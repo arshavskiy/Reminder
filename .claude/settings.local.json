@@ -25,7 +25,16 @@
       "Bash(curl -s -o /dev/null -w \"Status: %{http_code}\\\\n\" http://127.0.0.1:5173/App.vue)",
       "Bash(powershell -Command \"Get-Process -Name bun,node -ErrorAction SilentlyContinue | Stop-Process -Force\")",
       "Bash('C:\\\\Users\\\\User\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\bun\\\\bin\\\\bun.exe' -e ' *)",
-      "Bash(xargs -I{} cat \"E:\\\\Projects\\\\Reminder\\\\data\\\\extractions\\\\{}\")"
+      "Bash(xargs -I{} cat \"E:\\\\Projects\\\\Reminder\\\\data\\\\extractions\\\\{}\")",
+      "Bash(curl -sS -X POST http://127.0.0.1:3737/api/email/test -H 'Content-Type: application/json' -d '{\"to\":\"arshavsky.pasha@gmail.com\"}' -w '\\\\nHTTP %{http_code}\\\\n')",
+      "Bash(powershell -Command 'Get-NetTCPConnection -LocalPort 3737 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }')",
+      "Bash(xargs -I{} cat {})",
+      "Bash([ -f \"node_modules/@vicons/ionicons5/$name.d.ts\" ])",
+      "Bash(curl -s http://127.0.0.1:3737/api/doc-templates)",
+      "Bash(curl -s http://127.0.0.1:3737/api/email-templates)",
+      "Bash(curl -s -X POST http://127.0.0.1:3737/api/email-templates/vars -H 'Content-Type: application/json' -d '{\"html\":\"<p>{{title}} for {{client_company|the client}}</p>{{#if logo_url}}<img src={{logo_url}}/>{{/if}}\"}')",
+      "Read(//tmp/**)",
+      "Bash(curl -s -X POST http://127.0.0.1:3737/api/doc-templates/generate-from-text -H 'Content-Type: application/json' -d '{\"text\":\"רישיון רכב\\\\nמספר רישיון: 1234567\\\\nשם הבעלים: ישראל ישראלי\\\\nת.ז: 012345678\\\\nכתובת: רחוב הרצל 12, תל אביב\\\\nטלפון: 050-1234567\\\\nתאריך הוצאה: 15/03/2025\\\\nתוקף עד: 15/03/2027\\\\nסוג הרכב: פרטי\\\\nמספר רכב: 12-345-67\\\\nיצרן: טויוטה\\\\nדגם: קורולה\\\\nשנת ייצור: 2022\\\\nצבע: לבן\"}')"
     ]
   }
 }

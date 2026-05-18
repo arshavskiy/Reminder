@@ -1,5 +1,6 @@
+import { extname } from "path";
 import { getDb } from "../db/db.js";
-import { importFile } from "../pipeline/importer.js";
+import { importFile, processDocument } from "../pipeline/importer.js";
 import type { WsEvent } from "../../shared/types.js";
 
 export function registerDocumentRoutes(
@@ -100,15 +101,44 @@ export function registerDocumentRoutes(
   router.set("POST /api/documents/:id/reprocess", async (req) => {
     const id = extractId(req.url, "/api/documents/", "/reprocess");
     const db = getDb();
-    const doc = db.prepare("SELECT * FROM documents WHERE id = ?").get(id) as
-      | { file_path: string }
-      | null;
+    const doc = db
+      .prepare("SELECT file_path, mime_type FROM documents WHERE id = ?")
+      .get(id) as { file_path: string; mime_type: string } | null;
     if (!doc) return notFound();
-    db.prepare(
-      `UPDATE documents SET processing_status='queued', error_message=NULL, raw_text=NULL, updated_at=datetime('now') WHERE id=?`
-    ).run(id);
+
+    // Wipe all derived data so reprocess gives a clean slate.
+    // Documents row itself is kept (it owns the file_hash that identifies the file).
     db.prepare("DELETE FROM extractions WHERE document_id = ?").run(id);
-    await importFile(doc.file_path, push);
+    db.prepare("DELETE FROM tasks WHERE document_id = ?").run(id);
+    db.prepare(
+      `DELETE FROM reminders WHERE source_type='contract_expiry'
+       AND source_id IN (SELECT id FROM contracts WHERE document_id = ?)`
+    ).run(id);
+    db.prepare("DELETE FROM reminders WHERE document_id = ?").run(id);
+    db.prepare("DELETE FROM contracts WHERE document_id = ?").run(id);
+    db.prepare("DELETE FROM document_clients WHERE document_id = ?").run(id);
+    db.prepare(
+      `DELETE FROM timeline_events WHERE source_type='document' AND source_id = ?`
+    ).run(id);
+
+    // Reset processing status
+    db.prepare(
+      `UPDATE documents SET processing_status='queued', error_message=NULL,
+                            raw_text=NULL, document_type=NULL, document_number=NULL,
+                            updated_at=datetime('now')
+       WHERE id=?`
+    ).run(id);
+
+    // Run the pipeline directly on the existing row — bypass importFile()'s
+    // dedup check (the row's file_hash is the same file by definition).
+    const ext = extname(doc.file_path);
+    processDocument(id, doc.file_path, doc.mime_type, ext, push).catch((err) => {
+      console.error(`[reprocess] doc ${id} failed:`, err);
+      db.prepare(
+        `UPDATE documents SET processing_status='error', error_message=?, updated_at=datetime('now') WHERE id=?`
+      ).run(String(err), id);
+    });
+
     return json({ ok: true });
   });
 }

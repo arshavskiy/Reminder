@@ -1,9 +1,20 @@
 <template>
   <div style="max-width: 600px">
-    <n-h2>הגדרות</n-h2>
+<!--    <n-h2>הגדרות</n-h2>-->
 
     <n-spin :show="settingsStore.loading || settingsStore.saving">
       <template v-if="form">
+        <n-card title="מראה" style="margin-bottom: 16px">
+          <n-form label-placement="top">
+            <n-form-item label="ערכת נושא">
+              <n-radio-group v-model:value="form.theme">
+                <n-radio value="dark">🌙 כהה</n-radio>
+                <n-radio value="light">☀️ בהיר</n-radio>
+              </n-radio-group>
+            </n-form-item>
+          </n-form>
+        </n-card>
+
         <n-card title="בינה מלאכותית (AI)" style="margin-bottom: 16px">
           <n-form label-placement="top">
             <n-form-item label="מנוע AI">
@@ -48,6 +59,9 @@
                 </n-form-item>
               </n-gi>
             </n-grid>
+            <n-form-item label="אמת תעודת SSL (כבה רק לשרתים פנימיים / self-signed)">
+              <n-switch v-model:value="form.smtpRejectUnauthorized" />
+            </n-form-item>
             <n-form-item label="שם משתמש">
               <n-input v-model:value="form.smtpUser" />
             </n-form-item>
@@ -57,9 +71,13 @@
             <n-form-item label="כתובת שולח">
               <n-input v-model:value="form.emailFrom" placeholder="reminder@example.com" />
             </n-form-item>
+            <n-form-item label="כתובת לבדיקות (Test Email)">
+              <n-input v-model:value="form.testEmail" placeholder="me@example.com" />
+            </n-form-item>
             <n-space>
-              <n-input v-model:value="testEmail" placeholder="אימייל לבדיקה" style="width: 220px" />
-              <n-button @click="testSmtp" :loading="testing">שלח אימייל בדיקה</n-button>
+              <n-button @click="testSmtp" :loading="testing" :disabled="!form.testEmail">
+                שלח אימייל בדיקה ל-{{ form.testEmail || '...' }}
+              </n-button>
             </n-space>
           </n-form>
         </n-card>
@@ -112,7 +130,6 @@ import type { AppSettings } from "@shared/types.js";
 const settingsStore = useSettingsStore();
 const message = useMessage();
 const form = ref<AppSettings | null>(null);
-const testEmail = ref("");
 const testing = ref(false);
 
 onMounted(async () => {
@@ -127,11 +144,13 @@ async function save() {
 }
 
 async function testSmtp() {
-  if (!testEmail.value) return;
+  if (!form.value?.testEmail) return;
+  // Save first so server-side has the latest SMTP creds + testEmail
+  await settingsStore.save(form.value);
   testing.value = true;
   try {
-    const r = await api.email.test(testEmail.value);
-    if (r.success) message.success("האימייל נשלח בהצלחה!");
+    const r = await api.email.test(form.value.testEmail);
+    if (r.success) message.success(`האימייל נשלח ל-${form.value.testEmail}`);
     else message.error(r.error ?? "שגיאה");
   } finally {
     testing.value = false;

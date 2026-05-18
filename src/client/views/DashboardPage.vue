@@ -1,6 +1,6 @@
 <template>
   <div>
-    <n-h2>לוח בקרה</n-h2>
+<!--    <n-h2>לוח בקרה</n-h2>-->
 
     <n-spin :show="store.loading">
       <n-grid :cols="3" :x-gap="16" :y-gap="16" style="margin-bottom: 24px">
@@ -9,6 +9,9 @@
         </n-gi>
         <n-gi>
           <n-statistic label="לקוחות" :value="stats?.total_clients ?? 0" />
+        </n-gi>
+        <n-gi>
+          <n-statistic label="תסקירים" :value="stats?.total_inspections ?? 0" />
         </n-gi>
         <n-gi>
           <n-statistic label="חוזים פעילים" :value="stats?.active_contracts ?? 0" />

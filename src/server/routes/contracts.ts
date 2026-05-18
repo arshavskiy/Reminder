@@ -1,6 +1,12 @@
 import { getDb } from "../db/db.js";
 import { generateContractReminders } from "../reminders/scheduler.js";
 
+// Predicates re-used across routes
+const IS_CONTRACT_SQL =
+  `c.contract_number IS NOT NULL AND (c.contract_type IS NULL OR (c.contract_type NOT LIKE '%תסקיר%' AND c.contract_type NOT LIKE '%בדיקה%'))`;
+const IS_INSPECTION_SQL =
+  `c.contract_type LIKE '%תסקיר%' OR c.contract_type LIKE '%בדיקה%'`;
+
 export function registerContractRoutes(
   router: Map<string, (req: Request) => Promise<Response>>
 ) {
@@ -9,6 +15,7 @@ export function registerContractRoutes(
     const url = new URL(req.url);
     const clientId = url.searchParams.get("clientId");
     const status = url.searchParams.get("status");
+    const kind = url.searchParams.get("kind"); // "contract" | "inspection" | "all" | null
     const limit = parseInt(url.searchParams.get("limit") ?? "50");
     const offset = parseInt(url.searchParams.get("offset") ?? "0");
     const db = getDb();
@@ -17,6 +24,8 @@ export function registerContractRoutes(
     const params: (string | number)[] = [];
     if (clientId) { conditions.push("c.client_id = ?"); params.push(clientId); }
     if (status) { conditions.push("c.status = ?"); params.push(status); }
+    if (kind === "contract") conditions.push(`(${IS_CONTRACT_SQL})`);
+    else if (kind === "inspection") conditions.push(`(${IS_INSPECTION_SQL})`);
 
     const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
     const rows = db

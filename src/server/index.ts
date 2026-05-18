@@ -13,6 +13,7 @@ import { registerSearchRoutes } from "./routes/search.js";
 import { registerEmailRoutes } from "./routes/email.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
+import { registerTemplateRoutes } from "./routes/templates.js";
 import { importFile } from "./pipeline/importer.js";
 import type { WsEvent } from "../shared/types.js";
 
@@ -50,6 +51,7 @@ registerSettingsRoutes(router as Map<string, (req: Request) => Promise<Response>
   }
 });
 registerDashboardRoutes(router as Map<string, (req: Request) => Promise<Response>>);
+registerTemplateRoutes(router as Map<string, (req: Request) => Promise<Response>>);
 
 function matchRoute(method: string, pathname: string): Handler | null {
   // Exact match

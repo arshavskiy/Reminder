@@ -3,6 +3,7 @@ import { createPinia } from "pinia";
 import { router } from "./router/index.js";
 import App from "./App.vue";
 import "vfonts/Lato.css";
+import "./styles/global.css";
 
 const app = createApp(App);
 app.use(createPinia());

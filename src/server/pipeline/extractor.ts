@@ -2,7 +2,8 @@ import OpenAI from "openai";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { getSettings, getDataDir } from "../settings.js";
-import type { ExtractionResult } from "../../shared/types.js";
+import type { ExtractionResult, DocTemplate, DynamicExtraction } from "../../shared/types.js";
+import { buildPromptForTemplate } from "../templates/buildPrompt.js";
 
 const SYSTEM_PROMPT = `You are a document intelligence assistant specializing in Hebrew business, legal, and technical documents (contracts, invoices, inspection reports / תסקירים, certificates, etc.).
 Extract structured information from the provided document text and return ONLY valid JSON matching the schema below.
@@ -68,6 +69,17 @@ export interface ExtractionRun {
     completion_tokens: number;
     total_tokens: number;
   } | null;
+}
+
+export interface TemplateExtractionRun {
+  template: DocTemplate;
+  fields: DynamicExtraction | null;     // the flat extracted object
+  rawJson: string;
+  model: string;
+  backend: string;
+  execMs: number;
+  error: string | null;
+  usage: ExtractionRun["usage"];
 }
 
 export async function extractDocument(
@@ -158,4 +170,98 @@ export async function extractDocument(
   }
 
   return run;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Template-driven extraction (dynamic fields from user-defined templates)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function extractWithTemplate(
+  rawText: string,
+  template: DocTemplate,
+  documentId?: number,
+  fileName?: string
+): Promise<TemplateExtractionRun> {
+  const settings = getSettings();
+  const model = settings.aiBackend === "ollama" ? settings.ollamaModel : settings.openAiModel;
+  const backend = settings.aiBackend;
+  const text = rawText.slice(0, settings.extractionMaxChars);
+  const systemPrompt = buildPromptForTemplate(template);
+
+  const t0 = Date.now();
+  let rawJson = "";
+  let error: string | null = null;
+  let fields: DynamicExtraction | null = null;
+  let usage: ExtractionRun["usage"] = null;
+
+  try {
+    const client = buildClient(settings);
+    const response = await client.chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Document text:\n\n${text}` },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0,
+    });
+    rawJson = response.choices[0]?.message?.content ?? "";
+    fields = JSON.parse(rawJson) as DynamicExtraction;
+    if (response.usage) {
+      usage = {
+        prompt_tokens: response.usage.prompt_tokens ?? 0,
+        completion_tokens: response.usage.completion_tokens ?? 0,
+        total_tokens: response.usage.total_tokens ?? 0,
+      };
+    }
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+  }
+
+  const execMs = Date.now() - t0;
+
+  // Logging
+  if (error) {
+    console.error(
+      `[extractor:tpl] ❌ doc=${documentId ?? "?"} tpl="${template.name}" time=${execMs}ms — ${error}`
+    );
+  } else {
+    const u = usage
+      ? `tokens: prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`
+      : "tokens: n/a";
+    console.log(
+      `[extractor:tpl] ✓ doc=${documentId ?? "?"} tpl="${template.name}" time=${execMs}ms — ${u}`
+    );
+    if (fields) console.log("[extractor:tpl] →", fields);
+  }
+
+  // Disk dump for audit
+  try {
+    const dir = join(getDataDir(), "extractions");
+    mkdirSync(dir, { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const safeName = (fileName ?? "doc").replace(/[^a-zA-Z0-9א-ת._-]/g, "_").slice(0, 80);
+    writeFileSync(
+      join(dir, `${ts}_doc${documentId ?? "X"}_${safeName}__tpl.json`),
+      JSON.stringify(
+        {
+          timestamp: new Date().toISOString(),
+          document_id: documentId ?? null,
+          file_name: fileName ?? null,
+          template: { id: template.id, name: template.name },
+          backend, model, exec_ms: execMs, usage, error,
+          input_text_chars: text.length,
+          input_text_preview: text.slice(0, 500),
+          fields,
+          raw_json: rawJson,
+        },
+        null, 2
+      ),
+      "utf-8"
+    );
+  } catch (writeErr) {
+    console.warn(`[extractor:tpl] Failed to write dump: ${writeErr}`);
+  }
+
+  return { template, fields, rawJson, model, backend, execMs, error, usage };
 }

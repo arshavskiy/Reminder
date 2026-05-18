@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hebcal/core": "^5.9.0",
+    "@vicons/ionicons5": "^0.13.0",
     "date-fns": "^3.6.0",
     "mammoth": "^1.8.0",
     "naive-ui": "^2.38.2",

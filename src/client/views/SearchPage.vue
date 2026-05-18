@@ -1,6 +1,6 @@
 <template>
   <div>
-    <n-h2>חיפוש</n-h2>
+<!--    <n-h2>חיפוש</n-h2>-->
     <n-input
       v-model:value="query"
       placeholder="חפש מסמכים, לקוחות, חוזים..."

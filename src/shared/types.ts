@@ -20,6 +20,7 @@ export interface AppSettings {
   smtpSecure: boolean;
   smtpUser: string;
   smtpPass: string;
+  smtpRejectUnauthorized: boolean;  // false = accept self-signed / hostname-mismatched certs
   emailFrom: string;
   emailFromName: string;
 
@@ -27,6 +28,7 @@ export interface AppSettings {
   reminderEnabled: boolean;
   reminderAdvanceDays: number[];
   reminderCheckIntervalMs: number;
+  testEmail: string;          // default recipient for test emails / test reminders
 
   // Watch folder
   watchFolderEnabled: boolean;
@@ -198,10 +200,11 @@ export interface GlobalSearchResult {
 export interface DashboardStats {
   total_documents: number;
   total_clients: number;
-  total_contracts: number;
+  total_contracts: number;     // actual contracts (excludes inspection reports)
   active_contracts: number;
+  total_inspections: number;   // תסקירים / inspection reports
   pending_reminders: number;
-  expiring_soon: number; // contracts expiring within 30 days
+  expiring_soon: number;       // active contracts/inspections expiring within 30 days
   recent_documents: Document[];
   upcoming_reminders: ReminderWithContext[];
 }
@@ -220,7 +223,55 @@ export type WsEvent =
   | { type: "reminder:fired"; reminderId: number; clientId: number | null; title: string }
   | { type: "reminder:error"; reminderId: number; error: string };
 
-// AI extraction result shape
+// ── Document templates ──────────────────────────────────────────────────────
+export type FieldType =
+  | "text"
+  | "number"
+  | "date"            // ISO YYYY-MM-DD; can drive reminders
+  | "phone"
+  | "email"
+  | "currency"
+  | "list";           // array of strings
+
+export interface TemplateField {
+  key: string;                  // machine name e.g. "expiry_date"
+  label_he: string;             // Hebrew label shown in UI + email
+  type: FieldType;
+  required?: boolean;
+  hint_he?: string;             // optional extra instruction for the AI
+  example_he?: string;          // optional example value
+}
+
+export interface DocTemplate {
+  id: number;
+  name: string;                 // Hebrew, e.g. "תסקיר בדיקה"
+  description: string | null;
+  match_keywords: string[];     // ["תסקיר", "בדיקה"]
+  fields: TemplateField[];
+  expiry_field: string | null;  // key of the date field that drives reminders
+  is_default: number;
+  is_builtin: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Email templates ─────────────────────────────────────────────────────────
+export interface EmailTemplate {
+  id: number;
+  name: string;
+  doc_template_id: number | null;
+  subject: string;              // may contain {{vars}}
+  html: string;                 // body with {{vars}} placeholders
+  logo_path: string | null;
+  is_default: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// AI extraction result shape — kept for the legacy hardcoded prompt path.
+// New flow stores ALL extracted fields as a flat object in `documents.extracted_fields`.
+export type DynamicExtraction = Record<string, string | number | string[] | null>;
+
 export interface ExtractionResult {
   client_name: string | null;          // contact person (e.g. "שילה")
   client_company: string | null;       // company name (e.g. "מילניום שירותים ולוגיסטיקה בע\"מ")

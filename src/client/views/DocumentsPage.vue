@@ -1,7 +1,7 @@
 <template>
   <div>
     <n-space justify="space-between" align="center" style="margin-bottom: 16px">
-      <n-h2 style="margin: 0">מסמכים</n-h2>
+<!--      <n-h2 style="margin: 0">מסמכים</n-h2>-->
       <n-space>
         <!-- Hidden file input — triggered by the button below -->
         <input

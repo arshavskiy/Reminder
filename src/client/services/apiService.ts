@@ -3,6 +3,7 @@ import type {
   DashboardStats, GlobalSearchResult, EmailLogEntry,
   Extraction, ReminderWithContext, ContractWithClient,
   ClientDetail, WsEvent, AppSettings,
+  DocTemplate, EmailTemplate,
 } from "@shared/types.js";
 
 const BASE = "/api";
@@ -76,7 +77,7 @@ export const api = {
   },
 
   contracts: {
-    list: (params?: { clientId?: number; status?: string; limit?: number }) => {
+    list: (params?: { clientId?: number; status?: string; limit?: number; kind?: "contract" | "inspection" | "all" }) => {
       const q = new URLSearchParams(params as Record<string, string>).toString();
       return get<{ rows: ContractWithClient[]; total: number }>(`/contracts${q ? "?" + q : ""}`);
     },
@@ -122,6 +123,48 @@ export const api = {
   settings: {
     get: () => get<AppSettings>("/settings"),
     save: (body: Partial<AppSettings>) => post<AppSettings>("/settings", body),
+  },
+
+  docTemplates: {
+    list: () => get<DocTemplate[]>("/doc-templates"),
+    get: (id: number) => get<DocTemplate>(`/doc-templates/${id}`),
+    create: (body: Partial<DocTemplate>) => post<DocTemplate>("/doc-templates", body),
+    update: (id: number, body: Partial<DocTemplate>) => put<DocTemplate>(`/doc-templates/${id}`, body),
+    delete: (id: number) => del(`/doc-templates/${id}`),
+    generateFromText: (text: string) =>
+      post<{ draft: Partial<DocTemplate>; usage: unknown; model: string; exec_ms: number }>(
+        "/doc-templates/generate-from-text",
+        { text }
+      ),
+    generateFromFile: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/doc-templates/generate-from-file", { method: "POST", body: fd });
+      if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
+      return res.json() as Promise<{ draft: Partial<DocTemplate>; sample_text_preview: string; usage: unknown; model: string; exec_ms: number }>;
+    },
+  },
+
+  emailTemplates: {
+    list: () => get<EmailTemplate[]>("/email-templates"),
+    get: (id: number) => get<EmailTemplate>(`/email-templates/${id}`),
+    create: (body: Partial<EmailTemplate>) => post<EmailTemplate>("/email-templates", body),
+    update: (id: number, body: Partial<EmailTemplate>) => put<EmailTemplate>(`/email-templates/${id}`, body),
+    delete: (id: number) => del(`/email-templates/${id}`),
+    detectVars: (html: string) => post<{ vars: string[] }>("/email-templates/vars", { html }),
+    preview: (html: string, subject: string, vars: Record<string, unknown>) =>
+      post<{ html: string; subject: string }>("/email-templates/preview", { html, subject, vars }),
+  },
+
+  assets: {
+    uploadLogo: async (file: File) => {
+      const fd = new FormData();
+      fd.append("logo", file);
+      const res = await fetch("/api/assets/logo", { method: "POST", body: fd });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      return res.json() as Promise<{ logo_path: string }>;
+    },
+    url: (name: string) => `/api/assets/${name}`,
   },
 };
 

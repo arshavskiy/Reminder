@@ -6,7 +6,7 @@ import type { AppSettings } from "../shared/types.js";
 export type { AppSettings };
 
 const DEFAULTS: AppSettings = {
-  theme: "dark",
+  theme: "light",
   port: 3737,
 
   aiBackend: "openai",
@@ -24,12 +24,14 @@ const DEFAULTS: AppSettings = {
   smtpSecure: false,
   smtpUser: "",
   smtpPass: "",
+  smtpRejectUnauthorized: true,
   emailFrom: "",
-  emailFromName: "Client Reminder",
+  emailFromName: "תזכורת לקוח",
 
   reminderEnabled: true,
   reminderAdvanceDays: [90, 60, 30],
   reminderCheckIntervalMs: 60_000,
+  testEmail: "",
 
   watchFolderEnabled: false,
   watchFolder: "",

@@ -29,6 +29,8 @@ export function applySchema(db: Database) {
   // Idempotent migration: add columns if older DBs don't have them
   addColumnIfMissing(db, "documents", "document_type", "TEXT");
   addColumnIfMissing(db, "documents", "document_number", "TEXT");
+  addColumnIfMissing(db, "documents", "extracted_fields", "TEXT"); // JSON blob of dynamic fields
+  addColumnIfMissing(db, "documents", "template_id", "INTEGER");   // FK to doc_templates
 
   db.run(`
     CREATE TABLE IF NOT EXISTS clients (
@@ -185,6 +187,45 @@ export function applySchema(db: Database) {
   db.run(`CREATE INDEX IF NOT EXISTS idx_reminder_status  ON reminders (status)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_task_due         ON tasks (due_date)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_timeline_client  ON timeline_events (client_id, event_date DESC)`);
+
+  // ── Document templates ──────────────────────────────────────────────────────
+  // User-defined "what to extract" recipes. The AI prompt is generated from these.
+  // `match_keywords` is a JSON array of Hebrew keywords used to auto-pick a template
+  // when a document is imported. `fields` is a JSON array describing each field.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS doc_templates (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      name            TEXT NOT NULL UNIQUE,        -- Hebrew name e.g. "תסקיר בדיקה"
+      description     TEXT,
+      match_keywords  TEXT NOT NULL DEFAULT '[]',  -- JSON: ["תסקיר","בדיקה"]
+      fields          TEXT NOT NULL DEFAULT '[]',  -- JSON Field[]
+      expiry_field    TEXT,                        -- which field key drives reminders
+      is_default      INTEGER NOT NULL DEFAULT 0,
+      is_builtin      INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_doc_templates_name ON doc_templates (name)`);
+
+  // ── Email templates ─────────────────────────────────────────────────────────
+  // HTML email bodies bound (optionally) to a doc_template. When a reminder
+  // fires we look up: 1) template matching the document's template_id, else
+  // 2) any default template, else 3) the hardcoded fallback in emailSender.ts.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS email_templates (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      name            TEXT NOT NULL UNIQUE,
+      doc_template_id INTEGER REFERENCES doc_templates(id) ON DELETE SET NULL,
+      subject         TEXT NOT NULL DEFAULT '[תזכורת] {{title}}',
+      html            TEXT NOT NULL,               -- HTML with {{var}} placeholders
+      logo_path       TEXT,                        -- path under data/assets/
+      is_default      INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_email_templates_doc ON email_templates (doc_template_id)`);
 }
 
 function addColumnIfMissing(db: Database, table: string, column: string, type: string) {

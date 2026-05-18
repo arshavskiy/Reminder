@@ -177,7 +177,9 @@ export function generateContractReminders(
     // Only create if in the future
     if (triggerDate <= today) continue;
 
-    const title = `${baseLabel} בעוד ${days} יום (${expiryDate})`;
+    // Title format: "<label> ב-<fire date>" — the fire date is the headline.
+    // Example: "בדיקה הבאה ב-2027-02-09 (יעד: 2027-03-11)"
+    const title = `${baseLabel} ב-${triggerDate} (יעד: ${expiryDate})`;
 
     db.prepare(
       `INSERT INTO reminders (source_type, source_id, client_id, document_id, trigger_date, advance_days, title, status)

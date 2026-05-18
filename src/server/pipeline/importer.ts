@@ -6,9 +6,10 @@ import { parsePdf } from "./pdfParser.js";
 import { ocrFile } from "./ocrParser.js";
 import { parseDocx } from "./docxParser.js";
 import { parseXlsx } from "./xlsxParser.js";
-import { extractDocument } from "./extractor.js";
+import { extractDocument, extractWithTemplate } from "./extractor.js";
+import { pickTemplate } from "../templates/seedTemplates.js";
 import { generateContractReminders } from "../reminders/scheduler.js";
-import type { WsEvent } from "../../shared/types.js";
+import type { WsEvent, DocTemplate, DynamicExtraction } from "../../shared/types.js";
 
 type PushFn = (event: WsEvent) => void;
 
@@ -86,7 +87,7 @@ export async function importFile(originalPath: string, push?: PushFn): Promise<n
   return documentId;
 }
 
-async function processDocument(
+export async function processDocument(
   documentId: number,
   filePath: string,
   mimeType: string,
@@ -140,39 +141,71 @@ async function processDocument(
 
   push?.({ type: "document:progress", documentId, stage: "ai_extraction", progress: 50 });
 
-  // Step 2: AI extraction
+  // Step 2: AI extraction — template-driven
   if (settings.autoExtract && rawText.trim().length > 0) {
     const docRow = db
       .prepare("SELECT file_name FROM documents WHERE id = ?")
       .get(documentId) as { file_name: string } | null;
-    const extraction = await extractDocument(rawText, documentId, docRow?.file_name);
 
-    db.prepare(
-      `INSERT INTO extractions (document_id, backend, model, result_json, parsed_ok, error, exec_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      documentId,
-      extraction.backend,
-      extraction.model,
-      extraction.rawJson,
-      extraction.result ? 1 : 0,
-      extraction.error,
-      extraction.execMs
-    );
+    // Pick the best template (by keyword match → default → first)
+    const template = pickTemplate(db, rawText);
 
-    if (extraction.result) {
-      push?.({ type: "document:progress", documentId, stage: "saving_entities", progress: 75 });
-      await saveExtractionEntities(documentId, extraction.result);
-    } else if (extraction.error) {
-      // AI extraction failed (bad API key, network, etc.) — mark document
-      // as error so the UI surfaces the problem instead of silently saying "done".
-      const msg = `AI extraction failed: ${extraction.error}`;
+    if (template) {
+      const run = await extractWithTemplate(rawText, template, documentId, docRow?.file_name);
+
+      // Persist as an extractions row (use raw JSON; keep backend/model)
       db.prepare(
-        `UPDATE documents SET processing_status='error', error_message=?, updated_at=datetime('now') WHERE id=?`
-      ).run(msg, documentId);
-      push?.({ type: "document:done", documentId, status: "error", error: msg });
-      console.error(`[importer] ${msg}`);
-      return;
+        `INSERT INTO extractions (document_id, backend, model, result_json, parsed_ok, error, exec_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        documentId,
+        run.backend,
+        run.model,
+        run.rawJson,
+        run.fields ? 1 : 0,
+        run.error,
+        run.execMs
+      );
+
+      if (run.fields) {
+        // Save the dynamic fields blob + link to template
+        db.prepare(
+          `UPDATE documents SET extracted_fields = ?, template_id = ?,
+                                document_type = ?,
+                                updated_at = datetime('now')
+           WHERE id = ?`
+        ).run(JSON.stringify(run.fields), template.id, template.name, documentId);
+
+        push?.({ type: "document:progress", documentId, stage: "saving_entities", progress: 75 });
+        await saveTemplateEntities(documentId, template, run.fields);
+      } else if (run.error) {
+        const msg = `AI extraction failed: ${run.error}`;
+        db.prepare(
+          `UPDATE documents SET processing_status='error', error_message=?, updated_at=datetime('now') WHERE id=?`
+        ).run(msg, documentId);
+        push?.({ type: "document:done", documentId, status: "error", error: msg });
+        console.error(`[importer] ${msg}`);
+        return;
+      }
+    } else {
+      // No templates configured — fall back to the legacy fixed prompt
+      const extraction = await extractDocument(rawText, documentId, docRow?.file_name);
+      db.prepare(
+        `INSERT INTO extractions (document_id, backend, model, result_json, parsed_ok, error, exec_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(documentId, extraction.backend, extraction.model, extraction.rawJson,
+            extraction.result ? 1 : 0, extraction.error, extraction.execMs);
+      if (extraction.result) {
+        push?.({ type: "document:progress", documentId, stage: "saving_entities", progress: 75 });
+        await saveExtractionEntities(documentId, extraction.result);
+      } else if (extraction.error) {
+        const msg = `AI extraction failed: ${extraction.error}`;
+        db.prepare(
+          `UPDATE documents SET processing_status='error', error_message=?, updated_at=datetime('now') WHERE id=?`
+        ).run(msg, documentId);
+        push?.({ type: "document:done", documentId, status: "error", error: msg });
+        return;
+      }
     }
   }
 
@@ -313,5 +346,134 @@ async function saveExtractionEntities(
     db.prepare(
       `INSERT INTO tasks (document_id, client_id, description, due_date) VALUES (?, ?, ?, ?)`
     ).run(documentId, clientId, task.description, task.due_date ?? null);
+  }
+}
+
+/**
+ * Project a template-extracted flat object onto the existing entity tables.
+ * Conventions (looked up by `key` in the template fields):
+ *   - client_company / client_name / contact_person  → clients.display_name (+ notes)
+ *   - contact_phone / contact_email / client_address → clients.phone/email/address
+ *   - contract_number / report_number / invoice_number → contracts.contract_number
+ *   - start_date / inspection_date / issue_date      → contracts.start_date
+ *   - template.expiry_field value                    → contracts.expiry_date (drives reminders!)
+ *   - amount / currency                               → contracts.amount/currency
+ *
+ * Any field the template defines but we don't know how to project is still
+ * preserved verbatim in documents.extracted_fields (already saved earlier).
+ */
+async function saveTemplateEntities(
+  documentId: number,
+  template: DocTemplate,
+  fields: DynamicExtraction
+) {
+  const db = getDb();
+  const f = fields;
+
+  const getStr = (k: string): string | null => {
+    const v = f[k];
+    if (v === undefined || v === null || v === "") return null;
+    return String(v);
+  };
+  const getNum = (k: string): number | null => {
+    const v = f[k];
+    if (v === undefined || v === null || v === "") return null;
+    const n = typeof v === "number" ? v : parseFloat(String(v));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // ── Client ────────────────────────────────────────────────────────────────
+  const clientCompany = getStr("client_company");
+  const contactPerson = getStr("contact_person") ?? getStr("client_name");
+  const displayName = clientCompany ?? contactPerson;
+  const entityType: "company" | "person" = clientCompany ? "company" : "person";
+
+  let clientId: number | null = null;
+  if (displayName) {
+    const existing = db
+      .prepare("SELECT id, notes FROM clients WHERE display_name = ? COLLATE NOCASE")
+      .get(displayName) as { id: number; notes: string | null } | null;
+
+    const contactNote =
+      clientCompany && contactPerson ? `איש קשר: ${contactPerson}` : null;
+
+    if (existing) {
+      clientId = existing.id;
+      const mergedNotes =
+        contactNote && !(existing.notes ?? "").includes(contactNote)
+          ? [existing.notes, contactNote].filter(Boolean).join("\n")
+          : existing.notes;
+      db.prepare(
+        `UPDATE clients SET
+           email = COALESCE(email, ?), phone = COALESCE(phone, ?),
+           address = COALESCE(address, ?), id_number = COALESCE(id_number, ?),
+           notes = COALESCE(?, notes), updated_at = datetime('now')
+         WHERE id = ?`
+      ).run(
+        getStr("contact_email"),
+        getStr("contact_phone"),
+        getStr("client_address"),
+        getStr("client_id"),
+        mergedNotes,
+        clientId
+      );
+    } else {
+      const r = db
+        .prepare(
+          `INSERT INTO clients (display_name, entity_type, id_number, email, phone, address, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          displayName,
+          entityType,
+          getStr("client_id"),
+          getStr("contact_email"),
+          getStr("contact_phone"),
+          getStr("client_address"),
+          contactNote
+        );
+      clientId = Number(r.lastInsertRowid);
+    }
+
+    db.prepare(
+      `INSERT OR IGNORE INTO document_clients (document_id, client_id, role) VALUES (?, ?, 'party_a')`
+    ).run(documentId, clientId);
+
+    db.prepare(
+      `INSERT INTO timeline_events (client_id, event_type, title, description, event_date, source_id, source_type)
+       VALUES (?, 'document_added', ?, ?, datetime('now'), ?, 'document')`
+    ).run(clientId, `${template.name} יובא`, null, documentId);
+  }
+
+  // ── Contract / Inspection record ─────────────────────────────────────────
+  const docNumber =
+    getStr("contract_number") ?? getStr("report_number") ?? getStr("invoice_number");
+  const startDate =
+    getStr("start_date") ?? getStr("inspection_date") ?? getStr("issue_date");
+  const expiryDate = template.expiry_field ? getStr(template.expiry_field) : null;
+
+  if (docNumber || startDate || expiryDate) {
+    const r = db
+      .prepare(
+        `INSERT INTO contracts (document_id, client_id, contract_number, contract_type,
+                                start_date, expiry_date, amount, currency, summary, confidence)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        documentId,
+        clientId,
+        docNumber,
+        template.name,
+        startDate,
+        expiryDate,
+        getNum("amount"),
+        getStr("currency") ?? "ILS",
+        getStr("findings") ?? getStr("notes") ?? getStr("summary_hebrew"),
+        (getStr("_confidence") as "high" | "medium" | "low") ?? "medium"
+      );
+    const contractId = Number(r.lastInsertRowid);
+    if (expiryDate) {
+      generateContractReminders(contractId, clientId, documentId, expiryDate);
+    }
   }
 }

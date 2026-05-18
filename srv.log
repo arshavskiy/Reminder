@@ -1,3 +1,16 @@
-[scheduler] Started — checking every 60s
-[server] Running at http://localhost:3737
-[server] Data dir: E:\Projects\Reminder\data
+91 |   if (existsSync(index)) return new Response(Bun.file(index));
+92 |   return null;
+93 | }
+94 | 
+95 | // ── Bun.serve ─────────────────────────────────────────────────────────────────
+96 | const server = Bun.serve({
+                        ^
+error: Failed to start server. Is port 3737 in use?
+ syscall: "listen",
+   errno: 0,
+    code: "EADDRINUSE"
+
+      at E:\Projects\Reminder\src\server\index.ts:96:20
+      at loadAndEvaluateModule (2:1)
+
+Bun v1.3.13 (Windows x64)
