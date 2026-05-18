@@ -1,0 +1,14 @@
+$ concurrently "bun run server:dev" "bun run client:dev"
+[0] $ bun --watch src/server/index.ts
+[1] $ vite
+[0] [scheduler] Started — checking every 60s
+[0] [server] Running at http://localhost:3737
+[0] [server] Data dir: E:\Projects\Reminder\data
+[1] 
+[1]   [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m941[22m[2m[0m ms[22m
+[1] 
+[1]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[1] [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[0] error: script "server:dev" exited with code 255
+[0] bun run server:dev exited with code 255
+[1] bun run client:dev exited with code 4294967295
