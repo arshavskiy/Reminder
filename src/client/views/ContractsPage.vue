@@ -16,6 +16,7 @@
       <n-select
         v-model:value="statusFilter"
         :options="statusOptions"
+        :virtual-scroll="false"
         placeholder="כל הסטטוסים"
         clearable
         style="width: 160px"

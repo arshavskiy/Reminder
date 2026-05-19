@@ -241,3 +241,76 @@ mark {
   right: unset;
 }
 
+/* ── Naive UI RTL fixes for n-tabs ─────────────────────────────────────────
+   Naive UI positions the tab indicator with absolute `left` + JS-driven
+   `transform: translateX(...)`. In RTL the bar still aligns to the visual
+   left edge while the active tab is on the right, so the underline misses.
+   Workaround: hide the bar and rely on an active-tab text/border style. */
+
+html[dir="rtl"] .n-tabs.n-tabs--top .n-tabs-bar,
+html[dir="rtl"] .n-tabs.n-tabs--bottom .n-tabs-bar,
+html[dir="rtl"] .n-tabs.n-tabs--line-type .n-tabs-bar {
+  display: none !important;
+}
+
+/* Restore underline via the active tab itself (border-bottom). */
+html[dir="rtl"] .n-tabs.n-tabs--top .n-tabs-tab--active,
+html[dir="rtl"] .n-tabs.n-tabs--bottom .n-tabs-tab--active,
+html[dir="rtl"] .n-tabs.n-tabs--line-type .n-tabs-tab--active {
+  border-bottom: 2px solid var(--brand-color);
+  margin-bottom: -1px;
+}
+
+/* Segmented tabs: hide the JS-positioned capsule and instead style the
+   active wrapper directly with the brand background. */
+html[dir="rtl"] .n-tabs.n-tabs--segment-type .n-tabs-rail .n-tabs-capsule {
+  display: none !important;
+}
+html[dir="rtl"] .n-tabs.n-tabs--segment-type .n-tabs-tab-wrapper:has(.n-tabs-tab--active) {
+  background-color: var(--bg-card);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, .08);
+}
+html[dir="rtl"] .n-tabs.n-tabs--segment-type .n-tabs-tab--active {
+  color: var(--text-primary);
+}
+
+/* ── vueuc binder RTL fix ──────────────────────────────────────────────────
+   vueuc (used by Naive UI for popover/menu positioning) sets
+   `position: absolute` on `.v-binder-follower-content` with no `left` or
+   `right`. Under `dir=rtl` the browser resolves that to `right: 0`, which
+   anchors the popover to the right edge of the viewport — vueuc then adds
+   `transform: translateX(triggerX)` on top, sending the popover far off
+   screen.
+
+   Force the content to anchor at left:0 so the JS-computed translateX
+   places it correctly relative to the trigger. */
+.v-binder-follower-content {
+  left: 0 !important;
+  right: auto !important;
+}
+
+/* ── n-select clear icon / chevron RTL fix ─────────────────────────────────
+   The internal-selection component isn't covered by Naive's public RTL
+   configs, so the suffix slot (chevron + clear ×) stays on the LTR-left
+   even in RTL. Push them to the visual left and ensure they don't stack. */
+html[dir="rtl"] .n-base-selection .n-base-suffix {
+  left: 10px;
+  right: auto;
+}
+html[dir="rtl"] .n-base-selection .n-base-selection-tag-wrapper,
+html[dir="rtl"] .n-base-selection-label,
+html[dir="rtl"] .n-base-selection-input {
+  padding-right: 12px;
+  padding-left: 30px;
+}
+/* The clear-x lives inside .n-base-clear and only appears on hover; its
+   absolute positioning needs the same flip. */
+html[dir="rtl"] .n-base-clear {
+  /* Naive places this inside the suffix, so the flip above already affects
+     its container. Force the inner icon to render above the chevron. */
+  position: relative;
+  z-index: 1;
+}
+
+

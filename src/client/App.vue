@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme="theme" :theme-overrides="themeOverrides">
+  <n-config-provider :theme="theme" :theme-overrides="themeOverrides" :rtl="rtlConfig">
     <n-message-provider>
       <n-dialog-provider>
         <n-layout has-sider style="height: 100vh">
@@ -67,7 +67,35 @@ import { useRouter, useRoute } from "vue-router";
 import {
   darkTheme, NConfigProvider, NLayout, NLayoutSider, NLayoutContent,
   NMenu, NMessageProvider, NDialogProvider, NButton, NIcon, NTooltip,
+  // Per-component RTL config objects. Naive UI exports them with an
+  // `unstable` prefix; we alias them back to short names for readability.
+  unstableAlertRtl,        unstableAvatarGroupRtl, unstableBadgeRtl,
+  unstableButtonRtl,       unstableButtonGroupRtl, unstableCardRtl,
+  unstableCheckboxRtl,     unstableCollapseRtl,
+  unstableCollapseTransitionRtl, unstableDataTableRtl, unstableDialogRtl,
+  unstableDrawerRtl,       unstableDynamicInputRtl, unstableFlexRtl,
+  unstableInputRtl,        unstableInputNumberRtl,  unstableListRtl,
+  unstableMessageRtl,      unstableNotificationRtl, unstablePaginationRtl,
+  unstablePopoverRtl,      unstableRadioRtl,        unstableSelectRtl,
+  unstableSpaceRtl,        unstableStatisticRtl,    unstableStepsRtl,
+  unstableTableRtl,        unstableTagRtl,          unstableTreeRtl,
+  unstableTreeSelectRtl,   unstableUploadsRtl,      unstableScrollbarRtl,
 } from "naive-ui";
+
+// Flat RTL info list for n-config-provider :rtl
+const rtlConfig = [
+  unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
+  unstableButtonRtl, unstableButtonGroupRtl, unstableCardRtl,
+  unstableCheckboxRtl, unstableCollapseRtl, unstableCollapseTransitionRtl,
+  unstableDataTableRtl, unstableDialogRtl, unstableDrawerRtl,
+  unstableDynamicInputRtl, unstableFlexRtl, unstableInputRtl,
+  unstableInputNumberRtl, unstableListRtl, unstableMessageRtl,
+  unstableNotificationRtl, unstablePaginationRtl, unstablePopoverRtl,
+  unstableRadioRtl, unstableSelectRtl, unstableSpaceRtl,
+  unstableStatisticRtl, unstableStepsRtl, unstableTableRtl,
+  unstableTagRtl, unstableTreeRtl, unstableTreeSelectRtl,
+  unstableUploadsRtl, unstableScrollbarRtl,
+];
 import {
   HomeOutline, DocumentTextOutline, PeopleOutline, ClipboardOutline,
   AlarmOutline, SearchOutline, SettingsOutline,

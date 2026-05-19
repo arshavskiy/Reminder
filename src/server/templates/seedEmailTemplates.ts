@@ -37,12 +37,12 @@ const DEFAULT_HTML = `<!DOCTYPE html>
     <div class="badge">{{advance_days}} ימים לפני תאריך היעד</div>
 
     <div class="fields">
-      {{#if client_company}}<div class="field"><span class="label">לקוח / חברה</span><span class="value">{{client_company}}</span></div>{{/if}}
-      {{#if contact_person}}<div class="field"><span class="label">איש קשר</span><span class="value">{{contact_person}}</span></div>{{/if}}
-      {{#if contact_phone}}<div class="field"><span class="label">טלפון</span><span class="value">{{contact_phone}}</span></div>{{/if}}
-      {{#if document_number}}<div class="field"><span class="label">מספר מסמך</span><span class="value">{{document_number}}</span></div>{{/if}}
-      {{#if expiry_date}}<div class="field"><span class="label">תאריך יעד</span><span class="value">{{expiry_date}}</span></div>{{/if}}
-      {{#if trigger_date}}<div class="field"><span class="label">תאריך התזכורת</span><span class="value">{{trigger_date}}</span></div>{{/if}}
+      {{#if client_company}}<div class="field"><span class="label">לקוח / חברה</span><span class="value"> {{client_company}} </span></div>{{/if}}
+      {{#if contact_person}}<div class="field"><span class="label">איש קשר</span><span class="value"> {{contact_person}} </span></div>{{/if}}
+      {{#if contact_phone}}<div class="field"><span class="label">טלפון</span><span class="value"> {{contact_phone}} </span></div>{{/if}}
+      {{#if document_number}}<div class="field"><span class="label">מספר מסמך</span><span class="value"> {{document_number}} </span></div>{{/if}}
+      {{#if expiry_date}}<div class="field"><span class="label">תאריך יעד</span><span class="value"> {{expiry_date}} </span></div>{{/if}}
+      {{#if trigger_date}}<div class="field"><span class="label">תאריך התזכורת</span><span class="value"> {{trigger_date}} </span></div>{{/if}}
     </div>
 
     {{#if body}}<p>{{body}}</p>{{/if}}

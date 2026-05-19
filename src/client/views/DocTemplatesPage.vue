@@ -114,6 +114,7 @@
                   v-model:value="f.type"
                   size="small"
                   :options="typeOptions"
+                  :virtual-scroll="false"
                 />
               </n-gi>
               <n-gi :span="2">
@@ -139,6 +140,7 @@
               :options="dateFieldOptions"
               placeholder="בחר שדה תאריך..."
               clearable
+              :virtual-scroll="false"
             />
           </n-form-item>
 

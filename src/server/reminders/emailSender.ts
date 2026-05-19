@@ -152,10 +152,62 @@ function renderReminderEmail(reminder: ReminderWithContext): { subject: string; 
     };
   }
 
+  const renderedHtml = renderTemplate(tpl.html, vars, { escape: false });
   return {
     subject: renderTemplate(tpl.subject, vars, { escape: false }),
-    html: renderTemplate(tpl.html, vars, { escape: false }),  // HTML body — don't escape (template is HTML)
+    html: ensureRtl(renderedHtml),
   };
+}
+
+/**
+ * Many user-edited templates either omit `<html>` entirely or have it without
+ * `dir="rtl"`. Email clients (especially Gmail) don't inherit direction from
+ * surrounding chrome, so Hebrew text often gets left-aligned mixed with
+ * mangled punctuation.
+ *
+ * Strategy:
+ *   - If the body has a `<html>` tag, inject `dir="rtl" lang="he"` into it.
+ *   - If not, wrap the body in a minimal RTL document.
+ *   - Always force a top-level `<body dir="rtl">` so even bare-fragment
+ *     templates render correctly when mail clients strip the <html> tag.
+ */
+function ensureRtl(html: string): string {
+  const trimmed = html.trim();
+  const hasHtml = /<html[\s>]/i.test(trimmed);
+  const hasBody = /<body[\s>]/i.test(trimmed);
+
+  let out = trimmed;
+
+  if (hasHtml) {
+    // Inject dir/lang on the existing <html> tag (only if not already present)
+    out = out.replace(/<html(\s[^>]*)?>/i, (match, attrs = "") => {
+      let a = attrs ?? "";
+      if (!/\bdir\s*=/i.test(a)) a += ' dir="rtl"';
+      if (!/\blang\s*=/i.test(a)) a += ' lang="he"';
+      return `<html${a}>`;
+    });
+  } else if (hasBody) {
+    // Wrap in a minimal <html> shell
+    out = `<!DOCTYPE html><html dir="rtl" lang="he">${out}</html>`;
+  } else {
+    // Bare fragment — wrap fully
+    out = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"></head><body dir="rtl" style="direction:rtl; text-align:right; font-family:Arial, sans-serif">${out}</body></html>`;
+  }
+
+  // Also stamp <body> with dir/text-align so Gmail's "strip head" sanitisation
+  // doesn't lose the direction. Only adds attrs if missing.
+  out = out.replace(/<body(\s[^>]*)?>/i, (match, attrs = "") => {
+    let a = attrs ?? "";
+    if (!/\bdir\s*=/i.test(a)) a += ' dir="rtl"';
+    if (!/style\s*=/i.test(a)) {
+      a += ' style="direction:rtl; text-align:right"';
+    } else if (!/direction\s*:/i.test(a)) {
+      a = a.replace(/style\s*=\s*"/i, 'style="direction:rtl; text-align:right; ');
+    }
+    return `<body${a}>`;
+  });
+
+  return out;
 }
 
 export async function sendReminderEmail(

@@ -24,6 +24,7 @@
       <n-select
         v-model:value="statusFilter"
         :options="statusOptions"
+        :virtual-scroll="false"
         placeholder="כל הסטטוסים"
         clearable
         style="width: 160px"
@@ -42,14 +43,27 @@
     <!-- Create reminder modal -->
     <n-modal v-model:show="showCreate" title="תזכורת חדשה" preset="dialog" style="width: 520px">
       <n-form label-placement="top" v-if="newReminder">
+        <n-form-item label="לקוח" required>
+          <n-select
+            v-model:value="newReminder.client_id"
+            :options="clientOptions"
+            :virtual-scroll="false"
+            placeholder="בחר לקוח..."
+            filterable
+            @update:value="onPickClient"
+          />
+        </n-form-item>
         <n-form-item label="כותרת" required>
           <n-input v-model:value="newReminder.title" placeholder="לדוגמה: חידוש ביטוח רכב" />
         </n-form-item>
         <n-form-item label="תאריך תזכורת (מתי לשלוח)" required>
           <n-date-picker v-model:value="triggerDateMs" type="date" style="width: 100%" />
         </n-form-item>
-        <n-form-item label="אימייל נמען (JSON או כתובת בודדת)">
-          <n-input v-model:value="newReminder.email_to" :placeholder="defaultRecipient" />
+        <n-form-item label="אימייל נמען">
+          <n-input
+            v-model:value="newReminder.email_to"
+            :placeholder="emailPlaceholder"
+          />
         </n-form-item>
         <n-form-item label="תוכן">
           <n-input v-model:value="newReminder.body" type="textarea" :rows="3" />
@@ -72,12 +86,14 @@ import {
 } from "naive-ui";
 import { useRemindersStore } from "../stores/reminders.js";
 import { useSettingsStore } from "../stores/settings.js";
+import { useClientsStore } from "../stores/clients.js";
 import { api } from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type { ReminderWithContext } from "@shared/types.js";
+import type { ReminderWithContext, Client } from "@shared/types.js";
 
 const store = useRemindersStore();
 const settingsStore = useSettingsStore();
+const clientsStore = useClientsStore();
 const router = useRouter();
 const message = useMessage();
 
@@ -86,9 +102,25 @@ const showCreate = ref(false);
 const creating = ref(false);
 const testing = ref(false);
 const triggerDateMs = ref<number | null>(Date.now());
-const newReminder = ref<{ title: string; email_to: string; body: string } | null>(null);
+const newReminder = ref<{
+  client_id: number | null;
+  title: string;
+  email_to: string;
+  body: string;
+} | null>(null);
 
-const defaultRecipient = computed(() => settingsStore.settings?.testEmail || "...");
+const clientOptions = computed(() =>
+  clientsStore.rows.map((c: Client) => ({
+    label: c.email ? `${c.display_name}  ·  ${c.email}` : c.display_name,
+    value: c.id,
+  }))
+);
+
+const emailPlaceholder = computed(() => {
+  if (!newReminder.value?.client_id) return "ייקבע אוטומטית לפי הלקוח";
+  const c = clientsStore.rows.find((x) => x.id === newReminder.value!.client_id);
+  return c?.email ?? settingsStore.settings?.testEmail ?? "אין אימייל ללקוח";
+});
 
 const statusOptions = [
   { label: "ממתין", value: "pending" },
@@ -103,33 +135,49 @@ function load() {
 }
 
 onMounted(async () => {
-  await settingsStore.load();
+  await Promise.all([
+    settingsStore.load(),
+    clientsStore.fetch({ limit: 500 }),
+  ]);
   load();
 });
 
 // ── Create new reminder ─────────────────────────────────────────────────────
 function openCreate() {
   newReminder.value = {
+    client_id: null,
     title: "",
-    email_to: settingsStore.settings?.testEmail ?? "",
+    email_to: "",
     body: "",
   };
   triggerDateMs.value = Date.now();
   showCreate.value = true;
 }
 
+// When the user picks a client, auto-fill the email field with that client's
+// email (overrideable). Keeps the form minimal — most reminders go to the
+// client's primary email.
+function onPickClient(clientId: number | null) {
+  if (!newReminder.value) return;
+  const c = clientsStore.rows.find((x) => x.id === clientId);
+  if (c?.email) newReminder.value.email_to = c.email;
+}
+
 function normalizeEmailTo(input: string): string | null {
   const t = input.trim();
   if (!t) return null;
-  // Already JSON array? keep as-is
   if (t.startsWith("[")) return t;
-  // Comma-separated or single → wrap in JSON array
   const list = t.split(",").map((s) => s.trim()).filter(Boolean);
   return JSON.stringify(list);
 }
 
 async function doCreate() {
-  if (!newReminder.value?.title.trim() || !triggerDateMs.value) {
+  if (!newReminder.value) return;
+  if (!newReminder.value.client_id) {
+    message.warning("יש לבחור לקוח");
+    return;
+  }
+  if (!newReminder.value.title.trim() || !triggerDateMs.value) {
     message.warning("יש להזין כותרת ותאריך");
     return;
   }
@@ -138,6 +186,7 @@ async function doCreate() {
     const triggerDate = new Date(triggerDateMs.value).toISOString().slice(0, 10);
     await api.reminders.create({
       source_type: "manual",
+      client_id: newReminder.value.client_id,
       trigger_date: triggerDate,
       advance_days: 0,
       title: newReminder.value.title,

@@ -38,6 +38,7 @@
                   :options="docTplOptions"
                   placeholder="לכל סוגי המסמכים"
                   clearable
+                  :virtual-scroll="false"
                 />
               </n-form-item>
 
