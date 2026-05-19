@@ -65,6 +65,15 @@
             :placeholder="emailPlaceholder"
           />
         </n-form-item>
+        <n-form-item label="תבנית אימייל">
+          <n-select
+            v-model:value="newReminder.email_template_id"
+            :options="emailTemplateOptions"
+            :virtual-scroll="false"
+            placeholder="ברירת מחדל"
+            clearable
+          />
+        </n-form-item>
         <n-form-item label="תוכן">
           <n-input v-model:value="newReminder.body" type="textarea" :rows="3" />
         </n-form-item>
@@ -89,7 +98,7 @@ import { useSettingsStore } from "../stores/settings.js";
 import { useClientsStore } from "../stores/clients.js";
 import { api } from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type { ReminderWithContext, Client } from "@shared/types.js";
+import type { ReminderWithContext, Client, EmailTemplate } from "@shared/types.js";
 
 const store = useRemindersStore();
 const settingsStore = useSettingsStore();
@@ -102,17 +111,26 @@ const showCreate = ref(false);
 const creating = ref(false);
 const testing = ref(false);
 const triggerDateMs = ref<number | null>(Date.now());
+const emailTemplates = ref<EmailTemplate[]>([]);
 const newReminder = ref<{
   client_id: number | null;
   title: string;
   email_to: string;
   body: string;
+  email_template_id: number | null;
 } | null>(null);
 
 const clientOptions = computed(() =>
   clientsStore.rows.map((c: Client) => ({
     label: c.email ? `${c.display_name}  ·  ${c.email}` : c.display_name,
     value: c.id,
+  }))
+);
+
+const emailTemplateOptions = computed(() =>
+  emailTemplates.value.map((t) => ({
+    label: t.is_default ? `${t.name}  (ברירת מחדל)` : t.name,
+    value: t.id,
   }))
 );
 
@@ -135,20 +153,25 @@ function load() {
 }
 
 onMounted(async () => {
-  await Promise.all([
+  const [, , templates] = await Promise.all([
     settingsStore.load(),
     clientsStore.fetch({ limit: 500 }),
+    api.emailTemplates.list(),
   ]);
+  emailTemplates.value = templates;
   load();
 });
 
 // ── Create new reminder ─────────────────────────────────────────────────────
 function openCreate() {
+  // Pre-select the default email template if there is one.
+  const defaultTpl = emailTemplates.value.find((t) => t.is_default);
   newReminder.value = {
     client_id: null,
     title: "",
     email_to: "",
     body: "",
+    email_template_id: defaultTpl?.id ?? null,
   };
   triggerDateMs.value = Date.now();
   showCreate.value = true;
@@ -192,6 +215,7 @@ async function doCreate() {
       title: newReminder.value.title,
       body: newReminder.value.body || null,
       email_to: normalizeEmailTo(newReminder.value.email_to),
+      email_template_id: newReminder.value.email_template_id,
     });
     message.success("תזכורת נוצרה");
     showCreate.value = false;

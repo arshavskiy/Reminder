@@ -35,7 +35,8 @@
       "Bash(curl -s -X POST http://127.0.0.1:3737/api/email-templates/vars -H 'Content-Type: application/json' -d '{\"html\":\"<p>{{title}} for {{client_company|the client}}</p>{{#if logo_url}}<img src={{logo_url}}/>{{/if}}\"}')",
       "Read(//tmp/**)",
       "Bash(curl -s -X POST http://127.0.0.1:3737/api/doc-templates/generate-from-text -H 'Content-Type: application/json' -d '{\"text\":\"רישיון רכב\\\\nמספר רישיון: 1234567\\\\nשם הבעלים: ישראל ישראלי\\\\nת.ז: 012345678\\\\nכתובת: רחוב הרצל 12, תל אביב\\\\nטלפון: 050-1234567\\\\nתאריך הוצאה: 15/03/2025\\\\nתוקף עד: 15/03/2027\\\\nסוג הרכב: פרטי\\\\nמספר רכב: 12-345-67\\\\nיצרן: טויוטה\\\\nדגם: קורולה\\\\nשנת ייצור: 2022\\\\nצבע: לבן\"}')",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

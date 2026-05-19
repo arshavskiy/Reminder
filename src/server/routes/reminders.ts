@@ -47,8 +47,9 @@ export function registerReminderRoutes(
     const db = getDb();
     const r = db
       .prepare(
-        `INSERT INTO reminders (source_type, source_id, client_id, document_id, trigger_date, advance_days, title, body, email_to)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO reminders (source_type, source_id, client_id, document_id,
+                                trigger_date, advance_days, title, body, email_to, email_template_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         body.source_type ?? "manual",
@@ -59,7 +60,8 @@ export function registerReminderRoutes(
         body.advance_days ?? 0,
         body.title,
         body.body ?? null,
-        body.email_to ?? null
+        body.email_to ?? null,
+        body.email_template_id ?? null
       );
     return json(db.prepare("SELECT * FROM reminders WHERE id = ?").get(r.lastInsertRowid), 201);
   });
@@ -72,11 +74,15 @@ export function registerReminderRoutes(
     db.prepare(
       `UPDATE reminders SET
          title=COALESCE(?,title), body=COALESCE(?,body), trigger_date=COALESCE(?,trigger_date),
-         email_to=COALESCE(?,email_to), status=COALESCE(?,status), updated_at=datetime('now')
+         email_to=COALESCE(?,email_to), status=COALESCE(?,status),
+         email_template_id=COALESCE(?,email_template_id),
+         updated_at=datetime('now')
        WHERE id=?`
     ).run(
       body.title ?? null, body.body ?? null, body.trigger_date ?? null,
-      body.email_to ?? null, body.status ?? null, id
+      body.email_to ?? null, body.status ?? null,
+      body.email_template_id ?? null,
+      id
     );
     return json(db.prepare("SELECT * FROM reminders WHERE id = ?").get(id));
   });

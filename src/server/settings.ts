@@ -32,6 +32,7 @@ const DEFAULTS: AppSettings = {
   reminderAdvanceDays: [90, 60, 30],
   reminderCheckIntervalMs: 60_000,
   testEmail: "",
+  testEmailTemplateId: null,
 
   watchFolderEnabled: false,
   watchFolder: "",

@@ -117,7 +117,7 @@ export const api = {
       const q = new URLSearchParams(params as Record<string, string>).toString();
       return get<{ rows: EmailLogEntry[]; total: number }>(`/email-log${q ? "?" + q : ""}`);
     },
-    test: (to: string) => post<{ success: boolean; error?: string }>("/email/test", { to }),
+    test: (to: string, templateId?: number | null) => post<{ success: boolean; error?: string }>("/email/test", { to, templateId }),
   },
 
   settings: {

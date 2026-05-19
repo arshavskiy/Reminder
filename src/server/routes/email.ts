@@ -15,9 +15,9 @@ export function registerEmailRoutes(router: Map<string, (req: Request) => Promis
   });
 
   router.set("POST /api/email/test", async (req) => {
-    const { to } = (await req.json()) as { to: string };
+    const { to, templateId } = (await req.json()) as { to: string; templateId?: number | null };
     if (!to) return json({ error: "to required" }, 400);
-    const result = await sendTestEmail(to);
+    const result = await sendTestEmail(to, templateId ?? null);
     return json(result);
   });
 }

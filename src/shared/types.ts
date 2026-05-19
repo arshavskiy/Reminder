@@ -29,6 +29,7 @@ export interface AppSettings {
   reminderAdvanceDays: number[];
   reminderCheckIntervalMs: number;
   testEmail: string;          // default recipient for test emails / test reminders
+  testEmailTemplateId: number | null;  // email template to use for test emails
 
   // Watch folder
   watchFolderEnabled: boolean;
@@ -113,7 +114,8 @@ export interface Reminder {
   advance_days: number;
   title: string;
   body: string | null;
-  email_to: string | null; // JSON array string
+  email_to: string | null;       // JSON array string
+  email_template_id: number | null;
   status: ReminderStatus;
   snoozed_until: string | null;
   created_at: string;

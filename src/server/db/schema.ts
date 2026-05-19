@@ -32,6 +32,10 @@ export function applySchema(db: Database) {
   addColumnIfMissing(db, "documents", "extracted_fields", "TEXT"); // JSON blob of dynamic fields
   addColumnIfMissing(db, "documents", "template_id", "INTEGER");   // FK to doc_templates
 
+  // Per-reminder email template override. When null, scheduler falls back to
+  // the doc-template-bound template, then to the global default.
+  addColumnIfMissing(db, "reminders", "email_template_id", "INTEGER");
+
   db.run(`
     CREATE TABLE IF NOT EXISTS clients (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,

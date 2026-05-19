@@ -4,7 +4,7 @@ import { join, extname } from "path";
 import { getSettings, getDataDir } from "../settings.js";
 import { getDb } from "../db/db.js";
 import { renderTemplate, type EmailVars } from "../templates/renderEmail.js";
-import { pickEmailTemplate } from "../templates/seedEmailTemplates.js";
+import { pickEmailTemplate, loadEmailTemplate } from "../templates/seedEmailTemplates.js";
 import type { ReminderWithContext } from "../../shared/types.js";
 
 function buildTransport() {
@@ -131,15 +131,26 @@ function logoToDataUrl(logoPath: string | null | undefined): string | null {
 function renderReminderEmail(reminder: ReminderWithContext): { subject: string; html: string } {
   const db = getDb();
 
-  // Pick the email template via the document's chosen doc_template
-  let docTemplateId: number | null = null;
-  if (reminder.document_id) {
-    const row = db
-      .prepare("SELECT template_id FROM documents WHERE id = ?")
-      .get(reminder.document_id) as { template_id: number | null } | null;
-    docTemplateId = row?.template_id ?? null;
+  // Template selection cascade:
+  //   1. If the reminder has an explicit email_template_id, use it.
+  //   2. Else look up the document's doc_template_id and find the email
+  //      template bound to it.
+  //   3. Else fall back to the global default email template.
+  let tpl = null as ReturnType<typeof loadEmailTemplate>;
+  if (reminder.email_template_id) {
+    tpl = loadEmailTemplate(db, reminder.email_template_id);
   }
-  const tpl = pickEmailTemplate(db, docTemplateId);
+
+  if (!tpl) {
+    let docTemplateId: number | null = null;
+    if (reminder.document_id) {
+      const row = db
+        .prepare("SELECT template_id FROM documents WHERE id = ?")
+        .get(reminder.document_id) as { template_id: number | null } | null;
+      docTemplateId = row?.template_id ?? null;
+    }
+    tpl = pickEmailTemplate(db, docTemplateId);
+  }
 
   const vars = buildEmailVars(reminder);
   vars.logo_url = logoToDataUrl(tpl?.logo_path);
@@ -224,8 +235,8 @@ export async function sendReminderEmail(
     const transport = buildTransport();
     const { subject, html } = renderReminderEmail(reminder);
     await transport.sendMail({
-      from: settings.emailFromName
-        ? `"${settings.emailFromName}" <${settings.emailFrom}>`
+      from: settings.emailFrom
+        ? `"${settings.emailFrom}" <${settings.emailFromName}>`
         : settings.emailFrom,
       to: recipients.join(", "),
       subject,
@@ -243,7 +254,7 @@ export function previewReminderEmail(reminder: ReminderWithContext) {
   return renderReminderEmail(reminder);
 }
 
-export async function sendTestEmail(to: string): Promise<{ success: boolean; error?: string }> {
+export async function sendTestEmail(to: string, emailTemplateId: number | null = null): Promise<{ success: boolean; error?: string }> {
   const settings = getSettings();
   if (!settings.smtpHost) return { success: false, error: "SMTP not configured (host is empty)" };
   if (!to) return { success: false, error: "Recipient address is empty" };
@@ -254,13 +265,42 @@ export async function sendTestEmail(to: string): Promise<{ success: boolean; err
     // Verify the connection + auth first — gives a clearer error than sendMail()
     await transport.verify();
 
+    let subject = "[Client Reminder] בדיקת חיבור אימייל";
+    let html = "חיבור ה-SMTP עובד בהצלחה! This is a test email from Client Reminder.";
+
+    // If a template is specified, use it with sample data
+    if (emailTemplateId) {
+      const tpl = loadEmailTemplate(getDb(), emailTemplateId);
+      if (tpl) {
+        const sampleVars: EmailVars = {
+          title: "בדיקה לדוגמה",
+          trigger_date: new Date().toISOString().split("T")[0],
+          advance_days: 30,
+          body: "זהו דוא״ל בדיקה באמצעות תבנית שנבחרה.",
+          client_name: "לקוח לדוגמה",
+          document_name: "מסמך לדוגמה",
+          from_name: settings.emailFromName,
+          client_company: "חברה לדוגמה",
+          contact_email: to,
+          contact_phone: "050-1234567",
+          document_type: "בדיקה",
+          document_number: "001",
+          contact_person: "איש קשר לדוגמה",
+        };
+        subject = renderTemplate(tpl.subject, sampleVars, { escape: false }) || subject;
+        html = renderTemplate(tpl.html, sampleVars, { escape: false }) || html;
+      }
+    }
+
+    console.log('emails html', html);
+
     await transport.sendMail({
       from: settings.emailFromName
         ? `"${settings.emailFromName}" <${settings.emailFrom || settings.smtpUser}>`
         : settings.emailFrom || settings.smtpUser,
       to,
-      subject: "[Client Reminder] בדיקת חיבור אימייל",
-      text: "חיבור ה-SMTP עובד בהצלחה! This is a test email from Client Reminder.",
+      subject,
+      html,
     });
     return { success: true };
   } catch (err) {

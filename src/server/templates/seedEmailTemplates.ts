@@ -10,7 +10,7 @@ const DEFAULT_HTML = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; background: #f5f7fa; padding: 24px; color: #2c3e50; margin: 0; }
-    .card { background: #ffffff; border-radius: 12px; padding: 32px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+    .card { background: #ffffff; border-radius: 12px; padding: 32px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: right;}
     .logo { text-align: center; margin-bottom: 16px; }
     .logo img { max-height: 56px; }
     h1 { color: #18a058; margin: 0 0 8px; font-size: 22px; }

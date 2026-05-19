@@ -74,6 +74,15 @@
             <n-form-item label="כתובת לבדיקות (Test Email)">
               <n-input v-model:value="form.testEmail" placeholder="me@example.com" />
             </n-form-item>
+            <n-form-item label="תבנית אימייל לבדיקה">
+              <n-select
+                v-model:value="form.testEmailTemplateId"
+                :options="emailTemplateOptions"
+                placeholder="בחר תבנית (או השתמש בברירת מחדל)"
+                clearable
+                :virtual-scroll="false"
+              />
+            </n-form-item>
             <n-space>
               <n-button @click="testSmtp" :loading="testing" :disabled="!form.testEmail">
                 שלח אימייל בדיקה ל-{{ form.testEmail || '...' }}
@@ -118,23 +127,34 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { onMounted, ref, watch, computed } from "vue";
 import {
   NH2, NCard, NForm, NFormItem, NInput, NInputNumber, NRadioGroup, NRadio,
-  NSwitch, NGrid, NGi, NSpace, NButton, NSpin, useMessage,
+  NSwitch, NGrid, NGi, NSpace, NButton, NSpin, NSelect, useMessage,
 } from "naive-ui";
 import { useSettingsStore } from "../stores/settings.js";
 import { api } from "../services/apiService.js";
-import type { AppSettings } from "@shared/types.js";
+import type { AppSettings, EmailTemplate } from "@shared/types.js";
 
 const settingsStore = useSettingsStore();
 const message = useMessage();
 const form = ref<AppSettings | null>(null);
 const testing = ref(false);
+const emailTemplates = ref<EmailTemplate[]>([]);
+
+const emailTemplateOptions = computed(() =>
+  emailTemplates.value.map((t) => ({ label: t.name, value: t.id }))
+);
 
 onMounted(async () => {
   await settingsStore.load();
   form.value = { ...settingsStore.settings! };
+  // ...existing code...
+  try {
+    emailTemplates.value = await api.emailTemplates.list();
+  } catch (e) {
+    console.error("Failed to load email templates:", e);
+  }
 });
 
 async function save() {
@@ -149,7 +169,7 @@ async function testSmtp() {
   await settingsStore.save(form.value);
   testing.value = true;
   try {
-    const r = await api.email.test(form.value.testEmail);
+    const r = await api.email.test(form.value.testEmail, form.value.testEmailTemplateId);
     if (r.success) message.success(`האימייל נשלח ל-${form.value.testEmail}`);
     else message.error(r.error ?? "שגיאה");
   } finally {
