@@ -4,6 +4,55 @@ export function applySchema(db: Database) {
   db.run("PRAGMA journal_mode = WAL");
   db.run("PRAGMA foreign_keys = ON");
 
+  // ── Phase 2: Multi-user Authentication ──────────────────────────────────────
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      google_sub      TEXT NOT NULL UNIQUE,
+      email           TEXT NOT NULL UNIQUE,
+      name            TEXT,
+      picture_url     TEXT,
+      role            TEXT NOT NULL DEFAULT 'user',
+      is_active       INTEGER NOT NULL DEFAULT 1,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      last_login_at   TEXT
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)`);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id              TEXT PRIMARY KEY,
+      user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at      TEXT NOT NULL,
+      user_agent      TEXT,
+      ip              TEXT
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_exp  ON sessions (expires_at)`);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id              INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      theme                TEXT DEFAULT 'light',
+      email_from_name      TEXT,
+      reminder_advance_days TEXT DEFAULT '[90,60,30]',
+      ocr_language         TEXT DEFAULT 'heb+eng'
+    )
+  `);
+
+  // Add user_id to existing tables (Phase 2 scoping)
+  addColumnIfMissing(db, "documents", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE");
+  addColumnIfMissing(db, "clients", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE");
+  addColumnIfMissing(db, "contracts", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE");
+  addColumnIfMissing(db, "reminders", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE");
+  addColumnIfMissing(db, "tasks", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE");
+  addColumnIfMissing(db, "extractions", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE");
+  addColumnIfMissing(db, "email_log", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE");
+  addColumnIfMissing(db, "timeline_events", "user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE");
+
   db.run(`
     CREATE TABLE IF NOT EXISTS documents (
       id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,6 +105,14 @@ export function applySchema(db: Database) {
   `);
   db.run(`CREATE INDEX IF NOT EXISTS idx_equipment_category ON equipment (category)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_equipment_active   ON equipment (is_active)`);
+  // Remove accidental duplicates (keep the earliest id per name+category) and
+  // add a UNIQUE index to enforce the constraint going forward. This makes the
+  // seeding and subsequent server restarts idempotent even if old DBs contain
+  // duplicate seed rows.
+  // NOTE: deleting rows is destructive for duplicates — a backup is recommended
+  // before running this in production.
+  db.run("DELETE FROM equipment WHERE id NOT IN (SELECT MIN(id) FROM equipment GROUP BY name, category);");
+  db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_equipment_unique_name_cat ON equipment (name, category);");
 
   db.run(`
     CREATE TABLE IF NOT EXISTS clients (
@@ -212,6 +269,16 @@ export function applySchema(db: Database) {
   db.run(`CREATE INDEX IF NOT EXISTS idx_reminder_status  ON reminders (status)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_task_due         ON tasks (due_date)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_timeline_client  ON timeline_events (client_id, event_date DESC)`);
+
+  // Phase 2: User scoping indexes
+  db.run(`CREATE INDEX IF NOT EXISTS idx_documents_user   ON documents (user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_clients_user     ON clients (user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_contracts_user   ON contracts (user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_reminders_user   ON reminders (user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_user       ON tasks (user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_extractions_user ON extractions (user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_email_log_user   ON email_log (user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_timeline_user    ON timeline_events (user_id)`);
 
   // ── Document templates ──────────────────────────────────────────────────────
   // User-defined "what to extract" recipes. The AI prompt is generated from these.

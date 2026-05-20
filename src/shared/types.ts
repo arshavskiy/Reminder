@@ -34,6 +34,43 @@ export interface AppSettings {
   // Watch folder
   watchFolderEnabled: boolean;
   watchFolder: string;
+
+  // Phase 2: Google OAuth
+  googleClientId?: string;
+  googleClientSecret?: string;
+  googleRedirectUri?: string;
+  sessionSecret?: string;
+  allowedEmails?: string[];
+}
+
+// Phase 2: Authentication types
+export interface User {
+  id: number;
+  google_sub: string;
+  email: string;
+  name: string | null;
+  picture_url: string | null;
+  role: "admin" | "user";
+  is_active: number;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface Session {
+  id: string;
+  user_id: number;
+  created_at: string;
+  expires_at: string;
+  user_agent: string | null;
+  ip: string | null;
+}
+
+export interface UserSettings {
+  user_id: number;
+  theme: "dark" | "light";
+  email_from_name: string | null;
+  reminder_advance_days: string;  // JSON array as string
+  ocr_language: string;
 }
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";

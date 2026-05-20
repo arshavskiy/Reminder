@@ -24,24 +24,22 @@
               >{{ item.label }}</a>
             </nav>
 
-            <!-- Tail actions: theme toggle + avatar -->
-            <div class="appbar__actions">
-              <n-tooltip placement="bottom" :keep-alive-on-hover="false">
-                <template #trigger>
-                  <button
-                    class="iconbtn"
-                    :aria-label="isDark ? 'החלף למצב בהיר' : 'החלף למצב כהה'"
-                    @click="toggleTheme"
-                  >
-                    <n-icon :component="isDark ? SunnyOutline : MoonOutline" :size="18" />
-                  </button>
-                </template>
-                {{ isDark ? "מצב בהיר" : "מצב כהה" }}
-              </n-tooltip>
-              <div class="avatar" title="פרופיל" @click="router.push('/settings')">
-                <n-icon :component="PersonOutline" :size="18" />
-              </div>
-            </div>
+             <!-- Tail actions: theme toggle + user dropdown -->
+             <div class="appbar__actions">
+               <n-tooltip placement="bottom" :keep-alive-on-hover="false">
+                 <template #trigger>
+                   <button
+                     class="iconbtn"
+                     :aria-label="isDark ? 'החלף למצב בהיר' : 'החלף למצב כהה'"
+                     @click="toggleTheme"
+                   >
+                     <n-icon :component="isDark ? SunnyOutline : MoonOutline" :size="18" />
+                   </button>
+                 </template>
+                 {{ isDark ? "מצב בהיר" : "מצב כהה" }}
+               </n-tooltip>
+               <UserDropdown userName="משתמש בדיקה" userEmail="demo@example.com" />
+             </div>
           </header>
 
           <!-- ── Main content ───────────────────────────────────────────── -->
@@ -76,9 +74,10 @@ import {
   unstableUploadsRtl, unstableScrollbarRtl,
 } from "naive-ui";
 import {
-  SunnyOutline, MoonOutline, BriefcaseOutline, PersonOutline,
+  SunnyOutline, MoonOutline, BriefcaseOutline,
 } from "@vicons/ionicons5";
 import WsConnector from "./components/WsConnector.vue";
+import UserDropdown from "./components/UserDropdown.vue";
 import { useSettingsStore } from "./stores/settings.js";
 
 const rtlConfig = [

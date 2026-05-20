@@ -37,18 +37,26 @@ const SEEDS: SeedRow[] = [
 ];
 
 export function seedBuiltinEquipment(db: Database) {
+  // Safely seed rows only when an identical (name+category) row doesn't already exist.
+  // Using INSERT OR IGNORE relied on a UNIQUE constraint which this schema doesn't
+  // provide, so repeated server starts inserted duplicates. Check first to avoid
+  // creating duplicates on every run.
   const insert = db.prepare(
-    `INSERT OR IGNORE INTO equipment (name, category, manufacturer, model, capacity, description, is_active)
+    `INSERT INTO equipment (name, category, manufacturer, model, capacity, description, is_active)
      VALUES (?, ?, ?, ?, ?, ?, 1)`
   );
+  const find = db.prepare(`SELECT id FROM equipment WHERE name = ? AND category = ? LIMIT 1`);
   for (const s of SEEDS) {
-    insert.run(
-      s.name,
-      s.category,
-      s.manufacturer ?? null,
-      s.model ?? null,
-      s.capacity ?? null,
-      s.description ?? null
-    );
+    const exists = find.get(s.name, s.category);
+    if (!exists) {
+      insert.run(
+        s.name,
+        s.category,
+        s.manufacturer ?? null,
+        s.model ?? null,
+        s.capacity ?? null,
+        s.description ?? null
+      );
+    }
   }
 }

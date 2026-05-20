@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <style>
+    .bg { fill: #F5F7FA }
+    .card { fill: #FFFFFF; stroke: #E6EEF8; rx:12; }
+    .muted { fill: #6B7280; font-family: Inter, Roboto, Arial; }
+    .title { fill: #0F172A; font-family: Inter, Roboto, Arial; font-weight:700 }
+    .accent { fill: #2563EB }
+    .button { fill: #2563EB; rx:8 }
+    .button-text { fill: #FFFFFF; font-weight:700 }
+  </style>
+  <rect class="bg" width="1200" height="800"/>
+  <!-- Header -->
+  <rect x="0" y="0" width="1200" height="80" fill="#0F172A"/>
+  <text x="40" y="50" fill="#FFFFFF" font-size="20" font-family="Inter, Roboto, Arial" font-weight="700">Reminder — Profile</text>
+
+  <!-- Main card -->
+  <rect class="card" x="120" y="120" width="960" height="540"/>
+
+  <!-- Avatar -->
+  <circle cx="300" cy="260" r="68" fill="#DDEAFE" stroke="#BFDBFE" stroke-width="2"/>
+  <text x="300" y="270" text-anchor="middle" fill="#1E293B" font-size="28" font-family="Inter, Roboto, Arial" font-weight="700">AB</text>
+
+  <!-- Name & role -->
+  <text x="420" y="230" class="title" font-size="24">Alex Brown</text>
+  <text x="420" y="260" class="muted" font-size="14">Product Manager</text>
+
+  <!-- Action buttons -->
+  <g transform="translate(420,280)">
+    <rect class="button" x="0" y="0" width="120" height="40"/>
+    <text class="button-text" x="60" y="26" font-size="14" text-anchor="middle" font-family="Inter, Roboto, Arial">Edit Profile</text>
+    <rect x="140" y="0" width="120" height="40" fill="#F3F4F6" rx="8"/>
+    <text x="200" y="26" font-size="14" text-anchor="middle" fill="#111827" font-family="Inter, Roboto, Arial">Settings</text>
+  </g>
+
+  <!-- Contact & bio card -->
+  <rect x="420" y="340" width="560" height="200" rx="10" fill="#FBFEFF" stroke="#E6EEF8"/>
+  <text x="440" y="370" fill="#0F172A" font-size="16" font-family="Inter, Roboto, Arial" font-weight="600">Contact</text>
+  <text x="440" y="395" class="muted" font-size="14">alex@example.com • +1 (555) 123-4567</text>
+  <text x="440" y="430" fill="#0F172A" font-size="16" font-family="Inter, Roboto, Arial" font-weight="600">About</text>
+  <text x="440" y="455" class="muted" font-size="14" width="520">Experienced product manager focused on building reminder and scheduling features that help teams stay on track. Loves simple, clean UX and automation.</text>
+
+  <!-- Stats -->
+  <g>
+    <rect x="120" y="420" width="320" height="120" rx="10" fill="#FFFFFF" stroke="#E6EEF8"/>
+    <text x="160" y="455" fill="#0F172A" font-size="20" font-family="Inter, Roboto, Arial" font-weight="700">24</text>
+    <text x="160" y="480" class="muted" font-size="12">Active Reminders</text>
+
+    <rect x="460" y="420" width="320" height="120" rx="10" fill="#FFFFFF" stroke="#E6EEF8"/>
+    <text x="500" y="455" fill="#0F172A" font-size="20" font-family="Inter, Roboto, Arial" font-weight="700">8</text>
+    <text x="500" y="480" class="muted" font-size="12">Snoozed</text>
+
+    <rect x="800" y="420" width="280" height="120" rx="10" fill="#FFFFFF" stroke="#E6EEF8"/>
+    <text x="900" y="455" fill="#0F172A" font-size="20" font-family="Inter, Roboto, Arial" font-weight="700">12</text>
+    <text x="900" y="480" class="muted" font-size="12">Completed</text>
+  </g>
+
+  <!-- Footer note -->
+  <text x="120" y="690" class="muted" font-size="12">Variant 1 — refined spacing, clean card layout, Material-like palette</text>
+</svg>

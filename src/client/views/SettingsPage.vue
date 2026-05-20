@@ -1,19 +1,10 @@
 <template>
   <div style="max-width: 600px">
-<!--    <n-h2>הגדרות</n-h2>-->
+    <PageHeader title="הגדרות" subtitle="הגדרות כלליות של המערכת" />
 
     <n-spin :show="settingsStore.loading || settingsStore.saving">
       <template v-if="form">
-        <n-card title="מראה" style="margin-bottom: 16px">
-          <n-form label-placement="top">
-            <n-form-item label="ערכת נושא">
-              <n-radio-group v-model:value="form.theme">
-                <n-radio value="dark">🌙 כהה</n-radio>
-                <n-radio value="light">☀️ בהיר</n-radio>
-              </n-radio-group>
-            </n-form-item>
-          </n-form>
-        </n-card>
+        <!-- Theme moved to personal profile settings (ProfilePage.vue) - keep global settings page theme link unchanged -->
 
         <n-card title="בינה מלאכותית (AI)" style="margin-bottom: 16px">
           <n-form label-placement="top">
@@ -128,6 +119,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch, computed } from "vue";
+import PageHeader from "../components/PageHeader.vue";
 import {
   NH2, NCard, NForm, NFormItem, NInput, NInputNumber, NRadioGroup, NRadio,
   NSwitch, NGrid, NGi, NSpace, NButton, NSpin, NSelect, useMessage,

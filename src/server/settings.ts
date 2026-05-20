@@ -36,6 +36,13 @@ const DEFAULTS: AppSettings = {
 
   watchFolderEnabled: false,
   watchFolder: "",
+
+  // Phase 2: Google OAuth
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:3737/auth/google/callback",
+  sessionSecret: process.env.SESSION_SECRET ?? "",
+  allowedEmails: process.env.ALLOWED_EMAILS?.split(",") ?? [],
 };
 
 function resolveDataDir(): string {
