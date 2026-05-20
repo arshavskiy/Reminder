@@ -10,6 +10,7 @@ import SearchPage from "../views/SearchPage.vue";
 import SettingsPage from "../views/SettingsPage.vue";
 import DocTemplatesPage from "../views/DocTemplatesPage.vue";
 import EmailTemplatesPage from "../views/EmailTemplatesPage.vue";
+import EquipmentPage from "../views/EquipmentPage.vue";
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -25,5 +26,6 @@ export const router = createRouter({
     { path: "/settings", component: SettingsPage },
     { path: "/doc-templates", component: DocTemplatesPage },
     { path: "/email-templates", component: EmailTemplatesPage },
+    { path: "/equipment", component: EquipmentPage },
   ],
 });

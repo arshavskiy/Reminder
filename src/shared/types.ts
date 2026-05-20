@@ -257,6 +257,31 @@ export interface DocTemplate {
   updated_at: string;
 }
 
+// ── Equipment catalogue ─────────────────────────────────────────────────────
+export type EquipmentCategory =
+  | "lift"          // מכונות הרמה
+  | "accessory"     // אביזרי הרמה
+  | "scaffold"      // פיגומים
+  | "ladder"        // מעליות
+  | "balloon"       // מעלונים
+  | "intake"        // קולטי אוויר
+  | "extractor"     // קולטי קיטור
+  | "other";
+
+export interface Equipment {
+  id: number;
+  name: string;
+  category: EquipmentCategory;
+  manufacturer: string | null;
+  model: string | null;
+  capacity: string | null;
+  description: string | null;
+  notes: string | null;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Email templates ─────────────────────────────────────────────────────────
 export interface EmailTemplate {
   id: number;

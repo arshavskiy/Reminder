@@ -2,58 +2,55 @@
   <n-config-provider :theme="theme" :theme-overrides="themeOverrides" :rtl="rtlConfig">
     <n-message-provider>
       <n-dialog-provider>
-        <n-layout has-sider style="height: 100vh">
-          <n-layout-sider
-            bordered
-            collapse-mode="width"
-            :collapsed-width="64"
-            :width="220"
-            :collapsed="collapsed"
-            show-trigger
-            @collapse="collapsed = true"
-            @expand="collapsed = false"
-          >
-            <div class="brand" :class="{ 'brand--collapsed': collapsed }">
-              <n-icon :component="BriefcaseOutline" size="22" />
-              <span v-if="!collapsed" class="brand__text">תזכורת לקוח</span>
-            </div>
-            <n-menu
-              :collapsed="collapsed"
-              :collapsed-width="64"
-              :collapsed-icon-size="22"
-              :options="menuOptions"
-              :value="activeKey"
-              @update:value="navigate"
-            />
-          </n-layout-sider>
-
-          <n-layout>
-            <!-- Top app bar -->
-            <header class="topbar">
-              <div class="topbar__title">{{ activePageTitle }}</div>
-              <div class="topbar__actions">
-                <n-tooltip :trigger="'hover'" placement="bottom">
-                  <template #trigger>
-                    <n-button
-                      circle
-                      :aria-label="isDark ? 'החלף למצב בהיר' : 'החלף למצב כהה'"
-                      @click="toggleTheme"
-                    >
-                      <template #icon>
-                        <n-icon :component="isDark ? SunnyOutline : MoonOutline" />
-                      </template>
-                    </n-button>
-                  </template>
-                  {{ isDark ? "מצב בהיר" : "מצב כהה" }}
-                </n-tooltip>
+        <div class="app-shell">
+          <!-- ── Top horizontal app bar ─────────────────────────────────── -->
+          <header class="appbar">
+            <!-- Brand on the right (RTL "start") -->
+            <div class="appbar__brand" @click="router.push('/')">
+              <div class="appbar__logo">
+                <n-icon :component="BriefcaseOutline" :size="22" />
               </div>
-            </header>
+              <span class="appbar__brand-text">תזכורת לקוח</span>
+            </div>
 
-            <n-layout-content class="content">
-              <router-view />
-            </n-layout-content>
-          </n-layout>
-        </n-layout>
+            <!-- Center nav -->
+            <nav class="appbar__nav">
+              <a
+                v-for="item in primaryNav"
+                :key="item.key"
+                class="navlink"
+                :class="{ 'navlink--active': activeKey === item.key }"
+                @click="navigate(item.key)"
+              >{{ item.label }}</a>
+            </nav>
+
+            <!-- Tail actions: theme toggle + avatar -->
+            <div class="appbar__actions">
+              <n-tooltip placement="bottom" :keep-alive-on-hover="false">
+                <template #trigger>
+                  <button
+                    class="iconbtn"
+                    :aria-label="isDark ? 'החלף למצב בהיר' : 'החלף למצב כהה'"
+                    @click="toggleTheme"
+                  >
+                    <n-icon :component="isDark ? SunnyOutline : MoonOutline" :size="18" />
+                  </button>
+                </template>
+                {{ isDark ? "מצב בהיר" : "מצב כהה" }}
+              </n-tooltip>
+              <div class="avatar" title="פרופיל" @click="router.push('/settings')">
+                <n-icon :component="PersonOutline" :size="18" />
+              </div>
+            </div>
+          </header>
+
+          <!-- ── Main content ───────────────────────────────────────────── -->
+          <main class="content">
+            <div class="page">
+            <router-view />
+            </div>
+          </main>
+        </div>
 
         <WsConnector />
       </n-dialog-provider>
@@ -62,27 +59,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, h } from "vue";
+import { computed, onMounted, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import {
-  darkTheme, NConfigProvider, NLayout, NLayoutSider, NLayoutContent,
-  NMenu, NMessageProvider, NDialogProvider, NButton, NIcon, NTooltip,
-  // Per-component RTL config objects. Naive UI exports them with an
-  // `unstable` prefix; we alias them back to short names for readability.
-  unstableAlertRtl,        unstableAvatarGroupRtl, unstableBadgeRtl,
-  unstableButtonRtl,       unstableButtonGroupRtl, unstableCardRtl,
-  unstableCheckboxRtl,     unstableCollapseRtl,
-  unstableCollapseTransitionRtl, unstableDataTableRtl, unstableDialogRtl,
-  unstableDrawerRtl,       unstableDynamicInputRtl, unstableFlexRtl,
-  unstableInputRtl,        unstableInputNumberRtl,  unstableListRtl,
-  unstableMessageRtl,      unstableNotificationRtl, unstablePaginationRtl,
-  unstablePopoverRtl,      unstableRadioRtl,        unstableSelectRtl,
-  unstableSpaceRtl,        unstableStatisticRtl,    unstableStepsRtl,
-  unstableTableRtl,        unstableTagRtl,          unstableTreeRtl,
-  unstableTreeSelectRtl,   unstableUploadsRtl,      unstableScrollbarRtl,
+  darkTheme, NConfigProvider, NMessageProvider, NDialogProvider, NIcon, NTooltip,
+  unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
+  unstableButtonRtl, unstableButtonGroupRtl, unstableCardRtl,
+  unstableCheckboxRtl, unstableCollapseRtl, unstableCollapseTransitionRtl,
+  unstableDataTableRtl, unstableDialogRtl, unstableDrawerRtl,
+  unstableDynamicInputRtl, unstableFlexRtl, unstableInputRtl,
+  unstableInputNumberRtl, unstableListRtl, unstableMessageRtl,
+  unstableNotificationRtl, unstablePaginationRtl, unstablePopoverRtl,
+  unstableRadioRtl, unstableSelectRtl, unstableSpaceRtl,
+  unstableStatisticRtl, unstableStepsRtl, unstableTableRtl,
+  unstableTagRtl, unstableTreeRtl, unstableTreeSelectRtl,
+  unstableUploadsRtl, unstableScrollbarRtl,
 } from "naive-ui";
+import {
+  SunnyOutline, MoonOutline, BriefcaseOutline, PersonOutline,
+} from "@vicons/ionicons5";
+import WsConnector from "./components/WsConnector.vue";
+import { useSettingsStore } from "./stores/settings.js";
 
-// Flat RTL info list for n-config-provider :rtl
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
   unstableButtonRtl, unstableButtonGroupRtl, unstableCardRtl,
@@ -96,22 +94,12 @@ const rtlConfig = [
   unstableTagRtl, unstableTreeRtl, unstableTreeSelectRtl,
   unstableUploadsRtl, unstableScrollbarRtl,
 ];
-import {
-  HomeOutline, DocumentTextOutline, PeopleOutline, ClipboardOutline,
-  AlarmOutline, SearchOutline, SettingsOutline,
-  SunnyOutline, MoonOutline, BriefcaseOutline,
-  ExtensionPuzzleOutline, MailOutline,
-} from "@vicons/ionicons5";
-import WsConnector from "./components/WsConnector.vue";
-import { useSettingsStore } from "./stores/settings.js";
 
 const router = useRouter();
 const route = useRoute();
-const collapsed = ref(false);
 const settingsStore = useSettingsStore();
 
-// ── Theme ─────────────────────────────────────────────────────────────────────
-// Light is the default. Falls back to "light" if settings haven't loaded yet.
+// ── Theme ────────────────────────────────────────────────────────────────────
 const isDark = computed(() => (settingsStore.settings?.theme ?? "light") === "dark");
 const theme = computed(() => (isDark.value ? darkTheme : null));
 
@@ -132,93 +120,153 @@ async function toggleTheme() {
 
 onMounted(() => settingsStore.load());
 
-watch(
-  isDark,
-  (dark) => {
-    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-  },
-  { immediate: true }
-);
+watch(isDark, (dark) => {
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+}, { immediate: true });
 
-// ── Nav ───────────────────────────────────────────────────────────────────────
-const activeKey = computed(() => route.path.split("/")[1] || "dashboard");
+// ── Nav ──────────────────────────────────────────────────────────────────────
+// Top-bar primary nav. Matches the Spects design — terse Hebrew labels.
+// Settings is reached via the avatar; templates / search are hidden from the
+// primary bar to keep it sparse (matches the spec which shows ~6 items).
+const primaryNav = [
+  { label: "לוח בקרה",        key: "dashboard" },
+  { label: "ניהול תסקירים",   key: "contracts" },   // route stays /contracts (handles both)
+  { label: "לקוחות",           key: "clients" },
+  { label: "הגדרת ציוד",       key: "equipment" },
+  { label: "תבניות אימייל",    key: "email-templates" },
+  { label: "תזכורות",          key: "reminders" },
+];
 
-function renderIcon(icon: Component) {
-  return () => h(NIcon, null, { default: () => h(icon) });
-}
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type Component = unknown;
+const activeKey = computed(() => {
+  const seg = route.path.split("/")[1] || "dashboard";
+  return seg;
+});
 
 function navigate(key: string) {
   router.push(key === "dashboard" ? "/" : `/${key}`);
 }
-
-const menuOptions = [
-  { label: "לוח בקרה", key: "dashboard", icon: renderIcon(HomeOutline) },
-  { label: "מסמכים", key: "documents", icon: renderIcon(DocumentTextOutline) },
-  { label: "לקוחות", key: "clients", icon: renderIcon(PeopleOutline) },
-  { label: "חוזים", key: "contracts", icon: renderIcon(ClipboardOutline) },
-  { label: "תזכורות", key: "reminders", icon: renderIcon(AlarmOutline) },
-  { label: "תבניות מסמכים", key: "doc-templates", icon: renderIcon(ExtensionPuzzleOutline) },
-  { label: "תבניות אימייל", key: "email-templates", icon: renderIcon(MailOutline) },
-  { label: "חיפוש", key: "search", icon: renderIcon(SearchOutline) },
-  { label: "הגדרות", key: "settings", icon: renderIcon(SettingsOutline) },
-];
-
-const activePageTitle = computed(() => {
-  const found = menuOptions.find((m) => m.key === activeKey.value);
-  return found?.label ?? "תזכורת לקוח";
-});
 </script>
 
 <style scoped>
-.brand {
+.app-shell {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 18px 20px;
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--brand-color);
-  white-space: nowrap;
-  overflow: hidden;
-  border-bottom: 1px solid var(--border-color);
-}
-.brand--collapsed {
-  justify-content: center;
-  padding: 18px 0;
-}
-.brand__text {
-  letter-spacing: 0.2px;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-app);
 }
 
-.topbar {
+/* ── App bar ──────────────────────────────────────────────────────────────── */
+.appbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 56px;
-  padding: 0 20px;
+  gap: 32px;
+  height: 64px;
+  padding: 0 28px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 100;
 }
-.topbar__title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.topbar__actions {
+
+.appbar__brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.appbar__logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--brand-color), var(--brand-color-hover));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.appbar__brand-text {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-primary);
+  letter-spacing: 0.2px;
 }
 
+.appbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+.navlink {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap;
+}
+.navlink:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.navlink--active {
+  background: rgba(99, 226, 183, 0.14); /* tinted with brand */
+  color: var(--brand-color);
+  font-weight: 600;
+}
+html[data-theme="light"] .navlink--active {
+  background: rgba(24, 160, 88, 0.10);
+}
+
+.appbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.iconbtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.iconbtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.avatar:hover { background: var(--bg-hover); }
+
+/* ── Content ──────────────────────────────────────────────────────────────── */
 .content {
-  padding: 24px;
+  flex: 1;
   overflow-y: auto;
-  height: calc(100vh - 56px);
+  padding: 32px 48px;
   background: var(--bg-app);
 }
 </style>

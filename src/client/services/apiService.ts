@@ -3,7 +3,7 @@ import type {
   DashboardStats, GlobalSearchResult, EmailLogEntry,
   Extraction, ReminderWithContext, ContractWithClient,
   ClientDetail, WsEvent, AppSettings,
-  DocTemplate, EmailTemplate,
+  DocTemplate, EmailTemplate, Equipment,
 } from "@shared/types.js";
 
 const BASE = "/api";
@@ -39,6 +39,21 @@ async function del(path: string): Promise<void> {
   if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`);
 }
 
+/**
+ * Serialize an object to a querystring while dropping undefined/null/empty
+ * values. The naive `new URLSearchParams(params).toString()` stringifies
+ * missing values as the literal text "undefined" which breaks server filters.
+ */
+function qs(params?: Record<string, unknown>): string {
+  if (!params) return "";
+  const clean: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") clean[k] = String(v);
+  }
+  const s = new URLSearchParams(clean).toString();
+  return s ? "?" + s : "";
+}
+
 // ── Dashboard ────────────────────────────────────────────────────────────────
 export const api = {
   dashboard: {
@@ -47,8 +62,7 @@ export const api = {
 
   documents: {
     list: (params?: { status?: string; limit?: number; offset?: number }) => {
-      const q = new URLSearchParams(params as Record<string, string>).toString();
-      return get<{ rows: Document[]; total: number }>(`/documents${q ? "?" + q : ""}`);
+      return get<{ rows: Document[]; total: number }>(`/documents${qs(params)}`);
     },
     get: (id: number) => get<Document>(`/documents/${id}`),
     import: (filePath: string) => post<{ id: number }>("/documents/import", { filePath }),
@@ -65,8 +79,7 @@ export const api = {
 
   clients: {
     list: (params?: { q?: string; limit?: number; offset?: number }) => {
-      const q = new URLSearchParams(params as Record<string, string>).toString();
-      return get<{ rows: Client[]; total: number }>(`/clients${q ? "?" + q : ""}`);
+      return get<{ rows: Client[]; total: number }>(`/clients${qs(params)}`);
     },
     get: (id: number) => get<ClientDetail>(`/clients/${id}`),
     create: (body: Partial<Client>) => post<Client>("/clients", body),
@@ -78,8 +91,7 @@ export const api = {
 
   contracts: {
     list: (params?: { clientId?: number; status?: string; limit?: number; kind?: "contract" | "inspection" | "all" }) => {
-      const q = new URLSearchParams(params as Record<string, string>).toString();
-      return get<{ rows: ContractWithClient[]; total: number }>(`/contracts${q ? "?" + q : ""}`);
+      return get<{ rows: ContractWithClient[]; total: number }>(`/contracts${qs(params)}`);
     },
     expiring: (days = 30) => get<ContractWithClient[]>(`/contracts/expiring?days=${days}`),
     get: (id: number) => get<ContractWithClient>(`/contracts/${id}`),
@@ -89,8 +101,7 @@ export const api = {
 
   reminders: {
     list: (params?: { status?: string; days?: number; limit?: number }) => {
-      const q = new URLSearchParams(params as Record<string, string>).toString();
-      return get<{ rows: ReminderWithContext[]; total: number }>(`/reminders${q ? "?" + q : ""}`);
+      return get<{ rows: ReminderWithContext[]; total: number }>(`/reminders${qs(params)}`);
     },
     create: (body: Partial<Reminder>) => post<Reminder>("/reminders", body),
     update: (id: number, body: Partial<Reminder>) => put<Reminder>(`/reminders/${id}`, body),
@@ -101,8 +112,7 @@ export const api = {
 
   tasks: {
     list: (params?: { status?: string; clientId?: number }) => {
-      const q = new URLSearchParams(params as Record<string, string>).toString();
-      return get<Task[]>(`/tasks${q ? "?" + q : ""}`);
+      return get<Task[]>(`/tasks${qs(params)}`);
     },
     update: (id: number, body: Partial<Task>) => put<Task>(`/tasks/${id}`, body),
   },
@@ -114,8 +124,7 @@ export const api = {
 
   email: {
     log: (params?: { limit?: number; offset?: number }) => {
-      const q = new URLSearchParams(params as Record<string, string>).toString();
-      return get<{ rows: EmailLogEntry[]; total: number }>(`/email-log${q ? "?" + q : ""}`);
+      return get<{ rows: EmailLogEntry[]; total: number }>(`/email-log${qs(params)}`);
     },
     test: (to: string, templateId?: number | null) => post<{ success: boolean; error?: string }>("/email/test", { to, templateId }),
   },
@@ -154,6 +163,16 @@ export const api = {
     detectVars: (html: string) => post<{ vars: string[] }>("/email-templates/vars", { html }),
     preview: (html: string, subject: string, vars: Record<string, unknown>) =>
       post<{ html: string; subject: string }>("/email-templates/preview", { html, subject, vars }),
+  },
+
+  equipment: {
+    list: (params?: { category?: string; q?: string }) =>
+      get<Equipment[]>(`/equipment${qs(params)}`),
+    stats: () => get<Record<string, number>>("/equipment/stats"),
+    get: (id: number) => get<Equipment>(`/equipment/${id}`),
+    create: (body: Partial<Equipment>) => post<Equipment>("/equipment", body),
+    update: (id: number, body: Partial<Equipment>) => put<Equipment>(`/equipment/${id}`, body),
+    delete: (id: number) => del(`/equipment/${id}`),
   },
 
   assets: {

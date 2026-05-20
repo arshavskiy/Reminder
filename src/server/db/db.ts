@@ -5,6 +5,7 @@ import { join } from "path";
 import { mkdirSync } from "fs";
 import { seedBuiltinTemplates } from "../templates/seedTemplates.js";
 import { seedDefaultEmailTemplate } from "../templates/seedEmailTemplates.js";
+import { seedBuiltinEquipment } from "../templates/seedEquipment.js";
 
 let _db: Database | null = null;
 
@@ -19,6 +20,7 @@ export function getDb(): Database {
   applySchema(_db);
   seedBuiltinTemplates(_db);
   seedDefaultEmailTemplate(_db);
+  seedBuiltinEquipment(_db);
   return _db;
 }
 

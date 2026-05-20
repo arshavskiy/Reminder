@@ -36,6 +36,27 @@ export function applySchema(db: Database) {
   // the doc-template-bound template, then to the global default.
   addColumnIfMissing(db, "reminders", "email_template_id", "INTEGER");
 
+  // ── Equipment catalogue ────────────────────────────────────────────────────
+  // Reusable equipment definitions (e.g. lifts, cranes, hoists) that the user
+  // can attach to clients/contracts. The spec calls this "הגדרת ציוד".
+  db.run(`
+    CREATE TABLE IF NOT EXISTS equipment (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      name            TEXT NOT NULL,
+      category        TEXT NOT NULL DEFAULT 'other',
+      manufacturer    TEXT,
+      model           TEXT,
+      capacity        TEXT,
+      description     TEXT,
+      notes           TEXT,
+      is_active       INTEGER NOT NULL DEFAULT 1,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_equipment_category ON equipment (category)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_equipment_active   ON equipment (is_active)`);
+
   db.run(`
     CREATE TABLE IF NOT EXISTS clients (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,

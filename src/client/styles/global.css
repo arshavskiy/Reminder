@@ -313,4 +313,4 @@ html[dir="rtl"] .n-base-clear {
   z-index: 1;
 }
 
-
+.page { max-width: 1200px; margin: 0 auto; }
