@@ -1,0 +1,55 @@
+# Modelfile for LLM fine-tuning
+
+# Model name
+model = "qwen3.5"
+
+# Model type
+model_type = "ollama"
+
+# Model architecture
+num_hidden_layers = 4
+num_attention_heads = 8
+hidden_size = 3200
+intermediate_size = 8192
+num_key_value_heads = 8
+head_dim = 64
+
+# Tokenizer
+vocab_size = 128256
+num_ctx = 262144
+do_sample = true
+temperature = 0.7
+top_p = 0.95
+top_k = 50
+
+# Training parameters
+learning_rate = 2e-4
+max_steps = 100000
+warmup_ratio = 0.03
+gradient_accumulation_steps = 4
+gradient_checkpointing = true
+gradient_type = "cross_entropy"
+
+# Loss function
+loss_type = "cross_entropy"
+
+# Evaluation metrics
+eval_steps = 1000
+eval_batch_size = 16
+eval_interval = 100
+
+# Output settings
+output_dir = "output"
+output_format = "json"
+
+# Data settings
+data_dir = "data"
+data_type = "csv"
+data_columns = ["instruction", "input", "output"]
+
+# Model path
+model_path = "models/your_model_name"
+
+# Logging
+logging_level = "INFO"
+log_interval = 1000
