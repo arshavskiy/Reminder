@@ -118,8 +118,10 @@ import {
   NRadioGroup, NRadio, NTag, NAlert, NText, useMessage,
 } from 'naive-ui';
 import type { User, UserSettings } from '@shared/types.js';
+import { useAuthStore } from '../stores/auth.js';
 
 const message = useMessage();
+const authStore = useAuthStore();
 
 // State
 const loading = ref(true);
@@ -137,35 +139,29 @@ const initials = computed(() => {
   return name.split(' ').filter(Boolean).slice(0,2).map(n => n[0]).join('').toUpperCase();
 });
 
-// Mock data for now (will connect to API in Phase 2)
-const mockUser: User = {
-  id: 1,
-  google_sub: 'mock-sub',
-  email: 'user@example.com',
-  name: 'משתמש בדיקה',
-  picture_url: null,
-  role: 'admin',
-  is_active: 1,
-  created_at: new Date().toISOString(),
-  last_login_at: new Date().toISOString(),
-};
-
-const mockSettings: UserSettings = {
-  user_id: 1,
-  theme: 'light',
-  email_from_name: 'תזכורת לקוח',
-  reminder_advance_days: '[90,60,30]',
-  ocr_language: 'heb+eng',
-};
-
 onMounted(async () => {
   try {
-    // TODO: Replace with API calls in Phase 2
-    form.value = { ...mockUser };
-    userSettings.value = { ...mockSettings };
-    reminderAdvanceDays.value = JSON.parse(userSettings.value.reminder_advance_days).join(', ');
-  } catch (error) {
-    message.error('שגיאה בטעינת פרוטיל');
+    const u = authStore.user;
+    form.value = u ? {
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      picture_url: u.picture_url,
+      role: u.role,
+      is_active: 1,
+      google_sub: '',
+      created_at: '',
+      last_login_at: null,
+    } : null;
+
+    const res = await fetch('/api/user-settings', { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json() as UserSettings;
+      userSettings.value = data;
+      reminderAdvanceDays.value = JSON.parse(data.reminder_advance_days).join(', ');
+    }
+  } catch {
+    // silently continue — settings panel just won't show
   } finally {
     loading.value = false;
   }
@@ -176,17 +172,7 @@ function updateReminderDays(value: string) {
 }
 
 async function saveProfile() {
-  if (!form.value) return;
-
-  saving.value = true;
-  try {
-    // TODO: Implement API call in Phase 2
-    message.success('הפרופיל שמור בהצלחה');
-  } catch (error) {
-    message.error('שגיאה בשמירת הפרופיל');
-  } finally {
-    saving.value = false;
-  }
+  message.info('הפרופיל מנוהל על ידי Google — אין צורך לעדכן ידנית');
 }
 
 async function saveSettings() {
@@ -194,17 +180,20 @@ async function saveSettings() {
 
   savingSettings.value = true;
   try {
-    // Parse reminder days
     const days = reminderAdvanceDays.value
       .split(',')
       .map(x => parseInt(x.trim()))
       .filter(x => !isNaN(x));
-
     userSettings.value.reminder_advance_days = JSON.stringify(days);
 
-    // TODO: Implement API call in Phase 2
+    await fetch('/api/user-settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(userSettings.value),
+    });
     message.success('ההגדרות שמורות בהצלחה');
-  } catch (error) {
+  } catch {
     message.error('שגיאה בשמירת ההגדרות');
   } finally {
     savingSettings.value = false;
@@ -220,9 +209,10 @@ function resetSettings() {
 async function disconnectAllSessions() {
   disconnecting.value = true;
   try {
-    // TODO: Implement API call in Phase 2
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
     message.success('התנתקת מכל המכשירים');
-  } catch (error) {
+    authStore.logout();
+  } catch {
     message.error('שגיאה בהתנתקה');
   } finally {
     disconnecting.value = false;

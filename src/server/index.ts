@@ -15,6 +15,8 @@ import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerTemplateRoutes } from "./routes/templates.js";
 import { registerEquipmentRoutes } from "./routes/equipment.js";
+import { registerAuthRoutes } from "./routes/auth.js";
+import { registerUserSettingsRoutes } from "./routes/userSettings.js";
 import { importFile } from "./pipeline/importer.js";
 import type { WsEvent } from "../shared/types.js";
 
@@ -54,6 +56,8 @@ registerSettingsRoutes(router as Map<string, (req: Request) => Promise<Response>
 registerDashboardRoutes(router as Map<string, (req: Request) => Promise<Response>>);
 registerTemplateRoutes(router as Map<string, (req: Request) => Promise<Response>>);
 registerEquipmentRoutes(router as Map<string, (req: Request) => Promise<Response>>);
+registerAuthRoutes(router as Map<string, (req: Request) => Promise<Response>>);
+registerUserSettingsRoutes(router as Map<string, (req: Request) => Promise<Response>>);
 
 function matchRoute(method: string, pathname: string): Handler | null {
   // Exact match
@@ -108,8 +112,8 @@ const server = Bun.serve({
       return new Response("WebSocket upgrade failed", { status: 400 });
     }
 
-    // API routes
-    if (url.pathname.startsWith("/api/")) {
+    // API + Auth routes
+    if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) {
       const handler = matchRoute(req.method, url.pathname);
       if (handler) {
         try {

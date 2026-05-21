@@ -39,7 +39,12 @@
       "Bash(read f *)",
       "Bash(curl -s -X POST http://127.0.0.1:3737/api/documents/import -H 'Content-Type: application/json' -d '{\"filePath\":\"__TRACKED_VAR__\"}')",
       "Bash(curl -sS --max-time 30 -X POST http://127.0.0.1:3737/api/documents/upload -F files=@__TRACKED_VAR__)",
-      "Bash(mkdir -p ~/.claude/sessions)"
+      "Bash(mkdir -p ~/.claude/sessions)",
+      "Bash(Get-ChildItem -Path \"E:\\\\Projects\\\\Reminder\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)",
+      "Read(//mnt/e/Projects/**)",
+      "Bash(npx tsc *)"
     ]
   }
 }

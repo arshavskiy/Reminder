@@ -25,6 +25,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { NDropdown, NIcon } from 'naive-ui';
 import { PersonOutline, LogOutOutline, SettingsOutline } from '@vicons/ionicons5';
+import { useAuthStore } from '../stores/auth.js';
 
 interface Props {
   userName?: string | null;
@@ -35,6 +36,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const router = useRouter();
+const authStore = useAuthStore();
 
 // Create avatar from email / name
 const avatarUrl = computed<string>(() => {
@@ -71,14 +73,13 @@ const dropdownItems = [
   },
 ];
 
-function handleSelect(key: string) {
+async function handleSelect(key: string) {
   if (key === 'profile') {
     router.push('/profile');
   } else if (key === 'settings') {
     router.push('/settings');
   } else if (key === 'logout') {
-    // TODO: Implement logout (Phase 2)
-    console.log('Logout clicked');
+    await authStore.logout();
   }
 }
 </script>

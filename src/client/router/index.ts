@@ -12,10 +12,13 @@ import ProfilePage from "../views/ProfilePage.vue";
 import DocTemplatesPage from "../views/DocTemplatesPage.vue";
 import EmailTemplatesPage from "../views/EmailTemplatesPage.vue";
 import EquipmentPage from "../views/EquipmentPage.vue";
+import LoginPage from "../views/LoginPage.vue";
+import { useAuthStore } from "../stores/auth.js";
 
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
+    { path: "/login", component: LoginPage, meta: { public: true } },
     { path: "/", component: DashboardPage },
     { path: "/documents", component: DocumentsPage },
     { path: "/documents/:id", component: DocumentDetailPage },
@@ -30,4 +33,19 @@ export const router = createRouter({
     { path: "/email-templates", component: EmailTemplatesPage },
     { path: "/equipment", component: EquipmentPage },
   ],
+});
+
+router.beforeEach(async (to) => {
+  if (to.meta.public) return true;
+
+  const authStore = useAuthStore();
+  if (!authStore.initialized) {
+    await authStore.fetchMe();
+  }
+
+  if (!authStore.user) {
+    return { path: "/login" };
+  }
+
+  return true;
 });

@@ -5,3 +5,6 @@ data/
 *.db
 *.db-shm
 *.db-wal
+.claude/
+.idea/
+spects/

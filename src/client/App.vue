@@ -4,7 +4,7 @@
       <n-dialog-provider>
         <div class="app-shell">
           <!-- ── Top horizontal app bar ─────────────────────────────────── -->
-          <header class="appbar">
+          <header v-if="route.path !== '/login'" class="appbar">
             <!-- Brand on the right (RTL "start") -->
             <div class="appbar__brand" @click="router.push('/')">
               <div class="appbar__logo">
@@ -38,13 +38,18 @@
                  </template>
                  {{ isDark ? "מצב בהיר" : "מצב כהה" }}
                </n-tooltip>
-               <UserDropdown userName="משתמש בדיקה" userEmail="demo@example.com" />
+               <UserDropdown
+                 :userName="authStore.user?.name ?? authStore.user?.email ?? null"
+                 :userEmail="authStore.user?.email ?? null"
+                 :userPicture="authStore.user?.picture_url ?? null"
+                 :userRole="authStore.user?.role ?? null"
+               />
              </div>
           </header>
 
           <!-- ── Main content ───────────────────────────────────────────── -->
-          <main class="content">
-            <div class="page">
+          <main :class="['content', { 'content--fullpage': route.path === '/login' }]">
+            <div :class="route.path === '/login' ? '' : 'page'">
             <router-view />
             </div>
           </main>
@@ -79,6 +84,7 @@ import {
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
 import { useSettingsStore } from "./stores/settings.js";
+import { useAuthStore } from "./stores/auth.js";
 
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
@@ -97,6 +103,7 @@ const rtlConfig = [
 const router = useRouter();
 const route = useRoute();
 const settingsStore = useSettingsStore();
+const authStore = useAuthStore();
 
 // ── Theme ────────────────────────────────────────────────────────────────────
 const isDark = computed(() => (settingsStore.settings?.theme ?? "light") === "dark");
@@ -267,5 +274,8 @@ html[data-theme="light"] .navlink--active {
   overflow-y: auto;
   padding: 32px 48px;
   background: var(--bg-app);
+}
+.content--fullpage {
+  padding: 0;
 }
 </style>
