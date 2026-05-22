@@ -1,15 +1,11 @@
-import { getDb, col } from "../db/db";
+import { col } from "../db/db";
 import { getSettings } from "../settings";
 import { sendReminderEmail } from "./emailSender";
-import type { ReminderWithContext, WsEvent } from "../../src/shared/types.js";
+import type { ReminderWithContext } from "../../src/shared/types.js";
 
-type PushFn = (event: WsEvent) => void;
-
-let _push: PushFn | undefined;
 let _timer: ReturnType<typeof setInterval> | null = null;
 
-export function startScheduler(push: PushFn) {
-  _push = push;
+export function startScheduler() {
   const settings = getSettings();
   if (!settings.reminderEnabled) return;
 
@@ -110,22 +106,11 @@ async function processReminder(reminder: ReminderWithContext) {
 
   if (result.success) {
     await markSent(reminder);
-    _push?.({
-      type: "reminder:fired",
-      reminderId: reminder.id as any,
-      clientId: reminder.client_id as any,
-      title: reminder.title,
-    });
   } else if (failCount + 1 >= 3) {
     await col("reminders").updateOne(
       { _id: reminder.id } as any,
       { $set: { status: "error", updated_at: new Date() } }
     );
-    _push?.({
-      type: "reminder:error",
-      reminderId: reminder.id as any,
-      error: result.error ?? "unknown",
-    });
     console.error(`[scheduler] Reminder ${reminder.id} failed 3 times, marking as error`);
   } else {
     console.warn(

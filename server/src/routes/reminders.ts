@@ -2,12 +2,9 @@ import express from "express";
 import { col } from "../db/db";
 import { ObjectId } from "mongodb";
 import { sendReminderEmail } from "../reminders/emailSender";
-import type { ReminderWithContext, WsEvent } from "../../src/shared/types.js";
+import type { ReminderWithContext } from "../../src/shared/types.js";
 
-export function registerReminderRoutes(
-  app: express.Application,
-  push: (e: WsEvent) => void
-) {
+export function registerReminderRoutes(app: express.Application) {
   // GET /api/reminders
   app.get("/api/reminders", async (req, res) => {
     const status = req.query.status as string | undefined;
@@ -155,12 +152,6 @@ export function registerReminderRoutes(
         success: 1,
         smtp_host: "manual",
       } as any);
-      push({
-        type: "reminder:fired",
-        reminderId: req.params.id as any,
-        clientId: reminder.client_id as any,
-        title: reminder.title,
-      });
     }
 
     res.json(result);

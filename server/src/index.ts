@@ -1,7 +1,5 @@
 import "dotenv/config";
 import express from "express";
-import { createServer } from "http";
-import { WebSocketServer, WebSocket } from "ws";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { existsSync, watch } from "fs";
@@ -22,21 +20,8 @@ import { registerEquipmentRoutes } from "./routes/equipment";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserSettingsRoutes } from "./routes/userSettings";
 import { importFile } from "./pipeline/importer";
-import type { WsEvent } from "../src/shared/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// ── WebSocket broadcast ───────────────────────────────────────────────────────
-const wsClients = new Set<WebSocket>();
-
-function broadcast(event: WsEvent) {
-  const payload = JSON.stringify(event);
-  for (const ws of wsClients) {
-    if (ws.readyState === WebSocket.OPEN) {
-      try { ws.send(payload); } catch { wsClients.delete(ws); }
-    }
-  }
-}
 
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express();
@@ -44,10 +29,10 @@ app.use(express.json({ limit: "50mb" }));
 
 // Register all route modules
 registerAuthRoutes(app);
-registerDocumentRoutes(app, broadcast);
+registerDocumentRoutes(app);
 registerClientRoutes(app);
 registerContractRoutes(app);
-registerReminderRoutes(app, broadcast);
+registerReminderRoutes(app);
 registerTaskRoutes(app);
 registerSearchRoutes(app);
 registerEmailRoutes(app);
@@ -66,27 +51,17 @@ if (process.env.NODE_ENV === "production" && existsSync(STATIC_DIR)) {
   app.get("*", (_req, res) => res.sendFile(join(STATIC_DIR, "index.html")));
 }
 
-// ── HTTP + WebSocket server ───────────────────────────────────────────────────
+// ── HTTP server ───────────────────────────────────────────────────────────────
 async function main() {
   const settings = loadSettings();
   await connectDb();
 
-  const httpServer = createServer(app);
-
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
-  wss.on("connection", (ws) => {
-    wsClients.add(ws);
-    ws.send(JSON.stringify({ type: "connected" }));
-    ws.on("close", () => wsClients.delete(ws));
-    ws.on("message", (msg) => console.log("[ws] message:", msg.toString()));
-  });
-
-  httpServer.listen(settings.port, () => {
+  app.listen(settings.port, () => {
     console.log(`[server] Running at http://localhost:${settings.port}`);
     console.log(`[server] Data dir: ${join(process.cwd(), "data")}`);
   });
 
-  startScheduler(broadcast);
+  startScheduler();
   startWatchFolder();
 }
 
@@ -121,7 +96,7 @@ function startWatchFolder() {
       if (!existsSync(filePath)) return;
       console.log(`[watch] New file detected: ${filename}`);
       try {
-        await importFile(filePath, broadcast);
+        await importFile(filePath);
       } catch (err) {
         console.error(`[watch] Import failed for ${filename}:`, err);
       }

@@ -3,36 +3,45 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from "vue";
 import { useMessage } from "naive-ui";
-import { connectWs, onWsEvent } from "../services/apiService.js";
 import { useDocumentsStore } from "../stores/documents.js";
-import type { WsEvent } from "@shared/types.js";
+import { useRemindersStore } from "../stores/reminders.js";
 
 const message = useMessage();
 const docsStore = useDocumentsStore();
+const remindersStore = useRemindersStore();
 
-let unsub: (() => void) | null = null;
+let prevDocStatuses: Record<string, string> = {};
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+async function poll() {
+  try {
+    // Check for document status changes
+    await docsStore.fetch();
+    for (const doc of docsStore.rows) {
+      const prev = prevDocStatuses[doc.id];
+      if (prev && prev !== doc.processing_status) {
+        if (doc.processing_status === "done") {
+          message.success(`מסמך עובד בהצלחה: ${doc.file_name}`);
+        } else if (doc.processing_status === "error") {
+          message.error(`שגיאה בעיבוד מסמך: ${doc.file_name}`);
+        }
+      }
+      prevDocStatuses[doc.id] = doc.processing_status;
+    }
+
+    // Check for fired reminders
+    await remindersStore.fetch({ status: "sent" });
+  } catch {
+    // silent — server may be temporarily unreachable
+  }
+}
 
 onMounted(() => {
-  connectWs();
-  unsub = onWsEvent((e: WsEvent) => {
-    if (e.type === "document:done") {
-      if (e.status === "done") {
-        message.success(`מסמך עובד בהצלחה (#${e.documentId})`);
-      } else {
-        message.error(`שגיאה בעיבוד מסמך #${e.documentId}: ${e.error ?? ""}`);
-      }
-      docsStore.fetch();
-    }
-    if (e.type === "reminder:fired") {
-      message.success(`תזכורת נשלחה: ${e.title}`);
-    }
-    if (e.type === "reminder:error") {
-      message.error(`שגיאה בשליחת תזכורת: ${e.error}`);
-    }
-  });
+  poll();
+  pollTimer = setInterval(poll, 5000);
 });
 
 onUnmounted(() => {
-  unsub?.();
+  if (pollTimer) clearInterval(pollTimer);
 });
 </script>

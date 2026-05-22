@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { api, onWsEvent } from "../services/apiService.js";
+import { api } from "../services/apiService.js";
 import type { Document } from "../../src/shared/types.js";
 
 export const useDocumentsStore = defineStore("documents", () => {
@@ -29,12 +29,5 @@ export const useDocumentsStore = defineStore("documents", () => {
     total.value--;
   }
 
-  // Live update via WebSocket
-  function handleWs(e: ReturnType<typeof onWsEvent> extends (cb: infer C) => void ? Parameters<C>[0] : never) {
-    if (e.type === "document:done" || e.type === "document:queued") {
-      fetch();
-    }
-  }
-
-  return { rows, total, loading, fetch, importFile, deleteDoc, handleWs };
+  return { rows, total, loading, fetch, importFile, deleteDoc };
 });

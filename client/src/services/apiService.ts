@@ -2,7 +2,7 @@ import type {
   Document, Client, Contract, Reminder, Task,
   DashboardStats, GlobalSearchResult, EmailLogEntry,
   Extraction, ReminderWithContext, ContractWithClient,
-  ClientDetail, WsEvent, AppSettings,
+  ClientDetail, AppSettings,
   DocTemplate, EmailTemplate, Equipment,
 } from "../../src/shared/types.js";
 
@@ -187,26 +187,3 @@ export const api = {
   },
 };
 
-// ── WebSocket ─────────────────────────────────────────────────────────────────
-let _ws: WebSocket | null = null;
-const _listeners = new Set<(e: WsEvent) => void>();
-
-export function connectWs() {
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  const wsUrl = `${proto}://${location.host}/ws`;
-  _ws = new WebSocket(wsUrl);
-  _ws.onmessage = (e) => {
-    try {
-      const event = JSON.parse(e.data) as WsEvent;
-      for (const cb of _listeners) cb(event);
-    } catch {}
-  };
-  _ws.onclose = () => {
-    setTimeout(connectWs, 3000); // reconnect
-  };
-}
-
-export function onWsEvent(cb: (e: WsEvent) => void): () => void {
-  _listeners.add(cb);
-  return () => _listeners.delete(cb);
-}

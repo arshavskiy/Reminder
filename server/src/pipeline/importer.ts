@@ -10,9 +10,9 @@ import { parseXlsx } from "./xlsxParser";
 import { extractDocument, extractWithTemplate } from "./extractor";
 import { pickTemplate } from "../templates/seedTemplates";
 import { generateContractReminders } from "../reminders/scheduler";
-import type { WsEvent, DocTemplate, DynamicExtraction } from "../../src/shared/types.js";
+import type { DocTemplate, DynamicExtraction } from "../../src/shared/types.js";
 
-type PushFn = (event: WsEvent) => void;
+type PushFn = (event: Record<string, unknown>) => void;
 
 function getMimeType(ext: string): string {
   const map: Record<string, string> = {

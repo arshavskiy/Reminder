@@ -7,14 +7,10 @@ import { ObjectId } from "mongodb";
 import { importFile, processDocument } from "../pipeline/importer";
 import { getDataDir } from "../settings";
 import multer from "multer";
-import type { WsEvent } from "../../src/shared/types.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-export function registerDocumentRoutes(
-  app: express.Application,
-  push: (e: WsEvent) => void
-) {
+export function registerDocumentRoutes(app: express.Application) {
   // GET /api/documents
   app.get("/api/documents", async (req, res) => {
     const status = req.query.status as string | undefined;
@@ -56,7 +52,7 @@ export function registerDocumentRoutes(
       return;
     }
     try {
-      const id = await importFile(body.filePath, push);
+      const id = await importFile(body.filePath);
       res.json({ id });
     } catch (err) {
       res.status(500).json({ error: String(err) });
@@ -80,7 +76,7 @@ export function registerDocumentRoutes(
         const safeName = file.originalname.replace(/[^a-zA-Z0-9א-ת._-]/g, "_");
         const destPath = join(uploadDir, `${Date.now()}_${safeName}`);
         writeFileSync(destPath, file.buffer);
-        const id = await importFile(destPath, push);
+        const id = await importFile(destPath);
         ids.push(String(id));
       }
 
@@ -147,7 +143,7 @@ export function registerDocumentRoutes(
     });
 
     const ext = extname(doc.file_path);
-    processDocument(id, doc.file_path, doc.mime_type, ext, push).catch(async (err) => {
+    processDocument(id, doc.file_path, doc.mime_type, ext).catch(async (err) => {
       console.error(`[reprocess] doc ${id} failed:`, err);
       await col("documents").updateOne(filter, {
         $set: {
