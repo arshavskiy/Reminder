@@ -1,144 +1,172 @@
-import { getDb } from "../db/db";
+import express from "express";
+import { col } from "../db/db";
+import { ObjectId } from "mongodb";
 import { generateContractReminders } from "../reminders/scheduler";
 
-// Predicates re-used across routes
-const IS_CONTRACT_SQL =
-  `c.contract_number IS NOT NULL AND (c.contract_type IS NULL OR (c.contract_type NOT LIKE '%תסקיר%' AND c.contract_type NOT LIKE '%בדיקה%'))`;
-const IS_INSPECTION_SQL =
-  `c.contract_type LIKE '%תסקיר%' OR c.contract_type LIKE '%בדיקה%'`;
-
-export function registerContractRoutes(
-  router: Map<string, (req: Request) => Promise<Response>>
-) {
+export function registerContractRoutes(app: express.Application) {
   // GET /api/contracts
-  router.set("GET /api/contracts", async (req) => {
-    const url = new URL(req.url);
-    const clientId = url.searchParams.get("clientId");
-    const status = url.searchParams.get("status");
-    const kind = url.searchParams.get("kind"); // "contract" | "inspection" | "all" | null
-    const limit = parseInt(url.searchParams.get("limit") ?? "50");
-    const offset = parseInt(url.searchParams.get("offset") ?? "0");
-    const db = getDb();
+  app.get("/api/contracts", async (req, res) => {
+    const clientId = req.query.clientId as string | undefined;
+    const status = req.query.status as string | undefined;
+    const kind = req.query.kind as string | undefined; // "contract" | "inspection" | "all"
+    const limit = parseInt((req.query.limit as string) ?? "50");
+    const offset = parseInt((req.query.offset as string) ?? "0");
 
-    const conditions: string[] = [];
-    const params: (string | number)[] = [];
-    if (clientId) { conditions.push("c.client_id = ?"); params.push(clientId); }
-    if (status) { conditions.push("c.status = ?"); params.push(status); }
-    if (kind === "contract") conditions.push(`(${IS_CONTRACT_SQL})`);
-    else if (kind === "inspection") conditions.push(`(${IS_INSPECTION_SQL})`);
+    const filter: Record<string, any> = {};
+    if (clientId) filter.client_id = clientId;
+    if (status) filter.status = status;
+    if (kind === "contract") {
+      filter.contract_number = { $ne: null, $exists: true };
+      filter.$and = [
+        {
+          $or: [
+            { contract_type: null },
+            { contract_type: { $not: /תסקיר|בדיקה/ } },
+          ],
+        },
+      ];
+    } else if (kind === "inspection") {
+      filter.contract_type = { $regex: /תסקיר|בדיקה/ };
+    }
 
-    const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
-    const rows = db
-      .prepare(
-        `SELECT c.*, cl.display_name AS client_name, d.file_name AS document_name
-         FROM contracts c
-         LEFT JOIN clients cl ON cl.id = c.client_id
-         LEFT JOIN documents d ON d.id = c.document_id
-         ${where} ORDER BY c.expiry_date ASC LIMIT ? OFFSET ?`
-      )
-      .all(...params, limit, offset);
+    const [contractDocs, total] = await Promise.all([
+      col("contracts")
+        .find(filter)
+        .sort({ expiry_date: 1 })
+        .skip(offset)
+        .limit(limit)
+        .toArray(),
+      col("contracts").countDocuments(filter),
+    ]);
 
-    const { total } = db
-      .prepare(`SELECT COUNT(*) AS total FROM contracts c ${where}`)
-      .get(...params) as { total: number };
+    const rows = await Promise.all(
+      contractDocs.map(async (c: any) => {
+        const [client, document] = await Promise.all([
+          c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
+          c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
+        ]);
+        return {
+          ...flatDoc(c),
+          client_name: (client as any)?.display_name ?? null,
+          document_name: (document as any)?.file_name ?? null,
+        };
+      })
+    );
 
-    return json({ rows, total });
+    res.json({ rows, total });
   });
 
   // GET /api/contracts/expiring
-  router.set("GET /api/contracts/expiring", async (req) => {
-    const url = new URL(req.url);
-    const days = parseInt(url.searchParams.get("days") ?? "30");
-    const db = getDb();
-    const rows = db
-      .prepare(
-        `SELECT c.*, cl.display_name AS client_name, d.file_name AS document_name
-         FROM contracts c
-         LEFT JOIN clients cl ON cl.id = c.client_id
-         LEFT JOIN documents d ON d.id = c.document_id
-         WHERE c.status = 'active'
-           AND c.expiry_date IS NOT NULL
-           AND c.expiry_date BETWEEN date('now') AND date('now', '+' || ? || ' days')
-         ORDER BY c.expiry_date ASC`
-      )
-      .all(days);
-    return json(rows);
+  app.get("/api/contracts/expiring", async (req, res) => {
+    const days = parseInt((req.query.days as string) ?? "30");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const future = new Date(today.getTime() + days * 24 * 60 * 60 * 1000);
+    const todayStr = today.toISOString().slice(0, 10);
+    const futureStr = future.toISOString().slice(0, 10);
+
+    const contractDocs = await col("contracts")
+      .find({
+        status: "active",
+        expiry_date: { $ne: null, $gte: todayStr, $lte: futureStr },
+      })
+      .sort({ expiry_date: 1 })
+      .toArray();
+
+    const rows = await Promise.all(
+      contractDocs.map(async (c: any) => {
+        const [client, document] = await Promise.all([
+          c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
+          c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
+        ]);
+        return {
+          ...flatDoc(c),
+          client_name: (client as any)?.display_name ?? null,
+          document_name: (document as any)?.file_name ?? null,
+        };
+      })
+    );
+
+    res.json(rows);
   });
 
   // GET /api/contracts/:id
-  router.set("GET /api/contracts/:id", async (req) => {
-    const id = extractId(req.url, "/api/contracts/");
-    const db = getDb();
-    const row = db
-      .prepare(
-        `SELECT c.*, cl.display_name AS client_name, d.file_name AS document_name
-         FROM contracts c
-         LEFT JOIN clients cl ON cl.id = c.client_id
-         LEFT JOIN documents d ON d.id = c.document_id
-         WHERE c.id = ?`
-      )
-      .get(id);
-    if (!row) return notFound();
-    return json(row);
+  app.get("/api/contracts/:id", async (req, res) => {
+    const filter = idFilter(req.params.id);
+    const c = await col("contracts").findOne(filter) as any;
+    if (!c) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const [client, document] = await Promise.all([
+      c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
+      c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
+    ]);
+    res.json({
+      ...flatDoc(c),
+      client_name: (client as any)?.display_name ?? null,
+      document_name: (document as any)?.file_name ?? null,
+    });
   });
 
   // PUT /api/contracts/:id
-  router.set("PUT /api/contracts/:id", async (req) => {
-    const id = extractId(req.url, "/api/contracts/");
-    const body = (await req.json()) as Record<string, unknown>;
-    const db = getDb();
-    db.prepare(
-      `UPDATE contracts SET
-         contract_number=COALESCE(?,contract_number),
-         contract_type=COALESCE(?,contract_type),
-         start_date=COALESCE(?,start_date),
-         expiry_date=COALESCE(?,expiry_date),
-         amount=COALESCE(?,amount),
-         currency=COALESCE(?,currency),
-         counterparty=COALESCE(?,counterparty),
-         summary=COALESCE(?,summary),
-         status=COALESCE(?,status),
-         updated_at=datetime('now')
-       WHERE id=?`
-    ).run(
-      body.contract_number ?? null,
-      body.contract_type ?? null,
-      body.start_date ?? null,
-      body.expiry_date ?? null,
-      body.amount ?? null,
-      body.currency ?? null,
-      body.counterparty ?? null,
-      body.summary ?? null,
-      body.status ?? null,
-      id
-    );
+  app.put("/api/contracts/:id", async (req, res) => {
+    const filter = idFilter(req.params.id);
+    const body = req.body as Record<string, unknown>;
+
+    const updates: Record<string, any> = { updated_at: new Date() };
+    const fields = [
+      "contract_number", "contract_type", "start_date", "expiry_date",
+      "amount", "currency", "counterparty", "summary", "status",
+    ];
+    for (const f of fields) {
+      if (body[f] !== undefined) updates[f] = body[f];
+    }
+
+    await col("contracts").updateOne(filter, { $set: updates });
 
     // Regenerate reminders if expiry changed
     if (body.expiry_date) {
-      const contract = db.prepare("SELECT * FROM contracts WHERE id = ?").get(id) as {
-        client_id: number | null;
-        document_id: number;
-        expiry_date: string;
-      };
-      generateContractReminders(id, contract.client_id, contract.document_id, String(body.expiry_date));
+      const contract = await col("contracts").findOne(filter) as any;
+      if (contract) {
+        await generateContractReminders(
+          req.params.id,
+          contract.client_id ?? null,
+          contract.document_id ?? null,
+          String(body.expiry_date)
+        );
+      }
     }
 
-    return json(db.prepare("SELECT * FROM contracts WHERE id = ?").get(id));
+    const updated = await col("contracts").findOne(filter);
+    res.json(flatDoc(updated));
   });
 
   // DELETE /api/contracts/:id
-  router.set("DELETE /api/contracts/:id", async (req) => {
-    getDb().prepare("DELETE FROM contracts WHERE id = ?").run(extractId(req.url, "/api/contracts/"));
-    return json({ ok: true });
+  app.delete("/api/contracts/:id", async (req, res) => {
+    await col("contracts").deleteOne(idFilter(req.params.id));
+    res.json({ ok: true });
   });
 }
 
-function extractId(url: string, prefix: string): number {
-  return parseInt(new URL(url).pathname.replace(prefix, ""));
+function idFilter(id: string): Record<string, any> {
+  try {
+    return { _id: new ObjectId(id) };
+  } catch {
+    return { _id: id };
+  }
 }
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
+
+function tryObjectId(id: string): any {
+  try {
+    return new ObjectId(id);
+  } catch {
+    return id;
+  }
 }
-function notFound() {
-  return json({ error: "Not found" }, 404);
+
+function flatDoc(doc: any) {
+  if (!doc) return doc;
+  const { _id, ...rest } = doc;
+  return { id: _id?.toString(), ...rest };
 }

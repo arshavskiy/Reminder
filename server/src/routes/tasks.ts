@@ -1,42 +1,58 @@
-import { getDb } from "../db/db";
+import express from "express";
+import { col } from "../db/db";
+import { ObjectId } from "mongodb";
 
-export function registerTaskRoutes(router: Map<string, (req: Request) => Promise<Response>>) {
+export function registerTaskRoutes(app: express.Application) {
   // GET /api/tasks
-  router.set("GET /api/tasks", async (req) => {
-    const url = new URL(req.url);
-    const status = url.searchParams.get("status");
-    const clientId = url.searchParams.get("clientId");
-    const db = getDb();
+  app.get("/api/tasks", async (req, res) => {
+    const status = req.query.status as string | undefined;
+    const clientId = req.query.clientId as string | undefined;
 
-    const conditions: string[] = [];
-    const params: (string | number)[] = [];
-    if (status) { conditions.push("t.status = ?"); params.push(status); }
-    if (clientId) { conditions.push("t.client_id = ?"); params.push(clientId); }
+    const filter: Record<string, any> = {};
+    if (status) filter.status = status;
+    if (clientId) filter.client_id = clientId;
 
-    const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
-    const rows = db
-      .prepare(
-        `SELECT t.*, c.display_name AS client_name
-         FROM tasks t LEFT JOIN clients c ON c.id = t.client_id
-         ${where} ORDER BY t.due_date ASC`
-      )
-      .all(...params);
-    return json(rows);
+    const tasks = await col("tasks").find(filter).sort({ due_date: 1 }).toArray();
+
+    // Enrich with client_name
+    const rows = await Promise.all(
+      tasks.map(async (t: any) => {
+        const client = t.client_id ? await col("clients").findOne({ _id: t.client_id }) : null;
+        return {
+          ...flatDoc(t),
+          client_name: (client as any)?.display_name ?? null,
+        };
+      })
+    );
+
+    res.json(rows);
   });
 
   // PUT /api/tasks/:id
-  router.set("PUT /api/tasks/:id", async (req) => {
-    const id = parseInt(new URL(req.url).pathname.replace("/api/tasks/", ""));
-    const body = (await req.json()) as Record<string, unknown>;
-    const db = getDb();
-    db.prepare(
-      `UPDATE tasks SET description=COALESCE(?,description), due_date=COALESCE(?,due_date),
-       status=COALESCE(?,status), updated_at=datetime('now') WHERE id=?`
-    ).run(body.description ?? null, body.due_date ?? null, body.status ?? null, id);
-    return json(db.prepare("SELECT * FROM tasks WHERE id = ?").get(id));
+  app.put("/api/tasks/:id", async (req, res) => {
+    const id = req.params.id;
+    const body = req.body as Record<string, unknown>;
+
+    const updates: Record<string, any> = { updated_at: new Date() };
+    if (body.description !== undefined) updates.description = body.description;
+    if (body.due_date !== undefined) updates.due_date = body.due_date;
+    if (body.status !== undefined) updates.status = body.status;
+
+    let filter: Record<string, any>;
+    try {
+      filter = { _id: new ObjectId(id) };
+    } catch {
+      filter = { _id: id };
+    }
+
+    await col("tasks").updateOne(filter, { $set: updates });
+    const updated = await col("tasks").findOne(filter);
+    res.json(flatDoc(updated));
   });
 }
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
+function flatDoc(doc: any) {
+  if (!doc) return doc;
+  const { _id, ...rest } = doc;
+  return { id: _id?.toString(), ...rest };
 }

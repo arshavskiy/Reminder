@@ -84,7 +84,7 @@ export interface TemplateExtractionRun {
 
 export async function extractDocument(
   rawText: string,
-  documentId?: number,
+  documentId?: string | number,
   fileName?: string
 ): Promise<ExtractionRun> {
   const settings = getSettings();
@@ -179,7 +179,7 @@ export async function extractDocument(
 export async function extractWithTemplate(
   rawText: string,
   template: DocTemplate,
-  documentId?: number,
+  documentId?: string | number,
   fileName?: string
 ): Promise<TemplateExtractionRun> {
   const settings = getSettings();

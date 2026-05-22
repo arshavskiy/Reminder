@@ -2,7 +2,7 @@
 // empty on first install. All rows are flagged is_active=1 — users edit or
 // delete them as needed.
 
-import type { Database } from "bun:sqlite";
+import { col } from "../db/db";
 
 interface SeedRow {
   name: string;
@@ -36,27 +36,26 @@ const SEEDS: SeedRow[] = [
   },
 ];
 
-export function seedBuiltinEquipment(db: Database) {
-  // Safely seed rows only when an identical (name+category) row doesn't already exist.
-  // Using INSERT OR IGNORE relied on a UNIQUE constraint which this schema doesn't
-  // provide, so repeated server starts inserted duplicates. Check first to avoid
-  // creating duplicates on every run.
-  const insert = db.prepare(
-    `INSERT INTO equipment (name, category, manufacturer, model, capacity, description, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, 1)`
-  );
-  const find = db.prepare(`SELECT id FROM equipment WHERE name = ? AND category = ? LIMIT 1`);
+export async function seedBuiltinEquipment(): Promise<void> {
+  const now = new Date();
   for (const s of SEEDS) {
-    const exists = find.get(s.name, s.category);
-    if (!exists) {
-      insert.run(
-        s.name,
-        s.category,
-        s.manufacturer ?? null,
-        s.model ?? null,
-        s.capacity ?? null,
-        s.description ?? null
-      );
-    }
+    await col("equipment").updateOne(
+      { name: s.name, category: s.category },
+      {
+        $setOnInsert: {
+          name: s.name,
+          category: s.category,
+          manufacturer: s.manufacturer ?? null,
+          model: s.model ?? null,
+          capacity: s.capacity ?? null,
+          description: s.description ?? null,
+          notes: null,
+          is_active: 1,
+          created_at: now,
+          updated_at: now,
+        },
+      },
+      { upsert: true }
+    );
   }
 }

@@ -256,11 +256,11 @@ export interface AppInfo {
 
 // WebSocket push event types
 export type WsEvent =
-  | { type: "document:queued"; documentId: number; fileName: string }
-  | { type: "document:progress"; documentId: number; stage: string; progress: number }
-  | { type: "document:done"; documentId: number; status: "done" | "error"; error?: string }
-  | { type: "reminder:fired"; reminderId: number; clientId: number | null; title: string }
-  | { type: "reminder:error"; reminderId: number; error: string };
+  | { type: "document:queued"; documentId: string | number; fileName: string }
+  | { type: "document:progress"; documentId: string | number; stage: string; progress: number }
+  | { type: "document:done"; documentId: string | number; status: "done" | "error"; error?: string }
+  | { type: "reminder:fired"; reminderId: string | number; clientId: string | number | null; title: string }
+  | { type: "reminder:error"; reminderId: string | number; error: string };
 
 // ── Document templates ──────────────────────────────────────────────────────
 export type FieldType =

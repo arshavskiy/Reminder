@@ -1,3 +1,4 @@
+import express from "express";
 import { getSettings, saveSettings } from "../settings";
 import type { AppSettings } from "../settings";
 
@@ -5,25 +6,21 @@ type OnSettingsSaved = (settings: AppSettings) => void;
 let _onSaved: OnSettingsSaved | undefined;
 
 export function registerSettingsRoutes(
-  router: Map<string, (req: Request) => Promise<Response>>,
+  app: express.Application,
   onSaved?: OnSettingsSaved
 ) {
   _onSaved = onSaved;
 
-  router.set("GET /api/settings", async () => {
-    return json(getSettings());
+  app.get("/api/settings", async (_req, res) => {
+    res.json(getSettings());
   });
 
-  router.set("POST /api/settings", async (req) => {
-    const body = (await req.json()) as Partial<AppSettings>;
+  app.post("/api/settings", async (req, res) => {
+    const body = req.body as Partial<AppSettings>;
     const current = getSettings();
     const updated = { ...current, ...body };
     saveSettings(updated);
     _onSaved?.(updated);
-    return json(updated);
+    res.json(updated);
   });
-}
-
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
 }

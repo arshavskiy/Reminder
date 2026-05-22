@@ -1,4 +1,4 @@
-import { getDb } from "../db/db";
+import { getDb, col } from "../db/db";
 import { getSettings } from "../settings";
 import { sendReminderEmail } from "./emailSender";
 import type { ReminderWithContext, WsEvent } from "../../src/shared/types.js";
@@ -13,7 +13,6 @@ export function startScheduler(push: PushFn) {
   const settings = getSettings();
   if (!settings.reminderEnabled) return;
 
-  // Run immediately on startup, then on interval
   checkReminders().catch(console.error);
   _timer = setInterval(() => {
     checkReminders().catch(console.error);
@@ -32,31 +31,48 @@ export function stopScheduler() {
 }
 
 async function checkReminders() {
-  const db = getDb();
+  const today = new Date().toISOString().slice(0, 10);
 
-  const due = db
-    .prepare(
-      `SELECT r.*,
-              c.display_name AS client_name,
-              d.file_name    AS document_name
-       FROM reminders r
-       LEFT JOIN clients   c ON c.id = r.client_id
-       LEFT JOIN documents d ON d.id = r.document_id
-       WHERE r.status = 'pending'
-         AND r.trigger_date <= date('now')
-         AND r.id NOT IN (SELECT reminder_id FROM email_log WHERE success = 1 AND reminder_id IS NOT NULL)`
-    )
-    .all() as ReminderWithContext[];
+  // Get IDs of reminders that already have a successful email
+  const sentLogs = await col("email_log")
+    .find({ success: 1, reminder_id: { $ne: null } })
+    .project({ reminder_id: 1 })
+    .toArray();
+  const sentIds = new Set(sentLogs.map((l: any) => l.reminder_id));
+
+  const due = await col("reminders")
+    .find({
+      status: "pending",
+      trigger_date: { $lte: today },
+    })
+    .toArray();
 
   for (const reminder of due) {
-    await processReminder(reminder);
+    const remId = reminder._id?.toString();
+    if (sentIds.has(remId)) continue;
+
+    const r = reminder as any;
+    const [client, document] = await Promise.all([
+      r.client_id
+        ? col("clients").findOne({ _id: r.client_id } as any)
+        : null,
+      r.document_id
+        ? col("documents").findOne({ _id: r.document_id } as any)
+        : null,
+    ]);
+
+    const enriched: ReminderWithContext = {
+      ...r,
+      id: remId,
+      client_name: (client as any)?.display_name ?? null,
+      document_name: (document as any)?.file_name ?? null,
+    } as any;
+
+    await processReminder(enriched);
   }
 }
 
 async function processReminder(reminder: ReminderWithContext) {
-  const db = getDb();
-
-  // Collect recipient addresses
   let recipients: string[] = [];
   try {
     recipients = reminder.email_to ? JSON.parse(reminder.email_to) : [];
@@ -64,92 +80,89 @@ async function processReminder(reminder: ReminderWithContext) {
     recipients = [];
   }
 
-  // Fall back to client email if reminder has no explicit recipients
   if (recipients.length === 0 && reminder.client_id) {
-    const client = db
-      .prepare("SELECT email FROM clients WHERE id = ?")
-      .get(reminder.client_id) as { email: string | null } | null;
+    const client = await col("clients").findOne({ _id: reminder.client_id } as any) as any;
     if (client?.email) recipients = [client.email];
   }
 
   const settings = getSettings();
   if (recipients.length === 0 && !settings.emailFrom) {
-    // No email address anywhere — skip sending but mark as sent (in-app only)
-    markSent(reminder, recipients, null, null);
+    await markSent(reminder);
     return;
   }
 
   const result = await sendReminderEmail(reminder, recipients);
 
-  // Count prior failures
-  const failCount = (
-    db
-      .prepare(
-        "SELECT COUNT(*) AS n FROM email_log WHERE reminder_id = ? AND success = 0"
-      )
-      .get(reminder.id) as { n: number }
-  ).n;
+  const failCount = await col("email_log").countDocuments({
+    reminder_id: reminder.id,
+    success: 0,
+  });
 
-  db.prepare(
-    `INSERT INTO email_log (reminder_id, to_address, subject, sent_at, success, error, smtp_host)
-     VALUES (?, ?, ?, datetime('now'), ?, ?, ?)`
-  ).run(
-    reminder.id,
-    recipients.join(", "),
-    `[תזכורת] ${reminder.title}`,
-    result.success ? 1 : 0,
-    result.error ?? null,
-    getSettings().smtpHost || "in-app-only"
-  );
+  await col("email_log").insertOne({
+    reminder_id: reminder.id,
+    to_address: recipients.join(", "),
+    subject: `[תזכורת] ${reminder.title}`,
+    sent_at: new Date(),
+    success: result.success ? 1 : 0,
+    error: result.error ?? null,
+    smtp_host: getSettings().smtpHost || "in-app-only",
+  } as any);
 
   if (result.success) {
-    markSent(reminder, recipients, null, null);
-    _push?.({ type: "reminder:fired", reminderId: reminder.id, clientId: reminder.client_id, title: reminder.title });
+    await markSent(reminder);
+    _push?.({
+      type: "reminder:fired",
+      reminderId: reminder.id as any,
+      clientId: reminder.client_id as any,
+      title: reminder.title,
+    });
   } else if (failCount + 1 >= 3) {
-    db.prepare(
-      `UPDATE reminders SET status='error', updated_at=datetime('now') WHERE id=?`
-    ).run(reminder.id);
-    _push?.({ type: "reminder:error", reminderId: reminder.id, error: result.error ?? "unknown" });
+    await col("reminders").updateOne(
+      { _id: reminder.id } as any,
+      { $set: { status: "error", updated_at: new Date() } }
+    );
+    _push?.({
+      type: "reminder:error",
+      reminderId: reminder.id as any,
+      error: result.error ?? "unknown",
+    });
     console.error(`[scheduler] Reminder ${reminder.id} failed 3 times, marking as error`);
   } else {
-    console.warn(`[scheduler] Reminder ${reminder.id} send failed (attempt ${failCount + 1}): ${result.error}`);
+    console.warn(
+      `[scheduler] Reminder ${reminder.id} send failed (attempt ${failCount + 1}): ${result.error}`
+    );
   }
 }
 
-function markSent(
-  reminder: ReminderWithContext,
-  _recipients: string[],
-  _a: null,
-  _b: null
-) {
-  const db = getDb();
-  db.prepare(
-    `UPDATE reminders SET status='sent', updated_at=datetime('now') WHERE id=?`
-  ).run(reminder.id);
+async function markSent(reminder: ReminderWithContext) {
+  await col("reminders").updateOne(
+    { _id: reminder.id } as any,
+    { $set: { status: "sent", updated_at: new Date() } }
+  );
 
   if (reminder.client_id) {
-    db.prepare(
-      `INSERT INTO timeline_events (client_id, event_type, title, event_date, source_id, source_type)
-       VALUES (?, 'email_sent', ?, datetime('now'), ?, 'reminder')`
-    ).run(reminder.client_id, `תזכורת נשלחה: ${reminder.title}`, reminder.id);
+    await col("timeline_events").insertOne({
+      client_id: reminder.client_id,
+      event_type: "email_sent",
+      title: `תזכורת נשלחה: ${reminder.title}`,
+      event_date: new Date(),
+      source_id: reminder.id,
+      source_type: "reminder",
+      created_at: new Date(),
+    } as any);
   }
 }
 
-// Called after a contract is saved with an expiry_date
-export function generateContractReminders(
-  contractId: number,
-  clientId: number | null,
-  documentId: number | null,
+export async function generateContractReminders(
+  contractId: string,
+  clientId: string | null,
+  documentId: string | null,
   expiryDate: string
 ) {
-  const db = getDb();
   const settings = getSettings();
   const today = new Date().toISOString().slice(0, 10);
 
-  // Derive a reminder title from the contract type when available
-  const contract = db
-    .prepare("SELECT contract_type, contract_number FROM contracts WHERE id=?")
-    .get(contractId) as { contract_type: string | null; contract_number: string | null } | null;
+  const contract = await col("contracts").findOne({ _id: contractId } as any) as any;
 
   const baseLabel = (() => {
     const t = (contract?.contract_type ?? "").toLowerCase();
@@ -161,29 +174,33 @@ export function generateContractReminders(
   })();
 
   for (const days of settings.reminderAdvanceDays) {
-    // Check dedup
-    const exists = db
-      .prepare(
-        `SELECT id FROM reminders WHERE source_type='contract_expiry' AND source_id=? AND advance_days=? AND status != 'dismissed'`
-      )
-      .get(contractId, days);
-    if (exists) continue;
+    const existing = await col("reminders").findOne({
+      source_type: "contract_expiry",
+      source_id: contractId,
+      advance_days: days,
+      status: { $ne: "dismissed" },
+    });
+    if (existing) continue;
 
-    // Compute trigger date
     const expiry = new Date(expiryDate);
     expiry.setDate(expiry.getDate() - days);
     const triggerDate = expiry.toISOString().slice(0, 10);
 
-    // Only create if in the future
     if (triggerDate <= today) continue;
 
-    // Title format: "<label> ב-<fire date>" — the fire date is the headline.
-    // Example: "בדיקה הבאה ב-2027-02-09 (יעד: 2027-03-11)"
     const title = `${baseLabel} ב-${triggerDate} (יעד: ${expiryDate})`;
 
-    db.prepare(
-      `INSERT INTO reminders (source_type, source_id, client_id, document_id, trigger_date, advance_days, title, status)
-       VALUES ('contract_expiry', ?, ?, ?, ?, ?, ?, 'pending')`
-    ).run(contractId, clientId, documentId, triggerDate, days, title);
+    await col("reminders").insertOne({
+      source_type: "contract_expiry",
+      source_id: contractId,
+      client_id: clientId,
+      document_id: documentId,
+      trigger_date: triggerDate,
+      advance_days: days,
+      title,
+      status: "pending",
+      created_at: new Date(),
+      updated_at: new Date(),
+    } as any);
   }
 }

@@ -1,6 +1,8 @@
+import express from "express";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs";
 import { join, extname } from "path";
-import { getDb } from "../db/db";
+import { col } from "../db/db";
+import { ObjectId } from "mongodb";
 import { getDataDir } from "../settings";
 import { loadAllTemplates, loadTemplate } from "../templates/seedTemplates";
 import { loadEmailTemplate } from "../templates/seedEmailTemplates";
@@ -11,88 +13,88 @@ import { parsePdf } from "../pipeline/pdfParser";
 import { ocrFile } from "../pipeline/ocrParser";
 import { parseDocx } from "../pipeline/docxParser";
 import { parseXlsx } from "../pipeline/xlsxParser";
+import multer from "multer";
 import type { DocTemplate, EmailTemplate, ReminderWithContext } from "../../src/shared/types.js";
 
-export function registerTemplateRoutes(
-  router: Map<string, (req: Request) => Promise<Response>>
-) {
+const upload = multer({ storage: multer.memoryStorage() });
+
+export function registerTemplateRoutes(app: express.Application) {
   // ── Document templates ─────────────────────────────────────────────────────
-  router.set("GET /api/doc-templates", async () => {
-    return json(loadAllTemplates(getDb()));
+  app.get("/api/doc-templates", async (_req, res) => {
+    res.json(await loadAllTemplates());
   });
 
-  router.set("GET /api/doc-templates/:id", async (req) => {
-    const id = parseInt(new URL(req.url).pathname.replace("/api/doc-templates/", ""));
-    const tpl = loadTemplate(getDb(), id);
-    if (!tpl) return notFound();
-    return json(tpl);
+  app.get("/api/doc-templates/:id", async (req, res) => {
+    const tpl = await loadTemplate(req.params.id);
+    if (!tpl) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.json(tpl);
   });
 
-  router.set("POST /api/doc-templates", async (req) => {
-    const body = (await req.json()) as Partial<DocTemplate>;
-    if (!body.name) return badRequest("name required");
-    const db = getDb();
-    const r = db.prepare(
-      `INSERT INTO doc_templates (name, description, match_keywords, fields, expiry_field, is_default)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(
-      body.name,
-      body.description ?? null,
-      JSON.stringify(body.match_keywords ?? []),
-      JSON.stringify(body.fields ?? []),
-      body.expiry_field ?? null,
-      body.is_default ?? 0
-    );
-    return json(loadTemplate(db, Number(r.lastInsertRowid)));
+  app.post("/api/doc-templates", async (req, res) => {
+    const body = req.body as Partial<DocTemplate>;
+    if (!body.name) {
+      res.status(400).json({ error: "name required" });
+      return;
+    }
+    const now = new Date();
+    const doc = {
+      name: body.name,
+      description: body.description ?? null,
+      match_keywords: body.match_keywords ?? [],
+      fields: body.fields ?? [],
+      expiry_field: body.expiry_field ?? null,
+      is_default: body.is_default ?? 0,
+      is_builtin: 0,
+      created_at: now,
+      updated_at: now,
+    };
+    const result = await col("doc_templates").insertOne(doc as any);
+    res.json(await loadTemplate(result.insertedId.toString()));
   });
 
-  router.set("PUT /api/doc-templates/:id", async (req) => {
-    const id = parseInt(new URL(req.url).pathname.replace("/api/doc-templates/", ""));
-    const body = (await req.json()) as Partial<DocTemplate>;
-    const db = getDb();
-    db.prepare(
-      `UPDATE doc_templates SET
-         name = COALESCE(?, name),
-         description = COALESCE(?, description),
-         match_keywords = COALESCE(?, match_keywords),
-         fields = COALESCE(?, fields),
-         expiry_field = COALESCE(?, expiry_field),
-         is_default = COALESCE(?, is_default),
-         updated_at = datetime('now')
-       WHERE id = ?`
-    ).run(
-      body.name ?? null,
-      body.description ?? null,
-      body.match_keywords ? JSON.stringify(body.match_keywords) : null,
-      body.fields ? JSON.stringify(body.fields) : null,
-      body.expiry_field ?? null,
-      body.is_default ?? null,
-      id
-    );
-    return json(loadTemplate(db, id));
+  app.put("/api/doc-templates/:id", async (req, res) => {
+    const filter = idFilter(req.params.id);
+    const body = req.body as Partial<DocTemplate>;
+
+    const updates: Record<string, any> = { updated_at: new Date() };
+    if (body.name !== undefined) updates.name = body.name;
+    if (body.description !== undefined) updates.description = body.description;
+    if (body.match_keywords !== undefined) updates.match_keywords = body.match_keywords;
+    if (body.fields !== undefined) updates.fields = body.fields;
+    if (body.expiry_field !== undefined) updates.expiry_field = body.expiry_field;
+    if (body.is_default !== undefined) updates.is_default = body.is_default;
+
+    await col("doc_templates").updateOne(filter, { $set: updates });
+    res.json(await loadTemplate(req.params.id));
   });
 
-  router.set("DELETE /api/doc-templates/:id", async (req) => {
-    const id = parseInt(new URL(req.url).pathname.replace("/api/doc-templates/", ""));
-    const db = getDb();
-    const row = db.prepare("SELECT is_builtin FROM doc_templates WHERE id = ?").get(id) as
-      | { is_builtin: number } | null;
-    if (row?.is_builtin) return badRequest("cannot delete builtin template");
-    db.prepare("DELETE FROM doc_templates WHERE id = ?").run(id);
-    return json({ ok: true });
+  app.delete("/api/doc-templates/:id", async (req, res) => {
+    const filter = idFilter(req.params.id);
+    const row = (await col("doc_templates").findOne(filter)) as any;
+    if (row?.is_builtin) {
+      res.status(400).json({ error: "cannot delete builtin template" });
+      return;
+    }
+    await col("doc_templates").deleteOne(filter);
+    res.json({ ok: true });
   });
 
-  // ── Generate template from a sample raw text ──────────────────────────────
-  router.set("POST /api/doc-templates/generate-from-text", async (req) => {
-    const { text } = (await req.json()) as { text: string };
+  // ── Generate template from raw text ──────────────────────────────────────
+  app.post("/api/doc-templates/generate-from-text", async (req, res) => {
+    const { text } = req.body as { text: string };
     if (!text || text.trim().length < 50) {
-      return badRequest("text required (at least 50 chars)");
+      res.status(400).json({ error: "text required (at least 50 chars)" });
+      return;
     }
     const run = await generateTemplateFromText(text);
     if (!run.template || run.error) {
-      return serverError(run.error ?? "AI failed to generate a template");
+      res.status(500).json({ error: run.error ?? "AI failed to generate a template" });
+      return;
     }
-    return json({
+    res.json({
       draft: toDraft(run.template),
       usage: run.usage,
       model: run.model,
@@ -101,199 +103,227 @@ export function registerTemplateRoutes(
   });
 
   // ── Generate template from an uploaded sample document ────────────────────
-  // Same idea but takes a file (PDF/DOCX/XLSX/image), extracts the raw text,
-  // and pipes it to the generator. Convenient: drag-drop a representative
-  // document, get a starter template back.
-  router.set("POST /api/doc-templates/generate-from-file", async (req) => {
-    try {
-      const formData = await req.formData();
-      const file = formData.get("file") as File | null;
-      if (!file) return badRequest("file required");
-
-      const tmpDir = join(getDataDir(), "template_samples");
-      mkdirSync(tmpDir, { recursive: true });
-      const ext = extname(file.name).toLowerCase();
-      const safeName = file.name.replace(/[^a-zA-Z0-9א-ת._-]/g, "_");
-      const tmpPath = join(tmpDir, `${Date.now()}_${safeName}`);
-      await Bun.write(tmpPath, await file.arrayBuffer());
-
-      let text = "";
-      const mime = file.type || "";
+  app.post(
+    "/api/doc-templates/generate-from-file",
+    upload.single("file"),
+    async (req, res) => {
       try {
-        if (mime === "application/pdf" || ext === ".pdf") {
-          const pdf = await parsePdf(tmpPath);
-          text = pdf.text;
-          if (pdf.needsOcr) text = await ocrFile(tmpPath);
-        } else if (mime.startsWith("image/") || [".png", ".jpg", ".jpeg", ".tif", ".tiff"].includes(ext)) {
-          text = await ocrFile(tmpPath);
-        } else if (ext === ".docx") {
-          text = await parseDocx(tmpPath);
-        } else if (ext === ".xlsx") {
-          text = parseXlsx(tmpPath);
-        } else {
-          text = await Bun.file(tmpPath).text();
+        const file = req.file;
+        if (!file) {
+          res.status(400).json({ error: "file required" });
+          return;
         }
+
+        const tmpDir = join(getDataDir(), "template_samples");
+        mkdirSync(tmpDir, { recursive: true });
+        const ext = extname(file.originalname).toLowerCase();
+        const safeName = file.originalname.replace(/[^a-zA-Z0-9א-ת._-]/g, "_");
+        const tmpPath = join(tmpDir, `${Date.now()}_${safeName}`);
+        writeFileSync(tmpPath, file.buffer);
+
+        let text = "";
+        const mime = file.mimetype || "";
+        try {
+          if (mime === "application/pdf" || ext === ".pdf") {
+            const pdf = await parsePdf(tmpPath);
+            text = pdf.text;
+            if (pdf.needsOcr) text = await ocrFile(tmpPath);
+          } else if (
+            mime.startsWith("image/") ||
+            [".png", ".jpg", ".jpeg", ".tif", ".tiff"].includes(ext)
+          ) {
+            text = await ocrFile(tmpPath);
+          } else if (ext === ".docx") {
+            text = await parseDocx(tmpPath);
+          } else if (ext === ".xlsx") {
+            text = parseXlsx(tmpPath);
+          } else {
+            text = readFileSync(tmpPath, "utf-8");
+          }
+        } catch (err) {
+          res.status(500).json({ error: `Failed to extract text from sample: ${err}` });
+          return;
+        }
+
+        if (text.trim().length < 50) {
+          res.status(400).json({ error: "could not extract enough text from the document" });
+          return;
+        }
+
+        const run = await generateTemplateFromText(text);
+        if (!run.template || run.error) {
+          res.status(500).json({ error: run.error ?? "AI failed to generate a template" });
+          return;
+        }
+        res.json({
+          draft: toDraft(run.template),
+          sample_text_preview: text.slice(0, 500),
+          usage: run.usage,
+          model: run.model,
+          exec_ms: run.execMs,
+        });
       } catch (err) {
-        return serverError(`Failed to extract text from sample: ${err}`);
+        res.status(500).json({ error: String(err) });
       }
-
-      if (text.trim().length < 50) {
-        return badRequest("could not extract enough text from the document");
-      }
-
-      const run = await generateTemplateFromText(text);
-      if (!run.template || run.error) {
-        return serverError(run.error ?? "AI failed to generate a template");
-      }
-      return json({
-        draft: toDraft(run.template),
-        sample_text_preview: text.slice(0, 500),
-        usage: run.usage,
-        model: run.model,
-        exec_ms: run.execMs,
-      });
-    } catch (err) {
-      return serverError(String(err));
     }
-  });
+  );
 
   // ── Email templates ────────────────────────────────────────────────────────
-  router.set("GET /api/email-templates", async () => {
-    const rows = getDb().prepare("SELECT * FROM email_templates ORDER BY name ASC").all();
-    return json(rows);
+  app.get("/api/email-templates", async (_req, res) => {
+    const rows = await col("email_templates")
+      .find({})
+      .sort({ name: 1 })
+      .toArray();
+    res.json(rows.map(flatDoc));
   });
 
-  router.set("GET /api/email-templates/:id", async (req) => {
-    const id = parseInt(new URL(req.url).pathname.replace("/api/email-templates/", ""));
-    const t = loadEmailTemplate(getDb(), id);
-    if (!t) return notFound();
-    return json(t);
+  app.get("/api/email-templates/:id", async (req, res) => {
+    const t = await loadEmailTemplate(req.params.id);
+    if (!t) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.json(t);
   });
 
-  router.set("POST /api/email-templates", async (req) => {
-    const body = (await req.json()) as Partial<EmailTemplate>;
-    if (!body.name || !body.html) return badRequest("name + html required");
-    const db = getDb();
-    const r = db.prepare(
-      `INSERT INTO email_templates (name, doc_template_id, subject, html, logo_path, is_default)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(
-      body.name,
-      body.doc_template_id ?? null,
-      body.subject ?? "[תזכורת] {{title}}",
-      body.html,
-      body.logo_path ?? null,
-      body.is_default ?? 0
-    );
-    return json(loadEmailTemplate(db, Number(r.lastInsertRowid)));
+  app.post("/api/email-templates", async (req, res) => {
+    const body = req.body as Partial<EmailTemplate>;
+    if (!body.name || !body.html) {
+      res.status(400).json({ error: "name + html required" });
+      return;
+    }
+    const now = new Date();
+    const doc = {
+      name: body.name,
+      doc_template_id: body.doc_template_id ?? null,
+      subject: body.subject ?? "[תזכורת] {{title}}",
+      html: body.html,
+      logo_path: body.logo_path ?? null,
+      is_default: body.is_default ?? 0,
+      created_at: now,
+      updated_at: now,
+    };
+    const result = await col("email_templates").insertOne(doc as any);
+    res.json(await loadEmailTemplate(result.insertedId.toString()));
   });
 
-  router.set("PUT /api/email-templates/:id", async (req) => {
-    const id = parseInt(new URL(req.url).pathname.replace("/api/email-templates/", ""));
-    const body = (await req.json()) as Partial<EmailTemplate>;
-    const db = getDb();
-    db.prepare(
-      `UPDATE email_templates SET
-         name = COALESCE(?, name),
-         doc_template_id = COALESCE(?, doc_template_id),
-         subject = COALESCE(?, subject),
-         html = COALESCE(?, html),
-         logo_path = COALESCE(?, logo_path),
-         is_default = COALESCE(?, is_default),
-         updated_at = datetime('now')
-       WHERE id = ?`
-    ).run(
-      body.name ?? null,
-      body.doc_template_id ?? null,
-      body.subject ?? null,
-      body.html ?? null,
-      body.logo_path ?? null,
-      body.is_default ?? null,
-      id
-    );
-    return json(loadEmailTemplate(db, id));
+  app.put("/api/email-templates/:id", async (req, res) => {
+    const filter = idFilter(req.params.id);
+    const body = req.body as Partial<EmailTemplate>;
+
+    const updates: Record<string, any> = { updated_at: new Date() };
+    const fields = ["name", "doc_template_id", "subject", "html", "logo_path", "is_default"];
+    for (const f of fields) {
+      if ((body as any)[f] !== undefined) updates[f] = (body as any)[f];
+    }
+
+    await col("email_templates").updateOne(filter, { $set: updates });
+    res.json(await loadEmailTemplate(req.params.id));
   });
 
-  router.set("DELETE /api/email-templates/:id", async (req) => {
-    const id = parseInt(new URL(req.url).pathname.replace("/api/email-templates/", ""));
-    getDb().prepare("DELETE FROM email_templates WHERE id = ?").run(id);
-    return json({ ok: true });
+  app.delete("/api/email-templates/:id", async (req, res) => {
+    await col("email_templates").deleteOne(idFilter(req.params.id));
+    res.json({ ok: true });
   });
 
-  // Detect variables present in an email template body
-  router.set("POST /api/email-templates/vars", async (req) => {
-    const { html } = (await req.json()) as { html: string };
-    return json({ vars: listTemplateVars(html ?? "") });
+  // Detect variables in an email template body
+  app.post("/api/email-templates/vars", async (req, res) => {
+    const { html } = req.body as { html: string };
+    res.json({ vars: listTemplateVars(html ?? "") });
   });
 
-  // Render a preview with sample data — used by the editor's "Preview" tab
-  router.set("POST /api/email-templates/preview", async (req) => {
-    const { html, subject, vars } = (await req.json()) as {
+  // Render a preview with sample data
+  app.post("/api/email-templates/preview", async (req, res) => {
+    const { html, subject, vars } = req.body as {
       html: string;
       subject: string;
       vars: Record<string, unknown>;
     };
     const safeVars = vars as Record<string, string | number | null | undefined>;
-    return json({
+    res.json({
       subject: renderTemplate(subject ?? "", safeVars, { escape: false }),
       html: renderTemplate(html ?? "", safeVars, { escape: false }),
     });
   });
 
   // Render a real reminder's email HTML for preview (no send)
-  router.set("GET /api/reminders/:id/preview-email", async (req) => {
-    const id = parseInt(
-      new URL(req.url).pathname.replace("/api/reminders/", "").replace("/preview-email", "")
-    );
-    const db = getDb();
-    const r = db.prepare(
-      `SELECT r.*, c.display_name AS client_name, d.file_name AS document_name
-       FROM reminders r
-       LEFT JOIN clients c ON c.id = r.client_id
-       LEFT JOIN documents d ON d.id = r.document_id
-       WHERE r.id = ?`
-    ).get(id) as ReminderWithContext | null;
-    if (!r) return notFound();
-    return json(previewReminderEmail(r));
+  app.get("/api/reminders/:id/preview-email", async (req, res) => {
+    const filter = idFilter(req.params.id);
+    const r = (await col("reminders").findOne(filter)) as any;
+    if (!r) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const [client, document] = await Promise.all([
+      r.client_id ? col("clients").findOne({ _id: tryObjectId(r.client_id) }) : null,
+      r.document_id ? col("documents").findOne({ _id: tryObjectId(r.document_id) }) : null,
+    ]);
+    const reminder: ReminderWithContext = {
+      ...flatDoc(r),
+      client_name: (client as any)?.display_name ?? null,
+      document_name: (document as any)?.file_name ?? null,
+    } as any;
+    res.json(await previewReminderEmail(reminder));
   });
 
   // ── Logo upload ────────────────────────────────────────────────────────────
-  router.set("POST /api/assets/logo", async (req) => {
+  app.post("/api/assets/logo", upload.single("logo"), async (req, res) => {
     try {
-      const fd = await req.formData();
-      const file = fd.get("logo") as File | null;
-      if (!file) return badRequest("logo file required");
-      const ext = extname(file.name).toLowerCase();
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ error: "logo file required" });
+        return;
+      }
+      const ext = extname(file.originalname).toLowerCase();
       if (![".png", ".jpg", ".jpeg", ".svg", ".gif"].includes(ext)) {
-        return badRequest("only png/jpg/svg/gif allowed");
+        res.status(400).json({ error: "only png/jpg/svg/gif allowed" });
+        return;
       }
       const assetsDir = join(getDataDir(), "assets");
       mkdirSync(assetsDir, { recursive: true });
       const fileName = `logo_${Date.now()}${ext}`;
       const dest = join(assetsDir, fileName);
-      await Bun.write(dest, await file.arrayBuffer());
-      return json({ logo_path: fileName });
+      writeFileSync(dest, file.buffer);
+      res.json({ logo_path: fileName });
     } catch (err) {
-      return serverError(String(err));
+      res.status(500).json({ error: String(err) });
     }
   });
 
   // Serve an uploaded asset (for the UI preview)
-  router.set("GET /api/assets/:name", async (req) => {
-    const name = new URL(req.url).pathname.replace("/api/assets/", "");
-    if (name.includes("/") || name.includes("..")) return badRequest("invalid name");
-    const file = join(getDataDir(), "assets", name);
-    if (!existsSync(file)) return notFound();
-    return new Response(Bun.file(file));
+  app.get("/api/assets/:name", async (req, res) => {
+    const name = req.params.name;
+    if (name.includes("/") || name.includes("..")) {
+      res.status(400).json({ error: "invalid name" });
+      return;
+    }
+    const filePath = join(getDataDir(), "assets", name);
+    if (!existsSync(filePath)) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.sendFile(filePath);
   });
 }
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+function idFilter(id: string): Record<string, any> {
+  try {
+    return { _id: new ObjectId(id) };
+  } catch {
+    return { _id: id };
+  }
 }
-function notFound() { return json({ error: "Not found" }, 404); }
-function badRequest(msg: string) { return json({ error: msg }, 400); }
-function serverError(msg: string) { return json({ error: msg }, 500); }
+
+function tryObjectId(id: string): any {
+  try {
+    return new ObjectId(id);
+  } catch {
+    return id;
+  }
+}
+
+function flatDoc(doc: any) {
+  if (!doc) return doc;
+  const { _id, ...rest } = doc;
+  return { id: _id?.toString(), ...rest };
+}

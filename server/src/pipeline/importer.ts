@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, copyFileSync, readFileSync } from "fs";
+import { existsSync, mkdirSync, copyFileSync, readFileSync, statSync, writeFileSync } from "fs";
+import { createHash } from "crypto";
 import { join, extname, basename } from "path";
-import { getDb } from "../db/db";
+import { col } from "../db/db";
 import { getDataDir, getSettings } from "../settings";
 import { parsePdf } from "./pdfParser";
 import { ocrFile } from "./ocrParser";
@@ -29,30 +30,24 @@ function getMimeType(ext: string): string {
   return map[ext.toLowerCase()] ?? "application/octet-stream";
 }
 
-async function computeHash(filePath: string): Promise<string> {
-  const buf = readFileSync(filePath);
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(buf);
-  return hasher.digest("hex");
+function computeHash(filePath: string): string {
+  return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
-export async function importFile(originalPath: string, push?: PushFn): Promise<number> {
-  const db = getDb();
+export async function importFile(originalPath: string, push?: PushFn): Promise<string> {
   const settings = getSettings();
 
   const ext = extname(originalPath);
   const fileName = basename(originalPath);
-  const fileHash = await computeHash(originalPath);
-  const fileSize = (await Bun.file(originalPath).arrayBuffer()).byteLength;
+  const fileHash = computeHash(originalPath);
+  const fileSize = statSync(originalPath).size;
   const mimeType = getMimeType(ext);
 
   // Dedup check
-  const existing = db.prepare("SELECT id FROM documents WHERE file_hash = ?").get(fileHash) as
-    | { id: number }
-    | null;
+  const existing = await col("documents").findOne({ file_hash: fileHash });
   if (existing) {
     console.log(`[importer] Skipping duplicate: ${fileName}`);
-    return existing.id;
+    return existing._id!.toString();
   }
 
   // Copy to managed documents folder
@@ -63,46 +58,53 @@ export async function importFile(originalPath: string, push?: PushFn): Promise<n
     copyFileSync(originalPath, managedPath);
   }
 
-  // Insert document record
-  const insertResult = db
-    .prepare(
-      `INSERT INTO documents (file_name, file_path, original_path, file_hash, mime_type, file_size_bytes, import_date, processing_status)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'queued')`
-    )
-    .run(fileName, managedPath, originalPath, fileHash, mimeType, fileSize);
-  const documentId = Number(insertResult.lastInsertRowid);
+  const now = new Date();
+  const docRecord = {
+    file_name: fileName,
+    file_path: managedPath,
+    original_path: originalPath,
+    file_hash: fileHash,
+    mime_type: mimeType,
+    file_size_bytes: fileSize,
+    import_date: now,
+    processing_status: "queued",
+    created_at: now,
+    updated_at: now,
+  };
 
-  push?.({ type: "document:queued", documentId, fileName });
+  const insertResult = await col("documents").insertOne(docRecord as any);
+  const documentId = insertResult.insertedId.toString();
+
+  push?.({ type: "document:queued", documentId: documentId as any, fileName });
   console.log(`[importer] Queued document ${documentId}: ${fileName}`);
 
-  // Process asynchronously so the HTTP response can return immediately
-  processDocument(documentId, managedPath, mimeType, ext, push).catch((err) => {
+  processDocument(documentId, managedPath, mimeType, ext, push).catch(async (err) => {
     console.error(`[importer] Fatal error processing doc ${documentId}:`, err);
-    db.prepare(
-      `UPDATE documents SET processing_status='error', error_message=?, updated_at=datetime('now') WHERE id=?`
-    ).run(String(err), documentId);
-    push?.({ type: "document:done", documentId, status: "error", error: String(err) });
+    await col("documents").updateOne(
+      { _id: insertResult.insertedId },
+      { $set: { processing_status: "error", error_message: String(err), updated_at: new Date() } }
+    );
+    push?.({ type: "document:done", documentId: documentId as any, status: "error", error: String(err) });
   });
 
   return documentId;
 }
 
 export async function processDocument(
-  documentId: number,
+  documentId: string,
   filePath: string,
   mimeType: string,
   ext: string,
   push?: PushFn
 ) {
-  const db = getDb();
   const settings = getSettings();
+  const docFilter = { _id: documentId } as any;
 
-  db.prepare(
-    `UPDATE documents SET processing_status='processing', updated_at=datetime('now') WHERE id=?`
-  ).run(documentId);
-  push?.({ type: "document:progress", documentId, stage: "extracting_text", progress: 10 });
+  await col("documents").updateOne(docFilter, {
+    $set: { processing_status: "processing", updated_at: new Date() },
+  });
+  push?.({ type: "document:progress", documentId: documentId as any, stage: "extracting_text", progress: 10 });
 
-  // Step 1: Extract raw text
   let rawText = "";
   let pageCount: number | null = null;
 
@@ -111,263 +113,239 @@ export async function processDocument(
       const pdfResult = await parsePdf(filePath);
       pageCount = pdfResult.pageCount;
       if (pdfResult.needsOcr) {
-        push?.({ type: "document:progress", documentId, stage: "ocr", progress: 25 });
+        push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
         rawText = await ocrFile(filePath);
       } else {
         rawText = pdfResult.text;
       }
     } else if (mimeType.startsWith("image/")) {
-      push?.({ type: "document:progress", documentId, stage: "ocr", progress: 25 });
+      push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
       rawText = await ocrFile(filePath);
     } else if (ext === ".docx") {
       rawText = await parseDocx(filePath);
     } else if (ext === ".xlsx") {
       rawText = parseXlsx(filePath);
     } else {
-      rawText = await Bun.file(filePath).text();
+      rawText = readFileSync(filePath, "utf-8");
     }
   } catch (err) {
     const msg = `Text extraction failed: ${err}`;
-    db.prepare(
-      `UPDATE documents SET processing_status='error', error_message=?, updated_at=datetime('now') WHERE id=?`
-    ).run(msg, documentId);
-    push?.({ type: "document:done", documentId, status: "error", error: msg });
+    await col("documents").updateOne(docFilter, {
+      $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+    });
+    push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
     return;
   }
 
-  db.prepare(
-    `UPDATE documents SET raw_text=?, page_count=?, processing_status='processing', updated_at=datetime('now') WHERE id=?`
-  ).run(rawText, pageCount, documentId);
+  await col("documents").updateOne(docFilter, {
+    $set: { raw_text: rawText, page_count: pageCount, processing_status: "processing", updated_at: new Date() },
+  });
 
-  push?.({ type: "document:progress", documentId, stage: "ai_extraction", progress: 50 });
+  push?.({ type: "document:progress", documentId: documentId as any, stage: "ai_extraction", progress: 50 });
 
-  // Step 2: AI extraction — template-driven
   if (settings.autoExtract && rawText.trim().length > 0) {
-    const docRow = db
-      .prepare("SELECT file_name FROM documents WHERE id = ?")
-      .get(documentId) as { file_name: string } | null;
+    const docRow = await col("documents").findOne(docFilter) as any;
 
-    // Pick the best template (by keyword match → default → first)
-    const template = pickTemplate(db, rawText);
+    const template = await pickTemplate(rawText);
 
     if (template) {
       const run = await extractWithTemplate(rawText, template, documentId, docRow?.file_name);
 
-      // Persist as an extractions row (use raw JSON; keep backend/model)
-      db.prepare(
-        `INSERT INTO extractions (document_id, backend, model, result_json, parsed_ok, error, exec_ms)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        documentId,
-        run.backend,
-        run.model,
-        run.rawJson,
-        run.fields ? 1 : 0,
-        run.error,
-        run.execMs
-      );
+      await col("extractions").insertOne({
+        document_id: documentId,
+        backend: run.backend,
+        model: run.model,
+        result_json: run.rawJson,
+        parsed_ok: run.fields ? 1 : 0,
+        error: run.error ?? null,
+        exec_ms: run.execMs,
+        created_at: new Date(),
+      } as any);
 
       if (run.fields) {
-        // Save the dynamic fields blob + link to template
-        db.prepare(
-          `UPDATE documents SET extracted_fields = ?, template_id = ?,
-                                document_type = ?,
-                                updated_at = datetime('now')
-           WHERE id = ?`
-        ).run(JSON.stringify(run.fields), template.id, template.name, documentId);
+        await col("documents").updateOne(docFilter, {
+          $set: {
+            extracted_fields: JSON.stringify(run.fields),
+            template_id: template.id,
+            document_type: template.name,
+            updated_at: new Date(),
+          },
+        });
 
-        push?.({ type: "document:progress", documentId, stage: "saving_entities", progress: 75 });
+        push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
         await saveTemplateEntities(documentId, template, run.fields);
       } else if (run.error) {
         const msg = `AI extraction failed: ${run.error}`;
-        db.prepare(
-          `UPDATE documents SET processing_status='error', error_message=?, updated_at=datetime('now') WHERE id=?`
-        ).run(msg, documentId);
-        push?.({ type: "document:done", documentId, status: "error", error: msg });
+        await col("documents").updateOne(docFilter, {
+          $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+        });
+        push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
         console.error(`[importer] ${msg}`);
         return;
       }
     } else {
-      // No templates configured — fall back to the legacy fixed prompt
       const extraction = await extractDocument(rawText, documentId, docRow?.file_name);
-      db.prepare(
-        `INSERT INTO extractions (document_id, backend, model, result_json, parsed_ok, error, exec_ms)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(documentId, extraction.backend, extraction.model, extraction.rawJson,
-            extraction.result ? 1 : 0, extraction.error, extraction.execMs);
+      await col("extractions").insertOne({
+        document_id: documentId,
+        backend: extraction.backend,
+        model: extraction.model,
+        result_json: extraction.rawJson,
+        parsed_ok: extraction.result ? 1 : 0,
+        error: extraction.error ?? null,
+        exec_ms: extraction.execMs,
+        created_at: new Date(),
+      } as any);
+
       if (extraction.result) {
-        push?.({ type: "document:progress", documentId, stage: "saving_entities", progress: 75 });
+        push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
         await saveExtractionEntities(documentId, extraction.result);
       } else if (extraction.error) {
         const msg = `AI extraction failed: ${extraction.error}`;
-        db.prepare(
-          `UPDATE documents SET processing_status='error', error_message=?, updated_at=datetime('now') WHERE id=?`
-        ).run(msg, documentId);
-        push?.({ type: "document:done", documentId, status: "error", error: msg });
+        await col("documents").updateOne(docFilter, {
+          $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+        });
+        push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
         return;
       }
     }
   }
 
-  // Step 3: Mark done
-  db.prepare(
-    `UPDATE documents SET processing_status='done', updated_at=datetime('now') WHERE id=?`
-  ).run(documentId);
-  push?.({ type: "document:done", documentId, status: "done" });
+  await col("documents").updateOne(docFilter, {
+    $set: { processing_status: "done", updated_at: new Date() },
+  });
+  push?.({ type: "document:done", documentId: documentId as any, status: "done" });
   console.log(`[importer] Done processing document ${documentId}`);
 }
 
 async function saveExtractionEntities(
-  documentId: number,
+  documentId: string,
   result: import("../../src/shared/types.js").ExtractionResult
 ) {
-  const db = getDb();
-
-  // Persist document_type / document_number on the document row
   if (result.document_type || result.document_number) {
-    db.prepare(
-      `UPDATE documents SET document_type=COALESCE(?,document_type),
-                            document_number=COALESCE(?,document_number),
-                            updated_at=datetime('now')
-       WHERE id=?`
-    ).run(result.document_type ?? null, result.document_number ?? null, documentId);
+    await col("documents").updateOne(
+      { _id: documentId } as any,
+      {
+        $set: {
+          ...(result.document_type && { document_type: result.document_type }),
+          ...(result.document_number && { document_number: result.document_number }),
+          updated_at: new Date(),
+        },
+      }
+    );
   }
 
-  // ── Upsert client ──────────────────────────────────────────────────────────
-  // Prefer COMPANY as the client (matches business expectation: track companies,
-  // contact person is stored in notes). Fall back to person if no company found.
-  let clientId: number | null = null;
+  let clientId: string | null = null;
   const displayName = result.client_company ?? result.client_name;
   const entityType: "company" | "person" = result.client_company ? "company" : "person";
 
   if (displayName) {
-    const existing = db
-      .prepare("SELECT id, email, phone, address, notes FROM clients WHERE display_name = ? COLLATE NOCASE")
-      .get(displayName) as
-      | { id: number; email: string | null; phone: string | null; address: string | null; notes: string | null }
-      | null;
+    const existing = await col("clients").findOne({
+      display_name: { $regex: new RegExp(`^${escapeRegex(displayName)}$`, "i") },
+    }) as any;
 
-    // Build a notes line with the contact person (when client is a company)
     const contactNote =
-      result.client_company && result.client_name ? `איש קשר: ${result.client_name}` : null;
+      result.client_company && result.client_name
+        ? `איש קשר: ${result.client_name}`
+        : null;
 
     if (existing) {
-      clientId = existing.id;
+      clientId = existing._id.toString();
       const mergedNotes =
         contactNote && !(existing.notes ?? "").includes(contactNote)
           ? [existing.notes, contactNote].filter(Boolean).join("\n")
           : existing.notes;
 
-      db.prepare(
-        `UPDATE clients SET
-           email   = COALESCE(email,   ?),
-           phone   = COALESCE(phone,   ?),
-           address = COALESCE(address, ?),
-           id_number = COALESCE(id_number, ?),
-           notes   = COALESCE(?, notes),
-           updated_at = datetime('now')
-         WHERE id = ?`
-      ).run(
-        result.client_email ?? null,
-        result.client_phone ?? null,
-        result.client_address ?? null,
-        result.client_id ?? null,
-        mergedNotes,
-        clientId
+      await col("clients").updateOne(
+        { _id: existing._id },
+        {
+          $set: {
+            ...(result.client_email && !existing.email && { email: result.client_email }),
+            ...(result.client_phone && !existing.phone && { phone: result.client_phone }),
+            ...(result.client_address && !existing.address && { address: result.client_address }),
+            ...(result.client_id && !existing.id_number && { id_number: result.client_id }),
+            ...(mergedNotes !== existing.notes && { notes: mergedNotes }),
+            updated_at: new Date(),
+          },
+        }
       );
     } else {
-      const r = db
-        .prepare(
-          `INSERT INTO clients (display_name, entity_type, id_number, email, phone, address, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          displayName,
-          entityType,
-          result.client_id ?? null,
-          result.client_email ?? null,
-          result.client_phone ?? null,
-          result.client_address ?? null,
-          contactNote
-        );
-      clientId = Number(r.lastInsertRowid);
+      const r = await col("clients").insertOne({
+        display_name: displayName,
+        entity_type: entityType,
+        id_number: result.client_id ?? null,
+        email: result.client_email ?? null,
+        phone: result.client_phone ?? null,
+        address: result.client_address ?? null,
+        notes: contactNote,
+        created_at: new Date(),
+        updated_at: new Date(),
+      } as any);
+      clientId = r.insertedId.toString();
     }
 
-    // Link document ↔ client
-    db.prepare(
-      `INSERT OR IGNORE INTO document_clients (document_id, client_id, role) VALUES (?, ?, 'party_a')`
-    ).run(documentId, clientId, );
-
-    // Timeline event
-    db.prepare(
-      `INSERT INTO timeline_events (client_id, event_type, title, description, event_date, source_id, source_type)
-       VALUES (?, 'document_added', ?, ?, datetime('now'), ?, 'document')`
-    ).run(
-      clientId,
-      result.document_type ? `${result.document_type} יובא` : "מסמך חדש יובא",
-      result.summary_hebrew ?? null,
-      documentId
+    await col("document_clients").updateOne(
+      { document_id: documentId, client_id: clientId },
+      { $setOnInsert: { document_id: documentId, client_id: clientId, role: "party_a" } },
+      { upsert: true }
     );
+
+    await col("timeline_events").insertOne({
+      client_id: clientId,
+      event_type: "document_added",
+      title: result.document_type ? `${result.document_type} יובא` : "מסמך חדש יובא",
+      description: result.summary_hebrew ?? null,
+      event_date: new Date(),
+      source_id: documentId,
+      source_type: "document",
+      created_at: new Date(),
+    } as any);
   }
 
-  // ── Save contract / inspection record ──────────────────────────────────────
-  // Any document with an expiry_date (next inspection / next renewal / next
-  // action date) gets a "contract" row so a reminder can be generated.
   if (result.expiry_date || result.start_date || result.contract_number || result.document_number) {
-    const r = db
-      .prepare(
-        `INSERT INTO contracts (document_id, client_id, contract_number, contract_type, start_date, expiry_date, amount, currency, counterparty, summary, confidence)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        documentId,
-        clientId,
-        result.contract_number ?? result.document_number ?? null,
-        result.contract_type ?? result.document_type ?? null,
-        result.start_date ?? null,
-        result.expiry_date ?? null,
-        result.amount ?? null,
-        result.currency ?? "ILS",
+    const r = await col("contracts").insertOne({
+      document_id: documentId,
+      client_id: clientId,
+      contract_number: result.contract_number ?? result.document_number ?? null,
+      contract_type: result.contract_type ?? result.document_type ?? null,
+      start_date: result.start_date ?? null,
+      expiry_date: result.expiry_date ?? null,
+      amount: result.amount ?? null,
+      currency: result.currency ?? "ILS",
+      counterparty:
         (result.parties ?? [])
           .filter((p) => p !== (result.client_company ?? result.client_name))
           .join(", ") || null,
-        result.summary_hebrew ?? null,
-        result.confidence ?? "medium"
-      );
-    const contractId = Number(r.lastInsertRowid);
+      summary: result.summary_hebrew ?? null,
+      confidence: result.confidence ?? "medium",
+      status: "active",
+      created_at: new Date(),
+      updated_at: new Date(),
+    } as any);
 
+    const contractId = r.insertedId.toString();
     if (result.expiry_date) {
-      generateContractReminders(contractId, clientId, documentId, result.expiry_date);
+      await generateContractReminders(contractId, clientId, documentId, result.expiry_date);
     }
   }
 
-  // ── Save tasks ─────────────────────────────────────────────────────────────
   for (const task of result.tasks ?? []) {
-    db.prepare(
-      `INSERT INTO tasks (document_id, client_id, description, due_date) VALUES (?, ?, ?, ?)`
-    ).run(documentId, clientId, task.description, task.due_date ?? null);
+    await col("tasks").insertOne({
+      document_id: documentId,
+      client_id: clientId,
+      description: task.description,
+      due_date: task.due_date ?? null,
+      status: "pending",
+      created_at: new Date(),
+      updated_at: new Date(),
+    } as any);
   }
 }
 
-/**
- * Project a template-extracted flat object onto the existing entity tables.
- * Conventions (looked up by `key` in the template fields):
- *   - client_company / client_name / contact_person  → clients.display_name (+ notes)
- *   - contact_phone / contact_email / client_address → clients.phone/email/address
- *   - contract_number / report_number / invoice_number → contracts.contract_number
- *   - start_date / inspection_date / issue_date      → contracts.start_date
- *   - template.expiry_field value                    → contracts.expiry_date (drives reminders!)
- *   - amount / currency                               → contracts.amount/currency
- *
- * Any field the template defines but we don't know how to project is still
- * preserved verbatim in documents.extracted_fields (already saved earlier).
- */
 async function saveTemplateEntities(
-  documentId: number,
+  documentId: string,
   template: DocTemplate,
   fields: DynamicExtraction
 ) {
-  const db = getDb();
   const f = fields;
 
   const getStr = (k: string): string | null => {
@@ -382,70 +360,73 @@ async function saveTemplateEntities(
     return Number.isFinite(n) ? n : null;
   };
 
-  // ── Client ────────────────────────────────────────────────────────────────
   const clientCompany = getStr("client_company");
   const contactPerson = getStr("contact_person") ?? getStr("client_name");
   const displayName = clientCompany ?? contactPerson;
   const entityType: "company" | "person" = clientCompany ? "company" : "person";
 
-  let clientId: number | null = null;
+  let clientId: string | null = null;
   if (displayName) {
-    const existing = db
-      .prepare("SELECT id, notes FROM clients WHERE display_name = ? COLLATE NOCASE")
-      .get(displayName) as { id: number; notes: string | null } | null;
+    const existing = await col("clients").findOne({
+      display_name: { $regex: new RegExp(`^${escapeRegex(displayName)}$`, "i") },
+    }) as any;
 
     const contactNote =
       clientCompany && contactPerson ? `איש קשר: ${contactPerson}` : null;
 
     if (existing) {
-      clientId = existing.id;
+      clientId = existing._id.toString();
       const mergedNotes =
         contactNote && !(existing.notes ?? "").includes(contactNote)
           ? [existing.notes, contactNote].filter(Boolean).join("\n")
           : existing.notes;
-      db.prepare(
-        `UPDATE clients SET
-           email = COALESCE(email, ?), phone = COALESCE(phone, ?),
-           address = COALESCE(address, ?), id_number = COALESCE(id_number, ?),
-           notes = COALESCE(?, notes), updated_at = datetime('now')
-         WHERE id = ?`
-      ).run(
-        getStr("contact_email"),
-        getStr("contact_phone"),
-        getStr("client_address"),
-        getStr("client_id"),
-        mergedNotes,
-        clientId
+
+      await col("clients").updateOne(
+        { _id: existing._id },
+        {
+          $set: {
+            ...(getStr("contact_email") && !existing.email && { email: getStr("contact_email") }),
+            ...(getStr("contact_phone") && !existing.phone && { phone: getStr("contact_phone") }),
+            ...(getStr("client_address") && !existing.address && { address: getStr("client_address") }),
+            ...(getStr("client_id") && !existing.id_number && { id_number: getStr("client_id") }),
+            ...(mergedNotes !== existing.notes && { notes: mergedNotes }),
+            updated_at: new Date(),
+          },
+        }
       );
     } else {
-      const r = db
-        .prepare(
-          `INSERT INTO clients (display_name, entity_type, id_number, email, phone, address, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          displayName,
-          entityType,
-          getStr("client_id"),
-          getStr("contact_email"),
-          getStr("contact_phone"),
-          getStr("client_address"),
-          contactNote
-        );
-      clientId = Number(r.lastInsertRowid);
+      const r = await col("clients").insertOne({
+        display_name: displayName,
+        entity_type: entityType,
+        id_number: getStr("client_id"),
+        email: getStr("contact_email"),
+        phone: getStr("contact_phone"),
+        address: getStr("client_address"),
+        notes: contactNote,
+        created_at: new Date(),
+        updated_at: new Date(),
+      } as any);
+      clientId = r.insertedId.toString();
     }
 
-    db.prepare(
-      `INSERT OR IGNORE INTO document_clients (document_id, client_id, role) VALUES (?, ?, 'party_a')`
-    ).run(documentId, clientId);
+    await col("document_clients").updateOne(
+      { document_id: documentId, client_id: clientId },
+      { $setOnInsert: { document_id: documentId, client_id: clientId, role: "party_a" } },
+      { upsert: true }
+    );
 
-    db.prepare(
-      `INSERT INTO timeline_events (client_id, event_type, title, description, event_date, source_id, source_type)
-       VALUES (?, 'document_added', ?, ?, datetime('now'), ?, 'document')`
-    ).run(clientId, `${template.name} יובא`, null, documentId);
+    await col("timeline_events").insertOne({
+      client_id: clientId,
+      event_type: "document_added",
+      title: `${template.name} יובא`,
+      description: null,
+      event_date: new Date(),
+      source_id: documentId,
+      source_type: "document",
+      created_at: new Date(),
+    } as any);
   }
 
-  // ── Contract / Inspection record ─────────────────────────────────────────
   const docNumber =
     getStr("contract_number") ?? getStr("report_number") ?? getStr("invoice_number");
   const startDate =
@@ -453,27 +434,29 @@ async function saveTemplateEntities(
   const expiryDate = template.expiry_field ? getStr(template.expiry_field) : null;
 
   if (docNumber || startDate || expiryDate) {
-    const r = db
-      .prepare(
-        `INSERT INTO contracts (document_id, client_id, contract_number, contract_type,
-                                start_date, expiry_date, amount, currency, summary, confidence)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        documentId,
-        clientId,
-        docNumber,
-        template.name,
-        startDate,
-        expiryDate,
-        getNum("amount"),
-        getStr("currency") ?? "ILS",
-        getStr("findings") ?? getStr("notes") ?? getStr("summary_hebrew"),
-        (getStr("_confidence") as "high" | "medium" | "low") ?? "medium"
-      );
-    const contractId = Number(r.lastInsertRowid);
+    const r = await col("contracts").insertOne({
+      document_id: documentId,
+      client_id: clientId,
+      contract_number: docNumber,
+      contract_type: template.name,
+      start_date: startDate,
+      expiry_date: expiryDate,
+      amount: getNum("amount"),
+      currency: getStr("currency") ?? "ILS",
+      summary: getStr("findings") ?? getStr("notes") ?? getStr("summary_hebrew"),
+      confidence: (getStr("_confidence") as "high" | "medium" | "low") ?? "medium",
+      status: "active",
+      created_at: new Date(),
+      updated_at: new Date(),
+    } as any);
+
+    const contractId = r.insertedId.toString();
     if (expiryDate) {
-      generateContractReminders(contractId, clientId, documentId, expiryDate);
+      await generateContractReminders(contractId, clientId, documentId, expiryDate);
     }
   }
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

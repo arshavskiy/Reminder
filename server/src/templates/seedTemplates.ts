@@ -4,7 +4,8 @@
 // Built-in templates are marked is_builtin=1 so the UI can show a small badge,
 // but they're otherwise fully editable.
 
-import type { Database } from "bun:sqlite";
+import { col } from "../db/db";
+import { ObjectId } from "mongodb";
 import type { DocTemplate, TemplateField } from "../../src/shared/types.js";
 
 interface SeedRow {
@@ -86,61 +87,82 @@ const SEEDS: SeedRow[] = [
   },
 ];
 
-export function seedBuiltinTemplates(db: Database) {
-  const insert = db.prepare(
-    `INSERT OR IGNORE INTO doc_templates
-       (name, description, match_keywords, fields, expiry_field, is_default, is_builtin)
-     VALUES (?, ?, ?, ?, ?, ?, 1)`
-  );
+export async function seedBuiltinTemplates(): Promise<void> {
+  const collection = col<any>("doc_templates");
+  const now = new Date();
   for (const s of SEEDS) {
-    insert.run(
-      s.name,
-      s.description,
-      JSON.stringify(s.match_keywords),
-      JSON.stringify(s.fields),
-      s.expiry_field,
-      s.is_default
+    await collection.updateOne(
+      { name: s.name },
+      {
+        $setOnInsert: {
+          name: s.name,
+          description: s.description,
+          match_keywords: s.match_keywords,
+          fields: s.fields,
+          expiry_field: s.expiry_field,
+          is_default: s.is_default,
+          is_builtin: 1,
+          created_at: now,
+          updated_at: now,
+        },
+      },
+      { upsert: true }
     );
   }
 }
 
-export function loadTemplate(db: Database, id: number): DocTemplate | null {
-  const row = db.prepare("SELECT * FROM doc_templates WHERE id = ?").get(id) as
-    | (Omit<DocTemplate, "match_keywords" | "fields"> & { match_keywords: string; fields: string })
-    | null;
+export async function loadTemplate(id: string): Promise<DocTemplate | null> {
+  let filter: Record<string, any>;
+  try {
+    filter = { _id: new ObjectId(id) };
+  } catch {
+    filter = { _id: id };
+  }
+  const row = await col<any>("doc_templates").findOne(filter);
   if (!row) return null;
-  return parseRow(row);
+  return flatRow(row);
 }
 
-export function loadAllTemplates(db: Database): DocTemplate[] {
-  const rows = db.prepare("SELECT * FROM doc_templates ORDER BY name ASC").all() as Array<
-    Omit<DocTemplate, "match_keywords" | "fields"> & { match_keywords: string; fields: string }
-  >;
-  return rows.map(parseRow);
+export async function loadAllTemplates(): Promise<DocTemplate[]> {
+  const rows = await col<any>("doc_templates")
+    .find({})
+    .sort({ name: 1 })
+    .toArray();
+  return rows.map(flatRow);
 }
 
-function parseRow(row: Omit<DocTemplate, "match_keywords" | "fields"> & {
-  match_keywords: string;
-  fields: string;
-}): DocTemplate {
+function flatRow(row: any): DocTemplate {
+  const { _id, ...rest } = row;
   return {
-    ...row,
-    match_keywords: safeJson(row.match_keywords, []),
-    fields: safeJson(row.fields, []),
-  };
+    id: _id?.toString(),
+    ...rest,
+    // In MongoDB we store arrays natively; no JSON.parse needed.
+    // Guard against legacy string values just in case.
+    match_keywords: Array.isArray(rest.match_keywords)
+      ? rest.match_keywords
+      : safeJson(rest.match_keywords, []),
+    fields: Array.isArray(rest.fields)
+      ? rest.fields
+      : safeJson(rest.fields, []),
+  } as DocTemplate;
 }
 
-function safeJson<T>(raw: string, fallback: T): T {
-  try { return JSON.parse(raw) as T; } catch { return fallback; }
+function safeJson<T>(raw: unknown, fallback: T): T {
+  if (typeof raw !== "string") return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 /**
  * Pick the best matching template for a given raw document text.
- * Returns the one whose match_keywords have the most hits, falling back to is_default,
- * then to the first row, then null.
+ * Returns the one whose match_keywords have the most hits, falling back to
+ * is_default, then to the first row, then null.
  */
-export function pickTemplate(db: Database, rawText: string): DocTemplate | null {
-  const all = loadAllTemplates(db);
+export async function pickTemplate(rawText: string): Promise<DocTemplate | null> {
+  const all = await loadAllTemplates();
   if (!all.length) return null;
 
   let best: { tpl: DocTemplate; score: number } | null = null;

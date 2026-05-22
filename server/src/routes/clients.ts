@@ -1,139 +1,138 @@
-import { getDb } from "../db/db";
+import express from "express";
+import { col } from "../db/db";
+import { ObjectId } from "mongodb";
 
-export function registerClientRoutes(
-  router: Map<string, (req: Request) => Promise<Response>>
-) {
+export function registerClientRoutes(app: express.Application) {
   // GET /api/clients
-  router.set("GET /api/clients", async (req) => {
-    const url = new URL(req.url);
-    const q = url.searchParams.get("q") ?? "";
-    const limit = parseInt(url.searchParams.get("limit") ?? "50");
-    const offset = parseInt(url.searchParams.get("offset") ?? "0");
-    const db = getDb();
+  app.get("/api/clients", async (req, res) => {
+    const q = (req.query.q as string) ?? "";
+    const limit = parseInt((req.query.limit as string) ?? "50");
+    const offset = parseInt((req.query.offset as string) ?? "0");
 
-    const where = q ? "WHERE display_name LIKE ? OR email LIKE ?" : "";
-    const params = q ? [`%${q}%`, `%${q}%`, limit, offset] : [limit, offset];
-    const countParams = q ? [`%${q}%`, `%${q}%`] : [];
+    const filter: Record<string, any> = {};
+    if (q) {
+      const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [{ display_name: regex }, { email: regex }];
+    }
 
-    const rows = db
-      .prepare(`SELECT * FROM clients ${where} ORDER BY display_name ASC LIMIT ? OFFSET ?`)
-      .all(...params);
-    const { total } = db
-      .prepare(`SELECT COUNT(*) AS total FROM clients ${where}`)
-      .get(...countParams) as { total: number };
+    const [rows, total] = await Promise.all([
+      col("clients")
+        .find(filter)
+        .sort({ display_name: 1 })
+        .skip(offset)
+        .limit(limit)
+        .toArray(),
+      col("clients").countDocuments(filter),
+    ]);
 
-    return json({ rows, total });
+    res.json({ rows: rows.map(flatDoc), total });
   });
 
   // GET /api/clients/:id
-  router.set("GET /api/clients/:id", async (req) => {
-    const id = extractId(req.url, "/api/clients/");
-    const db = getDb();
-    const client = db.prepare("SELECT * FROM clients WHERE id = ?").get(id);
-    if (!client) return notFound();
+  app.get("/api/clients/:id", async (req, res) => {
+    const filter = idFilter(req.params.id);
 
-    const doc_count = (
-      db
-        .prepare("SELECT COUNT(*) AS n FROM document_clients WHERE client_id = ?")
-        .get(id) as { n: number }
-    ).n;
-    const contract_count = (
-      db
-        .prepare("SELECT COUNT(*) AS n FROM contracts WHERE client_id = ?")
-        .get(id) as { n: number }
-    ).n;
-    const open_reminder_count = (
-      db
-        .prepare("SELECT COUNT(*) AS n FROM reminders WHERE client_id = ? AND status = 'pending'")
-        .get(id) as { n: number }
-    ).n;
+    const client = await col("clients").findOne(filter);
+    if (!client) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
 
-    return json({ ...client, doc_count, contract_count, open_reminder_count });
+    const id = req.params.id;
+    const [doc_count, contract_count, open_reminder_count] = await Promise.all([
+      col("document_clients").countDocuments({ client_id: id }),
+      col("contracts").countDocuments({ client_id: id }),
+      col("reminders").countDocuments({ client_id: id, status: "pending" }),
+    ]);
+
+    res.json({ ...flatDoc(client), doc_count, contract_count, open_reminder_count });
   });
 
   // POST /api/clients
-  router.set("POST /api/clients", async (req) => {
-    const body = (await req.json()) as Record<string, unknown>;
-    const db = getDb();
-    const r = db
-      .prepare(
-        `INSERT INTO clients (display_name, entity_type, id_number, email, phone, address, notes, tags)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        body.display_name,
-        body.entity_type ?? "person",
-        body.id_number ?? null,
-        body.email ?? null,
-        body.phone ?? null,
-        body.address ?? null,
-        body.notes ?? null,
-        body.tags ?? null
-      );
-    return json(db.prepare("SELECT * FROM clients WHERE id = ?").get(r.lastInsertRowid), 201);
+  app.post("/api/clients", async (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    const now = new Date();
+    const doc = {
+      display_name: body.display_name,
+      entity_type: body.entity_type ?? "person",
+      id_number: body.id_number ?? null,
+      email: body.email ?? null,
+      phone: body.phone ?? null,
+      address: body.address ?? null,
+      notes: body.notes ?? null,
+      tags: body.tags ?? null,
+      created_at: now,
+      updated_at: now,
+    };
+    const result = await col("clients").insertOne(doc as any);
+    const inserted = await col("clients").findOne({ _id: result.insertedId });
+    res.status(201).json(flatDoc(inserted));
   });
 
   // PUT /api/clients/:id
-  router.set("PUT /api/clients/:id", async (req) => {
-    const id = extractId(req.url, "/api/clients/");
-    const body = (await req.json()) as Record<string, unknown>;
-    const db = getDb();
-    db.prepare(
-      `UPDATE clients SET display_name=COALESCE(?,display_name), entity_type=COALESCE(?,entity_type),
-       id_number=COALESCE(?,id_number), email=COALESCE(?,email), phone=COALESCE(?,phone),
-       address=COALESCE(?,address), notes=COALESCE(?,notes), tags=COALESCE(?,tags),
-       updated_at=datetime('now') WHERE id=?`
-    ).run(
-      body.display_name ?? null,
-      body.entity_type ?? null,
-      body.id_number ?? null,
-      body.email ?? null,
-      body.phone ?? null,
-      body.address ?? null,
-      body.notes ?? null,
-      body.tags ?? null,
-      id
-    );
-    return json(db.prepare("SELECT * FROM clients WHERE id = ?").get(id));
+  app.put("/api/clients/:id", async (req, res) => {
+    const filter = idFilter(req.params.id);
+    const body = req.body as Record<string, unknown>;
+
+    const updates: Record<string, any> = { updated_at: new Date() };
+    if (body.display_name !== undefined) updates.display_name = body.display_name;
+    if (body.entity_type !== undefined) updates.entity_type = body.entity_type;
+    if (body.id_number !== undefined) updates.id_number = body.id_number;
+    if (body.email !== undefined) updates.email = body.email;
+    if (body.phone !== undefined) updates.phone = body.phone;
+    if (body.address !== undefined) updates.address = body.address;
+    if (body.notes !== undefined) updates.notes = body.notes;
+    if (body.tags !== undefined) updates.tags = body.tags;
+
+    await col("clients").updateOne(filter, { $set: updates });
+    const updated = await col("clients").findOne(filter);
+    res.json(flatDoc(updated));
   });
 
   // DELETE /api/clients/:id
-  router.set("DELETE /api/clients/:id", async (req) => {
-    const id = extractId(req.url, "/api/clients/");
-    getDb().prepare("DELETE FROM clients WHERE id = ?").run(id);
-    return json({ ok: true });
+  app.delete("/api/clients/:id", async (req, res) => {
+    await col("clients").deleteOne(idFilter(req.params.id));
+    res.json({ ok: true });
   });
 
   // GET /api/clients/:id/timeline
-  router.set("GET /api/clients/:id/timeline", async (req) => {
-    const id = extractId(req.url, "/api/clients/", "/timeline");
-    const rows = getDb()
-      .prepare("SELECT * FROM timeline_events WHERE client_id = ? ORDER BY event_date DESC LIMIT 100")
-      .all(id);
-    return json(rows);
+  app.get("/api/clients/:id/timeline", async (req, res) => {
+    const rows = await col("timeline_events")
+      .find({ client_id: req.params.id })
+      .sort({ event_date: -1 })
+      .limit(100)
+      .toArray();
+    res.json(rows.map(flatDoc));
   });
 
   // GET /api/clients/:id/documents
-  router.set("GET /api/clients/:id/documents", async (req) => {
-    const id = extractId(req.url, "/api/clients/", "/documents");
-    const rows = getDb()
-      .prepare(
-        `SELECT d.* FROM documents d
-         JOIN document_clients dc ON dc.document_id = d.id
-         WHERE dc.client_id = ? ORDER BY d.import_date DESC`
-      )
-      .all(id);
-    return json(rows);
+  app.get("/api/clients/:id/documents", async (req, res) => {
+    const links = await col("document_clients")
+      .find({ client_id: req.params.id })
+      .toArray();
+
+    const docIds = links.map((l: any) => l.document_id);
+    const docs = docIds.length
+      ? await col("documents")
+          .find({ _id: { $in: docIds.map((d: string) => { try { return new ObjectId(d); } catch { return d; } }) } } as any)
+          .sort({ import_date: -1 })
+          .toArray()
+      : [];
+
+    res.json(docs.map(flatDoc));
   });
 }
 
-function extractId(url: string, prefix: string, suffix = ""): number {
-  const path = new URL(url).pathname;
-  return parseInt(path.replace(prefix, "").replace(suffix, ""));
+function idFilter(id: string): Record<string, any> {
+  try {
+    return { _id: new ObjectId(id) };
+  } catch {
+    return { _id: id };
+  }
 }
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
-}
-function notFound() {
-  return json({ error: "Not found" }, 404);
+
+function flatDoc(doc: any) {
+  if (!doc) return doc;
+  const { _id, ...rest } = doc;
+  return { id: _id?.toString(), ...rest };
 }

@@ -1,4 +1,5 @@
-import { getDb } from "../db/db";
+import express from "express";
+import { col } from "../db/db";
 import { getSettings } from "../settings";
 import {
   getGoogleAuthUrl,
@@ -7,122 +8,136 @@ import {
   generateState,
   generateCodeVerifier,
 } from "../auth/google";
-import { createSession, revokeSession, extractSessionFromCookie, verifySession } from "../auth/session";
+import {
+  createSession,
+  revokeSession,
+  extractSessionFromCookie,
+  verifySession,
+} from "../auth/session";
 
-type Handler = (req: Request) => Promise<Response>;
-
-export function registerAuthRoutes(router: Map<string, Handler>) {
+export function registerAuthRoutes(app: express.Application) {
   // GET /auth/google — kick off OAuth flow
-  router.set("GET /auth/google", async (req) => {
+  app.get("/auth/google", async (req, res) => {
     const settings = getSettings();
     if (!settings.googleClientId || !settings.googleClientSecret) {
-      return new Response("Google OAuth not configured", { status: 503 });
+      res.status(503).send("Google OAuth not configured");
+      return;
     }
 
     const state = generateState();
     const codeVerifier = generateCodeVerifier();
 
     // Persist PKCE state to DB so a server restart between redirect and callback
-    // doesn't lose it (in-memory Map is wiped on restart)
-    const db = getDb();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    db.prepare(`
-      INSERT OR REPLACE INTO oauth_states (state, code_verifier, expires_at)
-      VALUES (?, ?, ?)
-    `).run(state, codeVerifier, expiresAt);
+    // doesn't lose it
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await col("oauth_states").insertOne({
+      state,
+      code_verifier: codeVerifier,
+      expires_at: expiresAt,
+    } as any);
 
-    // Prune expired states while we're here
-    db.prepare(`DELETE FROM oauth_states WHERE expires_at < datetime('now')`).run();
+    // Prune expired states
+    await col("oauth_states").deleteMany({ expires_at: { $lt: new Date() } });
 
     const url = await getGoogleAuthUrl(state, codeVerifier);
-    return new Response(null, {
-      status: 302,
-      headers: { Location: url },
-    });
+    res.redirect(url);
   });
 
   // GET /auth/google/callback — handle redirect from Google
-  router.set("GET /auth/google/callback", async (req) => {
-    const url = new URL(req.url);
-    const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state");
-    const error = url.searchParams.get("error");
+  app.get("/auth/google/callback", async (req, res) => {
+    const code = req.query.code as string | undefined;
+    const state = req.query.state as string | undefined;
+    const error = req.query.error as string | undefined;
 
     if (error) {
-      return redirectToLogin(`error=${encodeURIComponent(error)}`);
+      res.redirect(frontendUrl(`/#/login?error=${encodeURIComponent(error)}`));
+      return;
     }
 
     if (!code || !state) {
-      return redirectToLogin("error=missing_params");
+      res.redirect(frontendUrl("/#/login?error=missing_params"));
+      return;
     }
 
-    const db = getDb();
-    const pkce = db.prepare(`
-      SELECT code_verifier FROM oauth_states
-      WHERE state = ? AND expires_at > datetime('now')
-    `).get(state) as { code_verifier: string } | null;
+    const pkce = await col<{ state: string; code_verifier: string; expires_at: Date }>(
+      "oauth_states"
+    ).findOne({ state, expires_at: { $gt: new Date() } });
 
     if (!pkce) {
-      return redirectToLogin("error=invalid_state");
+      res.redirect(frontendUrl("/#/login?error=invalid_state"));
+      return;
     }
-    db.prepare(`DELETE FROM oauth_states WHERE state = ?`).run(state);
+    await col("oauth_states").deleteOne({ state });
 
     try {
       const tokens = await exchangeCodeForIdToken(code, pkce.code_verifier);
       const profile = await verifyIdToken(tokens.id_token);
-
       const settings = getSettings();
 
       // Email whitelist check
       if (settings.allowedEmails && settings.allowedEmails.length > 0) {
         if (!settings.allowedEmails.includes(profile.email)) {
-          return redirectToLogin("error=not_allowed");
+          res.redirect(frontendUrl("/#/login?error=not_allowed"));
+          return;
         }
       }
 
       // Upsert user
-      db.prepare(`
-        INSERT INTO users (google_sub, email, name, picture_url)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(google_sub) DO UPDATE SET
-          email        = excluded.email,
-          name         = excluded.name,
-          picture_url  = excluded.picture_url,
-          last_login_at = datetime('now')
-      `).run(profile.sub, profile.email, profile.name ?? null, profile.picture ?? null);
+      await col("users").updateOne(
+        { google_sub: profile.sub },
+        {
+          $set: {
+            email: profile.email,
+            name: profile.name ?? null,
+            picture_url: profile.picture ?? null,
+            last_login_at: new Date(),
+          },
+          $setOnInsert: {
+            google_sub: profile.sub,
+            role: "user",
+            is_active: 1,
+            created_at: new Date(),
+          },
+        },
+        { upsert: true }
+      );
 
-      const user = db.prepare("SELECT * FROM users WHERE google_sub = ?").get(profile.sub) as { id: number };
-
-      // Update last_login_at
-      db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);
+      const user = await col("users").findOne({ google_sub: profile.sub }) as any;
+      if (!user) throw new Error("User not found after upsert");
 
       // Ensure user_settings row exists
-      db.prepare(`
-        INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)
-      `).run(user.id);
-
-      const ua = req.headers.get("user-agent") ?? undefined;
-      const ip = req.headers.get("x-forwarded-for") ?? undefined;
-      const { cookies } = createSession(db, user.id, ua, ip);
-
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: frontendUrl("/"),
-          "Set-Cookie": cookies,
+      await col("user_settings").updateOne(
+        { user_id: user._id.toString() },
+        {
+          $setOnInsert: {
+            user_id: user._id.toString(),
+            theme: "light",
+            email_from_name: null,
+            reminder_advance_days: "[90,60,30]",
+            ocr_language: "heb+eng",
+          },
         },
-      });
+        { upsert: true }
+      );
+
+      const ua = req.headers["user-agent"] ?? undefined;
+      const ip = (req.headers["x-forwarded-for"] as string) ?? req.socket.remoteAddress ?? undefined;
+      const { cookies } = await createSession(user._id.toString(), ua, ip);
+
+      res.setHeader("Set-Cookie", cookies);
+      res.redirect(frontendUrl("/"));
     } catch (err) {
       console.error("[auth] OAuth callback error:", err);
-      return redirectToLogin("error=auth_failed");
+      res.redirect(frontendUrl("/#/login?error=auth_failed"));
     }
   });
 
   // POST /api/auth/google — GIS credential (ID token) sign-in
-  router.set("POST /api/auth/google", async (req) => {
-    const body = await req.json() as { credential?: string };
+  app.post("/api/auth/google", async (req, res) => {
+    const body = req.body as { credential?: string };
     if (!body.credential) {
-      return new Response(JSON.stringify({ error: "missing_credential" }), { status: 400, headers: { "Content-Type": "application/json" } });
+      res.status(400).json({ error: "missing_credential" });
+      return;
     }
 
     try {
@@ -131,98 +146,111 @@ export function registerAuthRoutes(router: Map<string, Handler>) {
 
       if (settings.allowedEmails && settings.allowedEmails.length > 0) {
         if (!settings.allowedEmails.includes(profile.email)) {
-          return new Response(JSON.stringify({ error: "not_allowed" }), { status: 403, headers: { "Content-Type": "application/json" } });
+          res.status(403).json({ error: "not_allowed" });
+          return;
         }
       }
 
-      const db = getDb();
-
-      db.prepare(`
-        INSERT INTO users (google_sub, email, name, picture_url)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(google_sub) DO UPDATE SET
-          email         = excluded.email,
-          name          = excluded.name,
-          picture_url   = excluded.picture_url,
-          last_login_at = datetime('now')
-      `).run(profile.sub, profile.email, profile.name ?? null, profile.picture ?? null);
-
-      const user = db.prepare("SELECT * FROM users WHERE google_sub = ?").get(profile.sub) as { id: number; email: string; name: string | null; picture_url: string | null; role: string };
-      db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);
-      db.prepare("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)").run(user.id);
-
-      const ua = req.headers.get("user-agent") ?? undefined;
-      const ip = req.headers.get("x-forwarded-for") ?? undefined;
-      const { cookies } = createSession(db, user.id, ua, ip);
-
-      return new Response(
-        JSON.stringify({ user: { id: user.id, email: user.email, name: user.name, picture_url: user.picture_url, role: user.role } }),
-        { status: 200, headers: { "Content-Type": "application/json", "Set-Cookie": cookies } }
+      // Upsert user
+      await col("users").updateOne(
+        { google_sub: profile.sub },
+        {
+          $set: {
+            email: profile.email,
+            name: profile.name ?? null,
+            picture_url: profile.picture ?? null,
+            last_login_at: new Date(),
+          },
+          $setOnInsert: {
+            google_sub: profile.sub,
+            role: "user",
+            is_active: 1,
+            created_at: new Date(),
+          },
+        },
+        { upsert: true }
       );
-    } catch (err) {
-      console.error("[auth] GIS sign-in error:", err);
-      return new Response(JSON.stringify({ error: "auth_failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
-    }
-  });
 
-  // POST /auth/logout
-  router.set("POST /auth/logout", async (req) => {
-    const cookieHeader = req.headers.get("cookie") ?? undefined;
-    const sessionId = extractSessionFromCookie(cookieHeader);
-    if (sessionId) {
-      const db = getDb();
-      revokeSession(db, sessionId);
-    }
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: {
-        "Content-Type": "application/json",
-        "Set-Cookie": "session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
-      },
-    });
-  });
+      const user = await col("users").findOne({ google_sub: profile.sub }) as any;
+      if (!user) throw new Error("User not found after upsert");
 
-  // GET /auth/me — return current user info
-  router.set("GET /auth/me", async (req) => {
-    const cookieHeader = req.headers.get("cookie") ?? undefined;
-    const sessionId = extractSessionFromCookie(cookieHeader);
-    if (!sessionId) {
-      return new Response(JSON.stringify({ user: null }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+      // Ensure user_settings row exists
+      await col("user_settings").updateOne(
+        { user_id: user._id.toString() },
+        {
+          $setOnInsert: {
+            user_id: user._id.toString(),
+            theme: "light",
+            email_from_name: null,
+            reminder_advance_days: "[90,60,30]",
+            ocr_language: "heb+eng",
+          },
+        },
+        { upsert: true }
+      );
 
-    const db = getDb();
-    const user = verifySession(db, sessionId);
-    if (!user) {
-      return new Response(JSON.stringify({ user: null }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+      const ua = req.headers["user-agent"] ?? undefined;
+      const ip = (req.headers["x-forwarded-for"] as string) ?? req.socket.remoteAddress ?? undefined;
+      const { cookies } = await createSession(user._id.toString(), ua, ip);
 
-    return new Response(
-      JSON.stringify({
+      res.setHeader("Set-Cookie", cookies);
+      res.status(200).json({
         user: {
-          id: user.id,
+          id: user._id.toString(),
           email: user.email,
           name: user.name,
           picture_url: user.picture_url,
           role: user.role,
         },
-      }),
-      { headers: { "Content-Type": "application/json" } }
-    );
+      });
+    } catch (err) {
+      console.error("[auth] GIS sign-in error:", err);
+      res.status(500).json({ error: "auth_failed" });
+    }
+  });
+
+  // POST /auth/logout
+  app.post("/auth/logout", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    const sessionId = extractSessionFromCookie(cookieHeader);
+    if (sessionId) {
+      await revokeSession(sessionId);
+    }
+    res.setHeader("Set-Cookie", "session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+    res.json({ ok: true });
+  });
+
+  // GET /auth/me — return current user info
+  app.get("/auth/me", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    const sessionId = extractSessionFromCookie(cookieHeader);
+    if (!sessionId) {
+      res.json({ user: null });
+      return;
+    }
+
+    const user = await verifySession(sessionId);
+    if (!user) {
+      res.json({ user: null });
+      return;
+    }
+
+    res.json({
+      user: {
+        id: (user as any).id,
+        email: user.email,
+        name: user.name,
+        picture_url: user.picture_url,
+        role: user.role,
+      },
+    });
   });
 }
 
-const DEV_FRONTEND = process.env.VITE_DEV_URL ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:5173");
+const DEV_FRONTEND =
+  process.env.VITE_DEV_URL ??
+  (process.env.NODE_ENV === "production" ? "" : "http://localhost:5173");
 
 function frontendUrl(path: string): string {
   return `${DEV_FRONTEND}${path}`;
-}
-
-function redirectToLogin(query: string): Response {
-  return new Response(null, {
-    status: 302,
-    headers: { Location: frontendUrl(`/#/login?${query}`) },
-  });
 }

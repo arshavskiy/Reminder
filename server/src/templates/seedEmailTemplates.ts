@@ -1,7 +1,7 @@
 // Seed the default email template on first boot.
 // Users can edit / clone / disable. Bound to no doc_template = used as fallback.
 
-import type { Database } from "bun:sqlite";
+import { col } from "../db/db";
 import type { EmailTemplate } from "../../src/shared/types.js";
 
 const DEFAULT_HTML = `<!DOCTYPE html>
@@ -54,31 +54,62 @@ const DEFAULT_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-export function seedDefaultEmailTemplate(db: Database) {
-  db.prepare(
-    `INSERT OR IGNORE INTO email_templates (name, subject, html, is_default)
-     VALUES (?, ?, ?, 1)`
-  ).run("ברירת מחדל", "[תזכורת] {{title}}", DEFAULT_HTML);
+export async function seedDefaultEmailTemplate(): Promise<void> {
+  await col("email_templates").updateOne(
+    { name: "ברירת מחדל" },
+    {
+      $setOnInsert: {
+        name: "ברירת מחדל",
+        subject: "[תזכורת] {{title}}",
+        html: DEFAULT_HTML,
+        is_default: 1,
+        doc_template_id: null,
+        logo_path: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    },
+    { upsert: true }
+  );
 }
 
-export function loadEmailTemplate(db: Database, id: number): EmailTemplate | null {
-  const row = db.prepare("SELECT * FROM email_templates WHERE id = ?").get(id) as EmailTemplate | null;
-  return row;
-}
-
-export function pickEmailTemplate(db: Database, docTemplateId: number | null): EmailTemplate | null {
-  // 1. specific email-template bound to this doc-template
-  if (docTemplateId) {
-    const bound = db.prepare(
-      "SELECT * FROM email_templates WHERE doc_template_id = ? ORDER BY is_default DESC, id ASC LIMIT 1"
-    ).get(docTemplateId) as EmailTemplate | null;
-    if (bound) return bound;
+export async function loadEmailTemplate(id: string | number): Promise<EmailTemplate | null> {
+  const { ObjectId } = await import("mongodb");
+  let filter: Record<string, any>;
+  try {
+    filter = { _id: new ObjectId(String(id)) };
+  } catch {
+    filter = { _id: id };
   }
-  // 2. any default template
-  const def = db.prepare(
-    "SELECT * FROM email_templates WHERE is_default = 1 ORDER BY id ASC LIMIT 1"
-  ).get() as EmailTemplate | null;
-  if (def) return def;
-  // 3. any template
-  return db.prepare("SELECT * FROM email_templates ORDER BY id ASC LIMIT 1").get() as EmailTemplate | null;
+  const row = await col("email_templates").findOne(filter) as any;
+  if (!row) return null;
+  const { _id, ...rest } = row;
+  return { id: _id?.toString(), ...rest } as any;
+}
+
+export async function pickEmailTemplate(docTemplateId: string | number | null): Promise<EmailTemplate | null> {
+  if (docTemplateId) {
+    const bound = await col("email_templates").findOne(
+      { doc_template_id: String(docTemplateId) },
+      { sort: { is_default: -1, _id: 1 } }
+    ) as any;
+    if (bound) {
+      const { _id, ...rest } = bound;
+      return { id: _id?.toString(), ...rest } as any;
+    }
+  }
+
+  const def = await col("email_templates").findOne(
+    { is_default: 1 },
+    { sort: { _id: 1 } }
+  ) as any;
+  if (def) {
+    const { _id, ...rest } = def;
+    return { id: _id?.toString(), ...rest } as any;
+  }
+
+  const any = await col("email_templates").findOne({}, { sort: { _id: 1 } }) as any;
+  if (!any) return null;
+  const { _id, ...rest } = any;
+  return { id: _id?.toString(), ...rest } as any;
 }
