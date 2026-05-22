@@ -5,6 +5,7 @@ import { resolve } from "path";
 export default defineConfig({
   plugins: [vue()],
   root: "src",
+  envDir: "../",
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),
