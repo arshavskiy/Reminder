@@ -1,18 +1,29 @@
 import express from "express";
-import { col } from "../db/db";
-import { ObjectId } from "mongodb";
-import { sendReminderEmail } from "../reminders/emailSender";
-import type { ReminderWithContext } from "../../src/shared/types.js";
+import {col} from "../db/db";
+import {ObjectId} from "mongodb";
+import {sendReminderEmail} from "../reminders/emailSender";
+import type {ReminderWithContext} from "../../src/shared/types.js";
+import {HTTPException, requireAuth} from "../auth/middleware";
 
 export function registerReminderRoutes(app: express.Application) {
   // GET /api/reminders
   app.get("/api/reminders", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const status = req.query.status as string | undefined;
     const days = req.query.days as string | undefined;
     const limit = parseInt((req.query.limit as string) ?? "50");
     const offset = parseInt((req.query.offset as string) ?? "0");
 
-    const filter: Record<string, any> = {};
+    const filter: Record<string, any> = { user_id: userId };
     if (status) filter.status = status;
     if (days) {
       const today = new Date();
@@ -53,9 +64,20 @@ export function registerReminderRoutes(app: express.Application) {
 
   // POST /api/reminders
   app.post("/api/reminders", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const body = req.body as Record<string, unknown>;
     const now = new Date();
     const doc = {
+      user_id: userId,
       source_type: body.source_type ?? "manual",
       source_id: body.source_id ?? null,
       client_id: body.client_id ?? null,
@@ -77,7 +99,17 @@ export function registerReminderRoutes(app: express.Application) {
 
   // PUT /api/reminders/:id
   app.put("/api/reminders/:id", async (req, res) => {
-    const filter = idFilter(req.params.id);
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const filter = { ...idFilter(req.params.id), user_id: userId };
     const body = req.body as Record<string, unknown>;
 
     const updates: Record<string, any> = { updated_at: new Date() };
@@ -93,31 +125,62 @@ export function registerReminderRoutes(app: express.Application) {
 
   // POST /api/reminders/:id/dismiss
   app.post("/api/reminders/:id/dismiss", async (req, res) => {
-    await col("reminders").updateOne(idFilter(req.params.id), {
-      $set: { status: "dismissed", updated_at: new Date() },
-    });
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    await col("reminders").updateOne(
+      { ...idFilter(req.params.id), user_id: userId },
+      { $set: { status: "dismissed", updated_at: new Date() } }
+    );
     res.json({ ok: true });
   });
 
   // POST /api/reminders/:id/snooze
   app.post("/api/reminders/:id/snooze", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const { until } = req.body as { until: string };
-    await col("reminders").updateOne(idFilter(req.params.id), {
-      $set: { status: "snoozed", snoozed_until: until, trigger_date: until, updated_at: new Date() },
-    });
+    await col("reminders").updateOne(
+      { ...idFilter(req.params.id), user_id: userId },
+      { $set: { status: "snoozed", snoozed_until: until, trigger_date: until, updated_at: new Date() } }
+    );
     res.json({ ok: true });
   });
 
   // POST /api/reminders/:id/send-now
   app.post("/api/reminders/:id/send-now", async (req, res) => {
-    const filter = idFilter(req.params.id);
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const filter = { ...idFilter(req.params.id), user_id: userId };
     const r = (await col("reminders").findOne(filter)) as any;
     if (!r) {
       res.status(404).json({ error: "Not found" });
       return;
     }
 
-    // Enrich with client info
     const client = r.client_id ? (await col("clients").findOne({ _id: tryObjectId(r.client_id) })) as any : null;
     const document = r.document_id ? (await col("documents").findOne({ _id: tryObjectId(r.document_id) })) as any : null;
 

@@ -1,7 +1,7 @@
-import { col } from "../db/db";
-import { getSettings } from "../settings";
-import { sendReminderEmail } from "./emailSender";
-import type { ReminderWithContext } from "../../src/shared/types.js";
+import {col} from "../db/db";
+import {getSettings} from "../settings";
+import {sendReminderEmail} from "./emailSender";
+import type {ReminderWithContext} from "../../src/shared/types.js";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
@@ -142,7 +142,8 @@ export async function generateContractReminders(
   contractId: string,
   clientId: string | null,
   documentId: string | null,
-  expiryDate: string
+  expiryDate: string,
+  userId?: string
 ) {
   const settings = getSettings();
   const today = new Date().toISOString().slice(0, 10);
@@ -176,6 +177,7 @@ export async function generateContractReminders(
     const title = `${baseLabel} ב-${triggerDate} (יעד: ${expiryDate})`;
 
     await col("reminders").insertOne({
+      ...(userId && { user_id: userId }),
       source_type: "contract_expiry",
       source_id: contractId,
       client_id: clientId,

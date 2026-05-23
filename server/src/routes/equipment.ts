@@ -1,17 +1,27 @@
 import express from "express";
-import { col } from "../db/db";
-import { ObjectId } from "mongodb";
-import type { Equipment, EquipmentCategory } from "../../src/shared/types.js";
+import {col} from "../db/db";
+import {ObjectId} from "mongodb";
+import type {Equipment} from "../../src/shared/types.js";
+import {HTTPException, requireAuth} from "../auth/middleware";
 
 export function registerEquipmentRoutes(app: express.Application) {
   // GET /api/equipment  — optional ?category=lift and ?q= filters
   app.get("/api/equipment", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const category = req.query.category as string | undefined;
     const search = req.query.q as string | undefined;
-
     const clientId = req.query.client_id as string | undefined;
 
-    const filter: Record<string, any> = {};
+    const filter: Record<string, any> = { user_id: userId };
     if (category && category !== "all") filter.category = category;
     if (search) {
       const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
@@ -19,10 +29,8 @@ export function registerEquipmentRoutes(app: express.Application) {
     }
 
     if (clientId) {
-      // Find all document_ids linked to this client (via document_clients)
       const docLinks = await col("document_clients").find({ client_id: clientId }).toArray() as any[];
       const docIds = docLinks.map((d: any) => String(d.document_id));
-      // Match equipment by direct client_id OR by document_id belonging to client
       filter.$or = [
         { client_id: clientId },
         ...(docIds.length ? [{ document_id: { $in: docIds } }] : []),
@@ -34,7 +42,6 @@ export function registerEquipmentRoutes(app: express.Application) {
       .sort({ name: 1 })
       .toArray();
 
-    // Enrich with client name and document file name
     const enriched = await Promise.all(rows.map(async (row) => {
       const flat = flatDoc(row) as any;
       if (row.client_id) {
@@ -58,15 +65,25 @@ export function registerEquipmentRoutes(app: express.Application) {
   });
 
   // GET /api/equipment/stats — count per category for the UI chips
-  app.get("/api/equipment/stats", async (_req, res) => {
+  app.get("/api/equipment/stats", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const [counts, total] = await Promise.all([
       col("equipment")
         .aggregate([
-          { $match: { is_active: 1 } },
+          { $match: { is_active: 1, user_id: userId } },
           { $group: { _id: "$category", n: { $sum: 1 } } },
         ])
         .toArray(),
-      col("equipment").countDocuments({ is_active: 1 }),
+      col("equipment").countDocuments({ is_active: 1, user_id: userId }),
     ]);
 
     const map: Record<string, number> = { all: total };
@@ -78,7 +95,17 @@ export function registerEquipmentRoutes(app: express.Application) {
 
   // GET /api/equipment/:id
   app.get("/api/equipment/:id", async (req, res) => {
-    const row = await col("equipment").findOne(idFilter(req.params.id));
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const row = await col("equipment").findOne({ ...idFilter(req.params.id), user_id: userId });
     if (!row) {
       res.status(404).json({ error: "Not found" });
       return;
@@ -101,6 +128,16 @@ export function registerEquipmentRoutes(app: express.Application) {
 
   // POST /api/equipment
   app.post("/api/equipment", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const body = req.body as Partial<Equipment>;
     if (!body.name) {
       res.status(400).json({ error: "name required" });
@@ -108,6 +145,7 @@ export function registerEquipmentRoutes(app: express.Application) {
     }
     const now = new Date();
     const doc = {
+      user_id: userId,
       name: body.name,
       category: body.category ?? "other",
       manufacturer: body.manufacturer ?? null,
@@ -129,7 +167,17 @@ export function registerEquipmentRoutes(app: express.Application) {
 
   // PUT /api/equipment/:id
   app.put("/api/equipment/:id", async (req, res) => {
-    const filter = idFilter(req.params.id);
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const filter = { ...idFilter(req.params.id), user_id: userId };
     const body = req.body as Partial<Equipment>;
 
     const updates: Record<string, any> = { updated_at: new Date() };
@@ -149,12 +197,32 @@ export function registerEquipmentRoutes(app: express.Application) {
 
   // DELETE /api/equipment/:id
   app.delete("/api/equipment/:id", async (req, res) => {
-    await col("equipment").deleteOne(idFilter(req.params.id));
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    await col("equipment").deleteOne({ ...idFilter(req.params.id), user_id: userId });
     res.json({ ok: true });
   });
 
   // POST /api/equipment/backfill — patch equipment records missing document_id/client_id
-  app.post("/api/equipment/backfill", async (_req, res) => {
+  app.post("/api/equipment/backfill", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     let patched = 0;
     const extractions = await col("extractions").find({}).toArray();
 
@@ -182,10 +250,10 @@ export function registerEquipmentRoutes(app: express.Application) {
           ? { serial_number: String(eq.serial_number).trim() }
           : { name: String(eq.name ?? "").trim() };
 
-        // Patch any equipment row missing document_id OR client_id
         const result = await col("equipment").updateOne(
           {
             ...matchFilter,
+            user_id: userId,
             $or: [
               { document_id: { $exists: false } },
               { document_id: null },

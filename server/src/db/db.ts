@@ -1,4 +1,4 @@
-import { MongoClient, Db, Collection } from "mongodb";
+import {Collection, Db, MongoClient} from "mongodb";
 
 const MONGODB_URI = process.env.MONGODB_URI ?? "mongodb://127.0.0.1:27017";
 const DB_NAME = process.env.MONGODB_DB ?? "reminder-app";
@@ -141,6 +141,7 @@ async function applyIndexes(db: Db): Promise<void> {
     { serial_number: 1 },
     { unique: true, sparse: true }
   );
+  await db.collection("equipment").createIndex({ user_id: 1 });
   await db.collection("equipment").createIndex({ is_active: 1 });
   await db.collection("equipment").createIndex({ document_id: 1 });
   await db.collection("equipment").createIndex({ client_id: 1 });

@@ -54,13 +54,15 @@ export interface AppSettings {
 }
 
 // Phase 2: Authentication types
+export type UserRole = "admin" | "pro" | "user";
+
 export interface User {
   id: number;
   google_sub: string;
   email: string;
   name: string | null;
   picture_url: string | null;
-  role: "admin" | "user";
+  role: UserRole;
   is_active: number;
   created_at: string;
   last_login_at: string | null;

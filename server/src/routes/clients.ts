@@ -1,15 +1,26 @@
 import express from "express";
-import { col } from "../db/db";
-import { ObjectId } from "mongodb";
+import {col} from "../db/db";
+import {ObjectId} from "mongodb";
+import {HTTPException, requireAuth} from "../auth/middleware";
 
 export function registerClientRoutes(app: express.Application) {
   // GET /api/clients
   app.get("/api/clients", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const q = (req.query.q as string) ?? "";
     const limit = parseInt((req.query.limit as string) ?? "50");
     const offset = parseInt((req.query.offset as string) ?? "0");
 
-    const filter: Record<string, any> = {};
+    const filter: Record<string, any> = { user_id: userId };
     if (q) {
       const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       filter.$or = [{ display_name: regex }, { email: regex }];
@@ -30,8 +41,17 @@ export function registerClientRoutes(app: express.Application) {
 
   // GET /api/clients/:id
   app.get("/api/clients/:id", async (req, res) => {
-    const filter = idFilter(req.params.id);
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
 
+    const filter = { ...idFilter(req.params.id), user_id: userId };
     const client = await col("clients").findOne(filter);
     if (!client) {
       res.status(404).json({ error: "Not found" });
@@ -41,8 +61,8 @@ export function registerClientRoutes(app: express.Application) {
     const id = req.params.id;
     const [doc_count, contract_count, open_reminder_count] = await Promise.all([
       col("document_clients").countDocuments({ client_id: id }),
-      col("contracts").countDocuments({ client_id: id }),
-      col("reminders").countDocuments({ client_id: id, status: "pending" }),
+      col("contracts").countDocuments({ client_id: id, user_id: userId }),
+      col("reminders").countDocuments({ client_id: id, status: "pending", user_id: userId }),
     ]);
 
     res.json({ ...flatDoc(client), doc_count, contract_count, open_reminder_count });
@@ -50,9 +70,20 @@ export function registerClientRoutes(app: express.Application) {
 
   // POST /api/clients
   app.post("/api/clients", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const body = req.body as Record<string, unknown>;
     const now = new Date();
     const doc = {
+      user_id: userId,
       display_name: body.display_name,
       entity_type: body.entity_type ?? "person",
       id_number: body.id_number ?? null,
@@ -71,7 +102,17 @@ export function registerClientRoutes(app: express.Application) {
 
   // PUT /api/clients/:id
   app.put("/api/clients/:id", async (req, res) => {
-    const filter = idFilter(req.params.id);
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const filter = { ...idFilter(req.params.id), user_id: userId };
     const body = req.body as Record<string, unknown>;
 
     const updates: Record<string, any> = { updated_at: new Date() };
@@ -91,12 +132,30 @@ export function registerClientRoutes(app: express.Application) {
 
   // DELETE /api/clients/:id
   app.delete("/api/clients/:id", async (req, res) => {
-    await col("clients").deleteOne(idFilter(req.params.id));
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    await col("clients").deleteOne({ ...idFilter(req.params.id), user_id: userId });
     res.json({ ok: true });
   });
 
   // GET /api/clients/:id/timeline
   app.get("/api/clients/:id/timeline", async (req, res) => {
+    try {
+      await requireAuth(req.headers.cookie);
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const rows = await col("timeline_events")
       .find({ client_id: req.params.id })
       .sort({ event_date: -1 })
@@ -107,6 +166,16 @@ export function registerClientRoutes(app: express.Application) {
 
   // GET /api/clients/:id/documents
   app.get("/api/clients/:id/documents", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const links = await col("document_clients")
       .find({ client_id: req.params.id })
       .toArray();
@@ -114,7 +183,10 @@ export function registerClientRoutes(app: express.Application) {
     const docIds = links.map((l: any) => l.document_id);
     const docs = docIds.length
       ? await col("documents")
-          .find({ _id: { $in: docIds.map((d: string) => { try { return new ObjectId(d); } catch { return d; } }) } } as any)
+          .find({
+            _id: { $in: docIds.map((d: string) => { try { return new ObjectId(d); } catch { return d; } }) },
+            user_id: userId,
+          } as any)
           .sort({ import_date: -1 })
           .toArray()
       : [];

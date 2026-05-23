@@ -1,12 +1,12 @@
-import { defineStore } from "pinia";
-import { ref } from "vue";
+import {defineStore} from "pinia";
+import {ref} from "vue";
 
 interface AuthUser {
   id: number;
   email: string;
   name: string | null;
   picture_url: string | null;
-  role: "admin" | "user";
+  role: "admin" | "pro" | "user";
 }
 
 const STORAGE_KEY = "auth_user";

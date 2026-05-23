@@ -1,12 +1,12 @@
 import express from "express";
-import { extname } from "path";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
-import { col } from "../db/db";
-import { ObjectId } from "mongodb";
-import { importFile, processDocument } from "../pipeline/importer";
-import { getDataDir } from "../settings";
-import { requireAuth, HTTPException } from "../auth/middleware";
+import {extname, join} from "path";
+import {existsSync, mkdirSync, writeFileSync} from "fs";
+import {col} from "../db/db";
+import {ObjectId} from "mongodb";
+import {importFile, processDocument} from "../pipeline/importer";
+import {getDataDir} from "../settings";
+import {HTTPException, requireAuth} from "../auth/middleware";
+import {getSpacesSignedUrl, spacesEnabled} from "../storage/spaces";
 import multer from "multer";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -258,8 +258,18 @@ export function registerDocumentRoutes(app: express.Application) {
         },
       });
 
-      const ext = extname(doc.file_path ?? "");
-      processDocument(id, doc.file_path, doc.mime_type, ext).catch(async (err) => {
+      let filePath: string;
+      try {
+        filePath = await resolveFilePath(doc);
+      } catch (err) {
+        console.error(`[rescan] doc ${id} file not accessible:`, err);
+        await col("documents").updateOne(idFilter(id), {
+          $set: { processing_status: "error", error_message: String(err), updated_at: new Date() },
+        });
+        continue;
+      }
+      const ext = extname(filePath);
+      processDocument(id, filePath, doc.mime_type, ext, undefined, userId).catch(async (err) => {
         console.error(`[rescan] doc ${id} failed:`, err);
         await col("documents").updateOne(docIdFilter, {
           $set: { processing_status: "error", error_message: String(err), updated_at: new Date() },
@@ -348,8 +358,16 @@ export function registerDocumentRoutes(app: express.Application) {
       },
     });
 
-    const ext = extname(doc.file_path);
-    processDocument(id, doc.file_path, doc.mime_type, ext).catch(async (err) => {
+    let filePath: string;
+    try {
+      filePath = await resolveFilePath(doc);
+    } catch (err) {
+      res.status(503).json({ error: `File not accessible: ${err}` });
+      return;
+    }
+
+    const ext = extname(filePath);
+    processDocument(id, filePath, doc.mime_type, ext, undefined, userId).catch(async (err) => {
       console.error(`[reprocess] doc ${id} failed:`, err);
       await col("documents").updateOne(idFilter(id), {
         $set: {
@@ -362,6 +380,37 @@ export function registerDocumentRoutes(app: express.Application) {
 
     res.json({ ok: true });
   });
+}
+
+/**
+ * Return a local path to the file, downloading from Spaces if the managed
+ * copy no longer exists on disk (e.g. after a Railway redeploy).
+ */
+async function resolveFilePath(doc: any): Promise<string> {
+  const localPath: string = doc.file_path ?? "";
+
+  if (localPath && existsSync(localPath)) return localPath;
+
+  // Try to re-download from Spaces
+  if (spacesEnabled() && doc.spaces_key) {
+    const signedUrl = await getSpacesSignedUrl(doc.spaces_key, 300);
+    const res = await fetch(signedUrl);
+    if (!res.ok) throw new Error(`Spaces download failed: ${res.status}`);
+
+    const ext = extname(doc.spaces_key);
+    const tmpDir = join(getDataDir(), "tmp");
+    mkdirSync(tmpDir, { recursive: true });
+    const tmpPath = join(tmpDir, `${doc._id ?? "doc"}${ext}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    writeFileSync(tmpPath, buf);
+    return tmpPath;
+  }
+
+  throw new Error(
+    localPath
+      ? `Local file missing and Spaces not configured: ${localPath}`
+      : "No file_path and Spaces not configured"
+  );
 }
 
 function idFilter(id: string): Record<string, any> {

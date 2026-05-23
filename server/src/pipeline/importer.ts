@@ -1,18 +1,18 @@
-import { existsSync, mkdirSync, copyFileSync, readFileSync, statSync, writeFileSync, unlinkSync } from "fs";
-import { createHash } from "crypto";
-import { join, extname, basename } from "path";
-import { col } from "../db/db";
-import { ObjectId } from "mongodb";
-import { getDataDir, getSettings } from "../settings";
-import { parsePdf } from "./pdfParser";
-import { ocrFile } from "./ocrParser";
-import { parseDocx } from "./docxParser";
-import { parseXlsx } from "./xlsxParser";
-import { extractDocument, extractWithTemplate } from "./extractor";
-import { pickTemplate } from "../templates/seedTemplates";
-import { generateContractReminders } from "../reminders/scheduler";
-import { uploadToSpaces, spacesEnabled } from "../storage/spaces";
-import type { DocTemplate, DynamicExtraction } from "../../src/shared/types.js";
+import {copyFileSync, existsSync, mkdirSync, readFileSync, statSync} from "fs";
+import {createHash} from "crypto";
+import {basename, extname, join} from "path";
+import {col} from "../db/db";
+import {ObjectId} from "mongodb";
+import {getDataDir, getSettings} from "../settings";
+import {parsePdf} from "./pdfParser";
+import {ocrFile} from "./ocrParser";
+import {parseDocx} from "./docxParser";
+import {parseXlsx} from "./xlsxParser";
+import {extractDocument, extractWithTemplate} from "./extractor";
+import {pickTemplate} from "../templates/seedTemplates";
+import {generateContractReminders} from "../reminders/scheduler";
+import {spacesEnabled, uploadToSpaces} from "../storage/spaces";
+import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 
 type PushFn = (event: Record<string, unknown>) => void;
 
@@ -100,7 +100,7 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   push?.({ type: "document:queued", documentId: documentId as any, fileName });
   console.log(`[importer] Queued document ${documentId}: ${fileName}`);
 
-  processDocument(documentId, managedPath, mimeType, ext, push).catch(async (err) => {
+  processDocument(documentId, managedPath, mimeType, ext, push, userId).catch(async (err) => {
     console.error(`[importer] Fatal error processing doc ${documentId}:`, err);
     await col("documents").updateOne(
       { _id: insertResult.insertedId },
@@ -117,7 +117,8 @@ export async function processDocument(
   filePath: string,
   mimeType: string,
   ext: string,
-  push?: PushFn
+  push?: PushFn,
+  userId?: string
 ) {
   const settings = getSettings();
   const docFilter = { _id: new ObjectId(documentId) } as any;
@@ -196,7 +197,7 @@ export async function processDocument(
         });
 
         push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-        await saveTemplateEntities(documentId, template, run.fields);
+        await saveTemplateEntities(documentId, template, run.fields, userId);
       } else if (run.error) {
         const msg = `AI extraction failed: ${run.error}`;
         await col("documents").updateOne(docFilter, {
@@ -222,7 +223,7 @@ export async function processDocument(
 
       if (extraction.result) {
         push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-        await saveExtractionEntities(documentId, extraction.result);
+        await saveExtractionEntities(documentId, extraction.result, userId);
       } else if (extraction.error) {
         const msg = `AI extraction failed: ${extraction.error}`;
         await col("documents").updateOne(docFilter, {
@@ -243,7 +244,8 @@ export async function processDocument(
 
 async function saveExtractionEntities(
   documentId: string,
-  result: import("../../src/shared/types.js").ExtractionResult
+  result: import("../../src/shared/types.js").ExtractionResult,
+  userId?: string
 ) {
   if (result.document_type || result.document_number) {
     await col("documents").updateOne(
@@ -276,6 +278,7 @@ async function saveExtractionEntities(
       phone: result.client_phone ?? null,
       address: result.client_address ?? null,
       notes: contactNote,
+      userId,
     });
 
     await col("document_clients").updateOne(
@@ -298,6 +301,7 @@ async function saveExtractionEntities(
 
   if (result.expiry_date || result.start_date || result.contract_number || result.document_number) {
     const contractFields = {
+      ...(userId && { user_id: userId }),
       client_id: clientId,
       contract_number: result.contract_number ?? result.document_number ?? null,
       contract_type: result.contract_type ?? result.document_type ?? null,
@@ -323,12 +327,13 @@ async function saveExtractionEntities(
     );
     const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
     if (result.expiry_date) {
-      await generateContractReminders(contractId, clientId, documentId, result.expiry_date);
+      await generateContractReminders(contractId, clientId, documentId, result.expiry_date, userId);
     }
   }
 
   for (const task of result.tasks ?? []) {
     await col("tasks").insertOne({
+      ...(userId && { user_id: userId }),
       document_id: documentId,
       client_id: clientId,
       description: task.description,
@@ -343,7 +348,8 @@ async function saveExtractionEntities(
 async function saveTemplateEntities(
   documentId: string,
   template: DocTemplate,
-  fields: DynamicExtraction
+  fields: DynamicExtraction,
+  userId?: string
 ) {
   const f = fields;
 
@@ -377,6 +383,7 @@ async function saveTemplateEntities(
       phone: getStr("contact_phone"),
       address: getStr("client_address"),
       notes: contactNote,
+      userId,
     });
 
     await col("document_clients").updateOne(
@@ -405,6 +412,7 @@ async function saveTemplateEntities(
 
   if (docNumber || startDate || expiryDate) {
     const contractFields = {
+      ...(userId && { user_id: userId }),
       client_id: clientId,
       contract_number: docNumber,
       contract_type: template.name,
@@ -426,7 +434,7 @@ async function saveTemplateEntities(
     );
     const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
     if (expiryDate) {
-      await generateContractReminders(contractId, clientId, documentId, expiryDate);
+      await generateContractReminders(contractId, clientId, documentId, expiryDate, userId);
     }
   }
 
@@ -447,7 +455,6 @@ async function saveTemplateEntities(
       matchFilter,
       {
         $set: {
-          // Always refresh extracted fields so a re-scan enriches the record
           name,
           category: eq.category ?? "other",
           ...(eq.manufacturer != null && { manufacturer: String(eq.manufacturer) }),
@@ -458,6 +465,7 @@ async function saveTemplateEntities(
           ...(eq.load_radius != null && { load_radius: String(eq.load_radius) }),
           document_id: documentId,
           ...(clientId != null && { client_id: clientId }),
+          ...(userId && { user_id: userId }),
           updated_at: now,
         },
         $setOnInsert: {
@@ -498,6 +506,7 @@ interface ClientInput {
   phone?: string | null;
   address?: string | null;
   notes?: string | null;
+  userId?: string;
 }
 
 /**
@@ -506,13 +515,14 @@ interface ClientInput {
  * insert a new client.  Returns the client's _id as a string.
  */
 async function findOrCreateClient(input: ClientInput): Promise<string> {
-  const { displayName, entityType, idNumber, email, phone, address, notes } = input;
+  const { displayName, entityType, idNumber, email, phone, address, notes, userId } = input;
+  const userScope = userId ? { user_id: userId } : {};
 
   let existing: any = null;
 
   // 1. Strongest signal: government-issued id / company registration number
   if (idNumber) {
-    existing = await col("clients").findOne({ id_number: idNumber }) as any;
+    existing = await col("clients").findOne({ ...userScope, id_number: idNumber }) as any;
     if (existing) console.log(`[importer] Client matched by id_number: ${idNumber}`);
   }
 
@@ -520,6 +530,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   if (!existing && phone) {
     const normPhone = phone.replace(/[\s\-]/g, "");
     existing = await col("clients").findOne({
+      ...userScope,
       phone: { $regex: new RegExp(escapeRegex(normPhone)) },
     }) as any;
     if (existing) console.log(`[importer] Client matched by phone: ${phone}`);
@@ -528,6 +539,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   // 3. Exact name match (case-insensitive)
   if (!existing) {
     existing = await col("clients").findOne({
+      ...userScope,
       display_name: { $regex: new RegExp(`^${escapeRegex(displayName)}$`, "i") },
     }) as any;
     if (existing) console.log(`[importer] Client matched by exact name: ${displayName}`);
@@ -537,7 +549,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   if (!existing) {
     const norm = normaliseName(displayName);
     if (norm.length >= 3) {
-      const all = await col("clients").find({}).toArray() as any[];
+      const all = await col("clients").find(userScope).toArray() as any[];
       existing = all.find((c: any) => normaliseName(c.display_name ?? "") === norm) ?? null;
       if (existing) console.log(`[importer] Client matched by normalised name: "${norm}"`);
     }
@@ -568,6 +580,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
 
   // No match — create new
   const r = await col("clients").insertOne({
+    ...userScope,
     display_name: displayName,
     entity_type: entityType,
     id_number: idNumber ?? null,

@@ -1,18 +1,29 @@
 import express from "express";
-import { join } from "path";
-import { col } from "../db/db";
-import { getDataDir } from "../settings";
+import {join} from "path";
+import {col} from "../db/db";
+import {getDataDir} from "../settings";
+import {HTTPException, requireAuth} from "../auth/middleware";
 
 export function registerDashboardRoutes(app: express.Application) {
-  app.get("/api/dashboard/stats", async (_req, res) => {
+  app.get("/api/dashboard/stats", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const in30Days = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
     const in30DaysStr = in30Days.toISOString().slice(0, 10);
     const todayStr = today.toISOString().slice(0, 10);
 
-    // IS_CONTRACT: contract_number is present and type does NOT include תסקיר/בדיקה
     const isContractFilter = {
+      user_id: userId,
       contract_number: { $ne: null, $exists: true },
       $and: [
         {
@@ -24,6 +35,7 @@ export function registerDashboardRoutes(app: express.Application) {
       ],
     };
     const isInspectionFilter = {
+      user_id: userId,
       contract_type: { $regex: /תסקיר|בדיקה/ },
     };
 
@@ -38,21 +50,21 @@ export function registerDashboardRoutes(app: express.Application) {
       recent_documents,
       upcoming_reminders_raw,
     ] = await Promise.all([
-      col("documents").countDocuments({}),
-      col("clients").countDocuments({}),
+      col("documents").countDocuments({ user_id: userId }),
+      col("clients").countDocuments({ user_id: userId }),
       col("contracts").countDocuments(isContractFilter),
       col("contracts").countDocuments({ status: "active", ...isContractFilter }),
       col("contracts").countDocuments(isInspectionFilter),
-      col("reminders").countDocuments({ status: "pending" }),
+      col("reminders").countDocuments({ user_id: userId, status: "pending" }),
       col("contracts").countDocuments({
+        user_id: userId,
         status: "active",
         expiry_date: { $ne: null, $gte: todayStr, $lte: in30DaysStr },
       }),
-      col("documents").find({}).sort({ created_at: -1 }).limit(5).toArray(),
-      col("reminders").find({ status: "pending" }).sort({ trigger_date: 1 }).limit(10).toArray(),
+      col("documents").find({ user_id: userId }).sort({ created_at: -1 }).limit(5).toArray(),
+      col("reminders").find({ user_id: userId, status: "pending" }).sort({ trigger_date: 1 }).limit(10).toArray(),
     ]);
 
-    // Enrich upcoming reminders with client_name and document_name
     const upcoming_reminders = await Promise.all(
       upcoming_reminders_raw.map(async (r: any) => {
         const [client, document] = await Promise.all([

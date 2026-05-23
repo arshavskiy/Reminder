@@ -1,4 +1,4 @@
-import { createRouter, createWebHashHistory } from "vue-router";
+import {createRouter, createWebHashHistory} from "vue-router";
 import DashboardPage from "../views/DashboardPage.vue";
 import DocumentsPage from "../views/DocumentsPage.vue";
 import DocumentDetailPage from "../views/DocumentDetailPage.vue";
@@ -14,7 +14,7 @@ import EmailTemplatesPage from "../views/EmailTemplatesPage.vue";
 import EquipmentPage from "../views/EquipmentPage.vue";
 import LoginPage from "../views/LoginPage.vue";
 import ResetPasswordPage from "../views/ResetPasswordPage.vue";
-import { useAuthStore } from "../stores/auth.js";
+import {useAuthStore} from "../stores/auth.js";
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -30,10 +30,11 @@ export const router = createRouter({
     { path: "/reminders", component: RemindersPage },
     { path: "/search", component: SearchPage },
     { path: "/profile", component: ProfilePage },
-    { path: "/settings", component: SettingsPage },
+    { path: "/settings", component: SettingsPage, meta: { requireRole: "admin" } },
     { path: "/doc-templates", component: DocTemplatesPage },
     { path: "/email-templates", component: EmailTemplatesPage },
     { path: "/equipment", component: EquipmentPage },
+    { path: "/403", component: () => import("../views/ForbiddenPage.vue") },
   ],
 });
 
@@ -54,6 +55,17 @@ router.beforeEach(async (to) => {
 
   if (!authStore.user) {
     return { path: "/login" };
+  }
+
+  // Role-based route guard
+  const requiredRole = to.meta.requireRole as string | undefined;
+  if (requiredRole) {
+    const RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
+    const userRank = RANK[authStore.user.role] ?? 0;
+    const minRank = RANK[requiredRole] ?? 0;
+    if (userRank < minRank) {
+      return { path: "/403" };
+    }
   }
 
   return true;

@@ -62,29 +62,53 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
-import { useRouter, useRoute } from "vue-router";
+import {computed, onMounted, watch} from "vue";
+import {useRoute, useRouter} from "vue-router";
 import {
-  darkTheme, NConfigProvider, NMessageProvider, NDialogProvider, NIcon, NTooltip,
-  unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
-  unstableButtonRtl, unstableButtonGroupRtl, unstableCardRtl,
-  unstableCheckboxRtl, unstableCollapseRtl, unstableCollapseTransitionRtl,
-  unstableDataTableRtl, unstableDialogRtl, unstableDrawerRtl,
-  unstableDynamicInputRtl, unstableFlexRtl, unstableInputRtl,
-  unstableInputNumberRtl, unstableListRtl, unstableMessageRtl,
-  unstableNotificationRtl, unstablePaginationRtl, unstablePopoverRtl,
-  unstableRadioRtl, unstableSelectRtl, unstableSpaceRtl,
-  unstableStatisticRtl, unstableStepsRtl, unstableTableRtl,
-  unstableTagRtl, unstableTreeRtl, unstableTreeSelectRtl,
-  unstableUploadsRtl, unstableScrollbarRtl,
+  darkTheme,
+  NConfigProvider,
+  NDialogProvider,
+  NIcon,
+  NMessageProvider,
+  NTooltip,
+  unstableAlertRtl,
+  unstableAvatarGroupRtl,
+  unstableBadgeRtl,
+  unstableButtonGroupRtl,
+  unstableButtonRtl,
+  unstableCardRtl,
+  unstableCheckboxRtl,
+  unstableCollapseRtl,
+  unstableCollapseTransitionRtl,
+  unstableDataTableRtl,
+  unstableDialogRtl,
+  unstableDrawerRtl,
+  unstableDynamicInputRtl,
+  unstableFlexRtl,
+  unstableInputNumberRtl,
+  unstableInputRtl,
+  unstableListRtl,
+  unstableMessageRtl,
+  unstableNotificationRtl,
+  unstablePaginationRtl,
+  unstablePopoverRtl,
+  unstableRadioRtl,
+  unstableScrollbarRtl,
+  unstableSelectRtl,
+  unstableSpaceRtl,
+  unstableStatisticRtl,
+  unstableStepsRtl,
+  unstableTableRtl,
+  unstableTagRtl,
+  unstableTreeRtl,
+  unstableTreeSelectRtl,
+  unstableUploadsRtl,
 } from "naive-ui";
-import {
-  SunnyOutline, MoonOutline, BriefcaseOutline,
-} from "@vicons/ionicons5";
+import {BriefcaseOutline, MoonOutline, SunnyOutline,} from "@vicons/ionicons5";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
-import { useSettingsStore } from "./stores/settings.js";
-import { useAuthStore } from "./stores/auth.js";
+import {useSettingsStore} from "./stores/settings.js";
+import {useAuthStore} from "./stores/auth.js";
 
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
@@ -134,15 +158,23 @@ watch(isDark, (dark) => {
 // Top-bar primary nav. Matches the Spects design — terse Hebrew labels.
 // Settings is reached via the avatar; templates / search are hidden from the
 // primary bar to keep it sparse (matches the spec which shows ~6 items).
-const primaryNav = [
-  { label: "לוח בקרה",        key: "dashboard" },
-  { label: "מסמכים",           key: "documents" },
-  { label: "ניהול תסקירים",   key: "contracts" },   // route stays /contracts (handles both)
-  { label: "לקוחות",           key: "clients" },
-  { label: "הגדרת ציוד",       key: "equipment" },
-  { label: "תבניות אימייל",    key: "email-templates" },
-  { label: "תזכורות",          key: "reminders" },
+const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
+
+const allNav = [
+  { label: "לוח בקרה",        key: "dashboard",        minRole: "user" },
+  { label: "מסמכים",           key: "documents",        minRole: "user" },
+  { label: "ניהול תסקירים",   key: "contracts",        minRole: "user" },
+  { label: "לקוחות",           key: "clients",          minRole: "user" },
+  { label: "הגדרת ציוד",       key: "equipment",        minRole: "user" },
+  { label: "תבניות אימייל",    key: "email-templates",  minRole: "user" },
+  { label: "תזכורות",          key: "reminders",        minRole: "user" },
+  { label: "הגדרות",           key: "settings",         minRole: "admin" },
 ];
+
+const primaryNav = computed(() => {
+  const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
+  return allNav.filter((item) => userRank >= (ROLE_RANK[item.minRole] ?? 0));
+});
 
 const activeKey = computed(() => {
   const seg = route.path.split("/")[1] || "dashboard";

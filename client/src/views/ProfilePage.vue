@@ -1,218 +1,310 @@
 <template>
   <div class="profile-page">
     <n-spin :show="loading">
-      <PageHeader title="הפרופיל שלי" subtitle="ניהול המידע האישי וההגדרות שלך">
-        <!-- action slot could be used for edit buttons in future -->
-      </PageHeader>
 
-      <!-- Main profile card (refined layout) -->
-      <n-card style="margin-bottom: 24px">
-        <div class="profile-main">
-          <div class="profile-main__left">
-            <div class="avatar">
-              <template v-if="form && form.picture_url">
-                <img :src="form.picture_url" alt="avatar" />
-              </template>
-              <template v-else>
-                <div class="avatar__initials">{{ initials }}</div>
-              </template>
-            </div>
-            <div class="actions">
-              <n-button type="default" @click="resetSettings">ביטול</n-button>
-              <n-button type="primary" :loading="saving" @click="saveProfile">ערוך פרופיל</n-button>
-            </div>
+      <!-- ── Hero card ───────────────────────────────────────────────────── -->
+      <div class="hero-card">
+        <!-- Left: avatar + name + role -->
+        <div class="hero-left">
+          <div class="avatar">
+            <img v-if="user?.picture_url" :src="user.picture_url" alt="avatar" />
+            <span v-else class="avatar__initials">{{ initials }}</span>
           </div>
-
-          <div class="profile-main__right">
-            <div class="profile-info">
-              <h2>{{ form?.name }}</h2>
-              <div class="muted">{{ form?.email }}</div>
-              <div class="role-tag" style="margin-top:8px;">
-                <n-tag :type="form?.role === 'admin' ? 'warning' : 'info'">
-                  {{ form?.role === 'admin' ? '👑 מנהל' : '👤 משתמש' }}
-                </n-tag>
-              </div>
-            </div>
-
-            <div class="stats">
-              <div class="stat">
-                <div class="stat__num">24</div>
-                <div class="stat__label muted">תזכורות פעילות</div>
-              </div>
-              <div class="stat">
-                <div class="stat__num">8</div>
-                <div class="stat__label muted">הושעו</div>
-              </div>
-              <div class="stat">
-                <div class="stat__num">12</div>
-                <div class="stat__label muted">הושלמו</div>
-              </div>
-            </div>
+          <div class="hero-info">
+            <h1 class="hero-name">{{ user?.name || '—' }}</h1>
+            <p class="hero-email">{{ user?.email }}</p>
+            <n-tag :type="roleTag.type" size="small" style="margin-top:6px">
+              {{ roleTag.label }}
+            </n-tag>
           </div>
         </div>
 
-        <!-- Expanded settings below -->
-          <n-form label-placement="top" v-if="userSettings" style="margin-top:16px">
-            <n-form-item label="ערכת נושא">
-              <n-radio-group v-model:value="userSettings.theme">
-                <n-radio value="light">☀️ בהיר</n-radio>
-                <n-radio value="dark">🌙 כהה</n-radio>
-              </n-radio-group>
-            </n-form-item>
-
-            <n-grid :cols="2" :x-gap="16">
-              <n-gi>
-                <n-form-item label="שם שולח אימייל">
-                  <n-input v-model:value="userSettings.email_from_name" placeholder="לדוגמה:  ReminderOCR " />
-                </n-form-item>
-              </n-gi>
-
-              <n-gi>
-                <n-form-item label="ימים מראש לתזכורת">
-                  <n-input v-model:value="reminderAdvanceDays" placeholder="90, 60, 30" @input="updateReminderDays" />
-                </n-form-item>
-              </n-gi>
-            </n-grid>
-
-            <n-form-item label="שפה לזיהוי טקסט (OCR)">
-              <n-input v-model:value="userSettings.ocr_language" placeholder="heb+eng" />
-            </n-form-item>
-
-            <template #action>
-              <n-button @click="resetSettings">ביטול</n-button>
-              <n-button type="primary" :loading="savingSettings" @click="saveSettings">שמור</n-button>
-            </template>
-          </n-form>
-      </n-card>
-
-      <!-- Danger Zone remains unchanged -->
-      <n-card style="margin-bottom: 24px">
-          <span style="color: var(--error-color); font-weight: 600;">⚠️ אזור סכנה</span>
-
-        <n-alert type="error" style="margin-bottom: 16px">
-          פעולות אלו לא ניתנות להחזרה
-        </n-alert>
-
-        <n-space vertical>
-          <div>
-            <p style="margin: 0 0 8px 0; font-weight: 500;">🚪 התנתק מכל המכשירים</p>
-            <p style="margin: 0 0 12px 0; font-size: 13px; color: var(--text-secondary);">
-              יסיים את כל ההפעלות הפעילות בכל המכשירים
-            </p>
-            <n-button type="error" :loading="disconnecting" @click="disconnectAllSessions">
-              התנתק מהכל
-            </n-button>
+        <!-- Right: stats -->
+        <div class="stats">
+          <div class="stat">
+            <span class="stat__num">{{ stats.active }}</span>
+            <span class="stat__label">תזכורות פעילות</span>
           </div>
-        </n-space>
-      </n-card>
+          <div class="stat">
+            <span class="stat__num">{{ stats.snoozed }}</span>
+            <span class="stat__label">הושעו</span>
+          </div>
+          <div class="stat">
+            <span class="stat__num">{{ stats.completed }}</span>
+            <span class="stat__label">נשלחו</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Settings card ───────────────────────────────────────────────── -->
+      <div v-if="settings" class="section-card">
+        <h2 class="section-title">הגדרות משתמש</h2>
+
+        <n-form :disabled="savingSettings" label-placement="top">
+          <n-form-item label="ערכת נושא">
+            <n-radio-group v-model:value="settings.theme">
+              <n-radio value="light">☀️ בהיר</n-radio>
+              <n-radio value="dark">🌙 כהה</n-radio>
+            </n-radio-group>
+          </n-form-item>
+
+          <n-grid :cols="2" :x-gap="16">
+            <n-gi>
+              <n-form-item label="שם שולח אימייל">
+                <n-input v-model:value="settings.email_from_name" placeholder="לדוגמה: ReminderOCR" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="ימים מראש לתזכורת">
+                <n-input v-model:value="reminderDaysStr" placeholder="90, 60, 30" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+
+          <n-form-item label="שפת OCR">
+            <n-input v-model:value="settings.ocr_language" placeholder="heb+eng" />
+          </n-form-item>
+        </n-form>
+
+        <div class="section-footer">
+          <n-button @click="resetSettings">ביטול</n-button>
+          <n-button :loading="savingSettings" type="primary" @click="saveSettings">שמור הגדרות</n-button>
+        </div>
+      </div>
+
+      <!-- ── Session info card ───────────────────────────────────────────── -->
+      <div class="section-card">
+        <h2 class="section-title">חשבון</h2>
+        <div v-if="user?.created_at" class="info-row">
+          <span class="info-label">הצטרף</span>
+          <span class="info-val">{{ formatDate(user.created_at) }}</span>
+        </div>
+        <div v-if="user?.last_login_at" class="info-row">
+          <span class="info-label">כניסה אחרונה</span>
+          <span class="info-val">{{ formatDate(user.last_login_at) }}</span>
+        </div>
+      </div>
+
+      <!-- ── Users management (admin only) ─────────────────────────────── -->
+      <div v-if="isAdmin" class="section-card">
+        <h2 class="section-title">ניהול משתמשים</h2>
+        <n-data-table
+          :columns="usersColumns"
+          :data="allUsers"
+          :loading="loadingUsers"
+          :pagination="false"
+          size="small"
+        />
+      </div>
+
+      <!-- ── Danger zone ─────────────────────────────────────────────────── -->
+      <div class="section-card section-card--danger">
+        <h2 class="section-title section-title--danger">אזור סכנה</h2>
+        <p class="danger-desc">סיים את כל ההפעלות הפעילות בכל המכשירים. פעולה זו לא ניתנת לביטול.</p>
+        <n-button :loading="disconnecting" type="error" @click="disconnectAll">
+          התנתק מכל המכשירים
+        </n-button>
+      </div>
 
     </n-spin>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
-import PageHeader from '../components/PageHeader.vue';
+import {computed, h, onMounted, ref} from "vue";
 import {
-  NCard, NForm, NFormItem, NInput, NButton, NSpace, NSpin, NGrid, NGi,
-  NRadioGroup, NRadio, NTag, NAlert, NText, useMessage,
-} from 'naive-ui';
-import type { User, UserSettings } from '@shared/types.js';
-import { useAuthStore } from '../stores/auth.js';
+  NButton,
+  NDataTable,
+  NForm,
+  NFormItem,
+  NGi,
+  NGrid,
+  NInput,
+  NRadio,
+  NRadioGroup,
+  NSelect,
+  NSpin,
+  NTag,
+  useMessage,
+} from "naive-ui";
+import {useAuthStore} from "../stores/auth.js";
+import type {User, UserRole, UserSettings} from "@shared/types.js";
 
 const message = useMessage();
 const authStore = useAuthStore();
 
-// State
 const loading = ref(true);
-const saving = ref(false);
 const savingSettings = ref(false);
 const disconnecting = ref(false);
 
-const form = ref<Partial<User> | null>(null);
-const userSettings = ref<UserSettings | null>(null);
-const reminderAdvanceDays = ref('90, 60, 30');
+const user = computed(() => authStore.user as User | null);
+const settings = ref<UserSettings | null>(null);
+const reminderDaysStr = ref("90, 60, 30");
+const settingsSnapshot = ref<string>("");
+
+const stats = ref({ active: 0, snoozed: 0, completed: 0 });
 
 const initials = computed(() => {
-  const name = form.value?.name || '';
-  if (!name) return '';
-  return name.split(' ').filter(Boolean).slice(0,2).map(n => n[0]).join('').toUpperCase();
+  const name = user.value?.name ?? "";
+  return name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 });
+
+const ROLE_META: Record<string, { label: string; type: "warning" | "info" | "default" }> = {
+  admin: { label: "מנהל מערכת", type: "warning" },
+  pro:   { label: "Pro",        type: "info" },
+  user:  { label: "משתמש",      type: "default" },
+};
+const roleTag = computed(() => ROLE_META[user.value?.role ?? "user"] ?? ROLE_META.user);
+
+const isAdmin = computed(() => user.value?.role === "admin");
+
+// ── Users management (admin only) ────────────────────────────────────────────
+const allUsers = ref<any[]>([]);
+const loadingUsers = ref(false);
+
+const roleOptions = [
+  { label: "מנהל מערכת", value: "admin" },
+  { label: "Pro",          value: "pro" },
+  { label: "משתמש",        value: "user" },
+];
+
+async function loadUsers() {
+  loadingUsers.value = true;
+  try {
+    const res = await fetch(`${SERVER}/api/admin/users`, { credentials: "include" });
+    if (res.ok) allUsers.value = await res.json();
+  } finally {
+    loadingUsers.value = false;
+  }
+}
+
+async function updateUserRole(userId: string, role: UserRole) {
+  await fetch(`${SERVER}/api/admin/users/${userId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ role }),
+  });
+  await loadUsers();
+  message.success("התפקיד עודכן");
+}
+
+async function toggleActive(userId: string, is_active: number) {
+  await fetch(`${SERVER}/api/admin/users/${userId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ is_active }),
+  });
+  await loadUsers();
+  message.success(is_active ? "המשתמש הופעל" : "המשתמש הושבת");
+}
+
+const usersColumns = computed(() => [
+  { title: "שם", key: "name", render: (row: any) => row.name || row.email },
+  { title: "אימייל", key: "email" },
+  {
+    title: "תפקיד",
+    key: "role",
+    width: 160,
+    render: (row: any) => h(NSelect, {
+      value: row.role,
+      options: roleOptions,
+      size: "small",
+      style: "min-width:130px",
+      disabled: row.id === user.value?.id?.toString(),
+      onUpdateValue: (v: any) => updateUserRole(row.id, v as UserRole),
+    }),
+  },
+  {
+    title: "סטטוס",
+    key: "is_active",
+    width: 100,
+    render: (row: any) => h(NButton, {
+      size: "small",
+      type: row.is_active ? "default" : "error",
+      disabled: row.id === user.value?.id?.toString(),
+      onClick: () => toggleActive(row.id, row.is_active ? 0 : 1),
+    }, () => row.is_active ? "פעיל" : "מושבת"),
+  },
+]);
+
+function formatDate(d: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("he-IL", { year: "numeric", month: "long", day: "numeric" });
+}
+
+const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 onMounted(async () => {
   try {
-    const u = authStore.user;
-    form.value = u ? {
-      id: u.id,
-      email: u.email,
-      name: u.name,
-      picture_url: u.picture_url,
-      role: u.role,
-      is_active: 1,
-      google_sub: '',
-      created_at: '',
-      last_login_at: null,
-    } : null;
+    const [settingsRes, statsRes] = await Promise.all([
+      fetch(`${SERVER}/api/user-settings`, { credentials: "include" }),
+      fetch(`${SERVER}/api/profile/stats`, { credentials: "include" }),
+    ]);
 
-    const res = await fetch('/api/user-settings', { credentials: 'include' });
-    if (res.ok) {
-      const data = await res.json() as UserSettings;
-      userSettings.value = data;
-      reminderAdvanceDays.value = JSON.parse(data.reminder_advance_days).join(', ');
+    if (settingsRes.ok) {
+      const data = await settingsRes.json() as UserSettings;
+      settings.value = data;
+      reminderDaysStr.value = JSON.parse(data.reminder_advance_days ?? "[90,60,30]").join(", ");
+      settingsSnapshot.value = JSON.stringify(data);
     }
-  } catch {
-    // silently continue — settings panel just won't show
+
+    if (statsRes.ok) {
+      stats.value = await statsRes.json();
+    }
+
+    if (authStore.user?.role === "admin") {
+      await loadUsers();
+    }
   } finally {
     loading.value = false;
   }
 });
 
-function updateReminderDays(value: string) {
-  reminderAdvanceDays.value = value;
-}
-
-async function saveProfile() {
-  message.info('הפרופיל מנוהל על ידי Google — אין צורך לעדכן ידנית');
+function resetSettings() {
+  if (!settingsSnapshot.value) return;
+  settings.value = JSON.parse(settingsSnapshot.value);
+  reminderDaysStr.value = JSON.parse(settings.value!.reminder_advance_days ?? "[90,60,30]").join(", ");
 }
 
 async function saveSettings() {
-  if (!userSettings.value) return;
-
+  if (!settings.value) return;
   savingSettings.value = true;
   try {
-    const days = reminderAdvanceDays.value
-      .split(',')
-      .map(x => parseInt(x.trim()))
-      .filter(x => !isNaN(x));
-    userSettings.value.reminder_advance_days = JSON.stringify(days);
-
-    await fetch('/api/user-settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(userSettings.value),
+    const days = reminderDaysStr.value
+      .split(",")
+      .map((x) => parseInt(x.trim()))
+      .filter((x) => !isNaN(x) && x > 0);
+    const payload: UserSettings = {
+      ...settings.value,
+      reminder_advance_days: JSON.stringify(days),
+    };
+    const res = await fetch(`${SERVER}/api/user-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
     });
-    message.success('ההגדרות שמורות בהצלחה');
+    if (!res.ok) throw new Error(`${res.status}`);
+    settings.value = await res.json();
+    reminderDaysStr.value = JSON.parse(settings.value!.reminder_advance_days).join(", ");
+    settingsSnapshot.value = JSON.stringify(settings.value);
+    message.success("ההגדרות נשמרו");
   } catch {
-    message.error('שגיאה בשמירת ההגדרות');
+    message.error("שגיאה בשמירת ההגדרות");
   } finally {
     savingSettings.value = false;
   }
 }
 
-function resetSettings() {
-  if (userSettings.value) {
-    reminderAdvanceDays.value = JSON.parse(userSettings.value.reminder_advance_days).join(', ');
-  }
-}
-
-async function disconnectAllSessions() {
+async function disconnectAll() {
   disconnecting.value = true;
   try {
-    message.success('התנתקת מכל המכשירים');
     await authStore.logout();
+    message.success("התנתקת מכל המכשירים");
   } catch {
-    message.error('שגיאה בהתנתקה');
+    message.error("שגיאה בהתנתקות");
   } finally {
     disconnecting.value = false;
   }
@@ -221,64 +313,104 @@ async function disconnectAllSessions() {
 
 <style scoped>
 .profile-page {
-  max-width: 1100px;
-}
-
-.profile-header {
-  margin-bottom: 24px;
-}
-
-.profile-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.profile-header__desc {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.profile-main {
+  max-width: 860px;
   display: flex;
-  gap: 24px;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.profile-main__left {
-  width: 260px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:12px;
+/* ── Hero card ─────────────────────────────────────────────────────────────── */
+.hero-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 28px 32px;
+}
+
+.hero-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 
 .avatar {
-  width:136px;
-  height:136px;
-  border-radius:68px;
-  background:#DDEAFE;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:36px;
-  color:#0F172A;
-  font-weight:700;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: #DDEAFE;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.avatar__initials { font-size: 28px; font-weight: 700; color: #0F172A; }
+
+.hero-name { margin: 0 0 4px; font-size: 22px; font-weight: 700; color: var(--text-primary); }
+.hero-email { margin: 0; font-size: 14px; color: var(--text-secondary); }
+
+.stats {
+  display: flex;
+  gap: 20px;
+  flex-shrink: 0;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px 24px;
+  min-width: 90px;
+}
+.stat__num { font-size: 26px; font-weight: 700; color: var(--text-primary); }
+.stat__label { font-size: 11px; color: var(--text-secondary); margin-top: 4px; text-align: center; }
+
+/* ── Section cards ─────────────────────────────────────────────────────────── */
+.section-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 24px 28px;
+}
+.section-card--danger { border-color: rgba(208, 48, 80, 0.25); }
+
+.section-title {
+  margin: 0 0 20px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.section-title--danger { color: var(--color-error, #d03050); }
+
+.section-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
 }
 
-.avatar img { width:100%; height:100%; object-fit:cover; border-radius:68px }
+/* ── Info rows ─────────────────────────────────────────────────────────────── */
+.info-row {
+  display: flex;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+}
+.info-row:last-child { border-bottom: none; }
+.info-label { color: var(--text-secondary); min-width: 120px; }
+.info-val { color: var(--text-primary); font-weight: 500; }
 
-.actions { display:flex; gap:8px }
-
-.profile-main__right { flex:1 }
-
-.profile-info h2 { margin:0; font-size:20px }
-.muted { color:var(--text-secondary); font-size:13px }
-
-.stats { display:flex; gap:12px; margin-top:16px }
-.stat { background:#fff; border:1px solid var(--card-border); padding:12px; border-radius:8px; min-width:110px; text-align:center }
-.stat__num { font-weight:700; font-size:18px }
-.stat__label { font-size:12px; color:var(--text-secondary) }
+.danger-desc {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
 </style>
-

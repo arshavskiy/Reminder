@@ -1,14 +1,26 @@
 import express from "express";
-import { col } from "../db/db";
-import { ObjectId } from "mongodb";
-import { generateContractReminders } from "../reminders/scheduler";
+import {col} from "../db/db";
+import {ObjectId} from "mongodb";
+import {generateContractReminders} from "../reminders/scheduler";
+import {HTTPException, requireAuth} from "../auth/middleware";
 
 export function registerContractRoutes(app: express.Application) {
   // POST /api/contracts — create a contract manually
   app.post("/api/contracts", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const body = req.body as Record<string, unknown>;
     const now = new Date();
     const doc: Record<string, any> = {
+      user_id: userId,
       document_id: body.document_id ?? null,
       client_id: body.client_id ?? null,
       contract_number: body.contract_number ?? null,
@@ -27,7 +39,7 @@ export function registerContractRoutes(app: express.Application) {
     const r = await col("contracts").insertOne(doc);
     const contractId = r.insertedId.toString();
     if (doc.expiry_date) {
-      await generateContractReminders(contractId, doc.client_id, doc.document_id, String(doc.expiry_date));
+      await generateContractReminders(contractId, doc.client_id, doc.document_id, String(doc.expiry_date), userId);
     }
     const inserted = await col("contracts").findOne({ _id: r.insertedId });
     res.status(201).json(flatDoc(inserted));
@@ -35,13 +47,23 @@ export function registerContractRoutes(app: express.Application) {
 
   // GET /api/contracts
   app.get("/api/contracts", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const clientId = req.query.clientId as string | undefined;
     const status = req.query.status as string | undefined;
-    const kind = req.query.kind as string | undefined; // "contract" | "inspection" | "all"
+    const kind = req.query.kind as string | undefined;
     const limit = parseInt((req.query.limit as string) ?? "50");
     const offset = parseInt((req.query.offset as string) ?? "0");
 
-    const filter: Record<string, any> = {};
+    const filter: Record<string, any> = { user_id: userId };
     if (clientId) filter.client_id = clientId;
     if (status) filter.status = status;
     if (kind === "contract") {
@@ -87,6 +109,16 @@ export function registerContractRoutes(app: express.Application) {
 
   // GET /api/contracts/expiring
   app.get("/api/contracts/expiring", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
     const days = parseInt((req.query.days as string) ?? "30");
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -96,6 +128,7 @@ export function registerContractRoutes(app: express.Application) {
 
     const contractDocs = await col("contracts")
       .find({
+        user_id: userId,
         status: "active",
         expiry_date: { $ne: null, $gte: todayStr, $lte: futureStr },
       })
@@ -121,7 +154,17 @@ export function registerContractRoutes(app: express.Application) {
 
   // GET /api/contracts/:id
   app.get("/api/contracts/:id", async (req, res) => {
-    const filter = idFilter(req.params.id);
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const filter = { ...idFilter(req.params.id), user_id: userId };
     const c = await col("contracts").findOne(filter) as any;
     if (!c) {
       res.status(404).json({ error: "Not found" });
@@ -140,7 +183,17 @@ export function registerContractRoutes(app: express.Application) {
 
   // PUT /api/contracts/:id
   app.put("/api/contracts/:id", async (req, res) => {
-    const filter = idFilter(req.params.id);
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const filter = { ...idFilter(req.params.id), user_id: userId };
     const body = req.body as Record<string, unknown>;
 
     const updates: Record<string, any> = { updated_at: new Date() };
@@ -154,7 +207,6 @@ export function registerContractRoutes(app: express.Application) {
 
     await col("contracts").updateOne(filter, { $set: updates });
 
-    // Regenerate reminders if expiry changed
     if (body.expiry_date) {
       const contract = await col("contracts").findOne(filter) as any;
       if (contract) {
@@ -162,7 +214,8 @@ export function registerContractRoutes(app: express.Application) {
           req.params.id,
           contract.client_id ?? null,
           contract.document_id ?? null,
-          String(body.expiry_date)
+          String(body.expiry_date),
+          userId
         );
       }
     }
@@ -173,7 +226,17 @@ export function registerContractRoutes(app: express.Application) {
 
   // DELETE /api/contracts/:id
   app.delete("/api/contracts/:id", async (req, res) => {
-    await col("contracts").deleteOne(idFilter(req.params.id));
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    await col("contracts").deleteOne({ ...idFilter(req.params.id), user_id: userId });
     res.json({ ok: true });
   });
 }
