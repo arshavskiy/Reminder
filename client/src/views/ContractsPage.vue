@@ -15,8 +15,8 @@
         <button class="btn btn--ghost" @click="router.push('/documents')">
           📁 ארכיון
         </button>
-        <button class="btn btn--primary" @click="router.push('/documents')">
-          + תסקיר חדש
+        <button class="btn btn--primary" @click="openCreate">
+          + {{ kind === "inspection" ? "תסקיר חדש" : "חוזה חדש" }}
         </button>
       </div>
     </header>
@@ -41,7 +41,7 @@
         v-model="search"
         class="search"
         type="search"
-        placeholder="חיפוש לפי לקוח, מספר תסקיר, ציוד..."
+        :placeholder="kind === 'inspection' ? 'חיפוש לפי לקוח, מספר תסקיר, ציוד...' : 'חיפוש לפי לקוח, מספר חוזה...'"
       />
       <div class="toolbar__right">
         <n-select
@@ -66,46 +66,47 @@
           <div class="card__row">
             <div class="card__num">
               <span class="card__num-main">{{ row.contract_number ?? "—" }}</span>
-              <span class="card__num-tail">/484590</span>
             </div>
             <div class="card__actions">
-              <button class="btn btn--xs btn--ghost" @click="openDoc(row)">
+              <button class="btn btn--xs btn--ghost" @click="openDoc(row)" :title="row.document_id ? 'צפה במסמך' : 'אין מסמך מקושר'" :disabled="!row.document_id">
                 <n-icon :component="EyeOutline" /> צפה
               </button>
-              <button class="btn btn--xs btn--ghost" @click="duplicateRow(row)">
-                <n-icon :component="CopyOutline" /> שכפל
+              <button class="btn btn--xs btn--ghost" @click="openEdit(row)">
+                <n-icon :component="CreateOutline" /> ערוך
+              </button>
+              <button class="btn btn--xs btn--danger" @click="confirmDelete(row)">
+                <n-icon :component="TrashOutline" /> מחק
               </button>
             </div>
           </div>
 
           <!-- Subtitle -->
           <p class="card__sub">
-            {{ row.summary ?? (row.contract_type ?? "תסקיר") + " — " + (row.client_name ?? "—") }}
+            {{ row.summary ?? (row.contract_type ?? (kind === "inspection" ? "תסקיר" : "חוזה")) + " — " + (row.client_name ?? "—") }}
           </p>
 
           <!-- Status pills row -->
           <div class="card__pills">
-            <span class="tag tag--ok">{{ statusLabel(row.status) }}</span>
+            <span :class="statusTagClass(row.status)">{{ statusLabel(row.status) }}</span>
             <span class="tag tag--neutral">{{ row.contract_type ?? "—" }}</span>
-            <span v-if="row.summary" class="tag tag--neutral">{{ row.summary }}</span>
-            <span class="tag tag--muted">
-              <n-icon :component="CloudOfflineOutline" :size="13" /> לא מסונכרן
-            </span>
+            <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
           </div>
 
           <!-- Footer info -->
           <div class="card__foot">
             <div class="card__foot-col">
               <span class="kv"><strong>לקוח:</strong> {{ row.client_name ?? "—" }}</span>
-              <span class="kv"><strong>תאריך בדיקה:</strong> {{ formatDate(row.start_date) }}</span>
+              <span class="kv"><strong>תאריך התחלה:</strong> {{ formatDate(row.start_date) }}</span>
             </div>
             <div class="card__foot-col card__foot-col--end">
               <span class="kv">
-                <strong>בדיקה הבאה:</strong>
+                <strong>{{ kind === "inspection" ? "בדיקה הבאה:" : "תפוגה:" }}</strong>
                 <span :class="expiryClass(row.expiry_date)">{{ formatDate(row.expiry_date) }}</span>
                 <ExpiryBadge :date="row.expiry_date" />
               </span>
-              <span class="kv kv--muted">עודכן: {{ formatDate(row.updated_at) }}</span>
+              <span v-if="row.amount" class="kv">
+                <strong>סכום:</strong> {{ row.amount?.toLocaleString() }} {{ row.currency }}
+              </span>
             </div>
           </div>
         </article>
@@ -113,17 +114,116 @@
 
       <div v-else class="empty">
         <p>אין {{ kind === "inspection" ? "תסקירים" : "חוזים" }} להצגה</p>
+        <button class="btn btn--primary" style="margin-top:12px" @click="openCreate">
+          + {{ kind === "inspection" ? "הוסף תסקיר ראשון" : "הוסף חוזה ראשון" }}
+        </button>
       </div>
     </n-spin>
+
+    <!-- ── Create / Edit modal ─────────────────────────────────────────── -->
+    <n-modal v-model:show="showForm" :title="editingId ? 'עריכת תסקיר / חוזה' : 'תסקיר / חוזה חדש'" preset="card" style="width: 600px; max-width: 95vw" :mask-closable="false">
+      <n-form label-placement="top" :model="form">
+        <n-grid :cols="2" :x-gap="16">
+          <n-gi>
+            <n-form-item label="מספר תסקיר / חוזה">
+              <n-input v-model:value="form.contract_number" placeholder="לדוגמה: 15935" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="סוג">
+              <n-select
+                v-model:value="form.contract_type"
+                :options="contractTypeOptions"
+                clearable
+                filterable
+                tag
+                placeholder="בחר או הקלד"
+              />
+            </n-form-item>
+          </n-gi>
+
+          <n-gi :span="2">
+            <n-form-item label="לקוח">
+              <n-select
+                v-model:value="form.client_id"
+                :options="clientOptions"
+                clearable
+                filterable
+                placeholder="חיפוש לקוח..."
+                :loading="loadingClients"
+              />
+            </n-form-item>
+          </n-gi>
+
+          <n-gi>
+            <n-form-item label="תאריך התחלה">
+              <n-input v-model:value="form.start_date" type="text" placeholder="YYYY-MM-DD" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="תאריך תפוגה / בדיקה הבאה">
+              <n-input v-model:value="form.expiry_date" type="text" placeholder="YYYY-MM-DD" />
+            </n-form-item>
+          </n-gi>
+
+          <n-gi>
+            <n-form-item label="סכום">
+              <n-input-number v-model:value="form.amount" placeholder="0" style="width:100%" :show-button="false" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="מטבע">
+              <n-select v-model:value="form.currency" :options="currencyOptions" />
+            </n-form-item>
+          </n-gi>
+
+          <n-gi>
+            <n-form-item label="סטטוס">
+              <n-select v-model:value="form.status" :options="statusOptions" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="צד שכנגד">
+              <n-input v-model:value="form.counterparty" placeholder="שם החברה / איש קשר" />
+            </n-form-item>
+          </n-gi>
+
+          <n-gi :span="2">
+            <n-form-item label="סיכום / הערות">
+              <n-input v-model:value="form.summary" type="textarea" :rows="3" placeholder="תיאור קצר..." />
+            </n-form-item>
+          </n-gi>
+        </n-grid>
+      </n-form>
+
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showForm = false">ביטול</n-button>
+          <n-button type="primary" :loading="saving" @click="saveForm">
+            {{ editingId ? "שמור שינויים" : "צור" }}
+          </n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <!-- ── Delete confirm modal ────────────────────────────────────────── -->
+    <n-modal v-model:show="showDeleteConfirm" title="מחיקת רשומה" preset="dialog" type="error" :positive-text="'מחק'" :negative-text="'ביטול'" @positive-click="doDelete" @negative-click="showDeleteConfirm = false">
+      <p>האם למחוק את הרשומה <strong>{{ deletingRow?.contract_number ?? deletingRow?.contract_type ?? "זו" }}</strong>?</p>
+      <p style="font-size:13px; color:var(--text-secondary)">פעולה זו אינה הפיכה. התזכורות הקשורות לא יימחקו.</p>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref, computed } from "vue";
 import { useRouter } from "vue-router";
-import { NIcon, NTag, NSelect, NSpin, useMessage } from "naive-ui";
-import { EyeOutline, CopyOutline, CloudOfflineOutline } from "@vicons/ionicons5";
+import {
+  NIcon, NTag, NSelect, NSpin, NModal, NForm, NFormItem, NInput,
+  NInputNumber, NGrid, NGi, NButton, NSpace, useMessage,
+} from "naive-ui";
+import { EyeOutline, CreateOutline, TrashOutline } from "@vicons/ionicons5";
 import { useContractsStore } from "../stores/contracts.js";
+import { api } from "../services/apiService.js";
 import ExpiryBadge from "../components/ExpiryBadge.vue";
 import type { ContractWithClient } from "@shared/types.js";
 
@@ -135,52 +235,171 @@ const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
 const search = ref("");
 
+// ── Form state ────────────────────────────────────────────────────────────────
+const showForm = ref(false);
+const editingId = ref<string | null>(null);
+const saving = ref(false);
+const form = ref(emptyForm());
+
+const showDeleteConfirm = ref(false);
+const deletingRow = ref<ContractWithClient | null>(null);
+
+// ── Client picker ─────────────────────────────────────────────────────────────
+const clientOptions = ref<{ label: string; value: string }[]>([]);
+const loadingClients = ref(false);
+
+async function loadClients() {
+  if (clientOptions.value.length) return;
+  loadingClients.value = true;
+  try {
+    const r = await api.clients.list({ limit: 500 });
+    clientOptions.value = r.rows.map((c) => ({ label: c.display_name, value: String(c.id) }));
+  } finally {
+    loadingClients.value = false;
+  }
+}
+
 const kindOptions = [
   { label: "תסקירים", value: "inspection" },
   { label: "חוזים",   value: "contract" },
   { label: "הכל",     value: "all" },
 ];
 
-// Pill filter bar — follows the spec: הכל / טיוטה / ממתין לאישור / מאושר / דורש תיקונים / נדחה / הושלם / קרוב
+const contractTypeOptions = [
+  { label: "תסקיר בדיקה תקופתית", value: "תסקיר בדיקה תקופתית" },
+  { label: "תסקיר בדיקה", value: "תסקיר בדיקה" },
+  { label: "חוזה שירות", value: "חוזה שירות" },
+  { label: "חוזה תחזוקה", value: "חוזה תחזוקה" },
+  { label: "חשבונית", value: "חשבונית" },
+  { label: "ביטוח", value: "ביטוח" },
+  { label: "אישור", value: "אישור" },
+];
+
+const currencyOptions = [
+  { label: "₪ שקל", value: "ILS" },
+  { label: "$ דולר", value: "USD" },
+  { label: "€ אירו", value: "EUR" },
+];
+
+const statusOptions = [
+  { label: "פעיל", value: "active" },
+  { label: "פג תוקף", value: "expired" },
+  { label: "בוטל", value: "cancelled" },
+  { label: "חודש", value: "renewed" },
+];
+
 const pillFilters = computed(() => [
-  { label: "הכל",            value: null },
-  { label: "פעיל",            value: "active" },
-  { label: "פג תוקף",         value: "expired" },
-  { label: "בוטל",            value: "cancelled" },
-  { label: "חודש",            value: "renewed" },
+  { label: "הכל",     value: null },
+  { label: "פעיל",    value: "active" },
+  { label: "פג תוקף", value: "expired" },
+  { label: "בוטל",    value: "cancelled" },
+  { label: "חודש",    value: "renewed" },
 ]);
 
 function load() {
-  store.fetch({
-    status: statusFilter.value ?? undefined,
-    limit: 200,
-    kind: kind.value,
-  });
+  store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value });
 }
 
 onMounted(() => {
   load();
   store.fetchExpiring(30);
+  loadClients();
 });
 
-// Search filter (client-side, applies to the loaded set)
 const filteredRows = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return store.rows;
-  return store.rows.filter((r) => {
-    return (
-      (r.contract_number ?? "").toLowerCase().includes(q) ||
-      (r.client_name ?? "").toLowerCase().includes(q) ||
-      (r.contract_type ?? "").toLowerCase().includes(q) ||
-      (r.summary ?? "").toLowerCase().includes(q)
-    );
-  });
+  return store.rows.filter((r) =>
+    (r.contract_number ?? "").toLowerCase().includes(q) ||
+    (r.client_name ?? "").toLowerCase().includes(q) ||
+    (r.contract_type ?? "").toLowerCase().includes(q) ||
+    (r.summary ?? "").toLowerCase().includes(q)
+  );
 });
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── CRUD actions ──────────────────────────────────────────────────────────────
+function emptyForm() {
+  return {
+    contract_number: null as string | null,
+    contract_type: kind.value === "inspection" ? "תסקיר בדיקה תקופתית" : null as string | null,
+    client_id: null as string | null,
+    start_date: null as string | null,
+    expiry_date: null as string | null,
+    amount: null as number | null,
+    currency: "ILS",
+    counterparty: null as string | null,
+    summary: null as string | null,
+    status: "active" as string,
+  };
+}
+
+function openCreate() {
+  editingId.value = null;
+  form.value = emptyForm();
+  form.value.contract_type = kind.value === "inspection" ? "תסקיר בדיקה תקופתית" : null;
+  showForm.value = true;
+}
+
+function openEdit(row: ContractWithClient) {
+  editingId.value = row.id;
+  form.value = {
+    contract_number: row.contract_number,
+    contract_type: row.contract_type,
+    client_id: row.client_id,
+    start_date: row.start_date,
+    expiry_date: row.expiry_date,
+    amount: row.amount,
+    currency: row.currency ?? "ILS",
+    counterparty: row.counterparty,
+    summary: row.summary,
+    status: row.status,
+  };
+  showForm.value = true;
+}
+
+async function saveForm() {
+  saving.value = true;
+  try {
+    if (editingId.value) {
+      await store.update(editingId.value, form.value as any);
+      message.success("הרשומה עודכנה בהצלחה");
+    } else {
+      await store.create(form.value as any);
+      message.success("הרשומה נוצרה בהצלחה");
+      load();
+    }
+    showForm.value = false;
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    saving.value = false;
+  }
+}
+
+function confirmDelete(row: ContractWithClient) {
+  deletingRow.value = row;
+  showDeleteConfirm.value = true;
+}
+
+async function doDelete() {
+  if (!deletingRow.value) return;
+  try {
+    await store.remove(deletingRow.value.id);
+    message.success("הרשומה נמחקה");
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    deletingRow.value = null;
+  }
+}
+
+function openDoc(row: ContractWithClient) {
+  if (row.document_id) router.push(`/documents/${row.document_id}`);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function formatDate(d: string | null | undefined): string {
   if (!d) return "—";
-  // Display ISO date or datetime as DD/MM/YYYY
   const datePart = d.includes("T") ? d.split("T")[0] : d.split(" ")[0];
   const [y, m, day] = datePart.split("-");
   if (!y || !m || !day) return d;
@@ -189,12 +408,19 @@ function formatDate(d: string | null | undefined): string {
 
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
-    active: "פעיל",
-    expired: "פג תוקף",
-    cancelled: "בוטל",
-    renewed: "חודש",
+    active: "פעיל", expired: "פג תוקף", cancelled: "בוטל", renewed: "חודש",
   };
   return map[status] ?? status;
+}
+
+function statusTagClass(status: string): string {
+  const map: Record<string, string> = {
+    active: "tag tag--ok",
+    expired: "tag tag--bad",
+    cancelled: "tag tag--muted",
+    renewed: "tag tag--info",
+  };
+  return map[status] ?? "tag tag--neutral";
 }
 
 function expiryClass(d: string | null): string {
@@ -205,18 +431,9 @@ function expiryClass(d: string | null): string {
   return "expiry expiry--ok";
 }
 
-function openDoc(row: ContractWithClient) {
-  router.push(`/documents/${row.document_id}`);
-}
-
-async function duplicateRow(_row: ContractWithClient) {
-  message.info("שכפול בקרוב — ייבוא מסמך מקור מ-/documents");
-}
-
 function exportToExcel() {
-  // CSV (UTF-8 BOM) — opens cleanly in Excel with Hebrew.
   const rows = filteredRows.value;
-  const header = ["מספר", "סוג", "לקוח", "תאריך בדיקה", "בדיקה הבאה", "סטטוס"];
+  const header = ["מספר", "סוג", "לקוח", "תאריך התחלה", "תאריך תפוגה", "סכום", "מטבע", "סטטוס"];
   const lines = [header.join(",")];
   for (const r of rows) {
     lines.push([
@@ -225,6 +442,8 @@ function exportToExcel() {
       (r.client_name ?? "").replace(/,/g, " "),
       r.start_date ?? "",
       r.expiry_date ?? "",
+      r.amount ?? "",
+      r.currency ?? "ILS",
       statusLabel(r.status),
     ].join(","));
   }
@@ -233,15 +452,13 @@ function exportToExcel() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `inspections-${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `contracts-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 </script>
 
 <style scoped>
-
-
 /* ── Header ─────────────────────────────────────────────────────────────── */
 .page__head {
   display: flex;
@@ -286,19 +503,21 @@ function exportToExcel() {
 }
 .btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
 .btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn--primary {
   background: var(--brand-color);
   border-color: var(--brand-color);
   color: var(--text-inverse, #fff);
   font-weight: 600;
 }
-.btn--primary:hover {
-  background: var(--brand-color-hover);
-  border-color: var(--brand-color-hover);
-}
-.btn--ghost {
+.btn--primary:hover { background: var(--brand-color-hover); border-color: var(--brand-color-hover); }
+.btn--ghost { background: transparent; }
+.btn--danger {
   background: transparent;
+  border-color: var(--error-color, #d03050);
+  color: var(--error-color, #d03050);
 }
+.btn--danger:hover { background: rgba(208, 48, 80, 0.08); }
 .btn--xs { padding: 4px 10px; font-size: 12px; }
 
 /* ── Pill filter bar ────────────────────────────────────────────────────── */
@@ -341,7 +560,7 @@ function exportToExcel() {
   border-radius: 999px;
 }
 
-/* ── Toolbar (search + secondary filter) ────────────────────────────────── */
+/* ── Toolbar ────────────────────────────────────────────────────────────── */
 .toolbar {
   display: flex;
   justify-content: space-between;
@@ -349,11 +568,7 @@ function exportToExcel() {
   gap: 12px;
   margin-bottom: 18px;
 }
-.toolbar__right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+.toolbar__right { display: flex; align-items: center; gap: 10px; }
 .search {
   width: 360px;
   max-width: 100%;
@@ -370,11 +585,7 @@ function exportToExcel() {
 .search:focus { border-color: var(--brand-color); outline: none; }
 
 /* ── Cards ──────────────────────────────────────────────────────────────── */
-.cards {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
+.cards { display: flex; flex-direction: column; gap: 14px; }
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -382,40 +593,18 @@ function exportToExcel() {
   padding: 18px 22px;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
-.card:hover {
-  border-color: var(--brand-color);
-  box-shadow: var(--shadow-sm);
-}
-
+.card:hover { border-color: var(--brand-color); box-shadow: var(--shadow-sm); }
 .card__row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
 }
-.card__num {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.card__num-tail { color: var(--text-muted); font-weight: 500; }
-.card__actions {
-  display: flex;
-  gap: 8px;
-}
+.card__num { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+.card__actions { display: flex; gap: 8px; }
+.card__sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 12px; }
+.card__pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 
-.card__sub {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0 0 12px;
-}
-
-.card__pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 14px;
-}
 .tag {
   display: inline-flex;
   align-items: center;
@@ -425,22 +614,14 @@ function exportToExcel() {
   border-radius: 999px;
   border: 1px solid transparent;
 }
-.tag--ok {
-  background: rgba(99, 226, 183, 0.15);
-  color: #1a7951;
-  border-color: rgba(99, 226, 183, 0.3);
-}
-html[data-theme="dark"] .tag--ok { color: #63e2b7; }
-.tag--neutral {
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  border-color: var(--border-color);
-}
-.tag--muted {
-  background: transparent;
-  color: var(--text-muted);
-  border-color: var(--border-color);
-}
+.tag--ok    { background: rgba(99,226,183,0.15); color: #1a7951; border-color: rgba(99,226,183,0.3); }
+.tag--bad   { background: rgba(208,48,80,0.10);  color: #b22e2e; border-color: rgba(208,48,80,0.2); }
+.tag--info  { background: rgba(32,128,240,0.10); color: #1560bd; border-color: rgba(32,128,240,0.2); }
+.tag--neutral { background: var(--bg-elevated); color: var(--text-secondary); border-color: var(--border-color); }
+.tag--muted   { background: transparent; color: var(--text-muted); border-color: var(--border-color); }
+html[data-theme="dark"] .tag--ok   { color: #63e2b7; }
+html[data-theme="dark"] .tag--bad  { color: #ff7875; }
+html[data-theme="dark"] .tag--info { color: #63b3ed; }
 
 /* ── Card footer ────────────────────────────────────────────────────────── */
 .card__foot {
@@ -450,11 +631,7 @@ html[data-theme="dark"] .tag--ok { color: #63e2b7; }
   padding-top: 12px;
   border-top: 1px solid var(--border-color);
 }
-.card__foot-col {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+.card__foot-col { display: flex; flex-direction: column; gap: 4px; }
 .card__foot-col--end { text-align: left; }
 .kv {
   font-size: 13px;
@@ -464,7 +641,6 @@ html[data-theme="dark"] .tag--ok { color: #63e2b7; }
   gap: 6px;
 }
 .kv strong { color: var(--text-muted); font-weight: 500; }
-.kv--muted { color: var(--text-muted); font-size: 12px; }
 
 .expiry { font-weight: 600; }
 .expiry--ok   { color: #1a7951; }

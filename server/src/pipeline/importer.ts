@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, copyFileSync, readFileSync, statSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, copyFileSync, readFileSync, statSync, writeFileSync, unlinkSync } from "fs";
 import { createHash } from "crypto";
 import { join, extname, basename } from "path";
 import { col } from "../db/db";
+import { ObjectId } from "mongodb";
 import { getDataDir, getSettings } from "../settings";
 import { parsePdf } from "./pdfParser";
 import { ocrFile } from "./ocrParser";
@@ -10,6 +11,7 @@ import { parseXlsx } from "./xlsxParser";
 import { extractDocument, extractWithTemplate } from "./extractor";
 import { pickTemplate } from "../templates/seedTemplates";
 import { generateContractReminders } from "../reminders/scheduler";
+import { uploadToSpaces, spacesEnabled } from "../storage/spaces";
 import type { DocTemplate, DynamicExtraction } from "../../src/shared/types.js";
 
 type PushFn = (event: Record<string, unknown>) => void;
@@ -34,17 +36,19 @@ function computeHash(filePath: string): string {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
-export async function importFile(originalPath: string, push?: PushFn): Promise<string> {
+export async function importFile(originalPath: string, push?: PushFn, userId?: string, displayName?: string): Promise<string> {
   const settings = getSettings();
 
   const ext = extname(originalPath);
-  const fileName = basename(originalPath);
+  const fileName = displayName ?? basename(originalPath);
   const fileHash = computeHash(originalPath);
   const fileSize = statSync(originalPath).size;
   const mimeType = getMimeType(ext);
 
-  // Dedup check
-  const existing = await col("documents").findOne({ file_hash: fileHash });
+  // Dedup check — scoped to user if provided
+  const dedupFilter: Record<string, any> = { file_hash: fileHash };
+  if (userId) dedupFilter.user_id = userId;
+  const existing = await col("documents").findOne(dedupFilter);
   if (existing) {
     console.log(`[importer] Skipping duplicate: ${fileName}`);
     return existing._id!.toString();
@@ -58,8 +62,23 @@ export async function importFile(originalPath: string, push?: PushFn): Promise<s
     copyFileSync(originalPath, managedPath);
   }
 
+  // Upload to DigitalOcean Spaces if configured
+  let spacesKey: string | null = null;
+  let spacesUrl: string | null = null;
+  if (spacesEnabled()) {
+    try {
+      spacesKey = `documents/${fileHash}${ext}`;
+      spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
+      console.log(`[importer] Uploaded to Spaces: ${spacesKey}`);
+    } catch (err) {
+      console.error(`[importer] Spaces upload failed, keeping local copy:`, err);
+      spacesKey = null;
+      spacesUrl = null;
+    }
+  }
+
   const now = new Date();
-  const docRecord = {
+  const docRecord: Record<string, any> = {
     file_name: fileName,
     file_path: managedPath,
     original_path: originalPath,
@@ -70,9 +89,12 @@ export async function importFile(originalPath: string, push?: PushFn): Promise<s
     processing_status: "queued",
     created_at: now,
     updated_at: now,
+    spaces_key: spacesKey,
+    spaces_url: spacesUrl,
   };
+  if (userId) docRecord.user_id = userId;
 
-  const insertResult = await col("documents").insertOne(docRecord as any);
+  const insertResult = await col("documents").insertOne(docRecord);
   const documentId = insertResult.insertedId.toString();
 
   push?.({ type: "document:queued", documentId: documentId as any, fileName });
@@ -98,7 +120,7 @@ export async function processDocument(
   push?: PushFn
 ) {
   const settings = getSettings();
-  const docFilter = { _id: documentId } as any;
+  const docFilter = { _id: new ObjectId(documentId) } as any;
 
   await col("documents").updateOne(docFilter, {
     $set: { processing_status: "processing", updated_at: new Date() },
@@ -156,6 +178,7 @@ export async function processDocument(
         backend: run.backend,
         model: run.model,
         result_json: run.rawJson,
+        raw_text: rawText,
         parsed_ok: run.fields ? 1 : 0,
         error: run.error ?? null,
         exec_ms: run.execMs,
@@ -190,6 +213,7 @@ export async function processDocument(
         backend: extraction.backend,
         model: extraction.model,
         result_json: extraction.rawJson,
+        raw_text: rawText,
         parsed_ok: extraction.result ? 1 : 0,
         error: extraction.error ?? null,
         exec_ms: extraction.execMs,
@@ -223,7 +247,7 @@ async function saveExtractionEntities(
 ) {
   if (result.document_type || result.document_number) {
     await col("documents").updateOne(
-      { _id: documentId } as any,
+      { _id: new ObjectId(documentId) } as any,
       {
         $set: {
           ...(result.document_type && { document_type: result.document_type }),
@@ -239,49 +263,20 @@ async function saveExtractionEntities(
   const entityType: "company" | "person" = result.client_company ? "company" : "person";
 
   if (displayName) {
-    const existing = await col("clients").findOne({
-      display_name: { $regex: new RegExp(`^${escapeRegex(displayName)}$`, "i") },
-    }) as any;
-
     const contactNote =
       result.client_company && result.client_name
         ? `איש קשר: ${result.client_name}`
         : null;
 
-    if (existing) {
-      clientId = existing._id.toString();
-      const mergedNotes =
-        contactNote && !(existing.notes ?? "").includes(contactNote)
-          ? [existing.notes, contactNote].filter(Boolean).join("\n")
-          : existing.notes;
-
-      await col("clients").updateOne(
-        { _id: existing._id },
-        {
-          $set: {
-            ...(result.client_email && !existing.email && { email: result.client_email }),
-            ...(result.client_phone && !existing.phone && { phone: result.client_phone }),
-            ...(result.client_address && !existing.address && { address: result.client_address }),
-            ...(result.client_id && !existing.id_number && { id_number: result.client_id }),
-            ...(mergedNotes !== existing.notes && { notes: mergedNotes }),
-            updated_at: new Date(),
-          },
-        }
-      );
-    } else {
-      const r = await col("clients").insertOne({
-        display_name: displayName,
-        entity_type: entityType,
-        id_number: result.client_id ?? null,
-        email: result.client_email ?? null,
-        phone: result.client_phone ?? null,
-        address: result.client_address ?? null,
-        notes: contactNote,
-        created_at: new Date(),
-        updated_at: new Date(),
-      } as any);
-      clientId = r.insertedId.toString();
-    }
+    clientId = await findOrCreateClient({
+      displayName,
+      entityType,
+      idNumber: result.client_id ?? null,
+      email: result.client_email ?? null,
+      phone: result.client_phone ?? null,
+      address: result.client_address ?? null,
+      notes: contactNote,
+    });
 
     await col("document_clients").updateOne(
       { document_id: documentId, client_id: clientId },
@@ -302,8 +297,7 @@ async function saveExtractionEntities(
   }
 
   if (result.expiry_date || result.start_date || result.contract_number || result.document_number) {
-    const r = await col("contracts").insertOne({
-      document_id: documentId,
+    const contractFields = {
       client_id: clientId,
       contract_number: result.contract_number ?? result.document_number ?? null,
       contract_type: result.contract_type ?? result.document_type ?? null,
@@ -317,12 +311,17 @@ async function saveExtractionEntities(
           .join(", ") || null,
       summary: result.summary_hebrew ?? null,
       confidence: result.confidence ?? "medium",
-      status: "active",
-      created_at: new Date(),
       updated_at: new Date(),
-    } as any);
-
-    const contractId = r.insertedId.toString();
+    };
+    const upsertResult = await col("contracts").findOneAndUpdate(
+      { document_id: documentId },
+      {
+        $set: contractFields,
+        $setOnInsert: { document_id: documentId, status: "active", created_at: new Date() },
+      },
+      { upsert: true, returnDocument: "after" }
+    );
+    const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
     if (result.expiry_date) {
       await generateContractReminders(contractId, clientId, documentId, result.expiry_date);
     }
@@ -367,47 +366,18 @@ async function saveTemplateEntities(
 
   let clientId: string | null = null;
   if (displayName) {
-    const existing = await col("clients").findOne({
-      display_name: { $regex: new RegExp(`^${escapeRegex(displayName)}$`, "i") },
-    }) as any;
-
     const contactNote =
       clientCompany && contactPerson ? `איש קשר: ${contactPerson}` : null;
 
-    if (existing) {
-      clientId = existing._id.toString();
-      const mergedNotes =
-        contactNote && !(existing.notes ?? "").includes(contactNote)
-          ? [existing.notes, contactNote].filter(Boolean).join("\n")
-          : existing.notes;
-
-      await col("clients").updateOne(
-        { _id: existing._id },
-        {
-          $set: {
-            ...(getStr("contact_email") && !existing.email && { email: getStr("contact_email") }),
-            ...(getStr("contact_phone") && !existing.phone && { phone: getStr("contact_phone") }),
-            ...(getStr("client_address") && !existing.address && { address: getStr("client_address") }),
-            ...(getStr("client_id") && !existing.id_number && { id_number: getStr("client_id") }),
-            ...(mergedNotes !== existing.notes && { notes: mergedNotes }),
-            updated_at: new Date(),
-          },
-        }
-      );
-    } else {
-      const r = await col("clients").insertOne({
-        display_name: displayName,
-        entity_type: entityType,
-        id_number: getStr("client_id"),
-        email: getStr("contact_email"),
-        phone: getStr("contact_phone"),
-        address: getStr("client_address"),
-        notes: contactNote,
-        created_at: new Date(),
-        updated_at: new Date(),
-      } as any);
-      clientId = r.insertedId.toString();
-    }
+    clientId = await findOrCreateClient({
+      displayName,
+      entityType,
+      idNumber: getStr("client_id"),
+      email: getStr("contact_email"),
+      phone: getStr("contact_phone"),
+      address: getStr("client_address"),
+      notes: contactNote,
+    });
 
     await col("document_clients").updateOne(
       { document_id: documentId, client_id: clientId },
@@ -434,8 +404,7 @@ async function saveTemplateEntities(
   const expiryDate = template.expiry_field ? getStr(template.expiry_field) : null;
 
   if (docNumber || startDate || expiryDate) {
-    const r = await col("contracts").insertOne({
-      document_id: documentId,
+    const contractFields = {
       client_id: clientId,
       contract_number: docNumber,
       contract_type: template.name,
@@ -445,18 +414,170 @@ async function saveTemplateEntities(
       currency: getStr("currency") ?? "ILS",
       summary: getStr("findings") ?? getStr("notes") ?? getStr("summary_hebrew"),
       confidence: (getStr("_confidence") as "high" | "medium" | "low") ?? "medium",
-      status: "active",
-      created_at: new Date(),
       updated_at: new Date(),
-    } as any);
-
-    const contractId = r.insertedId.toString();
+    };
+    const upsertResult = await col("contracts").findOneAndUpdate(
+      { document_id: documentId },
+      {
+        $set: contractFields,
+        $setOnInsert: { document_id: documentId, status: "active", created_at: new Date() },
+      },
+      { upsert: true, returnDocument: "after" }
+    );
+    const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
     if (expiryDate) {
       await generateContractReminders(contractId, clientId, documentId, expiryDate);
     }
+  }
+
+  // Save equipment items extracted from inspection reports
+  const equipmentList = Array.isArray(f["_equipment"]) ? f["_equipment"] as any[] : [];
+  for (const eq of equipmentList) {
+    if (!eq || typeof eq !== "object") continue;
+    const name: string = (eq.name ?? eq.description ?? "").trim();
+    if (!name) continue;
+
+    // Match by serial_number if present (most reliable), otherwise by name
+    const matchFilter: Record<string, any> = eq.serial_number
+      ? { serial_number: String(eq.serial_number).trim() }
+      : { name };
+
+    const now = new Date();
+    await col("equipment").updateOne(
+      matchFilter,
+      {
+        $set: {
+          // Always refresh extracted fields so a re-scan enriches the record
+          name,
+          category: eq.category ?? "other",
+          ...(eq.manufacturer != null && { manufacturer: String(eq.manufacturer) }),
+          ...(eq.model != null && { model: String(eq.model) }),
+          ...(eq.serial_number != null && { serial_number: String(eq.serial_number).trim() }),
+          ...(eq.load_capacity_work != null && { capacity: String(eq.load_capacity_work) }),
+          ...(eq.load_capacity_test != null && { load_capacity_test: String(eq.load_capacity_test) }),
+          ...(eq.load_radius != null && { load_radius: String(eq.load_radius) }),
+          document_id: documentId,
+          ...(clientId != null && { client_id: clientId }),
+          updated_at: now,
+        },
+        $setOnInsert: {
+          description: null,
+          notes: null,
+          is_active: 1,
+          created_at: now,
+        },
+      },
+      { upsert: true }
+    );
+
+    console.log(`[importer] Equipment upserted: ${name} | SN: ${eq.serial_number ?? "—"} | ${eq.manufacturer ?? "?"} ${eq.model ?? ""}`);
   }
 }
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Normalise a company/person name for fuzzy dedup:
+// lower-case, collapse whitespace, strip common legal suffixes and punctuation
+function normaliseName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/["""''`״׳]/g, '"')   // normalise quote chars
+    .replace(/בע"מ|בע''מ|בעמ|ltd\.?|inc\.?|llc\.?/gi, "")
+    .replace(/[^\p{L}\p{N}]/gu, " ")  // non-letter/digit → space
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+interface ClientInput {
+  displayName: string;
+  entityType: "company" | "person";
+  idNumber?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+}
+
+/**
+ * Find an existing client by id_number, phone, or normalised name — in that
+ * priority order — then merge any new fields into it.  If no match is found,
+ * insert a new client.  Returns the client's _id as a string.
+ */
+async function findOrCreateClient(input: ClientInput): Promise<string> {
+  const { displayName, entityType, idNumber, email, phone, address, notes } = input;
+
+  let existing: any = null;
+
+  // 1. Strongest signal: government-issued id / company registration number
+  if (idNumber) {
+    existing = await col("clients").findOne({ id_number: idNumber }) as any;
+    if (existing) console.log(`[importer] Client matched by id_number: ${idNumber}`);
+  }
+
+  // 2. Phone (normalised — strip spaces and dashes)
+  if (!existing && phone) {
+    const normPhone = phone.replace(/[\s\-]/g, "");
+    existing = await col("clients").findOne({
+      phone: { $regex: new RegExp(escapeRegex(normPhone)) },
+    }) as any;
+    if (existing) console.log(`[importer] Client matched by phone: ${phone}`);
+  }
+
+  // 3. Exact name match (case-insensitive)
+  if (!existing) {
+    existing = await col("clients").findOne({
+      display_name: { $regex: new RegExp(`^${escapeRegex(displayName)}$`, "i") },
+    }) as any;
+    if (existing) console.log(`[importer] Client matched by exact name: ${displayName}`);
+  }
+
+  // 4. Normalised name match (strips bע"מ / punctuation)
+  if (!existing) {
+    const norm = normaliseName(displayName);
+    if (norm.length >= 3) {
+      const all = await col("clients").find({}).toArray() as any[];
+      existing = all.find((c: any) => normaliseName(c.display_name ?? "") === norm) ?? null;
+      if (existing) console.log(`[importer] Client matched by normalised name: "${norm}"`);
+    }
+  }
+
+  if (existing) {
+    const clientId = existing._id.toString();
+    const mergedNotes =
+      notes && !(existing.notes ?? "").includes(notes)
+        ? [existing.notes, notes].filter(Boolean).join("\n")
+        : existing.notes;
+
+    await col("clients").updateOne(
+      { _id: existing._id },
+      {
+        $set: {
+          ...(email && !existing.email && { email }),
+          ...(phone && !existing.phone && { phone }),
+          ...(address && !existing.address && { address }),
+          ...(idNumber && !existing.id_number && { id_number: idNumber }),
+          ...(mergedNotes !== existing.notes && { notes: mergedNotes }),
+          updated_at: new Date(),
+        },
+      }
+    );
+    return clientId;
+  }
+
+  // No match — create new
+  const r = await col("clients").insertOne({
+    display_name: displayName,
+    entity_type: entityType,
+    id_number: idNumber ?? null,
+    email: email ?? null,
+    phone: phone ?? null,
+    address: address ?? null,
+    notes: notes ?? null,
+    created_at: new Date(),
+    updated_at: new Date(),
+  } as any);
+  console.log(`[importer] Client created: ${displayName}`);
+  return r.insertedId.toString();
 }

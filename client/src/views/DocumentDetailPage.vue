@@ -1,100 +1,180 @@
 <template>
   <div v-if="doc">
-    <n-space align="center" style="margin-bottom: 16px">
+    <n-space align="center" style="margin-bottom: 20px">
       <n-button text @click="$router.back()">← חזרה</n-button>
       <n-h2 style="margin: 0">{{ doc.file_name }}</n-h2>
       <StatusBadge :status="doc.processing_status" />
     </n-space>
 
-    <n-alert
-      v-if="doc.error_message"
-      type="error"
-      title="שגיאה בעיבוד"
-      style="margin-bottom: 16px"
-    >
+    <n-alert v-if="doc.error_message" type="error" title="שגיאה בעיבוד" style="margin-bottom: 16px">
       {{ doc.error_message }}
     </n-alert>
 
-    <n-alert
-      v-else-if="doc.processing_status === 'done' && !extraction"
-      type="warning"
-      title="לא חולצו נתונים מהמסמך"
-      style="margin-bottom: 16px"
-    >
-      ייתכן שמפתח OpenAI חסר/שגוי בהגדרות, או שהטקסט במסמך לא היה זמין לחילוץ.
-    </n-alert>
-
     <n-grid :cols="2" :x-gap="24" :y-gap="16">
+      <!-- ── Document metadata ─────────────────────────────── -->
       <n-gi>
         <n-card title="פרטי מסמך">
           <n-descriptions :column="1" bordered>
             <n-descriptions-item label="סוג קובץ">{{ doc.mime_type }}</n-descriptions-item>
-            <n-descriptions-item label="גודל">{{ (doc.file_size_bytes / 1024).toFixed(1) }} KB</n-descriptions-item>
+            <n-descriptions-item label="גודל">{{ ((doc.file_size_bytes ?? 0) / 1024).toFixed(1) }} KB</n-descriptions-item>
             <n-descriptions-item label="תאריך ייבוא">{{ doc.import_date }}</n-descriptions-item>
             <n-descriptions-item v-if="doc.page_count" label="עמודים">{{ doc.page_count }}</n-descriptions-item>
+            <n-descriptions-item v-if="(doc as any).document_type" label="סוג מסמך">{{ (doc as any).document_type }}</n-descriptions-item>
           </n-descriptions>
         </n-card>
       </n-gi>
 
-      <n-gi v-if="extraction">
+      <!-- ── Extracted fields ─────────────────────────────── -->
+      <n-gi v-if="extractedFields.length">
         <n-card title="נתונים שחולצו (AI)">
           <n-descriptions :column="1" bordered>
-            <n-descriptions-item v-if="extraction.client_name" label="שם לקוח">{{ extraction.client_name }}</n-descriptions-item>
-            <n-descriptions-item v-if="extraction.contract_number" label="מספר חוזה">{{ extraction.contract_number }}</n-descriptions-item>
-            <n-descriptions-item v-if="extraction.start_date" label="תאריך התחלה">{{ extraction.start_date }}</n-descriptions-item>
-            <n-descriptions-item v-if="extraction.expiry_date" label="תאריך פקיעה">{{ extraction.expiry_date }}</n-descriptions-item>
-            <n-descriptions-item v-if="extraction.amount" label="סכום">{{ extraction.amount }} {{ extraction.currency }}</n-descriptions-item>
-            <n-descriptions-item v-if="extraction.summary_hebrew" label="תקציר">{{ extraction.summary_hebrew }}</n-descriptions-item>
-            <n-descriptions-item label="רמת ביטחון">{{ extraction.confidence }}</n-descriptions-item>
+            <n-descriptions-item v-for="f in extractedFields" :key="f.key" :label="f.label">
+              <span v-if="Array.isArray(f.value)">{{ f.value.join(', ') || '—' }}</span>
+              <span v-else-if="f.value && typeof f.value === 'object'">{{ JSON.stringify(f.value) }}</span>
+              <span v-else>{{ f.value ?? '—' }}</span>
+            </n-descriptions-item>
           </n-descriptions>
         </n-card>
       </n-gi>
 
-      <n-gi :span="2" v-if="doc.raw_text">
+      <!-- ── Equipment table (inspection reports) ─────────── -->
+      <n-gi :span="2" v-if="equipment.length">
+        <n-card title="ציוד שנבדק">
+          <n-data-table
+            :columns="equipmentColumns"
+            :data="equipment"
+            size="small"
+            :pagination="false"
+          />
+        </n-card>
+      </n-gi>
+
+      <!-- ── Raw text ──────────────────────────────────────── -->
+      <n-gi :span="2" v-if="displayText">
         <n-card title="טקסט גולמי" :segmented="{ content: true }">
-          <n-scrollbar style="max-height: 300px">
-            <pre style="white-space: pre-wrap; direction: rtl; font-size: 13px">{{ doc.raw_text }}</pre>
+          <template #header-extra>
+            <n-tag size="small" type="info">{{ displayText.length.toLocaleString() }} תווים</n-tag>
+          </template>
+          <n-scrollbar style="max-height: 500px">
+            <pre style="white-space: pre-wrap; direction: rtl; font-size: 12px; line-height: 1.6; font-family: inherit">{{ displayText }}</pre>
           </n-scrollbar>
         </n-card>
       </n-gi>
     </n-grid>
   </div>
-  <n-spin v-else :show="loading" />
+  <n-spin v-else :show="loading" style="padding: 80px; display: flex; justify-content: center" />
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed } from "vue";
+import { onMounted, ref, computed, h } from "vue";
 import { useRoute } from "vue-router";
 import {
   NH2, NSpace, NButton, NGrid, NGi, NCard, NDescriptions, NDescriptionsItem,
-  NSpin, NScrollbar, NAlert,
+  NSpin, NScrollbar, NAlert, NDataTable, NTag,
 } from "naive-ui";
 import { api } from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type { Document, ExtractionResult } from "@shared/types.js";
+import type { Document } from "@shared/types.js";
 
 const route = useRoute();
 const doc = ref<Document | null>(null);
-const extractions = ref<{ result_json: string; parsed_ok: number }[]>([]);
+const extractionRaw = ref<Record<string, any> | null>(null);
+const extractionRawText = ref<string | null>(null);
 const loading = ref(true);
 
-const extraction = computed<ExtractionResult | null>(() => {
-  const e = extractions.value.find((x) => x.parsed_ok);
-  if (!e) return null;
-  try { return JSON.parse(e.result_json); } catch { return null; }
+// Friendly Hebrew labels for common generic-extraction keys
+const LABEL_MAP: Record<string, string> = {
+  client_name: "איש קשר",
+  client_company: "חברה",
+  client_id: "ח.פ / ת.ז",
+  client_email: "אימייל",
+  client_phone: "טלפון",
+  client_address: "כתובת",
+  document_type: "סוג מסמך",
+  document_number: "מספר מסמך",
+  report_number: "מספר תסקיר",
+  contract_number: "מספר חוזה",
+  contract_type: "סוג חוזה",
+  invoice_number: "מספר חשבונית",
+  start_date: "תאריך התחלה",
+  inspection_date: "תאריך בדיקה",
+  issue_date: "תאריך הוצאה",
+  expiry_date: "תאריך תפוגה",
+  next_inspection_date: "בדיקה הבאה",
+  payment_due_date: "תאריך לתשלום",
+  amount: "סכום",
+  currency: "מטבע",
+  vat_amount: 'סכום מע"מ',
+  equipment_type: "סוג ציוד",
+  manufacturer: "יצרן",
+  model: "דגם",
+  serial_number: "מספר סידורי",
+  load_capacity: 'כושר עמיסה',
+  findings: "ממצאים",
+  notes: "הערות",
+  summary_hebrew: "תקציר",
+  auto_renewal: "חידוש אוטומטי",
+  counterparty: "צד שכנגד",
+  confidence: "רמת ביטחון",
+  _confidence: "רמת ביטחון",
+};
+
+const SKIP_KEYS = new Set(["_equipment", "parties", "tasks"]);
+
+const extractedFields = computed(() => {
+  const raw = extractionRaw.value;
+  if (!raw) return [];
+  return Object.entries(raw)
+    .filter(([k, v]) => !SKIP_KEYS.has(k) && v !== null && v !== "" && v !== undefined)
+    .map(([k, v]) => ({ key: k, label: LABEL_MAP[k] ?? k, value: v }));
 });
 
+const displayText = computed(() => extractionRawText.value ?? doc.value?.raw_text ?? null);
+
+const equipment = computed<any[]>(() => {
+  const raw = extractionRaw.value;
+  if (!raw || !Array.isArray(raw._equipment)) return [];
+  return raw._equipment.filter((e: any) => e && e.name);
+});
+
+const equipmentColumns = [
+  { title: "תיאור", key: "name", ellipsis: true },
+  { title: "יצרן", key: "manufacturer", width: 110 },
+  { title: "דגם", key: "model", width: 120 },
+  { title: "מ\"ס סידורי", key: "serial_number", width: 130 },
+  { title: 'עומס עבודה', key: "load_capacity_work", width: 110 },
+  { title: 'עומס מבחן', key: "load_capacity_test", width: 110 },
+  { title: "רדיוס", key: "load_radius", width: 80 },
+];
+
 onMounted(async () => {
-  const id = Number(route.params.id);
-  [doc.value, extractions.value] = await Promise.all([
-    api.documents.get(id),
-    api.documents.list({ limit: 1 }).then(() => [] as typeof extractions.value), // placeholder
-  ]);
-  // fetch extractions
+  const id = route.params.id as string;
   try {
-    const res = await fetch(`/api/documents/${id}/extractions`).then((r) => r.json());
-    extractions.value = Array.isArray(res) ? res : [];
-  } catch {}
-  loading.value = false;
+    doc.value = await api.documents.get(id);
+
+    // Try to get extraction — prefer template extraction (__tpl), fall back to generic
+    const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+    const rows = await fetch(`${SERVER}/api/documents/${id}/extractions`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : [])
+      .catch(() => []);
+
+    if (Array.isArray(rows) && rows.length) {
+      // Prefer the most recent successful extraction
+      const best = rows.find((r: any) => r.parsed_ok && r.result_json) ?? rows[0];
+      if (best?.result_json) {
+        try { extractionRaw.value = JSON.parse(best.result_json); } catch {}
+      }
+      if (best?.raw_text) {
+        extractionRawText.value = best.raw_text;
+      }
+    }
+
+    // Also check the document's own extracted_fields (stored during processing)
+    if (!extractionRaw.value && (doc.value as any).extracted_fields) {
+      try { extractionRaw.value = JSON.parse((doc.value as any).extracted_fields); } catch {}
+    }
+  } finally {
+    loading.value = false;
+  }
 });
 </script>

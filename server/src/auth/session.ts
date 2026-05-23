@@ -1,3 +1,4 @@
+import { ObjectId } from "mongodb";
 import { getDb } from "../db/db";
 import type { User } from "../../src/shared/types.js";
 
@@ -19,9 +20,11 @@ export async function createSession(
   });
 
   const secure = process.env.NODE_ENV === "production";
+  // SameSite=None required for cross-origin (Vercel client → Railway server)
+  const sameSite = secure ? "None" : "Lax";
   const setCookieHeader = `session=${sessionId}; Path=/; HttpOnly; ${
     secure ? "Secure; " : ""
-  }SameSite=Lax; Max-Age=604800`;
+  }SameSite=${sameSite}; Max-Age=604800`;
 
   return { sessionId, cookies: setCookieHeader };
 }
@@ -35,7 +38,7 @@ export async function verifySession(sessionId: string): Promise<User | null> {
 
   if (!session) return null;
 
-  const user = await db.collection("users").findOne({ _id: session.user_id as any }) as any;
+  const user = await db.collection("users").findOne({ _id: new ObjectId(session.user_id as string) }) as any;
   if (!user) return null;
 
   return {

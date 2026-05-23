@@ -64,6 +64,8 @@ async function applyIndexes(db: Db): Promise<void> {
   // users
   await db.collection("users").createIndex({ google_sub: 1 }, { unique: true, sparse: true });
   await db.collection("users").createIndex({ email: 1 }, { unique: true, sparse: true });
+  await db.collection("users").createIndex({ verification_token: 1 }, { sparse: true });
+  await db.collection("users").createIndex({ reset_token: 1 }, { sparse: true });
 
   // sessions
   await db.collection("sessions").createIndex({ user_id: 1 });
@@ -98,7 +100,12 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("contracts").createIndex({ user_id: 1 });
   await db.collection("contracts").createIndex({ expiry_date: 1 });
   await db.collection("contracts").createIndex({ status: 1 });
-  await db.collection("contracts").createIndex({ document_id: 1 });
+  // Drop old non-unique document_id index if present, then recreate as unique+sparse
+  try { await db.collection("contracts").dropIndex("document_id_1"); } catch { /* didn't exist */ }
+  await db.collection("contracts").createIndex(
+    { document_id: 1 },
+    { unique: true, sparse: true }
+  );
   await db.collection("contracts").createIndex({ client_id: 1 });
 
   // reminders
@@ -126,13 +133,17 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("email_log").createIndex({ reminder_id: 1 });
   await db.collection("email_log").createIndex({ sent_at: -1 });
 
-  // equipment
+  // equipment — drop old unique(name,category) if present, replace with serial_number
+  try { await db.collection("equipment").dropIndex("name_1_category_1"); } catch { /* didn't exist */ }
   await db.collection("equipment").createIndex({ category: 1 });
+  await db.collection("equipment").createIndex({ name: 1 });
   await db.collection("equipment").createIndex(
-    { name: 1, category: 1 },
-    { unique: true }
+    { serial_number: 1 },
+    { unique: true, sparse: true }
   );
   await db.collection("equipment").createIndex({ is_active: 1 });
+  await db.collection("equipment").createIndex({ document_id: 1 });
+  await db.collection("equipment").createIndex({ client_id: 1 });
 
   // doc_templates
   await db.collection("doc_templates").createIndex({ name: 1 }, { unique: true });

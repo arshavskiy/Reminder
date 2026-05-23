@@ -34,6 +34,31 @@ export function buildPromptForTemplate(tpl: DocTemplate): string {
     ? `\nIMPORTANT: the field "${tpl.expiry_field}" represents the FUTURE DATE the user must be reminded about. Always pick the next-action date, NOT the issue date.`
     : "";
 
+  const isInspectionTemplate = tpl.match_keywords.some((k) =>
+    ["תסקיר", "בדיקה תקופתית", "בדיקה", "ציוד הרמה", "פקודת הבטיחות"].includes(k)
+  );
+  const equipmentSection = isInspectionTemplate
+    ? `\n  "_equipment": [   // Extract EVERY equipment row from the inspection table — one object per row
+    {
+      "name": string,                   // תיאור — full description text of the equipment item
+      "manufacturer": string | null,    // יצרן
+      "model": string | null,           // דגם
+      "serial_number": string | null,   // מספר סידורי (מס' סידורי)
+      "load_capacity_work": string | null,  // עומס עבודה בטוח (ק"ג) — safe working load, include units e.g. "3200 ק\"ג"
+      "load_capacity_test": string | null,  // עומס מבחן (ק"ג) — test load, include units
+      "load_radius": string | null,         // רדיוס עומס (מטר) — load radius if present
+      "category": "lift" | "accessory" | "scaffold" | "ladder" | "balloon" | "intake" | "extractor" | "other"
+      // category guidance:
+      //   lift        → מגבה, מעלית, גיטרה, מנוף, עגורן
+      //   accessory   → אביזר הרמה, ווי, גלגלת, שרשרת
+      //   scaffold    → פיגום, דפנה
+      //   ladder      → סולם
+      //   balloon     → מעלון, מרים
+      //   other       → anything else
+    }
+  ]  // IMPORTANT: if the document contains a table of equipment, extract ALL rows. Empty array only if truly no equipment.`
+    : "";
+
   return `You are a document intelligence assistant specializing in Hebrew business documents.
 The user has defined a template called "${tpl.name}". Extract structured information
 from the provided document text and return ONLY ONE valid JSON object whose keys
@@ -49,7 +74,7 @@ ${expiryNote}
 
 JSON schema:
 {
-${fieldLines},
+${fieldLines},${equipmentSection}
   "_confidence": "high" | "medium" | "low"   // your own confidence in the extraction
 }`;
 }

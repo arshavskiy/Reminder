@@ -27,11 +27,39 @@
       <n-tab-pane name="docs" tab="מסמכים">
         <n-list v-if="store.activeDocuments.length">
           <n-list-item v-for="doc in store.activeDocuments" :key="doc.id">
-            <router-link :to="`/documents/${doc.id}`">{{ doc.file_name }}</router-link>
-            <StatusBadge :status="doc.processing_status" style="margin-right: 8px" />
+            <div style="display:flex;align-items:center;gap:8px">
+              <router-link :to="`/documents/${doc.id}`">{{ doc.file_name }}</router-link>
+              <StatusBadge :status="doc.processing_status" />
+              <span style="font-size:12px;color:#888">{{ formatDate(doc.import_date) }}</span>
+            </div>
           </n-list-item>
         </n-list>
         <n-empty v-else description="אין מסמכים" />
+      </n-tab-pane>
+
+      <n-tab-pane name="equipment" tab="ציוד">
+        <n-spin :show="loadingEquipment">
+          <n-list v-if="equipment.length">
+            <n-list-item v-for="eq in equipment" :key="eq.id">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="flex:1">
+                  <strong style="font-size:14px">{{ eq.name }}</strong>
+                  <span style="font-size:11px;color:#888;margin-right:8px">{{ categoryLabel(eq.category) }}</span>
+                  <div style="font-size:12px;color:#aaa;margin-top:2px">
+                    <span v-if="eq.manufacturer">יצרן: {{ eq.manufacturer }}</span>
+                    <span v-if="eq.model" style="margin-right:8px">דגם: {{ eq.model }}</span>
+                    <span v-if="eq.serial_number" style="margin-right:8px">מ"ס: {{ eq.serial_number }}</span>
+                    <span v-if="eq.capacity" style="margin-right:8px">עומס: {{ eq.capacity }}</span>
+                  </div>
+                </div>
+                <router-link v-if="eq.document_id" :to="`/documents/${eq.document_id}`" style="font-size:12px;color:var(--brand-color)">
+                  {{ eq.document_name || 'מסמך מקור' }}
+                </router-link>
+              </div>
+            </n-list-item>
+          </n-list>
+          <n-empty v-else description="אין ציוד משויך ללקוח זה" />
+        </n-spin>
       </n-tab-pane>
 
       <n-tab-pane name="timeline" tab="ציר זמן">
@@ -77,8 +105,9 @@ import {
   NModal, NForm, NFormItem, NInput, useMessage,
 } from "naive-ui";
 import { useClientsStore } from "../stores/clients.js";
+import { api } from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type { EventType } from "@shared/types.js";
+import type { EventType, Equipment, EquipmentCategory } from "@shared/types.js";
 
 const route = useRoute();
 const store = useClientsStore();
@@ -87,6 +116,20 @@ const message = useMessage();
 const showEdit = ref(false);
 const saving = ref(false);
 const editForm = ref<{ display_name: string; email: string; phone: string; notes: string } | null>(null);
+const equipment = ref<Equipment[]>([]);
+const loadingEquipment = ref(false);
+
+const CATEGORY_LABELS: Record<string, string> = {
+  lift: "מכונות הרמה", accessory: "אביזרי הרמה", scaffold: "פיגומים",
+  ladder: "מעליות", balloon: "מעלונים", intake: "קולטי אוויר",
+  extractor: "קולטי קיטור", other: "אחר",
+};
+function categoryLabel(c: string) { return CATEGORY_LABELS[c] ?? c; }
+
+function formatDate(d: string) {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString("he-IL");
+}
 
 watch(showEdit, (open) => {
   if (open && store.active) {
@@ -121,5 +164,18 @@ function eventType(type: EventType): "default" | "success" | "warning" | "info" 
   return "default";
 }
 
-onMounted(() => store.fetchOne(Number(route.params.id)));
+async function loadEquipment(clientId: string) {
+  loadingEquipment.value = true;
+  try {
+    equipment.value = await api.equipment.list({ client_id: clientId });
+  } finally {
+    loadingEquipment.value = false;
+  }
+}
+
+onMounted(() => {
+  const id = route.params.id as string;
+  store.fetchOne(id);
+  loadEquipment(id);
+});
 </script>

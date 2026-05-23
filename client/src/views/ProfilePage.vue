@@ -63,7 +63,7 @@
             <n-grid :cols="2" :x-gap="16">
               <n-gi>
                 <n-form-item label="שם שולח אימייל">
-                  <n-input v-model:value="userSettings.email_from_name" placeholder="לדוגמה: תזכורת לקוח" />
+                  <n-input v-model:value="userSettings.email_from_name" placeholder="לדוגמה:  ReminderOCR " />
                 </n-form-item>
               </n-gi>
 
@@ -209,9 +209,8 @@ function resetSettings() {
 async function disconnectAllSessions() {
   disconnecting.value = true;
   try {
-    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
     message.success('התנתקת מכל המכשירים');
-    authStore.logout();
+    await authStore.logout();
   } catch {
     message.error('שגיאה בהתנתקה');
   } finally {

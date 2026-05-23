@@ -10,7 +10,7 @@
               <div class="appbar__logo">
                 <n-icon :component="BriefcaseOutline" :size="22" />
               </div>
-              <span class="appbar__brand-text">תזכורת לקוח</span>
+              <span class="appbar__brand-text"> ReminderOCR </span>
             </div>
 
             <!-- Center nav -->
@@ -136,6 +136,7 @@ watch(isDark, (dark) => {
 // primary bar to keep it sparse (matches the spec which shows ~6 items).
 const primaryNav = [
   { label: "לוח בקרה",        key: "dashboard" },
+  { label: "מסמכים",           key: "documents" },
   { label: "ניהול תסקירים",   key: "contracts" },   // route stays /contracts (handles both)
   { label: "לקוחות",           key: "clients" },
   { label: "הגדרת ציוד",       key: "equipment" },

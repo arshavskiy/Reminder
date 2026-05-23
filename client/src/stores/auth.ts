@@ -1,6 +1,5 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import type { User } from "../../src/shared/types.js";
 
 interface AuthUser {
   id: number;
@@ -10,19 +9,41 @@ interface AuthUser {
   role: "admin" | "user";
 }
 
+const STORAGE_KEY = "auth_user";
+const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+
+function loadCached(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCache(user: AuthUser | null) {
+  if (user) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+}
+
 export const useAuthStore = defineStore("auth", () => {
-  const user = ref<AuthUser | null>(null);
+  // Restore from cache immediately — avoids redirect-to-login on refresh
+  const user = ref<AuthUser | null>(loadCached());
   const loading = ref(false);
   const initialized = ref(false);
 
   async function fetchMe() {
     loading.value = true;
     try {
-      const res = await fetch("/auth/me", { credentials: "include" });
+      const res = await fetch(`${SERVER}/api/auth/me`, { credentials: "include" });
       const data = await res.json() as { user: AuthUser | null };
       user.value = data.user;
+      saveCache(data.user);
     } catch {
-      user.value = null;
+      // Network error — keep cached user so app stays usable offline
     } finally {
       loading.value = false;
       initialized.value = true;
@@ -31,16 +52,23 @@ export const useAuthStore = defineStore("auth", () => {
 
   async function logout() {
     try {
-      await fetch("/auth/logout", { method: "POST", credentials: "include" });
+      await fetch(`${SERVER}/api/auth/logout`, { method: "POST", credentials: "include" });
     } finally {
       user.value = null;
+      saveCache(null);
       window.location.href = "/#/login";
     }
   }
 
   function loginWithGoogle() {
-    window.location.href = "/auth/google";
+    window.location.href = `${SERVER}/auth/google`;
   }
 
-  return { user, loading, initialized, fetchMe, logout, loginWithGoogle };
+  function setUser(u: AuthUser) {
+    user.value = u;
+    saveCache(u);
+    initialized.value = true;
+  }
+
+  return { user, loading, initialized, fetchMe, logout, loginWithGoogle, setUser };
 });

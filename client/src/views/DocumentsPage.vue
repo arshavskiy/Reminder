@@ -1,7 +1,7 @@
 <template>
   <div>
     <n-space justify="space-between" align="center" style="margin-bottom: 16px">
-<!--      <n-h2 style="margin: 0">מסמכים</n-h2>-->
+      <n-h2 style="margin: 0">מסמכים</n-h2>
       <n-space>
         <!-- Hidden file input — triggered by the button below -->
         <input
@@ -14,6 +14,8 @@
         />
         <n-button @click="fileInput?.click()" :loading="uploading">📂 בחר קבצים</n-button>
         <n-button type="primary" @click="showImport = true">+ נתיב שרת</n-button>
+        <n-button type="warning" :loading="rescanning" @click="doRescan">↻ סריקה מחדש</n-button>
+        <n-button type="error" :loading="deletingCorrupt" @click="doDeleteCorrupt">🗑 מחק פגומים</n-button>
       </n-space>
     </n-space>
 
@@ -66,6 +68,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref, h } from "vue";
+const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 import { useRouter } from "vue-router";
 import { NH2, NSpace, NButton, NDataTable, NModal, NInput, NAlert, useMessage } from "naive-ui";
 import { useDocumentsStore } from "../stores/documents.js";
@@ -84,6 +87,8 @@ const importing = ref(false);
 const uploading = ref(false);
 const isDragging = ref(false);
 const queuedCount = ref(0);
+const rescanning = ref(false);
+const deletingCorrupt = ref(false);
 
 onMounted(() => store.fetch());
 
@@ -132,6 +137,45 @@ async function doImportPath() {
     message.error(String(e));
   } finally {
     importing.value = false;
+  }
+}
+
+// ── Rescan corrupt documents ──────────────────────────────────────────────────
+async function doRescan() {
+  rescanning.value = true;
+  try {
+    const res = await fetch(`${SERVER}/api/documents/rescan`, { method: "POST", credentials: "include" });
+    const data = await res.json() as { queued: number };
+    if (data.queued === 0) {
+      message.info("אין מסמכים שגויים לסריקה מחדש");
+    } else {
+      message.success(`${data.queued} מסמכים נשלחו לסריקה מחדש`);
+      queuedCount.value += data.queued;
+    }
+    await store.fetch();
+  } catch {
+    message.error("שגיאה בסריקה מחדש");
+  } finally {
+    rescanning.value = false;
+  }
+}
+
+// ── Delete corrupt documents ──────────────────────────────────────────────────
+async function doDeleteCorrupt() {
+  deletingCorrupt.value = true;
+  try {
+    const res = await fetch(`${SERVER}/api/documents/corrupt`, { method: "DELETE", credentials: "include" });
+    const data = await res.json() as { deleted: number };
+    if (data.deleted === 0) {
+      message.info("אין מסמכים פגומים למחיקה");
+    } else {
+      message.success(`${data.deleted} מסמכים פגומים נמחקו`);
+    }
+    await store.fetch();
+  } catch {
+    message.error("שגיאה במחיקת מסמכים פגומים");
+  } finally {
+    deletingCorrupt.value = false;
   }
 }
 

@@ -5,15 +5,18 @@ import { onMounted, onUnmounted } from "vue";
 import { useMessage } from "naive-ui";
 import { useDocumentsStore } from "../stores/documents.js";
 import { useRemindersStore } from "../stores/reminders.js";
+import { useAuthStore } from "../stores/auth.js";
 
 const message = useMessage();
 const docsStore = useDocumentsStore();
 const remindersStore = useRemindersStore();
+const authStore = useAuthStore();
 
 let prevDocStatuses: Record<string, string> = {};
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function poll() {
+  if (!authStore.user) return;
   try {
     // Check for document status changes
     await docsStore.fetch();
@@ -29,8 +32,8 @@ async function poll() {
       prevDocStatuses[doc.id] = doc.processing_status;
     }
 
-    // Check for fired reminders
-    await remindersStore.fetch({ status: "sent" });
+    // Refresh all reminders
+    await remindersStore.fetch();
   } catch {
     // silent — server may be temporarily unreachable
   }
@@ -38,7 +41,7 @@ async function poll() {
 
 onMounted(() => {
   poll();
-  pollTimer = setInterval(poll, 5000);
+  pollTimer = setInterval(poll, 15 * 60 * 1000);
 });
 
 onUnmounted(() => {

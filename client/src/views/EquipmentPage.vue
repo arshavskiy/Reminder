@@ -28,7 +28,12 @@
           <h2 class="subhead__title">ניהול ציוד</h2>
           <p class="subhead__sub">נהל את רשימת הציוד שלך והצהרות הבטיחות המשויכות</p>
         </div>
-        <button class="btn btn--primary" @click="openCreate">+ הוספת ציוד חדש</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn--ghost" :disabled="backfilling" @click="backfill">
+            {{ backfilling ? 'מקשר...' : 'קשר לתיקים' }}
+          </button>
+          <button class="btn btn--primary" @click="openCreate">+ הוספת ציוד חדש</button>
+        </div>
       </div>
 
       <input
@@ -64,12 +69,21 @@
               <div class="row__title-line">
                 <strong class="row__name">{{ r.name }}</strong>
                 <span class="row__tag">{{ categoryLabel(r.category) }}</span>
+                <span v-if="r.client_name" class="row__client">{{ r.client_name }}</span>
               </div>
               <p v-if="r.description" class="row__desc">{{ r.description }}</p>
-              <p v-if="r.manufacturer || r.model || r.capacity" class="row__meta">
+              <p class="row__meta">
                 <span v-if="r.manufacturer">יצרן: {{ r.manufacturer }}</span>
                 <span v-if="r.model">דגם: {{ r.model }}</span>
-                <span v-if="r.capacity">קיבולת: {{ r.capacity }}</span>
+                <span v-if="r.serial_number">מ"ס: {{ r.serial_number }}</span>
+                <span v-if="r.capacity">עומס עבודה: {{ r.capacity }}</span>
+                <span v-if="r.load_capacity_test">עומס מבחן: {{ r.load_capacity_test }}</span>
+                <span v-if="r.load_radius">רדיוס: {{ r.load_radius }}</span>
+              </p>
+              <p v-if="r.document_id" class="row__doc">
+                <router-link :to="`/documents/${r.document_id}`" class="row__doc-link">
+                  {{ r.document_name || r.document_id }}
+                </router-link>
               </p>
             </div>
             <div class="row__actions">
@@ -114,15 +128,42 @@
                 <n-input v-model:value="editing.model" />
               </n-form-item>
             </n-gi>
+            <n-gi :span="2">
+              <n-form-item label="מספר סידורי">
+                <n-input v-model:value="editing.serial_number" placeholder="לדוגמה: K-G1235JXS" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label='עומס עבודה בטוח (ק"ג)'>
+                <n-input v-model:value="editing.capacity" placeholder='3200 ק"ג' />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label='עומס מבחן (ק"ג)'>
+                <n-input v-model:value="(editing as any).load_capacity_test" placeholder='2200 ק"ג' />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="רדיוס עומס (מטר)">
+                <n-input v-model:value="(editing as any).load_radius" placeholder="--" />
+              </n-form-item>
+            </n-gi>
           </n-grid>
-          <n-form-item label="קיבולת / כושר הרמה">
-            <n-input v-model:value="editing.capacity" placeholder='למשל: 25–35 טון' />
-          </n-form-item>
           <n-form-item label="תיאור">
             <n-input v-model:value="editing.description" type="textarea" :rows="3" />
           </n-form-item>
           <n-form-item label="הערות פנימיות">
             <n-input v-model:value="editing.notes" type="textarea" :rows="2" />
+          </n-form-item>
+          <n-form-item label="לקוח משויך">
+            <n-select
+              v-model:value="(editing as any).client_id"
+              :options="clientOptions"
+              placeholder="בחר לקוח..."
+              clearable
+              filterable
+              :virtual-scroll="false"
+            />
           </n-form-item>
         </n-form>
         <template #footer>
@@ -143,12 +184,14 @@ import {
   NIcon, NSpin, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NSelect,
   NGrid, NGi, NSpace, NButton, useMessage,
 } from "naive-ui";
+import type { SelectOption } from "naive-ui";
 import {
   ConstructOutline, LayersOutline, BusinessOutline, DocumentTextOutline,
   CubeOutline, GitBranchOutline, BuildOutline, AirplaneOutline,
 } from "@vicons/ionicons5";
+import { RouterLink } from "vue-router";
 import { api } from "../services/apiService.js";
-import type { Equipment, EquipmentCategory } from "@shared/types.js";
+import type { Equipment, EquipmentCategory, Client } from "@shared/types.js";
 
 const message = useMessage();
 
@@ -188,11 +231,17 @@ const categoryOptions = categories
 
 const rows = ref<Equipment[]>([]);
 const stats = ref<Record<string, number>>({});
+const clients = ref<Client[]>([]);
 const loading = ref(false);
 const search = ref("");
 const showEdit = ref(false);
 const editing = ref<Partial<Equipment> | null>(null);
 const saving = ref(false);
+const backfilling = ref(false);
+
+const clientOptions = computed<SelectOption[]>(() =>
+  clients.value.map((c) => ({ label: c.display_name, value: c.id.toString() }))
+);
 
 function categoryLabel(c: string): string {
   return categories.find((x) => x.value === c)?.label ?? c;
@@ -221,15 +270,17 @@ function debouncedLoad() {
 async function load() {
   loading.value = true;
   try {
-    const [list, st] = await Promise.all([
+    const [list, st, cl] = await Promise.all([
       api.equipment.list({
         category: category.value === "all" ? undefined : category.value,
         q: search.value || undefined,
       }),
       api.equipment.stats(),
+      api.clients.list({ limit: 500 }),
     ]);
     rows.value = list;
     stats.value = st;
+    clients.value = cl.rows;
   } finally {
     loading.value = false;
   }
@@ -278,6 +329,20 @@ async function save() {
     message.error(String(e));
   } finally {
     saving.value = false;
+  }
+}
+
+async function backfill() {
+  backfilling.value = true;
+  try {
+    const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+    const r = await fetch(`${SERVER}/api/equipment/backfill`, { method: "POST", credentials: "include" }).then(x => x.json());
+    message.success(`קושרו ${r.patched} פריטים`);
+    await load();
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    backfilling.value = false;
   }
 }
 
@@ -484,6 +549,25 @@ html[data-theme="light"] .row__tag { background: rgba(24, 160, 88, 0.10); }
   text-overflow: ellipsis;
 }
 .row__meta span + span::before { content: "·"; margin: 0 6px; color: var(--text-muted); }
+
+.row__client {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.row__doc {
+  font-size: 12px;
+  margin: 3px 0 0;
+}
+.row__doc-link {
+  color: var(--brand-color);
+  text-decoration: none;
+}
+.row__doc-link:hover { text-decoration: underline; }
 
 .row__actions { display: flex; gap: 6px; flex-shrink: 0; }
 

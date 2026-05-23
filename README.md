@@ -1,4 +1,4 @@
-# תזכורת לקוח — Client Reminder
+#  ReminderOCR  — Client Reminder
 
 A Hebrew-first document intelligence and contract reminder platform. Upload PDFs, Word docs, and images — the app extracts client details, contract dates, and expiry information using OCR + AI, then sends scheduled reminder emails before contracts expire.
 

@@ -23,7 +23,7 @@ export const useClientsStore = defineStore("clients", () => {
     }
   }
 
-  async function fetchOne(id: number) {
+  async function fetchOne(id: string) {
     loading.value = true;
     try {
       [active.value, activeDocuments.value, activeTimeline.value] = await Promise.all([
@@ -43,7 +43,7 @@ export const useClientsStore = defineStore("clients", () => {
     return created;
   }
 
-  async function update(id: number, body: Partial<Client>) {
+  async function update(id: string, body: Partial<Client>) {
     const updated = await api.clients.update(id, body);
     const idx = rows.value.findIndex((c) => c.id === id);
     if (idx !== -1) rows.value[idx] = updated;
@@ -51,7 +51,7 @@ export const useClientsStore = defineStore("clients", () => {
     return updated;
   }
 
-  async function remove(id: number) {
+  async function remove(id: string) {
     await api.clients.delete(id);
     rows.value = rows.value.filter((c) => c.id !== id);
     total.value--;

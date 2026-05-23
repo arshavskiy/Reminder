@@ -1,11 +1,14 @@
 import "dotenv/config";
 import express from "express";
+import cors from "cors";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { existsSync, watch } from "fs";
 import { connectDb } from "./db/db";
 import { loadSettings } from "./settings";
 import { startScheduler } from "./reminders/scheduler";
+import { seedBuiltinTemplates } from "./templates/seedTemplates";
+import { seedDefaultEmailTemplate } from "./templates/seedEmailTemplates";
 import { registerDocumentRoutes } from "./routes/documents";
 import { registerClientRoutes } from "./routes/clients";
 import { registerContractRoutes } from "./routes/contracts";
@@ -20,11 +23,27 @@ import { registerEquipmentRoutes } from "./routes/equipment";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserSettingsRoutes } from "./routes/userSettings";
 import { importFile } from "./pipeline/importer";
+import { shouldScanFile, scanFileForKeys, applyScannedKeys, scanWatchFolder } from "./pipeline/keyScanner";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express();
+
+// CORS — allow Vercel frontend and local dev
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : ["http://localhost:5173", "http://localhost:4173"];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow server-to-server (no origin) and listed origins
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+}));
+
 app.use(express.json({ limit: "50mb" }));
 
 // Register all route modules
@@ -55,6 +74,8 @@ if (process.env.NODE_ENV === "production" && existsSync(STATIC_DIR)) {
 async function main() {
   const settings = loadSettings();
   await connectDb();
+  await seedBuiltinTemplates();
+  await seedDefaultEmailTemplate();
 
   app.listen(settings.port, () => {
     console.log(`[server] Running at http://localhost:${settings.port}`);
@@ -63,6 +84,9 @@ async function main() {
 
   startScheduler();
   startWatchFolder();
+
+  // Scan watch folder for dropped credential files on startup
+  scanWatchFolder();
 }
 
 main().catch((err) => {
@@ -86,10 +110,26 @@ function startWatchFolder() {
 
   watch(s.watchFolder, { persistent: true }, (event, filename) => {
     if (!filename) return;
+    const filePath = join(s.watchFolder, filename);
     const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+
+    // Credential file dropped — scan and apply keys
+    if (shouldScanFile(filePath)) {
+      clearTimeout(pending.get(filename));
+      pending.set(filename, setTimeout(() => {
+        pending.delete(filename);
+        if (!existsSync(filePath)) return;
+        console.log(`[watch] Credential file detected: ${filename}`);
+        const result = scanFileForKeys(filePath);
+        if (result.found.length > 0) {
+          applyScannedKeys([result]);
+        }
+      }, 1000));
+      return;
+    }
+
     if (!SUPPORTED_EXTS.has(ext)) return;
 
-    const filePath = join(s.watchFolder, filename);
     clearTimeout(pending.get(filename));
     pending.set(filename, setTimeout(async () => {
       pending.delete(filename);

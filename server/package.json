@@ -6,10 +6,18 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node --import tsx/esm src/index.ts",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1053.0",
+    "@aws-sdk/s3-request-presigner": "^3.1053.0",
     "@hebcal/core": "^5.9.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
     "date-fns": "^3.6.0",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
@@ -29,6 +37,7 @@
     "@types/nodemailer": "^6.4.15",
     "@types/pdf-parse": "^1.1.4",
     "tsx": "^4.16.2",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.4"
   }
 }

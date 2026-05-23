@@ -6,10 +6,11 @@ import type {
   DocTemplate, EmailTemplate, Equipment,
 } from "../../src/shared/types.js";
 
-const BASE = "/api";
+const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+const BASE = `${SERVER}/api`;
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(BASE + path);
+  const res = await fetch(BASE + path, { credentials: "include" });
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -18,6 +19,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(BASE + path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
@@ -28,6 +30,7 @@ async function put<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(BASE + path, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`);
@@ -35,7 +38,7 @@ async function put<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function del(path: string): Promise<void> {
-  const res = await fetch(BASE + path, { method: "DELETE" });
+  const res = await fetch(BASE + path, { method: "DELETE", credentials: "include" });
   if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`);
 }
 
@@ -64,39 +67,40 @@ export const api = {
     list: (params?: { status?: string; limit?: number; offset?: number }) => {
       return get<{ rows: Document[]; total: number }>(`/documents${qs(params)}`);
     },
-    get: (id: number) => get<Document>(`/documents/${id}`),
-    import: (filePath: string) => post<{ id: number }>("/documents/import", { filePath }),
+    get: (id: string) => get<Document>(`/documents/${id}`),
+    import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
     upload: async (files: File[]) => {
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
-      const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
+      const res = await fetch(`${BASE}/documents/upload`, { method: "POST", body: fd, credentials: "include" });
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       return res.json() as Promise<{ ids: number[] }>;
     },
-    delete: (id: number) => del(`/documents/${id}`),
-    reprocess: (id: number) => post<{ ok: boolean }>(`/documents/${id}/reprocess`),
+    delete: (id: string) => del(`/documents/${id}`),
+    reprocess: (id: string) => post<{ ok: boolean }>(`/documents/${id}/reprocess`),
   },
 
   clients: {
     list: (params?: { q?: string; limit?: number; offset?: number }) => {
       return get<{ rows: Client[]; total: number }>(`/clients${qs(params)}`);
     },
-    get: (id: number) => get<ClientDetail>(`/clients/${id}`),
+    get: (id: string) => get<ClientDetail>(`/clients/${id}`),
     create: (body: Partial<Client>) => post<Client>("/clients", body),
-    update: (id: number, body: Partial<Client>) => put<Client>(`/clients/${id}`, body),
-    delete: (id: number) => del(`/clients/${id}`),
-    timeline: (id: number) => get(`/clients/${id}/timeline`),
-    documents: (id: number) => get<Document[]>(`/clients/${id}/documents`),
+    update: (id: string, body: Partial<Client>) => put<Client>(`/clients/${id}`, body),
+    delete: (id: string) => del(`/clients/${id}`),
+    timeline: (id: string) => get(`/clients/${id}/timeline`),
+    documents: (id: string) => get<Document[]>(`/clients/${id}/documents`),
   },
 
   contracts: {
-    list: (params?: { clientId?: number; status?: string; limit?: number; kind?: "contract" | "inspection" | "all" }) => {
+    list: (params?: { clientId?: string; status?: string; limit?: number; kind?: "contract" | "inspection" | "all" }) => {
       return get<{ rows: ContractWithClient[]; total: number }>(`/contracts${qs(params)}`);
     },
     expiring: (days = 30) => get<ContractWithClient[]>(`/contracts/expiring?days=${days}`),
-    get: (id: number) => get<ContractWithClient>(`/contracts/${id}`),
-    update: (id: number, body: Partial<Contract>) => put<Contract>(`/contracts/${id}`, body),
-    delete: (id: number) => del(`/contracts/${id}`),
+    get: (id: string) => get<ContractWithClient>(`/contracts/${id}`),
+    create: (body: Partial<Contract>) => post<Contract>("/contracts", body),
+    update: (id: string, body: Partial<Contract>) => put<Contract>(`/contracts/${id}`, body),
+    delete: (id: string) => del(`/contracts/${id}`),
   },
 
   reminders: {
@@ -148,7 +152,7 @@ export const api = {
     generateFromFile: async (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/doc-templates/generate-from-file", { method: "POST", body: fd });
+      const res = await fetch(`${BASE}/doc-templates/generate-from-file`, { method: "POST", body: fd, credentials: "include" });
       if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
       return res.json() as Promise<{ draft: Partial<DocTemplate>; sample_text_preview: string; usage: unknown; model: string; exec_ms: number }>;
     },
@@ -156,23 +160,25 @@ export const api = {
 
   emailTemplates: {
     list: () => get<EmailTemplate[]>("/email-templates"),
-    get: (id: number) => get<EmailTemplate>(`/email-templates/${id}`),
+    get: (id: string) => get<EmailTemplate>(`/email-templates/${id}`),
     create: (body: Partial<EmailTemplate>) => post<EmailTemplate>("/email-templates", body),
-    update: (id: number, body: Partial<EmailTemplate>) => put<EmailTemplate>(`/email-templates/${id}`, body),
-    delete: (id: number) => del(`/email-templates/${id}`),
+    update: (id: string, body: Partial<EmailTemplate>) => put<EmailTemplate>(`/email-templates/${id}`, body),
+    delete: (id: string) => del(`/email-templates/${id}`),
     detectVars: (html: string) => post<{ vars: string[] }>("/email-templates/vars", { html }),
     preview: (html: string, subject: string, vars: Record<string, unknown>) =>
       post<{ html: string; subject: string }>("/email-templates/preview", { html, subject, vars }),
+    getDefault: (name: "default" | "inspection" | "contract" | "invoice" | "verify-email" | "reset-password") =>
+      get<{ html: string }>(`/email-templates/defaults/${name}`),
   },
 
   equipment: {
-    list: (params?: { category?: string; q?: string }) =>
+    list: (params?: { category?: string; q?: string; client_id?: string }) =>
       get<Equipment[]>(`/equipment${qs(params)}`),
     stats: () => get<Record<string, number>>("/equipment/stats"),
-    get: (id: number) => get<Equipment>(`/equipment/${id}`),
+    get: (id: string) => get<Equipment>(`/equipment/${id}`),
     create: (body: Partial<Equipment>) => post<Equipment>("/equipment", body),
-    update: (id: number, body: Partial<Equipment>) => put<Equipment>(`/equipment/${id}`, body),
-    delete: (id: number) => del(`/equipment/${id}`),
+    update: (id: string, body: Partial<Equipment>) => put<Equipment>(`/equipment/${id}`, body),
+    delete: (id: string) => del(`/equipment/${id}`),
   },
 
   assets: {
@@ -183,7 +189,7 @@ export const api = {
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       return res.json() as Promise<{ logo_path: string }>;
     },
-    url: (name: string) => `/api/assets/${name}`,
+    url: (name: string) => `${BASE}/assets/${name}`,
   },
 };
 

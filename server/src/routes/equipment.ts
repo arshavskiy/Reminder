@@ -9,13 +9,24 @@ export function registerEquipmentRoutes(app: express.Application) {
     const category = req.query.category as string | undefined;
     const search = req.query.q as string | undefined;
 
+    const clientId = req.query.client_id as string | undefined;
+
     const filter: Record<string, any> = {};
-    if (category && category !== "all") {
-      filter.category = category;
-    }
+    if (category && category !== "all") filter.category = category;
     if (search) {
       const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       filter.$or = [{ name: regex }, { manufacturer: regex }, { model: regex }];
+    }
+
+    if (clientId) {
+      // Find all document_ids linked to this client (via document_clients)
+      const docLinks = await col("document_clients").find({ client_id: clientId }).toArray() as any[];
+      const docIds = docLinks.map((d: any) => String(d.document_id));
+      // Match equipment by direct client_id OR by document_id belonging to client
+      filter.$or = [
+        { client_id: clientId },
+        ...(docIds.length ? [{ document_id: { $in: docIds } }] : []),
+      ];
     }
 
     const rows = await col("equipment")
@@ -23,7 +34,27 @@ export function registerEquipmentRoutes(app: express.Application) {
       .sort({ name: 1 })
       .toArray();
 
-    res.json(rows.map(flatDoc));
+    // Enrich with client name and document file name
+    const enriched = await Promise.all(rows.map(async (row) => {
+      const flat = flatDoc(row) as any;
+      if (row.client_id) {
+        try {
+          const clientOid = new ObjectId(String(row.client_id));
+          const client = await col("clients").findOne({ _id: clientOid }) as any;
+          flat.client_name = client?.display_name ?? null;
+        } catch { flat.client_name = null; }
+      }
+      if (row.document_id) {
+        try {
+          const docOid = new ObjectId(String(row.document_id));
+          const doc = await col("documents").findOne({ _id: docOid }) as any;
+          flat.document_name = doc?.file_name ?? null;
+        } catch { flat.document_name = null; }
+      }
+      return flat;
+    }));
+
+    res.json(enriched);
   });
 
   // GET /api/equipment/stats — count per category for the UI chips
@@ -52,7 +83,20 @@ export function registerEquipmentRoutes(app: express.Application) {
       res.status(404).json({ error: "Not found" });
       return;
     }
-    res.json(flatDoc(row));
+    const flat = flatDoc(row) as any;
+    if (row.client_id) {
+      try {
+        const client = await col("clients").findOne({ _id: new ObjectId(String(row.client_id)) }) as any;
+        flat.client_name = client?.display_name ?? null;
+      } catch { flat.client_name = null; }
+    }
+    if (row.document_id) {
+      try {
+        const doc = await col("documents").findOne({ _id: new ObjectId(String(row.document_id)) }) as any;
+        flat.document_name = doc?.file_name ?? null;
+      } catch { flat.document_name = null; }
+    }
+    res.json(flat);
   });
 
   // POST /api/equipment
@@ -68,7 +112,10 @@ export function registerEquipmentRoutes(app: express.Application) {
       category: body.category ?? "other",
       manufacturer: body.manufacturer ?? null,
       model: body.model ?? null,
+      serial_number: body.serial_number ?? null,
       capacity: body.capacity ?? null,
+      load_capacity_test: (body as any).load_capacity_test ?? null,
+      load_radius: (body as any).load_radius ?? null,
       description: body.description ?? null,
       notes: body.notes ?? null,
       is_active: body.is_active ?? 1,
@@ -87,8 +134,9 @@ export function registerEquipmentRoutes(app: express.Application) {
 
     const updates: Record<string, any> = { updated_at: new Date() };
     const fields = [
-      "name", "category", "manufacturer", "model",
-      "capacity", "description", "notes", "is_active",
+      "name", "category", "manufacturer", "model", "serial_number",
+      "capacity", "load_capacity_test", "load_radius",
+      "description", "notes", "is_active", "client_id",
     ];
     for (const f of fields) {
       if ((body as any)[f] !== undefined) updates[f] = (body as any)[f];
@@ -103,6 +151,61 @@ export function registerEquipmentRoutes(app: express.Application) {
   app.delete("/api/equipment/:id", async (req, res) => {
     await col("equipment").deleteOne(idFilter(req.params.id));
     res.json({ ok: true });
+  });
+
+  // POST /api/equipment/backfill — patch equipment records missing document_id/client_id
+  app.post("/api/equipment/backfill", async (_req, res) => {
+    let patched = 0;
+    const extractions = await col("extractions").find({}).toArray();
+
+    for (const ext of extractions as any[]) {
+      let fields: any;
+      try { fields = JSON.parse(ext.result_json ?? "{}"); } catch { continue; }
+      const equipmentList: any[] = Array.isArray(fields._equipment) ? fields._equipment : [];
+      if (!equipmentList.length) continue;
+
+      const documentId: string = String(ext.document_id);
+
+      // Resolve client_id: try document_clients first, fall back to contracts
+      let clientId: string | null = null;
+      const dc = await col("document_clients").findOne({ document_id: documentId }) as any;
+      if (dc?.client_id) {
+        clientId = String(dc.client_id);
+      } else {
+        const contract = await col("contracts").findOne({ document_id: documentId }) as any;
+        if (contract?.client_id) clientId = String(contract.client_id);
+      }
+
+      for (const eq of equipmentList) {
+        if (!eq?.serial_number && !eq?.name) continue;
+        const matchFilter: Record<string, any> = eq.serial_number
+          ? { serial_number: String(eq.serial_number).trim() }
+          : { name: String(eq.name ?? "").trim() };
+
+        // Patch any equipment row missing document_id OR client_id
+        const result = await col("equipment").updateOne(
+          {
+            ...matchFilter,
+            $or: [
+              { document_id: { $exists: false } },
+              { document_id: null },
+              { client_id: { $exists: false } },
+              { client_id: null },
+            ],
+          },
+          {
+            $set: {
+              document_id: documentId,
+              ...(clientId && { client_id: clientId }),
+              updated_at: new Date(),
+            },
+          }
+        );
+        if (result.modifiedCount > 0) patched++;
+      }
+    }
+
+    res.json({ ok: true, patched });
   });
 }
 

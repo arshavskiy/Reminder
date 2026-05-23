@@ -19,14 +19,14 @@ const DEFAULTS: AppSettings = {
   autoExtract: true,
   extractionMaxChars: 8000,
 
-  smtpHost: "",
-  smtpPort: 587,
-  smtpSecure: false,
-  smtpUser: "",
-  smtpPass: "",
+  smtpHost: process.env.SMTP_HOST ?? "",
+  smtpPort: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587,
+  smtpSecure: process.env.SMTP_SECURE === "true",
+  smtpUser: process.env.SMTP_USER ?? "",
+  smtpPass: process.env.SMTP_PASS ?? "",
   smtpRejectUnauthorized: true,
-  emailFrom: "",
-  emailFromName: "תזכורת לקוח",
+  emailFrom: process.env.EMAIL_FROM ?? "",
+  emailFromName: process.env.EMAIL_FROM_NAME ?? " ReminderOCR ",
 
   reminderEnabled: true,
   reminderAdvanceDays: [90, 60, 30],
@@ -77,6 +77,19 @@ export function loadSettings(): AppSettings {
       if (process.env.GOOGLE_REDIRECT_URI)  envOverrides.googleRedirectUri  = process.env.GOOGLE_REDIRECT_URI;
       if (process.env.SESSION_SECRET)       envOverrides.sessionSecret      = process.env.SESSION_SECRET;
       if (process.env.ALLOWED_EMAILS)       envOverrides.allowedEmails      = process.env.ALLOWED_EMAILS.split(",").map(e => e.trim());
+      if (process.env.SMTP_HOST)            envOverrides.smtpHost           = process.env.SMTP_HOST;
+      if (process.env.SMTP_PORT)            envOverrides.smtpPort           = parseInt(process.env.SMTP_PORT);
+      if (process.env.SMTP_SECURE)          envOverrides.smtpSecure         = process.env.SMTP_SECURE === "true";
+      if (process.env.SMTP_USER)            envOverrides.smtpUser           = process.env.SMTP_USER;
+      if (process.env.SMTP_PASS)            envOverrides.smtpPass           = process.env.SMTP_PASS;
+      if (process.env.EMAIL_FROM)           envOverrides.emailFrom          = process.env.EMAIL_FROM;
+      if (process.env.EMAIL_FROM_NAME)      envOverrides.emailFromName      = process.env.EMAIL_FROM_NAME;
+      if (process.env.DO_SPACES_KEY)        envOverrides.doSpacesKey        = process.env.DO_SPACES_KEY;
+      if (process.env.DO_SPACES_SECRET)     envOverrides.doSpacesSecret     = process.env.DO_SPACES_SECRET;
+      if (process.env.DO_SPACES_ENDPOINT)   envOverrides.doSpacesEndpoint   = process.env.DO_SPACES_ENDPOINT;
+      if (process.env.DO_SPACES_BUCKET)     envOverrides.doSpacesBucket     = process.env.DO_SPACES_BUCKET;
+      if (process.env.DO_SPACES_REGION)     envOverrides.doSpacesRegion     = process.env.DO_SPACES_REGION;
+      if (process.env.ALLOWED_ORIGINS)      envOverrides.allowedOrigins     = process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim());
       _settings = { ...DEFAULTS, ...parsed, ...envOverrides };
       return _settings;
     } catch {

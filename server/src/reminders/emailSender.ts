@@ -7,6 +7,56 @@ import { renderTemplate, type EmailVars } from "../templates/renderEmail";
 import { pickEmailTemplate, loadEmailTemplate } from "../templates/seedEmailTemplates";
 import type { ReminderWithContext } from "../../src/shared/types.js";
 
+const FALLBACK_TEST_HTML = `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; background: #f5f7fa; padding: 24px; color: #2c3e50; margin: 0; }
+    .card { background: #ffffff; border-radius: 12px; padding: 32px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: right; }
+    .logo { text-align: center; margin-bottom: 16px; }
+    .logo img { max-height: 56px; }
+    h1 { color: #18a058; margin: 0 0 8px; font-size: 22px; }
+    .lead { color: #5a6c7d; margin: 0 0 24px; font-size: 14px; }
+    .badge { display: inline-block; background: #fff3cd; color: #856404; border: 1px solid #ffc107; border-radius: 999px; padding: 4px 14px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
+    .fields { background: #fafbfc; border-radius: 8px; padding: 16px 20px; margin: 16px 0; }
+    .field { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eef0f3; font-size: 14px; }
+    .field:last-child { border-bottom: none; }
+    .field .label { color: #5a6c7d; }
+    .field .value { color: #2c3e50; font-weight: 600; }
+    .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #eef0f3; font-size: 12px; color: #95a5a6; text-align: center; }
+    a.cta { display: inline-block; background: #18a058; color: #fff !important; text-decoration: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    {{#if logo_url}}
+    <div class="logo"><img src="{{logo_url}}" alt="לוגו"/></div>
+    {{/if}}
+
+    <h1>תזכורת: {{title}}</h1>
+    <p class="lead">{{document_type|מסמך}} עבור {{client_company|הלקוח}}</p>
+
+    <div class="badge">{{advance_days}} ימים לפני תאריך היעד</div>
+
+    <div class="fields">
+      {{#if client_company}}<div class="field"><span class="label"> לקוח / חברה </span><span class="value"> {{client_company}} </span></div>{{/if}}
+      {{#if contact_person}}<div class="field"><span class="label">  איש קשר</span><span class="value"> {{contact_person}} </span></div>{{/if}}
+      {{#if contact_phone}}<div class="field"><span class="label"> טלפון </span><span class="value"> {{contact_phone}} </span></div>{{/if}}
+      {{#if document_number}}<div class="field"><span class="label"> </span><span class="value"> {{document_number}} </span></div>{{/if}}
+      {{#if expiry_date}}<div class="field"><span class="label"> תאריך יעד </span><span class="value"> {{expiry_date}} </span></div>{{/if}}
+      {{#if trigger_date}}<div class="field"><span class="label"> תאריך התזכורת </span><span class="value"> {{trigger_date}} </span></div>{{/if}}
+    </div>
+
+    {{#if body}}<p>{{body}}</p>{{/if}}
+
+    <div class="footer">
+      {{from_name| ReminderOCR }} — תזכורת אוטומטית, אין צורך להשיב
+    </div>
+  </div>
+</body>
+</html>`;
+
 function buildTransport() {
   const s = getSettings();
   const pass = (s.smtpPass ?? "").replace(/\s+/g, "");
@@ -204,33 +254,36 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
     const transport = buildTransport();
     await transport.verify();
 
+    const sampleVars: EmailVars = {
+      title: "בדיקה לדוגמה",
+      trigger_date: new Date().toISOString().split("T")[0],
+      advance_days: 30,
+      body: "זהו דוא״ל בדיקה באמצעות תבנית שנבחרה.",
+      client_name: "לקוח לדוגמה",
+      document_name: "מסמך לדוגמה",
+      from_name: settings.emailFromName || " ReminderOCR ",
+      client_company: "חברה לדוגמה",
+      contact_email: to,
+      contact_phone: "050-1234567",
+      document_type: "בדיקה",
+      document_number: "001",
+      contact_person: "איש קשר לדוגמה",
+      expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+    };
+
+    const tpl = emailTemplateId
+      ? await loadEmailTemplate(emailTemplateId)
+      : await pickEmailTemplate(null);
+
     let subject = "[Client Reminder] בדיקת חיבור אימייל";
-    let html = "חיבור ה-SMTP עובד בהצלחה! This is a test email from Client Reminder.";
+    let html: string;
 
-    if (emailTemplateId) {
-      const tpl = await loadEmailTemplate(emailTemplateId);
-      if (tpl) {
-        const sampleVars: EmailVars = {
-          title: "בדיקה לדוגמה",
-          trigger_date: new Date().toISOString().split("T")[0],
-          advance_days: 30,
-          body: "זהו דוא״ל בדיקה באמצעות תבנית שנבחרה.",
-          client_name: "לקוח לדוגמה",
-          document_name: "מסמך לדוגמה",
-          from_name: settings.emailFromName,
-          client_company: "חברה לדוגמה",
-          contact_email: to,
-          contact_phone: "050-1234567",
-          document_type: "בדיקה",
-          document_number: "001",
-          contact_person: "איש קשר לדוגמה",
-        };
-        subject = renderTemplate(tpl.subject, sampleVars, { escape: false }) || subject;
-        html = renderTemplate(tpl.html, sampleVars, { escape: false }) || html;
-      }
+    if (tpl) {
+      subject = renderTemplate(tpl.subject, sampleVars, { escape: false }) || subject;
+      html = ensureRtl(renderTemplate(tpl.html, sampleVars, { escape: false }));
+    } else {
+      html = ensureRtl(renderTemplate(FALLBACK_TEST_HTML, sampleVars, { escape: false }));
     }
-
-    console.log("emails html", html);
 
     await transport.sendMail({
       from: settings.emailFromName

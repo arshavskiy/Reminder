@@ -104,7 +104,7 @@ export interface Document {
 }
 
 export interface Client {
-  id: number;
+  id: string;
   display_name: string;
   entity_type: EntityType;
   id_number: string | null;
@@ -282,7 +282,7 @@ export interface TemplateField {
 }
 
 export interface DocTemplate {
-  id: number;
+  id: string;
   name: string;                 // Hebrew, e.g. "תסקיר בדיקה"
   description: string | null;
   match_keywords: string[];     // ["תסקיר", "בדיקה"]
@@ -321,9 +321,9 @@ export interface Equipment {
 
 // ── Email templates ─────────────────────────────────────────────────────────
 export interface EmailTemplate {
-  id: number;
+  id: string;
   name: string;
-  doc_template_id: number | null;
+  doc_template_id: string | null;
   subject: string;              // may contain {{vars}}
   html: string;                 // body with {{vars}} placeholders
   logo_path: string | null;

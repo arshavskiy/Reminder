@@ -6,6 +6,7 @@ import { ObjectId } from "mongodb";
 import { getDataDir } from "../settings";
 import { loadAllTemplates, loadTemplate } from "../templates/seedTemplates";
 import { loadEmailTemplate } from "../templates/seedEmailTemplates";
+import { loadAuthTemplate, loadReminderTemplate } from "../email-templates/loader";
 import { renderTemplate, listTemplateVars } from "../templates/renderEmail";
 import { previewReminderEmail } from "../reminders/emailSender";
 import { generateTemplateFromText, toDraft } from "../templates/generateTemplate";
@@ -117,7 +118,7 @@ export function registerTemplateRoutes(app: express.Application) {
         const tmpDir = join(getDataDir(), "template_samples");
         mkdirSync(tmpDir, { recursive: true });
         const ext = extname(file.originalname).toLowerCase();
-        const safeName = file.originalname.replace(/[^a-zA-Z0-9א-ת._-]/g, "_");
+        const safeName = file.originalname.replace(/[^\p{L}\p{N}._-]/gu, "_");
         const tmpPath = join(tmpDir, `${Date.now()}_${safeName}`);
         writeFileSync(tmpPath, file.buffer);
 
@@ -169,6 +170,26 @@ export function registerTemplateRoutes(app: express.Application) {
   );
 
   // ── Email templates ────────────────────────────────────────────────────────
+
+  // Return the built-in default HTML for a named template (reminder/auth)
+  app.get("/api/email-templates/defaults/:name", (req, res) => {
+    const { name } = req.params;
+    try {
+      let html: string;
+      if (name === "default" || name === "inspection" || name === "contract" || name === "invoice") {
+        html = loadReminderTemplate(name as any);
+      } else if (name === "verify-email" || name === "reset-password") {
+        html = loadAuthTemplate(name);
+      } else {
+        res.status(404).json({ error: "Unknown template name" });
+        return;
+      }
+      res.json({ html });
+    } catch {
+      res.status(500).json({ error: "Failed to load default template" });
+    }
+  });
+
   app.get("/api/email-templates", async (_req, res) => {
     const rows = await col("email_templates")
       .find({})

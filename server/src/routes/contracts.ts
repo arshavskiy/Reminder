@@ -4,6 +4,35 @@ import { ObjectId } from "mongodb";
 import { generateContractReminders } from "../reminders/scheduler";
 
 export function registerContractRoutes(app: express.Application) {
+  // POST /api/contracts — create a contract manually
+  app.post("/api/contracts", async (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    const now = new Date();
+    const doc: Record<string, any> = {
+      document_id: body.document_id ?? null,
+      client_id: body.client_id ?? null,
+      contract_number: body.contract_number ?? null,
+      contract_type: body.contract_type ?? null,
+      start_date: body.start_date ?? null,
+      expiry_date: body.expiry_date ?? null,
+      amount: body.amount != null ? Number(body.amount) : null,
+      currency: body.currency ?? "ILS",
+      counterparty: body.counterparty ?? null,
+      summary: body.summary ?? null,
+      confidence: body.confidence ?? "medium",
+      status: body.status ?? "active",
+      created_at: now,
+      updated_at: now,
+    };
+    const r = await col("contracts").insertOne(doc);
+    const contractId = r.insertedId.toString();
+    if (doc.expiry_date) {
+      await generateContractReminders(contractId, doc.client_id, doc.document_id, String(doc.expiry_date));
+    }
+    const inserted = await col("contracts").findOne({ _id: r.insertedId });
+    res.status(201).json(flatDoc(inserted));
+  });
+
   // GET /api/contracts
   app.get("/api/contracts", async (req, res) => {
     const clientId = req.query.clientId as string | undefined;

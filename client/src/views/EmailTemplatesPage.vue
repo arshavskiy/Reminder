@@ -1,7 +1,6 @@
 <template>
   <div>
     <n-space justify="space-between" align="center" style="margin-bottom: 16px">
-<!--      <h2 style="margin: 0">תבניות אימייל</h2>-->
       <n-button type="primary" @click="newTemplate">+ תבנית חדשה</n-button>
     </n-space>
 
@@ -23,9 +22,10 @@
     </n-alert>
 
     <!-- Editor drawer -->
-    <n-drawer v-model:show="showEdit" :width="900" placement="left">
+    <n-drawer v-model:show="showEdit" :width="960" placement="left">
       <n-drawer-content :title="editing?.id ? 'עריכת תבנית אימייל' : 'תבנית אימייל חדשה'" closable>
-        <n-tabs v-if="editing" type="line" animated>
+        <n-tabs v-if="editing" v-model:value="activeTab" type="line" animated @update:value="onTabChange">
+          <!-- ── Editor tab ──────────────────────────────────────────────── -->
           <n-tab-pane name="editor" tab="עריכה">
             <n-form label-placement="top">
               <n-form-item label="שם" required>
@@ -65,17 +65,32 @@
               </n-form-item>
 
               <n-form-item label="גוף ה-HTML">
-                <n-input
-                  v-model:value="editing.html"
-                  type="textarea"
-                  :rows="18"
-                  placeholder="<div>תזכורת: {{title}}</div>"
-                  style="font-family: monospace; font-size: 12px"
-                />
+                <div style="width:100%">
+                  <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap">
+                    <n-button size="tiny" @click="detectVars" :loading="detectingVars">זהה משתנים</n-button>
+                    <n-button size="tiny" @click="insertSampleHtml" v-if="!editing.html">טען תבנית ברירת מחדל</n-button>
+                    <n-button size="tiny" quaternary @click="resetToDefault" :loading="resettingDefault">אפס לברירת מחדל</n-button>
+                    <n-tag
+                      v-for="v in detectedVars"
+                      :key="v"
+                      size="small"
+                      style="cursor:pointer; font-family:monospace"
+                      @click="insertVar(v)"
+                    >(( {{v}} ))</n-tag>
+                  </div>
+                  <n-input
+                    ref="htmlInputRef"
+                    v-model:value="editing.html"
+                    type="textarea"
+                    :rows="20"
+                    placeholder="<div>תזכורת: {{title}}</div>"
+                    style="font-family: monospace; font-size: 12px; direction: ltr; text-align: left"
+                  />
+                </div>
               </n-form-item>
 
               <n-alert type="info" :show-icon="false" style="font-size:12px">
-                משתנים זמינים:
+                <b>משתנים זמינים:</b>
                 <code v-pre>{{title}}</code>,
                 <code v-pre>{{trigger_date}}</code>,
                 <code v-pre>{{expiry_date}}</code>,
@@ -83,10 +98,11 @@
                 <code v-pre>{{contact_person}}</code>,
                 <code v-pre>{{contact_phone}}</code>,
                 <code v-pre>{{document_number}}</code>,
-                <code v-pre>{{logo_url}}</code>,
-                ובנוסף כל שדה שהוגדר בתבנית המסמך לפי ה-<code>key</code> שלו.
-                בלוקים מותנים: <code v-pre>{{#if var}}...{{/if}}</code>.
-                ערכי ברירת מחדל: <code v-pre>{{name|ברירת מחדל}}</code>.
+                <code v-pre>{{logo_url}}</code>
+                וכל שדה מתבנית המסמך לפי ה-<code>key</code> שלו.
+                <br/>
+                בלוקים מותנים: <code v-pre>{{#if var}}...{{/if}}</code> &nbsp;|&nbsp;
+                ערכי ברירת מחדל: <code v-pre>{{name|ברירת מחדל}}</code>
               </n-alert>
 
               <n-form-item style="margin-top:12px">
@@ -95,23 +111,35 @@
             </n-form>
           </n-tab-pane>
 
-          <n-tab-pane name="preview" tab="תצוגה מקדימה" @click="refreshPreview">
+          <!-- ── Preview tab ─────────────────────────────────────────────── -->
+          <n-tab-pane name="preview" tab="תצוגה מקדימה">
             <n-space justify="space-between" align="center" style="margin-bottom:12px">
-              <n-text strong>נושא: {{ previewSubject }}</n-text>
-              <n-button size="small" @click="refreshPreview">רענן</n-button>
+              <n-text strong>נושא: {{ previewSubject || "—" }}</n-text>
+              <n-space>
+                <n-button v-if="editing?.id" size="small" type="error" @click="deleteTpl">מחק תבנית</n-button>
+                <n-button size="small" @click="refreshPreview" :loading="previewing">רענן תצוגה</n-button>
+              </n-space>
             </n-space>
+            <div v-if="previewing" style="text-align:center; padding:40px">
+              <n-spin size="large" />
+            </div>
             <iframe
-              v-if="previewHtml"
+              v-else-if="previewHtml"
               :srcdoc="previewHtml"
-              style="width:100%; height:600px; border:1px solid var(--border-color); border-radius:8px"
+              style="width:100%; height:620px; border:1px solid var(--border-color); border-radius:8px"
             />
+            <n-alert v-else type="default" :show-icon="false">
+              לחץ על "רענן תצוגה" כדי לראות את התצוגה המקדימה
+            </n-alert>
           </n-tab-pane>
         </n-tabs>
 
         <template #footer>
-          <n-space>
-            <n-button @click="showEdit = false">ביטול</n-button>
-            <n-button v-if="editing?.id" type="error" @click="deleteTpl">מחק</n-button>
+          <n-space justify="space-between" style="width:100%">
+            <n-space>
+              <n-button @click="showEdit = false">ביטול</n-button>
+              <n-button v-if="editing?.id" type="error" @click="deleteTpl">מחק</n-button>
+            </n-space>
             <n-button type="primary" :loading="saving" @click="save">שמור</n-button>
           </n-space>
         </template>
@@ -125,7 +153,7 @@ import { onMounted, ref, computed } from "vue";
 import {
   NSpace, NButton, NCard, NGrid, NGi, NTag, NDrawer, NDrawerContent,
   NForm, NFormItem, NInput, NSelect, NCheckbox, NAlert, NText,
-  NTabs, NTabPane, NUpload, useMessage,
+  NTabs, NTabPane, NUpload, NSpin, useMessage,
 } from "naive-ui";
 import { api } from "../services/apiService.js";
 import type { DocTemplate, EmailTemplate } from "@shared/types.js";
@@ -135,15 +163,21 @@ const docTemplates = ref<DocTemplate[]>([]);
 const showEdit = ref(false);
 const editing = ref<EmailTemplate | null>(null);
 const saving = ref(false);
+const previewing = ref(false);
+const detectingVars = ref(false);
+const resettingDefault = ref(false);
 const previewHtml = ref("");
 const previewSubject = ref("");
+const detectedVars = ref<string[]>([]);
+const activeTab = ref("editor");
+const htmlInputRef = ref<any>(null);
 const message = useMessage();
 
 const docTplOptions = computed(() =>
   docTemplates.value.map((t) => ({ label: t.name, value: t.id }))
 );
 
-function docTplName(id: number | null): string {
+function docTplName(id: string | null): string {
   if (!id) return "";
   return docTemplates.value.find((t) => t.id === id)?.name ?? "";
 }
@@ -158,69 +192,156 @@ onMounted(load);
 
 function select(t: EmailTemplate) {
   editing.value = JSON.parse(JSON.stringify(t));
+  detectedVars.value = [];
+  previewHtml.value = "";
+  previewSubject.value = "";
+  activeTab.value = "editor";
   showEdit.value = true;
 }
 
 function newTemplate() {
   editing.value = {
-    id: 0,
+    id: "",
     name: "תבנית חדשה",
     doc_template_id: null,
     subject: "[תזכורת] {{title}}",
-    html:
-      '<!DOCTYPE html><html lang="he" dir="rtl"><body style="font-family:Arial">' +
-      '<h2>{{title}}</h2><p>{{body}}</p></body></html>',
+    html: "",
     logo_path: null,
     is_default: 0,
     created_at: "",
     updated_at: "",
   };
+  detectedVars.value = [];
+  previewHtml.value = "";
+  previewSubject.value = "";
+  activeTab.value = "editor";
   showEdit.value = true;
 }
 
-async function uploadLogo({ file }: { file: { file: File } }) {
+async function insertSampleHtml() {
   if (!editing.value) return;
   try {
-    const { logo_path } = await api.assets.uploadLogo(file.file);
-    editing.value.logo_path = logo_path;
-    message.success("לוגו הועלה");
+    const name = builtinTemplateName();
+    const r = await api.emailTemplates.getDefault(name);
+    editing.value.html = r.html;
+  } catch {
+    message.error("לא ניתן לטעון את תבנית ברירת המחדל");
+  }
+}
+
+async function uploadLogo({ file, onFinish, onError }: any) {
+  try {
+    const result = await api.assets.uploadLogo(file.file as File);
+    if (editing.value) editing.value.logo_path = result.logo_path;
+    onFinish();
+  } catch (e) {
+    message.error("העלאת הלוגו נכשלה");
+    onError();
+  }
+}
+
+function insertVar(varName: string) {
+  if (!editing.value) return;
+  const tag = `{{${varName}}}`;
+  const textarea = htmlInputRef.value?.$el?.querySelector("textarea");
+  if (textarea) {
+    const start = textarea.selectionStart ?? editing.value.html.length;
+    const end = textarea.selectionEnd ?? start;
+    editing.value.html = editing.value.html.slice(0, start) + tag + editing.value.html.slice(end);
+  } else {
+    editing.value.html += tag;
+  }
+}
+
+// Map the bound doc-template name → built-in reminder HTML file name
+function builtinTemplateName(): "default" | "inspection" | "contract" | "invoice" {
+  if (!editing.value?.doc_template_id) return "default";
+  const docName = docTemplates.value.find((t) => t.id === editing.value!.doc_template_id)?.name ?? "";
+  if (docName.includes("תסקיר")) return "inspection";
+  if (docName.includes("חוזה")) return "contract";
+  if (docName.includes("חשבונית")) return "invoice";
+  return "default";
+}
+
+async function resetToDefault() {
+  if (!editing.value) return;
+  if (!confirm("לאפס את גוף ה-HTML לתבנית ברירת המחדל המובנית?")) return;
+  resettingDefault.value = true;
+  try {
+    const name = builtinTemplateName();
+    const r = await api.emailTemplates.getDefault(name);
+    editing.value.html = r.html;
+    message.success("הוחזר לברירת המחדל");
   } catch (e) {
     message.error(String(e));
+  } finally {
+    resettingDefault.value = false;
+  }
+}
+
+async function detectVars() {
+  if (!editing.value?.html) return;
+  detectingVars.value = true;
+  try {
+    const r = await api.emailTemplates.detectVars(editing.value.html);
+    detectedVars.value = r.vars;
+    if (r.vars.length === 0) message.info("לא נמצאו משתנים בתבנית");
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    detectingVars.value = false;
+  }
+}
+
+async function onTabChange(tab: string) {
+  if (tab === "preview") {
+    await refreshPreview();
   }
 }
 
 async function refreshPreview() {
   if (!editing.value) return;
-  const sampleVars = {
-    title: "בדיקה הבאה",
-    trigger_date: "2027-02-09",
-    expiry_date: "2027-03-11",
-    advance_days: 30,
-    client_company: "אלפא לוגיסטיקה והפצה בע\"מ",
-    contact_person: "ישראל ישראלי",
-    contact_phone: "050-1234567",
-    contact_email: "demo@example.com",
-    document_number: "12345",
-    document_type: "תסקיר בדיקה",
-    from_name: "תזכורת לקוח",
-    body: "טקסט גוף לדוגמה",
-    logo_url: editing.value.logo_path ? api.assets.url(editing.value.logo_path) : null,
-  };
-  const r = await api.emailTemplates.preview(editing.value.html, editing.value.subject, sampleVars);
-  previewHtml.value = r.html;
-  previewSubject.value = r.subject;
+  previewing.value = true;
+  try {
+    const sampleVars: Record<string, unknown> = {
+      title: "בדיקה הבאה",
+      trigger_date: "09/02/2027",
+      expiry_date: "11/03/2027",
+      advance_days: 30,
+      client_company: 'אלפא לוגיסטיקה והפצה בע"מ',
+      contact_person: "ישראל ישראלי",
+      contact_phone: "050-1234567",
+      contact_email: "demo@example.com",
+      document_number: "12345",
+      document_type: "תסקיר בדיקה",
+      from_name: " ReminderOCR ",
+      body: "טקסט גוף לדוגמה",
+      logo_url: editing.value.logo_path ? api.assets.url(editing.value.logo_path) : null,
+    };
+    const r = await api.emailTemplates.preview(editing.value.html, editing.value.subject, sampleVars);
+    previewHtml.value = r.html;
+    previewSubject.value = r.subject;
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    previewing.value = false;
+  }
 }
 
 async function save() {
   if (!editing.value) return;
+  if (!editing.value.name?.trim()) {
+    message.warning("חובה להזין שם לתבנית");
+    return;
+  }
   saving.value = true;
   try {
     if (editing.value.id) {
       await api.emailTemplates.update(editing.value.id, editing.value);
-      message.success("נשמרה");
+      message.success("התבנית נשמרה");
     } else {
       await api.emailTemplates.create(editing.value);
-      message.success("נוצרה");
+      message.success("התבנית נוצרה");
     }
     showEdit.value = false;
     await load();
@@ -236,7 +357,7 @@ async function deleteTpl() {
   if (!confirm(`למחוק את "${editing.value.name}"?`)) return;
   try {
     await api.emailTemplates.delete(editing.value.id);
-    message.success("נמחקה");
+    message.success("התבנית נמחקה");
     showEdit.value = false;
     await load();
   } catch (e) {

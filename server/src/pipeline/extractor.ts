@@ -148,7 +148,7 @@ export async function extractDocument(
     const dir = join(getDataDir(), "extractions");
     mkdirSync(dir, { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    const safeName = (fileName ?? "doc").replace(/[^a-zA-Z0-9א-ת._-]/g, "_").slice(0, 80);
+    const safeName = (fileName ?? "doc").replace(/[^\p{L}\p{N}._-]/gu, "_").slice(0, 80);
     const fileBase = `${ts}_doc${documentId ?? "X"}_${safeName}`;
     const dump = {
       timestamp: new Date().toISOString(),
@@ -160,7 +160,7 @@ export async function extractDocument(
       usage,
       error,
       input_text_chars: text.length,
-      input_text_preview: text.slice(0, 500),
+      input_text: text,
       result,
       raw_json: rawJson,
     };
@@ -240,7 +240,7 @@ export async function extractWithTemplate(
     const dir = join(getDataDir(), "extractions");
     mkdirSync(dir, { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    const safeName = (fileName ?? "doc").replace(/[^a-zA-Z0-9א-ת._-]/g, "_").slice(0, 80);
+    const safeName = (fileName ?? "doc").replace(/[^\p{L}\p{N}._-]/gu, "_").slice(0, 80);
     writeFileSync(
       join(dir, `${ts}_doc${documentId ?? "X"}_${safeName}__tpl.json`),
       JSON.stringify(
@@ -251,7 +251,7 @@ export async function extractWithTemplate(
           template: { id: template.id, name: template.name },
           backend, model, exec_ms: execMs, usage, error,
           input_text_chars: text.length,
-          input_text_preview: text.slice(0, 500),
+          input_text: text,
           fields,
           raw_json: rawJson,
         },

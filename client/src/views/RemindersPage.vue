@@ -40,6 +40,28 @@
       :row-key="(r: any) => r.id"
     />
 
+    <!-- Quick-test modal -->
+    <n-modal v-model:show="showQuickTest" title="🧪 שליחת תזכורת בדיקה" preset="dialog" style="width: 420px">
+      <n-form label-placement="top">
+        <n-form-item label="נמען">
+          <n-input :value="settingsStore.settings?.testEmail" disabled />
+        </n-form-item>
+        <n-form-item label="תבנית אימייל">
+          <n-select
+            v-model:value="quickTestTemplateId"
+            :options="emailTemplateOptions"
+            :virtual-scroll="false"
+            placeholder="ברירת מחדל"
+            clearable
+          />
+        </n-form-item>
+      </n-form>
+      <template #action>
+        <n-button @click="showQuickTest = false">ביטול</n-button>
+        <n-button type="primary" :loading="testing" @click="doQuickTest">שלח</n-button>
+      </template>
+    </n-modal>
+
     <!-- Create reminder modal -->
     <n-modal v-model:show="showCreate" title="תזכורת חדשה" preset="dialog" style="width: 520px">
       <n-form label-placement="top" v-if="newReminder">
@@ -108,6 +130,8 @@ const message = useMessage();
 
 const statusFilter = ref<string | null>("pending");
 const showCreate = ref(false);
+const showQuickTest = ref(false);
+const quickTestTemplateId = ref<string | null>(null);
 const creating = ref(false);
 const testing = ref(false);
 const triggerDateMs = ref<number | null>(Date.now());
@@ -117,7 +141,7 @@ const newReminder = ref<{
   title: string;
   email_to: string;
   body: string;
-  email_template_id: number | null;
+  email_template_id: string | null;
 } | null>(null);
 
 const clientOptions = computed(() =>
@@ -227,8 +251,15 @@ async function doCreate() {
   }
 }
 
-// ── Quick test: create reminder with today's date + send immediately ────────
-async function quickTest() {
+// ── Quick test: open modal to pick template, then send ─────────────────────
+function quickTest() {
+  if (!settingsStore.settings?.testEmail) return;
+  const defaultTpl = emailTemplates.value.find((t) => t.is_default) ?? emailTemplates.value[0] ?? null;
+  quickTestTemplateId.value = defaultTpl?.id ?? null;
+  showQuickTest.value = true;
+}
+
+async function doQuickTest() {
   if (!settingsStore.settings?.testEmail) return;
   testing.value = true;
   try {
@@ -240,8 +271,10 @@ async function quickTest() {
       title: `בדיקה — ${new Date().toLocaleString("he-IL")}`,
       body: "תזכורת בדיקה שנוצרה מתוך לוח הבקרה",
       email_to: JSON.stringify([settingsStore.settings.testEmail]),
+      email_template_id: quickTestTemplateId.value,
     });
     const sendResult = await api.reminders.sendNow(created.id);
+    showQuickTest.value = false;
     if (sendResult.success) {
       message.success(`תזכורת בדיקה נשלחה ל-${settingsStore.settings.testEmail}`);
     } else {

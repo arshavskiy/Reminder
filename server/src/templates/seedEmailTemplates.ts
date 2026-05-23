@@ -2,75 +2,82 @@
 // Users can edit / clone / disable. Bound to no doc_template = used as fallback.
 
 import { col } from "../db/db";
+import { loadReminderTemplate } from "../email-templates/loader";
 import type { EmailTemplate } from "../../src/shared/types.js";
 
-const DEFAULT_HTML = `<!DOCTYPE html>
-<html lang="he" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; background: #f5f7fa; padding: 24px; color: #2c3e50; margin: 0; }
-    .card { background: #ffffff; border-radius: 12px; padding: 32px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: right;}
-    .logo { text-align: center; margin-bottom: 16px; }
-    .logo img { max-height: 56px; }
-    h1 { color: #18a058; margin: 0 0 8px; font-size: 22px; }
-    .lead { color: #5a6c7d; margin: 0 0 24px; font-size: 14px; }
-    .badge { display: inline-block; background: #fff3cd; color: #856404; border: 1px solid #ffc107; border-radius: 999px; padding: 4px 14px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
-    .fields { background: #fafbfc; border-radius: 8px; padding: 16px 20px; margin: 16px 0; }
-    .field { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eef0f3; font-size: 14px; }
-    .field:last-child { border-bottom: none; }
-    .field .label { color: #5a6c7d; }
-    .field .value { color: #2c3e50; font-weight: 600; }
-    .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #eef0f3; font-size: 12px; color: #95a5a6; text-align: center; }
-    a.cta { display: inline-block; background: #18a058; color: #fff !important; text-decoration: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; margin-top: 12px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    {{#if logo_url}}
-    <div class="logo"><img src="{{logo_url}}" alt="לוגו"/></div>
-    {{/if}}
+const DEFAULT_HTML    = loadReminderTemplate("default");
+const INSPECTION_HTML = loadReminderTemplate("inspection");
+const CONTRACT_HTML   = loadReminderTemplate("contract");
+const INVOICE_HTML    = loadReminderTemplate("invoice");
 
-    <h1>תזכורת: {{title}}</h1>
-    <p class="lead">{{document_type|מסמך}} עבור {{client_company|הלקוח}}</p>
+interface TemplateSeed {
+  name: string;
+  subject: string;
+  html: string;
+  is_default: number;
+  doc_template_name: string | null; // matched by name to find doc_template_id
+}
 
-    <div class="badge">{{advance_days}} ימים לפני תאריך היעד</div>
-
-    <div class="fields">
-      {{#if client_company}}<div class="field"><span class="label">לקוח / חברה</span><span class="value"> {{client_company}} </span></div>{{/if}}
-      {{#if contact_person}}<div class="field"><span class="label">איש קשר</span><span class="value"> {{contact_person}} </span></div>{{/if}}
-      {{#if contact_phone}}<div class="field"><span class="label">טלפון</span><span class="value"> {{contact_phone}} </span></div>{{/if}}
-      {{#if document_number}}<div class="field"><span class="label">מספר מסמך</span><span class="value"> {{document_number}} </span></div>{{/if}}
-      {{#if expiry_date}}<div class="field"><span class="label">תאריך יעד</span><span class="value"> {{expiry_date}} </span></div>{{/if}}
-      {{#if trigger_date}}<div class="field"><span class="label">תאריך התזכורת</span><span class="value"> {{trigger_date}} </span></div>{{/if}}
-    </div>
-
-    {{#if body}}<p>{{body}}</p>{{/if}}
-
-    <div class="footer">
-      {{from_name|תזכורת לקוח}} — תזכורת אוטומטית, אין צורך להשיב
-    </div>
-  </div>
-</body>
-</html>`;
+const SEEDS: TemplateSeed[] = [
+  {
+    name: "ברירת מחדל",
+    subject: "[תזכורת] {{title}}",
+    html: DEFAULT_HTML,
+    is_default: 1,
+    doc_template_name: null,
+  },
+  {
+    name: "תסקיר בדיקה תקופתית",
+    subject: "[תזכורת בדיקה] {{client_company}} — {{advance_days}} ימים לבדיקה",
+    html: INSPECTION_HTML,
+    is_default: 0,
+    doc_template_name: "תסקיר בדיקה",
+  },
+  {
+    name: "פקיעת חוזה שירות",
+    subject: "[פקיעת חוזה] {{client_company}} — {{advance_days}} ימים לפקיעה",
+    html: CONTRACT_HTML,
+    is_default: 0,
+    doc_template_name: "חוזה שירות",
+  },
+  {
+    name: "תזכורת תשלום חשבונית",
+    subject: "[תשלום] {{client_company}} — חשבונית {{document_number}}",
+    html: INVOICE_HTML,
+    is_default: 0,
+    doc_template_name: "חשבונית",
+  },
+];
 
 export async function seedDefaultEmailTemplate(): Promise<void> {
-  await col("email_templates").updateOne(
-    { name: "ברירת מחדל" },
-    {
-      $setOnInsert: {
-        name: "ברירת מחדל",
-        subject: "[תזכורת] {{title}}",
-        html: DEFAULT_HTML,
-        is_default: 1,
-        doc_template_id: null,
-        logo_path: null,
-        created_at: new Date(),
-        updated_at: new Date(),
+  for (const seed of SEEDS) {
+    let doc_template_id: string | null = null;
+    if (seed.doc_template_name) {
+      const dt = await col("doc_templates").findOne({ name: seed.doc_template_name }) as any;
+      if (dt) doc_template_id = dt._id?.toString() ?? null;
+    }
+
+    const now = new Date();
+    await col("email_templates").updateOne(
+      { name: seed.name },
+      {
+        // Always refresh html + subject from disk so stale DB rows get fixed on boot
+        $set: {
+          html: seed.html,
+          subject: seed.subject,
+          updated_at: now,
+        },
+        $setOnInsert: {
+          name: seed.name,
+          is_default: seed.is_default,
+          doc_template_id,
+          logo_path: null,
+          created_at: now,
+        },
       },
-    },
-    { upsert: true }
-  );
+      { upsert: true }
+    );
+  }
 }
 
 export async function loadEmailTemplate(id: string | number): Promise<EmailTemplate | null> {

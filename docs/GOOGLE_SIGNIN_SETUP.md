@@ -20,7 +20,7 @@ This app uses Google OAuth 2.0 with PKCE for authentication. No passwords are st
 1. Go to **APIs & Services → OAuth consent screen**
 2. Choose **External** → **Create**
 3. Fill in:
-   - **App name**: `תזכורת לקוח`
+   - **App name**: ` ReminderOCR `
    - **User support email**: your Gmail
    - **Developer contact email**: your Gmail
 4. Click **Save and Continue** through all steps (no scopes needed beyond the defaults)

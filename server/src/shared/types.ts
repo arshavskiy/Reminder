@@ -41,6 +41,16 @@ export interface AppSettings {
   googleRedirectUri?: string;
   sessionSecret?: string;
   allowedEmails?: string[];
+
+  // DigitalOcean Spaces (file storage)
+  doSpacesKey?: string;
+  doSpacesSecret?: string;
+  doSpacesEndpoint?: string;
+  doSpacesBucket?: string;
+  doSpacesRegion?: string;
+
+  // CORS
+  allowedOrigins?: string[];
 }
 
 // Phase 2: Authentication types
@@ -86,7 +96,7 @@ export type EventType =
   | "note";
 
 export interface Document {
-  id: number;
+  id: string;
   file_name: string;
   file_path: string;
   original_path: string | null;
@@ -97,8 +107,12 @@ export interface Document {
   processing_status: ProcessingStatus;
   error_message: string | null;
   raw_text: string | null;
+  extracted_fields: string | null;  // JSON string of DynamicExtraction
+  document_type: string | null;
   language: string;
   page_count: number | null;
+  spaces_key: string | null;
+  spaces_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -124,9 +138,9 @@ export interface DocumentClient {
 }
 
 export interface Contract {
-  id: number;
-  document_id: number;
-  client_id: number | null;
+  id: string;
+  document_id: string | null;
+  client_id: string | null;
   contract_number: string | null;
   contract_type: string | null;
   start_date: string | null;
@@ -306,14 +320,21 @@ export type EquipmentCategory =
   | "other";
 
 export interface Equipment {
-  id: number;
+  id: string;
   name: string;
   category: EquipmentCategory;
   manufacturer: string | null;
   model: string | null;
-  capacity: string | null;
+  serial_number: string | null;
+  capacity: string | null;           // safe working load (עומס עבודה)
+  load_capacity_test: string | null; // test load (עומס מבחן)
+  load_radius: string | null;        // load radius (רדיוס עומס)
   description: string | null;
   notes: string | null;
+  document_id: string | null;
+  client_id: string | null;
+  client_name?: string | null;    // enriched from clients collection
+  document_name?: string | null;  // enriched from documents collection
   is_active: number;
   created_at: string;
   updated_at: string;
