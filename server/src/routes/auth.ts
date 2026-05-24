@@ -247,6 +247,7 @@ export function registerAuthRoutes(app: express.Application) {
         id: (user as any).id,
         email: user.email,
         name: user.name,
+        phone: (user as any).phone ?? null,
         picture_url: user.picture_url,
         role: user.role,
       },

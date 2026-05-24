@@ -70,16 +70,16 @@ export function registerProfileRoutes(app: express.Application) {
     res.json(updated ?? {});
   });
 
-  // ── Update display name (via profile) ────────────────────────────────────
+  // ── Update personal info (name + phone) on the users collection ──────────
   app.put("/api/profile", async (req, res) => {
     const ctx = await auth(req, res);
     if (!ctx) return;
-    const { name } = req.body as { name?: string };
-    if (!name?.trim()) { res.status(400).json({ error: "name required" }); return; }
-    await col("users").updateOne(
-      { _id: ctx.userId as any },
-      { $set: { name: name.trim(), updated_at: new Date().toISOString() } },
-    );
+    const { name, phone } = req.body as { name?: string; phone?: string | null };
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (name !== undefined) patch.name = name?.trim() ?? null;
+    if (phone !== undefined) patch.phone = phone?.trim() || null;
+    if (Object.keys(patch).length === 1) { res.status(400).json({ error: "nothing to update" }); return; }
+    await col("users").updateOne({ _id: ctx.userId as any }, { $set: patch });
     res.json({ ok: true });
   });
 

@@ -52,6 +52,7 @@ export interface User {
   google_sub: string;
   email: string;
   name: string | null;
+  phone: string | null;
   picture_url: string | null;
   role: "admin" | "user";
   is_active: number;

@@ -50,7 +50,7 @@
             <div class="info-row">
               <span class="info-label">טלפון</span>
               <n-input v-if="editingPersonal" v-model:value="personalForm.phone" class="info-input" />
-              <span v-else class="info-val">{{ userSettings?.phone || '—' }}</span>
+              <span v-else class="info-val">{{ user?.phone || '—' }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">אימייל</span>
@@ -381,29 +381,20 @@ const savingPersonal = ref(false);
 const personalForm = ref({ name: "", phone: "" });
 
 function startEditPersonal() {
-  personalForm.value = { name: user.value?.name ?? "", phone: userSettings.value?.phone ?? "" };
+  personalForm.value = { name: user.value?.name ?? "", phone: user.value?.phone ?? "" };
   editingPersonal.value = true;
 }
 function cancelEditPersonal() { editingPersonal.value = false; }
 async function savePersonal() {
   savingPersonal.value = true;
   try {
-    await fetch(`${SERVER}/api/user-settings`, {
+    await fetch(`${SERVER}/api/profile`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ phone: personalForm.value.phone }),
+      body: JSON.stringify({ name: personalForm.value.name, phone: personalForm.value.phone }),
     });
-    if (personalForm.value.name !== user.value?.name) {
-      await fetch(`${SERVER}/api/profile`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: personalForm.value.name }),
-      });
-      await authStore.fetchMe();
-    }
-    if (userSettings.value) userSettings.value.phone = personalForm.value.phone;
+    await authStore.fetchMe();
     editingPersonal.value = false;
     message.success("הפרטים עודכנו");
   } catch {
