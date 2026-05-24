@@ -25,6 +25,8 @@ export const useSettingsStore = defineStore("settings", () => {
     loading.value = true;
     try {
       settings.value = await api.settings.get();
+    } catch {
+      // non-admin users get 403 — not an error
     } finally {
       loading.value = false;
     }

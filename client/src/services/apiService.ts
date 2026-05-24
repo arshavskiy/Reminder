@@ -11,7 +11,11 @@ const BASE = `${SERVER}/api`;
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(BASE + path, { credentials: "include" });
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(`GET ${path} failed: ${res.status}`) as any;
+    err.status = res.status;
+    throw err;
+  }
   return res.json() as Promise<T>;
 }
 
