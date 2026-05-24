@@ -1,7 +1,7 @@
-import { randomBytes } from "crypto";
-import { ObjectId } from "mongodb";
-import { getDb } from "../db/db";
-import type { User } from "../../src/shared/types.js";
+import {randomBytes} from "crypto";
+import {ObjectId} from "mongodb";
+import {getDb} from "../db/db";
+import type {User} from "../../src/shared/types.js";
 
 export async function createSession(
   userId: string,
