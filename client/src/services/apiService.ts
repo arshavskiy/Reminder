@@ -73,7 +73,10 @@ export const api = {
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
       const res = await fetch(`${BASE}/documents/upload`, { method: "POST", body: fd, credentials: "include" });
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as any;
+        throw new Error(data.error ?? `Upload failed: ${res.status}`);
+      }
       return res.json() as Promise<{ ids: number[] }>;
     },
     delete: (id: string) => del(`/documents/${id}`),

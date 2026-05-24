@@ -115,8 +115,12 @@ async function uploadFiles(files: File[]) {
     queuedCount.value += ids.length;
     message.info(`${ids.length} מסמכים נוספו לתור עיבוד`);
     store.fetch();
-  } catch (e) {
-    message.error(String(e));
+  } catch (e: any) {
+    if (e?.message === "document_limit_reached") {
+      message.error("הגעת למגבלת 25 המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.");
+    } else {
+      message.error(String(e));
+    }
   } finally {
     uploading.value = false;
   }
@@ -133,8 +137,12 @@ async function doImportPath() {
     showImport.value = false;
     importPath.value = "";
     store.fetch();
-  } catch (e) {
-    message.error(String(e));
+  } catch (e: any) {
+    if (e?.message?.includes("document_limit_reached")) {
+      message.error("הגעת למגבלת 25 המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.");
+    } else {
+      message.error(String(e));
+    }
   } finally {
     importing.value = false;
   }

@@ -122,6 +122,7 @@ Open **http://localhost:5173**. Vite proxies `/api`, `/auth`, and `/ws` to the s
 | `DO_SPACES_ENDPOINT` | | — | e.g. `fra1.digitaloceanspaces.com` |
 | `DO_SPACES_BUCKET` | | — | Bucket name |
 | `DO_SPACES_REGION` | | — | e.g. `fra1` |
+| `USER_DOCUMENT_LIMIT` | | `25` | Max documents for `user` role (`pro`/`admin` unlimited) |
 
 ### Client (build-time, `client/.env.production`)
 
