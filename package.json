@@ -8,7 +8,9 @@
     "start": "node --import tsx/esm src/index.ts",
     "build": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "storage:test": "tsx src/scripts/testObjectStorage.ts",
+    "storage:migrate-documents": "tsx src/scripts/migrateDocumentsToStorage.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1053.0",
