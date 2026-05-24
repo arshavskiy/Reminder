@@ -12,22 +12,43 @@
           style="display: none"
           @change="onFileInputChange"
         />
-        <n-button @click="fileInput?.click()" :loading="uploading">📂 בחר קבצים</n-button>
-        <n-button type="primary" @click="showImport = true">+ נתיב שרת</n-button>
+        <n-button @click="fileInput?.click()" :loading="uploading" :disabled="limitReached">📂 בחר קבצים</n-button>
+        <n-button type="primary" @click="showImport = true" :disabled="limitReached">+ נתיב שרת</n-button>
         <n-button type="warning" :loading="rescanning" @click="doRescan">↻ סריקה מחדש</n-button>
         <n-button type="error" :loading="deletingCorrupt" @click="doDeleteCorrupt">🗑 מחק פגומים</n-button>
       </n-space>
     </n-space>
 
+    <!-- Quota counter for role 'user' -->
+    <div v-if="isRegularUser" style="margin-bottom: 12px">
+      <n-space justify="space-between" style="margin-bottom: 4px">
+        <span style="font-size: 13px; color: var(--text-secondary)">
+          מסמכים שהועלו: {{ store.total }} / {{ settingsStore.userDocumentLimit }}
+        </span>
+        <span v-if="limitReached" style="font-size: 13px; color: #e88080; font-weight: 600">
+          הגעת למגבלה — שדרג ל-Pro
+        </span>
+      </n-space>
+      <n-progress
+        type="line"
+        :percentage="quotaPercent"
+        :color="quotaPercent >= 100 ? '#e88080' : quotaPercent >= 80 ? '#f0a020' : '#18a058'"
+        :rail-color="'rgba(128,128,128,0.15)'"
+        :show-indicator="false"
+        style="margin-bottom: 4px"
+      />
+    </div>
+
     <!-- Drag-drop zone -->
     <div
       class="drop-zone"
-      :class="{ 'drop-zone--active': isDragging }"
-      @dragover.prevent="isDragging = true"
+      :class="{ 'drop-zone--active': isDragging, 'drop-zone--disabled': limitReached }"
+      @dragover.prevent="!limitReached && (isDragging = true)"
       @dragleave.prevent="isDragging = false"
-      @drop.prevent="onDrop"
+      @drop.prevent="!limitReached && onDrop($event)"
     >
-      <span v-if="isDragging">שחרר כאן לייבוא...</span>
+      <span v-if="limitReached" style="color: #e88080">הגעת למגבלת {{ settingsStore.userDocumentLimit }} המסמכים</span>
+      <span v-else-if="isDragging">שחרר כאן לייבוא...</span>
       <span v-else style="color: #666">גרור קבצים לכאן (PDF, DOCX, XLSX, PNG...)</span>
     </div>
 
@@ -67,19 +88,27 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, h } from "vue";
+import { computed, onMounted, ref, h } from "vue";
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 import { useRouter } from "vue-router";
-import { NH2, NSpace, NButton, NDataTable, NModal, NInput, NAlert, useMessage } from "naive-ui";
+import { NH2, NSpace, NButton, NDataTable, NModal, NInput, NAlert, NProgress, useMessage } from "naive-ui";
 import { useDocumentsStore } from "../stores/documents.js";
 import { useSettingsStore } from "../stores/settings.js";
+import { useAuthStore } from "../stores/auth.js";
 import { api } from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import type { Document } from "@shared/types.js";
 
 const store = useDocumentsStore();
 const settingsStore = useSettingsStore();
+const authStore = useAuthStore();
 const router = useRouter();
+
+const isRegularUser = computed(() => authStore.user?.role === "user");
+const quotaPercent = computed(() =>
+  Math.min(100, Math.round((store.total / settingsStore.userDocumentLimit) * 100))
+);
+const limitReached = computed(() => isRegularUser.value && store.total >= settingsStore.userDocumentLimit);
 const message = useMessage();
 
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -233,5 +262,11 @@ const columns = [
 .drop-zone--active {
   border-color: #63e2b7;
   background: rgba(99, 226, 183, 0.06);
+}
+.drop-zone--disabled {
+  border-color: #e88080;
+  background: rgba(232, 128, 128, 0.05);
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 </style>
