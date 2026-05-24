@@ -91,14 +91,19 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, computed } from "vue";
-import { useRouter } from "vue-router";
-import { NIcon, NSpin } from "naive-ui";
+import {computed, onMounted} from "vue";
+import {useRouter} from "vue-router";
+import {NIcon, NSpin} from "naive-ui";
 import {
-  ClipboardOutline, PeopleOutline, ExtensionPuzzleOutline,
-  MailOutline, SettingsOutline, AlarmOutline, ConstructOutline,
+  AlarmOutline,
+  ClipboardOutline,
+  ConstructOutline,
+  ExtensionPuzzleOutline,
+  MailOutline,
+  PeopleOutline,
+  SettingsOutline,
 } from "@vicons/ionicons5";
-import { useDashboardStore } from "../stores/dashboard.js";
+import {useDashboardStore} from "../stores/dashboard.js";
 import StatusBadge from "../components/StatusBadge.vue";
 
 const store = useDashboardStore();
@@ -129,7 +134,7 @@ const dateLine = computed(() => {
 const modules = [
   {
     key: "contracts",
-    title: "ניהול תסקירים",
+    title: "תסקירים",
     desc: "צפה, ערוך וצור תסקירי בדיקה. נהל את כל שלבי התסקיר ממקום אחד.",
     icon: ClipboardOutline,
     to: "/contracts",

@@ -182,7 +182,7 @@ const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
 const allNav = [
   { label: "לוח בקרה",        key: "dashboard",        minRole: "user" },
   { label: "מסמכים",           key: "documents",        minRole: "user" },
-  { label: "ניהול תסקירים",   key: "contracts",        minRole: "user" },
+  { label: "תסקירים",   key: "contracts",        minRole: "user" },
   { label: "לקוחות",           key: "clients",          minRole: "user" },
   { label: "הגדרת ציוד",       key: "equipment",        minRole: "user" },
   { label: "תבניות אימייל",    key: "email-templates",  minRole: "user" },

@@ -43,19 +43,19 @@
         type="search"
         :placeholder="kind === 'inspection' ? 'חיפוש לפי לקוח, מספר תסקיר, ציוד...' : 'חיפוש לפי לקוח, מספר חוזה...'"
       />
-      <div class="toolbar__right">
-        <n-select
-          v-model:value="kind"
-          :options="kindOptions"
-          :virtual-scroll="false"
-          size="small"
-          style="width: 140px"
-          @update:value="load"
-        />
-        <n-tag v-if="store.expiringSoon.length" type="warning" round size="small">
-          {{ store.expiringSoon.length }} פגים בתוך 30 יום
-        </n-tag>
-      </div>
+<!--      <div class="toolbar__right">-->
+<!--        <n-select-->
+<!--          v-model:value="kind"-->
+<!--          :options="kindOptions"-->
+<!--          :virtual-scroll="false"-->
+<!--          size="small"-->
+<!--          style="width: 140px"-->
+<!--          @update:value="load"-->
+<!--        />-->
+<!--        <n-tag v-if="store.expiringSoon.length" type="warning" round size="small">-->
+<!--          {{ store.expiringSoon.length }} פגים בתוך 30 יום-->
+<!--        </n-tag>-->
+<!--      </div>-->
     </div>
 
     <!-- ── Card list ───────────────────────────────────────────────────── -->
@@ -273,27 +273,27 @@
             </n-form-item>
           </n-gi>
 
-          <n-gi>
-            <n-form-item label="סכום">
-              <n-input-number v-model:value="form.amount" placeholder="0" style="width:100%" :show-button="false" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="מטבע">
-              <n-select v-model:value="form.currency" :options="currencyOptions" />
-            </n-form-item>
-          </n-gi>
+<!--          <n-gi>-->
+<!--            <n-form-item label="סכום">-->
+<!--              <n-input-number v-model:value="form.amount" placeholder="0" style="width:100%" :show-button="false" />-->
+<!--            </n-form-item>-->
+<!--          </n-gi>-->
+<!--          <n-gi>-->
+<!--            <n-form-item label="מטבע">-->
+<!--              <n-select v-model:value="form.currency" :options="currencyOptions" />-->
+<!--            </n-form-item>-->
+<!--          </n-gi>-->
 
           <n-gi>
             <n-form-item label="סטטוס">
               <n-select v-model:value="form.status" :options="statusOptions" />
             </n-form-item>
           </n-gi>
-          <n-gi>
-            <n-form-item label="צד שכנגד">
-              <n-input v-model:value="form.counterparty" placeholder="שם החברה / איש קשר" />
-            </n-form-item>
-          </n-gi>
+<!--          <n-gi>-->
+<!--            <n-form-item label="צד שכנגד">-->
+<!--              <n-input v-model:value="form.counterparty" placeholder="שם החברה / איש קשר" />-->
+<!--            </n-form-item>-->
+<!--          </n-gi>-->
 
           <n-gi :span="2">
             <n-form-item label="סיכום / הערות">
@@ -322,18 +322,30 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from "vue";
-import { useRouter } from "vue-router";
+import {computed, onMounted, ref, watch} from "vue";
+import {useRouter} from "vue-router";
 import {
-  NIcon, NTag, NSelect, NSpin, NModal, NForm, NFormItem, NInput,
-  NInputNumber, NGrid, NGi, NButton, NSpace, NCheckbox, NDatePicker,
-  NPagination, useMessage,
+  NButton,
+  NCheckbox,
+  NDatePicker,
+  NForm,
+  NFormItem,
+  NGi,
+  NGrid,
+  NIcon,
+  NInput,
+  NModal,
+  NPagination,
+  NSelect,
+  NSpace,
+  NSpin,
+  useMessage,
 } from "naive-ui";
-import { EyeOutline, CreateOutline, TrashOutline } from "@vicons/ionicons5";
-import { useContractsStore } from "../stores/contracts.js";
-import { api } from "../services/apiService.js";
+import {CreateOutline, EyeOutline, TrashOutline} from "@vicons/ionicons5";
+import {useContractsStore} from "../stores/contracts.js";
+import {api} from "../services/apiService.js";
 import ExpiryBadge from "../components/ExpiryBadge.vue";
-import type { ContractWithClient } from "@shared/types.js";
+import type {ContractWithClient} from "@shared/types.js";
 
 const store = useContractsStore();
 const router = useRouter();
@@ -342,6 +354,102 @@ const message = useMessage();
 const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
 const search = ref("");
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+const pageSize = 20;
+const currentPage = ref(1);
+watch([search, statusFilter, kind], () => { currentPage.value = 1; });
+
+// ── Export wizard ─────────────────────────────────────────────────────────────
+const showExport = ref(false);
+const exportStep = ref(0);
+const exportFormat = ref<"csv" | "pdf">("csv");
+const exportSteps = [
+  { key: "filter", label: "סינון" },
+  { key: "columns", label: "עמודות" },
+  { key: "format", label: "פורמט" },
+  { key: "export", label: "ייצוא" },
+];
+const exportFilter = ref({
+  client_id: null as string | null,
+  status: null as string | null,
+  contract_type: null as string | null,
+  dateRange: null as [number, number] | null,
+});
+const exportColumns = ref([
+  { key: "contract_number", label: "מספר",        selected: true },
+  { key: "contract_type",   label: "סוג",          selected: true },
+  { key: "client_name",     label: "לקוח",         selected: true },
+  { key: "start_date",      label: "תאריך התחלה",  selected: true },
+  { key: "expiry_date",     label: "תאריך תפוגה",  selected: true },
+  { key: "amount",          label: "סכום",         selected: true },
+  { key: "currency",        label: "מטבע",         selected: false },
+  { key: "status",          label: "סטטוס",        selected: true },
+  { key: "counterparty",    label: "צד שכנגד",     selected: false },
+  { key: "summary",         label: "הערות",        selected: false },
+]);
+const selectedExportColumns = computed(() => exportColumns.value.filter((c) => c.selected));
+const exportedRows = computed(() => filteredRows.value.filter((r) => {
+  if (exportFilter.value.client_id && r.client_id !== exportFilter.value.client_id) return false;
+  if (exportFilter.value.status && r.status !== exportFilter.value.status) return false;
+  if (exportFilter.value.contract_type && r.contract_type !== exportFilter.value.contract_type) return false;
+  if (exportFilter.value.dateRange) {
+    const [from, to] = exportFilter.value.dateRange;
+    const d = r.expiry_date ? new Date(r.expiry_date).getTime() : null;
+    if (!d || d < from || d > to) return false;
+  }
+  return true;
+}));
+
+function openExport() {
+  exportStep.value = 0;
+  exportFormat.value = "csv";
+  exportFilter.value = { client_id: null, status: null, contract_type: null, dateRange: null };
+  showExport.value = true;
+}
+
+function doExport() {
+  const rows = exportedRows.value;
+  const cols = selectedExportColumns.value;
+  if (exportFormat.value === "csv") {
+    const header = cols.map((c) => c.label).join(",");
+    const lines = rows.map((r) =>
+      cols.map((c) => {
+        const v = (r as any)[c.key] ?? "";
+        if (c.key === "status") return statusLabel(String(v));
+        if (c.key === "start_date" || c.key === "expiry_date") return formatDate(String(v));
+        return String(v).replace(/,/g, " ");
+      }).join(",")
+    );
+    const csv = "﻿" + [header, ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `contracts-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } else {
+    const thead = cols.map((c) => `<th>${c.label}</th>`).join("");
+    const tbody = rows.map((r) =>
+      `<tr>${cols.map((c) => {
+        const v = (r as any)[c.key] ?? "—";
+        if (c.key === "status") return `<td>${statusLabel(String(v))}</td>`;
+        if (c.key === "start_date" || c.key === "expiry_date") return `<td>${formatDate(String(v))}</td>`;
+        return `<td>${v}</td>`;
+      }).join("")}</tr>`
+    ).join("");
+    const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
+      <style>body{font-family:Arial;padding:32px;direction:rtl}h1{font-size:20px}
+      table{width:100%;border-collapse:collapse;font-size:13px}
+      th,td{border:1px solid #ddd;padding:6px 10px;text-align:right}
+      th{background:#f0f0f0;font-weight:600}</style></head>
+      <body><h1>ייצוא תסקירים — ${new Date().toLocaleDateString("he-IL")}</h1>
+      <table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></body></html>`;
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); setTimeout(() => win.print(), 400); }
+  }
+  exportStep.value = 3;
+}
 
 // ── Form state ────────────────────────────────────────────────────────────────
 const showForm = ref(false);
