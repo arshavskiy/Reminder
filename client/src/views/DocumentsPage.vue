@@ -72,11 +72,13 @@ const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 import { useRouter } from "vue-router";
 import { NH2, NSpace, NButton, NDataTable, NModal, NInput, NAlert, useMessage } from "naive-ui";
 import { useDocumentsStore } from "../stores/documents.js";
+import { useSettingsStore } from "../stores/settings.js";
 import { api } from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import type { Document } from "@shared/types.js";
 
 const store = useDocumentsStore();
+const settingsStore = useSettingsStore();
 const router = useRouter();
 const message = useMessage();
 
@@ -117,7 +119,7 @@ async function uploadFiles(files: File[]) {
     store.fetch();
   } catch (e: any) {
     if (e?.message === "document_limit_reached") {
-      message.error("הגעת למגבלת 25 המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.");
+      message.error("הגעת למגבלת ${settingsStore.userDocumentLimit} המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.");
     } else {
       message.error(String(e));
     }
@@ -139,7 +141,7 @@ async function doImportPath() {
     store.fetch();
   } catch (e: any) {
     if (e?.message?.includes("document_limit_reached")) {
-      message.error("הגעת למגבלת 25 המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.");
+      message.error("הגעת למגבלת ${settingsStore.userDocumentLimit} המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.");
     } else {
       message.error(String(e));
     }

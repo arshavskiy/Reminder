@@ -51,6 +51,9 @@ export interface AppSettings {
 
   // CORS
   allowedOrigins?: string[];
+
+  // Quotas
+  userDocumentLimit: number;
 }
 
 // Phase 2: Authentication types

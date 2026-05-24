@@ -136,6 +136,10 @@ export const api = {
     test: (to: string, templateId?: number | null) => post<{ success: boolean; error?: string }>("/email/test", { to, templateId }),
   },
 
+  config: {
+    get: () => get<{ userDocumentLimit: number }>("/config"),
+  },
+
   settings: {
     get: () => get<AppSettings>("/settings"),
     save: (body: Partial<AppSettings>) => post<AppSettings>("/settings", body),

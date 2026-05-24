@@ -12,6 +12,18 @@ export function registerSettingsRoutes(
 ) {
   _onSaved = onSaved;
 
+  // Public config — non-sensitive values any authenticated client may read
+  app.get("/api/config", async (req, res) => {
+    try {
+      await requireAuth(req.headers.cookie ?? undefined);
+    } catch (err: any) {
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const s = getSettings();
+    res.json({ userDocumentLimit: s.userDocumentLimit });
+  });
+
   app.get("/api/settings", async (req, res) => {
     try {
       const auth = await requireAuth(req.headers.cookie ?? undefined);

@@ -41,6 +41,9 @@ export interface AppSettings {
   googleRedirectUri?: string;
   sessionSecret?: string;
   allowedEmails?: string[];
+
+  // Quotas
+  userDocumentLimit: number;
 }
 
 // Phase 2: Authentication types

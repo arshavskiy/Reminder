@@ -8,6 +8,19 @@ export const useSettingsStore = defineStore("settings", () => {
   const loading = ref(false);
   const saving = ref(false);
 
+  // Public config available to all authenticated users
+  const userDocumentLimit = ref<number>(25);
+  let _configLoaded = false;
+
+  async function loadConfig() {
+    if (_configLoaded) return;
+    try {
+      const cfg = await api.config.get();
+      userDocumentLimit.value = cfg.userDocumentLimit;
+      _configLoaded = true;
+    } catch { /* keep default */ }
+  }
+
   async function load() {
     loading.value = true;
     try {
@@ -26,5 +39,5 @@ export const useSettingsStore = defineStore("settings", () => {
     }
   }
 
-  return { settings, loading, saving, load, save };
+  return { settings, loading, saving, load, save, userDocumentLimit, loadConfig };
 });

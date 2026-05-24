@@ -148,7 +148,10 @@ async function toggleTheme() {
   await settingsStore.save({ ...settingsStore.settings, theme: next });
 }
 
-onMounted(() => settingsStore.load());
+onMounted(() => {
+  settingsStore.load();
+  settingsStore.loadConfig();
+});
 
 watch(isDark, (dark) => {
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");

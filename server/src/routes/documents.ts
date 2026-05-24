@@ -7,11 +7,10 @@ import {importFile, processDocument} from "../pipeline/importer";
 import {getDataDir} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSpacesSignedUrl, spacesEnabled} from "../storage/spaces";
+import {getSettings} from "../settings";
 import multer from "multer";
 
 const upload = multer({ storage: multer.memoryStorage() });
-
-const USER_DOCUMENT_LIMIT = parseInt(process.env.USER_DOCUMENT_LIMIT ?? "25");
 
 export function registerDocumentRoutes(app: express.Application) {
   // GET /api/documents
@@ -89,7 +88,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     if (userRole === "user") {
       const count = await col("documents").countDocuments({ user_id: userId });
-      if (count >= USER_DOCUMENT_LIMIT) {
+      if (count >= getSettings().userDocumentLimit) {
         res.status(403).json({ error: "document_limit_reached" });
         return;
       }
@@ -131,7 +130,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
       if (userRole === "user") {
         const count = await col("documents").countDocuments({ user_id: userId });
-        if (count + files.length > USER_DOCUMENT_LIMIT) {
+        if (count + files.length > getSettings().userDocumentLimit) {
           res.status(403).json({ error: "document_limit_reached" });
           return;
         }
