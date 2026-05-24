@@ -1,7 +1,16 @@
 import express from "express";
+import multer from "multer";
 import { ObjectId } from "mongodb";
 import { col } from "../db/db";
 import { requireAuth } from "../auth/middleware";
+
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, file.mimetype.startsWith("image/"));
+  },
+});
 
 async function auth(req: express.Request, res: express.Response) {
   try {
@@ -23,7 +32,11 @@ export function registerProfileRoutes(app: express.Application) {
     const [active, snoozed, sent, monthly] = await Promise.all([
       col("reminders").countDocuments({ user_id: ctx.userId, status: "pending" }),
       col("reminders").countDocuments({ user_id: ctx.userId, status: "snoozed" }),
-      col("reminders").countDocuments({ user_id: ctx.userId, status: "sent" }),
+      col("reminders").countDocuments({
+        user_id: ctx.userId,
+        status: "sent",
+        source_type: { $ne: "manual" },
+      }),
       col("reminders").countDocuments({
         user_id: ctx.userId,
         created_at: { $regex: `^${now}` },
@@ -82,6 +95,19 @@ export function registerProfileRoutes(app: express.Application) {
     if (Object.keys(patch).length === 1) { res.status(400).json({ error: "nothing to update" }); return; }
     await col("users").updateOne({ _id: new ObjectId(ctx.userId) as any }, { $set: patch });
     res.json({ ok: true });
+  });
+
+  // ── Avatar upload ─────────────────────────────────────────────────────────
+  app.post("/api/profile/avatar", avatarUpload.single("avatar"), async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+    if (!req.file) { res.status(400).json({ error: "no_file" }); return; }
+    const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+    await col("users").updateOne(
+      { _id: new ObjectId(ctx.userId) as any },
+      { $set: { picture_url: dataUrl, updated_at: new Date().toISOString() } },
+    );
+    res.json({ picture_url: dataUrl });
   });
 
   // ── Certificates ──────────────────────────────────────────────────────────

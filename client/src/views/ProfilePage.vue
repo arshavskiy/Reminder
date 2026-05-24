@@ -241,7 +241,8 @@
                 <img v-if="user?.picture_url" :src="user.picture_url" alt="avatar" />
                 <span v-else class="sidebar-avatar__initials">{{ initials }}</span>
               </div>
-              <n-button size="small">📷 שנה תמונה</n-button>
+              <input ref="avatarInput" type="file" accept="image/*" style="display:none" @change="onAvatarChange" />
+              <n-button size="small" :loading="uploadingAvatar" @click="avatarInput?.click()">📷 שנה תמונה</n-button>
             </div>
           </div>
 
@@ -301,7 +302,7 @@
             </div>
             <div class="info-row">
               <span class="info-label">תוקף מנוי</span>
-              <span class="info-val">{{ subscription.validUntil || 'ללא הגבלה' }}</span>
+              <span class="info-val">{{ subscription.validUntil || 'חינמי' }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">תסקירים החודש</span>
@@ -528,6 +529,33 @@ function notifTagType(type: string): "info" | "warning" | "error" | "default" {
 }
 function notifTypeLabel(type: string) {
   return { info: "מידע", warning: "אזהרה", error: "שגיאה" }[type] ?? type;
+}
+
+// ── Avatar upload ────────────────────────────────────────────────────────────
+const avatarInput = ref<HTMLInputElement | null>(null);
+const uploadingAvatar = ref(false);
+
+async function onAvatarChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  uploadingAvatar.value = true;
+  try {
+    const form = new FormData();
+    form.append("avatar", file);
+    const res = await fetch(`${SERVER}/api/profile/avatar`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    await authStore.fetchMe();
+    message.success("תמונת הפרופיל עודכנה");
+  } catch {
+    message.error("שגיאה בהעלאת התמונה");
+  } finally {
+    uploadingAvatar.value = false;
+    if (avatarInput.value) avatarInput.value.value = "";
+  }
 }
 
 // ── Settings: password ───────────────────────────────────────────────────────
