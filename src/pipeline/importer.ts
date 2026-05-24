@@ -62,16 +62,16 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
     copyFileSync(originalPath, managedPath);
   }
 
-  // Upload to DigitalOcean Spaces if configured
+  // Upload to S3-compatible object storage if configured
   let spacesKey: string | null = null;
   let spacesUrl: string | null = null;
   if (spacesEnabled()) {
     try {
       spacesKey = `documents/${fileHash}${ext}`;
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
-      console.log(`[importer] Uploaded to Spaces: ${spacesKey}`);
+      console.log(`[importer] Uploaded to object storage: ${spacesKey}`);
     } catch (err) {
-      console.error(`[importer] Spaces upload failed, keeping local copy:`, err);
+      console.error(`[importer] Object storage upload failed, keeping local copy:`, err);
       spacesKey = null;
       spacesUrl = null;
     }
@@ -594,3 +594,4 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   console.log(`[importer] Client created: ${displayName}`);
   return r.insertedId.toString();
 }
+

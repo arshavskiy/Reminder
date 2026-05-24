@@ -403,7 +403,7 @@ export function registerDocumentRoutes(app: express.Application) {
 }
 
 /**
- * Return a local path to the file, downloading from Spaces if the managed
+ * Return a local path to the file, downloading from object storage if the managed
  * copy no longer exists on disk (e.g. after a Railway redeploy).
  */
 async function resolveFilePath(doc: any): Promise<string> {
@@ -411,11 +411,11 @@ async function resolveFilePath(doc: any): Promise<string> {
 
   if (localPath && existsSync(localPath)) return localPath;
 
-  // Try to re-download from Spaces
+  // Try to re-download from object storage
   if (spacesEnabled() && doc.spaces_key) {
     const signedUrl = await getSpacesSignedUrl(doc.spaces_key, 300);
     const res = await fetch(signedUrl);
-    if (!res.ok) throw new Error(`Spaces download failed: ${res.status}`);
+    if (!res.ok) throw new Error(`Object storage download failed: ${res.status}`);
 
     const ext = extname(doc.spaces_key);
     const tmpDir = join(getDataDir(), "tmp");
@@ -428,8 +428,8 @@ async function resolveFilePath(doc: any): Promise<string> {
 
   throw new Error(
     localPath
-      ? `Local file missing and Spaces not configured: ${localPath}`
-      : "No file_path and Spaces not configured"
+      ? `Local file missing and object storage not configured: ${localPath}`
+      : "No file_path and object storage not configured"
   );
 }
 
@@ -446,3 +446,4 @@ function flatDoc(doc: any) {
   const { _id, ...rest } = doc;
   return { id: _id?.toString(), ...rest };
 }
+
