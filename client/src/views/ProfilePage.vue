@@ -249,8 +249,8 @@
           <div class="settings-group">
             <h3 class="settings-group__title">יצוא נתונים</h3>
             <n-space>
-              <n-button size="small">📄 יצוא PDF</n-button>
-              <n-button size="small">📝 יצוא Word</n-button>
+              <n-button size="small" @click="exportPdf">📄 יצוא PDF</n-button>
+              <n-button size="small" @click="exportWord">📝 יצוא Word</n-button>
             </n-space>
           </div>
 
@@ -623,6 +623,76 @@ const billingColumns = [
   { title: "סטטוס", key: "status" },
   { title: "תיאור", key: "description" },
 ];
+
+// ── Export helpers ───────────────────────────────────────────────────────────
+function buildProfileHtml(): string {
+  const ep = engineerProfile.value;
+  const rows = (pairs: [string, string | null | undefined][]) =>
+    pairs.map(([k, v]) => `<tr><td class="lbl">${k}</td><td>${v || '—'}</td></tr>`).join("");
+
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head><meta charset="UTF-8">
+<style>
+  body { font-family: Arial, sans-serif; direction: rtl; padding: 40px; color: #111; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+  td.lbl { color: #666; width: 200px; }
+  .role { display:inline-block; background:#e8f5e9; color:#2e7d32; padding:2px 10px; border-radius:12px; font-size:12px; }
+</style>
+</head>
+<body>
+  <h1>${user.value?.name || user.value?.email || ''}</h1>
+  <span class="role">${roleTag.value.label}</span>
+
+  <h2>פרטים אישיים</h2>
+  <table>${rows([
+    ["שם מלא", user.value?.name],
+    ["טלפון", user.value?.phone],
+    ["אימייל", user.value?.email],
+  ])}</table>
+
+  ${ep ? `<h2>פרופיל מהנדס</h2>
+  <table>${rows([
+    ["מספר מפקח", ep.inspector_number],
+    ["כתובת", ep.address],
+    ["תואר מקצועי", ep.title],
+    ["התמחות", ep.expertise],
+    ["מספר מ.ר.", ep.mr_number],
+    ["מספר מ.ג.", ep.mg_number],
+    ["תחילת חברות", formatDate(ep.membership_start_date)],
+  ])}</table>` : ""}
+
+  <h2>סטטיסטיקות</h2>
+  <table>${rows([
+    ["סה״כ תסקירים", String(inspectionStats.value.total)],
+    ["הושלמו", String(inspectionStats.value.completed)],
+    ["ממתינים", String(inspectionStats.value.pending)],
+    ["החודש", String(inspectionStats.value.monthly)],
+  ])}</table>
+</body></html>`;
+}
+
+function exportPdf() {
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(buildProfileHtml());
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 400);
+}
+
+function exportWord() {
+  const html = buildProfileHtml();
+  const blob = new Blob(["﻿", html], { type: "application/msword" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `profile-${user.value?.name || user.value?.email || "export"}.doc`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 // ── Mount ────────────────────────────────────────────────────────────────────
 onMounted(async () => {
