@@ -4,6 +4,12 @@ import {ObjectId} from "mongodb";
 import type {Equipment} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 
+type EquipmentDoc = Partial<Equipment> & {
+  _id?: ObjectId | string;
+  client_id?: string | null;
+  document_id?: string | null;
+};
+
 export function registerEquipmentRoutes(app: express.Application) {
   // GET /api/equipment  — optional ?category=lift and ?q= filters
   app.get("/api/equipment", async (req, res) => {
@@ -37,7 +43,7 @@ export function registerEquipmentRoutes(app: express.Application) {
       ];
     }
 
-    const rows = await col("equipment")
+    const rows = await col<EquipmentDoc>("equipment")
       .find(filter)
       .sort({ name: 1 })
       .toArray();
@@ -105,7 +111,7 @@ export function registerEquipmentRoutes(app: express.Application) {
       return;
     }
 
-    const row = await col("equipment").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
+    const row = await col<EquipmentDoc>("equipment").findOne({ ...idFilter(req.params.id), user_id: userId });
     if (!row) {
       res.status(404).json({ error: "Not found" });
       return;

@@ -48,6 +48,11 @@ app.use(cors({
 
 app.use(express.json({ limit: "50mb" }));
 
+// Railway health check — must return 200 before traffic is routed
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", ts: Date.now() });
+});
+
 // Register all route modules
 registerAuthRoutes(app);
 registerDocumentRoutes(app);
