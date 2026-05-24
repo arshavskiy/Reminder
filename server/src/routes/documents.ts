@@ -4,10 +4,9 @@ import {existsSync, mkdirSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {importFile, processDocument} from "../pipeline/importer";
-import {getDataDir} from "../settings";
+import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSpacesSignedUrl, spacesEnabled} from "../storage/spaces";
-import {getSettings} from "../settings";
 import multer from "multer";
 
 const upload = multer({ storage: multer.memoryStorage() });

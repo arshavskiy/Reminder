@@ -21,7 +21,12 @@ DigitalOcean Spaces → file storage (optional)
 - **Auto-reminders** — configurable advance-day schedule (default 90/60/30 days before expiry); email sent via SMTP with HTML templates
 - **Equipment catalog** — serial-number-keyed records linked to scanned document and client
 - **Multi-user auth** — Google OAuth 2.0 + email/password; all data strictly scoped to the authenticated user
-- **Role system** — `user` / `pro` / `admin`; admin-only Settings page and User Management table
+- **Role system** — `user` / `pro` / `admin`; admin-only Settings page and User Management table; `user` role capped at 25 uploaded documents
+- **Engineer profile** — professional details (inspector number, address, title, expertise, membership); per-user, upserted on save
+- **Certificates** — attach certifications with name, type, issuer, issue/expiry dates; auto-computed active/expired status
+- **In-app notifications** — stored in MongoDB, sortable, markable as read
+- **Avatar upload** — stored as base64 data URL in the `users` collection (5 MB limit)
+- **Contracts export** — client-side CSV export with Hebrew BOM; column/filter selection wizard; 20-per-page pagination
 - **RTL Hebrew UI** — full right-to-left layout, dark/light theme, Naive UI component library
 
 ---
@@ -256,7 +261,17 @@ All protected routes require a valid session cookie (`sid`). Unauthenticated req
 |--------|------|:----:|-------------|
 | `GET` | `/api/dashboard/stats` | ✓ | Home page aggregates (user-scoped) |
 | `GET` | `/api/search?q=` | ✓ | Cross-collection full-text search |
-| `GET` | `/api/profile/stats` | ✓ | Reminder counts for profile page |
+| `GET` | `/api/profile/stats` | ✓ | Reminder counts (active / snoozed / completed / monthly) |
+| `GET` | `/api/profile/engineer` | ✓ | Engineer professional profile |
+| `PUT` | `/api/profile/engineer` | ✓ | Save engineer profile (upsert) |
+| `PUT` | `/api/profile` | ✓ | Update name + phone on user account |
+| `POST` | `/api/profile/avatar` | ✓ | Upload profile avatar (multipart, 5 MB) |
+| `GET` | `/api/profile/certificates` | ✓ | List certificates |
+| `POST` | `/api/profile/certificates` | ✓ | Add certificate |
+| `DELETE` | `/api/profile/certificates/:id` | ✓ | Delete certificate (owner-scoped) |
+| `GET` | `/api/profile/notifications` | ✓ | List last 50 notifications |
+| `PUT` | `/api/profile/notifications/:id/read` | ✓ | Mark notification as read |
+| `POST` | `/api/auth/change-password` | ✓ | Change password (bcrypt verify + rehash) |
 | `GET` | `/api/user-settings` | ✓ | Per-user preferences |
 | `PUT` | `/api/user-settings` | ✓ | Save preferences |
 | `GET` | `/api/settings` | admin | Global app settings |
@@ -336,10 +351,10 @@ Enforced client-side by router guard (`meta.requireRole`) and nav filtering (`pr
 
 | Collection | Purpose | Key unique indexes |
 |-----------|---------|-------------------|
-| `users` | Auth accounts | `email`, `google_sub` |
+| `users` | Auth accounts (name, email, phone, picture_url) | `email`, `google_sub` |
 | `sessions` | Active sessions (TTL) | `expires_at` (TTL index) |
 | `oauth_states` | PKCE state (10-min TTL) | `expires_at` (TTL index) |
-| `user_settings` | Per-user preferences | `user_id` |
+| `user_settings` | Per-user preferences (theme, ocr_language, reminder_advance_days) | `user_id` |
 | `documents` | File records | `file_hash` |
 | `document_clients` | Document ↔ Client join | `(document_id, client_id)` |
 | `clients` | Contact records | — |
@@ -352,19 +367,24 @@ Enforced client-side by router guard (`meta.requireRole`) and nav filtering (`pr
 | `equipment` | Equipment catalog | `serial_number` (sparse) |
 | `doc_templates` | AI extraction templates | `name` |
 | `email_templates` | HTML email designs | `name` |
+| `engineer_profiles` | Professional engineer details per user | `user_id` (unique sparse) |
+| `certificates` | User certifications | `user_id`, `expiry_date` |
+| `notifications` | In-app notification feed | `user_id`, `created_at`, `read` |
 
 ---
 
 ## Tests
 
 ```bash
-cd server && npm test       # vitest run — 78 tests
+cd server && npm test       # vitest run — 121 tests
 ```
 
 | File | Coverage |
 |------|---------|
 | `roles.test.ts` | `requireRole`, `requireAdmin`, role hierarchy |
 | `profile.test.ts` | User-settings upsert, stats query shapes |
+| `profileRoutes.test.ts` | Engineer profile, certificates, notifications, avatar, password change, personal info patch |
+| `documentQuota.test.ts` | Upload quota logic (user/pro/admin roles, single/multi-file, per-user scoping) |
 | `renderEmail.test.ts` | HTML template `{{var}}` substitution |
 | `keyScanner.test.ts` | Credential key detection in extracted text |
 | `emailAuth.test.ts` | bcrypt hashing and verification |

@@ -1,7 +1,6 @@
-import { join } from "path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { homedir } from "os";
-import type { AppSettings } from "../src/shared/types.js";
+import {join} from "path";
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from "fs";
+import type {AppSettings} from "../src/shared/types.js";
 
 export type { AppSettings };
 

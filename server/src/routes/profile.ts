@@ -1,8 +1,8 @@
 import express from "express";
 import multer from "multer";
-import { ObjectId } from "mongodb";
-import { col } from "../db/db";
-import { requireAuth } from "../auth/middleware";
+import {ObjectId} from "mongodb";
+import {col} from "../db/db";
+import {requireAuth} from "../auth/middleware";
 
 const avatarUpload = multer({
   storage: multer.memoryStorage(),

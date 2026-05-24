@@ -1,6 +1,6 @@
 import express from "express";
-import { col } from "../db/db";
-import { requireAuth } from "../auth/middleware";
+import {col} from "../db/db";
+import {requireAuth} from "../auth/middleware";
 
 export function registerUserSettingsRoutes(app: express.Application) {
   app.get("/api/user-settings", async (req, res) => {
