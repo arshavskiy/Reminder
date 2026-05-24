@@ -273,6 +273,8 @@ onMounted(async () => {
   const e = route.query.error as string | undefined;
   if (e) routeError.value = e;
 
+  if (route.query.tab === "register") activeTab.value = "register";
+
   if (!authStore.initialized) await authStore.fetchMe();
   if (authStore.user) router.replace("/");
 });
