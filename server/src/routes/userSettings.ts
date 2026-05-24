@@ -20,6 +20,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
         email_from_name: null,
         reminder_advance_days: "[90,60,30]",
         ocr_language: "heb+eng",
+        phone: null,
       };
       await col("user_settings").updateOne(
         { user_id: auth.userId },
@@ -47,17 +48,20 @@ export function registerUserSettingsRoutes(app: express.Application) {
       email_from_name?: string;
       reminder_advance_days?: string;
       ocr_language?: string;
+      phone?: string | null;
     };
+
+    const patch: Record<string, unknown> = {};
+    if (body.theme !== undefined)                  patch.theme = body.theme;
+    if (body.email_from_name !== undefined)        patch.email_from_name = body.email_from_name ?? null;
+    if (body.reminder_advance_days !== undefined)  patch.reminder_advance_days = body.reminder_advance_days;
+    if (body.ocr_language !== undefined)           patch.ocr_language = body.ocr_language;
+    if (body.phone !== undefined)                  patch.phone = body.phone ?? null;
 
     await col("user_settings").updateOne(
       { user_id: auth.userId },
       {
-        $set: {
-          theme: body.theme ?? "light",
-          email_from_name: body.email_from_name ?? null,
-          reminder_advance_days: body.reminder_advance_days ?? "[90,60,30]",
-          ocr_language: body.ocr_language ?? "heb+eng",
-        },
+        $set: patch,
         $setOnInsert: { user_id: auth.userId },
       },
       { upsert: true }
