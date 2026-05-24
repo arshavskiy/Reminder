@@ -1,4 +1,5 @@
 import express from "express";
+import { ObjectId } from "mongodb";
 import { col } from "../db/db";
 import { requireAuth } from "../auth/middleware";
 
@@ -79,7 +80,7 @@ export function registerProfileRoutes(app: express.Application) {
     if (name !== undefined) patch.name = name?.trim() ?? null;
     if (phone !== undefined) patch.phone = phone?.trim() || null;
     if (Object.keys(patch).length === 1) { res.status(400).json({ error: "nothing to update" }); return; }
-    await col("users").updateOne({ _id: ctx.userId as any }, { $set: patch });
+    await col("users").updateOne({ _id: new ObjectId(ctx.userId) as any }, { $set: patch });
     res.json({ ok: true });
   });
 
@@ -113,7 +114,6 @@ export function registerProfileRoutes(app: express.Application) {
   app.delete("/api/profile/certificates/:id", async (req, res) => {
     const ctx = await auth(req, res);
     if (!ctx) return;
-    const { ObjectId } = await import("mongodb");
     await col("certificates").deleteOne({ _id: new ObjectId(req.params.id) as any, user_id: ctx.userId });
     res.json({ ok: true });
   });
@@ -133,7 +133,6 @@ export function registerProfileRoutes(app: express.Application) {
   app.put("/api/profile/notifications/:id/read", async (req, res) => {
     const ctx = await auth(req, res);
     if (!ctx) return;
-    const { ObjectId } = await import("mongodb");
     await col("notifications").updateOne(
       { _id: new ObjectId(req.params.id) as any, user_id: ctx.userId },
       { $set: { read: true } },
@@ -155,7 +154,8 @@ export function registerProfileRoutes(app: express.Application) {
       return;
     }
     const { compare, hash } = await import("bcryptjs");
-    const user = await col("users").findOne({ _id: ctx.userId as any }) as any;
+    const oid = new ObjectId(ctx.userId);
+    const user = await col("users").findOne({ _id: oid as any }) as any;
     if (!user?.password_hash) {
       res.status(400).json({ error: "no_password_set" });
       return;
@@ -164,7 +164,7 @@ export function registerProfileRoutes(app: express.Application) {
     if (!ok) { res.status(400).json({ error: "wrong_current_password" }); return; }
     const newHash = await hash(new_password, 12);
     await col("users").updateOne(
-      { _id: ctx.userId as any },
+      { _id: oid as any },
       { $set: { password_hash: newHash, updated_at: new Date().toISOString() } },
     );
     res.json({ ok: true });
