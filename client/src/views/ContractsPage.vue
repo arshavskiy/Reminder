@@ -415,14 +415,21 @@ onMounted(() => {
 });
 
 const filteredRows = computed(() => {
+  const rows = store.rows ?? [];
   const q = search.value.trim().toLowerCase();
-  if (!q) return store.rows;
-  return store.rows.filter((r) =>
+  if (!q) return rows;
+  return rows.filter((r) =>
     (r.contract_number ?? "").toLowerCase().includes(q) ||
     (r.client_name ?? "").toLowerCase().includes(q) ||
     (r.contract_type ?? "").toLowerCase().includes(q) ||
     (r.summary ?? "").toLowerCase().includes(q)
   );
+});
+
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)));
+const pagedRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredRows.value.slice(start, start + pageSize);
 });
 
 // ── CRUD actions ──────────────────────────────────────────────────────────────
