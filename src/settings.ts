@@ -73,6 +73,7 @@ export function loadSettings(): AppSettings {
       const parsed = JSON.parse(raw) as Partial<AppSettings>;
       // Env vars always win for secrets — never let saved settings override them
       const envOverrides: Partial<AppSettings> = {};
+      if (process.env.OPENAI_API_KEY)       envOverrides.openAiKey          = process.env.OPENAI_API_KEY;
       if (process.env.GOOGLE_CLIENT_ID)     envOverrides.googleClientId     = process.env.GOOGLE_CLIENT_ID;
       if (process.env.GOOGLE_CLIENT_SECRET) envOverrides.googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
       if (process.env.GOOGLE_REDIRECT_URI)  envOverrides.googleRedirectUri  = process.env.GOOGLE_REDIRECT_URI;
