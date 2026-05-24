@@ -17,6 +17,10 @@ function mockCol(data: Record<string, any[]> = {}) {
       countDocuments: vi.fn(async (filter: any) => {
         return docs.filter((d) => {
           for (const [k, v] of Object.entries(filter)) {
+            if (v && typeof v === "object" && "$ne" in v) {
+              if (d[k] === (v as any).$ne) return false;
+              continue;
+            }
             if (d[k] !== v) return false;
           }
           return true;
@@ -34,15 +38,15 @@ function mockAuth(userId = "user123") {
 // ── profile stats ─────────────────────────────────────────────────────────────
 
 describe("GET /api/profile/stats logic", () => {
-  it("counts pending as active, snoozed as snoozed, sent as completed", async () => {
+  it("counts pending as active, snoozed as snoozed, non-manual sent as completed", async () => {
     const userId = "u1";
     const reminders = [
       { user_id: userId, status: "pending" },
       { user_id: userId, status: "pending" },
       { user_id: userId, status: "snoozed" },
-      { user_id: userId, status: "sent" },
-      { user_id: userId, status: "sent" },
-      { user_id: userId, status: "sent" },
+      { user_id: userId, status: "sent", source_type: "contract_expiry" },
+      { user_id: userId, status: "sent", source_type: "task" },
+      { user_id: userId, status: "sent", source_type: "manual" },
       { user_id: "other", status: "pending" }, // different user — should not count
     ];
     const col = mockCol({ reminders });
@@ -50,12 +54,12 @@ describe("GET /api/profile/stats logic", () => {
     const [active, snoozed, sent] = await Promise.all([
       col("reminders").countDocuments({ user_id: userId, status: "pending" }),
       col("reminders").countDocuments({ user_id: userId, status: "snoozed" }),
-      col("reminders").countDocuments({ user_id: userId, status: "sent" }),
+      col("reminders").countDocuments({ user_id: userId, status: "sent", source_type: { $ne: "manual" } }),
     ]);
 
     expect(active).toBe(2);
     expect(snoozed).toBe(1);
-    expect(sent).toBe(3);
+    expect(sent).toBe(2);
   });
 
   it("returns zeros when user has no reminders", async () => {

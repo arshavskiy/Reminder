@@ -51,6 +51,9 @@ export interface AppSettings {
 
   // CORS
   allowedOrigins?: string[];
+
+  // Quotas
+  userDocumentLimit: number;
 }
 
 // Phase 2: Authentication types
@@ -61,6 +64,7 @@ export interface User {
   google_sub: string;
   email: string;
   name: string | null;
+  phone: string | null;
   picture_url: string | null;
   role: UserRole;
   is_active: number;

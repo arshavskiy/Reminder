@@ -1,25 +1,20 @@
 import express from "express";
-import { col } from "../db/db";
-import { getSettings } from "../settings";
+import {col} from "../db/db";
+import {getSettings} from "../settings";
 import {
-  getGoogleAuthUrl,
-  exchangeCodeForIdToken,
-  verifyIdToken,
-  generateState,
-  generateCodeVerifier,
+    exchangeCodeForIdToken,
+    generateCodeVerifier,
+    generateState,
+    getGoogleAuthUrl,
+    verifyIdToken,
 } from "../auth/google";
+import {createSession, extractSessionFromCookie, revokeSession, verifySession,} from "../auth/session";
 import {
-  createSession,
-  revokeSession,
-  extractSessionFromCookie,
-  verifySession,
-} from "../auth/session";
-import {
-  hashPassword,
-  verifyPassword,
-  generateToken,
-  sendVerificationEmail,
-  sendPasswordResetEmail,
+    generateToken,
+    hashPassword,
+    sendPasswordResetEmail,
+    sendVerificationEmail,
+    verifyPassword,
 } from "../auth/emailAuth";
 
 export function registerAuthRoutes(app: express.Application) {
@@ -247,6 +242,7 @@ export function registerAuthRoutes(app: express.Application) {
         id: (user as any).id,
         email: user.email,
         name: user.name,
+        phone: (user as any).phone ?? null,
         picture_url: user.picture_url,
         role: user.role,
       },

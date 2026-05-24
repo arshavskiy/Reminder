@@ -1,7 +1,6 @@
-import { join } from "path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { homedir } from "os";
-import type { AppSettings } from "../src/shared/types.js";
+import {join} from "path";
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from "fs";
+import type {AppSettings} from "../src/shared/types.js";
 
 export type { AppSettings };
 
@@ -43,6 +42,8 @@ const DEFAULTS: AppSettings = {
   googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:3737/auth/google/callback",
   sessionSecret: process.env.SESSION_SECRET ?? "",
   allowedEmails: process.env.ALLOWED_EMAILS?.split(",").map(e => e.trim()) ?? [],
+
+  userDocumentLimit: parseInt(process.env.USER_DOCUMENT_LIMIT ?? "25"),
 };
 
 function resolveDataDir(): string {
@@ -90,6 +91,7 @@ export function loadSettings(): AppSettings {
       if (process.env.DO_SPACES_BUCKET)     envOverrides.doSpacesBucket     = process.env.DO_SPACES_BUCKET;
       if (process.env.DO_SPACES_REGION)     envOverrides.doSpacesRegion     = process.env.DO_SPACES_REGION;
       if (process.env.ALLOWED_ORIGINS)      envOverrides.allowedOrigins     = process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim());
+      if (process.env.USER_DOCUMENT_LIMIT)  envOverrides.userDocumentLimit  = parseInt(process.env.USER_DOCUMENT_LIMIT);
       _settings = { ...DEFAULTS, ...parsed, ...envOverrides };
       return _settings;
     } catch {

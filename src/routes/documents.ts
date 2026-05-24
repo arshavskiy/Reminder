@@ -4,7 +4,7 @@ import {existsSync, mkdirSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {importFile, processDocument} from "../pipeline/importer";
-import {getDataDir} from "../settings";
+import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSpacesSignedUrl, spacesEnabled} from "../storage/spaces";
 import multer from "multer";
@@ -74,13 +74,23 @@ export function registerDocumentRoutes(app: express.Application) {
   // POST /api/documents/import
   app.post("/api/documents/import", async (req, res) => {
     let userId: string;
+    let userRole: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
+      userRole = ctx.user.role;
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
       return;
+    }
+
+    if (userRole === "user") {
+      const count = await col("documents").countDocuments({ user_id: userId });
+      if (count >= getSettings().userDocumentLimit) {
+        res.status(403).json({ error: "document_limit_reached" });
+        return;
+      }
     }
 
     const body = req.body as { filePath?: string };
@@ -99,9 +109,11 @@ export function registerDocumentRoutes(app: express.Application) {
   // POST /api/documents/upload — receives multipart file upload from browser
   app.post("/api/documents/upload", upload.array("files"), async (req, res) => {
     let userId: string;
+    let userRole: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
+      userRole = ctx.user.role;
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -113,6 +125,14 @@ export function registerDocumentRoutes(app: express.Application) {
       if (!files || files.length === 0) {
         res.status(400).json({ error: "no files" });
         return;
+      }
+
+      if (userRole === "user") {
+        const count = await col("documents").countDocuments({ user_id: userId });
+        if (count + files.length > getSettings().userDocumentLimit) {
+          res.status(403).json({ error: "document_limit_reached" });
+          return;
+        }
       }
 
       const uploadDir = join(getDataDir(), "uploads");
