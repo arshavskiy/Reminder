@@ -29,10 +29,10 @@ function storageKeyFor(doc: DocumentRecord): string {
 }
 
 async function main() {
-  const dryRun = hasFlag("--dry-run");
+  const dryRun = hasFlag("--dry-run") || hasFlag("--dry");
   const force = hasFlag("--force");
 
-  if (!spacesEnabled()) {
+  if (!dryRun && !spacesEnabled()) {
     throw new Error(
       "Object storage is not configured. Add Railway bucket variables to the service/env before running."
     );
@@ -96,3 +96,5 @@ main()
   .finally(async () => {
     await closeDb();
   });
+
+
