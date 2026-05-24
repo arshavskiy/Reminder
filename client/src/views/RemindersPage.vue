@@ -3,7 +3,7 @@
     <n-space justify="space-between" align="center" style="margin-bottom: 16px">
 <!--      <n-h2 style="margin: 0">תזכורות</n-h2>-->
       <n-space>
-        <n-button @click="quickTest" :loading="testing" :disabled="!settingsStore.settings?.testEmail">
+        <n-button @click="quickTest" :loading="testing" :disabled="!testEmail">
           🧪 תזכורת בדיקה
         </n-button>
         <n-button type="primary" @click="openCreate">+ תזכורת חדשה</n-button>
@@ -11,7 +11,7 @@
     </n-space>
 
     <n-alert
-      v-if="!settingsStore.settings?.testEmail"
+      v-if="!testEmail"
       type="warning"
       style="margin-bottom: 16px"
       :show-icon="false"
@@ -44,7 +44,7 @@
     <n-modal v-model:show="showQuickTest" title="🧪 שליחת תזכורת בדיקה" preset="dialog" style="width: 420px">
       <n-form label-placement="top">
         <n-form-item label="נמען">
-          <n-input :value="settingsStore.settings?.testEmail" disabled />
+          <n-input :value="testEmail" disabled />
         </n-form-item>
         <n-form-item label="תבנית אימייל">
           <n-select
@@ -118,6 +118,7 @@ import {
 import { useRemindersStore } from "../stores/reminders.js";
 import { useSettingsStore } from "../stores/settings.js";
 import { useClientsStore } from "../stores/clients.js";
+import { useAuthStore } from "../stores/auth.js";
 import { api } from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import type { ReminderWithContext, Client, EmailTemplate } from "@shared/types.js";
@@ -125,6 +126,10 @@ import type { ReminderWithContext, Client, EmailTemplate } from "@shared/types.j
 const store = useRemindersStore();
 const settingsStore = useSettingsStore();
 const clientsStore = useClientsStore();
+const authStore = useAuthStore();
+
+// testEmail: admin can configure a custom address in settings; all others default to their own email
+const testEmail = ref<string | null>(authStore.user?.email || "");
 const router = useRouter();
 const message = useMessage();
 
@@ -161,7 +166,7 @@ const emailTemplateOptions = computed(() =>
 const emailPlaceholder = computed(() => {
   if (!newReminder.value?.client_id) return "ייקבע אוטומטית לפי הלקוח";
   const c = clientsStore.rows.find((x) => x.id === newReminder.value!.client_id);
-  return c?.email ?? settingsStore.settings?.testEmail ?? "אין אימייל ללקוח";
+  return c?.email ?? testEmail.value ?? "אין אימייל ללקוח";
 });
 
 const statusOptions = [
@@ -178,7 +183,7 @@ function load() {
 
 onMounted(async () => {
   const [, , templates] = await Promise.all([
-    settingsStore.load(),
+    // settingsStore.load(),
     clientsStore.fetch({ limit: 500 }),
     api.emailTemplates.list(),
   ]);
@@ -253,14 +258,14 @@ async function doCreate() {
 
 // ── Quick test: open modal to pick template, then send ─────────────────────
 function quickTest() {
-  if (!settingsStore.settings?.testEmail) return;
+  if (!testEmail.value) return;
   const defaultTpl = emailTemplates.value.find((t) => t.is_default) ?? emailTemplates.value[0] ?? null;
   quickTestTemplateId.value = defaultTpl?.id ?? null;
   showQuickTest.value = true;
 }
 
 async function doQuickTest() {
-  if (!settingsStore.settings?.testEmail) return;
+  if (!testEmail.value) return;
   testing.value = true;
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -270,13 +275,13 @@ async function doQuickTest() {
       advance_days: 0,
       title: `בדיקה — ${new Date().toLocaleString("he-IL")}`,
       body: "תזכורת בדיקה שנוצרה מתוך לוח הבקרה",
-      email_to: JSON.stringify([settingsStore.settings.testEmail]),
+      email_to: JSON.stringify([testEmail.value]),
       email_template_id: quickTestTemplateId.value,
     });
     const sendResult = await api.reminders.sendNow(created.id);
     showQuickTest.value = false;
     if (sendResult.success) {
-      message.success(`תזכורת בדיקה נשלחה ל-${settingsStore.settings.testEmail}`);
+      message.success(`תזכורת בדיקה נשלחה ל-${testEmail.value}`);
     } else {
       message.error(sendResult.error ?? "שגיאה בשליחה");
     }
