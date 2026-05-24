@@ -4,6 +4,12 @@ import {ObjectId} from "mongodb";
 import type {Equipment} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 
+type EquipmentDoc = Partial<Equipment> & {
+  _id?: ObjectId | string;
+  client_id?: string | null;
+  document_id?: string | null;
+};
+
 export function registerEquipmentRoutes(app: express.Application) {
   // GET /api/equipment  — optional ?category=lift and ?q= filters
   app.get("/api/equipment", async (req, res) => {
@@ -37,12 +43,12 @@ export function registerEquipmentRoutes(app: express.Application) {
       ];
     }
 
-    const rows = await col("equipment")
+    const rows = await col<EquipmentDoc>("equipment")
       .find(filter)
       .sort({ name: 1 })
       .toArray();
 
-    const enriched = await Promise.all(rows.map(async (row) => {
+    const enriched = await Promise.all(rows.map(async (row: any) => {
       const flat = flatDoc(row) as any;
       if (row.client_id) {
         try {
@@ -105,7 +111,7 @@ export function registerEquipmentRoutes(app: express.Application) {
       return;
     }
 
-    const row = await col("equipment").findOne({ ...idFilter(req.params.id), user_id: userId });
+    const row = await col<EquipmentDoc>("equipment").findOne({ ...idFilter(req.params.id), user_id: userId });
     if (!row) {
       res.status(404).json({ error: "Not found" });
       return;
