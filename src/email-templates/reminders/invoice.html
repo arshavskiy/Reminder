@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; background: #f0fdf4; padding: 24px; color: #2c3e50; margin: 0; }
+    .card { background: #ffffff; border-radius: 14px; padding: 36px 32px; max-width: 620px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .logo { text-align: center; margin-bottom: 20px; }
+    .logo img { max-height: 56px; }
+    .header-bar { background: linear-gradient(135deg, #065f46, #059669); border-radius: 10px; padding: 18px 24px; margin-bottom: 24px; text-align: center; }
+    .header-bar h1 { color: #fff; margin: 0; font-size: 20px; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+    .header-bar .subtitle { color: rgba(255,255,255,0.85); font-size: 13px; margin-top: 6px; }
+    .alert-badge { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #14532d; border: 1px solid #86efac; border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 700; margin-bottom: 20px; }
+    .section-title { font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 8px; }
+    .fields { background: #fafbfc; border: 1px solid #e5e9ef; border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+    .field { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #e5e9ef; font-size: 14px; }
+    .field:last-child { border-bottom: none; }
+    .field .label { color: #6b7280; }
+    .field .value { color: #111827; font-weight: 600; }
+    .field-due { background: #fef9c3; }
+    .field-due .value { color: #713f12; font-size: 15px; }
+    .amount-box { background: #f0fdf4; border: 2px solid #16a34a; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center; }
+    .amount-box .amount-label { font-size: 13px; color: #166534; margin-bottom: 6px; font-weight: 600; }
+    .amount-box .amount-value { font-size: 32px; font-weight: 800; color: #14532d; }
+    .amount-box .amount-note { font-size: 12px; color: #4ade80; margin-top: 4px; }
+    .body-text { background: #f0fdf4; border-right: 4px solid #16a34a; padding: 14px 18px; border-radius: 0 10px 10px 0; font-size: 14px; color: #14532d; margin: 16px 0; line-height: 1.6; }
+    .items-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin: 16px 0; }
+    .items-box .items-title { font-size: 13px; font-weight: 700; color: #475569; margin-bottom: 8px; }
+    .items-box .item-line { font-size: 14px; color: #334155; padding: 3px 0; border-bottom: 1px dashed #e2e8f0; }
+    .items-box .item-line:last-child { border-bottom: none; }
+    .warning-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 14px 18px; margin: 16px 0; text-align: center; }
+    .warning-box p { margin: 0; font-size: 14px; color: #9a3412; font-weight: 600; }
+    .footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e5e9ef; font-size: 12px; color: #9ca3af; text-align: center; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    {{#if logo_url}}
+    <div class="logo"><img src="{{logo_url}}" alt="לוגו"/></div>
+    {{/if}}
+
+    <div class="header-bar">
+      <h1>💰 תזכורת לתשלום חשבונית</h1>
+      <div class="subtitle">{{document_type|חשבונית}} — {{client_company|הלקוח}}</div>
+    </div>
+
+    <div class="alert-badge">💳 {{advance_days}} ימים לתאריך התשלום</div>
+
+    <div class="section-title">פרטי הלקוח</div>
+    <div class="fields">
+      {{#if client_company}}<div class="field"><span class="label">לקוח / חברה</span><span class="value">{{client_company}}</span></div>{{/if}}
+      {{#if contact_person}}<div class="field"><span class="label">איש קשר</span><span class="value">{{contact_person}}</span></div>{{/if}}
+      {{#if contact_phone}}<div class="field"><span class="label">טלפון</span><span class="value">{{contact_phone}}</span></div>{{/if}}
+    </div>
+
+    <div class="section-title">פרטי החשבונית</div>
+    <div class="fields">
+      {{#if document_number}}<div class="field"><span class="label">מספר חשבונית</span><span class="value">{{document_number}}</span></div>{{/if}}
+      {{#if expiry_date}}<div class="field field-due"><span class="label">תאריך לתשלום</span><span class="value">{{expiry_date}}</span></div>{{/if}}
+      {{#if trigger_date}}<div class="field"><span class="label">תאריך שליחת התזכורת</span><span class="value">{{trigger_date}}</span></div>{{/if}}
+    </div>
+
+    {{#if amount}}
+    <div class="amount-box">
+      <div class="amount-label">סכום לתשלום</div>
+      <div class="amount-value">{{amount}} {{currency|₪}}</div>
+    </div>
+    {{/if}}
+
+    {{#if body}}
+    <div class="body-text">{{body}}</div>
+    {{/if}}
+
+    <div class="warning-box">
+      <p>⚠️ יש להסדיר את התשלום לפני המועד האחרון</p>
+    </div>
+
+    <div class="footer">
+      {{from_name| ReminderOCR }} — תזכורת אוטומטית לניהול תשלומים<br>
+      אין צורך להשיב על הודעה זו
+    </div>
+  </div>
+</body>
+</html>

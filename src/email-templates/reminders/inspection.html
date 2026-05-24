@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; background: #f0f4f8; padding: 24px; color: #2c3e50; margin: 0; }
+    .card { background: #ffffff; border-radius: 14px; padding: 36px 32px; max-width: 620px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .logo { text-align: center; margin-bottom: 20px; }
+    .logo img { max-height: 56px; }
+    .header-bar { background: linear-gradient(135deg, #e65c00, #f9d423); border-radius: 10px; padding: 18px 24px; margin-bottom: 24px; text-align: center; }
+    .header-bar h1 { color: #fff; margin: 0; font-size: 20px; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+    .header-bar .subtitle { color: rgba(255,255,255,0.9); font-size: 13px; margin-top: 6px; }
+    .alert-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff3cd; color: #7c4a00; border: 1px solid #f9a825; border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 700; margin-bottom: 20px; }
+    .section-title { font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 8px; }
+    .fields { background: #fafbfc; border: 1px solid #e5e9ef; border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+    .field { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #e5e9ef; font-size: 14px; }
+    .field:last-child { border-bottom: none; }
+    .field .label { color: #6b7280; }
+    .field .value { color: #111827; font-weight: 600; }
+    .highlight-field { background: #fff8e1; }
+    .highlight-field .value { color: #b45309; font-size: 15px; }
+    .body-text { background: #fff7ed; border-right: 4px solid #e65c00; padding: 14px 18px; border-radius: 0 10px 10px 0; font-size: 14px; color: #7c3a00; margin: 16px 0; line-height: 1.6; }
+    .equipment-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 14px 18px; margin: 16px 0; }
+    .equipment-box .eq-title { font-size: 13px; font-weight: 700; color: #0369a1; margin-bottom: 8px; }
+    .equipment-box .eq-item { font-size: 14px; color: #1e3a5f; padding: 3px 0; }
+    .cta-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 16px 20px; margin: 20px 0; text-align: center; }
+    .cta-box p { margin: 0; color: #991b1b; font-size: 14px; font-weight: 600; }
+    .footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e5e9ef; font-size: 12px; color: #9ca3af; text-align: center; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    {{#if logo_url}}
+    <div class="logo"><img src="{{logo_url}}" alt="לוגו"/></div>
+    {{/if}}
+
+    <div class="header-bar">
+      <h1>⚠️ תזכורת לבדיקה תקופתית</h1>
+      <div class="subtitle">{{document_type|תסקיר בדיקה}} — {{client_company|הלקוח}}</div>
+    </div>
+
+    <div class="alert-badge">⏰ {{advance_days}} ימים לפני מועד הבדיקה</div>
+
+    <div class="section-title">פרטי הלקוח</div>
+    <div class="fields">
+      {{#if client_company}}<div class="field"><span class="label">לקוח / חברה</span><span class="value">{{client_company}}</span></div>{{/if}}
+      {{#if contact_person}}<div class="field"><span class="label">איש קשר</span><span class="value">{{contact_person}}</span></div>{{/if}}
+      {{#if contact_phone}}<div class="field"><span class="label">טלפון</span><span class="value">{{contact_phone}}</span></div>{{/if}}
+    </div>
+
+    <div class="section-title">פרטי הבדיקה</div>
+    <div class="fields">
+      {{#if document_number}}<div class="field"><span class="label">מספר תסקיר</span><span class="value">{{document_number}}</span></div>{{/if}}
+      {{#if expiry_date}}<div class="field highlight-field"><span class="label">תאריך בדיקה הבא</span><span class="value">{{expiry_date}}</span></div>{{/if}}
+      {{#if trigger_date}}<div class="field"><span class="label">תאריך שליחת התזכורת</span><span class="value">{{trigger_date}}</span></div>{{/if}}
+    </div>
+
+    {{#if equipment_type}}
+    <div class="equipment-box">
+      <div class="eq-title">🔧 פרטי הציוד</div>
+      {{#if equipment_type}}<div class="eq-item">סוג: <strong>{{equipment_type}}</strong></div>{{/if}}
+      {{#if manufacturer}}<div class="eq-item">יצרן: <strong>{{manufacturer}}</strong></div>{{/if}}
+      {{#if model}}<div class="eq-item">דגם: <strong>{{model}}</strong></div>{{/if}}
+      {{#if serial_number}}<div class="eq-item">מ.ס: <strong>{{serial_number}}</strong></div>{{/if}}
+    </div>
+    {{/if}}
+
+    {{#if body}}
+    <div class="body-text">{{body}}</div>
+    {{/if}}
+
+    <div class="cta-box">
+      <p>יש לתאם את הבדיקה התקופתית לפני המועד האחרון!</p>
+    </div>
+
+    <div class="footer">
+      {{from_name| ReminderOCR }} — תזכורת אוטומטית לבדיקות תקופתיות<br>
+      אין צורך להשיב על הודעה זו
+    </div>
+  </div>
+</body>
+</html>
