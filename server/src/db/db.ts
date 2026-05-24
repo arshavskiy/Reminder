@@ -46,6 +46,9 @@ const ALL_COLLECTIONS = [
   "equipment",
   "doc_templates",
   "email_templates",
+  "engineer_profiles",
+  "certificates",
+  "notifications",
 ];
 
 async function ensureCollections(db: Db): Promise<void> {
@@ -154,6 +157,18 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("email_templates").createIndex({ name: 1 }, { unique: true });
   await db.collection("email_templates").createIndex({ doc_template_id: 1 });
   await db.collection("email_templates").createIndex({ is_default: 1 });
+
+  // engineer_profiles — one per user
+  await db.collection("engineer_profiles").createIndex({ user_id: 1 }, { unique: true, sparse: true });
+
+  // certificates
+  await db.collection("certificates").createIndex({ user_id: 1 });
+  await db.collection("certificates").createIndex({ expiry_date: 1 });
+
+  // notifications
+  await db.collection("notifications").createIndex({ user_id: 1 });
+  await db.collection("notifications").createIndex({ created_at: -1 });
+  await db.collection("notifications").createIndex({ read: 1 });
 }
 
 // Typed collection helper
