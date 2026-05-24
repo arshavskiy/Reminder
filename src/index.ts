@@ -89,6 +89,7 @@ async function main() {
   app.listen(settings.port, () => {
     console.log(`[server] Running at http://localhost:${settings.port}`);
     console.log(`[server] Data dir: ${join(process.cwd(), "data")}`);
+    console.log(`[server] Health check: http://localhost:${settings.port}/health`);
   });
 
   startScheduler();
