@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { ObjectId } from "mongodb";
 import { getDb } from "../db/db";
 import type { User } from "../../src/shared/types.js";
@@ -68,8 +69,5 @@ export function extractSessionFromCookie(cookieHeader: string | undefined): stri
 }
 
 function generateSessionId(): string {
-  return crypto.getRandomValues(new Uint8Array(32)).reduce(
-    (acc, byte) => acc + byte.toString(16).padStart(2, "0"),
-    ""
-  );
+  return randomBytes(32).toString("hex");
 }
