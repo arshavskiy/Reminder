@@ -54,16 +54,15 @@ const avatarUrl = computed<string>(() => {
 
 const avatarSrc = computed<string>(() => avatarUrl.value || '');
 
-// Dropdown menu items
-const dropdownItems = [
+const dropdownItems = computed(() => [
   {
     label: '👤 הפרופיל שלי',
     key: 'profile',
   },
-  {
-    label: '⚙️ הגדרות אישיות',
-    key: 'settings',
-  },
+  ...(props.userRole === 'admin'
+    ? [{ label: '⚙️ הגדרות אישיות', key: 'settings' }]
+    : []
+  ),
   {
     type: 'divider',
   },
@@ -71,7 +70,7 @@ const dropdownItems = [
     label: '🚪 התנתק',
     key: 'logout',
   },
-];
+]);
 
 async function handleSelect(key: string) {
   if (key === 'profile') {
