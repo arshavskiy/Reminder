@@ -37,10 +37,14 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : ["http://localhost:5173", "http://localhost:4173"];
 
+// Vercel preview deployments follow the pattern *.vercel.app
+const VERCEL_PREVIEW_RE = /^https:\/\/reminder(-[a-z0-9-]+)?\.vercel\.app$/;
+
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow server-to-server (no origin) and listed origins
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (VERCEL_PREVIEW_RE.test(origin)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
