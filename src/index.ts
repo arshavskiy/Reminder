@@ -37,8 +37,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : ["http://localhost:5173", "http://localhost:4173"];
 
-// Vercel preview deployments follow the pattern *.vercel.app
-const VERCEL_PREVIEW_RE = /^https:\/\/reminder(-[a-z0-9-]+)?\.vercel\.app$/;
+// Vercel deployments: any subdomain under vercel.app for this project
+const VERCEL_PREVIEW_RE = /^https:\/\/reminder[a-z0-9-]*\.vercel\.app$/;
 
 app.use(cors({
   origin: (origin, cb) => {
