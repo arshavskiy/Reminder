@@ -9,7 +9,7 @@
         </p>
       </div>
       <div class="page__actions">
-        <button class="btn btn--ghost" @click="exportToExcel" title="ייצוא ל-Excel">
+        <button class="btn btn--ghost" @click="openExport" title="ייצוא ל-Excel">
           📊 ייצוא ל-Excel
         </button>
         <button class="btn btn--ghost" @click="router.push('/documents')">
@@ -60,8 +60,8 @@
 
     <!-- ── Card list ───────────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
-      <div v-if="filteredRows.length" class="cards">
-        <article v-for="row in filteredRows" :key="row.id" class="card">
+      <div v-if="pagedRows.length" class="cards">
+        <article v-for="row in pagedRows" :key="row.id" class="card">
           <!-- Top row: number + actions -->
           <div class="card__row">
             <div class="card__num">
@@ -112,13 +112,120 @@
         </article>
       </div>
 
-      <div v-else class="empty">
+      <!-- Pagination -->
+      <div v-if="filteredRows.length > pageSize" class="pagination">
+        <n-pagination
+          v-model:page="currentPage"
+          :page-count="pageCount"
+          :page-slot="5"
+          show-quick-jumper
+        />
+        <span class="pagination__info">{{ filteredRows.length }} רשומות</span>
+      </div>
+
+      <div v-else-if="!pagedRows.length" class="empty">
         <p>אין {{ kind === "inspection" ? "תסקירים" : "חוזים" }} להצגה</p>
         <button class="btn btn--primary" style="margin-top:12px" @click="openCreate">
           + {{ kind === "inspection" ? "הוסף תסקיר ראשון" : "הוסף חוזה ראשון" }}
         </button>
       </div>
     </n-spin>
+
+    <!-- ── Export wizard modal ──────────────────────────────────────────── -->
+    <n-modal v-model:show="showExport" preset="card" style="width:640px; max-width:95vw" :mask-closable="false">
+      <template #header>
+        <div class="export-header">
+          <span>ייצוא בדיקות ל-Excel</span>
+          <div class="export-steps">
+            <div v-for="(s, i) in exportSteps" :key="s.key" class="export-step" :class="{ 'export-step--active': exportStep === i, 'export-step--done': exportStep > i }">
+              <div class="export-step__dot">{{ exportStep > i ? '✓' : i + 1 }}</div>
+              <span class="export-step__label">{{ s.label }}</span>
+              <div v-if="i < exportSteps.length - 1" class="export-step__line" />
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Step 0: סינון -->
+      <div v-if="exportStep === 0" class="export-body">
+        <h3 class="export-section-title">&#x25BD; סינון בדיקות לייצוא</h3>
+        <n-grid :cols="3" :x-gap="16" :y-gap="12">
+          <n-gi>
+            <n-form-item label="לקוח">
+              <n-select v-model:value="exportFilter.client_id" :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]" :virtual-scroll="false" clearable />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="סטטוס">
+              <n-select v-model:value="exportFilter.status" :options="[{ label: 'כל הסטטוסים', value: null }, ...statusOptions]" :virtual-scroll="false" clearable />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="סוג בדיקה">
+              <n-select v-model:value="exportFilter.contract_type" :options="[{ label: 'כל הסוגים', value: null }, ...contractTypeOptions]" :virtual-scroll="false" clearable />
+            </n-form-item>
+          </n-gi>
+          <n-gi :span="3">
+            <n-form-item label="טווח תאריכים">
+              <n-date-picker v-model:value="exportFilter.dateRange" type="daterange" clearable style="width:100%" />
+            </n-form-item>
+          </n-gi>
+        </n-grid>
+      </div>
+
+      <!-- Step 1: עמודות -->
+      <div v-if="exportStep === 1" class="export-body">
+        <h3 class="export-section-title">בחר עמודות לייצוא</h3>
+        <div class="col-grid">
+          <label v-for="col in exportColumns" :key="col.key" class="col-check">
+            <n-checkbox v-model:checked="col.selected" />
+            <span>{{ col.label }}</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Step 2: פורמט -->
+      <div v-if="exportStep === 2" class="export-body">
+        <h3 class="export-section-title">בחר פורמט ייצוא</h3>
+        <div class="format-cards">
+          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'csv' }" @click="exportFormat = 'csv'">
+            <div class="format-card__icon">📊</div>
+            <div class="format-card__name">CSV / Excel</div>
+            <div class="format-card__desc">נפתח ב-Excel / Google Sheets</div>
+          </div>
+          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'pdf' }" @click="exportFormat = 'pdf'">
+            <div class="format-card__icon">📄</div>
+            <div class="format-card__name">PDF</div>
+            <div class="format-card__desc">דף מודפס בעברית</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: ייצוא -->
+      <div v-if="exportStep === 3" class="export-body export-body--summary">
+        <div class="export-summary">
+          <div class="export-summary__icon">📊</div>
+          <div class="export-summary__text">
+            <strong>{{ exportedRows.length }}</strong> רשומות יוצאו
+          </div>
+          <div class="export-summary__sub">
+            {{ selectedExportColumns.map(c => c.label).join(' · ') }}
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <n-space justify="space-between">
+          <n-button @click="showExport = false">ביטול</n-button>
+          <n-space>
+            <n-button v-if="exportStep > 0 && exportStep < 3" @click="exportStep--">חזור</n-button>
+            <n-button v-if="exportStep < 2" type="primary" @click="exportStep++">המשך ›</n-button>
+            <n-button v-if="exportStep === 2" type="primary" @click="doExport">ייצא</n-button>
+            <n-button v-if="exportStep === 3" type="primary" @click="showExport = false">סגור</n-button>
+          </n-space>
+        </n-space>
+      </template>
+    </n-modal>
 
     <!-- ── Create / Edit modal ─────────────────────────────────────────── -->
     <n-modal v-model:show="showForm" :title="editingId ? 'עריכת תסקיר / חוזה' : 'תסקיר / חוזה חדש'" preset="card" style="width: 600px; max-width: 95vw" :mask-closable="false">
@@ -215,11 +322,12 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed } from "vue";
+import { onMounted, ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   NIcon, NTag, NSelect, NSpin, NModal, NForm, NFormItem, NInput,
-  NInputNumber, NGrid, NGi, NButton, NSpace, useMessage,
+  NInputNumber, NGrid, NGi, NButton, NSpace, NCheckbox, NDatePicker,
+  NPagination, useMessage,
 } from "naive-ui";
 import { EyeOutline, CreateOutline, TrashOutline } from "@vicons/ionicons5";
 import { useContractsStore } from "../stores/contracts.js";
@@ -659,4 +767,72 @@ html[data-theme="dark"] .expiry--bad  { color: #ff7875; }
   border: 1px dashed var(--border-color);
   border-radius: 14px;
 }
+
+/* ── Pagination ─────────────────────────────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+.pagination__info { font-size: 13px; color: var(--text-secondary); }
+
+/* ── Export wizard ──────────────────────────────────────────────────────── */
+.export-header { display: flex; flex-direction: column; gap: 16px; }
+.export-steps { display: flex; align-items: center; }
+.export-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.export-step--active { color: var(--brand-color, #18a058); font-weight: 600; }
+.export-step__dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.export-step--active .export-step__dot { border-color: var(--brand-color, #18a058); color: var(--brand-color, #18a058); }
+.export-step--done .export-step__dot { background: var(--brand-color, #18a058); border-color: var(--brand-color, #18a058); color: #fff; }
+.export-step__label { white-space: nowrap; }
+.export-step__line { width: 32px; height: 2px; background: var(--border-color); margin: 0 4px; }
+
+.export-body { min-height: 180px; }
+.export-section-title { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 16px; }
+
+.col-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.col-check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+
+.format-cards { display: flex; gap: 16px; }
+.format-card {
+  flex: 1;
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.format-card--active { border-color: var(--brand-color, #18a058); }
+.format-card__icon { font-size: 32px; margin-bottom: 8px; }
+.format-card__name { font-weight: 600; font-size: 14px; color: var(--text-primary); }
+.format-card__desc { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+.export-body--summary { display: flex; align-items: center; justify-content: center; }
+.export-summary { text-align: center; }
+.export-summary__icon { font-size: 48px; margin-bottom: 12px; }
+.export-summary__text { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.export-summary__sub { font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
 </style>
