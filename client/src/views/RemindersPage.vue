@@ -182,8 +182,7 @@ function load() {
 }
 
 onMounted(async () => {
-  const [, , templates] = await Promise.all([
-    // settingsStore.load(),
+  const [, templates] = await Promise.all([
     clientsStore.fetch({ limit: 500 }),
     api.emailTemplates.list(),
   ]);

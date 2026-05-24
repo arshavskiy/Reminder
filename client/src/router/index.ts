@@ -43,11 +43,6 @@ router.beforeEach(async (to) => {
 
   const authStore = useAuthStore();
 
-  // If we have a cached user, allow navigation immediately.
-  // main.ts validates the session in the background and will redirect to /login
-  // if the server says the session is gone.
-  if (authStore.user) return true;
-
   // No cached user and not yet initialized — wait for the server check.
   if (!authStore.initialized) {
     await authStore.fetchMe();
@@ -57,7 +52,7 @@ router.beforeEach(async (to) => {
     return { path: "/login" };
   }
 
-  // Role-based route guard
+  // Role-based route guard — must run for every navigation, even cached users
   const requiredRole = to.meta.requireRole as string | undefined;
   if (requiredRole) {
     const RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
