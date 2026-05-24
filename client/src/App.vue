@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, watch} from "vue";
+import {computed, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
   darkTheme,
@@ -107,7 +107,6 @@ import {
 import {BriefcaseOutline, MoonOutline, SunnyOutline,} from "@vicons/ionicons5";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
-import {useSettingsStore} from "./stores/settings.js";
 import {useAuthStore} from "./stores/auth.js";
 
 const rtlConfig = [
@@ -126,11 +125,13 @@ const rtlConfig = [
 
 const router = useRouter();
 const route = useRoute();
-const settingsStore = useSettingsStore();
 const authStore = useAuthStore();
 
+const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+
 // ── Theme ────────────────────────────────────────────────────────────────────
-const isDark = computed(() => (settingsStore.settings?.theme ?? "light") === "dark");
+const darkPref = ref<boolean>(localStorage.getItem("theme") === "dark");
+const isDark = computed(() => darkPref.value);
 const theme = computed(() => (isDark.value ? darkTheme : null));
 
 const themeOverrides = computed(() => ({
@@ -142,15 +143,30 @@ const themeOverrides = computed(() => ({
 }));
 
 async function toggleTheme() {
-  if (!settingsStore.settings) await settingsStore.load();
-  if (!settingsStore.settings) return;
   const next = isDark.value ? "light" : "dark";
-  await settingsStore.save({ ...settingsStore.settings, theme: next });
+  darkPref.value = next === "dark";
+  localStorage.setItem("theme", next);
+  // Persist to user-settings in the background (best-effort)
+  fetch(`${SERVER}/api/user-settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ theme: next }),
+  }).catch(() => {});
 }
 
-onMounted(() => {
-  settingsStore.load();
-  settingsStore.loadConfig();
+onMounted(async () => {
+  // Sync theme from user-settings on load
+  try {
+    const res = await fetch(`${SERVER}/api/user-settings`, { credentials: "include" });
+    if (res.ok) {
+      const data = await res.json() as { theme?: string };
+      if (data.theme) {
+        darkPref.value = data.theme === "dark";
+        localStorage.setItem("theme", data.theme);
+      }
+    }
+  } catch { /* keep localStorage value */ }
 });
 
 watch(isDark, (dark) => {
