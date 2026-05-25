@@ -36,7 +36,7 @@ function computeHash(filePath: string): string {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
-export async function importFile(originalPath: string, push?: PushFn, userId?: string, displayName?: string): Promise<string> {
+export async function importFile(originalPath: string, push?: PushFn, userId?: string, displayName?: string, ocrOnly = false): Promise<string> {
   const settings = getSettings();
 
   const ext = extname(originalPath);
@@ -98,9 +98,9 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   const documentId = insertResult.insertedId.toString();
 
   push?.({ type: "document:queued", documentId: documentId as any, fileName });
-  console.log(`[importer] Queued document ${documentId}: ${fileName}`);
+  console.log(`[importer] Queued document ${documentId}: ${fileName}${ocrOnly ? " (OCR-only)" : ""}`);
 
-  processDocument(documentId, managedPath, mimeType, ext, push, userId).catch(async (err) => {
+  processDocument(documentId, managedPath, mimeType, ext, push, userId, ocrOnly).catch(async (err) => {
     console.error(`[importer] Fatal error processing doc ${documentId}:`, err);
     await col("documents").updateOne(
       { _id: insertResult.insertedId },
@@ -118,7 +118,8 @@ export async function processDocument(
   mimeType: string,
   ext: string,
   push?: PushFn,
-  userId?: string
+  userId?: string,
+  ocrOnly = false
 ) {
   const settings = getSettings();
   const docFilter = { _id: new ObjectId(documentId) } as any;
@@ -166,7 +167,7 @@ export async function processDocument(
 
   push?.({ type: "document:progress", documentId: documentId as any, stage: "ai_extraction", progress: 50 });
 
-  if (settings.autoExtract && rawText.trim().length > 0) {
+  if (!ocrOnly && settings.autoExtract && rawText.trim().length > 0) {
     const docRow = await col("documents").findOne(docFilter) as any;
 
     const template = await pickTemplate(rawText);

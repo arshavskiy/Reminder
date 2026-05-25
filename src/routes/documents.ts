@@ -129,7 +129,9 @@ export function registerDocumentRoutes(app: express.Application) {
         return;
       }
 
-      if (userRole === "user") {
+      const ocrOnly = req.query.ocrOnly === "true";
+
+      if (!ocrOnly && userRole === "user") {
         const count = await col("documents").countDocuments({ user_id: userId });
         if (count + files.length > getSettings().userDocumentLimit) {
           res.status(403).json({ error: "document_limit_reached" });
@@ -153,7 +155,7 @@ export function registerDocumentRoutes(app: express.Application) {
           // If the result contains replacement chars, the name was already UTF-8
           if (displayName.includes("�")) displayName = file.originalname;
         } catch { /* keep original */ }
-        const id = await importFile(destPath, undefined, userId, displayName);
+        const id = await importFile(destPath, undefined, userId, displayName, ocrOnly);
         ids.push(String(id));
       }
 
