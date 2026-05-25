@@ -7,6 +7,9 @@
     "node": ">=23"
   },
   "scripts": {
+    "dev": "npm --prefix client run dev:all",
+    "dev:client": "npm --prefix client run dev",
+    "dev:server": "npm --prefix server run dev",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

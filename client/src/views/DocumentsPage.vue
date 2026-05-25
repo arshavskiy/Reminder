@@ -23,10 +23,10 @@
     <div v-if="isRegularUser" style="margin-bottom: 12px">
       <n-space justify="space-between" style="margin-bottom: 4px">
         <span style="font-size: 13px; color: var(--text-secondary)">
-          מסמכים שהועלו: {{ store.total }} / {{ settingsStore.userDocumentLimit }}
+          מסמכים שנסרקו: {{ store.totalAll }} / {{ store.documentLimit }}
         </span>
         <span v-if="limitReached" style="font-size: 13px; color: #e88080; font-weight: 600">
-          הגעת למגבלה — שדרג ל-Pro
+          הגעת למגבלת סריקות — שדרג ל-Pro
         </span>
       </n-space>
       <n-progress
@@ -47,7 +47,7 @@
       @dragleave.prevent="isDragging = false"
       @drop.prevent="!limitReached && onDrop($event)"
     >
-      <span v-if="limitReached" style="color: #e88080">הגעת למגבלת {{ settingsStore.userDocumentLimit }} המסמכים</span>
+      <span v-if="limitReached" style="color: #e88080">הגעת למגבלת {{ store.documentLimit }} סריקות</span>
       <span v-else-if="isDragging">שחרר כאן לייבוא...</span>
       <span v-else style="color: #666">גרור קבצים לכאן (PDF, DOCX, XLSX, PNG...)</span>
     </div>
@@ -88,27 +88,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, h } from "vue";
-const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
-import { useRouter } from "vue-router";
-import { NH2, NSpace, NButton, NDataTable, NModal, NInput, NAlert, NProgress, useMessage } from "naive-ui";
-import { useDocumentsStore } from "../stores/documents.js";
-import { useSettingsStore } from "../stores/settings.js";
-import { useAuthStore } from "../stores/auth.js";
-import { api } from "../services/apiService.js";
+import {computed, h, onMounted, onUnmounted, ref} from "vue";
+import {useRouter} from "vue-router";
+import {NAlert, NButton, NDataTable, NH2, NInput, NModal, NProgress, NSpace, useMessage} from "naive-ui";
+import {useDocumentsStore} from "../stores/documents.js";
+import {useAuthStore} from "../stores/auth.js";
+import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type { Document } from "@shared/types.js";
+import type {Document} from "@shared/types.js";
+
+const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 const store = useDocumentsStore();
-const settingsStore = useSettingsStore();
 const authStore = useAuthStore();
 const router = useRouter();
 
 const isRegularUser = computed(() => authStore.user?.role === "user");
 const quotaPercent = computed(() =>
-  Math.min(100, Math.round((store.total / settingsStore.userDocumentLimit) * 100))
+  Math.min(100, Math.round((store.totalAll / store.documentLimit) * 100))
 );
-const limitReached = computed(() => isRegularUser.value && store.total >= settingsStore.userDocumentLimit);
+const limitReached = computed(() => isRegularUser.value && store.totalAll >= store.documentLimit);
 const message = useMessage();
 
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -121,7 +120,24 @@ const queuedCount = ref(0);
 const rescanning = ref(false);
 const deletingCorrupt = ref(false);
 
-onMounted(() => store.fetch());
+// ── Status polling ────────────────────────────────────────────────────────────
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+function hasInProgress(): boolean {
+  return store.rows.some(r => r.processing_status === "queued" || r.processing_status === "processing");
+}
+
+function schedulePoll() {
+  if (pollTimer) return;
+  pollTimer = setTimeout(async () => {
+    pollTimer = null;
+    await store.fetch();
+    if (hasInProgress()) schedulePoll();
+  }, 3000);
+}
+
+onMounted(() => { store.fetch().then(() => { if (hasInProgress()) schedulePoll(); }); });
+onUnmounted(() => { if (pollTimer) clearTimeout(pollTimer); });
 
 // ── Browser file picker ───────────────────────────────────────────────────────
 async function onFileInputChange(e: Event) {
@@ -142,13 +158,16 @@ async function onDrop(e: DragEvent) {
 async function uploadFiles(files: File[]) {
   uploading.value = true;
   try {
-    const { ids } = await api.documents.upload(files);
-    queuedCount.value += ids.length;
-    message.info(`${ids.length} מסמכים נוספו לתור עיבוד`);
-    store.fetch();
+    const { ids, duplicates } = await api.documents.upload(files);
+    const newCount = ids.length - (duplicates?.length ?? 0);
+    if (newCount > 0) message.info(`${newCount} מסמכים נוספו לתור עיבוד`);
+    if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);
+    await store.fetch();
+    schedulePoll();
   } catch (e: any) {
     if (e?.message === "document_limit_reached") {
-      message.error("הגעת למגבלת ${settingsStore.userDocumentLimit} המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.");
+      message.error(e.serverMessage ?? `הגעת למגבלת ${store.documentLimit} המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.`);
+      store.fetch();
     } else {
       message.error(String(e));
     }
@@ -167,10 +186,11 @@ async function doImportPath() {
     message.info("המסמך נוסף לתור עיבוד");
     showImport.value = false;
     importPath.value = "";
-    store.fetch();
+    await store.fetch();
+    schedulePoll();
   } catch (e: any) {
     if (e?.message?.includes("document_limit_reached")) {
-      message.error("הגעת למגבלת ${settingsStore.userDocumentLimit} המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.");
+      message.error(`הגעת למגבלת ${store.documentLimit} המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.`);
     } else {
       message.error(String(e));
     }
