@@ -95,7 +95,7 @@ export const api = {
         err.limit = data.limit;
         throw err;
       }
-      return res.json() as Promise<{ ids: number[] }>;
+      return res.json() as Promise<{ ids: string[]; duplicates: string[] }>;
     },
     delete: (id: string) => del(`/documents/${id}`),
     reprocess: (id: string) => post<{ ok: boolean }>(`/documents/${id}/reprocess`),

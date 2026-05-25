@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, h, onMounted, ref} from "vue";
+import {computed, h, onMounted, onUnmounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NAlert, NButton, NDataTable, NH2, NInput, NModal, NProgress, NSpace, useMessage} from "naive-ui";
 import {useDocumentsStore} from "../stores/documents.js";
@@ -120,7 +120,24 @@ const queuedCount = ref(0);
 const rescanning = ref(false);
 const deletingCorrupt = ref(false);
 
-onMounted(() => store.fetch());
+// ── Status polling ────────────────────────────────────────────────────────────
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+function hasInProgress(): boolean {
+  return store.rows.some(r => r.processing_status === "queued" || r.processing_status === "processing");
+}
+
+function schedulePoll() {
+  if (pollTimer) return;
+  pollTimer = setTimeout(async () => {
+    pollTimer = null;
+    await store.fetch();
+    if (hasInProgress()) schedulePoll();
+  }, 3000);
+}
+
+onMounted(() => { store.fetch().then(() => { if (hasInProgress()) schedulePoll(); }); });
+onUnmounted(() => { if (pollTimer) clearTimeout(pollTimer); });
 
 // ── Browser file picker ───────────────────────────────────────────────────────
 async function onFileInputChange(e: Event) {
@@ -141,10 +158,12 @@ async function onDrop(e: DragEvent) {
 async function uploadFiles(files: File[]) {
   uploading.value = true;
   try {
-    const { ids } = await api.documents.upload(files);
-    queuedCount.value += ids.length;
-    message.info(`${ids.length} מסמכים נוספו לתור עיבוד`);
-    store.fetch();
+    const { ids, duplicates } = await api.documents.upload(files);
+    const newCount = ids.length - (duplicates?.length ?? 0);
+    if (newCount > 0) message.info(`${newCount} מסמכים נוספו לתור עיבוד`);
+    if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);
+    await store.fetch();
+    schedulePoll();
   } catch (e: any) {
     if (e?.message === "document_limit_reached") {
       message.error(e.serverMessage ?? `הגעת למגבלת ${store.documentLimit} המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.`);
@@ -167,7 +186,8 @@ async function doImportPath() {
     message.info("המסמך נוסף לתור עיבוד");
     showImport.value = false;
     importPath.value = "";
-    store.fetch();
+    await store.fetch();
+    schedulePoll();
   } catch (e: any) {
     if (e?.message?.includes("document_limit_reached")) {
       message.error(`הגעת למגבלת ${store.documentLimit} המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.`);
