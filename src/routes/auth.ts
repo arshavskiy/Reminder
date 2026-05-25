@@ -2,19 +2,19 @@ import express from "express";
 import {col} from "../db/db";
 import {getSettings} from "../settings";
 import {
-    exchangeCodeForIdToken,
-    generateCodeVerifier,
-    generateState,
-    getGoogleAuthUrl,
-    verifyIdToken,
+  exchangeCodeForIdToken,
+  generateCodeVerifier,
+  generateState,
+  getGoogleAuthUrl,
+  verifyIdToken,
 } from "../auth/google";
 import {createSession, extractSessionFromCookie, revokeSession, verifySession,} from "../auth/session";
 import {
-    generateToken,
-    hashPassword,
-    sendPasswordResetEmail,
-    sendVerificationEmail,
-    verifyPassword,
+  generateToken,
+  hashPassword,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+  verifyPassword,
 } from "../auth/emailAuth";
 
 export function registerAuthRoutes(app: express.Application) {
@@ -115,7 +115,7 @@ export function registerAuthRoutes(app: express.Application) {
             user_id: user._id.toString(),
             theme: "light",
             email_from_name: null,
-            reminder_advance_days: "[90,60,30]",
+            reminder_advance_days: "[30]",
             ocr_language: "heb+eng",
           },
         },
@@ -184,7 +184,7 @@ export function registerAuthRoutes(app: express.Application) {
             user_id: user._id.toString(),
             theme: "light",
             email_from_name: null,
-            reminder_advance_days: "[90,60,30]",
+            reminder_advance_days: "[30]",
             ocr_language: "heb+eng",
           },
         },

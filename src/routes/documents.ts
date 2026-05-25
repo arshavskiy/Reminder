@@ -76,6 +76,41 @@ export function registerDocumentRoutes(app: express.Application) {
     res.json(flatDoc(doc));
   });
 
+  // GET /api/documents/:id/download — returns a presigned URL or streams the local file
+  app.get("/api/documents/:id/download", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const doc = await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
+    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+
+    // If stored in S3 return a presigned URL (redirect)
+    if (doc.spaces_key) {
+      const { getSpacesSignedUrl } = await import("../storage/spaces.js");
+      const url = await getSpacesSignedUrl(doc.spaces_key, 3600);
+      res.redirect(url);
+      return;
+    }
+
+    // Fall back to streaming local file
+    try {
+      const filePath = await resolveDocumentFilePath(doc);
+      const { createReadStream } = await import("fs");
+      res.setHeader("Content-Type", doc.mime_type ?? "application/octet-stream");
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.file_name)}"`);
+      createReadStream(filePath).pipe(res);
+    } catch {
+      res.status(404).json({ error: "File not found on disk" });
+    }
+  });
+
   // POST /api/documents/import
   app.post("/api/documents/import", async (req, res) => {
     let userId: string;

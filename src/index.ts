@@ -66,9 +66,7 @@ registerReminderRoutes(app);
 registerTaskRoutes(app);
 registerSearchRoutes(app);
 registerEmailRoutes(app);
-registerSettingsRoutes(app, (updated) => {
-  if (updated.watchFolderEnabled && updated.watchFolder) startWatchFolder();
-});
+registerSettingsRoutes(app);
 registerDashboardRoutes(app);
 registerTemplateRoutes(app);
 registerEquipmentRoutes(app);
