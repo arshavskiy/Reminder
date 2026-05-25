@@ -34,10 +34,11 @@ export function registerDocumentRoutes(app: express.Application) {
       { $set: { user_id: userId, updated_at: new Date() } }
     );
 
-    const filter: Record<string, any> = { user_id: userId };
+    const baseFilter: Record<string, any> = { user_id: userId };
+    const filter: Record<string, any> = { ...baseFilter };
     if (status) filter.processing_status = status;
 
-    const [rows, total] = await Promise.all([
+    const [rows, total, totalAll] = await Promise.all([
       col("documents")
         .find(filter)
         .sort({ created_at: -1 })
@@ -45,9 +46,10 @@ export function registerDocumentRoutes(app: express.Application) {
         .limit(limit)
         .toArray(),
       col("documents").countDocuments(filter),
+      status ? col("documents").countDocuments(baseFilter) : Promise.resolve(-1),
     ]);
 
-    res.json({ rows: rows.map(flatDoc), total });
+    res.json({ rows: rows.map(flatDoc), total, totalAll: totalAll === -1 ? total : totalAll });
   });
 
   // GET /api/documents/:id
