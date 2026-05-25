@@ -53,19 +53,47 @@ PDF, DOCX, XLSX, PNG, JPEG, TIFF (and plain `.txt`, `.md`)
 
 ### Processing pipeline
 1. SHA-256 dedup — skip if user already has this file
-2. Copy to `data/documents/<hash>.<ext>`
-3. Upload to DigitalOcean Spaces if configured (fallback: local disk)
-4. Text extraction:
+2. Copy to `data/documents/<hash>.<ext>`; staging file in `uploads/` deleted immediately after copy
+3. Upload to DigitalOcean Spaces / S3-compatible storage if configured (fallback: local disk)
+4. Text extraction (each step logs format, char count, and first 200 chars):
    - PDF → `pdf-parse`; OCR fallback via Tesseract if text layer is empty
    - Image → Tesseract OCR
-   - DOCX → Mammoth
+   - DOCX → Mammoth; if extracted text < 50 chars, falls back to Tesseract on embedded page images (supports scanned DOCX)
    - XLSX → SheetJS
 5. Template matching — keyword-based selection of extraction schema
 6. AI extraction — OpenAI `gpt-4o-mini` or local Ollama
 7. Entity saving — client, contract, equipment, tasks, reminders
 
+### Pipeline feature flags (per-user)
+Each upload can toggle four stages independently. Flags are saved in `user_settings` and applied via `PipelineOptions`:
+
+| Flag | Default | Controls |
+|------|---------|----------|
+| `pipeline_ocr` | `true` | Text extraction stage |
+| `pipeline_ai` | `true` | AI extraction stage |
+| `pipeline_s3` | `true` | S3/Spaces upload |
+| `pipeline_entities` | `true` | Client/contract/reminder saving |
+
+Flags are exposed as checkboxes in the Documents page upload area. Changes debounce-save to the server (600 ms).
+
+### On-demand AI extraction modal
+When `pipeline_ai` is enabled, uploading files opens an extraction-fields modal instead of uploading immediately. The user defines which fields to extract:
+
+| Column | Description |
+|--------|-------------|
+| Key | Machine-readable field name |
+| תווית | Hebrew display label |
+| סוג | Field type (`text`, `date`, `number`, `currency`, `boolean`) |
+
+"+ הוסף שדה" adds a new row. "העלה ללא הגדרה" skips field definition and uploads without AI schema. "הרץ חילוץ" / "העלה ועבד" confirms.
+
+The `↻` (reprocess) button on existing documents now opens the same modal in "existing doc" mode, so ad-hoc extraction can be re-run with a different schema without re-uploading.
+
 ### Reprocessing
-Any document can be re-run through OCR + AI extraction without re-uploading.
+Any document can be re-run through the extraction pipeline via `POST /api/documents/:id/extract`:
+- Supply `fields[]` (ad-hoc schema) **or** `templateId` (saved template) **or** neither (generic extraction)
+- Previous extraction data (extractions, tasks, contracts, reminders, timeline events) is wiped before re-running
+- `scanned_count` is incremented only when extraction actually runs
 
 ---
 
@@ -80,6 +108,12 @@ Prompt returns `ExtractionResult`:
 
 ### Template-based extraction (`extractWithTemplate`)
 Template defines a field list and an `expiry_field`. Prompt is structured per template type (inspection report, contract, invoice, etc.).
+
+### Ad-hoc extraction (no saved template)
+`POST /api/documents/:id/extract` accepts an inline `fields[]` array (`key`, `label_he`, `type`). A transient `DocTemplate` is constructed server-side so the same `extractWithTemplate` path runs without saving anything to `doc_templates`.
+
+### Quota (`scanned_count`)
+`scanned_count` in `user_settings` is the authoritative extraction quota counter. It increments **only** when AI extraction actually ran on a document — not on plain upload, OCR-only, or entity-save-only operations. `document_limit_reached` is checked and set using this counter.
 
 ### Backends
 - **OpenAI** — `gpt-4o-mini` via `OPENAI_API_KEY`
@@ -188,6 +222,7 @@ Dedup: existing non-dismissed reminder for the same `(source_id, advance_days)` 
 - Email sender name
 - Reminder advance days
 - OCR language override
+- Pipeline flags: `pipeline_ocr`, `pipeline_ai`, `pipeline_s3`, `pipeline_entities`
 
 ---
 

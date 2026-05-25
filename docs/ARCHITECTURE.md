@@ -99,32 +99,58 @@ Sessions are stored in the `sessions` MongoDB collection with a TTL index on `ex
 
 ## Document Pipeline
 
+### Pipeline options (`PipelineOptions`)
+
+Every entry point into the pipeline (`importFile`, `processDocument`, `POST /documents/:id/extract`) accepts a `PipelineOptions` object:
+
+```typescript
+interface PipelineOptions {
+  ocr?: boolean;       // default true — run text extraction
+  ai?: boolean;        // default true — run AI extraction
+  s3?: boolean;        // default true — upload to object storage
+  entities?: boolean;  // default true — save client/contract/reminder entities
+  templateId?: number; // force a specific doc_template instead of auto-matching
+}
+```
+
+Per-user defaults are read from `user_settings` (`pipeline_ocr`, `pipeline_ai`, `pipeline_s3`, `pipeline_entities`) at the start of each upload request.
+
 ### Ingestion (`importFile`)
 
 1. Compute SHA-256 of the file — skip if hash already exists in `documents` for this user
-2. Copy file to `data/documents/<hash>.<ext>` (managed path)
-3. Upload to DigitalOcean Spaces if `DO_SPACES_KEY` is set; store `spaces_key` and `spaces_url`
+2. Copy file to `data/documents/<hash>.<ext>` (managed path); delete the staging `uploads/` file immediately after copy
+3. Upload to DigitalOcean Spaces / S3-compatible storage if `DO_SPACES_KEY` is set and `opts.s3` is true; store `spaces_key` and `spaces_url`
 4. Insert document record with `processing_status: "queued"`
 5. Call `processDocument()` asynchronously (does not block the HTTP response)
 
 ### Processing (`processDocument`)
 
-1. **Text extraction** — select parser based on MIME type:
+1. **Text extraction** (gated by `opts.ocr`) — select parser based on MIME type. Each path logs `[format] N chars: <preview>`:
    - PDF: `pdf-parse` → if fewer than 50 chars extracted, fall back to Tesseract OCR
    - Image: Tesseract OCR (language from `user_settings.ocr_language`, default `heb+eng`)
-   - DOCX: Mammoth → plain text
+   - DOCX: Mammoth with embedded-image capture → if fewer than 50 chars, Tesseract OCR on each embedded page image (handles scanned DOCX)
    - XLSX: SheetJS → joined cell values
-2. **Template matching** (`pickTemplate`) — check `doc_templates` for keyword matches in the raw text
-3. **AI extraction**:
+2. **Template matching** (`pickTemplate`) — check `doc_templates` for keyword matches in the raw text; overridden by `opts.templateId`
+3. **AI extraction** (gated by `opts.ai && settings.autoExtract`):
    - Template match → `extractWithTemplate` — structured prompt with per-template field list
    - No match → `extractDocument` — generic extraction prompt returning `ExtractionResult`
 4. **Save extraction** record to `extractions` (raw JSON for audit)
-5. **Save entities** (`saveTemplateEntities` / `saveExtractionEntities`):
+5. **Save entities** (gated by `opts.entities`) (`saveTemplateEntities` / `saveExtractionEntities`):
    - `findOrCreateClient` — 4-level dedup (see below)
    - Upsert contract (keyed on `document_id`)
    - Insert tasks
    - Upsert equipment (keyed on `serial_number` or `name`)
    - `generateContractReminders` — one reminder per advance day
+6. **Quota increment** — `scanned_count` in `user_settings` is incremented only when AI extraction ran successfully (not on OCR-only or entity-save-only paths)
+
+### On-demand extraction (`POST /api/documents/:id/extract`)
+
+Wipes previous extraction data (extractions, tasks, contracts, reminders, document_clients, timeline_events), then runs:
+- `fields[]` supplied → build transient `DocTemplate` inline, call `extractWithTemplate`
+- `templateId` supplied → look up saved template, call `extractWithTemplate`
+- Neither → call `extractDocument` (generic)
+
+`scanned_count` is incremented after successful extraction.
 
 ### Client Deduplication (`findOrCreateClient`)
 
