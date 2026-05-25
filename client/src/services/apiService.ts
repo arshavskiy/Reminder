@@ -1,9 +1,19 @@
 import type {
-  Document, Client, Contract, Reminder, Task,
-  DashboardStats, GlobalSearchResult, EmailLogEntry,
-  Extraction, ReminderWithContext, ContractWithClient,
-  ClientDetail, AppSettings,
-  DocTemplate, EmailTemplate, Equipment,
+  AppSettings,
+  Client,
+  ClientDetail,
+  Contract,
+  ContractWithClient,
+  DashboardStats,
+  DocTemplate,
+  Document,
+  EmailLogEntry,
+  EmailTemplate,
+  Equipment,
+  GlobalSearchResult,
+  Reminder,
+  ReminderWithContext,
+  Task,
 } from "../../src/shared/types.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -69,7 +79,7 @@ export const api = {
 
   documents: {
     list: (params?: { status?: string; limit?: number; offset?: number }) => {
-      return get<{ rows: Document[]; total: number }>(`/documents${qs(params)}`);
+      return get<{ rows: Document[]; total: number; totalAll: number; documentLimit: number }>(`/documents${qs(params)}`);
     },
     get: (id: string) => get<Document>(`/documents/${id}`),
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
@@ -79,7 +89,11 @@ export const api = {
       const res = await fetch(`${BASE}/documents/upload`, { method: "POST", body: fd, credentials: "include" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as any;
-        throw new Error(data.error ?? `Upload failed: ${res.status}`);
+        const err = new Error(data.error ?? `Upload failed: ${res.status}`) as any;
+        err.serverMessage = data.message;
+        err.remaining = data.remaining;
+        err.limit = data.limit;
+        throw err;
       }
       return res.json() as Promise<{ ids: number[] }>;
     },
