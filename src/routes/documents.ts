@@ -3,29 +3,13 @@ import {extname, join} from "path";
 import {mkdirSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
-import {
-    importFile,
-    type PipelineOptions,
-    processDocument,
-    saveExtractionEntities,
-    saveTemplateEntities
-} from "../pipeline/importer";
+import {importFile, processDocument} from "../pipeline/importer";
 import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
 import multer from "multer";
 
 const upload = multer({ storage: multer.memoryStorage() });
-
-async function getUserPipelineOpts(userId: string): Promise<PipelineOptions> {
-  const s = await col("user_settings").findOne({ user_id: userId }) as any;
-  return {
-    ocr:      s?.pipeline_ocr      ?? true,
-    ai:       s?.pipeline_ai       ?? true,
-    s3:       s?.pipeline_s3       ?? true,
-    entities: s?.pipeline_entities ?? true,
-  };
-}
 
 export function registerDocumentRoutes(app: express.Application) {
   // GET /api/documents
@@ -54,7 +38,7 @@ export function registerDocumentRoutes(app: express.Application) {
     const filter: Record<string, any> = { ...baseFilter };
     if (status) filter.processing_status = status;
 
-    const [rows, total, userSettingsDoc] = await Promise.all([
+    const [rows, total, totalAll] = await Promise.all([
       col("documents")
         .find(filter)
         .sort({ created_at: -1 })
@@ -62,13 +46,10 @@ export function registerDocumentRoutes(app: express.Application) {
         .limit(limit)
         .toArray(),
       col("documents").countDocuments(filter),
-      col("user_settings").findOne({ user_id: userId }) as Promise<any>,
+      status ? col("documents").countDocuments(baseFilter) : Promise.resolve(-1),
     ]);
 
-    const scannedCount: number = userSettingsDoc?.scanned_count ?? 0;
-    const documentLimit: number = userSettingsDoc?.document_limit ?? getSettings().userDocumentLimit;
-
-    res.json({ rows: rows.map(flatDoc), total, totalAll: scannedCount, documentLimit });
+    res.json({ rows: rows.map(flatDoc), total, totalAll: totalAll === -1 ? total : totalAll });
   });
 
   // GET /api/documents/:id
@@ -92,41 +73,6 @@ export function registerDocumentRoutes(app: express.Application) {
     res.json(flatDoc(doc));
   });
 
-  // GET /api/documents/:id/download — returns a presigned URL or streams the local file
-  app.get("/api/documents/:id/download", async (req, res) => {
-    let userId: string;
-    try {
-      const ctx = await requireAuth(req.headers.cookie);
-      userId = ctx.userId;
-    } catch (e) {
-      const err = e as HTTPException;
-      res.status(err.status ?? 401).json({ error: err.message });
-      return;
-    }
-
-    const doc = await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
-    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
-
-    // If stored in S3 return a presigned URL (redirect)
-    if (doc.spaces_key) {
-      const { getSpacesSignedUrl } = await import("../storage/spaces.js");
-      const url = await getSpacesSignedUrl(doc.spaces_key, 3600);
-      res.redirect(url);
-      return;
-    }
-
-    // Fall back to streaming local file
-    try {
-      const filePath = await resolveDocumentFilePath(doc);
-      const { createReadStream } = await import("fs");
-      res.setHeader("Content-Type", doc.mime_type ?? "application/octet-stream");
-      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.file_name)}"`);
-      createReadStream(filePath).pipe(res);
-    } catch {
-      res.status(404).json({ error: "File not found on disk" });
-    }
-  });
-
   // POST /api/documents/import
   app.post("/api/documents/import", async (req, res) => {
     let userId: string;
@@ -142,9 +88,8 @@ export function registerDocumentRoutes(app: express.Application) {
     }
 
     if (userRole === "user") {
-      const userSettingsDoc = await col("user_settings").findOne({ user_id: userId }) as any;
-      const scannedCount: number = userSettingsDoc?.scanned_count ?? 0;
-      if (scannedCount >= getSettings().userDocumentLimit) {
+      const count = await col("documents").countDocuments({ user_id: userId });
+      if (count >= getSettings().userDocumentLimit) {
         res.status(403).json({ error: "document_limit_reached" });
         return;
       }
@@ -156,8 +101,7 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
     try {
-      const pipelineOpts = await getUserPipelineOpts(userId);
-      const id = await importFile(body.filePath, undefined, userId, undefined, false, pipelineOpts);
+      const id = await importFile(body.filePath, undefined, userId);
       res.json({ id });
     } catch (err) {
       res.status(500).json({ error: String(err) });
@@ -185,15 +129,9 @@ export function registerDocumentRoutes(app: express.Application) {
         return;
       }
 
-      const ocrOnly = req.query.ocrOnly === "true";
-      const templateId = req.query.templateId ? parseInt(req.query.templateId as string) : undefined;
-
-      const pipelineOpts = { ...await getUserPipelineOpts(userId), ...(templateId ? { templateId } : {}) };
-
-      if (!ocrOnly && pipelineOpts.ai && userRole === "user") {
-        const userSettingsDoc = await col("user_settings").findOne({ user_id: userId }) as any;
-        const scannedCount: number = userSettingsDoc?.scanned_count ?? 0;
-        if (scannedCount + files.length > getSettings().userDocumentLimit) {
+      if (userRole === "user") {
+        const count = await col("documents").countDocuments({ user_id: userId });
+        if (count + files.length > getSettings().userDocumentLimit) {
           res.status(403).json({ error: "document_limit_reached" });
           return;
         }
@@ -215,7 +153,7 @@ export function registerDocumentRoutes(app: express.Application) {
           // If the result contains replacement chars, the name was already UTF-8
           if (displayName.includes("�")) displayName = file.originalname;
         } catch { /* keep original */ }
-        const id = await importFile(destPath, undefined, userId, displayName, ocrOnly, pipelineOpts);
+        const id = await importFile(destPath, undefined, userId, displayName);
         ids.push(String(id));
       }
 
@@ -463,101 +401,6 @@ export function registerDocumentRoutes(app: express.Application) {
     });
 
     res.json({ ok: true });
-  });
-
-  // POST /api/documents/:id/extract — run AI extraction on existing raw_text with a specific template
-  app.post("/api/documents/:id/extract", async (req, res) => {
-    let userId: string;
-    try {
-      const ctx = await requireAuth(req.headers.cookie);
-      userId = ctx.userId;
-    } catch (e) {
-      const err = e as HTTPException;
-      res.status(err.status ?? 401).json({ error: err.message });
-      return;
-    }
-
-    const id = req.params.id;
-    const doc = (await col("documents").findOne({ ...idFilter(id), user_id: userId })) as any;
-    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
-
-    const rawText: string = doc.raw_text ?? "";
-    if (!rawText.trim()) {
-      res.status(400).json({ error: "no_raw_text" });
-      return;
-    }
-
-    // Accept either an ad-hoc fields list OR a saved templateId
-    const body = req.body as {
-      fields?: Array<{ key: string; label_he: string; type?: string }>;
-      templateId?: number;
-    };
-    const { extractDocument, extractWithTemplate } = await import("../pipeline/extractor.js");
-
-    try {
-      // Wipe previous extraction data
-      await col("extractions").deleteMany({ document_id: id });
-      await col("tasks").deleteMany({ document_id: id });
-      const prevContracts = await col("contracts").find({ document_id: id }).toArray();
-      const prevContractIds = prevContracts.map((c: any) => c._id?.toString());
-      if (prevContractIds.length > 0) {
-        await col("reminders").deleteMany({ source_type: "contract_expiry", source_id: { $in: prevContractIds } });
-      }
-      await col("reminders").deleteMany({ document_id: id });
-      await col("contracts").deleteMany({ document_id: id });
-      await col("document_clients").deleteMany({ document_id: id });
-      await col("timeline_events").deleteMany({ source_type: "document", source_id: id });
-
-      // Build an ad-hoc template from inline fields if provided
-      let template: import("../shared/types.js").DocTemplate | null = null;
-      if (body.fields && body.fields.length > 0) {
-        template = {
-          id: 0,
-          name: "חילוץ מותאם אישית",
-          description: null,
-          match_keywords: [],
-          fields: body.fields.map(f => ({
-            key: f.key,
-            label_he: f.label_he,
-            type: (f.type ?? "text") as import("../shared/types.js").FieldType,
-          })),
-          expiry_field: null,
-          is_default: 0,
-          is_builtin: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-      } else if (body.templateId) {
-        try { template = await col("doc_templates").findOne({ _id: new ObjectId(body.templateId) }) as any; } catch {}
-      }
-
-      if (template) {
-        const run = await extractWithTemplate(rawText, template, id, doc.file_name);
-        await col("extractions").insertOne({ document_id: id, backend: run.backend, model: run.model, result_json: run.rawJson, raw_text: rawText, parsed_ok: run.fields ? 1 : 0, error: run.error ?? null, exec_ms: run.execMs, created_at: new Date() } as any);
-        if (run.fields) {
-          await col("documents").updateOne(idFilter(id), { $set: { extracted_fields: JSON.stringify(run.fields), document_type: template.name, updated_at: new Date() } });
-          await saveTemplateEntities(id, template, run.fields, userId);
-        }
-      } else {
-        const extraction = await extractDocument(rawText, id, doc.file_name);
-        await col("extractions").insertOne({ document_id: id, backend: extraction.backend, model: extraction.model, result_json: extraction.rawJson, raw_text: rawText, parsed_ok: extraction.result ? 1 : 0, error: extraction.error ?? null, exec_ms: extraction.execMs, created_at: new Date() } as any);
-        if (extraction.result) {
-          await saveExtractionEntities(id, extraction.result, userId);
-        }
-      }
-
-      await col("documents").updateOne(idFilter(id), { $set: { processing_status: "done", updated_at: new Date() } });
-
-      // Count this as a scan since AI extraction ran
-      await col("user_settings").updateOne(
-        { user_id: userId },
-        { $inc: { scanned_count: 1 } }
-      );
-
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: String(err) });
-    }
   });
 }
 

@@ -80,9 +80,8 @@ async function applyIndexes(db: Db): Promise<void> {
   // user_settings
   await db.collection("user_settings").createIndex({ user_id: 1 }, { unique: true, sparse: true });
 
-  // documents — drop old global file_hash unique index, replace with per-user compound
-  try { await db.collection("documents").dropIndex("file_hash_1"); } catch { /* didn't exist */ }
-  await db.collection("documents").createIndex({ user_id: 1, file_hash: 1 }, { unique: true, sparse: true });
+  // documents
+  await db.collection("documents").createIndex({ file_hash: 1 }, { unique: true, sparse: true });
   await db.collection("documents").createIndex({ processing_status: 1 });
   await db.collection("documents").createIndex({ user_id: 1 });
   await db.collection("documents").createIndex({ created_at: -1 });

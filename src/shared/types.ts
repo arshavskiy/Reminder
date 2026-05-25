@@ -54,9 +54,6 @@ export interface AppSettings {
 
   // Quotas
   userDocumentLimit: number;
-
-  // Process documents without saving files locally or to S3
-  processOnly: boolean;
 }
 
 // Phase 2: Authentication types
@@ -84,14 +81,7 @@ export interface Session {
   ip: string | null;
 }
 
-export interface PipelineFlags {
-  pipeline_ocr: boolean;        // run Tesseract OCR
-  pipeline_ai: boolean;         // run AI extraction
-  pipeline_s3: boolean;         // upload to S3/object-storage
-  pipeline_entities: boolean;   // save clients / contracts / reminders
-}
-
-export interface UserSettings extends PipelineFlags {
+export interface UserSettings {
   user_id: number;
   theme: "dark" | "light";
   email_from_name: string | null;

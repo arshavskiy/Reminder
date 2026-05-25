@@ -1,5 +1,6 @@
 import {existsSync, readFileSync} from "fs";
 import {basename, extname} from "path";
+import {getSettings, saveSettings} from "../settings";
 
 // Patterns that identify credential values
 const KEY_PATTERNS: Array<{ name: string; regex: RegExp; settingKey: string }> = [
@@ -63,37 +64,33 @@ export function scanFileForKeys(filePath: string): ScanResult {
   return result;
 }
 
-// Maps settingKey → the env var name to set
-const SETTING_TO_ENV: Record<string, string> = {
-  openAiKey:        "OPENAI_LOCAL_API_KEY",
-  smtpPass:         "SMTP_PASS",
-  smtpUser:         "SMTP_USER",
-  smtpHost:         "SMTP_HOST",
-  emailFrom:        "EMAIL_FROM",
-  googleClientId:   "GOOGLE_CLIENT_ID",
-  googleClientSecret: "GOOGLE_CLIENT_SECRET",
-  doSpacesKey:      "DO_SPACES_KEY",
-  doSpacesSecret:   "DO_SPACES_SECRET",
-  doSpacesBucket:   "DO_SPACES_BUCKET",
-  doSpacesEndpoint: "DO_SPACES_ENDPOINT",
-  _mongoUri:        "MONGODB_URI",
-};
-
 export function applyScannedKeys(results: ScanResult[]): number {
+  const settings = getSettings();
   let applied = 0;
 
   for (const result of results) {
     for (const item of result.found) {
-      const envVar = SETTING_TO_ENV[item.settingKey];
-      if (envVar && !process.env[envVar]) {
-        process.env[envVar] = item.value;
-        console.log(`[keyScanner] Set ${envVar} from ${result.file}`);
+      // MongoDB URI is an env var only — set process.env, not saved settings
+      if (item.settingKey === "_mongoUri") {
+        if (!process.env.MONGODB_URI) {
+          process.env.MONGODB_URI = item.value;
+          console.log(`[keyScanner] Set MONGODB_URI from ${result.file}`);
+          applied++;
+        }
+        continue;
+      }
+
+      const key = item.settingKey as keyof typeof settings;
+      if (key in settings && !settings[key]) {
+        (settings as any)[key] = item.value;
+        console.log(`[keyScanner] Applied ${item.name} from ${result.file}`);
         applied++;
       }
     }
   }
 
   if (applied > 0) {
+    saveSettings(settings);
     console.log(`[keyScanner] Applied ${applied} credential(s) from scanned files`);
   }
 
@@ -101,7 +98,7 @@ export function applyScannedKeys(results: ScanResult[]): number {
 }
 
 export function scanWatchFolder(): number {
-  const s = { watchFolder: process.env.WATCH_FOLDER ?? "" };
+  const s = getSettings();
   if (!s.watchFolder) return 0;
 
   // Also scan DATA_DIR for any dropped credential files

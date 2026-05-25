@@ -1,4 +1,4 @@
-import {copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync} from "fs";
+import {copyFileSync, existsSync, mkdirSync, readFileSync, statSync} from "fs";
 import {createHash} from "crypto";
 import {basename, extname, join} from "path";
 import {col} from "../db/db";
@@ -15,14 +15,6 @@ import {spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 
 type PushFn = (event: Record<string, unknown>) => void;
-
-export interface PipelineOptions {
-  ocr?: boolean;        // default true
-  ai?: boolean;         // default true
-  s3?: boolean;         // default true
-  entities?: boolean;   // default true
-  templateId?: number;  // force a specific template instead of auto-matching
-}
 
 function getMimeType(ext: string): string {
   const map: Record<string, string> = {
@@ -44,15 +36,8 @@ function computeHash(filePath: string): string {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
-export async function importFile(originalPath: string, push?: PushFn, userId?: string, displayName?: string, ocrOnly = false, pipelineOpts?: PipelineOptions): Promise<string> {
+export async function importFile(originalPath: string, push?: PushFn, userId?: string, displayName?: string): Promise<string> {
   const settings = getSettings();
-  const opts: Required<PipelineOptions> = {
-    ocr: pipelineOpts?.ocr ?? true,
-    ai: pipelineOpts?.ai ?? true,
-    s3: pipelineOpts?.s3 ?? true,
-    entities: pipelineOpts?.entities ?? true,
-    templateId: pipelineOpts?.templateId ?? 0,
-  };
 
   const ext = extname(originalPath);
   const fileName = displayName ?? basename(originalPath);
@@ -69,25 +54,18 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
     return existing._id!.toString();
   }
 
-  // Copy to managed documents folder (skipped in processOnly mode)
+  // Copy to managed documents folder
   const docsDir = join(getDataDir(), "documents");
-  let managedPath: string;
-  if (settings.processOnly) {
-    managedPath = originalPath; // use the temp upload path as-is
-  } else {
-    mkdirSync(docsDir, { recursive: true });
-    managedPath = join(docsDir, `${fileHash}${ext}`);
-    if (!existsSync(managedPath)) {
-      copyFileSync(originalPath, managedPath);
-    }
-    // Remove staging file now that it's been copied to the managed folder
-    try { rmSync(originalPath); } catch { /* ignore if already gone */ }
+  mkdirSync(docsDir, { recursive: true });
+  const managedPath = join(docsDir, `${fileHash}${ext}`);
+  if (!existsSync(managedPath)) {
+    copyFileSync(originalPath, managedPath);
   }
 
-  // Upload to S3-compatible object storage if configured (skip for OCR-only docs, processOnly, or when flag disabled)
+  // Upload to S3-compatible object storage if configured
   let spacesKey: string | null = null;
   let spacesUrl: string | null = null;
-  if (!ocrOnly && !settings.processOnly && opts.s3 && spacesEnabled()) {
+  if (spacesEnabled()) {
     try {
       spacesKey = `documents/${fileHash}${ext}`;
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
@@ -120,10 +98,9 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   const documentId = insertResult.insertedId.toString();
 
   push?.({ type: "document:queued", documentId: documentId as any, fileName });
-  const flagSummary = Object.entries(opts).filter(([,v]) => !v).map(([k]) => `no-${k}`).join(",");
-  console.log(`[importer] Queued document ${documentId}: ${fileName}${ocrOnly ? " (OCR-only)" : ""}${flagSummary ? ` [${flagSummary}]` : ""}`);
+  console.log(`[importer] Queued document ${documentId}: ${fileName}`);
 
-  processDocument(documentId, managedPath, mimeType, ext, push, userId, ocrOnly, opts).catch(async (err) => {
+  processDocument(documentId, managedPath, mimeType, ext, push, userId).catch(async (err) => {
     console.error(`[importer] Fatal error processing doc ${documentId}:`, err);
     await col("documents").updateOne(
       { _id: insertResult.insertedId },
@@ -141,18 +118,9 @@ export async function processDocument(
   mimeType: string,
   ext: string,
   push?: PushFn,
-  userId?: string,
-  ocrOnly = false,
-  pipelineOpts?: PipelineOptions
+  userId?: string
 ) {
   const settings = getSettings();
-  const opts: Required<PipelineOptions> = {
-    ocr: pipelineOpts?.ocr ?? true,
-    ai: pipelineOpts?.ai ?? true,
-    s3: pipelineOpts?.s3 ?? true,
-    entities: pipelineOpts?.entities ?? true,
-    templateId: pipelineOpts?.templateId ?? 0,
-  };
   const docFilter = { _id: new ObjectId(documentId) } as any;
 
   await col("documents").updateOne(docFilter, {
@@ -163,60 +131,45 @@ export async function processDocument(
   let rawText = "";
   let pageCount: number | null = null;
 
-  if (opts.ocr) {
-    try {
-      if (mimeType === "application/pdf") {
-        const pdfResult = await parsePdf(filePath);
-        pageCount = pdfResult.pageCount;
-        if (pdfResult.needsOcr) {
-          push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
-          rawText = await ocrFile(filePath);
-          console.log(`[importer] OCR result (${rawText.length} chars): ${rawText.slice(0, 200).replace(/\n/g, " ")}`);
-        } else {
-          rawText = pdfResult.text;
-          console.log(`[importer] PDF text (${rawText.length} chars): ${rawText.slice(0, 200).replace(/\n/g, " ")}`);
-        }
-      } else if (mimeType.startsWith("image/")) {
+  try {
+    if (mimeType === "application/pdf") {
+      const pdfResult = await parsePdf(filePath);
+      pageCount = pdfResult.pageCount;
+      if (pdfResult.needsOcr) {
         push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
         rawText = await ocrFile(filePath);
-        console.log(`[importer] Image OCR result (${rawText.length} chars): ${rawText.slice(0, 200).replace(/\n/g, " ")}`);
-      } else if (ext === ".docx") {
-        const docxResult = await parseDocx(filePath);
-        if (docxResult.needsOcr) {
-          push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
-        }
-        rawText = docxResult.text;
-        console.log(`[importer] DOCX${docxResult.needsOcr ? " OCR" : ""} text (${rawText.length} chars): ${rawText.slice(0, 200).replace(/\n/g, " ")}`);
-      } else if (ext === ".xlsx") {
-        rawText = parseXlsx(filePath);
-        console.log(`[importer] XLSX text (${rawText.length} chars): ${rawText.slice(0, 200).replace(/\n/g, " ")}`);
       } else {
-        rawText = readFileSync(filePath, "utf-8");
-        console.log(`[importer] Plain text (${rawText.length} chars): ${rawText.slice(0, 200).replace(/\n/g, " ")}`);
+        rawText = pdfResult.text;
       }
-    } catch (err) {
-      const msg = `Text extraction failed: ${err}`;
-      await col("documents").updateOne(docFilter, {
-        $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
-      });
-      push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
-      return;
+    } else if (mimeType.startsWith("image/")) {
+      push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
+      rawText = await ocrFile(filePath);
+    } else if (ext === ".docx") {
+      rawText = await parseDocx(filePath);
+    } else if (ext === ".xlsx") {
+      rawText = parseXlsx(filePath);
+    } else {
+      rawText = readFileSync(filePath, "utf-8");
     }
+  } catch (err) {
+    const msg = `Text extraction failed: ${err}`;
+    await col("documents").updateOne(docFilter, {
+      $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+    });
+    push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
+    return;
   }
 
   await col("documents").updateOne(docFilter, {
-    $set: { raw_text: rawText || null, page_count: pageCount, processing_status: "processing", updated_at: new Date() },
+    $set: { raw_text: rawText, page_count: pageCount, processing_status: "processing", updated_at: new Date() },
   });
 
   push?.({ type: "document:progress", documentId: documentId as any, stage: "ai_extraction", progress: 50 });
 
-  if (!ocrOnly && opts.ai && settings.autoExtract && rawText.trim().length > 0) {
+  if (settings.autoExtract && rawText.trim().length > 0) {
     const docRow = await col("documents").findOne(docFilter) as any;
 
-    // Use forced template if provided, otherwise auto-match
-    const template = opts.templateId
-      ? (await col("doc_templates").findOne({ _id: new ObjectId(opts.templateId) }) as any as import("../../src/shared/types.js").DocTemplate | null)
-      : await pickTemplate(rawText);
+    const template = await pickTemplate(rawText);
 
     if (template) {
       const run = await extractWithTemplate(rawText, template, documentId, docRow?.file_name);
@@ -243,10 +196,8 @@ export async function processDocument(
           },
         });
 
-        if (opts.entities) {
-          push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-          await saveTemplateEntities(documentId, template, run.fields, userId);
-        }
+        push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
+        await saveTemplateEntities(documentId, template, run.fields, userId);
       } else if (run.error) {
         const msg = `AI extraction failed: ${run.error}`;
         await col("documents").updateOne(docFilter, {
@@ -271,10 +222,8 @@ export async function processDocument(
       } as any);
 
       if (extraction.result) {
-        if (opts.entities) {
-          push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-          await saveExtractionEntities(documentId, extraction.result, userId);
-        }
+        push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
+        await saveExtractionEntities(documentId, extraction.result, userId);
       } else if (extraction.error) {
         const msg = `AI extraction failed: ${extraction.error}`;
         await col("documents").updateOne(docFilter, {
@@ -289,20 +238,11 @@ export async function processDocument(
   await col("documents").updateOne(docFilter, {
     $set: { processing_status: "done", updated_at: new Date() },
   });
-
-  // Increment persistent scan counter only when AI extraction ran
-  if (userId && !ocrOnly && opts.ai && settings.autoExtract && rawText.trim().length > 0) {
-    await col("user_settings").updateOne(
-      { user_id: userId },
-      { $inc: { scanned_count: 1 } }
-    );
-  }
-
   push?.({ type: "document:done", documentId: documentId as any, status: "done" });
   console.log(`[importer] Done processing document ${documentId}`);
 }
 
-export async function saveExtractionEntities(
+async function saveExtractionEntities(
   documentId: string,
   result: import("../../src/shared/types.js").ExtractionResult,
   userId?: string
@@ -405,7 +345,7 @@ export async function saveExtractionEntities(
   }
 }
 
-export async function saveTemplateEntities(
+async function saveTemplateEntities(
   documentId: string,
   template: DocTemplate,
   fields: DynamicExtraction,

@@ -135,8 +135,7 @@ export function registerTemplateRoutes(app: express.Application) {
           ) {
             text = await ocrFile(tmpPath);
           } else if (ext === ".docx") {
-            const docx = await parseDocx(tmpPath);
-            text = docx.needsOcr ? await ocrFile(tmpPath) : docx.text;
+            text = await parseDocx(tmpPath);
           } else if (ext === ".xlsx") {
             text = parseXlsx(tmpPath);
           } else {

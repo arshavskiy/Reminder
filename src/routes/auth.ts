@@ -115,7 +115,7 @@ export function registerAuthRoutes(app: express.Application) {
             user_id: user._id.toString(),
             theme: "light",
             email_from_name: null,
-            reminder_advance_days: "[30]",
+            reminder_advance_days: "[90,60,30]",
             ocr_language: "heb+eng",
           },
         },
@@ -184,7 +184,7 @@ export function registerAuthRoutes(app: express.Application) {
             user_id: user._id.toString(),
             theme: "light",
             email_from_name: null,
-            reminder_advance_days: "[30]",
+            reminder_advance_days: "[90,60,30]",
             ocr_language: "heb+eng",
           },
         },
@@ -471,6 +471,7 @@ export function registerAuthRoutes(app: express.Application) {
 }
 
 const DEV_FRONTEND =
+  process.env.FRONTEND_URL ??
   process.env.VITE_DEV_URL ??
   (process.env.NODE_ENV === "production" ? "" : "http://localhost:5173");
 

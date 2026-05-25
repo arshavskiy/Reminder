@@ -145,19 +145,8 @@ export async function generateContractReminders(
   expiryDate: string,
   userId?: string
 ) {
+  const settings = getSettings();
   const today = new Date().toISOString().slice(0, 10);
-
-  // Read advance days from per-user settings, fall back to global
-  let advanceDays: number[] = getSettings().reminderAdvanceDays;
-  if (userId) {
-    const userSettings = await col("user_settings").findOne({ user_id: userId }) as any;
-    if (userSettings?.reminder_advance_days) {
-      try {
-        const parsed = JSON.parse(userSettings.reminder_advance_days);
-        if (Array.isArray(parsed) && parsed.length > 0) advanceDays = parsed;
-      } catch { /* keep global default */ }
-    }
-  }
 
   const contract = await col("contracts").findOne({ _id: contractId } as any) as any;
 
@@ -170,7 +159,7 @@ export async function generateContractReminders(
     return "פקיעת תוקף";
   })();
 
-  for (const days of advanceDays) {
+  for (const days of settings.reminderAdvanceDays) {
     const existing = await col("reminders").findOne({
       source_type: "contract_expiry",
       source_id: contractId,
