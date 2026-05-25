@@ -13,9 +13,9 @@
           @change="onFileInputChange"
         />
         <n-button @click="fileInput?.click()" :loading="uploading" :disabled="limitReached">📂 בחר קבצים</n-button>
-        <n-button type="primary" @click="showImport = true" :disabled="limitReached">+ נתיב שרת</n-button>
+<!--        <n-button type="primary" @click="showImport = true" :disabled="limitReached">+ נתיב שרת</n-button>-->
         <n-button type="warning" :loading="rescanning" @click="doRescan">↻ סריקה מחדש</n-button>
-        <n-button type="error" :loading="deletingCorrupt" @click="doDeleteCorrupt">🗑 מחק פגומים</n-button>
+<!--        <n-button type="error" :loading="deletingCorrupt" @click="doDeleteCorrupt">🗑 מחק פגומים</n-button>-->
       </n-space>
     </n-space>
 
@@ -52,6 +52,35 @@
       <span v-else style="color: #666">גרור קבצים לכאן (PDF, DOCX, XLSX, PNG...)</span>
     </div>
 
+    <!-- Pipeline service flags -->
+    <div class="pipeline-flags" style="margin-bottom: 14px">
+      <span class="pipeline-flags__label">שירותי עיבוד:</span>
+      <n-tooltip placement="top" trigger="hover">
+        <template #trigger>
+          <n-checkbox v-model:checked="flagOcr">OCR (זיהוי טקסט)</n-checkbox>
+        </template>
+        הפעל זיהוי תווים אופטי (Tesseract) לחילוץ טקסט מ-PDF ותמונות
+      </n-tooltip>
+      <n-tooltip placement="top" trigger="hover">
+        <template #trigger>
+          <n-checkbox v-model:checked="flagAi">AI (חילוץ שדות)</n-checkbox>
+        </template>
+        הפעל מודל AI לחילוץ אוטומטי של שדות: לקוח, תאריכים, סכומים ועוד
+      </n-tooltip>
+      <n-tooltip placement="top" trigger="hover">
+        <template #trigger>
+          <n-checkbox v-model:checked="flagS3">S3 (אחסון ענן)</n-checkbox>
+        </template>
+        העלה את הקובץ לאחסון ענן (S3). כבה כדי לשמור מקומית בלבד
+      </n-tooltip>
+      <n-tooltip placement="top" trigger="hover">
+        <template #trigger>
+          <n-checkbox v-model:checked="flagEntities">ישויות (לקוחות / חוזים)</n-checkbox>
+        </template>
+        צור אוטומטית לקוחות, חוזים ותזכורות מנתוני הקובץ
+      </n-tooltip>
+    </div>
+
     <n-alert
       v-if="queuedCount > 0"
       type="info"
@@ -69,6 +98,60 @@
       :row-key="(r: any) => r.id"
     />
 
+    <!-- AI extraction modal — define fields to extract -->
+    <n-modal v-model:show="showAiModal" :title="aiModalMode === 'existing' ? 'חילוץ AI — הגדר שדות' : 'העלאה עם AI — הגדר שדות'" preset="card"
+      style="width: 580px">
+      <n-space size="medium" vertical>
+        <div style="font-size: 13px; color: #aaa">
+          {{ aiModalMode === 'existing'
+            ? 'הגדר אילו שדות ה-AI יחלץ מהמסמך. השאר ריק לחילוץ אוטומטי.'
+            : `${pendingFiles?.length ?? 0} קובץ/ים ממתינים. הגדר שדות לחילוץ AI:` }}
+        </div>
+
+        <!-- Field rows -->
+        <div v-for="(f, i) in extractionFields" :key="i" class="field-row">
+          <n-space :wrap="false" align="center">
+            <n-input
+              v-model:value="f.key"
+              placeholder="key (אנגלית)"
+              size="small"
+              style="width: 140px; direction: ltr"
+            />
+            <n-input
+              v-model:value="f.label_he"
+              placeholder="תווית עברית"
+              size="small"
+              style="flex: 1"
+            />
+            <n-select
+              v-model:value="f.type"
+              :options="fieldTypeOptions"
+              :virtual-scroll="false"
+              size="small"
+              style="width: 100px"
+            />
+            <n-button quaternary size="small" @click="extractionFields.splice(i, 1)">✕</n-button>
+          </n-space>
+        </div>
+
+        <n-button dashed size="small" @click="addExtractionField">+ הוסף שדה</n-button>
+
+        <div style="font-size: 12px; color: #666; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 10px">
+          שדות ריקים = AI יחלץ שדות סטנדרטיים אוטומטית (לקוח, תאריכים, סכומים)
+        </div>
+
+        <n-space justify="end">
+          <n-button @click="showAiModal = false">ביטול</n-button>
+          <n-button v-if="aiModalMode === 'upload'" secondary @click="skipAiModal">
+            העלה ללא הגדרה
+          </n-button>
+          <n-button :loading="extracting" type="primary" @click="confirmAiModal">
+            {{ aiModalMode === 'existing' ? 'הרץ חילוץ' : 'העלה ועבד' }}
+          </n-button>
+        </n-space>
+      </n-space>
+    </n-modal>
+
     <!-- Server-path import modal (for files already on the server machine) -->
     <n-modal v-model:show="showImport" title="ייבוא לפי נתיב שרת" preset="dialog" style="width: 520px">
       <n-alert type="info" :show-icon="false" style="margin-bottom: 12px">
@@ -81,6 +164,14 @@
           clearable
           @keyup.enter="doImportPath"
         />
+        <!-- Pipeline flags (shared with main page — same reactive state) -->
+        <div class="pipeline-flags pipeline-flags--modal">
+          <span class="pipeline-flags__label">שירותי עיבוד:</span>
+          <n-checkbox v-model:checked="flagOcr">OCR</n-checkbox>
+          <n-checkbox v-model:checked="flagAi">AI</n-checkbox>
+          <n-checkbox v-model:checked="flagS3">S3</n-checkbox>
+          <n-checkbox v-model:checked="flagEntities">ישויות</n-checkbox>
+        </div>
         <n-button type="primary" :loading="importing" @click="doImportPath" block>ייבוא</n-button>
       </n-space>
     </n-modal>
@@ -88,9 +179,22 @@
 </template>
 
 <script setup lang="ts">
-import {computed, h, onMounted, onUnmounted, ref} from "vue";
+import {computed, h, onMounted, onUnmounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
-import {NAlert, NButton, NDataTable, NH2, NInput, NModal, NProgress, NSpace, useMessage} from "naive-ui";
+import {
+  NAlert,
+  NButton,
+  NCheckbox,
+  NDataTable,
+  NH2,
+  NInput,
+  NModal,
+  NProgress,
+  NSelect,
+  NSpace,
+  NTooltip,
+  useMessage
+} from "naive-ui";
 import {useDocumentsStore} from "../stores/documents.js";
 import {useAuthStore} from "../stores/auth.js";
 import {api} from "../services/apiService.js";
@@ -120,6 +224,102 @@ const queuedCount = ref(0);
 const rescanning = ref(false);
 const deletingCorrupt = ref(false);
 
+// ── AI extraction modal ───────────────────────────────────────────────────────
+interface ExtractionField { key: string; label_he: string; type: string }
+
+const showAiModal      = ref(false);
+const aiModalMode      = ref<"upload" | "existing">("upload");
+const pendingFiles     = ref<File[] | null>(null);
+const pendingDocIds    = ref<string[]>([]);
+const extractionFields = ref<ExtractionField[]>([]);
+const extracting       = ref(false);
+
+const fieldTypeOptions = [
+  { label: "טקסט",    value: "text" },
+  { label: "מספר",    value: "number" },
+  { label: "תאריך",   value: "date" },
+  { label: "טלפון",   value: "phone" },
+  { label: "אימייל",  value: "email" },
+  { label: "מטבע",    value: "currency" },
+  { label: "רשימה",   value: "list" },
+];
+
+function addExtractionField() {
+  extractionFields.value.push({ key: "", label_he: "", type: "text" });
+}
+
+function openExtractModal(docId: string) {
+  pendingDocIds.value = [docId];
+  pendingFiles.value = null;
+  aiModalMode.value = "existing";
+  extractionFields.value = [];
+  showAiModal.value = true;
+}
+
+async function skipAiModal() {
+  const files = pendingFiles.value;
+  showAiModal.value = false;
+  pendingFiles.value = null;
+  if (files) await uploadFiles(files);
+}
+
+async function confirmAiModal() {
+  const fields = extractionFields.value.filter(f => f.key.trim() && f.label_he.trim());
+
+  if (aiModalMode.value === "existing") {
+    extracting.value = true;
+    try {
+      for (const id of pendingDocIds.value) {
+        await api.documents.extract(id, fields);
+      }
+      message.success(`חילוץ AI הושלם עבור ${pendingDocIds.value.length} מסמך/ים`);
+      await store.fetch();
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      extracting.value = false;
+      showAiModal.value = false;
+    }
+  } else if (pendingFiles.value) {
+    showAiModal.value = false;
+    await uploadFiles(pendingFiles.value);
+    pendingFiles.value = null;
+  }
+}
+
+// ── Pipeline feature flags ────────────────────────────────────────────────────
+const flagOcr      = ref(true);
+const flagAi       = ref(true);
+const flagS3       = ref(true);
+const flagEntities = ref(true);
+let saveFlagsTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function loadPipelineFlags() {
+  try {
+    const s = await api.userSettings.get();
+    flagOcr.value      = s.pipeline_ocr      ?? true;
+    flagAi.value       = s.pipeline_ai       ?? true;
+    flagS3.value       = s.pipeline_s3       ?? true;
+    flagEntities.value = s.pipeline_entities ?? true;
+  } catch { /* ignore — defaults stay */ }
+}
+
+function savePipelineFlags() {
+  if (saveFlagsTimer) clearTimeout(saveFlagsTimer);
+  saveFlagsTimer = setTimeout(async () => {
+    try {
+      await api.userSettings.save({
+        pipeline_ocr:      flagOcr.value,
+        pipeline_ai:       flagAi.value,
+        pipeline_s3:       flagS3.value,
+        pipeline_entities: flagEntities.value,
+      });
+    } catch { /* ignore */ }
+  }, 600);
+}
+
+watch([flagOcr, flagAi, flagS3, flagEntities], savePipelineFlags);
+
 // ── Status polling ────────────────────────────────────────────────────────────
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -136,22 +336,41 @@ function schedulePoll() {
   }, 3000);
 }
 
-onMounted(() => { store.fetch().then(() => { if (hasInProgress()) schedulePoll(); }); });
-onUnmounted(() => { if (pollTimer) clearTimeout(pollTimer); });
+onMounted(() => {
+  store.fetch().then(() => { if (hasInProgress()) schedulePoll(); });
+  loadPipelineFlags();
+});
+onUnmounted(() => {
+  if (pollTimer) clearTimeout(pollTimer);
+  if (saveFlagsTimer) clearTimeout(saveFlagsTimer);
+});
 
 // ── Browser file picker ───────────────────────────────────────────────────────
 async function onFileInputChange(e: Event) {
   const files = Array.from((e.target as HTMLInputElement).files ?? []);
   if (!files.length) return;
   (e.target as HTMLInputElement).value = ""; // reset so same file can be re-selected
-  await uploadFiles(files);
+  await handleFiles(files);
 }
 
 // ── Drag & drop ───────────────────────────────────────────────────────────────
 async function onDrop(e: DragEvent) {
   isDragging.value = false;
   const files = Array.from(e.dataTransfer?.files ?? []);
-  if (files.length) await uploadFiles(files);
+  if (files.length) await handleFiles(files);
+}
+
+// ── Intercept: open AI modal if flagAi is on ──────────────────────────────────
+async function handleFiles(files: File[]) {
+  if (flagAi.value) {
+    pendingFiles.value = files;
+    pendingDocIds.value = [];
+    aiModalMode.value = "upload";
+    extractionFields.value = [];
+    showAiModal.value = true;
+  } else {
+    await uploadFiles(files);
+  }
 }
 
 // ── Upload to server ──────────────────────────────────────────────────────────
@@ -261,7 +480,7 @@ const columns = [
     render: (row: Document) =>
       h(NSpace, { size: "small" }, {
         default: () => [
-          h(NButton, { size: "small", onClick: () => { api.documents.reprocess(row.id); store.fetch(); } }, { default: () => "↻" }),
+          h(NButton, { size: "small", onClick: () => openExtractModal(String(row.id)) }, { default: () => "↻" }),
           h(NButton, { size: "small", type: "error", onClick: () => store.deleteDoc(row.id) }, { default: () => "מחק" }),
         ],
       }),
@@ -275,7 +494,7 @@ const columns = [
   border-radius: 8px;
   padding: 20px;
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   transition: border-color 0.2s, background 0.2s;
   cursor: pointer;
 }
@@ -288,5 +507,30 @@ const columns = [
   background: rgba(232, 128, 128, 0.05);
   cursor: not-allowed;
   opacity: 0.7;
+}
+
+.pipeline-flags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+}
+.pipeline-flags--modal {
+  margin-top: 4px;
+}
+.pipeline-flags__label {
+  font-size: 12px;
+  color: #888;
+  margin-left: 4px;
+}
+
+.field-row {
+  padding: 6px 8px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 4px;
 }
 </style>

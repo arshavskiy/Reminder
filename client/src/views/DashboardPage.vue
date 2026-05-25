@@ -162,7 +162,7 @@ const modules = [
   },
   {
     key: "email-templates",
-    title: "תבניות אימייל",
+    title: "תבניות",
     desc: "עצב את תוכן התזכורות עם משתנים דינמיים ולוגו של החברה.",
     icon: MailOutline,
     to: "/email-templates",

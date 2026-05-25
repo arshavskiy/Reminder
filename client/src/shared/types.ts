@@ -69,7 +69,14 @@ export interface Session {
   ip: string | null;
 }
 
-export interface UserSettings {
+export interface PipelineFlags {
+  pipeline_ocr: boolean;
+  pipeline_ai: boolean;
+  pipeline_s3: boolean;
+  pipeline_entities: boolean;
+}
+
+export interface UserSettings extends PipelineFlags {
   user_id: number;
   theme: "dark" | "light";
   email_from_name: string | null;

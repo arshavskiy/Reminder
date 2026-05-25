@@ -18,7 +18,7 @@
       </n-gi>
     </n-grid>
     <n-alert v-else type="info" :show-icon="false">
-      אין עדיין תבניות אימייל. צור תבנית כדי לעצב את תוכן התזכורות.
+      אין עדיין תבניות. צור תבנית כדי לעצב את תוכן התזכורות.
     </n-alert>
 
     <!-- Editor drawer -->
@@ -149,14 +149,31 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed } from "vue";
+import {computed, onMounted, ref} from "vue";
 import {
-  NSpace, NButton, NCard, NGrid, NGi, NTag, NDrawer, NDrawerContent,
-  NForm, NFormItem, NInput, NSelect, NCheckbox, NAlert, NText,
-  NTabs, NTabPane, NUpload, NSpin, useMessage,
+  NAlert,
+  NButton,
+  NCard,
+  NCheckbox,
+  NDrawer,
+  NDrawerContent,
+  NForm,
+  NFormItem,
+  NGi,
+  NGrid,
+  NInput,
+  NSelect,
+  NSpace,
+  NSpin,
+  NTabPane,
+  NTabs,
+  NTag,
+  NText,
+  NUpload,
+  useMessage,
 } from "naive-ui";
-import { api } from "../services/apiService.js";
-import type { DocTemplate, EmailTemplate } from "@shared/types.js";
+import {api} from "../services/apiService.js";
+import type {DocTemplate, EmailTemplate} from "@shared/types.js";
 
 const templates = ref<EmailTemplate[]>([]);
 const docTemplates = ref<DocTemplate[]>([]);

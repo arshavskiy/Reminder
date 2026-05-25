@@ -11,9 +11,11 @@ import type {
   EmailTemplate,
   Equipment,
   GlobalSearchResult,
+  PipelineFlags,
   Reminder,
   ReminderWithContext,
   Task,
+  UserSettings,
 } from "../../src/shared/types.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -83,10 +85,14 @@ export const api = {
     },
     get: (id: string) => get<Document>(`/documents/${id}`),
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
-    upload: async (files: File[], ocrOnly = false) => {
+    upload: async (files: File[], ocrOnly = false, templateId?: number) => {
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
-      const url = `${BASE}/documents/upload${ocrOnly ? "?ocrOnly=true" : ""}`;
+      const params = new URLSearchParams();
+      if (ocrOnly) params.set("ocrOnly", "true");
+      if (templateId) params.set("templateId", String(templateId));
+      const qs = params.toString();
+      const url = `${BASE}/documents/upload${qs ? "?" + qs : ""}`;
       const res = await fetch(url, { method: "POST", body: fd, credentials: "include" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as any;
@@ -98,6 +104,8 @@ export const api = {
       }
       return res.json() as Promise<{ ids: string[]; duplicates: string[] }>;
     },
+    extract: (id: string, fields: Array<{ key: string; label_he: string; type: string }>) =>
+      post<{ ok: boolean }>(`/documents/${id}/extract`, { fields }),
     delete: (id: string) => del(`/documents/${id}`),
     downloadUrl: (id: string) => `${BASE}/documents/${id}/download`,
     reprocess: (id: string) => post<{ ok: boolean }>(`/documents/${id}/reprocess`),
@@ -154,6 +162,12 @@ export const api = {
       return get<{ rows: EmailLogEntry[]; total: number }>(`/email-log${qs(params)}`);
     },
     test: (to: string, templateId?: number | null) => post<{ success: boolean; error?: string }>("/email/test", { to, templateId }),
+  },
+
+  userSettings: {
+    get: () => get<UserSettings>("/user-settings"),
+    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language">>) =>
+      put<UserSettings>("/user-settings", body),
   },
 
   config: {
