@@ -9,15 +9,15 @@ function mockCol(data: Record<string, any[]> = {}) {
       findOne: vi.fn(async (filter: any) =>
         docs.find((d) => Object.entries(filter).every(([k, v]) => d[k] === v)) ?? null
       ),
-      find: vi.fn(() => ({
+      find: vi.fn((_filter?: any) => ({
         sort: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
         toArray: vi.fn(async () => docs),
       })),
       insertOne: vi.fn(async (doc: any) => ({ insertedId: "new-id-123" })),
-      updateOne: vi.fn(async () => ({ modifiedCount: 1, upsertedCount: 0 })),
-      deleteOne: vi.fn(async () => ({ deletedCount: 1 })),
-      countDocuments: vi.fn(async () => docs.length),
+      updateOne: vi.fn(async (_filter: any, _update: any, _options?: any) => ({ modifiedCount: 1, upsertedCount: 0 })),
+      deleteOne: vi.fn(async (_filter: any) => ({ deletedCount: 1 })),
+      countDocuments: vi.fn(async (_filter?: any) => docs.length),
     };
   };
 }
@@ -109,7 +109,7 @@ describe("certificates — POST status derivation", () => {
   });
 
   it("marks active when no expiry date provided", () => {
-    const expiryDate = "";
+    const expiryDate: string = "";
     const status = expiryDate && expiryDate < TODAY ? "expired" : "active";
     expect(status).toBe("active");
   });
@@ -234,7 +234,7 @@ describe("avatar upload — data URL construction", () => {
 
 describe("POST /api/auth/change-password — validation logic", () => {
   it("rejects when current_password is missing", () => {
-    const body = { new_password: "newpass123" };
+    const body: { current_password?: string; new_password?: string } = { new_password: "newpass123" };
     const missing = !body.current_password || !body.new_password;
     expect(missing).toBe(true);
   });

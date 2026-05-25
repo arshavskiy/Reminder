@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { writeFileSync, mkdirSync, rmSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-import { shouldScanFile, scanFileForKeys } from "../pipeline/keyScanner.js";
+import {afterEach, beforeEach, describe, expect, it} from "vitest";
+import {mkdirSync, rmSync, writeFileSync} from "fs";
+import {join} from "path";
+import {tmpdir} from "os";
+import {scanFileForKeys, shouldScanFile} from "../pipeline/keyScanner.js";
 
 // Temporary directory for test credential files
 let tmpDir: string;
@@ -80,7 +80,7 @@ describe("scanFileForKeys", () => {
   });
 
   it("detects an OpenAI key", () => {
-    const p = write("openai.env", "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstu1234567890ABCDEFG");
+    const p = write("openai.env", "OPENAI_API_KEY=sk-proj-test-only-not-a-real-secret-abcdefghijklmnopqrstu1234567890");
     const r = scanFileForKeys(p);
     const match = r.found.find((f) => f.settingKey === "openAiKey");
     expect(match).toBeDefined();

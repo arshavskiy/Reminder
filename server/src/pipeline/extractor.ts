@@ -1,9 +1,9 @@
 import OpenAI from "openai";
-import { mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
-import { getSettings, getDataDir } from "../settings";
-import type { ExtractionResult, DocTemplate, DynamicExtraction } from "../../src/shared/types.js";
-import { buildPromptForTemplate } from "../templates/buildPrompt";
+import {mkdirSync, writeFileSync} from "fs";
+import {join} from "path";
+import {getDataDir, getSettings} from "../settings";
+import type {DocTemplate, DynamicExtraction, ExtractionResult} from "../../src/shared/types.js";
+import {buildPromptForTemplate} from "../templates/buildPrompt";
 
 const SYSTEM_PROMPT = `You are a document intelligence assistant specializing in Hebrew business, legal, and technical documents (contracts, invoices, inspection reports / תסקירים, certificates, etc.).
 Extract structured information from the provided document text and return ONLY valid JSON matching the schema below.
@@ -48,6 +48,7 @@ JSON schema:
 }`;
 
 function buildClient(settings: ReturnType<typeof getSettings>) {
+
   if (settings.aiBackend === "ollama") {
     return new OpenAI({
       baseURL: `${settings.ollamaUrl}/v1`,
@@ -55,6 +56,29 @@ function buildClient(settings: ReturnType<typeof getSettings>) {
     });
   }
   return new OpenAI({ apiKey: settings.openAiKey });
+}
+
+function logExtractorSettings(
+  scope: "extractor" | "extractor:tpl",
+  settings: ReturnType<typeof getSettings>,
+  model: string,
+  rawTextLength: number,
+  inputTextLength: number,
+  documentId?: string | number
+) {
+  const config = {
+    backend: settings.aiBackend,
+    openAiKey: settings.openAiKey,
+    model,
+    extractionMaxChars: settings.extractionMaxChars,
+    rawTextChars: rawTextLength,
+    inputTextChars: inputTextLength,
+    truncated: rawTextLength > inputTextLength,
+    openAiKeyConfigured: Boolean(settings.openAiKey),
+    ollamaUrl: settings.aiBackend === "ollama" ? settings.ollamaUrl : undefined,
+  };
+
+  console.log(`[${scope}] settings doc=${documentId ?? "?"}`, config);
 }
 
 export interface ExtractionRun {
@@ -91,6 +115,7 @@ export async function extractDocument(
   const model = settings.aiBackend === "ollama" ? settings.ollamaModel : settings.openAiModel;
   const backend = settings.aiBackend;
   const text = rawText.slice(0, settings.extractionMaxChars);
+  logExtractorSettings("extractor", settings, model, rawText.length, text.length, documentId);
 
   const t0 = Date.now();
   let rawJson = "";
@@ -186,6 +211,7 @@ export async function extractWithTemplate(
   const model = settings.aiBackend === "ollama" ? settings.ollamaModel : settings.openAiModel;
   const backend = settings.aiBackend;
   const text = rawText.slice(0, settings.extractionMaxChars);
+  logExtractorSettings("extractor:tpl", settings, model, rawText.length, text.length, documentId);
   const systemPrompt = buildPromptForTemplate(template);
 
   const t0 = Date.now();
