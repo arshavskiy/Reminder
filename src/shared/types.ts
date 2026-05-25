@@ -54,6 +54,9 @@ export interface AppSettings {
 
   // Quotas
   userDocumentLimit: number;
+
+  // Process documents without saving files locally or to S3
+  processOnly: boolean;
 }
 
 // Phase 2: Authentication types

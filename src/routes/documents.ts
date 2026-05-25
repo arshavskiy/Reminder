@@ -38,7 +38,7 @@ export function registerDocumentRoutes(app: express.Application) {
     const filter: Record<string, any> = { ...baseFilter };
     if (status) filter.processing_status = status;
 
-    const [rows, total, totalAll] = await Promise.all([
+    const [rows, total, userSettingsDoc] = await Promise.all([
       col("documents")
         .find(filter)
         .sort({ created_at: -1 })
@@ -46,10 +46,13 @@ export function registerDocumentRoutes(app: express.Application) {
         .limit(limit)
         .toArray(),
       col("documents").countDocuments(filter),
-      status ? col("documents").countDocuments(baseFilter) : Promise.resolve(-1),
+      col("user_settings").findOne({ user_id: userId }) as Promise<any>,
     ]);
 
-    res.json({ rows: rows.map(flatDoc), total, totalAll: totalAll === -1 ? total : totalAll });
+    const scannedCount: number = userSettingsDoc?.scanned_count ?? 0;
+    const documentLimit: number = userSettingsDoc?.document_limit ?? getSettings().userDocumentLimit;
+
+    res.json({ rows: rows.map(flatDoc), total, totalAll: scannedCount, documentLimit });
   });
 
   // GET /api/documents/:id

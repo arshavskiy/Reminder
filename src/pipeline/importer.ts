@@ -54,18 +54,23 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
     return existing._id!.toString();
   }
 
-  // Copy to managed documents folder
+  // Copy to managed documents folder (skipped in processOnly mode)
   const docsDir = join(getDataDir(), "documents");
-  mkdirSync(docsDir, { recursive: true });
-  const managedPath = join(docsDir, `${fileHash}${ext}`);
-  if (!existsSync(managedPath)) {
-    copyFileSync(originalPath, managedPath);
+  let managedPath: string;
+  if (settings.processOnly) {
+    managedPath = originalPath; // use the temp upload path as-is
+  } else {
+    mkdirSync(docsDir, { recursive: true });
+    managedPath = join(docsDir, `${fileHash}${ext}`);
+    if (!existsSync(managedPath)) {
+      copyFileSync(originalPath, managedPath);
+    }
   }
 
-  // Upload to S3-compatible object storage if configured
+  // Upload to S3-compatible object storage if configured (skip for OCR-only docs or processOnly)
   let spacesKey: string | null = null;
   let spacesUrl: string | null = null;
-  if (spacesEnabled()) {
+  if (!ocrOnly && !settings.processOnly && spacesEnabled()) {
     try {
       spacesKey = `documents/${fileHash}${ext}`;
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
@@ -239,6 +244,15 @@ export async function processDocument(
   await col("documents").updateOne(docFilter, {
     $set: { processing_status: "done", updated_at: new Date() },
   });
+
+  // Increment persistent scan counter — never decremented on delete
+  if (userId) {
+    await col("user_settings").updateOne(
+      { user_id: userId },
+      { $inc: { scanned_count: 1 } }
+    );
+  }
+
   push?.({ type: "document:done", documentId: documentId as any, status: "done" });
   console.log(`[importer] Done processing document ${documentId}`);
 }

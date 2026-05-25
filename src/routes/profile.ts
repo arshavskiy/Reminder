@@ -111,6 +111,97 @@ export function registerProfileRoutes(app: express.Application) {
   });
 
   // ── Certificates ──────────────────────────────────────────────────────────
+
+  // Parse certificate fields from OCR raw text using regex patterns
+  function parseCertFromText(text: string): Partial<{ name: string; type: string; issuer: string; issued_date: string; expiry_date: string }> {
+    const t = text;
+
+    // ISO or Hebrew date patterns: 2024-03-15 / 15/03/2024 / 15.03.2024
+    function findDate(patterns: RegExp[]): string | null {
+      for (const re of patterns) {
+        const m = t.match(re);
+        if (m) {
+          // Normalise dd/mm/yyyy or dd.mm.yyyy → yyyy-mm-dd
+          const raw = m[1] ?? m[0];
+          const slash = raw.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+          if (slash) return `${slash[3]}-${slash[2].padStart(2, "0")}-${slash[1].padStart(2, "0")}`;
+          const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          if (iso) return raw;
+        }
+      }
+      return null;
+    }
+
+    const issued_date = findDate([
+      /(?:תאריך הנפקה|הונפק(?:ה)?|תאריך)[:\s]+(\d{1,2}[./]\d{1,2}[./]\d{4})/,
+      /(?:issued|issue date)[:\s]+(\d{4}-\d{2}-\d{2})/i,
+      /(\d{1,2}[./]\d{1,2}[./]\d{4})/,
+    ]);
+
+    const expiry_date = findDate([
+      /(?:תוקף עד|בתוקף עד|תאריך פקיעה|פג תוקף|תפוגה)[:\s]+(\d{1,2}[./]\d{1,2}[./]\d{4})/,
+      /(?:expiry|expiration|valid until|valid to)[:\s]+(\d{4}-\d{2}-\d{2}|\d{1,2}[./]\d{1,2}[./]\d{4})/i,
+    ]);
+
+    // Issuer: look for known authority keywords
+    const issuerMatch = t.match(
+      /(?:מונפק על ידי|גוף מנפיק|הונפק ע"י|issued by)[:\s]+([^\n]{3,60})/i
+    ) ?? t.match(/(?:מכון התקנים|רשות העבודה|משרד העבודה|Ministry of Labor|Standards Institute)([^\n]{0,40})/i);
+    const issuer = issuerMatch ? issuerMatch[1]?.trim() : undefined;
+
+    // Certificate name: first non-empty line or after "תעודת"
+    const nameMatch = t.match(/(?:תעודת?\s+)([֐-׿\w\s]{3,60})/) ??
+                      t.match(/^(.{5,80})$/m);
+    const name = nameMatch ? nameMatch[1]?.trim() : undefined;
+
+    // Type heuristic
+    let type = "כללי";
+    if (/בטיחות/.test(t)) type = "בטיחות";
+    else if (/הרמ[הות]/.test(t)) type = "הרמה";
+    else if (/חשמל/.test(t)) type = "חשמל";
+    else if (/כיבוי אש/.test(t)) type = "כיבוי אש";
+    else if (/ריתוך/.test(t)) type = "ריתוך";
+
+    return {
+      ...(name && { name }),
+      type,
+      ...(issuer && { issuer }),
+      ...(issued_date && { issued_date }),
+      ...(expiry_date && { expiry_date }),
+    };
+  }
+
+  // POST /api/profile/certificates/from-document — extract cert fields from an already-processed document
+  app.post("/api/profile/certificates/from-document", async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+    const { document_id } = req.body as { document_id: string };
+    if (!document_id) { res.status(400).json({ error: "document_id required" }); return; }
+
+    const doc = await col("documents").findOne({ _id: new ObjectId(document_id) as any, user_id: ctx.userId }) as any;
+    if (!doc) { res.status(404).json({ error: "document not found" }); return; }
+
+    const rawText: string = doc.raw_text ?? "";
+    const fields = parseCertFromText(rawText);
+
+    const now = new Date().toISOString();
+    const status = fields.expiry_date && fields.expiry_date < now.slice(0, 10) ? "expired" : "active";
+
+    const result = await col("certificates").insertOne({
+      user_id: ctx.userId,
+      document_id,
+      name: fields.name ?? doc.file_name ?? "",
+      type: fields.type ?? "כללי",
+      issuer: fields.issuer ?? "",
+      issued_date: fields.issued_date ?? null,
+      expiry_date: fields.expiry_date ?? null,
+      status,
+      created_at: now,
+    } as any);
+
+    res.json({ _id: result.insertedId, ...fields, status });
+  });
+
   app.get("/api/profile/certificates", async (req, res) => {
     const ctx = await auth(req, res);
     if (!ctx) return;

@@ -11,62 +11,85 @@ import {readFileSync} from "fs";
 interface StorageConfig {
   endpoint: string;
   region: string;
-  key: string;
-  secret: string;
+  accessKeyId: string;
+  secretAccessKey: string;
   bucket: string;
   forcePathStyle: boolean;
 }
 
-function normaliseEndpoint(endpoint: string): string {
-  return endpoint.startsWith("http://") || endpoint.startsWith("https://")
-    ? endpoint
-    : `https://${endpoint}`;
+function normaliseEndpoint(ep: string): string {
+  return ep.startsWith("http://") || ep.startsWith("https://") ? ep : `https://${ep}`;
 }
 
 function getStorageConfig(): StorageConfig | null {
-  const railwayEndpoint = process.env.BUCKET_ENDPOINT ?? process.env.ENDPOINT;
-  const railwayBucket = process.env.BUCKET_NAME ?? process.env.BUCKET;
-  const railwayKey = process.env.BUCKET_ACCESS_KEY_ID ?? process.env.ACCESS_KEY_ID;
-  const railwaySecret = process.env.BUCKET_SECRET_ACCESS_KEY ?? process.env.SECRET_ACCESS_KEY;
-  const railwayRegion = process.env.BUCKET_REGION ?? process.env.REGION ?? "auto";
+  // Priority 1: Railway-style S3_* variables (as per Railway bucket guide)
+  const s3Endpoint  = process.env.S3_ENDPOINT;
+  const s3Key       = process.env.S3_ACCESS_KEY_ID;
+  const s3Secret    = process.env.S3_SECRET_ACCESS_KEY;
+  const s3Bucket    = process.env.S3_BUCKET_NAME;
+  const s3Region    = process.env.S3_REGION ?? "auto";
 
-  if (railwayEndpoint && railwayBucket && railwayKey && railwaySecret) {
+  if (s3Endpoint && s3Key && s3Secret && s3Bucket) {
     return {
-      endpoint: normaliseEndpoint(railwayEndpoint),
-      region: railwayRegion,
-      key: railwayKey,
-      secret: railwaySecret,
-      bucket: railwayBucket,
-      forcePathStyle: process.env.BUCKET_FORCE_PATH_STYLE === "true",
+      endpoint: normaliseEndpoint(s3Endpoint),
+      region: s3Region,
+      accessKeyId: s3Key,
+      secretAccessKey: s3Secret,
+      bucket: s3Bucket,
+      forcePathStyle: false, // Railway uses virtual-hosted style
     };
   }
 
-  const endpoint = process.env.DO_SPACES_ENDPOINT;
-  const region = process.env.DO_SPACES_REGION ?? "fra1";
-  const key = process.env.DO_SPACES_KEY;
-  const secret = process.env.DO_SPACES_SECRET;
-  const bucket = process.env.DO_SPACES_BUCKET;
+  // Priority 2: generic ENDPOINT/BUCKET/ACCESS_KEY_ID/SECRET_ACCESS_KEY
+  const endpoint  = process.env.BUCKET_ENDPOINT ?? process.env.ENDPOINT;
+  const bucket    = process.env.BUCKET_NAME     ?? process.env.BUCKET;
+  const key       = process.env.BUCKET_ACCESS_KEY_ID ?? process.env.ACCESS_KEY_ID;
+  const secret    = process.env.BUCKET_SECRET_ACCESS_KEY ?? process.env.SECRET_ACCESS_KEY;
+  const region    = process.env.BUCKET_REGION   ?? process.env.REGION ?? "auto";
 
-  if (!endpoint || !key || !secret || !bucket) return null;
+  if (endpoint && bucket && key && secret) {
+    // Use path-style for non-Railway S3-compatible endpoints (MinIO, storageapi.dev, etc.)
+    const isRailway = endpoint.includes("storage.railway.app");
+    const forcePathStyle = process.env.BUCKET_FORCE_PATH_STYLE === "true" || !isRailway;
+    return {
+      endpoint: normaliseEndpoint(endpoint),
+      region,
+      accessKeyId: key,
+      secretAccessKey: secret,
+      bucket,
+      forcePathStyle,
+    };
+  }
 
-  return {
-    endpoint: normaliseEndpoint(endpoint),
-    region,
-    key,
-    secret,
-    bucket,
-    forcePathStyle: false,
-  };
+  // Priority 3: legacy DO_SPACES_* variables
+  const doEndpoint = process.env.DO_SPACES_ENDPOINT;
+  const doKey      = process.env.DO_SPACES_KEY;
+  const doSecret   = process.env.DO_SPACES_SECRET;
+  const doBucket   = process.env.DO_SPACES_BUCKET;
+  const doRegion   = process.env.DO_SPACES_REGION ?? "fra1";
+
+  if (doEndpoint && doKey && doSecret && doBucket) {
+    return {
+      endpoint: normaliseEndpoint(doEndpoint),
+      region: doRegion,
+      accessKeyId: doKey,
+      secretAccessKey: doSecret,
+      bucket: doBucket,
+      forcePathStyle: false,
+    };
+  }
+
+  return null;
 }
 
-function getClient() {
-  const config = getStorageConfig();
-  if (!config) return null;
-
+function makeClient(config: StorageConfig): S3Client {
   return new S3Client({
     endpoint: config.endpoint,
     region: config.region,
-    credentials: { accessKeyId: config.key, secretAccessKey: config.secret },
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    },
     forcePathStyle: config.forcePathStyle,
   });
 }
@@ -75,54 +98,46 @@ export function spacesEnabled(): boolean {
   return getStorageConfig() !== null;
 }
 
-export async function uploadToSpaces(
-  localPath: string,
-  key: string,
-  contentType: string
-): Promise<string> {
-  const client = getClient();
+export async function uploadToSpaces(localPath: string, key: string, contentType: string): Promise<string> {
   const config = getStorageConfig();
-  if (!client || !config) throw new Error("Object storage not configured");
+  if (!config) throw new Error("Object storage not configured");
 
+  const client = makeClient(config);
   const body = readFileSync(localPath);
-  await client.send(
-    new PutObjectCommand({
-      Bucket: config.bucket,
-      Key: key,
-      Body: body,
-      ContentType: contentType,
-    })
-  );
 
-  const endpointUrl = new URL(config.endpoint);
-  return `${endpointUrl.protocol}//${config.bucket}.${endpointUrl.host}/${key}`;
+  await client.send(new PutObjectCommand({
+    Bucket: config.bucket,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+  }));
+
+  // Return a virtual-hosted or path-style public URL depending on provider
+  const url = new URL(config.endpoint);
+  if (config.forcePathStyle) {
+    return `${url.protocol}//${url.host}/${config.bucket}/${key}`;
+  }
+  return `${url.protocol}//${config.bucket}.${url.host}/${key}`;
 }
 
 export async function deleteFromSpaces(key: string): Promise<void> {
-  const client = getClient();
   const config = getStorageConfig();
-  if (!client || !config) return;
-
+  if (!config) return;
+  const client = makeClient(config);
   await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
 }
 
 export async function getSpacesSignedUrl(key: string, expiresIn = 3600): Promise<string> {
-  const client = getClient();
   const config = getStorageConfig();
-  if (!client || !config) throw new Error("Object storage not configured");
-
-  return getSignedUrl(
-    client,
-    new GetObjectCommand({ Bucket: config.bucket, Key: key }),
-    { expiresIn }
-  );
+  if (!config) throw new Error("Object storage not configured");
+  const client = makeClient(config);
+  return getSignedUrl(client, new GetObjectCommand({ Bucket: config.bucket, Key: key }), { expiresIn });
 }
 
 export async function fileExistsInSpaces(key: string): Promise<boolean> {
-  const client = getClient();
   const config = getStorageConfig();
-  if (!client || !config) return false;
-
+  if (!config) return false;
+  const client = makeClient(config);
   try {
     await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }));
     return true;

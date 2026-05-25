@@ -9,7 +9,7 @@ const DEFAULTS: AppSettings = {
   port: 3737,
 
   aiBackend: "openai",
-  openAiKey: process.env.OPENAI_API_KEY ?? "",
+  openAiKey: process.env.OPENAI_LOCAL_API_KEY ?? process.env.OPENAI_API_KEY ?? "",
   openAiModel: "gpt-4o-mini",
   ollamaUrl: "http://localhost:11434",
   ollamaModel: "llama3.1",
@@ -44,6 +44,7 @@ const DEFAULTS: AppSettings = {
   allowedEmails: process.env.ALLOWED_EMAILS?.split(",").map(e => e.trim()) ?? [],
 
   userDocumentLimit: parseInt(process.env.USER_DOCUMENT_LIMIT ?? "25"),
+  processOnly: process.env.PROCESS_ONLY === "true",
 };
 
 function resolveDataDir(): string {
@@ -73,7 +74,8 @@ export function loadSettings(): AppSettings {
       const parsed = JSON.parse(raw) as Partial<AppSettings>;
       // Env vars always win for secrets — never let saved settings override them
       const envOverrides: Partial<AppSettings> = {};
-      if (process.env.OPENAI_API_KEY)       envOverrides.openAiKey          = process.env.OPENAI_API_KEY;
+      if (process.env.OPENAI_LOCAL_API_KEY)  envOverrides.openAiKey          = process.env.OPENAI_LOCAL_API_KEY;
+      else if (process.env.OPENAI_API_KEY)  envOverrides.openAiKey          = process.env.OPENAI_API_KEY;
       if (process.env.GOOGLE_CLIENT_ID)     envOverrides.googleClientId     = process.env.GOOGLE_CLIENT_ID;
       if (process.env.GOOGLE_CLIENT_SECRET) envOverrides.googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
       if (process.env.GOOGLE_REDIRECT_URI)  envOverrides.googleRedirectUri  = process.env.GOOGLE_REDIRECT_URI;
@@ -93,6 +95,7 @@ export function loadSettings(): AppSettings {
       if (process.env.DO_SPACES_REGION)     envOverrides.doSpacesRegion     = process.env.DO_SPACES_REGION;
       if (process.env.ALLOWED_ORIGINS)      envOverrides.allowedOrigins     = process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim());
       if (process.env.USER_DOCUMENT_LIMIT)  envOverrides.userDocumentLimit  = parseInt(process.env.USER_DOCUMENT_LIMIT);
+      if (process.env.PROCESS_ONLY)         envOverrides.processOnly        = process.env.PROCESS_ONLY === "true";
       _settings = { ...DEFAULTS, ...parsed, ...envOverrides };
       return _settings;
     } catch {
