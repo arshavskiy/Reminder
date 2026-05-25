@@ -112,6 +112,23 @@
         <section v-if="activeSection === 'certs'">
           <div class="section-header">
             <h2 class="section-title">תעודות והסמכות</h2>
+            <n-space>
+              <input ref="certFileInput" accept=".pdf,.docx,.xlsx,.txt,.md,.png,.jpg,.jpeg,.tif,.tiff" multiple style="display:none" type="file" @change="onCertFileChange" />
+              <n-button :loading="certUploading" @click="certFileInput?.click()">📂 העלה מסמך תעודה</n-button>
+            </n-space>
+          </div>
+
+          <!-- Drag-drop zone for certificate docs -->
+          <div
+            :class="{ 'drop-zone--active': certDragging }"
+            class="drop-zone"
+            style="margin-bottom:16px"
+            @dragover.prevent="certDragging = true"
+            @dragleave.prevent="certDragging = false"
+            @drop.prevent="onCertDrop($event)"
+          >
+            <span v-if="certDragging">שחרר כאן לייבוא...</span>
+            <span v-else style="color:#666">גרור קבצי תעודות לכאן (PDF, DOCX, PNG...)</span>
           </div>
           <div class="stats-row" style="margin-bottom:20px">
             <div class="stat-pill">
@@ -246,13 +263,13 @@
             </div>
           </div>
 
-          <div class="settings-group">
-            <h3 class="settings-group__title">יצוא נתונים</h3>
-            <n-space>
-              <n-button size="small" @click="exportPdf">📄 יצוא PDF</n-button>
-              <n-button size="small" @click="exportWord">📝 יצוא Word</n-button>
-            </n-space>
-          </div>
+<!--          <div class="settings-group">-->
+<!--            <h3 class="settings-group__title">יצוא נתונים</h3>-->
+<!--            <n-space>-->
+<!--              <n-button size="small" @click="exportPdf">📄 יצוא PDF</n-button>-->
+<!--              <n-button size="small" @click="exportWord">📝 יצוא Word</n-button>-->
+<!--            </n-space>-->
+<!--          </div>-->
 
           <div class="settings-group">
             <h3 class="settings-group__title">ניהול הפעלות</h3>
@@ -326,13 +343,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
+import {computed, h, onMounted, ref} from "vue";
 import {
-  NButton, NDataTable, NDatePicker, NForm, NFormItem, NInput, NProgress,
-  NSelect, NSpace, NSpin, NTag, useMessage,
+  NButton,
+  NDataTable,
+  NDatePicker,
+  NForm,
+  NFormItem,
+  NInput,
+  NProgress,
+  NSelect,
+  NSpace,
+  NSpin,
+  NTag,
+  useMessage,
 } from "naive-ui";
-import { useAuthStore } from "../stores/auth.js";
-import type { User, UserSettings } from "@shared/types.js";
+import {useAuthStore} from "../stores/auth.js";
+import {api} from "../services/apiService.js";
+import type {User, UserSettings} from "@shared/types.js";
 
 const message = useMessage();
 const authStore = useAuthStore();
@@ -459,6 +487,42 @@ async function saveEngineer() {
     message.error("שגיאה בשמירה");
   } finally {
     savingEngineer.value = false;
+  }
+}
+
+// ── Certificate document upload ───────────────────────────────────────────────
+const certFileInput = ref<HTMLInputElement | null>(null);
+const certUploading = ref(false);
+const certDragging = ref(false);
+
+async function onCertFileChange(e: Event) {
+  const files = Array.from((e.target as HTMLInputElement).files ?? []);
+  if (!files.length) return;
+  (e.target as HTMLInputElement).value = "";
+  await uploadCertFiles(files);
+}
+
+async function onCertDrop(e: DragEvent) {
+  certDragging.value = false;
+  const files = Array.from(e.dataTransfer?.files ?? []);
+  if (files.length) await uploadCertFiles(files);
+}
+
+async function uploadCertFiles(files: File[]) {
+  certUploading.value = true;
+  try {
+    const { ids, duplicates } = await api.documents.upload(files, true);
+    const newCount = ids.length - (duplicates?.length ?? 0);
+    if (newCount > 0) message.success(`${newCount} מסמך/ים נוספו לעיבוד`);
+    if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);
+  } catch (e: any) {
+    if (e?.message === "document_limit_reached") {
+      message.error(e.serverMessage ?? "הגעת למגבלת המסמכים");
+    } else {
+      message.error(String(e));
+    }
+  } finally {
+    certUploading.value = false;
   }
 }
 
@@ -960,5 +1024,18 @@ html[data-theme="light"] .sidebar-nav__item--active {
   color: var(--text-primary);
   background: var(--bg-card);
   border-top: 1px solid var(--border-color);
+}
+.drop-zone {
+  border: 2px dashed #444;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+  font-size: 13px;
+}
+.drop-zone--active {
+  border-color: #63e2b7;
+  background: rgba(99, 226, 183, 0.06);
 }
 </style>

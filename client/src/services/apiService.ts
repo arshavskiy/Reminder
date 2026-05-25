@@ -83,10 +83,11 @@ export const api = {
     },
     get: (id: string) => get<Document>(`/documents/${id}`),
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
-    upload: async (files: File[]) => {
+    upload: async (files: File[], ocrOnly = false) => {
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
-      const res = await fetch(`${BASE}/documents/upload`, { method: "POST", body: fd, credentials: "include" });
+      const url = `${BASE}/documents/upload${ocrOnly ? "?ocrOnly=true" : ""}`;
+      const res = await fetch(url, { method: "POST", body: fd, credentials: "include" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as any;
         const err = new Error(data.error ?? `Upload failed: ${res.status}`) as any;
