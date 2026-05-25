@@ -99,6 +99,7 @@ export const api = {
       return res.json() as Promise<{ ids: string[]; duplicates: string[] }>;
     },
     delete: (id: string) => del(`/documents/${id}`),
+    downloadUrl: (id: string) => `${BASE}/documents/${id}/download`,
     reprocess: (id: string) => post<{ ok: boolean }>(`/documents/${id}/reprocess`),
   },
 

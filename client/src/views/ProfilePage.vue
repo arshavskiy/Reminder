@@ -572,6 +572,19 @@ const certColumns = [
       size: "small",
     }, () => r.status === "active" ? "בתוקף" : "פג תוקף"),
   },
+  {
+    title: "",
+    key: "download",
+    width: 80,
+    render: (r: any) => r.document_id
+      ? h("a", {
+          href: api.documents.downloadUrl(r.document_id),
+          target: "_blank",
+          style: "color:#63e2b7;font-size:18px;text-decoration:none",
+          title: "הורד מסמך",
+        }, "⬇")
+      : null,
+  },
 ];
 
 // ── Statistics ───────────────────────────────────────────────────────────────
