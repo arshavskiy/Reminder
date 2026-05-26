@@ -9,7 +9,7 @@ const DEFAULTS: AppSettings = {
   port: 3737,
 
   aiBackend: "openai",
-  openAiKey: process.env.OPENAI_API_KEY ?? "",
+  openAiKey: process.env.OPENAI_LOCAL_API_KEY ?? "",
   openAiModel: "gpt-4o-mini",
   ollamaUrl: "http://localhost:11434",
   ollamaModel: "llama3.1",
@@ -28,7 +28,7 @@ const DEFAULTS: AppSettings = {
   emailFromName: process.env.EMAIL_FROM_NAME ?? " ReminderOCR ",
 
   reminderEnabled: true,
-  reminderAdvanceDays: [90, 60, 30],
+  reminderAdvanceDays: [30],
   reminderCheckIntervalMs: 60_000,
   testEmail: "",
   testEmailTemplateId: null,
@@ -73,7 +73,7 @@ export function loadSettings(): AppSettings {
       const parsed = JSON.parse(raw) as Partial<AppSettings>;
       // Env vars always win for secrets — never let saved settings override them
       const envOverrides: Partial<AppSettings> = {};
-      if (process.env.OPENAI_API_KEY)       envOverrides.openAiKey          = process.env.OPENAI_API_KEY;
+      if (process.env.OPENAI_LOCAL_API_KEY)  envOverrides.openAiKey          = process.env.OPENAI_LOCAL_API_KEY;
       if (process.env.GOOGLE_CLIENT_ID)     envOverrides.googleClientId     = process.env.GOOGLE_CLIENT_ID;
       if (process.env.GOOGLE_CLIENT_SECRET) envOverrides.googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
       if (process.env.GOOGLE_REDIRECT_URI)  envOverrides.googleRedirectUri  = process.env.GOOGLE_REDIRECT_URI;

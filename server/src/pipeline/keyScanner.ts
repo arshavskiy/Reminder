@@ -1,6 +1,6 @@
-import { readFileSync, existsSync } from "fs";
-import { extname, basename } from "path";
-import { getSettings, saveSettings } from "../settings";
+import {existsSync, readFileSync} from "fs";
+import {basename, extname} from "path";
+import {getSettings, saveSettings} from "../settings";
 
 // Patterns that identify credential values
 const KEY_PATTERNS: Array<{ name: string; regex: RegExp; settingKey: string }> = [

@@ -89,14 +89,15 @@
     />
 
     <!-- ── Filters toolbar ──────────────────────────────────────────────── -->
-    <div class="toolbar">
-      <input
-        v-model="search"
-        class="search"
+    <n-space style="margin-bottom: 14px" align="center" justify="space-between" :wrap="true">
+      <n-input
+        v-model:value="search"
+        clearable
         placeholder="חיפוש לפי שם קובץ..."
-        type="search"
+        style="width: 280px"
+        @update:value="currentPage = 1"
       />
-      <div class="toolbar__right">
+      <n-space align="center" :wrap="true">
         <n-select
           v-model:value="filterClientId"
           :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]"
@@ -115,8 +116,8 @@
           type="daterange"
           @update:value="currentPage = 1"
         />
-      </div>
-    </div>
+      </n-space>
+    </n-space>
 
     <!-- ── Table ────────────────────────────────────────────────────────── -->
     <n-data-table
@@ -137,6 +138,21 @@
       />
       <span class="pagination__info">{{ filteredRows.length }} מסמכים</span>
     </div>
+
+    <!-- ── Document limit modal ────────────────────────────────────────── -->
+    <n-modal
+      v-model:show="showLimitModal"
+      preset="dialog"
+      type="warning"
+      title="הגעת למגבלת המסמכים"
+      positive-text="שדרג ל-Pro"
+      negative-text="סגור"
+      @positive-click="showLimitModal = false"
+      @negative-click="showLimitModal = false"
+    >
+      <p>הגעת למגבלת <strong>{{ store.documentLimit }}</strong> המסמכים בחשבון החינמי.</p>
+      <p style="font-size:13px; color:var(--text-secondary)">שדרג לחשבון Pro להעלאה בלתי מוגבלת.</p>
+    </n-modal>
 
     <!-- ── Delete all confirm ───────────────────────────────────────────── -->
     <n-modal
@@ -213,6 +229,7 @@ import {
   NCheckbox,
   NDataTable,
   NDatePicker,
+  NDropdown,
   NH2,
   NInput,
   NModal,
@@ -252,6 +269,7 @@ const queuedCount = ref(0);
 const rescanning = ref(false);
 const deletingAll = ref(false);
 const showDeleteAllConfirm = ref(false);
+const showLimitModal = ref(false);
 
 // ── Filters ───────────────────────────────────────────────────────────────────
 const search = ref("");
@@ -260,9 +278,6 @@ const filterDateRange = ref<[number, number] | null>(null);
 
 // ── Client options for filter ─────────────────────────────────────────────────
 const clientOptions = ref<{ label: string; value: string }[]>([]);
-
-// document_client mapping: doc id → client name
-const docClientMap = ref<Map<string, string>>(new Map());
 
 async function loadClients() {
   try {
@@ -303,12 +318,23 @@ const pagedRows = computed(() => {
   return filteredRows.value.slice(start, start + pageSize);
 });
 
-// ── Kebab menu ────────────────────────────────────────────────────────────────
-const openKebab = ref<string | null>(null);
-function toggleKebab(id: string) {
-  openKebab.value = openKebab.value === id ? null : id;
+function rowActions(row: Document) {
+  return [
+    { label: "📄 צפה",     key: "view" },
+    { label: "⬇ הורד",    key: "download" },
+    { label: "✨ חלץ AI",  key: "extract" },
+    { type: "divider",     key: "d1" },
+    { label: "🗑 מחק",     key: "delete",  props: { style: "color: var(--color-error, #d03050)" } },
+  ];
 }
-function onDocClick() { openKebab.value = null; }
+
+function handleRowAction(key: string, row: Document) {
+  if (key === "view")     router.push(`/documents/${row.id}`);
+  if (key === "download") openDownload(row);
+  if (key === "extract")  openExtractModal(String(row.id));
+  if (key === "delete")   store.deleteDoc(row.id);
+}
+
 
 // ── AI extraction modal ───────────────────────────────────────────────────────
 interface ExtractionField { key: string; label_he: string; type: string }
@@ -426,12 +452,10 @@ onMounted(() => {
   store.fetch().then(() => { if (hasInProgress()) schedulePoll(); });
   loadPipelineFlags();
   loadClients();
-  document.addEventListener("click", onDocClick);
 });
 onUnmounted(() => {
   if (pollTimer) clearTimeout(pollTimer);
   if (saveFlagsTimer) clearTimeout(saveFlagsTimer);
-  document.removeEventListener("click", onDocClick);
 });
 
 // ── File picker ───────────────────────────────────────────────────────────────
@@ -449,15 +473,7 @@ async function onDrop(e: DragEvent) {
 }
 
 async function handleFiles(files: File[]) {
-  if (flagAi.value) {
-    pendingFiles.value = files;
-    pendingDocIds.value = [];
-    aiModalMode.value = "upload";
-    extractionFields.value = [];
-    showAiModal.value = true;
-  } else {
-    await uploadFiles(files);
-  }
+  await uploadFiles(files);
 }
 
 async function uploadFiles(files: File[]) {
@@ -471,7 +487,7 @@ async function uploadFiles(files: File[]) {
     schedulePoll();
   } catch (e: any) {
     if (e?.message === "document_limit_reached") {
-      message.error(e.serverMessage ?? `הגעת למגבלת ${store.documentLimit} המסמכים. שדרג לחשבון Pro.`);
+      showLimitModal.value = true;
       store.fetch();
     } else {
       message.error(String(e));
@@ -494,7 +510,7 @@ async function doImportPath() {
     schedulePoll();
   } catch (e: any) {
     if (e?.message?.includes("document_limit_reached")) {
-      message.error(`הגעת למגבלת ${store.documentLimit} המסמכים. שדרג לחשבון Pro.`);
+      showLimitModal.value = true;
     } else {
       message.error(String(e));
     }
@@ -576,21 +592,14 @@ const columns = [
     key: "actions",
     width: 48,
     render: (row: Document) =>
-      h("div", { class: "kebab-wrap", onClick: (e: Event) => e.stopPropagation() }, [
-        h("button", {
-          class: ["kebab-btn", openKebab.value === row.id ? "kebab-btn--open" : ""],
-          title: "פעולות",
-          onClick: () => toggleKebab(row.id),
-        }, "⋮"),
-        openKebab.value === row.id
-          ? h("div", { class: "kebab-menu" }, [
-              h("button", { class: "kebab-item", onClick: () => { router.push(`/documents/${row.id}`); openKebab.value = null; } }, "📄 צפה"),
-              h("button", { class: "kebab-item", onClick: () => openDownload(row) }, "⬇ הורד"),
-              h("button", { class: "kebab-item", onClick: () => openExtractModal(String(row.id)) }, "✨ חלץ AI"),
-              h("button", { class: "kebab-item kebab-item--danger", onClick: () => { store.deleteDoc(row.id); openKebab.value = null; } }, "🗑 מחק"),
-            ])
-          : null,
-      ]),
+      h(NDropdown, {
+        trigger: "click",
+        placement: "bottom-end",
+        options: rowActions(row),
+        onSelect: (key: string) => handleRowAction(key, row),
+      }, {
+        default: () => h(NButton, { quaternary: true, circle: true, size: "small" }, { default: () => "⋮" }),
+      }),
   },
 ];
 </script>
@@ -621,30 +630,6 @@ const columns = [
 .pipeline-flags--modal { margin-top: 4px; }
 .pipeline-flags__label { font-size: 12px; color: #888; margin-left: 4px; }
 
-/* ── Filters toolbar ────────────────────────────────────────────────────── */
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-.toolbar__right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.search {
-  width: 300px;
-  max-width: 100%;
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
-  font-size: 14px;
-  color: var(--text-primary);
-  font-family: inherit;
-  direction: rtl;
-}
-.search:focus { border-color: var(--brand-color); outline: none; }
-
 /* ── Pagination ──────────────────────────────────────────────────────────── */
 .pagination {
   display: flex;
@@ -657,56 +642,6 @@ const columns = [
 }
 .pagination__info { font-size: 13px; color: var(--text-secondary); }
 
-/* ── Kebab menu ──────────────────────────────────────────────────────────── */
-.kebab-wrap { position: relative; display: inline-block; }
-.kebab-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.12s, color 0.12s;
-}
-.kebab-btn:hover, .kebab-btn--open {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.kebab-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  min-width: 140px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,0.18));
-  z-index: 50;
-  overflow: hidden;
-}
-.kebab-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 9px 14px;
-  background: none;
-  border: none;
-  font-size: 13px;
-  color: var(--text-primary);
-  cursor: pointer;
-  text-align: right;
-  font-family: inherit;
-  transition: background 0.12s;
-}
-.kebab-item:hover { background: var(--bg-hover); }
-.kebab-item--danger { color: var(--color-error, #d03050); }
-.kebab-item--danger:hover { background: rgba(208,48,80,0.08); }
 
 .field-row {
   padding: 6px 8px;

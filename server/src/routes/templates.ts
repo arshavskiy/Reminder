@@ -1,21 +1,21 @@
 import express from "express";
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs";
-import { join, extname } from "path";
-import { col } from "../db/db";
-import { ObjectId } from "mongodb";
-import { getDataDir } from "../settings";
-import { loadAllTemplates, loadTemplate } from "../templates/seedTemplates";
-import { loadEmailTemplate } from "../templates/seedEmailTemplates";
-import { loadAuthTemplate, loadReminderTemplate } from "../email-templates/loader";
-import { renderTemplate, listTemplateVars } from "../templates/renderEmail";
-import { previewReminderEmail } from "../reminders/emailSender";
-import { generateTemplateFromText, toDraft } from "../templates/generateTemplate";
-import { parsePdf } from "../pipeline/pdfParser";
-import { ocrFile } from "../pipeline/ocrParser";
-import { parseDocx } from "../pipeline/docxParser";
-import { parseXlsx } from "../pipeline/xlsxParser";
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from "fs";
+import {extname, join} from "path";
+import {col} from "../db/db";
+import {ObjectId} from "mongodb";
+import {getDataDir} from "../settings";
+import {loadAllTemplates, loadTemplate} from "../templates/seedTemplates";
+import {loadEmailTemplate} from "../templates/seedEmailTemplates";
+import {loadAuthTemplate, loadReminderTemplate} from "../email-templates/loader";
+import {listTemplateVars, renderTemplate} from "../templates/renderEmail";
+import {previewReminderEmail} from "../reminders/emailSender";
+import {generateTemplateFromText, toDraft} from "../templates/generateTemplate";
+import {parsePdf} from "../pipeline/pdfParser";
+import {ocrFile} from "../pipeline/ocrParser";
+import {parseDocx} from "../pipeline/docxParser";
+import {parseXlsx} from "../pipeline/xlsxParser";
 import multer from "multer";
-import type { DocTemplate, EmailTemplate, ReminderWithContext } from "../../src/shared/types.js";
+import type {DocTemplate, EmailTemplate, ReminderWithContext} from "../../src/shared/types.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 

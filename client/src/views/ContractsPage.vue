@@ -11,6 +11,14 @@
       <div class="page__actions">
         <button
           v-if="bulkMode && selectedIds.size > 0"
+          :disabled="bulkSending"
+          class="btn btn--primary"
+          @click="bulkSendReminders"
+        >
+          {{ bulkSending ? '...' : `📤 שלח התראות (${selectedIds.size})` }}
+        </button>
+        <button
+          v-if="bulkMode && selectedIds.size > 0"
           :disabled="bulkDeleting"
           class="btn btn--danger"
           @click="bulkDelete"
@@ -84,7 +92,7 @@
     <!-- ── Card list ───────────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
       <div v-if="pagedRows.length" class="cards">
-        <article v-for="row in pagedRows" :key="row.id" :class="{ 'card--selected': selectedIds.has(row.id) }" class="card">
+        <article v-for="row in pagedRows" :key="row.id" :class="{ 'card--selected': selectedIds.has(row.id), 'card--selectable': bulkMode }" class="card" @click="bulkMode && toggleSelect(row.id)">
           <!-- Top row: number + actions -->
           <div class="card__row">
             <div class="card__num" style="display:flex;align-items:center;gap:10px">
@@ -460,6 +468,7 @@ const filterDateRange = ref<[number, number] | null>(null);
 const bulkMode = ref(false);
 const selectedIds = ref(new Set<string>());
 const bulkDeleting = ref(false);
+const bulkSending = ref(false);
 
 function toggleBulkMode() {
   bulkMode.value = !bulkMode.value;
@@ -485,6 +494,32 @@ async function bulkDelete() {
     message.error(String(e));
   } finally {
     bulkDeleting.value = false;
+  }
+}
+
+async function bulkSendReminders() {
+  if (!selectedIds.value.size) return;
+  bulkSending.value = true;
+  try {
+    const pendingReminders = [...selectedIds.value].flatMap((id) =>
+      remindersFor(id).filter((r) => r.status === "pending")
+    );
+    if (!pendingReminders.length) {
+      message.warning("אין תזכורות ממתינות לתסקירים הנבחרים");
+      return;
+    }
+    const results = await Promise.allSettled(
+      pendingReminders.map((r) => api.reminders.sendNow(r.id))
+    );
+    const sent = results.filter((r) => r.status === "fulfilled" && (r.value as any).success).length;
+    const failed = results.length - sent;
+    if (sent > 0) message.success(`${sent} התראות נשלחו בהצלחה`);
+    if (failed > 0) message.error(`${failed} התראות נכשלו`);
+    await loadReminders();
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    bulkSending.value = false;
   }
 }
 
@@ -652,16 +687,19 @@ const exportFilter = ref({
   dateRange: null as [number, number] | null,
 });
 const exportColumns = ref([
-  { key: "contract_number", label: "מספר",        selected: true },
-  { key: "contract_type",   label: "סוג",          selected: true },
-  { key: "client_name",     label: "לקוח",         selected: true },
-  { key: "start_date",      label: "תאריך התחלה",  selected: true },
-  { key: "expiry_date",     label: "תאריך תפוגה",  selected: true },
-  { key: "amount",          label: "סכום",         selected: true },
-  { key: "currency",        label: "מטבע",         selected: false },
-  { key: "status",          label: "סטטוס",        selected: true },
-  { key: "counterparty",    label: "צד שכנגד",     selected: false },
-  { key: "summary",         label: "הערות",        selected: false },
+  { key: "contract_number",     label: "מספר תסקיר",      selected: true },
+  { key: "client_name",         label: "לקוח / תופש",     selected: true },
+  { key: "contact_person",      label: "איש קשר",         selected: true },
+  { key: "contact_phone",       label: "נייד",            selected: true },
+  { key: "contact_email",       label: "מייל",            selected: true },
+  { key: "client_address",      label: "ישוב / רחוב",     selected: true },
+  { key: "start_date",          label: "תאריך בדיקה",     selected: true },
+  { key: "expiry_date",         label: "בתוקף עד",        selected: true },
+  { key: "equipment_description", label: "תיאור ציוד",    selected: true },
+  { key: "status",              label: "סטטוס",           selected: true },
+  { key: "contract_type",       label: "סוג",             selected: false },
+  { key: "counterparty",        label: "צד שכנגד",        selected: false },
+  { key: "summary",             label: "הערות",           selected: false },
 ]);
 const selectedExportColumns = computed(() => exportColumns.value.filter((c) => c.selected));
 const exportedRows = computed(() => filteredRows.value.filter((r) => {
@@ -1108,10 +1146,13 @@ function exportToExcel() {
   border: 1px solid var(--border-color);
   border-radius: 14px;
   padding: 18px 22px;
+  cursor: pointer;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 .card:hover { border-color: var(--brand-color); box-shadow: var(--shadow-sm); }
 .card--selected { border-color: var(--brand-color); background: rgba(99,226,183,0.06); }
+.card--selectable { cursor: pointer; }
+.card--selectable:hover { border-color: var(--brand-color); }
 .btn--ghost-active { background: var(--bg-elevated); border-color: var(--brand-color); color: var(--brand-color); }
 .card__row {
   display: flex;

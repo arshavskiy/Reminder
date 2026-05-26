@@ -22,28 +22,31 @@
 
     <n-grid :cols="2" :x-gap="24" :y-gap="16">
       <!-- ── Document metadata ─────────────────────────────── -->
-<!--      <n-gi>-->
-<!--        <n-card title="פרטי מסמך">-->
-<!--          <n-descriptions :column="1">-->
-<!--            <n-descriptions-item label="סוג קובץ">{{ doc.mime_type }}</n-descriptions-item>-->
-<!--            <n-descriptions-item label="גודל">{{ ((doc.file_size_bytes ?? 0) / 1024).toFixed(1) }} KB</n-descriptions-item>-->
-<!--            <n-descriptions-item label="תאריך ייבוא">{{ doc.import_date }}</n-descriptions-item>-->
-<!--            <n-descriptions-item v-if="doc.page_count" label="עמודים">{{ doc.page_count }}</n-descriptions-item>-->
-<!--            <n-descriptions-item v-if="(doc as any).document_type" label="סוג מסמך">{{ (doc as any).document_type }}</n-descriptions-item>-->
-<!--          </n-descriptions>-->
-<!--        </n-card>-->
-<!--      </n-gi>-->
+      <n-gi v-if="authStore.user?.role === 'admin'">
+        <n-card title="פרטי מסמך">
+          <n-descriptions :column="1">
+            <n-descriptions-item label="סוג קובץ">{{ doc.mime_type }}</n-descriptions-item>
+            <n-descriptions-item label="גודל">{{ ((doc.file_size_bytes ?? 0) / 1024).toFixed(1) }} KB</n-descriptions-item>
+            <n-descriptions-item label="תאריך ייבוא">{{ doc.import_date }}</n-descriptions-item>
+            <n-descriptions-item v-if="doc.page_count" label="עמודים">{{ doc.page_count }}</n-descriptions-item>
+            <n-descriptions-item v-if="(doc as any).document_type" label="סוג מסמך">{{ (doc as any).document_type }}</n-descriptions-item>
+          </n-descriptions>
+        </n-card>
+      </n-gi>
 
       <!-- ── Extracted fields ─────────────────────────────── -->
       <n-gi v-if="extractedFields.length">
         <n-card title="נתונים שחולצו (AI)">
-          <n-descriptions :column="1">
-            <n-descriptions-item v-for="f in extractedFields" :key="f.key" :label="f.label">
-              <span v-if="Array.isArray(f.value)">{{ f.value.join(', ') || '—' }}</span>
-              <span v-else-if="f.value && typeof f.value === 'object'">{{ JSON.stringify(f.value) }}</span>
-              <span v-else>{{ f.value ?? '—' }}</span>
-            </n-descriptions-item>
-          </n-descriptions>
+          <div class="fields-table">
+            <div v-for="f in extractedFields" :key="f.key" class="fields-row">
+              <span class="fields-label">{{ f.label }}</span>
+              <span class="fields-value">
+                <template v-if="Array.isArray(f.value)">{{ f.value.join(', ') || '—' }}</template>
+                <template v-else-if="f.value && typeof f.value === 'object'">{{ JSON.stringify(f.value) }}</template>
+                <template v-else>{{ f.value ?? '—' }}</template>
+              </span>
+            </div>
+          </div>
         </n-card>
       </n-gi>
 
@@ -59,8 +62,8 @@
         </n-card>
       </n-gi>
 
-      <!-- ── Raw text ──────────────────────────────────────── -->
-      <n-gi :span="2" v-if="displayText">
+      <!-- ── Raw text (admin only) ────────────────────────── -->
+      <n-gi :span="2" v-if="displayText && authStore.user?.role === 'admin'">
         <n-card title="טקסט גולמי" :segmented="{ content: true }">
           <template #header-extra>
             <n-tag size="small" type="info">{{ displayText.length.toLocaleString() }} תווים</n-tag>
@@ -96,6 +99,9 @@ import {
 import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import type {Document} from "@shared/types.js";
+import {useAuthStore} from "../stores/auth.js";
+
+const authStore = useAuthStore();
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const route = useRoute();
@@ -132,7 +138,7 @@ const LABEL_MAP: Record<string, string> = {
   contact_phone: "נייד",
   client_email: "מייל",
   contact_email: "מייל",
-  client_address: "ישוב",
+  client_address: "ישוב / רחוב",
   client_zipcode: "מיקוד",
   client_id: "ח.פ / ת.ז",
   // document identity
@@ -227,3 +233,39 @@ onMounted(async () => {
   }
 });
 </script>
+
+<style scoped>
+.fields-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.fields-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--n-border-color, #efeff5);
+  text-align: left;
+  direction: rtl;
+}
+
+.fields-row:last-child {
+  border-bottom: none;
+}
+
+.fields-label {
+  flex: 0 0 140px;
+  font-size: 13px;
+  color: var(--n-label-text-color, #909399);
+  font-weight: 500;
+}
+
+.fields-value {
+  flex: 1;
+  font-size: 13px;
+  color: var(--n-text-color, #333);
+  word-break: break-word;
+}
+</style>

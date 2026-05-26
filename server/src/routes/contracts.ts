@@ -96,10 +96,20 @@ export function registerContractRoutes(app: express.Application) {
           c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
           c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
         ]);
+        const docAny = document as any;
+        let extractedFields: Record<string, any> = {};
+        if (docAny?.extracted_fields) {
+          try { extractedFields = JSON.parse(docAny.extracted_fields); } catch {}
+        }
         return {
           ...flatDoc(c),
           client_name: (client as any)?.display_name ?? null,
-          document_name: (document as any)?.file_name ?? null,
+          document_name: docAny?.file_name ?? null,
+          contact_person: extractedFields.contact_person ?? null,
+          contact_phone: extractedFields.contact_phone ?? null,
+          contact_email: extractedFields.contact_email ?? null,
+          client_address: extractedFields.client_address ?? null,
+          equipment_description: extractedFields.equipment_description ?? null,
         };
       })
     );

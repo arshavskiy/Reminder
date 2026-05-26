@@ -106,8 +106,6 @@ contract.expiry_date = "2027-07-16"
 settings.reminderAdvanceDays = [90, 60, 30]
         │
         ▼
-INSERT INTO reminders (trigger_date='2027-04-17', advance_days=90, ...)
-INSERT INTO reminders (trigger_date='2027-05-17', advance_days=60, ...)
 INSERT INTO reminders (trigger_date='2027-06-16', advance_days=30, ...)
 ```
 

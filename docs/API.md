@@ -484,7 +484,7 @@ All counts scoped to the authenticated user.
 {
   "theme": "light",
   "email_from_name": "ReminderOCR",
-  "reminder_advance_days": "[90,60,30]",
+  "reminder_advance_days": "[30]",
   "ocr_language": "heb+eng"
 }
 ```

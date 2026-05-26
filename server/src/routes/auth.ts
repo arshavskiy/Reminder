@@ -2,19 +2,19 @@ import express from "express";
 import {col} from "../db/db";
 import {getSettings} from "../settings";
 import {
-    exchangeCodeForIdToken,
-    generateCodeVerifier,
-    generateState,
-    getGoogleAuthUrl,
-    verifyIdToken,
+  exchangeCodeForIdToken,
+  generateCodeVerifier,
+  generateState,
+  getGoogleAuthUrl,
+  verifyIdToken,
 } from "../auth/google";
 import {createSession, extractSessionFromCookie, revokeSession, verifySession,} from "../auth/session";
 import {
-    generateToken,
-    hashPassword,
-    sendPasswordResetEmail,
-    sendVerificationEmail,
-    verifyPassword,
+  generateToken,
+  hashPassword,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+  verifyPassword,
 } from "../auth/emailAuth";
 
 export function registerAuthRoutes(app: express.Application) {
@@ -471,6 +471,7 @@ export function registerAuthRoutes(app: express.Application) {
 }
 
 const DEV_FRONTEND =
+  process.env.FRONTEND_URL ??
   process.env.VITE_DEV_URL ??
   (process.env.NODE_ENV === "production" ? "" : "http://localhost:5173");
 

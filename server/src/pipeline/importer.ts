@@ -11,7 +11,7 @@ import {parseXlsx} from "./xlsxParser";
 import {extractDocument, extractWithTemplate} from "./extractor";
 import {pickTemplate} from "../templates/seedTemplates";
 import {generateContractReminders} from "../reminders/scheduler";
-import {spacesEnabled, uploadToSpaces} from "../storage/spaces";
+import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 
 type PushFn = (event: Record<string, unknown>) => void;
@@ -65,19 +65,24 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   // Upload to S3-compatible object storage if configured
   let spacesKey: string | null = null;
   let spacesUrl: string | null = null;
+  let downloadUrl: string | null = null;
+  const SIGNED_URL_TTL = 7 * 24 * 3600; // 7 days
   if (spacesEnabled()) {
     try {
       spacesKey = `documents/${fileHash}${ext}`;
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
+      downloadUrl = await getSpacesSignedUrl(spacesKey, SIGNED_URL_TTL, fileName);
       console.log(`[importer] Uploaded to object storage: ${spacesKey}`);
     } catch (err) {
       console.error(`[importer] Object storage upload failed, keeping local copy:`, err);
       spacesKey = null;
       spacesUrl = null;
+      downloadUrl = null;
     }
   }
 
   const now = new Date();
+  const signedUrlExpiresAt = downloadUrl ? new Date(Date.now() + SIGNED_URL_TTL * 1000) : null;
   const docRecord: Record<string, any> = {
     file_name: fileName,
     file_path: managedPath,
@@ -91,6 +96,8 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
     updated_at: now,
     spaces_key: spacesKey,
     spaces_url: spacesUrl,
+    download_url: downloadUrl,
+    signed_url_expires_at: signedUrlExpiresAt,
   };
   if (userId) docRecord.user_id = userId;
 
