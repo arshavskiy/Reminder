@@ -2,10 +2,10 @@
   <div class="dash">
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
-      <header class="dash__header">
-        <h1 class="dash__greet">{{ greeting }}{{ userName ? `, ${userName}` : "" }}</h1>
-        <p class="dash__sub">הנה מרכז העבודה שלך. {{ dateLine }}</p>
-      </header>
+<!--      <header class="dash__header">-->
+<!--        <h1 class="dash__greet">{{ greeting }}{{ userName ? `, ${userName}` : "" }}</h1>-->
+<!--        <p class="dash__sub">הנה מרכז העבודה שלך. {{ dateLine }}</p>-->
+<!--      </header>-->
 
       <!-- Quick stats — small chips line, easy to scan -->
       <div class="dash__stats">
@@ -104,15 +104,23 @@ import {
   SettingsOutline,
 } from "@vicons/ionicons5";
 import {useDashboardStore} from "../stores/dashboard.js";
+import {useAuthStore} from "../stores/auth.js";
 import StatusBadge from "../components/StatusBadge.vue";
 
 const store = useDashboardStore();
+const authStore = useAuthStore();
 const router = useRouter();
 const stats = computed(() => store.stats);
 onMounted(() => store.fetch());
 
-// Read the user's name from settings if present, otherwise no name in greeting.
-const userName = computed(() => "");
+const userName = computed(() => {
+  const u = authStore.user;
+  if (!u) return "";
+  // Use first name only if full name available, else email prefix
+  const name = u.name?.trim();
+  if (name) return name.split(" ")[0];
+  return u.email?.split("@")[0] ?? "";
+});
 
 // "בוקר טוב / צהריים טובים / ערב טוב / לילה טוב" by local hour
 const greeting = computed(() => {

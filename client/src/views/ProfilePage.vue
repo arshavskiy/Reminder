@@ -105,6 +105,21 @@
               <n-date-picker v-if="editingEngineer" v-model:value="engineerForm.membership_start_ms" type="date" style="flex:1" />
               <span v-else class="info-val">{{ formatDate(engineerProfile?.membership_start_date) }}</span>
             </div>
+            <div class="info-row">
+              <span class="info-label">מספר התחלת תסקירים</span>
+              <div v-if="editingEngineer" style="flex:1;display:flex;flex-direction:column;gap:4px">
+                <n-input v-model:value="engineerForm.inspector_id_start" placeholder="לדוגמה: 16125" />
+                <span v-if="engineerForm.inspector_id_start" class="info-hint">
+                  🔒 מספר זה נקבע כבר. הבא יהיה: {{ engineerForm.inspector_id_start }}/{{ engineerProfile?.inspector_number ?? '—' }}
+                </span>
+              </div>
+              <div v-else class="info-val" style="display:flex;flex-direction:column;gap:4px">
+                <span>{{ engineerProfile?.inspector_id_start || '—' }}</span>
+                <span v-if="engineerProfile?.inspector_id_start" class="info-hint">
+                  הבא יהיה: {{ nextInspectionId }}
+                </span>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -442,13 +457,22 @@ const engineerProfile = ref<{
   mr_number?: string;
   mg_number?: string;
   membership_start_date?: string;
+  inspector_id_start?: string;
 } | null>(null);
+
+const nextInspectionId = computed(() => {
+  const start = parseInt(engineerProfile.value?.inspector_id_start ?? "0", 10);
+  const total = inspectionStats.value.total;
+  if (!start) return "—";
+  return `${start + total}/${engineerProfile.value?.inspector_number ?? "—"}`;
+});
 
 const editingEngineer = ref(false);
 const savingEngineer = ref(false);
 const engineerForm = ref({
   inspector_number: "", address: "", title: "", expertise: "",
   mr_number: "", mg_number: "", membership_start_ms: null as number | null,
+  inspector_id_start: "",
 });
 
 function startEditEngineer() {
@@ -461,6 +485,7 @@ function startEditEngineer() {
     mr_number: p?.mr_number ?? "",
     mg_number: p?.mg_number ?? "",
     membership_start_ms: p?.membership_start_date ? new Date(p.membership_start_date).getTime() : null,
+    inspector_id_start: p?.inspector_id_start ?? "",
   };
   editingEngineer.value = true;
 }
@@ -473,6 +498,7 @@ async function saveEngineer() {
       membership_start_date: engineerForm.value.membership_start_ms
         ? new Date(engineerForm.value.membership_start_ms).toISOString().slice(0, 10)
         : null,
+      inspector_id_start: engineerForm.value.inspector_id_start || null,
     };
     const res = await fetch(`${SERVER}/api/profile/engineer`, {
       method: "PUT",
@@ -953,6 +979,7 @@ html[data-theme="light"] .sidebar-nav__item--active {
 .info-label { color: var(--text-secondary); min-width: 160px; flex-shrink: 0; }
 .info-val { color: var(--text-primary); font-weight: 500; }
 .info-input { flex: 1; }
+.info-hint { font-size: 11px; color: var(--color-warning, #f0a020); }
 
 .progress-wrap {
   flex: 1;

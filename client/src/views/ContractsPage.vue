@@ -9,6 +9,22 @@
         </p>
       </div>
       <div class="page__actions">
+        <button
+          v-if="bulkMode && selectedIds.size > 0"
+          :disabled="bulkDeleting"
+          class="btn btn--danger"
+          @click="bulkDelete"
+        >
+          🗑 מחק נבחרים ({{ selectedIds.size }})
+        </button>
+        <button
+          :class="{ 'btn--ghost-active': bulkMode }"
+          class="btn btn--ghost"
+          title="בחירה מרובה"
+          @click="toggleBulkMode"
+        >
+          ☑ בחירה מרובה
+        </button>
         <button class="btn btn--ghost" @click="openExport" title="ייצוא ל-Excel">
           📊 ייצוא ל-Excel
         </button>
@@ -61,10 +77,16 @@
     <!-- ── Card list ───────────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
       <div v-if="pagedRows.length" class="cards">
-        <article v-for="row in pagedRows" :key="row.id" class="card">
+        <article v-for="row in pagedRows" :key="row.id" :class="{ 'card--selected': selectedIds.has(row.id) }" class="card">
           <!-- Top row: number + actions -->
           <div class="card__row">
-            <div class="card__num">
+            <div class="card__num" style="display:flex;align-items:center;gap:10px">
+              <n-checkbox
+                v-if="bulkMode"
+                :checked="selectedIds.has(row.id)"
+                @update:checked="toggleSelect(row.id)"
+                @click.stop
+              />
               <span class="card__num-main">{{ row.contract_number ?? "—" }}</span>
             </div>
             <div class="card__actions">
@@ -108,6 +130,45 @@
                 <strong>סכום:</strong> {{ row.amount?.toLocaleString() }} {{ row.currency }}
               </span>
             </div>
+          </div>
+
+          <!-- ── Reminders section ──────────────────────────────────────── -->
+          <div class="card__reminders">
+            <div class="reminders-header">
+              <span class="reminders-title">🔔 תזכורות</span>
+              <button class="btn btn--xs btn--ghost" @click.stop="openAddReminder(row)">
+                + תזכורת חדשה
+              </button>
+            </div>
+            <div v-if="remindersFor(row.id).length" class="reminders-list">
+              <div
+                v-for="r in remindersFor(row.id)"
+                :key="r.id"
+                class="reminder-row"
+              >
+                <span class="reminder-date">{{ r.trigger_date }}</span>
+                <span class="reminder-title">{{ r.title }}</span>
+                <span :class="reminderStatusClass(r.status)" class="reminder-status-badge">
+                  {{ reminderStatusLabel(r.status) }}
+                </span>
+                <div class="reminder-actions">
+                  <button
+                    v-if="r.status === 'pending'"
+                    :disabled="sendingReminder === r.id"
+                    class="btn btn--xs btn--ghost"
+                    title="שלח עכשיו"
+                    @click.stop="sendReminderNow(r)"
+                  >{{ sendingReminder === r.id ? '...' : '📤 שלח' }}</button>
+                  <button
+                    v-if="r.status === 'pending'"
+                    class="btn btn--xs btn--ghost"
+                    title="בטל תזכורת"
+                    @click.stop="dismissReminder(r)"
+                  >✕</button>
+                </div>
+              </div>
+            </div>
+            <p v-else class="reminders-empty">אין תזכורות לתסקיר זה</p>
           </div>
         </article>
       </div>
@@ -318,6 +379,37 @@
       <p>האם למחוק את הרשומה <strong>{{ deletingRow?.contract_number ?? deletingRow?.contract_type ?? "זו" }}</strong>?</p>
       <p style="font-size:13px; color:var(--text-secondary)">פעולה זו אינה הפיכה. התזכורות הקשורות לא יימחקו.</p>
     </n-modal>
+
+    <!-- ── Add reminder modal ─────────────────────────────────────────── -->
+    <n-modal v-model:show="showAddReminder" preset="dialog" style="width:480px" title="הוסף תזכורת לתסקיר">
+      <n-form v-if="reminderForm" label-placement="top">
+        <n-form-item label="כותרת" required>
+          <n-input v-model:value="reminderForm.title" placeholder="לדוגמה: תזכורת בדיקה הבאה" />
+        </n-form-item>
+        <n-form-item label="תאריך שליחה" required>
+          <n-date-picker v-model:value="reminderForm.triggerDateMs" style="width:100%" type="date" />
+        </n-form-item>
+        <n-form-item label="אימייל נמען">
+          <n-input v-model:value="reminderForm.emailTo" placeholder="email@example.com" />
+        </n-form-item>
+        <n-form-item label="תבנית אימייל">
+          <n-select
+            v-model:value="reminderForm.email_template_id"
+            :options="emailTemplateOptions"
+            :virtual-scroll="false"
+            clearable
+            placeholder="ברירת מחדל"
+          />
+        </n-form-item>
+        <n-form-item label="הערה">
+          <n-input v-model:value="reminderForm.body" :rows="2" type="textarea" />
+        </n-form-item>
+      </n-form>
+      <template #action>
+        <n-button @click="showAddReminder = false">ביטול</n-button>
+        <n-button :loading="savingReminder" type="primary" @click="saveReminder">צור תזכורת</n-button>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -345,7 +437,7 @@ import {CreateOutline, EyeOutline, TrashOutline} from "@vicons/ionicons5";
 import {useContractsStore} from "../stores/contracts.js";
 import {api} from "../services/apiService.js";
 import ExpiryBadge from "../components/ExpiryBadge.vue";
-import type {ContractWithClient} from "@shared/types.js";
+import type {ContractWithClient, EmailTemplate, ReminderWithContext} from "@shared/types.js";
 
 const store = useContractsStore();
 const router = useRouter();
@@ -354,6 +446,180 @@ const message = useMessage();
 const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
 const search = ref("");
+
+// ── Bulk select ───────────────────────────────────────────────────────────────
+const bulkMode = ref(false);
+const selectedIds = ref(new Set<string>());
+const bulkDeleting = ref(false);
+
+function toggleBulkMode() {
+  bulkMode.value = !bulkMode.value;
+  if (!bulkMode.value) selectedIds.value = new Set();
+}
+function toggleSelect(id: string) {
+  const s = new Set(selectedIds.value);
+  if (s.has(id)) s.delete(id);
+  else s.add(id);
+  selectedIds.value = s;
+}
+async function bulkDelete() {
+  if (!selectedIds.value.size) return;
+  if (!confirm(`למחוק ${selectedIds.value.size} רשומות?`)) return;
+  bulkDeleting.value = true;
+  try {
+    await Promise.all([...selectedIds.value].map((id) => store.remove(id)));
+    message.success(`${selectedIds.value.size} רשומות נמחקו`);
+    selectedIds.value = new Set();
+    bulkMode.value = false;
+    load();
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    bulkDeleting.value = false;
+  }
+}
+
+// ── Reminders ─────────────────────────────────────────────────────────────────
+const allReminders = ref<ReminderWithContext[]>([]);
+
+// Group reminders by source_id (contract id). source_type may be 'contract_expiry' or 'manual'.
+const remindersByContract = computed(() => {
+  const map = new Map<string, ReminderWithContext[]>();
+  for (const r of allReminders.value) {
+    if (r.source_id == null) continue;
+    const key = String(r.source_id);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(r);
+  }
+  return map;
+});
+
+function remindersFor(contractId: string): ReminderWithContext[] {
+  return remindersByContract.value.get(String(contractId)) ?? [];
+}
+
+async function loadReminders() {
+  try {
+    const { rows } = await api.reminders.list({ limit: 1000 });
+    allReminders.value = rows;
+  } catch { /* non-fatal */ }
+}
+
+const sendingReminder = ref<number | null>(null);
+const message2 = useMessage();
+
+async function sendReminderNow(r: ReminderWithContext) {
+  sendingReminder.value = r.id;
+  try {
+    const res = await api.reminders.sendNow(r.id);
+    if (res.success) {
+      message2.success("תזכורת נשלחה");
+      await loadReminders();
+    } else {
+      message2.error(res.error ?? "שגיאה בשליחה");
+    }
+  } finally {
+    sendingReminder.value = null;
+  }
+}
+
+async function dismissReminder(r: ReminderWithContext) {
+  try {
+    await api.reminders.dismiss(r.id);
+    allReminders.value = allReminders.value.filter((x) => x.id !== r.id);
+  } catch (e) {
+    message2.error(String(e));
+  }
+}
+
+function reminderStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    pending: "ממתין", sent: "נשלח", snoozed: "נדחה", dismissed: "בוטל", error: "שגיאה",
+  };
+  return map[status] ?? status;
+}
+
+function reminderStatusClass(status: string): string {
+  const map: Record<string, string> = {
+    pending:   "rbadge rbadge--pending",
+    sent:      "rbadge rbadge--sent",
+    snoozed:   "rbadge rbadge--snoozed",
+    dismissed: "rbadge rbadge--dismissed",
+    error:     "rbadge rbadge--error",
+  };
+  return map[status] ?? "rbadge";
+}
+
+// ── Email templates ───────────────────────────────────────────────────────────
+const emailTemplates = ref<EmailTemplate[]>([]);
+const emailTemplateOptions = computed(() =>
+  emailTemplates.value.map((t) => ({
+    label: t.is_default ? `${t.name}  (ברירת מחדל)` : t.name,
+    value: t.id,
+  }))
+);
+
+// ── Add reminder modal ────────────────────────────────────────────────────────
+const showAddReminder = ref(false);
+const savingReminder = ref(false);
+const reminderTargetRow = ref<ContractWithClient | null>(null);
+const reminderForm = ref<{
+  title: string;
+  triggerDateMs: number | null;
+  emailTo: string;
+  body: string;
+  email_template_id: string | null;
+} | null>(null);
+
+function openAddReminder(row: ContractWithClient) {
+  reminderTargetRow.value = row;
+  const client = clientsMap.value.get(String(row.client_id));
+  const tpl =
+    emailTemplates.value.find((t) => t.name.includes("תסקיר בדיקה תקופתית")) ??
+    emailTemplates.value.find((t) => !!t.is_default) ??
+    null;
+  reminderForm.value = {
+    title: `תזכורת בדיקה — ${row.contract_number ?? row.contract_type ?? "תסקיר"}`,
+    triggerDateMs: row.expiry_date ? new Date(row.expiry_date).getTime() : Date.now(),
+    emailTo: client?.email ?? "",
+    body: "",
+    email_template_id: tpl?.id ?? null,
+  };
+  showAddReminder.value = true;
+}
+
+async function saveReminder() {
+  if (!reminderForm.value || !reminderTargetRow.value) return;
+  if (!reminderForm.value.title.trim() || !reminderForm.value.triggerDateMs) {
+    message2.warning("יש להזין כותרת ותאריך");
+    return;
+  }
+  savingReminder.value = true;
+  try {
+    const triggerDate = new Date(reminderForm.value.triggerDateMs).toISOString().slice(0, 10);
+    const emailTo = reminderForm.value.emailTo.trim()
+      ? JSON.stringify([reminderForm.value.emailTo.trim()])
+      : null;
+    await api.reminders.create({
+      source_type: "manual",
+      source_id: Number(reminderTargetRow.value.id),
+      client_id: reminderTargetRow.value.client_id ?? undefined,
+      trigger_date: triggerDate,
+      advance_days: 0,
+      title: reminderForm.value.title,
+      body: reminderForm.value.body || null,
+      email_to: emailTo,
+      email_template_id: reminderForm.value.email_template_id,
+    });
+    message2.success("תזכורת נוצרה");
+    showAddReminder.value = false;
+    await loadReminders();
+  } catch (e) {
+    message2.error(String(e));
+  } finally {
+    savingReminder.value = false;
+  }
+}
 
 // ── Pagination ────────────────────────────────────────────────────────────────
 const pageSize = 20;
@@ -462,6 +728,7 @@ const deletingRow = ref<ContractWithClient | null>(null);
 
 // ── Client picker ─────────────────────────────────────────────────────────────
 const clientOptions = ref<{ label: string; value: string }[]>([]);
+const clientsMap = ref<Map<string, import("@shared/types.js").Client>>(new Map());
 const loadingClients = ref(false);
 
 async function loadClients() {
@@ -470,6 +737,7 @@ async function loadClients() {
   try {
     const r = await api.clients.list({ limit: 500 });
     clientOptions.value = r.rows.map((c) => ({ label: c.display_name, value: String(c.id) }));
+    clientsMap.value = new Map(r.rows.map((c) => [String(c.id), c]));
   } finally {
     loadingClients.value = false;
   }
@@ -516,10 +784,14 @@ function load() {
   store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value });
 }
 
-onMounted(() => {
+onMounted(async () => {
   load();
   store.fetchExpiring(30);
   loadClients();
+  loadReminders();
+  try {
+    emailTemplates.value = await api.emailTemplates.list();
+  } catch { /* non-fatal */ }
 });
 
 const filteredRows = computed(() => {
@@ -817,6 +1089,8 @@ function exportToExcel() {
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 .card:hover { border-color: var(--brand-color); box-shadow: var(--shadow-sm); }
+.card--selected { border-color: var(--brand-color); background: rgba(99,226,183,0.06); }
+.btn--ghost-active { background: var(--bg-elevated); border-color: var(--brand-color); color: var(--brand-color); }
 .card__row {
   display: flex;
   justify-content: space-between;
@@ -950,4 +1224,84 @@ html[data-theme="dark"] .expiry--bad  { color: #ff7875; }
 .export-summary__icon { font-size: 48px; margin-bottom: 12px; }
 .export-summary__text { font-size: 18px; font-weight: 600; color: var(--text-primary); }
 .export-summary__sub { font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
+
+/* ── Reminders on card ───────────────────────────────────────────────────── */
+.card__reminders {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+.reminders-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.reminders-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.reminders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reminder-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+}
+.reminder-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 80px;
+}
+.reminder-title {
+  flex: 1;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reminder-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* reminder status badges */
+.rbadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rbadge--pending   { background: rgba(240,160,32,0.15);  color: #b27a02; border: 1px solid rgba(240,160,32,0.3); }
+.rbadge--sent      { background: rgba(99,226,183,0.15);  color: #1a7951; border: 1px solid rgba(99,226,183,0.3); }
+.rbadge--snoozed   { background: rgba(32,128,240,0.12);  color: #1560bd; border: 1px solid rgba(32,128,240,0.2); }
+.rbadge--dismissed { background: var(--bg-elevated);     color: var(--text-muted); border: 1px solid var(--border-color); }
+.rbadge--error     { background: rgba(208,48,80,0.12);   color: #b22e2e; border: 1px solid rgba(208,48,80,0.2); }
+html[data-theme="dark"] .rbadge--pending   { color: #f0a020; }
+html[data-theme="dark"] .rbadge--sent      { color: #63e2b7; }
+html[data-theme="dark"] .rbadge--snoozed   { color: #63b3ed; }
+html[data-theme="dark"] .rbadge--error     { color: #ff7875; }
+
+.reminders-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+  padding: 0;
+}
 </style>
