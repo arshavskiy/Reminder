@@ -7,8 +7,8 @@
     "node": ">=23"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "node --import tsx/esm src/index.ts",
+    "dev": "node --disable-warning=DEP0040 --import tsx/esm --watch src/index.ts",
+    "start": "node --disable-warning=DEP0040 --import tsx/esm src/index.ts",
     "build": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
