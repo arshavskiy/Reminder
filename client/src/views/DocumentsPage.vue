@@ -457,13 +457,25 @@ async function doDeleteCorrupt() {
   }
 }
 
+// ── Download helper ───────────────────────────────────────────────────────────
+async function openDownload(row: Document) {
+  try {
+    const res = await fetch(`${SERVER}/api/documents/${row.id}/download`, { credentials: "include" });
+    if (!res.ok) throw new Error(await res.text());
+    const { url } = await res.json() as { url: string };
+    window.open(url, "_blank", "noopener");
+  } catch (e) {
+    message.error(`לא ניתן לפתוח את הקובץ: ${e}`);
+  }
+}
+
 // ── Table ─────────────────────────────────────────────────────────────────────
 const columns = [
   {
     title: "שם קובץ",
     key: "file_name",
     render: (row: Document) =>
-      h("a", { style: "cursor:pointer;color:#63e2b7", onClick: () => router.push(`/documents/${row.id}`) }, row.file_name),
+      h("a", { style: "cursor:pointer;color:#63e2b7", onClick: () => router.push(`/documents/${row.id}`) , title: "פתח / הורד"},  row.file_name),
   },
   { title: "סוג", key: "mime_type", width: 200 },
   {
@@ -476,10 +488,11 @@ const columns = [
   {
     title: "",
     key: "actions",
-    width: 120,
+    width: 200,
     render: (row: Document) =>
       h(NSpace, { size: "small" }, {
         default: () => [
+          h(NButton, { size: "small", onClick: () => openDownload(row), title: "פתח / הורד" }, { default: () => "הורד" }),
           h(NButton, { size: "small", onClick: () => openExtractModal(String(row.id)) }, { default: () => "↻" }),
           h(NButton, { size: "small", type: "error", onClick: () => store.deleteDoc(row.id) }, { default: () => "מחק" }),
         ],

@@ -10,24 +10,34 @@
       {{ doc.error_message }}
     </n-alert>
 
+    <!-- ── PDF preview ──────────────────────────────────────── -->
+    <n-card v-if="previewUrl" :segmented="{ content: true }" style="margin-bottom: 16px">
+      <iframe
+        :src="previewUrl"
+        style="width:100%; height:780px; border:none; border-radius:6px"
+        type="application/pdf"
+      />
+    </n-card>
+    <n-alert v-else-if="previewError" :title="previewError" style="margin-bottom: 16px" type="warning" />
+
     <n-grid :cols="2" :x-gap="24" :y-gap="16">
       <!-- ── Document metadata ─────────────────────────────── -->
-      <n-gi>
-        <n-card title="פרטי מסמך">
-          <n-descriptions :column="1" bordered>
-            <n-descriptions-item label="סוג קובץ">{{ doc.mime_type }}</n-descriptions-item>
-            <n-descriptions-item label="גודל">{{ ((doc.file_size_bytes ?? 0) / 1024).toFixed(1) }} KB</n-descriptions-item>
-            <n-descriptions-item label="תאריך ייבוא">{{ doc.import_date }}</n-descriptions-item>
-            <n-descriptions-item v-if="doc.page_count" label="עמודים">{{ doc.page_count }}</n-descriptions-item>
-            <n-descriptions-item v-if="(doc as any).document_type" label="סוג מסמך">{{ (doc as any).document_type }}</n-descriptions-item>
-          </n-descriptions>
-        </n-card>
-      </n-gi>
+<!--      <n-gi>-->
+<!--        <n-card title="פרטי מסמך">-->
+<!--          <n-descriptions :column="1">-->
+<!--            <n-descriptions-item label="סוג קובץ">{{ doc.mime_type }}</n-descriptions-item>-->
+<!--            <n-descriptions-item label="גודל">{{ ((doc.file_size_bytes ?? 0) / 1024).toFixed(1) }} KB</n-descriptions-item>-->
+<!--            <n-descriptions-item label="תאריך ייבוא">{{ doc.import_date }}</n-descriptions-item>-->
+<!--            <n-descriptions-item v-if="doc.page_count" label="עמודים">{{ doc.page_count }}</n-descriptions-item>-->
+<!--            <n-descriptions-item v-if="(doc as any).document_type" label="סוג מסמך">{{ (doc as any).document_type }}</n-descriptions-item>-->
+<!--          </n-descriptions>-->
+<!--        </n-card>-->
+<!--      </n-gi>-->
 
       <!-- ── Extracted fields ─────────────────────────────── -->
       <n-gi v-if="extractedFields.length">
         <n-card title="נתונים שחולצו (AI)">
-          <n-descriptions :column="1" bordered>
+          <n-descriptions :column="1">
             <n-descriptions-item v-for="f in extractedFields" :key="f.key" :label="f.label">
               <span v-if="Array.isArray(f.value)">{{ f.value.join(', ') || '—' }}</span>
               <span v-else-if="f.value && typeof f.value === 'object'">{{ JSON.stringify(f.value) }}</span>
@@ -66,21 +76,51 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed, h } from "vue";
-import { useRoute } from "vue-router";
+import {computed, onMounted, ref} from "vue";
+import {useRoute} from "vue-router";
 import {
-  NH2, NSpace, NButton, NGrid, NGi, NCard, NDescriptions, NDescriptionsItem,
-  NSpin, NScrollbar, NAlert, NDataTable, NTag,
+  NAlert,
+  NButton,
+  NCard,
+  NDataTable,
+  NDescriptions,
+  NDescriptionsItem,
+  NGi,
+  NGrid,
+  NH2,
+  NScrollbar,
+  NSpace,
+  NSpin,
+  NTag,
 } from "naive-ui";
-import { api } from "../services/apiService.js";
+import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type { Document } from "@shared/types.js";
+import type {Document} from "@shared/types.js";
 
+const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const route = useRoute();
 const doc = ref<Document | null>(null);
 const extractionRaw = ref<Record<string, any> | null>(null);
 const extractionRawText = ref<string | null>(null);
 const loading = ref(true);
+const previewUrl = ref<string | null>(null);
+const previewError = ref<string | null>(null);
+
+async function loadPreview() {
+  if (!doc.value?.spaces_key) return;
+  try {
+    const res = await fetch(`${SERVER}/api/documents/${doc.value.id}/download`, { credentials: "include" });
+    if (!res.ok) throw new Error(await res.text());
+    const { url } = await res.json() as { url: string };
+    if (doc.value.mime_type === "application/pdf") {
+      previewUrl.value = url;
+    } else {
+      window.open(url, "_blank", "noopener");
+    }
+  } catch (e) {
+    previewError.value = `לא ניתן לטעון תצוגה מקדימה: ${e}`;
+  }
+}
 
 // Friendly Hebrew labels for common generic-extraction keys
 const LABEL_MAP: Record<string, string> = {
@@ -151,9 +191,9 @@ onMounted(async () => {
   const id = route.params.id as string;
   try {
     doc.value = await api.documents.get(id);
+    loadPreview();
 
     // Try to get extraction — prefer template extraction (__tpl), fall back to generic
-    const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
     const rows = await fetch(`${SERVER}/api/documents/${id}/extractions`, { credentials: "include" })
       .then((r) => r.ok ? r.json() : [])
       .catch(() => []);
