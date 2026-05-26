@@ -124,42 +124,51 @@ async function loadPreview() {
 
 // Friendly Hebrew labels for common generic-extraction keys
 const LABEL_MAP: Record<string, string> = {
+  // client / contact
+  client_company: "פרטי הלקוח/תופש",
   client_name: "איש קשר",
-  client_company: "חברה",
+  contact_person: "איש קשר",
+  client_phone: "נייד",
+  contact_phone: "נייד",
+  client_email: "מייל",
+  contact_email: "מייל",
+  client_address: "ישוב",
+  client_zipcode: "מיקוד",
   client_id: "ח.פ / ת.ז",
-  client_email: "אימייל",
-  client_phone: "טלפון",
-  client_address: "כתובת",
-  document_type: "סוג מסמך",
-  document_number: "מספר מסמך",
+  // document identity
   report_number: "מספר תסקיר",
+  document_number: "מספר מסמך",
   contract_number: "מספר חוזה",
-  contract_type: "סוג חוזה",
   invoice_number: "מספר חשבונית",
-  start_date: "תאריך התחלה",
+  document_type: "סוג מסמך",
+  contract_type: "סוג חוזה",
+  // dates
   inspection_date: "תאריך בדיקה",
-  issue_date: "תאריך הוצאה",
+  next_inspection_date: "בתוקף עד",
+  start_date: "תאריך התחלה",
   expiry_date: "תאריך תפוגה",
-  next_inspection_date: "בדיקה הבאה",
+  issue_date: "תאריך הוצאה",
   payment_due_date: "תאריך לתשלום",
-  amount: "סכום",
-  currency: "מטבע",
-  vat_amount: 'סכום מע"מ',
+  // equipment
+  equipment_description: "תיאור מכונת הרמה",
+  license_number: "מספר רישוי",
   equipment_type: "סוג ציוד",
   manufacturer: "יצרן",
   model: "דגם",
   serial_number: "מספר סידורי",
-  load_capacity: 'כושר עמיסה',
+  load_capacity: "כושר עמיסה",
+  // misc
   findings: "ממצאים",
   notes: "הערות",
   summary_hebrew: "תקציר",
   auto_renewal: "חידוש אוטומטי",
   counterparty: "צד שכנגד",
+  vat_amount: 'סכום מע"מ',
   confidence: "רמת ביטחון",
   _confidence: "רמת ביטחון",
 };
 
-const SKIP_KEYS = new Set(["_equipment", "parties", "tasks"]);
+const SKIP_KEYS = new Set(["_equipment", "parties", "tasks", "amount", "currency"]);
 
 const extractedFields = computed(() => {
   const raw = extractionRaw.value;

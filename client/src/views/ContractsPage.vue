@@ -59,19 +59,26 @@
         type="search"
         :placeholder="kind === 'inspection' ? 'חיפוש לפי לקוח, מספר תסקיר, ציוד...' : 'חיפוש לפי לקוח, מספר חוזה...'"
       />
-<!--      <div class="toolbar__right">-->
-<!--        <n-select-->
-<!--          v-model:value="kind"-->
-<!--          :options="kindOptions"-->
-<!--          :virtual-scroll="false"-->
-<!--          size="small"-->
-<!--          style="width: 140px"-->
-<!--          @update:value="load"-->
-<!--        />-->
-<!--        <n-tag v-if="store.expiringSoon.length" type="warning" round size="small">-->
-<!--          {{ store.expiringSoon.length }} פגים בתוך 30 יום-->
-<!--        </n-tag>-->
-<!--      </div>-->
+      <div class="toolbar__right">
+        <n-select
+          v-model:value="filterClientId"
+          :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]"
+          :virtual-scroll="false"
+          clearable
+          filterable
+          placeholder="סינון לפי לקוח"
+          style="width: 200px"
+          @update:value="currentPage = 1"
+        />
+        <n-date-picker
+          v-model:value="filterDateRange"
+          clearable
+          placeholder="סינון לפי תאריך תפוגה"
+          style="width: 260px"
+          type="daterange"
+          @update:value="currentPage = 1"
+        />
+      </div>
     </div>
 
     <!-- ── Card list ───────────────────────────────────────────────────── -->
@@ -446,6 +453,8 @@ const message = useMessage();
 const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
 const search = ref("");
+const filterClientId = ref<string | null>(null);
+const filterDateRange = ref<[number, number] | null>(null);
 
 // ── Bulk select ───────────────────────────────────────────────────────────────
 const bulkMode = ref(false);
@@ -624,7 +633,7 @@ async function saveReminder() {
 // ── Pagination ────────────────────────────────────────────────────────────────
 const pageSize = 20;
 const currentPage = ref(1);
-watch([search, statusFilter, kind], () => { currentPage.value = 1; });
+watch([search, statusFilter, kind, filterClientId, filterDateRange], () => { currentPage.value = 1; });
 
 // ── Export wizard ─────────────────────────────────────────────────────────────
 const showExport = ref(false);
@@ -795,15 +804,28 @@ onMounted(async () => {
 });
 
 const filteredRows = computed(() => {
-  const rows = store.rows ?? [];
+  let rows = store.rows ?? [];
   const q = search.value.trim().toLowerCase();
-  if (!q) return rows;
-  return rows.filter((r) =>
-    (r.contract_number ?? "").toLowerCase().includes(q) ||
-    (r.client_name ?? "").toLowerCase().includes(q) ||
-    (r.contract_type ?? "").toLowerCase().includes(q) ||
-    (r.summary ?? "").toLowerCase().includes(q)
-  );
+  if (q) {
+    rows = rows.filter((r) =>
+      (r.contract_number ?? "").toLowerCase().includes(q) ||
+      (r.client_name ?? "").toLowerCase().includes(q) ||
+      (r.contract_type ?? "").toLowerCase().includes(q) ||
+      (r.summary ?? "").toLowerCase().includes(q)
+    );
+  }
+  if (filterClientId.value) {
+    rows = rows.filter((r) => String(r.client_id) === filterClientId.value);
+  }
+  if (filterDateRange.value) {
+    const [from, to] = filterDateRange.value;
+    rows = rows.filter((r) => {
+      if (!r.expiry_date) return false;
+      const d = new Date(r.expiry_date).getTime();
+      return d >= from && d <= to;
+    });
+  }
+  return rows;
 });
 
 const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)));
@@ -1063,7 +1085,7 @@ function exportToExcel() {
   gap: 12px;
   margin-bottom: 18px;
 }
-.toolbar__right { display: flex; align-items: center; gap: 10px; }
+.toolbar__right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .search {
   width: 360px;
   max-width: 100%;

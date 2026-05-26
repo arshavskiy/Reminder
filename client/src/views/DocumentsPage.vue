@@ -3,7 +3,6 @@
     <n-space justify="space-between" align="center" style="margin-bottom: 16px">
       <n-h2 style="margin: 0">מסמכים</n-h2>
       <n-space>
-        <!-- Hidden file input — triggered by the button below -->
         <input
           ref="fileInput"
           type="file"
@@ -13,9 +12,8 @@
           @change="onFileInputChange"
         />
         <n-button @click="fileInput?.click()" :loading="uploading" :disabled="limitReached">📂 בחר קבצים</n-button>
-<!--        <n-button type="primary" @click="showImport = true" :disabled="limitReached">+ נתיב שרת</n-button>-->
         <n-button type="warning" :loading="rescanning" @click="doRescan">↻ סריקה מחדש</n-button>
-<!--        <n-button type="error" :loading="deletingCorrupt" @click="doDeleteCorrupt">🗑 מחק פגומים</n-button>-->
+        <n-button :loading="deletingAll" type="error" @click="confirmDeleteAll">🗑 מחק הכל</n-button>
       </n-space>
     </n-space>
 
@@ -90,15 +88,72 @@
       @close="queuedCount = 0"
     />
 
+    <!-- ── Filters toolbar ──────────────────────────────────────────────── -->
+    <div class="toolbar">
+      <input
+        v-model="search"
+        class="search"
+        placeholder="חיפוש לפי שם קובץ..."
+        type="search"
+      />
+      <div class="toolbar__right">
+        <n-select
+          v-model:value="filterClientId"
+          :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]"
+          :virtual-scroll="false"
+          clearable
+          filterable
+          placeholder="סינון לפי לקוח"
+          style="width: 200px"
+          @update:value="currentPage = 1"
+        />
+        <n-date-picker
+          v-model:value="filterDateRange"
+          clearable
+          placeholder="סינון לפי תאריך ייבוא"
+          style="width: 260px"
+          type="daterange"
+          @update:value="currentPage = 1"
+        />
+      </div>
+    </div>
+
+    <!-- ── Table ────────────────────────────────────────────────────────── -->
     <n-data-table
       :columns="columns"
-      :data="store.rows"
+      :data="pagedRows"
       :loading="store.loading"
-      :pagination="{ pageSize: 20 }"
+      :pagination="false"
       :row-key="(r: any) => r.id"
     />
 
-    <!-- AI extraction modal — define fields to extract -->
+    <!-- Pagination -->
+    <div v-if="filteredRows.length > pageSize" class="pagination">
+      <n-pagination
+        v-model:page="currentPage"
+        :page-count="pageCount"
+        :page-slot="5"
+        show-quick-jumper
+      />
+      <span class="pagination__info">{{ filteredRows.length }} מסמכים</span>
+    </div>
+
+    <!-- ── Delete all confirm ───────────────────────────────────────────── -->
+    <n-modal
+      v-model:show="showDeleteAllConfirm"
+      negative-text="ביטול"
+      positive-text="מחק הכל"
+      preset="dialog"
+      title="מחיקת כל המסמכים"
+      type="error"
+      @positive-click="doDeleteAll"
+      @negative-click="showDeleteAllConfirm = false"
+    >
+      <p>האם למחוק את כל <strong>{{ store.rows.length }}</strong> המסמכים?</p>
+      <p style="font-size:13px; color:var(--text-secondary)">פעולה זו אינה הפיכה.</p>
+    </n-modal>
+
+    <!-- AI extraction modal -->
     <n-modal v-model:show="showAiModal" :title="aiModalMode === 'existing' ? 'חילוץ AI — הגדר שדות' : 'העלאה עם AI — הגדר שדות'" preset="card"
       style="width: 580px">
       <n-space size="medium" vertical>
@@ -107,44 +162,21 @@
             ? 'הגדר אילו שדות ה-AI יחלץ מהמסמך. השאר ריק לחילוץ אוטומטי.'
             : `${pendingFiles?.length ?? 0} קובץ/ים ממתינים. הגדר שדות לחילוץ AI:` }}
         </div>
-
-        <!-- Field rows -->
         <div v-for="(f, i) in extractionFields" :key="i" class="field-row">
           <n-space :wrap="false" align="center">
-            <n-input
-              v-model:value="f.key"
-              placeholder="key (אנגלית)"
-              size="small"
-              style="width: 140px; direction: ltr"
-            />
-            <n-input
-              v-model:value="f.label_he"
-              placeholder="תווית עברית"
-              size="small"
-              style="flex: 1"
-            />
-            <n-select
-              v-model:value="f.type"
-              :options="fieldTypeOptions"
-              :virtual-scroll="false"
-              size="small"
-              style="width: 100px"
-            />
+            <n-input v-model:value="f.key" placeholder="key (אנגלית)" size="small" style="width: 140px; direction: ltr" />
+            <n-input v-model:value="f.label_he" placeholder="תווית עברית" size="small" style="flex: 1" />
+            <n-select v-model:value="f.type" :options="fieldTypeOptions" :virtual-scroll="false" size="small" style="width: 100px" />
             <n-button quaternary size="small" @click="extractionFields.splice(i, 1)">✕</n-button>
           </n-space>
         </div>
-
         <n-button dashed size="small" @click="addExtractionField">+ הוסף שדה</n-button>
-
         <div style="font-size: 12px; color: #666; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 10px">
           שדות ריקים = AI יחלץ שדות סטנדרטיים אוטומטית (לקוח, תאריכים, סכומים)
         </div>
-
         <n-space justify="end">
           <n-button @click="showAiModal = false">ביטול</n-button>
-          <n-button v-if="aiModalMode === 'upload'" secondary @click="skipAiModal">
-            העלה ללא הגדרה
-          </n-button>
+          <n-button v-if="aiModalMode === 'upload'" secondary @click="skipAiModal">העלה ללא הגדרה</n-button>
           <n-button :loading="extracting" type="primary" @click="confirmAiModal">
             {{ aiModalMode === 'existing' ? 'הרץ חילוץ' : 'העלה ועבד' }}
           </n-button>
@@ -152,19 +184,13 @@
       </n-space>
     </n-modal>
 
-    <!-- Server-path import modal (for files already on the server machine) -->
+    <!-- Server-path import modal -->
     <n-modal v-model:show="showImport" title="ייבוא לפי נתיב שרת" preset="dialog" style="width: 520px">
       <n-alert type="info" :show-icon="false" style="margin-bottom: 12px">
         השתמש באפשרות זו רק כאשר הקובץ נמצא כבר על מחשב השרת
       </n-alert>
       <n-space vertical>
-        <n-input
-          v-model:value="importPath"
-          placeholder="C:\Documents\contract.pdf"
-          clearable
-          @keyup.enter="doImportPath"
-        />
-        <!-- Pipeline flags (shared with main page — same reactive state) -->
+        <n-input v-model:value="importPath" clearable placeholder="C:\Documents\contract.pdf" @keyup.enter="doImportPath" />
         <div class="pipeline-flags pipeline-flags--modal">
           <span class="pipeline-flags__label">שירותי עיבוד:</span>
           <n-checkbox v-model:checked="flagOcr">OCR</n-checkbox>
@@ -186,14 +212,16 @@ import {
   NButton,
   NCheckbox,
   NDataTable,
+  NDatePicker,
   NH2,
   NInput,
   NModal,
+  NPagination,
   NProgress,
   NSelect,
   NSpace,
   NTooltip,
-  useMessage
+  useMessage,
 } from "naive-ui";
 import {useDocumentsStore} from "../stores/documents.js";
 import {useAuthStore} from "../stores/auth.js";
@@ -206,13 +234,13 @@ const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useDocumentsStore();
 const authStore = useAuthStore();
 const router = useRouter();
+const message = useMessage();
 
 const isRegularUser = computed(() => authStore.user?.role === "user");
 const quotaPercent = computed(() =>
   Math.min(100, Math.round((store.totalAll / store.documentLimit) * 100))
 );
 const limitReached = computed(() => isRegularUser.value && store.totalAll >= store.documentLimit);
-const message = useMessage();
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const showImport = ref(false);
@@ -222,7 +250,65 @@ const uploading = ref(false);
 const isDragging = ref(false);
 const queuedCount = ref(0);
 const rescanning = ref(false);
-const deletingCorrupt = ref(false);
+const deletingAll = ref(false);
+const showDeleteAllConfirm = ref(false);
+
+// ── Filters ───────────────────────────────────────────────────────────────────
+const search = ref("");
+const filterClientId = ref<string | null>(null);
+const filterDateRange = ref<[number, number] | null>(null);
+
+// ── Client options for filter ─────────────────────────────────────────────────
+const clientOptions = ref<{ label: string; value: string }[]>([]);
+
+// document_client mapping: doc id → client name
+const docClientMap = ref<Map<string, string>>(new Map());
+
+async function loadClients() {
+  try {
+    const r = await api.clients.list({ limit: 500 });
+    clientOptions.value = r.rows.map((c) => ({ label: c.display_name, value: String(c.id) }));
+  } catch { /* non-fatal */ }
+}
+
+// ── Pagination ─────────────────────────────────────────────────────────────────
+const pageSize = 20;
+const currentPage = ref(1);
+watch([search, filterClientId, filterDateRange], () => { currentPage.value = 1; });
+
+const filteredRows = computed(() => {
+  let rows = store.rows ?? [];
+  const q = search.value.trim().toLowerCase();
+  if (q) {
+    rows = rows.filter((r) => (r.file_name ?? "").toLowerCase().includes(q));
+  }
+  if (filterClientId.value) {
+    // filter by client_id stored on document (set during extraction)
+    rows = rows.filter((r) => (r as any).client_id === filterClientId.value);
+  }
+  if (filterDateRange.value) {
+    const [from, to] = filterDateRange.value;
+    rows = rows.filter((r) => {
+      if (!r.import_date) return false;
+      const d = new Date(r.import_date).getTime();
+      return d >= from && d <= to;
+    });
+  }
+  return rows;
+});
+
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)));
+const pagedRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredRows.value.slice(start, start + pageSize);
+});
+
+// ── Kebab menu ────────────────────────────────────────────────────────────────
+const openKebab = ref<string | null>(null);
+function toggleKebab(id: string) {
+  openKebab.value = openKebab.value === id ? null : id;
+}
+function onDocClick() { openKebab.value = null; }
 
 // ── AI extraction modal ───────────────────────────────────────────────────────
 interface ExtractionField { key: string; label_he: string; type: string }
@@ -254,6 +340,7 @@ function openExtractModal(docId: string) {
   aiModalMode.value = "existing";
   extractionFields.value = [];
   showAiModal.value = true;
+  openKebab.value = null;
 }
 
 async function skipAiModal() {
@@ -265,7 +352,6 @@ async function skipAiModal() {
 
 async function confirmAiModal() {
   const fields = extractionFields.value.filter(f => f.key.trim() && f.label_he.trim());
-
   if (aiModalMode.value === "existing") {
     extracting.value = true;
     try {
@@ -301,7 +387,7 @@ async function loadPipelineFlags() {
     flagAi.value       = s.pipeline_ai       ?? true;
     flagS3.value       = s.pipeline_s3       ?? true;
     flagEntities.value = s.pipeline_entities ?? true;
-  } catch { /* ignore — defaults stay */ }
+  } catch { /* ignore */ }
 }
 
 function savePipelineFlags() {
@@ -320,7 +406,7 @@ function savePipelineFlags() {
 
 watch([flagOcr, flagAi, flagS3, flagEntities], savePipelineFlags);
 
-// ── Status polling ────────────────────────────────────────────────────────────
+// ── Status polling ─────────────────────────────────────────────────────────────
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
 function hasInProgress(): boolean {
@@ -339,28 +425,29 @@ function schedulePoll() {
 onMounted(() => {
   store.fetch().then(() => { if (hasInProgress()) schedulePoll(); });
   loadPipelineFlags();
+  loadClients();
+  document.addEventListener("click", onDocClick);
 });
 onUnmounted(() => {
   if (pollTimer) clearTimeout(pollTimer);
   if (saveFlagsTimer) clearTimeout(saveFlagsTimer);
+  document.removeEventListener("click", onDocClick);
 });
 
-// ── Browser file picker ───────────────────────────────────────────────────────
+// ── File picker ───────────────────────────────────────────────────────────────
 async function onFileInputChange(e: Event) {
   const files = Array.from((e.target as HTMLInputElement).files ?? []);
   if (!files.length) return;
-  (e.target as HTMLInputElement).value = ""; // reset so same file can be re-selected
+  (e.target as HTMLInputElement).value = "";
   await handleFiles(files);
 }
 
-// ── Drag & drop ───────────────────────────────────────────────────────────────
 async function onDrop(e: DragEvent) {
   isDragging.value = false;
   const files = Array.from(e.dataTransfer?.files ?? []);
   if (files.length) await handleFiles(files);
 }
 
-// ── Intercept: open AI modal if flagAi is on ──────────────────────────────────
 async function handleFiles(files: File[]) {
   if (flagAi.value) {
     pendingFiles.value = files;
@@ -373,7 +460,6 @@ async function handleFiles(files: File[]) {
   }
 }
 
-// ── Upload to server ──────────────────────────────────────────────────────────
 async function uploadFiles(files: File[]) {
   uploading.value = true;
   try {
@@ -385,7 +471,7 @@ async function uploadFiles(files: File[]) {
     schedulePoll();
   } catch (e: any) {
     if (e?.message === "document_limit_reached") {
-      message.error(e.serverMessage ?? `הגעת למגבלת ${store.documentLimit} המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.`);
+      message.error(e.serverMessage ?? `הגעת למגבלת ${store.documentLimit} המסמכים. שדרג לחשבון Pro.`);
       store.fetch();
     } else {
       message.error(String(e));
@@ -395,7 +481,6 @@ async function uploadFiles(files: File[]) {
   }
 }
 
-// ── Server-path import ────────────────────────────────────────────────────────
 async function doImportPath() {
   if (!importPath.value.trim()) return;
   importing.value = true;
@@ -409,7 +494,7 @@ async function doImportPath() {
     schedulePoll();
   } catch (e: any) {
     if (e?.message?.includes("document_limit_reached")) {
-      message.error(`הגעת למגבלת ${store.documentLimit} המסמכים. שדרג לחשבון Pro להעלאה בלתי מוגבלת.`);
+      message.error(`הגעת למגבלת ${store.documentLimit} המסמכים. שדרג לחשבון Pro.`);
     } else {
       message.error(String(e));
     }
@@ -418,7 +503,6 @@ async function doImportPath() {
   }
 }
 
-// ── Rescan corrupt documents ──────────────────────────────────────────────────
 async function doRescan() {
   rescanning.value = true;
   try {
@@ -438,26 +522,24 @@ async function doRescan() {
   }
 }
 
-// ── Delete corrupt documents ──────────────────────────────────────────────────
-async function doDeleteCorrupt() {
-  deletingCorrupt.value = true;
+function confirmDeleteAll() {
+  showDeleteAllConfirm.value = true;
+}
+
+async function doDeleteAll() {
+  deletingAll.value = true;
   try {
-    const res = await fetch(`${SERVER}/api/documents/corrupt`, { method: "DELETE", credentials: "include" });
-    const data = await res.json() as { deleted: number };
-    if (data.deleted === 0) {
-      message.info("אין מסמכים פגומים למחיקה");
-    } else {
-      message.success(`${data.deleted} מסמכים פגומים נמחקו`);
-    }
+    await Promise.all(store.rows.map((r) => store.deleteDoc(r.id)));
+    message.success("כל המסמכים נמחקו");
     await store.fetch();
   } catch {
-    message.error("שגיאה במחיקת מסמכים פגומים");
+    message.error("שגיאה במחיקת המסמכים");
   } finally {
-    deletingCorrupt.value = false;
+    deletingAll.value = false;
+    showDeleteAllConfirm.value = false;
   }
 }
 
-// ── Download helper ───────────────────────────────────────────────────────────
 async function openDownload(row: Document) {
   try {
     const res = await fetch(`${SERVER}/api/documents/${row.id}/download`, { credentials: "include" });
@@ -469,15 +551,19 @@ async function openDownload(row: Document) {
   }
 }
 
-// ── Table ─────────────────────────────────────────────────────────────────────
+// ── Table columns ─────────────────────────────────────────────────────────────
 const columns = [
   {
     title: "שם קובץ",
     key: "file_name",
     render: (row: Document) =>
-      h("a", { style: "cursor:pointer;color:#63e2b7", onClick: () => router.push(`/documents/${row.id}`) , title: "פתח / הורד"},  row.file_name),
+      h("a", {
+        style: "cursor:pointer;color:#63e2b7",
+        onClick: () => router.push(`/documents/${row.id}`),
+        title: "פתח מסמך",
+      }, row.file_name),
   },
-  { title: "סוג", key: "mime_type", width: 200 },
+  { title: "סוג", key: "mime_type", width: 180 },
   {
     title: "סטטוס",
     key: "processing_status",
@@ -488,15 +574,23 @@ const columns = [
   {
     title: "",
     key: "actions",
-    width: 200,
+    width: 48,
     render: (row: Document) =>
-      h(NSpace, { size: "small" }, {
-        default: () => [
-          h(NButton, { size: "small", onClick: () => openDownload(row), title: "פתח / הורד" }, { default: () => "הורד" }),
-          h(NButton, { size: "small", onClick: () => openExtractModal(String(row.id)) }, { default: () => "↻" }),
-          h(NButton, { size: "small", type: "error", onClick: () => store.deleteDoc(row.id) }, { default: () => "מחק" }),
-        ],
-      }),
+      h("div", { class: "kebab-wrap", onClick: (e: Event) => e.stopPropagation() }, [
+        h("button", {
+          class: ["kebab-btn", openKebab.value === row.id ? "kebab-btn--open" : ""],
+          title: "פעולות",
+          onClick: () => toggleKebab(row.id),
+        }, "⋮"),
+        openKebab.value === row.id
+          ? h("div", { class: "kebab-menu" }, [
+              h("button", { class: "kebab-item", onClick: () => { router.push(`/documents/${row.id}`); openKebab.value = null; } }, "📄 צפה"),
+              h("button", { class: "kebab-item", onClick: () => openDownload(row) }, "⬇ הורד"),
+              h("button", { class: "kebab-item", onClick: () => openExtractModal(String(row.id)) }, "✨ חלץ AI"),
+              h("button", { class: "kebab-item kebab-item--danger", onClick: () => { store.deleteDoc(row.id); openKebab.value = null; } }, "🗑 מחק"),
+            ])
+          : null,
+      ]),
   },
 ];
 </script>
@@ -511,16 +605,8 @@ const columns = [
   transition: border-color 0.2s, background 0.2s;
   cursor: pointer;
 }
-.drop-zone--active {
-  border-color: #63e2b7;
-  background: rgba(99, 226, 183, 0.06);
-}
-.drop-zone--disabled {
-  border-color: #e88080;
-  background: rgba(232, 128, 128, 0.05);
-  cursor: not-allowed;
-  opacity: 0.7;
-}
+.drop-zone--active { border-color: #63e2b7; background: rgba(99,226,183,0.06); }
+.drop-zone--disabled { border-color: #e88080; background: rgba(232,128,128,0.05); cursor: not-allowed; opacity: 0.7; }
 
 .pipeline-flags {
   display: flex;
@@ -532,14 +618,95 @@ const columns = [
   border-radius: 6px;
   background: rgba(255,255,255,0.02);
 }
-.pipeline-flags--modal {
-  margin-top: 4px;
+.pipeline-flags--modal { margin-top: 4px; }
+.pipeline-flags__label { font-size: 12px; color: #888; margin-left: 4px; }
+
+/* ── Filters toolbar ────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
 }
-.pipeline-flags__label {
-  font-size: 12px;
-  color: #888;
-  margin-left: 4px;
+.toolbar__right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.search {
+  width: 300px;
+  max-width: 100%;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  font-size: 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+  direction: rtl;
 }
+.search:focus { border-color: var(--brand-color); outline: none; }
+
+/* ── Pagination ──────────────────────────────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+.pagination__info { font-size: 13px; color: var(--text-secondary); }
+
+/* ── Kebab menu ──────────────────────────────────────────────────────────── */
+.kebab-wrap { position: relative; display: inline-block; }
+.kebab-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+.kebab-btn:hover, .kebab-btn--open {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.kebab-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 140px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,0.18));
+  z-index: 50;
+  overflow: hidden;
+}
+.kebab-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: right;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+.kebab-item:hover { background: var(--bg-hover); }
+.kebab-item--danger { color: var(--color-error, #d03050); }
+.kebab-item--danger:hover { background: rgba(208,48,80,0.08); }
 
 .field-row {
   padding: 6px 8px;
