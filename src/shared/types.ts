@@ -119,6 +119,8 @@ export interface Document {
   page_count: number | null;
   spaces_key: string | null;
   spaces_url: string | null;
+  download_url: string | null;
+  signed_url_expires_at: string | null;
   created_at: string;
   updated_at: string;
 }

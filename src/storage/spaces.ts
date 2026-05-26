@@ -1,9 +1,9 @@
 import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client,
+    DeleteObjectCommand,
+    GetObjectCommand,
+    HeadObjectCommand,
+    PutObjectCommand,
+    S3Client,
 } from "@aws-sdk/client-s3";
 import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 import {readFileSync} from "fs";
@@ -106,14 +106,19 @@ export async function deleteFromSpaces(key: string): Promise<void> {
   await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
 }
 
-export async function getSpacesSignedUrl(key: string, expiresIn = 3600): Promise<string> {
+export async function getSpacesSignedUrl(key: string, expiresIn = 3600, fileName?: string): Promise<string> {
   const client = getClient();
   const config = getStorageConfig();
   if (!client || !config) throw new Error("Object storage not configured");
 
+  const cmd: Record<string, any> = { Bucket: config.bucket, Key: key };
+  if (fileName) {
+    cmd.ResponseContentDisposition = `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+  }
+
   return getSignedUrl(
     client,
-    new GetObjectCommand({ Bucket: config.bucket, Key: key }),
+    new GetObjectCommand(cmd),
     { expiresIn }
   );
 }

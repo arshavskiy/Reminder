@@ -163,6 +163,59 @@ export function registerDocumentRoutes(app: express.Application) {
     }
   });
 
+  // GET /api/documents/:id/download — returns a short-lived signed URL or streams the local file
+  app.get("/api/documents/:id/download", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const doc = (await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId })) as any;
+    if (!doc) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    // Prefer S3 signed URL — use cached one if still fresh, otherwise regenerate
+    if (doc.spaces_key) {
+      try {
+        const { getSpacesSignedUrl } = await import("../storage/spaces.js");
+        const SIGNED_URL_TTL = 7 * 24 * 3600;
+        const expiresAt: Date | null = doc.signed_url_expires_at ? new Date(doc.signed_url_expires_at) : null;
+        const needsRefresh = !doc.download_url || !expiresAt || expiresAt.getTime() - Date.now() < 3600_000;
+        let url: string = doc.download_url ?? "";
+        if (needsRefresh) {
+          url = await getSpacesSignedUrl(doc.spaces_key, SIGNED_URL_TTL, doc.file_name ?? undefined);
+          const newExpiry = new Date(Date.now() + SIGNED_URL_TTL * 1000);
+          await col("documents").updateOne(idFilter(req.params.id), {
+            $set: { download_url: url, signed_url_expires_at: newExpiry, updated_at: new Date() },
+          });
+        }
+        res.json({ url, source: "s3" });
+        return;
+      } catch (err) {
+        console.error("[download] signed URL failed, falling back to local:", err);
+      }
+    }
+
+    // Fall back to local file stream
+    try {
+      const { resolveDocumentFilePath } = await import("../documents/fileResolver.js");
+      const filePath = await resolveDocumentFilePath(doc);
+      const fileName = encodeURIComponent(doc.file_name ?? "document");
+      res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${fileName}`);
+      res.setHeader("Content-Type", doc.mime_type ?? "application/octet-stream");
+      res.sendFile(filePath, { root: "/" });
+    } catch (err) {
+      res.status(503).json({ error: `File not accessible: ${err}` });
+    }
+  });
+
   // DELETE /api/documents/:id
   app.delete("/api/documents/:id", async (req, res) => {
     let userId: string;
