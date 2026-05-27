@@ -217,6 +217,22 @@ export function registerEquipmentRoutes(app: express.Application) {
     res.json({ ok: true });
   });
 
+  // DELETE /api/equipment — delete all equipment for the user
+  app.delete("/api/equipment", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const result = await col("equipment").deleteMany({ user_id: userId });
+    res.json({ ok: true, deleted: result.deletedCount });
+  });
+
   // POST /api/equipment/backfill — patch equipment records missing document_id/client_id
   app.post("/api/equipment/backfill", async (req, res) => {
     let userId: string;
