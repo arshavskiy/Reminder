@@ -243,7 +243,6 @@ import {
   NSelect,
   NSpace,
   NSpin,
-  useDialog,
   useMessage,
 } from "naive-ui";
 import {
@@ -257,10 +256,11 @@ import {
 } from "@vicons/ionicons5";
 import {RouterLink} from "vue-router";
 import {api} from "../services/apiService.js";
+import {useConfirm} from "../composables/useConfirm.js";
 import type {Client, Equipment, EquipmentCategory} from "@shared/types.js";
 
 const message = useMessage();
-const dialog = useDialog();
+const { confirm } = useConfirm();
 
 const section = ref<"equipment" | "categories" | "manufacturers" | "declarations">("equipment");
 const sections = [
@@ -456,12 +456,11 @@ async function backfill() {
 }
 
 function deleteAll() {
-  dialog.error({
+  confirm({
     title: "מחק הכל",
     content: "למחוק את כל הציוד? פעולה זו אינה הפיכה.",
-    positiveText: "מחק הכל",
-    negativeText: "ביטול",
-    onPositiveClick: async () => {
+    confirmText: "מחק הכל",
+    onConfirm: async () => {
       try {
         await api.equipment.deleteAll();
         message.success("כל הציוד נמחק");
@@ -473,17 +472,23 @@ function deleteAll() {
   });
 }
 
-async function del(r: Equipment) {
+function del(r: Equipment) {
   if (!r.id) return;
-  if (!confirm(`למחוק את "${r.name}"?`)) return;
-  try {
-    await api.equipment.delete(r.id);
-    message.success("נמחק");
-    showEdit.value = false;
-    await load();
-  } catch (e) {
-    message.error(String(e));
-  }
+  confirm({
+    title: "מחיקת ציוד",
+    content: `למחוק את "${r.name}"?`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await api.equipment.delete(r.id!);
+        message.success("נמחק");
+        showEdit.value = false;
+        await load();
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
 }
 </script>
 

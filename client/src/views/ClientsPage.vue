@@ -213,11 +213,13 @@ import {useRouter} from "vue-router";
 import {NButton, NForm, NFormItem, NInput, NModal, NRadio, NRadioGroup, useMessage,} from "naive-ui";
 import {useClientsStore} from "../stores/clients.js";
 import {api} from "../services/apiService.js";
+import {useConfirm} from "../composables/useConfirm.js";
 import type {Client} from "@shared/types.js";
 
 const store = useClientsStore();
 const router = useRouter();
 const message = useMessage();
+const { confirm } = useConfirm();
 
 // ── Search ────────────────────────────────────────────────────────────────────
 const search = ref("");
@@ -315,14 +317,20 @@ async function doSave() {
   }
 }
 
-async function doDelete(row: Client) {
-  if (!confirm(`למחוק את "${row.display_name}"?`)) return;
-  try {
-    await store.remove(String(row.id));
-    message.success("הלקוח נמחק");
-  } catch (e) {
-    message.error(String(e));
-  }
+function doDelete(row: Client) {
+  confirm({
+    title: "מחיקת לקוח",
+    content: `למחוק את "${row.display_name}"?`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await store.remove(String(row.id));
+        message.success("הלקוח נמחק");
+      } catch {
+        message.error("שגיאה במחיקה");
+      }
+    },
+  });
 }
 </script>
 
