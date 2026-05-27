@@ -109,7 +109,11 @@ export function registerContractRoutes(app: express.Application) {
           contact_phone: extractedFields.contact_phone ?? null,
           contact_email: extractedFields.contact_email ?? null,
           client_address: extractedFields.client_address ?? null,
+          po_box: extractedFields.po_box ?? null,
+          client_zipcode: extractedFields.client_zipcode ?? null,
           equipment_description: extractedFields.equipment_description ?? null,
+          _confidence: extractedFields._confidence ?? null,
+          _equipment: Array.isArray(extractedFields._equipment) ? extractedFields._equipment : [],
         };
       })
     );
