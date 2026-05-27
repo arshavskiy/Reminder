@@ -156,7 +156,10 @@
       <template #footer>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <n-button type="primary" @click="router.push(`/clients/${quickViewClient?.id}`)">פתח פרופיל לקוח</n-button>
-          <n-button @click="showQuickViewModal = false">סגור</n-button>
+          <div style="display:flex;gap:8px">
+            <n-button ghost type="error" @click="showQuickViewModal = false; doDelete(quickViewClient!)">מחק</n-button>
+            <n-button @click="showQuickViewModal = false">סגור</n-button>
+          </div>
         </div>
       </template>
     </n-modal>

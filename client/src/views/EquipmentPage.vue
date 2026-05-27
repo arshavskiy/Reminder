@@ -28,6 +28,7 @@
           <p class="subhead__sub">נהל את רשימת הציוד שלך והצהרות הבטיחות המשויכות</p>
         </div>
         <div style="display:flex;gap:8px">
+          <button class="btn btn--ghost btn--danger" @click="deleteAll">מחק הכל</button>
           <button class="btn btn--ghost" :disabled="backfilling" @click="backfill">
             {{ backfilling ? 'מקשר...' : 'קשר לתיקים' }}
           </button>
@@ -239,6 +240,7 @@ import {
   NSelect,
   NSpace,
   NSpin,
+  useDialog,
   useMessage,
 } from "naive-ui";
 import {
@@ -255,6 +257,7 @@ import {api} from "../services/apiService.js";
 import type {Client, Equipment, EquipmentCategory} from "@shared/types.js";
 
 const message = useMessage();
+const dialog = useDialog();
 
 const section = ref<"equipment" | "categories" | "manufacturers" | "declarations">("equipment");
 const sections = [
@@ -447,6 +450,24 @@ async function backfill() {
   } finally {
     backfilling.value = false;
   }
+}
+
+function deleteAll() {
+  dialog.error({
+    title: "מחק הכל",
+    content: "למחוק את כל הציוד? פעולה זו אינה הפיכה.",
+    positiveText: "מחק הכל",
+    negativeText: "ביטול",
+    onPositiveClick: async () => {
+      try {
+        await api.equipment.deleteAll();
+        message.success("כל הציוד נמחק");
+        await load();
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
 }
 
 async function del(r: Equipment) {
