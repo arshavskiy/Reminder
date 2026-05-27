@@ -1,8 +1,8 @@
 <template>
   <div class="dash">
     <header class="dash__topbar">
-      <h1 class="dash__greet">{{ greeting }}{{ userName ? `, ${userName}` : "" }}</h1>
-      <n-button :loading="store.loading" @click="store.fetch(true)">↻ רענן</n-button>
+<!--      <h1 class="dash__greet">{{ greeting }}{{ userName ? `, ${userName}` : "" }}</h1>-->
+<!--      <n-button :loading="store.loading" @click="store.fetch(true)">↻ רענן</n-button>-->
     </header>
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
@@ -35,7 +35,7 @@
       <h2 class="dash__section">סביבת העבודה</h2>
       <div class="module-grid">
         <article
-          v-for="m in modules"
+          v-for="m in data_cards"
           :key="m.key"
           class="module"
           @click="router.push(m.to)"
@@ -93,7 +93,7 @@
 <script setup lang="ts">
 import {computed, onMounted} from "vue";
 import {useRouter} from "vue-router";
-import {NButton, NIcon, NSpin} from "naive-ui";
+import {NIcon, NSpin} from "naive-ui";
 import {
   AlarmOutline,
   ClipboardOutline,
@@ -141,18 +141,19 @@ const dateLine = computed(() => {
 
 const modules = [
   {
+    key: "documents",
+    title: "מסמכים",
+    desc: "צפה, ערוך וסרוק מסמכים בדיקה.",
+    icon: ClipboardOutline,
+    to: "/contracts",
+    show: true,
+  }, {
     key: "contracts",
     title: "תסקירים",
     desc: "צפה, ערוך וצור תסקירי בדיקה. נהל את כל שלבי התסקיר ממקום אחד.",
     icon: ClipboardOutline,
     to: "/contracts",
-  },
-  {
-    key: "clients",
-    title: "ניהול לקוחות",
-    desc: "הוסף לקוחות חדשים, נהל אנשי קשר ועקוב אחרי פרטי לקוח.",
-    icon: PeopleOutline,
-    to: "/clients",
+    show: true,
   },
   {
     key: "equipment",
@@ -160,6 +161,15 @@ const modules = [
     desc: "נהל את רשימת הציוד שלך, יצרנים והצהרות בטיחות.",
     icon: ConstructOutline,
     to: "/equipment",
+    show: true,
+  },
+  {
+    key: "clients",
+    title: "ניהול לקוחות",
+    desc: "הוסף לקוחות חדשים, נהל אנשי קשר ועקוב אחרי פרטי לקוח.",
+    icon: PeopleOutline,
+    to: "/clients",
+    show: true,
   },
   {
     key: "doc-templates",
@@ -167,6 +177,7 @@ const modules = [
     desc: "הגדר אילו שדות לחלץ מכל סוג מסמך. יצירה אוטומטית מ-AI.",
     icon: ExtensionPuzzleOutline,
     to: "/doc-templates",
+    show: true,
   },
   {
     key: "email-templates",
@@ -174,6 +185,7 @@ const modules = [
     desc: "עצב את תוכן התזכורות עם משתנים דינמיים ולוגו של החברה.",
     icon: MailOutline,
     to: "/email-templates",
+    show: authStore.user?.role === "admin", // Only show to admins
   },
   {
     key: "reminders",
@@ -188,8 +200,12 @@ const modules = [
     desc: "AI, SMTP, מעקב תיקיות, ערכת נושא ועוד.",
     icon: SettingsOutline,
     to: "/settings",
+    show: authStore.user?.role === "admin", // Only show to admins
+
   },
 ];
+
+const data_cards = modules.filter(m => m.show)
 </script>
 
 <style scoped>
