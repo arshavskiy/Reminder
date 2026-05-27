@@ -53,6 +53,11 @@
               <span v-else class="info-val">{{ user?.phone || '—' }}</span>
             </div>
             <div class="info-row">
+              <span class="info-label">שם חברה</span>
+              <n-input v-if="editingPersonal" v-model:value="personalForm.company_name" class="info-input" placeholder="לדוגמה: M.A.D הנדסה ובטיחות" />
+              <span v-else class="info-val">{{ (user as any)?.company_name || '—' }}</span>
+            </div>
+            <div class="info-row">
               <span class="info-label">אימייל</span>
               <span class="info-val">{{ user?.email }}</span>
             </div>
@@ -119,6 +124,24 @@
                   הבא יהיה: {{ nextInspectionId }}
                 </span>
               </div>
+            </div>
+
+            <!-- ── Inspector company details (used to filter out from AI extraction) ── -->
+            <div class="info-section-divider">פרטי החברה / בית העסק (לסינון מהחילוץ)</div>
+            <div class="info-row">
+              <span class="info-label">שם החברה</span>
+              <n-input v-if="editingEngineer" v-model:value="engineerForm.company_name" class="info-input" placeholder="לדוגמה: M.A.D הנדסה ובטיחות" />
+              <span v-else class="info-val">{{ (engineerProfile as any)?.company_name || '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">טלפון / נייד</span>
+              <n-input v-if="editingEngineer" v-model:value="engineerForm.company_phone" class="info-input" placeholder="052-8195650" />
+              <span v-else class="info-val">{{ (engineerProfile as any)?.company_phone || '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">אימייל</span>
+              <n-input v-if="editingEngineer" v-model:value="engineerForm.company_email" class="info-input" placeholder="name@company.com" />
+              <span v-else class="info-val">{{ (engineerProfile as any)?.company_email || '—' }}</span>
             </div>
           </div>
         </section>
@@ -422,10 +445,14 @@ function formatDate(d: string | null | undefined) {
 // ── Personal info ────────────────────────────────────────────────────────────
 const editingPersonal = ref(false);
 const savingPersonal = ref(false);
-const personalForm = ref({ name: "", phone: "" });
+const personalForm = ref({ name: "", phone: "", company_name: "" });
 
 function startEditPersonal() {
-  personalForm.value = { name: user.value?.name ?? "", phone: user.value?.phone ?? "" };
+  personalForm.value = {
+    name: user.value?.name ?? "",
+    phone: user.value?.phone ?? "",
+    company_name: (user.value as any)?.company_name ?? "",
+  };
   editingPersonal.value = true;
 }
 function cancelEditPersonal() { editingPersonal.value = false; }
@@ -436,7 +463,7 @@ async function savePersonal() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ name: personalForm.value.name, phone: personalForm.value.phone }),
+      body: JSON.stringify({ name: personalForm.value.name, phone: personalForm.value.phone, company_name: personalForm.value.company_name }),
     });
     await authStore.fetchMe();
     editingPersonal.value = false;
@@ -473,6 +500,7 @@ const engineerForm = ref({
   inspector_number: "", address: "", title: "", expertise: "",
   mr_number: "", mg_number: "", membership_start_ms: null as number | null,
   inspector_id_start: "",
+  company_name: "", company_phone: "", company_email: "",
 });
 
 function startEditEngineer() {
@@ -486,6 +514,9 @@ function startEditEngineer() {
     mg_number: p?.mg_number ?? "",
     membership_start_ms: p?.membership_start_date ? new Date(p.membership_start_date).getTime() : null,
     inspector_id_start: p?.inspector_id_start ?? "",
+    company_name: (p as any)?.company_name ?? "",
+    company_phone: (p as any)?.company_phone ?? "",
+    company_email: (p as any)?.company_email ?? "",
   };
   editingEngineer.value = true;
 }
@@ -980,6 +1011,17 @@ html[data-theme="light"] .sidebar-nav__item--active {
 .info-val { color: var(--text-primary); font-weight: 500; }
 .info-input { flex: 1; }
 .info-hint { font-size: 11px; color: var(--color-warning, #f0a020); }
+.info-section-divider {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 4px;
+}
 
 .progress-wrap {
   flex: 1;

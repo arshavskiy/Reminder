@@ -243,6 +243,7 @@ export function registerAuthRoutes(app: express.Application) {
         email: user.email,
         name: user.name,
         phone: (user as any).phone ?? null,
+        company_name: (user as any).company_name ?? null,
         picture_url: user.picture_url,
         role: user.role,
       },

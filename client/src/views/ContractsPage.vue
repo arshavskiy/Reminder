@@ -39,6 +39,9 @@
         <button class="btn btn--ghost" @click="router.push('/documents')">
           📁 ארכיון
         </button>
+        <button class="btn btn--ghost" :disabled="store.loading" @click="refresh" title="רענן">
+          <span class="refresh-icon" :class="{ 'refresh-icon--spin': store.loading }">↻</span> רענן
+        </button>
         <button class="btn btn--primary" @click="openCreate">
           + {{ kind === "inspection" ? "תסקיר חדש" : "חוזה חדש" }}
         </button>
@@ -698,7 +701,6 @@ const exportColumns = ref([
   { key: "start_date",            label: "תאריך בדיקה",        selected: true },
   { key: "expiry_date",           label: "בתוקף עד",           selected: true },
   { key: "equipment_description", label: "תיאור מכונת הרמה",   selected: true },
-  { key: "_confidence",           label: "רמת ביטחון",         selected: true },
   { key: "status",                label: "סטטוס",              selected: false },
   { key: "contract_type",         label: "סוג",                selected: false },
   { key: "summary",               label: "הערות",              selected: false },
@@ -916,8 +918,12 @@ function load() {
   store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value });
 }
 
+function refresh() {
+  store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value }, true);
+}
+
 onMounted(async () => {
-  load();
+  if (!store.rows.length) load();
   store.fetchExpiring(30);
   loadClients();
   loadReminders();
@@ -1159,6 +1165,9 @@ function exportToExcel() {
 }
 .btn--danger:hover { background: rgba(208, 48, 80, 0.08); }
 .btn--xs { padding: 4px 10px; font-size: 12px; }
+.refresh-icon { display: inline-block; transition: transform 0.4s; }
+.refresh-icon--spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Pill filter bar ────────────────────────────────────────────────────── */
 .filterbar {

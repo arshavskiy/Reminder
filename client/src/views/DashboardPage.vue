@@ -1,11 +1,11 @@
 <template>
   <div class="dash">
+    <header class="dash__topbar">
+      <h1 class="dash__greet">{{ greeting }}{{ userName ? `, ${userName}` : "" }}</h1>
+      <n-button :loading="store.loading" @click="store.fetch(true)">↻ רענן</n-button>
+    </header>
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
-<!--      <header class="dash__header">-->
-<!--        <h1 class="dash__greet">{{ greeting }}{{ userName ? `, ${userName}` : "" }}</h1>-->
-<!--        <p class="dash__sub">הנה מרכז העבודה שלך. {{ dateLine }}</p>-->
-<!--      </header>-->
 
       <!-- Quick stats — small chips line, easy to scan -->
       <div class="dash__stats">
@@ -93,7 +93,7 @@
 <script setup lang="ts">
 import {computed, onMounted} from "vue";
 import {useRouter} from "vue-router";
-import {NIcon, NSpin} from "naive-ui";
+import {NButton, NIcon, NSpin} from "naive-ui";
 import {
   AlarmOutline,
   ClipboardOutline,
@@ -111,7 +111,7 @@ const store = useDashboardStore();
 const authStore = useAuthStore();
 const router = useRouter();
 const stats = computed(() => store.stats);
-onMounted(() => store.fetch());
+onMounted(() => { if (!store.stats) store.fetch(); });
 
 const userName = computed(() => {
   const u = authStore.user;
@@ -194,6 +194,13 @@ const modules = [
 
 <style scoped>
 .dash { max-width: 1200px; margin: 0 auto; }
+
+.dash__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
 
 .dash__header {
   margin-bottom: 32px;

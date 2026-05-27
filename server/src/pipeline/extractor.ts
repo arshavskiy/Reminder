@@ -3,7 +3,7 @@ import {mkdirSync, writeFileSync} from "fs";
 import {join} from "path";
 import {getDataDir, getSettings} from "../settings";
 import type {DocTemplate, DynamicExtraction, ExtractionResult} from "../../src/shared/types.js";
-import {buildPromptForTemplate} from "../templates/buildPrompt";
+import {buildPromptForTemplate, InspectorProfile} from "../templates/buildPrompt";
 
 const SYSTEM_PROMPT = `You are a document intelligence assistant specializing in Hebrew business, legal, and technical documents (contracts, invoices, inspection reports / תסקירים, certificates, etc.).
 Extract structured information from the provided document text and return ONLY valid JSON matching the schema below.
@@ -207,14 +207,15 @@ export async function extractWithTemplate(
   rawText: string,
   template: DocTemplate,
   documentId?: string | number,
-  fileName?: string
+  fileName?: string,
+  inspector?: InspectorProfile
 ): Promise<TemplateExtractionRun> {
   const settings = getSettings();
   const model = settings.aiBackend === "ollama" ? settings.ollamaModel : settings.openAiModel;
   const backend = settings.aiBackend;
   const text = rawText.slice(0, settings.extractionMaxChars);
   logExtractorSettings("extractor:tpl", settings, model, rawText.length, text.length, documentId);
-  const systemPrompt = buildPromptForTemplate(template);
+  const systemPrompt = buildPromptForTemplate(template, inspector);
 
   const t0 = Date.now();
   let rawJson = "";

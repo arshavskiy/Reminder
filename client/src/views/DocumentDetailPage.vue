@@ -171,8 +171,6 @@ const LABEL_MAP: Record<string, string> = {
   auto_renewal: "חידוש אוטומטי",
   counterparty: "צד שכנגד",
   vat_amount: 'סכום מע"מ',
-  confidence: "רמת ביטחון",
-  _confidence: "רמת ביטחון",
 };
 
 const SKIP_KEYS = new Set(["_equipment", "parties", "tasks", "amount", "currency"]);

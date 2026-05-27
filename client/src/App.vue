@@ -181,14 +181,14 @@ watch(isDark, (dark) => {
 const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
 
 const allNav = [
-  { label: "לוח בקרה",        key: "dashboard",        minRole: "user" },
-  { label: "מסמכים",           key: "documents",        minRole: "user" },
-  { label: "תסקירים",   key: "contracts",        minRole: "user" },
-  { label: "לקוחות",           key: "clients",          minRole: "user" },
-  { label: "הגדרת ציוד",       key: "equipment",        minRole: "user" },
-  { label: "תבניות",    key: "email-templates",  minRole: "user" },
-  { label: "פרופיל",           key: "profile",          minRole: "user" },
-  { label: "הגדרות",           key: "settings",         minRole: "admin" },
+  {label: "לוח בקרה", key: "dashboard", minRole: "user"},
+  {label: "מסמכים", key: "documents", minRole: "user"},
+  {label: "תסקירים", key: "contracts", minRole: "user"},
+  {label: "הגדרת ציוד", key: "equipment", minRole: "user"},
+  {label: "לקוחות", key: "clients", minRole: "user"},
+  {label: "פרופיל", key: "profile", minRole: "user"},
+  {label: "תבניות", key: "email-templates", minRole: "user"},
+  {label: "הגדרות", key: "settings", minRole: "admin"},
 ];
 
 const primaryNav = computed(() => {

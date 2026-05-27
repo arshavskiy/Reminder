@@ -3,6 +3,7 @@
     <n-space justify="space-between" align="center" style="margin-bottom: 16px">
 <!--      <n-h2 style="margin: 0">תזכורות</n-h2>-->
       <n-space>
+        <n-button :loading="store.loading" @click="store.fetch({ status: statusFilter.value ?? undefined, limit: 100 }, true)">↻ רענן</n-button>
         <n-button @click="quickTest" :loading="testing" :disabled="!testEmail">
           🧪 תזכורת בדיקה
         </n-button>
@@ -183,11 +184,11 @@ function load() {
 
 onMounted(async () => {
   const [, templates] = await Promise.all([
-    clientsStore.fetch({ limit: 500 }),
+    clientsStore.rows.length ? Promise.resolve() : clientsStore.fetch({ limit: 500 }),
     api.emailTemplates.list(),
   ]);
   emailTemplates.value = templates;
-  load();
+  if (!store.rows.length) load();
 });
 
 // ── Create new reminder ─────────────────────────────────────────────────────

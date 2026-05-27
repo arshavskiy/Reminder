@@ -32,6 +32,9 @@
           <button class="btn btn--ghost" :disabled="backfilling" @click="backfill">
             {{ backfilling ? 'מקשר...' : 'קשר לתיקים' }}
           </button>
+          <button class="btn btn--ghost" :disabled="loading" @click="load(true)">
+            <span class="refresh-icon" :class="{ 'refresh-icon--spin': loading }">↻</span> רענן
+          </button>
           <button class="btn btn--primary" @click="openCreate">+ הוספת ציוד חדש</button>
         </div>
       </div>
@@ -373,14 +376,14 @@ function debouncedLoad() {
   debounce = setTimeout(load, 200);
 }
 
-async function load() {
+async function load(force = false) {
   loading.value = true;
   try {
     const [list, st, cl] = await Promise.all([
       api.equipment.list({
         category: category.value === "all" ? undefined : category.value,
         q: search.value || undefined,
-      }),
+      }, force),
       api.equipment.stats(),
       api.clients.list({ limit: 500 }),
     ]);
@@ -723,6 +726,9 @@ html[data-theme="light"] .row__tag { background: rgba(24, 160, 88, 0.10); }
 .btn--xs { padding: 4px 10px; font-size: 12px; }
 .btn--danger { color: var(--color-error); }
 .btn--danger:hover { background: rgba(208, 48, 80, 0.08); }
+.refresh-icon { display: inline-block; transition: transform 0.4s; }
+.refresh-icon--spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Placeholder / empty ────────────────────────────────────────────────── */
 .placeholder,

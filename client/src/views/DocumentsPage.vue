@@ -12,6 +12,7 @@
           @change="onFileInputChange"
         />
         <n-button @click="fileInput?.click()" :loading="uploading" :disabled="limitReached">📂 בחר קבצים</n-button>
+        <n-button :loading="store.loading" @click="store.fetch(undefined, true)">↻ רענן</n-button>
         <n-button type="warning" :loading="rescanning" @click="doRescan">↻ סריקה מחדש</n-button>
         <n-button :loading="deletingAll" type="error" @click="confirmDeleteAll">🗑 מחק הכל</n-button>
       </n-space>
@@ -432,7 +433,7 @@ function savePipelineFlags() {
 watch([flagOcr, flagAi, flagS3, flagEntities], savePipelineFlags);
 
 onMounted(() => {
-  store.fetch();
+  if (!store.rows.length) store.fetch();
   loadPipelineFlags();
   loadClients();
 });

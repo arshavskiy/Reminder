@@ -14,10 +14,10 @@ export const useDocumentsStore = defineStore("documents", () => {
     rows.value.some(r => r.processing_status === "queued" || r.processing_status === "processing")
   );
 
-  async function fetch(params?: { status?: string; limit?: number; offset?: number }) {
+  async function fetch(params?: { status?: string; limit?: number; offset?: number }, force = false) {
     loading.value = true;
     try {
-      const r = await api.documents.list(params);
+      const r = await api.documents.list(params, force);
       rows.value = r.rows;
       total.value = r.total;
       totalAll.value = r.totalAll ?? 0;

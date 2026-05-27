@@ -8,11 +8,11 @@ export const useDashboardStore = defineStore("dashboard", () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
 
-  async function fetch() {
+  async function fetch(force = false) {
     loading.value = true;
     error.value = null;
     try {
-      stats.value = await api.dashboard.stats();
+      stats.value = await api.dashboard.stats(force);
     } catch (e) {
       error.value = String(e);
     } finally {

@@ -43,9 +43,24 @@ export interface PdfResult {
   reason?: string;
 }
 
+const PDF_PARSE_TIMEOUT_MS = 30_000;
+
 export async function parsePdf(filePath: string): Promise<PdfResult> {
   const buffer = readFileSync(filePath);
-  const data = await pdfParse(buffer);
+
+  let data: Awaited<ReturnType<typeof pdfParse>>;
+  try {
+    data = await Promise.race([
+      pdfParse(buffer),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("pdf-parse timed out after 30s")), PDF_PARSE_TIMEOUT_MS)
+      ),
+    ]);
+  } catch (err) {
+    console.warn(`[pdfParser] pdf-parse failed (${err}), falling back to OCR`);
+    return { text: "", pageCount: 0, needsOcr: true, reason: `pdf-parse error: ${err}` };
+  }
+
   const rawText = data.text ?? "";
   const pageCount = data.numpages ?? 0;
 

@@ -227,10 +227,10 @@ function onSearch() {
   searchTimer = setTimeout(() => store.fetch({ q: search.value || undefined, limit: 200 }), 300);
 }
 function refresh() {
-  store.fetch({ q: search.value || undefined, limit: 200 });
+  store.fetch({ q: search.value || undefined, limit: 200 }, true);
 }
 
-onMounted(() => store.fetch({ limit: 200 }));
+onMounted(() => { if (!store.rows.length) store.fetch({ limit: 200 }); });
 
 // ── Kebab menu ────────────────────────────────────────────────────────────────
 const openKebab = ref<string | null>(null);

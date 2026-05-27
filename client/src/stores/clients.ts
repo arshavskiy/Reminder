@@ -12,10 +12,10 @@ export const useClientsStore = defineStore("clients", () => {
   const activeDocuments = ref<Document[]>([]);
   const activeTimeline = ref<TimelineEvent[]>([]);
 
-  async function fetch(params?: { q?: string; limit?: number; offset?: number }) {
+  async function fetch(params?: { q?: string; limit?: number; offset?: number }, force = false) {
     loading.value = true;
     try {
-      const r = await api.clients.list(params);
+      const r = await api.clients.list(params, force);
       rows.value = r.rows;
       total.value = r.total;
     } finally {

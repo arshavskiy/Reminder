@@ -138,11 +138,21 @@ import { useRoute, useRouter } from "vue-router";
 import { NIcon, NAlert, NTabs, NTabPane, NForm, NFormItem, NInput, NButton, NModal } from "naive-ui";
 import { BriefcaseOutline } from "@vicons/ionicons5";
 import { useAuthStore } from "../stores/auth.js";
+import { useDashboardStore } from "../stores/dashboard.js";
+import { useDocumentsStore } from "../stores/documents.js";
+import { useContractsStore } from "../stores/contracts.js";
+import { useClientsStore } from "../stores/clients.js";
+import { useRemindersStore } from "../stores/reminders.js";
 import GoogleSignIn from "../components/GoogleSignIn.vue";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 const authStore = useAuthStore();
+const dashStore = useDashboardStore();
+const docsStore = useDocumentsStore();
+const contractsStore = useContractsStore();
+const clientsStore = useClientsStore();
+const remindersStore = useRemindersStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -214,6 +224,14 @@ async function handleLogin() {
       return;
     }
     authStore.setUser(data.user);
+    // Preload key stores in background so pages feel instant
+    Promise.all([
+      dashStore.fetch(),
+      docsStore.fetch(),
+      contractsStore.fetch({ limit: 200 }),
+      clientsStore.fetch({ limit: 200 }),
+      remindersStore.fetch(),
+    ]).catch(() => {});
     router.replace("/");
   } catch {
     routeError.value = "auth_failed";

@@ -21,8 +21,11 @@ import type {
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const BASE = `${SERVER}/api`;
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(BASE + path, { credentials: "include" });
+async function get<T>(path: string, force = false): Promise<T> {
+  const res = await fetch(BASE + path, {
+    credentials: "include",
+    cache: force ? "reload" : "default",
+  });
   if (!res.ok) {
     const err = new Error(`GET ${path} failed: ${res.status}`) as any;
     err.status = res.status;
@@ -76,12 +79,12 @@ function qs(params?: Record<string, unknown>): string {
 // ── Dashboard ────────────────────────────────────────────────────────────────
 export const api = {
   dashboard: {
-    stats: () => get<DashboardStats>("/dashboard/stats"),
+    stats: (force = false) => get<DashboardStats>("/dashboard/stats", force),
   },
 
   documents: {
-    list: (params?: { status?: string; limit?: number; offset?: number }) => {
-      return get<{ rows: Document[]; total: number; totalAll: number; documentLimit: number }>(`/documents${qs(params)}`);
+    list: (params?: { status?: string; limit?: number; offset?: number }, force = false) => {
+      return get<{ rows: Document[]; total: number; totalAll: number; documentLimit: number }>(`/documents${qs(params)}`, force);
     },
     get: (id: string) => get<Document>(`/documents/${id}`),
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
@@ -112,8 +115,8 @@ export const api = {
   },
 
   clients: {
-    list: (params?: { q?: string; limit?: number; offset?: number }) => {
-      return get<{ rows: Client[]; total: number }>(`/clients${qs(params)}`);
+    list: (params?: { q?: string; limit?: number; offset?: number }, force = false) => {
+      return get<{ rows: Client[]; total: number }>(`/clients${qs(params)}`, force);
     },
     get: (id: string) => get<ClientDetail>(`/clients/${id}`),
     create: (body: Partial<Client>) => post<Client>("/clients", body),
@@ -124,8 +127,8 @@ export const api = {
   },
 
   contracts: {
-    list: (params?: { clientId?: string; status?: string; limit?: number; kind?: "contract" | "inspection" | "all" }) => {
-      return get<{ rows: ContractWithClient[]; total: number }>(`/contracts${qs(params)}`);
+    list: (params?: { clientId?: string; status?: string; limit?: number; kind?: "contract" | "inspection" | "all" }, force = false) => {
+      return get<{ rows: ContractWithClient[]; total: number }>(`/contracts${qs(params)}`, force);
     },
     expiring: (days = 30) => get<ContractWithClient[]>(`/contracts/expiring?days=${days}`),
     get: (id: string) => get<ContractWithClient>(`/contracts/${id}`),
@@ -135,8 +138,8 @@ export const api = {
   },
 
   reminders: {
-    list: (params?: { status?: string; days?: number; limit?: number }) => {
-      return get<{ rows: ReminderWithContext[]; total: number }>(`/reminders${qs(params)}`);
+    list: (params?: { status?: string; days?: number; limit?: number }, force = false) => {
+      return get<{ rows: ReminderWithContext[]; total: number }>(`/reminders${qs(params)}`, force);
     },
     create: (body: Partial<Reminder>) => post<Reminder>("/reminders", body),
     update: (id: number, body: Partial<Reminder>) => put<Reminder>(`/reminders/${id}`, body),
@@ -213,8 +216,8 @@ export const api = {
   },
 
   equipment: {
-    list: (params?: { category?: string; q?: string; client_id?: string }) =>
-      get<Equipment[]>(`/equipment${qs(params)}`),
+    list: (params?: { category?: string; q?: string; client_id?: string }, force = false) =>
+      get<Equipment[]>(`/equipment${qs(params)}`, force),
     stats: () => get<Record<string, number>>("/equipment/stats"),
     get: (id: string) => get<Equipment>(`/equipment/${id}`),
     create: (body: Partial<Equipment>) => post<Equipment>("/equipment", body),
