@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:all": "concurrently \"npm run dev\" \"npm --prefix ../server run dev\"",
-    "build": "vite build"
+    "build": "vite build",
+    "test": "npx playwright test"
   },
   "dependencies": {
     "@hebcal/core": "^5.9.0",
