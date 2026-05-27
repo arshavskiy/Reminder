@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme="theme" :theme-overrides="themeOverrides" :rtl="rtlConfig" :locale="heIL" :date-locale="dateHeIL">
+  <n-config-provider :rtl="rtlConfig" :theme="theme" :theme-overrides="themeOverrides">
     <n-message-provider>
       <n-dialog-provider>
         <div class="app-shell">
@@ -66,8 +66,6 @@ import {computed, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
   darkTheme,
-  dateHeIL,
-  heIL,
   NConfigProvider,
   NDialogProvider,
   NIcon,
