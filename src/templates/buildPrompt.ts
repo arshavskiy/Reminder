@@ -1,5 +1,16 @@
 import type {DocTemplate, TemplateField} from "../../src/shared/types.js";
 
+export interface InspectorProfile {
+  company_name?: string | null;
+  company_phone?: string | null;
+  company_email?: string | null;
+  inspector_number?: string | null;
+  personal_phone?: string | null;
+  personal_email?: string | null;
+  personal_name?: string | null;
+  personal_company_name?: string | null;
+}
+
 const TYPE_DESCRIPTIONS: Record<TemplateField["type"], string> = {
   text: "string | null",
   number: "number | null",
@@ -15,7 +26,7 @@ const TYPE_DESCRIPTIONS: Record<TemplateField["type"], string> = {
  * The prompt asks the model to return ONE flat JSON object whose keys are the
  * template's field `key`s.
  */
-export function buildPromptForTemplate(tpl: DocTemplate): string {
+export function buildPromptForTemplate(tpl: DocTemplate, inspector?: InspectorProfile): string {
   const fieldLines = tpl.fields
     .map((f) => {
       const parts: string[] = [];
@@ -74,6 +85,8 @@ export function buildPromptForTemplate(tpl: DocTemplate): string {
   ]  // IMPORTANT: extract ALL rows; empty array only if truly no equipment.`
     : "";
 
+  const inspectorExclusionNote = buildInspectorExclusionNote(inspector);
+
   return `You are a document intelligence assistant specializing in Hebrew business documents.
 The user has defined a template called "${tpl.name}". Extract structured information
 from the provided document text and return ONLY ONE valid JSON object whose keys
@@ -92,7 +105,13 @@ GENERAL RULES:
   - פקודת הבטיחות בעבודה legal disclaimer text (סעיפים 75,76,81,86...)
   - תסקיר זה מייצג / תסקיר זה אינו / יש לשמור boilerplate paragraphs
   - Inspector's personal details block (חתימת הבודק / פרטים מלאים of the inspector)
-• IMPORTANT — company names with embedded numbers: Hebrew PDFs sometimes output
+  - Page footer / letterhead belonging to the INSPECTOR or the inspection company:
+    this includes the inspector's own email, phone, company name, and address printed at the
+    bottom of every page (e.g. "דואר אלקטרוני: ...", "נייד: ...", "M.A.D הנדסה ובטיחות").
+    The CLIENT is the company or person whose equipment is being inspected — their details
+    appear in the BODY of the report (e.g. "שם מעביד / בעל הציוד", "כתובת", "פרטי הלקוח"),
+    NOT in the page footer. Never use footer email/phone as client contact details.
+${inspectorExclusionNote}• IMPORTANT — company names with embedded numbers: Hebrew PDFs sometimes output
   company names in reversed visual order with digits attached without spaces, e.g.
   "מ\"הובלות בע1945שלב" which is actually "שלב 1945 הובלות בע\"מ".
   When you see a company/client name that looks garbled (Hebrew words in wrong order,
@@ -105,4 +124,20 @@ JSON schema:
 ${fieldLines},${equipmentSection}
   "_confidence": "high" | "medium" | "low"   // your own confidence in the extraction
 }`;
+}
+
+function buildInspectorExclusionNote(inspector?: InspectorProfile): string {
+  if (!inspector) return "";
+  const identifiers: string[] = [];
+  if (inspector.company_name) identifiers.push(`company "${inspector.company_name}"`);
+  if (inspector.company_email) identifiers.push(`email "${inspector.company_email}"`);
+  if (inspector.company_phone) identifiers.push(`phone "${inspector.company_phone}"`);
+  if (inspector.personal_name) identifiers.push(`personal name "${inspector.personal_name}"`);
+  if (inspector.personal_phone) identifiers.push(`personal phone "${inspector.personal_phone}"`);
+  if (inspector.personal_email) identifiers.push(`personal email "${inspector.personal_email}"`);
+  if (inspector.personal_company_name) identifiers.push(`personal company "${inspector.personal_company_name}"`);
+  if (!identifiers.length) return "";
+  return `• INSPECTOR IDENTITY — The inspector/author of this report has the following details: ${identifiers.join(", ")}. ` +
+    `These values belong to the inspector, NOT to the client. ` +
+    `If any of these exact values appear in the document, do NOT assign them to client fields (client_email, client_phone, client_company, client_name).\n`;
 }

@@ -60,6 +60,7 @@ export function registerProfileRoutes(app: express.Application) {
     const {
       inspector_number, address, title, expertise,
       mr_number, mg_number, membership_start_date,
+      company_name, company_phone, company_email,
     } = req.body as Record<string, string | null>;
 
     await col("engineer_profiles").updateOne(
@@ -74,6 +75,9 @@ export function registerProfileRoutes(app: express.Application) {
           mr_number: mr_number ?? null,
           mg_number: mg_number ?? null,
           membership_start_date: membership_start_date ?? null,
+          company_name: company_name ?? null,
+          company_phone: company_phone ?? null,
+          company_email: company_email ?? null,
           updated_at: new Date().toISOString(),
         },
       },
@@ -88,10 +92,11 @@ export function registerProfileRoutes(app: express.Application) {
   app.put("/api/profile", async (req, res) => {
     const ctx = await auth(req, res);
     if (!ctx) return;
-    const { name, phone } = req.body as { name?: string; phone?: string | null };
+    const { name, phone, company_name } = req.body as { name?: string; phone?: string | null; company_name?: string | null };
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (name !== undefined) patch.name = name?.trim() ?? null;
     if (phone !== undefined) patch.phone = phone?.trim() || null;
+    if (company_name !== undefined) patch.company_name = company_name?.trim() || null;
     if (Object.keys(patch).length === 1) { res.status(400).json({ error: "nothing to update" }); return; }
     await col("users").updateOne({ _id: new ObjectId(ctx.userId) as any }, { $set: patch });
     res.json({ ok: true });

@@ -396,7 +396,18 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
-    const run = await extractWithTemplate(rawText, template, id, doc.file_name);
+    const [engineerProfile, userRow] = await Promise.all([
+      col("engineer_profiles").findOne({ user_id: userId }) as Promise<any>,
+      col("users").findOne({ _id: new ObjectId(userId) as any }) as Promise<any>,
+    ]);
+    const inspector = {
+      ...(engineerProfile ?? {}),
+      personal_phone: userRow?.phone ?? null,
+      personal_email: userRow?.email ?? null,
+      personal_name: userRow?.name ?? null,
+      personal_company_name: userRow?.company_name ?? null,
+    };
+    const run = await extractWithTemplate(rawText, template, id, doc.file_name, inspector);
     const now = new Date();
 
     await col("extractions").insertOne({

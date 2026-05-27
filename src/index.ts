@@ -57,6 +57,16 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", ts: Date.now() });
 });
 
+// Cache-Control: private, max-age=300 on GET list endpoints so the browser
+// caches responses for 5 minutes. The client sends cache:"reload" on manual
+// refresh to bypass this.
+app.use((req, res, next) => {
+  if (req.method === "GET" && req.path.startsWith("/api/")) {
+    res.setHeader("Cache-Control", "private, max-age=300");
+  }
+  next();
+});
+
 // Register all route modules
 registerAuthRoutes(app);
 registerDocumentRoutes(app);
