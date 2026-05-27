@@ -9,6 +9,7 @@ data/
 .claude
 spects/
 dist/
+uploads/
 coverage/
 *.log
 *.tmp

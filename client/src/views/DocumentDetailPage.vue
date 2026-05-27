@@ -193,14 +193,19 @@ const equipment = computed<any[]>(() => {
   return raw._equipment.filter((e: any) => e && e.name);
 });
 
+function joinArr(v: unknown): string {
+  if (Array.isArray(v)) return v.filter(Boolean).join(" / ");
+  return v != null ? String(v) : "";
+}
+
 const equipmentColumns = [
   { title: "תיאור", key: "name", ellipsis: true },
   { title: "יצרן", key: "manufacturer", width: 110 },
   { title: "דגם", key: "model", width: 120 },
   { title: "מ\"ס סידורי", key: "serial_number", width: 130 },
-  { title: 'עומס עבודה', key: "load_capacity_work", width: 110 },
-  { title: 'עומס מבחן', key: "load_capacity_test", width: 110 },
-  { title: "רדיוס", key: "load_radius", width: 80 },
+  { title: 'עומס עבודה', key: "load_capacity_work", width: 110, render: (row: any) => joinArr(row.load_capacity_work) },
+  { title: 'עומס מבחן', key: "load_capacity_test", width: 110, render: (row: any) => joinArr(row.load_capacity_test) },
+  { title: "רדיוס", key: "load_radius", width: 80, render: (row: any) => joinArr(row.load_radius) },
 ];
 
 onMounted(async () => {

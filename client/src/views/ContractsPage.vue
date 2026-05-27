@@ -266,8 +266,8 @@
         <div class="format-cards">
           <div class="format-card" :class="{ 'format-card--active': exportFormat === 'csv' }" @click="exportFormat = 'csv'">
             <div class="format-card__icon">📊</div>
-            <div class="format-card__name">CSV / Excel</div>
-            <div class="format-card__desc">נפתח ב-Excel / Google Sheets</div>
+            <div class="format-card__name">Excel (.xlsx)</div>
+            <div class="format-card__desc">קובץ Excel עם כיוון מימין לשמאל</div>
           </div>
           <div class="format-card" :class="{ 'format-card--active': exportFormat === 'pdf' }" @click="exportFormat = 'pdf'">
             <div class="format-card__icon">📄</div>
@@ -771,23 +771,66 @@ function doExport() {
   function getCell(main: any, eq: any | null, key: string): string {
     if (key.startsWith("eq_")) {
       const field = key.slice(3); // strip "eq_"
-      return eq ? String(eq[field] ?? "") : "";
+      if (!eq) return "";
+      const v = eq[field];
+      if (Array.isArray(v)) return v.filter(Boolean).join(" / ");
+      return String(v ?? "");
     }
     return cellValue(main, key);
   }
 
   if (exportFormat.value === "csv") {
-    const header = allCols.map((c) => csvQuote(c.label)).join(",");
-    const lines = expanded.map(({ main, eq }) =>
-      allCols.map((c) => csvQuote(getCell(main, eq, c.key))).join(",")
-    );
-    const csv = "﻿" + [header, ...lines].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `inspections-${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    Promise.all([import("xlsx"), import("jszip")]).then(async ([{ utils, write }, { default: JSZip }]) => {
+      const wsData = [
+        allCols.map((c) => c.label),
+        ...expanded.map(({ main, eq }) => allCols.map((c) => getCell(main, eq, c.key))),
+      ];
+      const ws = utils.aoa_to_sheet(wsData);
+      ws["!cols"] = allCols.map(() => ({ wch: 20 }));
+      const wb = utils.book_new();
+      utils.book_append_sheet(wb, ws, "תסקירים");
+
+      // SheetJS 0.18 ignores rightToLeft and cell styles — patch the zip XML directly
+      const buf: ArrayBuffer = write(wb, { type: "array", bookType: "xlsx" });
+      const zip = await JSZip.loadAsync(buf);
+
+      // 1. Patch styles.xml — add a bold font + xf style at index 1
+      const stylesFile = zip.file("xl/styles.xml");
+      if (stylesFile) {
+        let sxml = await stylesFile.async("string");
+        // Append bold font entry
+        sxml = sxml.replace(/(<fonts count=")(\d+)(">)/, (_m, a, n, b) => `${a}${+n + 1}${b}`);
+        sxml = sxml.replace(/<\/fonts>/, '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>');
+        // Count fonts now (bold font is last)
+        const boldFontIdx = (sxml.match(/<font>/g) ?? []).length - 1;
+        // Append xf entry referencing the bold font
+        sxml = sxml.replace(/(<cellXfs count=")(\d+)(">)/, (_m, a, n, b) => `${a}${+n + 1}${b}`);
+        sxml = sxml.replace(/<\/cellXfs>/, `<xf numFmtId="0" fontId="${boldFontIdx}" fillId="0" borderId="0" applyFont="1"/></cellXfs>`);
+        zip.file("xl/styles.xml", sxml);
+      }
+
+      // 2. Patch sheet1.xml — RTL + bold style (s="1") on all row-1 cells
+      const sheetFile = zip.file("xl/worksheets/sheet1.xml");
+      if (sheetFile) {
+        let xml = await sheetFile.async("string");
+        xml = xml.replace(/<sheetView /g, '<sheetView rightToLeft="1" ');
+        // Add s="1" to every cell in row 1 (cells look like <c r="A1" t="str">)
+        xml = xml.replace(
+          /(<row r="1"[^>]*>)([\s\S]*?)(<\/row>)/,
+          (_m, open, cells, close) =>
+            open + cells.replace(/<c (r="[A-Z]+1"[^>]*)>/g, '<c $1 s="1">') + close
+        );
+        zip.file("xl/worksheets/sheet1.xml", xml);
+      }
+      const outBuf = await zip.generateAsync({ type: "arraybuffer" });
+
+      const blob = new Blob([outBuf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `inspections-${dateStr}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
   } else {
     const thead = allCols.map((c) => `<th>${c.label}</th>`).join("");
     const tbody = expanded.map(({ main, eq }) =>

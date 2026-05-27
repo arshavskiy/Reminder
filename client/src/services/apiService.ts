@@ -1,21 +1,21 @@
 import type {
-  AppSettings,
-  Client,
-  ClientDetail,
-  Contract,
-  ContractWithClient,
-  DashboardStats,
-  DocTemplate,
-  Document,
-  EmailLogEntry,
-  EmailTemplate,
-  Equipment,
-  GlobalSearchResult,
-  PipelineFlags,
-  Reminder,
-  ReminderWithContext,
-  Task,
-  UserSettings,
+    AppSettings,
+    Client,
+    ClientDetail,
+    Contract,
+    ContractWithClient,
+    DashboardStats,
+    DocTemplate,
+    Document,
+    EmailLogEntry,
+    EmailTemplate,
+    Equipment,
+    GlobalSearchResult,
+    PipelineFlags,
+    Reminder,
+    ReminderWithContext,
+    Task,
+    UserSettings,
 } from "../../src/shared/types.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -104,8 +104,8 @@ export const api = {
       }
       return res.json() as Promise<{ ids: string[]; duplicates: string[] }>;
     },
-    extract: (id: string, fields: Array<{ key: string; label_he: string; type: string }>) =>
-      post<{ ok: boolean }>(`/documents/${id}/extract`, { fields }),
+    extract: (id: string, templateId?: string) =>
+      post<{ ok: boolean; fields: Record<string, unknown> | null; template: string; document: import('../shared/types.js').Document }>(`/documents/${id}/extract`, templateId ? { templateId } : {}),
     delete: (id: string) => del(`/documents/${id}`),
     downloadUrl: (id: string) => `${BASE}/documents/${id}/download`,
     reprocess: (id: string) => post<{ ok: boolean }>(`/documents/${id}/reprocess`),

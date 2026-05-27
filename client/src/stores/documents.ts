@@ -1,5 +1,5 @@
 import {defineStore} from "pinia";
-import {ref} from "vue";
+import {computed, ref} from "vue";
 import {api} from "../services/apiService.js";
 import type {Document} from "../../src/shared/types.js";
 
@@ -9,6 +9,10 @@ export const useDocumentsStore = defineStore("documents", () => {
   const totalAll = ref(0);        // scanned_count from user_settings
   const documentLimit = ref(25);  // document_limit from user_settings
   const loading = ref(false);
+
+  const hasInProgress = computed(() =>
+    rows.value.some(r => r.processing_status === "queued" || r.processing_status === "processing")
+  );
 
   async function fetch(params?: { status?: string; limit?: number; offset?: number }) {
     loading.value = true;
@@ -32,5 +36,5 @@ export const useDocumentsStore = defineStore("documents", () => {
     await fetch();
   }
 
-  return { rows, total, totalAll, documentLimit, loading, fetch, importFile, deleteDoc };
+  return { rows, total, totalAll, documentLimit, loading, hasInProgress, fetch, importFile, deleteDoc };
 });

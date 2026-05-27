@@ -377,12 +377,11 @@ async function skipAiModal() {
 }
 
 async function confirmAiModal() {
-  const fields = extractionFields.value.filter(f => f.key.trim() && f.label_he.trim());
   if (aiModalMode.value === "existing") {
     extracting.value = true;
     try {
       for (const id of pendingDocIds.value) {
-        await api.documents.extract(id, fields);
+        await api.documents.extract(id);
       }
       message.success(`חילוץ AI הושלם עבור ${pendingDocIds.value.length} מסמך/ים`);
       await store.fetch();
@@ -432,29 +431,12 @@ function savePipelineFlags() {
 
 watch([flagOcr, flagAi, flagS3, flagEntities], savePipelineFlags);
 
-// ── Status polling ─────────────────────────────────────────────────────────────
-let pollTimer: ReturnType<typeof setTimeout> | null = null;
-
-function hasInProgress(): boolean {
-  return store.rows.some(r => r.processing_status === "queued" || r.processing_status === "processing");
-}
-
-function schedulePoll() {
-  if (pollTimer) return;
-  pollTimer = setTimeout(async () => {
-    pollTimer = null;
-    await store.fetch();
-    if (hasInProgress()) schedulePoll();
-  }, 3000);
-}
-
 onMounted(() => {
-  store.fetch().then(() => { if (hasInProgress()) schedulePoll(); });
+  store.fetch();
   loadPipelineFlags();
   loadClients();
 });
 onUnmounted(() => {
-  if (pollTimer) clearTimeout(pollTimer);
   if (saveFlagsTimer) clearTimeout(saveFlagsTimer);
 });
 
@@ -484,7 +466,6 @@ async function uploadFiles(files: File[]) {
     if (newCount > 0) message.info(`${newCount} מסמכים נוספו לתור עיבוד`);
     if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);
     await store.fetch();
-    schedulePoll();
   } catch (e: any) {
     if (e?.message === "document_limit_reached") {
       showLimitModal.value = true;
@@ -507,7 +488,6 @@ async function doImportPath() {
     showImport.value = false;
     importPath.value = "";
     await store.fetch();
-    schedulePoll();
   } catch (e: any) {
     if (e?.message?.includes("document_limit_reached")) {
       showLimitModal.value = true;

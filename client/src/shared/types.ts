@@ -234,9 +234,9 @@ export interface ContractWithClient extends Contract {
     manufacturer: string | null;
     model: string | null;
     serial_number: string | null;
-    load_capacity_work: string | null;
-    load_capacity_test: string | null;
-    load_radius: string | null;
+    load_capacity_work: string[];
+    load_capacity_test: string[];
+    load_radius: string[];
     category: string;
   }>;
 }
