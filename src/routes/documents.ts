@@ -3,10 +3,12 @@ import {extname, join} from "path";
 import {mkdirSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
-import {importFile, processDocument} from "../pipeline/importer";
+import {importFile, processDocument, saveTemplateEntitiesForDoc} from "../pipeline/importer";
 import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
+import {extractWithTemplate} from "../pipeline/extractor";
+import {pickTemplate} from "../templates/seedTemplates";
 import multer from "multer";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -354,6 +356,84 @@ export function registerDocumentRoutes(app: express.Application) {
 
     console.log(`[documents] Queued ${errorDocs.length} documents for rescan for user ${userId}`);
     res.json({ queued: errorDocs.length });
+  });
+
+  // POST /api/documents/:id/extract — re-run AI extraction with the best-fit template
+  app.post("/api/documents/:id/extract", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const id = req.params.id;
+    const doc = (await col("documents").findOne({ ...idFilter(id), user_id: userId })) as any;
+    if (!doc) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const rawText: string = doc.raw_text ?? "";
+    if (!rawText) {
+      res.status(422).json({ error: "Document has no raw text yet" });
+      return;
+    }
+
+    // Allow caller to request a specific template by id
+    const body = req.body as Record<string, unknown>;
+    let template = null;
+    if (body.templateId) {
+      const { loadTemplate } = await import("../templates/seedTemplates.js");
+      template = await loadTemplate(String(body.templateId));
+    }
+    if (!template) template = await pickTemplate(rawText);
+    if (!template) {
+      res.status(422).json({ error: "No matching template found" });
+      return;
+    }
+
+    const run = await extractWithTemplate(rawText, template, id, doc.file_name);
+    const now = new Date();
+
+    await col("extractions").insertOne({
+      document_id: id,
+      template_id: template.id ?? null,
+      template_name: template.name,
+      backend: run.backend,
+      model: run.model,
+      fields: run.fields,
+      raw_json: run.rawJson,
+      error: run.error ?? null,
+      usage: run.usage ?? null,
+      exec_ms: run.execMs,
+      created_at: now,
+    } as any);
+
+    if (run.fields) {
+      await col("documents").updateOne(idFilter(id), {
+        $set: {
+          extracted_fields: JSON.stringify(run.fields),
+          template_id: template.id,
+          document_type: template.name,
+          updated_at: now,
+        },
+      });
+
+      // Update contract, client, and equipment records
+      try {
+        await saveTemplateEntitiesForDoc(id, template, run.fields, userId);
+      } catch (e) {
+        console.error(`[extract] Failed to save extracted entities for doc ${id}:`, e);
+      }
+    }
+
+    // Return updated document so client can refresh in one round-trip
+    const updated = await col("documents").findOne(idFilter(id));
+    res.json({ ok: true, fields: run.fields ?? null, template: template.name, document: flatDoc(updated) });
   });
 
   // GET /api/documents/:id/extractions

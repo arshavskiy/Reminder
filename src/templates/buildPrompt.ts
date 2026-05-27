@@ -43,17 +43,28 @@ export function buildPromptForTemplate(tpl: DocTemplate): string {
     //   Some items (e.g. רצועות הרמה, שאקל) list several serial numbers separated by / or space.
     //   Create ONE object per serial number so each gets its own record.
     //   Copy name/manufacturer/model/loads to each sibling object.
+    //
+    // IMPORTANT — merged-cell tables (one item, multiple load sub-rows):
+    //   Some tables use merged cells where description/manufacturer/model/serial appear ONCE
+    //   but the load columns repeat for different configurations or radii (e.g. "על במה" vs "על מרפסת").
+    //   In this case create ONE object per equipment item and put each load sub-row as a separate
+    //   element in the load_capacity_work / load_capacity_test / load_radius arrays.
+    //   Example: load_capacity_work = ["320 ק\"ג (2 אנשים + ציוד)", "113 ק\"ג (עובד אחד + ציוד)"]
+    //            load_capacity_test = ["100 ק\"ג"]
+    //            load_radius = ["על במה", "על מרפסת"]
+    //   Do NOT create duplicate objects for the same serial number — merge sub-rows instead.
+    //   When there is only one load value, still use an array with one element.
     {
       "name": string,                   // תיאור — full description text of the equipment item
       "manufacturer": string | null,    // יצרן
       "model": string | null,           // דגם (keep Latin model codes as-is, e.g. "SLR-CLU")
       "serial_number": string | null,   // מספר סידורי — ONE serial per object; keep mixed Hebrew+Latin as-is
-      "load_capacity_work": string | null,  // עומס עבודה בטוח — safe working load, include units e.g. "3200 ק\"ג"
-      "load_capacity_test": string | null,  // עומס מבחן — test load, include units
-      "load_radius": string | null,         // רדיוס עומס — load radius if present
+      "load_capacity_work": string[],   // עומס עבודה בטוח — one entry per load configuration, include units e.g. ["3200 ק\"ג"]. Empty array if not present.
+      "load_capacity_test": string[],   // עומס מבחן — one entry per load configuration. Empty array if not present.
+      "load_radius": string[],          // רדיוס עומס — one entry per radius. Empty array if not present.
       "category": "lift" | "accessory" | "scaffold" | "ladder" | "balloon" | "intake" | "extractor" | "other"
       // category guidance:
-      //   lift        → מגבה, מנוף, עגורן, מעלית, גיטרה
+      //   lift        → מגבה, מנוף, עגורן, מעלית, גיטרה, במת הרמה
       //   accessory   → אביזר הרמה, רצועה, ווי, גלגלת, שרשרת, שאקל, container lifter, SLR
       //   scaffold    → פיגום, דפנה
       //   ladder      → סולם

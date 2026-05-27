@@ -352,6 +352,15 @@ async function saveExtractionEntities(
   }
 }
 
+export async function saveTemplateEntitiesForDoc(
+  documentId: string,
+  template: DocTemplate,
+  fields: DynamicExtraction,
+  userId?: string
+) {
+  return saveTemplateEntities(documentId, template, fields, userId);
+}
+
 async function saveTemplateEntities(
   documentId: string,
   template: DocTemplate,
@@ -467,9 +476,9 @@ async function saveTemplateEntities(
           ...(eq.manufacturer != null && { manufacturer: String(eq.manufacturer) }),
           ...(eq.model != null && { model: String(eq.model) }),
           ...(eq.serial_number != null && { serial_number: String(eq.serial_number).trim() }),
-          ...(eq.load_capacity_work != null && { capacity: String(eq.load_capacity_work) }),
-          ...(eq.load_capacity_test != null && { load_capacity_test: String(eq.load_capacity_test) }),
-          ...(eq.load_radius != null && { load_radius: String(eq.load_radius) }),
+          ...(eq.load_capacity_work?.length && { capacity: (eq.load_capacity_work as string[]).join(" / ") }),
+          ...(eq.load_capacity_test?.length && { load_capacity_test: (eq.load_capacity_test as string[]).join(" / ") }),
+          ...(eq.load_radius?.length && { load_radius: (eq.load_radius as string[]).join(" / ") }),
           document_id: documentId,
           ...(clientId != null && { client_id: clientId }),
           ...(userId && { user_id: userId }),

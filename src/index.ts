@@ -108,6 +108,14 @@ main().catch((err) => {
   process.exit(1);
 });
 
+// Keep the server alive even if a background pipeline task throws
+process.on("unhandledRejection", (reason) => {
+  console.error("[server] Unhandled promise rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[server] Uncaught exception:", err);
+});
+
 // ── Watch folder ──────────────────────────────────────────────────────────────
 const SUPPORTED_EXTS = new Set([".pdf", ".docx", ".xlsx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".tif", ".tiff"]);
 

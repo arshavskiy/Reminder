@@ -2,6 +2,8 @@ import {createWorker} from "tesseract.js";
 import {getSettings} from "../settings";
 import {fixHebrewBidi} from "./hebrewBidi";
 
+const OCR_TIMEOUT_MS = 120_000;
+
 export async function ocrFile(filePath: string): Promise<string> {
   const settings = getSettings();
   const lang = settings.ocrLanguage; // e.g. "heb+eng"
@@ -16,15 +18,17 @@ export async function ocrFile(filePath: string): Promise<string> {
       preserve_interword_spaces: "1" as any,
     });
 
-    const { data } = await worker.recognize(filePath);
-    let text = data.text ?? "";
+    const result = await Promise.race([
+      worker.recognize(filePath),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("OCR timed out after 120s")), OCR_TIMEOUT_MS)
+      ),
+    ]);
 
-    // Apply Hebrew bidi fix — OCR output for RTL documents often has the same
-    // visual-order issues as pdf-parse output
+    let text = result.data.text ?? "";
     text = fixHebrewBidi(text);
-
     return text;
   } finally {
-    await worker.terminate();
+    worker.terminate().catch(() => {});
   }
 }
