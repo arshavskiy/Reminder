@@ -21,9 +21,11 @@ CRITICAL RULES:
    - client_name: the CONTACT PERSON (e.g. "שילה"). Look near "איש קשר".
 5. document_type: classify in Hebrew (e.g. "תסקיר בדיקה", "חוזה", "חשבונית", "אישור", "תעודה").
 6. document_number: the report/document/invoice number (e.g. "תסקיר מספר 15935" → "15935"). Distinct from contract_number.
-7. Phone numbers: keep original Israeli format (e.g. "050-7870067").
-8. The text may have been extracted from a Hebrew PDF; some words can be mis-spaced or have residual bidi artifacts. Use context to determine the correct meaning.
-9. If a field cannot be determined, use null. Do not add extra fields. Do not invent data.
+7. Phone numbers: keep original Israeli format (e.g. "050-7870067"). If the number appears as 10 consecutive digits with no dash (e.g. "0537285690"), insert the dash after the 3rd digit → "053-7285690".
+8. Email addresses: Hebrew PDFs sometimes output email addresses in reversed visual order, e.g. "il.co1945.shelev@klodin" which is actually "klodin@shelev1945.co.il". Recognize a reversed email by checking whether the part after "@" looks like a name/word and the part before "@" looks like a domain (contains dots and a TLD like .co.il / .com / .org). If reversed, swap the two parts around "@".
+9. The text may have been extracted from a Hebrew PDF; some words can be mis-spaced or have residual bidi artifacts. Use context to determine the correct meaning.
+10. IMPORTANT — company names with embedded numbers: Hebrew PDFs sometimes output company names in reversed visual order with digits concatenated without spaces, e.g. "מ\"הובלות בע1945שלב" which is actually "שלב 1945 הובלות בע\"מ". Reconstruct the correct name using context clues such as email domain, address, or other mentions.
+11. If a field cannot be determined, use null. Do not add extra fields. Do not invent data.
 
 JSON schema:
 {

@@ -317,7 +317,7 @@ POST /api/documents/import
 
 ```
 generateContractReminders(contractId, clientId, documentId, expiryDate, userId)
-  → for each day in [90, 60, 30] (configurable):
+  → for each day in [30] (configurable):
       triggerDate = expiryDate − N days
       skip if triggerDate ≤ today
       skip if reminder already exists (source_type + source_id + advance_days)

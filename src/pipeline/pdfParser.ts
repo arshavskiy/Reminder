@@ -1,6 +1,6 @@
 import pdfParse from "pdf-parse";
-import { readFileSync } from "fs";
-import { fixHebrewBidi } from "./hebrewBidi";
+import {readFileSync} from "fs";
+import {fixHebrewBidi} from "./hebrewBidi";
 
 // Hebrew Unicode range: U+0590–U+05FF
 const HEBREW_RE = /[֐-׿]/g;
@@ -68,6 +68,10 @@ export async function parsePdf(filePath: string): Promise<PdfResult> {
   } else if (heRatio < 0.02 && trimmedLen < 500) {
     needsOcr = true;
     reason = "almost no Hebrew or Latin text after cleanup";
+  } else if (trimmedLen > 0 && heRatio < 0.05 && trimmedLen < 300) {
+    // Very little Hebrew survived — likely a scanned table-heavy document
+    needsOcr = true;
+    reason = "sparse Hebrew after garbage strip — likely scanned table document";
   }
 
   if (needsOcr) {
