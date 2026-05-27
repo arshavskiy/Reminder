@@ -687,19 +687,21 @@ const exportFilter = ref({
   dateRange: null as [number, number] | null,
 });
 const exportColumns = ref([
-  { key: "contract_number",     label: "מספר תסקיר",      selected: true },
-  { key: "client_name",         label: "לקוח / תופש",     selected: true },
-  { key: "contact_person",      label: "איש קשר",         selected: true },
-  { key: "contact_phone",       label: "נייד",            selected: true },
-  { key: "contact_email",       label: "מייל",            selected: true },
-  { key: "client_address",      label: "ישוב / רחוב",     selected: true },
-  { key: "start_date",          label: "תאריך בדיקה",     selected: true },
-  { key: "expiry_date",         label: "בתוקף עד",        selected: true },
-  { key: "equipment_description", label: "תיאור ציוד",    selected: true },
-  { key: "status",              label: "סטטוס",           selected: true },
-  { key: "contract_type",       label: "סוג",             selected: false },
-  { key: "counterparty",        label: "צד שכנגד",        selected: false },
-  { key: "summary",             label: "הערות",           selected: false },
+  { key: "contract_number",       label: "מספר תסקיר",         selected: true },
+  { key: "client_name",           label: "פרטי הלקוח/תופש",    selected: true },
+  { key: "contact_person",        label: "איש קשר",            selected: true },
+  { key: "contact_phone",         label: "נייד",               selected: true },
+  { key: "contact_email",         label: "מייל",               selected: true },
+  { key: "client_address",        label: "ישוב / רחוב",        selected: true },
+  { key: "po_box",                label: "ת.ד",                selected: true },
+  { key: "client_zipcode",        label: "מיקוד",              selected: true },
+  { key: "start_date",            label: "תאריך בדיקה",        selected: true },
+  { key: "expiry_date",           label: "בתוקף עד",           selected: true },
+  { key: "equipment_description", label: "תיאור מכונת הרמה",   selected: true },
+  { key: "_confidence",           label: "רמת ביטחון",         selected: true },
+  { key: "status",                label: "סטטוס",              selected: false },
+  { key: "contract_type",         label: "סוג",                selected: false },
+  { key: "summary",               label: "הערות",              selected: false },
 ]);
 const selectedExportColumns = computed(() => exportColumns.value.filter((c) => c.selected));
 const exportedRows = computed(() => filteredRows.value.filter((r) => {
@@ -721,35 +723,75 @@ function openExport() {
   showExport.value = true;
 }
 
+// Equipment columns appended after main columns
+const EQUIPMENT_COLS = [
+  { key: "eq_name",               label: "תיאור ציוד" },
+  { key: "eq_manufacturer",       label: "יצרן" },
+  { key: "eq_model",              label: "דגם" },
+  { key: "eq_serial_number",      label: 'מ"ס סידורי' },
+  { key: "eq_load_capacity_work", label: "עומס עבודה" },
+  { key: "eq_load_capacity_test", label: "עומס מבחן" },
+  { key: "eq_load_radius",        label: "רדיוס" },
+];
+
+function cellValue(r: any, key: string): string {
+  if (key === "status") return statusLabel(String(r[key] ?? ""));
+  if (key === "start_date" || key === "expiry_date") return formatDate(String(r[key] ?? "")) || "";
+  return String(r[key] ?? "");
+}
+
+function csvQuote(s: string): string {
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+// Expand one contract row into multiple flat rows — one per equipment item.
+// If no equipment, produces one row with empty equipment columns.
+function expandRows(rows: any[], mainCols: typeof exportColumns.value) {
+  const result: Array<{ main: any; eq: any | null }> = [];
+  for (const r of rows) {
+    const equipment: any[] = Array.isArray(r._equipment) && r._equipment.length ? r._equipment : [null];
+    for (const eq of equipment) {
+      result.push({ main: r, eq });
+    }
+  }
+  return result;
+}
+
 function doExport() {
   const rows = exportedRows.value;
   const cols = selectedExportColumns.value;
+  const allCols = [...cols, ...EQUIPMENT_COLS];
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  const expanded = expandRows(rows, cols);
+
+  function getCell(main: any, eq: any | null, key: string): string {
+    if (key.startsWith("eq_")) {
+      const field = key.slice(3); // strip "eq_"
+      return eq ? String(eq[field] ?? "") : "";
+    }
+    return cellValue(main, key);
+  }
+
   if (exportFormat.value === "csv") {
-    const header = cols.map((c) => c.label).join(",");
-    const lines = rows.map((r) =>
-      cols.map((c) => {
-        const v = (r as any)[c.key] ?? "";
-        if (c.key === "status") return statusLabel(String(v));
-        if (c.key === "start_date" || c.key === "expiry_date") return formatDate(String(v));
-        return String(v).replace(/,/g, " ");
-      }).join(",")
+    const header = allCols.map((c) => csvQuote(c.label)).join(",");
+    const lines = expanded.map(({ main, eq }) =>
+      allCols.map((c) => csvQuote(getCell(main, eq, c.key))).join(",")
     );
     const csv = "﻿" + [header, ...lines].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `contracts-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `inspections-${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   } else {
-    const thead = cols.map((c) => `<th>${c.label}</th>`).join("");
-    const tbody = rows.map((r) =>
-      `<tr>${cols.map((c) => {
-        const v = (r as any)[c.key] ?? "—";
-        if (c.key === "status") return `<td>${statusLabel(String(v))}</td>`;
-        if (c.key === "start_date" || c.key === "expiry_date") return `<td>${formatDate(String(v))}</td>`;
-        return `<td>${v}</td>`;
-      }).join("")}</tr>`
+    const thead = allCols.map((c) => `<th>${c.label}</th>`).join("");
+    const tbody = expanded.map(({ main, eq }) =>
+      `<tr>${allCols.map((c) => `<td>${getCell(main, eq, c.key) || "—"}</td>`).join("")}</tr>`
     ).join("");
     const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
       <style>body{font-family:Arial;padding:32px;direction:rtl}h1{font-size:20px}

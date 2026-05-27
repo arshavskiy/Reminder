@@ -139,6 +139,7 @@ const LABEL_MAP: Record<string, string> = {
   client_email: "מייל",
   contact_email: "מייל",
   client_address: "ישוב / רחוב",
+  po_box: "ת.ד",
   client_zipcode: "מיקוד",
   client_id: "ח.פ / ת.ז",
   // document identity

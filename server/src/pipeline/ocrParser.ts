@@ -1,6 +1,6 @@
-import { createWorker } from "tesseract.js";
-import { getSettings } from "../settings";
-import { fixHebrewBidi } from "./hebrewBidi";
+import {createWorker} from "tesseract.js";
+import {getSettings} from "../settings";
+import {fixHebrewBidi} from "./hebrewBidi";
 
 export async function ocrFile(filePath: string): Promise<string> {
   const settings = getSettings();

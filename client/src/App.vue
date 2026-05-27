@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :rtl="rtlConfig" :theme="theme" :theme-overrides="themeOverrides">
+  <n-config-provider :rtl="rtlConfig" :theme="theme" :theme-overrides="themeOverrides" :locale="heIL" :date-locale="dateHeIL">
     <n-message-provider>
       <n-dialog-provider>
         <div class="app-shell">
@@ -108,6 +108,7 @@ import {BriefcaseOutline, MoonOutline, SunnyOutline,} from "@vicons/ionicons5";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
 import {useAuthStore} from "./stores/auth.js";
+import {heIL, dateHeIL} from "./locales/heIL.js";
 
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,

@@ -1,6 +1,6 @@
 import pdfParse from "pdf-parse";
-import { readFileSync } from "fs";
-import { fixHebrewBidi } from "./hebrewBidi";
+import {readFileSync} from "fs";
+import {fixHebrewBidi} from "./hebrewBidi";
 
 // Hebrew Unicode range: U+0590–U+05FF
 const HEBREW_RE = /[֐-׿]/g;

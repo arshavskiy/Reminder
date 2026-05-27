@@ -221,6 +221,24 @@ export interface TimelineEvent {
 export interface ContractWithClient extends Contract {
   client_name: string | null;
   document_name: string;
+  contact_person: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  client_address: string | null;
+  po_box: string | null;
+  client_zipcode: string | null;
+  equipment_description: string | null;
+  _confidence: string | null;
+  _equipment: Array<{
+    name: string;
+    manufacturer: string | null;
+    model: string | null;
+    serial_number: string | null;
+    load_capacity_work: string | null;
+    load_capacity_test: string | null;
+    load_radius: string | null;
+    category: string;
+  }>;
 }
 
 export interface ReminderWithContext extends Reminder {

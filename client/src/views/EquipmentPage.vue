@@ -36,13 +36,24 @@
         </div>
       </div>
 
-      <input
-        v-model="search"
-        class="search"
-        type="search"
-        placeholder="חפש ציוד..."
-        @input="debouncedLoad"
-      />
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+        <input
+          v-model="search"
+          class="search"
+          style="flex:1;margin-bottom:0"
+          type="search"
+          placeholder="חפש ציוד..."
+          @input="debouncedLoad"
+        />
+        <n-select
+          v-model:value="filterManufacturer"
+          :options="manufacturerOptions"
+          clearable
+          filterable
+          placeholder="סינון לפי יצרן"
+          style="width:200px"
+        />
+      </div>
 
       <!-- Category chips -->
       <div class="catchips">
@@ -51,17 +62,17 @@
           :key="c.value"
           class="catchip"
           :class="{ 'catchip--active': category === c.value }"
-          @click="category = c.value; load()"
+          @click="category = c.value; if (!filterManufacturer) load()"
         >
           {{ c.label }}
-          <span class="catchip__count">{{ stats[c.value] ?? 0 }}</span>
+          <span class="catchip__count">{{ displayStats[c.value] ?? 0 }}</span>
         </button>
       </div>
 
       <!-- List -->
       <n-spin :show="loading">
-        <div v-if="rows.length" class="rows">
-          <article v-for="r in rows" :key="r.id" class="row">
+        <div v-if="filteredRows.length" class="rows">
+          <article v-for="r in filteredRows" :key="r.id" class="row">
             <button class="row__icon" :class="`row__icon--${r.category}`" @click="openEdit(r)">
               <n-icon :component="categoryIcon(r.category)" :size="18" />
             </button>
@@ -92,11 +103,46 @@
             </div>
           </article>
         </div>
-        <p v-else class="empty">אין ציוד להצגה. לחץ "הוספת ציוד חדש" כדי להתחיל.</p>
+        <p v-else class="empty">{{ filterManufacturer ? 'אין ציוד עבור יצרן זה.' : 'אין ציוד להצגה. לחץ "הוספת ציוד חדש" כדי להתחיל.' }}</p>
       </n-spin>
     </template>
 
-    <!-- Placeholders for the other sections — same shell, just informational -->
+    <!-- ── יצרנים tab ───────────────────────────────────────────────────── -->
+    <template v-else-if="section === 'manufacturers'">
+      <div class="subhead">
+        <div>
+          <h2 class="subhead__title">יצרנים</h2>
+          <p class="subhead__sub">רשימת היצרנים הקיימים במערכת לפי מספר פריטי ציוד</p>
+        </div>
+      </div>
+      <n-spin :show="loading">
+        <div v-if="manufacturerRows.length" class="rows">
+          <article
+            v-for="m in manufacturerRows"
+            :key="m.name"
+            class="row"
+            style="cursor:pointer"
+            @click="section = 'equipment'; filterManufacturer = m.name"
+          >
+            <button class="row__icon row__icon--lift" style="pointer-events:none">
+              <n-icon :component="BusinessOutline" :size="18" />
+            </button>
+            <div class="row__body">
+              <div class="row__title-line">
+                <strong class="row__name">{{ m.name }}</strong>
+                <span class="row__tag">{{ m.count }} פריטים</span>
+              </div>
+              <p class="row__meta">
+                <span v-for="cat in m.categories" :key="cat">{{ cat }}</span>
+              </p>
+            </div>
+          </article>
+        </div>
+        <p v-else class="empty">אין יצרנים במערכת עדיין.</p>
+      </n-spin>
+    </template>
+
+    <!-- Placeholders for remaining sections -->
     <template v-else>
       <div class="placeholder">
         <p>{{ sectionPlaceholder }}</p>
@@ -198,9 +244,9 @@ const message = useMessage();
 const section = ref<"equipment" | "categories" | "manufacturers" | "declarations">("equipment");
 const sections = [
   { value: "equipment",     label: "ציוד",            icon: ConstructOutline },
-  { value: "categories",    label: "קטגוריות",        icon: LayersOutline },
+  // { value: "categories",    label: "קטגוריות",        icon: LayersOutline },
   { value: "manufacturers", label: "יצרנים",          icon: BusinessOutline },
-  { value: "declarations",  label: "הצהרות בטיחות",   icon: DocumentTextOutline },
+  // { value: "declarations",  label: "הצהרות בטיחות",   icon: DocumentTextOutline },
 ];
 
 const sectionPlaceholder = computed(() => {
@@ -230,10 +276,52 @@ const categoryOptions = categories
   .map((c) => ({ label: c.label, value: c.value }));
 
 const rows = ref<Equipment[]>([]);
+const filterManufacturer = ref<string | null>(null);
 const stats = ref<Record<string, number>>({});
 const clients = ref<Client[]>([]);
 const loading = ref(false);
 const search = ref("");
+
+const manufacturerOptions = computed<SelectOption[]>(() => {
+  const names = [...new Set(rows.value.map((r) => r.manufacturer).filter(Boolean))] as string[];
+  return names.sort().map((m) => ({ label: m, value: m }));
+});
+
+const manufacturerRows = computed(() => {
+  const map = new Map<string, { name: string; count: number; categories: Set<string> }>();
+  for (const r of rows.value) {
+    if (!r.manufacturer) continue;
+    if (!map.has(r.manufacturer)) {
+      map.set(r.manufacturer, { name: r.manufacturer, count: 0, categories: new Set() });
+    }
+    const entry = map.get(r.manufacturer)!;
+    entry.count++;
+    if (r.category) entry.categories.add(categoryLabel(r.category));
+  }
+  return [...map.values()]
+    .map((e) => ({ ...e, categories: [...e.categories] }))
+    .sort((a, b) => a.name.localeCompare(b.name, "he"));
+});
+
+const filteredRows = computed(() => {
+  let result = rows.value;
+  if (filterManufacturer.value) {
+    result = result.filter((r) => r.manufacturer === filterManufacturer.value);
+    if (category.value !== "all") {
+      result = result.filter((r) => r.category === category.value);
+    }
+  }
+  return result;
+});
+
+const displayStats = computed(() => {
+  if (!filterManufacturer.value) return stats.value;
+  const counts: Record<string, number> = { all: filteredRows.value.length };
+  for (const r of filteredRows.value) {
+    counts[r.category] = (counts[r.category] ?? 0) + 1;
+  }
+  return counts;
+});
 const showEdit = ref(false);
 const editing = ref<Partial<Equipment> | null>(null);
 const saving = ref(false);
