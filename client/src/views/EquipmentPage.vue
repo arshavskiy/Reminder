@@ -3,8 +3,7 @@
     <!-- ── Header ──────────────────────────────────────────────────────── -->
     <header class="page__head">
       <div>
-        <h1 class="page__title">הגדרות מערכת</h1>
-        <p class="page__sub">נהל את הציוד, קטגוריות, יצרנים והצהרות בטיחות</p>
+        <h1 class="page__title">הגדרות ציוד</h1>
       </div>
     </header>
 
@@ -225,19 +224,35 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed } from "vue";
+import {computed, onMounted, ref} from "vue";
+import type {SelectOption} from "naive-ui";
 import {
-  NIcon, NSpin, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NSelect,
-  NGrid, NGi, NSpace, NButton, useMessage,
+  NButton,
+  NDrawer,
+  NDrawerContent,
+  NForm,
+  NFormItem,
+  NGi,
+  NGrid,
+  NIcon,
+  NInput,
+  NSelect,
+  NSpace,
+  NSpin,
+  useMessage,
 } from "naive-ui";
-import type { SelectOption } from "naive-ui";
 import {
-  ConstructOutline, LayersOutline, BusinessOutline, DocumentTextOutline,
-  CubeOutline, GitBranchOutline, BuildOutline, AirplaneOutline,
+  AirplaneOutline,
+  BuildOutline,
+  BusinessOutline,
+  ConstructOutline,
+  CubeOutline,
+  GitBranchOutline,
+  LayersOutline,
 } from "@vicons/ionicons5";
-import { RouterLink } from "vue-router";
-import { api } from "../services/apiService.js";
-import type { Equipment, EquipmentCategory, Client } from "@shared/types.js";
+import {RouterLink} from "vue-router";
+import {api} from "../services/apiService.js";
+import type {Client, Equipment, EquipmentCategory} from "@shared/types.js";
 
 const message = useMessage();
 
