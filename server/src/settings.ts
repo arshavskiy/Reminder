@@ -29,7 +29,7 @@ const DEFAULTS: AppSettings = {
 
   reminderEnabled: true,
   reminderAdvanceDays: [30],
-  reminderCheckIntervalMs: 60_000,
+  reminderCheckIntervalMs: 600000,
   testEmail: "",
   testEmailTemplateId: null,
 

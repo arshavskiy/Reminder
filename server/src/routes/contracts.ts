@@ -238,6 +238,55 @@ export function registerContractRoutes(app: express.Application) {
     res.json(flatDoc(updated));
   });
 
+  // GET /api/contracts/by-document/:documentId
+  app.get("/api/contracts/by-document/:documentId", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const docId = req.params.documentId;
+    const contractDocs = await col("contracts")
+      .find({ user_id: userId, document_id: docId })
+      .sort({ expiry_date: 1 })
+      .toArray();
+
+    const rows = await Promise.all(
+      contractDocs.map(async (c: any) => {
+        const [client, document] = await Promise.all([
+          c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
+          c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
+        ]);
+        const docAny = document as any;
+        let extractedFields: Record<string, any> = {};
+        if (docAny?.extracted_fields) {
+          try { extractedFields = JSON.parse(docAny.extracted_fields); } catch {}
+        }
+        return {
+          ...flatDoc(c),
+          client_name: (client as any)?.display_name ?? null,
+          document_name: docAny?.file_name ?? null,
+          contact_person: extractedFields.contact_person ?? null,
+          contact_phone: extractedFields.contact_phone ?? null,
+          contact_email: extractedFields.contact_email ?? null,
+          client_address: extractedFields.client_address ?? null,
+          po_box: extractedFields.po_box ?? null,
+          client_zipcode: extractedFields.client_zipcode ?? null,
+          equipment_description: extractedFields.equipment_description ?? null,
+          _confidence: extractedFields._confidence ?? null,
+          _equipment: Array.isArray(extractedFields._equipment) ? extractedFields._equipment : [],
+        };
+      })
+    );
+
+    res.json(rows);
+  });
+
   // DELETE /api/contracts/:id
   app.delete("/api/contracts/:id", async (req, res) => {
     let userId: string;
