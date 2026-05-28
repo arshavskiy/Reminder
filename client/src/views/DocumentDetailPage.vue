@@ -13,6 +13,21 @@
       {{ doc.error_message }}
     </n-alert>
 
+    <section v-if="linkedContracts.length" class="linked-contracts">
+      <ContractCard
+        v-for="contract in linkedContracts"
+        :key="contract.id"
+        :bulk-mode="false"
+        :kind="contractKind(contract)"
+        :reminders="remindersForContract(contract.id)"
+        :row="contract"
+        :selected="false"
+        :sending-reminder="null"
+        :show-actions="false"
+        :show-reminder-actions="false"
+      />
+    </section>
+
     <div v-if="doc" class="doc-detail__grid">
       <!-- ── Left column: preview ───────────────────────────────────── -->
       <aside class="doc-detail__left">
@@ -127,7 +142,8 @@ import {NAlert, NButton, NDataTable, NScrollbar, NSpin, NTag, useMessage,} from 
 import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
-import type {Document} from "@shared/types.js";
+import ContractCard from "../components/contracts/ContractCard.vue";
+import type {ContractWithClient, Document, ReminderWithContext} from "@shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
 
 const authStore = useAuthStore();
@@ -143,6 +159,8 @@ const previewUrl = ref<string | null>(null);
 const previewError = ref<string | null>(null);
 const downloading = ref(false);
 const extracting = ref(false);
+const linkedContracts = ref<ContractWithClient[]>([]);
+const linkedReminders = ref<ReminderWithContext[]>([]);
 
 const isPdf = computed(() => doc.value?.mime_type === "application/pdf");
 const isImage = computed(() => doc.value?.mime_type?.startsWith("image/") ?? false);
@@ -278,6 +296,7 @@ const equipmentColumns = [
 async function reloadDoc() {
   const id = route.params.id as string;
   doc.value = await api.documents.get(id);
+  await loadLinkedContracts(id);
   const rows = await fetch(`${SERVER}/api/documents/${id}/extractions`, { credentials: "include" })
     .then((r) => r.ok ? r.json() : [])
     .catch(() => []);
@@ -293,6 +312,38 @@ async function reloadDoc() {
   }
 }
 
+async function loadLinkedContracts(documentId: string) {
+  try {
+    linkedContracts.value = await api.contracts.byDocument(documentId);
+    if (linkedContracts.value.length) {
+      await loadLinkedReminders();
+    }
+  } catch {
+    linkedContracts.value = [];
+  }
+}
+
+async function loadLinkedReminders() {
+  try {
+    const { rows } = await api.reminders.list({ limit: 1000 });
+    const ids = new Set(linkedContracts.value.map((contract) => String(contract.id)));
+    linkedReminders.value = rows.filter((reminder) =>
+      reminder.source_id != null && ids.has(String(reminder.source_id))
+    );
+  } catch {
+    linkedReminders.value = [];
+  }
+}
+
+function remindersForContract(contractId: string | number): ReminderWithContext[] {
+  return linkedReminders.value.filter((reminder) => String(reminder.source_id) === String(contractId));
+}
+
+function contractKind(contract: ContractWithClient): "contract" | "inspection" | "all" {
+  const text = `${contract.contract_type ?? ""} ${contract.document_name ?? ""}`;
+  return text.includes("תסקיר") || text.toLowerCase().includes("inspection") ? "inspection" : "contract";
+}
+
 onMounted(async () => {
   try {
     await reloadDoc();
@@ -305,6 +356,13 @@ onMounted(async () => {
 
 <style scoped>
 .doc-detail { padding-bottom: 24px; }
+
+.linked-contracts {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 20px;
+}
 
 .doc-detail__grid {
   display: grid;
