@@ -3,7 +3,12 @@ import {extname, join} from "path";
 import {mkdirSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
-import {importFile, processDocument, saveTemplateEntitiesForDoc} from "../pipeline/importer";
+import {
+  importFile,
+  normalizeExtractionFieldsForTemplate,
+  processDocument,
+  saveTemplateEntitiesForDoc
+} from "../pipeline/importer";
 import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
@@ -455,6 +460,7 @@ export function registerDocumentRoutes(app: express.Application) {
       personal_company_name: userRow?.company_name ?? null,
     };
     const run = await extractWithTemplate(rawText, template, id, doc.file_name, inspector);
+    const normalizedFields = normalizeExtractionFieldsForTemplate(rawText, template, run.fields);
     const now = new Date();
 
     await col("extractions").insertOne({
@@ -463,7 +469,7 @@ export function registerDocumentRoutes(app: express.Application) {
       template_name: template.name,
       backend: run.backend,
       model: run.model,
-      fields: run.fields,
+      fields: normalizedFields,
       raw_json: run.rawJson,
       error: run.error ?? null,
       usage: run.usage ?? null,
@@ -471,10 +477,10 @@ export function registerDocumentRoutes(app: express.Application) {
       created_at: now,
     } as any);
 
-    if (run.fields) {
+    if (normalizedFields) {
       await col("documents").updateOne(idFilter(id), {
         $set: {
-          extracted_fields: JSON.stringify(run.fields),
+          extracted_fields: JSON.stringify(normalizedFields),
           template_id: template.id,
           document_type: template.name,
           updated_at: now,
@@ -483,7 +489,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
       // Update contract, client, and equipment records
       try {
-        await saveTemplateEntitiesForDoc(id, template, run.fields, userId);
+        await saveTemplateEntitiesForDoc(id, template, normalizedFields, userId);
       } catch (e) {
         console.error(`[extract] Failed to save extracted entities for doc ${id}:`, e);
       }
@@ -491,7 +497,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     // Return updated document so client can refresh in one round-trip
     const updated = await col("documents").findOne(idFilter(id));
-    res.json({ ok: true, fields: run.fields ?? null, template: template.name, document: flatDoc(updated) });
+    res.json({ ok: true, fields: normalizedFields ?? null, template: template.name, document: flatDoc(updated) });
   });
 
   // GET /api/documents/:id/extractions
@@ -580,7 +586,9 @@ export function registerDocumentRoutes(app: express.Application) {
     }
 
     const ext = extname(filePath);
-    processDocument(id, filePath, doc.mime_type, ext, undefined, userId).catch(async (err) => {
+    try {
+      await processDocument(id, filePath, doc.mime_type, ext, undefined, userId);
+    } catch (err) {
       console.error(`[reprocess] doc ${id} failed:`, err);
       await col("documents").updateOne(idFilter(id), {
         $set: {
@@ -589,9 +597,20 @@ export function registerDocumentRoutes(app: express.Application) {
           updated_at: new Date(),
         },
       });
-    });
+      res.status(500).json({ error: String(err) });
+      return;
+    }
 
-    res.json({ ok: true });
+    const updated = await col("documents").findOne(idFilter(id));
+    let fields: Record<string, unknown> | null = null;
+    if ((updated as any)?.extracted_fields) {
+      try {
+        fields = JSON.parse((updated as any).extracted_fields);
+      } catch {
+        fields = null;
+      }
+    }
+    res.json({ ok: true, fields, document: flatDoc(updated) });
   });
 }
 
