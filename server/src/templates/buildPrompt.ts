@@ -70,7 +70,7 @@ export function buildPromptForTemplate(tpl: DocTemplate, inspector?: InspectorPr
       "manufacturer": string | null,    // יצרן
       "model": string | null,           // דגם (keep Latin model codes as-is, e.g. "SLR-CLU")
       "serial_number": string | null,   // מספר סידורי — ONE serial per object; keep mixed Hebrew+Latin as-is
-      "load_capacity_work": string[],   // עומס עבודה בטוח — one entry per load configuration, include units e.g. ["3200 ק\"ג"]. Empty array if not present.
+      "load_capacity_work": string[],   // עומס עבודה בטוח — extract ONLY from the equipment table column/header "עומס עבודה בטוח (ק\"ג)" or equivalent. One entry per load configuration, include units and context exactly as written, e.g. ["230 ק\"ג - עד 2 אנשים בבמה", "115 ק\"ג - אדם אחד בלבד"]. Empty array if not present.
       "load_capacity_test": string[],   // עומס מבחן — one entry per load configuration. Empty array if not present.
       "load_radius": string[],          // רדיוס עומס — one entry per radius. Empty array if not present.
       "category": "lift" | "accessory" | "scaffold" | "ladder" | "balloon" | "intake" | "extractor" | "other"
@@ -97,6 +97,11 @@ GENERAL RULES:
 • Phone numbers: keep original Israeli format (e.g. "050-1234567"). If the number appears as 10 consecutive digits with no dash (e.g. "0537285690"), insert the dash after the 3rd digit → "053-7285690".
 • Email addresses: Hebrew PDFs sometimes output email addresses in reversed visual order, e.g. "il.co1945.shelev@klodin" which is actually "klodin@shelev1945.co.il". Recognize a reversed email by checking whether the part after "@" looks like a name/word and the part before "@" looks like a domain (contains dots and a TLD like .co.il / .com / .org). If reversed, swap the two parts around "@".
 • Address fields: keep each piece separate — client_address = street + city only (e.g. "הקידמה 235, אשדוד"), po_box = P.O. Box number only (e.g. "679"), client_zipcode = postal code only (5–7 digits labeled "מיקוד"). Do NOT mix ת.ד into client_address or client_zipcode.
+• Report number: report_number / "מספר תסקיר" is the CURRENT report number only. If the text also contains "מספר תסקיר קודם", "תסקיר קודם", or "previous report", do NOT use that previous value for report_number. Example: "מספר תסקיר: 17924/484590" and "מספר תסקיר קודם: 161748/340" means report_number="17924/484590".
+• Contact fields for inspection reports:
+  - contact_person, contact_phone, and contact_email must come from the CLIENT / HOLDER details block in the BODY of the report, preferably the first details block near labels such as "פרטי הלקוח/תופש", "איש קשר", "נייד", "טלפון", "מייל", "שם מעביד / בעל הציוד".
+  - Example from a client block: "איש קשר: בר", "נייד: 053-8801490", "מייל: benitaliftingplat@gmail.com" means contact_person="בר", contact_phone="053-8801490", contact_email="benitaliftingplat@gmail.com".
+  - If several phone/email values appear, prefer the one closest to those client/contact labels in the upper/body data section. Never take contact_person/phone/email from the page footer, inspector signature, legal disclaimer, or final instructions block.
 • If a field cannot be determined, use null (or [] for list types).
 • Do not invent data. Do not add fields not in the schema.
 • The text may have residual bidi/encoding artifacts from PDF extraction — use context.
@@ -105,6 +110,7 @@ GENERAL RULES:
   - פקודת הבטיחות בעבודה legal disclaimer text (סעיפים 75,76,81,86...)
   - תסקיר זה מייצג / תסקיר זה אינו / יש לשמור boilerplate paragraphs
   - Inspector's personal details block (חתימת הבודק / פרטים מלאים of the inspector)
+  - End-of-document instruction blocks, e.g. "יש לשמור תסקיר זה לביקורת מפקח העבודה", "תסקיר זה מייצג", "הערות"
   - Page footer / letterhead belonging to the INSPECTOR or the inspection company:
     this includes the inspector's own email, phone, company name, and address printed at the
     bottom of every page (e.g. "דואר אלקטרוני: ...", "נייד: ...", "M.A.D הנדסה ובטיחות").

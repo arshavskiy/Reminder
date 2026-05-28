@@ -194,6 +194,7 @@ export async function processDocument(
         };
       }
       const run = await extractWithTemplate(rawText, template, documentId, docRow?.file_name, inspector);
+      const normalizedFields = normalizeExtractionFieldsForTemplate(rawText, template, run.fields);
 
       await col("extractions").insertOne({
         document_id: documentId,
@@ -201,16 +202,16 @@ export async function processDocument(
         model: run.model,
         result_json: run.rawJson,
         raw_text: rawText,
-        parsed_ok: run.fields ? 1 : 0,
+        parsed_ok: normalizedFields ? 1 : 0,
         error: run.error ?? null,
         exec_ms: run.execMs,
         created_at: new Date(),
       } as any);
 
-      if (run.fields) {
+      if (normalizedFields) {
         await col("documents").updateOne(docFilter, {
           $set: {
-            extracted_fields: JSON.stringify(run.fields),
+            extracted_fields: JSON.stringify(normalizedFields),
             template_id: template.id,
             document_type: template.name,
             updated_at: new Date(),
@@ -218,7 +219,7 @@ export async function processDocument(
         });
 
         push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-        await saveTemplateEntities(documentId, template, run.fields, userId);
+        await saveTemplateEntities(documentId, template, normalizedFields, userId);
       } else if (run.error) {
         const msg = `AI extraction failed: ${run.error}`;
         await col("documents").updateOne(docFilter, {
@@ -373,6 +374,47 @@ export async function saveTemplateEntitiesForDoc(
   userId?: string
 ) {
   return saveTemplateEntities(documentId, template, fields, userId);
+}
+
+export function normalizeExtractionFieldsForTemplate(
+  rawText: string,
+  template: DocTemplate,
+  fields: DynamicExtraction | null
+): DynamicExtraction | null {
+  if (!fields) return null;
+
+  const normalized: DynamicExtraction = { ...fields };
+  const supportsReportNumber = template.fields.some((field) => field.key === "report_number");
+  if (supportsReportNumber && !hasMeaningfulValue(normalized.report_number)) {
+    const reportNumber = extractCurrentReportNumber(rawText);
+    if (reportNumber) normalized.report_number = reportNumber;
+  }
+
+  return normalized;
+}
+
+function extractCurrentReportNumber(rawText: string): string | null {
+  for (const rawLine of rawText.split(/\r?\n/)) {
+    const line = rawLine.replace(/\s+/g, " ").trim();
+    if (!line) continue;
+    if (/מספר\s+תסקיר\s+קודם/i.test(line)) continue;
+
+    const match = line.match(/^מספר\s+תסקיר(?!\s+קודם)\s*[:：-]?\s*(.+)$/i);
+    if (!match) continue;
+
+    const value = match[1]
+      .split(/\t|\s{2,}|\s+\|\s+/)[0]
+      .trim()
+      .replace(/[|]$/, "");
+
+    if (value) return value;
+  }
+
+  return null;
+}
+
+function hasMeaningfulValue(value: unknown): boolean {
+  return value !== null && value !== undefined && String(value).trim() !== "";
 }
 
 async function saveTemplateEntities(
