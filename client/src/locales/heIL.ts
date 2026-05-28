@@ -1,5 +1,5 @@
-import { createLocale, enUS } from 'naive-ui'
-import { he } from 'date-fns/locale'
+import {createLocale, enUS} from 'naive-ui'
+import {he} from 'date-fns/locale'
 
 export const heIL = createLocale(
   {
@@ -49,6 +49,44 @@ export const heIL = createLocale(
     },
     Empty: {
       description: 'אין נתונים',
+    },
+    Input: {
+      placeholder: 'הזן ערך',
+    },
+    InputNumber: {
+      placeholder: 'הזן מספר',
+    },
+    Cascader: {
+      placeholder: 'בחר',
+      loading: 'טוען',
+      loadingRequiredMessage: (label: string) => `יש לטעון את כל הצאצאים של ${label} לפני בחירה.`,
+    },
+    TimePicker: {
+      placeholder: 'בחר שעה',
+      positiveText: 'אישור',
+      negativeText: 'ביטול',
+      now: 'עכשיו',
+      clear: 'נקה',
+    },
+    Popconfirm: {
+      positiveText: 'אישור',
+      negativeText: 'ביטול',
+    },
+    DynamicInput: {
+      create: 'הוסף',
+    },
+    DynamicTags: {
+      add: 'הוסף',
+    },
+    Log: {
+      loading: 'טוען',
+    },
+    Transfer: {
+      selectAll: 'בחר הכל',
+      unselectAll: 'בטל בחירת הכל',
+      clearAll: 'נקה הכל',
+      total: (num: number) => `סך הכל ${num} פריטים`,
+      selected: (num: number) => `נבחרו ${num} פריטים`,
     },
   },
   enUS

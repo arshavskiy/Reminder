@@ -651,6 +651,7 @@ async function saveReminder() {
       source_type: "manual",
       source_id: Number(reminderTargetRow.value.id),
       client_id: reminderTargetRow.value.client_id ?? undefined,
+      document_id: reminderTargetRow.value.document_id ?? undefined, // Pass document_id
       trigger_date: triggerDate,
       advance_days: 0,
       title: reminderForm.value.title,
@@ -1295,6 +1296,8 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
   gap: 6px;
 }
 .kv strong { color: var(--text-muted); font-weight: 500; }
+.doc-link { color: var(--brand-color); text-decoration: none; font-size: 12px; }
+.doc-link:hover { text-decoration: underline; }
 
 .expiry { font-weight: 600; }
 .expiry--ok   { color: #1a7951; }

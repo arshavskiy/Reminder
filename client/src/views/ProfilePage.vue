@@ -568,16 +568,29 @@ async function onCertDrop(e: DragEvent) {
 async function uploadCertFiles(files: File[]) {
   certUploading.value = true;
   try {
-    const { ids, duplicates } = await api.documents.upload(files, true);
-    if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);
-    if (!ids.length) return;
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    message.info(`${files.length} מסמך/ים בעיבוד...`);
 
-    message.info(`${ids.length} מסמך/ים בעיבוד OCR...`);
+    const res = await fetch(`${SERVER}/api/profile/certificate-upload`, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+    const data = await res.json() as {
+      uploaded: number;
+      created: Array<{ documentId: string; certificateId: string | null; result: any }>;
+      profile_fields_updated: string[];
+    };
 
-    // Poll each document until OCR done, then extract certificate fields
-    await Promise.all(ids.map(pollAndExtractCert));
-    await loadCertificates();
-    message.success("תעודות נוספו מהמסמכים שנסרקו");
+    await Promise.all([loadCertificates(), loadEngineerProfile()]);
+
+    if (data.profile_fields_updated.length) {
+      message.success(`תעודות נוספו. עודכנו שדות בפרופיל: ${data.profile_fields_updated.length}`);
+    } else {
+      message.success(`${data.uploaded} תעודות נוספו`);
+    }
   } catch (e: any) {
     message.error(String(e));
   } finally {
@@ -585,27 +598,14 @@ async function uploadCertFiles(files: File[]) {
   }
 }
 
-async function pollAndExtractCert(documentId: string) {
-  const maxWait = 60_000;
-  const interval = 2_000;
-  const started = Date.now();
-  while (Date.now() - started < maxWait) {
-    const doc = await api.documents.get(documentId);
-    if (doc.processing_status === "done" || doc.processing_status === "error") break;
-    await new Promise(r => setTimeout(r, interval));
-  }
-  // Save certificate record from OCR text
-  await fetch(`${SERVER}/api/profile/certificates/from-document`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ document_id: documentId }),
-  });
-}
-
 async function loadCertificates() {
   const res = await fetch(`${SERVER}/api/profile/certificates`, { credentials: "include" });
   if (res.ok) certificates.value = await res.json();
+}
+
+async function loadEngineerProfile() {
+  const res = await fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" });
+  if (res.ok) engineerProfile.value = await res.json();
 }
 
 // ── Certificates ─────────────────────────────────────────────────────────────

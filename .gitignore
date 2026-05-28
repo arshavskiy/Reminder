@@ -13,3 +13,4 @@ uploads/
 coverage/
 *.log
 *.tmp
+playwright-report/

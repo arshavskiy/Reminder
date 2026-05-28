@@ -1,21 +1,21 @@
 import type {
-  AppSettings,
-  Client,
-  ClientDetail,
-  Contract,
-  ContractWithClient,
-  DashboardStats,
-  DocTemplate,
-  Document,
-  EmailLogEntry,
-  EmailTemplate,
-  Equipment,
-  GlobalSearchResult,
-  PipelineFlags,
-  Reminder,
-  ReminderWithContext,
-  Task,
-  UserSettings,
+    AppSettings,
+    Client,
+    ClientDetail,
+    Contract,
+    ContractWithClient,
+    DashboardStats,
+    DocTemplate,
+    Document,
+    EmailLogEntry,
+    EmailTemplate,
+    Equipment,
+    GlobalSearchResult,
+    PipelineFlags,
+    Reminder,
+    ReminderWithContext,
+    Task,
+    UserSettings,
 } from "../../src/shared/types.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -83,7 +83,7 @@ export const api = {
   },
 
   documents: {
-    list: (params?: { status?: string; limit?: number; offset?: number }, force = false) => {
+    list: (params?: { status?: string; limit?: number; offset?: number; clientId?: string }, force = false) => {
       return get<{ rows: Document[]; total: number; totalAll: number; documentLimit: number }>(`/documents${qs(params)}`, force);
     },
     get: (id: string) => get<Document>(`/documents/${id}`),
@@ -132,6 +132,7 @@ export const api = {
     },
     expiring: (days = 30) => get<ContractWithClient[]>(`/contracts/expiring?days=${days}`),
     get: (id: string) => get<ContractWithClient>(`/contracts/${id}`),
+    byDocument: (documentId: string) => get<ContractWithClient[]>(`/contracts/by-document/${documentId}`),
     create: (body: Partial<Contract>) => post<Contract>("/contracts", body),
     update: (id: string, body: Partial<Contract>) => put<Contract>(`/contracts/${id}`, body),
     delete: (id: string) => del(`/contracts/${id}`),

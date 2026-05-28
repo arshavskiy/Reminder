@@ -31,6 +31,13 @@
         </div>
       </div>
 
+      <!-- ── Reminders calendar ───────────────────────────────────────── -->
+      <ReminderCalendar
+        :loading="remindersStore.loading"
+        :rows="remindersStore.rows"
+        @refresh="remindersStore.fetch({ limit: 500 }, true)"
+      />
+
       <!-- ── Module cards ──────────────────────────────────────────────── -->
       <h2 class="dash__section">סביבת העבודה</h2>
       <div class="module-grid">
@@ -104,14 +111,20 @@ import {
   SettingsOutline,
 } from "@vicons/ionicons5";
 import {useDashboardStore} from "../stores/dashboard.js";
+import {useRemindersStore} from "../stores/reminders.js";
 import {useAuthStore} from "../stores/auth.js";
 import StatusBadge from "../components/StatusBadge.vue";
+import ReminderCalendar from "../components/ReminderCalendar.vue";
 
 const store = useDashboardStore();
+const remindersStore = useRemindersStore();
 const authStore = useAuthStore();
 const router = useRouter();
 const stats = computed(() => store.stats);
-onMounted(() => { if (!store.stats) store.fetch(); });
+onMounted(() => {
+  if (!store.stats) store.fetch();
+  if (!remindersStore.rows.length) remindersStore.fetch({ limit: 500 });
+});
 
 const userName = computed(() => {
   const u = authStore.user;

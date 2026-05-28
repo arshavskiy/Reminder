@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 /* ============================================================
    Global stylesheet
    Loaded once from main.ts. Variables follow the data-theme
