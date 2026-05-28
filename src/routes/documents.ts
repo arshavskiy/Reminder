@@ -27,6 +27,7 @@ export function registerDocumentRoutes(app: express.Application) {
     }
 
     const status = req.query.status as string | undefined;
+    const clientIdFilter = req.query.clientId as string | undefined;
     const limit = parseInt((req.query.limit as string) ?? "50");
     const offset = parseInt((req.query.offset as string) ?? "0");
 
@@ -36,9 +37,28 @@ export function registerDocumentRoutes(app: express.Application) {
       { $set: { user_id: userId, updated_at: new Date() } }
     );
 
-    const baseFilter: Record<string, any> = { user_id: userId };
+    // Hide certificate documents from the main documents list — they live
+    // in Profile → תעודות והסמכות and shouldn't pollute the inspection view.
+    const baseFilter: Record<string, any> = {
+      user_id: userId,
+      document_kind: { $ne: "certificate" },
+    };
     const filter: Record<string, any> = { ...baseFilter };
     if (status) filter.processing_status = status;
+
+    // If client filter set, narrow to document_ids linked to that client first.
+    if (clientIdFilter) {
+      const links = await col("document_clients")
+        .find({ client_id: clientIdFilter } as any)
+        .project({ document_id: 1 })
+        .toArray();
+      const docIds = links.map((l: any) => String(l.document_id)).filter(Boolean);
+      if (!docIds.length) {
+        res.json({ rows: [], total: 0, totalAll: 0 });
+        return;
+      }
+      filter._id = { $in: docIds.map((id) => new ObjectId(id)) };
+    }
 
     const [rows, total, totalAll] = await Promise.all([
       col("documents")
@@ -51,7 +71,34 @@ export function registerDocumentRoutes(app: express.Application) {
       status ? col("documents").countDocuments(baseFilter) : Promise.resolve(-1),
     ]);
 
-    res.json({ rows: rows.map(flatDoc), total, totalAll: totalAll === -1 ? total : totalAll });
+    // Enrich with linked client (via document_clients) so the documents list
+    // can display the associated client without extra round-trips.
+    const docIds = rows.map((r) => r._id);
+    const links = docIds.length
+      ? await col("document_clients").find({ document_id: { $in: docIds.map((id) => id.toString()) } } as any).toArray()
+      : [];
+    const clientIds = [...new Set(links.map((l: any) => l.client_id).filter(Boolean))];
+    const clients = clientIds.length
+      ? await col("clients").find({ _id: { $in: clientIds.map((id) => new ObjectId(String(id))) } } as any).toArray()
+      : [];
+    const clientMap = new Map(clients.map((c: any) => [c._id.toString(), c]));
+    const linkMap = new Map<string, any>();
+    for (const link of links) {
+      const cid = String((link as any).client_id);
+      const client = clientMap.get(cid);
+      if (client) linkMap.set(String((link as any).document_id), { id: cid, name: (client as any).display_name });
+    }
+
+    const enriched = rows.map((r) => {
+      const link = linkMap.get(r._id.toString());
+      return {
+        ...flatDoc(r),
+        client_id: link?.id ?? null,
+        client_name: link?.name ?? null,
+      };
+    });
+
+    res.json({ rows: enriched, total, totalAll: totalAll === -1 ? total : totalAll });
   });
 
   // GET /api/documents/:id

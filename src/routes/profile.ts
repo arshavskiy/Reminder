@@ -1,8 +1,16 @@
 import express from "express";
 import multer from "multer";
 import {ObjectId} from "mongodb";
+import {extname, join} from "path";
+import {mkdirSync, readFileSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
+import {getDataDir} from "../settings";
+import {parsePdf} from "../pipeline/pdfParser";
+import {parseDocx} from "../pipeline/docxParser";
+import {parseXlsx} from "../pipeline/xlsxParser";
+import {ocrFile} from "../pipeline/ocrParser";
+import {extractCertificate} from "../pipeline/certificateExtractor";
 
 const avatarUpload = multer({
   storage: multer.memoryStorage(),
@@ -10,6 +18,11 @@ const avatarUpload = multer({
   fileFilter: (_req, file, cb) => {
     cb(null, file.mimetype.startsWith("image/"));
   },
+});
+
+const certUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
 });
 
 async function auth(req: express.Request, res: express.Response) {
@@ -140,6 +153,167 @@ export function registerProfileRoutes(app: express.Application) {
       created_at: now,
     } as any);
     res.json({ _id: result.insertedId });
+  });
+
+  // ── Certificate upload — dedicated profile pipeline ─────────────────────────
+  // Uploads a file, runs OCR/text extraction, then a specialized certificate
+  // extractor that fills the engineer_profiles record (only-empty fields) and
+  // creates a certificate row. The document is tagged document_kind="certificate"
+  // so it stays out of the main documents list.
+  app.post("/api/profile/certificate-upload", certUpload.array("files"), async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+    const files = req.files as Express.Multer.File[];
+    if (!files || !files.length) {
+      res.status(400).json({ error: "no_files" });
+      return;
+    }
+
+    const uploadDir = join(getDataDir(), "uploads");
+    mkdirSync(uploadDir, { recursive: true });
+
+    const created: Array<{ documentId: string; certificateId: string | null; result: any }> = [];
+    const updatedProfileFields = new Set<string>();
+
+    for (const file of files) {
+      const ext = (extname(file.originalname) || "").toLowerCase();
+      const destPath = join(uploadDir, `${Date.now()}_cert${ext}`);
+      writeFileSync(destPath, file.buffer);
+
+      // Decode UTF-8 filename
+      let displayName = file.originalname;
+      try {
+        const decoded = Buffer.from(file.originalname, "latin1").toString("utf8");
+        if (!decoded.includes("�")) displayName = decoded;
+      } catch { /* keep original */ }
+
+      // 1. Create the document record tagged as a certificate
+      const docInsert = await col("documents").insertOne({
+        user_id: ctx.userId,
+        file_name: displayName,
+        file_path: destPath,
+        mime_type: file.mimetype,
+        file_size_bytes: file.size,
+        document_kind: "certificate",
+        processing_status: "processing",
+        import_date: new Date().toISOString().slice(0, 10),
+        created_at: new Date(),
+        updated_at: new Date(),
+      } as any);
+      const documentId = docInsert.insertedId.toString();
+
+      // 2. Extract raw text
+      let rawText = "";
+      try {
+        if (file.mimetype === "application/pdf") {
+          const r = await parsePdf(destPath);
+          rawText = r.needsOcr ? await ocrFile(destPath) : r.text;
+        } else if (file.mimetype.startsWith("image/")) {
+          rawText = await ocrFile(destPath);
+        } else if (ext === ".docx") {
+          rawText = await parseDocx(destPath);
+        } else if (ext === ".xlsx") {
+          rawText = parseXlsx(destPath);
+        } else {
+          rawText = readFileSync(destPath, "utf-8");
+        }
+      } catch (err) {
+        await col("documents").updateOne(
+          { _id: docInsert.insertedId } as any,
+          { $set: { processing_status: "error", error_message: `Text extraction failed: ${err}`, updated_at: new Date() } }
+        );
+        created.push({ documentId, certificateId: null, result: { error: String(err) } });
+        continue;
+      }
+
+      await col("documents").updateOne(
+        { _id: docInsert.insertedId } as any,
+        { $set: { raw_text: rawText, updated_at: new Date() } }
+      );
+
+      // 3. Run the certificate-specific AI extractor
+      const run = await extractCertificate(rawText, documentId, displayName);
+      const result = run.result;
+
+      // 4. Persist extracted_fields snapshot on the document
+      await col("documents").updateOne(
+        { _id: docInsert.insertedId } as any,
+        {
+          $set: {
+            extracted_fields: result ? JSON.stringify(result) : null,
+            processing_status: run.error ? "error" : "done",
+            error_message: run.error ?? null,
+            updated_at: new Date(),
+          },
+        }
+      );
+
+      // 5. Create the certificate row
+      let certificateId: string | null = null;
+      if (result) {
+        const status =
+          result.expiry_date && result.expiry_date < new Date().toISOString().slice(0, 10)
+            ? "expired"
+            : "active";
+        const certInsert = await col("certificates").insertOne({
+          user_id: ctx.userId,
+          document_id: documentId,
+          name: result.certificate_name ?? displayName,
+          type: result.certificate_type ?? "",
+          issuer: result.issuer ?? "",
+          issued_date: result.issued_date ?? null,
+          expiry_date: result.expiry_date ?? null,
+          status,
+          created_at: new Date().toISOString(),
+        } as any);
+        certificateId = certInsert.insertedId.toString();
+
+        // 6. Fill engineer_profiles — only-empty (don't overwrite user data)
+        const profile = (await col("engineer_profiles").findOne({ user_id: ctx.userId })) as any;
+        const profilePatch: Record<string, unknown> = {};
+        const profileFields: Array<keyof typeof result & string> = [
+          "inspector_number", "title", "expertise",
+          "mr_number", "mg_number", "membership_start_date",
+          "company_name", "company_phone", "company_email", "address",
+        ];
+        for (const k of profileFields) {
+          const newVal = result[k];
+          if (newVal != null && newVal !== "" && (!profile || profile[k] == null || profile[k] === "")) {
+            profilePatch[k] = newVal;
+            updatedProfileFields.add(k);
+          }
+        }
+        if (Object.keys(profilePatch).length) {
+          profilePatch.updated_at = new Date().toISOString();
+          await col("engineer_profiles").updateOne(
+            { user_id: ctx.userId },
+            { $set: { user_id: ctx.userId, ...profilePatch } },
+            { upsert: true }
+          );
+        }
+
+        // 7. Fill users (personal) — only-empty
+        const userRow = (await col("users").findOne({ _id: new ObjectId(ctx.userId) as any })) as any;
+        const userPatch: Record<string, unknown> = {};
+        if (result.full_name && !userRow?.name) userPatch.name = result.full_name;
+        if (result.phone && !userRow?.phone) userPatch.phone = result.phone;
+        if (Object.keys(userPatch).length) {
+          userPatch.updated_at = new Date().toISOString();
+          await col("users").updateOne(
+            { _id: new ObjectId(ctx.userId) as any },
+            { $set: userPatch }
+          );
+        }
+      }
+
+      created.push({ documentId, certificateId, result });
+    }
+
+    res.json({
+      uploaded: created.length,
+      created,
+      profile_fields_updated: Array.from(updatedProfileFields),
+    });
   });
 
   app.delete("/api/profile/certificates/:id", async (req, res) => {

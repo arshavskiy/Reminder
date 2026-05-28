@@ -43,6 +43,10 @@ async function checkReminders() {
     })
     .toArray();
 
+  console.log(
+      `[scheduler] checkReminders() due today ${due.length}`
+  );
+
   for (const reminder of due) {
     const remId = reminder._id?.toString();
     if (sentIds.has(remId)) continue;
@@ -97,7 +101,7 @@ async function processReminder(reminder: ReminderWithContext) {
   await col("email_log").insertOne({
     reminder_id: reminder.id,
     to_address: recipients.join(", "),
-    subject: `[תזכורת] ${reminder.title}`,
+    subject: ` תזכורת -${reminder.title}`,
     sent_at: new Date(),
     success: result.success ? 1 : 0,
     error: result.error ?? null,

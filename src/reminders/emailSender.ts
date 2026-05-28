@@ -1,11 +1,11 @@
 import nodemailer from "nodemailer";
-import { readFileSync, existsSync } from "fs";
-import { join, extname } from "path";
-import { getSettings, getDataDir } from "../settings";
-import { col } from "../db/db";
-import { renderTemplate, type EmailVars } from "../templates/renderEmail";
-import { pickEmailTemplate, loadEmailTemplate } from "../templates/seedEmailTemplates";
-import type { ReminderWithContext } from "../../src/shared/types.js";
+import {existsSync, readFileSync} from "fs";
+import {extname, join} from "path";
+import {getDataDir, getSettings} from "../settings";
+import {col} from "../db/db";
+import {type EmailVars, renderTemplate} from "../templates/renderEmail";
+import {loadEmailTemplate, pickEmailTemplate} from "../templates/seedEmailTemplates";
+import type {ReminderWithContext} from "../../src/shared/types.js";
 
 const FALLBACK_TEST_HTML = `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -48,7 +48,7 @@ const FALLBACK_TEST_HTML = `<!DOCTYPE html>
       {{#if trigger_date}}<div class="field"><span class="label"> תאריך התזכורת </span><span class="value"> {{trigger_date}} </span></div>{{/if}}
     </div>
 
-    {{#if body}}<p>{{body}}</p>{{/if}}
+    {{#if body}}<p>{{body}}</p>
 
     <div class="footer">
       {{from_name| ReminderOCR }} — תזכורת אוטומטית, אין צורך להשיב
@@ -258,16 +258,16 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
       title: "בדיקה לדוגמה",
       trigger_date: new Date().toISOString().split("T")[0],
       advance_days: 30,
-      body: "זהו דוא״ל בדיקה באמצעות תבנית שנבחרה.",
-      client_name: "לקוח לדוגמה",
-      document_name: "מסמך לדוגמה",
+      body: " זהו דוא״ל בדיקה באמצעות תבנית שנבחרה.",
+      client_name: " לקוח לדוגמה",
+      document_name: " מסמך לדוגמה",
       from_name: settings.emailFromName || " ReminderOCR ",
-      client_company: "חברה לדוגמה",
+      client_company: " חברה לדוגמה",
       contact_email: to,
-      contact_phone: "050-1234567",
-      document_type: "בדיקה",
-      document_number: "001",
-      contact_person: "איש קשר לדוגמה",
+      contact_phone: "050-1234567 ",
+      document_type: " בדיקה",
+      document_number: "001 ",
+      contact_person: " איש קשר לדוגמה",
       expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
     };
 
