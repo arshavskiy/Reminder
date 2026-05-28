@@ -36,7 +36,7 @@
             <span class="preview-card__title">תצוגה מקדימה</span>
             <n-tag v-if="doc.mime_type" :bordered="false" size="small">{{ doc.mime_type }}</n-tag>
           </div>
-          <div class="preview-card__body">
+          <div :class="{ 'preview-card__body--sheet': isSpreadsheet }" class="preview-card__body">
             <iframe
               v-if="previewUrl && isPdf"
               :src="previewUrl"
@@ -44,10 +44,30 @@
               type="application/pdf"
             />
             <img v-else-if="previewUrl && isImage" :src="previewUrl" class="preview-img" />
+            <div v-else-if="isSpreadsheet && xlsxPreviewSheets.length" class="xlsx-preview">
+              <section v-for="sheet in xlsxPreviewSheets" :key="sheet.name" class="xlsx-sheet">
+                <div class="xlsx-sheet__name">{{ sheet.name }}</div>
+                <div class="xlsx-table-wrap">
+                  <table class="xlsx-table">
+                    <tbody>
+                      <tr v-for="(row, rowIndex) in sheet.rows" :key="rowIndex">
+                        <td v-for="(cell, cellIndex) in row" :key="cellIndex">{{ cell || " " }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
             <div v-else-if="previewError" class="preview-empty preview-empty--error">{{ previewError }}</div>
-            <div v-else-if="!previewUrl" class="preview-empty">
+            <div v-else-if="!previewUrl && !isSpreadsheet" class="preview-empty">
               <n-spin size="small" />
               <span class="mt-2">טוען תצוגה...</span>
+            </div>
+            <div v-else-if="isSpreadsheet" class="preview-empty">
+              <span>אין עדיין טקסט טבלאי להצגה</span>
+              <n-button :loading="extracting" class="mt-3" size="small" type="primary" @click="rerunExtract">
+                עבד את הקובץ מחדש
+              </n-button>
             </div>
             <div v-else class="preview-empty">
               <span>אין תצוגה מקדימה זמינה לסוג קובץ זה</span>
@@ -164,8 +184,35 @@ const linkedReminders = ref<ReminderWithContext[]>([]);
 
 const isPdf = computed(() => doc.value?.mime_type === "application/pdf");
 const isImage = computed(() => doc.value?.mime_type?.startsWith("image/") ?? false);
+const isSpreadsheet = computed(() =>
+  doc.value?.mime_type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+  doc.value?.file_name?.toLowerCase().endsWith(".xlsx") ||
+  doc.value?.file_name?.toLowerCase().endsWith(".xls")
+);
+const xlsxPreviewSheets = computed(() => {
+  if (!isSpreadsheet.value || !displayText.value) return [];
+  const sheets: Array<{ name: string; rows: string[][] }> = [];
+  let current: { name: string; rows: string[][] } | null = null;
+
+  for (const line of displayText.value.split(/\r?\n/)) {
+    const sheetMatch = line.match(/^===\s*(.*?)\s*===$/);
+    if (sheetMatch) {
+      current = { name: sheetMatch[1] || "Sheet", rows: [] };
+      sheets.push(current);
+      continue;
+    }
+    if (!current) continue;
+    if (!line.trim() || line.startsWith("--- detected") || line.startsWith("--- table")) continue;
+    if (!line.includes("\t")) continue;
+    current.rows.push(line.split("\t").map((cell) => cell.trim()));
+    if (current.rows.length >= 80) current = null;
+  }
+
+  return sheets.filter((sheet) => sheet.rows.length).slice(0, 4);
+});
 
 async function loadPreview() {
+  if (isSpreadsheet.value) return;
   if (!doc.value?.spaces_key) return;
   try {
     const res = await fetch(`${SERVER}/api/documents/${doc.value.id}/download`, { credentials: "include" });
@@ -200,7 +247,19 @@ async function rerunExtract() {
   if (!doc.value) return;
   extracting.value = true;
   try {
-    await api.documents.extract(String(doc.value.id));
+    if (!doc.value.raw_text?.trim()) {
+      const result = await api.documents.reprocess(String(doc.value.id));
+      if (result.document) doc.value = result.document;
+      extractionRaw.value = result.fields ?? null;
+      extractionRawText.value = null;
+      message.success("המסמך נשלח לעיבוד מחדש");
+      await reloadDoc();
+      return;
+    }
+    const result = await api.documents.extract(String(doc.value.id));
+    if (result.document) doc.value = result.document;
+    extractionRaw.value = result.fields ?? null;
+    extractionRawText.value = null;
     message.success("חילוץ AI הושלם");
     await reloadDoc();
   } catch (e) {
@@ -295,15 +354,21 @@ const equipmentColumns = [
 
 async function reloadDoc() {
   const id = route.params.id as string;
+  extractionRaw.value = null;
+  extractionRawText.value = null;
   doc.value = await api.documents.get(id);
   await loadLinkedContracts(id);
   const rows = await fetch(`${SERVER}/api/documents/${id}/extractions`, { credentials: "include" })
     .then((r) => r.ok ? r.json() : [])
     .catch(() => []);
   if (Array.isArray(rows) && rows.length) {
-    const best = rows.find((r: any) => r.parsed_ok && r.result_json) ?? rows[0];
-    if (best?.result_json) {
+    const best = rows.find((r: any) => (r.parsed_ok && r.result_json) || r.fields || r.raw_json) ?? rows[0];
+    if (best?.fields) {
+      extractionRaw.value = best.fields;
+    } else if (best?.result_json) {
       try { extractionRaw.value = JSON.parse(best.result_json); } catch {}
+    } else if (best?.raw_json) {
+      try { extractionRaw.value = JSON.parse(best.raw_json); } catch {}
     }
     if (best?.raw_text) extractionRawText.value = best.raw_text;
   }
@@ -408,8 +473,53 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
 }
+.preview-card__body--sheet {
+  background: var(--bg-card);
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: auto;
+  padding: 0;
+  color: var(--text-primary);
+}
 .preview-frame { width: 100%; height: 100%; border: none; background: #fff; }
 .preview-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.xlsx-preview {
+  align-self: stretch;
+  width: 100%;
+  overflow: auto;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  padding: 12px;
+}
+.xlsx-sheet + .xlsx-sheet { margin-top: 18px; }
+.xlsx-sheet__name {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+.xlsx-table-wrap { overflow: auto; border: 1px solid var(--border-color); }
+.xlsx-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  direction: rtl;
+  background: var(--bg-card);
+  font-size: 12px;
+}
+.xlsx-table td {
+  min-width: 90px;
+  max-width: 240px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  white-space: pre-wrap;
+  vertical-align: top;
+}
 .preview-empty {
   color: var(--text-muted);
   font-size: 13px;
