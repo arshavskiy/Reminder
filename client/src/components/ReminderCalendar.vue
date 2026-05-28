@@ -1,0 +1,362 @@
+<template>
+  <section class="rcal">
+    <header class="rcal__head">
+      <div class="rcal__title-wrap">
+        <h3 class="rcal__title">לוח תזכורות</h3>
+        <span class="rcal__count">{{ rows.length }}</span>
+      </div>
+      <div class="rcal__controls">
+        <div class="rcal__toggle">
+          <n-button
+            :type="view === 'month' ? 'primary' : 'default'"
+            size="small"
+            @click="view = 'month'"
+          >▦ חודש</n-button>
+          <n-button
+            :type="view === 'agenda' ? 'primary' : 'default'"
+            size="small"
+            @click="view = 'agenda'"
+          >☰ רשימה</n-button>
+        </div>
+        <n-button :loading="loading" size="small" @click="$emit('refresh')">↻</n-button>
+      </div>
+    </header>
+
+    <!-- ── Month grid ──────────────────────────────────────────────────── -->
+    <div v-if="view === 'month'" class="rcal__month">
+      <div class="rcal__nav">
+        <n-button size="tiny" @click="shiftMonth(-1)">‹</n-button>
+        <span class="rcal__nav-label">{{ monthLabel }}</span>
+        <n-button size="tiny" @click="shiftMonth(1)">›</n-button>
+        <n-button size="tiny" tertiary @click="goToday">היום</n-button>
+      </div>
+
+      <div class="rcal__weekdays">
+        <span v-for="d in weekdayLabels" :key="d" class="rcal__weekday">{{ d }}</span>
+      </div>
+
+      <div class="rcal__grid">
+        <div
+          v-for="cell in monthCells"
+          :key="cell.iso"
+          :class="{
+            'rcal__cell--off': !cell.inMonth,
+            'rcal__cell--today': cell.isToday,
+            'rcal__cell--has': cell.items.length > 0,
+          }"
+          class="rcal__cell"
+        >
+          <div class="rcal__cell-num">{{ cell.day }}</div>
+          <div v-if="cell.items.length" class="rcal__cell-items">
+            <n-popover
+              v-for="r in cell.items.slice(0, 3)"
+              :key="r.id"
+              :width="320"
+              placement="right"
+              trigger="click"
+            >
+              <template #trigger>
+                <button
+                  :class="`rcal__pill--${r.status}`"
+                  :title="r.title"
+                  class="rcal__pill"
+                  @click.stop
+                >
+                  {{ r.title }}
+                </button>
+              </template>
+              <ReminderQuickView :reminder="r" @navigate="onNavigate" />
+            </n-popover>
+            <span v-if="cell.items.length > 3" class="rcal__more">+{{ cell.items.length - 3 }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Agenda list ─────────────────────────────────────────────────── -->
+    <div v-else class="rcal__agenda">
+      <div v-if="!agendaGroups.length" class="rcal__empty">אין תזכורות קרובות</div>
+      <div v-for="grp in agendaGroups" :key="grp.iso" class="rcal__agenda-group">
+        <div :class="{ 'rcal__agenda-date--today': grp.isToday, 'rcal__agenda-date--past': grp.isPast }" class="rcal__agenda-date">
+          {{ grp.label }}
+        </div>
+        <div class="rcal__agenda-items">
+          <n-popover
+            v-for="r in grp.items"
+            :key="r.id"
+            :width="300"
+            placement="right"
+            trigger="click"
+          >
+            <template #trigger>
+              <button :class="`rcal__agenda-item--${r.status}`" class="rcal__agenda-item">
+                <span class="rcal__agenda-dot" />
+                <span class="rcal__agenda-title">{{ r.title }}</span>
+                <span v-if="r.client_name" class="rcal__agenda-client">— {{ r.client_name }}</span>
+              </button>
+            </template>
+            <ReminderQuickView :reminder="r" @navigate="onNavigate" />
+          </n-popover>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<script lang="ts" setup>
+import {computed, ref} from "vue";
+import {useRouter} from "vue-router";
+import {NButton, NPopover} from "naive-ui";
+import type {ReminderWithContext} from "@shared/types.js";
+import ReminderQuickView from "./ReminderQuickView.vue";
+
+interface Props {
+  rows: ReminderWithContext[];
+  loading?: boolean;
+}
+const props = withDefaults(defineProps<Props>(), { loading: false });
+defineEmits<{ (e: "refresh"): void }>();
+
+const router = useRouter();
+const view = ref<"month" | "agenda">("month");
+const cursor = ref(new Date());
+
+const weekdayLabels = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
+
+function toIso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function sameDay(a: Date, b: Date): boolean { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+
+const today = startOfDay(new Date());
+
+const rowsByIso = computed(() => {
+  const m = new Map<string, ReminderWithContext[]>();
+  for (const r of props.rows) {
+    if (!r.trigger_date) continue;
+    const iso = r.trigger_date.slice(0, 10);
+    if (!m.has(iso)) m.set(iso, []);
+    m.get(iso)!.push(r);
+  }
+  return m;
+});
+
+const monthLabel = computed(() => cursor.value.toLocaleDateString("he-IL", { month: "long", year: "numeric" }));
+
+const monthCells = computed(() => {
+  const c = cursor.value;
+  const first = new Date(c.getFullYear(), c.getMonth(), 1);
+  const startWeekday = first.getDay(); // 0 = Sunday
+  const gridStart = new Date(first);
+  gridStart.setDate(first.getDate() - startWeekday);
+
+  const cells: Array<{
+    iso: string; day: number; inMonth: boolean; isToday: boolean; items: ReminderWithContext[];
+  }> = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    const iso = toIso(d);
+    cells.push({
+      iso,
+      day: d.getDate(),
+      inMonth: d.getMonth() === c.getMonth(),
+      isToday: sameDay(d, today),
+      items: rowsByIso.value.get(iso) ?? [],
+    });
+  }
+  return cells;
+});
+
+const agendaGroups = computed(() => {
+  const now = today.getTime();
+  const sorted = [...props.rows]
+    .filter((r) => r.trigger_date)
+    .sort((a, b) => (a.trigger_date < b.trigger_date ? -1 : 1));
+  const groups = new Map<string, ReminderWithContext[]>();
+  for (const r of sorted) {
+    const iso = r.trigger_date.slice(0, 10);
+    if (!groups.has(iso)) groups.set(iso, []);
+    groups.get(iso)!.push(r);
+  }
+  return Array.from(groups.entries()).map(([iso, items]) => {
+    const d = new Date(iso + "T00:00:00");
+    return {
+      iso,
+      items,
+      isToday: sameDay(d, today),
+      isPast: d.getTime() < now,
+      label: d.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" }),
+    };
+  });
+});
+
+function shiftMonth(delta: number) {
+  const c = new Date(cursor.value);
+  c.setMonth(c.getMonth() + delta);
+  cursor.value = c;
+}
+function goToday() { cursor.value = new Date(); }
+
+function onNavigate(target: { type: "contract" | "document"; id: number | string }) {
+  if (target.type === "contract") router.push(`/contracts/${target.id}`);
+  else if (target.type === "document") router.push(`/documents/${target.id}`);
+}
+</script>
+
+<style scoped>
+.rcal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+}
+
+.rcal__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rcal__title-wrap { display: flex; align-items: center; gap: 8px; }
+.rcal__title { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.rcal__count {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+.rcal__controls { display: flex; gap: 8px; align-items: center; }
+.rcal__toggle { display: flex; gap: 4px; }
+
+/* ── Month nav ─────────────────────────────────────────────────────────── */
+.rcal__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  justify-content: center;
+}
+.rcal__nav-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 140px;
+  text-align: center;
+}
+
+/* ── Weekday header ────────────────────────────────────────────────────── */
+.rcal__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.rcal__weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+/* ── Grid ──────────────────────────────────────────────────────────────── */
+.rcal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.rcal__cell {
+  min-height: 80px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background 0.12s, border-color 0.12s;
+}
+.rcal__cell--off { opacity: 0.4; background: transparent; }
+.rcal__cell--today { border-color: var(--brand-color); background: rgba(99,226,183,0.05); }
+.rcal__cell--has { background: var(--bg-elevated); }
+.rcal__cell-num {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: end;
+}
+.rcal__cell--today .rcal__cell-num { color: var(--brand-color); }
+.rcal__cell-items { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rcal__pill {
+  border: none;
+  background: var(--brand-color);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: start;
+  font-family: inherit;
+  transition: filter 0.12s;
+}
+.rcal__pill:hover { filter: brightness(1.1); }
+.rcal__pill--sent { background: #2080f0; }
+.rcal__pill--dismissed { background: var(--text-muted); }
+.rcal__pill--failed { background: var(--color-error, #d03050); }
+.rcal__more { font-size: 10px; color: var(--text-muted); padding: 1px 4px; }
+
+/* ── Agenda ─────────────────────────────────────────────────────────────── */
+.rcal__agenda { display: flex; flex-direction: column; gap: 14px; max-height: 480px; overflow-y: auto; }
+.rcal__empty { text-align: center; color: var(--text-muted); font-size: 13px; padding: 32px 0; }
+.rcal__agenda-group {}
+.rcal__agenda-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color);
+}
+.rcal__agenda-date--today { color: var(--brand-color); }
+.rcal__agenda-date--past { color: var(--text-muted); opacity: 0.7; }
+.rcal__agenda-items { display: flex; flex-direction: column; gap: 4px; }
+.rcal__agenda-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  text-align: start;
+  transition: background 0.12s, border-color 0.12s;
+}
+.rcal__agenda-item:hover { background: var(--bg-hover); border-color: var(--brand-color); }
+.rcal__agenda-dot {
+  width: 8px; height: 8px;
+  border-radius: 999px;
+  background: var(--brand-color);
+  flex-shrink: 0;
+}
+.rcal__agenda-item--sent .rcal__agenda-dot { background: #2080f0; }
+.rcal__agenda-item--dismissed .rcal__agenda-dot { background: var(--text-muted); }
+.rcal__agenda-item--failed .rcal__agenda-dot { background: var(--color-error, #d03050); }
+.rcal__agenda-title { font-weight: 500; flex: 1; }
+.rcal__agenda-client { color: var(--text-muted); font-size: 12px; }
+</style>
