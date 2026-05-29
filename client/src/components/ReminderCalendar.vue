@@ -42,14 +42,14 @@
           :class="{
             'rcal__cell--off': !cell.inMonth,
             'rcal__cell--today': cell.isToday,
-            'rcal__cell--has': cell.items.length > 0,
+            'rcal__cell--has': cell.items.length > 0 || cell.expiryItems.length > 0,
           }"
           class="rcal__cell"
         >
           <div class="rcal__cell-num">{{ cell.day }}</div>
-          <div v-if="cell.items.length" class="rcal__cell-items">
+          <div v-if="cell.items.length || cell.expiryItems.length" class="rcal__cell-items">
             <n-popover
-              v-for="r in cell.items.slice(0, 3)"
+              v-for="r in cell.items.slice(0, 2)"
               :key="r.id"
               :width="320"
               placement="right"
@@ -67,7 +67,35 @@
               </template>
               <ReminderQuickView :reminder="r" @navigate="onNavigate" />
             </n-popover>
-            <span v-if="cell.items.length > 3" class="rcal__more">+{{ cell.items.length - 3 }}</span>
+            <n-popover
+              v-for="e in cell.expiryItems.slice(0, 2)"
+              :key="`exp-${e.id}`"
+              :width="260"
+              placement="right"
+              trigger="click"
+            >
+              <template #trigger>
+                <button
+                  :class="`rcal__pill--expiry-${e.urgency}`"
+                  :title="`פג תוקף: ${e.equipment_name ?? e.contract_type ?? 'תעודה'} — ${e.client_name ?? ''}`"
+                  class="rcal__pill rcal__pill--expiry"
+                  @click.stop
+                >
+                  {{ e.equipment_name ?? e.contract_type ?? 'תעודה' }}
+                </button>
+              </template>
+              <div class="rcal__expiry-pop">
+                <p class="rcal__expiry-pop__title">{{ e.equipment_name ?? e.contract_type ?? 'תעודה' }}</p>
+                <p v-if="e.client_name" class="rcal__expiry-pop__sub">לקוח: {{ e.client_name }}</p>
+                <p v-if="e.contract_number" class="rcal__expiry-pop__sub">מס׳ {{ e.contract_number }}</p>
+                <p :class="`rcal__expiry-pop__days--${e.urgency}`" class="rcal__expiry-pop__days">
+                  {{ e.days_until < 0 ? `פג לפני ${Math.abs(e.days_until)} ימים` : e.days_until === 0 ? 'פג היום' : `${e.days_until} ימים לפקיעה` }}
+                </p>
+              </div>
+            </n-popover>
+            <span v-if="cell.items.length + cell.expiryItems.length > 4" class="rcal__more">
+              +{{ cell.items.length + cell.expiryItems.length - 4 }}
+            </span>
           </div>
         </div>
       </div>
@@ -82,7 +110,7 @@
         </div>
         <div class="rcal__agenda-items">
           <n-popover
-            v-for="r in grp.items"
+            v-for="r in grp.reminders"
             :key="r.id"
             :width="300"
             placement="right"
@@ -97,6 +125,16 @@
             </template>
             <ReminderQuickView :reminder="r" @navigate="onNavigate" />
           </n-popover>
+          <button
+            v-for="e in grp.expiryItems"
+            :key="`exp-${e.id}`"
+            :class="`rcal__agenda-item--expiry-${e.urgency}`"
+            class="rcal__agenda-item"
+          >
+            <span class="rcal__agenda-dot rcal__agenda-dot--expiry" />
+            <span class="rcal__agenda-title">{{ e.equipment_name ?? e.contract_type ?? 'תעודה' }} — פג תוקף</span>
+            <span v-if="e.client_name" class="rcal__agenda-client">— {{ e.client_name }}</span>
+          </button>
         </div>
       </div>
     </div>
@@ -108,13 +146,15 @@ import {computed, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NButton, NPopover} from "naive-ui";
 import type {ReminderWithContext} from "@shared/types.js";
+import type {ExpiryCalendarItem} from "../services/apiService.js";
 import ReminderQuickView from "./ReminderQuickView.vue";
 
 interface Props {
   rows: ReminderWithContext[];
+  expiryItems?: ExpiryCalendarItem[];
   loading?: boolean;
 }
-const props = withDefaults(defineProps<Props>(), { loading: false });
+const props = withDefaults(defineProps<Props>(), { loading: false, expiryItems: () => [] });
 defineEmits<{ (e: "refresh"): void }>();
 
 const router = useRouter();
@@ -142,6 +182,17 @@ const rowsByIso = computed(() => {
   return m;
 });
 
+const expiryByIso = computed(() => {
+  const m = new Map<string, ExpiryCalendarItem[]>();
+  for (const e of props.expiryItems ?? []) {
+    if (!e.expiry_date) continue;
+    const iso = e.expiry_date.slice(0, 10);
+    if (!m.has(iso)) m.set(iso, []);
+    m.get(iso)!.push(e);
+  }
+  return m;
+});
+
 const monthLabel = computed(() => cursor.value.toLocaleDateString("he-IL", { month: "long", year: "numeric" }));
 
 const monthCells = computed(() => {
@@ -152,7 +203,8 @@ const monthCells = computed(() => {
   gridStart.setDate(first.getDate() - startWeekday);
 
   const cells: Array<{
-    iso: string; day: number; inMonth: boolean; isToday: boolean; items: ReminderWithContext[];
+    iso: string; day: number; inMonth: boolean; isToday: boolean;
+    items: ReminderWithContext[]; expiryItems: ExpiryCalendarItem[];
   }> = [];
   for (let i = 0; i < 42; i++) {
     const d = new Date(gridStart);
@@ -164,6 +216,7 @@ const monthCells = computed(() => {
       inMonth: d.getMonth() === c.getMonth(),
       isToday: sameDay(d, today),
       items: rowsByIso.value.get(iso) ?? [],
+      expiryItems: expiryByIso.value.get(iso) ?? [],
     });
   }
   return cells;
@@ -171,20 +224,18 @@ const monthCells = computed(() => {
 
 const agendaGroups = computed(() => {
   const now = today.getTime();
-  const sorted = [...props.rows]
-    .filter((r) => r.trigger_date)
-    .sort((a, b) => (a.trigger_date < b.trigger_date ? -1 : 1));
-  const groups = new Map<string, ReminderWithContext[]>();
-  for (const r of sorted) {
-    const iso = r.trigger_date.slice(0, 10);
-    if (!groups.has(iso)) groups.set(iso, []);
-    groups.get(iso)!.push(r);
-  }
-  return Array.from(groups.entries()).map(([iso, items]) => {
+  const isoSet = new Set<string>();
+
+  for (const r of props.rows) { if (r.trigger_date) isoSet.add(r.trigger_date.slice(0, 10)); }
+  for (const e of props.expiryItems ?? []) { if (e.expiry_date) isoSet.add(e.expiry_date.slice(0, 10)); }
+
+  const sorted = [...isoSet].sort();
+  return sorted.map((iso) => {
     const d = new Date(iso + "T00:00:00");
     return {
       iso,
-      items,
+      reminders: (rowsByIso.value.get(iso) ?? []),
+      expiryItems: (expiryByIso.value.get(iso) ?? []),
       isToday: sameDay(d, today),
       isPast: d.getTime() < now,
       label: d.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" }),
@@ -317,6 +368,22 @@ function onNavigate(target: { type: "contract" | "document"; id: number | string
 .rcal__pill--failed { background: var(--color-error, #d03050); }
 .rcal__more { font-size: 10px; color: var(--text-muted); padding: 1px 4px; }
 
+/* ── Expiry pills ──────────────────────────────────────────────────────────── */
+.rcal__pill--expiry { font-style: italic; }
+.rcal__pill--expiry-overdue  { background: #d03050; }
+.rcal__pill--expiry-critical { background: #f0a020; }
+.rcal__pill--expiry-warning  { background: #e8c84a; color: #333; }
+.rcal__pill--expiry-ok       { background: #18a058; }
+
+.rcal__expiry-pop { padding: 4px 0; font-size: 13px; direction: rtl; }
+.rcal__expiry-pop__title { font-weight: 600; margin: 0 0 4px; color: var(--text-primary); }
+.rcal__expiry-pop__sub { margin: 2px 0; color: var(--text-secondary); font-size: 12px; }
+.rcal__expiry-pop__days { margin: 6px 0 0; font-weight: 600; font-size: 12px; }
+.rcal__expiry-pop__days--overdue  { color: #d03050; }
+.rcal__expiry-pop__days--critical { color: #f0a020; }
+.rcal__expiry-pop__days--warning  { color: #c9a800; }
+.rcal__expiry-pop__days--ok       { color: #18a058; }
+
 /* ── Agenda ─────────────────────────────────────────────────────────────── */
 .rcal__agenda { display: flex; flex-direction: column; gap: 14px; max-height: 480px; overflow-y: auto; }
 .rcal__empty { text-align: center; color: var(--text-muted); font-size: 13px; padding: 32px 0; }
@@ -357,6 +424,11 @@ function onNavigate(target: { type: "contract" | "document"; id: number | string
 .rcal__agenda-item--sent .rcal__agenda-dot { background: #2080f0; }
 .rcal__agenda-item--dismissed .rcal__agenda-dot { background: var(--text-muted); }
 .rcal__agenda-item--failed .rcal__agenda-dot { background: var(--color-error, #d03050); }
+.rcal__agenda-item--expiry-overdue  .rcal__agenda-dot { background: #d03050; }
+.rcal__agenda-item--expiry-critical .rcal__agenda-dot { background: #f0a020; }
+.rcal__agenda-item--expiry-warning  .rcal__agenda-dot { background: #e8c84a; }
+.rcal__agenda-item--expiry-ok       .rcal__agenda-dot { background: #18a058; }
+.rcal__agenda-dot--expiry { border-radius: 2px; }
 .rcal__agenda-title { font-weight: 500; flex: 1; }
 .rcal__agenda-client { color: var(--text-muted); font-size: 12px; }
 </style>

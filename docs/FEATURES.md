@@ -177,6 +177,24 @@ Dedup: existing non-dismissed reminder for the same `(source_id, advance_days)` 
 - Idempotent: checks `email_log` before sending
 - Failure retry: logs each attempt; marks `error` after 3 failures
 
+### Reminder Escalation
+
+If a reminder stays `pending` for more than N days past its `trigger_date`, an escalation email is sent to a supervisor address.
+
+**Configuration** (global settings, admin-only):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `escalationEmail` | `""` | Supervisor address; escalation is disabled when empty |
+| `escalationThresholdDays` | `3` | Days past `trigger_date` before escalation fires |
+
+**Mechanism:**
+- `checkEscalations()` runs on every scheduler tick alongside `checkReminders()`
+- Finds all `pending` reminders whose `trigger_date ≤ today − threshold`
+- Checks `email_log` for existing entries with `log_type: "escalation"` for that `reminder_id` — no duplicate escalations are sent
+- On success, inserts an `email_log` row with `log_type: "escalation"`; does **not** change the reminder's `status` (the original reminder remains `pending` for normal processing)
+- Env override: `ESCALATION_EMAIL` sets the address without going through settings UI
+
 ---
 
 ## Equipment Catalog
@@ -187,6 +205,62 @@ Dedup: existing non-dismissed reminder for the same `(source_id, advance_days)` 
 - Filter by category, text search, or client
 - Category stats chip bar in the UI
 - Backfill endpoint: patches missing `client_id`/`document_id` from existing extractions
+
+### Equipment Service History Timeline
+
+Per-equipment chronological log of all past inspections, accessible via the "היסטוריה" tab in the equipment drawer.
+
+**Endpoint:** `GET /api/equipment/:id/history`
+
+- Collects all document IDs linked to the equipment — via `document_id` on the record and via any sibling records sharing the same `serial_number`
+- Fetches all `contracts` whose `document_id` is in that set, sorted by `start_date` descending
+- Each history event is enriched from the linked document's `extracted_fields`:
+  - `inspector` — from `inspector` or `contact_person` field
+  - `load_capacity_test` — test load value
+  - `test_pressure` — hydraulic test pressure
+  - `pass_fail` — inspection result
+- `days_until` is computed server-side from `expiry_date` relative to today; negative = already expired
+- UI: vertical timeline with color-coded dots (`active` green / `expired` red / `renewed` blue / `cancelled` grey), expiry countdown badge, and a direct link to the source document
+
+### Bulk XLSX Equipment Import
+
+Batch-create equipment records from a spreadsheet without manual data entry.
+
+**Endpoints:**
+- `POST /api/equipment/import-xlsx/preview` — parse uploaded file, return `{ headers, total, preview }` (first 5 rows); no DB writes
+- `POST /api/equipment/import-xlsx/confirm` — save all rows using the confirmed column mapping
+
+**Flow:**
+1. User drops or selects an `.xlsx` / `.xls` file
+2. Server returns column headers and a 5-row preview
+3. Client shows a mapping grid: each equipment field mapped to a spreadsheet column; headers are auto-matched on obvious name similarity
+4. User confirms → server iterates all rows, deduplicates by `serial_number`, inserts new records
+5. If a `next_inspection_date` column is mapped and contains a valid ISO date, a stub inspection contract + reminder chain is generated automatically
+
+**Dedup:** rows whose `serial_number` already exists for the user are skipped (counted in `skipped`).  
+**Result:** `{ created: N, skipped: M }` shown on a confirmation screen.
+
+### Certificate Expiry Calendar
+
+Color-coded view of certificate expiry dates overlaid on the existing reminder calendar.
+
+**Endpoint:** `GET /api/equipment/expiry-calendar?from=&to=`
+
+- Queries `contracts` where `expiry_date` is set and `contract_type` matches inspection keywords (`תסקיר|בדיקה|inspection|certificate`), or `contract_type` is null
+- Each item is enriched with `client_name` (from `clients`) and `equipment_name` (from the first equipment record linked to the same `document_id`)
+- `urgency` is computed server-side:
+
+| Value | Condition |
+|-------|-----------|
+| `overdue` | `days_until < 0` |
+| `critical` | `0 ≤ days_until ≤ 30` |
+| `warning` | `31 ≤ days_until ≤ 90` |
+| `ok` | `days_until > 90` |
+
+- `ReminderCalendar.vue` accepts an `expiryItems` prop and renders expiry pills alongside reminder pills in both **month grid** and **agenda** views
+- Pills are colored by urgency: red / orange / yellow / green
+- Clicking a pill opens a popover with equipment name, client, contract number, and days-until text
+- Dashboard fetches expiry items on mount and passes them to the calendar
 
 ---
 

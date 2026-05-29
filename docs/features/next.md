@@ -65,6 +65,17 @@ Currently `SettingsPage.vue` shows all settings to all users. Should:
 
 ---
 
+## Recently Shipped (2026-05-29)
+
+| Feature | Notes |
+|---------|-------|
+| Certificate Expiry Calendar | Color-coded expiry pills on the reminder calendar; `GET /api/equipment/expiry-calendar` |
+| Reminder Escalation | `checkEscalations()` in scheduler; `escalationEmail` + `escalationThresholdDays` settings |
+| Equipment Service History | "היסטוריה" tab in equipment drawer; `GET /api/equipment/:id/history` |
+| Bulk XLSX Equipment Import | `XlsxImportModal.vue`; preview + column-mapping + confirm; `import-xlsx/preview` + `confirm` endpoints |
+
+---
+
 ## Deferred
 
 | Feature | Notes |
@@ -78,3 +89,8 @@ Currently `SettingsPage.vue` shows all settings to all users. Should:
 | Push notifications (mobile) | Web Push API — nice to have for reminders |
 | Document versioning | Re-import same file → keep history |
 | Bulk operations | Delete / re-process multiple documents at once |
+| Inspection Certificate Lifecycle Board | Kanban/table view of all equipment cert statuses |
+| Inspection Protocol Checklists | Structured digital checklists per equipment type |
+| Field Inspection PWA | Mobile-friendly offline mode with camera attach |
+| Inspection Report PDF Generator | One-click PDF with pdfkit + NotoSansHebrew |
+| QR/Barcode on Equipment | Print QR sticker → scan on-site to open record |

@@ -35,6 +35,7 @@
           <button class="btn btn--ghost" :disabled="loading" @click="load(true)">
             <span class="refresh-icon" :class="{ 'refresh-icon--spin': loading }">↻</span> רענן
           </button>
+          <button class="btn btn--ghost" @click="showImport = true">⬆ ייבוא מ-Excel</button>
           <button class="btn btn--primary" @click="openCreate">+ הוספת ציוד חדש</button>
         </div>
       </div>
@@ -152,74 +153,102 @@
       </div>
     </template>
 
+    <!-- ── XLSX Import modal ─────────────────────────────────────────── -->
+    <XlsxImportModal v-model="showImport" @imported="load(true)" />
+
     <!-- ── Create/Edit drawer ──────────────────────────────────────────── -->
     <n-drawer v-model:show="showEdit" :width="520" placement="left">
       <n-drawer-content :title="editing?.id ? 'עריכת ציוד' : 'הוספת ציוד חדש'" closable>
-        <n-form v-if="editing" label-placement="top">
+        <n-tabs v-if="editing?.id" v-model:value="drawerTab" animated type="line">
+          <n-tab-pane name="details" tab="פרטים">
+            <n-form label-placement="top" style="margin-top:12px">
+              <n-form-item label="שם הציוד" required>
+                <n-input v-model:value="editing.name" placeholder="למשל: במת הרמה" />
+              </n-form-item>
+              <n-form-item label="קטגוריה" required>
+                <n-select v-model:value="editing.category" :options="categoryOptions" :virtual-scroll="false" />
+              </n-form-item>
+              <n-grid :cols="2" :x-gap="12">
+                <n-gi><n-form-item label="יצרן"><n-input v-model:value="editing.manufacturer" /></n-form-item></n-gi>
+                <n-gi><n-form-item label="דגם"><n-input v-model:value="editing.model" /></n-form-item></n-gi>
+                <n-gi :span="2"><n-form-item label="מספר סידורי"><n-input v-model:value="editing.serial_number" placeholder="לדוגמה: K-G1235JXS" /></n-form-item></n-gi>
+                <n-gi><n-form-item label='עומס עבודה בטוח (ק"ג)'><n-input v-model:value="editing.capacity" placeholder='3200 ק"ג' /></n-form-item></n-gi>
+                <n-gi><n-form-item label='עומס מבחן (ק"ג)'><n-input v-model:value="(editing as any).load_capacity_test" placeholder='2200 ק"ג' /></n-form-item></n-gi>
+                <n-gi><n-form-item label="רדיוס עומס (מטר)"><n-input v-model:value="(editing as any).load_radius" placeholder="--" /></n-form-item></n-gi>
+              </n-grid>
+              <n-form-item label="תיאור"><n-input v-model:value="editing.description" :rows="3" type="textarea" /></n-form-item>
+              <n-form-item label="הערות פנימיות"><n-input v-model:value="editing.notes" :rows="2" type="textarea" /></n-form-item>
+              <n-form-item label="לקוח משויך">
+                <n-select v-model:value="(editing as any).client_id" :options="clientOptions" :virtual-scroll="false" clearable filterable placeholder="בחר לקוח..." />
+              </n-form-item>
+            </n-form>
+          </n-tab-pane>
+
+          <n-tab-pane name="history" tab="היסטוריה">
+            <n-spin :show="historyLoading" style="margin-top:12px">
+              <div v-if="history.length" class="hist">
+                <div v-for="ev in history" :key="ev.id" class="hist__item">
+                  <div class="hist__line" />
+                  <div :class="`hist__dot--${ev.status}`" class="hist__dot" />
+                  <div class="hist__body">
+                    <div class="hist__title-row">
+                      <strong>{{ ev.contract_type ?? 'בדיקה' }}</strong>
+                      <span v-if="ev.contract_number" class="hist__num">{{ ev.contract_number }}</span>
+                      <span :class="`hist__status--${ev.status}`" class="hist__status">{{ ev.status }}</span>
+                    </div>
+                    <div class="hist__dates">
+                      <span v-if="ev.start_date">התחלה: {{ ev.start_date }}</span>
+                      <span v-if="ev.expiry_date">
+                        פקיעה: {{ ev.expiry_date }}
+                        <span v-if="ev.days_until !== null" :class="ev.days_until < 0 ? 'hist__overdue' : ev.days_until <= 30 ? 'hist__warn' : ''">
+                          ({{ ev.days_until < 0 ? `פג לפני ${Math.abs(ev.days_until)}י` : `${ev.days_until}י` }})
+                        </span>
+                      </span>
+                    </div>
+                    <div v-if="ev.inspector || ev.load_capacity_test || ev.pass_fail" class="hist__meta">
+                      <span v-if="ev.inspector">בודק: {{ ev.inspector }}</span>
+                      <span v-if="ev.load_capacity_test">עומס מבחן: {{ ev.load_capacity_test }}</span>
+                      <span v-if="ev.pass_fail">תוצאה: {{ ev.pass_fail }}</span>
+                    </div>
+                    <router-link v-if="ev.document_id" :to="`/documents/${ev.document_id}`" class="hist__doc-link">
+                      {{ ev.document_name ?? ev.document_id }}
+                    </router-link>
+                  </div>
+                </div>
+              </div>
+              <p v-else class="hist__empty">אין היסטוריית בדיקות לציוד זה.</p>
+            </n-spin>
+          </n-tab-pane>
+        </n-tabs>
+
+        <!-- New equipment (no id) — just the form, no tabs -->
+        <n-form v-else-if="editing" label-placement="top">
           <n-form-item label="שם הציוד" required>
             <n-input v-model:value="editing.name" placeholder="למשל: במת הרמה" />
           </n-form-item>
           <n-form-item label="קטגוריה" required>
-            <n-select
-              v-model:value="editing.category"
-              :options="categoryOptions"
-              :virtual-scroll="false"
-            />
+            <n-select v-model:value="editing.category" :options="categoryOptions" :virtual-scroll="false" />
           </n-form-item>
           <n-grid :cols="2" :x-gap="12">
-            <n-gi>
-              <n-form-item label="יצרן">
-                <n-input v-model:value="editing.manufacturer" />
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="דגם">
-                <n-input v-model:value="editing.model" />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="2">
-              <n-form-item label="מספר סידורי">
-                <n-input v-model:value="editing.serial_number" placeholder="לדוגמה: K-G1235JXS" />
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label='עומס עבודה בטוח (ק"ג)'>
-                <n-input v-model:value="editing.capacity" placeholder='3200 ק"ג' />
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label='עומס מבחן (ק"ג)'>
-                <n-input v-model:value="(editing as any).load_capacity_test" placeholder='2200 ק"ג' />
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="רדיוס עומס (מטר)">
-                <n-input v-model:value="(editing as any).load_radius" placeholder="--" />
-              </n-form-item>
-            </n-gi>
+            <n-gi><n-form-item label="יצרן"><n-input v-model:value="editing.manufacturer" /></n-form-item></n-gi>
+            <n-gi><n-form-item label="דגם"><n-input v-model:value="editing.model" /></n-form-item></n-gi>
+            <n-gi :span="2"><n-form-item label="מספר סידורי"><n-input v-model:value="editing.serial_number" placeholder="לדוגמה: K-G1235JXS" /></n-form-item></n-gi>
+            <n-gi><n-form-item label='עומס עבודה בטוח (ק"ג)'><n-input v-model:value="editing.capacity" placeholder='3200 ק"ג' /></n-form-item></n-gi>
+            <n-gi><n-form-item label='עומס מבחן (ק"ג)'><n-input v-model:value="(editing as any).load_capacity_test" placeholder='2200 ק"ג' /></n-form-item></n-gi>
+            <n-gi><n-form-item label="רדיוס עומס (מטר)"><n-input v-model:value="(editing as any).load_radius" placeholder="--" /></n-form-item></n-gi>
           </n-grid>
-          <n-form-item label="תיאור">
-            <n-input v-model:value="editing.description" type="textarea" :rows="3" />
-          </n-form-item>
-          <n-form-item label="הערות פנימיות">
-            <n-input v-model:value="editing.notes" type="textarea" :rows="2" />
-          </n-form-item>
+          <n-form-item label="תיאור"><n-input v-model:value="editing.description" :rows="3" type="textarea" /></n-form-item>
+          <n-form-item label="הערות פנימיות"><n-input v-model:value="editing.notes" :rows="2" type="textarea" /></n-form-item>
           <n-form-item label="לקוח משויך">
-            <n-select
-              v-model:value="(editing as any).client_id"
-              :options="clientOptions"
-              placeholder="בחר לקוח..."
-              clearable
-              filterable
-              :virtual-scroll="false"
-            />
+            <n-select v-model:value="(editing as any).client_id" :options="clientOptions" :virtual-scroll="false" clearable filterable placeholder="בחר לקוח..." />
           </n-form-item>
         </n-form>
+
         <template #footer>
           <n-space>
             <n-button @click="showEdit = false">ביטול</n-button>
             <n-button v-if="editing?.id" type="error" quaternary @click="del(editing as Equipment)">מחק</n-button>
-            <n-button type="primary" :loading="saving" @click="save">שמור</n-button>
+            <n-button v-if="drawerTab === 'details'" :loading="saving" type="primary" @click="save">שמור</n-button>
           </n-space>
         </template>
       </n-drawer-content>
@@ -243,6 +272,8 @@ import {
   NSelect,
   NSpace,
   NSpin,
+  NTabPane,
+  NTabs,
   useMessage,
 } from "naive-ui";
 import {
@@ -255,9 +286,11 @@ import {
   LayersOutline,
 } from "@vicons/ionicons5";
 import {RouterLink} from "vue-router";
+import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import type {Client, Equipment, EquipmentCategory} from "@shared/types.js";
+import XlsxImportModal from "../components/XlsxImportModal.vue";
 
 const message = useMessage();
 const { confirm } = useConfirm();
@@ -343,10 +376,14 @@ const displayStats = computed(() => {
   }
   return counts;
 });
+const showImport = ref(false);
 const showEdit = ref(false);
 const editing = ref<Partial<Equipment> | null>(null);
 const saving = ref(false);
 const backfilling = ref(false);
+const drawerTab = ref<"details" | "history">("details");
+const history = ref<EquipmentHistoryEvent[]>([]);
+const historyLoading = ref(false);
 
 const clientOptions = computed<SelectOption[]>(() =>
   clients.value.map((c) => ({ label: c.display_name, value: c.id.toString() }))
@@ -414,7 +451,13 @@ function openCreate() {
 
 function openEdit(r: Equipment) {
   editing.value = { ...r };
+  drawerTab.value = "details";
+  history.value = [];
   showEdit.value = true;
+  if (r.id) {
+    historyLoading.value = true;
+    api.equipment.history(r.id).then(h => { history.value = h; }).catch(() => {}).finally(() => { historyLoading.value = false; });
+  }
 }
 
 async function save() {
@@ -744,5 +787,99 @@ html[data-theme="light"] .row__tag { background: rgba(24, 160, 88, 0.10); }
   background: var(--bg-card);
   border: 1px dashed var(--border-color);
   border-radius: 14px;
+}
+
+/* ── History timeline ────────────────────────────────────────────────────── */
+.hist { display: flex; flex-direction: column; gap: 0; }
+.hist__item {
+  display: flex;
+  gap: 12px;
+  position: relative;
+  padding-bottom: 20px;
+}
+.hist__item:last-child { padding-bottom: 0; }
+.hist__line {
+  position: absolute;
+  left: 7px;
+  top: 20px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border-color);
+}
+.hist__item:last-child .hist__line { display: none; }
+.hist__dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  background: var(--brand-color);
+  border: 2px solid var(--bg-card);
+  z-index: 1;
+}
+.hist__dot--expired  { background: #d03050; }
+.hist__dot--active   { background: #18a058; }
+.hist__dot--renewed  { background: #2080f0; }
+.hist__dot--cancelled { background: var(--text-muted); }
+
+.hist__body { flex: 1; min-width: 0; }
+.hist__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+.hist__num {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+}
+.hist__status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.hist__status--active   { background: rgba(24,160,88,.12); color: #18a058; }
+.hist__status--expired  { background: rgba(208,48,80,.10); color: #d03050; }
+.hist__status--renewed  { background: rgba(32,128,240,.10); color: #2080f0; }
+.hist__status--cancelled { background: var(--bg-elevated); color: var(--text-muted); }
+
+.hist__dates {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+.hist__overdue { color: #d03050; font-weight: 600; }
+.hist__warn    { color: #f0a020; font-weight: 600; }
+
+.hist__meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.hist__meta span + span::before { content: "·"; margin-left: 4px; }
+.hist__doc-link {
+  font-size: 12px;
+  color: var(--brand-color);
+  text-decoration: none;
+  display: block;
+  margin-top: 3px;
+}
+.hist__doc-link:hover { text-decoration: underline; }
+.hist__empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 32px 0;
 }
 </style>

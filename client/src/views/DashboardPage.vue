@@ -35,6 +35,7 @@
       <ReminderCalendar
         :loading="remindersStore.loading"
         :rows="remindersStore.rows"
+        :expiry-items="expiryItems"
         @refresh="remindersStore.fetch({ limit: 500 }, true)"
       />
 
@@ -98,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted} from "vue";
+import {computed, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NIcon, NSpin} from "naive-ui";
 import {
@@ -113,6 +114,8 @@ import {
 import {useDashboardStore} from "../stores/dashboard.js";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useAuthStore} from "../stores/auth.js";
+import type {ExpiryCalendarItem} from "../services/apiService.js";
+import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 
@@ -121,9 +124,14 @@ const remindersStore = useRemindersStore();
 const authStore = useAuthStore();
 const router = useRouter();
 const stats = computed(() => store.stats);
-onMounted(() => {
+const expiryItems = ref<ExpiryCalendarItem[]>([]);
+
+onMounted(async () => {
   if (!store.stats) store.fetch();
   if (!remindersStore.rows.length) remindersStore.fetch({ limit: 500 });
+  try {
+    expiryItems.value = await api.equipment.expiryCalendar();
+  } catch { /* non-critical */ }
 });
 
 const userName = computed(() => {

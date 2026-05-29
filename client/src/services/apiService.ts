@@ -18,6 +18,33 @@ import type {
   UserSettings,
 } from "../../src/shared/types.js";
 
+export interface EquipmentHistoryEvent {
+  id: string;
+  contract_type: string | null;
+  contract_number: string | null;
+  start_date: string | null;
+  expiry_date: string | null;
+  status: string | null;
+  document_id: string | null;
+  document_name: string | null;
+  inspector: string | null;
+  load_capacity_test: string | null;
+  test_pressure: string | null;
+  pass_fail: string | null;
+  days_until: number | null;
+}
+
+export interface ExpiryCalendarItem {
+  id: string;
+  expiry_date: string;
+  contract_type: string | null;
+  contract_number: string | null;
+  client_name: string | null;
+  equipment_name: string | null;
+  days_until: number;
+  urgency: "overdue" | "critical" | "warning" | "ok";
+}
+
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const BASE = `${SERVER}/api`;
 
@@ -226,6 +253,24 @@ export const api = {
     update: (id: string, body: Partial<Equipment>) => put<Equipment>(`/equipment/${id}`, body),
     delete: (id: string) => del(`/equipment/${id}`),
     deleteAll: () => del("/equipment"),
+    expiryCalendar: (params?: { from?: string; to?: string }) =>
+      get<ExpiryCalendarItem[]>(`/equipment/expiry-calendar${qs(params)}`),
+    history: (id: string) => get<EquipmentHistoryEvent[]>(`/equipment/${id}/history`),
+    importPreview: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${BASE}/equipment/import-xlsx/preview`, { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+      return res.json() as Promise<{ headers: string[]; total: number; preview: Record<string, string>[] }>;
+    },
+    importConfirm: async (file: File, mapping: Record<string, string>) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("mapping", JSON.stringify(mapping));
+      const res = await fetch(`${BASE}/equipment/import-xlsx/confirm`, { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+      return res.json() as Promise<{ ok: boolean; created: number; skipped: number }>;
+    },
   },
 
   assets: {

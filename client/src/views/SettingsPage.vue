@@ -94,6 +94,15 @@
                 placeholder="90, 60, 30"
               />
             </n-form-item>
+            <n-form-item label="אימייל הסלמה (supervisor)">
+              <n-input v-model:value="form.escalationEmail" placeholder="supervisor@example.com" />
+            </n-form-item>
+            <n-form-item label="ימי איחור לפני הסלמה">
+              <n-input-number v-model:value="form.escalationThresholdDays" :max="30" :min="1" />
+            </n-form-item>
+            <n-alert :show-icon="false" style="margin-top: 4px; font-size: 12px" type="info">
+              אם תזכורת לא טופלה תוך N ימים מתאריכה, יישלח אימייל נוסף לכתובת ההסלמה.
+            </n-alert>
           </n-form>
         </n-card>
 
@@ -118,15 +127,29 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch, computed } from "vue";
+import {computed, onMounted, ref} from "vue";
 import PageHeader from "../components/PageHeader.vue";
 import {
-  NH2, NCard, NForm, NFormItem, NInput, NInputNumber, NRadioGroup, NRadio,
-  NSwitch, NGrid, NGi, NSpace, NButton, NSpin, NSelect, useMessage,
+  NAlert,
+  NButton,
+  NCard,
+  NForm,
+  NFormItem,
+  NGi,
+  NGrid,
+  NInput,
+  NInputNumber,
+  NRadio,
+  NRadioGroup,
+  NSelect,
+  NSpace,
+  NSpin,
+  NSwitch,
+  useMessage,
 } from "naive-ui";
-import { useSettingsStore } from "../stores/settings.js";
-import { api } from "../services/apiService.js";
-import type { AppSettings, EmailTemplate } from "@shared/types.js";
+import {useSettingsStore} from "../stores/settings.js";
+import {api} from "../services/apiService.js";
+import type {AppSettings, EmailTemplate} from "@shared/types.js";
 
 const settingsStore = useSettingsStore();
 const message = useMessage();
