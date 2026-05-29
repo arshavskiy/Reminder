@@ -10,8 +10,10 @@ export function startScheduler() {
   if (!settings.reminderEnabled) return;
 
   checkReminders().catch(console.error);
+  checkEscalations().catch(console.error);
   _timer = setInterval(() => {
     checkReminders().catch(console.error);
+    checkEscalations().catch(console.error);
   }, settings.reminderCheckIntervalMs);
 
   console.log(
@@ -139,6 +141,61 @@ async function markSent(reminder: ReminderWithContext) {
       source_type: "reminder",
       created_at: new Date(),
     } as any);
+  }
+}
+
+async function checkEscalations() {
+  const settings = getSettings();
+  if (!settings.escalationEmail) return;
+
+  const threshold = settings.escalationThresholdDays ?? 3;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - threshold);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+  // Reminders still pending N+ days past their trigger date
+  const overdue = await col("reminders")
+    .find({ status: "pending", trigger_date: { $lte: cutoffIso } })
+    .toArray();
+
+  if (!overdue.length) return;
+
+  // IDs that already have an escalation log entry
+  const escalatedLogs = await col("email_log")
+    .find({ log_type: "escalation", reminder_id: { $in: overdue.map((r: any) => r._id?.toString()) } })
+    .project({ reminder_id: 1 })
+    .toArray();
+  const escalatedIds = new Set(escalatedLogs.map((l: any) => l.reminder_id));
+
+  for (const reminder of overdue) {
+    const remId = reminder._id?.toString();
+    if (escalatedIds.has(remId)) continue;
+
+    const r = reminder as any;
+    const subject = `[הסלמה] תזכורת לא טופלה: ${r.title}`;
+    const body = `התזכורת "${r.title}" לא טופלה במשך ${threshold} ימים מאז ${r.trigger_date}. נא לטפל.`;
+
+    const result = await sendReminderEmail(
+      { ...r, id: remId, client_name: null, document_name: null, title: subject, body } as ReminderWithContext,
+      [settings.escalationEmail]
+    );
+
+    await col("email_log").insertOne({
+      reminder_id: remId,
+      log_type: "escalation",
+      to_address: settings.escalationEmail,
+      subject,
+      sent_at: new Date(),
+      success: result.success ? 1 : 0,
+      error: result.error ?? null,
+      smtp_host: settings.smtpHost || "in-app-only",
+    } as any);
+
+    if (result.success) {
+      console.log(`[scheduler] Escalation sent for reminder ${remId} to ${settings.escalationEmail}`);
+    } else {
+      console.warn(`[scheduler] Escalation failed for reminder ${remId}: ${result.error}`);
+    }
   }
 }
 

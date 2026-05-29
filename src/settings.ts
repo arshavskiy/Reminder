@@ -44,6 +44,9 @@ const DEFAULTS: AppSettings = {
   allowedEmails: process.env.ALLOWED_EMAILS?.split(",").map(e => e.trim()) ?? [],
 
   userDocumentLimit: parseInt(process.env.USER_DOCUMENT_LIMIT ?? "25"),
+
+  escalationEmail: process.env.ESCALATION_EMAIL ?? "",
+  escalationThresholdDays: 3,
 };
 
 function resolveDataDir(): string {

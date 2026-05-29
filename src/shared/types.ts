@@ -54,6 +54,10 @@ export interface AppSettings {
 
   // Quotas
   userDocumentLimit: number;
+
+  // Escalation
+  escalationEmail: string;
+  escalationThresholdDays: number;
 }
 
 // Phase 2: Authentication types
