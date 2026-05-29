@@ -416,10 +416,10 @@ const navItems = [
   { key: "personal",      icon: "👤", label: "פרטים אישיים" },
   { key: "engineer",      icon: "🔧", label: "פרופיל מהנדס" },
   { key: "certs",         icon: "📜", label: "תעודות והסמכות" },
-  { key: "stats",         icon: "📊", label: "סטטיסטיקות" },
-  { key: "notifications", icon: "🔔", label: "התראות ועדכונים" },
+  // { key: "stats",         icon: "📊", label: "סטטיסטיקות" },
+  // { key: "notifications", icon: "🔔", label: "התראות ועדכונים" },
   { key: "settings",      icon: "⚙️", label: "הגדרות" },
-  { key: "theme",         icon: "🎨", label: "נושא עיצוב" },
+  // { key: "theme",         icon: "🎨", label: "נושא עיצוב" },
   { key: "subscription",  icon: "💳", label: "מנוי ותשלומים" },
 ];
 

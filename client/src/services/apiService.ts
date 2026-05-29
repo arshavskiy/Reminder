@@ -140,6 +140,8 @@ export const api = {
     downloadUrl: (id: string) => `${BASE}/documents/${id}/download`,
     reprocess: (id: string) =>
       post<{ ok: boolean; fields?: Record<string, unknown> | null; document?: Document }>(`/documents/${id}/reprocess`),
+    updateFields: (id: string, fields: Record<string, unknown>) =>
+      put<{ ok: boolean; fields: Record<string, unknown> }>(`/documents/${id}/fields`, fields),
   },
 
   clients: {
@@ -256,6 +258,25 @@ export const api = {
     expiryCalendar: (params?: { from?: string; to?: string }) =>
       get<ExpiryCalendarItem[]>(`/equipment/expiry-calendar${qs(params)}`),
     history: (id: string) => get<EquipmentHistoryEvent[]>(`/equipment/${id}/history`),
+    downloadReport: async (id: string) => {
+      const res = await fetch(`${BASE}/equipment/${id}/report.pdf`, { credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename\*=UTF-8''(.+)|filename="([^"]+)"/);
+      const filename = match
+        ? decodeURIComponent(match[1] ?? match[2])
+        : `equipment-${id}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    },
     importPreview: async (file: File) => {
       const fd = new FormData();
       fd.append("file", file);

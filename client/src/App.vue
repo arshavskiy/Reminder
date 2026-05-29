@@ -108,7 +108,7 @@ import {BriefcaseOutline, MoonOutline, SunnyOutline,} from "@vicons/ionicons5";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
 import {useAuthStore} from "./stores/auth.js";
-import {heIL, dateHeIL} from "./locales/heIL.js";
+import {dateHeIL, heIL} from "./locales/heIL.js";
 
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
@@ -185,6 +185,7 @@ const allNav = [
   {label: "מסמכים", key: "documents", minRole: "user"},
   {label: "תסקירים", key: "contracts", minRole: "user"},
   {label: "הגדרת ציוד", key: "equipment", minRole: "user"},
+  {label: "שטח", key: "field", minRole: "user"},
   {label: "לקוחות", key: "clients", minRole: "user"},
   {label: "פרופיל", key: "profile", minRole: "user"},
   {label: "תבניות", key: "email-templates", minRole: "user"},

@@ -102,6 +102,8 @@
               </p>
             </div>
             <div class="row__actions">
+              <button class="btn btn--xs btn--ghost" @click="openHistory(r)">היסטוריה</button>
+              <button class="btn btn--xs btn--ghost" @click="api.equipment.downloadReport(r.id)">PDF</button>
               <button class="btn btn--xs btn--ghost" @click="openEdit(r)">ערוך</button>
               <button class="btn btn--xs btn--ghost btn--danger" @click="del(r)">מחק</button>
             </div>
@@ -452,6 +454,17 @@ function openCreate() {
 function openEdit(r: Equipment) {
   editing.value = { ...r };
   drawerTab.value = "details";
+  history.value = [];
+  showEdit.value = true;
+  if (r.id) {
+    historyLoading.value = true;
+    api.equipment.history(r.id).then(h => { history.value = h; }).catch(() => {}).finally(() => { historyLoading.value = false; });
+  }
+}
+
+function openHistory(r: Equipment) {
+  editing.value = { ...r };
+  drawerTab.value = "history";
   history.value = [];
   showEdit.value = true;
   if (r.id) {

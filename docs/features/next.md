@@ -73,6 +73,9 @@ Currently `SettingsPage.vue` shows all settings to all users. Should:
 | Reminder Escalation | `checkEscalations()` in scheduler; `escalationEmail` + `escalationThresholdDays` settings |
 | Equipment Service History | "היסטוריה" tab in equipment drawer; `GET /api/equipment/:id/history` |
 | Bulk XLSX Equipment Import | `XlsxImportModal.vue`; preview + column-mapping + confirm; `import-xlsx/preview` + `confirm` endpoints |
+| PDF Inspection Report | `GET /api/equipment/:id/report.pdf`; pdfkit + NotoSansHebrew; "PDF" button on each equipment row |
+| PWA + Field Inspection Mode | `vite-plugin-pwa`; `FieldPage.vue` at `/field`; mobile search, history view, camera capture, offline support |
+| UI visibility fixes | "היסטוריה" direct button on equipment rows; legend CSS in ReminderCalendar |
 
 ---
 

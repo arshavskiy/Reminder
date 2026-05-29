@@ -95,12 +95,19 @@
         <div class="data-card">
           <div class="data-card__head">
             <span class="data-card__title">נתונים שחולצו</span>
-            <n-tag v-if="extractedFields.length" :bordered="false" size="small" type="success">
-              {{ extractedFields.length }} שדות
-            </n-tag>
+            <div class="data-card__head-actions">
+              <n-tag v-if="extractionRaw" :bordered="false" size="small" type="success">
+                {{ extractedFields.filter(f => f.value !== null && f.value !== '').length }} שדות
+              </n-tag>
+              <template v-if="editingFields">
+                <n-button size="small" @click="cancelEdit">ביטול</n-button>
+                <n-button :loading="savingFields" size="small" type="primary" @click="saveFields">שמור</n-button>
+              </template>
+              <n-button v-else-if="extractionRaw" size="small" @click="startEdit">✎ ערוך</n-button>
+            </div>
           </div>
           <div class="data-card__body">
-            <div v-if="!extractedFields.length" class="data-empty">
+            <div v-if="!extractionRaw" class="data-empty">
               <span>עדיין לא חולצו נתונים מהמסמך</span>
               <n-button :loading="extracting" class="mt-3" size="small" type="primary" @click="rerunExtract">
                 ✨ הרץ חילוץ AI
@@ -110,7 +117,14 @@
               <div v-for="f in extractedFields" :key="f.key" class="fields-row">
                 <span class="fields-label">{{ f.label }}</span>
                 <span class="fields-value">
-                  <template v-if="Array.isArray(f.value)">{{ f.value.join(', ') || '—' }}</template>
+                  <template v-if="editingFields && !Array.isArray(f.value) && (f.value === null || typeof f.value !== 'object')">
+                    <input
+                      v-model="fieldEdits[f.key]"
+                      :placeholder="f.label"
+                      class="fields-input"
+                    />
+                  </template>
+                  <template v-else-if="Array.isArray(f.value)">{{ f.value.join(', ') || '—' }}</template>
                   <template v-else-if="f.value && typeof f.value === 'object'">{{ JSON.stringify(f.value) }}</template>
                   <template v-else>{{ f.value ?? '—' }}</template>
                 </span>
@@ -181,6 +195,9 @@ const downloading = ref(false);
 const extracting = ref(false);
 const linkedContracts = ref<ContractWithClient[]>([]);
 const linkedReminders = ref<ReminderWithContext[]>([]);
+const editingFields = ref(false);
+const savingFields = ref(false);
+const fieldEdits = ref<Record<string, string>>({});
 
 const isPdf = computed(() => doc.value?.mime_type === "application/pdf");
 const isImage = computed(() => doc.value?.mime_type?.startsWith("image/") ?? false);
@@ -280,53 +297,45 @@ function formatSize(bytes: number | null | undefined) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-const LABEL_MAP: Record<string, string> = {
-  client_company: "פרטי הלקוח/תופש",
-  client_name: "איש קשר",
-  contact_person: "איש קשר",
-  client_phone: "נייד",
-  contact_phone: "נייד",
-  client_email: "מייל",
-  contact_email: "מייל",
-  client_address: "ישוב / רחוב",
-  po_box: "ת.ד",
-  client_zipcode: "מיקוד",
-  client_id: "ח.פ / ת.ז",
-  report_number: "מספר תסקיר",
-  document_number: "מספר מסמך",
-  contract_number: "מספר חוזה",
-  invoice_number: "מספר חשבונית",
-  document_type: "סוג מסמך",
-  contract_type: "סוג חוזה",
-  inspection_date: "תאריך בדיקה",
-  next_inspection_date: "בתוקף עד",
-  start_date: "תאריך התחלה",
-  expiry_date: "תאריך תפוגה",
-  issue_date: "תאריך הוצאה",
-  payment_due_date: "תאריך לתשלום",
-  equipment_description: "תיאור מכונת הרמה",
-  license_number: "מספר רישוי",
-  equipment_type: "סוג ציוד",
-  manufacturer: "יצרן",
-  model: "דגם",
-  serial_number: "מספר סידורי",
-  load_capacity: "כושר עמיסה",
-  findings: "ממצאים",
-  notes: "הערות",
-  summary_hebrew: "תקציר",
-  auto_renewal: "חידוש אוטומטי",
-  counterparty: "צד שכנגד",
-  vat_amount: 'סכום מע"מ',
-};
+const DEFAULT_FIELDS: { key: string; label: string }[] = [
+  { key: "report_number",         label: "מספר תסקיר" },
+  { key: "client_company",        label: "שם החברה / תופש" },
+  { key: "contact_person",        label: "איש קשר" },
+  { key: "contact_phone",         label: "נייד" },
+  { key: "contact_email",         label: "מייל" },
+  { key: "client_address",        label: "ישוב / רחוב" },
+  { key: "po_box",                label: "ת.ד" },
+  { key: "client_zipcode",        label: "מיקוד" },
+  { key: "inspection_date",       label: "תאריך בדיקה" },
+  { key: "next_inspection_date",  label: "בתוקף עד" },
+  { key: "equipment_description", label: "תיאור מכונת הרמה" },
+  { key: "license_number",        label: "מספר רישוי" },
+  { key: "manufacturer",          label: "יצרן" },
+  { key: "model",                 label: "דגם" },
+  { key: "serial_number",         label: "מספר סידורי" },
+  { key: "load_capacity",         label: "כושר עמיסה" },
+  { key: "findings",              label: "ממצאים / הערות" },
+  { key: "notes",                 label: "תיאור" },
+];
+
+const LABEL_MAP: Record<string, string> = Object.fromEntries(
+  DEFAULT_FIELDS.map(f => [f.key, f.label])
+);
 
 const SKIP_KEYS = new Set(["_equipment", "parties", "tasks", "amount", "currency"]);
 
 const extractedFields = computed(() => {
-  const raw = extractionRaw.value;
-  if (!raw) return [];
-  return Object.entries(raw)
-    .filter(([k, v]) => !SKIP_KEYS.has(k) && v !== null && v !== "" && v !== undefined)
-    .map(([k, v]) => ({ key: k, label: LABEL_MAP[k] ?? k, value: v }));
+  const raw = extractionRaw.value ?? {};
+  const defaultKeys = new Set(DEFAULT_FIELDS.map(f => f.key));
+  // Extra keys in raw that aren't in the default list and aren't skipped
+  const extraFields = Object.keys(raw)
+    .filter(k => !SKIP_KEYS.has(k) && !defaultKeys.has(k))
+    .map(k => ({ key: k, label: LABEL_MAP[k] ?? k }));
+  return [...DEFAULT_FIELDS, ...extraFields].map(f => ({
+    key: f.key,
+    label: f.label,
+    value: raw[f.key] ?? null,
+  }));
 });
 
 const displayText = computed(() => extractionRawText.value ?? doc.value?.raw_text ?? null);
@@ -361,19 +370,23 @@ async function reloadDoc() {
   const rows = await fetch(`${SERVER}/api/documents/${id}/extractions`, { credentials: "include" })
     .then((r) => r.ok ? r.json() : [])
     .catch(() => []);
+  // doc.extracted_fields is the authoritative source (updated by PUT /fields)
+  if ((doc.value as any).extracted_fields) {
+    try { extractionRaw.value = JSON.parse((doc.value as any).extracted_fields); } catch {}
+  }
   if (Array.isArray(rows) && rows.length) {
     const best = rows.find((r: any) => (r.parsed_ok && r.result_json) || r.fields || r.raw_json) ?? rows[0];
-    if (best?.fields) {
-      extractionRaw.value = best.fields;
-    } else if (best?.result_json) {
-      try { extractionRaw.value = JSON.parse(best.result_json); } catch {}
-    } else if (best?.raw_json) {
-      try { extractionRaw.value = JSON.parse(best.raw_json); } catch {}
+    // Only use extraction record if document has no extracted_fields yet
+    if (!extractionRaw.value) {
+      if (best?.fields) {
+        extractionRaw.value = best.fields;
+      } else if (best?.result_json) {
+        try { extractionRaw.value = JSON.parse(best.result_json); } catch {}
+      } else if (best?.raw_json) {
+        try { extractionRaw.value = JSON.parse(best.raw_json); } catch {}
+      }
     }
     if (best?.raw_text) extractionRawText.value = best.raw_text;
-  }
-  if (!extractionRaw.value && (doc.value as any).extracted_fields) {
-    try { extractionRaw.value = JSON.parse((doc.value as any).extracted_fields); } catch {}
   }
 }
 
@@ -407,6 +420,34 @@ function remindersForContract(contractId: string | number): ReminderWithContext[
 function contractKind(contract: ContractWithClient): "contract" | "inspection" | "all" {
   const text = `${contract.contract_type ?? ""} ${contract.document_name ?? ""}`;
   return text.includes("תסקיר") || text.toLowerCase().includes("inspection") ? "inspection" : "contract";
+}
+
+function startEdit() {
+  fieldEdits.value = Object.fromEntries(
+    extractedFields.value.map(f => [f.key, f.value != null && !Array.isArray(f.value) && typeof f.value !== 'object' ? String(f.value) : ''])
+  );
+  editingFields.value = true;
+}
+
+function cancelEdit() {
+  editingFields.value = false;
+  fieldEdits.value = {};
+}
+
+async function saveFields() {
+  if (!doc.value) return;
+  savingFields.value = true;
+  try {
+    await api.documents.updateFields(String(doc.value.id), fieldEdits.value);
+    editingFields.value = false;
+    fieldEdits.value = {};
+    message.success("הנתונים עודכנו — תזכורות מקושרות עודכנו אוטומטית");
+    await reloadDoc();
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    savingFields.value = false;
+  }
 }
 
 onMounted(async () => {
@@ -562,6 +603,11 @@ onMounted(async () => {
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-elevated);
 }
+.data-card__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .data-card__title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .data-card__body { padding: 14px 16px; }
 .data-card__body--no-pad { padding: 0; }
@@ -598,6 +644,22 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--text-primary);
   word-break: break-word;
+}
+.fields-input {
+  width: 100%;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-body);
+  border: 1px solid var(--brand-color);
+  border-radius: 6px;
+  padding: 4px 8px;
+  outline: none;
+  direction: rtl;
+  box-sizing: border-box;
+}
+.fields-input:focus {
+  box-shadow: 0 0 0 2px rgba(99, 226, 183, 0.2);
 }
 
 /* ── Raw text ────────────────────────────────────────────────────────────── */

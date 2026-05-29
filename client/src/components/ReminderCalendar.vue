@@ -2,10 +2,27 @@
   <section class="rcal">
     <header class="rcal__head">
       <div class="rcal__title-wrap">
-        <h3 class="rcal__title">לוח תזכורות</h3>
-        <span class="rcal__count">{{ rows.length }}</span>
+        <h3 class="rcal__title">לוח תזכורות ותעודות</h3>
+        <span class="rcal__count">{{ rows.length }} תזכורות</span>
+        <span v-if="(expiryItems ?? []).length" class="rcal__expiry-count">
+          {{ (expiryItems ?? []).length }} תעודות
+        </span>
       </div>
       <div class="rcal__controls">
+        <div class="rcal__legend">
+          <span class="rcal__legend-item">
+            <span class="rcal__legend-dot" style="background:var(--brand-color)"></span> תזכורות
+          </span>
+          <span class="rcal__legend-item">
+            <span class="rcal__legend-dot" style="background:#d03050"></span> פג תוקף
+          </span>
+          <span class="rcal__legend-item">
+            <span class="rcal__legend-dot" style="background:#f0a020"></span> ≤30 יום
+          </span>
+          <span class="rcal__legend-item">
+            <span class="rcal__legend-dot" style="background:#e8c84a"></span> ≤90 יום
+          </span>
+        </div>
         <div class="rcal__toggle">
           <n-button
             :type="view === 'month' ? 'primary' : 'default'"
@@ -361,6 +378,9 @@ function onNavigate(target: { type: "contract" | "document"; id: number | string
   text-align: start;
   font-family: inherit;
   transition: filter 0.12s;
+  max-width: 100%;
+  width: 100%;
+  display: block;
 }
 .rcal__pill:hover { filter: brightness(1.1); }
 .rcal__pill--sent { background: #2080f0; }
@@ -431,4 +451,32 @@ function onNavigate(target: { type: "contract" | "document"; id: number | string
 .rcal__agenda-dot--expiry { border-radius: 2px; }
 .rcal__agenda-title { font-weight: 500; flex: 1; }
 .rcal__agenda-client { color: var(--text-muted); font-size: 12px; }
+
+.rcal__legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rcal__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.rcal__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rcal__expiry-count {
+  font-size: 12px;
+  background: rgba(240, 160, 32, 0.15);
+  color: #f0a020;
+  border-radius: 10px;
+  padding: 2px 8px;
+}
 </style>
