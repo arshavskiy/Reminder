@@ -251,6 +251,170 @@ export function registerEquipmentRoutes(app: express.Application) {
     res.json(events);
   });
 
+  // GET /api/equipment/:id/report.pdf
+  app.get("/api/equipment/:id/report.pdf", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const eq = await col<EquipmentDoc>("equipment").findOne({ ...idFilter(req.params.id), user_id: userId });
+    if (!eq) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Fetch history events (same logic as /history)
+    const docIdSet = new Set<string>();
+    if ((eq as any).document_id) docIdSet.add(String((eq as any).document_id));
+    if ((eq as any).serial_number) {
+      const siblings = await col("equipment")
+        .find({ serial_number: (eq as any).serial_number, user_id: userId })
+        .project({ document_id: 1 }).toArray();
+      for (const s of siblings as any[]) if (s.document_id) docIdSet.add(String(s.document_id));
+    }
+    const docIds = [...docIdSet];
+    const contracts = docIds.length
+      ? await col("contracts").find({ document_id: { $in: docIds }, user_id: userId }).sort({ start_date: -1 }).toArray()
+      : [];
+    const events = await Promise.all(contracts.map(async (c: any) => {
+      let document_name: string | null = null;
+      let inspector: string | null = null;
+      let extracted: Record<string, any> = {};
+      if (c.document_id) {
+        try {
+          const doc = await col("documents").findOne({ _id: new ObjectId(String(c.document_id)) }) as any;
+          document_name = doc?.file_name ?? null;
+          if (doc?.extracted_fields) { try { extracted = JSON.parse(doc.extracted_fields); } catch {} }
+          inspector = extracted.inspector ?? extracted.contact_person ?? null;
+        } catch {}
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      const expiry = c.expiry_date as string | null;
+      const daysUntil = expiry ? Math.ceil((new Date(expiry).getTime() - new Date(today).getTime()) / 86400000) : null;
+      return { contract_type: c.contract_type ?? null, contract_number: c.contract_number ?? null, start_date: c.start_date ?? null, expiry_date: expiry, status: c.status ?? null, document_name, inspector, load_capacity_test: extracted.load_capacity_test ?? null, pass_fail: extracted.pass_fail ?? extracted.result ?? null, days_until: daysUntil };
+    }));
+
+    // Build PDF — buffer entirely before sending so errors can return proper HTTP status
+    try {
+      const PDFDocument = (await import("pdfkit")).default;
+      const fontPath = "C:/Windows/Fonts/calibri.ttf";
+
+      // Collect the PDF into a buffer first
+      const pdfBuffer: Buffer = await new Promise((resolve, reject) => {
+        const doc = new PDFDocument({ size: "A4", margin: 50, info: { Title: `Equipment Report` } });
+        const chunks: Buffer[] = [];
+        doc.on("data", (c: Buffer) => chunks.push(c));
+        doc.on("end", () => resolve(Buffer.concat(chunks)));
+        doc.on("error", reject);
+
+        let fontAvailable = false;
+        try {
+          doc.registerFont("Calibri", fontPath);
+          doc.font("Calibri");
+          fontAvailable = true;
+        } catch { fontAvailable = false; }
+
+        const setFont = (size: number) => {
+          try {
+            doc.font(fontAvailable ? "Calibri" : "Helvetica").fontSize(size);
+          } catch {
+            doc.font("Helvetica").fontSize(size);
+          }
+        };
+
+        // For Hebrew: font renders correctly; without font just output as-is (latin fallback)
+        const t = (s: string | null | undefined, fallback = "") => s ?? fallback;
+
+        // ── Header ────────────────────────────────────────────────────────
+        setFont(18);
+        doc.text(t(eq.name, "Equipment Report"), { align: "right" });
+        doc.moveDown(0.2);
+        setFont(10);
+        doc.text(new Date().toLocaleDateString("he-IL"), { align: "right" });
+        doc.moveDown(0.8);
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke("#cccccc");
+        doc.moveDown(0.8);
+
+        // ── Equipment details ─────────────────────────────────────────────
+        setFont(13);
+        doc.text("פרטי הציוד", { align: "right" });
+        doc.moveDown(0.4);
+        setFont(10);
+
+        const detailRows: [string, string | null | undefined][] = [
+          ["יצרן", eq.manufacturer],
+          ["דגם", eq.model],
+          ["מספר סידורי", eq.serial_number],
+          ["קטגוריה", eq.category],
+          ["עומס עבודה", eq.capacity],
+          ["עומס מבחן", eq.load_capacity_test],
+          ["רדיוס עומס", eq.load_radius],
+          ["לקוח", (eq as any).client_name],
+        ];
+        for (const [label, value] of detailRows) {
+          if (!value) continue;
+          doc.text(`${t(label)}: ${value}`, { align: "right" });
+        }
+        if (eq.description) {
+          doc.moveDown(0.3);
+          doc.text(`תיאור: ${eq.description}`, { align: "right" });
+        }
+
+        // ── Inspection history ────────────────────────────────────────────
+        doc.moveDown(0.8);
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke("#cccccc");
+        doc.moveDown(0.8);
+        setFont(13);
+        doc.text("היסטוריית בדיקות", { align: "right" });
+        doc.moveDown(0.5);
+
+        if (events.length === 0) {
+          setFont(10);
+          doc.text("אין רשומות בדיקה", { align: "right" });
+        } else {
+          for (const ev of events) {
+            setFont(11);
+            const num = ev.contract_number ? ` (#${ev.contract_number})` : "";
+            doc.text(`${t(ev.contract_type, "בדיקה")}${num}`, { align: "right" });
+            setFont(10);
+            if (ev.start_date) doc.text(`תאריך: ${ev.start_date}`, { align: "right" });
+            if (ev.expiry_date) {
+              const daysStr = ev.days_until !== null
+                ? (ev.days_until < 0 ? ` (פג לפני ${Math.abs(ev.days_until)} ימים)` : ` (${ev.days_until} ימים)`)
+                : "";
+              doc.text(`פקיעה: ${ev.expiry_date}${daysStr}`, { align: "right" });
+            }
+            if (ev.inspector) doc.text(`בודק: ${ev.inspector}`, { align: "right" });
+            if (ev.load_capacity_test) doc.text(`עומס מבחן: ${ev.load_capacity_test}`, { align: "right" });
+            if (ev.pass_fail) doc.text(`תוצאה: ${ev.pass_fail}`, { align: "right" });
+            doc.moveDown(0.5);
+          }
+        }
+
+        doc.end();
+      });
+
+      // Filename: use equipment name + serial/report number
+      const safeName = (eq.name ?? "equipment").replace(/[^\w֐-׿\s-]/g, "").trim().replace(/\s+/g, "_");
+      const safeSerial = (eq.serial_number ?? req.params.id).replace(/[^\w-]/g, "");
+      const filename = `${safeName}_${safeSerial}.pdf`;
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.end(pdfBuffer);
+
+    } catch (err) {
+      console.error("[PDF] generation error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: String(err) });
+      }
+    }
+  });
+
   // GET /api/equipment/:id
   app.get("/api/equipment/:id", async (req, res) => {
     let userId: string;
