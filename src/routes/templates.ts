@@ -64,11 +64,19 @@ export function registerTemplateRoutes(app: express.Application) {
     if (body.name !== undefined) updates.name = body.name;
     if (body.description !== undefined) updates.description = body.description;
     if (body.match_keywords !== undefined) updates.match_keywords = body.match_keywords;
+    if (body.document_kind !== undefined) updates.document_kind = body.document_kind;
     if (body.fields !== undefined) updates.fields = body.fields;
     if (body.expiry_field !== undefined) updates.expiry_field = body.expiry_field;
     if (body.is_default !== undefined) updates.is_default = body.is_default;
 
+    // Prompt-affecting fields changed — clear the cache so it's rebuilt on next use.
+    const promptInvalidatingFields = ["name", "fields", "expiry_field", "match_keywords"];
+    if (promptInvalidatingFields.some((f) => (body as any)[f] !== undefined)) {
+      updates.cached_system_prompt = null;
+    }
+
     await col("doc_templates").updateOne(filter, { $set: updates });
+    console.log(`[templates] Updated template ${req.params.id}${updates.cached_system_prompt === null ? " (prompt cache cleared)" : ""}`);
     res.json(await loadTemplate(req.params.id));
   });
 

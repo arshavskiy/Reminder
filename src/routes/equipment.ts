@@ -1,8 +1,12 @@
 import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
+import {mkdirSync, writeFileSync} from "fs";
+import {extname, join} from "path";
 import type {Equipment} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {getDataDir} from "../settings";
+import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 
 type EquipmentDoc = Partial<Equipment> & {
   _id?: ObjectId | string;
@@ -413,6 +417,149 @@ export function registerEquipmentRoutes(app: express.Application) {
         res.status(500).json({ error: String(err) });
       }
     }
+  });
+
+  // POST /api/equipment/:id/photos — upload a field photo, save to S3/local, append URL
+  app.post("/api/equipment/:id/photos", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const eq = await col<EquipmentDoc>("equipment").findOne({ ...idFilter(req.params.id), user_id: userId });
+    if (!eq) { res.status(404).json({ error: "Not found" }); return; }
+
+    const multer = await import("multer");
+    const upload = multer.default({
+      storage: multer.default.memoryStorage(),
+      limits: { fileSize: 20 * 1024 * 1024 },
+    }).single("photo");
+
+    upload(req as any, res as any, async (err: any) => {
+      if (err) { res.status(400).json({ error: err.message }); return; }
+      const file = (req as any).file as { buffer: Buffer; mimetype: string; originalname: string } | undefined;
+      if (!file) { res.status(400).json({ error: "No photo file" }); return; }
+
+      const ext = extname(file.originalname).toLowerCase() || ".jpg";
+      const key = `equipment-photos/${req.params.id}/${Date.now()}${ext}`;
+      let photoUrl: string;
+
+      if (spacesEnabled()) {
+        // Save buffer to a temp file then upload to S3
+        const tmpDir = join(getDataDir(), "uploads");
+        mkdirSync(tmpDir, { recursive: true });
+        const tmpPath = join(tmpDir, `photo-${Date.now()}${ext}`);
+        writeFileSync(tmpPath, file.buffer);
+        await uploadToSpaces(tmpPath, key, file.mimetype);
+        photoUrl = await getSpacesSignedUrl(key, 7 * 24 * 3600);
+        // Store the S3 key so we can refresh the URL later; encode as "s3:<key>|<url>"
+        photoUrl = `s3:${key}`;
+      } else {
+        // Local fallback — save to data/equipment-photos/
+        const photosDir = join(getDataDir(), "equipment-photos", req.params.id);
+        mkdirSync(photosDir, { recursive: true });
+        const fileName = `${Date.now()}${ext}`;
+        writeFileSync(join(photosDir, fileName), file.buffer);
+        photoUrl = `/api/equipment/${req.params.id}/photos/${fileName}`;
+      }
+
+      const taken_at = new Date().toISOString();
+      const photoEntry = { key: photoUrl, taken_at };
+
+      await col("equipment").updateOne(
+        idFilter(req.params.id),
+        { $push: { photo_urls: photoEntry } as any, $set: { updated_at: new Date() } }
+      );
+
+      // Return the URL to display — resolve S3 key to signed URL for the response
+      let displayUrl = photoUrl;
+      if (photoUrl.startsWith("s3:")) {
+        displayUrl = await getSpacesSignedUrl(photoUrl.slice(3), 7 * 24 * 3600);
+      }
+
+      res.json({ url: displayUrl, key: photoUrl, taken_at });
+    });
+  });
+
+  // DELETE /api/equipment/:id/photos — remove a photo by its stored key
+  app.delete("/api/equipment/:id/photos", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const { key } = req.body as { key?: string };
+    if (!key) { res.status(400).json({ error: "key required" }); return; }
+
+    await col("equipment").updateOne(
+      { ...idFilter(req.params.id), user_id: userId },
+      { $pull: { photo_urls: { key } } as any, $set: { updated_at: new Date() } }
+    );
+
+    if (key.startsWith("s3:")) {
+      const { deleteFromSpaces } = await import("../storage/spaces.js");
+      await deleteFromSpaces(key.slice(3)).catch(() => {});
+    }
+
+    res.json({ ok: true });
+  });
+
+  // GET /api/equipment/:id/photos/:filename — serve locally stored photo
+  app.get("/api/equipment/:id/photos/:filename", async (req, res) => {
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      const userId = ctx.userId;
+      const eq = await col("equipment").findOne({ ...idFilter(req.params.id), user_id: userId });
+      if (!eq) { res.status(404).end(); return; }
+    } catch {
+      res.status(401).end(); return;
+    }
+
+    const { createReadStream, existsSync } = await import("fs");
+    const filePath = join(getDataDir(), "equipment-photos", req.params.id, req.params.filename);
+    if (!existsSync(filePath)) { res.status(404).end(); return; }
+    const ext = extname(req.params.filename).toLowerCase();
+    const mime = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+    res.setHeader("Content-Type", mime);
+    createReadStream(filePath).pipe(res);
+  });
+
+  // GET /api/equipment/:id/photos/signed — refresh signed URLs for all S3 photos
+  app.get("/api/equipment/:id/photos/signed", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const eq = await col<EquipmentDoc>("equipment").findOne({ ...idFilter(req.params.id), user_id: userId });
+    if (!eq) { res.status(404).json({ error: "Not found" }); return; }
+
+    const stored: { key: string; taken_at: string }[] = (eq as any).photo_urls ?? [];
+    const resolved = await Promise.all(stored.map(async (entry) => {
+      let url: string | null = entry.key;
+      if (entry.key.startsWith("s3:")) {
+        try { url = await getSpacesSignedUrl(entry.key.slice(3), 7 * 24 * 3600); } catch { url = null; }
+      }
+      return url ? { url, key: entry.key, taken_at: entry.taken_at } : null;
+    }));
+
+    const photos = resolved.filter(Boolean) as { url: string; key: string; taken_at: string }[];
+    res.json({ photos });
   });
 
   // GET /api/equipment/:id

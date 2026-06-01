@@ -209,7 +209,9 @@ export async function generateContractReminders(
   const settings = getSettings();
   const today = new Date().toISOString().slice(0, 10);
 
-  const contract = await col("contracts").findOne({ _id: contractId } as any) as any;
+  let contractOid: any;
+  try { const { ObjectId } = await import("mongodb"); contractOid = new ObjectId(contractId); } catch { contractOid = contractId; }
+  const contract = await col("contracts").findOne({ _id: contractOid }) as any;
 
   const baseLabel = (() => {
     const t = (contract?.contract_type ?? "").toLowerCase();
@@ -231,9 +233,14 @@ export async function generateContractReminders(
 
     const expiry = new Date(expiryDate);
     expiry.setDate(expiry.getDate() - days);
-    const triggerDate = expiry.toISOString().slice(0, 10);
+    const calculatedTrigger = expiry.toISOString().slice(0, 10);
 
-    if (triggerDate <= today) continue;
+    // If the expiry date itself is already past, skip entirely — nothing to remind about.
+    if (expiryDate < today) continue;
+
+    // If the advance-warning trigger is already past but expiry is still future,
+    // clamp to today so the scheduler fires it on the next check.
+    const triggerDate = calculatedTrigger < today ? today : calculatedTrigger;
 
     const title = `${baseLabel} ב-${triggerDate} (יעד: ${expiryDate})`;
 

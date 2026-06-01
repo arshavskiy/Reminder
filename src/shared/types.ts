@@ -288,6 +288,14 @@ export type WsEvent =
   | { type: "reminder:fired"; reminderId: string | number; clientId: string | number | null; title: string }
   | { type: "reminder:error"; reminderId: string | number; error: string };
 
+// ── Document kind ───────────────────────────────────────────────────────────
+export type DocumentKind =
+  | "inspection_report"  // תסקיר בדיקה
+  | "contract"           // חוזה / הסכם
+  | "invoice"            // חשבונית
+  | "certificate"        // תעודה / הסמכה / רישיון
+  | "unknown";
+
 // ── Document templates ──────────────────────────────────────────────────────
 export type FieldType =
   | "text"
@@ -312,8 +320,10 @@ export interface DocTemplate {
   name: string;                 // Hebrew, e.g. "תסקיר בדיקה"
   description: string | null;
   match_keywords: string[];     // ["תסקיר", "בדיקה"]
+  document_kind: DocumentKind;  // coarse category used for routing
   fields: TemplateField[];
   expiry_field: string | null;  // key of the date field that drives reminders
+  cached_system_prompt: string | null;  // pre-built AI system prompt; null = regenerate
   is_default: number;
   is_builtin: number;
   created_at: string;
@@ -347,6 +357,7 @@ export interface Equipment {
   client_id: string | null;
   client_name?: string | null;    // enriched from clients collection
   document_name?: string | null;  // enriched from documents collection
+  photo_urls?: { key: string; taken_at: string }[]; // field-captured photos stored in S3 or local
   is_active: number;
   created_at: string;
   updated_at: string;

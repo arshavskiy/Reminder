@@ -8,15 +8,15 @@ const DEFAULTS: AppSettings = {
   theme: "light",
   port: 3737,
 
-  aiBackend: "openai",
-  openAiKey: process.env.OPENAI_LOCAL_API_KEY ?? "",
-  openAiModel: "gpt-4o-mini",
-  ollamaUrl: "http://localhost:11434",
-  ollamaModel: "llama3.1",
+  aiBackend: process.env.AI_BACKEND,
+  openAiKey: process.env.OPENAI_LOCAL_API_KEY,
+  openAiModel: process.env.OPENAI_MODEL,
+  ollamaUrl: process.env.OLLAMA_URL,
+  ollamaModel: process.env.OLLAMA_MODEL,
 
-  ocrLanguage: "heb+eng",
-  autoExtract: true,
-  extractionMaxChars: 8000,
+  ocrLanguage: process.env.OCR_LANGUAGE,
+  autoExtract: process.env.AUTO_EXTRACT,
+  extractionMaxChars: process.env.EXTRACTION_MAX_CHARS,
 
   smtpHost: process.env.SMTP_HOST ?? "",
   smtpPort: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587,

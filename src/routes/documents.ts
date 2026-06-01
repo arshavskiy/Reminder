@@ -142,7 +142,7 @@ export function registerDocumentRoutes(app: express.Application) {
     }
 
     if (userRole === "user") {
-      const count = await col("documents").countDocuments({ user_id: userId });
+      const count = await col("documents").countDocuments({ user_id: userId, ai_extracted: true });
       if (count >= getSettings().userDocumentLimit) {
         res.status(403).json({ error: "document_limit_reached" });
         return;
@@ -183,8 +183,13 @@ export function registerDocumentRoutes(app: express.Application) {
         return;
       }
 
-      if (userRole === "user") {
-        const count = await col("documents").countDocuments({ user_id: userId });
+      const skipAi       = req.query.skipAi       === "true";
+      const skipEntities = req.query.skipEntities === "true";
+      const skipReminders = req.query.skipReminders === "true";
+      const pipelineOptions = { skipAi, skipEntities, skipReminders };
+
+      if (userRole === "user" && !skipAi) {
+        const count = await col("documents").countDocuments({ user_id: userId, ai_extracted: true });
         if (count + files.length > getSettings().userDocumentLimit) {
           res.status(403).json({ error: "document_limit_reached" });
           return;
@@ -204,10 +209,9 @@ export function registerDocumentRoutes(app: express.Application) {
         let displayName = file.originalname;
         try {
           displayName = Buffer.from(file.originalname, "latin1").toString("utf8");
-          // If the result contains replacement chars, the name was already UTF-8
           if (displayName.includes("�")) displayName = file.originalname;
         } catch { /* keep original */ }
-        const id = await importFile(destPath, undefined, userId, displayName);
+        const id = await importFile(destPath, undefined, userId, displayName, pipelineOptions);
         ids.push(String(id));
       }
 
