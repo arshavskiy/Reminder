@@ -103,7 +103,12 @@
                 <n-button size="small" @click="cancelEdit">ביטול</n-button>
                 <n-button :loading="savingFields" size="small" type="primary" @click="saveFields">שמור</n-button>
               </template>
-              <n-button v-else-if="extractionRaw" size="small" @click="startEdit">✎ ערוך</n-button>
+              <template v-else-if="extractionRaw">
+                <n-button size="small" @click="showEmptyFields = !showEmptyFields">
+                  {{ showEmptyFields ? 'הסתר ריקים' : 'הצג הכל' }}
+                </n-button>
+                <n-button size="small" @click="startEdit">✎ ערוך</n-button>
+              </template>
             </div>
           </div>
           <div class="data-card__body">
@@ -114,7 +119,12 @@
               </n-button>
             </div>
             <div v-else class="fields-table">
-              <div v-for="f in extractedFields" :key="f.key" class="fields-row">
+              <div
+                v-for="f in extractedFields"
+                v-show="editingFields || showEmptyFields || (f.value !== null && f.value !== '' && !(Array.isArray(f.value) && f.value.length === 0))"
+                :key="f.key"
+                class="fields-row"
+              >
                 <span class="fields-label">{{ f.label }}</span>
                 <span class="fields-value">
                   <template v-if="editingFields && !Array.isArray(f.value) && (f.value === null || typeof f.value !== 'object')">
@@ -198,6 +208,7 @@ const linkedReminders = ref<ReminderWithContext[]>([]);
 const editingFields = ref(false);
 const savingFields = ref(false);
 const fieldEdits = ref<Record<string, string>>({});
+const showEmptyFields = ref(false);
 
 const isPdf = computed(() => doc.value?.mime_type === "application/pdf");
 const isImage = computed(() => doc.value?.mime_type?.startsWith("image/") ?? false);
@@ -351,15 +362,27 @@ function joinArr(v: unknown): string {
   return v != null ? String(v) : "";
 }
 
-const equipmentColumns = [
+const ALL_EQUIPMENT_COLUMNS = [
   { title: "תיאור", key: "name", ellipsis: true },
   { title: "יצרן", key: "manufacturer", width: 110 },
   { title: "דגם", key: "model", width: 120 },
   { title: 'מ"ס סידורי', key: "serial_number", width: 130 },
   { title: "עומס עבודה", key: "load_capacity_work", width: 110, render: (row: any) => joinArr(row.load_capacity_work) },
   { title: "עומס מבחן", key: "load_capacity_test", width: 110, render: (row: any) => joinArr(row.load_capacity_test) },
-  { title: "רדיוס", key: "load_radius", width: 80, render: (row: any) => joinArr(row.load_radius) },
+  // { title: "רדיוס", key: "load_radius", width: 80, render: (row: any) => joinArr(row.load_radius) },
 ];
+
+// Only show columns that have at least one non-empty value across all rows
+const equipmentColumns = computed(() => {
+  const rows = equipment.value;
+  return ALL_EQUIPMENT_COLUMNS.filter(col => {
+    return rows.some(row => {
+      const v = row[col.key];
+      if (Array.isArray(v)) return v.some(Boolean);
+      return v !== null && v !== undefined && v !== "";
+    });
+  });
+});
 
 async function reloadDoc() {
   const id = route.params.id as string;
