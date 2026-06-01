@@ -2,16 +2,7 @@
   <div class="page2">
     <PageHeader :count="store.total" title="מסמכים">
       <template #actions>
-        <input
-          ref="fileInput"
-          type="file"
-          multiple
-          accept=".pdf,.docx,.xlsx,.txt,.md,.png,.jpg,.jpeg,.tif,.tiff"
-          class="hidden"
-          @change="onFileInputChange"
-        />
-
-        <n-button :disabled="limitReached" :loading="uploading" type="primary" @click="fileInput?.click()">
+        <n-button :disabled="limitReached" :loading="uploading" type="primary" @click="openUploadModal()">
           📂 העלה קבצים
         </n-button>
         <n-button :loading="store.loading" size="small" @click="store.fetch(undefined, true)">↻ רענן</n-button>
@@ -70,11 +61,12 @@
       class="drop-strip"
       @dragover.prevent="!limitReached && (isDragging = true)"
       @dragleave.prevent="isDragging = false"
-      @drop.prevent="!limitReached && onDrop($event)"
+      @click="!limitReached && openUploadModal()"
+      @drop.prevent="!limitReached && onStripDrop($event)"
     >
       <span v-if="limitReached">הגעת למגבלת {{ store.documentLimit }} סריקות</span>
       <span v-else-if="isDragging">שחרר כאן לייבוא...</span>
-      <span v-else> גרור קבצים לכאן או לחץ "העלה קבצים"</span>
+      <span v-else>גרור קבצים לכאן או לחץ "העלה קבצים"</span>
     </div>
 
     <n-alert
@@ -210,7 +202,7 @@
 
       <div v-else-if="!store.loading" class="empty">
         <p>אין מסמכים להצגה</p>
-        <n-button :disabled="limitReached" class="mt-3" type="primary" @click="fileInput?.click()">
+        <n-button :disabled="limitReached" class="mt-3" type="primary" @click="openUploadModal()">
           📂 העלה מסמך ראשון
         </n-button>
       </div>
@@ -253,35 +245,13 @@
       <p class="text-sm text-[var(--text-secondary)]">פעולה זו אינה הפיכה.</p>
     </n-modal>
 
-    <!-- ── AI extraction modal ─────────────────────────────────────────── -->
-    <n-modal v-model:show="showAiModal" :title="aiModalMode === 'existing' ? 'חילוץ AI — הגדר שדות' : 'העלאה עם AI — הגדר שדות'" class="!w-[580px]" preset="card">
-      <n-space size="medium" vertical>
-        <div class="text-sm text-[var(--text-secondary)]">
-          {{ aiModalMode === 'existing'
-            ? 'הגדר אילו שדות ה-AI יחלץ מהמסמך. השאר ריק לחילוץ אוטומטי.'
-            : `${pendingFiles?.length ?? 0} קובץ/ים ממתינים. הגדר שדות לחילוץ AI:` }}
-        </div>
-        <div v-for="(f, i) in extractionFields" :key="i" class="field-row">
-          <n-space :wrap="false" align="center">
-            <n-input v-model:value="f.key" class="!w-[140px]" placeholder="key (אנגלית)" size="small" style="direction: ltr" />
-            <n-input v-model:value="f.label_he" class="!flex-1" placeholder="תווית עברית" size="small" />
-            <n-select v-model:value="f.type" :options="fieldTypeOptions" :virtual-scroll="false" class="!w-[100px]" size="small" />
-            <n-button quaternary size="small" @click="extractionFields.splice(i, 1)">✕</n-button>
-          </n-space>
-        </div>
-        <n-button dashed size="small" @click="addExtractionField">+ הוסף שדה</n-button>
-        <div class="text-xs text-[var(--text-muted)] border-t border-[var(--border-color)] pt-3">
-          שדות ריקים = AI יחלץ שדות סטנדרטיים אוטומטית (לקוח, תאריכים, סכומים)
-        </div>
-        <n-space justify="end">
-          <n-button @click="showAiModal = false">ביטול</n-button>
-          <n-button v-if="aiModalMode === 'upload'" secondary @click="skipAiModal">העלה ללא הגדרה</n-button>
-          <n-button :loading="extracting" type="primary" @click="confirmAiModal">
-            {{ aiModalMode === 'existing' ? 'הרץ חילוץ' : 'העלה ועבד' }}
-          </n-button>
-        </n-space>
-      </n-space>
-    </n-modal>
+    <!-- ── Upload modal ───────────────────────────────────────────────── -->
+    <UploadModal
+      ref="uploadModalRef"
+      v-model="showUploadModal"
+      :uploading="uploading"
+      @upload="onModalUpload"
+    />
   </div>
 </template>
 
@@ -311,6 +281,7 @@ import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
 import ListCard from "../components/ListCard.vue";
 import PaginationBar from "../components/PaginationBar.vue";
+import UploadModal from "../components/UploadModal.vue";
 import type {Document} from "@shared/types.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -324,9 +295,6 @@ const isRegularUser = computed(() => authStore.user?.role === "user");
 const quotaPercent = computed(() => Math.min(100, Math.round((store.totalAll / store.documentLimit) * 100)));
 const limitReached = computed(() => isRegularUser.value && store.totalAll >= store.documentLimit);
 
-const fileInput = ref<HTMLInputElement | null>(null);
-const importing = ref(false);
-const importPath = ref("");
 const uploading = ref(false);
 const isDragging = ref(false);
 const queuedCount = ref(0);
@@ -335,6 +303,32 @@ const deletingAll = ref(false);
 const showDeleteAllConfirm = ref(false);
 const showLimitModal = ref(false);
 const viewMode = ref<"grid" | "list">("list");
+
+// ── Upload modal ───────────────────────────────────────────────────────────────
+const showUploadModal = ref(false);
+const uploadModalRef = ref<InstanceType<typeof UploadModal> | null>(null);
+
+function openUploadModal() {
+  showUploadModal.value = true;
+}
+
+function onStripDrop(e: DragEvent) {
+  isDragging.value = false;
+  const files = Array.from(e.dataTransfer?.files ?? []);
+  if (!files.length) return;
+  showUploadModal.value = true;
+  // Pre-load dropped files after the modal mounts on next tick
+  setTimeout(() => uploadModalRef.value?.addFiles(files), 50);
+}
+
+async function onModalUpload(
+  files: File[],
+  fields: { key: string; label_he: string; type: string }[],
+  options: { doAi: boolean; doEntities: boolean; doReminders: boolean }
+) {
+  await uploadFiles(files, options);
+  showUploadModal.value = false;
+}
 
 // ── Filters ───────────────────────────────────────────────────────────────────
 const search = ref("");
@@ -425,55 +419,19 @@ function handleRowAction(key: string, row: Document) {
   if (key === "delete") store.deleteDoc(row.id);
 }
 
-// ── AI extraction modal ───────────────────────────────────────────────────────
-interface ExtractionField { key: string; label_he: string; type: string }
-
-const showAiModal = ref(false);
-const aiModalMode = ref<"upload" | "existing">("upload");
-const pendingFiles = ref<File[] | null>(null);
-const pendingDocIds = ref<string[]>([]);
-const extractionFields = ref<ExtractionField[]>([]);
+// ── Re-extract existing doc (row action ✨) ────────────────────────────────────
 const extracting = ref(false);
 
-const fieldTypeOptions = [
-  { label: "טקסט", value: "text" }, { label: "מספר", value: "number" }, { label: "תאריך", value: "date" },
-  { label: "טלפון", value: "phone" }, { label: "אימייל", value: "email" }, { label: "מטבע", value: "currency" },
-  { label: "רשימה", value: "list" },
-];
-
-function addExtractionField() {
-  extractionFields.value.push({ key: "", label_he: "", type: "text" });
-}
-function openExtractModal(docId: string) {
-  pendingDocIds.value = [docId];
-  pendingFiles.value = null;
-  aiModalMode.value = "existing";
-  extractionFields.value = [];
-  showAiModal.value = true;
-}
-async function skipAiModal() {
-  const files = pendingFiles.value;
-  showAiModal.value = false;
-  pendingFiles.value = null;
-  if (files) await uploadFiles(files);
-}
-async function confirmAiModal() {
-  if (aiModalMode.value === "existing") {
-    extracting.value = true;
-    try {
-      for (const id of pendingDocIds.value) await api.documents.extract(id);
-      message.success(`חילוץ AI הושלם עבור ${pendingDocIds.value.length} מסמך/ים`);
-      await store.fetch();
-    } catch (e) {
-      message.error(String(e));
-    } finally {
-      extracting.value = false;
-      showAiModal.value = false;
-    }
-  } else if (pendingFiles.value) {
-    showAiModal.value = false;
-    await uploadFiles(pendingFiles.value);
-    pendingFiles.value = null;
+async function openExtractModal(docId: string) {
+  extracting.value = true;
+  try {
+    await api.documents.extract(docId);
+    message.success("חילוץ AI הושלם");
+    await store.fetch();
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    extracting.value = false;
   }
 }
 
@@ -487,10 +445,10 @@ let saveFlagsTimer: ReturnType<typeof setTimeout> | null = null;
 async function loadPipelineFlags() {
   try {
     const s = await api.userSettings.get();
-    flagOcr.value = s.pipeline_ocr ?? true;
-    flagAi.value = s.pipeline_ai ?? true;
-    flagS3.value = s.pipeline_s3 ?? true;
-    flagEntities.value = s.pipeline_entities ?? true;
+    flagOcr.value = s.pipeline_ocr ?? flagOcr.value;
+    flagAi.value = s.pipeline_ai ?? flagAi.value;
+    flagS3.value = s.pipeline_s3 ?? flagS3.value;
+    flagEntities.value = s.pipeline_entities ?? flagEntities.value;
   } catch { /* ignore */ }
 }
 function savePipelineFlags() {
@@ -514,21 +472,13 @@ onMounted(() => {
 onUnmounted(() => { if (saveFlagsTimer) clearTimeout(saveFlagsTimer); });
 
 // ── File handling ─────────────────────────────────────────────────────────────
-async function onFileInputChange(e: Event) {
-  const files = Array.from((e.target as HTMLInputElement).files ?? []);
-  if (!files.length) return;
-  (e.target as HTMLInputElement).value = "";
-  await uploadFiles(files);
-}
-async function onDrop(e: DragEvent) {
-  isDragging.value = false;
-  const files = Array.from(e.dataTransfer?.files ?? []);
-  if (files.length) await uploadFiles(files);
-}
-async function uploadFiles(files: File[]) {
+async function uploadFiles(
+  files: File[],
+  options?: { doAi: boolean; doEntities: boolean; doReminders: boolean }
+) {
   uploading.value = true;
   try {
-    const { ids, duplicates } = await api.documents.upload(files);
+    const { ids, duplicates } = await api.documents.upload(files, options);
     const newCount = ids.length - (duplicates?.length ?? 0);
     if (newCount > 0) message.info(`${newCount} מסמכים נוספו לתור עיבוד`);
     if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);
@@ -787,6 +737,4 @@ async function openDownload(row: Document) {
 /* ── Empty ───────────────────────────────────────────────────────────────── */
 .empty { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 14px; }
 
-/* ── AI modal field row ──────────────────────────────────────────────────── */
-.field-row { padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 6px; }
 </style>

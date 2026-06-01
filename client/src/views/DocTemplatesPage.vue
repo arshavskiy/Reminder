@@ -65,8 +65,13 @@
       <n-gi v-for="t in templates" :key="t.id">
         <n-card hoverable :title="t.name" @click="select(t)" style="cursor:pointer">
           <template #header-extra>
-            <n-tag v-if="t.is_builtin" size="small" type="info">מובנה</n-tag>
-            <n-tag v-if="t.is_default" size="small" type="success" style="margin-right: 4px">ברירת מחדל</n-tag>
+            <n-space :size="4">
+              <n-tag v-if="t.document_kind && t.document_kind !== 'unknown'" :type="kindTagType(t.document_kind)" size="small">
+                {{ kindLabel(t.document_kind) }}
+              </n-tag>
+              <n-tag v-if="t.is_builtin" size="small" type="info">מובנה</n-tag>
+              <n-tag v-if="t.is_default" size="small" type="success">ברירת מחדל</n-tag>
+            </n-space>
           </template>
           <p style="font-size: 13px; color: var(--text-secondary); margin: 0 0 8px">
             {{ t.description || "—" }}
@@ -79,12 +84,26 @@
     </n-grid>
 
     <!-- Editor drawer -->
-    <n-drawer v-model:show="showEdit" :width="640" placement="left">
+    <n-drawer v-model:show="showEdit" :width="700" placement="left">
       <n-drawer-content :title="editing?.id ? 'עריכת תבנית' : 'תבנית חדשה'" closable>
         <n-form v-if="editing" label-placement="top">
-          <n-form-item label="שם" required>
-            <n-input v-model:value="editing.name" placeholder="למשל: תסקיר בדיקה" />
-          </n-form-item>
+          <n-grid :cols="2" :x-gap="16">
+            <n-gi>
+              <n-form-item label="שם" required>
+                <n-input v-model:value="editing.name" placeholder="למשל: תסקיר בדיקה" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="סוג מסמך">
+                <n-select
+                  v-model:value="editing.document_kind"
+                  :options="kindOptions"
+                  :virtual-scroll="false"
+                />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+
           <n-form-item label="תיאור">
             <n-input v-model:value="editing.description" type="textarea" :rows="2" />
           </n-form-item>
@@ -96,20 +115,24 @@
             />
           </n-form-item>
 
-          <h4 style="margin: 16px 0 8px">שדות לחילוץ</h4>
+          <n-divider style="margin: 16px 0 12px" />
+          <n-space align="center" justify="space-between" style="margin-bottom: 8px">
+            <span style="font-weight: 600">שדות לחילוץ</span>
+            <n-button ghost size="small" type="primary" @click="addField">+ הוסף שדה</n-button>
+          </n-space>
           <n-alert type="info" :show-icon="false" style="margin-bottom: 12px; font-size: 12px">
             כל שדה יחולץ מהמסמך באמצעות AI. שדה התאריך שמופיע למטה ב"שדה תזכורת" הוא זה שמפעיל את התזכורת.
           </n-alert>
 
           <div v-for="(f, i) in editing.fields" :key="i" class="field-row">
-            <n-grid :cols="12" :x-gap="8">
+            <n-grid :cols="12" :x-gap="8" align="center">
               <n-gi :span="3">
                 <n-input v-model:value="f.key" placeholder="key" size="small" />
               </n-gi>
               <n-gi :span="4">
-                <n-input v-model:value="f.label_he" placeholder="תווית" size="small" />
+                <n-input v-model:value="f.label_he" placeholder="תווית עברית" size="small" />
               </n-gi>
-              <n-gi :span="2">
+              <n-gi :span="3">
                 <n-select
                   v-model:value="f.type"
                   size="small"
@@ -117,24 +140,26 @@
                   :virtual-scroll="false"
                 />
               </n-gi>
-              <n-gi :span="2">
-                <n-checkbox v-model:checked="f.required as any">חובה</n-checkbox>
-              </n-gi>
               <n-gi :span="1">
-                <n-button size="small" quaternary @click="editing!.fields.splice(i, 1)">✕</n-button>
+                <n-checkbox v-model:checked="f.required as any" size="small">חובה</n-checkbox>
+              </n-gi>
+              <n-gi :span="1" style="text-align: center">
+                <n-button circle quaternary size="small" @click="editing!.fields.splice(i, 1)">✕</n-button>
               </n-gi>
             </n-grid>
             <n-input
               v-model:value="f.hint_he"
-              placeholder="רמז ל-AI (אופציונלי)"
+              placeholder="רמז ל-AI — מה לחפש, מה להתעלם (אופציונלי)"
               size="small"
               style="margin-top: 4px"
             />
           </div>
 
-          <n-button size="small" @click="addField" style="margin-top: 8px">+ שדה</n-button>
+          <n-empty v-if="!editing.fields.length" description="אין שדות עדיין" size="small" style="margin: 12px 0" />
 
-          <n-form-item label="שדה תזכורת (איזה תאריך מפעיל את התזכורת)" style="margin-top: 16px">
+          <n-divider style="margin: 16px 0 12px" />
+
+          <n-form-item label="שדה תזכורת — איזה תאריך מפעיל את התזכורת">
             <n-select
               v-model:value="editing.expiry_field"
               :options="dateFieldOptions"
@@ -166,14 +191,34 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed } from "vue";
+import {computed, onMounted, ref} from "vue";
 import {
-  NSpace, NButton, NCard, NGrid, NGi, NTag, NDrawer, NDrawerContent,
-  NForm, NFormItem, NInput, NSelect, NCheckbox, NAlert, useMessage,
-  NModal, NTabs, NTabPane, NUpload, NUploadDragger, NSpin,
+  NAlert,
+  NButton,
+  NCard,
+  NCheckbox,
+  NDivider,
+  NDrawer,
+  NDrawerContent,
+  NEmpty,
+  NForm,
+  NFormItem,
+  NGi,
+  NGrid,
+  NInput,
+  NModal,
+  NSelect,
+  NSpace,
+  NSpin,
+  NTabPane,
+  NTabs,
+  NTag,
+  NUpload,
+  NUploadDragger,
+  useMessage,
 } from "naive-ui";
-import { api } from "../services/apiService.js";
-import type { DocTemplate, TemplateField, FieldType } from "@shared/types.js";
+import {api} from "../services/apiService.js";
+import type {DocTemplate, DocumentKind, FieldType, TemplateField} from "@shared/types.js";
 
 const templates = ref<DocTemplate[]>([]);
 const showEdit = ref(false);
@@ -196,6 +241,29 @@ const typeOptions = [
   { label: "מטבע", value: "currency" },
   { label: "רשימה", value: "list" },
 ];
+
+const kindOptions = [
+  { label: "תסקיר בדיקה", value: "inspection_report" },
+  { label: "חוזה / הסכם",  value: "contract" },
+  { label: "חשבונית",      value: "invoice" },
+  { label: "תעודה / הסמכה", value: "certificate" },
+  { label: "אחר / לא ידוע", value: "unknown" },
+];
+
+function kindLabel(kind: DocumentKind): string {
+  return kindOptions.find((o) => o.value === kind)?.label ?? kind;
+}
+
+function kindTagType(kind: DocumentKind): "default" | "info" | "success" | "warning" | "error" {
+  const map: Record<DocumentKind, "default" | "info" | "success" | "warning" | "error"> = {
+    inspection_report: "warning",
+    contract: "info",
+    invoice: "success",
+    certificate: "error",
+    unknown: "default",
+  };
+  return map[kind] ?? "default";
+}
 
 const dateFieldOptions = computed(() => {
   if (!editing.value) return [];
@@ -220,9 +288,11 @@ function newTemplate() {
     id: 0,
     name: "",
     description: "",
+    document_kind: "unknown",
     match_keywords: [],
     fields: [],
     expiry_field: null,
+    cached_system_prompt: null,
     is_default: 0,
     is_builtin: 0,
     created_at: "",
@@ -276,14 +346,15 @@ async function deleteTpl() {
 
 // ── Generator: AI builds a template from a sample document/text ─────────────
 function openDraft(draft: Partial<DocTemplate>) {
-  // Drop the user into the regular editor pre-filled with the AI draft
   editing.value = {
     id: 0,
     name: draft.name ?? "",
     description: draft.description ?? "",
+    document_kind: draft.document_kind ?? "unknown",
     match_keywords: draft.match_keywords ?? [],
     fields: (draft.fields ?? []) as TemplateField[],
     expiry_field: draft.expiry_field ?? null,
+    cached_system_prompt: null,
     is_default: 0,
     is_builtin: 0,
     created_at: "",

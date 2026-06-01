@@ -65,6 +65,14 @@ Currently `SettingsPage.vue` shows all settings to all users. Should:
 
 ---
 
+## Recently Shipped (2026-06-01)
+
+| Feature | Notes |
+|---------|-------|
+| OCR Regex Baseline (Stage A) | `ocrExtractor.ts` — always runs before AI; extracts expiry date, contact, phone, email, address, PO box, doc type via Hebrew bidi-aware regex; saves client/contract/reminders without needing AI |
+| Upload Modal with Pipeline Toggles | `UploadModal.vue` — per-upload switches for AI extraction, entity creation, and reminder generation |
+| AI-only Document Quota | `ai_extracted` flag on every document; quota of 25 only counts AI-extracted docs; OCR-only uploads are unlimited |
+
 ## Recently Shipped (2026-05-29)
 
 | Feature | Notes |

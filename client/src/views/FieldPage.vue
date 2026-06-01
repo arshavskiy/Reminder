@@ -81,15 +81,30 @@
         <button class="field__btn field__btn--pdf" @click="api.equipment.downloadReport(selected.id)">
           הפק דוח PDF
         </button>
-        <label class="field__btn field__btn--photo">
-          צלם תמונה
-          <input accept="image/*" capture="environment" style="display:none" type="file" @change="onPhoto" />
+        <label :class="{ 'field__btn--uploading': photoUploading }" class="field__btn field__btn--photo">
+          {{ photoUploading ? 'מעלה...' : 'צלם תמונה' }}
+          <input
+            v-if="!photoUploading"
+            accept="image/*"
+            capture="environment"
+            style="display:none"
+            type="file"
+            @change="onPhoto"
+          />
         </label>
       </div>
 
-      <!-- Photo preview -->
-      <div v-if="photoUrl" class="field__photo-wrap">
-        <img :src="photoUrl" alt="תמונת ציוד" class="field__photo" />
+      <!-- Saved photos gallery -->
+      <div v-if="savedPhotos.length" class="field__gallery">
+        <div v-for="(photo, i) in savedPhotos" :key="photo.key" class="field__gallery-item">
+          <img :src="photo.url" alt="תמונת ציוד" class="field__photo" @click="lightboxUrl = photo.url" />
+          <button class="field__photo-del" title="מחק תמונה" @click="deletePhoto(i)">✕</button>
+        </div>
+      </div>
+
+      <!-- Lightbox -->
+      <div v-if="lightboxUrl" class="field__lightbox" @click="lightboxUrl = null">
+        <img :src="lightboxUrl" class="field__lightbox-img" />
       </div>
     </div>
 
@@ -110,7 +125,9 @@ const selected = ref<Equipment | null>(null);
 const history = ref<EquipmentHistoryEvent[]>([]);
 const historyLoading = ref(false);
 const loading = ref(false);
-const photoUrl = ref<string | null>(null);
+const savedPhotos = ref<{ url: string; key: string; taken_at: string }[]>([]);
+const photoUploading = ref(false);
+const lightboxUrl = ref<string | null>(null);
 const online = ref(navigator.onLine);
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -136,7 +153,7 @@ async function select(r: Equipment) {
   selected.value = r;
   results.value = [];
   query.value = "";
-  photoUrl.value = null;
+  savedPhotos.value = [];
   history.value = [];
   historyLoading.value = true;
   try {
@@ -144,6 +161,11 @@ async function select(r: Equipment) {
   } catch {} finally {
     historyLoading.value = false;
   }
+  // Load saved photos
+  try {
+    const { photos } = await api.equipment.getSignedPhotos(String(r.id));
+    savedPhotos.value = photos;
+  } catch {}
 }
 
 function expiryClass(ev: EquipmentHistoryEvent) {
@@ -154,9 +176,26 @@ function expiryClass(ev: EquipmentHistoryEvent) {
   return "";
 }
 
-function onPhoto(e: Event) {
+async function onPhoto(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0];
-  if (file) photoUrl.value = URL.createObjectURL(file);
+  if (!file || !selected.value) return;
+  photoUploading.value = true;
+  try {
+    const photo = await api.equipment.uploadPhoto(String(selected.value.id), file);
+    savedPhotos.value.push(photo);
+  } catch (err) {
+    alert("שגיאה בהעלאת תמונה");
+  } finally {
+    photoUploading.value = false;
+    (e.target as HTMLInputElement).value = "";
+  }
+}
+
+async function deletePhoto(index: number) {
+  if (!selected.value) return;
+  const { key } = savedPhotos.value[index];
+  await api.equipment.deletePhoto(String(selected.value.id), key);
+  savedPhotos.value.splice(index, 1);
 }
 
 function updateOnline() { online.value = navigator.onLine; }
@@ -334,9 +373,67 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
 }
 
-/* Photo preview */
-.field__photo-wrap { margin-top: 12px; }
-.field__photo { width: 100%; border-radius: 10px; }
+/* Photo gallery */
+.field__gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.field__gallery-item {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+.field__photo {
+  width: 100%;
+  display: block;
+  border-radius: 10px;
+  cursor: zoom-in;
+  object-fit: cover;
+  aspect-ratio: 4/3;
+}
+.field__photo-del {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Lightbox */
+.field__lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.88);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+.field__lightbox-img {
+  max-width: 95vw;
+  max-height: 90vh;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.field__btn--uploading {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 /* Offline banner */
 .field__offline {

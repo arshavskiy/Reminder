@@ -221,10 +221,41 @@ Each file contains: timestamp, document ID, file name, backend, model, execution
 
 ---
 
+## Stage 1.5 — OCR Regex Baseline (`ocrExtractor.ts`)
+
+Before AI runs, a lightweight regex pass extracts structured fields directly from the raw text. This stage **always runs** when there is text, regardless of whether AI is enabled.
+
+### Extracted fields
+
+| Field | Description |
+|---|---|
+| `expiry_date` | ISO date — matched against Hebrew expiry labels (`בתוקף עד`, `תאריך בדיקה הבאה`, `תוקף עד`, etc.) |
+| `contact_name` | Client/company name — matched against `איש קשר`, `שם הלקוח`, `תופש`, etc. |
+| `contact_phone` | Israeli mobile or landline number, normalised to `XXX-XXXXXXX` format |
+| `contact_email` | Email address; reversed bidi emails (`il.co.domain@user`) are auto-corrected |
+| `client_address` | Street or city extracted from `כתובת`, `ישוב`, or `פרטים מלאים` labels |
+| `po_box` | P.O. Box (`ת.ד`) number |
+| `document_type` | One of: `תסקיר בדיקה`, `חוזה`, `הסכם`, `חשבונית`, `תעודה` |
+
+### Hebrew BiDi pattern support
+
+Many Israeli PDFs produce text where the label and value are reversed (right-to-left visual order read as left-to-right). Every pattern supports both orderings:
+
+- **Forward** (label before value): `בתוקף עד: 23.07.2027`
+- **Reversed** (value before label): `2027/07/23: בתוקף עד`
+
+### What happens with the results
+
+- The extraction is always persisted: `document.extracted_fields`, `document.document_kind`, and an `extractions` row with `backend: "ocr-regex"`.
+- If `skipEntities` is false and at least one of `expiry_date` / `contact_name` / `contact_phone` was found, client + contract + reminders are created from the regex data.
+- If AI (Stage B) runs afterward, it **overwrites** these fields with richer data — the regex result is just the baseline.
+
+---
+
 ## Full Pipeline Flow
 
 ```
-Upload / Watch folder
+Upload
         │
         ▼
   Parse text from file
@@ -246,7 +277,11 @@ Upload / Watch folder
         ▼
   raw_text saved to document record
         │
-        ▼ (if autoExtract = true)
+        ▼  Stage A — always runs when text is present
+  extractFromOcr(rawText)          ← regex-based, no LLM
+  Save client / contract / reminders from OCR data
+        │
+        ▼  Stage B — only when autoExtract=true AND skipAi=false
   pickTemplate(rawText)
         │
    ┌────┴──────────────────────┐
@@ -259,7 +294,7 @@ extractWithTemplate        extractDocument
         │
         ▼
   Save to extractions collection
-  Update document.extracted_fields
+  Update document.extracted_fields  (overwrites Stage A)
   Save contracts / clients / equipment
   Generate reminders from expiry_date
 ```

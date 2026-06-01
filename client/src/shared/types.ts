@@ -295,6 +295,14 @@ export type WsEvent =
   | { type: "reminder:fired"; reminderId: number; clientId: number | null; title: string }
   | { type: "reminder:error"; reminderId: number; error: string };
 
+// ── Document kind ───────────────────────────────────────────────────────────
+export type DocumentKind =
+  | "inspection_report"
+  | "contract"
+  | "invoice"
+  | "certificate"
+  | "unknown";
+
 // ── Document templates ──────────────────────────────────────────────────────
 export type FieldType =
   | "text"
@@ -316,11 +324,13 @@ export interface TemplateField {
 
 export interface DocTemplate {
   id: string;
-  name: string;                 // Hebrew, e.g. "תסקיר בדיקה"
+  name: string;                        // Hebrew, e.g. "תסקיר בדיקה"
   description: string | null;
-  match_keywords: string[];     // ["תסקיר", "בדיקה"]
+  document_kind: DocumentKind;
+  match_keywords: string[];            // ["תסקיר", "בדיקה"]
   fields: TemplateField[];
-  expiry_field: string | null;  // key of the date field that drives reminders
+  expiry_field: string | null;         // key of the date field that drives reminders
+  cached_system_prompt: string | null; // pre-built AI system prompt
   is_default: number;
   is_builtin: number;
   created_at: string;
@@ -344,9 +354,16 @@ export interface Equipment {
   category: EquipmentCategory;
   manufacturer: string | null;
   model: string | null;
+  serial_number?: string | null;
   capacity: string | null;
+  load_capacity_test?: string | null;
   description: string | null;
   notes: string | null;
+  client_id?: string | null;
+  client_name?: string | null;
+  document_id?: string | null;
+  document_name?: string | null;
+  photo_urls?: { key: string; taken_at: string }[];
   is_active: number;
   created_at: string;
   updated_at: string;

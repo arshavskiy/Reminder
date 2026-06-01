@@ -76,6 +76,18 @@ Each upload can toggle four stages independently. Flags are saved in `user_setti
 
 Flags are exposed as checkboxes in the Documents page upload area. Changes debounce-save to the server (600 ms).
 
+### Upload Modal (`UploadModal.vue`)
+
+The upload modal provides three pipeline toggles per upload:
+
+| Toggle | Default | Effect |
+|--------|---------|--------|
+| חילוץ AI | on | Runs AI field extraction (Stage B) |
+| צור לקוחות וחוזים | on | Saves client / contract / equipment entities; disabled automatically when AI is off |
+| צור תזכורות | on | Generates reminders from expiry dates; disabled automatically when entities is off |
+
+The OCR regex baseline (Stage A) always runs regardless of these toggles.
+
 ### On-demand AI extraction modal
 When `pipeline_ai` is enabled, uploading files opens an extraction-fields modal instead of uploading immediately. The user defines which fields to extract:
 
@@ -99,6 +111,20 @@ Any document can be re-run through the extraction pipeline via `POST /api/docume
 
 ## AI Extraction
 
+### OCR regex baseline (`extractFromOcr`) — Stage A
+
+Runs **always** on every upload (before AI, regardless of `skipAi`). Uses regex patterns to extract:
+
+- `expiry_date` — matches Hebrew expiry labels (`בתוקף עד`, `תוקף עד`, `בדיקה הבאה`, etc.) in both forward and reversed bidi order
+- `contact_name` — matched against `איש קשר`, `שם הלקוח`, `תופש`, etc.
+- `contact_phone` — Israeli mobile/landline, normalised to `XXX-XXXXXXX`
+- `contact_email` — auto-corrects reversed bidi email addresses
+- `client_address` — from `כתובת`, `ישוב`, or `פרטים מלאים`
+- `po_box` — from `ת.ד` / `P.O. Box`
+- `document_type` — keyword classification (`תסקיר בדיקה`, `חוזה`, `הסכם`, `חשבונית`, `תעודה`)
+
+Results are saved immediately. If AI (Stage B) runs later, it overwrites these fields with richer data.
+
 ### Generic extraction (`extractDocument`)
 Prompt returns `ExtractionResult`:
 - `client_name`, `client_company`, `client_id`, `client_email`, `client_phone`, `client_address`
@@ -112,8 +138,17 @@ Template defines a field list and an `expiry_field`. Prompt is structured per te
 ### Ad-hoc extraction (no saved template)
 `POST /api/documents/:id/extract` accepts an inline `fields[]` array (`key`, `label_he`, `type`). A transient `DocTemplate` is constructed server-side so the same `extractWithTemplate` path runs without saving anything to `doc_templates`.
 
-### Quota (`scanned_count`)
-`scanned_count` in `user_settings` is the authoritative extraction quota counter. It increments **only** when AI extraction actually ran on a document — not on plain upload, OCR-only, or entity-save-only operations. `document_limit_reached` is checked and set using this counter.
+### Quota (`ai_extracted` flag)
+
+Each document is tagged at insert time with `ai_extracted: true/false` depending on whether AI extraction ran.
+
+The `user` role is limited to `USER_DOCUMENT_LIMIT` (default: **25**) AI-extracted documents. The quota check:
+
+- Only counts documents where `ai_extracted: true`
+- Is **skipped entirely** when uploading with AI disabled (`skipAi=true`) — OCR-only uploads are unlimited
+- `pro` and `admin` roles bypass the quota check completely
+
+`document_limit_reached` (HTTP 403) is returned when `count(ai_extracted=true) + files.length > limit`.
 
 ### Backends
 - **OpenAI** — `gpt-4o-mini` via `OPENAI_API_KEY`

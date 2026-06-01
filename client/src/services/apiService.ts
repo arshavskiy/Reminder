@@ -115,11 +115,17 @@ export const api = {
     },
     get: (id: string) => get<Document>(`/documents/${id}`),
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
-    upload: async (files: File[], ocrOnly = false, templateId?: number) => {
+    upload: async (
+      files: File[],
+      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean },
+      templateId?: number
+    ) => {
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
       const params = new URLSearchParams();
-      if (ocrOnly) params.set("ocrOnly", "true");
+      if (options?.doAi === false) params.set("skipAi", "true");
+      if (options?.doEntities === false) params.set("skipEntities", "true");
+      if (options?.doReminders === false) params.set("skipReminders", "true");
       if (templateId) params.set("templateId", String(templateId));
       const qs = params.toString();
       const url = `${BASE}/documents/upload${qs ? "?" + qs : ""}`;
@@ -292,6 +298,24 @@ export const api = {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
       return res.json() as Promise<{ ok: boolean; created: number; skipped: number }>;
     },
+    uploadPhoto: async (id: string, file: File) => {
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await fetch(`${BASE}/equipment/${id}/photos`, { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+      return res.json() as Promise<{ url: string; key: string; taken_at: string }>;
+    },
+    deletePhoto: async (id: string, key: string) => {
+      const res = await fetch(`${BASE}/equipment/${id}/photos`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ key }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+    },
+    getSignedPhotos: (id: string) =>
+      get<{ photos: { url: string; key: string; taken_at: string }[] }>(`/equipment/${id}/photos/signed`),
   },
 
   assets: {

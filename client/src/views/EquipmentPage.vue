@@ -97,7 +97,7 @@
               </p>
               <p v-if="r.document_id" class="row__doc">
                 <router-link :to="`/documents/${r.document_id}`" class="row__doc-link">
-                  {{ r.document_name || r.document_id }}
+                  {{ r.document_name || 'מסמך מקור' }}
                 </router-link>
               </p>
             </div>
@@ -188,38 +188,64 @@
 
           <n-tab-pane name="history" tab="היסטוריה">
             <n-spin :show="historyLoading" style="margin-top:12px">
-              <div v-if="history.length" class="hist">
-                <div v-for="ev in history" :key="ev.id" class="hist__item">
+              <div v-if="timeline.length" class="hist">
+                <div v-for="(item, idx) in timeline" :key="idx" class="hist__item">
                   <div class="hist__line" />
-                  <div :class="`hist__dot--${ev.status}`" class="hist__dot" />
-                  <div class="hist__body">
-                    <div class="hist__title-row">
-                      <strong>{{ ev.contract_type ?? 'בדיקה' }}</strong>
-                      <span v-if="ev.contract_number" class="hist__num">{{ ev.contract_number }}</span>
-                      <span :class="`hist__status--${ev.status}`" class="hist__status">{{ ev.status }}</span>
+
+                  <!-- Photo entry -->
+                  <template v-if="item.kind === 'photo'">
+                    <div class="hist__dot hist__dot--photo" />
+                    <div class="hist__body">
+                      <div class="hist__title-row">
+                        <strong>תמונת שטח</strong>
+                        <span class="hist__num">{{ formatDateTime(item.photo.taken_at) }}</span>
+                      </div>
+                      <img
+                        :src="item.photo.url"
+                        alt="תמונת ציוד"
+                        class="hist__photo"
+                        @click="lightboxUrl = item.photo.url"
+                      />
                     </div>
-                    <div class="hist__dates">
-                      <span v-if="ev.start_date">התחלה: {{ ev.start_date }}</span>
-                      <span v-if="ev.expiry_date">
-                        פקיעה: {{ ev.expiry_date }}
-                        <span v-if="ev.days_until !== null" :class="ev.days_until < 0 ? 'hist__overdue' : ev.days_until <= 30 ? 'hist__warn' : ''">
-                          ({{ ev.days_until < 0 ? `פג לפני ${Math.abs(ev.days_until)}י` : `${ev.days_until}י` }})
+                  </template>
+
+                  <!-- Inspection entry -->
+                  <template v-else>
+                    <div :class="`hist__dot--${item.event.status}`" class="hist__dot" />
+                    <div class="hist__body">
+                      <div class="hist__title-row">
+                        <strong>{{ item.event.contract_type ?? 'בדיקה' }}</strong>
+                        <span v-if="item.event.contract_number" class="hist__num">{{ item.event.contract_number }}</span>
+                        <span :class="`hist__status--${item.event.status}`" class="hist__status">{{ item.event.status }}</span>
+                      </div>
+                      <div class="hist__dates">
+                        <span v-if="item.event.start_date">התחלה: {{ item.event.start_date }}</span>
+                        <span v-if="item.event.expiry_date">
+                          פקיעה: {{ item.event.expiry_date }}
+                          <span v-if="item.event.days_until !== null" :class="item.event.days_until < 0 ? 'hist__overdue' : item.event.days_until <= 30 ? 'hist__warn' : ''">
+                            ({{ item.event.days_until < 0 ? `פג לפני ${Math.abs(item.event.days_until)}י` : `${item.event.days_until}י` }})
+                          </span>
                         </span>
-                      </span>
+                      </div>
+                      <div v-if="item.event.inspector || item.event.load_capacity_test || item.event.pass_fail" class="hist__meta">
+                        <span v-if="item.event.inspector">בודק: {{ item.event.inspector }}</span>
+                        <span v-if="item.event.load_capacity_test">עומס מבחן: {{ item.event.load_capacity_test }}</span>
+                        <span v-if="item.event.pass_fail">תוצאה: {{ item.event.pass_fail }}</span>
+                      </div>
+                      <router-link v-if="item.event.document_id" :to="`/documents/${item.event.document_id}`" class="hist__doc-link">
+                        {{ item.event.document_name ?? item.event.document_id }}
+                      </router-link>
                     </div>
-                    <div v-if="ev.inspector || ev.load_capacity_test || ev.pass_fail" class="hist__meta">
-                      <span v-if="ev.inspector">בודק: {{ ev.inspector }}</span>
-                      <span v-if="ev.load_capacity_test">עומס מבחן: {{ ev.load_capacity_test }}</span>
-                      <span v-if="ev.pass_fail">תוצאה: {{ ev.pass_fail }}</span>
-                    </div>
-                    <router-link v-if="ev.document_id" :to="`/documents/${ev.document_id}`" class="hist__doc-link">
-                      {{ ev.document_name ?? ev.document_id }}
-                    </router-link>
-                  </div>
+                  </template>
                 </div>
               </div>
               <p v-else class="hist__empty">אין היסטוריית בדיקות לציוד זה.</p>
             </n-spin>
+
+            <!-- Lightbox -->
+            <div v-if="lightboxUrl" class="hist__lightbox" @click="lightboxUrl = null">
+              <img :src="lightboxUrl" class="hist__lightbox-img" />
+            </div>
           </n-tab-pane>
         </n-tabs>
 
@@ -386,10 +412,42 @@ const backfilling = ref(false);
 const drawerTab = ref<"details" | "history">("details");
 const history = ref<EquipmentHistoryEvent[]>([]);
 const historyLoading = ref(false);
+const photos = ref<{ url: string; key: string; taken_at: string }[]>([]);
+const lightboxUrl = ref<string | null>(null);
 
 const clientOptions = computed<SelectOption[]>(() =>
   clients.value.map((c) => ({ label: c.display_name, value: c.id.toString() }))
 );
+
+type TimelineItem =
+  | { kind: "inspection"; date: string; event: EquipmentHistoryEvent }
+  | { kind: "photo";      date: string; photo: { url: string; key: string; taken_at: string } };
+
+const timeline = computed<TimelineItem[]>(() => {
+  const items: TimelineItem[] = [
+    ...history.value.map(e => ({
+      kind: "inspection" as const,
+      date: e.start_date ?? e.expiry_date ?? "",
+      event: e,
+    })),
+    ...photos.value.map(p => ({
+      kind: "photo" as const,
+      date: p.taken_at,
+      photo: p,
+    })),
+  ];
+  return items.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+});
+
+function formatDate(iso: string) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatDateTime(iso: string) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+};
 
 function categoryLabel(c: string): string {
   return categories.find((x) => x.value === c)?.label ?? c;
@@ -451,15 +509,21 @@ function openCreate() {
   showEdit.value = true;
 }
 
+function loadHistoryData(id: string | number) {
+  historyLoading.value = true;
+  photos.value = [];
+  Promise.all([
+    api.equipment.history(id).then(h => { history.value = h; }),
+    api.equipment.getSignedPhotos(String(id)).then(({ photos: p }) => { photos.value = p; }),
+  ]).catch(() => {}).finally(() => { historyLoading.value = false; });
+}
+
 function openEdit(r: Equipment) {
   editing.value = { ...r };
   drawerTab.value = "details";
   history.value = [];
   showEdit.value = true;
-  if (r.id) {
-    historyLoading.value = true;
-    api.equipment.history(r.id).then(h => { history.value = h; }).catch(() => {}).finally(() => { historyLoading.value = false; });
-  }
+  if (r.id) loadHistoryData(r.id);
 }
 
 function openHistory(r: Equipment) {
@@ -467,10 +531,7 @@ function openHistory(r: Equipment) {
   drawerTab.value = "history";
   history.value = [];
   showEdit.value = true;
-  if (r.id) {
-    historyLoading.value = true;
-    api.equipment.history(r.id).then(h => { history.value = h; }).catch(() => {}).finally(() => { historyLoading.value = false; });
-  }
+  if (r.id) loadHistoryData(r.id);
 }
 
 async function save() {
@@ -894,5 +955,36 @@ html[data-theme="light"] .row__tag { background: rgba(24, 160, 88, 0.10); }
   color: var(--text-muted);
   font-size: 13px;
   padding: 32px 0;
+}
+
+.hist__dot--photo { background: #8855ff; }
+
+.hist__photo {
+  margin-top: 8px;
+  width: 100%;
+  max-width: 260px;
+  border-radius: 8px;
+  object-fit: cover;
+  aspect-ratio: 4/3;
+  cursor: zoom-in;
+  display: block;
+  border: 1px solid var(--border-color);
+}
+
+.hist__lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.88);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+.hist__lightbox-img {
+  max-width: 95vw;
+  max-height: 90vh;
+  border-radius: 8px;
+  object-fit: contain;
 }
 </style>
