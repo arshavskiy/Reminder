@@ -563,6 +563,30 @@ export function normalizeExtractionFieldsForTemplate(
     if (reportNumber) normalized.report_number = reportNumber;
   }
 
+  // When flat equipment fields are empty but _equipment rows were extracted,
+  // backfill from the first row so the document card shows something useful.
+  const equipmentRows = Array.isArray(normalized._equipment) ? normalized._equipment as any[] : [];
+  if (equipmentRows.length > 0) {
+    const first = equipmentRows[0];
+    if (!hasMeaningfulValue(normalized.equipment_description) && hasMeaningfulValue(first?.name)) {
+      normalized.equipment_description = first.name;
+    }
+    if (!hasMeaningfulValue(normalized.serial_number) && hasMeaningfulValue(first?.serial_number)) {
+      normalized.serial_number = first.serial_number;
+    }
+    if (!hasMeaningfulValue(normalized.manufacturer) && hasMeaningfulValue(first?.manufacturer)) {
+      normalized.manufacturer = first.manufacturer;
+    }
+    if (!hasMeaningfulValue(normalized.model) && hasMeaningfulValue(first?.model)) {
+      normalized.model = first.model;
+    }
+    if (!hasMeaningfulValue(normalized.load_capacity)) {
+      const work = first?.load_capacity_work;
+      const val = Array.isArray(work) && work.length > 0 ? (work as string[]).join(" / ") : null;
+      if (val) normalized.load_capacity = val;
+    }
+  }
+
   return normalized;
 }
 
