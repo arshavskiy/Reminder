@@ -90,7 +90,7 @@ describe("generateContractReminders — skip past trigger dates", () => {
 
 describe("generateContractReminders — mock insertOne calls", () => {
   it("inserts one reminder per advance day", async () => {
-    const insertOne = vi.fn(async () => ({ insertedId: "new-id" }));
+    const insertOne = vi.fn(async (_doc: unknown) => ({ insertedId: "new-id" }));
     const findOne = vi.fn(async () => null); // no existing reminder
 
     const advanceDays = [30, 60, 90];
@@ -106,7 +106,7 @@ describe("generateContractReminders — mock insertOne calls", () => {
     }
 
     expect(insertOne).toHaveBeenCalledTimes(3);
-    const calls = insertOne.mock.calls.map((c) => c[0].advance_days);
+    const calls = insertOne.mock.calls.map((c: any[]) => (c[0] as any).advance_days);
     expect(calls).toEqual([30, 60, 90]);
   });
 
