@@ -41,7 +41,7 @@ export function parsePdfWithPlumber(filePath: string): PlumberResult | null {
  * Each table row becomes a tab-separated line, tables separated by blank lines.
  * This lets the AI extractor see structured rows even from CID-encoded PDFs.
  */
-export function tablesToText(tables: string[][][]): string {
+export function tablesToText(tables: string[][][][]): string {
   const parts: string[] = [];
   for (const pageTables of tables) {
     for (const table of pageTables) {
