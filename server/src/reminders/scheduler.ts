@@ -10,8 +10,10 @@ export function startScheduler() {
   if (!settings.reminderEnabled) return;
 
   checkReminders().catch(console.error);
+  checkEscalations().catch(console.error);
   _timer = setInterval(() => {
     checkReminders().catch(console.error);
+    checkEscalations().catch(console.error);
   }, settings.reminderCheckIntervalMs);
 
   console.log(
@@ -73,52 +75,90 @@ async function checkReminders() {
 }
 
 async function processReminder(reminder: ReminderWithContext) {
+  const settings = getSettings();
+  const remId = reminder.id;
   let recipients: string[] = [];
+  let recipientSource = "none";
+
   try {
-    recipients = reminder.email_to ? JSON.parse(reminder.email_to) : [];
+    const parsed = reminder.email_to ? JSON.parse(reminder.email_to) : [];
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      recipients = parsed.filter(Boolean);
+      recipientSource = "reminder.email_to";
+    }
   } catch {
-    recipients = [];
+    console.warn(`[scheduler] Reminder ${remId}: malformed email_to field, ignoring`);
   }
 
   if (recipients.length === 0 && reminder.client_id) {
     const client = await col("clients").findOne({ _id: reminder.client_id } as any) as any;
-    if (client?.email) recipients = [client.email];
+    if (client?.email) {
+      recipients = [client.email];
+      recipientSource = `client (${client.display_name ?? reminder.client_id})`;
+    } else {
+      console.warn(
+        `[scheduler] Reminder ${remId}: client ${reminder.client_id} has no email address`
+      );
+    }
   }
 
-  const settings = getSettings();
-  if (recipients.length === 0 && !settings.emailFrom) {
+  if (recipients.length === 0) {
+    console.warn(
+      `[scheduler] Reminder ${remId} "${reminder.title}": no recipients found — skipping send`
+    );
+    await col("email_log").insertOne({
+      reminder_id: remId,
+      log_type: "skipped",
+      to_address: "",
+      subject: `תזכורת - ${reminder.title}`,
+      sent_at: new Date(),
+      success: 0,
+      error: "no recipients resolved",
+      smtp_host: settings.smtpHost || "in-app-only",
+    } as any);
     await markSent(reminder);
     return;
   }
 
+  console.log(
+    `[scheduler] Reminder ${remId} "${reminder.title}": sending to ${recipients.join(", ")} (source: ${recipientSource})`
+  );
+
   const result = await sendReminderEmail(reminder, recipients);
 
   const failCount = await col("email_log").countDocuments({
-    reminder_id: reminder.id,
+    reminder_id: remId,
+    log_type: "send",
     success: 0,
   });
 
   await col("email_log").insertOne({
-    reminder_id: reminder.id,
+    reminder_id: remId,
+    log_type: "send",
     to_address: recipients.join(", "),
-    subject: ` תזכורת -${reminder.title}`,
+    subject: `תזכורת - ${reminder.title}`,
     sent_at: new Date(),
     success: result.success ? 1 : 0,
     error: result.error ?? null,
-    smtp_host: getSettings().smtpHost || "in-app-only",
+    smtp_host: settings.smtpHost || "in-app-only",
   } as any);
 
   if (result.success) {
+    console.log(
+      `[scheduler] Reminder ${remId} sent successfully to ${recipients.join(", ")}`
+    );
     await markSent(reminder);
   } else if (failCount + 1 >= 3) {
     await col("reminders").updateOne(
-      { _id: reminder.id } as any,
+      { _id: remId } as any,
       { $set: { status: "error", updated_at: new Date() } }
     );
-    console.error(`[scheduler] Reminder ${reminder.id} failed 3 times, marking as error`);
+    console.error(
+      `[scheduler] Reminder ${remId} "${reminder.title}": failed 3 times (last: ${result.error}), marking as error`
+    );
   } else {
     console.warn(
-      `[scheduler] Reminder ${reminder.id} send failed (attempt ${failCount + 1}): ${result.error}`
+      `[scheduler] Reminder ${remId} "${reminder.title}": send failed (attempt ${failCount + 1}/3): ${result.error}`
     );
   }
 }
@@ -130,15 +170,76 @@ async function markSent(reminder: ReminderWithContext) {
   );
 
   if (reminder.client_id) {
+    const parts: string[] = [];
+    if (reminder.document_name) parts.push(`מסמך: ${reminder.document_name}`);
+    if (reminder.advance_days)  parts.push(`${reminder.advance_days} ימים מראש`);
+    parts.push(`תאריך יעד: ${reminder.trigger_date}`);
+
     await col("timeline_events").insertOne({
       client_id: reminder.client_id,
       event_type: "email_sent",
       title: `תזכורת נשלחה: ${reminder.title}`,
+      description: parts.join(" · "),
       event_date: new Date(),
       source_id: reminder.id,
       source_type: "reminder",
       created_at: new Date(),
     } as any);
+  }
+}
+
+async function checkEscalations() {
+  const settings = getSettings();
+  if (!settings.escalationEmail) return;
+
+  const threshold = settings.escalationThresholdDays ?? 3;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - threshold);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+  // Reminders still pending N+ days past their trigger date
+  const overdue = await col("reminders")
+    .find({ status: "pending", trigger_date: { $lte: cutoffIso } })
+    .toArray();
+
+  if (!overdue.length) return;
+
+  // IDs that already have an escalation log entry
+  const escalatedLogs = await col("email_log")
+    .find({ log_type: "escalation", reminder_id: { $in: overdue.map((r: any) => r._id?.toString()) } })
+    .project({ reminder_id: 1 })
+    .toArray();
+  const escalatedIds = new Set(escalatedLogs.map((l: any) => l.reminder_id));
+
+  for (const reminder of overdue) {
+    const remId = reminder._id?.toString();
+    if (escalatedIds.has(remId)) continue;
+
+    const r = reminder as any;
+    const subject = `[הסלמה] תזכורת לא טופלה: ${r.title}`;
+    const body = `התזכורת "${r.title}" לא טופלה במשך ${threshold} ימים מאז ${r.trigger_date}. נא לטפל.`;
+
+    const result = await sendReminderEmail(
+      { ...r, id: remId, client_name: null, document_name: null, title: subject, body } as ReminderWithContext,
+      [settings.escalationEmail]
+    );
+
+    await col("email_log").insertOne({
+      reminder_id: remId,
+      log_type: "escalation",
+      to_address: settings.escalationEmail,
+      subject,
+      sent_at: new Date(),
+      success: result.success ? 1 : 0,
+      error: result.error ?? null,
+      smtp_host: settings.smtpHost || "in-app-only",
+    } as any);
+
+    if (result.success) {
+      console.log(`[scheduler] Escalation sent for reminder ${remId} to ${settings.escalationEmail}`);
+    } else {
+      console.warn(`[scheduler] Escalation failed for reminder ${remId}: ${result.error}`);
+    }
   }
 }
 
@@ -152,7 +253,9 @@ export async function generateContractReminders(
   const settings = getSettings();
   const today = new Date().toISOString().slice(0, 10);
 
-  const contract = await col("contracts").findOne({ _id: contractId } as any) as any;
+  let contractOid: any;
+  try { const { ObjectId } = await import("mongodb"); contractOid = new ObjectId(contractId); } catch { contractOid = contractId; }
+  const contract = await col("contracts").findOne({ _id: contractOid }) as any;
 
   const baseLabel = (() => {
     const t = (contract?.contract_type ?? "").toLowerCase();
@@ -174,9 +277,14 @@ export async function generateContractReminders(
 
     const expiry = new Date(expiryDate);
     expiry.setDate(expiry.getDate() - days);
-    const triggerDate = expiry.toISOString().slice(0, 10);
+    const calculatedTrigger = expiry.toISOString().slice(0, 10);
 
-    if (triggerDate <= today) continue;
+    // If the expiry date itself is already past, skip entirely — nothing to remind about.
+    if (expiryDate < today) continue;
+
+    // If the advance-warning trigger is already past but expiry is still future,
+    // clamp to today so the scheduler fires it on the next check.
+    const triggerDate = calculatedTrigger < today ? today : calculatedTrigger;
 
     const title = `${baseLabel} ב-${triggerDate} (יעד: ${expiryDate})`;
 
