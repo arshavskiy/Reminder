@@ -244,6 +244,18 @@ Many Israeli PDFs produce text where the label and value are reversed (right-to-
 - **Forward** (label before value): `בתוקף עד: 23.07.2027`
 - **Reversed** (value before label): `2027/07/23: בתוקף עד`
 
+### Noise filtering (`contact_name`)
+
+Heavily bidi-garbled PDFs sometimes produce values that look like a concatenated row of label names (e.g. `פקס: טלפוןתקופתית: סוג בדיקה`). The extractor rejects any candidate name that:
+
+- Starts with a known label word (`פקס`, `טלפון`, `נייד`, `מייל`, `כתובת`, etc.)
+- Contains inspection-table header fragments (`תקופתית`, `סוג בדיקה`, `מספר רישוי`, `מיקוד`)
+- Contains no Hebrew letters at all
+
+### Reversed email detection
+
+A reversed bidi email appears as `domain.tld@username` (the domain — which has dots — is before the `@`, and the username — no dots — is after it). Detection rule: if the part before `@` contains a dot **and** the part after `@` does not, the address is reversed and is returned as `username@domain.tld`. This correctly handles both standard TLDs (`co.il`) and non-standard domains that appear in real documents.
+
 ### What happens with the results
 
 - The extraction is always persisted: `document.extracted_fields`, `document.document_kind`, and an `extractions` row with `backend: "ocr-regex"`.
