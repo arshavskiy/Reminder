@@ -9,12 +9,20 @@ import {ocrFile} from "./ocrParser";
 import {parseDocx} from "./docxParser";
 import {parseXlsx} from "./xlsxParser";
 import {extractDocument, extractWithTemplate} from "./extractor";
-import {pickTemplate} from "../templates/seedTemplates";
+import {extractCertificate} from "./certificateExtractor";
+import {extractFromOcr} from "./ocrExtractor";
+import {classifyDocumentKind, getOrBuildSystemPrompt, pickTemplate} from "../templates/seedTemplates";
 import {generateContractReminders} from "../reminders/scheduler";
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 
 type PushFn = (event: Record<string, unknown>) => void;
+
+export interface PipelineOptions {
+  skipAi?: boolean;        // skip all AI extraction
+  skipEntities?: boolean;  // skip client/contract/equipment creation
+  skipReminders?: boolean; // skip reminder generation
+}
 
 function getMimeType(ext: string): string {
   const map: Record<string, string> = {
@@ -36,7 +44,7 @@ function computeHash(filePath: string): string {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
-export async function importFile(originalPath: string, push?: PushFn, userId?: string, displayName?: string): Promise<string> {
+export async function importFile(originalPath: string, push?: PushFn, userId?: string, displayName?: string, pipeline?: PipelineOptions): Promise<string> {
   const settings = getSettings();
 
   const ext = extname(originalPath);
@@ -100,6 +108,7 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
     signed_url_expires_at: signedUrlExpiresAt,
   };
   if (userId) docRecord.user_id = userId;
+  docRecord.ai_extracted = !pipeline?.skipAi;
 
   const insertResult = await col("documents").insertOne(docRecord);
   const documentId = insertResult.insertedId.toString();
@@ -107,7 +116,7 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   push?.({ type: "document:queued", documentId: documentId as any, fileName });
   console.log(`[importer] Queued document ${documentId}: ${fileName}`);
 
-  processDocument(documentId, managedPath, mimeType, ext, push, userId).catch(async (err) => {
+  processDocument(documentId, managedPath, mimeType, ext, push, userId, pipeline).catch(async (err) => {
     console.error(`[importer] Fatal error processing doc ${documentId}:`, err);
     await col("documents").updateOne(
       { _id: insertResult.insertedId },
@@ -125,7 +134,8 @@ export async function processDocument(
   mimeType: string,
   ext: string,
   push?: PushFn,
-  userId?: string
+  userId?: string,
+  pipeline?: PipelineOptions
 ) {
   const settings = getSettings();
   const docFilter = { _id: new ObjectId(documentId) } as any;
@@ -173,86 +183,248 @@ export async function processDocument(
 
   push?.({ type: "document:progress", documentId: documentId as any, stage: "ai_extraction", progress: 50 });
 
-  if (settings.autoExtract && rawText.trim().length > 0) {
+  // ── Stage A: OCR regex baseline — always runs when there is text ────────────
+  // Runs regardless of AI setting. Creates extractions row, extracted_fields,
+  // client, contract and reminders from regex-parsed data.
+  // AI (Stage B) will overwrite these with richer data if enabled.
+  if (rawText.trim().length > 0) {
+    const ocr = extractFromOcr(rawText);
+    const documentKind = classifyDocumentKind(rawText);
+    console.log(`[ocr-extractor] doc=${documentId} kind="${documentKind}"`, ocr);
+
+    // Always persist kind + raw OCR fields on the document
+    await col("documents").updateOne(docFilter, {
+      $set: {
+        document_kind: documentKind,
+        document_type: ocr.document_type,
+        extracted_fields: JSON.stringify(ocr),
+        updated_at: new Date(),
+      },
+    });
+
+    // Always write an extractions row for the OCR pass
+    await col("extractions").insertOne({
+      document_id: documentId,
+      backend: "ocr-regex",
+      model: "regex",
+      result_json: JSON.stringify(ocr),
+      raw_text: rawText,
+      parsed_ok: ocr.expiry_date || ocr.contact_name || ocr.contact_phone ? 1 : 0,
+      error: null,
+      exec_ms: 0,
+      created_at: new Date(),
+    } as any);
+
+    // Create client / contract / reminders from OCR data (unless disabled)
+    if (!pipeline?.skipEntities && (ocr.expiry_date || ocr.contact_name || ocr.contact_phone)) {
+      let clientId: string | null = null;
+      if (ocr.contact_name || ocr.contact_phone || ocr.contact_email) {
+        clientId = await findOrCreateClient({
+          displayName: ocr.contact_name ?? ocr.contact_phone ?? "לא ידוע",
+          entityType: "person",
+          email: ocr.contact_email,
+          phone: ocr.contact_phone,
+          address: ocr.client_address,
+          userId,
+        });
+        await col("document_clients").updateOne(
+          { document_id: documentId, client_id: clientId },
+          { $setOnInsert: { document_id: documentId, client_id: clientId, role: "party_a" } },
+          { upsert: true }
+        );
+      }
+
+      if (ocr.expiry_date) {
+        const upsertResult = await col("contracts").findOneAndUpdate(
+          { document_id: documentId },
+          {
+            $set: {
+              ...(userId && { user_id: userId }),
+              client_id: clientId,
+              contract_type: ocr.document_type,
+              start_date: null,
+              expiry_date: ocr.expiry_date,
+              confidence: "low",
+              updated_at: new Date(),
+            },
+            $setOnInsert: { document_id: documentId, status: "active", created_at: new Date() },
+          },
+          { upsert: true, returnDocument: "after" }
+        );
+        const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
+        if (!pipeline?.skipReminders) {
+          await generateContractReminders(contractId, clientId, documentId, ocr.expiry_date, userId);
+        }
+      }
+
+      console.log(
+        `[ocr-extractor] doc=${documentId} expiry="${ocr.expiry_date ?? "?"}" ` +
+        `contact="${ocr.contact_name ?? "?"}" phone="${ocr.contact_phone ?? "?"}"` +
+        `${ocr.expiry_date && !pipeline?.skipReminders ? " → reminders queued" : ""}`
+      );
+    }
+  }
+
+  // ── Stage B: AI extraction — enriches OCR baseline when enabled ─────────────
+  if (settings.autoExtract && rawText.trim().length > 0 && !pipeline?.skipAi) {
     const docRow = await col("documents").findOne(docFilter) as any;
 
-    const template = await pickTemplate(rawText);
+    // ── Stage 1: classify document kind by keyword scoring ───────────────────
+    const documentKind = classifyDocumentKind(rawText);
+    console.log(
+      `[classifier] doc=${documentId} file="${docRow?.file_name ?? "?"}" → kind="${documentKind}" | text_chars=${rawText.length}`
+    );
 
-    if (template) {
-      let inspector: Record<string, any> | undefined;
-      if (userId) {
-        const [engineerProfile, userRow] = await Promise.all([
-          col("engineer_profiles").findOne({ user_id: userId }) as Promise<any>,
-          col("users").findOne({ _id: new ObjectId(userId) as any }) as Promise<any>,
-        ]);
-        inspector = {
-          ...(engineerProfile ?? {}),
-          personal_phone: userRow?.phone ?? null,
-          personal_email: userRow?.email ?? null,
-          personal_name: userRow?.name ?? null,
-          personal_company_name: userRow?.company_name ?? null,
-        };
-      }
-      const run = await extractWithTemplate(rawText, template, documentId, docRow?.file_name, inspector);
-      const normalizedFields = normalizeExtractionFieldsForTemplate(rawText, template, run.fields);
+    // Persist the kind immediately so filters (e.g. hide certificates) work
+    // even before extraction completes.
+    await col("documents").updateOne(docFilter, {
+      $set: { document_kind: documentKind, updated_at: new Date() },
+    });
 
+    // ── Stage 2: dispatch to the right extractor ─────────────────────────────
+
+    if (documentKind === "certificate") {
+      console.log(`[classifier] doc=${documentId} → extractor=certificateExtractor`);
+      // Certificate extraction is a separate schema — handled by certificateExtractor.
+      // The document stays accessible via the profile page; it is hidden from the
+      // main documents list by the existing { document_kind: { $ne: "certificate" } } filter.
+      const certRun = await extractCertificate(rawText, documentId, docRow?.file_name);
       await col("extractions").insertOne({
         document_id: documentId,
-        backend: run.backend,
-        model: run.model,
-        result_json: run.rawJson,
+        backend: certRun.backend,
+        model: certRun.model,
+        result_json: certRun.rawJson,
         raw_text: rawText,
-        parsed_ok: normalizedFields ? 1 : 0,
-        error: run.error ?? null,
-        exec_ms: run.execMs,
+        parsed_ok: certRun.result ? 1 : 0,
+        error: certRun.error ?? null,
+        exec_ms: certRun.execMs,
         created_at: new Date(),
       } as any);
 
-      if (normalizedFields) {
+      if (certRun.result) {
+        console.log(
+          `[classifier] doc=${documentId} certificate_type="${certRun.result.certificate_type ?? "?"}" ` +
+          `issuer="${certRun.result.issuer ?? "?"}" expiry="${certRun.result.expiry_date ?? "?"}" ` +
+          `confidence=${certRun.result.confidence} time=${certRun.execMs}ms`
+        );
         await col("documents").updateOne(docFilter, {
           $set: {
-            extracted_fields: JSON.stringify(normalizedFields),
-            template_id: template.id,
-            document_type: template.name,
+            extracted_fields: JSON.stringify(certRun.result),
+            document_type: certRun.result.certificate_type ?? "תעודה",
             updated_at: new Date(),
           },
         });
-
-        push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-        await saveTemplateEntities(documentId, template, normalizedFields, userId);
-      } else if (run.error) {
-        const msg = `AI extraction failed: ${run.error}`;
+      } else if (certRun.error) {
+        const msg = `Certificate extraction failed: ${certRun.error}`;
         await col("documents").updateOne(docFilter, {
           $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
         });
         push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
-        console.error(`[importer] ${msg}`);
         return;
       }
     } else {
-      const extraction = await extractDocument(rawText, documentId, docRow?.file_name);
-      await col("extractions").insertOne({
-        document_id: documentId,
-        backend: extraction.backend,
-        model: extraction.model,
-        result_json: extraction.rawJson,
-        raw_text: rawText,
-        parsed_ok: extraction.result ? 1 : 0,
-        error: extraction.error ?? null,
-        exec_ms: extraction.execMs,
-        created_at: new Date(),
-      } as any);
+      // For all other kinds, pick the best matching template then extract.
+      const template = await pickTemplate(rawText);
+      console.log(
+        `[classifier] doc=${documentId} → extractor=${template ? `template("${template.name}")` : "generic"}`
+      );
 
-      if (extraction.result) {
-        push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-        await saveExtractionEntities(documentId, extraction.result, userId);
-      } else if (extraction.error) {
-        const msg = `AI extraction failed: ${extraction.error}`;
-        await col("documents").updateOne(docFilter, {
-          $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
-        });
-        push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
-        return;
+      if (template) {
+        let inspector: Record<string, any> | undefined;
+        if (userId) {
+          const [engineerProfile, userRow] = await Promise.all([
+            col("engineer_profiles").findOne({ user_id: userId }) as Promise<any>,
+            col("users").findOne({ _id: new ObjectId(userId) as any }) as Promise<any>,
+          ]);
+          inspector = {
+            ...(engineerProfile ?? {}),
+            personal_phone: userRow?.phone ?? null,
+            personal_email: userRow?.email ?? null,
+            personal_name: userRow?.name ?? null,
+            personal_company_name: userRow?.company_name ?? null,
+          };
+        }
+
+        // Use cached prompt when no inspector exclusions are needed.
+        const systemPrompt = await getOrBuildSystemPrompt(template, inspector as any);
+        const run = await extractWithTemplate(rawText, template, documentId, docRow?.file_name, inspector as any, systemPrompt);
+        const normalizedFields = normalizeExtractionFieldsForTemplate(rawText, template, run.fields);
+
+        await col("extractions").insertOne({
+          document_id: documentId,
+          backend: run.backend,
+          model: run.model,
+          result_json: run.rawJson,
+          raw_text: rawText,
+          parsed_ok: normalizedFields ? 1 : 0,
+          error: run.error ?? null,
+          exec_ms: run.execMs,
+          created_at: new Date(),
+        } as any);
+
+        if (normalizedFields) {
+          const keyCount = Object.keys(normalizedFields).length;
+          const expiryVal = template.expiry_field ? (normalizedFields[template.expiry_field] ?? null) : null;
+          console.log(
+            `[classifier] doc=${documentId} template="${template.name}" ` +
+            `fields_extracted=${keyCount} expiry="${expiryVal ?? "?"}" ` +
+            `confidence=${normalizedFields._confidence ?? "?"} time=${run.execMs}ms`
+          );
+          await col("documents").updateOne(docFilter, {
+            $set: {
+              extracted_fields: JSON.stringify(normalizedFields),
+              template_id: template.id,
+              document_type: template.name,
+              updated_at: new Date(),
+            },
+          });
+
+          if (!pipeline?.skipEntities) {
+            push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
+            await saveTemplateEntities(documentId, template, normalizedFields, userId, pipeline?.skipReminders);
+          }
+        } else if (run.error) {
+          const msg = `AI extraction failed: ${run.error}`;
+          await col("documents").updateOne(docFilter, {
+            $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+          });
+          push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
+          console.error(`[importer] ${msg}`);
+          return;
+        }
+      } else {
+        const extraction = await extractDocument(rawText, documentId, docRow?.file_name);
+        await col("extractions").insertOne({
+          document_id: documentId,
+          backend: extraction.backend,
+          model: extraction.model,
+          result_json: extraction.rawJson,
+          raw_text: rawText,
+          parsed_ok: extraction.result ? 1 : 0,
+          error: extraction.error ?? null,
+          exec_ms: extraction.execMs,
+          created_at: new Date(),
+        } as any);
+
+        if (extraction.result) {
+          console.log(
+            `[classifier] doc=${documentId} generic document_type="${extraction.result.document_type ?? "?"}" ` +
+            `client="${extraction.result.client_company ?? extraction.result.client_name ?? "?"}" ` +
+            `expiry="${extraction.result.expiry_date ?? "?"}" ` +
+            `confidence=${extraction.result.confidence} time=${extraction.execMs}ms`
+          );
+          if (!pipeline?.skipEntities) {
+            push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
+            await saveExtractionEntities(documentId, extraction.result, userId, pipeline?.skipReminders);
+          }
+        } else if (extraction.error) {
+          const msg = `AI extraction failed: ${extraction.error}`;
+          await col("documents").updateOne(docFilter, {
+            $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+          });
+          push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
+          return;
+        }
       }
     }
   }
@@ -267,7 +439,8 @@ export async function processDocument(
 async function saveExtractionEntities(
   documentId: string,
   result: import("../../src/shared/types.js").ExtractionResult,
-  userId?: string
+  userId?: string,
+  skipReminders?: boolean
 ) {
   if (result.document_type || result.document_number) {
     await col("documents").updateOne(
@@ -348,7 +521,7 @@ async function saveExtractionEntities(
       { upsert: true, returnDocument: "after" }
     );
     const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
-    if (result.expiry_date) {
+    if (result.expiry_date && !skipReminders) {
       await generateContractReminders(contractId, clientId, documentId, result.expiry_date, userId);
     }
   }
@@ -390,6 +563,30 @@ export function normalizeExtractionFieldsForTemplate(
     if (reportNumber) normalized.report_number = reportNumber;
   }
 
+  // When flat equipment fields are empty but _equipment rows were extracted,
+  // backfill from the first row so the document card shows something useful.
+  const equipmentRows = Array.isArray(normalized._equipment) ? normalized._equipment as any[] : [];
+  if (equipmentRows.length > 0) {
+    const first = equipmentRows[0];
+    if (!hasMeaningfulValue(normalized.equipment_description) && hasMeaningfulValue(first?.name)) {
+      normalized.equipment_description = first.name;
+    }
+    if (!hasMeaningfulValue(normalized.serial_number) && hasMeaningfulValue(first?.serial_number)) {
+      normalized.serial_number = first.serial_number;
+    }
+    if (!hasMeaningfulValue(normalized.manufacturer) && hasMeaningfulValue(first?.manufacturer)) {
+      normalized.manufacturer = first.manufacturer;
+    }
+    if (!hasMeaningfulValue(normalized.model) && hasMeaningfulValue(first?.model)) {
+      normalized.model = first.model;
+    }
+    if (!hasMeaningfulValue(normalized.load_capacity)) {
+      const work = first?.load_capacity_work;
+      const val = Array.isArray(work) && work.length > 0 ? (work as string[]).join(" / ") : null;
+      if (val) normalized.load_capacity = val;
+    }
+  }
+
   return normalized;
 }
 
@@ -421,7 +618,8 @@ async function saveTemplateEntities(
   documentId: string,
   template: DocTemplate,
   fields: DynamicExtraction,
-  userId?: string
+  userId?: string,
+  skipReminders?: boolean
 ) {
   const f = fields;
 
@@ -505,7 +703,7 @@ async function saveTemplateEntities(
       { upsert: true, returnDocument: "after" }
     );
     const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
-    if (expiryDate) {
+    if (expiryDate && !skipReminders) {
       await generateContractReminders(contractId, clientId, documentId, expiryDate, userId);
     }
   }

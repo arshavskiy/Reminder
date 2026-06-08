@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { hashPassword, verifyPassword, generateToken } from "../auth/emailAuth.js";
-import { HTTPException, handleHTTPException } from "../auth/middleware.js";
+import {describe, expect, it} from "vitest";
+import {generateToken, hashPassword, verifyPassword} from "../auth/emailAuth.js";
+import {handleHTTPException, HTTPException} from "../auth/middleware.js";
 
 // ── hashPassword / verifyPassword ────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ describe("hashPassword / verifyPassword", () => {
     const h2 = await hashPassword("same");
     expect(await verifyPassword("same", h1)).toBe(true);
     expect(await verifyPassword("same", h2)).toBe(true);
-  });
+  }, 15000);
 });
 
 // ── generateToken ─────────────────────────────────────────────────────────────

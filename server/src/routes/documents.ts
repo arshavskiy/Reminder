@@ -4,10 +4,10 @@ import {mkdirSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {
-  importFile,
-  normalizeExtractionFieldsForTemplate,
-  processDocument,
-  saveTemplateEntitiesForDoc
+    importFile,
+    normalizeExtractionFieldsForTemplate,
+    processDocument,
+    saveTemplateEntitiesForDoc
 } from "../pipeline/importer";
 import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
@@ -142,7 +142,7 @@ export function registerDocumentRoutes(app: express.Application) {
     }
 
     if (userRole === "user") {
-      const count = await col("documents").countDocuments({ user_id: userId });
+      const count = await col("documents").countDocuments({ user_id: userId, ai_extracted: true });
       if (count >= getSettings().userDocumentLimit) {
         res.status(403).json({ error: "document_limit_reached" });
         return;
@@ -183,8 +183,13 @@ export function registerDocumentRoutes(app: express.Application) {
         return;
       }
 
-      if (userRole === "user") {
-        const count = await col("documents").countDocuments({ user_id: userId });
+      const skipAi       = req.query.skipAi       === "true";
+      const skipEntities = req.query.skipEntities === "true";
+      const skipReminders = req.query.skipReminders === "true";
+      const pipelineOptions = { skipAi, skipEntities, skipReminders };
+
+      if (userRole === "user" && !skipAi) {
+        const count = await col("documents").countDocuments({ user_id: userId, ai_extracted: true });
         if (count + files.length > getSettings().userDocumentLimit) {
           res.status(403).json({ error: "document_limit_reached" });
           return;
@@ -204,10 +209,9 @@ export function registerDocumentRoutes(app: express.Application) {
         let displayName = file.originalname;
         try {
           displayName = Buffer.from(file.originalname, "latin1").toString("utf8");
-          // If the result contains replacement chars, the name was already UTF-8
           if (displayName.includes("�")) displayName = file.originalname;
         } catch { /* keep original */ }
-        const id = await importFile(destPath, undefined, userId, displayName);
+        const id = await importFile(destPath, undefined, userId, displayName, pipelineOptions);
         ids.push(String(id));
       }
 
@@ -611,6 +615,107 @@ export function registerDocumentRoutes(app: express.Application) {
       }
     }
     res.json({ ok: true, fields, document: flatDoc(updated) });
+  });
+
+  // PUT /api/documents/:id/fields  — save manually-edited extraction fields
+  app.put("/api/documents/:id/fields", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const id = req.params.id;
+    const doc = await col("documents").findOne({ ...idFilter(id), user_id: userId }) as any;
+    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+
+    const incoming = req.body as Record<string, unknown>;
+
+    // Strip empty strings so they don't overwrite real values
+    const sanitized: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(incoming)) {
+      if (v !== "" && v !== null) sanitized[k] = v;
+    }
+
+    // Merge with existing extracted_fields
+    let existing: Record<string, unknown> = {};
+    if (doc.extracted_fields) {
+      try { existing = JSON.parse(doc.extracted_fields); } catch {}
+    }
+    const merged = { ...existing, ...sanitized };
+
+    await col("documents").updateOne(idFilter(id), {
+      $set: { extracted_fields: JSON.stringify(merged), updated_at: new Date() },
+    });
+
+    // Also update the latest extraction record so reloadDoc reads the new values
+    await col("extractions").updateOne(
+      { document_id: id },
+      { $set: { fields: merged, updated_at: new Date() } },
+      { sort: { created_at: -1 } } as any,
+    );
+
+    // Propagate date/type changes to linked contracts
+    const CONTRACT_FIELDS = ["expiry_date", "start_date", "contract_number", "contract_type", "counterparty"] as const;
+    const contractUpdate: Record<string, unknown> = {};
+    for (const f of CONTRACT_FIELDS) {
+      if (sanitized[f] !== undefined) contractUpdate[f] = sanitized[f];
+    }
+    // report_number from inspection documents maps to contract_number
+    if (sanitized.report_number !== undefined && contractUpdate.contract_number === undefined) {
+      contractUpdate.contract_number = sanitized.report_number;
+    }
+    // next_inspection_date is an alias for expiry_date
+    if (sanitized.next_inspection_date !== undefined && contractUpdate.expiry_date === undefined) {
+      contractUpdate.expiry_date = sanitized.next_inspection_date;
+    }
+
+    if (Object.keys(contractUpdate).length) {
+      // Match contracts by document_id stored as either string or ObjectId
+      let oid: ObjectId | null = null;
+      try { oid = new ObjectId(id); } catch {}
+      const contracts = await col("contracts").find({
+        $or: [
+          { document_id: id, user_id: userId },
+          ...(oid ? [{ document_id: oid, user_id: userId }] : []),
+        ],
+      }).toArray();
+
+      for (const c of contracts) {
+        const cid = (c._id as ObjectId).toString();
+        await col("contracts").updateOne(
+          { _id: c._id },
+          { $set: { ...contractUpdate, updated_at: new Date() } },
+        );
+
+        // Regenerate / update reminders when expiry_date or contract_type changed
+        if (contractUpdate.expiry_date || contractUpdate.contract_type) {
+          const { generateContractReminders } = await import("../reminders/scheduler.js");
+          const expiryDate = String(contractUpdate.expiry_date ?? (c as any).expiry_date ?? "");
+          if (expiryDate) {
+            // Delete existing pending reminders for this contract so they get recreated with updated title/date
+            await col("reminders").deleteMany({
+              source_type: "contract_expiry",
+              source_id: cid,
+              status: "pending",
+            });
+            await generateContractReminders(
+              cid,
+              (c as any).client_id ?? null,
+              id,
+              expiryDate,
+              userId,
+            );
+          }
+        }
+      }
+    }
+
+    res.json({ ok: true, fields: merged });
   });
 }
 

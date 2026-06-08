@@ -8,15 +8,15 @@ const DEFAULTS: AppSettings = {
   theme: "light",
   port: 3737,
 
-  aiBackend: "openai",
+  aiBackend: (process.env.AI_BACKEND as "openai" | "ollama") ?? "openai",
   openAiKey: process.env.OPENAI_LOCAL_API_KEY ?? "",
-  openAiModel: "gpt-4o-mini",
-  ollamaUrl: "http://localhost:11434",
-  ollamaModel: "llama3.1",
+  openAiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+  ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
+  ollamaModel: process.env.OLLAMA_MODEL ?? "llama3",
 
-  ocrLanguage: "heb+eng",
-  autoExtract: true,
-  extractionMaxChars: 8000,
+  ocrLanguage: process.env.OCR_LANGUAGE ?? "heb+eng",
+  autoExtract: process.env.AUTO_EXTRACT !== "false",
+  extractionMaxChars: process.env.EXTRACTION_MAX_CHARS ? parseInt(process.env.EXTRACTION_MAX_CHARS) : 12000,
 
   smtpHost: process.env.SMTP_HOST ?? "",
   smtpPort: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587,
@@ -44,6 +44,9 @@ const DEFAULTS: AppSettings = {
   allowedEmails: process.env.ALLOWED_EMAILS?.split(",").map(e => e.trim()) ?? [],
 
   userDocumentLimit: parseInt(process.env.USER_DOCUMENT_LIMIT ?? "25"),
+
+  escalationEmail: process.env.ESCALATION_EMAIL ?? "",
+  escalationThresholdDays: 3,
 };
 
 function resolveDataDir(): string {

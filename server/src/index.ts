@@ -24,6 +24,7 @@ import {registerAuthRoutes} from "./routes/auth";
 import {registerUserSettingsRoutes} from "./routes/userSettings";
 import {registerProfileRoutes} from "./routes/profile";
 import {registerAdminRoutes} from "./routes/admin";
+import {registerExtractRemindersRoutes} from "./routes/extractReminders";
 import {importFile} from "./pipeline/importer";
 import {applyScannedKeys, scanFileForKeys, scanWatchFolder, shouldScanFile} from "./pipeline/keyScanner";
 
@@ -85,6 +86,7 @@ registerEquipmentRoutes(app);
 registerUserSettingsRoutes(app);
 registerProfileRoutes(app);
 registerAdminRoutes(app);
+registerExtractRemindersRoutes(app);
 
 // Static file serving (production)
 const STATIC_DIR = join(__dirname, "../../dist/client");

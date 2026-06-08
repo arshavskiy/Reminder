@@ -6,8 +6,8 @@
 // to extract data, we use a sample document to design a template.
 
 import OpenAI from "openai";
-import { getSettings } from "../settings";
-import type { DocTemplate, TemplateField } from "../../src/shared/types.js";
+import {getSettings} from "../settings";
+import type {DocTemplate, TemplateField} from "../../src/shared/types.js";
 
 const SYSTEM_PROMPT = `You are a Hebrew business-document analyst. The user will give you a sample document's raw text (in Hebrew, possibly with bidi/encoding artifacts from a PDF). Your job: design a reusable extraction template for documents of THIS KIND.
 
@@ -140,9 +140,11 @@ export function toDraft(g: GeneratedTemplate): Omit<DocTemplate, "id" | "created
   return {
     name: g.name,
     description: g.description,
+    document_kind: "unknown",
     match_keywords: g.match_keywords,
     fields: g.fields,
     expiry_field: g.expiry_field,
+    cached_system_prompt: null,
     is_default: 0,
     is_builtin: 0,
   };

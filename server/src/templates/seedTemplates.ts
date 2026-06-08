@@ -6,11 +6,13 @@
 
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
-import type {DocTemplate, TemplateField} from "../../src/shared/types.js";
+import type {DocTemplate, DocumentKind, TemplateField} from "../../src/shared/types.js";
+import {buildPromptForTemplate, type InspectorProfile} from "./buildPrompt";
 
 interface SeedRow {
   name: string;
   description: string;
+  document_kind: DocumentKind;
   match_keywords: string[];
   fields: TemplateField[];
   expiry_field: string | null;
@@ -21,6 +23,7 @@ const SEEDS: SeedRow[] = [
   {
     name: "תסקיר בדיקה",
     description: "תסקיר בדיקה תקופתית של ציוד הרמה, מעליות, מערכות בטיחות וכד׳",
+    document_kind: "inspection_report",
     match_keywords: ["תסקיר", "בדיקה תקופתית", "פקודת הבטיחות"],
     expiry_field: "next_inspection_date",
     is_default: 1,
@@ -59,6 +62,7 @@ const SEEDS: SeedRow[] = [
   {
     name: "חוזה שירות",
     description: "חוזה / הסכם שירות, ביטוח, שכירות וכד׳",
+    document_kind: "contract",
     match_keywords: ["חוזה", "הסכם", "הסכם שירות"],
     expiry_field: "expiry_date",
     is_default: 0,
@@ -81,6 +85,7 @@ const SEEDS: SeedRow[] = [
   {
     name: "חשבונית",
     description: "חשבונית מס / קבלה / דרישת תשלום",
+    document_kind: "invoice",
     match_keywords: ["חשבונית", "מספר חשבונית", "תשלום"],
     expiry_field: "payment_due_date",
     is_default: 0,
@@ -103,14 +108,19 @@ export async function seedBuiltinTemplates(): Promise<void> {
   const collection = col<any>("doc_templates");
   const now = new Date();
   for (const s of SEEDS) {
+    // Build and cache the system prompt at seed time so it's ready immediately.
+    const tplShell = { fields: s.fields, name: s.name, expiry_field: s.expiry_field, match_keywords: s.match_keywords } as DocTemplate;
+    const cached_system_prompt = buildPromptForTemplate(tplShell);
     await collection.updateOne(
       { name: s.name },
       {
         $set: {
           description: s.description,
+          document_kind: s.document_kind,
           match_keywords: s.match_keywords,
           fields: s.fields,
           expiry_field: s.expiry_field,
+          cached_system_prompt,
           is_default: s.is_default,
           is_builtin: 1,
           updated_at: now,
@@ -150,8 +160,8 @@ function flatRow(row: any): DocTemplate {
   return {
     id: _id?.toString(),
     ...rest,
-    // In MongoDB we store arrays natively; no JSON.parse needed.
-    // Guard against legacy string values just in case.
+    document_kind: (rest.document_kind as DocumentKind) ?? "unknown",
+    cached_system_prompt: rest.cached_system_prompt ?? null,
     match_keywords: Array.isArray(rest.match_keywords)
       ? rest.match_keywords
       : safeJson(rest.match_keywords, []),
@@ -190,4 +200,90 @@ export async function pickTemplate(rawText: string): Promise<DocTemplate | null>
   if (best && best.score > 0) return best.tpl;
 
   return all.find((t) => t.is_default) ?? all[0];
+}
+
+// ── Keyword tables for document-kind classification ─────────────────────────
+
+const KIND_KEYWORDS: Record<DocumentKind, string[]> = {
+  inspection_report: [
+    "תסקיר", "בדיקה תקופתית", "פקודת הבטיחות", "מספר תסקיר",
+    "ציוד הרמה", "בודק מוסמך", "בתוקף עד", "בדיקה הבאה",
+  ],
+  contract: [
+    "חוזה", "הסכם", "הסכם שירות", "הסכם שכירות", "הסכם ביטוח",
+    "הצדדים מסכימים", "תנאי ההסכם",
+  ],
+  invoice: [
+    "חשבונית", "חשבונית מס", "מספר חשבונית", "סכום לתשלום",
+    "מע\"מ", "קבלה", "דרישת תשלום",
+  ],
+  certificate: [
+    "תעודה", "הסמכה", "רישיון", "מוסמך", "תעודת הסמכה",
+    "תעודת מהנדס", "inspector", "license", "certification",
+    "מ.ר.", "מ.ג.", "תוקף עד",
+  ],
+  unknown: [],
+};
+
+/**
+ * Classify raw document text into a DocumentKind using keyword scoring.
+ * Returns the kind with the highest hit count; falls back to "unknown".
+ */
+export function classifyDocumentKind(rawText: string): DocumentKind {
+  let best: { kind: DocumentKind; score: number } = { kind: "unknown", score: 0 };
+
+  for (const [kind, keywords] of Object.entries(KIND_KEYWORDS) as [DocumentKind, string[]][]) {
+    if (kind === "unknown") continue;
+    let score = 0;
+    for (const kw of keywords) {
+      if (rawText.includes(kw)) score++;
+    }
+    if (score > best.score) best = { kind, score };
+  }
+
+  return best.score > 0 ? best.kind : "unknown";
+}
+
+/**
+ * Return the cached system prompt for a template, building and persisting it if absent.
+ * Pass `inspector` only if you need a user-specific exclusion note baked in;
+ * inspector-aware prompts are NOT cached (returned ephemerally).
+ */
+export async function getOrBuildSystemPrompt(
+  template: DocTemplate,
+  inspector?: InspectorProfile
+): Promise<string> {
+  // Inspector-specific prompts cannot be shared across users — build ephemerally.
+  if (inspector) {
+    return buildPromptForTemplate(template, inspector);
+  }
+
+  if (template.cached_system_prompt) {
+    return template.cached_system_prompt;
+  }
+
+  // Cache miss — build, persist, and return.
+  const prompt = buildPromptForTemplate(template);
+  await col("doc_templates").updateOne(
+    { _id: tryObjectId(String(template.id)) },
+    { $set: { cached_system_prompt: prompt, updated_at: new Date() } }
+  );
+  console.log(`[templates] Cached system prompt for template "${template.name}"`);
+  return prompt;
+}
+
+/**
+ * Clear the cached system prompt so it is rebuilt on the next extraction.
+ * Call this whenever a template's fields, name, or expiry_field change.
+ */
+export async function invalidatePromptCache(templateId: string): Promise<void> {
+  await col("doc_templates").updateOne(
+    { _id: tryObjectId(templateId) },
+    { $set: { cached_system_prompt: null, updated_at: new Date() } }
+  );
+  console.log(`[templates] Invalidated prompt cache for template ${templateId}`);
+}
+
+function tryObjectId(id: string): any {
+  try { return new ObjectId(id); } catch { return id; }
 }

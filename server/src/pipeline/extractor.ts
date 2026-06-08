@@ -208,14 +208,15 @@ export async function extractWithTemplate(
   template: DocTemplate,
   documentId?: string | number,
   fileName?: string,
-  inspector?: InspectorProfile
+  inspector?: InspectorProfile,
+  prebuiltSystemPrompt?: string
 ): Promise<TemplateExtractionRun> {
   const settings = getSettings();
   const model = settings.aiBackend === "ollama" ? settings.ollamaModel : settings.openAiModel;
   const backend = settings.aiBackend;
   const text = rawText.slice(0, settings.extractionMaxChars);
   logExtractorSettings("extractor:tpl", settings, model, rawText.length, text.length, documentId);
-  const systemPrompt = buildPromptForTemplate(template, inspector);
+  const systemPrompt = prebuiltSystemPrompt ?? buildPromptForTemplate(template, inspector);
 
   const t0 = Date.now();
   let rawJson = "";

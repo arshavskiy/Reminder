@@ -66,12 +66,12 @@ export function buildPromptForTemplate(tpl: DocTemplate, inspector?: InspectorPr
     //   Do NOT create duplicate objects for the same serial number — merge sub-rows instead.
     //   When there is only one load value, still use an array with one element.
     {
-      "name": string,                   // תיאור — full description text of the equipment item
+      "name": string,                   // תיאור / "תיאור" column — full description text of the equipment item. BiDi note: may appear as "ראית" or "רואית" in reversed text — still map to this field.
       "manufacturer": string | null,    // יצרן
       "model": string | null,           // דגם (keep Latin model codes as-is, e.g. "SLR-CLU")
-      "serial_number": string | null,   // מספר סידורי — ONE serial per object; keep mixed Hebrew+Latin as-is
+      "serial_number": string | null,   // מספר סידורי / "מס' סידורי" — ONE serial per object; keep mixed Hebrew+Latin as-is. BiDi note: column header may appear reversed as "ירודיס 'סמ" or "ירודיס רפסמ" — still map values in that column to serial_number.
       "load_capacity_work": string[],   // עומס עבודה בטוח — extract ONLY from the equipment table column/header "עומס עבודה בטוח (ק\"ג)" or equivalent. One entry per load configuration, include units and context exactly as written, e.g. ["230 ק\"ג - עד 2 אנשים בבמה", "115 ק\"ג - אדם אחד בלבד"]. Empty array if not present.
-      "load_capacity_test": string[],   // עומס מבחן — one entry per load configuration. Empty array if not present.
+      "load_capacity_test": string[],   // עומס מבחן / "ומס מבחן" — test load. BiDi note: column header may appear reversed as "ןחבמ סמוע" or "ןחבמ סמ" — still map values to load_capacity_test. Include ק\"ג units. Empty array if not present.
       "load_radius": string[],          // רדיוס עומס — one entry per radius. Empty array if not present.
       "category": "lift" | "accessory" | "scaffold" | "ladder" | "balloon" | "intake" | "extractor" | "other"
       // category guidance:
@@ -105,6 +105,13 @@ GENERAL RULES:
 • If a field cannot be determined, use null (or [] for list types).
 • Do not invent data. Do not add fields not in the schema.
 • The text may have residual bidi/encoding artifacts from PDF extraction — use context.
+• BiDi table columns: Hebrew PDFs often reverse the order of column header words in equipment tables.
+  Common reversed headers and their correct mapping:
+    "ירודיס 'סמ" / "ירודיס רפסמ"  →  מספר סידורי  →  serial_number
+    "ןחבמ סמוע" / "ןחבמ (ג\"ק) סמוע"  →  עומס מבחן  →  load_capacity_test
+    "חוטב הדובע סמוע"  →  עומס עבודה בטוח  →  load_capacity_work
+    "ראית" / "רואית"  →  תיאור  →  name
+  Read column values left-to-right as they appear; only the HEADER words are reversed, not the values.
 • IGNORE the following boilerplate sections that appear in every inspection report — do NOT extract data from them:
   - סעיף 4 / הערות נוספות (section 4 / additional notes)
   - פקודת הבטיחות בעבודה legal disclaimer text (סעיפים 75,76,81,86...)
