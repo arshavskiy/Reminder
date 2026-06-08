@@ -53,17 +53,42 @@ function extractExpiryDate(text) {
   return null;
 }
 
+const LABEL_WORDS = /^(?:פקס|טלפון|נייד|מייל|מיקוד|ישוב|כתובת|רחוב|סוג|שם|תאריך|מספר|:)$/;
+const NOISE_PATTERN = /(?:טלפון|פקס|תקופתית|סוג\s+בדיקה|מספר\s+רישוי|ת\.ד|מיקוד)/;
+
+function isCleanName(v) {
+  if (!v) return false;
+  if (LABEL_WORDS.test(v.split(/\s/)[0])) return false;
+  if (NOISE_PATTERN.test(v)) return false;
+  if (!/[א-ת]/.test(v)) return false;
+  return true;
+}
+
 function extractContactName(text) {
-  return (
-    firstMatch(text, /איש\s+קשר\s*:?\s*([^\n\r\t|]{2,40})/) ??
-    firstMatch(text, /שם\s+איש\s+קשר\s*:?\s*([^\n\r\t|]{2,40})/) ??
-    firstMatch(text, /שם\s+מלא\s*:?\s*([^\n\r\t|]{2,40})/) ??
-    firstMatch(text, /שם\s+הלקוח\s*:?\s*([^\n\r\t|]{2,40})/) ??
-    firstMatch(text, /שם\s+מעביד\s*[/]?\s*בעל\s+הציוד\s*:?\s*([^\n\r\t|]{2,40})/) ??
-    firstMatch(text, /שם\s+החברה\s*:?\s*([^\n\r\t|]{2,40})/) ??
-    firstMatch(text, /(?:תופש|בעל\s+הנכס)\s*:?\s*([^\n\r\t|]{2,40})/) ??
-    null
-  );
+  for (const p of [
+    /איש\s+קשר\s*:\s*([^\n\r\t|:]{2,40})/,
+    /שם\s+איש\s+קשר\s*:?\s*([^\n\r\t|:]{2,40})/,
+    /שם\s+מלא\s*:?\s*([^\n\r\t|:]{2,40})/,
+    /שם\s+הלקוח\s*:?\s*([^\n\r\t|:]{2,40})/,
+    /שם\s+מעביד\s*[/]?\s*בעל\s+הציוד\s*:?\s*([^\n\r\t|:]{2,40})/,
+    /שם\s+החברה\s*:?\s*([^\n\r\t|:]{2,40})/,
+    /(?:^|\n)תופש\s*:?\s*([^\n\r\t|:]{2,40})/m,
+  ]) {
+    const m = text.match(p);
+    const v = m?.[1]?.trim();
+    if (v && isCleanName(v)) return v;
+  }
+  for (const p of [
+    /([^\n:]{2,50})\s*:\s*תופש\/פרטי\s+הלקוח/,
+    /([^\n:]{2,50})\s*:\s*(?:תופש|פרטי\s+הלקוח)/,
+    /([^\n:]{2,50})\s*:\s*שם\s+הלקוח/,
+    /([^\n:]{2,50})\s*:\s*שם\s+החברה/,
+  ]) {
+    const m = text.match(p);
+    const v = m?.[1]?.trim();
+    if (v && isCleanName(v)) return v;
+  }
+  return null;
 }
 
 function extractPhone(text) {
@@ -77,16 +102,16 @@ function extractPhone(text) {
 }
 
 function extractEmail(text) {
-  const raw = text.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+/);
-  if (!raw?.[0]) return null;
-  const addr = raw[0];
+  const m = text.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+/);
+  if (!m?.[0]) return null;
+  const addr = m[0];
   const atIdx = addr.indexOf("@");
   const before = addr.slice(0, atIdx);
   const after  = addr.slice(atIdx + 1);
-  if (/\.[a-z]{2,}(\.[a-z]{2})?$/i.test(before) && !/\./.test(after)) {
-    return `${after}@${before}`;
-  }
-  if (/\./.test(after)) return addr;
+  const afterHasDot = /\./.test(after);
+  const beforeHasDot = /\./.test(before);
+  if (beforeHasDot && !afterHasDot && after.length >= 1) return `${after}@${before}`;
+  if (afterHasDot) return addr;
   return null;
 }
 
@@ -193,6 +218,20 @@ const SAMPLES = [
     text: `
 מייל: il.co1945.shelev@klodin
 בתוקף עד: 10/05/2026
+    `,
+  },
+  {
+    label: "Noisy contact_name — garbled bidi table header (should return null)",
+    text: `
+פקס: טלפוןתקופתית: סוג בדיקה679ד .ת, 235 : תופש/פרטי הלקוח
+2027/07/23: בתוקף עד
+    `,
+  },
+  {
+    label: "Clean reversed bidi company name",
+    text: `
+מ"הובלות בע1945שלב : תופש/פרטי הלקוח1 .
+2027/07/23: בתוקף עד
     `,
   },
 ];

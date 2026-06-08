@@ -75,52 +75,90 @@ async function checkReminders() {
 }
 
 async function processReminder(reminder: ReminderWithContext) {
+  const settings = getSettings();
+  const remId = reminder.id;
   let recipients: string[] = [];
+  let recipientSource = "none";
+
   try {
-    recipients = reminder.email_to ? JSON.parse(reminder.email_to) : [];
+    const parsed = reminder.email_to ? JSON.parse(reminder.email_to) : [];
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      recipients = parsed.filter(Boolean);
+      recipientSource = "reminder.email_to";
+    }
   } catch {
-    recipients = [];
+    console.warn(`[scheduler] Reminder ${remId}: malformed email_to field, ignoring`);
   }
 
   if (recipients.length === 0 && reminder.client_id) {
     const client = await col("clients").findOne({ _id: reminder.client_id } as any) as any;
-    if (client?.email) recipients = [client.email];
+    if (client?.email) {
+      recipients = [client.email];
+      recipientSource = `client (${client.display_name ?? reminder.client_id})`;
+    } else {
+      console.warn(
+        `[scheduler] Reminder ${remId}: client ${reminder.client_id} has no email address`
+      );
+    }
   }
 
-  const settings = getSettings();
-  if (recipients.length === 0 && !settings.emailFrom) {
+  if (recipients.length === 0) {
+    console.warn(
+      `[scheduler] Reminder ${remId} "${reminder.title}": no recipients found — skipping send`
+    );
+    await col("email_log").insertOne({
+      reminder_id: remId,
+      log_type: "skipped",
+      to_address: "",
+      subject: `תזכורת - ${reminder.title}`,
+      sent_at: new Date(),
+      success: 0,
+      error: "no recipients resolved",
+      smtp_host: settings.smtpHost || "in-app-only",
+    } as any);
     await markSent(reminder);
     return;
   }
 
+  console.log(
+    `[scheduler] Reminder ${remId} "${reminder.title}": sending to ${recipients.join(", ")} (source: ${recipientSource})`
+  );
+
   const result = await sendReminderEmail(reminder, recipients);
 
   const failCount = await col("email_log").countDocuments({
-    reminder_id: reminder.id,
+    reminder_id: remId,
+    log_type: "send",
     success: 0,
   });
 
   await col("email_log").insertOne({
-    reminder_id: reminder.id,
+    reminder_id: remId,
+    log_type: "send",
     to_address: recipients.join(", "),
-    subject: ` תזכורת -${reminder.title}`,
+    subject: `תזכורת - ${reminder.title}`,
     sent_at: new Date(),
     success: result.success ? 1 : 0,
     error: result.error ?? null,
-    smtp_host: getSettings().smtpHost || "in-app-only",
+    smtp_host: settings.smtpHost || "in-app-only",
   } as any);
 
   if (result.success) {
+    console.log(
+      `[scheduler] Reminder ${remId} sent successfully to ${recipients.join(", ")}`
+    );
     await markSent(reminder);
   } else if (failCount + 1 >= 3) {
     await col("reminders").updateOne(
-      { _id: reminder.id } as any,
+      { _id: remId } as any,
       { $set: { status: "error", updated_at: new Date() } }
     );
-    console.error(`[scheduler] Reminder ${reminder.id} failed 3 times, marking as error`);
+    console.error(
+      `[scheduler] Reminder ${remId} "${reminder.title}": failed 3 times (last: ${result.error}), marking as error`
+    );
   } else {
     console.warn(
-      `[scheduler] Reminder ${reminder.id} send failed (attempt ${failCount + 1}): ${result.error}`
+      `[scheduler] Reminder ${remId} "${reminder.title}": send failed (attempt ${failCount + 1}/3): ${result.error}`
     );
   }
 }
@@ -132,10 +170,16 @@ async function markSent(reminder: ReminderWithContext) {
   );
 
   if (reminder.client_id) {
+    const parts: string[] = [];
+    if (reminder.document_name) parts.push(`מסמך: ${reminder.document_name}`);
+    if (reminder.advance_days)  parts.push(`${reminder.advance_days} ימים מראש`);
+    parts.push(`תאריך יעד: ${reminder.trigger_date}`);
+
     await col("timeline_events").insertOne({
       client_id: reminder.client_id,
       event_type: "email_sent",
       title: `תזכורת נשלחה: ${reminder.title}`,
+      description: parts.join(" · "),
       event_date: new Date(),
       source_id: reminder.id,
       source_type: "reminder",

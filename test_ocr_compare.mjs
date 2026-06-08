@@ -163,6 +163,14 @@ function v2_extractPhone(text) {
   return null;
 }
 const LABEL_WORDS = /^(?:פקס|טלפון|נייד|מייל|מיקוד|ישוב|כתובת|רחוב|סוג|שם|תאריך|מספר|:)$/;
+const NOISE_PATTERN = /(?:טלפון|פקס|תקופתית|סוג\s+בדיקה|מספר\s+רישוי|ת\.ד|מיקוד)/;
+function v2_isCleanName(v) {
+  if (!v) return false;
+  if (LABEL_WORDS.test(v.split(/\s/)[0])) return false;
+  if (NOISE_PATTERN.test(v)) return false;
+  if (!/[א-ת]/.test(v)) return false;
+  return true;
+}
 function v2_extractName(text) {
   for (const p of [
     /איש\s+קשר\s*:\s*([^\n\r\t|:]{2,40})/,
@@ -174,22 +182,28 @@ function v2_extractName(text) {
   ]) {
     const m = text.match(p);
     const v = m?.[1]?.trim();
-    if (v && !LABEL_WORDS.test(v.split(/\s/)[0])) return v;
+    if (v && v2_isCleanName(v)) return v;
   }
-  return v2_firstMatch(text,
+  for (const p of [
     /([^\n:]{2,50})\s*:\s*תופש\/פרטי\s+הלקוח/,
     /([^\n:]{2,50})\s*:\s*(?:תופש|פרטי\s+הלקוח)/,
     /([^\n:]{2,50})\s*:\s*שם\s+הלקוח/,
     /([^\n:]{2,50})\s*:\s*שם\s+החברה/,
-  );
+  ]) {
+    const m = text.match(p);
+    const v = m?.[1]?.trim();
+    if (v && v2_isCleanName(v)) return v;
+  }
+  return null;
 }
 function v2_extractEmail(text) {
   const m = text.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+/);
   if (!m?.[0]) return null;
   const addr = m[0]; const atIdx = addr.indexOf("@");
   const before = addr.slice(0, atIdx); const after = addr.slice(atIdx+1);
-  if (/\.[a-z]{2,}(\.[a-z]{2})?$/i.test(before) && !/\./.test(after)) return `${after}@${before}`;
-  if (/\./.test(after)) return addr;
+  const afterHasDot = /\./.test(after); const beforeHasDot = /\./.test(before);
+  if (beforeHasDot && !afterHasDot && after.length >= 1) return `${after}@${before}`;
+  if (afterHasDot) return addr;
   return null;
 }
 function v2_extractAddress(text) {

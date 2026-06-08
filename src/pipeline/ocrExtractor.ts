@@ -104,8 +104,20 @@ function extractPhone(text: string): string | null {
 // Labels that should NOT be treated as a contact name value
 const LABEL_WORDS = /^(?:פקס|טלפון|נייד|מייל|מיקוד|ישוב|כתובת|רחוב|סוג|שם|תאריך|מספר|:)$/;
 
+// Reject values that contain garbled bidi table headers (label fragments)
+const NOISE_PATTERN = /(?:טלפון|פקס|תקופתית|סוג\s+בדיקה|מספר\s+רישוי|ת\.ד|מיקוד)/;
+
+function isCleanName(v: string): boolean {
+  if (!v) return false;
+  if (LABEL_WORDS.test(v.split(/\s/)[0])) return false;
+  if (NOISE_PATTERN.test(v)) return false;
+  // Reject if it's pure digits/punctuation with no Hebrew letters
+  if (!/[א-ת]/.test(v)) return false;
+  return true;
+}
+
 function extractContactName(text: string): string | null {
-  // Forward labels — but reject captured value if it looks like another label
+  // Forward labels — reject captured value if it looks like another label or noise
   for (const p of [
     /איש\s+קשר\s*:\s*([^\n\r\t|:]{2,40})/,
     /שם\s+איש\s+קשר\s*:?\s*([^\n\r\t|:]{2,40})/,
@@ -117,17 +129,21 @@ function extractContactName(text: string): string | null {
   ]) {
     const m = text.match(p);
     const v = m?.[1]?.trim();
-    if (v && !LABEL_WORDS.test(v.split(/\s/)[0])) return v;
+    if (v && isCleanName(v)) return v;
   }
 
   // Reversed: value then label  (e.g. "מ\"בניטה במות הרמה בע: תופש/פרטי הלקוח")
-  return firstMatch(
-    text,
+  for (const p of [
     /([^\n:]{2,50})\s*:\s*תופש\/פרטי\s+הלקוח/,
     /([^\n:]{2,50})\s*:\s*(?:תופש|פרטי\s+הלקוח)/,
     /([^\n:]{2,50})\s*:\s*שם\s+הלקוח/,
     /([^\n:]{2,50})\s*:\s*שם\s+החברה/,
-  );
+  ]) {
+    const m = text.match(p);
+    const v = m?.[1]?.trim();
+    if (v && isCleanName(v)) return v;
+  }
+  return null;
 }
 
 // ─── email ──────────────��────────────────────────────────────────��────────────
@@ -140,12 +156,15 @@ function extractEmail(text: string): string | null {
   const atIdx = addr.indexOf("@");
   const before = addr.slice(0, atIdx);
   const after  = addr.slice(atIdx + 1);
-  // Reversed: domain@word → word@domain
-  if (/\.[a-z]{2,}(\.[a-z]{2})?$/i.test(before) && !/\./.test(after)) {
+  const afterHasDot = /\./.test(after);
+  const beforeHasDot = /\./.test(before);
+  // Reversed bidi: domain-like part is before @, user part after
+  // Detect: before has dots (looks like domain) AND after has no dots (looks like user)
+  if (beforeHasDot && !afterHasDot && after.length >= 1) {
     return `${after}@${before}`;
   }
   // Normal: must have a dot after @
-  if (/\./.test(after)) return addr;
+  if (afterHasDot) return addr;
   return null;
 }
 
