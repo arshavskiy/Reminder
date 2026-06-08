@@ -110,19 +110,28 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, h, computed } from "vue";
-import { useRouter } from "vue-router";
+import {computed, h, onMounted, ref} from "vue";
+import {useRouter} from "vue-router";
 import {
-  NH2, NSpace, NSelect, NDataTable, NButton, NModal, NForm, NFormItem,
-  NInput, NDatePicker, NAlert, useMessage,
+  NAlert,
+  NButton,
+  NDataTable,
+  NDatePicker,
+  NForm,
+  NFormItem,
+  NInput,
+  NModal,
+  NSelect,
+  NSpace,
+  useMessage,
 } from "naive-ui";
-import { useRemindersStore } from "../stores/reminders.js";
-import { useSettingsStore } from "../stores/settings.js";
-import { useClientsStore } from "../stores/clients.js";
-import { useAuthStore } from "../stores/auth.js";
-import { api } from "../services/apiService.js";
+import {useRemindersStore} from "../stores/reminders.js";
+import {useSettingsStore} from "../stores/settings.js";
+import {useClientsStore} from "../stores/clients.js";
+import {useAuthStore} from "../stores/auth.js";
+import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type { ReminderWithContext, Client, EmailTemplate } from "@shared/types.js";
+import type {Client, EmailTemplate, ReminderWithContext} from "@shared/types.js";
 
 const store = useRemindersStore();
 const settingsStore = useSettingsStore();
@@ -179,7 +188,7 @@ const statusOptions = [
 ];
 
 function load() {
-  store.fetch({ status: statusFilter.value ?? undefined, limit: 100 });
+  store.fetch({ status: statusFilter.value ?? undefined, limit: 100 }, true);
 }
 
 onMounted(async () => {

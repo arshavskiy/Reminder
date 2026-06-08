@@ -413,7 +413,7 @@ async function bulkDelete() {
     message.success(`${selectedIds.value.size} רשומות נמחקו`);
     selectedIds.value = new Set();
     bulkMode.value = false;
-    load();
+    refresh();
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -918,7 +918,7 @@ async function saveForm() {
       message.success("הרשומה נוצרה בהצלחה");
     }
     showForm.value = false;
-    load();
+    refresh();
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -936,7 +936,7 @@ async function doDelete() {
   try {
     await store.remove(deletingRow.value.id);
     message.success("הרשומה נמחקה");
-    load();
+    refresh();
   } catch (e) {
     message.error(String(e));
   } finally {

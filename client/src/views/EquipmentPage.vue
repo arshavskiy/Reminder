@@ -550,7 +550,7 @@ async function save() {
       message.success("הציוד נוסף");
     }
     showEdit.value = false;
-    await load();
+    await load(true);
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -564,7 +564,7 @@ async function backfill() {
     const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
     const r = await fetch(`${SERVER}/api/equipment/backfill`, { method: "POST", credentials: "include" }).then(x => x.json());
     message.success(`קושרו ${r.patched} פריטים`);
-    await load();
+    await load(true);
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -581,7 +581,7 @@ function deleteAll() {
       try {
         await api.equipment.deleteAll();
         message.success("כל הציוד נמחק");
-        await load();
+        await load(true);
       } catch (e) {
         message.error(String(e));
       }
@@ -600,7 +600,7 @@ function del(r: Equipment) {
         await api.equipment.delete(r.id!);
         message.success("נמחק");
         showEdit.value = false;
-        await load();
+        await load(true);
       } catch (e) {
         message.error(String(e));
       }

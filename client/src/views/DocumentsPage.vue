@@ -427,7 +427,7 @@ async function openExtractModal(docId: string) {
   try {
     await api.documents.extract(docId);
     message.success("חילוץ AI הושלם");
-    await store.fetch();
+    await store.fetch(undefined, true);
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -482,11 +482,11 @@ async function uploadFiles(
     const newCount = ids.length - (duplicates?.length ?? 0);
     if (newCount > 0) message.info(`${newCount} מסמכים נוספו לתור עיבוד`);
     if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);
-    await store.fetch();
+    await store.fetch(undefined, true);
   } catch (e: any) {
     if (e?.message === "document_limit_reached") {
       showLimitModal.value = true;
-      store.fetch();
+      store.fetch(undefined, true);
     } else {
       message.error(String(e));
     }
@@ -505,7 +505,7 @@ async function doRescan() {
       message.success(`${data.queued} מסמכים נשלחו לסריקה מחדש`);
       queuedCount.value += data.queued;
     }
-    await store.fetch();
+    await store.fetch(undefined, true);
   } catch {
     message.error("שגיאה בסריקה מחדש");
   } finally {
@@ -518,7 +518,7 @@ async function doDeleteAll() {
   try {
     await Promise.all(store.rows.map((r) => store.deleteDoc(r.id)));
     message.success("כל המסמכים נמחקו");
-    await store.fetch();
+    await store.fetch(undefined, true);
   } catch {
     message.error("שגיאה במחיקת המסמכים");
   } finally {
