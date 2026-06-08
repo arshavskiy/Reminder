@@ -1,4 +1,5 @@
 node_modules/
+py_deps/
 data/
 .env*
 .env.production
