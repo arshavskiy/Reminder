@@ -1,16 +1,18 @@
-import { spawnSync } from "child_process";
-import { join } from "path";
+import {spawnSync} from "child_process";
+import {dirname, join} from "path";
+import {fileURLToPath} from "url";
 
 export interface PlumberResult {
   text: string;
   pageCount: number;
-  tables: string[][][];   // [page][table][row] = cell[]
+  tables: string[][][][];  // [page][table][row][cell]
   needsOcr: boolean;
   method: "pdfplumber";
   error?: string;
 }
 
-const SCRIPT = join(import.meta.dir, "pdfplumber_extract.py");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SCRIPT = join(__dirname, "pdfplumber_extract.py");
 const TIMEOUT_MS = 30_000;
 
 export function parsePdfWithPlumber(filePath: string): PlumberResult | null {
@@ -39,7 +41,7 @@ export function parsePdfWithPlumber(filePath: string): PlumberResult | null {
  * Each table row becomes a tab-separated line, tables separated by blank lines.
  * This lets the AI extractor see structured rows even from CID-encoded PDFs.
  */
-export function tablesToText(tables: string[][][]): string {
+export function tablesToText(tables: string[][][][]): string {
   const parts: string[] = [];
   for (const pageTables of tables) {
     for (const table of pageTables) {

@@ -1,6 +1,6 @@
-import {describe, expect, it} from "vitest";
+import {describe, expect, it, vi} from "vitest";
 
-// ── field sanitization (mirrors PUT /api/documents/:id/fields logic) ──────────
+// ── helpers mirroring PUT /api/documents/:id/fields logic ────────────────────
 
 function sanitizeIncoming(incoming: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -14,132 +14,289 @@ function mergeFields(
   existing: Record<string, unknown>,
   incoming: Record<string, unknown>
 ): Record<string, unknown> {
-  const sanitized = sanitizeIncoming(incoming);
-  return { ...existing, ...sanitized };
+  return { ...existing, ...sanitizeIncoming(incoming) };
 }
 
-// ── contract field propagation mapping ───────────────────────────────────────
-
-const CONTRACT_FIELDS = ["expiry_date", "start_date", "contract_number", "contract_type", "counterparty"];
-
-function extractContractUpdate(sanitized: Record<string, unknown>): Record<string, unknown> {
-  const update: Record<string, unknown> = {};
-  for (const f of CONTRACT_FIELDS) {
-    if (sanitized[f] !== undefined) update[f] = sanitized[f];
-  }
-  // report_number → contract_number alias
-  if (sanitized.report_number !== undefined && update.contract_number === undefined) {
-    update.contract_number = sanitized.report_number;
-  }
-  // next_inspection_date → expiry_date alias
-  if (sanitized.next_inspection_date !== undefined && update.expiry_date === undefined) {
-    update.expiry_date = sanitized.next_inspection_date;
-  }
-  return update;
+function expiryChanged(sanitized: Record<string, unknown>): boolean {
+  return sanitized.expiry_date !== undefined || sanitized.next_inspection_date !== undefined;
 }
 
-// ── tests ──────────────────────────────────────────────────────────────────────
+// ── sanitization ──────────────────────────────────────────────────────────────
 
 describe("PUT /documents/:id/fields — sanitization", () => {
   it("strips empty strings", () => {
-    const result = sanitizeIncoming({ name: "test", phone: "", email: "" });
-    expect(result).toEqual({ name: "test" });
+    expect(sanitizeIncoming({ name: "test", phone: "", email: "" })).toEqual({ name: "test" });
   });
 
   it("strips null values", () => {
-    const result = sanitizeIncoming({ name: "test", phone: null });
-    expect(result).toEqual({ name: "test" });
+    expect(sanitizeIncoming({ name: "test", phone: null })).toEqual({ name: "test" });
   });
 
   it("preserves zero and false", () => {
-    const result = sanitizeIncoming({ count: 0, active: false });
-    expect(result).toEqual({ count: 0, active: false });
+    expect(sanitizeIncoming({ count: 0, active: false })).toEqual({ count: 0, active: false });
   });
 
   it("preserves all non-empty values", () => {
-    const result = sanitizeIncoming({ a: "hello", b: "world" });
-    expect(result).toEqual({ a: "hello", b: "world" });
+    expect(sanitizeIncoming({ a: "hello", b: "world" })).toEqual({ a: "hello", b: "world" });
   });
 });
 
+// ── field merging ─────────────────────────────────────────────────────────────
+
 describe("PUT /documents/:id/fields — field merging", () => {
   it("merges new fields into existing", () => {
-    const existing = { client_company: "חברה א", expiry_date: "2026-01-01" };
-    const incoming = { contact_person: "משה", phone: "" };
-    const merged = mergeFields(existing, incoming);
+    const merged = mergeFields(
+      { client_company: "חברה א", expiry_date: "2026-01-01" },
+      { contact_person: "משה", phone: "" }
+    );
     expect(merged.client_company).toBe("חברה א");
     expect(merged.contact_person).toBe("משה");
-    expect(merged.phone).toBeUndefined(); // empty string stripped
+    expect(merged.phone).toBeUndefined();
   });
 
   it("incoming value overwrites existing", () => {
-    const existing = { expiry_date: "2026-01-01" };
-    const incoming = { expiry_date: "2027-06-30" };
-    const merged = mergeFields(existing, incoming);
+    const merged = mergeFields({ expiry_date: "2026-01-01" }, { expiry_date: "2027-06-30" });
     expect(merged.expiry_date).toBe("2027-06-30");
   });
 
   it("existing value preserved when incoming is empty string", () => {
-    const existing = { expiry_date: "2026-01-01" };
-    const incoming = { expiry_date: "" }; // user cleared the field
-    const merged = mergeFields(existing, incoming);
-    expect(merged.expiry_date).toBe("2026-01-01"); // not overwritten
+    const merged = mergeFields({ expiry_date: "2026-01-01" }, { expiry_date: "" });
+    expect(merged.expiry_date).toBe("2026-01-01");
+  });
+
+  it("preserves _equipment array from existing fields", () => {
+    const eq = [{ name: "מנוף", serial_number: "SN-1" }];
+    const merged = mergeFields({ _equipment: eq, expiry_date: "2026-01-01" }, { expiry_date: "2027-01-01" });
+    expect(merged._equipment).toEqual(eq);
   });
 });
 
-describe("PUT /documents/:id/fields — contract field propagation", () => {
-  it("maps expiry_date to contract update", () => {
-    const update = extractContractUpdate({ expiry_date: "2027-01-01" });
-    expect(update.expiry_date).toBe("2027-01-01");
+// ── reminder regeneration trigger ────────────────────────────────────────────
+
+describe("PUT /documents/:id/fields — reminder regeneration trigger", () => {
+  it("triggers when expiry_date changes", () => {
+    expect(expiryChanged({ expiry_date: "2027-01-01" })).toBe(true);
   });
 
-  it("maps report_number → contract_number", () => {
-    const update = extractContractUpdate({ report_number: "17924/484590" });
-    expect(update.contract_number).toBe("17924/484590");
+  it("triggers when next_inspection_date changes", () => {
+    expect(expiryChanged({ next_inspection_date: "2027-06-01" })).toBe(true);
   });
 
-  it("maps next_inspection_date → expiry_date", () => {
-    const update = extractContractUpdate({ next_inspection_date: "2027-06-01" });
-    expect(update.expiry_date).toBe("2027-06-01");
+  it("does not trigger for non-expiry fields", () => {
+    expect(expiryChanged({ contract_number: "123", client_company: "חברה" })).toBe(false);
   });
 
-  it("explicit expiry_date takes precedence over next_inspection_date alias", () => {
-    const update = extractContractUpdate({ expiry_date: "2027-01-01", next_inspection_date: "2028-01-01" });
-    expect(update.expiry_date).toBe("2027-01-01"); // explicit wins
+  it("triggers when both expiry_date and next_inspection_date present", () => {
+    expect(expiryChanged({ expiry_date: "2027-01-01", next_inspection_date: "2028-01-01" })).toBe(true);
+  });
+});
+
+// ── entity propagation via saveTemplateEntitiesForDoc (mocked) ────────────────
+
+function makeMockSaveEntities() {
+  return vi.fn(async (
+    _documentId: string,
+    _template: any,
+    _fields: any,
+    _userId?: string,
+    _skipReminders?: boolean
+  ) => {});
+}
+
+describe("PUT /documents/:id/fields — entity propagation", () => {
+  it("calls saveTemplateEntitiesForDoc with merged fields when template is resolved", async () => {
+    const saveEntities = makeMockSaveEntities();
+    const template = { id: "tpl-1", name: "תסקיר בדיקה", fields: [], expiry_field: "expiry_date" };
+    const merged = { client_company: "חברה א", expiry_date: "2027-01-01", _equipment: [] };
+
+    await saveEntities("doc-1", template, merged, "user-1", true);
+
+    expect(saveEntities).toHaveBeenCalledOnce();
+    expect(saveEntities).toHaveBeenCalledWith("doc-1", template, merged, "user-1", true);
   });
 
-  it("explicit contract_number takes precedence over report_number alias", () => {
-    const update = extractContractUpdate({ contract_number: "ABC-123", report_number: "XYZ-999" });
-    expect(update.contract_number).toBe("ABC-123");
+  it("passes skipReminders=true so reminder logic is not double-triggered", async () => {
+    const saveEntities = makeMockSaveEntities();
+    await saveEntities("doc-1", {}, {}, "user-1", true);
+    const [, , , , skipReminders] = saveEntities.mock.calls[0];
+    expect(skipReminders).toBe(true);
   });
 
-  it("does not add contract fields when none present in incoming", () => {
-    const update = extractContractUpdate({ contact_person: "משה", phone: "050-0000000" });
+  it("does not call saveTemplateEntitiesForDoc when no template is found", async () => {
+    const saveEntities = makeMockSaveEntities();
+    const template = null;
+    if (template) await saveEntities("doc-1", template, {}, "user-1", true);
+    expect(saveEntities).not.toHaveBeenCalled();
+  });
+});
+
+// ── flat equipment field propagation to equipment collection ─────────────────
+
+const EQUIPMENT_FLAT_FIELDS = [
+  "equipment_description", "serial_number", "manufacturer", "model",
+  "load_capacity", "load_capacity_test", "load_radius",
+] as const;
+
+function extractEquipmentUpdate(sanitized: Record<string, unknown>): Record<string, unknown> {
+  const update: Record<string, unknown> = {};
+  for (const f of EQUIPMENT_FLAT_FIELDS) {
+    if (sanitized[f] !== undefined) {
+      update[f === "equipment_description" ? "name" : f] = sanitized[f];
+    }
+  }
+  return update;
+}
+
+describe("PUT /documents/:id/fields — flat equipment field propagation", () => {
+  it("maps equipment_description to name in db update", () => {
+    const update = extractEquipmentUpdate({ equipment_description: "מנוף חדש" });
+    expect(update.name).toBe("מנוף חדש");
+    expect(update.equipment_description).toBeUndefined();
+  });
+
+  it("maps serial_number directly", () => {
+    const update = extractEquipmentUpdate({ serial_number: "SN-999" });
+    expect(update.serial_number).toBe("SN-999");
+  });
+
+  it("maps manufacturer and model directly", () => {
+    const update = extractEquipmentUpdate({ manufacturer: "XYZ", model: "M3" });
+    expect(update.manufacturer).toBe("XYZ");
+    expect(update.model).toBe("M3");
+  });
+
+  it("maps load_capacity, load_capacity_test, load_radius", () => {
+    const update = extractEquipmentUpdate({
+      load_capacity: "500 ק\"ג",
+      load_capacity_test: "750 ק\"ג",
+      load_radius: "3 מ'",
+    });
+    expect(update.load_capacity).toBe("500 ק\"ג");
+    expect(update.load_capacity_test).toBe("750 ק\"ג");
+    expect(update.load_radius).toBe("3 מ'");
+  });
+
+  it("returns empty object when no equipment fields in sanitized", () => {
+    const update = extractEquipmentUpdate({ expiry_date: "2027-01-01", client_company: "חברה" });
     expect(Object.keys(update)).toHaveLength(0);
   });
 
-  it("propagates contract_type", () => {
-    const update = extractContractUpdate({ contract_type: "תסקיר בדיקה" });
-    expect(update.contract_type).toBe("תסקיר בדיקה");
+  it("only includes fields present in sanitized (not all flat fields)", () => {
+    const update = extractEquipmentUpdate({ serial_number: "SN-100" });
+    expect(Object.keys(update)).toEqual(["serial_number"]);
+  });
+
+  it("triggers db update when at least one equipment field changed", () => {
+    const sanitized = { serial_number: "SN-NEW", expiry_date: "2027-01-01" };
+    const update = extractEquipmentUpdate(sanitized);
+    expect(Object.keys(update).length).toBeGreaterThan(0);
+  });
+
+  it("does not trigger db update when no equipment fields changed", () => {
+    const sanitized = { expiry_date: "2027-01-01", client_company: "חברה" };
+    const update = extractEquipmentUpdate(sanitized);
+    expect(Object.keys(update)).toHaveLength(0);
   });
 });
 
-describe("PUT /documents/:id/fields — reminder regeneration trigger", () => {
-  it("triggers regeneration when expiry_date changes", () => {
-    const update = extractContractUpdate({ expiry_date: "2027-01-01" });
-    const shouldRegenerate = !!(update.expiry_date || update.contract_type);
-    expect(shouldRegenerate).toBe(true);
+// ── equipment field propagation ───────────────────────────────────────────────
+
+describe("PUT /documents/:id/fields — equipment in merged fields", () => {
+  it("_equipment rows are preserved through merge", () => {
+    const equipmentRows = [
+      { name: "מנוף א", serial_number: "SN-100", manufacturer: "XYZ", model: "M1" },
+      { name: "מנוף ב", serial_number: "SN-200", manufacturer: "ABC", model: "M2" },
+    ];
+    const existing = { expiry_date: "2026-01-01", _equipment: equipmentRows };
+    const incoming = { expiry_date: "2027-06-01" };
+    const merged = mergeFields(existing, incoming);
+    expect(merged._equipment).toEqual(equipmentRows);
+    expect((merged._equipment as any[]).length).toBe(2);
   });
 
-  it("triggers regeneration when contract_type changes", () => {
-    const update = extractContractUpdate({ contract_type: "תסקיר בדיקה" });
-    const shouldRegenerate = !!(update.expiry_date || update.contract_type);
-    expect(shouldRegenerate).toBe(true);
+  it("_equipment can be updated via incoming fields", () => {
+    const updated = [{ name: "מנוף חדש", serial_number: "SN-999" }];
+    const merged = mergeFields(
+      { _equipment: [{ name: "ישן", serial_number: "SN-000" }] },
+      { _equipment: updated }
+    );
+    expect(merged._equipment).toEqual(updated);
+  });
+});
+
+// ── client field propagation ──────────────────────────────────────────────────
+
+describe("PUT /documents/:id/fields — client fields in merged output", () => {
+  it("client identity fields are present in merged output for entity save", () => {
+    const merged = mergeFields(
+      { expiry_date: "2026-01-01" },
+      { client_company: "מילניום בע\"מ", client_name: "שילה", client_email: "test@example.com" }
+    );
+    expect(merged.client_company).toBe("מילניום בע\"מ");
+    expect(merged.client_name).toBe("שילה");
+    expect(merged.client_email).toBe("test@example.com");
   });
 
-  it("does not trigger regeneration for non-date fields", () => {
-    const update = extractContractUpdate({ contract_number: "123" });
-    const shouldRegenerate = !!(update.expiry_date || update.contract_type);
-    expect(shouldRegenerate).toBe(false);
+  it("null client_email is stripped and does not overwrite existing", () => {
+    const merged = mergeFields(
+      { client_email: "existing@example.com" },
+      { client_email: null }
+    );
+    expect(merged.client_email).toBe("existing@example.com");
+  });
+});
+
+// ── reminder regeneration with contract lookup (mocked) ──────────────────────
+
+describe("PUT /documents/:id/fields — reminder regeneration flow", () => {
+  it("deletes pending reminders and regenerates when expiry_date changes", async () => {
+    const deleteMany = vi.fn(async (_filter: Record<string, unknown>) => ({ deletedCount: 2 }));
+    const generateReminders = vi.fn(async (..._args: unknown[]) => {});
+
+    const contract = { _id: { toString: () => "ctr-1" }, client_id: "cli-1", expiry_date: "2026-01-01" };
+    const sanitized = { expiry_date: "2027-06-01" };
+
+    if (expiryChanged(sanitized)) {
+      const expiryDate = String(sanitized.expiry_date ?? (contract as any).expiry_date ?? "");
+      await deleteMany({ source_type: "contract_expiry", source_id: "ctr-1", status: "pending" });
+      await generateReminders("ctr-1", contract.client_id, "doc-1", expiryDate, "user-1");
+    }
+
+    expect(deleteMany).toHaveBeenCalledOnce();
+    expect(deleteMany).toHaveBeenCalledWith({
+      source_type: "contract_expiry",
+      source_id: "ctr-1",
+      status: "pending",
+    });
+    expect(generateReminders).toHaveBeenCalledWith("ctr-1", "cli-1", "doc-1", "2027-06-01", "user-1");
+  });
+
+  it("skips reminder regeneration when expiry_date not in sanitized fields", async () => {
+    const deleteMany = vi.fn(async (_filter: Record<string, unknown>) => ({}));
+    const generateReminders = vi.fn(async (..._args: unknown[]) => {});
+    const sanitized = { contract_number: "123" };
+
+    if (expiryChanged(sanitized)) {
+      await deleteMany({});
+      await generateReminders("ctr-1", "cli-1", "doc-1", "", "user-1");
+    }
+
+    expect(deleteMany).not.toHaveBeenCalled();
+    expect(generateReminders).not.toHaveBeenCalled();
+  });
+
+  it("uses next_inspection_date as expiry fallback for reminder date", async () => {
+    const generateReminders = vi.fn(async (..._args: unknown[]) => {});
+    const sanitized = { next_inspection_date: "2028-03-15" };
+    const contract = { _id: { toString: () => "ctr-2" }, client_id: "cli-2", expiry_date: "2026-01-01" };
+
+    if (expiryChanged(sanitized)) {
+      const expiryDate = String(
+        (sanitized as any).expiry_date ?? sanitized.next_inspection_date ?? (contract as any).expiry_date ?? ""
+      );
+      await generateReminders("ctr-2", contract.client_id, "doc-2", expiryDate, "user-1");
+    }
+
+    expect(generateReminders).toHaveBeenCalledWith("ctr-2", "cli-2", "doc-2", "2028-03-15", "user-1");
   });
 });

@@ -544,9 +544,10 @@ export async function saveTemplateEntitiesForDoc(
   documentId: string,
   template: DocTemplate,
   fields: DynamicExtraction,
-  userId?: string
+  userId?: string,
+  skipReminders?: boolean
 ) {
-  return saveTemplateEntities(documentId, template, fields, userId);
+  return saveTemplateEntities(documentId, template, fields, userId, skipReminders);
 }
 
 export function normalizeExtractionFieldsForTemplate(

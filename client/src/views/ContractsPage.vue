@@ -79,7 +79,7 @@
           filterable
           placeholder="סינון לפי לקוח"
           style="width: 200px"
-          @update:value="currentPage = 1"
+          @update:value="() => {}"
         />
         <n-date-picker
           v-model:value="filterDateRange"
@@ -87,45 +87,44 @@
           placeholder="סינון לפי תאריך תפוגה"
           style="width: 260px"
           type="daterange"
-          @update:value="currentPage = 1"
+          @update:value="() => {}"
         />
       </div>
     </div>
 
     <!-- ── Card list ───────────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
-      <div v-if="pagedRows.length" class="cards">
-        <ContractCard
-          v-for="row in pagedRows"
-          :key="row.id"
-          :bulk-mode="bulkMode"
-          :kind="kind"
-          :reminders="remindersFor(String(row.id))"
-          :row="row"
-          :selected="selectedIds.has(String(row.id))"
-          :sending-reminder="sendingReminder"
-          @delete="confirmDelete"
-          @edit="openEdit"
-          @add-reminder="openAddReminder"
-          @dismiss-reminder="dismissReminder"
-          @open-document="openDoc"
-          @send-reminder="sendReminderNow"
-          @toggle-select="toggleSelect"
-        />
-      </div>
+      <n-virtual-list
+        v-if="filteredRows.length"
+        :item-size="220"
+        :items="filteredRows"
+        :item-resizable="true"
+        class="cards-vlist"
+        item-class="cards-vlist__item"
+      >
+        <template #default="{ item: row }">
+          <div class="cards-vlist__pad">
+            <ContractCard
+              :key="row.id"
+              :bulk-mode="bulkMode"
+              :kind="kind"
+              :reminders="remindersFor(String(row.id))"
+              :row="row"
+              :selected="selectedIds.has(String(row.id))"
+              :sending-reminder="sendingReminder"
+              @delete="confirmDelete"
+              @edit="openEdit"
+              @add-reminder="openAddReminder"
+              @dismiss-reminder="dismissReminder"
+              @open-document="openDoc"
+              @send-reminder="sendReminderNow"
+              @toggle-select="toggleSelect"
+            />
+          </div>
+        </template>
+      </n-virtual-list>
 
-      <!-- Pagination -->
-      <div v-if="filteredRows.length > pageSize" class="pagination">
-        <n-pagination
-          v-model:page="currentPage"
-          :page-count="pageCount"
-          :page-slot="5"
-          show-quick-jumper
-        />
-        <span class="pagination__info">{{ filteredRows.length }} רשומות</span>
-      </div>
-
-      <div v-else-if="!pagedRows.length" class="empty">
+      <div v-if="!filteredRows.length" class="empty">
         <p>אין {{ kind === "inspection" ? "תסקירים" : "חוזים" }} להצגה</p>
         <button class="btn btn--primary" style="margin-top:12px" @click="openCreate">
           + {{ kind === "inspection" ? "הוסף תסקיר ראשון" : "הוסף חוזה ראשון" }}
@@ -367,10 +366,10 @@ import {
   NGrid,
   NInput,
   NModal,
-  NPagination,
   NSelect,
   NSpace,
   NSpin,
+  NVirtualList,
   useMessage,
 } from "naive-ui";
 import {useContractsStore} from "../stores/contracts.js";
@@ -572,10 +571,7 @@ async function saveReminder() {
   }
 }
 
-// ── Pagination ────────────────────────────────────────────────────────────────
-const pageSize = 20;
-const currentPage = ref(1);
-watch([search, statusFilter, kind, filterClientId, filterDateRange], () => { currentPage.value = 1; });
+;
 
 // ── Export wizard ─────────────────────────────────────────────────────────────
 const showExport = ref(false);
@@ -861,11 +857,6 @@ const filteredRows = computed(() => {
   return rows;
 });
 
-const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)));
-const pagedRows = computed(() => {
-  const start = (currentPage.value - 1) * pageSize;
-  return filteredRows.value.slice(start, start + pageSize);
-});
 
 // ── CRUD actions ──────────────────────────────────────────────────────────────
 function emptyForm() {
@@ -1120,11 +1111,12 @@ function exportToExcel() {
 }
 .search:focus { border-color: var(--brand-color); outline: none; }
 
-/* ── Cards ──────────────────────────────────────────────────────────────── */
-.cards { display: flex; flex-direction: column; gap: 14px; }
+/* ── Cards virtual list ──────────────────────────────────────────────── */
+.cards-vlist { height: calc(100vh - 260px); }
+.cards-vlist__pad { padding-bottom: 14px; }
 .btn--ghost-active { background: var(--bg-elevated); border-color: var(--brand-color); color: var(--brand-color); }
 
-/* ── Empty state ────────────────────────────────────────────────────────── */
+/* ── Empty state ────────────────────────────────────────────────────── */
 .empty {
   text-align: center;
   padding: 60px 20px;
@@ -1133,18 +1125,6 @@ function exportToExcel() {
   border: 1px dashed var(--border-color);
   border-radius: 14px;
 }
-
-/* ── Pagination ─────────────────────────────────────────────────────────── */
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-color);
-}
-.pagination__info { font-size: 13px; color: var(--text-secondary); }
 
 /* ── Export wizard ──────────────────────────────────────────────────────── */
 .export-header { display: flex; flex-direction: column; gap: 16px; }
