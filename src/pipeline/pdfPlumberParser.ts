@@ -1,16 +1,18 @@
 import {spawnSync} from "child_process";
-import {join} from "path";
+import {dirname, join} from "path";
+import {fileURLToPath} from "url";
 
 export interface PlumberResult {
   text: string;
   pageCount: number;
-  tables: string[][][];   // [page][table][row] = cell[]
+  tables: string[][][][];  // [page][table][row][cell]
   needsOcr: boolean;
   method: "pdfplumber";
   error?: string;
 }
 
-const SCRIPT = join(import.meta.dir, "pdfplumber_extract.py");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SCRIPT = join(__dirname, "pdfplumber_extract.py");
 const TIMEOUT_MS = 30_000;
 
 export function parsePdfWithPlumber(filePath: string): PlumberResult | null {
