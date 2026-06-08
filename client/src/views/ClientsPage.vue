@@ -310,6 +310,7 @@ async function doSave() {
     }
     showCreate.value = false;
     resetForm();
+    refresh();
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -326,6 +327,7 @@ function doDelete(row: Client) {
       try {
         await store.remove(String(row.id));
         message.success("הלקוח נמחק");
+        refresh();
       } catch {
         message.error("שגיאה במחיקה");
       }

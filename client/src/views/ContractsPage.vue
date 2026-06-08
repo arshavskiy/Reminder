@@ -916,9 +916,9 @@ async function saveForm() {
     } else {
       await store.create(form.value as any);
       message.success("הרשומה נוצרה בהצלחה");
-      load();
     }
     showForm.value = false;
+    load();
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -936,6 +936,7 @@ async function doDelete() {
   try {
     await store.remove(deletingRow.value.id);
     message.success("הרשומה נמחקה");
+    load();
   } catch (e) {
     message.error(String(e));
   } finally {
