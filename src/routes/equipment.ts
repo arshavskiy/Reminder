@@ -1,12 +1,16 @@
 import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
-import {mkdirSync, writeFileSync} from "fs";
-import {extname, join} from "path";
+import {existsSync, mkdirSync, writeFileSync} from "fs";
+import {dirname, extname, join} from "path";
+import {fileURLToPath} from "url";
 import type {Equipment} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getDataDir} from "../settings";
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const HEBREW_FONT = join(__dirname, "../../../scripts/NotoSansHebrew.ttf");
 
 type EquipmentDoc = Partial<Equipment> & {
   _id?: ObjectId | string;
@@ -304,7 +308,6 @@ export function registerEquipmentRoutes(app: express.Application) {
     // Build PDF — buffer entirely before sending so errors can return proper HTTP status
     try {
       const PDFDocument = (await import("pdfkit")).default;
-      const fontPath = "C:/Windows/Fonts/calibri.ttf";
 
       // Collect the PDF into a buffer first
       const pdfBuffer: Buffer = await new Promise((resolve, reject) => {
@@ -314,19 +317,14 @@ export function registerEquipmentRoutes(app: express.Application) {
         doc.on("end", () => resolve(Buffer.concat(chunks)));
         doc.on("error", reject);
 
-        let fontAvailable = false;
-        try {
-          doc.registerFont("Calibri", fontPath);
-          doc.font("Calibri");
-          fontAvailable = true;
-        } catch { fontAvailable = false; }
+        const fontAvailable = existsSync(HEBREW_FONT);
+        if (fontAvailable) {
+          doc.registerFont("Hebrew", HEBREW_FONT);
+          doc.font("Hebrew");
+        }
 
         const setFont = (size: number) => {
-          try {
-            doc.font(fontAvailable ? "Calibri" : "Helvetica").fontSize(size);
-          } catch {
-            doc.font("Helvetica").fontSize(size);
-          }
+          doc.font(fontAvailable ? "Hebrew" : "Helvetica").fontSize(size);
         };
 
         // For Hebrew: font renders correctly; without font just output as-is (latin fallback)

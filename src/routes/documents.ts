@@ -13,7 +13,7 @@ import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {extractWithTemplate} from "../pipeline/extractor";
-import {pickTemplate} from "../templates/seedTemplates";
+import {loadAllTemplates, pickTemplate} from "../templates/seedTemplates";
 import multer from "multer";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -659,23 +659,47 @@ export function registerDocumentRoutes(app: express.Application) {
       { sort: { created_at: -1 } } as any,
     );
 
-    // Propagate date/type changes to linked contracts
-    const CONTRACT_FIELDS = ["expiry_date", "start_date", "contract_number", "contract_type", "counterparty"] as const;
-    const contractUpdate: Record<string, unknown> = {};
-    for (const f of CONTRACT_FIELDS) {
-      if (sanitized[f] !== undefined) contractUpdate[f] = sanitized[f];
+    // Propagate all field changes to linked entities (client, contract, equipment)
+    // Resolve the document's template (stored by id, or fall back to first match)
+    let template = null;
+    if (doc.template_id) {
+      const all = await loadAllTemplates();
+      template = all.find((t) => String(t.id) === String(doc.template_id)) ?? null;
     }
-    // report_number from inspection documents maps to contract_number
-    if (sanitized.report_number !== undefined && contractUpdate.contract_number === undefined) {
-      contractUpdate.contract_number = sanitized.report_number;
-    }
-    // next_inspection_date is an alias for expiry_date
-    if (sanitized.next_inspection_date !== undefined && contractUpdate.expiry_date === undefined) {
-      contractUpdate.expiry_date = sanitized.next_inspection_date;
+    if (!template && doc.file_text) {
+      template = await pickTemplate(doc.file_text);
     }
 
-    if (Object.keys(contractUpdate).length) {
-      // Match contracts by document_id stored as either string or ObjectId
+    if (template) {
+      // skipReminders=true: reminder regeneration is handled explicitly below
+      await saveTemplateEntitiesForDoc(id, template, merged as any, userId, true);
+    }
+
+    // Propagate flat equipment fields edited directly by the user.
+    // saveTemplateEntitiesForDoc only processes _equipment rows; when the user
+    // edits top-level keys (serial_number, manufacturer, model, etc.) those
+    // changes need to reach the equipment record matched by document_id.
+    const EQUIPMENT_FLAT_FIELDS = [
+      "equipment_description", "serial_number", "manufacturer", "model",
+      "load_capacity", "load_capacity_test", "load_radius",
+    ] as const;
+    const equipUpdate: Record<string, unknown> = {};
+    for (const f of EQUIPMENT_FLAT_FIELDS) {
+      if (sanitized[f] !== undefined) {
+        equipUpdate[f === "equipment_description" ? "name" : f] = sanitized[f];
+      }
+    }
+    if (Object.keys(equipUpdate).length) {
+      await col("equipment").updateOne(
+        { document_id: id },
+        { $set: { ...equipUpdate, updated_at: new Date() } },
+      );
+      console.log(`[fields] Equipment flat-fields updated for doc ${id}:`, Object.keys(equipUpdate));
+    }
+
+    // Regenerate reminders when expiry_date changed
+    const expiryChanged = sanitized.expiry_date !== undefined || sanitized.next_inspection_date !== undefined;
+    if (expiryChanged) {
       let oid: ObjectId | null = null;
       try { oid = new ObjectId(id); } catch {}
       const contracts = await col("contracts").find({
@@ -687,30 +711,17 @@ export function registerDocumentRoutes(app: express.Application) {
 
       for (const c of contracts) {
         const cid = (c._id as ObjectId).toString();
-        await col("contracts").updateOne(
-          { _id: c._id },
-          { $set: { ...contractUpdate, updated_at: new Date() } },
+        const expiryDate = String(
+          sanitized.expiry_date ?? sanitized.next_inspection_date ?? (c as any).expiry_date ?? ""
         );
-
-        // Regenerate / update reminders when expiry_date or contract_type changed
-        if (contractUpdate.expiry_date || contractUpdate.contract_type) {
+        if (expiryDate) {
           const { generateContractReminders } = await import("../reminders/scheduler.js");
-          const expiryDate = String(contractUpdate.expiry_date ?? (c as any).expiry_date ?? "");
-          if (expiryDate) {
-            // Delete existing pending reminders for this contract so they get recreated with updated title/date
-            await col("reminders").deleteMany({
-              source_type: "contract_expiry",
-              source_id: cid,
-              status: "pending",
-            });
-            await generateContractReminders(
-              cid,
-              (c as any).client_id ?? null,
-              id,
-              expiryDate,
-              userId,
-            );
-          }
+          await col("reminders").deleteMany({
+            source_type: "contract_expiry",
+            source_id: cid,
+            status: "pending",
+          });
+          await generateContractReminders(cid, (c as any).client_id ?? null, id, expiryDate, userId);
         }
       }
     }
