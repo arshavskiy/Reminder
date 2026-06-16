@@ -2,6 +2,7 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {generateTaskReminders} from "../reminders/scheduler";
 
 export function registerTaskRoutes(app: express.Application) {
   // GET /api/tasks
@@ -38,6 +39,48 @@ export function registerTaskRoutes(app: express.Application) {
     res.json(rows);
   });
 
+  // POST /api/tasks
+  app.post("/api/tasks", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const now = new Date();
+    const doc = {
+      user_id: userId,
+      document_id: body.document_id ?? null,
+      client_id: body.client_id ?? null,
+      description: String(body.description ?? ""),
+      due_date: (body.due_date as string) ?? null,
+      status: "pending",
+      created_at: now,
+      updated_at: now,
+    };
+    const result = await col("tasks").insertOne(doc as any);
+    const taskId = result.insertedId.toString();
+
+    if (doc.due_date) {
+      await generateTaskReminders(
+        taskId,
+        doc.client_id as string | null,
+        doc.document_id as string | null,
+        doc.due_date,
+        doc.description,
+        userId
+      );
+    }
+
+    const inserted = await col("tasks").findOne({ _id: result.insertedId });
+    res.status(201).json(flatDoc(inserted));
+  });
+
   // PUT /api/tasks/:id
   app.put("/api/tasks/:id", async (req, res) => {
     let userId: string;
@@ -67,7 +110,22 @@ export function registerTaskRoutes(app: express.Application) {
     const filter = { ...baseFilter, user_id: userId };
 
     await col("tasks").updateOne(filter, { $set: updates });
-    const updated = await col("tasks").findOne(filter);
+    const updated = await col("tasks").findOne(filter) as any;
+
+    // If the task now has a future due date and isn't done, (re)generate
+    // advance-warning reminders. generateTaskReminders is idempotent per
+    // (taskId, advance_days), so updating other fields won't duplicate them.
+    if (updated && updated.due_date && updated.status !== "done" && updated.status !== "cancelled") {
+      await generateTaskReminders(
+        id,
+        updated.client_id ?? null,
+        updated.document_id ?? null,
+        updated.due_date,
+        updated.description ?? "",
+        userId
+      );
+    }
+
     res.json(flatDoc(updated));
   });
 }

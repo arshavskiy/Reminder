@@ -243,6 +243,64 @@ async function checkEscalations() {
   }
 }
 
+/**
+ * Create advance-warning reminders for a task that has a due date.
+ * Mirrors generateContractReminders but keyed on source_type "task".
+ * Idempotent: skips an (taskId, advance_days) pair that already has a
+ * non-dismissed reminder, so it is safe to call on every task update.
+ */
+export async function generateTaskReminders(
+  taskId: string,
+  clientId: string | null,
+  documentId: string | null,
+  dueDate: string | null,
+  description: string,
+  userId?: string
+) {
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}/.test(dueDate)) return;
+
+  const settings = getSettings();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Nothing to remind about if the due date has already passed.
+  if (dueDate < today) return;
+
+  const label = description.trim().slice(0, 60) || "משימה";
+
+  for (const days of settings.reminderAdvanceDays) {
+    const existing = await col("reminders").findOne({
+      source_type: "task",
+      source_id: taskId,
+      advance_days: days,
+      status: { $ne: "dismissed" },
+    });
+    if (existing) continue;
+
+    const due = new Date(dueDate);
+    due.setDate(due.getDate() - days);
+    const calculatedTrigger = due.toISOString().slice(0, 10);
+
+    // Clamp a past advance-trigger to today so the scheduler still fires it.
+    const triggerDate = calculatedTrigger < today ? today : calculatedTrigger;
+
+    const title = `משימה: ${label} (יעד: ${dueDate})`;
+
+    await col("reminders").insertOne({
+      ...(userId && { user_id: userId }),
+      source_type: "task",
+      source_id: taskId,
+      client_id: clientId,
+      document_id: documentId,
+      trigger_date: triggerDate,
+      advance_days: days,
+      title,
+      status: "pending",
+      created_at: new Date(),
+      updated_at: new Date(),
+    } as any);
+  }
+}
+
 export async function generateContractReminders(
   contractId: string,
   clientId: string | null,
