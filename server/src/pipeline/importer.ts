@@ -12,7 +12,7 @@ import {extractDocument, extractWithTemplate} from "./extractor";
 import {extractCertificate} from "./certificateExtractor";
 import {extractFromOcr} from "./ocrExtractor";
 import {classifyDocumentKind, getOrBuildSystemPrompt, pickTemplate} from "../templates/seedTemplates";
-import {generateContractReminders} from "../reminders/scheduler";
+import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 
@@ -527,7 +527,7 @@ async function saveExtractionEntities(
   }
 
   for (const task of result.tasks ?? []) {
-    await col("tasks").insertOne({
+    const taskRes = await col("tasks").insertOne({
       ...(userId && { user_id: userId }),
       document_id: documentId,
       client_id: clientId,
@@ -537,6 +537,16 @@ async function saveExtractionEntities(
       created_at: new Date(),
       updated_at: new Date(),
     } as any);
+    if (task.due_date && !skipReminders) {
+      await generateTaskReminders(
+        taskRes.insertedId.toString(),
+        clientId,
+        documentId,
+        task.due_date,
+        task.description,
+        userId
+      );
+    }
   }
 }
 
