@@ -12,7 +12,7 @@
           @click.stop
           @update:checked="emit('toggle-select', String(row.id))"
         />
-        <span class="card__num-main">{{ row.contract_number ?? "-" }}</span>
+        <span v-if="row.contract_number" class="card__num-main">{{ row.contract_number }}</span>
       </div>
 
       <div class="card__pills">

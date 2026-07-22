@@ -1,4 +1,5 @@
 import express from "express";
+import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {getSettings} from "../settings";
 import {
@@ -8,7 +9,13 @@ import {
   getGoogleAuthUrl,
   verifyIdToken,
 } from "../auth/google";
-import {createSession, extractSessionFromCookie, revokeSession, verifySession,} from "../auth/session";
+import {
+  consumeMagicLinkToken,
+  createSession,
+  extractSessionFromCookie,
+  revokeSession,
+  verifySession,
+} from "../auth/session";
 import {
   generateToken,
   hashPassword,
@@ -363,6 +370,36 @@ export function registerAuthRoutes(app: express.Application) {
         role: user.role,
       },
     });
+  });
+
+  // GET /auth/magic?token=... — one-click magic-link sign-in
+  app.get("/auth/magic", async (req, res) => {
+    const token = req.query.token as string | undefined;
+    if (!token) {
+      res.redirect(frontendUrl("/#/login?error=invalid_token"));
+      return;
+    }
+
+    const userId = await consumeMagicLinkToken(token);
+    if (!userId) {
+      res.redirect(frontendUrl("/#/login?error=token_expired"));
+      return;
+    }
+
+    const user = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
+    if (!user || !user.is_active) {
+      res.redirect(frontendUrl("/#/login?error=account_disabled"));
+      return;
+    }
+
+    await col("users").updateOne({ _id: user._id }, { $set: { last_login_at: new Date() } });
+
+    const ua = req.headers["user-agent"] ?? undefined;
+    const ip = (req.headers["x-forwarded-for"] as string) ?? req.socket.remoteAddress ?? undefined;
+    const { cookies } = await createSession(user._id.toString(), ua, ip);
+
+    res.setHeader("Set-Cookie", cookies);
+    res.redirect(frontendUrl("/"));
   });
 
   // GET /auth/verify-email?token=...

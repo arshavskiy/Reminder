@@ -187,6 +187,7 @@ const allNav = [
   {label: "הגדרת ציוד", key: "equipment", minRole: "user"},
   {label: "שטח", key: "field", minRole: "user"},
   {label: "לקוחות", key: "clients", minRole: "user"},
+  {label: "תזכורות", key: "reminders", minRole: "user"},
   {label: "פרופיל", key: "profile", minRole: "user"},
   {label: "תבניות", key: "email-templates", minRole: "user"},
   {label: "הגדרות", key: "settings", minRole: "admin"},

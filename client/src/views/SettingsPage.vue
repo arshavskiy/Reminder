@@ -36,8 +36,12 @@
         <n-card title="אימייל (SMTP)" style="margin-bottom: 16px">
           <n-form label-placement="top">
             <n-form-item label="SMTP Host">
-              <n-input v-model:value="form.smtpHost" placeholder="smtp.gmail.com" />
+              <n-input v-model:value="form.smtpHost" placeholder="smtp-relay.brevo.com" />
             </n-form-item>
+            <n-alert :show-icon="false" style="margin-bottom: 16px; font-size: 12px" type="info">
+              מומלץ Brevo (300 אימיילים/יום בחינם): Host = smtp-relay.brevo.com, Port = 587, SSL/TLS כבוי,
+              שם משתמש = כתובת האימייל של חשבון ה-Brevo, סיסמה = SMTP key מתוך app.brevo.com/settings/keys/smtp
+            </n-alert>
             <n-grid :cols="2" :x-gap="16">
               <n-gi>
                 <n-form-item label="Port">

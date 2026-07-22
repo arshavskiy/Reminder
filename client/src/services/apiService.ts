@@ -34,6 +34,35 @@ export interface EquipmentHistoryEvent {
   days_until: number | null;
 }
 
+export interface HydraulicCheckRequest {
+  client_id?: string;
+  business: {
+    display_name: string;
+    entity_type?: string;
+    id_number?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    notes?: string;
+  };
+  equipment: {
+    category: "lift" | "scaffold" | "ladder";
+    name?: string;
+    manufacturer?: string;
+    model?: string;
+    serial_number?: string;
+  };
+  check_date?: string;
+  interval_months: 4 | 6 | 12 | 14;
+}
+
+export interface HydraulicCheckResult {
+  client: Client;
+  equipment: Equipment;
+  contract: Contract;
+  reminders: Reminder[];
+}
+
 export interface ExpiryCalendarItem {
   id: string;
   expiry_date: string;
@@ -183,6 +212,8 @@ export const api = {
     dismiss: (id: number) => post(`/reminders/${id}/dismiss`),
     snooze: (id: number, until: string) => post(`/reminders/${id}/snooze`, { until }),
     sendNow: (id: number) => post<{ success: boolean; error?: string }>(`/reminders/${id}/send-now`),
+    createHydraulicCheck: (body: HydraulicCheckRequest) =>
+      post<HydraulicCheckResult>("/reminders/hydraulic-check", body),
   },
 
   tasks: {

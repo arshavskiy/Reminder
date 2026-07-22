@@ -350,6 +350,84 @@
         <n-button :loading="savingReminder" type="primary" @click="saveReminder">צור תזכורת</n-button>
       </template>
     </n-modal>
+
+    <!-- Manual hydraulic-check modal: business + equipment + interval -->
+    <n-modal v-model:show="showHydraulicCheck" title="תסקיר חדש" :show-icon="false" preset="dialog" style="width: 560px">
+      <n-form label-placement="top" v-if="hydraulicForm">
+        <n-h4 style="margin: 0 0 4px">פרטי העסק</n-h4>
+        <n-form-item label="לקוח קיים">
+          <n-select
+            v-model:value="hydraulicClientId"
+            :options="clientOptions"
+            clearable
+            filterable
+            placeholder="בחר לקוח קיים, או השאר ריק ליצירת עסק חדש"
+            :loading="loadingClients"
+          />
+        </n-form-item>
+        <template v-if="!hydraulicClientId">
+          <n-form-item label="שם העסק" required>
+            <n-input v-model:value="hydraulicForm.business.display_name" placeholder="לדוגמה: מפעל דן בע&quot;מ" />
+          </n-form-item>
+          <n-grid :cols="2" :x-gap="16">
+            <n-gi>
+              <n-form-item label="ח.פ / ת.ז">
+                <n-input v-model:value="hydraulicForm.business.id_number" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="טלפון">
+                <n-input v-model:value="hydraulicForm.business.phone" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+          <n-grid :cols="2" :x-gap="16">
+            <n-gi>
+              <n-form-item label="אימייל">
+                <n-input v-model:value="hydraulicForm.business.email" placeholder="office@example.com" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="כתובת">
+                <n-input v-model:value="hydraulicForm.business.address" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+        </template>
+
+        <n-h4 style="margin: 16px 0 4px">ציוד הידראולי</n-h4>
+        <n-form-item label="סוג ציוד" required>
+          <n-select v-model:value="hydraulicForm.equipment.category" :options="hydraulicCategoryOptions" />
+        </n-form-item>
+        <n-grid :cols="2" :x-gap="16">
+          <n-gi>
+            <n-form-item label="שם הציוד">
+              <n-input v-model:value="hydraulicForm.equipment.name" placeholder="ברירת מחדל: שם העסק" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="מספר סידורי">
+              <n-input v-model:value="hydraulicForm.equipment.serial_number" />
+            </n-form-item>
+          </n-gi>
+        </n-grid>
+
+        <n-h4 style="margin: 16px 0 4px">מועד הבדיקה הבאה</n-h4>
+        <n-form-item label="תאריך בדיקה" required>
+          <n-date-picker v-model:value="hydraulicCheckDateMs" type="date" style="width: 100%" />
+        </n-form-item>
+        <n-form-item label="בעוד כמה זמן נדרשת הבדיקה הבאה?" required>
+          <n-select v-model:value="hydraulicForm.interval_months" :options="hydraulicIntervalOptions" />
+        </n-form-item>
+        <n-alert :show-icon="false" type="info" style="font-size: 12px">
+          תזכורות יישלחו לפי ימי ההתראה מראש שהוגדרו בהגדרות (ברירת מחדל: 30, 14, 3 ימים) לפני מועד הבדיקה.
+        </n-alert>
+      </n-form>
+      <template #action>
+        <n-button @click="showHydraulicCheck = false">ביטול</n-button>
+        <n-button type="primary" :loading="creatingHydraulicCheck" @click="doCreateHydraulicCheck">צור</n-button>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -357,6 +435,7 @@
 import {computed, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {
+  NAlert,
   NButton,
   NCheckbox,
   NDatePicker,
@@ -364,6 +443,7 @@ import {
   NFormItem,
   NGi,
   NGrid,
+  NH4,
   NInput,
   NModal,
   NSelect,
@@ -374,12 +454,15 @@ import {
 } from "naive-ui";
 import {useContractsStore} from "../stores/contracts.js";
 import {api} from "../services/apiService.js";
+import type {HydraulicCheckRequest} from "../services/apiService.js";
+import {useConfirm} from "../composables/useConfirm.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
-import type {ContractWithClient, EmailTemplate, ReminderWithContext} from "@shared/types.js";
+import type {ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
 const store = useContractsStore();
 const router = useRouter();
 const message = useMessage();
+const { confirm } = useConfirm();
 
 const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
@@ -403,21 +486,28 @@ function toggleSelect(id: string) {
   else s.add(id);
   selectedIds.value = s;
 }
-async function bulkDelete() {
+function bulkDelete() {
   if (!selectedIds.value.size) return;
-  if (!confirm(`למחוק ${selectedIds.value.size} רשומות?`)) return;
-  bulkDeleting.value = true;
-  try {
-    await Promise.all([...selectedIds.value].map((id) => store.remove(id)));
-    message.success(`${selectedIds.value.size} רשומות נמחקו`);
-    selectedIds.value = new Set();
-    bulkMode.value = false;
-    refresh();
-  } catch (e) {
-    message.error(String(e));
-  } finally {
-    bulkDeleting.value = false;
-  }
+  const count = selectedIds.value.size;
+  confirm({
+    title: kind.value === "inspection" ? "מחיקת תסקירים" : "מחיקת חוזים",
+    content: `למחוק ${count} רשומות?`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      bulkDeleting.value = true;
+      try {
+        await Promise.all([...selectedIds.value].map((id) => store.remove(id)));
+        message.success(`${count} רשומות נמחקו`);
+        selectedIds.value = new Set();
+        bulkMode.value = false;
+        refresh();
+      } catch (e) {
+        message.error(String(e));
+      } finally {
+        bulkDeleting.value = false;
+      }
+    },
+  });
 }
 
 async function bulkSendReminders() {
@@ -765,8 +855,8 @@ const clientOptions = ref<{ label: string; value: string }[]>([]);
 const clientsMap = ref<Map<string, import("@shared/types.js").Client>>(new Map());
 const loadingClients = ref(false);
 
-async function loadClients() {
-  if (clientOptions.value.length) return;
+async function loadClients(force = false) {
+  if (clientOptions.value.length && !force) return;
   loadingClients.value = true;
   try {
     const r = await api.clients.list({ limit: 500 });
@@ -774,6 +864,67 @@ async function loadClients() {
     clientsMap.value = new Map(r.rows.map((c) => [String(c.id), c]));
   } finally {
     loadingClients.value = false;
+  }
+}
+
+// ── Manual hydraulic-check: business + equipment + interval ────────────────
+const showHydraulicCheck = ref(false);
+const creatingHydraulicCheck = ref(false);
+const hydraulicForm = ref<HydraulicCheckRequest | null>(null);
+const hydraulicClientId = ref<string | null>(null);
+const hydraulicCheckDateMs = ref<number | null>(null);
+
+const hydraulicCategoryOptions: { label: string; value: EquipmentCategory }[] = [
+  { label: "מכונות הרמה", value: "lift" },
+  { label: "פיגומים", value: "scaffold" },
+  { label: "מעליות", value: "ladder" },
+];
+
+const hydraulicIntervalOptions = [
+  { label: "4 חודשים", value: 4 },
+  { label: "6 חודשים", value: 6 },
+  { label: "12 חודשים", value: 12 },
+  { label: "14 חודשים", value: 14 },
+];
+
+function openHydraulicCheck() {
+  hydraulicClientId.value = null;
+  hydraulicCheckDateMs.value = Date.now();
+  hydraulicForm.value = {
+    business: { display_name: "", id_number: "", email: "", phone: "", address: "" },
+    equipment: { category: "lift", name: "", serial_number: "" },
+    interval_months: 4,
+  };
+  loadClients();
+  showHydraulicCheck.value = true;
+}
+
+async function doCreateHydraulicCheck() {
+  if (!hydraulicForm.value) return;
+  if (!hydraulicClientId.value && !hydraulicForm.value.business.display_name.trim()) {
+    message.warning("יש לבחור לקוח קיים או להזין שם עסק");
+    return;
+  }
+  if (!hydraulicCheckDateMs.value) {
+    message.warning("יש לבחור תאריך בדיקה");
+    return;
+  }
+  creatingHydraulicCheck.value = true;
+  try {
+    const payload: HydraulicCheckRequest = {
+      ...hydraulicForm.value,
+      client_id: hydraulicClientId.value ?? undefined,
+      check_date: new Date(hydraulicCheckDateMs.value).toISOString().slice(0, 10),
+    };
+    const result = await api.reminders.createHydraulicCheck(payload);
+    message.success(`נוצרו ${result.reminders.length} תזכורות עבור ${result.client.display_name}`);
+    showHydraulicCheck.value = false;
+    loadClients(true);
+    refresh();
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    creatingHydraulicCheck.value = false;
   }
 }
 
@@ -875,9 +1026,13 @@ function emptyForm() {
 }
 
 function openCreate() {
+  if (kind.value === "inspection") {
+    openHydraulicCheck();
+    return;
+  }
   editingId.value = null;
   form.value = emptyForm();
-  form.value.contract_type = kind.value === "inspection" ? "תסקיר בדיקה תקופתית" : null;
+  form.value.contract_type = null;
   showForm.value = true;
 }
 

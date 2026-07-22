@@ -12,6 +12,7 @@
     "build": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "auth:magic-link": "tsx src/scripts/createMagicLinkUser.ts",
     "storage:test": "tsx src/scripts/testObjectStorage.ts",
     "storage:migrate-documents": "tsx src/scripts/migrateDocumentsToStorage.ts",
     "storage:migrate-documents:dry": "tsx src/scripts/migrateDocumentsToStorage.ts --dry"

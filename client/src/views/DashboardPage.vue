@@ -214,6 +214,7 @@ const modules = [
     desc: "כל התזכורות הממתינות והנשלחות. שלח עכשיו או דחה.",
     icon: AlarmOutline,
     to: "/reminders",
+    show: true,
   },
   {
     key: "settings",
