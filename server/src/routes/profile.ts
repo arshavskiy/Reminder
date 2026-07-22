@@ -74,6 +74,7 @@ export function registerProfileRoutes(app: express.Application) {
       inspector_number, address, title, expertise,
       mr_number, mg_number, membership_start_date,
       company_name, company_phone, company_email,
+      inspector_id_start,
     } = req.body as Record<string, string | null>;
 
     await col("engineer_profiles").updateOne(
@@ -91,6 +92,7 @@ export function registerProfileRoutes(app: express.Application) {
           company_name: company_name ?? null,
           company_phone: company_phone ?? null,
           company_email: company_email ?? null,
+          inspector_id_start: inspector_id_start ?? null,
           updated_at: new Date().toISOString(),
         },
       },

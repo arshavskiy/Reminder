@@ -465,11 +465,34 @@ function savePipelineFlags() {
 watch([flagOcr, flagAi, flagS3, flagEntities], savePipelineFlags);
 
 onMounted(() => {
-  if (!store.rows.length) store.fetch();
+  store.fetch(undefined, true);
   loadPipelineFlags();
   loadClients();
 });
-onUnmounted(() => { if (saveFlagsTimer) clearTimeout(saveFlagsTimer); });
+onUnmounted(() => {
+  if (saveFlagsTimer) clearTimeout(saveFlagsTimer);
+  stopProcessingPoll();
+});
+
+// ── Poll while any document is still queued/processing ─────────────────────
+let processingPollTimer: ReturnType<typeof setInterval> | null = null;
+function stopProcessingPoll() {
+  if (processingPollTimer) {
+    clearInterval(processingPollTimer);
+    processingPollTimer = null;
+  }
+}
+watch(
+  () => store.hasInProgress,
+  (inProgress) => {
+    if (inProgress && !processingPollTimer) {
+      processingPollTimer = setInterval(() => store.fetch(undefined, true), 3000);
+    } else if (!inProgress) {
+      stopProcessingPoll();
+    }
+  },
+  { immediate: true }
+);
 
 // ── File handling ─────────────────────────────────────────────────────────────
 async function uploadFiles(

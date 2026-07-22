@@ -974,7 +974,7 @@ function refresh() {
 }
 
 onMounted(async () => {
-  if (!store.rows.length) load();
+  refresh();
   store.fetchExpiring(30);
   loadClients();
   loadReminders();

@@ -9,6 +9,40 @@ import {HTTPException, requireAuth} from "../auth/middleware";
 const HYDRAULIC_CATEGORIES: EquipmentCategory[] = ["lift", "scaffold", "ladder"];
 const HYDRAULIC_INTERVAL_MONTHS = [4, 6, 12, 14] as const;
 
+/**
+ * Atomically allocates the next sequential inspection/report number for this
+ * user and combines it with their inspector_number into a report number, e.g.
+ * "18168/484590" — same format shown as a preview on the Profile page
+ * (nextInspectionId), but actually persisted here instead of just displayed.
+ * Seeds the counter from engineer_profiles.inspector_id_start on first use.
+ */
+async function allocateReportNumber(userId: string): Promise<string | null> {
+  const profile = await col("engineer_profiles").findOne({ user_id: userId }) as any;
+  if (!profile?.inspector_id_start) return null;
+
+  const seed = parseInt(profile.inspector_id_start, 10);
+  if (!Number.isFinite(seed)) return null;
+
+  const updated = await col("engineer_profiles").findOneAndUpdate(
+    { user_id: userId },
+    [
+      {
+        $set: {
+          next_inspection_seq: {
+            $ifNull: [{ $add: ["$next_inspection_seq", 1] }, seed],
+          },
+        },
+      },
+    ] as any,
+    { returnDocument: "after" }
+  );
+
+  const seq = (updated as any)?.next_inspection_seq ?? (updated as any)?.value?.next_inspection_seq;
+  if (!Number.isFinite(seq)) return null;
+
+  return `${seq}/${profile.inspector_number ?? ""}`.replace(/\/$/, "");
+}
+
 export function registerReminderRoutes(app: express.Application) {
   // GET /api/reminders
   app.get("/api/reminders", async (req, res) => {
@@ -227,11 +261,13 @@ export function registerReminderRoutes(app: express.Application) {
     dueDate.setMonth(dueDate.getMonth() + intervalMonths);
     const expiryDate = dueDate.toISOString().slice(0, 10);
     const startDate = checkDate.toISOString().slice(0, 10);
+    const reportNumber = await allocateReportNumber(userId);
 
     const contractDoc = {
       user_id: userId,
       client_id: clientId,
       contract_type: "בדיקה הידראולית",
+      contract_number: reportNumber,
       start_date: startDate,
       expiry_date: expiryDate,
       status: "active",

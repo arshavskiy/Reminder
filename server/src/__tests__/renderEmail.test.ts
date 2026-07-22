@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renderTemplate, listTemplateVars } from "../templates/renderEmail.js";
+import { loadReminderTemplate } from "../email-templates/loader.js";
+import type { EmailVars } from "../templates/renderEmail.js";
 
 describe("renderTemplate", () => {
   it("substitutes a simple variable", () => {
@@ -106,4 +108,90 @@ describe("listTemplateVars", () => {
     expect(vars).toContain("contact_person");
     expect(vars).toContain("expiry_date");
   });
+});
+
+describe("reminder email templates — full data fill", () => {
+  // Mirrors buildEmailVars() in reminders/emailSender.ts when the reminder is
+  // linked to both a client and a document/contract.
+  const FULL_VARS: EmailVars = {
+    title: "בדיקה הבאה ב-2026-10-22 (יעד: 2026-11-22)",
+    trigger_date: "2026-10-22",
+    advance_days: 30,
+    body: "הערה לבדיקה",
+    client_name: "יוסי כהן",
+    document_name: "תסקיר 18163.pdf",
+    from_name: "ReminderOCR",
+    client_company: "מן הנדסת חשמל",
+    contact_email: "office@example.com",
+    contact_phone: "052-1234567",
+    contact_person: "יוסי כהן",
+    client_address: "העצמאות 36, אשדוד",
+    document_type: "תסקיר בדיקה",
+    document_number: "484590/18163",
+    contract_number: "18163",
+    contract_type: "בדיקה הידראולית",
+    start_date: "2026-07-22",
+    expiry_date: "2026-11-22",
+    amount: 1200,
+    currency: "ILS",
+    equipment_type: "lift",
+    manufacturer: "Ferrari",
+    model: "AGLY2",
+    serial_number: "2305001938",
+    logo_url: null,
+  };
+
+  // Only the fields ALWAYS available for any reminder — buildEmailVars() only
+  // populates document_type/document_number/contract_*/expiry_date/amount when
+  // reminder.document_id is set. Contract-only reminders (e.g. the manual
+  // hydraulic-check flow, or the equipment-XLSX-import stub-contract path)
+  // have document_id: null, so those fields are never present.
+  const MINIMAL_VARS: EmailVars = {
+    title: "בדיקה הבאה ב-2026-10-22 (יעד: 2026-11-22)",
+    trigger_date: "2026-10-22",
+    advance_days: 30,
+    body: null,
+    client_name: "יוסי כהן",
+    document_name: null,
+    from_name: "ReminderOCR",
+    client_company: "מן הנדסת חשמל",
+    contact_email: "office@example.com",
+    contact_phone: "052-1234567",
+    logo_url: null,
+  };
+
+  // Simulates a reminder whose linked client/document has since been deleted.
+  const BARE_VARS: EmailVars = {
+    title: "תזכורת",
+    trigger_date: "2026-01-01",
+    advance_days: 30,
+  };
+
+  const TEMPLATES = ["default", "inspection", "contract", "invoice"] as const;
+  const VAR_SETS = [
+    ["full", FULL_VARS],
+    ["minimal (contract-only reminder)", MINIMAL_VARS],
+    ["bare (no client/equipment)", BARE_VARS],
+  ] as const;
+
+  function findUnresolvedTokens(html: string): string[] {
+    return html.match(/\{\{[^}]*\}\}|\{\s*\{[^}]*\}\s*\}/g) ?? [];
+  }
+
+  for (const name of TEMPLATES) {
+    // Stray-space variants like "{ {var}}" silently bypass the renderer's
+    // regex and leak into the sent email as literal text.
+    it(`${name}.html has no malformed brace tokens in source`, () => {
+      const raw = loadReminderTemplate(name);
+      expect(raw.match(/\{\s+\{|\}\s+\}/g)).toBeNull();
+    });
+
+    for (const [varsLabel, vars] of VAR_SETS) {
+      it(`${name}.html resolves all tokens with ${varsLabel} vars`, () => {
+        const raw = loadReminderTemplate(name);
+        const rendered = renderTemplate(raw, vars, { escape: false });
+        expect(findUnresolvedTokens(rendered)).toEqual([]);
+      });
+    }
+  }
 });

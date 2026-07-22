@@ -232,7 +232,7 @@ function refresh() {
   store.fetch({ q: search.value || undefined, limit: 200 }, true);
 }
 
-onMounted(() => { if (!store.rows.length) store.fetch({ limit: 200 }); });
+onMounted(() => { store.fetch({ limit: 200 }, true); });
 
 // ── Kebab menu ────────────────────────────────────────────────────────────────
 const openKebab = ref<string | null>(null);

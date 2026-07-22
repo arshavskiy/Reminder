@@ -197,7 +197,7 @@ onMounted(async () => {
     api.emailTemplates.list(),
   ]);
   emailTemplates.value = templates;
-  if (!store.rows.length) load();
+  load();
 });
 
 // ── Create new reminder ─────────────────────────────────────────────────────
