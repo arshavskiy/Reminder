@@ -28,7 +28,9 @@ const DEFAULTS: AppSettings = {
   emailFromName: process.env.EMAIL_FROM_NAME ?? " ReminderOCR ",
 
   reminderEnabled: true,
-  reminderAdvanceDays: [30],
+  reminderAdvanceDays: process.env.REMINDER_ADVANCE_DAYS
+    ? process.env.REMINDER_ADVANCE_DAYS.split(",").map((d) => parseInt(d.trim(), 10)).filter((n) => Number.isFinite(n))
+    : [30, 14, 3],
   reminderCheckIntervalMs: 600000,
   testEmail: "",
   testEmailTemplateId: null,
