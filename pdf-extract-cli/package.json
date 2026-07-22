@@ -1,0 +1,31 @@
+{
+  "name": "pdf-extract-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Universal local PDF reader: clean text via OCR (Tesseract.js), optional AI Q&A about the document via a local Ollama model. No OpenAI dependency, no fixed business schema.",
+  "bin": {
+    "pdf-extract": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node --disable-warning=DEP0040 --import tsx/esm src/cli.ts",
+    "build": "tsc && node -e \"require('fs').copyFileSync('src/pdfplumber_extract.py', 'dist/pdfplumber_extract.py')\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.7.0",
+    "dotenv": "^17.4.2",
+    "pdf-parse": "^1.1.1",
+    "sharp": "^0.35.3",
+    "tesseract.js": "^5.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.5",
+    "@types/pdf-parse": "^1.1.4",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4"
+  }
+}

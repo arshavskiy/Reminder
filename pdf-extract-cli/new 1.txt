@@ -1,0 +1,549 @@
+CLI Tool: Local PDF Data Extraction (Ollama-powered)
+
+Context
+
+The existing web app (server/src/pipeline/) extracts structured data from Hebrew business PDFs (contracts, invoices, inspection reports) using: pdf-parse for text-based PDFs, Tesseract.js OCR as fallback for scans, then an LLM call (OpenAI gpt-4o-mini) to turn raw text into a structured JSON record (client info, dates, contract numbers, etc.).
+
+Goal: a standalone CLI tool, in a new top-level folder, that does the same PDF → structured JSON extraction, but:
+- Runs fully locally — no OpenAI dependency, no API costs, works offline.
+- Uses Ollama for the text→JSON step instead of OpenAI.
+- Is decoupled from the server (per user's choice) — its own code, not importing server/src, so it can be run/shared independently and iterated on quickly without touching the production web app.
+
+This is also a testbed to validate whether small local models are "good enough" for this extraction task before ever considering switching the main app's default backend (out of scope for this task).
+
+Hardware constraint: NVIDIA RTX A2000 Laptop GPU, 4GB VRAM. Research (via Ollama's library + 2025-2026 benchmarks) confirms:
+- Local vision-language models have no reliable Hebrew OCR support and are prone to hallucinating text — not safe for this use case. Tesseract.js OCR stays as the OCR engine, ported into the CLI (same engine, standalone copy).
+- For text→JSON extraction, best options at 4GB VRAM: qwen3:4b (~2.5GB, best multilingual/instruction-following balance), phi-4-mini (~2.5GB, strong structured-output reliability), qwen3:1.7b (~1.4GB, fastest/most headroom). Avoid anything ≥7B — no VRAM headroom left for context.
+- Ollama's format parameter with a JSON Schema (not just "json" mode) gives real grammar-constrained decoding since Ollama 0.3+ — this should be used instead of prompt-only JSON mode, to keep small-model output schema-valid.
+
+Scope
+
+- New folder: pdf-extract-cli/ at repo root (sibling to server/, client/).
+- Standalone Node.js + TypeScript CLI, own package.json, own node_modules.
+- Own copies of the needed pipeline logic (ported/adapted from server/src/pipeline/, not imported):
+  - pdfParser.ts — text extraction via pdgarbage-glyph stripping (fromserver/src/pipeline/pdfParser.ts, hebrewBidi.ts)                                                                    - ocrParser.ts — Tesseract.js OCR fallberver/src/pipeline/ocrParser.ts)
+  - ocrExtractor.ts — regex-based fallback field extractor, ported as-is (from                                    server/src/pipeline/ocrExtractor.ts) — usline-only mode with zero LLM calls
+  - extractor.ts — rewritten to call Ollama's native /api/chat endpoint (not the OpenAI-compat shim) with format: <json-schema> for constrained decoding, uand ExtractionResult shape as the server(schema copied from server/src/shared/types.ts).
+- CLI entry point (e.g. src/cli.ts) usingpproach consistent with the repo's existingscript style (server/src/scripts/*.ts run via tsx) — no new heavy CLI framework needed unless the user wancommander-style --help/subcommands (will
+- Config via .env (model name, Ollama URL, OCR language) — same pattern as server/.env, using dotenv.     - Output: prints JSON to stdout by defaulsk; supports a single file or a directoryglob of PDFs.                                                                                             
+Ollama Setup (included as setup steps, since env isn't confirmed ready)                                   
+1. Verify Ollama is installed (ollama --version); if not, direct user to install from ollama.com (Windows installer) since this can't be scripted u
+2. Pull candidate models: ollama pull qwen3:4b and ollama pull phi-4-mini for side-by-side comparison.
+3. Verify GPU offload: run ollama ps afteROCESSOR shows GPU (not 100% CPU), confirming the RTX A2000 is being used.
+4. Document a quick ollama run qwen3:4b "JSON" smoke test.
+
+Implementation Steps
+
+1. Scaffold pdf-extract-cli/ — package.jsparse, tesseract.js, dotenv, bidi-js or porthebrewBidi.ts logic which appears hand-rolled — check), tsconfig.json matching server's ESM/strict config, .env.example.
+2. Port parsing modules: copy + trim pdfParser.ts, hebrewBidi.ts, ocrParser.ts, ocrExtractor.ts, dateNormalizer.ts (dependency of ocrExtractor) from server/ts (no getSettings() coupling; use localconfig module instead).                                                                                          3. Build local config module (src/config. (default http://localhost:11434),OLLAMA_MODEL (default qwen3:4b), OCR_LANGUAGE (default heb+eng).                                                 4. Build Ollama extractor (src/extractor. and ExtractionResult interface fromserver/src/pipeline/extractor.ts / server/src/shared/types.ts; call Ollama's /api/chat with format set to the JSOSchema derived from ExtractionResult (stron mode), temperature: 0, stream: false.
+5. Build the pipeline orchestrator (src/pipeline.ts) — mirrors the relevant slice of                             server/src/pipeline/importer.ts: parse PD → LLM extraction → merge/compare againstregex fallback → return result. No DB/entity/reminder logic (out of scope — this is extraction only, not the fullapp pipeline).
+6. Build CLI entry (src/cli.ts) — accepts one or more file/glob args, --model <name> override, --out <dir|file>, --no-ai (regex-only mode), --verbose (prision). Runs via tsx src/cli.ts <args>, addnpm run build/bin entry for optional global install later.
+7. Add a README in pdf-extract-cli/ docum, model pull, .env), usage examples, and anote that this is a standalone tool decoupled from server/ by design (won't auto-stay in sync — future pipeline
+changes in server/ must be manually porte
+
+Verification
+
+- Run the CLI against a real sample PDF fs-2026-05-20/ (Hebrew inspection report,known-good test fixture already in the repo) with both qwen3:4b and phi-4-mini, compare output JSON quality
+against the corresponding dumped extractis/ (if a matching prior OpenAI-run dumpexists) or against manual inspection of the PDF.
+- Confirm OCR fallback triggers correctlyDF.
+- Confirm --no-ai regex-only mode still produces partial output with zero Ollama calls.
+- Confirm ollama ps shows GPU usage during back to CPU, which would be very slow on a4GB card).
+
+
+Interactive Terminal UI for pdf-extract-cli
+
+(Plan reviewed and confirmed current as of this session — no changes needed to scope below.)
+
+Context
+
+pdf-extract-cli/ (built in a prior session) is a flag-driven CLI:
+node src/cli.ts <file|dir> [--model][--out][--no-ai][--verbose]. It runs
+Tesseract OCR + a local Ollama model (qwen3:4b recommended after
+benchmarking) to turn Hebrew business PDFs into structured JSON, matching the
+ExtractionResult shape used by the main app.
+
+The user wants this to feel like a "proper" tool: instead of memorizing
+flags, running it with no arguments should launch an interactive terminal
+UI — prompts for file path (with autocomplete), model choice, confirmation
+— show a live progress indicator while OCR/extraction runs, then a
+human-readable results screen (not just raw JSON) with an option to save
+JSON + a readable summary to disk.
+
+The existing flag-based invocation must keep working unchanged (for
+scripting/batch use, CI, etc.) — the interactive mode is additive, triggered
+when no file arguments are given (or via --interactive/no args).
+
+Approach
+
+Use @clack/prompts for the interactive flow — lightweight, zero native
+deps (works fine on Windows/PowerShell/Git Bash), good file-path
+autocomplete via a custom text prompt + basic FS-based suggestion, spinner
+support for the OCR/extraction progress, and styled output for the results
+screen. This avoids the much heavier Inquirer or a full TUI framework
+(blessed/ink) which would be overkill for a linear wizard flow.
+
+New dependency
+
+- @clack/prompts (~small, pure JS, no native bindings)
+
+Flow (interactive mode)
+
+1. Welcome banner (intro()) — tool name + short description.
+2. File/folder path prompt — text() prompt with live validation
+(path exists, is .pdf or a directory containing PDFs) using Node's
+fs as the user types is not natively supported by clack's text()
+(no live autocomplete-as-you-type in a plain text prompt) — implement
+lightweight autocomplete by:
+  - Accepting a partial path
+  - On Tab-less environments (clack doesn't support raw Tab-complete),
+instead: after the user types a path, if it doesn't resolve, list
+sibling entries in the parent dir that share the typed prefix as
+suggestions and let them pick via select(). This is the pragmatic
+"autocomplete" approximation without pulling in a raw-keypress-handling
+library.
+  - If multiple PDFs found (directory input), show a multiselect() to
+pick which ones to process (default: all selected).
+3. Model selection — select() prompt listing models pulled locally via
+ollama list (shell out, parse), with qwen3:4b pre-selected/starred as
+recommended (matches README benchmark findings), falling back to a manual
+text entry if the Ollama call fails (server not running) or user wants a
+model not yet pulled. Include a "skip AI, regex-only" option (maps to
+--no-ai).
+4. Output preference — select(): "Print to screen only" / "Save to
+file(s)" — if saving, text() prompt for output directory (default:
+./output), created if missing.
+5. Confirmation summary — note() showing chosen file(s), model, output
+choice before running.
+6. Run — for each file: spinner() start → call existing
+runPipeline() (unchanged) → spinner stop with ✓/✗ and one-line status
+(used OCR? AI success? timing).
+7. Results screen — for each processed file, a formatted human-readable
+summary block (not raw JSON): client name/company, document type, key
+dates (start/expiry), contact info, confidence — using note() or plain
+styled console.log blocks. Full JSON still written to disk if the user
+chose to save.
+8. Save output (if chosen) — write two files per document into the
+output dir:
+  - <name>.json — same shape as today (file, used_ocr, regex_fallback,
+ai_extraction, etc.)
+  - <name>.summary.txt — the human-readable block also shown on screen
+9. Outro — outro() with count of files processed, any failures, and
+output location if saved.
+
+Non-interactive mode (unchanged)
+
+If the process is invoked with file/dir arguments (as today) or any of the
+existing flags, skip the interactive wizard entirely and run the current
+flag-parsing path as-is — zero behavior change for scripted use. Interactive
+mode triggers only when invoked with no positional file arguments and no
+flags (bare npm start / node dist/cli.js).
+
+Files to change
+
+- pdf-extract-cli/package.json — add @clack/prompts dependency.
+- pdf-extract-cli/src/cli.ts — split: keep existing parseArgs +
+flag-driven runNonInteractive() (current main() body, renamed,
+unchanged logic), add branch at top: if no argv → call new
+runInteractive().
+- New pdf-extract-cli/src/interactive.ts — the wizard flow described
+above. Reuses getConfig(), runPipeline(), PipelineResult from
+existing modules — no duplication of pipeline logic, only new
+presentation/prompt code.
+- New pdf-extract-cli/src/summary.ts — pure function
+formatSummary(result: PipelineResult): string that turns a
+PipelineResult into the human-readable block, used both for the
+on-screen results display and the .summary.txt file. Single source of
+truth so screen output and saved file never drift.
+- New helper in interactive.ts (or small src/ollamaModels.ts) — shell
+out to ollama list, parse table output into model names, with a graceful
+fallback (static suggested list: qwen3:4b, qwen3:1.7b) if Ollama isn't
+reachable.
+- pdf-extract-cli/README.md — document the new interactive mode as the
+primary usage path, keep flags documented as "scripting mode".
+
+Verification
+
+- Run npm start with no args → confirm wizard launches, walk through
+picking the known sample PDF
+(spects/data/batch-reports-2026-05-20/16104_...pdf), select qwen3:4b,
+choose "save to file", confirm .json and .summary.txt are written and
+the on-screen summary matches the saved summary file.
+- Run npm start -- ./some.pdf --no-ai → confirm non-interactive path is
+unaffected (existing flag behavior untouched).
+- Run npm run build && node dist/cli.js (no args) → confirm the compiled
+build also launches the wizard (not just tsx dev mode).
+- npx tsc --noEmit clean.
+
+
+
+Make pdf-extract-cli a universal PDF reader (drop reminder-app schema)
+
+Context
+
+pdf-extract-cli/ started as a Reminder-app-specific tool: it ported the
+main app's Hebrew-business-document extraction schema (client/contract/
+expiry-date fields) and later I narrowed that schema to 7 "reminder"
+fields at the user's request. The user has now decided the CLI shouldn't
+be bound to the Reminder app's domain at all — it should be a universal
+PDF reader: given any PDF, produce clean text (via parse + OCR fallback,
+which are already domain-agnostic), with no fixed extraction schema and
+no AI call by default. AI becomes fully optional and generic — the user
+can ask an open-ended question about the document's content instead of the
+tool imposing a business-document shape on the output.
+
+This removes the last Reminder-app-specific assumption from the tool
+(the ExtractionResult schema and its Hebrew-business-document system
+prompt) while keeping everything that was already generic: PDF text
+extraction, Hebrew bidi fixing (a text-correctness feature, not a business
+schema — keep it, since garbled bidi text is wrong for ANY use case, not
+just reminders), and Tesseract OCR fallback.
+
+What gets removed
+
+- src/ocrExtractor.ts (extractFromOcr) — the regex-based fallback
+extractor is entirely reminder/business-d
+contact_name, po_box, etc.). Delete it; there is no universal-PDF
+equivalent to keep.
+- src/dateNormalizer.ts — only used by ocrExtractor.ts. Delete
+(no other consumer).
+- The fixed ExtractionResult schema in src/types.ts and the
+
+src/extractor.ts — replace with free-form AI querying (see below).
+- --no-ai flag — meaningless once there'
+extraction to skip; AI becomes opt-in via a new --ask <question> flag
+instead of opt-out.
+
+What gets kept as-is (already domain-agn
+
+- src/pdfParser.ts (parsePdf) — pdf-pars
+bidi fix + OCR-fallback heuristic. Not reminder-specific.
+- src/hebrewBidi.ts (fixHebrewBidi) — gey.
+- src/ocrParser.ts (ocrFile) — Tesseract OCR, already generic, keeps
+the errorHandler fix from this session.
+- src/config.ts — Ollama URL/model/ctx settings, all still relevant.
+- src/ollamaModels.ts — model listing he
+
+New design
+
+src/pipeline.ts
+
+runPipeline(filePath, config, opts) beco if
+needed → return raw text. Optionally, if opts.question is set, send the
+raw text + the user's question to Ollamano
+JSON Schema, no fixed fields) and return the free-text answer alongside.
+
+export interface PipelineResult {
+  file: string;
+  rawTextChars: number;
+  usedOcr: boolean;
+  ocrReason?: string;
+  text: string;              // NEW: the part of the result
+  answer: AskRun | null;     // NEW: replaces `ai` — null unless a question was asked
+}
+export interface PipelineOptions {
+  question?: string;         // NEW: repa extraction
+  model?: string;
+  verbose?: boolean;
+}
+
+src/extractor.ts → rename to src/ask.ts
+
+Replace extractDocument() (schema-constrained) with askAboutDocument (rawText, question, config, modelOverride):
+- Plain Ollama /api/chat call, no format
+free-form text response).
+- Generic system prompt: something like
+answering questions about the text of a document the user provided.
+Answer concisely and only from the given
+isn't in the text." No Hebrew-business-domain rules, no field mapping —
+but keep it Hebrew-RTL-aware in tone (doew)
+without assuming a business-document shape.
+- Keep think: false and num_ctx: config.
+performance fixes, domain-agnostic).
+- Returns { answer: string | null, modelead
+of a parsed schema object.
+
+src/types.ts
+
+Delete ExtractionResult. No replacement needed — the "result" of asking
+a question is just a string.
+
+src/summary.ts
+
+Rewrite formatSummary(result: PipelineRe
+raw text length, and — if a question was asked — the question + answer.
+Also always include a preview of the extt
+~500 chars) since that's now the primary output of a universal reader, not
+just a byproduct. Full text goes to a ne
+below), not just the JSON.
+
+src/interactive.ts
+
+- pickFiles() — unchanged (still PDF-only, still uses p.path +
+multiselect).
+- pickModel() → rename/reshape to pickQuestion(): ask via p.confirm
+"Ask the AI a question about this docume
+for the question (with model selection folded in as a secondary
+prompt, reusing listOllamaModels()/RECOM
+they chose to ask). If no, skip AI entirely — output is just the parsed/
+OCR'd text.
+- pickOutput() — unchanged shape, but writeResult() now always writes
+<name>.txt (the full extracted text) plu
+question/answer if asked) instead of assuming a .summary.txt schema
+dump.
+- Results screen — show the text preview + Q&A (if asked) via
+formatSummary().
+
+src/cli.ts
+
+- Flag parsing: replace --no-ai with --a
+omitted, no AI call is made at all, which is the new default behavior,
+a stricter "universal" stance than the oon).
+Keep --model, --out, --verbose, --help.
+- runNonInteractive(): write <name>.txt
+print to stdout if no --out); if --ask was given, also print/save
+the answer.
+- Help text and examples updated to reflect the new generic positioning.
+
+package.json / README
+
+- description field: drop "Hebrew business PDFs" specificity → "extract
+clean text from any PDF, optionally ask l
+Ollama model."
+- README gets a substantial rewrite: dro
+"Output shape" section, drop the reminder-specific benchmark table
+(keep the technical findings — num_ctx b
+truncation bug, errorHandler crash fix — since those are still true and
+valuable, just reframe away from "remind
+"Ask a question" usage example.
+- Keep the Hebrew-OCR-specific setup not000
+4GB VRAM guidance, "why not a VLM for OCR") — those are about the OCR
+layer, which remains genuinely useful fo
+even though the tool is no longer business-schema-specific. This isn't
+a contradiction: OCR language support an
+independent axes.
+
+Files touched
+
+- Delete: src/ocrExtractor.ts, src/dateNormalizer.ts
+- Rewrite: src/types.ts (remove Extracti
+→ src/ask.ts (schema extraction → free-form Q&A), src/pipeline.ts,
+src/summary.ts, src/interactive.ts, src/
+- Update: package.json (description, no dependency changes — nothing
+removed depended only on the deleted fils
+only used by dateNormalizer.ts — remove it from package.json
+dependencies since nothing else uses it)
+(no changes needed — same Ollama/OCR settings apply)
+
+Verification
+
+- npx tsc --noEmit clean after all changes.
+- npm run build succeeds.
+- Run against the known sample PDF
+(spects/data/batch-reports-2026-05-20/16
+confirm output is just clean extracted text, no AI call made, no fixed
+JSON fields.
+- Run again with --ask "האבה הקידבה ךיראת המ?" → confirm a free-text
+Hebrew answer comes back (not JSON-schem
+- Run the interactive wizard (pdf-extract / npm start with no args) →
+confirm it still boots, offers the ask-a
+<name>.txt + <name>.json correctly.
+- Confirm @hebcal/core removed from pack
+still succeeds (no orphaned lockfile issues).
+
+Approved. Let's start implementing — deleting the reminder-specific files first.
+
+● Running 1 shell command…
+
+
+
+
+Plan saved to: C:\Users\User\.claude\plans\zesty-purring-scroll.md · /plan to edit
+Table/CSV + HTML extraction with line-count verification
+
+(Approach confirmed with user: per-cell bbox-crop OCR, Python/pdfplumber dependency accepted.)
+
+Context
+
+The universal-PDF-reader rewrite (previous session, now complete and
+building clean) turned pdf-extract-cli into a generic "clean text out of
+any PDF, optional free-form AI question" tool with no fixed schema.
+
+The user now wants a separate, additive capability: when a PDF contains
+a detectable table (tested against a real 19-page Bank Hapoalim statement,
+pdf-extract-cli/data/current_account_operations_07.07.2026_11.32.56.pdf),
+produce a CSV of just the table data, and an HTML file for the whole
+document. The interactive wizard should also show a line-count comparison
+— original document lines vs. extracted CSV rows — so the user can sanity-
+check nothing was silently dropped.
+
+What was already discovered this session (informs the plan)
+
+- server/src/pipeline/pdfPlumberParser.ts + pdfplumber_extract.py (main
+app, already exists) shell out to Python's pdfplumber and return both
+raw text AND a structured tables: string[][][][] array ([page][table] [row][cell]) using line-based-then-text-based table-detection strategies.
+This is the right tool for structural table detection — reused as-is via
+the same subprocess pattern, not reimplemented.
+- Tested against the real bank statement: pdfplumber correctly finds one
+table per page × 19 pages, with clean columns for date, credit, debit,
+balance. BUT this specific PDF embeds a custom subset font
+(Poalim-Regular) with a broken/missing Hebrew ToUnicode CMap — the
+Hebrew "description" column decodes to � replacement characters at
+the character-code level. This is not the bidi-reversal problem
+hebrewBidi.ts already fixes (that's word/character order; this is
+wrong character identity — unrecoverable from the text layer at all).
+- Tesseract can't OCR a PDF file directly (worker.recognize() needs a
+raster image) — confirmed by reproducing the exact "Error attempting to
+read image" failure this session (now caught safely, not crashing, thanks
+to the errorHandler fix already in src/ocrParser.ts). To OCR the
+Hebrew description column, each PDF page must first be rasterized to an
+image.
+- The user confirmed (AskUserQuestion): rasterize pages and OCR just to
+recover correct Hebrew text for cells pdfplumber can't decode, rather than
+leaving them blank or OCR'ing the whole page as unstructured text.
+
+Scope
+
+1. New module: src/tableExtract.ts
+
+Thin TS wrapper mirroring server/src/pipeline/pdfPlumberParser.ts's
+spawnSync pattern, but pointing at a local copy of
+pdfplumber_extract.py (per this project's established "standalone, ported
+not imported" convention — see existing pdf-extract-cli/README.md
+"decoupled from server/ by design"). Copy pdfplumber_extract.py from
+server/src/pipeline/ into pdf-extract-cli/src/ unchanged (it's already
+generic — no reminder-app coupling). Returns { text, pageCount, tables, needsOcr } per existing PlumberResult shape.
+
+Add a pythonPath config option (.env: PYTHON_PATH, default python)
+since this session discovered python3 (bash) and python
+(PowerShell/Windows) can resolve to different interpreters with different
+installed packages on this machine — the working one here was
+C:\Python312\python.exe. Document this clearly in the README setup steps
+(pip install pdfplumber against the correct interpreter, with a
+verification command).
+
+2. New module: src/pdfRasterize.ts
+
+Rasterize PDF pages to PNG images so Tesseract can OCR them. Use pdfjs-dist
+(Mozilla's PDF.js, pure-JS, no native deps beyond what's already pulled in
+transitively by pdf-parse) with node-canvas — or, simpler and
+avoiding a new native dependency (canvas requires native compilation, which
+is exactly the kind of Windows-build-toolchain risk worth avoiding): shell
+out to pdftoppm (Poppler) if available, falling back to a pure-JS
+rasterizer only if needed. Decision: check what's already available in
+this environment first (Poppler/pdftoppm is commonly bundled or
+easy-installable; the main app's Python env already has pypdfium2 as a
+pdfplumber dependency, which can rasterize pages via
+page.render()/to_pil()) — prefer reusing pypdfium2 (already a proven,
+working dependency in this exact Python environment, confirmed installed)
+over adding a new Node native/binary dependency. Implementation: extend the
+Python script to optionally render+OCR-crop cells, OR simplest of all —
+add a second small Python script rasterize_page.py using pypdfium2
+directly (pdfium.PdfDocument(path)[i].render(scale=2.0).to_pil().save(...))
+to dump one PNG per page to a temp dir, then hand those PNGs to the existing
+Node ocrFile()/Tesseract path (which already works on image files, not
+just PDFs — confirmed: the crash we hit was specifically PDF-as-image-input,
+not PNG-as-image-input).
+
+3. Cell-level Hebrew repair strategy
+
+For a table PDF: after pdfplumber extraction, detect columns/cells whose
+text contains a high ratio of �/mojibake characters (reuse a ratio
+check similar to pdfParser.ts's existing Hebrew-ratio heuristic). For
+only those flagged cells (not the whole page — full-page OCR is slow
+and the numeric/date columns are already clean), crop the corresponding
+region of the rasterized page image (using bounding-box coordinates
+pdfplumber already provides per-cell via page.find_tables()/.bbox)
+and OCR just that crop. This keeps OCR cost proportional to how much is
+actually broken (this file: 1 of 5 columns × 19 pages ≈ manageable) instead
+of OCR'ing every page in full.
+
+(Fallback if bbox-cropped OCR proves unreliable in testing: OCR the whole
+rasterized page once per page and pattern-match the Hebrew description
+column out of the OCR text using row-order alignment with the already-clean
+pdfplumber row count — more fragile but avoids per-cell crop-coordinate
+bugs. Try bbox-crop first; fall back only if testing shows it's unreliable.)
+
+4. CSV output
+
+New src/csvWriter.ts: tableToCsv(table: string[][]): string — simple
+RFC 4180 CSV serialization (quote fields containing commas/quotes/newlines,
+escape embedded quotes). No new dependency needed for basic CSV escaping.
+One CSV per detected table per document (if multiple tables span multiple
+pages representing one logical table — like this 19-page statement — concat
+rows into a single CSV, since pdfplumber returns one table per page for a
+paginated table; detect "same header row repeated on each page" as a signal
+to merge rather than treat as 19 separate tables).
+
+5. HTML output
+
+New src/htmlWriter.ts: toHtml(result): string — a simple, self-contained
+HTML document (matches this project's existing Artifact-style
+self-contained-file convention — inline styles, no external assets) showing:
+extracted plain text (with dir="rtl" for Hebrew), and if a table was
+found, a rendered <table> from the same data as the CSV. This is the
+"whole document" HTML the user asked for — text + table together, one file.
+
+6. Pipeline integration (src/pipeline.ts)
+
+runPipeline() gains a table-detection step: after parsePdf/OCR-fallback
+for plain text, additionally run tableExtract.ts (pdfplumber). If
+tables is non-empty, run the cell-repair-OCR step, build the merged CSV
+rows, and include csv: string | null and html: string in
+PipelineResult. If no tables found, csv stays null and HTML still
+gets generated from just the text.
+
+7. Line-count verification (src/interactive.ts + src/summary.ts)
+
+Add a comparison: "original lines" = count of non-empty lines in the raw
+extracted text (text.split('\n').filter(Boolean).length); "CSV lines" =
+CSV row count (excluding header). Show both in the wizard's results screen
+(p.note) and in formatSummary(), e.g.:
+Original text lines: 342
+CSV rows extracted:  87
+This isn't a strict correctness proof (a table's rows don't map 1:1 to raw
+text lines in general — pdfplumber's row-splitting differs from raw
+newlines) but gives the user a quick eyeball sanity signal per their
+request, clearly labeled as such (not framed as a hard validation), to
+avoid implying false precision.
+
+8. CLI / output files
+
+- Interactive wizard (src/interactive.ts): after processing, if a table
+was found, write <name>.csv alongside the existing <name>.txt +
+<name>.json; always write <name>.html. Show the line-count comparison
+in the results screen.
+- Non-interactive (src/cli.ts): same three/four files written when
+--out is given; if no --out, print text to stdout as today, plus a
+note like [table found: 87 rows, use --out to save as CSV] if a table
+was detected but not saved.
+
+Files touched
+
+- New: src/tableExtract.ts, src/pdfplumber_extract.py (copied from
+server/src/pipeline/), src/rasterize_page.py, src/pdfRasterize.ts
+(or fold rasterization straight into tableExtract.ts/a combined Python
+script — decide during implementation based on what's simplest), src/ csvWriter.ts, src/htmlWriter.ts
+- Modified: src/pipeline.ts (add table/CSV/HTML to PipelineResult),
+src/summary.ts (line-count comparison), src/interactive.ts (new
+output files + comparison display), src/cli.ts (new output files),
+src/config.ts (add PYTHON_PATH), .env.example, README.md
+(document Python/pdfplumber setup requirement — this is now a hard
+dependency for table detection, not optional, so setup steps need a new
+"Python + pdfplumber" section)
+
+Verification
+
+- Run against pdf-extract-cli/data/current_account_operations_07.07.2026_11.32.56.pdf
+(interactive wizard): confirm <name>.csv has ~19 pages worth of merged
+transaction rows, <name>.html renders the table with correct RTL
+Hebrew in the description column (not �), and the line-count
+comparison displays sensible numbers.
+- Run against a PDF with no table (e.g. the existing Hebrew inspection
+report sample) — confirm no .csv is written, .html still is, no
+crash/error from the "no table found" path.
+- npx tsc --noEmit clean, npm run build succeeds.
+- Confirm the Python subprocess calls use the correct interpreter
+(PYTHON_PATH resolves to one that actually has pdfplumber installed —
+this session hit real confusion between python3/python/python.exe
+resolving to different installs; document and code around this explicitly
+rather than assuming python on PATH is correct).

@@ -1,0 +1,8 @@
+{
+  "file": "E:\\Projects\\Reminder\\pdf-extract-cli\\data\\current_account_operations_07.07.2026_11.32.56.pdf",
+  "used_ocr": false,
+  "ocr_reason": null,
+  "raw_text_chars": 21096,
+  "csv_row_count": 408,
+  "answer": null
+}
