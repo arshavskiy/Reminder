@@ -374,3 +374,28 @@ Real-time document processing updates pushed to the client:
 | Spaces | `DO_SPACES_KEY` set | `@aws-sdk/client-s3` upload; presigned URLs (1-hour) |
 
 Files are deduplicated by hash — re-uploading the same file returns the existing document record.
+
+## Contract and Inspection Exports
+
+The Contracts page includes an export generator for the currently filtered records. Users can choose the client, status, contract type, date range, and columns before selecting a format:
+
+- CSV: UTF-8 CSV with a BOM, suitable for spreadsheets and data systems.
+- Excel: RTL `.xlsx` workbook with equipment rows expanded.
+- PDF: print-ready Hebrew HTML that can be printed or saved as PDF from the browser.
+
+The page also provides a monthly PDF report. It asks for a month and downloads a server-generated PDF containing all contracts and inspections started in that month, including client details, dates, status, amount, source document, equipment, and related reminders.
+## Monthly Email Reports
+
+The Reports page (`/reports`) controls automatic monthly delivery of contract and inspection reports.
+
+Settings include:
+
+- Enable or disable automatic delivery
+- Recipients, or the account email when recipients are left empty
+- Day of month (`1`-`28`)
+- Hour of day (`00:00`-`23:00`)
+- PDF and/or CSV attachments
+
+The manual report generator lets users choose report fields with Hebrew labels. CSV attachments use Hebrew headers with UTF-8 BOM and RTL display markers for spreadsheet compatibility.
+
+The scheduler checks these settings during its normal interval. It creates one report per client and sends it to the client email plus the user recipients, at most once per calendar month per user. The page includes a report-month picker, client selector, and a manual generate-and-send action.

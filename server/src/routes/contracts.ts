@@ -1,9 +1,14 @@
 import express from "express";
+import {existsSync} from "node:fs";
+import {dirname, join} from "node:path";
+import {fileURLToPath} from "node:url";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {generateContractReminders} from "../reminders/scheduler";
 import {type EquipmentInput, upsertEquipmentForClient} from "../reminders/equipmentUpsert";
 import {HTTPException, requireAuth} from "../auth/middleware";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const HEBREW_FONT = join(__dirname, "../../../scripts/NotoSansHebrew.ttf");
 
 export function registerContractRoutes(app: express.Application) {
   // POST /api/contracts — create a contract manually
@@ -155,6 +160,155 @@ export function registerContractRoutes(app: express.Application) {
     res.json({ rows, total });
   });
 
+  // GET /api/contracts/monthly-report.pdf
+  app.get("/api/contracts/monthly-report.pdf", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const year = Number(req.query.year ?? now.getFullYear());
+      const month = Number(req.query.month ?? now.getMonth() + 1);
+      const kind = String(req.query.kind ?? "all");
+      if (!Number.isInteger(year) || year < 2000 || year > 2200 || !Number.isInteger(month) || month < 1 || month > 12) {
+        res.status(400).json({ error: "year and month must be valid" });
+        return;
+      }
+
+      const from = `${year}-${String(month).padStart(2, "0")}-01`;
+      const next = new Date(year, month, 1);
+      const to = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
+      const filter: Record<string, any> = {
+        user_id: userId,
+        start_date: { $gte: from, $lt: to },
+      };
+      if (kind === "inspection") filter.contract_type = { $regex: /תסקיר|בדיקה/ };
+      if (kind === "contract") {
+        filter.$and = [{ $or: [{ contract_type: null }, { contract_type: { $not: /תסקיר|בדיקה/ } }] }];
+      }
+
+      const contracts = await col("contracts").find(filter).sort({ start_date: 1, contract_number: 1 }).toArray();
+      const rows = await Promise.all(contracts.map(async (contract: any) => {
+        const [client, document, reminders] = await Promise.all([
+          contract.client_id ? col("clients").findOne({ _id: tryObjectId(String(contract.client_id)) }) : null,
+          contract.document_id ? col("documents").findOne({ _id: tryObjectId(String(contract.document_id)) }) : null,
+          col("reminders").find({ user_id: userId, source_id: String(contract._id) }).sort({ trigger_date: 1 }).toArray(),
+        ]);
+        let extracted: Record<string, any> = {};
+        if ((document as any)?.extracted_fields) {
+          try { extracted = JSON.parse((document as any).extracted_fields); } catch {}
+        }
+        const fields = mergeContractFields(contract, extracted);
+        return { contract, client: client as any, document: document as any, fields, reminders };
+      }));
+
+      const PDFDocument = (await import("pdfkit")).default;
+      const pdfBuffer: Buffer = await new Promise((resolve, reject) => {
+        const doc = new PDFDocument({ size: "A4", margin: 44, info: { Title: `Contracts report ${year}-${month}` } });
+        const chunks: Buffer[] = [];
+        let pageNo = 1;
+        doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+        doc.on("end", () => resolve(Buffer.concat(chunks)));
+        doc.on("error", reject);
+        doc.on("pageAdded", () => {
+          pageNo += 1;
+          doc.font(fontAvailable ? "Hebrew" : "Helvetica").fontSize(8).fillColor("#777777")
+            .text(`עמוד ${pageNo}`, 44, 780, { width: 507, align: "center" });
+          doc.fillColor("#111111");
+        });
+
+        const fontAvailable = existsSync(HEBREW_FONT);
+        if (fontAvailable) doc.registerFont("Hebrew", HEBREW_FONT);
+        const setFont = (size: number) => doc.font(fontAvailable ? "Hebrew" : "Helvetica").fontSize(size).fillColor("#111111");
+        const value = (raw: unknown) => raw == null || raw === "" ? "-" : String(raw);
+        const label = (name: string, raw: unknown) => {
+          setFont(9);
+          doc.text(`${name}: ${value(raw)}`, { align: "right", width: 507 });
+        };
+        const section = (title: string) => {
+          if (doc.y > 710) doc.addPage();
+          doc.moveDown(0.45);
+          setFont(12);
+          doc.text(title, { align: "right" });
+          doc.moveDown(0.2);
+          doc.moveTo(44, doc.y).lineTo(551, doc.y).stroke("#cfd5dc");
+          doc.moveDown(0.3);
+        };
+
+        setFont(18);
+        doc.text("דוח חודשי - חוזים ותסקירים", { align: "right" });
+        setFont(11);
+        doc.text(`חודש הדוח: ${new Date(year, month - 1, 1).toLocaleDateString("he-IL", { month: "long", year: "numeric" })}`, { align: "right" });
+        doc.text(`נוצר בתאריך: ${new Date().toLocaleDateString("he-IL")}`, { align: "right" });
+        doc.moveDown(0.6);
+        doc.moveTo(44, doc.y).lineTo(551, doc.y).stroke("#8aa0b5");
+        doc.moveDown(0.5);
+        setFont(11);
+        doc.text(`סה"כ רשומות: ${rows.length}`, { align: "right" });
+
+        if (!rows.length) {
+          doc.moveDown(1.2);
+          setFont(13);
+          doc.text("לא נמצאו חוזים או תסקירים בחודש שנבחר.", { align: "right" });
+        }
+
+        for (const row of rows) {
+          const c = row.contract;
+          const f = row.fields ?? {};
+          section(`${value(c.contract_number)} - ${value(c.contract_type ?? "חוזה / תסקיר")}`);
+          label("לקוח", row.client?.display_name);
+          label("מספר מזהה לקוח", row.client?.id_number);
+          label("איש קשר", f.contact_person);
+          label("טלפון", f.contact_phone);
+          label("אימייל", f.contact_email);
+          label("כתובת", f.client_address);
+          label("תאריך התחלה / בדיקה", c.start_date);
+          label("בתוקף עד / בדיקה הבאה", c.expiry_date);
+          label("סטטוס", c.status);
+          label("סכום", c.amount == null ? null : `${c.amount} ${c.currency ?? "ILS"}`);
+          label("מסמך מקור", row.document?.file_name);
+          label("תיאור", c.summary ?? f.equipment_description);
+          const equipment = Array.isArray(f._equipment) ? f._equipment : [];
+          if (equipment.length) {
+            section("ציוד");
+            equipment.forEach((eq: any, index: number) => {
+              setFont(10);
+              doc.text(`ציוד ${index + 1}`, { align: "right" });
+              label("שם", eq.name);
+              label("יצרן", eq.manufacturer);
+              label("דגם", eq.model);
+              label("מספר סידורי", eq.serial_number);
+              label("עומס עבודה", eq.load_capacity_work);
+              label("עומס מבחן", eq.load_capacity_test);
+              label("רדיוס", eq.load_radius);
+            });
+          }
+          if (row.reminders.length) {
+            section("תזכורות");
+            row.reminders.forEach((reminder: any) => label(`${value(reminder.title)} (${value(reminder.status)})`, reminder.trigger_date));
+          }
+        }
+
+        doc.end();
+      });
+
+      const filename = `contracts-report-${year}-${String(month).padStart(2, "0")}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.end(pdfBuffer);
+    } catch (err) {
+      console.error("[contracts] monthly PDF failed:", err);
+      if (!res.headersSent) res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
   // GET /api/contracts/expiring
   app.get("/api/contracts/expiring", async (req, res) => {
     let userId: string;

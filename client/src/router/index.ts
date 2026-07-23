@@ -12,6 +12,7 @@ import ProfilePage from "../views/ProfilePage.vue";
 import DocTemplatesPage from "../views/DocTemplatesPage.vue";
 import EmailTemplatesPage from "../views/EmailTemplatesPage.vue";
 import EquipmentPage from "../views/EquipmentPage.vue";
+import ReportsPage from "../views/ReportsPage.vue";
 import LoginPage from "../views/LoginPage.vue";
 import ResetPasswordPage from "../views/ResetPasswordPage.vue";
 import {useAuthStore} from "../stores/auth.js";
@@ -34,6 +35,7 @@ export const router = createRouter({
     { path: "/doc-templates", component: DocTemplatesPage },
     { path: "/email-templates", component: EmailTemplatesPage },
     { path: "/equipment", component: EquipmentPage },
+    { path: "/reports", component: ReportsPage },
     { path: "/field", component: () => import("../views/FieldPage.vue") },
     { path: "/403", component: () => import("../views/ForbiddenPage.vue") },
   ],

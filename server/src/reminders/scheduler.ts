@@ -1,19 +1,21 @@
 import {col} from "../db/db";
+import {ObjectId} from "mongodb";
 import {getSettings} from "../settings";
-import {sendReminderEmail} from "./emailSender";
+import {sendReminderEmail, sendEmailWithAttachments} from "./emailSender";
+import {sendMonthlyReportsPerClient} from "../reports/monthlyReports";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
 export function startScheduler() {
   const settings = getSettings();
-  if (!settings.reminderEnabled) return;
-
-  checkReminders().catch(console.error);
-  checkEscalations().catch(console.error);
+  if (settings.reminderEnabled) checkReminders().catch(console.error);
+  checkMonthlyReports().catch(console.error);
+  if (settings.reminderEnabled) checkEscalations().catch(console.error);
   _timer = setInterval(() => {
-    checkReminders().catch(console.error);
-    checkEscalations().catch(console.error);
+    if (settings.reminderEnabled) checkReminders().catch(console.error);
+    checkMonthlyReports().catch(console.error);
+    if (settings.reminderEnabled) checkEscalations().catch(console.error);
   }, settings.reminderCheckIntervalMs);
 
   console.log(
@@ -26,6 +28,53 @@ export function stopScheduler() {
     clearInterval(_timer);
     _timer = null;
   }
+}
+
+async function checkMonthlyReports() {
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const settingsRows = await col("user_settings").find({monthly_report_enabled: true}).toArray();
+  for (const row of settingsRows as any[]) {
+    const day = Number(row.monthly_report_day ?? 1);
+    const hour = Number(row.monthly_report_hour ?? 8);
+    if (now.getDate() < day || (now.getDate() === day && now.getHours() < hour)) continue;
+    if (row.monthly_report_last_sent === monthKey) continue;
+
+    const user = await col("users").findOne({_id: toObjectId(row.user_id)}) as any;
+    const configuredRecipients = String(row.monthly_report_recipients ?? "").split(/[;,\s]+/).filter(Boolean);
+    const recipients = uniqueEmails([...configuredRecipients, user?.email]);
+    const formats = parseFormats(row.monthly_report_formats);
+    if (!recipients.length || !formats.length) continue;
+
+    const result = await sendMonthlyReportsPerClient({
+      userId: row.user_id,
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+      recipients,
+      formats,
+    });
+    if (result.success) {
+      await col("user_settings").updateOne({_id: row._id}, {$set: {monthly_report_last_sent: monthKey, monthly_report_last_error: null}});
+      console.log(`[scheduler] ${result.reportsSent} client reports sent for ${monthKey}`);
+    } else {
+      await col("user_settings").updateOne({_id: row._id}, {$set: {monthly_report_last_error: result.error ?? "Unknown error"}});
+      console.warn(`[scheduler] Monthly reports failed for ${row.user_id}: ${result.error}`);
+    }
+  }
+}
+function toObjectId(id: unknown): any {
+  try { return new ObjectId(String(id)); } catch { return id; }
+}
+
+function uniqueEmails(values: Array<unknown>) {
+  return [...new Set(values.filter((value): value is string => typeof value === "string" && value.trim() !== "").map((value) => value.trim().toLowerCase()))];
+}
+
+function parseFormats(raw: unknown): string[] {
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed.filter((format) => format === "pdf" || format === "csv") : ["pdf", "csv"];
+  } catch { return ["pdf", "csv"]; }
 }
 
 async function checkReminders() {

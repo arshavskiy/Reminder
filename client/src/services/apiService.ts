@@ -205,6 +205,23 @@ export const api = {
       return get<{ rows: ContractWithClient[]; total: number }>(`/contracts${qs(params)}`, force);
     },
     expiring: (days = 30) => get<ContractWithClient[]>(`/contracts/expiring?days=${days}`),
+    downloadMonthlyReport: async (params?: { year?: number; month?: number; kind?: "contract" | "inspection" | "all" }) => {
+      const res = await fetch(`${BASE}/contracts/monthly-report.pdf${qs(params)}`, { credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename\*=UTF-8''(.+)|filename="([^"]+)"/);
+      const filename = match ? decodeURIComponent(match[1] ?? match[2]) : "contracts-report.pdf";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
     get: (id: string) => get<ContractWithClient>(`/contracts/${id}`),
     byDocument: (documentId: string, force = false) => get<ContractWithClient[]>(`/contracts/by-document/${documentId}`, force),
     create: (body: Partial<Contract>) => post<Contract>("/contracts", body),
@@ -245,9 +262,31 @@ export const api = {
     test: (to: string, templateId?: number | null) => post<{ success: boolean; error?: string }>("/email/test", { to, templateId }),
   },
 
+  reports: {
+    downloadMonthly: async (params: { year: number; month: number; format: "pdf" | "csv"; fields?: string[]; clientId?: string }) => {
+      const res = await fetch(`${BASE}/reports/monthly/download${qs(params)}`, {credentials: "include"});
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({error: `HTTP ${res.status}`}));
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename\*=UTF-8''(.+)|filename="([^"]+)"/);
+      const filename = match ? decodeURIComponent(match[1] ?? match[2]) : `contracts-report-${params.year}-${String(params.month).padStart(2, "0")}.${params.format}`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    },
+    sendMonthly: (body?: { year?: number; month?: number; formats?: string[]; recipients?: string[]; clientId?: string }) =>
+      post<{ success: boolean; count?: number; reportsSent?: number; error?: string }>("/reports/monthly/send", body ?? {}),
+  },
+
   userSettings: {
     get: () => get<UserSettings>("/user-settings"),
-    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language">>) =>
+    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats">>) =>
       put<UserSettings>("/user-settings", body),
   },
 

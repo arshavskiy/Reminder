@@ -563,3 +563,65 @@ Common status codes:
 | `404` | Resource not found (or belongs to a different user) |
 | `409` | Conflict (duplicate email on registration) |
 | `500` | Internal server error |
+
+## Contract and Inspection Reports
+
+### `GET /api/contracts/monthly-report.pdf`
+
+Downloads an authenticated PDF report for contracts and inspections whose `start_date` falls within the selected month.
+
+**Query parameters**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `year` | no | Four-digit year. Defaults to the current year. |
+| `month` | no | Month number `1`-`12`. Defaults to the current month. |
+| `kind` | no | `all`, `contract`, or `inspection`. The UI uses `all` for the monthly report. |
+
+The response is `application/pdf` with a downloadable filename such as `contracts-report-2026-07.pdf`. The report includes client details, contract fields, merged extracted/manual fields, equipment rows, source document name, and reminders linked to each contract.
+
+### Client export generator
+
+The Contracts page export wizard applies client-side filters and selected columns, then generates one of these formats:
+
+- CSV download: `contracts-YYYY-MM-DD.csv`
+- Excel download: `contracts-YYYY-MM-DD.xlsx`
+- PDF print view: opens a print-ready RTL document for browser printing or Save as PDF
+## Monthly Report Delivery
+
+### `GET /api/reports/monthly/download`
+
+Generates a downloadable report for the authenticated user. Query parameters are `year`, `month`, `format` (`pdf` or `csv`), and optional comma-separated `fields`. The response contains the generated file with a month-specific filename. CSV files use Hebrew headers, UTF-8 BOM, and RTL marks for Excel-compatible Hebrew display.
+
+Example: `/api/reports/monthly/download?year=2026&month=7&format=csv`
+
+
+### `POST /api/reports/monthly/send`
+
+Generates separate monthly reports per client and sends each report to that client's email plus the authenticated user and configured recipients. The optional `clientId` limits delivery to one client.
+
+**Optional body**
+
+```json
+{
+  "year": 2026,
+  "month": 7,
+  "formats": ["pdf", "csv"],
+  "recipients": ["reports@example.com"],
+  "clientId": "optional-client-id"
+}
+```
+
+When omitted, the current month, saved formats, and saved recipients are used. If no recipients are configured, the authenticated user's account email is used.
+
+Automatic delivery is controlled by these `/api/user-settings` fields:
+
+| Field | Description |
+|-------|-------------|
+| `monthly_report_enabled` | Enables the monthly scheduler job |
+| `monthly_report_recipients` | Comma/semicolon/space-separated recipient emails |
+| `monthly_report_day` | Day of month, clamped to `1`-`28` |
+| `monthly_report_hour` | Hour of day, `0`-`23` |
+| `monthly_report_formats` | JSON string containing `pdf`, `csv`, or both |
+| `monthly_report_last_sent` | `YYYY-MM` marker preventing duplicate monthly sends |
+| `monthly_report_last_error` | Most recent delivery error, if any |

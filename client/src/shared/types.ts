@@ -86,6 +86,13 @@ export interface UserSettings extends PipelineFlags {
   email_from_name: string | null;
   reminder_advance_days: string;  // JSON array as string
   ocr_language: string;
+  monthly_report_enabled?: boolean;
+  monthly_report_recipients?: string;
+  monthly_report_day?: number;
+  monthly_report_hour?: number;
+  monthly_report_formats?: string;
+  monthly_report_last_sent?: string | null;
+  monthly_report_last_error?: string | null;
 }
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";

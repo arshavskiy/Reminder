@@ -36,8 +36,11 @@
         >
           ☑ בחירה מרובה
         </button>
-        <button class="btn btn--ghost" @click="openExport" title="ייצוא ל-Excel">
-          📊 ייצוא ל-Excel
+        <button class="btn btn--ghost" @click="openExport" title="ייצוא CSV / Excel / PDF">
+          📊 ייצוא CSV / Excel / PDF
+        </button>
+        <button class="btn btn--ghost" @click="openMonthlyReport" title="הורדת דוח חודשי PDF">
+          📄 דוח חודשי PDF
         </button>
         <button class="btn btn--ghost" @click="router.push('/documents')">
           📁 ארכיון
@@ -134,11 +137,23 @@
       </div>
     </n-spin>
 
+    <!-- ── Monthly report modal ─────────────────────────────────────────── -->
+    <n-modal v-model:show="showMonthlyReport" preset="dialog" :show-icon="false" title="דוח חודשי PDF" style="width: 420px; max-width: 95vw">
+      <n-form label-placement="top">
+        <n-form-item label="חודש הדוח">
+          <n-date-picker v-model:value="monthlyReportMonthMs" type="month" style="width: 100%" />
+        </n-form-item>
+      </n-form>
+      <template #action>
+        <n-button @click="showMonthlyReport = false">ביטול</n-button>
+        <n-button type="primary" :loading="monthlyReportLoading" @click="doMonthlyReport">הורד PDF</n-button>
+      </template>
+    </n-modal>
     <!-- ── Export wizard modal ──────────────────────────────────────────── -->
     <n-modal v-model:show="showExport" preset="card" style="width:640px; max-width:95vw" :mask-closable="false">
       <template #header>
         <div class="export-header">
-          <span>ייצוא בדיקות ל-Excel</span>
+          <span>ייצוא חוזים ותסקירים</span>
           <div class="export-steps">
             <div v-for="(s, i) in exportSteps" :key="s.key" class="export-step" :class="{ 'export-step--active': exportStep === i, 'export-step--done': exportStep > i }">
               <div class="export-step__dot">{{ exportStep > i ? '✓' : i + 1 }}</div>
@@ -192,9 +207,14 @@
         <h3 class="export-section-title">בחר פורמט ייצוא</h3>
         <div class="format-cards">
           <div class="format-card" :class="{ 'format-card--active': exportFormat === 'csv' }" @click="exportFormat = 'csv'">
+            <div class="format-card__icon">🧾</div>
+            <div class="format-card__name">CSV</div>
+            <div class="format-card__desc">קובץ נתונים פשוט לפתיחה בכל מערכת</div>
+          </div>
+          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'xlsx' }" @click="exportFormat = 'xlsx'">
             <div class="format-card__icon">📊</div>
             <div class="format-card__name">Excel (.xlsx)</div>
-            <div class="format-card__desc">קובץ Excel עם כיוון מימין לשמאל</div>
+            <div class="format-card__desc">גיליון Excel עם כיוון מימין לשמאל</div>
           </div>
           <div class="format-card" :class="{ 'format-card--active': exportFormat === 'pdf' }" @click="exportFormat = 'pdf'">
             <div class="format-card__icon">📄</div>
@@ -788,8 +808,30 @@ async function saveReminder() {
 
 // ── Export wizard ─────────────────────────────────────────────────────────────
 const showExport = ref(false);
+const showMonthlyReport = ref(false);
+const monthlyReportLoading = ref(false);
+const monthlyReportMonthMs = ref(Date.now());
+
+function openMonthlyReport() {
+  monthlyReportMonthMs.value = Date.now();
+  showMonthlyReport.value = true;
+}
+
+async function doMonthlyReport() {
+  const date = new Date(monthlyReportMonthMs.value ?? Date.now());
+  monthlyReportLoading.value = true;
+  try {
+    await api.contracts.downloadMonthlyReport({ year: date.getFullYear(), month: date.getMonth() + 1, kind: "all" });
+    showMonthlyReport.value = false;
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    monthlyReportLoading.value = false;
+  }
+}
+
 const exportStep = ref(0);
-const exportFormat = ref<"csv" | "pdf">("csv");
+const exportFormat = ref<"csv" | "xlsx" | "pdf">("csv");
 const exportSteps = [
   { key: "filter", label: "סינון" },
   { key: "columns", label: "עמודות" },
@@ -894,7 +936,7 @@ function doExport() {
     return cellValue(main, key);
   }
 
-  if (exportFormat.value === "csv") {
+  if (exportFormat.value === "xlsx") {
     Promise.all([import("xlsx"), import("jszip")]).then(async ([{ utils, write }, { default: JSZip }]) => {
       const wsData = [
         allCols.map((c) => c.label),
@@ -942,10 +984,22 @@ function doExport() {
       const blob = new Blob([outBuf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `inspections-${dateStr}.xlsx`;
+      a.download = `contracts-${dateStr}.xlsx`;
       a.click();
       URL.revokeObjectURL(a.href);
     });
+  } else if (exportFormat.value === "csv") {
+    const lines = [
+      allCols.map((c) => csvQuote(c.label)).join(","),
+      ...expanded.map(({ main, eq }) => allCols.map((c) => csvQuote(getCell(main, eq, c.key))).join(",")),
+    ];
+    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `contracts-${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   } else {
     const thead = allCols.map((c) => `<th>${c.label}</th>`).join("");
     const tbody = expanded.map(({ main, eq }) =>

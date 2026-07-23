@@ -4,9 +4,9 @@
 <!--      <n-h2 style="margin: 0">תזכורות</n-h2>-->
       <n-space>
         <n-button :loading="store.loading" @click="store.fetch({ status: statusFilter.value ?? undefined, limit: 100 }, true)">↻ רענן</n-button>
-        <n-button @click="quickTest" :loading="testing" :disabled="!testEmail">
-          🧪 תזכורת בדיקה
-        </n-button>
+<!--        <n-button @click="quickTest" :loading="testing" :disabled="!testEmail">-->
+<!--          🧪 תזכורת בדיקה-->
+<!--        </n-button>-->
         <n-button type="primary" :loading="loadingEmailTemplates" @click="openCreate">+ תזכורת חדשה</n-button>
       </n-space>
     </n-space>
