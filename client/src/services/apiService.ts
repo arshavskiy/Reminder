@@ -209,6 +209,7 @@ export const api = {
     },
     create: (body: Partial<Reminder>) => post<Reminder>("/reminders", body),
     update: (id: number, body: Partial<Reminder>) => put<Reminder>(`/reminders/${id}`, body),
+    delete: (id: number) => del(`/reminders/${id}`),
     dismiss: (id: number) => post(`/reminders/${id}/dismiss`),
     snooze: (id: number, until: string) => post(`/reminders/${id}/snooze`, { until }),
     sendNow: (id: number) => post<{ success: boolean; error?: string }>(`/reminders/${id}/send-now`),

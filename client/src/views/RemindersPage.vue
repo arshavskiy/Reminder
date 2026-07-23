@@ -146,6 +146,7 @@ import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";
 import {useAuthStore} from "../stores/auth.js";
 import {api} from "../services/apiService.js";
+import {useConfirm} from "../composables/useConfirm.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import type {Client, EmailTemplate, ReminderWithContext} from "@shared/types.js";
 
@@ -153,6 +154,7 @@ const store = useRemindersStore();
 const settingsStore = useSettingsStore();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
+const { confirm } = useConfirm();
 
 // testEmail: admin can configure a custom address in settings; all others default to their own email
 const testEmail = ref<string | null>(authStore.user?.email || "");
@@ -312,6 +314,23 @@ async function doSaveDate() {
   }
 }
 
+function confirmDelete(row: ReminderWithContext) {
+  confirm({
+    title: "מחיקת תזכורת",
+    content: `למחוק את התזכורת "${row.title}"? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await store.remove(row.id);
+        message.success("התזכורת נמחקה");
+        load();
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
+}
+
 // ── Quick test: open modal to pick template, then send ─────────────────────
 function quickTest() {
   if (!testEmail.value) return;
@@ -370,7 +389,7 @@ const columns = [
   {
     title: "פעולות",
     key: "actions",
-    width: 300,
+    width: 380,
     render: (row: ReminderWithContext) =>
       h(NSpace, { size: "small" }, {
         default: () => [
@@ -398,6 +417,12 @@ const columns = [
                 onClick: async () => { await store.dismiss(row.id); load(); },
               }, { default: () => "בטל" })
             : null,
+          h(NButton, {
+            size: "small",
+            type: "error",
+            ghost: true,
+            onClick: () => confirmDelete(row),
+          }, { default: () => "🗑 מחק" }),
         ],
       }),
   },

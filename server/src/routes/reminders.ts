@@ -318,6 +318,22 @@ export function registerReminderRoutes(app: express.Application) {
     res.json(flatDoc(updated));
   });
 
+  // DELETE /api/reminders/:id
+  app.delete("/api/reminders/:id", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    await col("reminders").deleteOne({ ...idFilter(req.params.id), user_id: userId });
+    res.json({ ok: true });
+  });
+
   // POST /api/reminders/:id/dismiss
   app.post("/api/reminders/:id/dismiss", async (req, res) => {
     let userId: string;

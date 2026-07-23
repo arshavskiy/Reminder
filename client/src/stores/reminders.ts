@@ -24,9 +24,14 @@ export const useRemindersStore = defineStore("reminders", () => {
     rows.value = rows.value.filter((r) => r.id !== id);
   }
 
+  async function remove(id: number) {
+    await api.reminders.delete(id);
+    rows.value = rows.value.filter((r) => r.id !== id);
+  }
+
   async function sendNow(id: number) {
     return api.reminders.sendNow(id);
   }
 
-  return { rows, total, loading, fetch, dismiss, sendNow };
+  return { rows, total, loading, fetch, dismiss, remove, sendNow };
 });
