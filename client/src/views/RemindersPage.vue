@@ -92,8 +92,14 @@
         <n-form-item label="כותרת" required>
           <n-input v-model:value="newReminder.title" placeholder="לדוגמה: חידוש ביטוח רכב" />
         </n-form-item>
-        <n-form-item label="תאריך תזכורת (מתי לשלוח)" required>
-          <n-date-picker v-model:value="triggerDateMs" type="date" style="width: 100%" />
+        <n-form-item label="מועד התזכורת הבאה" required>
+          <n-select v-model:value="reminderDateMode" :options="reminderDateModeOptions" />
+        </n-form-item>
+        <n-form-item v-if="reminderDateMode === 'months'" label="בעוד כמה חודשים" required>
+          <n-select v-model:value="reminderIntervalMonths" :options="reminderIntervalOptions" />
+        </n-form-item>
+        <n-form-item v-else label="תאריך תזכורת מותאם אישית" required>
+          <n-date-picker v-model:value="reminderCustomDateMs" type="date" style="width: 100%" />
         </n-form-item>
         <n-form-item label="אימייל נמען" required>
           <n-input
@@ -205,6 +211,12 @@ function localDateToMs(dateStr: string): number {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(y, m - 1, d).getTime();
 }
+function addMonths(ms: number, months: number): number {
+  const date = new Date(ms);
+  date.setMonth(date.getMonth() + months);
+  return date.getTime();
+}
+
 function msToLocalDateStr(ms: number): string {
   const d = new Date(ms);
   const y = d.getFullYear();
@@ -231,6 +243,19 @@ const quickTestTemplateId = ref<string | null>(null);
 const creating = ref(false);
 const testing = ref(false);
 const triggerDateMs = ref<number | null>(Date.now());
+const reminderDateMode = ref<"months" | "date">("months");
+const reminderCustomDateMs = ref<number | null>(null);
+const reminderIntervalMonths = ref<4 | 6 | 12 | 14>(4);
+const reminderDateModeOptions = [
+  { label: "בעוד מספר חודשים מהיום", value: "months" },
+  { label: "בתאריך מותאם אישית", value: "date" },
+];
+const reminderIntervalOptions = [
+  { label: "4 חודשים", value: 4 },
+  { label: "6 חודשים", value: 6 },
+  { label: "12 חודשים", value: 12 },
+  { label: "14 חודשים", value: 14 },
+];
 const emailTemplates = ref<EmailTemplate[]>([]);
 const loadingEmailTemplates = ref(false);
 let emailTemplatesPromise: Promise<void> | null = null;
@@ -342,6 +367,9 @@ async function openCreate() {
   newReminderContractId.value = null;
   newReminderContracts.value = [];
   triggerDateMs.value = Date.now();
+  reminderDateMode.value = "months";
+  reminderCustomDateMs.value = null;
+  reminderIntervalMonths.value = 4;
   showCreate.value = true;
 }
 
@@ -379,7 +407,10 @@ function onPickContract(contractId: string | null) {
     const number = contract.contract_number ? ` ${contract.contract_number}` : "";
     newReminder.value.title = `${contract.contract_type || "תסקיר/חוזה"}${number}`.trim();
   }
-  if (contract.expiry_date) triggerDateMs.value = localDateToMs(contract.expiry_date);
+  if (contract.expiry_date) {
+    reminderDateMode.value = "date";
+    reminderCustomDateMs.value = localDateToMs(contract.expiry_date);
+  }
   if (contract.contact_email) newReminder.value.email_to = contract.contact_email;
   newReminder.value.email_template_id = pickEmailTemplate(contract)?.id ?? newReminder.value.email_template_id;
   if (!newReminder.value.body.trim()) {
@@ -450,8 +481,12 @@ async function doCreate() {
     message.warning("יש לבחור לקוח");
     return;
   }
-  if (!newReminder.value.title.trim() || !triggerDateMs.value) {
+  if (!newReminder.value.title.trim()) {
     message.warning("יש להזין כותרת ותאריך");
+    return;
+  }
+  if (reminderDateMode.value === "date" && !reminderCustomDateMs.value) {
+    message.warning("יש לבחור תאריך תזכורת");
     return;
   }
   if (!newReminder.value.email_to.trim()) {
@@ -460,7 +495,10 @@ async function doCreate() {
   }
   creating.value = true;
   try {
-    const triggerDate = msToLocalDateStr(triggerDateMs.value);
+    const triggerDateMsValue = reminderDateMode.value === "date"
+      ? reminderCustomDateMs.value!
+      : addMonths(Date.now(), reminderIntervalMonths.value);
+    const triggerDate = msToLocalDateStr(triggerDateMsValue);
     const contract = selectedContract();
     const equipment = firstContractEquipment(contract);
     await api.reminders.create({

@@ -2,7 +2,7 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {generateContractReminders} from "../reminders/scheduler";
-import {upsertEquipmentForClient, type EquipmentInput} from "../reminders/equipmentUpsert";
+import {type EquipmentInput, upsertEquipmentForClient} from "../reminders/equipmentUpsert";
 import {HTTPException, requireAuth} from "../auth/middleware";
 
 export function registerContractRoutes(app: express.Application) {

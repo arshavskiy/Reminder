@@ -60,7 +60,8 @@ export interface HydraulicCheckRequest {
     load_radius?: string;
     description?: string;
   };
-  check_date?: string;`r`n  next_inspection_date?: string;
+  check_date?: string;
+  next_inspection_date?: string;
   interval_months?: 4 | 6 | 12 | 14;
 }
 

@@ -109,6 +109,7 @@
               :key="row.id"
               :bulk-mode="bulkMode"
               :kind="kind"
+              :inspector-number="engineerProfile?.inspector_number"
               :reminders="remindersFor(String(row.id))"
               :row="row"
               :selected="selectedIds.has(String(row.id))"
@@ -531,6 +532,17 @@
         </n-grid>
 
 
+
+        <n-divider />
+        <n-form-item label="מועד התזכורת הבאה">
+          <n-select v-model:value="hydraulicReminderMode" :options="hydraulicReminderModeOptions" />
+        </n-form-item>
+        <n-form-item v-if="hydraulicReminderMode === 'months'" label="בעוד כמה חודשים">
+          <n-select v-model:value="hydraulicIntervalMonths" :options="hydraulicIntervalOptions" />
+        </n-form-item>
+        <n-form-item v-else label="תאריך תזכורת מותאם אישית" required>
+          <n-date-picker v-model:value="hydraulicReminderDateMs" type="date" style="width: 100%" />
+        </n-form-item>
       </n-form>
       <template #action>
         <n-button @click="showHydraulicCheck = false">ביטול</n-button>
@@ -611,7 +623,7 @@ function bulkDelete() {
         message.success(`${count} רשומות נמחקו`);
         selectedIds.value = new Set();
         bulkMode.value = false;
-        refresh();
+        await Promise.all([refresh(), loadReminders()]);
       } catch (e) {
         message.error(String(e));
       } finally {
@@ -1037,8 +1049,25 @@ const hydraulicCategoryOptions: { label: string; value: EquipmentCategory }[] = 
   { label: "מעליות", value: "ladder" },
 ];
 
+const hydraulicReminderMode = ref<"months" | "date">("months");
+const hydraulicReminderDateMs = ref<number | null>(null);
+const hydraulicIntervalMonths = ref<4 | 6 | 12 | 14>(4);
+const hydraulicReminderModeOptions = [
+  { label: "בעוד מספר חודשים מהיום", value: "months" },
+  { label: "בתאריך מותאם אישית", value: "date" },
+];
+const hydraulicIntervalOptions = [
+  { label: "4 חודשים", value: 4 },
+  { label: "6 חודשים", value: 6 },
+  { label: "12 חודשים", value: 12 },
+  { label: "14 חודשים", value: 14 },
+];
+
 function openHydraulicCheck() {
   hydraulicClientId.value = null;
+  hydraulicReminderMode.value = "months";
+  hydraulicReminderDateMs.value = null;
+  hydraulicIntervalMonths.value = 4;
 
   hydraulicForm.value = {
     contract_number: suggestedHydraulicContractNumber.value || "",
@@ -1075,19 +1104,27 @@ async function doCreateHydraulicCheck() {
     message.warning("יש לבחור לקוח קיים או להזין שם עסק");
     return;
   }
+  if (hydraulicReminderMode.value === "date" && !hydraulicReminderDateMs.value) {
+    message.warning("יש לבחור תאריך תזכורת");
+    return;
+  }
   creatingHydraulicCheck.value = true;
   try {
     const payload: HydraulicCheckRequest = {
       ...hydraulicForm.value,
       contract_number: hydraulicForm.value.contract_number?.trim() || undefined,
       client_id: hydraulicClientId.value ?? undefined,
+      interval_months: hydraulicIntervalMonths.value,
+      next_inspection_date: hydraulicReminderMode.value === "date"
+        ? new Date(hydraulicReminderDateMs.value!).toISOString().slice(0, 10)
+        : undefined,
 
     };
     const result = await api.reminders.createHydraulicCheck(payload);
     message.success(`נוצרו ${result.reminders.length} תזכורות עבור ${result.client.display_name}`);
     showHydraulicCheck.value = false;
     loadClients(true);
-    refresh();
+    await Promise.all([refresh(), loadReminders()]);
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -1136,8 +1173,8 @@ function load() {
   store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value });
 }
 
-function refresh() {
-  store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value }, true);
+async function refresh() {
+  await store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value }, true);
 }
 
 onMounted(async () => {
@@ -1247,7 +1284,7 @@ async function saveForm() {
       message.success("הרשומה נוצרה בהצלחה");
     }
     showForm.value = false;
-    refresh();
+    await Promise.all([refresh(), loadReminders()]);
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -1265,7 +1302,7 @@ async function doDelete() {
   try {
     await store.remove(deletingRow.value.id);
     message.success("הרשומה נמחקה");
-    refresh();
+    await Promise.all([refresh(), loadReminders()]);
   } catch (e) {
     message.error(String(e));
   } finally {

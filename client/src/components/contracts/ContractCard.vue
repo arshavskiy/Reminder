@@ -118,7 +118,8 @@ import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
 const router = useRouter();
 
 const props = defineProps<{
-  row: ContractWithClient;`r`n  inspectorNumber?: string;
+  row: ContractWithClient;
+  inspectorNumber?: string;
   kind: "contract" | "inspection" | "all";
   bulkMode: boolean;
   selected: boolean;
@@ -127,6 +128,13 @@ const props = defineProps<{
   showActions?: boolean;
   showReminderActions?: boolean;
 }>();
+
+const displayContractNumber = computed(() => {
+  const number = props.row.contract_number?.trim();
+  if (!number || number.includes("/")) return number;
+  const inspector = props.kind === "inspection" ? props.inspectorNumber?.trim() : undefined;
+  return inspector ? `${inspector}/${number}` : number;
+});
 
 const emit = defineEmits<{
   "toggle-select": [id: string];
