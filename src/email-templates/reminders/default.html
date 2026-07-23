@@ -40,6 +40,10 @@
       {{#if expiry_date}}<tr class="field"><td class="label">תאריך פקיעה</td><td class="value">{{expiry_date}}</td></tr>{{/if}}
       {{#if trigger_date}}<tr class="field"><td class="label">תאריך התזכורת</td><td class="value">{{trigger_date}}</td></tr>{{/if}}
       {{#if amount}}<tr class="field"><td class="label">סכום</td><td class="value">{{amount}} {{currency}}</td></tr>{{/if}}
+      {{#if equipment_type}}<tr class="field"><td class="label">סוג ציוד</td><td class="value">{{equipment_type}}</td></tr>{{/if}}
+      {{#if manufacturer}}<tr class="field"><td class="label">יצרן</td><td class="value">{{manufacturer}}</td></tr>{{/if}}
+      {{#if model}}<tr class="field"><td class="label">דגם</td><td class="value">{{model}}</td></tr>{{/if}}
+      {{#if serial_number}}<tr class="field"><td class="label">מס"ד סידורי</td><td class="value">{{serial_number}}</td></tr>{{/if}}
     </table>
 
     {{#if body}}<div class="body-text"> {{body}} </div>{{/if}}

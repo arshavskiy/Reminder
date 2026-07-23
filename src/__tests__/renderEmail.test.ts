@@ -114,7 +114,7 @@ describe("reminder email templates — full data fill", () => {
   // Mirrors buildEmailVars() in reminders/emailSender.ts when the reminder is
   // linked to both a client and a document/contract.
   const FULL_VARS: EmailVars = {
-    title: "בדיקה הבאה ב-2026-10-22 (יעד: 2026-11-22)",
+    title: "בדיקה הבאה ב-2026-11-22",
     trigger_date: "2026-10-22",
     advance_days: 30,
     body: "הערה לבדיקה",
@@ -147,7 +147,7 @@ describe("reminder email templates — full data fill", () => {
   // hydraulic-check flow, or the equipment-XLSX-import stub-contract path)
   // have document_id: null, so those fields are never present.
   const MINIMAL_VARS: EmailVars = {
-    title: "בדיקה הבאה ב-2026-10-22 (יעד: 2026-11-22)",
+    title: "בדיקה הבאה ב-2026-11-22",
     trigger_date: "2026-10-22",
     advance_days: 30,
     body: null,

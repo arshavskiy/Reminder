@@ -110,11 +110,15 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("contracts").createIndex({ user_id: 1 });
   await db.collection("contracts").createIndex({ expiry_date: 1 });
   await db.collection("contracts").createIndex({ status: 1 });
-  // Drop old non-unique document_id index if present, then recreate as unique+sparse
+  // Unique per real document_id, but many manual contracts (document_id: null)
+  // must coexist. A sparse index still indexes explicit nulls, so a second
+  // manual contract collides; a partial index scoped to string document_ids
+  // enforces uniqueness only where it matters. Recreate if the old
+  // sparse/plain index is present.
   try { await db.collection("contracts").dropIndex("document_id_1"); } catch { /* didn't exist */ }
   await db.collection("contracts").createIndex(
     { document_id: 1 },
-    { unique: true, sparse: true }
+    { unique: true, partialFilterExpression: { document_id: { $type: "string" } } }
   );
   await db.collection("contracts").createIndex({ client_id: 1 });
 

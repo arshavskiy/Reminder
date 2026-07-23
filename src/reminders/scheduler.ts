@@ -344,7 +344,10 @@ export async function generateContractReminders(
     // clamp to today so the scheduler fires it on the next check.
     const triggerDate = calculatedTrigger < today ? today : calculatedTrigger;
 
-    const title = `${baseLabel} ב-${triggerDate} (יעד: ${expiryDate})`;
+    // The date shown must be the inspection/expiry target ("בדיקה הבאה ב-…"),
+    // not the trigger date (when the email fires, e.g. 30 days earlier), which
+    // otherwise reads as if the inspection itself is on the earlier date.
+    const title = `${baseLabel} ב-${expiryDate}`;
 
     await col("reminders").insertOne({
       ...(userId && { user_id: userId }),

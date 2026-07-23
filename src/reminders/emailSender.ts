@@ -69,6 +69,13 @@ function buildTransport() {
     tls: {
       rejectUnauthorized: s.smtpRejectUnauthorized !== false,
     },
+    // Without explicit timeouts, an unreachable/slow SMTP host (common on
+    // some hosting providers' outbound network) leaves send-now hanging for
+    // nodemailer's default ~2 minutes with no feedback to the user, instead
+    // of failing fast with a clear error.
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
   });
 }
 
@@ -78,6 +85,24 @@ function tryObjectId(id: string | number): any {
   } catch {
     return id;
   }
+}
+
+const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
+  lift: "מכונות הרמה",
+  accessory: "אביזרי הרמה",
+  scaffold: "פיגומים",
+  ladder: "מעליות",
+  balloon: "מעלונים",
+  intake: "קולטי אוויר",
+  extractor: "קולטי קיטור",
+  other: "אחר",
+};
+
+function applyEquipmentVars(vars: EmailVars, eq: any): void {
+  vars.equipment_type ??= EQUIPMENT_CATEGORY_LABELS[eq.category] ?? eq.category ?? null;
+  vars.manufacturer ??= eq.manufacturer;
+  vars.model ??= eq.model;
+  vars.serial_number ??= eq.serial_number;
 }
 
 async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars> {
@@ -92,6 +117,15 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
     from_name: settings.emailFromName,
   };
 
+  // Equipment fields stored directly on the reminder take precedence over the
+  // client/document fallbacks below (which use ??=), so the user's edits in the
+  // reminder modal are what actually get sent.
+  const r = reminder as any;
+  if (r.equipment_type) vars.equipment_type = EQUIPMENT_CATEGORY_LABELS[r.equipment_type] ?? r.equipment_type;
+  if (r.manufacturer) vars.manufacturer = r.manufacturer;
+  if (r.model) vars.model = r.model;
+  if (r.serial_number) vars.serial_number = r.serial_number;
+
   if (reminder.client_id) {
     const c = await col("clients").findOne({ _id: tryObjectId(reminder.client_id) } as any) as any;
     if (c) {
@@ -104,10 +138,13 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
 
     // Contract-only reminders (no document_id — e.g. the manual hydraulic-check
     // flow) never hit the document_id branch below, so pull the client's most
-    // recent contract here as a fallback for contract_number/expiry_date/etc.
+    // relevant contract here as a fallback for contract_number/expiry_date/etc.
     if (!reminder.document_id) {
+      const sourceId = (reminder as any).source_id;
       const ct = await col("contracts").findOne(
-        { client_id: reminder.client_id },
+        sourceId
+          ? { _id: tryObjectId(sourceId), client_id: reminder.client_id }
+          : { client_id: reminder.client_id },
         { sort: { _id: -1 } }
       ) as any;
       if (ct) {
@@ -118,6 +155,12 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
         vars.amount ??= ct.amount;
         vars.currency ??= ct.currency;
       }
+
+      const eq = await col("equipment").findOne(
+        { client_id: reminder.client_id },
+        { sort: { _id: -1 } }
+      ) as any;
+      if (eq) applyEquipmentVars(vars, eq);
     }
   }
 
@@ -149,6 +192,12 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
         vars.amount ??= ct.amount;
         vars.currency ??= ct.currency;
       }
+
+      const eq = await col("equipment").findOne(
+        { document_id: reminder.document_id },
+        { sort: { _id: -1 } }
+      ) as any;
+      if (eq) applyEquipmentVars(vars, eq);
     }
   }
 

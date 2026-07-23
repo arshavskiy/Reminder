@@ -17,9 +17,9 @@ function triggerDate(expiryIso: string, advanceDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function buildTitle(contractType: string | null, expiryDate: string, advanceDays: number): string {
-  const trigger = triggerDate(expiryDate, advanceDays);
-  return `${baseLabel(contractType)} ב-${trigger} (יעד: ${expiryDate})`;
+function buildTitle(contractType: string | null, expiryDate: string): string {
+  // Title shows the inspection/expiry target date, not the earlier trigger date.
+  return `${baseLabel(contractType)} ב-${expiryDate}`;
 }
 
 // ── tests ──────────────────────────────────────────────────────────────────────
@@ -68,9 +68,9 @@ describe("generateContractReminders — trigger date calculation", () => {
 });
 
 describe("generateContractReminders — reminder title format", () => {
-  it("formats title with label, trigger date, and target date", () => {
-    expect(buildTitle("תסקיר בדיקה", "2026-11-25", 30)).toBe("בדיקה הבאה ב-2026-10-26 (יעד: 2026-11-25)");
-    expect(buildTitle(null, "2026-11-25", 30)).toBe("פקיעת תוקף ב-2026-10-26 (יעד: 2026-11-25)");
+  it("formats title with label and the inspection/target date", () => {
+    expect(buildTitle("תסקיר בדיקה", "2026-11-25")).toBe("בדיקה הבאה ב-2026-11-25");
+    expect(buildTitle(null, "2026-11-25")).toBe("פקיעת תוקף ב-2026-11-25");
   });
 });
 
