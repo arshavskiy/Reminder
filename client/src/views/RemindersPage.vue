@@ -76,6 +76,19 @@
             @update:value="onPickClient"
           />
         </n-form-item>
+        <n-form-item label="תסקיר/חוזה (אופציונלי)">
+          <n-select
+            v-model:value="newReminderContractId"
+            :options="contractOptions"
+            :virtual-scroll="false"
+            :loading="loadingContracts"
+            :disabled="!newReminder.client_id"
+            placeholder="בחר תסקיר/חוזה לשליפת נתונים..."
+            filterable
+            clearable
+            @update:value="onPickContract"
+          />
+        </n-form-item>
         <n-form-item label="כותרת" required>
           <n-input v-model:value="newReminder.title" placeholder="לדוגמה: חידוש ביטוח רכב" />
         </n-form-item>
@@ -181,7 +194,7 @@ import {useAuthStore} from "../stores/auth.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type {Client, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
+import type {Client, EmailTemplate, EquipmentCategory, ReminderWithContext, ContractWithClient} from "@shared/types.js";
 
 // Date-only strings (YYYY-MM-DD) must round-trip through the date picker using
 // local calendar days, not UTC — new Date("2026-08-01").getTime() parses as
@@ -225,6 +238,9 @@ const newReminder = ref<{
   body: string;
   email_template_id: string | null;
 } | null>(null);
+const newReminderContractId = ref<string | null>(null);
+const newReminderContracts = ref<ContractWithClient[]>([]);
+const loadingContracts = ref(false);
 
 const clientOptions = computed(() =>
   clientsStore.rows.map((c: Client) => ({
@@ -238,6 +254,21 @@ const emailTemplateOptions = computed(() =>
     label: t.is_default ? `${t.name}  (ברירת מחדל)` : t.name,
     value: t.id,
   }))
+);
+
+const contractOptions = computed(() =>
+  newReminderContracts.value.map((c) => {
+    const parts = [
+      c.contract_number || "ללא מספר",
+      c.contract_type || "חוזה",
+      c.expiry_date ? `תוקף עד ${c.expiry_date}` : null,
+      contractEquipmentLabel(c),
+    ].filter(Boolean);
+    return {
+      label: parts.join(" · "),
+      value: String(c.id),
+    };
+  })
 );
 
 const emailPlaceholder = computed(() => {
@@ -281,20 +312,77 @@ function openCreate() {
     body: "",
     email_template_id: defaultTpl?.id ?? null,
   };
+  newReminderContractId.value = null;
+  newReminderContracts.value = [];
   triggerDateMs.value = Date.now();
   showCreate.value = true;
 }
 
-// When the user picks a client, auto-fill from that client's data — email,
-// a default title, and notes as the body — but only into fields still empty,
-// so nothing the user already typed gets overwritten.
-function onPickClient(clientId: number | null) {
+// When the user picks a client, fetch their contracts and auto-fill email/title/body.
+async function onPickClient(clientId: number | null) {
   if (!newReminder.value) return;
   const c = clientsStore.rows.find((x) => x.id === clientId);
   if (!c) return;
   if (c.email) newReminder.value.email_to = c.email;
   if (!newReminder.value.title.trim()) newReminder.value.title = `תזכורת עבור ${c.display_name}`;
   if (!newReminder.value.body.trim() && c.notes) newReminder.value.body = c.notes;
+
+  // Fetch contracts for this client
+  newReminderContractId.value = null;
+  newReminderContracts.value = [];
+  loadingContracts.value = true;
+  try {
+    const result = await api.contracts.list({ clientId: String(clientId), limit: 100 });
+    newReminderContracts.value = result.rows;
+  } catch {
+    newReminderContracts.value = [];
+  } finally {
+    loadingContracts.value = false;
+  }
+}
+
+// When the user picks a contract, auto-populate reminder fields from contract data.
+function onPickContract(contractId: string | null) {
+  if (!newReminder.value || !contractId) return;
+  const contract = newReminderContracts.value.find((c) => String(c.id) === contractId);
+  if (!contract) return;
+
+  // Use contract type + number as default title if user hasn't typed one
+  if (!newReminder.value.title.trim() || newReminder.value.title.startsWith("תזכורת עבור")) {
+    const number = contract.contract_number ? ` ${contract.contract_number}` : "";
+    newReminder.value.title = `${contract.contract_type || "תסקיר/חוזה"}${number}`.trim();
+  }
+  if (contract.expiry_date) triggerDateMs.value = localDateToMs(contract.expiry_date);
+  if (contract.contact_email) newReminder.value.email_to = contract.contact_email;
+  if (!newReminder.value.body.trim()) {
+    newReminder.value.body = contractBody(contract);
+  }
+}
+
+function contractEquipmentLabel(contract: ContractWithClient): string | null {
+  const first = contract._equipment?.[0];
+  return first?.name || contract.equipment_description || first?.model || first?.serial_number || null;
+}
+
+function contractBody(contract: ContractWithClient): string {
+  const lines = [
+    contract.contract_type ? `סוג: ${contract.contract_type}` : null,
+    contract.contract_number ? `מספר: ${contract.contract_number}` : null,
+    contract.start_date ? `תאריך התחלה: ${contract.start_date}` : null,
+    contract.expiry_date ? `תאריך תפוגה: ${contract.expiry_date}` : null,
+    contractEquipmentLabel(contract) ? `ציוד: ${contractEquipmentLabel(contract)}` : null,
+    contract.summary,
+  ].filter(Boolean);
+  return lines.join("\n");
+}
+
+function selectedContract(): ContractWithClient | null {
+  if (!newReminderContractId.value) return null;
+  return newReminderContracts.value.find((c) => String(c.id) === newReminderContractId.value) ?? null;
+}
+
+function firstContractEquipment(contract: ContractWithClient | null) {
+  return contract?._equipment?.[0] ?? null;
 }
 
 function normalizeEmailTo(input: string): string | null {
@@ -322,15 +410,23 @@ async function doCreate() {
   creating.value = true;
   try {
     const triggerDate = msToLocalDateStr(triggerDateMs.value);
+    const contract = selectedContract();
+    const equipment = firstContractEquipment(contract);
     await api.reminders.create({
-      source_type: "manual",
+      source_type: contract ? "contract_expiry" : "manual",
+      source_id: contract?.id ?? null,
       client_id: newReminder.value.client_id,
+      document_id: contract?.document_id ?? null,
       trigger_date: triggerDate,
       advance_days: 0,
       title: newReminder.value.title,
       body: newReminder.value.body || null,
       email_to: normalizeEmailTo(newReminder.value.email_to),
       email_template_id: newReminder.value.email_template_id,
+      equipment_type: (equipment?.category as EquipmentCategory | undefined) ?? null,
+      manufacturer: equipment?.manufacturer ?? null,
+      model: equipment?.model ?? null,
+      serial_number: equipment?.serial_number ?? null,
     });
     message.success("תזכורת נוצרה");
     showCreate.value = false;
