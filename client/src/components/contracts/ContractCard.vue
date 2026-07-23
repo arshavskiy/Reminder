@@ -47,6 +47,7 @@
       <div class="card__foot-col">
         <span class="kv"><strong>לקוח:</strong> {{ row.client_name ?? "-" }}</span>
         <span class="kv"><strong>תאריך התחלה:</strong> {{ formatDate(row.start_date) }}</span>
+        <span v-if="equipmentLabel" class="kv kv--equipment"><strong>ציוד נבדק:</strong> {{ equipmentLabel }}</span>
       </div>
       <div class="card__foot-col card__foot-col--end">
         <span class="kv">
@@ -144,6 +145,19 @@ const subtitle = computed(() =>
   props.row.summary ??
   `${props.row.contract_type ?? (props.kind === "inspection" ? "תסקיר" : "חוזה")} - ${props.row.client_name ?? "-"}`
 );
+
+// Short label for the tested equipment: prefer the structured _equipment rows
+// (manufacturer / model / serial), fall back to the free-text description.
+const equipmentLabel = computed<string | null>(() => {
+  const items = props.row._equipment ?? [];
+  if (items.length) {
+    const parts = items
+      .map((eq) => [eq.name, eq.manufacturer, eq.model, eq.serial_number].filter(Boolean).join(" · "))
+      .filter(Boolean);
+    if (parts.length) return parts.join(" | ");
+  }
+  return props.row.equipment_description || null;
+});
 
 function formatDate(d: string | null | undefined): string {
   if (!d) return "-";
@@ -297,6 +311,8 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
   gap: 6px;
 }
 .kv strong { color: var(--text-muted); font-weight: 500; }
+.kv--equipment { align-items: flex-start; }
+.kv--equipment strong { white-space: nowrap; }
 
 .expiry { font-weight: 600; }
 .expiry--ok { color: #1a7951; }

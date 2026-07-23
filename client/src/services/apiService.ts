@@ -197,7 +197,7 @@ export const api = {
     },
     expiring: (days = 30) => get<ContractWithClient[]>(`/contracts/expiring?days=${days}`),
     get: (id: string) => get<ContractWithClient>(`/contracts/${id}`),
-    byDocument: (documentId: string) => get<ContractWithClient[]>(`/contracts/by-document/${documentId}`),
+    byDocument: (documentId: string, force = false) => get<ContractWithClient[]>(`/contracts/by-document/${documentId}`, force),
     create: (body: Partial<Contract>) => post<Contract>("/contracts", body),
     update: (id: string, body: Partial<Contract>) => put<Contract>(`/contracts/${id}`, body),
     delete: (id: string) => del(`/contracts/${id}`),

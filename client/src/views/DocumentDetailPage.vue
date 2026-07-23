@@ -4,7 +4,7 @@
       <template #actions>
         <StatusBadge :status="doc.processing_status" />
         <n-button size="small" @click="$router.back()">   חזרה</n-button>
-        <n-button :loading="downloading" size="small" @click="openDownload">⬇ הורד</n-button>
+        <n-button :loading="downloading" size="small" @click="openDownload"> הורד</n-button>
         <n-button :loading="extracting" size="small" type="primary" @click="rerunExtract">✨ חלץ AI</n-button>
       </template>
     </PageHeader>
@@ -415,7 +415,10 @@ async function reloadDoc() {
 
 async function loadLinkedContracts(documentId: string) {
   try {
-    linkedContracts.value = await api.contracts.byDocument(documentId);
+    // Force-refresh: the linked contract's client_name/type is populated as
+    // extraction/linking completes, so a cached (often empty) response would
+    // leave the header showing dashes.
+    linkedContracts.value = await api.contracts.byDocument(documentId, true);
     if (linkedContracts.value.length) {
       await loadLinkedReminders();
     }
