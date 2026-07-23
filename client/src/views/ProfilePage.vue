@@ -115,7 +115,7 @@
               <div v-if="editingEngineer" style="flex:1;display:flex;flex-direction:column;gap:4px">
                 <n-input v-model:value="engineerForm.inspector_id_start" placeholder="לדוגמה: 16125" />
                 <span v-if="engineerForm.inspector_id_start" class="info-hint">
-                  🔒 מספר זה נקבע כבר. הבא יהיה: {{ engineerForm.inspector_id_start }}/{{ engineerProfile?.inspector_number ?? '—' }}
+                  🔒 מספר זה נקבע כבר. הבא יהיה: {{ engineerProfile?.inspector_number ?? '—' }}/{{ engineerForm.inspector_id_start }}
                 </span>
               </div>
               <div v-else class="info-val" style="display:flex;flex-direction:column;gap:4px">
@@ -491,7 +491,7 @@ const nextInspectionId = computed(() => {
   const start = parseInt(engineerProfile.value?.inspector_id_start ?? "0", 10);
   const total = inspectionStats.value.total;
   if (!start) return "—";
-  return `${start + total}/${engineerProfile.value?.inspector_number ?? "—"}`;
+  return `${engineerProfile.value?.inspector_number ?? "—"}/${start + total}`;
 });
 
 const editingEngineer = ref(false);

@@ -406,7 +406,7 @@ function fileKind(mime: string | null | undefined) {
 function rowActions() {
   return [
     { label: "📄 צפה", key: "view" },
-    { label: "⬇ הורד", key: "download" },
+    { label: " הורד", key: "download" },
     { label: "✨ חלץ AI", key: "extract" },
     { type: "divider", key: "d1" },
     { label: "🗑 מחק", key: "delete", props: { style: "color: var(--color-error, #d03050)" } },

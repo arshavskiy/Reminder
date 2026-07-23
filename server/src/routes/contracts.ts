@@ -32,6 +32,7 @@ export function registerContractRoutes(app: express.Application) {
         currency: body.currency ?? "ILS",
         counterparty: body.counterparty ?? null,
         summary: body.summary ?? null,
+        manual_fields: body.manual_fields ?? null,
         confidence: body.confidence ?? "medium",
         status: body.status ?? "active",
         created_at: now,
@@ -90,7 +91,13 @@ export function registerContractRoutes(app: express.Application) {
     const offset = parseInt((req.query.offset as string) ?? "0");
 
     const filter: Record<string, any> = { user_id: userId };
-    if (clientId) filter.client_id = clientId;
+    if (clientId) {
+      const clientIds: any[] = [clientId];
+      try {
+        clientIds.push(new ObjectId(clientId));
+      } catch { /* not an ObjectId-shaped client id */ }
+      filter.client_id = { $in: clientIds };
+    }
     if (status) filter.status = status;
     if (kind === "contract") {
       filter.contract_number = { $ne: null, $exists: true };
@@ -127,19 +134,20 @@ export function registerContractRoutes(app: express.Application) {
         if (docAny?.extracted_fields) {
           try { extractedFields = JSON.parse(docAny.extracted_fields); } catch {}
         }
+        const mergedFields = mergeContractFields(c, extractedFields);
         return {
           ...flatDoc(c),
           client_name: (client as any)?.display_name ?? null,
           document_name: docAny?.file_name ?? null,
-          contact_person: extractedFields.contact_person ?? null,
-          contact_phone: extractedFields.contact_phone ?? null,
-          contact_email: extractedFields.contact_email ?? null,
-          client_address: extractedFields.client_address ?? null,
-          po_box: extractedFields.po_box ?? null,
-          client_zipcode: extractedFields.client_zipcode ?? null,
-          equipment_description: extractedFields.equipment_description ?? null,
-          _confidence: extractedFields._confidence ?? null,
-          _equipment: Array.isArray(extractedFields._equipment) ? extractedFields._equipment : [],
+          contact_person: mergedFields.contact_person ?? null,
+          contact_phone: mergedFields.contact_phone ?? null,
+          contact_email: mergedFields.contact_email ?? null,
+          client_address: mergedFields.client_address ?? null,
+          po_box: mergedFields.po_box ?? null,
+          client_zipcode: mergedFields.client_zipcode ?? null,
+          equipment_description: mergedFields.equipment_description ?? null,
+          _confidence: mergedFields._confidence ?? null,
+          _equipment: Array.isArray(mergedFields._equipment) ? mergedFields._equipment : [],
         };
       })
     );
@@ -214,10 +222,25 @@ export function registerContractRoutes(app: express.Application) {
       c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
       c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
     ]);
+    const docAny = document as any;
+    let extractedFields: Record<string, any> = {};
+    if (docAny?.extracted_fields) {
+      try { extractedFields = JSON.parse(docAny.extracted_fields); } catch {}
+    }
+    const mergedFields = mergeContractFields(c, extractedFields);
     res.json({
       ...flatDoc(c),
       client_name: (client as any)?.display_name ?? null,
-      document_name: (document as any)?.file_name ?? null,
+      document_name: docAny?.file_name ?? null,
+      contact_person: mergedFields.contact_person ?? null,
+      contact_phone: mergedFields.contact_phone ?? null,
+      contact_email: mergedFields.contact_email ?? null,
+      client_address: mergedFields.client_address ?? null,
+      po_box: mergedFields.po_box ?? null,
+      client_zipcode: mergedFields.client_zipcode ?? null,
+      equipment_description: mergedFields.equipment_description ?? null,
+      _confidence: mergedFields._confidence ?? null,
+      _equipment: Array.isArray(mergedFields._equipment) ? mergedFields._equipment : [],
     });
   });
 
@@ -240,7 +263,7 @@ export function registerContractRoutes(app: express.Application) {
       const updates: Record<string, any> = { updated_at: new Date() };
       const fields = [
         "contract_number", "contract_type", "start_date", "expiry_date",
-        "amount", "currency", "counterparty", "summary", "status",
+        "amount", "currency", "counterparty", "summary", "status", "manual_fields",
       ];
       for (const f of fields) {
         if (body[f] !== undefined) updates[f] = body[f];
@@ -315,19 +338,20 @@ export function registerContractRoutes(app: express.Application) {
         if (docAny?.extracted_fields) {
           try { extractedFields = JSON.parse(docAny.extracted_fields); } catch {}
         }
+        const mergedFields = mergeContractFields(c, extractedFields);
         return {
           ...flatDoc(c),
           client_name: (client as any)?.display_name ?? null,
           document_name: docAny?.file_name ?? null,
-          contact_person: extractedFields.contact_person ?? null,
-          contact_phone: extractedFields.contact_phone ?? null,
-          contact_email: extractedFields.contact_email ?? null,
-          client_address: extractedFields.client_address ?? null,
-          po_box: extractedFields.po_box ?? null,
-          client_zipcode: extractedFields.client_zipcode ?? null,
-          equipment_description: extractedFields.equipment_description ?? null,
-          _confidence: extractedFields._confidence ?? null,
-          _equipment: Array.isArray(extractedFields._equipment) ? extractedFields._equipment : [],
+          contact_person: mergedFields.contact_person ?? null,
+          contact_phone: mergedFields.contact_phone ?? null,
+          contact_email: mergedFields.contact_email ?? null,
+          client_address: mergedFields.client_address ?? null,
+          po_box: mergedFields.po_box ?? null,
+          client_zipcode: mergedFields.client_zipcode ?? null,
+          equipment_description: mergedFields.equipment_description ?? null,
+          _confidence: mergedFields._confidence ?? null,
+          _equipment: Array.isArray(mergedFields._equipment) ? mergedFields._equipment : [],
         };
       })
     );
@@ -366,6 +390,23 @@ function tryObjectId(id: string): any {
   } catch {
     return id;
   }
+}
+
+function mergeContractFields(contract: any, extractedFields: Record<string, any>) {
+  const manualFields = contract?.manual_fields && typeof contract.manual_fields === "object"
+    ? contract.manual_fields
+    : {};
+  return {
+    ...manualFields,
+    ...Object.fromEntries(
+      Object.entries(extractedFields).filter(([, value]) =>
+        value !== undefined &&
+        value !== null &&
+        !(Array.isArray(value) && value.length === 0) &&
+        value !== ""
+      )
+    ),
+  };
 }
 
 function flatDoc(doc: any) {

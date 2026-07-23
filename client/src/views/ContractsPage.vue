@@ -9,6 +9,9 @@
         </p>
       </div>
       <div class="page__actions">
+        <button class="btn btn--primary" @click="openCreate">
+          {{ kind === "inspection" ? "תסקיר חדש" : "חוזה חדש" }}
+        </button>
         <button
           v-if="bulkMode && selectedIds.size > 0"
           :disabled="bulkSending"
@@ -42,9 +45,7 @@
         <button class="btn btn--ghost" :disabled="store.loading" @click="refresh" title="רענן">
           <span class="refresh-icon" :class="{ 'refresh-icon--spin': store.loading }">↻</span> רענן
         </button>
-        <button class="btn btn--primary" @click="openCreate">
-          + {{ kind === "inspection" ? "תסקיר חדש" : "חוזה חדש" }}
-        </button>
+
       </div>
     </header>
 
@@ -381,19 +382,30 @@
     </n-modal>
 
     <!-- Manual hydraulic-check modal: business + equipment + interval -->
-    <n-modal v-model:show="showHydraulicCheck" title="תסקיר חדש" :show-icon="false" preset="dialog" style="width: 560px">
+    <n-modal v-model:show="showHydraulicCheck" title="תסקיר חדש" :show-icon="false" preset="dialog" style="width: 760px; max-width: 95vw">
       <n-form label-placement="top" v-if="hydraulicForm">
-        <n-h4 style="margin: 0 0 4px">פרטי העסק</n-h4>
-        <n-form-item label="לקוח קיים">
-          <n-select
-            v-model:value="hydraulicClientId"
-            :options="clientOptions"
-            clearable
-            filterable
-            placeholder="בחר לקוח קיים, או השאר ריק ליצירת עסק חדש"
-            :loading="loadingClients"
-          />
-        </n-form-item>
+        <n-grid :cols="2" :x-gap="16">
+          <n-gi>
+            <n-form-item label="מספר תסקיר">
+              <n-input
+                v-model:value="hydraulicForm.contract_number"
+                placeholder="אוטומטי לפי מספר מפקח והמספר הבא"
+              />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="לקוח קיים">
+              <n-select
+                v-model:value="hydraulicClientId"
+                :options="clientOptions"
+                clearable
+                filterable
+                placeholder="בחר לקוח קיים, או השאר ריק ליצירת עסק חדש"
+                :loading="loadingClients"
+              />
+            </n-form-item>
+          </n-gi>
+        </n-grid>
         <template v-if="!hydraulicClientId">
           <n-form-item label="שם העסק" required>
             <n-input v-model:value="hydraulicForm.business.display_name" placeholder="לדוגמה: מפעל דן בע&quot;מ" />
@@ -405,12 +417,15 @@
               </n-form-item>
             </n-gi>
             <n-gi>
+              <n-form-item label="איש קשר">
+                <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="שם איש קשר" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
               <n-form-item label="טלפון">
                 <n-input v-model:value="hydraulicForm.business.phone" />
               </n-form-item>
             </n-gi>
-          </n-grid>
-          <n-grid :cols="2" :x-gap="16">
             <n-gi>
               <n-form-item label="אימייל">
                 <n-input v-model:value="hydraulicForm.business.email" placeholder="office@example.com" />
@@ -419,6 +434,50 @@
             <n-gi>
               <n-form-item label="כתובת">
                 <n-input v-model:value="hydraulicForm.business.address" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="ת.ד">
+                <n-input v-model:value="hydraulicForm.business.po_box" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="מיקוד">
+                <n-input v-model:value="hydraulicForm.business.client_zipcode" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+        </template>
+        <template v-else>
+          <n-grid :cols="2" :x-gap="16">
+            <n-gi>
+              <n-form-item label="איש קשר">
+                <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="אם שונה מפרטי הלקוח" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="אימייל לתזכורות">
+                <n-input v-model:value="hydraulicForm.business.email" placeholder="אם שונה מפרטי הלקוח" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="טלפון">
+                <n-input v-model:value="hydraulicForm.business.phone" placeholder="אם שונה מפרטי הלקוח" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="כתובת">
+                <n-input v-model:value="hydraulicForm.business.address" placeholder="אם שונה מפרטי הלקוח" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="ת.ד">
+                <n-input v-model:value="hydraulicForm.business.po_box" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="מיקוד">
+                <n-input v-model:value="hydraulicForm.business.client_zipcode" />
               </n-form-item>
             </n-gi>
           </n-grid>
@@ -435,22 +494,43 @@
             </n-form-item>
           </n-gi>
           <n-gi>
+            <n-form-item label="יצרן">
+              <n-input v-model:value="hydraulicForm.equipment.manufacturer" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="דגם">
+              <n-input v-model:value="hydraulicForm.equipment.model" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
             <n-form-item label="מספר סידורי">
               <n-input v-model:value="hydraulicForm.equipment.serial_number" />
             </n-form-item>
           </n-gi>
+          <n-gi>
+            <n-form-item label="עומס עבודה">
+              <n-input v-model:value="hydraulicForm.equipment.load_capacity_work" placeholder="לדוגמה: 3 טון" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="עומס בדיקה">
+              <n-input v-model:value="hydraulicForm.equipment.load_capacity_test" placeholder="לדוגמה: 3.75 טון" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="רדיוס / טווח">
+              <n-input v-model:value="hydraulicForm.equipment.load_radius" />
+            </n-form-item>
+          </n-gi>
+          <n-gi :span="2">
+            <n-form-item label="תיאור ציוד">
+              <n-input v-model:value="hydraulicForm.equipment.description" type="textarea" :rows="2" />
+            </n-form-item>
+          </n-gi>
         </n-grid>
 
-        <n-h4 style="margin: 16px 0 4px">מועד הבדיקה הבאה</n-h4>
-        <n-form-item label="תאריך בדיקה" required>
-          <n-date-picker v-model:value="hydraulicCheckDateMs" type="date" style="width: 100%" />
-        </n-form-item>
-        <n-form-item label="בעוד כמה זמן נדרשת הבדיקה הבאה?" required>
-          <n-select v-model:value="hydraulicForm.interval_months" :options="hydraulicIntervalOptions" />
-        </n-form-item>
-        <n-alert :show-icon="false" type="info" style="font-size: 12px">
-          תזכורות יישלחו לפי ימי ההתראה מראש שהוגדרו בהגדרות (ברירת מחדל: 30, 14, 3 ימים) לפני מועד הבדיקה.
-        </n-alert>
+
       </n-form>
       <template #action>
         <n-button @click="showHydraulicCheck = false">ביטול</n-button>
@@ -489,6 +569,7 @@ import {useConfirm} from "../composables/useConfirm.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
 import type {ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
+const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
 const router = useRouter();
 const message = useMessage();
@@ -895,6 +976,11 @@ const deletingRow = ref<ContractWithClient | null>(null);
 const clientOptions = ref<{ label: string; value: string }[]>([]);
 const clientsMap = ref<Map<string, import("@shared/types.js").Client>>(new Map());
 const loadingClients = ref(false);
+const engineerProfile = ref<{
+  inspector_number?: string;
+  inspector_id_start?: string;
+  next_inspection_seq?: number | null;
+} | null>(null);
 
 async function loadClients(force = false) {
   if (clientOptions.value.length && !force) return;
@@ -908,12 +994,42 @@ async function loadClients(force = false) {
   }
 }
 
+async function loadEngineerProfile() {
+  const res = await fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load engineer profile: ${res.status}`);
+  engineerProfile.value = await res.json();
+}
+
+function extractInspectionSequence(contractNumber: string | null | undefined, inspectorNumber: string): number | null {
+  if (!contractNumber) return null;
+  const [left, right] = contractNumber.split("/").map((part) => part.trim());
+  if (!left || !right) return null;
+  if (left === inspectorNumber && /^\d+$/.test(right)) return parseInt(right, 10);
+  if (right === inspectorNumber && /^\d+$/.test(left)) return parseInt(left, 10);
+  return null;
+}
+
+const suggestedHydraulicContractNumber = computed(() => {
+  const inspectorNumber = engineerProfile.value?.inspector_number?.trim();
+  const seed = parseInt(engineerProfile.value?.inspector_id_start ?? "0", 10);
+  if (!inspectorNumber || !Number.isFinite(seed) || seed <= 0) return "";
+  const maxFromRows = store.rows.reduce((max, row) => {
+    const seq = extractInspectionSequence(row.contract_number, inspectorNumber);
+    return seq && seq > max ? seq : max;
+  }, seed - 1);
+  const storedSeq = Number.isFinite(Number(engineerProfile.value?.next_inspection_seq))
+    ? Number(engineerProfile.value?.next_inspection_seq)
+    : seed - 1;
+  const nextSeq = Math.max(seed, maxFromRows + 1, storedSeq + 1);
+  return `${inspectorNumber}/${nextSeq}`;
+});
+
 // ── Manual hydraulic-check: business + equipment + interval ────────────────
 const showHydraulicCheck = ref(false);
 const creatingHydraulicCheck = ref(false);
 const hydraulicForm = ref<HydraulicCheckRequest | null>(null);
 const hydraulicClientId = ref<string | null>(null);
-const hydraulicCheckDateMs = ref<number | null>(null);
+
 
 const hydraulicCategoryOptions: { label: string; value: EquipmentCategory }[] = [
   { label: "מכונות הרמה", value: "lift" },
@@ -921,19 +1037,32 @@ const hydraulicCategoryOptions: { label: string; value: EquipmentCategory }[] = 
   { label: "מעליות", value: "ladder" },
 ];
 
-const hydraulicIntervalOptions = [
-  { label: "4 חודשים", value: 4 },
-  { label: "6 חודשים", value: 6 },
-  { label: "12 חודשים", value: 12 },
-  { label: "14 חודשים", value: 14 },
-];
-
 function openHydraulicCheck() {
   hydraulicClientId.value = null;
-  hydraulicCheckDateMs.value = Date.now();
+
   hydraulicForm.value = {
-    business: { display_name: "", id_number: "", email: "", phone: "", address: "" },
-    equipment: { category: "lift", name: "", serial_number: "" },
+    contract_number: suggestedHydraulicContractNumber.value || "",
+    business: {
+      display_name: "",
+      id_number: "",
+      contact_person: "",
+      email: "",
+      phone: "",
+      address: "",
+      po_box: "",
+      client_zipcode: "",
+    },
+    equipment: {
+      category: "lift",
+      name: "",
+      manufacturer: "",
+      model: "",
+      serial_number: "",
+      load_capacity_work: "",
+      load_capacity_test: "",
+      load_radius: "",
+      description: "",
+    },
     interval_months: 4,
   };
   loadClients();
@@ -946,16 +1075,13 @@ async function doCreateHydraulicCheck() {
     message.warning("יש לבחור לקוח קיים או להזין שם עסק");
     return;
   }
-  if (!hydraulicCheckDateMs.value) {
-    message.warning("יש לבחור תאריך בדיקה");
-    return;
-  }
   creatingHydraulicCheck.value = true;
   try {
     const payload: HydraulicCheckRequest = {
       ...hydraulicForm.value,
+      contract_number: hydraulicForm.value.contract_number?.trim() || undefined,
       client_id: hydraulicClientId.value ?? undefined,
-      check_date: new Date(hydraulicCheckDateMs.value).toISOString().slice(0, 10),
+
     };
     const result = await api.reminders.createHydraulicCheck(payload);
     message.success(`נוצרו ${result.reminders.length} תזכורות עבור ${result.client.display_name}`);
@@ -1019,6 +1145,7 @@ onMounted(async () => {
   store.fetchExpiring(30);
   loadClients();
   loadReminders();
+  loadEngineerProfile().catch(() => {});
   try {
     emailTemplates.value = await api.emailTemplates.list();
   } catch { /* non-fatal */ }

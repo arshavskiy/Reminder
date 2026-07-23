@@ -138,10 +138,13 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
 
     // Contract-only reminders (no document_id — e.g. the manual hydraulic-check
     // flow) never hit the document_id branch below, so pull the client's most
-    // recent contract here as a fallback for contract_number/expiry_date/etc.
+    // relevant contract here as a fallback for contract_number/expiry_date/etc.
     if (!reminder.document_id) {
+      const sourceId = (reminder as any).source_id;
       const ct = await col("contracts").findOne(
-        { client_id: reminder.client_id },
+        sourceId
+          ? { _id: tryObjectId(sourceId), client_id: reminder.client_id }
+          : { client_id: reminder.client_id },
         { sort: { _id: -1 } }
       ) as any;
       if (ct) {

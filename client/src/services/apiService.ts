@@ -36,13 +36,17 @@ export interface EquipmentHistoryEvent {
 
 export interface HydraulicCheckRequest {
   client_id?: string;
+  contract_number?: string;
   business: {
     display_name: string;
     entity_type?: string;
     id_number?: string;
+    contact_person?: string;
     email?: string;
     phone?: string;
     address?: string;
+    po_box?: string;
+    client_zipcode?: string;
     notes?: string;
   };
   equipment: {
@@ -51,9 +55,13 @@ export interface HydraulicCheckRequest {
     manufacturer?: string;
     model?: string;
     serial_number?: string;
+    load_capacity_work?: string;
+    load_capacity_test?: string;
+    load_radius?: string;
+    description?: string;
   };
   check_date?: string;
-  interval_months: 4 | 6 | 12 | 14;
+  interval_months?: 4 | 6 | 12 | 14;
 }
 
 export interface HydraulicCheckResult {

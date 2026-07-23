@@ -7,7 +7,7 @@
         <n-button @click="quickTest" :loading="testing" :disabled="!testEmail">
           🧪 תזכורת בדיקה
         </n-button>
-        <n-button type="primary" @click="openCreate">+ תזכורת חדשה</n-button>
+        <n-button type="primary" :loading="loadingEmailTemplates" @click="openCreate">+ תזכורת חדשה</n-button>
       </n-space>
     </n-space>
 
@@ -106,6 +106,7 @@
             v-model:value="newReminder.email_template_id"
             :options="emailTemplateOptions"
             :virtual-scroll="false"
+            :loading="loadingEmailTemplates"
             placeholder="ברירת מחדל"
             clearable
           />
@@ -231,8 +232,10 @@ const creating = ref(false);
 const testing = ref(false);
 const triggerDateMs = ref<number | null>(Date.now());
 const emailTemplates = ref<EmailTemplate[]>([]);
+const loadingEmailTemplates = ref(false);
+let emailTemplatesPromise: Promise<void> | null = null;
 const newReminder = ref<{
-  client_id: number | null;
+  client_id: string | null;
   title: string;
   email_to: string;
   body: string;
@@ -250,14 +253,23 @@ const clientOptions = computed(() =>
 );
 
 const emailTemplateOptions = computed(() =>
-  emailTemplates.value.map((t) => ({
+  emailTemplates.value.length
+    ? emailTemplates.value.map((t) => ({
     label: t.is_default ? `${t.name}  (ברירת מחדל)` : t.name,
     value: t.id,
   }))
+    : [{ label: "אין תבניות אימייל זמינות", value: "__empty__", disabled: true }]
 );
 
 const contractOptions = computed(() =>
-  newReminderContracts.value.map((c) => {
+  {
+    if (loadingContracts.value) {
+      return [{ label: "טוען תסקירים/חוזים...", value: "__loading__", disabled: true }];
+    }
+    if (newReminder.value?.client_id && newReminderContracts.value.length === 0) {
+      return [{ label: "אין תסקירים/חוזים ללקוח שנבחר", value: "__empty__", disabled: true }];
+    }
+    return newReminderContracts.value.map((c) => {
     const parts = [
       c.contract_number || "ללא מספר",
       c.contract_type || "חוזה",
@@ -268,7 +280,8 @@ const contractOptions = computed(() =>
       label: parts.join(" · "),
       value: String(c.id),
     };
-  })
+    });
+  }
 );
 
 const emailPlaceholder = computed(() => {
@@ -289,28 +302,42 @@ function load() {
   store.fetch({ status: statusFilter.value ?? undefined, limit: 100 }, true);
 }
 
+async function loadEmailTemplates() {
+  if (emailTemplates.value.length) return;
+  if (!emailTemplatesPromise) {
+    loadingEmailTemplates.value = true;
+    emailTemplatesPromise = api.emailTemplates.list()
+      .then((templates) => {
+        emailTemplates.value = templates;
+      })
+      .finally(() => {
+        loadingEmailTemplates.value = false;
+        emailTemplatesPromise = null;
+      });
+  }
+  await emailTemplatesPromise;
+}
+
 onMounted(async () => {
-  const [, templates] = await Promise.all([
+  await Promise.all([
     clientsStore.rows.length ? Promise.resolve() : clientsStore.fetch({ limit: 500 }),
-    api.emailTemplates.list(),
+    loadEmailTemplates(),
   ]);
-  emailTemplates.value = templates;
   load();
 });
 
 // ── Create new reminder ─────────────────────────────────────────────────────
-function openCreate() {
+async function openCreate() {
+  await loadEmailTemplates();
   // Default to the periodic-inspection template, since that's what most
   // manually-created reminders are for; fall back to whichever template is
   // marked is_default if it isn't found.
-  const inspectionTpl = emailTemplates.value.find((t) => t.name === "תסקיר בדיקה תקופתית");
-  const defaultTpl = inspectionTpl ?? emailTemplates.value.find((t) => t.is_default);
   newReminder.value = {
     client_id: null,
     title: "",
     email_to: "",
     body: "",
-    email_template_id: defaultTpl?.id ?? null,
+    email_template_id: pickEmailTemplate()?.id ?? null,
   };
   newReminderContractId.value = null;
   newReminderContracts.value = [];
@@ -319,7 +346,7 @@ function openCreate() {
 }
 
 // When the user picks a client, fetch their contracts and auto-fill email/title/body.
-async function onPickClient(clientId: number | null) {
+async function onPickClient(clientId: string | null) {
   if (!newReminder.value) return;
   const c = clientsStore.rows.find((x) => x.id === clientId);
   if (!c) return;
@@ -354,9 +381,33 @@ function onPickContract(contractId: string | null) {
   }
   if (contract.expiry_date) triggerDateMs.value = localDateToMs(contract.expiry_date);
   if (contract.contact_email) newReminder.value.email_to = contract.contact_email;
+  newReminder.value.email_template_id = pickEmailTemplate(contract)?.id ?? newReminder.value.email_template_id;
   if (!newReminder.value.body.trim()) {
     newReminder.value.body = contractBody(contract);
   }
+}
+
+function pickEmailTemplate(contract?: ContractWithClient | null): EmailTemplate | null {
+  const text = `${contract?.contract_type ?? ""} ${contract?.document_name ?? ""}`;
+  const isInspection = /תסקיר|בדיקה|inspection/i.test(text);
+  const isContract = /חוזה|contract/i.test(text);
+  if (isInspection) {
+    return emailTemplates.value.find((t) => t.name.includes("תסקיר בדיקה תקופתית")) ??
+      emailTemplates.value.find((t) => t.name.includes("תסקיר")) ??
+      emailTemplates.value.find((t) => t.is_default) ??
+      emailTemplates.value[0] ??
+      null;
+  }
+  if (isContract) {
+    return emailTemplates.value.find((t) => t.name.includes("חוזה")) ??
+      emailTemplates.value.find((t) => t.is_default) ??
+      emailTemplates.value[0] ??
+      null;
+  }
+  return emailTemplates.value.find((t) => t.name.includes("תסקיר בדיקה תקופתית")) ??
+    emailTemplates.value.find((t) => t.is_default) ??
+    emailTemplates.value[0] ??
+    null;
 }
 
 function contractEquipmentLabel(contract: ContractWithClient): string | null {

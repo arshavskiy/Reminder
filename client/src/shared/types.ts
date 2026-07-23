@@ -151,10 +151,31 @@ export interface Contract {
   currency: string;
   counterparty: string | null;
   summary: string | null;
+  manual_fields?: ContractManualFields | null;
   confidence: "high" | "medium" | "low";
   status: ContractStatus;
   created_at: string;
   updated_at: string;
+}
+
+export interface ContractManualFields {
+  contact_person?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  client_address?: string | null;
+  po_box?: string | null;
+  client_zipcode?: string | null;
+  equipment_description?: string | null;
+  _equipment?: Array<{
+    name: string;
+    manufacturer: string | null;
+    model: string | null;
+    serial_number: string | null;
+    load_capacity_work: string[];
+    load_capacity_test: string[];
+    load_radius: string[];
+    category: string;
+  }>;
 }
 
 export interface Reminder {
