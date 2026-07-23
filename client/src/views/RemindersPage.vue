@@ -82,7 +82,7 @@
         <n-form-item label="תאריך תזכורת (מתי לשלוח)" required>
           <n-date-picker v-model:value="triggerDateMs" type="date" style="width: 100%" />
         </n-form-item>
-        <n-form-item label="אימייל נמען">
+        <n-form-item label="אימייל נמען" required>
           <n-input
             v-model:value="newReminder.email_to"
             :placeholder="emailPlaceholder"
@@ -116,7 +116,7 @@
         <n-form-item label="תאריך שליחה" required>
           <n-date-picker v-model:value="editDateMs" type="date" style="width: 100%" />
         </n-form-item>
-        <n-form-item label="אימייל נמען">
+        <n-form-item label="אימייל נמען" required>
           <n-input v-model:value="editEmailTo" placeholder="כתובת אימייל אחת או יותר, מופרדות בפסיק" />
         </n-form-item>
         <n-form-item label="תבנית אימייל">
@@ -278,6 +278,10 @@ async function doCreate() {
     message.warning("יש להזין כותרת ותאריך");
     return;
   }
+  if (!newReminder.value.email_to.trim()) {
+    message.warning("יש להזין כתובת אימייל");
+    return;
+  }
   creating.value = true;
   try {
     const triggerDate = new Date(triggerDateMs.value).toISOString().slice(0, 10);
@@ -329,6 +333,10 @@ function openEditDate(row: ReminderWithContext) {
 
 async function doSaveDate() {
   if (!editingReminder.value || !editDateMs.value) return;
+  if (!editEmailTo.value.trim()) {
+    message.warning("יש להזין כתובת אימייל");
+    return;
+  }
   savingDate.value = true;
   try {
     const triggerDate = new Date(editDateMs.value).toISOString().slice(0, 10);
