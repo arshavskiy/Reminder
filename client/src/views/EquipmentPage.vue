@@ -57,6 +57,15 @@
           placeholder="סינון לפי יצרן"
           style="width:200px"
         />
+        <n-select
+          v-model:value="filterClientId"
+          :options="clientOptions"
+          clearable
+          filterable
+          placeholder="סינון לפי לקוח"
+          style="width:200px"
+          @update:value="load(true)"
+        />
       </div>
 
       <!-- Category chips -->
@@ -359,6 +368,7 @@ const categoryOptions = categories
 
 const rows = ref<Equipment[]>([]);
 const filterManufacturer = ref<string | null>(null);
+const filterClientId = ref<string | null>(null);
 const stats = ref<Record<string, number>>({});
 const clients = ref<Client[]>([]);
 const loading = ref(false);
@@ -480,6 +490,7 @@ async function load(force = false) {
       api.equipment.list({
         category: category.value === "all" ? undefined : category.value,
         q: search.value || undefined,
+        client_id: filterClientId.value || undefined,
       }, force),
       api.equipment.stats(),
       api.clients.list({ limit: 500 }),

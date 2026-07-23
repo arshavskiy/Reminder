@@ -24,20 +24,14 @@
     <p v-if="reminder.body" class="rqv__body">{{ reminder.body }}</p>
 
     <div class="rqv__actions">
-      <n-button
-        v-if="reminder.source_type === 'contract_expiry' && reminder.source_id"
-        block
-        size="small"
-        type="primary"
-        @click="$emit('navigate', { type: 'document', id: reminder.document_id! })"
-      >
-        פתח מסמך
+      <n-button block size="small" type="primary" @click="$emit('navigate', { type: 'reminder', id: reminder.id })">
+        פתח תזכורת
       </n-button>
       <n-button
-        v-else-if="reminder.document_id"
+        v-if="reminder.document_id"
         block
         size="small"
-        type="primary"
+        style="margin-top: 6px"
         @click="$emit('navigate', { type: 'document', id: reminder.document_id! })"
       >
         פתח מסמך
@@ -55,7 +49,7 @@ interface Props {
   reminder: ReminderWithContext;
 }
 const props = defineProps<Props>();
-defineEmits<{ (e: "navigate", target: { type: "contract" | "document"; id: number | string }): void }>();
+defineEmits<{ (e: "navigate", target: { type: "contract" | "document" | "reminder"; id: number | string }): void }>();
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "ממתינה",

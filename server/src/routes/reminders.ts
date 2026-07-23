@@ -151,6 +151,20 @@ export function registerReminderRoutes(app: express.Application) {
       return;
     }
 
+    try {
+      await handleHydraulicCheck(req, res, userId);
+    } catch (err) {
+      // A crash here (e.g. an unanticipated Mongo error) must not become an
+      // unhandled rejection — that can take the whole process down and hang
+      // every other in-flight request until the process watcher restarts it.
+      console.error("[reminders] hydraulic-check failed:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+      }
+    }
+  });
+
+  async function handleHydraulicCheck(req: express.Request, res: express.Response, userId: string) {
     const body = req.body as {
       client_id?: string;
       business?: {
@@ -236,26 +250,54 @@ export function registerReminderRoutes(app: express.Application) {
     }
 
     const equipmentName = body.equipment?.name?.trim() || clientDisplayName;
-    const serialNumber = body.equipment?.serial_number?.trim() || undefined;
-    const equipmentDoc = {
-      user_id: userId,
-      name: equipmentName,
-      category,
-      manufacturer: body.equipment?.manufacturer?.trim() || null,
-      model: body.equipment?.model?.trim() || null,
-      ...(serialNumber && { serial_number: serialNumber }),
-      capacity: null,
-      load_capacity_test: null,
-      load_radius: null,
-      description: null,
-      notes: null,
-      client_id: clientId,
-      document_id: null,
-      is_active: 1,
-      created_at: now,
-      updated_at: now,
-    };
-    const equipmentResult = await col("equipment").insertOne(equipmentDoc as any);
+    const requestedSerial = body.equipment?.serial_number?.trim() || undefined;
+
+    // serial_number has a globally unique index (not scoped per user), so two
+    // different accounts can legitimately submit the same value (a shared
+    // generic serial, a coincidence, or a retried request). Reusing another
+    // user's equipment record would leak data across tenants, so: if it's
+    // this user's own equipment, reuse it; if it belongs to someone else,
+    // drop the serial number rather than crash the whole request on a
+    // duplicate-key error.
+    let reusedEquipmentId: ObjectId | undefined;
+    let serialNumber = requestedSerial;
+    if (requestedSerial) {
+      const existingEquipment = await col("equipment").findOne({ serial_number: requestedSerial }) as any;
+      if (existingEquipment && existingEquipment.user_id === userId) {
+        await col("equipment").updateOne(
+          { _id: existingEquipment._id },
+          { $set: { client_id: clientId, updated_at: now } }
+        );
+        reusedEquipmentId = existingEquipment._id;
+      } else if (existingEquipment) {
+        serialNumber = undefined; // belongs to another user — drop it to avoid the unique-index conflict
+      }
+    }
+
+    let equipmentId: ObjectId;
+    if (reusedEquipmentId) {
+      equipmentId = reusedEquipmentId;
+    } else {
+      const equipmentDoc = {
+        user_id: userId,
+        name: equipmentName,
+        category,
+        manufacturer: body.equipment?.manufacturer?.trim() || null,
+        model: body.equipment?.model?.trim() || null,
+        ...(serialNumber && { serial_number: serialNumber }),
+        capacity: null,
+        load_capacity_test: null,
+        load_radius: null,
+        description: null,
+        notes: null,
+        client_id: clientId,
+        document_id: null,
+        is_active: 1,
+        created_at: now,
+        updated_at: now,
+      };
+      equipmentId = (await col("equipment").insertOne(equipmentDoc as any)).insertedId;
+    }
 
     const dueDate = new Date(checkDate);
     dueDate.setMonth(dueDate.getMonth() + intervalMonths);
@@ -286,11 +328,11 @@ export function registerReminderRoutes(app: express.Application) {
 
     res.status(201).json({
       client: flatDoc(await col("clients").findOne({ _id: tryObjectId(clientId) })),
-      equipment: flatDoc(await col("equipment").findOne({ _id: equipmentResult.insertedId })),
+      equipment: flatDoc(await col("equipment").findOne({ _id: equipmentId })),
       contract: flatDoc(await col("contracts").findOne({ _id: contractResult.insertedId })),
       reminders: reminders.map(flatDoc),
     });
-  });
+  }
 
   // PUT /api/reminders/:id
   app.put("/api/reminders/:id", async (req, res) => {

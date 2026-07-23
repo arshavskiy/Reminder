@@ -267,9 +267,10 @@ function shiftMonth(delta: number) {
 }
 function goToday() { cursor.value = new Date(); }
 
-function onNavigate(target: { type: "contract" | "document"; id: number | string }) {
+function onNavigate(target: { type: "contract" | "document" | "reminder"; id: number | string }) {
   if (target.type === "contract") router.push(`/contracts/${target.id}`);
   else if (target.type === "document") router.push(`/documents/${target.id}`);
+  else if (target.type === "reminder") router.push("/reminders");
 }
 </script>
 

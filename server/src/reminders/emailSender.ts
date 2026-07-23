@@ -69,6 +69,13 @@ function buildTransport() {
     tls: {
       rejectUnauthorized: s.smtpRejectUnauthorized !== false,
     },
+    // Without explicit timeouts, an unreachable/slow SMTP host (common on
+    // some hosting providers' outbound network) leaves send-now hanging for
+    // nodemailer's default ~2 minutes with no feedback to the user, instead
+    // of failing fast with a clear error.
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
   });
 }
 
@@ -78,6 +85,24 @@ function tryObjectId(id: string | number): any {
   } catch {
     return id;
   }
+}
+
+const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
+  lift: "מכונות הרמה",
+  accessory: "אביזרי הרמה",
+  scaffold: "פיגומים",
+  ladder: "מעליות",
+  balloon: "מעלונים",
+  intake: "קולטי אוויר",
+  extractor: "קולטי קיטור",
+  other: "אחר",
+};
+
+function applyEquipmentVars(vars: EmailVars, eq: any): void {
+  vars.equipment_type ??= EQUIPMENT_CATEGORY_LABELS[eq.category] ?? eq.category ?? null;
+  vars.manufacturer ??= eq.manufacturer;
+  vars.model ??= eq.model;
+  vars.serial_number ??= eq.serial_number;
 }
 
 async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars> {
@@ -118,6 +143,12 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
         vars.amount ??= ct.amount;
         vars.currency ??= ct.currency;
       }
+
+      const eq = await col("equipment").findOne(
+        { client_id: reminder.client_id },
+        { sort: { _id: -1 } }
+      ) as any;
+      if (eq) applyEquipmentVars(vars, eq);
     }
   }
 
@@ -149,6 +180,12 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
         vars.amount ??= ct.amount;
         vars.currency ??= ct.currency;
       }
+
+      const eq = await col("equipment").findOne(
+        { document_id: reminder.document_id },
+        { sort: { _id: -1 } }
+      ) as any;
+      if (eq) applyEquipmentVars(vars, eq);
     }
   }
 
