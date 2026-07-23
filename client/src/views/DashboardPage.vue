@@ -127,7 +127,10 @@ const stats = computed(() => store.stats);
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
 
 onMounted(async () => {
-  if (!store.stats) store.fetch();
+  // Always refetch fresh — stats can go stale after a client/contract/document
+  // is deleted elsewhere, and the cached singleton would otherwise show the old
+  // count until a hard reload.
+  store.fetch(true);
   if (!remindersStore.rows.length) remindersStore.fetch({ limit: 500 });
   try {
     expiryItems.value = await api.equipment.expiryCalendar();
