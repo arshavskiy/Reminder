@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import {existsSync, readFileSync} from "fs";
 import {extname, join} from "path";
+import {ObjectId} from "mongodb";
 import {getDataDir, getSettings} from "../settings";
 import {col} from "../db/db";
 import {type EmailVars, renderTemplate} from "../templates/renderEmail";
@@ -71,6 +72,14 @@ function buildTransport() {
   });
 }
 
+function tryObjectId(id: string | number): any {
+  try {
+    return new ObjectId(String(id));
+  } catch {
+    return id;
+  }
+}
+
 async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars> {
   const settings = getSettings();
   const vars: EmailVars = {
@@ -84,17 +93,36 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
   };
 
   if (reminder.client_id) {
-    const c = await col("clients").findOne({ _id: reminder.client_id } as any) as any;
+    const c = await col("clients").findOne({ _id: tryObjectId(reminder.client_id) } as any) as any;
     if (c) {
       vars.client_company = c.display_name;
+      vars.contact_person = c.contact_person;
       vars.contact_email = c.email;
       vars.contact_phone = c.phone;
       vars.client_address = c.address;
     }
+
+    // Contract-only reminders (no document_id — e.g. the manual hydraulic-check
+    // flow) never hit the document_id branch below, so pull the client's most
+    // recent contract here as a fallback for contract_number/expiry_date/etc.
+    if (!reminder.document_id) {
+      const ct = await col("contracts").findOne(
+        { client_id: reminder.client_id },
+        { sort: { _id: -1 } }
+      ) as any;
+      if (ct) {
+        vars.contract_number ??= ct.contract_number;
+        vars.contract_type ??= ct.contract_type;
+        vars.start_date ??= ct.start_date;
+        vars.expiry_date ??= ct.expiry_date;
+        vars.amount ??= ct.amount;
+        vars.currency ??= ct.currency;
+      }
+    }
   }
 
   if (reminder.document_id) {
-    const d = await col("documents").findOne({ _id: reminder.document_id } as any) as any;
+    const d = await col("documents").findOne({ _id: tryObjectId(reminder.document_id) } as any) as any;
     if (d) {
       vars.document_type = d.document_type;
       vars.document_number = d.document_number;
@@ -164,6 +192,13 @@ async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ sub
 
   const vars = await buildEmailVars(reminder);
   vars.logo_url = logoToDataUrl(tpl?.logo_path);
+
+  const filledKeys = Object.entries(vars).filter(([, v]) => v != null && v !== "").map(([k]) => k);
+  console.log(
+    `[emailSender] reminder=${reminder.id} client_id=${reminder.client_id ?? "—"} ` +
+    `document_id=${reminder.document_id ?? "—"} template=${tpl?.name ?? "(fallback)"} ` +
+    `filled_vars=[${filledKeys.join(", ")}]`
+  );
 
   if (!tpl) {
     return {

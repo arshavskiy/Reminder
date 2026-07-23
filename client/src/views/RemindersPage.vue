@@ -107,14 +107,26 @@
       </template>
     </n-modal>
 
-    <!-- Edit due date modal -->
-    <n-modal v-model:show="showEditDate" title="עריכת מועד שליחה" :show-icon="false" preset="dialog" style="width: 380px">
+    <!-- Edit reminder modal -->
+    <n-modal v-model:show="showEditDate" title="עריכת תזכורת" :show-icon="false" preset="dialog" style="width: 380px">
       <n-form label-placement="top" v-if="editingReminder">
         <n-form-item label="כותרת">
           <n-input :value="editingReminder.title" disabled />
         </n-form-item>
         <n-form-item label="תאריך שליחה" required>
           <n-date-picker v-model:value="editDateMs" type="date" style="width: 100%" />
+        </n-form-item>
+        <n-form-item label="אימייל נמען">
+          <n-input v-model:value="editEmailTo" placeholder="כתובת אימייל אחת או יותר, מופרדות בפסיק" />
+        </n-form-item>
+        <n-form-item label="תבנית אימייל">
+          <n-select
+            v-model:value="editEmailTemplateId"
+            :options="emailTemplateOptions"
+            :virtual-scroll="false"
+            placeholder="ברירת מחדל"
+            clearable
+          />
         </n-form-item>
       </n-form>
       <template #action>
@@ -220,8 +232,11 @@ onMounted(async () => {
 
 // ── Create new reminder ─────────────────────────────────────────────────────
 function openCreate() {
-  // Pre-select the default email template if there is one.
-  const defaultTpl = emailTemplates.value.find((t) => t.is_default);
+  // Default to the periodic-inspection template, since that's what most
+  // manually-created reminders are for; fall back to whichever template is
+  // marked is_default if it isn't found.
+  const inspectionTpl = emailTemplates.value.find((t) => t.name === "תסקיר בדיקה תקופתית");
+  const defaultTpl = inspectionTpl ?? emailTemplates.value.find((t) => t.is_default);
   newReminder.value = {
     client_id: null,
     title: "",
@@ -286,15 +301,29 @@ async function doCreate() {
   }
 }
 
-// ── Edit due date (trigger_date) ────────────────────────────────────────────
+// ── Edit reminder (trigger_date + email_to) ─────────────────────────────────
 const showEditDate = ref(false);
 const savingDate = ref(false);
 const editingReminder = ref<ReminderWithContext | null>(null);
 const editDateMs = ref<number | null>(null);
+const editEmailTo = ref("");
+const editEmailTemplateId = ref<string | null>(null);
+
+function displayEmailTo(emailTo: string | null | undefined): string {
+  if (!emailTo) return "";
+  try {
+    const parsed = JSON.parse(emailTo);
+    return Array.isArray(parsed) ? parsed.join(", ") : String(parsed);
+  } catch {
+    return emailTo;
+  }
+}
 
 function openEditDate(row: ReminderWithContext) {
   editingReminder.value = row;
   editDateMs.value = row.trigger_date ? new Date(row.trigger_date).getTime() : Date.now();
+  editEmailTo.value = displayEmailTo(row.email_to);
+  editEmailTemplateId.value = row.email_template_id ?? null;
   showEditDate.value = true;
 }
 
@@ -303,8 +332,12 @@ async function doSaveDate() {
   savingDate.value = true;
   try {
     const triggerDate = new Date(editDateMs.value).toISOString().slice(0, 10);
-    await api.reminders.update(editingReminder.value.id, { trigger_date: triggerDate });
-    message.success("מועד השליחה עודכן");
+    await api.reminders.update(editingReminder.value.id, {
+      trigger_date: triggerDate,
+      email_to: normalizeEmailTo(editEmailTo.value),
+      email_template_id: editEmailTemplateId.value,
+    });
+    message.success("התזכורת עודכנה");
     showEditDate.value = false;
     load();
   } catch (e) {
