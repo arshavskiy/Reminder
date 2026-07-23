@@ -3,25 +3,25 @@ import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {getSettings} from "../settings";
 import {
-  exchangeCodeForIdToken,
-  generateCodeVerifier,
-  generateState,
-  getGoogleAuthUrl,
-  verifyIdToken,
+    exchangeCodeForIdToken,
+    generateCodeVerifier,
+    generateState,
+    getGoogleAuthUrl,
+    verifyIdToken,
 } from "../auth/google";
 import {
-  consumeMagicLinkToken,
-  createSession,
-  extractSessionFromCookie,
-  revokeSession,
-  verifySession,
+    consumeMagicLinkToken,
+    createSession,
+    extractSessionFromCookie,
+    revokeSession,
+    verifySession,
 } from "../auth/session";
 import {
-  generateToken,
-  hashPassword,
-  sendPasswordResetEmail,
-  sendVerificationEmail,
-  verifyPassword,
+    generateToken,
+    hashPassword,
+    sendPasswordResetEmail,
+    sendVerificationEmail,
+    verifyPassword,
 } from "../auth/emailAuth";
 
 export function registerAuthRoutes(app: express.Application) {

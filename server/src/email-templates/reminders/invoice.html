@@ -48,14 +48,14 @@
     <div class="alert-badge">💳 {{advance_days}} ימים לתאריך התשלום</div>
 
     <div class="section-title">פרטי הלקוח</div>
-    <table class="fields" role="presentation" cellpadding="0" cellspacing="0">
+    <table cellpadding="0" cellspacing="0" class="fields" role="presentation">
       {{#if client_company}}<tr class="field"><td class="label">לקוח / חברה</td><td class="value">{{client_company}}</td></tr>{{/if}}
       {{#if contact_person}}<tr class="field"><td class="label">איש קשר</td><td class="value">{{contact_person}}</td></tr>{{/if}}
       {{#if contact_phone}}<tr class="field"><td class="label">טלפון</td><td class="value">{{contact_phone}}</td></tr>{{/if}}
     </table>
 
     <div class="section-title">פרטי החשבונית</div>
-    <table class="fields" role="presentation" cellpadding="0" cellspacing="0">
+    <table cellpadding="0" cellspacing="0" class="fields" role="presentation">
       {{#if document_number}}<tr class="field"><td class="label">מספר חשבונית</td><td class="value">{{document_number}}</td></tr>{{/if}}
       {{#if expiry_date}}<tr class="field field-due"><td class="label">תאריך לתשלום</td><td class="value">{{expiry_date}}</td></tr>{{/if}}
       {{#if trigger_date}}<tr class="field"><td class="label">תאריך שליחת התזכורת</td><td class="value">{{trigger_date}}</td></tr>{{/if}}

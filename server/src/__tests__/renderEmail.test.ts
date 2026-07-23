@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { renderTemplate, listTemplateVars } from "../templates/renderEmail.js";
-import { loadReminderTemplate } from "../email-templates/loader.js";
-import type { EmailVars } from "../templates/renderEmail.js";
+import {describe, expect, it} from "vitest";
+import type {EmailVars} from "../templates/renderEmail.js";
+import {listTemplateVars, renderTemplate} from "../templates/renderEmail.js";
+import {loadReminderTemplate} from "../email-templates/loader.js";
 
 describe("renderTemplate", () => {
   it("substitutes a simple variable", () => {

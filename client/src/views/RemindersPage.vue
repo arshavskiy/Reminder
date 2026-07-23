@@ -162,6 +162,22 @@ import {useConfirm} from "../composables/useConfirm.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import type {Client, EmailTemplate, ReminderWithContext} from "@shared/types.js";
 
+// Date-only strings (YYYY-MM-DD) must round-trip through the date picker using
+// local calendar days, not UTC — new Date("2026-08-01").getTime() parses as
+// UTC midnight, which n-date-picker then displays in local time. In any
+// timezone behind UTC that silently shows (and can save) the previous day.
+function localDateToMs(dateStr: string): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).getTime();
+}
+function msToLocalDateStr(ms: number): string {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 const store = useRemindersStore();
 const settingsStore = useSettingsStore();
 const clientsStore = useClientsStore();
@@ -284,7 +300,7 @@ async function doCreate() {
   }
   creating.value = true;
   try {
-    const triggerDate = new Date(triggerDateMs.value).toISOString().slice(0, 10);
+    const triggerDate = msToLocalDateStr(triggerDateMs.value);
     await api.reminders.create({
       source_type: "manual",
       client_id: newReminder.value.client_id,
@@ -325,7 +341,7 @@ function displayEmailTo(emailTo: string | null | undefined): string {
 
 function openEditDate(row: ReminderWithContext) {
   editingReminder.value = row;
-  editDateMs.value = row.trigger_date ? new Date(row.trigger_date).getTime() : Date.now();
+  editDateMs.value = row.trigger_date ? localDateToMs(row.trigger_date) : Date.now();
   editEmailTo.value = displayEmailTo(row.email_to);
   editEmailTemplateId.value = row.email_template_id ?? null;
   showEditDate.value = true;
@@ -339,7 +355,7 @@ async function doSaveDate() {
   }
   savingDate.value = true;
   try {
-    const triggerDate = new Date(editDateMs.value).toISOString().slice(0, 10);
+    const triggerDate = msToLocalDateStr(editDateMs.value);
     await api.reminders.update(editingReminder.value.id, {
       trigger_date: triggerDate,
       email_to: normalizeEmailTo(editEmailTo.value),
