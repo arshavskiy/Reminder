@@ -2,8 +2,46 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {sendReminderEmail} from "../reminders/emailSender";
-import type {ReminderWithContext} from "../../src/shared/types.js";
+import {generateContractReminders} from "../reminders/scheduler";
+import type {EquipmentCategory, ReminderWithContext} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
+
+const HYDRAULIC_CATEGORIES: EquipmentCategory[] = ["lift", "scaffold", "ladder"];
+const HYDRAULIC_INTERVAL_MONTHS = [4, 6, 12, 14] as const;
+
+/**
+ * Atomically allocates the next sequential inspection/report number for this
+ * user and combines it with their inspector_number into a report number, e.g.
+ * "18168/484590" — same format shown as a preview on the Profile page
+ * (nextInspectionId), but actually persisted here instead of just displayed.
+ * Seeds the counter from engineer_profiles.inspector_id_start on first use.
+ */
+async function allocateReportNumber(userId: string): Promise<string | null> {
+  const profile = await col("engineer_profiles").findOne({ user_id: userId }) as any;
+  if (!profile?.inspector_id_start) return null;
+
+  const seed = parseInt(profile.inspector_id_start, 10);
+  if (!Number.isFinite(seed)) return null;
+
+  const updated = await col("engineer_profiles").findOneAndUpdate(
+    { user_id: userId },
+    [
+      {
+        $set: {
+          next_inspection_seq: {
+            $ifNull: [{ $add: ["$next_inspection_seq", 1] }, seed],
+          },
+        },
+      },
+    ] as any,
+    { returnDocument: "after" }
+  );
+
+  const seq = (updated as any)?.next_inspection_seq ?? (updated as any)?.value?.next_inspection_seq;
+  if (!Number.isFinite(seq)) return null;
+
+  return `${seq}/${profile.inspector_number ?? ""}`.replace(/\/$/, "");
+}
 
 export function registerReminderRoutes(app: express.Application) {
   // GET /api/reminders
@@ -95,6 +133,163 @@ export function registerReminderRoutes(app: express.Application) {
     const result = await col("reminders").insertOne(doc as any);
     const inserted = await col("reminders").findOne({ _id: result.insertedId });
     res.status(201).json(flatDoc(inserted));
+  });
+
+  // POST /api/reminders/hydraulic-check — manual entry: creates a business (client),
+  // a hydraulic equipment record (lift/scaffold/ladder), and a next-check due date
+  // `intervalMonths` from `check_date` (defaults to today). Reminders fire using
+  // the existing global advance-warning days (reminderAdvanceDays) counting down
+  // to that due date.
+  app.post("/api/reminders/hydraulic-check", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const body = req.body as {
+      client_id?: string;
+      business?: {
+        display_name?: string;
+        entity_type?: string;
+        id_number?: string;
+        email?: string;
+        phone?: string;
+        address?: string;
+        notes?: string;
+      };
+      equipment?: {
+        category?: string;
+        name?: string;
+        manufacturer?: string;
+        model?: string;
+        serial_number?: string;
+      };
+      check_date?: string;
+      interval_months?: number;
+    };
+
+    const category = body.equipment?.category as EquipmentCategory | undefined;
+    if (!category || !HYDRAULIC_CATEGORIES.includes(category)) {
+      res.status(400).json({ error: `equipment.category must be one of: ${HYDRAULIC_CATEGORIES.join(", ")}` });
+      return;
+    }
+
+    const intervalMonths = body.interval_months;
+    if (!intervalMonths || !HYDRAULIC_INTERVAL_MONTHS.includes(intervalMonths as any)) {
+      res.status(400).json({ error: `interval_months must be one of: ${HYDRAULIC_INTERVAL_MONTHS.join(", ")}` });
+      return;
+    }
+
+    let checkDate: Date;
+    if (body.check_date) {
+      checkDate = new Date(body.check_date);
+      if (isNaN(checkDate.getTime())) {
+        res.status(400).json({ error: "check_date must be a valid date (YYYY-MM-DD)" });
+        return;
+      }
+    } else {
+      checkDate = new Date();
+    }
+
+    const now = new Date();
+    let clientId: string;
+    let clientDisplayName: string;
+
+    if (body.client_id) {
+      let existingOid: any;
+      try { existingOid = new ObjectId(body.client_id); } catch { existingOid = body.client_id; }
+      const existing = await col("clients").findOne({ _id: existingOid, user_id: userId }) as any;
+      if (!existing) {
+        res.status(404).json({ error: "client_id not found" });
+        return;
+      }
+      clientId = existing._id.toString();
+      clientDisplayName = existing.display_name;
+    } else {
+      const businessName = body.business?.display_name?.trim();
+      if (!businessName) {
+        res.status(400).json({ error: "business.display_name or client_id required" });
+        return;
+      }
+
+      const clientDoc = {
+        user_id: userId,
+        display_name: businessName,
+        entity_type: body.business?.entity_type ?? "company",
+        id_number: body.business?.id_number?.trim() || null,
+        email: body.business?.email?.trim() || null,
+        phone: body.business?.phone?.trim() || null,
+        address: body.business?.address?.trim() || null,
+        notes: body.business?.notes?.trim() || null,
+        tags: null,
+        created_at: now,
+        updated_at: now,
+      };
+      const clientResult = await col("clients").insertOne(clientDoc as any);
+      clientId = clientResult.insertedId.toString();
+      clientDisplayName = businessName;
+    }
+
+    const equipmentName = body.equipment?.name?.trim() || clientDisplayName;
+    const serialNumber = body.equipment?.serial_number?.trim() || undefined;
+    const equipmentDoc = {
+      user_id: userId,
+      name: equipmentName,
+      category,
+      manufacturer: body.equipment?.manufacturer?.trim() || null,
+      model: body.equipment?.model?.trim() || null,
+      ...(serialNumber && { serial_number: serialNumber }),
+      capacity: null,
+      load_capacity_test: null,
+      load_radius: null,
+      description: null,
+      notes: null,
+      client_id: clientId,
+      document_id: null,
+      is_active: 1,
+      created_at: now,
+      updated_at: now,
+    };
+    const equipmentResult = await col("equipment").insertOne(equipmentDoc as any);
+
+    const dueDate = new Date(checkDate);
+    dueDate.setMonth(dueDate.getMonth() + intervalMonths);
+    const expiryDate = dueDate.toISOString().slice(0, 10);
+    const startDate = checkDate.toISOString().slice(0, 10);
+    const reportNumber = await allocateReportNumber(userId);
+
+    const contractDoc = {
+      user_id: userId,
+      client_id: clientId,
+      contract_type: "בדיקה הידראולית",
+      contract_number: reportNumber,
+      start_date: startDate,
+      expiry_date: expiryDate,
+      status: "active",
+      created_at: now,
+      updated_at: now,
+    };
+    const contractResult = await col("contracts").insertOne(contractDoc as any);
+    const contractId = contractResult.insertedId.toString();
+
+    await generateContractReminders(contractId, clientId, null, expiryDate, userId);
+
+    const reminders = await col("reminders")
+      .find({ source_type: "contract_expiry", source_id: contractId })
+      .sort({ trigger_date: 1 })
+      .toArray();
+
+    res.status(201).json({
+      client: flatDoc(await col("clients").findOne({ _id: tryObjectId(clientId) })),
+      equipment: flatDoc(await col("equipment").findOne({ _id: equipmentResult.insertedId })),
+      contract: flatDoc(await col("contracts").findOne({ _id: contractResult.insertedId })),
+      reminders: reminders.map(flatDoc),
+    });
   });
 
   // PUT /api/reminders/:id

@@ -3,6 +3,28 @@ import {ObjectId} from "mongodb";
 import {getDb} from "../db/db";
 import type {User} from "../../src/shared/types.js";
 
+const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
+
+export async function createMagicLinkToken(userId: string): Promise<string> {
+  const token = randomBytes(32).toString("hex");
+  await getDb().collection("magic_link_tokens").insertOne({
+    token,
+    user_id: userId,
+    created_at: new Date(),
+    expires_at: new Date(Date.now() + MAGIC_LINK_TTL_MS),
+  } as any);
+  return token;
+}
+
+/** Verifies and consumes a magic-link token, returning the associated user id. Single-use. */
+export async function consumeMagicLinkToken(token: string): Promise<string | null> {
+  const record = await getDb().collection("magic_link_tokens").findOneAndDelete({
+    token,
+    expires_at: { $gt: new Date() },
+  } as any);
+  return record?.user_id ?? null;
+}
+
 export async function createSession(
   userId: string,
   userAgent?: string,

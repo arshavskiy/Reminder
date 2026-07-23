@@ -13,12 +13,12 @@
     .header-bar .subtitle { color: rgba(255,255,255,0.85); font-size: 13px; margin-top: 6px; }
     .alert-badge { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #14532d; border: 1px solid #86efac; border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 700; margin-bottom: 20px; }
     .section-title { font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 8px; }
-    .fields { background: #fafbfc; border: 1px solid #e5e9ef; border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
-    .field { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #e5e9ef; font-size: 14px; }
-    .field:last-child { border-bottom: none; }
-    .field .label { color: #6b7280; }
-    .field .value { color: #111827; font-weight: 600; }
-    .field-due { background: #fef9c3; }
+    .fields { background: #fafbfc; border: 1px solid #e5e9ef; border-radius: 10px; margin-bottom: 16px; width: 100%; border-collapse: collapse; }
+    .field td { padding: 10px 16px; border-bottom: 1px solid #e5e9ef; font-size: 14px; }
+    .field:last-child td { border-bottom: none; }
+    .field .label { color: #6b7280; text-align: right; }
+    .field .value { color: #111827; font-weight: 600; text-align: left; }
+    .field-due td { background: #fef9c3; }
     .field-due .value { color: #713f12; font-size: 15px; }
     .amount-box { background: #f0fdf4; border: 2px solid #16a34a; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center; }
     .amount-box .amount-label { font-size: 13px; color: #166534; margin-bottom: 6px; font-weight: 600; }
@@ -48,18 +48,18 @@
     <div class="alert-badge">💳 {{advance_days}} ימים לתאריך התשלום</div>
 
     <div class="section-title">פרטי הלקוח</div>
-    <div class="fields">
-      {{#if client_company}}<div class="field"><span class="label">לקוח / חברה</span><span class="value">{{client_company}}</span></div>{{/if}}
-      {{#if contact_person}}<div class="field"><span class="label">איש קשר</span><span class="value">{{contact_person}}</span></div>{{/if}}
-      {{#if contact_phone}}<div class="field"><span class="label">טלפון</span><span class="value">{{contact_phone}}</span></div>{{/if}}
-    </div>
+    <table cellpadding="0" cellspacing="0" class="fields" role="presentation">
+      {{#if client_company}}<tr class="field"><td class="label">לקוח / חברה</td><td class="value">{{client_company}}</td></tr>{{/if}}
+      {{#if contact_person}}<tr class="field"><td class="label">איש קשר</td><td class="value">{{contact_person}}</td></tr>{{/if}}
+      {{#if contact_phone}}<tr class="field"><td class="label">טלפון</td><td class="value">{{contact_phone}}</td></tr>{{/if}}
+    </table>
 
     <div class="section-title">פרטי החשבונית</div>
-    <div class="fields">
-      {{#if document_number}}<div class="field"><span class="label">מספר חשבונית</span><span class="value">{{document_number}}</span></div>{{/if}}
-      {{#if expiry_date}}<div class="field field-due"><span class="label">תאריך לתשלום</span><span class="value">{{expiry_date}}</span></div>{{/if}}
-      {{#if trigger_date}}<div class="field"><span class="label">תאריך שליחת התזכורת</span><span class="value">{{trigger_date}}</span></div>{{/if}}
-    </div>
+    <table cellpadding="0" cellspacing="0" class="fields" role="presentation">
+      {{#if document_number}}<tr class="field"><td class="label">מספר חשבונית</td><td class="value">{{document_number}}</td></tr>{{/if}}
+      {{#if expiry_date}}<tr class="field field-due"><td class="label">תאריך לתשלום</td><td class="value">{{expiry_date}}</td></tr>{{/if}}
+      {{#if trigger_date}}<tr class="field"><td class="label">תאריך שליחת התזכורת</td><td class="value">{{trigger_date}}</td></tr>{{/if}}
+    </table>
 
     {{#if amount}}
     <div class="amount-box">

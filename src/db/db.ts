@@ -33,6 +33,7 @@ const ALL_COLLECTIONS = [
   "users",
   "sessions",
   "oauth_states",
+  "magic_link_tokens",
   "user_settings",
   "documents",
   "document_clients",
@@ -76,6 +77,11 @@ async function applyIndexes(db: Db): Promise<void> {
 
   // oauth_states — TTL 10 minutes
   await db.collection("oauth_states").createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
+
+  // magic_link_tokens — single-use, TTL cleanup
+  await db.collection("magic_link_tokens").createIndex({ token: 1 }, { unique: true });
+  await db.collection("magic_link_tokens").createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
+  await db.collection("magic_link_tokens").createIndex({ user_id: 1 });
 
   // user_settings
   await db.collection("user_settings").createIndex({ user_id: 1 }, { unique: true, sparse: true });
