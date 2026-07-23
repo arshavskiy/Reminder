@@ -196,7 +196,8 @@ export function registerReminderRoutes(app: express.Application) {
         load_radius?: string;
         description?: string;
       };
-      check_date?: string;`r`n      next_inspection_date?: string;
+      check_date?: string;
+      next_inspection_date?: string;
       interval_months?: number;
     };
 
@@ -322,8 +323,15 @@ export function registerReminderRoutes(app: express.Application) {
       equipmentId = (await col("equipment").insertOne(equipmentDoc as any)).insertedId;
     }
 
-    const dueDate = new Date(checkDate);
-    dueDate.setMonth(dueDate.getMonth() + intervalMonths);
+    const dueDate = body.next_inspection_date ? new Date(body.next_inspection_date) : new Date(checkDate);
+    if (body.next_inspection_date) {
+      if (isNaN(dueDate.getTime())) {
+        res.status(400).json({ error: "next_inspection_date must be a valid date (YYYY-MM-DD)" });
+        return;
+      }
+    } else {
+      dueDate.setMonth(dueDate.getMonth() + intervalMonths);
+    }
     const expiryDate = dueDate.toISOString().slice(0, 10);
     const startDate = checkDate.toISOString().slice(0, 10);
     const reportNumber = body.contract_number?.trim() || await allocateReportNumber(userId);
