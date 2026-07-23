@@ -2,6 +2,7 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {generateContractReminders} from "../reminders/scheduler";
+import {upsertEquipmentForClient, type EquipmentInput} from "../reminders/equipmentUpsert";
 import {HTTPException, requireAuth} from "../auth/middleware";
 
 export function registerContractRoutes(app: express.Application) {
@@ -17,32 +18,57 @@ export function registerContractRoutes(app: express.Application) {
       return;
     }
 
-    const body = req.body as Record<string, unknown>;
-    const now = new Date();
-    const doc: Record<string, any> = {
-      user_id: userId,
-      document_id: body.document_id ?? null,
-      client_id: body.client_id ?? null,
-      contract_number: body.contract_number ?? null,
-      contract_type: body.contract_type ?? null,
-      start_date: body.start_date ?? null,
-      expiry_date: body.expiry_date ?? null,
-      amount: body.amount != null ? Number(body.amount) : null,
-      currency: body.currency ?? "ILS",
-      counterparty: body.counterparty ?? null,
-      summary: body.summary ?? null,
-      confidence: body.confidence ?? "medium",
-      status: body.status ?? "active",
-      created_at: now,
-      updated_at: now,
-    };
-    const r = await col("contracts").insertOne(doc);
-    const contractId = r.insertedId.toString();
-    if (doc.expiry_date) {
-      await generateContractReminders(contractId, doc.client_id, doc.document_id, String(doc.expiry_date), userId);
+    try {
+      const body = req.body as Record<string, unknown>;
+      const now = new Date();
+      const doc: Record<string, any> = {
+        user_id: userId,
+        client_id: body.client_id ?? null,
+        contract_number: body.contract_number ?? null,
+        contract_type: body.contract_type ?? null,
+        start_date: body.start_date ?? null,
+        expiry_date: body.expiry_date ?? null,
+        amount: body.amount != null ? Number(body.amount) : null,
+        currency: body.currency ?? "ILS",
+        counterparty: body.counterparty ?? null,
+        summary: body.summary ?? null,
+        confidence: body.confidence ?? "medium",
+        status: body.status ?? "active",
+        created_at: now,
+        updated_at: now,
+      };
+      // Only set document_id when it's a real id — a stored null collides under
+      // the unique index, so leave the field absent for manual contracts.
+      if (body.document_id) doc.document_id = body.document_id;
+
+      const r = await col("contracts").insertOne(doc);
+      const contractId = r.insertedId.toString();
+
+      // Optionally link/create equipment for this contract's client so its
+      // manufacturer/model/serial flow into reminder emails.
+      const equipment = body.equipment as EquipmentInput | undefined;
+      if (equipment && doc.client_id) {
+        const client = await col("clients").findOne({ _id: tryObjectId(String(doc.client_id)) }) as any;
+        await upsertEquipmentForClient(
+          equipment,
+          String(doc.client_id),
+          client?.display_name ?? "",
+          userId,
+          now
+        );
+      }
+
+      if (doc.expiry_date) {
+        await generateContractReminders(contractId, doc.client_id, doc.document_id ?? null, String(doc.expiry_date), userId);
+      }
+      const inserted = await col("contracts").findOne({ _id: r.insertedId });
+      res.status(201).json(flatDoc(inserted));
+    } catch (err) {
+      console.error("[contracts] create failed:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+      }
     }
-    const inserted = await col("contracts").findOne({ _id: r.insertedId });
-    res.status(201).json(flatDoc(inserted));
   });
 
   // GET /api/contracts
@@ -207,35 +233,57 @@ export function registerContractRoutes(app: express.Application) {
       return;
     }
 
-    const filter = { ...idFilter(req.params.id), user_id: userId };
-    const body = req.body as Record<string, unknown>;
+    try {
+      const filter = { ...idFilter(req.params.id), user_id: userId };
+      const body = req.body as Record<string, unknown>;
 
-    const updates: Record<string, any> = { updated_at: new Date() };
-    const fields = [
-      "contract_number", "contract_type", "start_date", "expiry_date",
-      "amount", "currency", "counterparty", "summary", "status",
-    ];
-    for (const f of fields) {
-      if (body[f] !== undefined) updates[f] = body[f];
-    }
+      const updates: Record<string, any> = { updated_at: new Date() };
+      const fields = [
+        "contract_number", "contract_type", "start_date", "expiry_date",
+        "amount", "currency", "counterparty", "summary", "status",
+      ];
+      for (const f of fields) {
+        if (body[f] !== undefined) updates[f] = body[f];
+      }
 
-    await col("contracts").updateOne(filter, { $set: updates });
+      await col("contracts").updateOne(filter, { $set: updates });
 
-    if (body.expiry_date) {
-      const contract = await col("contracts").findOne(filter) as any;
-      if (contract) {
-        await generateContractReminders(
-          req.params.id,
-          contract.client_id ?? null,
-          contract.document_id ?? null,
-          String(body.expiry_date),
-          userId
-        );
+      const equipment = body.equipment as EquipmentInput | undefined;
+      if (equipment) {
+        const contract = await col("contracts").findOne(filter) as any;
+        if (contract?.client_id) {
+          const client = await col("clients").findOne({ _id: tryObjectId(String(contract.client_id)) }) as any;
+          await upsertEquipmentForClient(
+            equipment,
+            String(contract.client_id),
+            client?.display_name ?? "",
+            userId,
+            new Date()
+          );
+        }
+      }
+
+      if (body.expiry_date) {
+        const contract = await col("contracts").findOne(filter) as any;
+        if (contract) {
+          await generateContractReminders(
+            req.params.id,
+            contract.client_id ?? null,
+            contract.document_id ?? null,
+            String(body.expiry_date),
+            userId
+          );
+        }
+      }
+
+      const updated = await col("contracts").findOne(filter);
+      res.json(flatDoc(updated));
+    } catch (err) {
+      console.error("[contracts] update failed:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
       }
     }
-
-    const updated = await col("contracts").findOne(filter);
-    res.json(flatDoc(updated));
   });
 
   // GET /api/contracts/by-document/:documentId

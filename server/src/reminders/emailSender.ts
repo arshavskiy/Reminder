@@ -117,6 +117,15 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
     from_name: settings.emailFromName,
   };
 
+  // Equipment fields stored directly on the reminder take precedence over the
+  // client/document fallbacks below (which use ??=), so the user's edits in the
+  // reminder modal are what actually get sent.
+  const r = reminder as any;
+  if (r.equipment_type) vars.equipment_type = EQUIPMENT_CATEGORY_LABELS[r.equipment_type] ?? r.equipment_type;
+  if (r.manufacturer) vars.manufacturer = r.manufacturer;
+  if (r.model) vars.model = r.model;
+  if (r.serial_number) vars.serial_number = r.serial_number;
+
   if (reminder.client_id) {
     const c = await col("clients").findOne({ _id: tryObjectId(reminder.client_id) } as any) as any;
     if (c) {

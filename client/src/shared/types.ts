@@ -171,6 +171,11 @@ export interface Reminder {
   email_template_id: number | null;
   status: ReminderStatus;
   snoozed_until: string | null;
+  // Equipment snapshot stored on the reminder — sent to email templates.
+  equipment_type: EquipmentCategory | null;
+  manufacturer: string | null;
+  model: string | null;
+  serial_number: string | null;
   created_at: string;
   updated_at: string;
 }

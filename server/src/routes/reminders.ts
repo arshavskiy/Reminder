@@ -350,7 +350,10 @@ export function registerReminderRoutes(app: express.Application) {
     const body = req.body as Record<string, unknown>;
 
     const updates: Record<string, any> = { updated_at: new Date() };
-    const fields = ["title", "body", "trigger_date", "email_to", "status", "email_template_id"];
+    const fields = [
+      "title", "body", "trigger_date", "email_to", "status", "email_template_id",
+      "equipment_type", "manufacturer", "model", "serial_number",
+    ];
     for (const f of fields) {
       if (body[f] !== undefined) updates[f] = body[f];
     }

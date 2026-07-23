@@ -301,6 +301,35 @@
               <n-input v-model:value="form.summary" type="textarea" :rows="3" placeholder="תיאור קצר..." />
             </n-form-item>
           </n-gi>
+
+          <n-gi :span="2">
+            <n-divider style="margin: 4px 0 12px" title-placement="right">ציוד (יישלח בתזכורת)</n-divider>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="קטגוריה">
+              <n-select
+                v-model:value="form.equipment.category"
+                :options="equipmentCategoryOptions"
+                clearable
+                placeholder="בחר קטגוריה"
+              />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="יצרן">
+              <n-input v-model:value="form.equipment.manufacturer" placeholder="יצרן" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="דגם">
+              <n-input v-model:value="form.equipment.model" placeholder="דגם" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label='מס"ד סידורי'>
+              <n-input v-model:value="form.equipment.serial_number" placeholder='מס"ד סידורי' />
+            </n-form-item>
+          </n-gi>
         </n-grid>
       </n-form>
 
@@ -439,6 +468,7 @@ import {
   NButton,
   NCheckbox,
   NDatePicker,
+  NDivider,
   NForm,
   NFormItem,
   NGi,
@@ -847,6 +877,17 @@ const editingId = ref<string | null>(null);
 const saving = ref(false);
 const form = ref(emptyForm());
 
+const equipmentCategoryOptions: { label: string; value: EquipmentCategory }[] = [
+  { label: "מכונות הרמה", value: "lift" },
+  { label: "אביזרי הרמה", value: "accessory" },
+  { label: "פיגומים", value: "scaffold" },
+  { label: "מעליות", value: "ladder" },
+  { label: "מעלונים", value: "balloon" },
+  { label: "קולטי אוויר", value: "intake" },
+  { label: "קולטי קיטור", value: "extractor" },
+  { label: "אחר", value: "other" },
+];
+
 const showDeleteConfirm = ref(false);
 const deletingRow = ref<ContractWithClient | null>(null);
 
@@ -1022,6 +1063,12 @@ function emptyForm() {
     counterparty: null as string | null,
     summary: null as string | null,
     status: "active" as string,
+    equipment: {
+      category: null as EquipmentCategory | null,
+      manufacturer: null as string | null,
+      model: null as string | null,
+      serial_number: null as string | null,
+    },
   };
 }
 
@@ -1049,6 +1096,12 @@ function openEdit(row: ContractWithClient) {
     counterparty: row.counterparty,
     summary: row.summary,
     status: row.status,
+    equipment: {
+      category: null as EquipmentCategory | null,
+      manufacturer: null as string | null,
+      model: null as string | null,
+      serial_number: null as string | null,
+    },
   };
   showForm.value = true;
 }
@@ -1056,11 +1109,14 @@ function openEdit(row: ContractWithClient) {
 async function saveForm() {
   saving.value = true;
   try {
+    const eq = form.value.equipment;
+    const hasEquipment = !!(eq.category || eq.manufacturer?.trim() || eq.model?.trim() || eq.serial_number?.trim());
+    const payload = { ...form.value, equipment: hasEquipment ? eq : undefined };
     if (editingId.value) {
-      await store.update(editingId.value, form.value as any);
+      await store.update(editingId.value, payload as any);
       message.success("הרשומה עודכנה בהצלחה");
     } else {
-      await store.create(form.value as any);
+      await store.create(payload as any);
       message.success("הרשומה נוצרה בהצלחה");
     }
     showForm.value = false;

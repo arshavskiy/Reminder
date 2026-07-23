@@ -128,6 +128,26 @@
             clearable
           />
         </n-form-item>
+
+        <n-divider style="margin: 4px 0 12px" title-placement="right">ציוד (יישלח בתבנית האימייל)</n-divider>
+        <n-form-item label="סוג ציוד">
+          <n-select
+            v-model:value="editEquipmentType"
+            :options="equipmentCategoryOptions"
+            :virtual-scroll="false"
+            placeholder="בחר קטגוריה"
+            clearable
+          />
+        </n-form-item>
+        <n-form-item label="יצרן">
+          <n-input v-model:value="editManufacturer" placeholder="יצרן" />
+        </n-form-item>
+        <n-form-item label="דגם">
+          <n-input v-model:value="editModel" placeholder="דגם" />
+        </n-form-item>
+        <n-form-item label='מס"ד סידורי'>
+          <n-input v-model:value="editSerialNumber" placeholder='מס"ד סידורי' />
+        </n-form-item>
       </n-form>
       <template #action>
         <n-button @click="showEditDate = false">ביטול</n-button>
@@ -145,6 +165,7 @@ import {
   NButton,
   NDataTable,
   NDatePicker,
+  NDivider,
   NForm,
   NFormItem,
   NInput,
@@ -160,7 +181,7 @@ import {useAuthStore} from "../stores/auth.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type {Client, EmailTemplate, ReminderWithContext} from "@shared/types.js";
+import type {Client, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
 // Date-only strings (YYYY-MM-DD) must round-trip through the date picker using
 // local calendar days, not UTC — new Date("2026-08-01").getTime() parses as
@@ -328,6 +349,21 @@ const editingReminder = ref<ReminderWithContext | null>(null);
 const editDateMs = ref<number | null>(null);
 const editEmailTo = ref("");
 const editEmailTemplateId = ref<string | null>(null);
+const editEquipmentType = ref<EquipmentCategory | null>(null);
+const editManufacturer = ref("");
+const editModel = ref("");
+const editSerialNumber = ref("");
+
+const equipmentCategoryOptions: { label: string; value: EquipmentCategory }[] = [
+  { label: "מכונות הרמה", value: "lift" },
+  { label: "אביזרי הרמה", value: "accessory" },
+  { label: "פיגומים", value: "scaffold" },
+  { label: "מעליות", value: "ladder" },
+  { label: "מעלונים", value: "balloon" },
+  { label: "קולטי אוויר", value: "intake" },
+  { label: "קולטי קיטור", value: "extractor" },
+  { label: "אחר", value: "other" },
+];
 
 function displayEmailTo(emailTo: string | null | undefined): string {
   if (!emailTo) return "";
@@ -339,12 +375,32 @@ function displayEmailTo(emailTo: string | null | undefined): string {
   }
 }
 
-function openEditDate(row: ReminderWithContext) {
+async function openEditDate(row: ReminderWithContext) {
   editingReminder.value = row;
   editDateMs.value = row.trigger_date ? localDateToMs(row.trigger_date) : Date.now();
   editEmailTo.value = displayEmailTo(row.email_to);
   editEmailTemplateId.value = row.email_template_id ?? null;
+  editEquipmentType.value = row.equipment_type ?? null;
+  editManufacturer.value = row.manufacturer ?? "";
+  editModel.value = row.model ?? "";
+  editSerialNumber.value = row.serial_number ?? "";
   showEditDate.value = true;
+
+  // If the reminder has no equipment snapshot yet, prefill from the linked
+  // client's equipment so the user starts from real data instead of blanks.
+  const hasSnapshot = row.equipment_type || row.manufacturer || row.model || row.serial_number;
+  if (!hasSnapshot && row.client_id != null) {
+    try {
+      const eq = await api.equipment.list({ client_id: String(row.client_id) });
+      const first = eq[0];
+      if (first && editingReminder.value?.id === row.id) {
+        editEquipmentType.value = (first.category as EquipmentCategory) ?? null;
+        editManufacturer.value = first.manufacturer ?? "";
+        editModel.value = first.model ?? "";
+        editSerialNumber.value = first.serial_number ?? "";
+      }
+    } catch { /* ignore — leave fields blank */ }
+  }
 }
 
 async function doSaveDate() {
@@ -360,6 +416,10 @@ async function doSaveDate() {
       trigger_date: triggerDate,
       email_to: normalizeEmailTo(editEmailTo.value),
       email_template_id: editEmailTemplateId.value,
+      equipment_type: editEquipmentType.value,
+      manufacturer: editManufacturer.value.trim() || null,
+      model: editModel.value.trim() || null,
+      serial_number: editSerialNumber.value.trim() || null,
     });
     message.success("התזכורת עודכנה");
     showEditDate.value = false;
