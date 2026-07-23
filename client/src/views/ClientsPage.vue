@@ -74,9 +74,13 @@
                   :class="{ 'kebab-btn--open': openKebab === row.id }"
                   class="kebab-btn"
                   title="פעולות"
-                  @click="toggleKebab(row.id)"
+                  @click="toggleKebab(row.id, $event)"
                 >⋮</button>
-                <div v-if="openKebab === row.id" class="kebab-menu">
+                <div
+                  v-if="openKebab === row.id"
+                  class="kebab-menu"
+                  :style="{ top: kebabPos.top + 'px', left: kebabPos.left + 'px' }"
+                >
                   <button class="kebab-item" @click="openEdit(row); openKebab = null">✏️ ערוך</button>
                   <button class="kebab-item kebab-item--danger" @click="doDelete(row); openKebab = null">🗑 מחק</button>
                 </div>
@@ -237,8 +241,24 @@ onMounted(() => { store.fetch({ limit: 200 }, true); });
 
 // ── Kebab menu ────────────────────────────────────────────────────────────────
 const openKebab = ref<string | null>(null);
-function toggleKebab(id: string) {
-  openKebab.value = openKebab.value === id ? null : id;
+// Screen coordinates for the open menu — rendered position:fixed so it escapes
+// the table-wrap's overflow:hidden clipping instead of being cut off.
+const kebabPos = ref<{ top: number; left: number }>({ top: 0, left: 0 });
+const MENU_WIDTH = 150;
+const MENU_HEIGHT = 88;
+
+function toggleKebab(id: string, ev: MouseEvent) {
+  if (openKebab.value === id) { openKebab.value = null; return; }
+  const btn = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+  // Open below the button, aligned to its left edge; flip up / clamp to viewport
+  // when there isn't room so the menu is always fully visible.
+  let top = btn.bottom + 4;
+  if (top + MENU_HEIGHT > window.innerHeight) top = btn.top - MENU_HEIGHT - 4;
+  let left = btn.left;
+  if (left + MENU_WIDTH > window.innerWidth) left = window.innerWidth - MENU_WIDTH - 8;
+  if (left < 8) left = 8;
+  kebabPos.value = { top, left };
+  openKebab.value = id;
 }
 // Close kebab when clicking outside
 function onDocClick() { openKebab.value = null; }
@@ -503,15 +523,13 @@ function doDelete(row: Client) {
   color: var(--text-primary);
 }
 .kebab-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+  position: fixed;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 10px;
   box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.15));
-  min-width: 130px;
-  z-index: 50;
+  width: 150px;
+  z-index: 2000;
   overflow: hidden;
 }
 .kebab-item {
