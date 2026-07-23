@@ -1,21 +1,21 @@
 import type {
-  AppSettings,
-  Client,
-  ClientDetail,
-  Contract,
-  ContractWithClient,
-  DashboardStats,
-  DocTemplate,
-  Document,
-  EmailLogEntry,
-  EmailTemplate,
-  Equipment,
-  GlobalSearchResult,
-  PipelineFlags,
-  Reminder,
-  ReminderWithContext,
-  Task,
-  UserSettings,
+    AppSettings,
+    Client,
+    ClientDetail,
+    Contract,
+    ContractWithClient,
+    DashboardStats,
+    DocTemplate,
+    Document,
+    EmailLogEntry,
+    EmailTemplate,
+    Equipment,
+    GlobalSearchResult,
+    PipelineFlags,
+    Reminder,
+    ReminderWithContext,
+    Task,
+    UserSettings,
 } from "../../src/shared/types.js";
 
 export interface EquipmentHistoryEvent {
@@ -60,7 +60,7 @@ export interface HydraulicCheckRequest {
     load_radius?: string;
     description?: string;
   };
-  check_date?: string;
+  check_date?: string;`r`n  next_inspection_date?: string;
   interval_months?: 4 | 6 | 12 | 14;
 }
 

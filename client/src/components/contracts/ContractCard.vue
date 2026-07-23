@@ -12,7 +12,7 @@
           @click.stop
           @update:checked="emit('toggle-select', String(row.id))"
         />
-        <span v-if="row.contract_number" class="card__num-main">{{ row.contract_number }}</span>
+        <span v-if="row.contract_number" class="card__num-main">{{ displayContractNumber }}</span>
       </div>
 
       <div class="card__pills">
@@ -118,7 +118,7 @@ import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
 const router = useRouter();
 
 const props = defineProps<{
-  row: ContractWithClient;
+  row: ContractWithClient;`r`n  inspectorNumber?: string;
   kind: "contract" | "inspection" | "all";
   bulkMode: boolean;
   selected: boolean;
