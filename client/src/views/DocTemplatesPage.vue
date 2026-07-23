@@ -84,7 +84,7 @@
     </n-grid>
 
     <!-- Editor drawer -->
-    <n-drawer v-model:show="showEdit" :width="700" placement="left">
+    <n-drawer v-model:show="showEdit" :width="960" placement="left">
       <n-drawer-content :title="editing?.id ? 'עריכת תבנית' : 'תבנית חדשה'" closable>
         <n-form v-if="editing" label-placement="top">
           <n-grid :cols="2" :x-gap="16">

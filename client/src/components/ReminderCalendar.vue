@@ -255,7 +255,7 @@ const agendaGroups = computed(() => {
       expiryItems: (expiryByIso.value.get(iso) ?? []),
       isToday: sameDay(d, today),
       isPast: d.getTime() < now,
-      label: d.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" }),
+      label: d.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
     };
   });
 });

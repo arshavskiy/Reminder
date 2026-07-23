@@ -68,7 +68,13 @@
         </button>
       </div>
       <div v-if="reminders.length" class="reminders-list">
-        <div v-for="reminder in reminders" :key="reminder.id" class="reminder-row">
+        <div
+          v-for="reminder in reminders"
+          :key="reminder.id"
+          class="reminder-row reminder-row--clickable"
+          title="פתח בעמוד התזכורות"
+          @click.stop="router.push('/reminders')"
+        >
           <span class="reminder-date">{{ reminder.trigger_date }}</span>
           <span class="reminder-title">{{ reminder.title }}</span>
           <span :class="reminderStatusClass(reminder.status)" class="reminder-status-badge">
@@ -105,7 +111,10 @@ import {computed} from "vue";
 import {NCheckbox, NIcon} from "naive-ui";
 import {CreateOutline, EyeOutline, TrashOutline} from "@vicons/ionicons5";
 import ExpiryBadge from "../ExpiryBadge.vue";
+import {useRouter} from "vue-router";
 import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
+
+const router = useRouter();
 
 const props = defineProps<{
   row: ContractWithClient;
@@ -329,6 +338,12 @@ html[data-theme="dark"] .expiry--bad { color: #ff7875; }
   border-radius: 8px;
   padding: 7px 12px;
   font-size: 13px;
+}
+.reminder-row--clickable {
+  cursor: pointer;
+}
+.reminder-row--clickable:hover {
+  border-color: var(--brand-color);
 }
 .reminder-date {
   font-size: 12px;

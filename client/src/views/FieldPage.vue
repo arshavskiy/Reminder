@@ -78,8 +78,12 @@
 
       <!-- Actions -->
       <div class="field__actions">
-        <button class="field__btn field__btn--pdf" @click="api.equipment.downloadReport(selected.id)">
-          הפק דוח PDF
+        <button
+          v-if="selected.document_id"
+          class="field__btn field__btn--doc"
+          @click="router.push(`/documents/${selected.document_id}`)"
+        >
+          📄 {{ selected.document_name ?? "מסמך מקור" }}
         </button>
         <label :class="{ 'field__btn--uploading': photoUploading }" class="field__btn field__btn--photo">
           {{ photoUploading ? 'מעלה...' : 'צלם תמונה' }}
@@ -115,10 +119,12 @@
 
 <script lang="ts" setup>
 import {onMounted, onUnmounted, ref} from "vue";
+import {useRouter} from "vue-router";
 import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import type {Equipment} from "../shared/types.js";
 
+const router = useRouter();
 const query = ref("");
 const results = ref<Equipment[]>([]);
 const selected = ref<Equipment | null>(null);
@@ -363,7 +369,7 @@ onUnmounted(() => {
   justify-content: center;
   min-width: 120px;
 }
-.field__btn--pdf {
+.field__btn--doc {
   background: var(--brand-color);
   color: #fff;
 }

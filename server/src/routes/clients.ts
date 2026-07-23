@@ -23,7 +23,7 @@ export function registerClientRoutes(app: express.Application) {
     const filter: Record<string, any> = { user_id: userId };
     if (q) {
       const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-      filter.$or = [{ display_name: regex }, { email: regex }];
+      filter.$or = [{ display_name: regex }, { contact_person: regex }, { email: regex }];
     }
 
     const [rows, total] = await Promise.all([
@@ -86,6 +86,7 @@ export function registerClientRoutes(app: express.Application) {
       user_id: userId,
       display_name: body.display_name,
       entity_type: body.entity_type ?? "person",
+      contact_person: body.contact_person ?? null,
       id_number: body.id_number ?? null,
       email: body.email ?? null,
       phone: body.phone ?? null,
@@ -118,6 +119,7 @@ export function registerClientRoutes(app: express.Application) {
     const updates: Record<string, any> = { updated_at: new Date() };
     if (body.display_name !== undefined) updates.display_name = body.display_name;
     if (body.entity_type !== undefined) updates.entity_type = body.entity_type;
+    if (body.contact_person !== undefined) updates.contact_person = body.contact_person;
     if (body.id_number !== undefined) updates.id_number = body.id_number;
     if (body.email !== undefined) updates.email = body.email;
     if (body.phone !== undefined) updates.phone = body.phone;

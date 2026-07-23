@@ -258,7 +258,7 @@
             type="primary"
             @click="submit"
           >
-            העלה ועבד →
+            העלה ועבד
           </n-button>
         </div>
       </div>
@@ -274,7 +274,7 @@
               type="primary"
               @click="runExtract"
             >
-              חלץ תזכורות →
+              חלץ תזכורות
             </n-button>
           </template>
 

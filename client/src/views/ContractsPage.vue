@@ -321,7 +321,7 @@
     </n-modal>
 
     <!-- ── Add reminder modal ─────────────────────────────────────────── -->
-    <n-modal v-model:show="showAddReminder" preset="dialog" style="width:480px" title="הוסף תזכורת לתסקיר">
+    <n-modal v-model:show="showAddReminder" preset="dialog" :show-icon="false" style="width:480px" title="הוסף תזכורת לתסקיר">
       <n-form v-if="reminderForm" label-placement="top">
         <n-form-item label="כותרת" required>
           <n-input v-model:value="reminderForm.title" placeholder="לדוגמה: תזכורת בדיקה הבאה" />

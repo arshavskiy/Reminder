@@ -1,7 +1,7 @@
 <template>
   <div v-if="store.active">
     <n-space align="center" style="margin-bottom: 16px">
-      <n-button text @click="$router.back()">← חזרה</n-button>
+      <n-button text @click="$router.back()">   חזרה</n-button>
       <n-h2 style="margin: 0">{{ store.active.display_name }}</n-h2>
       <n-tag type="info">{{ store.active.entity_type === "company" ? "חברה" : "אדם פרטי" }}</n-tag>
       <n-button size="small" @click="showEdit = true">✏️ עריכה</n-button>
@@ -79,7 +79,7 @@
     </n-tabs>
 
     <!-- Edit modal -->
-    <n-modal v-model:show="showEdit" title="עריכת לקוח" preset="dialog" style="width: 480px">
+    <n-modal v-model:show="showEdit" title="עריכת לקוח" :show-icon="false" preset="dialog" style="width: 480px">
       <n-form label-placement="top" v-if="editForm">
         <n-form-item label="שם"><n-input v-model:value="editForm.display_name" /></n-form-item>
         <n-form-item label="אימייל"><n-input v-model:value="editForm.email" /></n-form-item>

@@ -18,7 +18,7 @@
       :show-icon="false"
     >
       להפעלת "תזכורת בדיקה" יש להגדיר כתובת לבדיקות ב-
-      <router-link to="/settings" style="color: #63e2b7">הגדרות → אימייל</router-link>
+      <router-link to="/settings" style="color: #63e2b7">הגדרות   אימייל</router-link>
     </n-alert>
 
     <n-space style="margin-bottom: 16px">
@@ -42,7 +42,7 @@
     />
 
     <!-- Quick-test modal -->
-    <n-modal v-model:show="showQuickTest" title="🧪 שליחת תזכורת בדיקה" preset="dialog" style="width: 420px">
+    <n-modal v-model:show="showQuickTest" title="🧪 שליחת תזכורת בדיקה" :show-icon="false" preset="dialog" style="width: 420px">
       <n-form label-placement="top">
         <n-form-item label="נמען">
           <n-input :value="testEmail" disabled />
@@ -64,7 +64,7 @@
     </n-modal>
 
     <!-- Create reminder modal -->
-    <n-modal v-model:show="showCreate" title="תזכורת חדשה" preset="dialog" style="width: 520px">
+    <n-modal v-model:show="showCreate" title="תזכורת חדשה" :show-icon="false" preset="dialog" style="width: 520px">
       <n-form label-placement="top" v-if="newReminder">
         <n-form-item label="לקוח" required>
           <n-select
@@ -104,6 +104,22 @@
       <template #action>
         <n-button @click="showCreate = false">ביטול</n-button>
         <n-button type="primary" :loading="creating" @click="doCreate">צור תזכורת</n-button>
+      </template>
+    </n-modal>
+
+    <!-- Edit due date modal -->
+    <n-modal v-model:show="showEditDate" title="עריכת מועד שליחה" :show-icon="false" preset="dialog" style="width: 380px">
+      <n-form label-placement="top" v-if="editingReminder">
+        <n-form-item label="כותרת">
+          <n-input :value="editingReminder.title" disabled />
+        </n-form-item>
+        <n-form-item label="תאריך שליחה" required>
+          <n-date-picker v-model:value="editDateMs" type="date" style="width: 100%" />
+        </n-form-item>
+      </n-form>
+      <template #action>
+        <n-button @click="showEditDate = false">ביטול</n-button>
+        <n-button type="primary" :loading="savingDate" @click="doSaveDate">שמור</n-button>
       </template>
     </n-modal>
   </div>
@@ -215,13 +231,16 @@ function openCreate() {
   showCreate.value = true;
 }
 
-// When the user picks a client, auto-fill the email field with that client's
-// email (overrideable). Keeps the form minimal — most reminders go to the
-// client's primary email.
+// When the user picks a client, auto-fill from that client's data — email,
+// a default title, and notes as the body — but only into fields still empty,
+// so nothing the user already typed gets overwritten.
 function onPickClient(clientId: number | null) {
   if (!newReminder.value) return;
   const c = clientsStore.rows.find((x) => x.id === clientId);
-  if (c?.email) newReminder.value.email_to = c.email;
+  if (!c) return;
+  if (c.email) newReminder.value.email_to = c.email;
+  if (!newReminder.value.title.trim()) newReminder.value.title = `תזכורת עבור ${c.display_name}`;
+  if (!newReminder.value.body.trim() && c.notes) newReminder.value.body = c.notes;
 }
 
 function normalizeEmailTo(input: string): string | null {
@@ -262,6 +281,34 @@ async function doCreate() {
     message.error(String(e));
   } finally {
     creating.value = false;
+  }
+}
+
+// ── Edit due date (trigger_date) ────────────────────────────────────────────
+const showEditDate = ref(false);
+const savingDate = ref(false);
+const editingReminder = ref<ReminderWithContext | null>(null);
+const editDateMs = ref<number | null>(null);
+
+function openEditDate(row: ReminderWithContext) {
+  editingReminder.value = row;
+  editDateMs.value = row.trigger_date ? new Date(row.trigger_date).getTime() : Date.now();
+  showEditDate.value = true;
+}
+
+async function doSaveDate() {
+  if (!editingReminder.value || !editDateMs.value) return;
+  savingDate.value = true;
+  try {
+    const triggerDate = new Date(editDateMs.value).toISOString().slice(0, 10);
+    await api.reminders.update(editingReminder.value.id, { trigger_date: triggerDate });
+    message.success("מועד השליחה עודכן");
+    showEditDate.value = false;
+    load();
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    savingDate.value = false;
   }
 }
 
@@ -323,7 +370,7 @@ const columns = [
   {
     title: "פעולות",
     key: "actions",
-    width: 220,
+    width: 300,
     render: (row: ReminderWithContext) =>
       h(NSpace, { size: "small" }, {
         default: () => [
@@ -337,6 +384,12 @@ const columns = [
                   else message.error(r.error ?? "שגיאה");
                 },
               }, { default: () => "שלח עכשיו" })
+            : null,
+          row.status === "pending"
+            ? h(NButton, {
+                size: "small",
+                onClick: () => openEditDate(row),
+              }, { default: () => "✏️ ערוך" })
             : null,
           row.status === "pending"
             ? h(NButton, {

@@ -133,6 +133,7 @@ export interface Client {
   id: number;
   display_name: string;
   entity_type: EntityType;
+  contact_person: string | null;
   id_number: string | null;
   email: string | null;
   phone: string | null;

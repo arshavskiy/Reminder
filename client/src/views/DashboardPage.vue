@@ -54,7 +54,7 @@
           <div class="module__body">
             <h3 class="module__title">{{ m.title }}</h3>
             <p class="module__desc">{{ m.desc }}</p>
-            <span class="module__cta">פתח ←</span>
+            <span class="module__cta">פתח   </span>
           </div>
         </article>
       </div>
@@ -64,7 +64,7 @@
         <section class="panel">
           <header class="panel__head">
             <h3>מסמכים אחרונים</h3>
-            <router-link class="panel__more" to="/documents">כל המסמכים ←</router-link>
+            <router-link class="panel__more" to="/documents">כל המסמכים   </router-link>
           </header>
           <ul v-if="stats?.recent_documents?.length" class="panel__list">
             <li v-for="doc in stats.recent_documents" :key="doc.id" class="panel__row">
@@ -80,7 +80,7 @@
         <section class="panel">
           <header class="panel__head">
             <h3>תזכורות קרובות</h3>
-            <router-link class="panel__more" to="/reminders">כל התזכורות ←</router-link>
+            <router-link class="panel__more" to="/reminders">כל התזכורות   </router-link>
           </header>
           <ul v-if="stats?.upcoming_reminders?.length" class="panel__list">
             <li v-for="r in stats.upcoming_reminders" :key="r.id" class="panel__row">

@@ -3,7 +3,7 @@
     <PageHeader v-if="doc" :title="doc.file_name">
       <template #actions>
         <StatusBadge :status="doc.processing_status" />
-        <n-button size="small" @click="$router.back()">← חזרה</n-button>
+        <n-button size="small" @click="$router.back()">   חזרה</n-button>
         <n-button :loading="downloading" size="small" @click="openDownload">⬇ הורד</n-button>
         <n-button :loading="extracting" size="small" type="primary" @click="rerunExtract">✨ חלץ AI</n-button>
       </template>

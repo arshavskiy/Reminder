@@ -168,6 +168,7 @@
     <n-modal
       v-model:show="showForm"
       :title="editingId ? 'עריכת לקוח' : 'לקוח חדש'"
+      :show-icon="false"
       preset="dialog"
       style="width:500px"
     >
@@ -245,11 +246,11 @@ onMounted(() => document.addEventListener("click", onDocClick));
 
 // ── Quick-view modal ──────────────────────────────────────────────────────────
 const showQuickViewModal = ref(false);
-const quickViewClient = ref<Client & { contact_person?: string } | null>(null);
+const quickViewClient = ref<Client | null>(null);
 const qvStats = ref({ pending: 0, approved: 0, completed: 0, total: 0 });
 
 async function openQuickView(row: Client) {
-  quickViewClient.value = row as any;
+  quickViewClient.value = row;
   showQuickViewModal.value = true;
   // Fetch contract stats for this client
   try {
@@ -288,7 +289,7 @@ function openEdit(row: Client) {
   form.value = {
     display_name: row.display_name,
     entity_type:  row.entity_type,
-    contact_person: (row as any).contact_person ?? "",
+    contact_person: row.contact_person ?? "",
     email:        row.email ?? "",
     phone:        row.phone ?? "",
     address:      row.address ?? "",
