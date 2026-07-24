@@ -1,6 +1,9 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import swaggerUi from "swagger-ui-express";
+import YAML from "yaml";
+import {readFileSync} from "fs";
 import {dirname, join} from "path";
 import {fileURLToPath} from "url";
 import {existsSync, watch} from "fs";
@@ -59,6 +62,32 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", ts: Date.now() });
 });
 
+// Swagger UI — API documentation
+try {
+  const swaggerSpec = YAML.parse(readFileSync(join(__dirname, "../../docs/openapi.yaml"), "utf8"));
+  app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, {
+      swaggerOptions: {
+        urls: [
+          {
+            url: "/api-docs.json",
+            name: "ReminderOCR API",
+          },
+        ],
+      },
+      customCss: '.swagger-ui .topbar { display: none }',
+    })
+  );
+  // Serve spec as JSON for swagger-ui
+  app.get("/api-docs.json", (_req, res) => {
+    res.json(swaggerSpec);
+  });
+} catch (e) {
+  console.warn("[server] Could not load Swagger spec — API docs unavailable");
+}
+
 // app.use((req, res, next) => {
 //   if (req.method === "GET" && req.path.startsWith("/api/")) {
 //     res.setHeader("Cache-Control", "private, max-age=300");
@@ -106,6 +135,7 @@ async function main() {
     console.log(`[server] Running at http://localhost:${settings.port}`);
     console.log(`[server] Data dir: ${join(process.cwd(), "data")}`);
     console.log(`[server] Health check: http://localhost:${settings.port}/health`);
+    console.log(`[server] Swagger UI: http://localhost:${settings.port}/api-docs`);
   });
 
   startScheduler();
