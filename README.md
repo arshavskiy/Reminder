@@ -12,6 +12,10 @@ MongoDB Atlas              S3-compatible storage
  contracts, reminders)      DigitalOcean Spaces — optional)
 ```
 
+> **📚 Full documentation available in [docs/](./docs/) — start with [PROJECT_OVERVIEW.md](./docs/PROJECT_OVERVIEW.md)**
+>
+> **🔌 API reference: [openapi.yaml](./docs/openapi.yaml) — OpenAPI 3.0 spec (viewable in [Swagger UI](https://swagger.io/tools/swagger-ui/) or [ReDoc](https://redocly.com/redoc/))**
+
 ---
 
 ## Features

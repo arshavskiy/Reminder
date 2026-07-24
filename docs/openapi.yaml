@@ -1,0 +1,1157 @@
+openapi: 3.0.0
+info:
+  title: ReminderOCR API
+  description: |
+    Reminder and document management system with OCR extraction, contract tracking, and automated email reminders.
+
+    **Base URLs:**
+    - Production: `https://<your-railway-domain>`
+    - Development: `http://localhost:3737`
+
+    **Authentication:** All protected endpoints require the session cookie `sid` set by `/api/auth/login` or Google OAuth callback.
+  version: 1.0.0
+  contact:
+    name: ReminderOCR Support
+    email: support@reminderocr.local
+
+servers:
+  - url: http://localhost:3737
+    description: Development server
+  - url: https://reminderocr.railway.app
+    description: Production server
+
+security:
+  - cookieAuth: []
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sid
+      description: Session ID cookie set after successful authentication
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+        created_at:
+          type: string
+          format: date-time
+      required: [id, email, name, role]
+
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+        display_name:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        entity_type:
+          type: string
+          nullable: true
+        id_number:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, display_name, created_at, updated_at]
+
+    Contract:
+      type: object
+      properties:
+        id:
+          type: integer
+        client_id:
+          type: integer
+        contract_type:
+          type: string
+          example: "תסקיר בדיקה תקופתית"
+          nullable: true
+        contract_number:
+          type: string
+          nullable: true
+        start_date:
+          type: string
+          format: date
+          nullable: true
+        expiry_date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, expired, cancelled, renewed]
+          default: active
+        amount:
+          type: number
+          nullable: true
+        currency:
+          type: string
+          default: ILS
+        equipment_description:
+          type: string
+          nullable: true
+        document_id:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+        contact_email:
+          type: string
+          format: email
+          nullable: true
+        equipment:
+          type: array
+          items:
+            $ref: '#/components/schemas/Equipment'
+        _equipment:
+          type: array
+          items:
+            $ref: '#/components/schemas/Equipment'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, client_id, expiry_date]
+
+    Equipment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        client_id:
+          type: integer
+        category:
+          type: string
+          enum: [lift, scaffold, ladder, accessory, balloon, intake, extractor, other]
+        name:
+          type: string
+          nullable: true
+        manufacturer:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        serial_number:
+          type: string
+          nullable: true
+        last_inspection:
+          type: string
+          format: date
+          nullable: true
+        next_inspection:
+          type: string
+          format: date
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, client_id, category]
+
+    Reminder:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        client_id:
+          type: integer
+          nullable: true
+        document_id:
+          type: string
+          nullable: true
+        source_type:
+          type: string
+          enum: [manual, contract_expiry, equipment_inspection, task]
+        source_id:
+          type: integer
+          nullable: true
+        title:
+          type: string
+        body:
+          type: string
+          nullable: true
+        trigger_date:
+          type: string
+          format: date
+        advance_days:
+          type: integer
+        status:
+          type: string
+          enum: [pending, sent, dismissed, snoozed, error]
+        email_to:
+          type: string
+          nullable: true
+          description: "JSON array of email addresses or single email string"
+        email_template_id:
+          type: string
+          nullable: true
+        equipment_type:
+          type: string
+          nullable: true
+        manufacturer:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        serial_number:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, title, trigger_date, status]
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        file_name:
+          type: string
+        file_size:
+          type: integer
+        mime_type:
+          type: string
+        processing_status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        extracted_fields:
+          type: object
+          nullable: true
+        ai_summary:
+          type: string
+          nullable: true
+        detected_entities:
+          type: array
+          items:
+            type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, file_name, file_size, processing_status]
+
+    DashboardStats:
+      type: object
+      properties:
+        total_documents:
+          type: integer
+        total_clients:
+          type: integer
+        total_inspections:
+          type: integer
+        pending_reminders:
+          type: integer
+        expiring_soon:
+          type: integer
+        recent_documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Document'
+        upcoming_reminders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reminder'
+
+paths:
+  /api/auth/register:
+    post:
+      summary: Register a new user
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                password:
+                  type: string
+                  format: password
+              required: [email, name, password]
+      responses:
+        201:
+          description: User created, verification email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /api/auth/login:
+    post:
+      summary: Login with email and password
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+              required: [email, password]
+      responses:
+        200:
+          description: Login successful, sets sid cookie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        401:
+          description: Invalid credentials
+
+  /api/auth/logout:
+    post:
+      summary: Logout current user
+      tags: [Authentication]
+      responses:
+        200:
+          description: Logout successful
+
+  /api/dashboard/stats:
+    get:
+      summary: Get dashboard statistics
+      tags: [Dashboard]
+      parameters:
+        - name: Cache-Control
+          in: query
+          schema:
+            type: string
+          description: 'Pass "reload" to force-refresh stats'
+      responses:
+        200:
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+
+  /api/clients:
+    get:
+      summary: List all clients
+      tags: [Clients]
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        200:
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Client'
+                  total:
+                    type: integer
+
+    post:
+      summary: Create a new client
+      tags: [Clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Client'
+      responses:
+        201:
+          description: Client created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+
+  /api/clients/{id}:
+    get:
+      summary: Get client by ID
+      tags: [Clients]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Client details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+
+    put:
+      summary: Update client
+      tags: [Clients]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Client'
+      responses:
+        200:
+          description: Client updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+
+    delete:
+      summary: Delete client
+      tags: [Clients]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Client deleted
+
+  /api/contracts:
+    get:
+      summary: List contracts
+      tags: [Contracts]
+      parameters:
+        - name: clientId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, expired, cancelled, renewed]
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [contract, inspection, all]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        200:
+          description: List of contracts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Contract'
+                  total:
+                    type: integer
+
+    post:
+      summary: Create contract
+      tags: [Contracts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contract'
+      responses:
+        201:
+          description: Contract created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+
+  /api/contracts/{id}:
+    get:
+      summary: Get contract by ID
+      tags: [Contracts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Contract details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+
+    put:
+      summary: Update contract
+      tags: [Contracts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contract'
+      responses:
+        200:
+          description: Contract updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+
+    delete:
+      summary: Delete contract
+      tags: [Contracts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Contract deleted
+
+  /api/contracts/by-document/{documentId}:
+    get:
+      summary: Get contracts linked to a document
+      tags: [Contracts]
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Contracts for document
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Contract'
+
+  /api/contracts/expiring:
+    get:
+      summary: Get contracts expiring soon
+      tags: [Contracts]
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+          description: Number of days to look ahead
+      responses:
+        200:
+          description: Expiring contracts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Contract'
+
+  /api/reminders:
+    get:
+      summary: List reminders
+      tags: [Reminders]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, sent, dismissed, snoozed, error]
+        - name: days
+          in: query
+          schema:
+            type: integer
+            description: Filter by days ahead
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        200:
+          description: List of reminders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Reminder'
+                  total:
+                    type: integer
+
+    post:
+      summary: Create reminder
+      tags: [Reminders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reminder'
+      responses:
+        201:
+          description: Reminder created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reminder'
+
+  /api/reminders/{id}:
+    get:
+      summary: Get reminder by ID
+      tags: [Reminders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Reminder details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reminder'
+
+    put:
+      summary: Update reminder
+      tags: [Reminders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reminder'
+      responses:
+        200:
+          description: Reminder updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reminder'
+
+    delete:
+      summary: Delete reminder
+      tags: [Reminders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Reminder deleted
+
+  /api/reminders/{id}/send-now:
+    post:
+      summary: Send reminder immediately
+      tags: [Reminders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Reminder sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: string
+                    nullable: true
+
+  /api/reminders/{id}/dismiss:
+    post:
+      summary: Dismiss a reminder
+      tags: [Reminders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Reminder dismissed
+
+  /api/reminders/{id}/snooze:
+    post:
+      summary: Snooze a reminder
+      tags: [Reminders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                until:
+                  type: string
+                  format: date
+              required: [until]
+      responses:
+        200:
+          description: Reminder snoozed
+
+  /api/reminders/hydraulic-check:
+    post:
+      summary: Create hydraulic lift inspection reminder
+      tags: [Reminders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client_id:
+                  type: integer
+                  nullable: true
+                business:
+                  type: object
+                  properties:
+                    display_name:
+                      type: string
+                    entity_type:
+                      type: string
+                    id_number:
+                      type: string
+                    email:
+                      type: string
+                    phone:
+                      type: string
+                    address:
+                      type: string
+                  required: [display_name]
+                equipment:
+                  type: object
+                  properties:
+                    category:
+                      type: string
+                      enum: [lift, scaffold, ladder]
+                    name:
+                      type: string
+                    manufacturer:
+                      type: string
+                    model:
+                      type: string
+                    serial_number:
+                      type: string
+                check_date:
+                  type: string
+                  format: date
+                interval_months:
+                  type: integer
+                  enum: [4, 6, 12, 14]
+              required: [business, equipment, interval_months]
+      responses:
+        201:
+          description: Hydraulic check reminder created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client:
+                    $ref: '#/components/schemas/Client'
+                  equipment:
+                    $ref: '#/components/schemas/Equipment'
+                  contract:
+                    $ref: '#/components/schemas/Contract'
+                  reminders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Reminder'
+
+  /api/equipment:
+    get:
+      summary: List equipment
+      tags: [Equipment]
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query
+        - name: client_id
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        200:
+          description: List of equipment
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Equipment'
+
+    post:
+      summary: Create equipment
+      tags: [Equipment]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Equipment'
+      responses:
+        201:
+          description: Equipment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Equipment'
+
+  /api/equipment/{id}:
+    get:
+      summary: Get equipment by ID
+      tags: [Equipment]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Equipment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Equipment'
+
+    put:
+      summary: Update equipment
+      tags: [Equipment]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Equipment'
+      responses:
+        200:
+          description: Equipment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Equipment'
+
+    delete:
+      summary: Delete equipment
+      tags: [Equipment]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Equipment deleted
+
+  /api/documents:
+    get:
+      summary: List documents
+      tags: [Documents]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, processing, completed, failed]
+        - name: clientId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        200:
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Document'
+                  total:
+                    type: integer
+
+  /api/documents/{id}:
+    get:
+      summary: Get document by ID
+      tags: [Documents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Document details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+
+  /api/documents/{id}/download:
+    get:
+      summary: Download document file
+      tags: [Documents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: File download
+          content:
+            application/pdf: {}
+
+  /api/documents/upload:
+    post:
+      summary: Upload documents for OCR processing
+      tags: [Documents]
+      parameters:
+        - name: skipAi
+          in: query
+          schema:
+            type: boolean
+        - name: skipEntities
+          in: query
+          schema:
+            type: boolean
+        - name: skipReminders
+          in: query
+          schema:
+            type: boolean
+        - name: templateId
+          in: query
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+              required: [files]
+      responses:
+        200:
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ids:
+                    type: array
+                    items:
+                      type: string
+                  duplicates:
+                    type: array
+                    items:
+                      type: string
+
+  /api/user-settings:
+    get:
+      summary: Get user settings
+      tags: [Settings]
+      responses:
+        200:
+          description: User settings
+
+    put:
+      summary: Update user settings
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Settings updated
+
+tags:
+  - name: Authentication
+    description: User registration and login
+  - name: Dashboard
+    description: Dashboard statistics and overview
+  - name: Clients
+    description: Client management
+  - name: Contracts
+    description: Contract and inspection management
+  - name: Reminders
+    description: Reminder creation and management
+  - name: Equipment
+    description: Equipment tracking and inspection
+  - name: Documents
+    description: Document upload and OCR processing
+  - name: Settings
+    description: User and system settings
