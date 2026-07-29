@@ -24,6 +24,10 @@
               >{{ item.label }}</a>
             </nav>
 
+            <button class="nav-menu-btn" type="button" aria-label="פתח ניווט" @click="mobileNavOpen = true">
+              <span class="nav-menu-btn__icon">☰</span>
+            </button>
+
              <!-- Tail actions: theme toggle + user dropdown -->
              <div class="appbar__actions">
                <n-tooltip placement="bottom" :keep-alive-on-hover="false">
@@ -47,6 +51,23 @@
              </div>
           </header>
 
+          <n-drawer v-model:show="mobileNavOpen" :width="280" placement="right">
+            <n-drawer-content title="ניווט" closable>
+              <nav class="mobile-nav-list">
+                <button
+                  v-for="item in primaryNav"
+                  :key="item.key"
+                  :class="{ 'mobile-nav-list__item--active': activeKey === item.key }"
+                  class="mobile-nav-list__item"
+                  type="button"
+                  @click="navigate(item.key)"
+                >
+                  {{ item.label }}
+                </button>
+              </nav>
+            </n-drawer-content>
+          </n-drawer>
+
           <!-- ── Main content ───────────────────────────────────────────── -->
           <main :class="['content', { 'content--fullpage': route.path === '/login' }]">
             <div :class="route.path === '/login' ? '' : 'page'">
@@ -68,6 +89,8 @@ import {
   darkTheme,
   NConfigProvider,
   NDialogProvider,
+  NDrawer,
+  NDrawerContent,
   NIcon,
   NMessageProvider,
   NTooltip,
@@ -129,6 +152,7 @@ const route = useRoute();
 const authStore = useAuthStore();
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+const mobileNavOpen = ref(false);
 
 // ── Theme ────────────────────────────────────────────────────────────────────
 const darkPref = ref<boolean>(localStorage.getItem("theme") === "dark");
@@ -205,6 +229,7 @@ const activeKey = computed(() => {
 });
 
 function navigate(key: string) {
+  mobileNavOpen.value = false;
   router.push(key === "dashboard" ? "/" : `/${key}`);
 }
 </script>
@@ -285,6 +310,62 @@ html[data-theme="light"] .navlink--active {
   background: rgba(24, 160, 88, 0.10);
 }
 
+.nav-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+.nav-menu-btn:hover {
+  border-color: var(--brand-color);
+  background: rgba(99, 226, 183, 0.10);
+  color: var(--brand-color);
+}
+.nav-menu-btn__icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.mobile-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mobile-nav-list__item {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 14px;
+  text-align: right;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+.mobile-nav-list__item:hover {
+  background: var(--bg-hover);
+}
+.mobile-nav-list__item--active {
+  border-color: rgba(99, 226, 183, 0.24);
+  background: rgba(99, 226, 183, 0.12);
+  color: var(--brand-color);
+}
+html[data-theme="light"] .mobile-nav-list__item--active {
+  border-color: rgba(24, 160, 88, 0.18);
+  background: rgba(24, 160, 88, 0.10);
+}
+
 .appbar__actions {
   display: flex;
   align-items: center;
@@ -343,24 +424,17 @@ html[data-theme="light"] .navlink--active {
     padding: 10px 14px;
   }
 
-  .appbar__brand-text {
+  .appbar__brand {
     display: none;
   }
 
   .appbar__nav {
-    justify-content: flex-start;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    scrollbar-width: none;
-  }
-
-  .appbar__nav::-webkit-scrollbar {
     display: none;
   }
 
-  .navlink {
-    padding: 7px 11px;
-    font-size: 13px;
+  .nav-menu-btn {
+    display: inline-flex;
+    flex: 0 0 auto;
   }
 
   .appbar__actions {
@@ -375,10 +449,16 @@ html[data-theme="light"] .navlink--active {
 @media (max-width: 520px) {
   .appbar {
     padding-inline: 10px;
+    gap: 8px;
   }
 
   .appbar__logo,
   .iconbtn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .nav-menu-btn {
     width: 34px;
     height: 34px;
   }
