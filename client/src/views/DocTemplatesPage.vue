@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <n-space justify="space-between" align="center" style="margin-bottom: 16px">
+  <div class="doc-templates-page">
+    <n-space class="doc-templates-head" justify="space-between" align="center" style="margin-bottom: 16px">
 <!--      <h2 style="margin: 0">תבניות מסמכים</h2>-->
       <span></span>
       <n-space>
@@ -10,7 +10,7 @@
     </n-space>
 
     <!-- Generate-from-AI modal -->
-    <n-modal v-model:show="showGenerate" preset="card" title="צור תבנית באמצעות AI" style="width: 640px">
+    <n-modal v-model:show="showGenerate" preset="card" title="צור תבנית באמצעות AI" style="width: 640px; max-width: 95vw">
       <n-alert type="info" :show-icon="false" style="margin-bottom: 12px; font-size: 13px">
         העלה דוגמה של מסמך, או הדבק את הטקסט שלו — ה-AI יציע תבנית עם שדות מתאימים בעברית. תוכל לערוך לפני שמירה.
       </n-alert>
@@ -61,7 +61,7 @@
       אין עדיין תבניות. צור תבנית כדי להגדיר אילו שדות לחלץ מסוגי מסמכים שונים.
     </n-alert>
 
-    <n-grid v-else :cols="3" :x-gap="16" :y-gap="16">
+    <n-grid v-else :cols="templateGridCols" :x-gap="16" :y-gap="16">
       <n-gi v-for="t in templates" :key="t.id">
         <n-card hoverable :title="t.name" @click="select(t)" style="cursor:pointer">
           <template #header-extra>
@@ -84,7 +84,7 @@
     </n-grid>
 
     <!-- Editor drawer -->
-    <n-drawer v-model:show="showEdit" :width="960" placement="left">
+    <n-drawer v-model:show="showEdit" :width="drawerWidth" placement="left">
       <n-drawer-content :title="editing?.id ? 'עריכת תבנית' : 'תבנית חדשה'" closable>
         <n-form v-if="editing" label-placement="top">
           <n-grid :cols="2" :x-gap="16">
@@ -191,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from "vue";
+import {computed, onBeforeUnmount, onMounted, ref} from "vue";
 import {
   NAlert,
   NButton,
@@ -225,6 +225,13 @@ const showEdit = ref(false);
 const editing = ref<DocTemplate | null>(null);
 const saving = ref(false);
 const message = useMessage();
+const isMobile = ref(false);
+const templateGridCols = computed(() => isMobile.value ? 1 : 3);
+const drawerWidth = computed(() => isMobile.value ? "100vw" : 960);
+
+function updateViewport() {
+  isMobile.value = window.innerWidth <= 720;
+}
 
 // Generator state
 const showGenerate = ref(false);
@@ -275,7 +282,15 @@ const dateFieldOptions = computed(() => {
 async function load() {
   templates.value = await api.docTemplates.list();
 }
-onMounted(load);
+onMounted(() => {
+  updateViewport();
+  window.addEventListener("resize", updateViewport);
+  load();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", updateViewport);
+});
 
 function select(t: DocTemplate) {
   // deep-ish clone so we don't mutate the table row
@@ -398,5 +413,44 @@ async function onGenFile({ file }: { file: { file: File } }) {
   border: 1px solid var(--border-color);
   border-radius: 4px;
   margin-bottom: 6px;
+}
+
+@media (max-width: 720px) {
+  .doc-templates-head,
+  .doc-templates-head :deep(.n-space) {
+    align-items: stretch !important;
+    flex-direction: column !important;
+    width: 100%;
+  }
+
+  .doc-templates-head :deep(.n-button) {
+    width: 100%;
+  }
+
+  :deep(.n-drawer-body-content-wrapper) {
+    padding: 14px;
+  }
+
+  :deep(.n-grid) {
+    grid-template-columns: 1fr !important;
+  }
+
+  :deep(.n-gi) {
+    grid-column: span 1 / span 1 !important;
+  }
+
+  .field-row {
+    border-radius: 8px;
+  }
+
+  :deep(.n-drawer-footer .n-space) {
+    align-items: stretch;
+    flex-direction: column-reverse;
+    width: 100%;
+  }
+
+  :deep(.n-drawer-footer .n-button) {
+    width: 100%;
+  }
 }
 </style>
