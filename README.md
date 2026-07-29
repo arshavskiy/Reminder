@@ -111,6 +111,7 @@ All configuration is env-only — no `settings.json` file is used. Settings are 
 | `MONGODB_URI` | ✓ | `mongodb://127.0.0.1:27017` | Connection string |
 | `MONGODB_DB` | | `reminder-app` | Database name |
 | `PORT` | | `3737` | HTTP port |
+| `LOG_LEVEL` | | `info` in production, `debug` in dev | Minimum structured log level: `debug`, `info`, `warn`, or `error` |
 | `OPENAI_LOCAL_API_KEY` | ✓* | — | OpenAI API key (takes priority over `OPENAI_API_KEY`) |
 | `OPENAI_API_KEY` | ✓* | — | Fallback OpenAI key (avoid if system env var may conflict) |
 | `OPENAI_MODEL` | | `gpt-4o-mini` | OpenAI model |

@@ -4,23 +4,25 @@ import {getSettings} from "../settings";
 import {sendReminderEmail, sendEmailWithAttachments} from "./emailSender";
 import {sendMonthlyReportsPerClient} from "../reports/monthlyReports";
 import type {ReminderWithContext} from "../../src/shared/types.js";
+import {logger} from "../logger";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
 export function startScheduler() {
   const settings = getSettings();
-  if (settings.reminderEnabled) checkReminders().catch(console.error);
-  checkMonthlyReports().catch(console.error);
-  if (settings.reminderEnabled) checkEscalations().catch(console.error);
+  if (settings.reminderEnabled) checkReminders().catch((error) => logger.error("reminder_check_failed", { error }));
+  checkMonthlyReports().catch((error) => logger.error("monthly_report_check_failed", { error }));
+  if (settings.reminderEnabled) checkEscalations().catch((error) => logger.error("escalation_check_failed", { error }));
   _timer = setInterval(() => {
-    if (settings.reminderEnabled) checkReminders().catch(console.error);
-    checkMonthlyReports().catch(console.error);
-    if (settings.reminderEnabled) checkEscalations().catch(console.error);
+    if (settings.reminderEnabled) checkReminders().catch((error) => logger.error("reminder_check_failed", { error }));
+    checkMonthlyReports().catch((error) => logger.error("monthly_report_check_failed", { error }));
+    if (settings.reminderEnabled) checkEscalations().catch((error) => logger.error("escalation_check_failed", { error }));
   }, settings.reminderCheckIntervalMs);
 
-  console.log(
-    `[scheduler] Started — checking every ${settings.reminderCheckIntervalMs / 1000}s`
-  );
+  logger.info("scheduler_started", {
+    reminder_enabled: settings.reminderEnabled,
+    interval_seconds: settings.reminderCheckIntervalMs / 1000,
+  });
 }
 
 export function stopScheduler() {
@@ -55,10 +57,16 @@ async function checkMonthlyReports() {
     });
     if (result.success) {
       await col("user_settings").updateOne({_id: row._id}, {$set: {monthly_report_last_sent: monthKey, monthly_report_last_error: null}});
-      console.log(`[scheduler] ${result.reportsSent} client reports sent for ${monthKey}`);
+      logger.info("monthly_reports_sent", {
+        user_id: row.user_id,
+        month: monthKey,
+        reports_sent: result.reportsSent,
+        recipient_count: recipients.length,
+        formats,
+      });
     } else {
       await col("user_settings").updateOne({_id: row._id}, {$set: {monthly_report_last_error: result.error ?? "Unknown error"}});
-      console.warn(`[scheduler] Monthly reports failed for ${row.user_id}: ${result.error}`);
+      logger.warn("monthly_reports_failed", { user_id: row.user_id, month: monthKey, error: result.error });
     }
   }
 }
@@ -94,9 +102,7 @@ async function checkReminders() {
     })
     .toArray();
 
-  console.log(
-      `[scheduler] checkReminders() due today ${due.length}`
-  );
+  logger.debug("reminder_check_completed", { due_count: due.length });
 
   for (const reminder of due) {
     const remId = reminder._id?.toString();
@@ -136,7 +142,7 @@ async function processReminder(reminder: ReminderWithContext) {
       recipientSource = "reminder.email_to";
     }
   } catch {
-    console.warn(`[scheduler] Reminder ${remId}: malformed email_to field, ignoring`);
+    logger.warn("reminder_email_to_malformed", { reminder_id: remId });
   }
 
   if (recipients.length === 0 && reminder.client_id) {
@@ -145,16 +151,20 @@ async function processReminder(reminder: ReminderWithContext) {
       recipients = [client.email];
       recipientSource = `client (${client.display_name ?? reminder.client_id})`;
     } else {
-      console.warn(
-        `[scheduler] Reminder ${remId}: client ${reminder.client_id} has no email address`
-      );
+      logger.warn("reminder_client_email_missing", {
+        reminder_id: remId,
+        client_id: reminder.client_id,
+      });
     }
   }
 
   if (recipients.length === 0) {
-    console.warn(
-      `[scheduler] Reminder ${remId} "${reminder.title}": no recipients found — skipping send`
-    );
+    logger.warn("reminder_send_skipped", {
+      reminder_id: remId,
+      title: reminder.title,
+      reason: "no_recipients",
+      user_id: (reminder as any).user_id ?? null,
+    });
     await col("email_log").insertOne({
       reminder_id: remId,
       log_type: "skipped",
@@ -169,9 +179,13 @@ async function processReminder(reminder: ReminderWithContext) {
     return;
   }
 
-  console.log(
-    `[scheduler] Reminder ${remId} "${reminder.title}": sending to ${recipients.join(", ")} (source: ${recipientSource})`
-  );
+  logger.info("reminder_send_started", {
+    reminder_id: remId,
+    title: reminder.title,
+    user_id: (reminder as any).user_id ?? null,
+    recipient_count: recipients.length,
+    recipient_source: recipientSource,
+  });
 
   const result = await sendReminderEmail(reminder, recipients);
 
@@ -193,22 +207,33 @@ async function processReminder(reminder: ReminderWithContext) {
   } as any);
 
   if (result.success) {
-    console.log(
-      `[scheduler] Reminder ${remId} sent successfully to ${recipients.join(", ")}`
-    );
+    logger.info("reminder_sent", {
+      reminder_id: remId,
+      title: reminder.title,
+      user_id: (reminder as any).user_id ?? null,
+      recipient_count: recipients.length,
+    });
     await markSent(reminder);
   } else if (failCount + 1 >= 3) {
     await col("reminders").updateOne(
       { _id: remId } as any,
       { $set: { status: "error", updated_at: new Date() } }
     );
-    console.error(
-      `[scheduler] Reminder ${remId} "${reminder.title}": failed 3 times (last: ${result.error}), marking as error`
-    );
+    logger.error("reminder_send_failed_final", {
+      reminder_id: remId,
+      title: reminder.title,
+      user_id: (reminder as any).user_id ?? null,
+      attempt: failCount + 1,
+      error: result.error,
+    });
   } else {
-    console.warn(
-      `[scheduler] Reminder ${remId} "${reminder.title}": send failed (attempt ${failCount + 1}/3): ${result.error}`
-    );
+    logger.warn("reminder_send_failed", {
+      reminder_id: remId,
+      title: reminder.title,
+      user_id: (reminder as any).user_id ?? null,
+      attempt: failCount + 1,
+      error: result.error,
+    });
   }
 }
 
@@ -285,9 +310,18 @@ async function checkEscalations() {
     } as any);
 
     if (result.success) {
-      console.log(`[scheduler] Escalation sent for reminder ${remId} to ${settings.escalationEmail}`);
+      logger.warn("reminder_escalation_sent", {
+        reminder_id: remId,
+        user_id: r.user_id ?? null,
+        threshold_days: threshold,
+      });
     } else {
-      console.warn(`[scheduler] Escalation failed for reminder ${remId}: ${result.error}`);
+      logger.warn("reminder_escalation_failed", {
+        reminder_id: remId,
+        user_id: r.user_id ?? null,
+        threshold_days: threshold,
+        error: result.error,
+      });
     }
   }
 }

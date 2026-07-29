@@ -16,6 +16,7 @@ import {parseDocx} from "../pipeline/docxParser";
 import {parseXlsx} from "../pipeline/xlsxParser";
 import multer from "multer";
 import type {DocTemplate, EmailTemplate, ReminderWithContext} from "../../src/shared/types.js";
+import {logger} from "../logger";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -76,7 +77,10 @@ export function registerTemplateRoutes(app: express.Application) {
     }
 
     await col("doc_templates").updateOne(filter, { $set: updates });
-    console.log(`[templates] Updated template ${req.params.id}${updates.cached_system_prompt === null ? " (prompt cache cleared)" : ""}`);
+    logger.info("document_template_updated", {
+      template_id: req.params.id,
+      prompt_cache_cleared: updates.cached_system_prompt === null,
+    });
     res.json(await loadTemplate(req.params.id));
   });
 

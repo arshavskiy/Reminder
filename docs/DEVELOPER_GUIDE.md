@@ -511,6 +511,19 @@ onMounted(async () => {
 
 ### Backend Debugging
 
+### Production Logging
+
+Server runtime logs go through `server/src/logger.ts`.
+
+- In `NODE_ENV=production`, logs are emitted as one JSON object per line.
+- In development, logs are human-readable so local debugging stays comfortable.
+- Set `LOG_LEVEL=debug|info|warn|error` to control verbosity. Production defaults to `info`; development defaults to `debug`.
+- Request logs are emitted as `http_request` with method, path, status, duration, IP, and user agent. `/health` is skipped to avoid heartbeat noise.
+- Auth audit events include `login_success`, `login_failed`, `logout`, `user_registered`, `email_verified`, `password_reset_requested`, and `password_reset_completed`.
+- Operational events include `document_import_queued`, `document_processing_completed`, `document_processing_failed`, `reminder_sent`, `reminder_send_failed`, `reminder_escalation_sent`, `monthly_reports_sent`, and `monthly_reports_failed`.
+
+Do not log secrets, cookies, OAuth codes, password reset tokens, raw extracted document text, or full AI extraction JSON. Detailed extraction audit files are still written under the configured data directory; production stdout should only contain summaries, IDs, timings, counts, status, and error messages.
+
 **Using VS Code debugger:**
 
 1. Create `.vscode/launch.json`:

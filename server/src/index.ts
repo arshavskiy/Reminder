@@ -31,6 +31,7 @@ import {registerAdminRoutes} from "./routes/admin";
 import {registerExtractRemindersRoutes} from "./routes/extractReminders";
 import {importFile} from "./pipeline/importer";
 import {applyScannedKeys, scanFileForKeys, scanWatchFolder, shouldScanFile} from "./pipeline/keyScanner";
+import {logger, requestLogger} from "./logger";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -56,6 +57,7 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: "50mb" }));
+app.use(requestLogger);
 
 // Railway health check — must return 200 before traffic is routed
 app.get("/health", (_req, res) => {
@@ -85,7 +87,7 @@ try {
     res.json(swaggerSpec);
   });
 } catch (e) {
-  console.warn("[server] Could not load Swagger spec — API docs unavailable");
+  logger.warn("swagger_spec_unavailable", { error: e instanceof Error ? e.message : String(e) });
 }
 
 // app.use((req, res, next) => {
@@ -132,10 +134,12 @@ async function main() {
   await seedDefaultEmailTemplate();
 
   app.listen(settings.port, () => {
-    console.log(`[server] Running at http://localhost:${settings.port}`);
-    console.log(`[server] Data dir: ${join(process.cwd(), "data")}`);
-    console.log(`[server] Health check: http://localhost:${settings.port}/health`);
-    console.log(`[server] Swagger UI: http://localhost:${settings.port}/api-docs`);
+    logger.info("server_started", {
+      port: settings.port,
+      data_dir: join(process.cwd(), "data"),
+      health_url: `http://localhost:${settings.port}/health`,
+      api_docs_url: `http://localhost:${settings.port}/api-docs`,
+    });
   });
 
   startScheduler();
@@ -146,16 +150,16 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("[server] Fatal startup error:", err);
+  logger.error("server_startup_failed", { error: err });
   process.exit(1);
 });
 
 // Keep the server alive even if a background pipeline task throws
 process.on("unhandledRejection", (reason) => {
-  console.error("[server] Unhandled promise rejection:", reason);
+  logger.error("unhandled_rejection", { reason });
 });
 process.on("uncaughtException", (err) => {
-  console.error("[server] Uncaught exception:", err);
+  logger.error("uncaught_exception", { error: err });
 });
 
 // ── Watch folder ──────────────────────────────────────────────────────────────
@@ -165,11 +169,11 @@ function startWatchFolder() {
   const s = loadSettings();
   if (!s.watchFolderEnabled || !s.watchFolder) return;
   if (!existsSync(s.watchFolder)) {
-    console.warn(`[watch] Folder not found: ${s.watchFolder}`);
+    logger.warn("watch_folder_missing", { path: s.watchFolder });
     return;
   }
 
-  console.log(`[watch] Watching: ${s.watchFolder}`);
+  logger.info("watch_folder_started", { path: s.watchFolder });
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
   watch(s.watchFolder, { persistent: true }, (event, filename) => {
@@ -183,7 +187,7 @@ function startWatchFolder() {
       pending.set(filename, setTimeout(() => {
         pending.delete(filename);
         if (!existsSync(filePath)) return;
-        console.log(`[watch] Credential file detected: ${filename}`);
+        logger.info("credential_file_detected", { file_name: filename });
         const result = scanFileForKeys(filePath);
         if (result.found.length > 0) {
           applyScannedKeys([result]);
@@ -198,11 +202,11 @@ function startWatchFolder() {
     pending.set(filename, setTimeout(async () => {
       pending.delete(filename);
       if (!existsSync(filePath)) return;
-      console.log(`[watch] New file detected: ${filename}`);
+      logger.info("watch_file_detected", { file_name: filename });
       try {
         await importFile(filePath);
       } catch (err) {
-        console.error(`[watch] Import failed for ${filename}:`, err);
+        logger.error("watch_file_import_failed", { file_name: filename, error: err });
       }
     }, 1000));
   });

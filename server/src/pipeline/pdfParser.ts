@@ -1,6 +1,7 @@
 import pdfParse from "pdf-parse";
 import {readFileSync} from "fs";
 import {fixHebrewBidi} from "./hebrewBidi";
+import {logger} from "../logger";
 
 // Hebrew Unicode range: U+0590–U+05FF
 const HEBREW_RE = /[֐-׿]/g;
@@ -57,7 +58,7 @@ export async function parsePdf(filePath: string): Promise<PdfResult> {
       ),
     ]);
   } catch (err) {
-    console.warn(`[pdfParser] pdf-parse failed (${err}), falling back to OCR`);
+    logger.warn("pdf_parse_failed_ocr_fallback", { file_path: filePath, error: err });
     return { text: "", pageCount: 0, needsOcr: true, reason: `pdf-parse error: ${err}` };
   }
 
@@ -90,16 +91,18 @@ export async function parsePdf(filePath: string): Promise<PdfResult> {
   }
 
   if (needsOcr) {
-    console.warn(`[pdfParser] Will fall back to OCR: ${reason}`);
+    logger.warn("pdf_ocr_fallback_selected", { file_path: filePath, reason });
   }
 
   // Diagnostic: how much was stripped?
   const stripped = rawText.length - text.length;
   if (stripped > 50) {
-    console.log(
-      `[pdfParser] Stripped ${stripped} non-Hebrew/Latin chars from PDF text ` +
-        `(${rawText.length} → ${text.length})`
-    );
+    logger.debug("pdf_text_garbage_stripped", {
+      file_path: filePath,
+      stripped_chars: stripped,
+      raw_chars: rawText.length,
+      cleaned_chars: text.length,
+    });
   }
 
   return { text, pageCount, needsOcr, reason };

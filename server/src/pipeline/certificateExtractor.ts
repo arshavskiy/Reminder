@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import {mkdirSync, writeFileSync} from "fs";
 import {join} from "path";
 import {getDataDir, getSettings} from "../settings";
+import {logger} from "../logger";
 
 export interface CertificateExtraction {
   // Certificate identity
@@ -126,10 +127,22 @@ export async function extractCertificate(
   const execMs = Date.now() - t0;
 
   if (error) {
-    console.error(`[certExtractor] doc=${documentId ?? "?"} backend=${backend} model=${model} time=${execMs}ms — ${error}`);
+    logger.error("certificate_ai_extraction_failed", {
+      document_id: documentId ?? null,
+      backend,
+      model,
+      exec_ms: execMs,
+      error,
+    });
   } else {
-    console.log(`[certExtractor] doc=${documentId ?? "?"} backend=${backend} model=${model} time=${execMs}ms`);
-    if (result) console.log("[certExtractor] →", result);
+    logger.info("certificate_ai_extraction_completed", {
+      document_id: documentId ?? null,
+      backend,
+      model,
+      exec_ms: execMs,
+      parsed_ok: Boolean(result),
+      confidence: result?.confidence ?? null,
+    });
   }
 
   // Audit dump

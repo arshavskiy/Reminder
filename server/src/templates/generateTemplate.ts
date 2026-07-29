@@ -8,6 +8,7 @@
 import OpenAI from "openai";
 import {getSettings} from "../settings";
 import type {DocTemplate, TemplateField} from "../../src/shared/types.js";
+import {logger} from "../logger";
 
 const SYSTEM_PROMPT = `You are a Hebrew business-document analyst. The user will give you a sample document's raw text (in Hebrew, possibly with bidi/encoding artifacts from a PDF). Your job: design a reusable extraction template for documents of THIS KIND.
 
@@ -122,10 +123,16 @@ export async function generateTemplateFromText(sampleText: string): Promise<Gene
 
   const execMs = Date.now() - t0;
   if (error) {
-    console.error(`[gen-tpl] ❌ ${error}`);
+    logger.error("template_generation_failed", { backend, model, exec_ms: execMs, error });
   } else {
-    const u = usage ? `tokens: total=${usage.total_tokens}` : "";
-    console.log(`[gen-tpl] ✓ "${template?.name}" — ${template?.fields.length} fields ${u}`);
+    logger.info("template_generation_completed", {
+      backend,
+      model,
+      exec_ms: execMs,
+      template_name: template?.name ?? null,
+      field_count: template?.fields.length ?? 0,
+      usage,
+    });
   }
 
   return { template, rawJson, error, model, backend, execMs, usage };
