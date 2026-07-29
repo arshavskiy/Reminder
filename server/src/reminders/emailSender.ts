@@ -115,6 +115,8 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
     body: reminder.body ?? null,
     client_name: reminder.client_name,
     document_name: reminder.document_name,
+    contract_number: (reminder as any).contract_number ?? null,
+    contract_type: (reminder as any).contract_type ?? null,
     from_name: settings.emailFromName,
   };
 
@@ -149,10 +151,10 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
         { sort: { _id: -1 } }
       ) as any;
       if (ct) {
-        vars.contract_number ??= ct.contract_number;
-        vars.contract_type ??= ct.contract_type;
-        vars.start_date ??= ct.start_date;
-        vars.expiry_date ??= ct.expiry_date;
+        vars.contract_number = ct.contract_number ?? vars.contract_number;
+        vars.contract_type = ct.contract_type ?? vars.contract_type;
+        vars.start_date = ct.start_date ?? vars.start_date;
+        vars.expiry_date = ct.expiry_date ?? vars.expiry_date;
         vars.amount ??= ct.amount;
         vars.currency ??= ct.currency;
       }
@@ -174,7 +176,7 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
         try {
           const fields = JSON.parse(d.extracted_fields) as Record<string, unknown>;
           for (const [k, v] of Object.entries(fields)) {
-            if (vars[k] === undefined && (typeof v === "string" || typeof v === "number")) {
+            if (vars[k] == null && (typeof v === "string" || typeof v === "number")) {
               vars[k] = v as string | number;
             }
           }
@@ -186,10 +188,10 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
         { sort: { _id: -1 } }
       ) as any;
       if (ct) {
-        vars.contract_number ??= ct.contract_number;
-        vars.contract_type ??= ct.contract_type;
-        vars.start_date ??= ct.start_date;
-        vars.expiry_date ??= ct.expiry_date;
+        vars.contract_number = ct.contract_number ?? vars.contract_number;
+        vars.contract_type = ct.contract_type ?? vars.contract_type;
+        vars.start_date = ct.start_date ?? vars.start_date;
+        vars.expiry_date = ct.expiry_date ?? vars.expiry_date;
         vars.amount ??= ct.amount;
         vars.currency ??= ct.currency;
       }

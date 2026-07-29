@@ -208,9 +208,9 @@ const modules = [
     key: "doc-templates",
     title: "תבניות מסמכים",
     desc: "הגדר אילו שדות לחלץ מכל סוג מסמך. יצירה אוטומטית מ-AI.",
-    count: () => stats.value?.total_doc_templates ?? 0,
+    count: () => stats.value?.total_email_templates ?? 0,
     icon: ExtensionPuzzleOutline,
-    to: "/doc-templates",
+    to: "/email-templates",
     show: true,
   },
   {
@@ -440,6 +440,7 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
   padding: 10px 0;
   border-bottom: 1px solid var(--border-color);
 }
@@ -448,8 +449,10 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
   color: var(--text-primary);
   font-size: 13px;
   text-decoration: none;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 .panel__row-title:hover { color: var(--brand-color); }
 .panel__row-stack { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -468,5 +471,66 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
   font-size: 13px;
   padding: 18px 0 6px;
   margin: 0;
+}
+
+@media (max-width: 680px) {
+  .dash {
+    max-width: none;
+  }
+
+  .dash__topbar {
+    margin-bottom: 10px;
+  }
+
+  .dash__stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .stat {
+    min-width: 0;
+    padding: 13px 14px;
+    border-radius: 12px;
+  }
+
+  .stat__num {
+    font-size: 24px;
+  }
+
+  .module-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .module {
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .module:hover {
+    transform: none;
+  }
+
+  .module__title {
+    font-size: 15px;
+  }
+
+  .panel {
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .panel__row {
+    align-items: flex-start;
+  }
+
+  .panel__row-title {
+    flex: 1 1 auto;
+    max-width: 100%;
+  }
+
 }
 </style>

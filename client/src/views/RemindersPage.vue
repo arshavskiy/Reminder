@@ -3,7 +3,7 @@
     <n-space justify="space-between" align="center" style="margin-bottom: 16px">
 <!--      <n-h2 style="margin: 0">תזכורות</n-h2>-->
       <n-space>
-        <n-button :loading="store.loading" @click="store.fetch({ status: statusFilter.value ?? undefined, limit: 100 }, true)">↻ רענן</n-button>
+        <n-button :loading="store.loading" @click="load">↻ רענן</n-button>
 <!--        <n-button @click="quickTest" :loading="testing" :disabled="!testEmail">-->
 <!--          🧪 תזכורת בדיקה-->
 <!--        </n-button>-->
@@ -236,7 +236,7 @@ const testEmail = ref<string | null>(authStore.user?.email || "");
 const router = useRouter();
 const message = useMessage();
 
-const statusFilter = ref<string | null>("pending");
+const statusFilter = ref<string | null>(null);
 const showCreate = ref(false);
 const showQuickTest = ref(false);
 const quickTestTemplateId = ref<string | null>(null);

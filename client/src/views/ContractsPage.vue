@@ -101,7 +101,7 @@
       <n-virtual-list
         v-if="filteredRows.length"
         :item-size="220"
-        :items="filteredRows"
+        :items="pagedRows"
         :item-resizable="true"
         class="cards-vlist"
         item-class="cards-vlist__item"
@@ -128,6 +128,19 @@
           </div>
         </template>
       </n-virtual-list>
+
+      <div v-if="filteredRows.length" class="pagination-bar">
+        <span class="pagination-summary">
+          מציג {{ pageStart + 1 }}-{{ pageEnd }} מתוך {{ filteredRows.length }}
+        </span>
+        <n-pagination
+          v-model:page="page"
+          v-model:page-size="pageSize"
+          :item-count="filteredRows.length"
+          :page-sizes="[5, 10, 20, 50]"
+          show-size-picker
+        />
+      </div>
 
       <div v-if="!filteredRows.length" class="empty">
         <p>אין {{ kind === "inspection" ? "תסקירים" : "חוזים" }} להצגה</p>
@@ -167,7 +180,7 @@
       <!-- Step 0: סינון -->
       <div v-if="exportStep === 0" class="export-body">
         <h3 class="export-section-title">&#x25BD; סינון בדיקות לייצוא</h3>
-        <n-grid :cols="3" :x-gap="16" :y-gap="12">
+        <n-grid :cols="exportGridCols" :x-gap="16" :y-gap="12">
           <n-gi>
             <n-form-item label="לקוח">
               <n-select v-model:value="exportFilter.client_id" :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]" :virtual-scroll="false" clearable />
@@ -183,7 +196,7 @@
               <n-select v-model:value="exportFilter.contract_type" :options="[{ label: 'כל הסוגים', value: null }, ...contractTypeOptions]" :virtual-scroll="false" clearable />
             </n-form-item>
           </n-gi>
-          <n-gi :span="3">
+          <n-gi :span="exportGridCols">
             <n-form-item label="טווח תאריכים">
               <n-date-picker v-model:value="exportFilter.dateRange" type="daterange" clearable style="width:100%" />
             </n-form-item>
@@ -253,7 +266,7 @@
     <!-- ── Create / Edit modal ─────────────────────────────────────────── -->
     <n-modal v-model:show="showForm" :title="editingId ? 'עריכת תסקיר / חוזה' : 'תסקיר / חוזה חדש'" preset="card" style="width: 600px; max-width: 95vw" :mask-closable="false">
       <n-form label-placement="top" :model="form">
-        <n-grid :cols="2" :x-gap="16">
+        <n-grid :cols="formGridCols" :x-gap="16">
           <n-gi>
             <n-form-item label="מספר תסקיר / חוזה">
               <n-input v-model:value="form.contract_number" placeholder="לדוגמה: 15935" />
@@ -272,7 +285,7 @@
             </n-form-item>
           </n-gi>
 
-          <n-gi :span="2">
+          <n-gi :span="formGridCols">
             <n-form-item label="לקוח">
               <n-select
                 v-model:value="form.client_id"
@@ -318,13 +331,13 @@
 <!--            </n-form-item>-->
 <!--          </n-gi>-->
 
-          <n-gi :span="2">
+          <n-gi :span="formGridCols">
             <n-form-item label="סיכום / הערות">
               <n-input v-model:value="form.summary" type="textarea" :rows="3" placeholder="תיאור קצר..." />
             </n-form-item>
           </n-gi>
 
-          <n-gi :span="2">
+          <n-gi :span="formGridCols">
             <n-divider style="margin: 4px 0 12px" title-placement="right">ציוד (יישלח בתזכורת)</n-divider>
           </n-gi>
           <n-gi>
@@ -368,7 +381,22 @@
     <!-- ── Delete confirm modal ────────────────────────────────────────── -->
     <n-modal v-model:show="showDeleteConfirm" title="מחיקת רשומה" preset="dialog" type="error" :positive-text="'מחק'" :negative-text="'ביטול'" @positive-click="doDelete" @negative-click="showDeleteConfirm = false">
       <p>האם למחוק את הרשומה <strong>{{ deletingRow?.contract_number ?? deletingRow?.contract_type ?? "זו" }}</strong>?</p>
-      <p style="font-size:13px; color:var(--text-secondary)">פעולה זו אינה הפיכה. התזכורות הקשורות לא יימחקו.</p>
+      <n-checkbox v-model:checked="deleteRelatedReminders" style="margin: 8px 0 4px">
+        מחק גם תזכורות ואימיילים קשורים
+      </n-checkbox>
+      <p style="font-size:13px; color:var(--text-secondary)">
+        פעולה זו אינה הפיכה. {{ deleteRelatedReminders ? "התזכורות ורישומי האימייל הקשורים יימחקו גם כן." : "התזכורות ורישומי האימייל הקשורים יישארו במערכת." }}
+      </p>
+    </n-modal>
+
+    <n-modal v-model:show="showBulkDeleteConfirm" title="מחיקת רשומות" preset="dialog" type="error" :positive-text="'מחק'" :negative-text="'ביטול'" @positive-click="doBulkDelete" @negative-click="showBulkDeleteConfirm = false">
+      <p>למחוק {{ selectedIds.size }} רשומות?</p>
+      <n-checkbox v-model:checked="bulkDeleteRelatedReminders" style="margin: 8px 0 4px">
+        מחק גם תזכורות ואימיילים קשורים
+      </n-checkbox>
+      <p style="font-size:13px; color:var(--text-secondary)">
+        פעולה זו אינה הפיכה. {{ bulkDeleteRelatedReminders ? "התזכורות ורישומי האימייל הקשורים יימחקו גם כן." : "התזכורות ורישומי האימייל הקשורים יישארו במערכת." }}
+      </p>
     </n-modal>
 
     <!-- ── Add reminder modal ─────────────────────────────────────────── -->
@@ -405,7 +433,7 @@
     <!-- Manual hydraulic-check modal: business + equipment + interval -->
     <n-modal v-model:show="showHydraulicCheck" title="תסקיר חדש" :show-icon="false" preset="dialog" style="width: 760px; max-width: 95vw">
       <n-form label-placement="top" v-if="hydraulicForm">
-        <n-grid :cols="2" :x-gap="16">
+        <n-grid :cols="formGridCols" :x-gap="16">
           <n-gi>
             <n-form-item label="מספר תסקיר">
               <n-input
@@ -431,7 +459,7 @@
           <n-form-item label="שם העסק" required>
             <n-input v-model:value="hydraulicForm.business.display_name" placeholder="לדוגמה: מפעל דן בע&quot;מ" />
           </n-form-item>
-          <n-grid :cols="2" :x-gap="16">
+          <n-grid :cols="formGridCols" :x-gap="16">
             <n-gi>
               <n-form-item label="ח.פ / ת.ז">
                 <n-input v-model:value="hydraulicForm.business.id_number" />
@@ -470,7 +498,7 @@
           </n-grid>
         </template>
         <template v-else>
-          <n-grid :cols="2" :x-gap="16">
+          <n-grid :cols="formGridCols" :x-gap="16">
             <n-gi>
               <n-form-item label="איש קשר">
                 <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="אם שונה מפרטי הלקוח" />
@@ -508,10 +536,10 @@
         <n-form-item label="סוג ציוד" required>
           <n-select v-model:value="hydraulicForm.equipment.category" :options="hydraulicCategoryOptions" />
         </n-form-item>
-        <n-grid :cols="2" :x-gap="16">
+        <n-grid :cols="formGridCols" :x-gap="16">
           <n-gi>
             <n-form-item label="שם הציוד">
-              <n-input v-model:value="hydraulicForm.equipment.name" placeholder="ברירת מחדל: שם העסק" />
+              <n-input v-model:value="hydraulicForm.equipment.name" placeholder="לדוגמה: מלגזה חשמלית / במת הרמה / עגורן" />
             </n-form-item>
           </n-gi>
           <n-gi>
@@ -544,7 +572,7 @@
               <n-input v-model:value="hydraulicForm.equipment.load_radius" />
             </n-form-item>
           </n-gi>
-          <n-gi :span="2">
+          <n-gi :span="formGridCols">
             <n-form-item label="תיאור ציוד">
               <n-input v-model:value="hydraulicForm.equipment.description" type="textarea" :rows="2" />
             </n-form-item>
@@ -561,7 +589,12 @@
           <n-select v-model:value="hydraulicIntervalMonths" :options="hydraulicIntervalOptions" />
         </n-form-item>
         <n-form-item v-else label="תאריך תזכורת מותאם אישית" required>
-          <n-date-picker v-model:value="hydraulicReminderDateMs" type="date" style="width: 100%" />
+          <n-date-picker
+            v-model:value="hydraulicReminderDateMs"
+            :is-date-disabled="disablePastHydraulicDates"
+            type="date"
+            style="width: 100%"
+          />
         </n-form-item>
       </n-form>
       <template #action>
@@ -573,7 +606,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref, watch} from "vue";
+import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {
   NAlert,
@@ -588,6 +621,7 @@ import {
   NH4,
   NInput,
   NModal,
+  NPagination,
   NSelect,
   NSpace,
   NSpin,
@@ -597,7 +631,6 @@ import {
 import {useContractsStore} from "../stores/contracts.js";
 import {api} from "../services/apiService.js";
 import type {HydraulicCheckRequest} from "../services/apiService.js";
-import {useConfirm} from "../composables/useConfirm.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
 import type {ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
@@ -605,19 +638,40 @@ const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
 const router = useRouter();
 const message = useMessage();
-const { confirm } = useConfirm();
 
 const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
 const search = ref("");
 const filterClientId = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
+const isMobile = ref(false);
+const page = ref(1);
+const pageSize = ref(10);
+const formGridCols = computed(() => isMobile.value ? 1 : 2);
+const exportGridCols = computed(() => isMobile.value ? 1 : 3);
+
+function updateViewport() {
+  isMobile.value = window.innerWidth <= 720;
+}
+
+function formatLocalDate(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function startOfLocalDay(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
 
 // ── Bulk select ───────────────────────────────────────────────────────────────
 const bulkMode = ref(false);
 const selectedIds = ref(new Set<string>());
 const bulkDeleting = ref(false);
 const bulkSending = ref(false);
+const showBulkDeleteConfirm = ref(false);
+const bulkDeleteRelatedReminders = ref(false);
 
 function toggleBulkMode() {
   bulkMode.value = !bulkMode.value;
@@ -631,26 +685,28 @@ function toggleSelect(id: string) {
 }
 function bulkDelete() {
   if (!selectedIds.value.size) return;
+  bulkDeleteRelatedReminders.value = false;
+  showBulkDeleteConfirm.value = true;
+}
+
+async function doBulkDelete() {
+  if (!selectedIds.value.size) return;
   const count = selectedIds.value.size;
-  confirm({
-    title: kind.value === "inspection" ? "מחיקת תסקירים" : "מחיקת חוזים",
-    content: `למחוק ${count} רשומות?`,
-    confirmText: "מחק",
-    onConfirm: async () => {
-      bulkDeleting.value = true;
-      try {
-        await Promise.all([...selectedIds.value].map((id) => store.remove(id)));
-        message.success(`${count} רשומות נמחקו`);
-        selectedIds.value = new Set();
-        bulkMode.value = false;
-        await Promise.all([refresh(), loadReminders()]);
-      } catch (e) {
-        message.error(String(e));
-      } finally {
-        bulkDeleting.value = false;
-      }
-    },
-  });
+  bulkDeleting.value = true;
+  try {
+    await Promise.all([...selectedIds.value].map((id) =>
+      store.remove(id, { deleteRelatedReminders: bulkDeleteRelatedReminders.value })
+    ));
+    message.success(`${count} רשומות נמחקו`);
+    selectedIds.value = new Set();
+    bulkMode.value = false;
+    await Promise.all([refresh(), loadReminders()]);
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    bulkDeleting.value = false;
+    bulkDeleteRelatedReminders.value = false;
+  }
 }
 
 async function bulkSendReminders() {
@@ -1037,6 +1093,7 @@ const equipmentCategoryOptions: { label: string; value: EquipmentCategory }[] = 
 
 const showDeleteConfirm = ref(false);
 const deletingRow = ref<ContractWithClient | null>(null);
+const deleteRelatedReminders = ref(false);
 
 // ── Client picker ─────────────────────────────────────────────────────────────
 const clientOptions = ref<{ label: string; value: string }[]>([]);
@@ -1077,16 +1134,18 @@ function extractInspectionSequence(contractNumber: string | null | undefined, in
 
 const suggestedHydraulicContractNumber = computed(() => {
   const inspectorNumber = engineerProfile.value?.inspector_number?.trim();
-  const seed = parseInt(engineerProfile.value?.inspector_id_start ?? "0", 10);
-  if (!inspectorNumber || !Number.isFinite(seed) || seed <= 0) return "";
+  if (!inspectorNumber) return "";
+  const parsedSeed = parseInt(engineerProfile.value?.inspector_id_start ?? "", 10);
+  const seed = Number.isFinite(parsedSeed) && parsedSeed > 0 ? parsedSeed : null;
   const maxFromRows = store.rows.reduce((max, row) => {
     const seq = extractInspectionSequence(row.contract_number, inspectorNumber);
     return seq && seq > max ? seq : max;
-  }, seed - 1);
+  }, seed ? seed - 1 : 0);
   const storedSeq = Number.isFinite(Number(engineerProfile.value?.next_inspection_seq))
     ? Number(engineerProfile.value?.next_inspection_seq)
-    : seed - 1;
-  const nextSeq = Math.max(seed, maxFromRows + 1, storedSeq + 1);
+    : seed ? seed - 1 : 0;
+  if (!seed && maxFromRows <= 0 && storedSeq <= 0) return "";
+  const nextSeq = Math.max(seed ?? 1, maxFromRows + 1, storedSeq + 1);
   return `${inspectorNumber}/${nextSeq}`;
 });
 
@@ -1117,7 +1176,14 @@ const hydraulicIntervalOptions = [
   { label: "14 חודשים", value: 14 },
 ];
 
-function openHydraulicCheck() {
+function disablePastHydraulicDates(ts: number): boolean {
+  return startOfLocalDay(ts) < startOfLocalDay(Date.now());
+}
+
+async function openHydraulicCheck() {
+  if (!engineerProfile.value) {
+    await loadEngineerProfile().catch(() => {});
+  }
   hydraulicClientId.value = null;
   hydraulicReminderMode.value = "months";
   hydraulicReminderDateMs.value = null;
@@ -1152,6 +1218,40 @@ function openHydraulicCheck() {
   showHydraulicCheck.value = true;
 }
 
+function applyHydraulicClient(clientId: string | null) {
+  if (!hydraulicForm.value) return;
+
+  if (!clientId) {
+    hydraulicForm.value.business = {
+      display_name: "",
+      id_number: "",
+      contact_person: "",
+      email: "",
+      phone: "",
+      address: "",
+      po_box: "",
+      client_zipcode: "",
+    };
+    return;
+  }
+
+  const client = clientsMap.value.get(String(clientId));
+  if (!client) return;
+  hydraulicForm.value.business = {
+    ...hydraulicForm.value.business,
+    display_name: client.display_name ?? "",
+    id_number: client.id_number ?? "",
+    contact_person: client.contact_person ?? "",
+    email: client.email ?? "",
+    phone: client.phone ?? "",
+    address: client.address ?? "",
+    po_box: (client as any).po_box ?? "",
+    client_zipcode: (client as any).client_zipcode ?? "",
+  };
+}
+
+watch(hydraulicClientId, applyHydraulicClient);
+
 async function doCreateHydraulicCheck() {
   if (!hydraulicForm.value) return;
   if (!hydraulicClientId.value && !hydraulicForm.value.business.display_name.trim()) {
@@ -1164,13 +1264,17 @@ async function doCreateHydraulicCheck() {
   }
   creatingHydraulicCheck.value = true;
   try {
+    const contractNumber = hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value;
+    if (contractNumber && !hydraulicForm.value.contract_number?.trim()) {
+      hydraulicForm.value.contract_number = contractNumber;
+    }
     const payload: HydraulicCheckRequest = {
       ...hydraulicForm.value,
-      contract_number: hydraulicForm.value.contract_number?.trim() || undefined,
+      contract_number: contractNumber || undefined,
       client_id: hydraulicClientId.value ?? undefined,
       interval_months: hydraulicIntervalMonths.value,
       next_inspection_date: hydraulicReminderMode.value === "date"
-        ? new Date(hydraulicReminderDateMs.value!).toISOString().slice(0, 10)
+        ? formatLocalDate(hydraulicReminderDateMs.value!)
         : undefined,
 
     };
@@ -1232,6 +1336,8 @@ async function refresh() {
 }
 
 onMounted(async () => {
+  updateViewport();
+  window.addEventListener("resize", updateViewport);
   refresh();
   store.fetchExpiring(30);
   loadClients();
@@ -1240,6 +1346,10 @@ onMounted(async () => {
   try {
     emailTemplates.value = await api.emailTemplates.list();
   } catch { /* non-fatal */ }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", updateViewport);
 });
 
 const filteredRows = computed(() => {
@@ -1264,8 +1374,37 @@ const filteredRows = computed(() => {
       return d >= from && d <= to;
     });
   }
-  return rows;
+  return [...rows].sort(compareBySerialLastFirst);
 });
+
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)));
+const pageStart = computed(() => (page.value - 1) * pageSize.value);
+const pageEnd = computed(() => Math.min(filteredRows.value.length, pageStart.value + pageSize.value));
+const pagedRows = computed(() => filteredRows.value.slice(pageStart.value, pageEnd.value));
+
+watch([search, filterClientId, filterDateRange, statusFilter, kind, pageSize], () => {
+  page.value = 1;
+});
+
+watch(pageCount, (count) => {
+  if (page.value > count) page.value = count;
+});
+
+function serialSortValue(row: ContractWithClient): string {
+  const equipment = Array.isArray((row as any)._equipment) ? (row as any)._equipment : [];
+  const firstSerial = equipment
+    .map((item: any) => String(item?.serial_number ?? "").trim())
+    .find(Boolean);
+  return firstSerial || String(row.contract_number ?? "");
+}
+
+function compareBySerialLastFirst(a: ContractWithClient, b: ContractWithClient): number {
+  const aSerial = serialSortValue(a);
+  const bSerial = serialSortValue(b);
+  const result = aSerial.localeCompare(bSerial, undefined, { numeric: true, sensitivity: "base" });
+  if (result !== 0) return -result;
+  return String(b.id).localeCompare(String(a.id), undefined, { numeric: true, sensitivity: "base" });
+}
 
 
 // ── CRUD actions ──────────────────────────────────────────────────────────────
@@ -1346,21 +1485,23 @@ async function saveForm() {
   }
 }
 
-function confirmDelete(row: ContractWithClient) {
+function confirmDelete(row: ContractWithClient, options?: { deleteRelatedReminders?: boolean }) {
   deletingRow.value = row;
+  deleteRelatedReminders.value = options?.deleteRelatedReminders ?? false;
   showDeleteConfirm.value = true;
 }
 
 async function doDelete() {
   if (!deletingRow.value) return;
   try {
-    await store.remove(deletingRow.value.id);
+    await store.remove(deletingRow.value.id, { deleteRelatedReminders: deleteRelatedReminders.value });
     message.success("הרשומה נמחקה");
     await Promise.all([refresh(), loadReminders()]);
   } catch (e) {
     message.error(String(e));
   } finally {
     deletingRow.value = null;
+    deleteRelatedReminders.value = false;
   }
 }
 
@@ -1543,6 +1684,22 @@ function exportToExcel() {
 /* ── Cards virtual list ──────────────────────────────────────────────── */
 .cards-vlist { height: calc(100vh - 260px); }
 .cards-vlist__pad { padding-bottom: 14px; }
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+}
+.pagination-summary {
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
 .btn--ghost-active { background: var(--bg-elevated); border-color: var(--brand-color); color: var(--brand-color); }
 
 /* ── Empty state ────────────────────────────────────────────────────── */
@@ -1611,4 +1768,103 @@ function exportToExcel() {
 .export-summary__text { font-size: 18px; font-weight: 600; color: var(--text-primary); }
 .export-summary__sub { font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
 
+@media (max-width: 720px) {
+  .page__head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .page__title {
+    font-size: 23px;
+  }
+
+  .page__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .btn {
+    justify-content: center;
+    min-width: 0;
+    padding-inline: 10px;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .filterbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 5px;
+    scrollbar-width: none;
+  }
+
+  .filterbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pill {
+    flex: 0 0 auto;
+    padding-inline: 14px;
+  }
+
+  .toolbar,
+  .toolbar__right {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .search {
+    width: 100%;
+  }
+
+  .toolbar__right :deep(.n-select),
+  .toolbar__right :deep(.n-date-picker) {
+    width: 100% !important;
+  }
+
+  .cards-vlist {
+    height: calc(100vh - 360px);
+    min-height: 360px;
+  }
+
+  .pagination-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pagination-summary {
+    text-align: center;
+  }
+
+  .export-steps {
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .export-step__line {
+    width: 18px;
+  }
+
+  .col-grid,
+  .format-cards {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+}
+
+@media (max-width: 460px) {
+  .page__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .cards-vlist {
+    height: calc(100vh - 390px);
+    min-height: 420px;
+  }
+}
 </style>

@@ -5,33 +5,25 @@
     @click="bulkMode ? emit('toggle-select', String(row.id)) : emit('open-document', row)"
   >
     <div class="card__row">
-      <div class="card__num">
-        <n-checkbox
-          v-if="bulkMode"
-          :checked="selected"
-          @click.stop
-          @update:checked="emit('toggle-select', String(row.id))"
-        />
-        <span v-if="row.contract_number" class="card__num-main">{{ displayContractNumber }}</span>
+      <div class="card__meta">
+        <div v-if="bulkMode || row.contract_number" class="card__num">
+          <n-checkbox
+            v-if="bulkMode"
+            :checked="selected"
+            @click.stop
+            @update:checked="emit('toggle-select', String(row.id))"
+          />
+          <span v-if="row.contract_number" class="card__num-main">{{ displayContractNumber }}</span>
+        </div>
+
+        <div class="card__pills">
+          <span :class="statusTagClass(row.status)">{{ statusLabel(row.status) }}</span>
+          <span class="tag tag--neutral">{{ row.contract_type ?? "-" }}</span>
+          <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
+        </div>
       </div>
 
-      <div class="card__pills">
-        <span :class="statusTagClass(row.status)">{{ statusLabel(row.status) }}</span>
-        <span class="tag tag--neutral">{{ row.contract_type ?? "-" }}</span>
-        <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
-      </div>
-      <div v-if="showActions" class="card__actions">
-        <button
-          :disabled="!row.document_id"
-          :title="row.document_id ? 'צפה במסמך' : 'אין מסמך מקושר'"
-          class="btn btn--xs btn--ghost"
-          @click.stop="emit('open-document', row)"
-        >
-          <n-icon :component="EyeOutline" /> צפה
-        </button>
-        <button class="btn btn--xs btn--ghost" @click.stop="emit('edit', row)">
-          <n-icon :component="CreateOutline" /> ערוך
-        </button>
+      <div class="card__actions">
         <button class="btn btn--xs btn--danger" @click.stop="emit('delete', row)">
           <n-icon :component="TrashOutline" /> מחק
         </button>
@@ -41,6 +33,20 @@
     <p class="card__sub">
       {{ subtitle }}
     </p>
+
+    <div v-if="showActions" class="card__secondary-actions">
+      <button
+        :disabled="!row.document_id"
+        :title="row.document_id ? 'צפה במסמך' : 'אין מסמך מקושר'"
+        class="btn btn--xs btn--ghost"
+        @click.stop="emit('open-document', row)"
+      >
+        <n-icon :component="EyeOutline" /> צפה
+      </button>
+      <button class="btn btn--xs btn--ghost" @click.stop="emit('edit', row)">
+        <n-icon :component="CreateOutline" /> ערוך
+      </button>
+    </div>
 
 
     <div class="card__foot">
@@ -140,7 +146,7 @@ const emit = defineEmits<{
   "toggle-select": [id: string];
   "open-document": [row: ContractWithClient];
   edit: [row: ContractWithClient];
-  delete: [row: ContractWithClient];
+  delete: [row: ContractWithClient, options?: { deleteRelatedReminders?: boolean }];
   "add-reminder": [row: ContractWithClient];
   "send-reminder": [reminder: ReminderWithContext];
   "dismiss-reminder": [reminder: ReminderWithContext];
@@ -242,8 +248,16 @@ function reminderStatusClass(status: string): string {
 .card__row {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.card__meta {
+  display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
 }
 .card__num {
   display: flex;
@@ -252,11 +266,24 @@ function reminderStatusClass(status: string): string {
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
+  min-height: 28px;
 }
-.card__actions { display: flex; gap: 8px; }
+.card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-inline-start: auto;
+}
 .card__sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 12px; }
-.card__pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-
+.card__secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -4px 0 12px;
+}
+.card__pills { display: flex; flex-wrap: wrap; gap: 6px; }
 .btn {
   display: inline-flex;
   align-items: center;
@@ -411,5 +438,85 @@ html[data-theme="dark"] .rbadge--error { color: #ff7875; }
   color: var(--text-muted);
   margin: 6px 0 0;
   padding: 0;
+}
+
+@media (max-width: 720px) {
+  .card {
+    padding: 15px;
+    border-radius: 12px;
+  }
+
+  .card:hover {
+    box-shadow: none;
+  }
+
+  .card__row,
+  .card__foot {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .card__num {
+    min-width: 0;
+    font-size: 18px;
+  }
+
+  .card__num-main {
+    overflow-wrap: anywhere;
+  }
+
+  .card__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-inline-start: 0;
+    width: 100%;
+  }
+
+  .card__meta {
+    width: 100%;
+  }
+
+  .card__actions .btn,
+  .card__secondary-actions .btn,
+  .reminder-actions .btn {
+    justify-content: center;
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .card__secondary-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .card__foot-col--end {
+    text-align: right;
+  }
+
+  .kv {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .reminders-header,
+  .reminder-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .reminder-date {
+    min-width: 0;
+  }
+
+  .reminder-title {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .reminder-actions {
+    width: 100%;
+  }
 }
 </style>

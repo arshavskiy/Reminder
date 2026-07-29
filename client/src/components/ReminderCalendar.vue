@@ -14,6 +14,9 @@
             <span class="rcal__legend-dot" style="background:var(--brand-color)"></span> תזכורות
           </span>
           <span class="rcal__legend-item">
+            <span class="rcal__legend-dot" style="background:#2080f0"></span> נשלחה
+          </span>
+          <span class="rcal__legend-item">
             <span class="rcal__legend-dot" style="background:#d03050"></span> פג תוקף
           </span>
           <span class="rcal__legend-item">
@@ -74,12 +77,12 @@
             >
               <template #trigger>
                 <button
-                  :class="`rcal__pill--${r.status}`"
-                  :title="r.title"
+                  :class="`rcal__pill--${reminderVisualStatus(r)}`"
+                  :title="reminderDisplayTitle(r)"
                   class="rcal__pill"
                   @click.stop
                 >
-                  {{ r.title }}
+                  {{ reminderCalendarLabel(r) }}
                 </button>
               </template>
               <ReminderQuickView :reminder="r" @navigate="onNavigate" />
@@ -93,8 +96,8 @@
             >
               <template #trigger>
                 <button
-                  :class="`rcal__pill--expiry-${e.urgency}`"
-                  :title="`פג תוקף: ${e.equipment_name ?? e.contract_type ?? 'תסקירים'} — ${e.client_name ?? ''}`"
+                  :class="`rcal__pill--expiry-${expiryVisualStatus(e)}`"
+                  :title="`${expiryStatusLabel(e)}: ${e.equipment_name ?? e.contract_type ?? 'תסקירים'} — ${e.client_name ?? ''}`"
                   class="rcal__pill rcal__pill--expiry"
                   @click.stop
                 >
@@ -105,8 +108,8 @@
                 <p class="rcal__expiry-pop__title">{{ e.equipment_name ?? e.contract_type ?? 'תסקירים' }}</p>
                 <p v-if="e.client_name" class="rcal__expiry-pop__sub">לקוח: {{ e.client_name }}</p>
                 <p v-if="e.contract_number" class="rcal__expiry-pop__sub">מס׳ {{ e.contract_number }}</p>
-                <p :class="`rcal__expiry-pop__days--${e.urgency}`" class="rcal__expiry-pop__days">
-                  {{ e.days_until < 0 ? `פג לפני ${Math.abs(e.days_until)} ימים` : e.days_until === 0 ? 'פג היום' : `${e.days_until} ימים לפקיעה` }}
+                <p :class="`rcal__expiry-pop__days--${expiryVisualStatus(e)}`" class="rcal__expiry-pop__days">
+                  {{ expiryTimeLabel(e) }}
                 </p>
               </div>
             </n-popover>
@@ -134,9 +137,10 @@
             trigger="click"
           >
             <template #trigger>
-              <button :class="`rcal__agenda-item--${r.status}`" class="rcal__agenda-item">
+              <button :class="`rcal__agenda-item--${reminderVisualStatus(r)}`" class="rcal__agenda-item">
                 <span class="rcal__agenda-dot" />
-                <span class="rcal__agenda-title">{{ r.title }}</span>
+                <span class="rcal__agenda-title">{{ reminderCalendarLabel(r) }}</span>
+                <span v-if="isReminderOverdue(r)" class="rcal__agenda-overdue">באיחור</span>
                 <span v-if="r.client_name" class="rcal__agenda-client">— {{ r.client_name }}</span>
               </button>
             </template>
@@ -145,11 +149,11 @@
           <button
             v-for="e in grp.expiryItems"
             :key="`exp-${e.id}`"
-            :class="`rcal__agenda-item--expiry-${e.urgency}`"
+            :class="`rcal__agenda-item--expiry-${expiryVisualStatus(e)}`"
             class="rcal__agenda-item"
           >
             <span class="rcal__agenda-dot rcal__agenda-dot--expiry" />
-            <span class="rcal__agenda-title">{{ e.equipment_name ?? e.contract_type ?? 'תסקירים' }} — פג תוקף</span>
+            <span class="rcal__agenda-title">{{ e.equipment_name ?? e.contract_type ?? 'תסקירים' }} — {{ expiryStatusLabel(e) }}</span>
             <span v-if="e.client_name" class="rcal__agenda-client">— {{ e.client_name }}</span>
           </button>
         </div>
@@ -187,6 +191,51 @@ function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0, 0, 0, 
 function sameDay(a: Date, b: Date): boolean { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 
 const today = startOfDay(new Date());
+
+function isReminderOverdue(r: ReminderWithContext): boolean {
+  if (r.status !== "pending" || !r.trigger_date) return false;
+  return startOfDay(new Date(r.trigger_date)).getTime() < today.getTime();
+}
+
+function reminderVisualStatus(r: ReminderWithContext): string {
+  return isReminderOverdue(r) ? "overdue" : r.status;
+}
+
+function reminderDisplayTitle(r: ReminderWithContext): string {
+  const label = reminderCalendarLabel(r);
+  return isReminderOverdue(r) ? `באיחור: ${label}` : label;
+}
+
+function reminderCalendarLabel(r: ReminderWithContext): string {
+  return [r.title, shortContractNumber(r.contract_number)].filter(Boolean).join(" ");
+}
+
+function shortContractNumber(contractNumber: string | null | undefined): string | null {
+  if (!contractNumber) return null;
+  const parts = contractNumber.split("/");
+  return (parts.at(-1) ?? contractNumber).trim() || contractNumber;
+}
+
+function expiryVisualStatus(e: ExpiryCalendarItem): "overdue" | "critical" | "warning" | "ok" {
+  if (e.days_until < 0) return "overdue";
+  if (e.days_until <= 30) return "critical";
+  if (e.days_until <= 90) return "warning";
+  return "ok";
+}
+
+function expiryStatusLabel(e: ExpiryCalendarItem): string {
+  const status = expiryVisualStatus(e);
+  if (status === "overdue") return "פג תוקף";
+  if (status === "critical") return e.days_until === 0 ? "פג היום" : "תוקף קרוב";
+  if (status === "warning") return "תוקף עד 90 יום";
+  return "בתוקף";
+}
+
+function expiryTimeLabel(e: ExpiryCalendarItem): string {
+  if (e.days_until < 0) return `פג לפני ${Math.abs(e.days_until)} ימים`;
+  if (e.days_until === 0) return "פג היום";
+  return `${e.days_until} ימים לפקיעה`;
+}
 
 const rowsByIso = computed(() => {
   const m = new Map<string, ReminderWithContext[]>();
@@ -384,8 +433,10 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
   display: block;
 }
 .rcal__pill:hover { filter: brightness(1.1); }
+.rcal__pill--overdue { background: #d03050; }
 .rcal__pill--sent { background: #2080f0; }
 .rcal__pill--dismissed { background: var(--text-muted); }
+.rcal__pill--error { background: var(--color-error, #d03050); }
 .rcal__pill--failed { background: var(--color-error, #d03050); }
 .rcal__more { font-size: 10px; color: var(--text-muted); padding: 1px 4px; }
 
@@ -436,14 +487,24 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
   transition: background 0.12s, border-color 0.12s;
 }
 .rcal__agenda-item:hover { background: var(--bg-hover); border-color: var(--brand-color); }
+.rcal__agenda-item--overdue {
+  border-color: rgba(208, 48, 80, 0.35);
+  background: rgba(208, 48, 80, 0.06);
+}
+.rcal__agenda-item--overdue:hover {
+  border-color: #d03050;
+  background: rgba(208, 48, 80, 0.10);
+}
 .rcal__agenda-dot {
   width: 8px; height: 8px;
   border-radius: 999px;
   background: var(--brand-color);
   flex-shrink: 0;
 }
+.rcal__agenda-item--overdue .rcal__agenda-dot { background: #d03050; }
 .rcal__agenda-item--sent .rcal__agenda-dot { background: #2080f0; }
 .rcal__agenda-item--dismissed .rcal__agenda-dot { background: var(--text-muted); }
+.rcal__agenda-item--error .rcal__agenda-dot { background: var(--color-error, #d03050); }
 .rcal__agenda-item--failed .rcal__agenda-dot { background: var(--color-error, #d03050); }
 .rcal__agenda-item--expiry-overdue  .rcal__agenda-dot { background: #d03050; }
 .rcal__agenda-item--expiry-critical .rcal__agenda-dot { background: #f0a020; }
@@ -451,6 +512,15 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
 .rcal__agenda-item--expiry-ok       .rcal__agenda-dot { background: #18a058; }
 .rcal__agenda-dot--expiry { border-radius: 2px; }
 .rcal__agenda-title { font-weight: 500; flex: 1; }
+.rcal__agenda-overdue {
+  border: 1px solid rgba(208, 48, 80, 0.26);
+  border-radius: 999px;
+  color: #d03050;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+}
 .rcal__agenda-client { color: var(--text-muted); font-size: 12px; }
 
 .rcal__legend {

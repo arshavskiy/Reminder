@@ -334,4 +334,57 @@ html[data-theme="light"] .navlink--active {
 .content--fullpage {
   padding: 0;
 }
+
+@media (max-width: 900px) {
+  .appbar {
+    gap: 14px;
+    height: auto;
+    min-height: 60px;
+    padding: 10px 14px;
+  }
+
+  .appbar__brand-text {
+    display: none;
+  }
+
+  .appbar__nav {
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .appbar__nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .navlink {
+    padding: 7px 11px;
+    font-size: 13px;
+  }
+
+  .appbar__actions {
+    gap: 6px;
+  }
+
+  .content {
+    padding: 18px 14px 28px;
+  }
+}
+
+@media (max-width: 520px) {
+  .appbar {
+    padding-inline: 10px;
+  }
+
+  .appbar__logo,
+  .iconbtn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .content {
+    padding: 14px 10px 24px;
+  }
+}
 </style>

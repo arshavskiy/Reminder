@@ -2,27 +2,47 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {sendReminderEmail} from "../reminders/emailSender";
-import {generateContractReminders} from "../reminders/scheduler";
+import {advanceContractAfterSentReminder, generateContractReminders} from "../reminders/scheduler";
 import type {EquipmentCategory, ReminderWithContext} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 
 const HYDRAULIC_CATEGORIES: EquipmentCategory[] = ["lift", "scaffold", "ladder"];
 const HYDRAULIC_INTERVAL_MONTHS = [4, 6, 12, 14] as const;
 
+function parseIsoDateOnly(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (d.getFullYear() !== Number(match[1]) || d.getMonth() !== Number(match[2]) - 1 || d.getDate() !== Number(match[3])) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatIsoDateOnly(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function todayDateOnly(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 /**
  * Atomically allocates the next sequential inspection/report number for this
  * user and combines it with their inspector_number into a report number, e.g.
  * "484590/18168".
  * (nextInspectionId), but actually persisted here instead of just displayed.
- * Seeds the counter from engineer_profiles.inspector_id_start on first use.
+ * Seeds the counter from engineer_profiles.inspector_id_start on first use,
+ * or from this user's existing report numbers if the explicit seed is missing.
  */
 async function allocateReportNumber(userId: string): Promise<string | null> {
   const profile = await col("engineer_profiles").findOne({ user_id: userId }) as any;
   const inspectorNumber = String(profile?.inspector_number ?? "").trim();
-  if (!profile?.inspector_id_start || !inspectorNumber) return null;
+  if (!inspectorNumber) return null;
 
-  const seed = parseInt(profile.inspector_id_start, 10);
-  if (!Number.isFinite(seed)) return null;
+  const parsedSeed = parseInt(profile?.inspector_id_start ?? "", 10);
+  const seed = Number.isFinite(parsedSeed) && parsedSeed > 0 ? parsedSeed : null;
   const existingContracts = await col("contracts")
     .find({ user_id: userId, contract_number: { $regex: inspectorNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") } })
     .project({ contract_number: 1 })
@@ -30,11 +50,12 @@ async function allocateReportNumber(userId: string): Promise<string | null> {
   const maxExistingSeq = existingContracts.reduce((max, row: any) => {
     const seq = extractInspectionSequence(row?.contract_number, inspectorNumber);
     return seq && seq > max ? seq : max;
-  }, seed - 1);
+  }, seed ? seed - 1 : 0);
   const storedSeq = Number.isFinite(Number(profile?.next_inspection_seq))
     ? Number(profile.next_inspection_seq)
-    : seed - 1;
-  const nextSeq = Math.max(seed, storedSeq + 1, maxExistingSeq + 1);
+    : seed ? seed - 1 : 0;
+  if (!seed && maxExistingSeq <= 0 && storedSeq <= 0) return null;
+  const nextSeq = Math.max(seed ?? 1, storedSeq + 1, maxExistingSeq + 1);
 
   await col("engineer_profiles").updateOne(
     { user_id: userId },
@@ -86,14 +107,17 @@ export function registerReminderRoutes(app: express.Application) {
 
     const rows = await Promise.all(
       reminderDocs.map(async (r: any) => {
-        const [client, document] = await Promise.all([
+        const [client, document, contract] = await Promise.all([
           r.client_id ? col("clients").findOne({ _id: tryObjectId(r.client_id) }) : null,
           r.document_id ? col("documents").findOne({ _id: tryObjectId(r.document_id) }) : null,
+          resolveReminderContract(r, userId),
         ]);
         return {
           ...flatDoc(r),
           client_name: (client as any)?.display_name ?? null,
           document_name: (document as any)?.file_name ?? null,
+          contract_number: (contract as any)?.contract_number ?? null,
+          contract_type: (contract as any)?.contract_type ?? null,
         };
       })
     );
@@ -215,13 +239,14 @@ export function registerReminderRoutes(app: express.Application) {
 
     let checkDate: Date;
     if (body.check_date) {
-      checkDate = new Date(body.check_date);
-      if (isNaN(checkDate.getTime())) {
+      const parsed = parseIsoDateOnly(body.check_date);
+      if (!parsed) {
         res.status(400).json({ error: "check_date must be a valid date (YYYY-MM-DD)" });
         return;
       }
+      checkDate = parsed;
     } else {
-      checkDate = new Date();
+      checkDate = todayDateOnly();
     }
 
     const now = new Date();
@@ -323,18 +348,26 @@ export function registerReminderRoutes(app: express.Application) {
       equipmentId = (await col("equipment").insertOne(equipmentDoc as any)).insertedId;
     }
 
-    const dueDate = body.next_inspection_date ? new Date(body.next_inspection_date) : new Date(checkDate);
+    const dueDate = body.next_inspection_date ? parseIsoDateOnly(body.next_inspection_date) : new Date(checkDate);
     if (body.next_inspection_date) {
-      if (isNaN(dueDate.getTime())) {
+      if (!dueDate) {
         res.status(400).json({ error: "next_inspection_date must be a valid date (YYYY-MM-DD)" });
         return;
       }
+      if (dueDate.getTime() < todayDateOnly().getTime()) {
+        res.status(400).json({ error: "next_inspection_date cannot be in the past" });
+        return;
+      }
     } else {
-      dueDate.setMonth(dueDate.getMonth() + intervalMonths);
+      dueDate!.setMonth(dueDate!.getMonth() + intervalMonths);
     }
-    const expiryDate = dueDate.toISOString().slice(0, 10);
-    const startDate = checkDate.toISOString().slice(0, 10);
+    const expiryDate = formatIsoDateOnly(dueDate!);
+    const startDate = formatIsoDateOnly(checkDate);
     const reportNumber = body.contract_number?.trim() || await allocateReportNumber(userId);
+    if (!reportNumber) {
+      res.status(400).json({ error: "Enter contract_number manually or set inspector_number and inspector_id_start in the engineer profile" });
+      return;
+    }
     if (reportNumber) {
       await syncInspectionSequenceFromReportNumber(userId, reportNumber);
     }
@@ -346,8 +379,10 @@ export function registerReminderRoutes(app: express.Application) {
       contract_number: reportNumber,
       start_date: startDate,
       expiry_date: expiryDate,
+      inspection_interval_months: intervalMonths,
       summary: equipmentDescription,
       manual_fields: {
+        inspection_interval_months: intervalMonths,
         contact_person: contactPerson,
         contact_phone: contactPhone,
         contact_email: contactEmail,
@@ -511,13 +546,18 @@ export function registerReminderRoutes(app: express.Application) {
       return;
     }
 
-    const client = r.client_id ? (await col("clients").findOne({ _id: tryObjectId(r.client_id) })) as any : null;
-    const document = r.document_id ? (await col("documents").findOne({ _id: tryObjectId(r.document_id) })) as any : null;
+    const [client, document, contract] = await Promise.all([
+      r.client_id ? col("clients").findOne({ _id: tryObjectId(r.client_id) }) as any : null,
+      r.document_id ? col("documents").findOne({ _id: tryObjectId(r.document_id) }) as any : null,
+      resolveReminderContract(r, userId),
+    ]);
 
     const reminder: ReminderWithContext & { client_email?: string } = {
       ...flatDoc(r),
       client_name: client?.display_name ?? null,
       document_name: document?.file_name ?? null,
+      contract_number: contract?.contract_number ?? null,
+      contract_type: contract?.contract_type ?? null,
       client_email: client?.email ?? undefined,
     } as any;
 
@@ -537,6 +577,7 @@ export function registerReminderRoutes(app: express.Application) {
       await col("reminders").updateOne(filter, {
         $set: { status: "sent", updated_at: new Date() },
       });
+      await advanceContractAfterSentReminder(reminder);
       await col("email_log").insertOne({
         reminder_id: req.params.id,
         to_address: recipients.join(", "),
@@ -586,6 +627,18 @@ function tryObjectId(id: string): any {
   } catch {
     return id;
   }
+}
+
+async function resolveReminderContract(reminder: any, userId: string): Promise<any | null> {
+  if (reminder.source_type !== "contract_expiry" || !reminder.source_id) return null;
+  const sourceId = String(reminder.source_id);
+  return col("contracts").findOne({
+    user_id: userId,
+    $or: [
+      { _id: tryObjectId(sourceId) },
+      { id: sourceId },
+    ],
+  });
 }
 
 function flatDoc(doc: any) {

@@ -1,5 +1,6 @@
 import express from "express";
 import {join} from "path";
+import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {getDataDir} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
@@ -73,14 +74,17 @@ export function registerDashboardRoutes(app: express.Application) {
 
     const upcoming_reminders = await Promise.all(
       upcoming_reminders_raw.map(async (r: any) => {
-        const [client, document] = await Promise.all([
+        const [client, document, contract] = await Promise.all([
           r.client_id ? col("clients").findOne({ _id: r.client_id }) : null,
           r.document_id ? col("documents").findOne({ _id: r.document_id }) : null,
+          resolveReminderContract(r, userId),
         ]);
         return {
           ...flatDoc(r),
           client_name: (client as any)?.display_name ?? null,
           document_name: (document as any)?.file_name ?? null,
+          contract_number: (contract as any)?.contract_number ?? null,
+          contract_type: (contract as any)?.contract_type ?? null,
         };
       })
     );
@@ -108,4 +112,24 @@ function flatDoc(doc: any) {
   if (!doc) return doc;
   const { _id, ...rest } = doc;
   return { id: _id?.toString(), ...rest };
+}
+
+function tryObjectId(id: string): any {
+  try {
+    return new ObjectId(id);
+  } catch {
+    return id;
+  }
+}
+
+async function resolveReminderContract(reminder: any, userId: string): Promise<any | null> {
+  if (reminder.source_type !== "contract_expiry" || !reminder.source_id) return null;
+  const sourceId = String(reminder.source_id);
+  return col("contracts").findOne({
+    user_id: userId,
+    $or: [
+      { _id: tryObjectId(sourceId) },
+      { id: sourceId },
+    ],
+  });
 }

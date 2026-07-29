@@ -38,8 +38,8 @@ export const useContractsStore = defineStore("contracts", () => {
     return updated;
   }
 
-  async function remove(id: string) {
-    await api.contracts.delete(id);
+  async function remove(id: string, options?: { deleteRelatedReminders?: boolean }) {
+    await api.contracts.delete(id, options);
     rows.value = rows.value.filter((c) => c.id !== id);
     total.value--;
   }

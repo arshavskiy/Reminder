@@ -11,6 +11,10 @@
         <span class="rqv__label">לקוח</span>
         <span class="rqv__value">{{ reminder.client_name }}</span>
       </div>
+      <div v-if="reminder.contract_number" class="rqv__row">
+        <span class="rqv__label">מספר תסקיר</span>
+        <span class="rqv__value">{{ shortContractNumber(reminder.contract_number) }}</span>
+      </div>
       <div v-if="reminder.document_name" class="rqv__row">
         <span class="rqv__label">מסמך</span>
         <span class="rqv__value">{{ reminder.document_name }}</span>
@@ -55,6 +59,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending: "ממתינה",
   sent: "נשלחה",
   dismissed: "נדחתה",
+  error: "נכשלה",
   failed: "נכשלה",
   snoozed: "נדחתה זמנית",
 };
@@ -63,6 +68,12 @@ const statusLabel = computed(() => STATUS_LABELS[props.reminder.status] ?? props
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+function shortContractNumber(contractNumber: string | null | undefined): string {
+  if (!contractNumber) return "—";
+  const parts = contractNumber.split("/");
+  return (parts.at(-1) ?? contractNumber).trim() || contractNumber;
 }
 </script>
 
@@ -88,6 +99,7 @@ function formatDate(d: string | null | undefined) {
 .rqv__status--pending { background: rgba(240,160,32,0.15); color: #b27a02; }
 .rqv__status--sent { background: rgba(32,128,240,0.15); color: #2080f0; }
 .rqv__status--dismissed { background: var(--bg-elevated); color: var(--text-muted); }
+.rqv__status--error { background: rgba(208,48,80,0.15); color: var(--color-error, #d03050); }
 .rqv__status--failed { background: rgba(208,48,80,0.15); color: var(--color-error, #d03050); }
 .rqv__status--snoozed { background: rgba(99,226,183,0.15); color: var(--brand-color); }
 

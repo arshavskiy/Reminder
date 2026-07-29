@@ -4,7 +4,7 @@
       <n-button type="primary" @click="newTemplate">+ תבנית חדשה</n-button>
     </n-space>
 
-    <n-grid v-if="templates.length" :cols="3" :x-gap="16" :y-gap="16">
+    <n-grid v-if="templates.length" :cols="templateGridCols" :x-gap="16" :y-gap="16">
       <n-gi v-for="t in templates" :key="t.id">
         <n-card hoverable :title="t.name" @click="select(t)" style="cursor: pointer">
           <template #header-extra>
@@ -22,9 +22,31 @@
     </n-alert>
 
     <!-- Editor drawer -->
-    <n-drawer v-model:show="showEdit" :width="960" placement="left">
+    <n-drawer v-model:show="showEdit" :width="drawerWidth" placement="left">
       <n-drawer-content :title="editing?.id ? 'עריכת תבנית אימייל' : 'תבנית אימייל חדשה'" closable>
         <n-tabs v-if="editing" v-model:value="activeTab" type="line" animated @update:value="onTabChange">
+          <!-- ── Preview tab ─────────────────────────────────────────────── -->
+          <n-tab-pane name="preview" tab="תצוגה מקדימה">
+            <n-space justify="space-between" align="center" style="margin-bottom:12px">
+              <n-text strong>נושא: {{ previewSubject || "—" }}</n-text>
+              <n-space>
+                <n-button v-if="editing?.id" size="small" type="error" @click="deleteTpl">מחק תבנית</n-button>
+                <n-button size="small" @click="refreshPreview" :loading="previewing">רענן תצוגה</n-button>
+              </n-space>
+            </n-space>
+            <div v-if="previewing" style="text-align:center; padding:40px">
+              <n-spin size="large" />
+            </div>
+            <iframe
+              v-else-if="previewHtml"
+              :srcdoc="previewHtml"
+              style="width:100%; height:620px; border:1px solid var(--border-color); border-radius:8px"
+            />
+            <n-alert v-else type="default" :show-icon="false">
+              לחץ על "רענן תצוגה" כדי לראות את התצוגה המקדימה
+            </n-alert>
+          </n-tab-pane>
+
           <!-- ── Editor tab ──────────────────────────────────────────────── -->
           <n-tab-pane name="editor" tab="עריכה">
             <n-form label-placement="top">
@@ -110,28 +132,6 @@
               </n-form-item>
             </n-form>
           </n-tab-pane>
-
-          <!-- ── Preview tab ─────────────────────────────────────────────── -->
-          <n-tab-pane name="preview" tab="תצוגה מקדימה">
-            <n-space justify="space-between" align="center" style="margin-bottom:12px">
-              <n-text strong>נושא: {{ previewSubject || "—" }}</n-text>
-              <n-space>
-                <n-button v-if="editing?.id" size="small" type="error" @click="deleteTpl">מחק תבנית</n-button>
-                <n-button size="small" @click="refreshPreview" :loading="previewing">רענן תצוגה</n-button>
-              </n-space>
-            </n-space>
-            <div v-if="previewing" style="text-align:center; padding:40px">
-              <n-spin size="large" />
-            </div>
-            <iframe
-              v-else-if="previewHtml"
-              :srcdoc="previewHtml"
-              style="width:100%; height:620px; border:1px solid var(--border-color); border-radius:8px"
-            />
-            <n-alert v-else type="default" :show-icon="false">
-              לחץ על "רענן תצוגה" כדי לראות את התצוגה המקדימה
-            </n-alert>
-          </n-tab-pane>
         </n-tabs>
 
         <template #footer>
@@ -149,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from "vue";
+import {computed, onBeforeUnmount, onMounted, ref} from "vue";
 import {
   NAlert,
   NButton,
@@ -189,6 +189,13 @@ const detectedVars = ref<string[]>([]);
 const activeTab = ref("editor");
 const htmlInputRef = ref<any>(null);
 const message = useMessage();
+const isMobile = ref(false);
+const templateGridCols = computed(() => isMobile.value ? 1 : 3);
+const drawerWidth = computed(() => isMobile.value ? "100vw" : 960);
+
+function updateViewport() {
+  isMobile.value = window.innerWidth <= 720;
+}
 
 const docTplOptions = computed(() =>
   docTemplates.value.map((t) => ({ label: t.name, value: t.id }))
@@ -205,15 +212,24 @@ async function load() {
     api.docTemplates.list(),
   ]);
 }
-onMounted(load);
+onMounted(() => {
+  updateViewport();
+  window.addEventListener("resize", updateViewport);
+  load();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", updateViewport);
+});
 
 function select(t: EmailTemplate) {
   editing.value = JSON.parse(JSON.stringify(t));
   detectedVars.value = [];
   previewHtml.value = "";
   previewSubject.value = "";
-  activeTab.value = "editor";
+  activeTab.value = "preview";
   showEdit.value = true;
+  refreshPreview();
 }
 
 function newTemplate() {
@@ -231,8 +247,9 @@ function newTemplate() {
   detectedVars.value = [];
   previewHtml.value = "";
   previewSubject.value = "";
-  activeTab.value = "editor";
+  activeTab.value = "preview";
   showEdit.value = true;
+  refreshPreview();
 }
 
 async function insertSampleHtml() {
@@ -382,3 +399,19 @@ async function deleteTpl() {
   }
 }
 </script>
+
+<style scoped>
+@media (max-width: 720px) {
+  :deep(.n-drawer-body-content-wrapper) {
+    padding: 14px;
+  }
+
+  :deep(.n-drawer-header__main) {
+    font-size: 16px;
+  }
+
+  iframe {
+    min-height: 520px;
+  }
+}
+</style>
