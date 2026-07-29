@@ -179,10 +179,14 @@ const props = withDefaults(defineProps<Props>(), { loading: false, expiryItems: 
 defineEmits<{ (e: "refresh"): void }>();
 
 const router = useRouter();
-const view = ref<"month" | "agenda">("month");
+const view = ref<"month" | "agenda">(isMobileViewport() ? "agenda" : "month");
 const cursor = ref(new Date());
 
 const weekdayLabels = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
+
+function isMobileViewport(): boolean {
+  return typeof window !== "undefined" && window.innerWidth <= 720;
+}
 
 function toIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

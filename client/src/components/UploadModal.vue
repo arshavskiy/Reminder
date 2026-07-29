@@ -1,5 +1,14 @@
 <template>
-  <n-modal v-model:show="visible" :bordered="false" :mask-closable="false" :segmented="false" :title="null" preset="card" style="width: 860px">
+  <n-modal
+    v-model:show="visible"
+    :bordered="false"
+    :mask-closable="false"
+    :segmented="false"
+    :title="null"
+    class="upload-modal"
+    preset="card"
+    style="width: min(860px, calc(100vw - 24px)); max-height: calc(100vh - 24px)"
+  >
     <template #header>
       <span style="font-size: 15px; font-weight: 600">העלאת מסמכים</span>
     </template>
@@ -250,7 +259,7 @@
       <!-- Upload tab footer -->
       <div v-if="activeTab === 'upload'" class="modal-footer">
         <n-button @click="cancel">ביטול</n-button>
-        <div style="display: flex; gap: 8px; align-items: center">
+        <div class="modal-footer__actions">
           <span v-if="files.length" class="footer-count">{{ files.length }} קובץ/ים נבחרו</span>
           <n-button
             :disabled="!files.length"
@@ -266,7 +275,7 @@
       <!-- Extract tab footer -->
       <div v-else class="modal-footer">
         <n-button @click="cancel">ביטול</n-button>
-        <div style="display: flex; gap: 8px; align-items: center">
+        <div class="modal-footer__actions">
           <!-- Step: pick -->
           <template v-if="extractStep === 'pick'">
             <n-button
@@ -520,6 +529,15 @@ defineExpose({ addFiles });
 <style scoped>
 .hidden { display: none; }
 
+:global(.upload-modal.n-card) {
+  overflow: hidden;
+}
+
+:global(.upload-modal .n-card__content) {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 /* ── Two-column layout (upload tab) ─────────────────────────────────────── */
 .upload-layout {
   display: flex;
@@ -548,7 +566,10 @@ defineExpose({ addFiles });
   border: 2px dashed var(--border-color);
   border-radius: 12px;
   cursor: pointer;
-  transition: border-color 0.18s, background 0.18s;
+  background:
+    linear-gradient(135deg, rgba(24, 160, 88, 0.08), rgba(32, 128, 240, 0.05)),
+    var(--bg-card);
+  transition: border-color 0.18s, background 0.18s, transform 0.12s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -558,7 +579,10 @@ defineExpose({ addFiles });
 .drop-zone:hover,
 .drop-zone--over {
   border-color: var(--brand-color);
-  background: rgba(99, 226, 183, 0.05);
+  background:
+    linear-gradient(135deg, rgba(99, 226, 183, 0.16), rgba(32, 128, 240, 0.08)),
+    var(--bg-card);
+  transform: translateY(-1px);
 }
 .drop-zone--has-files {
   min-height: 52px;
@@ -867,6 +891,164 @@ defineExpose({ addFiles });
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
+.modal-footer__actions { display: flex; gap: 8px; align-items: center; }
 .footer-count { font-size: 13px; color: var(--text-muted); }
+
+@media (max-width: 720px) {
+  :global(.upload-modal.n-card) {
+    width: calc(100vw - 16px) !important;
+    max-height: calc(100vh - 16px) !important;
+  }
+
+  :global(.upload-modal .n-card-header) {
+    padding: 18px 18px 10px;
+  }
+
+  :global(.upload-modal .n-card__content) {
+    padding: 0 18px 14px;
+  }
+
+  :global(.upload-modal .n-card__footer) {
+    padding: 12px 18px 18px;
+  }
+
+  .upload-layout {
+    flex-direction: column;
+    min-height: 0;
+    gap: 16px;
+  }
+
+  .upload-col {
+    width: 100%;
+    padding: 0;
+  }
+
+  .upload-col--drop,
+  .upload-col--fields {
+    padding: 0;
+  }
+
+  .upload-divider {
+    width: 100%;
+    height: 1px;
+    margin: 0;
+  }
+
+  .drop-zone {
+    min-height: 190px;
+  }
+
+  .drop-zone--has-files {
+    min-height: 56px;
+  }
+
+  .fields-list {
+    flex: initial;
+    max-height: none;
+  }
+
+  .fields-empty {
+    min-height: 150px;
+    padding: 24px 14px;
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+  }
+
+  .field-row__key,
+  .field-row__label,
+  .field-row__type {
+    width: 100%;
+  }
+
+  .field-row__key,
+  .field-row__label,
+  .field-row__type {
+    grid-column: 1 / -1;
+  }
+
+  .toggle-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .toggle-row__label {
+    min-width: 0;
+  }
+
+  .toggle-row__hint {
+    flex-basis: 100%;
+    padding-inline-start: 46px;
+  }
+
+  .extract-tab {
+    min-height: 0;
+  }
+
+  .extract-hint-box {
+    align-items: flex-start;
+  }
+
+  .preview-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .preview-list {
+    max-height: none;
+  }
+
+  .preview-card__title {
+    white-space: normal;
+  }
+
+  .modal-footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .modal-footer > .n-button,
+  .modal-footer__actions,
+  .modal-footer__actions > .n-button {
+    width: 100%;
+  }
+
+  .modal-footer__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .footer-count {
+    text-align: center;
+  }
+}
+
+@media (max-width: 420px) {
+  :global(.upload-modal.n-card) {
+    width: calc(100vw - 8px) !important;
+  }
+
+  :global(.upload-modal .n-card-header),
+  :global(.upload-modal .n-card__content),
+  :global(.upload-modal .n-card__footer) {
+    padding-inline: 14px;
+  }
+
+  .drop-zone {
+    min-height: 168px;
+  }
+
+  .file-item {
+    flex-wrap: wrap;
+  }
+
+  .file-item__name {
+    flex-basis: calc(100% - 72px);
+  }
+}
 </style>

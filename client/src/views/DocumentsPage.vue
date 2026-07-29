@@ -84,14 +84,14 @@
         v-model:value="search"
         clearable
         placeholder="חיפוש לפי שם קובץ..."
-        class="!flex-1 !min-w-[220px]"
+        class="toolbar__search"
         @update:value="currentPage = 1"
       />
       <n-select
         v-model:value="filterClientId"
         :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]"
         :virtual-scroll="false"
-        class="!w-[200px]"
+        class="toolbar__client"
         clearable
         filterable
         placeholder="סינון לפי לקוח"
@@ -99,7 +99,7 @@
       />
       <n-date-picker
         v-model:value="filterDateRange"
-        class="!w-[260px]"
+        class="toolbar__dates"
         clearable
         placeholder="סינון לפי תאריך ייבוא"
         type="daterange"
@@ -571,16 +571,33 @@ async function openDownload(row: Document) {
 
 /* ── Drop strip ──────────────────────────────────────────────────────────── */
 .drop-strip {
-  border: 1px dashed black;
-  border-radius: 10px;
-  padding: 20px 14px;
+  border: 1px dashed rgba(24, 160, 88, 0.42);
+  border-radius: 12px;
+  padding: 22px 16px;
   text-align: center;
   margin-bottom: 14px;
-  font-size: 13px;
-  color: var(--text-muted);
-  transition: border-color 0.2s, background 0.2s;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background:
+    linear-gradient(135deg, rgba(24, 160, 88, 0.10), rgba(32, 128, 240, 0.06)),
+    var(--bg-card);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.12s;
 }
-.drop-strip--active { border-color: var(--brand-color); background: rgba(99,226,183,0.06); color: var(--text-primary); }
+.drop-strip:hover {
+  border-color: var(--brand-color);
+  color: var(--text-primary);
+}
+.drop-strip--active {
+  border-color: var(--brand-color);
+  background:
+    linear-gradient(135deg, rgba(99,226,183,0.18), rgba(32,128,240,0.10)),
+    var(--bg-card);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
 .drop-strip--disabled { border-color: #e88080; background: rgba(232,128,128,0.05); color: #e88080; }
 
 /* ── Settings popover ────────────────────────────────────────────────────── */
@@ -594,6 +611,16 @@ async function openDownload(row: Document) {
   gap: 10px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+.toolbar__search {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+.toolbar__client {
+  width: 200px;
+}
+.toolbar__dates {
+  width: 260px;
 }
 .toolbar__view-toggle { display: flex; gap: 4px; margin-right: auto; }
 
@@ -759,5 +786,114 @@ async function openDownload(row: Document) {
 
 /* ── Empty ───────────────────────────────────────────────────────────────── */
 .empty { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 14px; }
+
+@media (max-width: 640px) {
+  .page2 {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  :deep(.page-header__actions) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  :deep(.page-header__actions > .n-button),
+  :deep(.page-header__actions > .n-popover) {
+    width: 100%;
+  }
+
+  :deep(.page-header__actions .n-button) {
+    justify-content: center;
+  }
+
+  .quota-bar__text {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .drop-strip {
+    min-height: 86px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px 14px;
+    line-height: 1.55;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .toolbar__search,
+  .toolbar__client,
+  .toolbar__dates {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+  }
+
+  .toolbar__view-toggle {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .toolbar__view-toggle :deep(.n-button) {
+    flex: 1;
+  }
+
+  :deep(.list-card) {
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  :deep(.list-card__row) {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  :deep(.list-card__title) {
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  :deep(.list-card__actions) {
+    gap: 5px;
+  }
+
+  :deep(.list-card__foot) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .list-pdf-icon {
+    padding-top: 2px;
+  }
+
+  .tag {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 420px) {
+  :deep(.page-header__actions) {
+    grid-template-columns: 1fr;
+  }
+
+  :deep(.list-card__row) {
+    flex-direction: column-reverse;
+  }
+
+  :deep(.list-card__actions) {
+    align-self: flex-start;
+  }
+}
 
 </style>
