@@ -27,7 +27,7 @@
           <h2 class="subhead__title">ניהול ציוד</h2>
           <p class="subhead__sub">נהל את רשימת הציוד שלך והצהרות הבטיחות המשויכות</p>
         </div>
-        <div style="display:flex;gap:8px">
+        <div class="equipment-actions">
           <button class="btn btn--ghost btn--danger" @click="deleteAll">מחק הכל</button>
           <button class="btn btn--ghost" :disabled="backfilling" @click="backfill">
             {{ backfilling ? 'מקשר...' : 'קשר לתיקים' }}
@@ -40,11 +40,10 @@
         </div>
       </div>
 
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+      <div class="equipment-filters">
         <input
           v-model="search"
           class="search"
-          style="flex:1;margin-bottom:0"
           type="search"
           placeholder="חפש ציוד..."
           @input="debouncedLoad"
@@ -997,5 +996,107 @@ html[data-theme="light"] .row__tag { background: rgba(24, 160, 88, 0.10); }
   max-height: 90vh;
   border-radius: 8px;
   object-fit: contain;
+}
+
+@media (max-width: 720px) {
+  .page__title {
+    font-size: 23px;
+  }
+
+  .sectiontabs,
+  .catchips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .sectiontabs::-webkit-scrollbar,
+  .catchips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sectionpill,
+  .catchip {
+    flex: 0 0 auto;
+  }
+
+  .subhead {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .equipment-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .equipment-actions .btn {
+    justify-content: center;
+  }
+
+  .equipment-filters {
+    align-items: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .equipment-filters .search {
+    margin-bottom: 0;
+  }
+
+  .equipment-filters :deep(.n-select) {
+    width: 100% !important;
+  }
+
+  .row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 14px;
+  }
+
+  .row__body {
+    flex: 1 1 calc(100% - 56px);
+  }
+
+  .row__title-line,
+  .row__meta {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .row__desc,
+  .row__meta {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .row__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .row__actions .btn {
+    justify-content: center;
+  }
+
+  :deep(.n-drawer) {
+    max-width: 100vw;
+  }
+
+  :deep(.n-drawer-body-content-wrapper) {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .equipment-actions,
+  .row__actions {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
