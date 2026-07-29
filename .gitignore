@@ -12,3 +12,5 @@ coverage/
 *.log
 *.tmp
 py_deps/
+__pycache__/
+*.pyc
