@@ -457,7 +457,53 @@ onUnmounted(() => {
 }
 
 @media (max-width: 480px) {
-  .field { padding: 10px; }
-  .field__card-name { font-size: 18px; }
+  .field {
+    max-width: none;
+    padding: 8px 0;
+  }
+
+  .field__search-wrap {
+    padding-inline: 0;
+  }
+
+  .field__search {
+    font-size: 16px;
+    padding: 12px 14px;
+  }
+
+  .field__card {
+    border-radius: 14px;
+    padding: 16px;
+  }
+
+  .field__card-head {
+    flex-wrap: wrap;
+  }
+
+  .field__card-name {
+    flex-basis: 100%;
+    font-size: 18px;
+  }
+
+  .field__meta-row {
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .field__meta-label {
+    min-width: 78px;
+  }
+
+  .field__actions {
+    flex-direction: column;
+  }
+
+  .field__btn {
+    width: 100%;
+  }
+
+  .field__gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>
