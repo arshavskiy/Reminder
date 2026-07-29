@@ -1,5 +1,5 @@
 <template>
-  <div style="max-width: 600px">
+  <div class="settings-page">
     <PageHeader title="הגדרות" subtitle="הגדרות כלליות של המערכת" />
 
     <n-spin :show="settingsStore.loading || settingsStore.saving">
@@ -196,3 +196,47 @@ async function testSmtp() {
   }
 }
 </script>
+
+<style scoped>
+.settings-page {
+  max-width: 600px;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .settings-page {
+    max-width: none;
+  }
+
+  :deep(.n-card) {
+    border-radius: 12px;
+  }
+
+  :deep(.n-card-header),
+  :deep(.n-card__content) {
+    padding-inline: 16px;
+  }
+
+  :deep(.n-grid) {
+    grid-template-columns: 1fr !important;
+  }
+
+  :deep(.n-gi) {
+    grid-column: span 1 / span 1 !important;
+  }
+
+  :deep(.n-radio-group) {
+    display: grid;
+    gap: 8px;
+  }
+
+  :deep(.n-space),
+  :deep(.n-button) {
+    width: 100%;
+  }
+
+  :deep(.n-button) {
+    justify-content: center;
+  }
+}
+</style>
