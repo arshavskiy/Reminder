@@ -669,4 +669,137 @@ function doDelete(row: Client) {
 .refresh-icon { display: inline-block; font-size: 15px; transition: transform 0.4s; }
 .refresh-icon--spin { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 720px) {
+  .page__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .page__title {
+    font-size: 22px;
+  }
+
+  .page__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .page__actions .btn {
+    justify-content: center;
+  }
+
+  .table-wrap {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .clients-table,
+  .clients-table tbody,
+  .clients-table tr,
+  .clients-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .clients-table thead {
+    display: none;
+  }
+
+  .clients-table {
+    border-collapse: separate;
+    border-spacing: 0 10px;
+  }
+
+  .client-row {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .client-row td {
+    border-bottom: none;
+    padding: 8px 44px 8px 14px;
+  }
+
+  .td-name {
+    padding-top: 14px !important;
+  }
+
+  .td-contact,
+  .td-contact-info,
+  .td-address {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+  }
+
+  .td-contact::before,
+  .td-contact-info::before,
+  .td-address::before {
+    color: var(--text-muted);
+    content: "";
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .td-contact::before { content: "איש קשר"; }
+  .td-contact-info::before { content: "תקשורת"; }
+  .td-address::before { content: "כתובת"; }
+
+  .contact-person,
+  .contact-line {
+    justify-content: flex-end;
+  }
+
+  .td-actions {
+    inset-inline-start: 8px;
+    padding: 0 !important;
+    position: absolute;
+    top: 8px;
+    width: auto;
+  }
+
+  .pagination-info {
+    text-align: center;
+  }
+
+  .qv-body {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .qv-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :deep(.n-dialog .n-dialog__action),
+  :deep(.n-card__footer > div) {
+    align-items: stretch !important;
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  :deep(.n-card__footer .n-button) {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .page__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .qv-stats {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
