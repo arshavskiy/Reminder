@@ -476,6 +476,7 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
 @media (max-width: 680px) {
   .dash {
     max-width: none;
+    width: 100%;
   }
 
   .dash__topbar {
@@ -532,5 +533,44 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
     max-width: 100%;
   }
 
+}
+
+@media (max-width: 430px) {
+  .dash__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .dash__section {
+    font-size: 16px;
+  }
+
+  .module__head,
+  .module__heading {
+    align-items: flex-start;
+  }
+
+  .module__heading {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .module__count {
+    margin-inline-start: 0;
+  }
+
+  .panel__head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .panel__row {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .panel__row-date {
+    white-space: normal;
+  }
 }
 </style>
