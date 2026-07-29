@@ -74,6 +74,59 @@ function toObjectId(id: unknown): any {
   try { return new ObjectId(String(id)); } catch { return id; }
 }
 
+async function resolveReminderContract(reminder: any): Promise<any | null> {
+  if (reminder.source_type !== "contract_expiry" || !reminder.source_id || !reminder.user_id) return null;
+  const sourceId = String(reminder.source_id);
+  return col("contracts").findOne({
+    user_id: reminder.user_id,
+    $or: [
+      { _id: toObjectId(sourceId) },
+      { id: sourceId },
+    ],
+  });
+}
+
+function parseIsoDateOnly(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (d.getFullYear() !== Number(match[1]) || d.getMonth() !== Number(match[2]) - 1 || d.getDate() !== Number(match[3])) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatIsoDateOnly(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function addMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  const day = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() + months);
+  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(day, lastDay));
+  return result;
+}
+
+function resolveInspectionIntervalMonths(contract: any): number {
+  const explicit = Number(
+    contract.inspection_interval_months ??
+    contract.manual_fields?.inspection_interval_months ??
+    contract.manual_fields?.interval_months
+  );
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+
+  const start = parseIsoDateOnly(String(contract.start_date ?? ""));
+  const expiry = parseIsoDateOnly(String(contract.expiry_date ?? ""));
+  if (start && expiry && expiry.getTime() > start.getTime()) {
+    const months = (expiry.getFullYear() - start.getFullYear()) * 12 + expiry.getMonth() - start.getMonth();
+    return Math.max(1, months);
+  }
+
+  return 12;
+}
+
 function uniqueEmails(values: Array<unknown>) {
   return [...new Set(values.filter((value): value is string => typeof value === "string" && value.trim() !== "").map((value) => value.trim().toLowerCase()))];
 }
@@ -109,13 +162,14 @@ async function checkReminders() {
     if (sentIds.has(remId)) continue;
 
     const r = reminder as any;
-    const [client, document] = await Promise.all([
+    const [client, document, contract] = await Promise.all([
       r.client_id
         ? col("clients").findOne({ _id: r.client_id } as any)
         : null,
       r.document_id
         ? col("documents").findOne({ _id: r.document_id } as any)
         : null,
+      resolveReminderContract(r),
     ]);
 
     const enriched: ReminderWithContext = {
@@ -123,6 +177,8 @@ async function checkReminders() {
       id: remId,
       client_name: (client as any)?.display_name ?? null,
       document_name: (document as any)?.file_name ?? null,
+      contract_number: (contract as any)?.contract_number ?? null,
+      contract_type: (contract as any)?.contract_type ?? null,
     } as any;
 
     await processReminder(enriched);
@@ -260,6 +316,75 @@ async function markSent(reminder: ReminderWithContext) {
       created_at: new Date(),
     } as any);
   }
+
+  await advanceContractAfterSentReminder(reminder);
+}
+
+export async function advanceContractAfterSentReminder(reminder: ReminderWithContext): Promise<void> {
+  const r = reminder as any;
+  if (r.source_type !== "contract_expiry" || !r.source_id || !r.user_id) return;
+
+  const remainingPending = await col("reminders").countDocuments({
+    user_id: r.user_id,
+    source_type: "contract_expiry",
+    source_id: r.source_id,
+    status: "pending",
+  });
+  if (remainingPending > 0) return;
+
+  const contract = await resolveReminderContract(r);
+  if (!contract?.expiry_date) return;
+
+  const currentExpiry = parseIsoDateOnly(String(contract.expiry_date));
+  if (!currentExpiry) return;
+
+  const intervalMonths = resolveInspectionIntervalMonths(contract);
+  const nextExpiry = addMonths(currentExpiry, intervalMonths);
+  const currentExpiryIso = formatIsoDateOnly(currentExpiry);
+  const nextExpiryIso = formatIsoDateOnly(nextExpiry);
+  const contractId = contract._id?.toString() ?? String(r.source_id);
+
+  await col("contracts").updateOne(
+    { _id: contract._id, user_id: r.user_id },
+    {
+      $set: {
+        start_date: currentExpiryIso,
+        expiry_date: nextExpiryIso,
+        status: "active",
+        updated_at: new Date(),
+      },
+    } as any
+  );
+
+  await generateContractReminders(
+    contractId,
+    contract.client_id ?? r.client_id ?? null,
+    contract.document_id ?? r.document_id ?? null,
+    nextExpiryIso,
+    r.user_id
+  );
+
+  const reminderPatch: Record<string, unknown> = { updated_at: new Date() };
+  for (const key of ["email_to", "equipment_type", "manufacturer", "model", "serial_number"]) {
+    if (r[key] != null) reminderPatch[key] = r[key];
+  }
+  await col("reminders").updateMany(
+    {
+      user_id: r.user_id,
+      source_type: "contract_expiry",
+      source_id: contractId,
+      status: "pending",
+    },
+    { $set: reminderPatch } as any
+  );
+
+  logger.info("contract_cycle_advanced", {
+    reminder_id: reminder.id,
+    contract_id: contractId,
+    previous_expiry_date: currentExpiryIso,
+    next_expiry_date: nextExpiryIso,
+    interval_months: intervalMonths,
+  });
 }
 
 async function checkEscalations() {
@@ -408,14 +533,6 @@ export async function generateContractReminders(
   })();
 
   for (const days of settings.reminderAdvanceDays) {
-    const existing = await col("reminders").findOne({
-      source_type: "contract_expiry",
-      source_id: contractId,
-      advance_days: days,
-      status: { $ne: "dismissed" },
-    });
-    if (existing) continue;
-
     const expiry = new Date(expiryDate);
     expiry.setDate(expiry.getDate() - days);
     const calculatedTrigger = expiry.toISOString().slice(0, 10);
@@ -426,6 +543,15 @@ export async function generateContractReminders(
     // If the advance-warning trigger is already past but expiry is still future,
     // clamp to today so the scheduler fires it on the next check.
     const triggerDate = calculatedTrigger < today ? today : calculatedTrigger;
+
+    const existing = await col("reminders").findOne({
+      source_type: "contract_expiry",
+      source_id: contractId,
+      advance_days: days,
+      trigger_date: triggerDate,
+      status: { $ne: "dismissed" },
+    });
+    if (existing) continue;
 
     // The date shown must be the inspection/expiry target ("בדיקה הבאה ב-…"),
     // not the trigger date (when the email fires, e.g. 30 days earlier), which

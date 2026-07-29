@@ -525,8 +525,37 @@ export function registerContractRoutes(app: express.Application) {
       return;
     }
 
-    await col("contracts").deleteOne({ ...idFilter(req.params.id), user_id: userId });
-    res.json({ ok: true });
+    const deleteRelatedReminders = req.query.deleteRelatedReminders === "true";
+    const contractFilter = { ...idFilter(req.params.id), user_id: userId };
+    const contract = await col("contracts").findOne(contractFilter);
+    if (!contract) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    let remindersDeleted = 0;
+    let emailLogsDeleted = 0;
+    if (deleteRelatedReminders) {
+      const sourceIds = [req.params.id, contract._id?.toString()].filter(Boolean);
+      const reminders = await col("reminders")
+        .find({ user_id: userId, source_type: "contract_expiry", source_id: { $in: sourceIds } })
+        .project({ _id: 1 })
+        .toArray();
+      const reminderIds = reminders.map((r: any) => r._id?.toString()).filter(Boolean);
+      if (reminderIds.length) {
+        const emailResult = await col("email_log").deleteMany({ reminder_id: { $in: reminderIds } });
+        emailLogsDeleted = emailResult.deletedCount ?? 0;
+      }
+      const reminderResult = await col("reminders").deleteMany({
+        user_id: userId,
+        source_type: "contract_expiry",
+        source_id: { $in: sourceIds },
+      });
+      remindersDeleted = reminderResult.deletedCount ?? 0;
+    }
+
+    await col("contracts").deleteOne(contractFilter);
+    res.json({ ok: true, reminders_deleted: remindersDeleted, email_logs_deleted: emailLogsDeleted });
   });
 }
 
