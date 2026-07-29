@@ -32,10 +32,30 @@ MongoDB Atlas → database
 
 ## 2. Railway (server)
 
+### Git source
+
+This project has two Git repositories:
+
+- The parent repo at `E:\Projects\Reminder` pushes to `arshavskiy/Reminder`.
+- The nested server repo at `E:\Projects\Reminder\server` pushes to `arshavskiy/reminder-server`.
+
+Railway production is connected to `arshavskiy/reminder-server` on branch `master`. Backend changes only trigger Railway after they are committed and pushed from inside `server/`:
+
+```bash
+cd server
+git status
+git add <server files>
+git commit -m "..."
+git push origin master
+```
+
+Pushing only the parent repo (`arshavskiy/Reminder`) will not trigger the `reminder-server` Railway service.
+
 ### Deploy
 1. Create new Railway project → **Deploy from GitHub repo**
-2. Set the **root directory** to `server/`
-3. Railway auto-detects Nixpacks and runs `npm start`
+2. Connect `arshavskiy/reminder-server`
+3. Use branch `master`
+4. Railway auto-detects Nixpacks and runs `npm start`
 
 ### Environment variables (set in Railway dashboard)
 ```

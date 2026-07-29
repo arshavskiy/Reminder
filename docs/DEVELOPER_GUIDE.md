@@ -131,6 +131,25 @@ mongod
 
 ## Project Structure
 
+### Git Repositories
+
+There are two Git repositories in this workspace:
+
+- `E:\Projects\Reminder` → `https://github.com/arshavskiy/Reminder.git`
+- `E:\Projects\Reminder\server` → `https://github.com/arshavskiy/reminder-server.git`
+
+Railway watches the nested server repo, `arshavskiy/reminder-server`, branch `master`. When a backend change must deploy to Railway, commit and push from `server/`, not only from the parent repo:
+
+```bash
+cd server
+git status
+git add <server files>
+git commit -m "..."
+git push origin master
+```
+
+The parent repo is still useful for full-project history and docs, but pushing it alone does not trigger the Railway `reminder-server` service.
+
 ```
 Reminder/
 ├── server/                      # Backend (Express.js)

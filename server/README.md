@@ -395,10 +395,14 @@ cd server && npm test       # vitest run — 121 tests
 
 See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the full step-by-step guide. Summary:
 
-1. Deploy `server/` to **Railway** → set all env vars → copy the generated domain
-2. Set `VITE_API_BASE=<railway-domain>` in `client/.env.production`
-3. Deploy `client/` to **Vercel** → set `VITE_API_BASE` and `VITE_GOOGLE_CLIENT_ID` in Vercel dashboard
-4. In Google Cloud Console → OAuth client → add the production domains to Authorized Origins and Redirect URIs
+1. Railway production is connected to this nested server repo: `arshavskiy/reminder-server`, branch `master`
+2. Commit and push backend deploy changes from this directory: `cd server && git push origin master`
+3. Set all Railway env vars → copy the generated domain
+4. Set `VITE_API_BASE=<railway-domain>` in `client/.env.production`
+5. Deploy `client/` to **Vercel** → set `VITE_API_BASE` and `VITE_GOOGLE_CLIENT_ID` in Vercel dashboard
+6. In Google Cloud Console → OAuth client → add the production domains to Authorized Origins and Redirect URIs
+
+Pushing only the parent repo (`arshavskiy/Reminder`) does not trigger Railway for this service.
 
 ---
 
