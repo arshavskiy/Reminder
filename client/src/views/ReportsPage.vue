@@ -466,9 +466,34 @@ onMounted(loadSettings);
 }
 
 @media (max-width: 520px) {
+  .reports-page {
+    padding: 18px 10px 34px;
+  }
+
+  .reports-hero__status {
+    justify-content: center;
+    width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+
   .reports-panel { padding: 18px; }
+  .reports-panel__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .generator-controls { grid-template-columns: 1fr; }
+  .field-selector__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .field-selector__grid { grid-template-columns: 1fr; }
+  .reports-panel :deep(.n-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  .reports-panel :deep(.n-gi) {
+    grid-column: span 1 / span 1 !important;
+  }
   .generator-controls :deep(.n-button) { width: 100%; }
   .reports-actions :deep(.n-button) { width: 100%; }
 }
