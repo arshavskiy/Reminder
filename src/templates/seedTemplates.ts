@@ -8,6 +8,7 @@ import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import type {DocTemplate, DocumentKind, TemplateField} from "../../src/shared/types.js";
 import {buildPromptForTemplate, type InspectorProfile} from "./buildPrompt";
+import {logger} from "../logger";
 
 interface SeedRow {
   name: string;
@@ -268,7 +269,7 @@ export async function getOrBuildSystemPrompt(
     { _id: tryObjectId(String(template.id)) },
     { $set: { cached_system_prompt: prompt, updated_at: new Date() } }
   );
-  console.log(`[templates] Cached system prompt for template "${template.name}"`);
+  logger.debug("template_prompt_cached", { template_id: template.id, template_name: template.name });
   return prompt;
 }
 
@@ -281,7 +282,7 @@ export async function invalidatePromptCache(templateId: string): Promise<void> {
     { _id: tryObjectId(templateId) },
     { $set: { cached_system_prompt: null, updated_at: new Date() } }
   );
-  console.log(`[templates] Invalidated prompt cache for template ${templateId}`);
+  logger.info("template_prompt_cache_invalidated", { template_id: templateId });
 }
 
 function tryObjectId(id: string): any {

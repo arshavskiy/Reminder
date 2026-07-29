@@ -5,8 +5,9 @@ import {ObjectId} from "mongodb";
 import {getDataDir, getSettings} from "../settings";
 import {col} from "../db/db";
 import {type EmailVars, renderTemplate} from "../templates/renderEmail";
-import {loadEmailTemplate, pickEmailTemplate} from "../templates/seedEmailTemplates";
+import {loadEmailTemplate, loadEmailTemplateByName, pickEmailTemplate} from "../templates/seedEmailTemplates";
 import type {ReminderWithContext} from "../../src/shared/types.js";
+import {logger} from "../logger";
 
 const FALLBACK_TEST_HTML = `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -243,11 +244,13 @@ async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ sub
   vars.logo_url = logoToDataUrl(tpl?.logo_path);
 
   const filledKeys = Object.entries(vars).filter(([, v]) => v != null && v !== "").map(([k]) => k);
-  console.log(
-    `[emailSender] reminder=${reminder.id} client_id=${reminder.client_id ?? "—"} ` +
-    `document_id=${reminder.document_id ?? "—"} template=${tpl?.name ?? "(fallback)"} ` +
-    `filled_vars=[${filledKeys.join(", ")}]`
-  );
+  logger.debug("reminder_email_rendered", {
+    reminder_id: reminder.id,
+    client_id: reminder.client_id ?? null,
+    document_id: reminder.document_id ?? null,
+    template_name: tpl?.name ?? null,
+    filled_vars: filledKeys,
+  });
 
   if (!tpl) {
     return {
@@ -310,7 +313,7 @@ export async function sendReminderEmail(
   try {
     const transport = buildTransport();
     const { subject, html } = await renderReminderEmail(reminder);
-    await transport.sendMail({
+    const info = await transport.sendMail({
       from: settings.emailFrom
         ? `"${settings.emailFromName}" <${settings.emailFrom}>`
         : settings.emailFrom,
@@ -319,12 +322,84 @@ export async function sendReminderEmail(
       html,
       text: `תזכורת: ${reminder.title}\nלקוח: ${reminder.client_name ?? ""}\nתאריך: ${reminder.trigger_date}`,
     });
+    logger.info("reminder_email_sent", {
+      reminder_id: reminder.id,
+      recipient_count: recipients.length,
+      message_id: (info as any).messageId ?? null,
+    });
     return { success: true };
   } catch (err) {
+    logger.warn("reminder_email_failed", {
+      reminder_id: reminder.id,
+      recipient_count: recipients.length,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
+export async function sendEmailWithAttachments(
+  recipients: string[],
+  subject: string,
+  text: string,
+  attachments: Array<{ filename: string; content: Buffer; contentType: string }>,
+  html?: string,
+): Promise<{ success: boolean; error?: string }> {
+  const settings = getSettings();
+  if (!settings.smtpHost) return { success: false, error: "SMTP not configured" };
+  if (!recipients.length) return { success: false, error: "No recipients configured" };
+  try {
+    const transport = buildTransport();
+    const info = await transport.sendMail({
+      from: settings.emailFrom ? `"${settings.emailFromName}" <${settings.emailFrom}>` : settings.emailFrom,
+      to: recipients.join(", "),
+      subject,
+      text,
+      html,
+      attachments,
+    });
+    logger.info("email_with_attachments_sent", {
+      recipient_count: recipients.length,
+      message_id: (info as any).messageId ?? null,
+      attachment_count: attachments.length,
+    });
+    return { success: true };
+  } catch (err) {
+    logger.warn("email_with_attachments_failed", {
+      recipient_count: recipients.length,
+      attachment_count: attachments.length,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+export async function sendMonthlyReportEmail(
+  recipients: string[],
+  details: {clientName: string; reportMonth: string; recordCount: number},
+  attachments: Array<{ filename: string; content: Buffer; contentType: string }>,
+): Promise<{ success: boolean; error?: string }> {
+  const settings = getSettings();
+  const vars: EmailVars = {
+    client_company: details.clientName,
+    report_month: details.reportMonth,
+    report_count: details.recordCount,
+    from_name: settings.emailFromName,
+  };
+  const template = await loadEmailTemplateByName("דוח חודשי ללקוח");
+  const subject = template
+    ? renderTemplate(template.subject, vars, {escape: false})
+    : `דוח חודשי - ${details.clientName} - ${details.reportMonth}`;
+  const html = template
+    ? ensureRtl(renderTemplate(template.html, vars, {escape: false}))
+    : ensureRtl(`<h2>דוח חודשי</h2><p>מצורף דוח עבור ${details.clientName} לתקופה ${details.reportMonth}.</p>`);
+  return sendEmailWithAttachments(
+    recipients,
+    subject,
+    `מצורף דוח חודשי עבור ${details.clientName}. מספר רשומות: ${details.recordCount}.`,
+    attachments,
+    html,
+  );
+}
 export async function previewReminderEmail(reminder: ReminderWithContext) {
   return renderReminderEmail(reminder);
 }

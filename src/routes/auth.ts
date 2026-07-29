@@ -23,6 +23,7 @@ import {
     sendVerificationEmail,
     verifyPassword,
 } from "../auth/emailAuth";
+import {clientIp, logger} from "../logger";
 
 export function registerAuthRoutes(app: express.Application) {
   // GET /auth/google — kick off OAuth flow
@@ -92,7 +93,7 @@ export function registerAuthRoutes(app: express.Application) {
       }
 
       // Upsert user
-      await col("users").updateOne(
+      const upsert = await col("users").updateOne(
         { google_sub: profile.sub },
         {
           $set: {
@@ -130,13 +131,18 @@ export function registerAuthRoutes(app: express.Application) {
       );
 
       const ua = req.headers["user-agent"] ?? undefined;
-      const ip = (req.headers["x-forwarded-for"] as string) ?? req.socket.remoteAddress ?? undefined;
+      const ip = clientIp(req);
       const { cookies } = await createSession(user._id.toString(), ua, ip);
+      logAuth("login_success", req, {
+        user,
+        method: "google_oauth",
+        is_new_user: upsert.upsertedCount > 0,
+      });
 
       res.setHeader("Set-Cookie", cookies);
       res.redirect(frontendUrl("/"));
     } catch (err) {
-      console.error("[auth] OAuth callback error:", err);
+      logger.error("login_failed", { method: "google_oauth", reason: "callback_error", error: err, ip: clientIp(req) ?? null });
       res.redirect(frontendUrl("/#/login?error=auth_failed"));
     }
   });
@@ -155,13 +161,14 @@ export function registerAuthRoutes(app: express.Application) {
 
       if (settings.allowedEmails && settings.allowedEmails.length > 0) {
         if (!settings.allowedEmails.includes(profile.email)) {
+          logger.warn("login_failed", { method: "google_gis", reason: "not_allowed", email: profile.email, ip: clientIp(req) ?? null });
           res.status(403).json({ error: "not_allowed" });
           return;
         }
       }
 
       // Upsert user
-      await col("users").updateOne(
+      const upsert = await col("users").updateOne(
         { google_sub: profile.sub },
         {
           $set: {
@@ -199,8 +206,13 @@ export function registerAuthRoutes(app: express.Application) {
       );
 
       const ua = req.headers["user-agent"] ?? undefined;
-      const ip = (req.headers["x-forwarded-for"] as string) ?? req.socket.remoteAddress ?? undefined;
+      const ip = clientIp(req);
       const { cookies } = await createSession(user._id.toString(), ua, ip);
+      logAuth("login_success", req, {
+        user,
+        method: "google_gis",
+        is_new_user: upsert.upsertedCount > 0,
+      });
 
       res.setHeader("Set-Cookie", cookies);
       res.status(200).json({
@@ -213,7 +225,7 @@ export function registerAuthRoutes(app: express.Application) {
         },
       });
     } catch (err) {
-      console.error("[auth] GIS sign-in error:", err);
+      logger.error("login_failed", { method: "google_gis", reason: "auth_error", error: err, ip: clientIp(req) ?? null });
       res.status(500).json({ error: "auth_failed" });
     }
   });
@@ -223,7 +235,16 @@ export function registerAuthRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     const sessionId = extractSessionFromCookie(cookieHeader);
     if (sessionId) {
+      const user = await verifySession(sessionId);
       await revokeSession(sessionId);
+      if (user) {
+        logger.info("logout", {
+          user_id: (user as any).id,
+          email: user.email,
+          role: user.role,
+          ip: clientIp(req) ?? null,
+        });
+      }
     }
     res.setHeader("Set-Cookie", "session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
     res.json({ ok: true });
@@ -281,6 +302,7 @@ export function registerAuthRoutes(app: express.Application) {
     const settings = getSettings();
     if (settings.allowedEmails && settings.allowedEmails.length > 0) {
       if (!settings.allowedEmails.includes(emailLower)) {
+        logger.warn("registration_failed", { reason: "not_allowed", email: emailLower, ip: clientIp(req) ?? null });
         res.status(403).json({ error: "not_allowed" });
         return;
       }
@@ -288,6 +310,7 @@ export function registerAuthRoutes(app: express.Application) {
 
     const existing = await col("users").findOne({ email: emailLower });
     if (existing) {
+      logger.warn("registration_failed", { reason: "email_taken", email: emailLower, ip: clientIp(req) ?? null });
       res.status(409).json({ error: "email_taken" });
       return;
     }
@@ -296,7 +319,7 @@ export function registerAuthRoutes(app: express.Application) {
     const verificationToken = generateToken();
     const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    await col("users").insertOne({
+    const insert = await col("users").insertOne({
       email: emailLower,
       name: name?.trim() ?? null,
       picture_url: null,
@@ -310,12 +333,18 @@ export function registerAuthRoutes(app: express.Application) {
       created_at: new Date(),
       last_login_at: null,
     } as any);
+    logger.info("user_registered", {
+      user_id: insert.insertedId.toString(),
+      email: emailLower,
+      method: "email_password",
+      ip: clientIp(req) ?? null,
+    });
 
     const base = serverBaseUrl(req);
     try {
       await sendVerificationEmail(emailLower, verificationToken, base);
     } catch (err) {
-      console.error("[auth] Failed to send verification email:", err);
+      logger.error("verification_email_failed", { email: emailLower, error: err, ip: clientIp(req) ?? null });
     }
 
     res.status(201).json({ ok: true, emailSent: true });
@@ -334,22 +363,26 @@ export function registerAuthRoutes(app: express.Application) {
     const user = await col("users").findOne({ email: emailLower }) as any;
 
     if (!user || !user.password_hash) {
+      logger.warn("login_failed", { method: "email_password", reason: "invalid_credentials", email: emailLower, ip: clientIp(req) ?? null });
       res.status(401).json({ error: "invalid_credentials" });
       return;
     }
 
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) {
+      logger.warn("login_failed", { method: "email_password", reason: "invalid_credentials", email: emailLower, user_id: user._id.toString(), ip: clientIp(req) ?? null });
       res.status(401).json({ error: "invalid_credentials" });
       return;
     }
 
     if (!user.email_verified) {
+      logger.warn("login_failed", { method: "email_password", reason: "email_not_verified", email: emailLower, user_id: user._id.toString(), ip: clientIp(req) ?? null });
       res.status(403).json({ error: "email_not_verified" });
       return;
     }
 
     if (!user.is_active) {
+      logger.warn("login_failed", { method: "email_password", reason: "account_disabled", email: emailLower, user_id: user._id.toString(), ip: clientIp(req) ?? null });
       res.status(403).json({ error: "account_disabled" });
       return;
     }
@@ -357,8 +390,9 @@ export function registerAuthRoutes(app: express.Application) {
     await col("users").updateOne({ _id: user._id }, { $set: { last_login_at: new Date() } });
 
     const ua = req.headers["user-agent"] ?? undefined;
-    const ip = (req.headers["x-forwarded-for"] as string) ?? req.socket.remoteAddress ?? undefined;
+    const ip = clientIp(req);
     const { cookies } = await createSession(user._id.toString(), ua, ip);
+    logAuth("login_success", req, { user, method: "email_password", is_new_user: false });
 
     res.setHeader("Set-Cookie", cookies);
     res.json({
@@ -382,12 +416,14 @@ export function registerAuthRoutes(app: express.Application) {
 
     const userId = await consumeMagicLinkToken(token);
     if (!userId) {
+      logger.warn("login_failed", { method: "magic_link", reason: "token_expired", ip: clientIp(req) ?? null });
       res.redirect(frontendUrl("/#/login?error=token_expired"));
       return;
     }
 
     const user = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
     if (!user || !user.is_active) {
+      logger.warn("login_failed", { method: "magic_link", reason: "account_disabled", user_id: userId, ip: clientIp(req) ?? null });
       res.redirect(frontendUrl("/#/login?error=account_disabled"));
       return;
     }
@@ -395,8 +431,9 @@ export function registerAuthRoutes(app: express.Application) {
     await col("users").updateOne({ _id: user._id }, { $set: { last_login_at: new Date() } });
 
     const ua = req.headers["user-agent"] ?? undefined;
-    const ip = (req.headers["x-forwarded-for"] as string) ?? req.socket.remoteAddress ?? undefined;
+    const ip = clientIp(req);
     const { cookies } = await createSession(user._id.toString(), ua, ip);
+    logAuth("login_success", req, { user, method: "magic_link", is_new_user: false });
 
     res.setHeader("Set-Cookie", cookies);
     res.redirect(frontendUrl("/"));
@@ -427,11 +464,17 @@ export function registerAuthRoutes(app: express.Application) {
         $unset: { verification_token: "", verification_token_expires: "" },
       }
     );
+    logger.info("email_verified", {
+      user_id: user._id.toString(),
+      email: user.email,
+      ip: clientIp(req) ?? null,
+    });
 
     // Auto sign-in after verification
     const ua = req.headers["user-agent"] ?? undefined;
-    const ip = (req.headers["x-forwarded-for"] as string) ?? req.socket.remoteAddress ?? undefined;
+    const ip = clientIp(req);
     const { cookies } = await createSession(user._id.toString(), ua, ip);
+    logAuth("login_success", req, { user, method: "email_verification", is_new_user: false });
     res.setHeader("Set-Cookie", cookies);
     res.redirect(frontendUrl("/?verified=1"));
   });
@@ -449,6 +492,7 @@ export function registerAuthRoutes(app: express.Application) {
 
     // Always return ok to avoid user enumeration
     if (!user || !user.password_hash) {
+      logger.info("password_reset_requested", { email: emailLower, user_found: false, ip: clientIp(req) ?? null });
       res.json({ ok: true });
       return;
     }
@@ -464,8 +508,9 @@ export function registerAuthRoutes(app: express.Application) {
     const base = serverBaseUrl(req);
     try {
       await sendPasswordResetEmail(emailLower, resetToken, base);
+      logger.info("password_reset_requested", { user_id: user._id.toString(), email: emailLower, user_found: true, ip: clientIp(req) ?? null });
     } catch (err) {
-      console.error("[auth] Failed to send reset email:", err);
+      logger.error("password_reset_email_failed", { user_id: user._id.toString(), email: emailLower, error: err, ip: clientIp(req) ?? null });
     }
 
     res.json({ ok: true });
@@ -503,6 +548,11 @@ export function registerAuthRoutes(app: express.Application) {
         $unset: { reset_token: "", reset_token_expires: "" },
       }
     );
+    logger.info("password_reset_completed", {
+      user_id: user._id.toString(),
+      email: user.email,
+      ip: clientIp(req) ?? null,
+    });
 
     res.json({ ok: true });
   });
@@ -522,4 +572,20 @@ function serverBaseUrl(req: express.Request): string {
   const proto = req.headers["x-forwarded-proto"] ?? req.protocol;
   const host = req.headers["x-forwarded-host"] ?? req.headers.host;
   return `${proto}://${host}`;
+}
+
+function logAuth(
+  event: "login_success",
+  req: express.Request,
+  details: { user: any; method: string; is_new_user: boolean }
+) {
+  logger.info(event, {
+    user_id: details.user._id?.toString(),
+    email: details.user.email,
+    role: details.user.role,
+    method: details.method,
+    is_new_user: details.is_new_user,
+    ip: clientIp(req) ?? null,
+    user_agent: req.headers["user-agent"] ?? null,
+  });
 }

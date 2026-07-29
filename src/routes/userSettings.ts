@@ -20,6 +20,12 @@ export function registerUserSettingsRoutes(app: express.Application) {
         email_from_name: null,
         reminder_advance_days: "[90,60,30]",
         ocr_language: "heb+eng",
+        monthly_report_enabled: false,
+        monthly_report_recipients: "",
+        monthly_report_day: 1,
+        monthly_report_hour: 8,
+        monthly_report_formats: JSON.stringify(["pdf", "csv"]),
+        monthly_report_last_sent: null,
       };
       await col("user_settings").updateOne(
         { user_id: auth.userId },
@@ -47,6 +53,11 @@ export function registerUserSettingsRoutes(app: express.Application) {
       email_from_name?: string;
       reminder_advance_days?: string;
       ocr_language?: string;
+      monthly_report_enabled?: boolean;
+      monthly_report_recipients?: string;
+      monthly_report_day?: number;
+      monthly_report_hour?: number;
+      monthly_report_formats?: string;
     };
 
     const patch: Record<string, unknown> = {};
@@ -54,6 +65,11 @@ export function registerUserSettingsRoutes(app: express.Application) {
     if (body.email_from_name !== undefined)        patch.email_from_name = body.email_from_name ?? null;
     if (body.reminder_advance_days !== undefined)  patch.reminder_advance_days = body.reminder_advance_days;
     if (body.ocr_language !== undefined)           patch.ocr_language = body.ocr_language;
+    if (body.monthly_report_enabled !== undefined) patch.monthly_report_enabled = Boolean(body.monthly_report_enabled);
+    if (body.monthly_report_recipients !== undefined) patch.monthly_report_recipients = String(body.monthly_report_recipients ?? "");
+    if (body.monthly_report_day !== undefined) patch.monthly_report_day = Math.min(28, Math.max(1, Number(body.monthly_report_day)));
+    if (body.monthly_report_hour !== undefined) patch.monthly_report_hour = Math.min(23, Math.max(0, Number(body.monthly_report_hour)));
+    if (body.monthly_report_formats !== undefined) patch.monthly_report_formats = body.monthly_report_formats;
 
     await col("user_settings").updateOne(
       { user_id: auth.userId },

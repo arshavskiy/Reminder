@@ -15,6 +15,7 @@ import {classifyDocumentKind, getOrBuildSystemPrompt, pickTemplate} from "../tem
 import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
+import {logger} from "../logger";
 
 type PushFn = (event: Record<string, unknown>) => void;
 
@@ -58,7 +59,11 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   if (userId) dedupFilter.user_id = userId;
   const existing = await col("documents").findOne(dedupFilter);
   if (existing) {
-    console.log(`[importer] Skipping duplicate: ${fileName}`);
+    logger.info("document_import_duplicate", {
+      document_id: existing._id!.toString(),
+      user_id: userId ?? null,
+      file_name: fileName,
+    });
     return existing._id!.toString();
   }
 
@@ -80,9 +85,9 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
       spacesKey = `documents/${fileHash}${ext}`;
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
       downloadUrl = await getSpacesSignedUrl(spacesKey, SIGNED_URL_TTL, fileName);
-      console.log(`[importer] Uploaded to object storage: ${spacesKey}`);
+      logger.info("document_storage_uploaded", { user_id: userId ?? null, spaces_key: spacesKey });
     } catch (err) {
-      console.error(`[importer] Object storage upload failed, keeping local copy:`, err);
+      logger.error("document_storage_upload_failed", { user_id: userId ?? null, file_name: fileName, error: err });
       spacesKey = null;
       spacesUrl = null;
       downloadUrl = null;
@@ -114,10 +119,17 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   const documentId = insertResult.insertedId.toString();
 
   push?.({ type: "document:queued", documentId: documentId as any, fileName });
-  console.log(`[importer] Queued document ${documentId}: ${fileName}`);
+  logger.info("document_import_queued", {
+    document_id: documentId,
+    user_id: userId ?? null,
+    file_name: fileName,
+    mime_type: mimeType,
+    file_size_bytes: fileSize,
+    ai_enabled: !pipeline?.skipAi,
+  });
 
   processDocument(documentId, managedPath, mimeType, ext, push, userId, pipeline).catch(async (err) => {
-    console.error(`[importer] Fatal error processing doc ${documentId}:`, err);
+    logger.error("document_processing_failed", { document_id: documentId, user_id: userId ?? null, error: err });
     await col("documents").updateOne(
       { _id: insertResult.insertedId },
       { $set: { processing_status: "error", error_message: String(err), updated_at: new Date() } }
@@ -190,7 +202,12 @@ export async function processDocument(
   if (rawText.trim().length > 0) {
     const ocr = extractFromOcr(rawText);
     const documentKind = classifyDocumentKind(rawText);
-    console.log(`[ocr-extractor] doc=${documentId} kind="${documentKind}"`, ocr);
+    logger.debug("document_ocr_extracted", {
+      document_id: documentId,
+      user_id: userId ?? null,
+      document_kind: documentKind,
+      field_count: Object.keys(ocr).length,
+    });
 
     // Always persist kind + raw OCR fields on the document
     await col("documents").updateOne(docFilter, {
@@ -257,11 +274,13 @@ export async function processDocument(
         }
       }
 
-      console.log(
-        `[ocr-extractor] doc=${documentId} expiry="${ocr.expiry_date ?? "?"}" ` +
-        `contact="${ocr.contact_name ?? "?"}" phone="${ocr.contact_phone ?? "?"}"` +
-        `${ocr.expiry_date && !pipeline?.skipReminders ? " → reminders queued" : ""}`
-      );
+      logger.info("document_ocr_entities_saved", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        has_expiry_date: Boolean(ocr.expiry_date),
+        has_contact: Boolean(ocr.contact_name || ocr.contact_phone),
+        reminders_queued: Boolean(ocr.expiry_date && !pipeline?.skipReminders),
+      });
     }
   }
 
@@ -271,9 +290,13 @@ export async function processDocument(
 
     // ── Stage 1: classify document kind by keyword scoring ───────────────────
     const documentKind = classifyDocumentKind(rawText);
-    console.log(
-      `[classifier] doc=${documentId} file="${docRow?.file_name ?? "?"}" → kind="${documentKind}" | text_chars=${rawText.length}`
-    );
+    logger.info("document_classified", {
+      document_id: documentId,
+      user_id: userId ?? null,
+      file_name: docRow?.file_name ?? null,
+      document_kind: documentKind,
+      text_chars: rawText.length,
+    });
 
     // Persist the kind immediately so filters (e.g. hide certificates) work
     // even before extraction completes.
@@ -284,7 +307,11 @@ export async function processDocument(
     // ── Stage 2: dispatch to the right extractor ─────────────────────────────
 
     if (documentKind === "certificate") {
-      console.log(`[classifier] doc=${documentId} → extractor=certificateExtractor`);
+      logger.info("document_extractor_selected", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        extractor: "certificate",
+      });
       // Certificate extraction is a separate schema — handled by certificateExtractor.
       // The document stays accessible via the profile page; it is hidden from the
       // main documents list by the existing { document_kind: { $ne: "certificate" } } filter.
@@ -302,11 +329,15 @@ export async function processDocument(
       } as any);
 
       if (certRun.result) {
-        console.log(
-          `[classifier] doc=${documentId} certificate_type="${certRun.result.certificate_type ?? "?"}" ` +
-          `issuer="${certRun.result.issuer ?? "?"}" expiry="${certRun.result.expiry_date ?? "?"}" ` +
-          `confidence=${certRun.result.confidence} time=${certRun.execMs}ms`
-        );
+        logger.info("certificate_extracted", {
+          document_id: documentId,
+          user_id: userId ?? null,
+          certificate_type: certRun.result.certificate_type ?? null,
+          has_issuer: Boolean(certRun.result.issuer),
+          has_expiry_date: Boolean(certRun.result.expiry_date),
+          confidence: certRun.result.confidence ?? null,
+          exec_ms: certRun.execMs,
+        });
         await col("documents").updateOne(docFilter, {
           $set: {
             extracted_fields: JSON.stringify(certRun.result),
@@ -325,9 +356,12 @@ export async function processDocument(
     } else {
       // For all other kinds, pick the best matching template then extract.
       const template = await pickTemplate(rawText);
-      console.log(
-        `[classifier] doc=${documentId} → extractor=${template ? `template("${template.name}")` : "generic"}`
-      );
+      logger.info("document_extractor_selected", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        extractor: template ? "template" : "generic",
+        template_name: template?.name ?? null,
+      });
 
       if (template) {
         let inspector: Record<string, any> | undefined;
@@ -365,11 +399,15 @@ export async function processDocument(
         if (normalizedFields) {
           const keyCount = Object.keys(normalizedFields).length;
           const expiryVal = template.expiry_field ? (normalizedFields[template.expiry_field] ?? null) : null;
-          console.log(
-            `[classifier] doc=${documentId} template="${template.name}" ` +
-            `fields_extracted=${keyCount} expiry="${expiryVal ?? "?"}" ` +
-            `confidence=${normalizedFields._confidence ?? "?"} time=${run.execMs}ms`
-          );
+          logger.info("template_extraction_completed", {
+            document_id: documentId,
+            user_id: userId ?? null,
+            template_name: template.name,
+            fields_extracted: keyCount,
+            has_expiry_date: Boolean(expiryVal),
+            confidence: normalizedFields._confidence ?? null,
+            exec_ms: run.execMs,
+          });
           await col("documents").updateOne(docFilter, {
             $set: {
               extracted_fields: JSON.stringify(normalizedFields),
@@ -389,7 +427,12 @@ export async function processDocument(
             $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
           });
           push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
-          console.error(`[importer] ${msg}`);
+          logger.error("template_extraction_empty", {
+            document_id: documentId,
+            user_id: userId ?? null,
+            template_name: template.name,
+            error: msg,
+          });
           return;
         }
       } else {
@@ -407,12 +450,15 @@ export async function processDocument(
         } as any);
 
         if (extraction.result) {
-          console.log(
-            `[classifier] doc=${documentId} generic document_type="${extraction.result.document_type ?? "?"}" ` +
-            `client="${extraction.result.client_company ?? extraction.result.client_name ?? "?"}" ` +
-            `expiry="${extraction.result.expiry_date ?? "?"}" ` +
-            `confidence=${extraction.result.confidence} time=${extraction.execMs}ms`
-          );
+          logger.info("generic_extraction_completed", {
+            document_id: documentId,
+            user_id: userId ?? null,
+            document_type: extraction.result.document_type ?? null,
+            has_client: Boolean(extraction.result.client_company ?? extraction.result.client_name),
+            has_expiry_date: Boolean(extraction.result.expiry_date),
+            confidence: extraction.result.confidence ?? null,
+            exec_ms: extraction.execMs,
+          });
           if (!pipeline?.skipEntities) {
             push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
             await saveExtractionEntities(documentId, extraction.result, userId, pipeline?.skipReminders);
@@ -433,7 +479,7 @@ export async function processDocument(
     $set: { processing_status: "done", updated_at: new Date() },
   });
   push?.({ type: "document:done", documentId: documentId as any, status: "done" });
-  console.log(`[importer] Done processing document ${documentId}`);
+  logger.info("document_processing_completed", { document_id: documentId, user_id: userId ?? null });
 }
 
 async function saveExtractionEntities(
@@ -759,7 +805,13 @@ async function saveTemplateEntities(
       { upsert: true }
     );
 
-    console.log(`[importer] Equipment upserted: ${name} | SN: ${eq.serial_number ?? "—"} | ${eq.manufacturer ?? "?"} ${eq.model ?? ""}`);
+    logger.debug("equipment_upserted_from_document", {
+      user_id: userId ?? null,
+      name,
+      has_serial_number: Boolean(eq.serial_number),
+      manufacturer: eq.manufacturer ?? null,
+      model: eq.model ?? null,
+    });
   }
 }
 
@@ -804,7 +856,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   // 1. Strongest signal: government-issued id / company registration number
   if (idNumber) {
     existing = await col("clients").findOne({ ...userScope, id_number: idNumber }) as any;
-    if (existing) console.log(`[importer] Client matched by id_number: ${idNumber}`);
+    if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "id_number", client_id: existing._id?.toString() });
   }
 
   // 2. Phone (normalised — strip spaces and dashes)
@@ -814,7 +866,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       ...userScope,
       phone: { $regex: new RegExp(escapeRegex(normPhone)) },
     }) as any;
-    if (existing) console.log(`[importer] Client matched by phone: ${phone}`);
+    if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "phone", client_id: existing._id?.toString() });
   }
 
   // 3. Exact name match (case-insensitive)
@@ -823,7 +875,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       ...userScope,
       display_name: { $regex: new RegExp(`^${escapeRegex(displayName)}$`, "i") },
     }) as any;
-    if (existing) console.log(`[importer] Client matched by exact name: ${displayName}`);
+    if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "exact_name", client_id: existing._id?.toString() });
   }
 
   // 4. Normalised name match (strips bע"מ / punctuation)
@@ -832,7 +884,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
     if (norm.length >= 3) {
       const all = await col("clients").find(userScope).toArray() as any[];
       existing = all.find((c: any) => normaliseName(c.display_name ?? "") === norm) ?? null;
-      if (existing) console.log(`[importer] Client matched by normalised name: "${norm}"`);
+      if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "normalized_name", client_id: existing._id?.toString() });
     }
   }
 
@@ -872,7 +924,11 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
     created_at: new Date(),
     updated_at: new Date(),
   } as any);
-  console.log(`[importer] Client created: ${displayName}`);
+  logger.info("client_created_from_document", {
+    user_id: userId ?? null,
+    client_id: r.insertedId.toString(),
+    display_name: displayName,
+  });
   return r.insertedId.toString();
 }
 

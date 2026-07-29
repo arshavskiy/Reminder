@@ -15,6 +15,7 @@ import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {extractWithTemplate} from "../pipeline/extractor";
 import {loadAllTemplates, pickTemplate} from "../templates/seedTemplates";
 import multer from "multer";
+import {logger} from "../logger";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -257,7 +258,7 @@ export function registerDocumentRoutes(app: express.Application) {
         res.json({ url, source: "s3" });
         return;
       } catch (err) {
-        console.error("[download] signed URL failed, falling back to local:", err);
+        logger.warn("document_signed_url_failed", { document_id: req.params.id, user_id: userId, error: err });
       }
     }
 
@@ -334,7 +335,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     await col("documents").deleteMany({ user_id: userId, processing_status: "error" });
 
-    console.log(`[documents] Deleted ${ids.length} corrupt documents for user ${userId}`);
+    logger.warn("corrupt_documents_deleted", { user_id: userId, deleted_count: ids.length });
     res.json({ deleted: ids.length });
   });
 
@@ -395,7 +396,7 @@ export function registerDocumentRoutes(app: express.Application) {
       try {
         filePath = await resolveDocumentFilePath(doc);
       } catch (err) {
-        console.error(`[rescan] doc ${id} file not accessible:`, err);
+        logger.error("document_rescan_file_unavailable", { document_id: id, user_id: userId, error: err });
         await col("documents").updateOne(idFilter(id), {
           $set: { processing_status: "error", error_message: String(err), updated_at: new Date() },
         });
@@ -403,14 +404,14 @@ export function registerDocumentRoutes(app: express.Application) {
       }
       const ext = extname(filePath);
       processDocument(id, filePath, doc.mime_type, ext, undefined, userId).catch(async (err) => {
-        console.error(`[rescan] doc ${id} failed:`, err);
+        logger.error("document_rescan_failed", { document_id: id, user_id: userId, error: err });
         await col("documents").updateOne(docIdFilter, {
           $set: { processing_status: "error", error_message: String(err), updated_at: new Date() },
         });
       });
     }
 
-    console.log(`[documents] Queued ${errorDocs.length} documents for rescan for user ${userId}`);
+    logger.info("document_rescan_queued", { user_id: userId, queued_count: errorDocs.length });
     res.json({ queued: errorDocs.length });
   });
 
@@ -495,7 +496,7 @@ export function registerDocumentRoutes(app: express.Application) {
       try {
         await saveTemplateEntitiesForDoc(id, template, normalizedFields, userId);
       } catch (e) {
-        console.error(`[extract] Failed to save extracted entities for doc ${id}:`, e);
+        logger.error("document_extract_entities_failed", { document_id: id, user_id: userId, error: e });
       }
     }
 
@@ -593,7 +594,7 @@ export function registerDocumentRoutes(app: express.Application) {
     try {
       await processDocument(id, filePath, doc.mime_type, ext, undefined, userId);
     } catch (err) {
-      console.error(`[reprocess] doc ${id} failed:`, err);
+      logger.error("document_reprocess_failed", { document_id: id, user_id: userId, error: err });
       await col("documents").updateOne(idFilter(id), {
         $set: {
           processing_status: "error",
@@ -694,7 +695,11 @@ export function registerDocumentRoutes(app: express.Application) {
         { document_id: id },
         { $set: { ...equipUpdate, updated_at: new Date() } },
       );
-      console.log(`[fields] Equipment flat-fields updated for doc ${id}:`, Object.keys(equipUpdate));
+      logger.info("document_equipment_fields_updated", {
+        document_id: id,
+        user_id: userId,
+        fields: Object.keys(equipUpdate),
+      });
     }
 
     // Regenerate reminders when expiry_date changed

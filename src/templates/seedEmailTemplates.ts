@@ -9,6 +9,22 @@ const DEFAULT_HTML    = loadReminderTemplate("default");
 const INSPECTION_HTML = loadReminderTemplate("inspection");
 const CONTRACT_HTML   = loadReminderTemplate("contract");
 const INVOICE_HTML    = loadReminderTemplate("invoice");
+const MONTHLY_REPORT_HTML = `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:24px;background:#f5f7fa;color:#2c3e50;font-family:Arial,sans-serif;direction:rtl;text-align:right">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e4e8ed;border-radius:10px;padding:28px">
+    <h1 style="margin:0 0 12px;color:#18a058;font-size:22px">דוח חודשי</h1>
+    <p style="margin:0 0 20px;line-height:1.6">שלום {{client_company|לקוח}}, מצורף דוח החוזים והתסקירים עבור {{report_month}}.</p>
+    <table style="width:100%;border-collapse:collapse;background:#fafbfc">
+      <tr><td style="padding:10px;border-bottom:1px solid #e4e8ed;color:#5a6c7d">לקוח</td><td style="padding:10px;border-bottom:1px solid #e4e8ed;font-weight:600">{{client_company}}</td></tr>
+      <tr><td style="padding:10px;color:#5a6c7d">מספר רשומות</td><td style="padding:10px;font-weight:600">{{report_count}}</td></tr>
+    </table>
+    <p style="margin:20px 0 0;line-height:1.6">קובצי הדוח מצורפים להודעה זו.</p>
+    <p style="margin:24px 0 0;padding-top:14px;border-top:1px solid #e4e8ed;color:#95a5a6;font-size:12px">{{from_name|ReminderOCR}}</p>
+  </div>
+</body>
+</html>`;
 
 interface TemplateSeed {
   name: string;
@@ -20,6 +36,12 @@ interface TemplateSeed {
 
 const SEEDS: TemplateSeed[] = [
   {
+    name: "דוח חודשי ללקוח",
+    subject: "דוח חודשי - {{client_company}} - {{report_month}}",
+    html: MONTHLY_REPORT_HTML,
+    is_default: 0,
+    doc_template_name: null,
+  },  {
     name: "ברירת מחדל",
     subject: "[תזכורת] {{title}}",
     html: DEFAULT_HTML,
@@ -119,4 +141,11 @@ export async function pickEmailTemplate(docTemplateId: string | number | null): 
   if (!any) return null;
   const { _id, ...rest } = any;
   return { id: _id?.toString(), ...rest } as any;
+}
+
+export async function loadEmailTemplateByName(name: string): Promise<EmailTemplate | null> {
+  const row = await col("email_templates").findOne({name}) as any;
+  if (!row) return null;
+  const {_id, ...rest} = row;
+  return {id: _id?.toString(), ...rest} as any;
 }

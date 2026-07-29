@@ -4,6 +4,7 @@ import {join} from "path";
 import {getDataDir, getSettings} from "../settings";
 import type {DocTemplate, DynamicExtraction, ExtractionResult} from "../../src/shared/types.js";
 import {buildPromptForTemplate, InspectorProfile} from "../templates/buildPrompt";
+import {logger} from "../logger";
 
 const SYSTEM_PROMPT = `You are a document intelligence assistant specializing in Hebrew business, legal, and technical documents (contracts, invoices, inspection reports / תסקירים, certificates, etc.).
 Extract structured information from the provided document text and return ONLY valid JSON matching the schema below.
@@ -70,7 +71,6 @@ function logExtractorSettings(
 ) {
   const config = {
     backend: settings.aiBackend,
-    openAiKey: settings.openAiKey,
     model,
     extractionMaxChars: settings.extractionMaxChars,
     rawTextChars: rawTextLength,
@@ -80,7 +80,7 @@ function logExtractorSettings(
     ollamaUrl: settings.aiBackend === "ollama" ? settings.ollamaUrl : undefined,
   };
 
-  console.log(`[${scope}] settings doc=${documentId ?? "?"}`, config);
+  logger.debug("extraction_settings", { scope, document_id: documentId ?? null, ...config });
 }
 
 export interface ExtractionRun {
@@ -153,21 +153,23 @@ export async function extractDocument(
   const execMs = Date.now() - t0;
   const run: ExtractionRun = { result, rawJson, model, backend, execMs, error, usage };
 
-  // ── Console log ─────────────────────────────────────────────────────────────
   if (error) {
-    console.error(
-      `[extractor] ❌ doc=${documentId ?? "?"} backend=${backend} model=${model} time=${execMs}ms — ${error}`
-    );
+    logger.error("ai_extraction_failed", {
+      document_id: documentId ?? null,
+      backend,
+      model,
+      exec_ms: execMs,
+      error,
+    });
   } else {
-    const u = usage
-      ? `tokens: prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`
-      : "tokens: n/a";
-    console.log(
-      `[extractor] ✓ doc=${documentId ?? "?"} backend=${backend} model=${model} time=${execMs}ms — ${u}`
-    );
-    if (result) {
-      console.log('[extractor] →', result);
-    }
+    logger.info("ai_extraction_completed", {
+      document_id: documentId ?? null,
+      backend,
+      model,
+      exec_ms: execMs,
+      usage,
+      parsed_ok: Boolean(result),
+    });
   }
 
   // ── Dump full run to disk ───────────────────────────────────────────────────
@@ -193,7 +195,7 @@ export async function extractDocument(
     };
     writeFileSync(join(dir, `${fileBase}.json`), JSON.stringify(dump, null, 2), "utf-8");
   } catch (writeErr) {
-    console.warn(`[extractor] Failed to write extraction dump: ${writeErr}`);
+    logger.warn("ai_extraction_dump_failed", { document_id: documentId ?? null, error: writeErr });
   }
 
   return run;
@@ -252,17 +254,24 @@ export async function extractWithTemplate(
 
   // Logging
   if (error) {
-    console.error(
-      `[extractor:tpl] ❌ doc=${documentId ?? "?"} tpl="${template.name}" time=${execMs}ms — ${error}`
-    );
+    logger.error("template_ai_extraction_failed", {
+      document_id: documentId ?? null,
+      template_name: template.name,
+      backend,
+      model,
+      exec_ms: execMs,
+      error,
+    });
   } else {
-    const u = usage
-      ? `tokens: prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`
-      : "tokens: n/a";
-    console.log(
-      `[extractor:tpl] ✓ doc=${documentId ?? "?"} tpl="${template.name}" time=${execMs}ms — ${u}`
-    );
-    if (fields) console.log("[extractor:tpl] →", fields);
+    logger.info("template_ai_extraction_completed", {
+      document_id: documentId ?? null,
+      template_name: template.name,
+      backend,
+      model,
+      exec_ms: execMs,
+      usage,
+      parsed_ok: Boolean(fields),
+    });
   }
 
   // Disk dump for audit
@@ -290,7 +299,7 @@ export async function extractWithTemplate(
       "utf-8"
     );
   } catch (writeErr) {
-    console.warn(`[extractor:tpl] Failed to write dump: ${writeErr}`);
+    logger.warn("template_ai_extraction_dump_failed", { document_id: documentId ?? null, template_name: template.name, error: writeErr });
   }
 
   return { template, fields, rawJson, model, backend, execMs, error, usage };

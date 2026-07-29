@@ -1,4 +1,5 @@
 import {Collection, Db, MongoClient} from "mongodb";
+import {logger} from "../logger";
 
 const MONGODB_URI = process.env.MONGODB_URI ?? "mongodb://127.0.0.1:27017";
 const DB_NAME = process.env.MONGODB_DB ?? "reminder-app";
@@ -13,7 +14,7 @@ export async function connectDb(): Promise<Db> {
   _db = _client.db(DB_NAME);
   await ensureCollections(_db);
   await applyIndexes(_db);
-  console.log(`[db] Connected to MongoDB: ${DB_NAME}`);
+  logger.info("db_connected", { db_name: DB_NAME });
   return _db;
 }
 
@@ -59,7 +60,7 @@ async function ensureCollections(db: Db): Promise<void> {
   for (const name of ALL_COLLECTIONS) {
     if (!existing.has(name)) {
       await db.createCollection(name);
-      console.log(`[db] Created collection: ${name}`);
+      logger.info("db_collection_created", { collection: name });
     }
   }
 }
