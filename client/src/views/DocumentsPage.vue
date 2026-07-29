@@ -893,6 +893,12 @@ async function openDownload(row: Document) {
 
   :deep(.list-card__actions) {
     align-self: flex-start;
+    display: grid;
+    grid-template-columns: repeat(3, 34px);
+  }
+
+  :deep(.list-card__actions .n-button) {
+    width: 34px;
   }
 }
 
