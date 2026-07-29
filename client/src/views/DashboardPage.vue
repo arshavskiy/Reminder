@@ -537,7 +537,22 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
 
 @media (max-width: 430px) {
   .dash__stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .stat {
+    min-height: 82px;
+    padding: 12px;
+  }
+
+  .stat__num {
+    font-size: 24px;
+  }
+
+  .stat__label {
+    font-size: 12px;
+    line-height: 1.35;
   }
 
   .dash__section {
