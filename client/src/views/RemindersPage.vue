@@ -1,8 +1,8 @@
 <template>
-  <div>
-    <n-space justify="space-between" align="center" style="margin-bottom: 16px">
+  <div class="reminders-page">
+    <n-space class="reminders-head" justify="space-between" align="center" style="margin-bottom: 16px">
 <!--      <n-h2 style="margin: 0">תזכורות</n-h2>-->
-      <n-space>
+      <n-space class="reminders-actions">
         <n-button :loading="store.loading" @click="load">↻ רענן</n-button>
 <!--        <n-button @click="quickTest" :loading="testing" :disabled="!testEmail">-->
 <!--          🧪 תזכורת בדיקה-->
@@ -21,7 +21,7 @@
       <router-link to="/settings" style="color: #63e2b7">הגדרות   אימייל</router-link>
     </n-alert>
 
-    <n-space style="margin-bottom: 16px">
+    <n-space class="reminders-filters" style="margin-bottom: 16px">
       <n-select
         v-model:value="statusFilter"
         :options="statusOptions"
@@ -39,10 +39,13 @@
       :loading="store.loading"
       :pagination="{ pageSize: 20 }"
       :row-key="(r: any) => r.id"
+      :scroll-x="820"
+      class="reminders-table"
+      size="small"
     />
 
     <!-- Quick-test modal -->
-    <n-modal v-model:show="showQuickTest" title="🧪 שליחת תזכורת בדיקה" :show-icon="false" preset="dialog" style="width: 420px">
+    <n-modal v-model:show="showQuickTest" title="🧪 שליחת תזכורת בדיקה" :show-icon="false" preset="dialog" style="width: 420px; max-width: 95vw">
       <n-form label-placement="top">
         <n-form-item label="נמען">
           <n-input :value="testEmail" disabled />
@@ -64,7 +67,7 @@
     </n-modal>
 
     <!-- Create reminder modal -->
-    <n-modal v-model:show="showCreate" title="תזכורת חדשה" :show-icon="false" preset="dialog" style="width: 520px">
+    <n-modal v-model:show="showCreate" title="תזכורת חדשה" :show-icon="false" preset="dialog" style="width: 520px; max-width: 95vw">
       <n-form label-placement="top" v-if="newReminder">
         <n-form-item label="לקוח" required>
           <n-select
@@ -128,7 +131,7 @@
     </n-modal>
 
     <!-- Edit reminder modal -->
-    <n-modal v-model:show="showEditDate" title="עריכת תזכורת" :show-icon="false" preset="dialog" style="width: 380px">
+    <n-modal v-model:show="showEditDate" title="עריכת תזכורת" :show-icon="false" preset="dialog" style="width: 380px; max-width: 95vw">
       <n-form label-placement="top" v-if="editingReminder">
         <n-form-item label="כותרת">
           <n-input :value="editingReminder.title" disabled />
@@ -730,3 +733,51 @@ const columns = [
   },
 ];
 </script>
+
+<style scoped>
+.reminders-page {
+  max-width: 100%;
+}
+
+.reminders-actions,
+.reminders-filters {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .reminders-head,
+  .reminders-head :deep(.n-space) {
+    align-items: stretch !important;
+    flex-direction: column !important;
+    width: 100%;
+  }
+
+  .reminders-actions :deep(.n-button),
+  .reminders-filters :deep(.n-select) {
+    width: 100%;
+  }
+
+  .reminders-filters {
+    width: 100%;
+  }
+
+  .reminders-table {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .reminders-table :deep(.n-data-table-wrapper) {
+    overflow-x: auto;
+  }
+
+  :deep(.n-dialog__action) {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  :deep(.n-dialog__action .n-button) {
+    width: 100%;
+  }
+}
+</style>
