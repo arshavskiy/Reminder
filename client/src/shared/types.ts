@@ -309,6 +309,9 @@ export interface DashboardStats {
   total_contracts: number;     // actual contracts (excludes inspection reports)
   active_contracts: number;
   total_inspections: number;   // תסקירים / inspection reports
+  total_equipment: number;
+  total_doc_templates: number;
+  total_email_templates: number;
   pending_reminders: number;
   expiring_soon: number;       // active contracts/inspections expiring within 30 days
   recent_documents: Document[];

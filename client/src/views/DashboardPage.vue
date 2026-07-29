@@ -48,11 +48,16 @@
           class="module"
           @click="router.push(m.to)"
         >
-          <div class="module__icon">
-            <n-icon :component="m.icon" :size="22" />
-          </div>
           <div class="module__body">
-            <h3 class="module__title">{{ m.title }}</h3>
+            <div class="module__head">
+              <div class="module__icon">
+                <n-icon :component="m.icon" :size="22" />
+              </div>
+              <div class="module__heading">
+                <h3 class="module__title">{{ m.title }}</h3>
+                <span v-if="m.count" class="module__count">{{ m.count() }}</span>
+              </div>
+            </div>
             <p class="module__desc">{{ m.desc }}</p>
             <span class="module__cta">פתח   </span>
           </div>
@@ -168,6 +173,7 @@ const modules = [
     key: "documents",
     title: "מסמכים",
     desc: "צפה, ערוך וסרוק מסמכים בדיקה.",
+    count: () => stats.value?.total_documents ?? 0,
     icon: ClipboardOutline,
     to: "/contracts",
     show: true,
@@ -175,6 +181,7 @@ const modules = [
     key: "contracts",
     title: "תסקירים",
     desc: "צפה, ערוך וצור תסקירי בדיקה. נהל את כל שלבי התסקיר ממקום אחד.",
+    count: () => stats.value?.total_inspections ?? 0,
     icon: ClipboardOutline,
     to: "/contracts",
     show: true,
@@ -183,6 +190,7 @@ const modules = [
     key: "equipment",
     title: "הגדרות ציוד",
     desc: "נהל את רשימת הציוד שלך, יצרנים והצהרות בטיחות.",
+    count: () => stats.value?.total_equipment ?? 0,
     icon: ConstructOutline,
     to: "/equipment",
     show: true,
@@ -191,6 +199,7 @@ const modules = [
     key: "clients",
     title: "ניהול לקוחות",
     desc: "הוסף לקוחות חדשים, נהל אנשי קשר ועקוב אחרי פרטי לקוח.",
+    count: () => stats.value?.total_clients ?? 0,
     icon: PeopleOutline,
     to: "/clients",
     show: true,
@@ -199,6 +208,7 @@ const modules = [
     key: "doc-templates",
     title: "תבניות מסמכים",
     desc: "הגדר אילו שדות לחלץ מכל סוג מסמך. יצירה אוטומטית מ-AI.",
+    count: () => stats.value?.total_doc_templates ?? 0,
     icon: ExtensionPuzzleOutline,
     to: "/doc-templates",
     show: true,
@@ -207,6 +217,7 @@ const modules = [
     key: "email-templates",
     title: "תבניות",
     desc: "עצב את תוכן התזכורות עם משתנים דינמיים ולוגו של החברה.",
+    count: () => stats.value?.total_email_templates ?? 0,
     icon: MailOutline,
     to: "/email-templates",
     show: authStore.user?.role === "admin", // Only show to admins
@@ -215,6 +226,7 @@ const modules = [
     key: "reminders",
     title: "תזכורות",
     desc: "כל התזכורות הממתינות והנשלחות. שלח עכשיו או דחה.",
+    count: () => stats.value?.pending_reminders ?? 0,
     icon: AlarmOutline,
     to: "/reminders",
     show: true,
@@ -320,10 +332,17 @@ const data_cards = modules.filter(m => m.show)
   box-shadow: var(--shadow-md);
   transform: translateY(-2px);
 }
+.module__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
 .module__icon {
   width: 44px;
   height: 44px;
   border-radius: 12px;
+  flex: 0 0 44px;
   background: rgba(99, 226, 183, 0.14);
   color: var(--brand-color);
   display: flex;
@@ -332,11 +351,36 @@ const data_cards = modules.filter(m => m.show)
 }
 html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
 
+.module__heading {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+}
 .module__title {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.module__count {
+  margin-inline-start: auto;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(99, 226, 183, 0.14);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand-color);
+  line-height: 1;
 }
 .module__desc {
   margin: 0 0 12px;
@@ -406,8 +450,6 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
-  //text-overflow: ellipsis;
-  //max-width: 70%;
 }
 .panel__row-title:hover { color: var(--brand-color); }
 .panel__row-stack { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

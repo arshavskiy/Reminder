@@ -2,10 +2,10 @@
   <section class="rcal">
     <header class="rcal__head">
       <div class="rcal__title-wrap">
-        <h3 class="rcal__title">לוח תזכורות ותעודות</h3>
+        <h3 class="rcal__title">לוח תזכורות ותסקירים</h3>
         <span class="rcal__count">{{ rows.length }} תזכורות</span>
         <span v-if="(expiryItems ?? []).length" class="rcal__expiry-count">
-          {{ (expiryItems ?? []).length }} תעודות
+          {{ (expiryItems ?? []).length }} תסקירים
         </span>
       </div>
       <div class="rcal__controls">
@@ -94,15 +94,15 @@
               <template #trigger>
                 <button
                   :class="`rcal__pill--expiry-${e.urgency}`"
-                  :title="`פג תוקף: ${e.equipment_name ?? e.contract_type ?? 'תעודה'} — ${e.client_name ?? ''}`"
+                  :title="`פג תוקף: ${e.equipment_name ?? e.contract_type ?? 'תסקירים'} — ${e.client_name ?? ''}`"
                   class="rcal__pill rcal__pill--expiry"
                   @click.stop
                 >
-                  {{ e.equipment_name ?? e.contract_type ?? 'תעודה' }}
+                  {{ e.equipment_name ?? e.contract_type ?? 'תסקירים' }}
                 </button>
               </template>
               <div class="rcal__expiry-pop">
-                <p class="rcal__expiry-pop__title">{{ e.equipment_name ?? e.contract_type ?? 'תעודה' }}</p>
+                <p class="rcal__expiry-pop__title">{{ e.equipment_name ?? e.contract_type ?? 'תסקירים' }}</p>
                 <p v-if="e.client_name" class="rcal__expiry-pop__sub">לקוח: {{ e.client_name }}</p>
                 <p v-if="e.contract_number" class="rcal__expiry-pop__sub">מס׳ {{ e.contract_number }}</p>
                 <p :class="`rcal__expiry-pop__days--${e.urgency}`" class="rcal__expiry-pop__days">
@@ -149,7 +149,7 @@
             class="rcal__agenda-item"
           >
             <span class="rcal__agenda-dot rcal__agenda-dot--expiry" />
-            <span class="rcal__agenda-title">{{ e.equipment_name ?? e.contract_type ?? 'תעודה' }} — פג תוקף</span>
+            <span class="rcal__agenda-title">{{ e.equipment_name ?? e.contract_type ?? 'תסקירים' }} — פג תוקף</span>
             <span v-if="e.client_name" class="rcal__agenda-client">— {{ e.client_name }}</span>
           </button>
         </div>
