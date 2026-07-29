@@ -402,6 +402,14 @@ async function deleteTpl() {
 
 <style scoped>
 @media (max-width: 720px) {
+  :deep(.n-space) {
+    width: 100%;
+  }
+
+  :deep(.n-space .n-button) {
+    justify-content: center;
+  }
+
   :deep(.n-drawer-body-content-wrapper) {
     padding: 14px;
   }
@@ -411,7 +419,32 @@ async function deleteTpl() {
   }
 
   iframe {
+    height: 520px !important;
     min-height: 520px;
+  }
+
+  :deep(.n-tabs-nav-scroll-content) {
+    width: 100%;
+  }
+
+  :deep(.n-drawer .n-card__footer),
+  :deep(.n-drawer-footer .n-space) {
+    align-items: stretch;
+  }
+
+  :deep(.n-drawer-footer .n-space) {
+    flex-direction: column-reverse;
+  }
+
+  :deep(.n-drawer-footer .n-button) {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  iframe {
+    height: 440px !important;
+    min-height: 440px;
   }
 }
 </style>
