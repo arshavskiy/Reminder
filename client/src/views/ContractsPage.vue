@@ -1834,10 +1834,17 @@ function exportToExcel() {
   .pagination-bar {
     align-items: stretch;
     flex-direction: column;
+    gap: 10px;
   }
 
   .pagination-summary {
     text-align: center;
+  }
+
+  .pagination-bar :deep(.n-pagination) {
+    justify-content: center;
+    overflow-x: auto;
+    padding-bottom: 2px;
   }
 
   .export-steps {
@@ -1855,6 +1862,11 @@ function exportToExcel() {
     grid-template-columns: 1fr;
     display: grid;
   }
+
+  :deep(.n-dialog__action),
+  :deep(.n-card__footer) {
+    align-items: stretch;
+  }
 }
 
 @media (max-width: 460px) {
@@ -1863,7 +1875,11 @@ function exportToExcel() {
   }
 
   .cards-vlist {
-    height: calc(100vh - 390px);
+    height: auto;
+    min-height: 0;
+  }
+
+  .cards-vlist :deep(.v-vl) {
     min-height: 420px;
   }
 }
