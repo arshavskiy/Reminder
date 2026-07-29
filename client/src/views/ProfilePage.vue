@@ -186,6 +186,7 @@
             :columns="certColumns"
             :data="certificates"
             :pagination="{ pageSize: 10 }"
+            :scroll-x="760"
             size="small"
           />
         </section>
@@ -371,6 +372,7 @@
             :columns="billingColumns"
             :data="billingHistory"
             :pagination="false"
+            :scroll-x="620"
             size="small"
           />
         </section>
@@ -1144,5 +1146,97 @@ html[data-theme="light"] .sidebar-nav__item--active {
 .drop-zone--active {
   border-color: #63e2b7;
   background: rgba(99, 226, 183, 0.06);
+}
+
+@media (max-width: 820px) {
+  .profile-shell {
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+  }
+
+  .profile-sidebar {
+    position: static;
+    width: 100%;
+    padding: 14px;
+  }
+
+  .sidebar-user {
+    padding-bottom: 12px;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .sidebar-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-nav__item {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .profile-content {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .section-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .section-header :deep(.n-button),
+  .section-header :deep(.n-select) {
+    width: 100% !important;
+  }
+
+  .info-card,
+  .settings-group {
+    padding-inline: 16px;
+  }
+
+  .info-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .info-label {
+    min-width: 0;
+  }
+
+  .info-input,
+  .progress-wrap {
+    width: 100%;
+  }
+
+  .stats-row,
+  .theme-cards {
+    flex-direction: column;
+  }
+
+  .stat-pill,
+  .stat-card,
+  .theme-card {
+    width: 100%;
+  }
+
+  .avatar-upload-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .drop-zone {
+    line-height: 1.5;
+  }
 }
 </style>
