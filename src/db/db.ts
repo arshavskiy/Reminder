@@ -48,6 +48,7 @@ const ALL_COLLECTIONS = [
   "equipment",
   "doc_templates",
   "email_templates",
+  "features",
   "engineer_profiles",
   "certificates",
   "notifications",
@@ -162,13 +163,18 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("equipment").createIndex({ client_id: 1 });
 
   // doc_templates
-  await db.collection("doc_templates").createIndex({ name: 1 }, { unique: true });
+  try { await db.collection("doc_templates").dropIndex("name_1"); } catch { /* didn't exist */ }
+  await db.collection("doc_templates").createIndex({ user_id: 1, name: 1 }, { unique: true });
   await db.collection("doc_templates").createIndex({ is_default: 1 });
 
   // email_templates
   await db.collection("email_templates").createIndex({ name: 1 }, { unique: true });
   await db.collection("email_templates").createIndex({ doc_template_id: 1 });
   await db.collection("email_templates").createIndex({ is_default: 1 });
+
+  // features
+  await db.collection("features").createIndex({ key: 1 }, { unique: true });
+  await db.collection("features").createIndex({ scope: 1, sort_order: 1 });
 
   // engineer_profiles — one per user
   await db.collection("engineer_profiles").createIndex({ user_id: 1 }, { unique: true, sparse: true });

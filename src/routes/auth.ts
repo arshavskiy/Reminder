@@ -24,6 +24,7 @@ import {
     verifyPassword,
 } from "../auth/emailAuth";
 import {clientIp, logger} from "../logger";
+import {DEFAULT_FEATURES} from "../features";
 
 export function registerAuthRoutes(app: express.Application) {
   // GET /auth/google — kick off OAuth flow
@@ -125,6 +126,7 @@ export function registerAuthRoutes(app: express.Application) {
             email_from_name: null,
             reminder_advance_days: "[90,60,30]",
             ocr_language: "heb+eng",
+            features: DEFAULT_FEATURES,
           },
         },
         { upsert: true }
@@ -200,6 +202,7 @@ export function registerAuthRoutes(app: express.Application) {
             email_from_name: null,
             reminder_advance_days: "[90,60,30]",
             ocr_language: "heb+eng",
+            features: DEFAULT_FEATURES,
           },
         },
         { upsert: true }

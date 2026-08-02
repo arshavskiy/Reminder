@@ -1,6 +1,7 @@
 import "dotenv/config";
 import {closeDb, col, connectDb} from "../db/db";
 import {createMagicLinkToken} from "../auth/session";
+import {DEFAULT_FEATURES} from "../features";
 
 /**
  * Creates (or reuses) a user and prints a one-time magic-link sign-in URL.
@@ -58,6 +59,7 @@ async function main() {
         email_from_name: null,
         reminder_advance_days: "[90,60,30]",
         ocr_language: "heb+eng",
+        features: DEFAULT_FEATURES,
       },
     },
     { upsert: true }

@@ -10,6 +10,7 @@ import {loadAuthTemplate, loadReminderTemplate} from "../email-templates/loader"
 import {listTemplateVars, renderTemplate} from "../templates/renderEmail";
 import {previewReminderEmail} from "../reminders/emailSender";
 import {generateTemplateFromText, toDraft} from "../templates/generateTemplate";
+import {requireAuth} from "../auth/middleware";
 import {parsePdf} from "../pipeline/pdfParser";
 import {ocrFile} from "../pipeline/ocrParser";
 import {parseDocx} from "../pipeline/docxParser";
@@ -20,10 +21,16 @@ import {logger} from "../logger";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+async function currentUserId(req: express.Request): Promise<string | undefined> {
+  const ctx = await requireAuth(req.headers.cookie ?? undefined);
+  return ctx.userId;
+}
+
 export function registerTemplateRoutes(app: express.Application) {
   // ── Document templates ─────────────────────────────────────────────────────
-  app.get("/api/doc-templates", async (_req, res) => {
-    res.json(await loadAllTemplates());
+  app.get("/api/doc-templates", async (req, res) => {
+    const userId = await currentUserId(req).catch(() => undefined);
+    res.json(await loadAllTemplates(userId));
   });
 
   app.get("/api/doc-templates/:id", async (req, res) => {

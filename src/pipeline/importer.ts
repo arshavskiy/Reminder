@@ -355,7 +355,7 @@ export async function processDocument(
       }
     } else {
       // For all other kinds, pick the best matching template then extract.
-      const template = await pickTemplate(rawText);
+      const template = await pickTemplate(rawText, userId);
       logger.info("document_extractor_selected", {
         document_id: documentId,
         user_id: userId ?? null,

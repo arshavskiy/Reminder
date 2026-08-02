@@ -5,6 +5,8 @@ import {sendReminderEmail} from "../reminders/emailSender";
 import {advanceContractAfterSentReminder, generateContractReminders} from "../reminders/scheduler";
 import type {EquipmentCategory, ReminderWithContext} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {getSettings} from "../settings";
+import {pickEmailTemplate} from "../templates/seedEmailTemplates";
 
 const HYDRAULIC_CATEGORIES: EquipmentCategory[] = ["lift", "scaffold", "ladder"];
 const HYDRAULIC_INTERVAL_MONTHS = [4, 6, 12, 14] as const;
@@ -20,6 +22,13 @@ function parseIsoDateOnly(value: string): Date | null {
 
 function formatIsoDateOnly(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+async function resolveEmailTemplateId(value: unknown): Promise<string | null> {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  const template = await pickEmailTemplate(null);
+  return template?.id ? String(template.id) : null;
 }
 
 function todayDateOnly(): Date {
@@ -66,6 +75,37 @@ async function allocateReportNumber(userId: string): Promise<string | null> {
 }
 
 export function registerReminderRoutes(app: express.Application) {
+  app.get("/api/reminders/email-sender", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const settings = getSettings();
+    const [userSettings, engineerProfile, user] = await Promise.all([
+      col("user_settings").findOne({ user_id: userId }) as Promise<any>,
+      col("engineer_profiles").findOne({ user_id: userId }) as Promise<any>,
+      col("users").findOne({ _id: new ObjectId(userId) } as any) as Promise<any>,
+    ]);
+    const name = [
+      userSettings?.email_from_name,
+      engineerProfile?.company_name,
+      user?.company_name,
+      settings.emailFromName,
+      "ReminderOCR",
+    ].find((value) => typeof value === "string" && value.trim()) ?? "ReminderOCR";
+
+    res.json({
+      email: settings.emailFrom || settings.smtpUser || null,
+      name,
+    });
+  });
+
   // GET /api/reminders
   app.get("/api/reminders", async (req, res) => {
     let userId: string;
@@ -115,6 +155,7 @@ export function registerReminderRoutes(app: express.Application) {
         return {
           ...flatDoc(r),
           client_name: (client as any)?.display_name ?? null,
+          client_email: (client as any)?.email ?? null,
           document_name: (document as any)?.file_name ?? null,
           contract_number: (contract as any)?.contract_number ?? null,
           contract_type: (contract as any)?.contract_type ?? null,
@@ -139,6 +180,7 @@ export function registerReminderRoutes(app: express.Application) {
 
     const body = req.body as Record<string, unknown>;
     const now = new Date();
+    const emailTemplateId = await resolveEmailTemplateId(body.email_template_id);
     const doc = {
       user_id: userId,
       source_type: body.source_type ?? "manual",
@@ -150,7 +192,7 @@ export function registerReminderRoutes(app: express.Application) {
       title: body.title,
       body: body.body ?? null,
       email_to: body.email_to ?? null,
-      email_template_id: body.email_template_id ?? null,
+      email_template_id: emailTemplateId,
       status: "pending",
       equipment_type: body.equipment_type ?? null,
       manufacturer: body.manufacturer ?? null,
@@ -465,6 +507,9 @@ export function registerReminderRoutes(app: express.Application) {
     ];
     for (const f of fields) {
       if (body[f] !== undefined) updates[f] = body[f];
+    }
+    if (body.email_template_id !== undefined) {
+      updates.email_template_id = await resolveEmailTemplateId(body.email_template_id);
     }
 
     await col("reminders").updateOne(filter, { $set: updates });

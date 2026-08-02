@@ -73,7 +73,7 @@ export function registerExtractRemindersRoutes(app: express.Application) {
 
       try {
         const previews = await extractRemindersFromFile(
-          tmpPath, ext, displayName, advanceDays
+          tmpPath, ext, displayName, advanceDays, userId
         );
         allPreviews.push(...previews);
       } catch (err) {
@@ -151,7 +151,8 @@ async function extractRemindersFromFile(
   filePath: string,
   ext: string,
   displayName: string,
-  advanceDays: number[]
+  advanceDays: number[],
+  userId: string
 ): Promise<ReminderPreview[]> {
   // ── 1. Extract raw text ──────────────────────────────────────────────────
   let rawText = "";
@@ -178,13 +179,14 @@ async function extractRemindersFromFile(
   }
 
   // ── 3. Single-document extraction ─────────────────────────────────────────
-  return extractFromSingleDoc(rawText, displayName, advanceDays);
+  return extractFromSingleDoc(rawText, displayName, advanceDays, userId);
 }
 
 async function extractFromSingleDoc(
   rawText: string,
   displayName: string,
-  advanceDays: number[]
+  advanceDays: number[],
+  userId: string
 ): Promise<ReminderPreview[]> {
   // Try template-based extraction first; fall back to generic
   let expiryDate: string | null = null;
@@ -194,7 +196,7 @@ async function extractFromSingleDoc(
   let documentType: string | null = null;
   let confidence: "high" | "medium" | "low" = "low";
 
-  const template = await pickTemplate(rawText);
+  const template = await pickTemplate(rawText, userId);
   if (template) {
     const run = await extractWithTemplate(rawText, template, undefined, displayName);
     if (run.fields) {

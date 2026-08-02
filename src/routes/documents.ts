@@ -447,7 +447,7 @@ export function registerDocumentRoutes(app: express.Application) {
       const { loadTemplate } = await import("../templates/seedTemplates.js");
       template = await loadTemplate(String(body.templateId));
     }
-    if (!template) template = await pickTemplate(rawText);
+    if (!template) template = await pickTemplate(rawText, userId);
     if (!template) {
       res.status(422).json({ error: "No matching template found" });
       return;
@@ -664,11 +664,11 @@ export function registerDocumentRoutes(app: express.Application) {
     // Resolve the document's template (stored by id, or fall back to first match)
     let template = null;
     if (doc.template_id) {
-      const all = await loadAllTemplates();
+      const all = await loadAllTemplates(userId);
       template = all.find((t) => String(t.id) === String(doc.template_id)) ?? null;
     }
     if (!template && doc.file_text) {
-      template = await pickTemplate(doc.file_text);
+      template = await pickTemplate(doc.file_text, userId);
     }
 
     if (template) {
