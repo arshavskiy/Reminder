@@ -91,6 +91,7 @@ export interface UserSettings {
   email_from_name: string | null;
   reminder_advance_days: string;  // JSON array as string
   ocr_language: string;
+  features?: Record<string, boolean> | null;
 }
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
@@ -347,6 +348,7 @@ export interface TemplateField {
 
 export interface DocTemplate {
   id: number;
+  user_id?: string | null;
   name: string;                 // Hebrew, e.g. "תסקיר בדיקה"
   description: string | null;
   match_keywords: string[];     // ["תסקיר", "בדיקה"]
@@ -356,6 +358,7 @@ export interface DocTemplate {
   cached_system_prompt: string | null;  // pre-built AI system prompt; null = regenerate
   is_default: number;
   is_builtin: number;
+  extract_equipment?: boolean;
   created_at: string;
   updated_at: string;
 }

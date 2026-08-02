@@ -333,14 +333,14 @@ const LABEL_MAP: Record<string, string> = Object.fromEntries(
   DEFAULT_FIELDS.map(f => [f.key, f.label])
 );
 
-const SKIP_KEYS = new Set(["_equipment", "parties", "tasks", "amount", "currency"]);
+const SKIP_KEYS = new Set(["parties", "tasks", "amount", "currency"]);
 
 const extractedFields = computed(() => {
   const raw = extractionRaw.value ?? {};
   const defaultKeys = new Set(DEFAULT_FIELDS.map(f => f.key));
   // Extra keys in raw that aren't in the default list and aren't skipped
   const extraFields = Object.keys(raw)
-    .filter(k => !SKIP_KEYS.has(k) && !defaultKeys.has(k))
+    .filter(k => !k.startsWith("_") && !SKIP_KEYS.has(k) && !defaultKeys.has(k))
     .map(k => ({ key: k, label: LABEL_MAP[k] ?? k }));
   return [...DEFAULT_FIELDS, ...extraFields].map(f => ({
     key: f.key,

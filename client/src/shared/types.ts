@@ -93,6 +93,18 @@ export interface UserSettings extends PipelineFlags {
   monthly_report_formats?: string;
   monthly_report_last_sent?: string | null;
   monthly_report_last_error?: string | null;
+  features?: Record<string, boolean> | null;
+}
+
+export interface FeatureDefinition {
+  id: string;
+  key: string;
+  scope: "pages" | "dashboard";
+  label_he: string;
+  label_en: string;
+  description_he: string;
+  default_enabled: boolean;
+  sort_order: number;
 }
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
@@ -266,7 +278,6 @@ export interface ContractWithClient extends Contract {
   po_box: string | null;
   client_zipcode: string | null;
   equipment_description: string | null;
-  _confidence: string | null;
   _equipment: Array<{
     name: string;
     manufacturer: string | null;
@@ -281,6 +292,7 @@ export interface ContractWithClient extends Contract {
 
 export interface ReminderWithContext extends Reminder {
   client_name: string | null;
+  client_email?: string | null;
   document_name: string | null;
 }
 
@@ -361,6 +373,7 @@ export interface TemplateField {
 
 export interface DocTemplate {
   id: string;
+  user_id?: string | null;
   name: string;                        // Hebrew, e.g. "תסקיר בדיקה"
   description: string | null;
   document_kind: DocumentKind;
@@ -370,6 +383,7 @@ export interface DocTemplate {
   cached_system_prompt: string | null; // pre-built AI system prompt
   is_default: number;
   is_builtin: number;
+  extract_equipment?: boolean;
   created_at: string;
   updated_at: string;
 }

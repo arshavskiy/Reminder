@@ -48,7 +48,8 @@ export function buildPromptForTemplate(tpl: DocTemplate, inspector?: InspectorPr
   const isInspectionTemplate = tpl.match_keywords.some((k) =>
     ["תסקיר", "בדיקה תקופתית", "בדיקה", "ציוד הרמה", "פקודת הבטיחות"].includes(k)
   );
-  const equipmentSection = isInspectionTemplate
+  const shouldExtractEquipment = isInspectionTemplate && (tpl as any).extract_equipment !== false;
+  const equipmentSection = shouldExtractEquipment
     ? `\n  "_equipment": [   // Extract EVERY equipment row from the inspection table — one object per row.
     // IMPORTANT — multiple serial numbers on one row:
     //   Some items (e.g. רצועות הרמה, שאקל) list several serial numbers separated by / or space.

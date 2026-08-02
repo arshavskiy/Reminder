@@ -1,6 +1,7 @@
 import express from "express";
 import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
+import {DEFAULT_FEATURES, normalizeFeatures} from "../features";
 
 export function registerUserSettingsRoutes(app: express.Application) {
   app.get("/api/user-settings", async (req, res) => {
@@ -20,6 +21,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
         email_from_name: null,
         reminder_advance_days: "[90,60,30]",
         ocr_language: "heb+eng",
+        features: DEFAULT_FEATURES,
         monthly_report_enabled: false,
         monthly_report_recipients: "",
         monthly_report_day: 1,
@@ -34,6 +36,15 @@ export function registerUserSettingsRoutes(app: express.Application) {
       );
       res.json(defaults);
       return;
+    }
+    if (!(row as any).features) {
+      const features = normalizeFeatures((row as any).features_json) ?? DEFAULT_FEATURES;
+      await col("user_settings").updateOne(
+        { user_id: auth.userId },
+        { $set: { features }, $unset: { features_json: "" } },
+      );
+      (row as any).features = features;
+      delete (row as any).features_json;
     }
     const { _id, ...rest } = row as any;
     res.json({ id: _id?.toString(), ...rest });
@@ -58,6 +69,8 @@ export function registerUserSettingsRoutes(app: express.Application) {
       monthly_report_day?: number;
       monthly_report_hour?: number;
       monthly_report_formats?: string;
+      features?: Record<string, boolean> | string | null;
+      features_json?: string | null;
     };
 
     const patch: Record<string, unknown> = {};
@@ -70,13 +83,25 @@ export function registerUserSettingsRoutes(app: express.Application) {
     if (body.monthly_report_day !== undefined) patch.monthly_report_day = Math.min(28, Math.max(1, Number(body.monthly_report_day)));
     if (body.monthly_report_hour !== undefined) patch.monthly_report_hour = Math.min(23, Math.max(0, Number(body.monthly_report_hour)));
     if (body.monthly_report_formats !== undefined) patch.monthly_report_formats = body.monthly_report_formats;
+    const rawFeatures = body.features !== undefined ? body.features : body.features_json;
+    if (rawFeatures !== undefined) {
+      try {
+        patch.features = normalizeFeatures(rawFeatures);
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : "Invalid features" });
+        return;
+      }
+    }
+
+    const update: Record<string, unknown> = {
+      $set: patch,
+      $setOnInsert: { user_id: auth.userId, features: DEFAULT_FEATURES },
+    };
+    if (rawFeatures !== undefined) update.$unset = { features_json: "" };
 
     await col("user_settings").updateOne(
       { user_id: auth.userId },
-      {
-        $set: patch,
-        $setOnInsert: { user_id: auth.userId },
-      },
+      update,
       { upsert: true }
     );
 

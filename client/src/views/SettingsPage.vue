@@ -69,7 +69,7 @@
             <n-form-item label="כתובת לבדיקות (Test Email)">
               <n-input v-model:value="form.testEmail" placeholder="me@example.com" />
             </n-form-item>
-            <n-form-item label="תבנית אימייל לבדיקה">
+            <n-form-item v-if="canSelectEmailTemplates" label="תבנית אימייל לבדיקה">
               <n-select
                 v-model:value="form.testEmailTemplateId"
                 :options="emailTemplateOptions"
@@ -152,10 +152,13 @@ import {
   useMessage,
 } from "naive-ui";
 import {useSettingsStore} from "../stores/settings.js";
+import {useFeaturesStore} from "../stores/features.js";
 import {api} from "../services/apiService.js";
+import {FEATURES} from "../shared/features.js";
 import type {AppSettings, EmailTemplate} from "@shared/types.js";
 
 const settingsStore = useSettingsStore();
+const featuresStore = useFeaturesStore();
 const message = useMessage();
 const form = ref<AppSettings | null>(null);
 const testing = ref(false);
@@ -164,15 +167,20 @@ const emailTemplates = ref<EmailTemplate[]>([]);
 const emailTemplateOptions = computed(() =>
   emailTemplates.value.map((t) => ({ label: t.name, value: t.id }))
 );
+const canSelectEmailTemplates = computed(() => featuresStore.hasFeature(FEATURES.pages.emailTemplates));
 
 onMounted(async () => {
+  await featuresStore.fetchFeatures().catch(() => {});
   await settingsStore.load();
   form.value = { ...settingsStore.settings! };
-  // ...existing code...
-  try {
-    emailTemplates.value = await api.emailTemplates.list();
-  } catch (e) {
-    console.error("Failed to load email templates:", e);
+  if (canSelectEmailTemplates.value) {
+    try {
+      emailTemplates.value = await api.emailTemplates.list();
+    } catch (e) {
+      console.error("Failed to load email templates:", e);
+    }
+  } else if (form.value) {
+    form.value.testEmailTemplateId = null;
   }
 });
 
@@ -188,7 +196,10 @@ async function testSmtp() {
   await settingsStore.save(form.value);
   testing.value = true;
   try {
-    const r = await api.email.test(form.value.testEmail, form.value.testEmailTemplateId);
+    const r = await api.email.test(
+      form.value.testEmail,
+      canSelectEmailTemplates.value ? form.value.testEmailTemplateId : null
+    );
     if (r.success) message.success(`האימייל נשלח ל-${form.value.testEmail}`);
     else message.error(r.error ?? "שגיאה");
   } finally {

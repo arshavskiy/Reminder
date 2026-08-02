@@ -88,6 +88,38 @@ function tryObjectId(id: string | number): any {
   }
 }
 
+function firstNonEmpty(...values: Array<unknown>): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+function formatAddress(fromName: string, fromEmail: string): string {
+  return fromEmail ? `"${fromName.replace(/"/g, "'")}" <${fromEmail}>` : fromEmail;
+}
+
+async function resolveSenderName(userId: string | number | null | undefined): Promise<string> {
+  const settings = getSettings();
+  if (!userId) return firstNonEmpty(settings.emailFromName, "ReminderOCR") ?? "ReminderOCR";
+
+  const [userSettings, engineerProfile, user] = await Promise.all([
+    col("user_settings").findOne({ user_id: String(userId) }) as Promise<any>,
+    col("engineer_profiles").findOne({ user_id: String(userId) }) as Promise<any>,
+    col("users").findOne({ _id: tryObjectId(userId) } as any) as Promise<any>,
+  ]);
+
+  return firstNonEmpty(
+    userSettings?.email_from_name,
+    engineerProfile?.company_name,
+    user?.company_name,
+    settings.emailFromName,
+    "ReminderOCR",
+  ) ?? "ReminderOCR";
+}
+
 const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
   lift: "מכונות הרמה",
   accessory: "אביזרי הרמה",
@@ -107,7 +139,7 @@ function applyEquipmentVars(vars: EmailVars, eq: any): void {
 }
 
 async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars> {
-  const settings = getSettings();
+  const senderName = await resolveSenderName((reminder as any).user_id);
   const vars: EmailVars = {
     title: reminder.title,
     trigger_date: reminder.trigger_date,
@@ -117,7 +149,7 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
     document_name: reminder.document_name,
     contract_number: (reminder as any).contract_number ?? null,
     contract_type: (reminder as any).contract_type ?? null,
-    from_name: settings.emailFromName,
+    from_name: senderName,
   };
 
   // Equipment fields stored directly on the reminder take precedence over the
@@ -315,10 +347,9 @@ export async function sendReminderEmail(
   try {
     const transport = buildTransport();
     const { subject, html } = await renderReminderEmail(reminder);
+    const senderName = await resolveSenderName((reminder as any).user_id);
     const info = await transport.sendMail({
-      from: settings.emailFrom
-        ? `"${settings.emailFromName}" <${settings.emailFrom}>`
-        : settings.emailFrom,
+      from: formatAddress(senderName, settings.emailFrom),
       to: recipients.join(", "),
       subject,
       html,

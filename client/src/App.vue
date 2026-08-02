@@ -131,7 +131,9 @@ import {BriefcaseOutline, MoonOutline, SunnyOutline,} from "@vicons/ionicons5";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
 import {useAuthStore} from "./stores/auth.js";
+import {useFeaturesStore} from "./stores/features.js";
 import {dateHeIL, heIL} from "./locales/heIL.js";
+import {FEATURES, type FeatureKey} from "./shared/features.js";
 
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
@@ -150,6 +152,7 @@ const rtlConfig = [
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
+const featuresStore = useFeaturesStore();
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const mobileNavOpen = ref(false);
@@ -192,6 +195,9 @@ onMounted(async () => {
       }
     }
   } catch { /* keep localStorage value */ }
+  if (authStore.user) {
+    featuresStore.fetchFeatures().catch(() => {});
+  }
 });
 
 watch(isDark, (dark) => {
@@ -205,22 +211,25 @@ watch(isDark, (dark) => {
 const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
 
 const allNav = [
-  {label: "לוח בקרה", key: "dashboard", minRole: "user"},
-  {label: "מסמכים", key: "documents", minRole: "user"},
-  {label: "תסקירים", key: "contracts", minRole: "user"},
-  {label: "תזכורות", key: "reminders", minRole: "user"},
-  {label: "דוחות", key: "reports", minRole: "user"},
-  {label: "לקוחות", key: "clients", minRole: "user"},
-  {label: "הגדרת ציוד", key: "equipment", minRole: "user"},
-  {label: "שטח", key: "field", minRole: "user"},
-  {label: "פרופיל", key: "profile", minRole: "user"},
-  {label: "תבניות", key: "email-templates", minRole: "user"},
-  {label: "הגדרות", key: "settings", minRole: "admin"},
+  {label: "לוח בקרה", key: "dashboard", minRole: "user", feature: FEATURES.pages.dashboard},
+  {label: "מסמכים", key: "documents", minRole: "user", feature: FEATURES.pages.documents},
+  {label: "תסקירים", key: "contracts", minRole: "user", feature: FEATURES.pages.contracts},
+  {label: "תזכורות", key: "reminders", minRole: "user", feature: FEATURES.pages.reminders},
+  {label: "דוחות", key: "reports", minRole: "user", feature: FEATURES.pages.reports},
+  {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
+  {label: "הגדרת ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment},
+  {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
+  {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
+  {label: "תבניות", key: "email-templates", minRole: "user", feature: FEATURES.pages.emailTemplates},
+  {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];
 
 const primaryNav = computed(() => {
   const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
-  return allNav.filter((item) => userRank >= (ROLE_RANK[item.minRole] ?? 0));
+  return allNav.filter((item) =>
+    userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
+    featuresStore.hasFeature(item.feature as FeatureKey)
+  );
 });
 
 const activeKey = computed(() => {

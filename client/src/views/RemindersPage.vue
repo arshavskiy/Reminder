@@ -50,7 +50,7 @@
         <n-form-item label="נמען">
           <n-input :value="testEmail" disabled />
         </n-form-item>
-        <n-form-item label="תבנית אימייל">
+        <n-form-item v-if="canSelectEmailTemplates" label="תבנית אימייל">
           <n-select
             v-model:value="quickTestTemplateId"
             :options="emailTemplateOptions"
@@ -110,7 +110,7 @@
             :placeholder="emailPlaceholder"
           />
         </n-form-item>
-        <n-form-item label="תבנית אימייל">
+        <n-form-item v-if="canSelectEmailTemplates" label="תבנית אימייל">
           <n-select
             v-model:value="newReminder.email_template_id"
             :options="emailTemplateOptions"
@@ -131,7 +131,7 @@
     </n-modal>
 
     <!-- Edit reminder modal -->
-    <n-modal v-model:show="showEditDate" title="עריכת תזכורת" :show-icon="false" preset="dialog" style="width: 380px; max-width: 95vw">
+    <n-modal v-model:show="showEditDate" title="עריכת תזכורת" :show-icon="false" preset="dialog" style="width: 420px; max-width: 95vw">
       <n-form label-placement="top" v-if="editingReminder">
         <n-form-item label="כותרת">
           <n-input :value="editingReminder.title" disabled />
@@ -139,10 +139,13 @@
         <n-form-item label="תאריך שליחה" required>
           <n-date-picker v-model:value="editDateMs" type="date" style="width: 100%" />
         </n-form-item>
-        <n-form-item label="אימייל נמען" required>
+        <n-form-item label="אימייל לשליחה" required>
           <n-input v-model:value="editEmailTo" placeholder="כתובת אימייל אחת או יותר, מופרדות בפסיק" />
         </n-form-item>
-        <n-form-item label="תבנית אימייל">
+        <n-form-item label="אימייל שולח">
+          <n-input :value="senderLabel" disabled placeholder="לא הוגדר אימייל שולח" />
+        </n-form-item>
+        <n-form-item v-if="canSelectEmailTemplates" label="תבנית אימייל">
           <n-select
             v-model:value="editEmailTemplateId"
             :options="emailTemplateOptions"
@@ -152,25 +155,6 @@
           />
         </n-form-item>
 
-        <n-divider style="margin: 4px 0 12px" title-placement="right">ציוד (יישלח בתבנית האימייל)</n-divider>
-        <n-form-item label="סוג ציוד">
-          <n-select
-            v-model:value="editEquipmentType"
-            :options="equipmentCategoryOptions"
-            :virtual-scroll="false"
-            placeholder="בחר קטגוריה"
-            clearable
-          />
-        </n-form-item>
-        <n-form-item label="יצרן">
-          <n-input v-model:value="editManufacturer" placeholder="יצרן" />
-        </n-form-item>
-        <n-form-item label="דגם">
-          <n-input v-model:value="editModel" placeholder="דגם" />
-        </n-form-item>
-        <n-form-item label='מס"ד סידורי'>
-          <n-input v-model:value="editSerialNumber" placeholder='מס"ד סידורי' />
-        </n-form-item>
       </n-form>
       <template #action>
         <n-button @click="showEditDate = false">ביטול</n-button>
@@ -188,7 +172,6 @@ import {
   NButton,
   NDataTable,
   NDatePicker,
-  NDivider,
   NForm,
   NFormItem,
   NInput,
@@ -201,9 +184,11 @@ import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";
 import {useAuthStore} from "../stores/auth.js";
+import {useFeaturesStore} from "../stores/features.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import StatusBadge from "../components/StatusBadge.vue";
+import {FEATURES} from "../shared/features.js";
 import type {Client, EmailTemplate, EquipmentCategory, ReminderWithContext, ContractWithClient} from "@shared/types.js";
 
 // Date-only strings (YYYY-MM-DD) must round-trip through the date picker using
@@ -232,6 +217,7 @@ const store = useRemindersStore();
 const settingsStore = useSettingsStore();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
+const featuresStore = useFeaturesStore();
 const { confirm } = useConfirm();
 
 // testEmail: admin can configure a custom address in settings; all others default to their own email
@@ -262,6 +248,7 @@ const reminderIntervalOptions = [
 const emailTemplates = ref<EmailTemplate[]>([]);
 const loadingEmailTemplates = ref(false);
 let emailTemplatesPromise: Promise<void> | null = null;
+const canSelectEmailTemplates = computed(() => featuresStore.hasFeature(FEATURES.pages.emailTemplates));
 const newReminder = ref<{
   client_id: string | null;
   title: string;
@@ -331,6 +318,10 @@ function load() {
 }
 
 async function loadEmailTemplates() {
+  if (!canSelectEmailTemplates.value) {
+    emailTemplates.value = [];
+    return;
+  }
   if (emailTemplates.value.length) return;
   if (!emailTemplatesPromise) {
     loadingEmailTemplates.value = true;
@@ -347,12 +338,22 @@ async function loadEmailTemplates() {
 }
 
 onMounted(async () => {
+  await featuresStore.fetchFeatures().catch(() => {});
   await Promise.all([
     clientsStore.rows.length ? Promise.resolve() : clientsStore.fetch({ limit: 500 }),
     loadEmailTemplates(),
+    loadSenderInfo(),
   ]);
   load();
 });
+
+async function loadSenderInfo() {
+  try {
+    senderInfo.value = await api.reminders.senderInfo();
+  } catch {
+    senderInfo.value = null;
+  }
+}
 
 // ── Create new reminder ─────────────────────────────────────────────────────
 async function openCreate() {
@@ -365,7 +366,7 @@ async function openCreate() {
     title: "",
     email_to: "",
     body: "",
-    email_template_id: pickEmailTemplate()?.id ?? null,
+    email_template_id: canSelectEmailTemplates.value ? pickEmailTemplate()?.id ?? null : null,
   };
   newReminderContractId.value = null;
   newReminderContracts.value = [];
@@ -415,7 +416,9 @@ function onPickContract(contractId: string | null) {
     reminderCustomDateMs.value = localDateToMs(contract.expiry_date);
   }
   if (contract.contact_email) newReminder.value.email_to = contract.contact_email;
-  newReminder.value.email_template_id = pickEmailTemplate(contract)?.id ?? newReminder.value.email_template_id;
+  newReminder.value.email_template_id = canSelectEmailTemplates.value
+    ? pickEmailTemplate(contract)?.id ?? newReminder.value.email_template_id
+    : null;
   if (!newReminder.value.body.trim()) {
     newReminder.value.body = contractBody(contract);
   }
@@ -514,7 +517,7 @@ async function doCreate() {
       title: newReminder.value.title,
       body: newReminder.value.body || null,
       email_to: normalizeEmailTo(newReminder.value.email_to),
-      email_template_id: newReminder.value.email_template_id,
+      email_template_id: canSelectEmailTemplates.value ? newReminder.value.email_template_id : null,
       equipment_type: (equipment?.category as EquipmentCategory | undefined) ?? null,
       manufacturer: equipment?.manufacturer ?? null,
       model: equipment?.model ?? null,
@@ -537,21 +540,14 @@ const editingReminder = ref<ReminderWithContext | null>(null);
 const editDateMs = ref<number | null>(null);
 const editEmailTo = ref("");
 const editEmailTemplateId = ref<string | null>(null);
-const editEquipmentType = ref<EquipmentCategory | null>(null);
-const editManufacturer = ref("");
-const editModel = ref("");
-const editSerialNumber = ref("");
+const senderInfo = ref<{ email: string | null; name: string } | null>(null);
 
-const equipmentCategoryOptions: { label: string; value: EquipmentCategory }[] = [
-  { label: "מכונות הרמה", value: "lift" },
-  { label: "אביזרי הרמה", value: "accessory" },
-  { label: "פיגומים", value: "scaffold" },
-  { label: "מעליות", value: "ladder" },
-  { label: "מעלונים", value: "balloon" },
-  { label: "קולטי אוויר", value: "intake" },
-  { label: "קולטי קיטור", value: "extractor" },
-  { label: "אחר", value: "other" },
-];
+const senderLabel = computed(() => {
+  if (!senderInfo.value?.email) return "";
+  return senderInfo.value.name
+    ? `${senderInfo.value.name} <${senderInfo.value.email}>`
+    : senderInfo.value.email;
+});
 
 function displayEmailTo(emailTo: string | null | undefined): string {
   if (!emailTo) return "";
@@ -563,32 +559,16 @@ function displayEmailTo(emailTo: string | null | undefined): string {
   }
 }
 
+function effectiveEmailTo(row: ReminderWithContext): string | null {
+  return row.email_to || row.client_email || null;
+}
+
 async function openEditDate(row: ReminderWithContext) {
   editingReminder.value = row;
   editDateMs.value = row.trigger_date ? localDateToMs(row.trigger_date) : Date.now();
-  editEmailTo.value = displayEmailTo(row.email_to);
-  editEmailTemplateId.value = row.email_template_id ?? null;
-  editEquipmentType.value = row.equipment_type ?? null;
-  editManufacturer.value = row.manufacturer ?? "";
-  editModel.value = row.model ?? "";
-  editSerialNumber.value = row.serial_number ?? "";
+  editEmailTo.value = displayEmailTo(effectiveEmailTo(row));
+  editEmailTemplateId.value = canSelectEmailTemplates.value ? row.email_template_id ?? null : null;
   showEditDate.value = true;
-
-  // If the reminder has no equipment snapshot yet, prefill from the linked
-  // client's equipment so the user starts from real data instead of blanks.
-  const hasSnapshot = row.equipment_type || row.manufacturer || row.model || row.serial_number;
-  if (!hasSnapshot && row.client_id != null) {
-    try {
-      const eq = await api.equipment.list({ client_id: String(row.client_id) });
-      const first = eq[0];
-      if (first && editingReminder.value?.id === row.id) {
-        editEquipmentType.value = (first.category as EquipmentCategory) ?? null;
-        editManufacturer.value = first.manufacturer ?? "";
-        editModel.value = first.model ?? "";
-        editSerialNumber.value = first.serial_number ?? "";
-      }
-    } catch { /* ignore — leave fields blank */ }
-  }
 }
 
 async function doSaveDate() {
@@ -603,11 +583,7 @@ async function doSaveDate() {
     await api.reminders.update(editingReminder.value.id, {
       trigger_date: triggerDate,
       email_to: normalizeEmailTo(editEmailTo.value),
-      email_template_id: editEmailTemplateId.value,
-      equipment_type: editEquipmentType.value,
-      manufacturer: editManufacturer.value.trim() || null,
-      model: editModel.value.trim() || null,
-      serial_number: editSerialNumber.value.trim() || null,
+      email_template_id: canSelectEmailTemplates.value ? editEmailTemplateId.value : null,
     });
     message.success("התזכורת עודכנה");
     showEditDate.value = false;
@@ -640,7 +616,7 @@ function confirmDelete(row: ReminderWithContext) {
 function quickTest() {
   if (!testEmail.value) return;
   const defaultTpl = emailTemplates.value.find((t) => t.is_default) ?? emailTemplates.value[0] ?? null;
-  quickTestTemplateId.value = defaultTpl?.id ?? null;
+  quickTestTemplateId.value = canSelectEmailTemplates.value ? defaultTpl?.id ?? null : null;
   showQuickTest.value = true;
 }
 
@@ -656,7 +632,7 @@ async function doQuickTest() {
       title: `בדיקה — ${new Date().toLocaleString("he-IL")}`,
       body: "תזכורת בדיקה שנוצרה מתוך לוח הבקרה",
       email_to: JSON.stringify([testEmail.value]),
-      email_template_id: quickTestTemplateId.value,
+      email_template_id: canSelectEmailTemplates.value ? quickTestTemplateId.value : null,
     });
     const sendResult = await api.reminders.sendNow(created.id);
     showQuickTest.value = false;

@@ -10,6 +10,7 @@ import type {
     EmailLogEntry,
     EmailTemplate,
     Equipment,
+    FeatureDefinition,
     GlobalSearchResult,
     PipelineFlags,
     Reminder,
@@ -233,6 +234,7 @@ export const api = {
     list: (params?: { status?: string; days?: number; limit?: number }, force = false) => {
       return get<{ rows: ReminderWithContext[]; total: number }>(`/reminders${qs(params)}`, force);
     },
+    senderInfo: () => get<{ email: string | null; name: string }>("/reminders/email-sender"),
     create: (body: Partial<Reminder>) => post<Reminder>("/reminders", body),
     update: (id: number, body: Partial<Reminder>) => put<Reminder>(`/reminders/${id}`, body),
     delete: (id: number) => del(`/reminders/${id}`),
@@ -286,8 +288,12 @@ export const api = {
 
   userSettings: {
     get: () => get<UserSettings>("/user-settings"),
-    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats">>) =>
+    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats" | "features">>) =>
       put<UserSettings>("/user-settings", body),
+  },
+
+  features: {
+    list: () => get<{ rows: FeatureDefinition[] }>("/features"),
   },
 
   config: {

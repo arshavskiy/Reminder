@@ -6,26 +6,50 @@
     </header>
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
+      <div
+        v-if="hasFeature(FEATURES.dashboard.dropStrip) && hasFeature(FEATURES.pages.documents)"
+        :class="{ 'drop-strip--active': isDragging, 'drop-strip--uploading': uploading }"
+        class="drop-strip"
+        @dragover.prevent="!uploading && (isDragging = true)"
+        @dragleave.prevent="isDragging = false"
+        @click="!uploading && fileInput?.click()"
+        @drop.prevent="!uploading && onStripDrop($event)"
+      >
+        <div class="drop-strip__icon">
+          <n-icon :component="CloudUploadOutline" :size="30" />
+        </div>
+        <div class="drop-strip__copy">
+          <strong>{{ uploading ? "מעלה קבצים..." : isDragging ? "שחרר כאן והייבוא יתחיל" : "גרור מסמכים לכאן" }}</strong>
+          <span>{{ uploading ? "הקבצים נשלחים לעיבוד" : "גרירה או לחיצה מעלות מיד" }}</span>
+        </div>
+      </div>
+      <input
+        ref="fileInput"
+        class="hidden-file-input"
+        multiple
+        type="file"
+        @change="onFileInputChange"
+      />
 
       <!-- Quick stats — small chips line, easy to scan -->
       <div class="dash__stats">
-        <div class="stat">
+        <div v-if="hasFeature(FEATURES.dashboard.statDocuments)" class="stat">
           <span class="stat__num">{{ stats?.total_documents ?? 0 }}</span>
           <span class="stat__label">מסמכים</span>
         </div>
-        <div class="stat">
+        <div v-if="hasFeature(FEATURES.dashboard.statClients)" class="stat">
           <span class="stat__num">{{ stats?.total_clients ?? 0 }}</span>
           <span class="stat__label">לקוחות</span>
         </div>
-        <div class="stat">
+        <div v-if="hasFeature(FEATURES.dashboard.statInspections)" class="stat">
           <span class="stat__num">{{ stats?.total_inspections ?? 0 }}</span>
           <span class="stat__label">תסקירים</span>
         </div>
-        <div class="stat">
+        <div v-if="hasFeature(FEATURES.dashboard.statPendingReminders)" class="stat">
           <span class="stat__num stat__num--accent">{{ stats?.pending_reminders ?? 0 }}</span>
           <span class="stat__label">תזכורות ממתינות</span>
         </div>
-        <div class="stat" v-if="(stats?.expiring_soon ?? 0) > 0">
+        <div v-if="hasFeature(FEATURES.dashboard.statExpiringSoon) && (stats?.expiring_soon ?? 0) > 0" class="stat">
           <span class="stat__num stat__num--warn">{{ stats?.expiring_soon }}</span>
           <span class="stat__label">פגי תוקף ב-30 יום</span>
         </div>
@@ -33,6 +57,7 @@
 
       <!-- ── Reminders calendar ───────────────────────────────────────── -->
       <ReminderCalendar
+        v-if="hasFeature(FEATURES.dashboard.calendar)"
         :loading="remindersStore.loading"
         :rows="remindersStore.rows"
         :expiry-items="expiryItems"
@@ -40,8 +65,8 @@
       />
 
       <!-- ── Module cards ──────────────────────────────────────────────── -->
-      <h2 class="dash__section">סביבת העבודה</h2>
-      <div class="module-grid">
+      <h2 v-if="hasFeature(FEATURES.dashboard.modules)" class="dash__section">סביבת העבודה</h2>
+      <div v-if="hasFeature(FEATURES.dashboard.modules)" class="module-grid">
         <article
           v-for="m in data_cards"
           :key="m.key"
@@ -66,7 +91,7 @@
 
       <!-- ── Two-column: recent docs + upcoming reminders ──────────────── -->
       <div class="dash__two-col">
-        <section class="panel">
+        <section v-if="hasFeature(FEATURES.dashboard.recentDocuments)" class="panel">
           <header class="panel__head">
             <h3>מסמכים אחרונים</h3>
             <router-link class="panel__more" to="/documents">כל המסמכים   </router-link>
@@ -82,7 +107,7 @@
           <p v-else class="panel__empty">אין מסמכים עדיין</p>
         </section>
 
-        <section class="panel">
+        <section v-if="hasFeature(FEATURES.dashboard.upcomingReminders)" class="panel">
           <header class="panel__head">
             <h3>תזכורות קרובות</h3>
             <router-link class="panel__more" to="/reminders">כל התזכורות   </router-link>
@@ -100,15 +125,17 @@
         </section>
       </div>
     </n-spin>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
-import {NIcon, NSpin} from "naive-ui";
+import {NIcon, NSpin, useMessage} from "naive-ui";
 import {
   AlarmOutline,
+  CloudUploadOutline,
   ClipboardOutline,
   ConstructOutline,
   ExtensionPuzzleOutline,
@@ -119,27 +146,78 @@ import {
 import {useDashboardStore} from "../stores/dashboard.js";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useAuthStore} from "../stores/auth.js";
+import {useFeaturesStore} from "../stores/features.js";
 import type {ExpiryCalendarItem} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
+import {FEATURES, type FeatureKey} from "../shared/features.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 
 const store = useDashboardStore();
 const remindersStore = useRemindersStore();
 const authStore = useAuthStore();
+const featuresStore = useFeaturesStore();
 const router = useRouter();
+const message = useMessage();
 const stats = computed(() => store.stats);
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
+const uploading = ref(false);
+const isDragging = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
+
+function hasFeature(feature: FeatureKey): boolean {
+  return featuresStore.hasFeature(feature);
+}
+
+function onFileInputChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = "";
+  if (!files.length) return;
+  uploadDashboardFiles(files);
+}
+
+function onStripDrop(e: DragEvent) {
+  isDragging.value = false;
+  const files = Array.from(e.dataTransfer?.files ?? []);
+  if (!files.length) return;
+  uploadDashboardFiles(files);
+}
+
+async function uploadDashboardFiles(
+  files: File[],
+  options: { doAi: boolean; doEntities: boolean; doReminders: boolean } = {
+    doAi: true,
+    doEntities: true,
+    doReminders: true,
+  }
+) {
+  uploading.value = true;
+  try {
+    const {ids, duplicates} = await api.documents.upload(files, options);
+    const newCount = ids.length - (duplicates?.length ?? 0);
+    if (newCount > 0) message.success(`${newCount} מסמכים נוספו לתור עיבוד`);
+    if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיימים`);
+    await store.fetch(true);
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : "שגיאה בהעלאת הקבצים");
+  } finally {
+    uploading.value = false;
+  }
+}
 
 onMounted(async () => {
   // Always refetch fresh — stats can go stale after a client/contract/document
   // is deleted elsewhere, and the cached singleton would otherwise show the old
   // count until a hard reload.
   store.fetch(true);
-  if (!remindersStore.rows.length) remindersStore.fetch({ limit: 500 });
-  try {
-    expiryItems.value = await api.equipment.expiryCalendar();
-  } catch { /* non-critical */ }
+  featuresStore.fetchFeatures().catch(() => {});
+  if (hasFeature(FEATURES.dashboard.calendar)) {
+    if (!remindersStore.rows.length) remindersStore.fetch({ limit: 500 });
+    try {
+      expiryItems.value = await api.equipment.expiryCalendar();
+    } catch { /* non-critical */ }
+  }
 });
 
 const userName = computed(() => {
@@ -171,6 +249,7 @@ const dateLine = computed(() => {
 const modules = [
   {
     key: "documents",
+    feature: FEATURES.pages.documents,
     title: "מסמכים",
     desc: "צפה, ערוך וסרוק מסמכים בדיקה.",
     count: () => stats.value?.total_documents ?? 0,
@@ -179,6 +258,7 @@ const modules = [
     show: true,
   }, {
     key: "contracts",
+    feature: FEATURES.pages.contracts,
     title: "תסקירים",
     desc: "צפה, ערוך וצור תסקירי בדיקה. נהל את כל שלבי התסקיר ממקום אחד.",
     count: () => stats.value?.total_inspections ?? 0,
@@ -188,6 +268,7 @@ const modules = [
   },
   {
     key: "equipment",
+    feature: FEATURES.pages.equipment,
     title: "הגדרות ציוד",
     desc: "נהל את רשימת הציוד שלך, יצרנים והצהרות בטיחות.",
     count: () => stats.value?.total_equipment ?? 0,
@@ -197,6 +278,7 @@ const modules = [
   },
   {
     key: "clients",
+    feature: FEATURES.pages.clients,
     title: "ניהול לקוחות",
     desc: "הוסף לקוחות חדשים, נהל אנשי קשר ועקוב אחרי פרטי לקוח.",
     count: () => stats.value?.total_clients ?? 0,
@@ -206,6 +288,7 @@ const modules = [
   },
   {
     key: "doc-templates",
+    feature: FEATURES.pages.docTemplates,
     title: "תבניות מסמכים",
     desc: "הגדר אילו שדות לחלץ מכל סוג מסמך. יצירה אוטומטית מ-AI.",
     count: () => stats.value?.total_email_templates ?? 0,
@@ -215,6 +298,7 @@ const modules = [
   },
   {
     key: "email-templates",
+    feature: FEATURES.pages.emailTemplates,
     title: "תבניות",
     desc: "עצב את תוכן התזכורות עם משתנים דינמיים ולוגו של החברה.",
     count: () => stats.value?.total_email_templates ?? 0,
@@ -224,6 +308,7 @@ const modules = [
   },
   {
     key: "reminders",
+    feature: FEATURES.pages.reminders,
     title: "תזכורות",
     desc: "כל התזכורות הממתינות והנשלחות. שלח עכשיו או דחה.",
     count: () => stats.value?.pending_reminders ?? 0,
@@ -233,6 +318,7 @@ const modules = [
   },
   {
     key: "settings",
+    feature: FEATURES.pages.settings,
     title: "הגדרות",
     desc: "AI, SMTP, מעקב תיקיות, ערכת נושא ועוד.",
     icon: SettingsOutline,
@@ -242,7 +328,7 @@ const modules = [
   },
 ];
 
-const data_cards = modules.filter(m => m.show)
+const data_cards = computed(() => modules.filter((m) => m.show && hasFeature(m.feature)))
 </script>
 
 <style scoped>
@@ -269,6 +355,78 @@ const data_cards = modules.filter(m => m.show)
   font-size: 15px;
   color: var(--text-secondary);
   margin: 0;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+/* ── Top upload strip ─────────────────────────────────────────────────── */
+.drop-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 86px;
+  margin: 0 0 20px;
+  padding: 18px 22px;
+  border: 2px dashed rgba(24, 160, 88, 0.72);
+  border-radius: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  background:
+    linear-gradient(135deg, rgba(24, 160, 88, 0.18), rgba(32, 128, 240, 0.10)),
+    var(--bg-card);
+  box-shadow:
+    0 14px 36px rgba(24, 160, 88, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.38);
+  transition: transform 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.drop-strip:hover,
+.drop-strip--active {
+  transform: translateY(-1px);
+  border-color: var(--brand-color);
+  background:
+    linear-gradient(135deg, rgba(24, 160, 88, 0.25), rgba(32, 128, 240, 0.14)),
+    var(--bg-card);
+  box-shadow:
+    0 18px 42px rgba(24, 160, 88, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.46);
+}
+
+.drop-strip--uploading {
+  cursor: progress;
+  opacity: 0.78;
+}
+
+.drop-strip__icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--brand-color);
+  box-shadow: 0 10px 24px rgba(24, 160, 88, 0.28);
+  flex: 0 0 auto;
+}
+
+.drop-strip__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+}
+
+.drop-strip__copy strong {
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.drop-strip__copy span {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 /* ── Stats chips ──────────────────────────────────────────────────────── */

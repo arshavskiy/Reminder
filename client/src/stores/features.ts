@@ -1,0 +1,38 @@
+import {defineStore} from "pinia";
+import {computed, ref} from "vue";
+import {api} from "../services/apiService.js";
+import {type FeatureFlags, type FeatureKey, isFeatureEnabled, normalizeFeatureFlags} from "../shared/features.js";
+
+export const useFeaturesStore = defineStore("features", () => {
+  const flags = ref<FeatureFlags>({});
+  const loading = ref(false);
+  const initialized = ref(false);
+
+  const enabled = computed(() => flags.value);
+
+  function hasFeature(key: FeatureKey): boolean {
+    return isFeatureEnabled(flags.value, key);
+  }
+
+  async function fetchFeatures(force = false) {
+    if (initialized.value && !force) return;
+    loading.value = true;
+    try {
+      const settings = await api.userSettings.get();
+      flags.value = normalizeFeatureFlags(settings.features);
+      initialized.value = true;
+    } catch {
+      flags.value = {};
+      initialized.value = true;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  function reset() {
+    flags.value = {};
+    initialized.value = false;
+  }
+
+  return {flags, enabled, loading, initialized, hasFeature, fetchFeatures, reset};
+});

@@ -113,7 +113,7 @@ export async function seedBuiltinTemplates(): Promise<void> {
     const tplShell = { fields: s.fields, name: s.name, expiry_field: s.expiry_field, match_keywords: s.match_keywords } as DocTemplate;
     const cached_system_prompt = buildPromptForTemplate(tplShell);
     await collection.updateOne(
-      { name: s.name },
+      { name: s.name, user_id: null },
       {
         $set: {
           description: s.description,
@@ -124,6 +124,8 @@ export async function seedBuiltinTemplates(): Promise<void> {
           cached_system_prompt,
           is_default: s.is_default,
           is_builtin: 1,
+          user_id: null,
+          extract_equipment: true,
           updated_at: now,
         },
         $setOnInsert: {
@@ -148,10 +150,13 @@ export async function loadTemplate(id: string): Promise<DocTemplate | null> {
   return flatRow(row);
 }
 
-export async function loadAllTemplates(): Promise<DocTemplate[]> {
+export async function loadAllTemplates(userId?: string): Promise<DocTemplate[]> {
+  const filter = userId
+    ? { $or: [{ user_id: userId }, { user_id: null }, { user_id: { $exists: false } }] }
+    : {};
   const rows = await col<any>("doc_templates")
-    .find({})
-    .sort({ name: 1 })
+    .find(filter)
+    .sort({ user_id: -1, name: 1 })
     .toArray();
   return rows.map(flatRow);
 }
@@ -186,8 +191,8 @@ function safeJson<T>(raw: unknown, fallback: T): T {
  * Returns the one whose match_keywords have the most hits, falling back to
  * is_default, then to the first row, then null.
  */
-export async function pickTemplate(rawText: string): Promise<DocTemplate | null> {
-  const all = await loadAllTemplates();
+export async function pickTemplate(rawText: string, userId?: string): Promise<DocTemplate | null> {
+  const all = await loadAllTemplates(userId);
   if (!all.length) return null;
 
   let best: { tpl: DocTemplate; score: number } | null = null;
@@ -200,7 +205,9 @@ export async function pickTemplate(rawText: string): Promise<DocTemplate | null>
   }
   if (best && best.score > 0) return best.tpl;
 
-  return all.find((t) => t.is_default) ?? all[0];
+  return all.find((t) => userId && t.user_id === userId && t.is_default) ??
+    all.find((t) => t.is_default) ??
+    all[0];
 }
 
 // ── Keyword tables for document-kind classification ─────────────────────────

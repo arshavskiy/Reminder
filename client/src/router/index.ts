@@ -16,27 +16,29 @@ import ReportsPage from "../views/ReportsPage.vue";
 import LoginPage from "../views/LoginPage.vue";
 import ResetPasswordPage from "../views/ResetPasswordPage.vue";
 import {useAuthStore} from "../stores/auth.js";
+import {useFeaturesStore} from "../stores/features.js";
+import {FEATURES, type FeatureKey} from "../shared/features.js";
 
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: "/login", component: LoginPage, meta: { public: true } },
     { path: "/reset-password", component: ResetPasswordPage, meta: { public: true } },
-    { path: "/", component: DashboardPage },
-    { path: "/documents", component: DocumentsPage },
-    { path: "/documents/:id", component: DocumentDetailPage },
-    { path: "/clients", component: ClientsPage },
-    { path: "/clients/:id", component: ClientDetailPage },
-    { path: "/contracts", component: ContractsPage },
-    { path: "/reminders", component: RemindersPage },
-    { path: "/search", component: SearchPage },
-    { path: "/profile", component: ProfilePage },
-    { path: "/settings", component: SettingsPage, meta: { requireRole: "admin" } },
-    { path: "/doc-templates", component: DocTemplatesPage },
-    { path: "/email-templates", component: EmailTemplatesPage },
-    { path: "/equipment", component: EquipmentPage },
-    { path: "/reports", component: ReportsPage },
-    { path: "/field", component: () => import("../views/FieldPage.vue") },
+    { path: "/", component: DashboardPage, meta: { feature: FEATURES.pages.dashboard } },
+    { path: "/documents", component: DocumentsPage, meta: { feature: FEATURES.pages.documents } },
+    { path: "/documents/:id", component: DocumentDetailPage, meta: { feature: FEATURES.pages.documents } },
+    { path: "/clients", component: ClientsPage, meta: { feature: FEATURES.pages.clients } },
+    { path: "/clients/:id", component: ClientDetailPage, meta: { feature: FEATURES.pages.clients } },
+    { path: "/contracts", component: ContractsPage, meta: { feature: FEATURES.pages.contracts } },
+    { path: "/reminders", component: RemindersPage, meta: { feature: FEATURES.pages.reminders } },
+    { path: "/search", component: SearchPage, meta: { feature: FEATURES.pages.search } },
+    { path: "/profile", component: ProfilePage, meta: { feature: FEATURES.pages.profile } },
+    { path: "/settings", component: SettingsPage, meta: { requireRole: "admin", feature: FEATURES.pages.settings } },
+    { path: "/doc-templates", component: DocTemplatesPage, meta: { feature: FEATURES.pages.docTemplates } },
+    { path: "/email-templates", component: EmailTemplatesPage, meta: { feature: FEATURES.pages.emailTemplates } },
+    { path: "/equipment", component: EquipmentPage, meta: { feature: FEATURES.pages.equipment } },
+    { path: "/reports", component: ReportsPage, meta: { feature: FEATURES.pages.reports } },
+    { path: "/field", component: () => import("../views/FieldPage.vue"), meta: { feature: FEATURES.pages.field } },
     { path: "/403", component: () => import("../views/ForbiddenPage.vue") },
   ],
 });
@@ -53,6 +55,13 @@ router.beforeEach(async (to) => {
 
   if (!authStore.user) {
     return { path: "/login" };
+  }
+
+  const featuresStore = useFeaturesStore();
+  await featuresStore.fetchFeatures();
+  const requiredFeature = to.meta.feature as FeatureKey | undefined;
+  if (requiredFeature && !featuresStore.hasFeature(requiredFeature)) {
+    return { path: "/403" };
   }
 
   // Role-based route guard — must run for every navigation, even cached users

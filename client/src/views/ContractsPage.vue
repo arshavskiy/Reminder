@@ -411,7 +411,7 @@
         <n-form-item label="אימייל נמען">
           <n-input v-model:value="reminderForm.emailTo" placeholder="email@example.com" />
         </n-form-item>
-        <n-form-item label="תבנית אימייל">
+        <n-form-item v-if="canSelectEmailTemplates" label="תבנית אימייל">
           <n-select
             v-model:value="reminderForm.email_template_id"
             :options="emailTemplateOptions"
@@ -629,15 +629,19 @@ import {
   useMessage,
 } from "naive-ui";
 import {useContractsStore} from "../stores/contracts.js";
+import {useFeaturesStore} from "../stores/features.js";
 import {api} from "../services/apiService.js";
 import type {HydraulicCheckRequest} from "../services/apiService.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
+import {FEATURES} from "../shared/features.js";
 import type {ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
+const featuresStore = useFeaturesStore();
 const router = useRouter();
 const message = useMessage();
+const canSelectEmailTemplates = computed(() => featuresStore.hasFeature(FEATURES.pages.emailTemplates));
 
 const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
@@ -821,7 +825,7 @@ function openAddReminder(row: ContractWithClient) {
     triggerDateMs: row.expiry_date ? new Date(row.expiry_date).getTime() : Date.now(),
     emailTo: client?.email ?? "",
     body: "",
-    email_template_id: tpl?.id ?? null,
+    email_template_id: canSelectEmailTemplates.value ? tpl?.id ?? null : null,
   };
   showAddReminder.value = true;
 }
@@ -848,7 +852,7 @@ async function saveReminder() {
       title: reminderForm.value.title,
       body: reminderForm.value.body || null,
       email_to: emailTo,
-      email_template_id: reminderForm.value.email_template_id,
+      email_template_id: canSelectEmailTemplates.value ? reminderForm.value.email_template_id : null,
     });
     message2.success("תזכורת נוצרה");
     showAddReminder.value = false;
@@ -1336,6 +1340,7 @@ async function refresh() {
 }
 
 onMounted(async () => {
+  await featuresStore.fetchFeatures().catch(() => {});
   updateViewport();
   window.addEventListener("resize", updateViewport);
   refresh();
@@ -1343,9 +1348,13 @@ onMounted(async () => {
   loadClients();
   loadReminders();
   loadEngineerProfile().catch(() => {});
-  try {
-    emailTemplates.value = await api.emailTemplates.list();
-  } catch { /* non-fatal */ }
+  if (canSelectEmailTemplates.value) {
+    try {
+      emailTemplates.value = await api.emailTemplates.list();
+    } catch { /* non-fatal */ }
+  } else {
+    emailTemplates.value = [];
+  }
 });
 
 onBeforeUnmount(() => {
