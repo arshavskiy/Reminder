@@ -1,6 +1,6 @@
 <template>
   <div class="rqv">
-    <div class="rqv__title">{{ reminder.title }}</div>
+    <div class="rqv__title">{{ popupTitle }}</div>
 
     <div class="rqv__meta">
       <div class="rqv__row">
@@ -11,21 +11,19 @@
         <span class="rqv__label">לקוח</span>
         <span class="rqv__value">{{ reminder.client_name }}</span>
       </div>
-      <div v-if="reminder.contract_number" class="rqv__row">
-        <span class="rqv__label">מספר תסקיר</span>
-        <span class="rqv__value">{{ shortContractNumber(reminder.contract_number) }}</span>
+      <div v-if="reminder.contact_person" class="rqv__row">
+        <span class="rqv__label">איש קשר</span>
+        <span class="rqv__value">{{ reminder.contact_person }}</span>
       </div>
-      <div v-if="reminder.document_name" class="rqv__row">
-        <span class="rqv__label">מסמך</span>
-        <span class="rqv__value">{{ reminder.document_name }}</span>
+      <div v-if="reminder.client_phone" class="rqv__row">
+        <span class="rqv__label">טלפון</span>
+        <span class="rqv__value">{{ reminder.client_phone }}</span>
       </div>
-      <div class="rqv__row">
-        <span class="rqv__label">סטטוס</span>
-        <span :class="`rqv__status--${reminder.status}`" class="rqv__status">{{ statusLabel }}</span>
+      <div v-if="contactEmail" class="rqv__row">
+        <span class="rqv__label">אימייל</span>
+        <span class="rqv__value">{{ contactEmail }}</span>
       </div>
     </div>
-
-    <p v-if="reminder.body" class="rqv__body">{{ reminder.body }}</p>
 
     <div class="rqv__actions">
       <n-button block size="small" type="primary" @click="$emit('navigate', { type: 'reminder', id: reminder.id })">
@@ -55,15 +53,17 @@ interface Props {
 const props = defineProps<Props>();
 defineEmits<{ (e: "navigate", target: { type: "contract" | "document" | "reminder"; id: number | string }): void }>();
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "ממתינה",
-  sent: "נשלחה",
-  dismissed: "נדחתה",
-  error: "נכשלה",
-  failed: "נכשלה",
-  snoozed: "נדחתה זמנית",
-};
-const statusLabel = computed(() => STATUS_LABELS[props.reminder.status] ?? props.reminder.status);
+const popupTitle = computed(() => reminderCalendarLabel(props.reminder));
+const contactEmail = computed(() => props.reminder.client_email?.trim() || firstReminderEmail(props.reminder.email_to));
+
+function reminderCalendarLabel(r: ReminderWithContext): string {
+  const client = r.client_name?.trim();
+  const contact = r.contact_person?.trim();
+  if (client && contact) return `${client} · ${contact}`;
+  if (client) return client;
+  if (contact) return contact;
+  return [r.title, shortContractNumber(r.contract_number)].filter(Boolean).join(" ");
+}
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
@@ -74,6 +74,19 @@ function shortContractNumber(contractNumber: string | null | undefined): string 
   if (!contractNumber) return "—";
   const parts = contractNumber.split("/");
   return (parts.at(-1) ?? contractNumber).trim() || contractNumber;
+}
+
+function firstReminderEmail(value: string | null | undefined): string | null {
+  if (!value?.trim()) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.find((item) => typeof item === "string" && item.trim())?.trim() ?? null;
+    }
+  } catch {
+    // Keep supporting older/manual reminders where email_to is a plain string.
+  }
+  return value.includes("@") ? value.trim() : null;
 }
 </script>
 
@@ -90,28 +103,5 @@ function shortContractNumber(contractNumber: string | null | undefined): string 
 .rqv__row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
 .rqv__label { color: var(--text-muted); }
 .rqv__value { color: var(--text-primary); font-weight: 500; text-align: end; }
-.rqv__status {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 1px 8px;
-  border-radius: 999px;
-}
-.rqv__status--pending { background: rgba(240,160,32,0.15); color: #b27a02; }
-.rqv__status--sent { background: rgba(32,128,240,0.15); color: #2080f0; }
-.rqv__status--dismissed { background: var(--bg-elevated); color: var(--text-muted); }
-.rqv__status--error { background: rgba(208,48,80,0.15); color: var(--color-error, #d03050); }
-.rqv__status--failed { background: rgba(208,48,80,0.15); color: var(--color-error, #d03050); }
-.rqv__status--snoozed { background: rgba(99,226,183,0.15); color: var(--brand-color); }
-
-.rqv__body {
-  margin: 8px 0;
-  padding: 8px 10px;
-  background: var(--bg-elevated);
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-secondary);
-  white-space: pre-wrap;
-}
 .rqv__actions { margin-top: 8px; }
 </style>

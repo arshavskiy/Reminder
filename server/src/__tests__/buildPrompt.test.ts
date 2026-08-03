@@ -42,4 +42,20 @@ describe("buildPromptForTemplate", () => {
     expect(prompt).toContain("One entry per load configuration");
     expect(prompt).toContain("empty array only if truly no equipment");
   });
+
+  it("separates the general equipment description from the checked item", () => {
+    const prompt = buildPromptForTemplate(inspectionTemplate());
+
+    expect(prompt).toContain('equipment_description="מכונת הרמה"');
+    expect(prompt).toContain("checked_equipment");
+    expect(prompt).toContain("specific checked item");
+  });
+
+  it("keeps numbers that are part of client company names", () => {
+    const prompt = buildPromptForTemplate(inspectionTemplate());
+
+    expect(prompt).toContain("client_company");
+    expect(prompt).toContain("1990");
+    expect(prompt).toContain("Never drop numbers that are part of a company name");
+  });
 });

@@ -56,12 +56,21 @@
       </div>
 
       <!-- ── Reminders calendar ───────────────────────────────────────── -->
+      <div v-if="hasFeature(FEATURES.dashboard.calendar)" class="calendar-pref">
+        <span class="calendar-pref__label">הצג רק בדיקות מתוכננות</span>
+        <n-switch
+          v-model:value="calendarNextTestsOnly"
+          :loading="savingCalendarPreference"
+          @update:value="saveCalendarPreference"
+        />
+      </div>
       <ReminderCalendar
         v-if="hasFeature(FEATURES.dashboard.calendar)"
-        :loading="remindersStore.loading"
-        :rows="remindersStore.rows"
+        :loading="calendarLoading"
+        :rows="calendarRows"
         :expiry-items="expiryItems"
-        @refresh="remindersStore.fetch({ limit: 500 }, true)"
+        :tests-only="calendarNextTestsOnly"
+        @refresh="refreshCalendar(true)"
       />
 
       <!-- ── Module cards ──────────────────────────────────────────────── -->
@@ -132,7 +141,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
-import {NIcon, NSpin, useMessage} from "naive-ui";
+import {NIcon, NSpin, NSwitch, useMessage} from "naive-ui";
 import {
   AlarmOutline,
   CloudUploadOutline,
@@ -161,6 +170,9 @@ const router = useRouter();
 const message = useMessage();
 const stats = computed(() => store.stats);
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
+const loadingExpiryItems = ref(false);
+const calendarNextTestsOnly = ref(false);
+const savingCalendarPreference = ref(false);
 const uploading = ref(false);
 const isDragging = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -168,6 +180,11 @@ const fileInput = ref<HTMLInputElement | null>(null);
 function hasFeature(feature: FeatureKey): boolean {
   return featuresStore.hasFeature(feature);
 }
+
+const calendarRows = computed(() => calendarNextTestsOnly.value ? [] : remindersStore.rows);
+const calendarLoading = computed(() =>
+  loadingExpiryItems.value || (!calendarNextTestsOnly.value && remindersStore.loading)
+);
 
 function onFileInputChange(e: Event) {
   const input = e.target as HTMLInputElement;
@@ -211,14 +228,57 @@ onMounted(async () => {
   // is deleted elsewhere, and the cached singleton would otherwise show the old
   // count until a hard reload.
   store.fetch(true);
-  featuresStore.fetchFeatures().catch(() => {});
+  await Promise.all([
+    featuresStore.fetchFeatures().catch(() => {}),
+    loadCalendarPreference(),
+  ]);
   if (hasFeature(FEATURES.dashboard.calendar)) {
-    if (!remindersStore.rows.length) remindersStore.fetch({ limit: 500 });
-    try {
-      expiryItems.value = await api.equipment.expiryCalendar();
-    } catch { /* non-critical */ }
+    refreshCalendar(false);
   }
 });
+
+async function loadCalendarPreference() {
+  try {
+    const settings = await api.userSettings.get();
+    calendarNextTestsOnly.value = Boolean(settings.calendar_next_tests_only);
+  } catch {
+    calendarNextTestsOnly.value = false;
+  }
+}
+
+async function saveCalendarPreference(value: boolean) {
+  savingCalendarPreference.value = true;
+  try {
+    await api.userSettings.save({ calendar_next_tests_only: value });
+    await refreshCalendar(true);
+  } catch (err) {
+    calendarNextTestsOnly.value = !value;
+    message.error(err instanceof Error ? err.message : "שגיאה בשמירת הגדרת הלוח");
+  } finally {
+    savingCalendarPreference.value = false;
+  }
+}
+
+async function refreshCalendar(force: boolean) {
+  if (!calendarNextTestsOnly.value && (force || !remindersStore.rows.length)) {
+    remindersStore.fetch({ limit: 500 }, force);
+  }
+  loadingExpiryItems.value = true;
+  try {
+    expiryItems.value = await api.equipment.expiryCalendar(
+      calendarNextTestsOnly.value ? { from: todayIso() } : undefined
+    );
+  } catch {
+    expiryItems.value = [];
+  } finally {
+    loadingExpiryItems.value = false;
+  }
+}
+
+function todayIso() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
 
 const userName = computed(() => {
   const u = authStore.user;
@@ -427,6 +487,20 @@ const data_cards = computed(() => modules.filter((m) => m.show && hasFeature(m.f
 .drop-strip__copy span {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.calendar-pref {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin: 0 0 10px;
+}
+
+.calendar-pref__label {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 /* ── Stats chips ──────────────────────────────────────────────────────── */

@@ -7,166 +7,58 @@
         <span class="count-badge">{{ store.total }}</span>
       </div>
       <div class="page__actions">
-        <button :class="{ 'btn--loading': store.loading }" class="btn btn--ghost" title="רענן" @click="refresh">
-          <span :class="{ 'refresh-icon--spin': store.loading }" class="refresh-icon">↻</span> רענן
-        </button>
-        <button class="btn btn--primary" @click="showCreate = true">+ צור לקוח</button>
+        <n-button :loading="store.loading" @click="refresh">
+          <template #icon><n-icon :component="RefreshOutline" /></template>
+          רענן
+        </n-button>
+        <n-button type="primary" @click="showCreate = true">
+          <template #icon><n-icon :component="AddOutline" /></template>
+          צור לקוח
+        </n-button>
       </div>
     </header>
 
     <!-- ── Search ───────────────────────────────────────────────────────── -->
-    <div class="search-wrap">
-      <span class="search-icon">🔍</span>
-      <input
-        v-model="search"
-        class="search"
-        placeholder="חיפוש לפי שם לקוח, איש קשר או אימייל..."
-        type="search"
-        @input="onSearch"
-      />
-    </div>
+    <n-input
+      v-model:value="search"
+      clearable
+      class="client-search"
+      placeholder="חיפוש לפי שם לקוח, איש קשר או אימייל..."
+      @update:value="onSearch"
+    >
+      <template #prefix><n-icon :component="SearchOutline" /></template>
+    </n-input>
 
     <!-- ── Table ─────────────────────────────────────────────────────────── -->
     <div class="table-wrap">
-      <table v-if="store.rows.length" class="clients-table">
-        <thead>
-          <tr>
-            <th>שם הלקוח</th>
-            <th>איש קשר</th>
-            <th>פרטי התקשרות</th>
-            <th>כתובת</th>
-            <th style="width:40px"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="row in store.rows"
-            :key="row.id"
-            class="client-row"
-            @click="openQuickView(row)"
-          >
-            <td class="td-name">
-              <span class="client-icon">🏢</span>
-              <span class="client-name">{{ row.display_name }}</span>
-            </td>
-            <td class="td-contact">
-              <span v-if="row.contact_person" class="contact-person">
-                <span class="person-icon">👤</span> {{ row.contact_person }}
-              </span>
-              <span v-else class="muted">—</span>
-            </td>
-            <td class="td-contact-info">
-              <div v-if="row.email" class="contact-line">
-                <span class="contact-icon">✉</span> {{ row.email }}
-              </div>
-              <div v-if="row.phone" class="contact-line">
-                <span class="contact-icon">📞</span> {{ row.phone }}
-              </div>
-              <span v-if="!row.email && !row.phone" class="muted">—</span>
-            </td>
-            <td class="td-address">
-              <span v-if="row.address">{{ row.address }}</span>
-              <span v-else class="muted">—</span>
-            </td>
-            <td class="td-actions" @click.stop>
-              <div class="kebab-wrap">
-                <button
-                  :class="{ 'kebab-btn--open': openKebab === row.id }"
-                  class="kebab-btn"
-                  title="פעולות"
-                  @click="toggleKebab(row.id, $event)"
-                >⋮</button>
-                <div
-                  v-if="openKebab === row.id"
-                  class="kebab-menu"
-                  :style="{ top: kebabPos.top + 'px', left: kebabPos.left + 'px' }"
-                >
-                  <button class="kebab-item" @click="openEdit(row); openKebab = null">✏️ ערוך</button>
-                  <button class="kebab-item kebab-item--danger" @click="doDelete(row); openKebab = null">🗑 מחק</button>
-                </div>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <n-data-table
+        v-if="store.rows.length"
+        :bordered="false"
+        :columns="columns"
+        :data="store.rows"
+        :loading="store.loading"
+        :pagination="false"
+        :row-key="(row: Client) => row.id"
+        :row-props="rowProps"
+        class="clients-data-table"
+        dir="rtl"
+      />
 
-      <div v-else-if="store.loading" class="empty">טוען...</div>
-      <div v-else class="empty">
-        <p>אין לקוחות להצגה</p>
-        <button class="btn btn--primary" style="margin-top:12px" @click="showCreate = true">+ צור לקוח ראשון</button>
-      </div>
+      <n-empty v-else-if="store.loading" description="טוען..." class="empty-state" />
+      <n-empty v-else description="אין לקוחות להצגה" class="empty-state">
+        <template #extra>
+          <n-button type="primary" @click="showCreate = true">
+            <template #icon><n-icon :component="AddOutline" /></template>
+            צור לקוח ראשון
+          </n-button>
+        </template>
+      </n-empty>
     </div>
 
     <!-- Pagination info -->
     <div v-if="store.rows.length" class="pagination-info">
       מציג 1–{{ store.rows.length }} מתוך {{ store.total }} לקוחות
     </div>
-
-    <!-- ── Quick-view modal ──────────────────────────────────────────────── -->
-    <n-modal v-model:show="showQuickViewModal" :mask-closable="true" preset="card" style="width:640px;max-width:95vw">
-      <template #header>
-        <h2 class="qv-title">{{ quickViewClient?.display_name }}</h2>
-      </template>
-      <div v-if="quickViewClient" class="qv-body">
-        <!-- Left: contact persons -->
-        <div class="qv-left">
-          <div class="qv-section-title">אנשי קשר ופרטי תקשורת</div>
-          <div class="qv-contact-card">
-            <div class="qv-contact-badge">ראשי</div>
-            <div class="qv-contact-info">
-              <div class="qv-contact-name">
-                <span class="person-icon">👤</span>
-                {{ quickViewClient.contact_person || quickViewClient.display_name }}
-              </div>
-              <div v-if="quickViewClient.phone" class="qv-contact-line">
-                <span class="contact-icon">📞</span> {{ quickViewClient.phone }}
-              </div>
-              <div v-if="quickViewClient.email" class="qv-contact-line">
-                <span class="contact-icon">✉</span> {{ quickViewClient.email }}
-              </div>
-            </div>
-          </div>
-          <div v-if="quickViewClient.address" class="qv-address-card">
-            <div class="qv-section-title" style="margin-top:12px">כתובת</div>
-            <div class="qv-address">
-              <span class="contact-icon">📍</span> {{ quickViewClient.address }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: stats -->
-        <div class="qv-right">
-          <div class="qv-section-title">תמונת מצב ביצועים</div>
-          <div class="qv-stats">
-            <div class="qv-stat">
-              <span class="qv-stat__num qv-stat__num--orange">{{ qvStats.pending }}</span>
-              <span class="qv-stat__label">↗ ממתינים</span>
-            </div>
-            <div class="qv-stat">
-              <span class="qv-stat__num qv-stat__num--blue">{{ qvStats.approved }}</span>
-              <span class="qv-stat__label">✓ אושרו</span>
-            </div>
-            <div class="qv-stat">
-              <span class="qv-stat__num qv-stat__num--green">{{ qvStats.completed }}</span>
-              <span class="qv-stat__label">✓ הושלמו</span>
-            </div>
-            <div class="qv-stat">
-              <span class="qv-stat__num">{{ qvStats.total }}</span>
-              <span class="qv-stat__label">↗ סה"כ תסקירים</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <n-button type="primary" @click="router.push(`/clients/${quickViewClient?.id}`)">פתח פרופיל לקוח</n-button>
-          <div style="display:flex;gap:8px">
-            <n-button ghost type="error" @click="showQuickViewModal = false; doDelete(quickViewClient!)">מחק</n-button>
-            <n-button @click="showQuickViewModal = false">סגור</n-button>
-          </div>
-        </div>
-      </template>
-    </n-modal>
 
     <!-- ── Create / Edit modal ──────────────────────────────────────────── -->
     <n-modal
@@ -195,9 +87,6 @@
         <n-form-item label="טלפון">
           <n-input v-model:value="form.phone" placeholder="050-0000000" />
         </n-form-item>
-        <n-form-item label="כתובת">
-          <n-input v-model:value="form.address" placeholder="רחוב, עיר" />
-        </n-form-item>
         <n-form-item label="מספר ת.ז / ח.פ">
           <n-input v-model:value="form.id_number" />
         </n-form-item>
@@ -213,11 +102,21 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from "vue";
+import {computed, h, onMounted, ref, type Component} from "vue";
 import {useRouter} from "vue-router";
-import {NButton, NForm, NFormItem, NInput, NModal, NRadio, NRadioGroup, useMessage,} from "naive-ui";
+import {NButton, NDataTable, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NRadio, NRadioGroup, NSpace, useMessage, type DataTableColumns} from "naive-ui";
+import {
+  AddOutline,
+  BusinessOutline,
+  CallOutline,
+  CreateOutline,
+  MailOutline,
+  PersonOutline,
+  RefreshOutline,
+  SearchOutline,
+  TrashOutline,
+} from "@vicons/ionicons5";
 import {useClientsStore} from "../stores/clients.js";
-import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import type {Client} from "@shared/types.js";
 
@@ -239,51 +138,101 @@ function refresh() {
 
 onMounted(() => { store.fetch({ limit: 200 }, true); });
 
-// ── Kebab menu ────────────────────────────────────────────────────────────────
-const openKebab = ref<string | null>(null);
-// Screen coordinates for the open menu — rendered position:fixed so it escapes
-// the table-wrap's overflow:hidden clipping instead of being cut off.
-const kebabPos = ref<{ top: number; left: number }>({ top: 0, left: 0 });
-const MENU_WIDTH = 150;
-const MENU_HEIGHT = 88;
+const columns: DataTableColumns<Client> = [
+  {
+    title: "שם הלקוח",
+    key: "display_name",
+    align: "right",
+    titleAlign: "right",
+    render(row) {
+      return h(NSpace, { class: "td-name", align: "center", size: 8, wrapItem: false }, {
+        default: () => [
+          h(NIcon, { component: BusinessOutline, class: "client-icon" }),
+          h("span", { class: "client-name", dir: "ltr" }, displayClientName(row.display_name)),
+        ],
+      });
+    },
+  },
+  {
+    title: "איש קשר",
+    key: "contact_person",
+    align: "right",
+    titleAlign: "right",
+    render(row) {
+      return row.contact_person
+        ? h(NSpace, { class: "contact-person", align: "center", size: 5, wrapItem: false }, {
+            default: () => [
+              h(NIcon, { component: PersonOutline, class: "person-icon" }),
+              h("span", row.contact_person),
+            ],
+          })
+        : h("span", { class: "muted" }, "—");
+    },
+  },
+  {
+    title: "פרטי התקשרות",
+    key: "contact_info",
+    align: "right",
+    titleAlign: "right",
+    render(row) {
+      if (!row.email && !row.phone) return h("span", { class: "muted" }, "—");
+      return h("div", { class: "td-contact-info" }, [
+        row.email ? contactLine(MailOutline, row.email) : null,
+        row.phone ? contactLine(CallOutline, row.phone) : null,
+      ]);
+    },
+  },
+  {
+    title: "",
+    key: "actions",
+    align: "left",
+    titleAlign: "left",
+    width: 132,
+    render(row) {
+      return h(
+        NSpace,
+        { justify: "end", size: 8, onClick: (event: MouseEvent) => event.stopPropagation() },
+        {
+          default: () => [
+            h(NButton, { size: "small", quaternary: true, onClick: () => openEdit(row) }, {
+              icon: () => h(NIcon, { component: CreateOutline }),
+              default: () => "ערוך",
+            }),
+            h(NButton, { size: "small", quaternary: true, type: "error", onClick: () => doDelete(row) }, {
+              icon: () => h(NIcon, { component: TrashOutline }),
+              default: () => "מחק",
+            }),
+          ],
+        },
+      );
+    },
+  },
+];
 
-function toggleKebab(id: string, ev: MouseEvent) {
-  if (openKebab.value === id) { openKebab.value = null; return; }
-  const btn = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-  // Open below the button, aligned to its left edge; flip up / clamp to viewport
-  // when there isn't room so the menu is always fully visible.
-  let top = btn.bottom + 4;
-  if (top + MENU_HEIGHT > window.innerHeight) top = btn.top - MENU_HEIGHT - 4;
-  let left = btn.left;
-  if (left + MENU_WIDTH > window.innerWidth) left = window.innerWidth - MENU_WIDTH - 8;
-  if (left < 8) left = 8;
-  kebabPos.value = { top, left };
-  openKebab.value = id;
+function rowProps(row: Client) {
+  return {
+    class: "client-row",
+    onClick: () => router.push(`/clients/${row.id}`),
+  };
 }
-// Close kebab when clicking outside
-function onDocClick() { openKebab.value = null; }
-onMounted(() => document.addEventListener("click", onDocClick));
 
-// ── Quick-view modal ──────────────────────────────────────────────────────────
-const showQuickViewModal = ref(false);
-const quickViewClient = ref<Client | null>(null);
-const qvStats = ref({ pending: 0, approved: 0, completed: 0, total: 0 });
+function contactLine(icon: Component, value: string) {
+  return h(NSpace, { class: "contact-line", align: "center", size: 5, wrapItem: false, dir: "ltr" }, {
+    default: () => [
+      h(NIcon, { component: icon, class: "contact-icon" }),
+      h("span", value),
+    ],
+  });
+}
 
-async function openQuickView(row: Client) {
-  quickViewClient.value = row;
-  showQuickViewModal.value = true;
-  // Fetch contract stats for this client
-  try {
-    const { rows } = await api.contracts.list({ clientId: String(row.id), limit: 500 });
-    qvStats.value = {
-      pending:   rows.filter(r => r.status === "active").length,
-      approved:  rows.filter(r => r.status === "renewed").length,
-      completed: rows.filter(r => r.status === "expired" || r.status === "cancelled").length,
-      total:     rows.length,
-    };
-  } catch {
-    qvStats.value = { pending: 0, approved: 0, completed: 0, total: 0 };
-  }
+function displayClientName(value: string) {
+  const spaced = value
+    .replace(/([א-ת])(\d{2,})/g, "$1 $2")
+    .replace(/(\d{2,})([א-ת])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+  const numericPrefix = spaced.match(/^(\d{3,4})\s+(.+[\u0590-\u05FF].*)$/);
+  return numericPrefix ? `${numericPrefix[2].trim()} ${numericPrefix[1]}` : spaced;
 }
 
 // ── Create / Edit ─────────────────────────────────────────────────────────────
@@ -296,12 +245,12 @@ const editingId = ref<string | null>(null);
 const saving = ref(false);
 const form = ref({
   display_name: "", entity_type: "person" as "person" | "company",
-  contact_person: "", email: "", phone: "", address: "", id_number: "",
+  contact_person: "", email: "", phone: "", id_number: "",
 });
 
 function resetForm() {
   editingId.value = null;
-  form.value = { display_name: "", entity_type: "person", contact_person: "", email: "", phone: "", address: "", id_number: "" };
+  form.value = { display_name: "", entity_type: "person", contact_person: "", email: "", phone: "", id_number: "" };
 }
 
 function openEdit(row: Client) {
@@ -312,7 +261,6 @@ function openEdit(row: Client) {
     contact_person: row.contact_person ?? "",
     email:        row.email ?? "",
     phone:        row.phone ?? "",
-    address:      row.address ?? "",
     id_number:    row.id_number ?? "",
   };
   showCreate.value = true;
@@ -389,61 +337,12 @@ function doDelete(row: Client) {
 }
 .page__actions { display: flex; gap: 8px; }
 
-/* ── Buttons ─────────────────────────────────────────────────────────────── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
-  color: var(--text-primary);
-  transition: background 0.15s, border-color 0.15s;
-  white-space: nowrap;
-  font-family: inherit;
-}
-.btn:hover { background: var(--bg-hover); }
-.btn--primary {
-  background: var(--brand-color);
-  border-color: var(--brand-color);
-  color: #fff;
-  font-weight: 600;
-}
-.btn--primary:hover { filter: brightness(1.08); }
-.btn--ghost { background: transparent; }
-
 /* ── Search ──────────────────────────────────────────────────────────────── */
-.search-wrap {
-  position: relative;
+.client-search {
+  width: 100%;
   margin-bottom: 16px;
 }
-.search-icon {
-  position: absolute;
-  left: auto;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 14px;
-  pointer-events: none;
-  color: var(--text-muted);
-}
-.search {
-  width: 100%;
-  padding: 10px 40px 10px 16px;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
-  font-size: 14px;
-  color: var(--text-primary);
-  font-family: inherit;
-  direction: rtl;
-  box-sizing: border-box;
-}
-.search:focus { border-color: var(--brand-color); outline: none; }
+.client-search :deep(.n-input__input-el) { direction: rtl; }
 
 /* ── Table ───────────────────────────────────────────────────────────────── */
 .table-wrap {
@@ -452,32 +351,38 @@ function doDelete(row: Client) {
   border-radius: 14px;
   overflow: hidden;
 }
-.clients-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.clients-data-table {
   direction: rtl;
 }
-.clients-table th {
-  text-align: right;
-  padding: 12px 16px;
+.clients-data-table :deep(.n-data-table-wrapper),
+.clients-data-table :deep(.n-data-table-base-table),
+.clients-data-table :deep(.n-data-table-table) {
+  direction: rtl;
+}
+.clients-data-table :deep(th) {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border-color);
+  text-align: right;
 }
-.client-row td {
-  padding: 13px 16px;
-  border-bottom: 1px solid var(--border-color);
+.clients-data-table :deep(.n-data-table-th__title) {
+  justify-content: flex-start;
+  width: 100%;
+}
+.clients-data-table :deep(td) {
+  direction: rtl;
+  text-align: right;
   vertical-align: middle;
 }
-.client-row:last-child td { border-bottom: none; }
-.client-row {
+.clients-data-table :deep(td:last-child) {
+  text-align: left;
+}
+.clients-data-table :deep(.client-row) {
   cursor: pointer;
   transition: background 0.12s;
 }
-.client-row:hover { background: var(--bg-hover); }
+.clients-data-table :deep(.client-row:hover td) { background: var(--bg-hover); }
 
 .td-name {
   display: flex;
@@ -487,7 +392,12 @@ function doDelete(row: Client) {
   color: var(--text-primary);
 }
 .client-icon { font-size: 14px; color: var(--text-muted); }
-.client-name { font-size: 13px; }
+.client-name {
+  direction: ltr;
+  font-size: 13px;
+  unicode-bidi: isolate;
+  white-space: pre;
+}
 
 .td-contact { color: var(--text-secondary); }
 .contact-person { display: flex; align-items: center; gap: 5px; }
@@ -497,59 +407,7 @@ function doDelete(row: Client) {
 .contact-line { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; font-size: 12px; }
 .contact-icon { font-size: 11px; }
 
-.td-address { color: var(--text-secondary); font-size: 12px; }
-
 .muted { color: var(--text-muted); font-size: 12px; }
-
-/* ── Kebab menu ──────────────────────────────────────────────────────────── */
-.td-actions { width: 40px; padding: 0 8px !important; }
-.kebab-wrap { position: relative; }
-.kebab-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.12s, color 0.12s;
-}
-.kebab-btn:hover, .kebab-btn--open {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.kebab-menu {
-  position: fixed;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.15));
-  width: 150px;
-  z-index: 2000;
-  overflow: hidden;
-}
-.kebab-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 14px;
-  border: none;
-  background: transparent;
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  text-align: right;
-  font-family: inherit;
-  transition: background 0.12s;
-}
-.kebab-item:hover { background: var(--bg-hover); }
-.kebab-item--danger { color: var(--color-error, #d03050); }
-.kebab-item--danger:hover { background: rgba(208, 48, 80, 0.08); }
 
 /* ── Pagination info ─────────────────────────────────────────────────────── */
 .pagination-info {
@@ -559,116 +417,9 @@ function doDelete(row: Client) {
   text-align: start;
 }
 
-/* ── Empty ───────────────────────────────────────────────────────────────── */
-.empty {
-  text-align: center;
+.empty-state {
   padding: 60px 20px;
-  color: var(--text-muted);
-  font-size: 14px;
 }
-
-/* ── Quick-view modal ────────────────────────────────────────────────────── */
-.qv-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.qv-body {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  direction: rtl;
-}
-.qv-section-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 10px;
-}
-.qv-contact-card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 14px;
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-.qv-contact-badge {
-  background: var(--brand-color);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.qv-contact-info { flex: 1; }
-.qv-contact-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.qv-contact-line {
-  font-size: 12px;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-bottom: 3px;
-}
-.qv-address-card { margin-top: 8px; }
-.qv-address {
-  font-size: 13px;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* Stats side */
-.qv-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.qv-stat {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.qv-stat__num {
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1;
-}
-.qv-stat__num--orange { color: #f0a020; }
-.qv-stat__num--blue   { color: #2080f0; }
-.qv-stat__num--green  { color: var(--brand-color); }
-.qv-stat__label {
-  font-size: 11px;
-  color: var(--text-secondary);
-  text-align: center;
-}
-
-/* refresh spin */
-.refresh-icon { display: inline-block; font-size: 15px; transition: transform 0.4s; }
-.refresh-icon--spin { animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 720px) {
   .page__head {
@@ -685,100 +436,17 @@ function doDelete(row: Client) {
     grid-template-columns: 1fr 1fr;
   }
 
-  .page__actions .btn {
+  .page__actions :deep(.n-button) {
     justify-content: center;
   }
-
-  .table-wrap {
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    overflow: visible;
-  }
-
-  .clients-table,
-  .clients-table tbody,
-  .clients-table tr,
-  .clients-table td {
-    display: block;
-    width: 100%;
-  }
-
-  .clients-table thead {
-    display: none;
-  }
-
-  .clients-table {
-    border-collapse: separate;
-    border-spacing: 0 10px;
-  }
-
-  .client-row {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 14px;
-    box-shadow: 0 1px 0 rgba(0,0,0,0.02);
-    overflow: hidden;
-    position: relative;
-  }
-
-  .client-row td {
-    border-bottom: none;
-    padding: 8px 44px 8px 14px;
-  }
-
-  .td-name {
-    padding-top: 14px !important;
-  }
-
-  .td-contact,
-  .td-contact-info,
-  .td-address {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    text-align: left;
-  }
-
-  .td-contact::before,
-  .td-contact-info::before,
-  .td-address::before {
-    color: var(--text-muted);
-    content: "";
-    flex: 0 0 auto;
-    font-size: 12px;
-    font-weight: 600;
-    text-align: right;
-  }
-
-  .td-contact::before { content: "איש קשר"; }
-  .td-contact-info::before { content: "תקשורת"; }
-  .td-address::before { content: "כתובת"; }
 
   .contact-person,
   .contact-line {
     justify-content: flex-end;
   }
 
-  .td-actions {
-    inset-inline-start: 8px;
-    padding: 0 !important;
-    position: absolute;
-    top: 8px;
-    width: auto;
-  }
-
   .pagination-info {
     text-align: center;
-  }
-
-  .qv-body {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .qv-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   :deep(.n-dialog .n-dialog__action),
@@ -798,8 +466,5 @@ function doDelete(row: Client) {
     grid-template-columns: 1fr;
   }
 
-  .qv-stats {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

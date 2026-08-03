@@ -110,13 +110,27 @@ export function registerEquipmentRoutes(app: express.Application) {
     const today = new Date().toISOString().slice(0, 10);
 
     const enriched = await Promise.all(contracts.map(async (c: any) => {
+      let documentFields: Record<string, unknown> | null = null;
+      if (c.document_id) {
+        try {
+          const doc = await col("documents").findOne({ _id: new ObjectId(String(c.document_id)), user_id: userId }) as any;
+          documentFields = parseManualFields(doc?.extracted_fields);
+        } catch { /* ignore */ }
+      }
+      const contactFields = contactFieldsFromContract(c, documentFields);
       let client_name: string | null = null;
+      let contact_person: string | null = contactFields.contact_person;
+      let contact_email: string | null = contactFields.contact_email;
+      let contact_phone: string | null = contactFields.contact_phone;
       let equipment_name: string | null = null;
 
       if (c.client_id) {
         try {
           const client = await col("clients").findOne({ _id: new ObjectId(String(c.client_id)) }) as any;
-          client_name = client?.display_name ?? null;
+          client_name = textField(client?.display_name) ?? null;
+          contact_person = textField(client?.contact_person) ?? contact_person ?? extractContactPersonFromNotes(client?.notes);
+          contact_email = textField(client?.email) ?? contact_email;
+          contact_phone = textField(client?.phone) ?? contact_phone;
         } catch { /* ignore */ }
       }
       if (c.document_id) {
@@ -139,6 +153,9 @@ export function registerEquipmentRoutes(app: express.Application) {
         contract_type: c.contract_type ?? null,
         contract_number: c.contract_number ?? null,
         client_name,
+        contact_person,
+        contact_email,
+        contact_phone,
         equipment_name,
         days_until: daysUntil,
         urgency,
@@ -911,4 +928,39 @@ function flatDoc(doc: any) {
   if (!doc) return doc;
   const { _id, ...rest } = doc;
   return { id: _id?.toString(), ...rest };
+}
+
+function extractContactPersonFromNotes(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = value.match(/(?:^|\n)\s*איש\s+קשר\s*[:：-]\s*([^\n]+)/);
+  return match?.[1]?.trim() || null;
+}
+
+function contactFieldsFromContract(contract: any, documentFields: Record<string, unknown> | null = null): {
+  contact_person: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+} {
+  const fields = parseManualFields(contract?.manual_fields);
+  return {
+    contact_person: textField(fields?.contact_person) ?? textField(documentFields?.contact_person) ?? textField(documentFields?.client_name),
+    contact_email: textField(fields?.contact_email) ?? textField(documentFields?.contact_email) ?? textField(documentFields?.client_email) ?? textField(documentFields?.email),
+    contact_phone: textField(fields?.contact_phone) ?? textField(documentFields?.contact_phone) ?? textField(documentFields?.client_phone) ?? textField(documentFields?.phone),
+  };
+}
+
+function parseManualFields(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "object") return value as Record<string, unknown>;
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function textField(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }

@@ -13,7 +13,7 @@ import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {extractWithTemplate} from "../pipeline/extractor";
-import {loadAllTemplates, pickTemplate} from "../templates/seedTemplates";
+import {loadAllTemplates, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import multer from "multer";
 import {logger} from "../logger";
 
@@ -524,11 +524,8 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
-    const rows = await col("extractions")
-      .find({ document_id: req.params.id })
-      .sort({ created_at: -1 })
-      .toArray();
-    res.json(rows.map(flatDoc));
+    const fields = await resolveCurrentExtractionFields(doc, userId);
+    res.json({ fields });
   });
 
   // POST /api/documents/:id/reprocess
@@ -653,7 +650,7 @@ export function registerDocumentRoutes(app: express.Application) {
       $set: { extracted_fields: JSON.stringify(merged), updated_at: new Date() },
     });
 
-    // Also update the latest extraction record so reloadDoc reads the new values
+    // Keep the audit row roughly in sync for diagnostics; the client reads documents.extracted_fields.
     await col("extractions").updateOne(
       { document_id: id },
       { $set: { fields: merged, updated_at: new Date() } },
@@ -747,5 +744,36 @@ function flatDoc(doc: any) {
   if (!doc) return doc;
   const { _id, ...rest } = doc;
   return { id: _id?.toString(), ...rest };
+}
+
+async function resolveCurrentExtractionFields(doc: any, userId: string): Promise<Record<string, unknown> | null> {
+  const fields = parseObjectJson(doc?.extracted_fields);
+  if (!fields) return null;
+
+  const rawText = typeof doc?.raw_text === "string" ? doc.raw_text : "";
+  if (!rawText.trim()) return fields;
+
+  let template = null;
+  if (doc?.template_id) {
+    template = await loadTemplate(String(doc.template_id));
+  }
+  if (!template) {
+    template = await pickTemplate(rawText, userId);
+  }
+  if (!template) return fields;
+
+  return normalizeExtractionFieldsForTemplate(rawText, template, fields as any) ?? fields;
+}
+
+function parseObjectJson(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 

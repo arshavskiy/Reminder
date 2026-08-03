@@ -915,7 +915,7 @@ const exportColumns = ref([
   { key: "client_zipcode",        label: "מיקוד",              selected: true },
   { key: "start_date",            label: "תאריך בדיקה",        selected: true },
   { key: "expiry_date",           label: "בתוקף עד",           selected: true },
-  { key: "equipment_description", label: "תיאור מכונת הרמה",   selected: true },
+  { key: "equipment_description", label: "תיאור",              selected: true },
   { key: "status",                label: "סטטוס",              selected: false },
   { key: "contract_type",         label: "סוג",                selected: false },
   { key: "summary",               label: "הערות",              selected: false },

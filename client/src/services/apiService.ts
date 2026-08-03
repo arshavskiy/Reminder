@@ -79,6 +79,9 @@ export interface ExpiryCalendarItem {
   contract_type: string | null;
   contract_number: string | null;
   client_name: string | null;
+  contact_person: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
   equipment_name: string | null;
   days_until: number;
   urgency: "overdue" | "critical" | "warning" | "ok";
@@ -288,7 +291,7 @@ export const api = {
 
   userSettings: {
     get: () => get<UserSettings>("/user-settings"),
-    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats" | "features">>) =>
+    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats" | "calendar_next_tests_only" | "features">>) =>
       put<UserSettings>("/user-settings", body),
   },
 

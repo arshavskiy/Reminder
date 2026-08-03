@@ -91,6 +91,7 @@ export interface UserSettings {
   email_from_name: string | null;
   reminder_advance_days: string;  // JSON array as string
   ocr_language: string;
+  calendar_next_tests_only?: boolean;
   features?: Record<string, boolean> | null;
 }
 
@@ -138,7 +139,7 @@ export interface Client {
   id_number: string | null;
   email: string | null;
   phone: string | null;
-  address: string | null;
+  address?: string | null;
   notes: string | null;
   tags: string | null; // JSON array string
   created_at: string;
@@ -178,6 +179,7 @@ export interface ContractManualFields {
   po_box?: string | null;
   client_zipcode?: string | null;
   equipment_description?: string | null;
+  checked_equipment?: string | null;
   _equipment?: Array<{
     name: string;
     manufacturer: string | null;
@@ -268,11 +270,15 @@ export interface ContractWithClient extends Contract {
 
 export interface ReminderWithContext extends Reminder {
   client_name: string | null;
+  contact_person?: string | null;
+  client_email?: string | null;
+  client_phone?: string | null;
   document_name: string | null;
 }
 
 export interface ClientDetail extends Client {
-  document_count: number;
+  doc_count: number;
+  document_count?: number;
   contract_count: number;
   open_reminder_count: number;
 }

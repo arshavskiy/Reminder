@@ -239,9 +239,9 @@ export async function processDocument(
         clientId = await findOrCreateClient({
           displayName: ocr.contact_name ?? ocr.contact_phone ?? "לא ידוע",
           entityType: "person",
+          contactPerson: ocr.contact_name,
           email: ocr.contact_email,
           phone: ocr.contact_phone,
-          address: ocr.client_address,
           userId,
         });
         await col("document_clients").updateOne(
@@ -515,9 +515,9 @@ async function saveExtractionEntities(
       displayName,
       entityType,
       idNumber: result.client_id ?? null,
+      contactPerson: result.client_name ?? null,
       email: result.client_email ?? null,
       phone: result.client_phone ?? null,
-      address: result.client_address ?? null,
       notes: contactNote,
       userId,
     });
@@ -614,17 +614,44 @@ export function normalizeExtractionFieldsForTemplate(
   if (!fields) return null;
 
   const normalized: DynamicExtraction = { ...fields };
+  removeAddressExtractionFields(normalized);
+  normalizeClientCompany(rawText, normalized);
   const supportsReportNumber = template.fields.some((field) => field.key === "report_number");
   if (supportsReportNumber && !hasMeaningfulValue(normalized.report_number)) {
     const reportNumber = extractCurrentReportNumber(rawText);
     if (reportNumber) normalized.report_number = reportNumber;
   }
+  const supportsContactPerson = template.fields.some((field) => field.key === "contact_person");
+  if (supportsContactPerson && !hasMeaningfulValue(normalized.contact_person)) {
+    const contactPerson = extractContactPerson(rawText);
+    if (contactPerson) normalized.contact_person = contactPerson;
+  }
+  if (!hasMeaningfulValue(normalized.contact_email)) {
+    const contactEmail = extractContactEmail(rawText);
+    if (contactEmail) normalized.contact_email = contactEmail;
+  }
+  const supportsLicenseNumber = template.fields.some((field) => field.key === "license_number");
+  if (supportsLicenseNumber && !isLikelyLicenseNumber(normalized.license_number)) {
+    const licenseNumber = extractLicenseNumber(rawText);
+    if (licenseNumber) normalized.license_number = licenseNumber;
+  }
+
+  const headerEquipmentDescription = extractEquipmentDescriptionFromHeader(rawText);
 
   // When flat equipment fields are empty but _equipment rows were extracted,
   // backfill from the first row so the document card shows something useful.
   const equipmentRows = Array.isArray(normalized._equipment) ? normalized._equipment as any[] : [];
   if (equipmentRows.length > 0) {
     const first = equipmentRows[0];
+    if (!hasMeaningfulValue(normalized.checked_equipment) && hasMeaningfulValue(first?.name)) {
+      normalized.checked_equipment = first.name;
+    }
+    if (shouldUseDefaultLiftingMachineDescription(rawText, template, normalized)) {
+      normalized.equipment_description = "מכונת הרמה";
+    }
+    if (headerEquipmentDescription && shouldUseHeaderEquipmentDescription(normalized.equipment_description, first?.name)) {
+      normalized.equipment_description = headerEquipmentDescription;
+    }
     if (!hasMeaningfulValue(normalized.equipment_description) && hasMeaningfulValue(first?.name)) {
       normalized.equipment_description = first.name;
     }
@@ -641,6 +668,13 @@ export function normalizeExtractionFieldsForTemplate(
       const work = first?.load_capacity_work;
       const val = Array.isArray(work) && work.length > 0 ? (work as string[]).join(" / ") : null;
       if (val) normalized.load_capacity = val;
+    }
+  } else {
+    if (shouldUseDefaultLiftingMachineDescription(rawText, template, normalized)) {
+      normalized.equipment_description = "מכונת הרמה";
+    }
+    if (headerEquipmentDescription && shouldUseHeaderEquipmentDescription(normalized.equipment_description, null)) {
+      normalized.equipment_description = headerEquipmentDescription;
     }
   }
 
@@ -667,8 +701,196 @@ function extractCurrentReportNumber(rawText: string): string | null {
   return null;
 }
 
+function extractContactPerson(rawText: string): string | null {
+  const lines = rawText.split(/\r?\n/).map((rawLine) => rawLine.replace(/\s+/g, " ").trim());
+  for (const line of lines) {
+    if (!line) continue;
+
+    const afterLabel = line.match(/(?:^|\s)איש\s+קשר\s*[:：-]?\s*([^|:：]+)/);
+    const afterLabelValue = cleanContactPersonValue(afterLabel?.[1]);
+    if (afterLabelValue) return afterLabelValue;
+
+    const beforeLabel = line.match(/([^|:：]+)\s*[:：]\s*איש\s+קשר(?:\s|$)/);
+    const beforeLabelValue = cleanContactPersonValue(beforeLabel?.[1]);
+    if (beforeLabelValue) return beforeLabelValue;
+  }
+
+  return null;
+}
+
+function cleanContactPersonValue(value: string | undefined): string | null {
+  if (!value) return null;
+  const cleaned = value
+    .replace(/\b\d{2,3}[-\s]?\d{6,7}\b/g, " ")
+    .replace(/\b\d{7,10}\b/g, " ")
+    .trim()
+    .replace(/^(?:נייד|טלפון|פקס)\s*/g, "")
+    .replace(/\s+(?:נייד|טלפון|פקס)\s*$/g, "")
+    .replace(/[|:：-]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return /[א-ת]/.test(cleaned) ? cleaned : null;
+}
+
+function extractContactEmail(rawText: string): string | null {
+  const lines = rawText.split(/\r?\n/).map((rawLine) => rawLine.replace(/\s+/g, " ").trim());
+  const labeledLines = lines.filter((line) => /מייל|דוא"?ל|דואר\s+אלקטרוני|email/i.test(line));
+  for (const line of labeledLines) {
+    const email = firstEmailInText(line);
+    if (email && !isLikelyInspectorFooterLine(line)) return normalizeEmail(email);
+  }
+
+  const clientBlockEnd = lines.findIndex((line) => /(?:תיאור|ציוד|מקום\s+הבדיקה|מספר\s+רישוי|סעיף\s*3|3\.)/.test(line));
+  const searchLines = clientBlockEnd > 0 ? lines.slice(0, clientBlockEnd) : lines.slice(0, Math.min(lines.length, 20));
+  for (const line of searchLines) {
+    const email = firstEmailInText(line);
+    if (email && !isLikelyInspectorFooterLine(line)) return normalizeEmail(email);
+  }
+
+  return null;
+}
+
+function firstEmailInText(value: string): string | null {
+  const match = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match?.[0] ?? null;
+}
+
+function normalizeEmail(value: string): string {
+  return value.trim().replace(/[.,;:]+$/g, "").toLowerCase();
+}
+
+function isLikelyInspectorFooterLine(line: string): boolean {
+  return /חתימ|בודק|מהנדס|הנדסה|בטיחות|פקודת\s+הבטיחות|תסקיר\s+זה|footer/i.test(line);
+}
+
+function extractLicenseNumber(rawText: string): string | null {
+  const locationSectionValue = extractLicenseNumberAfterInspectionLocation(rawText);
+  if (locationSectionValue) return locationSectionValue;
+
+  const lines = rawText.split(/\r?\n/).map((rawLine) => rawLine.replace(/\s+/g, " ").trim());
+  for (const line of lines) {
+    if (!line) continue;
+
+    const afterLabel = line.match(/(?:^|\s)מספר\s+רישוי\s*[:：-]?\s*(\d+)/i);
+    const beforeLabel = line.match(/(\d+)\s+מספר\s+רישוי\s*[:：-]?/i);
+    const value = cleanInlineFieldValue(afterLabel?.[1] ?? beforeLabel?.[1]);
+    if (value && isLikelyLicenseNumber(value)) return value;
+  }
+
+  return null;
+}
+
+function extractLicenseNumberAfterInspectionLocation(rawText: string): string | null {
+  const lines = rawText.split(/\r?\n/).map((rawLine) => rawLine.replace(/\s+/g, " ").trim());
+  for (let i = 0; i < lines.length; i++) {
+    if (!/מקום\s+הבדיקה/.test(lines[i])) continue;
+    for (const candidateLine of lines.slice(i + 1, i + 4)) {
+      if (isLikelyLicenseNumber(candidateLine)) return candidateLine;
+    }
+  }
+  return null;
+}
+
+function cleanInlineFieldValue(value: string | undefined): string | null {
+  if (!value) return null;
+  const cleaned = value
+    .split(/\t|\s{2,}|\s+\|\s+/)[0]
+    .trim()
+    .replace(/[|]$/, "");
+  return cleaned || null;
+}
+
+function isLikelyLicenseNumber(value: unknown): boolean {
+  return typeof value === "string" && /^\d{4,6}$/.test(value.trim());
+}
+
 function hasMeaningfulValue(value: unknown): boolean {
   return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function removeAddressExtractionFields(fields: DynamicExtraction): void {
+  delete fields.client_address;
+  delete fields.po_box;
+  delete fields.client_zipcode;
+}
+
+function normalizeClientCompany(rawText: string, fields: DynamicExtraction): void {
+  if (typeof fields.client_company !== "string") return;
+  fields.client_company = normalizeClientName(fields.client_company, rawText);
+}
+
+function normalizeClientName(value: string, rawText?: string): string {
+  const spaced = value
+    .replace(/([א-ת])(\d{2,})/g, "$1 $2")
+    .replace(/(\d{2,})([א-ת])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+  return preferHebrewNameWithNumericSuffix(spaced, rawText);
+}
+
+function preferHebrewNameWithNumericSuffix(value: string, rawText?: string): string {
+  const match = value.match(/^(\d{3,4})\s+(.+[\u0590-\u05FF].*)$/);
+  if (!match) return value;
+
+  const candidate = `${match[2].trim()} ${match[1]}`;
+  if (!rawText) return candidate;
+
+  const normalizedText = rawText.replace(/\s+/g, " ");
+  return normalizedText.includes(candidate) ? candidate : value;
+}
+
+function extractEquipmentDescriptionFromHeader(rawText: string): string | null {
+  for (const rawLine of rawText.split(/\r?\n/)) {
+    const line = rawLine.replace(/\s+/g, " ").trim();
+    if (!line) continue;
+
+    const inlineValue = line.match(/(?:^|\s)תיאור\s*[:：-]\s*([^|:：]+)$/);
+    if (inlineValue?.[1]) {
+      const value = cleanHeaderValue(inlineValue[1]);
+      if (value) return value;
+    }
+
+    const labelAndValue = line.match(/(?:^|\s)תיאור\s+([^:：|]+)\s*[:：]?$/);
+    if (labelAndValue?.[1]) {
+      const value = cleanHeaderValue(labelAndValue[1]);
+      if (value && value !== "תיאור") return value;
+    }
+  }
+
+  return null;
+}
+
+function cleanHeaderValue(value: string): string | null {
+  const cleaned = value
+    .replace(/^[\s.،,;:：-]+|[\s.،,;:：-]+$/g, "")
+    .trim();
+  return cleaned || null;
+}
+
+function shouldUseHeaderEquipmentDescription(current: unknown, firstEquipmentName: unknown): boolean {
+  if (!hasMeaningfulValue(current)) return true;
+  const currentText = String(current).trim();
+  if (/^תיאור\s+/.test(currentText)) return true;
+  if (!hasMeaningfulValue(firstEquipmentName)) return false;
+  return currentText === String(firstEquipmentName).trim();
+}
+
+function shouldUseDefaultLiftingMachineDescription(
+  rawText: string,
+  template: DocTemplate,
+  fields: DynamicExtraction
+): boolean {
+  const checkedEquipment = fields.checked_equipment;
+  const description = fields.equipment_description;
+  if (!hasMeaningfulValue(checkedEquipment) || !hasMeaningfulValue(description)) return false;
+  if (String(checkedEquipment).trim() !== String(description).trim()) return false;
+
+  const templateLooksLikeInspection = template.document_kind === "inspection_report" ||
+    template.match_keywords.some((keyword) => /תסקיר|בדיקה|מכונת הרמה|ציוד הרמה/.test(keyword));
+  if (!templateLooksLikeInspection) return false;
+
+  return /מכונת\s+הרמה|ציוד\s+הרמה|תסקיר\s+בדיקה/.test(rawText);
 }
 
 async function saveTemplateEntities(
@@ -706,9 +928,9 @@ async function saveTemplateEntities(
       displayName,
       entityType,
       idNumber: getStr("client_id"),
+      contactPerson,
       email: getStr("contact_email"),
       phone: getStr("contact_phone"),
-      address: getStr("client_address"),
       notes: contactNote,
       userId,
     });
@@ -835,9 +1057,9 @@ interface ClientInput {
   displayName: string;
   entityType: "company" | "person";
   idNumber?: string | null;
+  contactPerson?: string | null;
   email?: string | null;
   phone?: string | null;
-  address?: string | null;
   notes?: string | null;
   userId?: string;
 }
@@ -848,7 +1070,8 @@ interface ClientInput {
  * insert a new client.  Returns the client's _id as a string.
  */
 async function findOrCreateClient(input: ClientInput): Promise<string> {
-  const { displayName, entityType, idNumber, email, phone, address, notes, userId } = input;
+  const { displayName, entityType, idNumber, contactPerson, email, phone, notes, userId } = input;
+  const normalizedDisplayName = normalizeClientName(displayName);
   const userScope = userId ? { user_id: userId } : {};
 
   let existing: any = null;
@@ -873,14 +1096,14 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   if (!existing) {
     existing = await col("clients").findOne({
       ...userScope,
-      display_name: { $regex: new RegExp(`^${escapeRegex(displayName)}$`, "i") },
+      display_name: { $regex: new RegExp(`^${escapeRegex(normalizedDisplayName)}$`, "i") },
     }) as any;
     if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "exact_name", client_id: existing._id?.toString() });
   }
 
   // 4. Normalised name match (strips bע"מ / punctuation)
   if (!existing) {
-    const norm = normaliseName(displayName);
+    const norm = normaliseName(normalizedDisplayName);
     if (norm.length >= 3) {
       const all = await col("clients").find(userScope).toArray() as any[];
       existing = all.find((c: any) => normaliseName(c.display_name ?? "") === norm) ?? null;
@@ -901,7 +1124,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
         $set: {
           ...(email && !existing.email && { email }),
           ...(phone && !existing.phone && { phone }),
-          ...(address && !existing.address && { address }),
+          ...(contactPerson && !existing.contact_person && { contact_person: contactPerson }),
           ...(idNumber && !existing.id_number && { id_number: idNumber }),
           ...(mergedNotes !== existing.notes && { notes: mergedNotes }),
           updated_at: new Date(),
@@ -914,12 +1137,12 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   // No match — create new
   const r = await col("clients").insertOne({
     ...userScope,
-    display_name: displayName,
+    display_name: normalizedDisplayName,
     entity_type: entityType,
+    contact_person: contactPerson ?? null,
     id_number: idNumber ?? null,
     email: email ?? null,
     phone: phone ?? null,
-    address: address ?? null,
     notes: notes ?? null,
     created_at: new Date(),
     updated_at: new Date(),
@@ -927,7 +1150,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   logger.info("client_created_from_document", {
     user_id: userId ?? null,
     client_id: r.insertedId.toString(),
-    display_name: displayName,
+    display_name: normalizedDisplayName,
   });
   return r.insertedId.toString();
 }

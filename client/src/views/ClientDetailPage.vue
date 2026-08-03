@@ -1,133 +1,321 @@
 <template>
-  <div v-if="store.active">
-    <n-space align="center" style="margin-bottom: 16px">
-      <n-button text @click="$router.back()">   חזרה</n-button>
-      <n-h2 style="margin: 0">{{ store.active.display_name }}</n-h2>
-      <n-tag type="info">{{ store.active.entity_type === "company" ? "חברה" : "אדם פרטי" }}</n-tag>
-      <n-button size="small" @click="showEdit = true">✏️ עריכה</n-button>
-    </n-space>
-
-    <n-grid :cols="3" :x-gap="16" style="margin-bottom: 24px">
-      <n-gi><n-statistic label="מסמכים" :value="store.active.doc_count" /></n-gi>
-      <n-gi><n-statistic label="חוזים" :value="store.active.contract_count" /></n-gi>
-      <n-gi><n-statistic label="תזכורות פתוחות" :value="store.active.open_reminder_count" /></n-gi>
-    </n-grid>
-
-    <!-- Contact info row -->
-    <n-card style="margin-bottom: 16px">
-      <n-space>
-        <span v-if="store.active.email">📧 {{ store.active.email }}</span>
-        <span v-if="store.active.phone">📞 {{ store.active.phone }}</span>
-        <span v-if="store.active.id_number">🪪 {{ store.active.id_number }}</span>
+  <n-spin :show="store.loading && !store.active">
+    <n-space v-if="store.active" vertical size="large" class="client-detail" dir="rtl">
+      <n-space justify="space-between" align="center" class="client-detail__header">
+        <n-space align="center">
+          <n-button text @click="router.back()">
+            <template #icon><n-icon :component="ArrowBackOutline" /></template>
+            חזרה
+          </n-button>
+          <n-h2 class="client-detail__title">{{ store.active.display_name }}</n-h2>
+          <n-tag type="info">{{ store.active.entity_type === "company" ? "חברה" : "אדם פרטי" }}</n-tag>
+        </n-space>
+        <n-button size="small" @click="showEdit = true">
+          <template #icon><n-icon :component="CreateOutline" /></template>
+          עריכה
+        </n-button>
       </n-space>
-      <div v-if="store.active.notes" style="margin-top: 8px; color: #aaa">{{ store.active.notes }}</div>
-    </n-card>
 
-    <n-tabs>
-      <n-tab-pane name="docs" tab="מסמכים">
-        <n-list v-if="store.activeDocuments.length">
-          <n-list-item v-for="doc in store.activeDocuments" :key="doc.id">
-            <div style="display:flex;align-items:center;gap:8px">
-              <router-link :to="`/documents/${doc.id}`">{{ doc.file_name }}</router-link>
-              <StatusBadge :status="doc.processing_status" />
-              <span style="font-size:12px;color:#888">{{ formatDate(doc.import_date) }}</span>
-            </div>
-          </n-list-item>
-        </n-list>
-        <n-empty v-else description="אין מסמכים" />
-      </n-tab-pane>
+      <n-grid :cols="3" :x-gap="16" responsive="screen">
+        <n-gi v-for="stat in clientStats" :key="stat.key">
+          <n-card><n-statistic :label="stat.label" :value="stat.value" /></n-card>
+        </n-gi>
+      </n-grid>
 
-      <n-tab-pane name="equipment" tab="ציוד">
-        <n-spin :show="loadingEquipment">
-          <n-list v-if="equipment.length">
-            <n-list-item v-for="eq in equipment" :key="eq.id">
-              <div style="display:flex;align-items:center;gap:10px">
-                <div style="flex:1">
-                  <strong style="font-size:14px">{{ eq.name }}</strong>
-                  <span style="font-size:11px;color:#888;margin-right:8px">{{ categoryLabel(eq.category) }}</span>
-                  <div style="font-size:12px;color:#aaa;margin-top:2px">
-                    <span v-if="eq.manufacturer">יצרן: {{ eq.manufacturer }}</span>
-                    <span v-if="eq.model" style="margin-right:8px">דגם: {{ eq.model }}</span>
-                    <span v-if="eq.serial_number" style="margin-right:8px">מ"ס: {{ eq.serial_number }}</span>
-                    <span v-if="eq.capacity" style="margin-right:8px">עומס: {{ eq.capacity }}</span>
-                  </div>
-                </div>
-                <router-link v-if="eq.document_id" :to="`/documents/${eq.document_id}`" style="font-size:12px;color:var(--brand-color)">
-                  {{ eq.document_name || 'מסמך מקור' }}
-                </router-link>
-              </div>
-            </n-list-item>
-          </n-list>
-          <n-empty v-else description="אין ציוד משויך ללקוח זה" />
-        </n-spin>
-      </n-tab-pane>
-
-      <n-tab-pane name="timeline" tab="ציר זמן">
-        <n-timeline v-if="store.activeTimeline.length">
-          <n-timeline-item
-            v-for="event in store.activeTimeline"
-            :key="event.id"
-            :title="event.title"
-            :time="event.event_date"
-            :type="eventType(event.event_type)"
+      <n-card title="פרטי לקוח">
+        <n-descriptions class="client-details-table" :column="3" bordered label-placement="top">
+          <n-descriptions-item
+            v-for="detail in clientDetails"
+            :key="detail.key"
+            :label="detail.label"
+            :span="detail.span"
           >
-            {{ event.description }}
-          </n-timeline-item>
-        </n-timeline>
-        <n-empty v-else description="אין אירועים" />
-      </n-tab-pane>
-    </n-tabs>
+            <n-text :depth="detail.empty ? 3 : undefined">{{ detail.value }}</n-text>
+          </n-descriptions-item>
+        </n-descriptions>
+      </n-card>
 
-    <!-- Edit modal -->
-    <n-modal v-model:show="showEdit" title="עריכת לקוח" :show-icon="false" preset="dialog" style="width: 480px">
-      <n-form label-placement="top" v-if="editForm">
-        <n-form-item label="שם"><n-input v-model:value="editForm.display_name" /></n-form-item>
-        <n-form-item label="אימייל"><n-input v-model:value="editForm.email" /></n-form-item>
-        <n-form-item label="טלפון"><n-input v-model:value="editForm.phone" /></n-form-item>
-        <n-form-item label="הערות"><n-input v-model:value="editForm.notes" type="textarea" :rows="3" /></n-form-item>
-      </n-form>
-      <template #action>
-        <n-button @click="showEdit = false">ביטול</n-button>
-        <n-button type="primary" :loading="saving" @click="doSave">שמור</n-button>
-      </template>
-    </n-modal>
-  </div>
+      <n-tabs type="line" animated>
+        <n-tab-pane name="docs" tab="מסמכים">
+          <n-data-table
+            v-if="store.activeDocuments.length"
+            :bordered="false"
+            :columns="documentColumns"
+            :data="store.activeDocuments"
+            :pagination="false"
+            :row-key="(doc: ClientDocumentRow) => String(doc.id)"
+            :row-props="documentRowProps"
+            class="detail-table"
+            dir="rtl"
+          />
+          <n-empty v-else description="אין מסמכים" />
+        </n-tab-pane>
 
-  <n-spin v-else :show="store.loading" style="margin-top: 60px; display: flex; justify-content: center" />
+        <n-tab-pane name="equipment" tab="ציוד">
+          <n-spin :show="loadingEquipment">
+            <n-data-table
+              v-if="equipment.length"
+              :bordered="false"
+              :columns="equipmentColumns"
+              :data="equipment"
+              :pagination="false"
+              :row-key="(row: Equipment) => String(row.id)"
+              class="detail-table"
+              dir="rtl"
+            />
+            <n-empty v-else description="אין ציוד משויך ללקוח זה" />
+          </n-spin>
+        </n-tab-pane>
+
+        <n-tab-pane name="timeline" tab="ציר זמן">
+          <n-timeline v-if="store.activeTimeline.length">
+            <n-timeline-item
+              v-for="event in store.activeTimeline"
+              :key="event.id"
+              :title="event.title"
+              :time="formatDate(event.event_date)"
+              :type="eventType(event.event_type)"
+            >
+              {{ event.description }}
+            </n-timeline-item>
+          </n-timeline>
+          <n-empty v-else description="אין אירועים" />
+        </n-tab-pane>
+      </n-tabs>
+
+      <n-modal v-model:show="showEdit" title="עריכת לקוח" :show-icon="false" preset="dialog" style="width: 480px">
+        <n-form v-if="editForm" label-placement="top">
+          <n-form-item label="שם"><n-input v-model:value="editForm.display_name" /></n-form-item>
+          <n-form-item label="איש קשר"><n-input v-model:value="editForm.contact_person" /></n-form-item>
+          <n-form-item label="אימייל"><n-input v-model:value="editForm.email" /></n-form-item>
+          <n-form-item label="טלפון"><n-input v-model:value="editForm.phone" /></n-form-item>
+          <n-form-item label="הערות"><n-input v-model:value="editForm.notes" type="textarea" :rows="3" /></n-form-item>
+        </n-form>
+        <template #action>
+          <n-button @click="showEdit = false">ביטול</n-button>
+          <n-button type="primary" :loading="saving" @click="doSave">שמור</n-button>
+        </template>
+      </n-modal>
+    </n-space>
+  </n-spin>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { computed, h, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
-  NH2, NSpace, NButton, NGrid, NGi, NStatistic, NTag, NTabs, NTabPane,
-  NList, NListItem, NTimeline, NTimelineItem, NSpin, NEmpty, NCard,
-  NModal, NForm, NFormItem, NInput, useMessage,
+  NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NEmpty, NForm,
+  NFormItem, NGi, NGrid, NH2, NIcon, NInput, NModal, NSpace, NSpin, NStatistic,
+  NTabPane, NTabs, NTag, NText, NTimeline, NTimelineItem, useMessage,
+  type DataTableColumns,
 } from "naive-ui";
+import {
+  ArrowBackOutline,
+  CreateOutline,
+  DocumentTextOutline,
+  OpenOutline,
+} from "@vicons/ionicons5";
 import { useClientsStore } from "../stores/clients.js";
 import { api } from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type { EventType, Equipment, EquipmentCategory } from "@shared/types.js";
+import type { Document, Equipment, EventType } from "@shared/types.js";
+
+type ClientDocumentRow = Document & {
+  inspection_date?: string | null;
+  next_inspection_date?: string | null;
+  document_type?: string | null;
+};
+
+type ClientDetailItem = {
+  key: string;
+  label: string;
+  value: string;
+  span?: number;
+  empty?: boolean;
+};
 
 const route = useRoute();
+const router = useRouter();
 const store = useClientsStore();
 const message = useMessage();
 
 const showEdit = ref(false);
 const saving = ref(false);
-const editForm = ref<{ display_name: string; email: string; phone: string; notes: string } | null>(null);
+const editForm = ref<{ display_name: string; contact_person: string; email: string; phone: string; notes: string } | null>(null);
 const equipment = ref<Equipment[]>([]);
 const loadingEquipment = ref(false);
 
-const CATEGORY_LABELS: Record<string, string> = {
-  lift: "מכונות הרמה", accessory: "אביזרי הרמה", scaffold: "פיגומים",
-  ladder: "מעליות", balloon: "מעלונים", intake: "קולטי אוויר",
-  extractor: "קולטי קיטור", other: "אחר",
-};
-function categoryLabel(c: string) { return CATEGORY_LABELS[c] ?? c; }
+const clientStats = computed(() => {
+  const client = store.active;
+  return [
+    { key: "documents", label: "מסמכים", value: client?.doc_count ?? client?.document_count ?? 0 },
+    { key: "contracts", label: "חוזים", value: client?.contract_count ?? 0 },
+    { key: "reminders", label: "תזכורות פתוחות", value: client?.open_reminder_count ?? 0 },
+  ];
+});
 
-function formatDate(d: string) {
-  if (!d) return "";
+const clientDetails = computed<ClientDetailItem[]>(() => {
+  const client = store.active;
+  if (!client) return [];
+
+  const notes = cleanNotes(client.notes, client.contact_person);
+  const details: ClientDetailItem[] = [
+    detailItem("display_name", "שם לקוח", client.display_name),
+    detailItem("entity_type", "סוג לקוח", entityLabel(client.entity_type)),
+    detailItem("contact_person", "איש קשר", client.contact_person),
+    detailItem("email", "אימייל", client.email),
+    detailItem("phone", "טלפון", client.phone),
+    detailItem("id_number", "מספר ת.ז / ח.פ", client.id_number),
+    detailItem("created_at", "נוצר", formatDate(client.created_at)),
+    detailItem("updated_at", "עודכן", formatDate(client.updated_at)),
+  ];
+
+  if (notes) {
+    details.push({ key: "notes", label: "הערות", value: notes, span: 3 });
+  }
+
+  return details;
+});
+
+const CATEGORY_LABELS: Record<string, string> = {
+  lift: "מכונות הרמה",
+  accessory: "אביזרי הרמה",
+  scaffold: "פיגומים",
+  ladder: "מעליות",
+  balloon: "מעלונים",
+  intake: "קולטי אוויר",
+  extractor: "קולטי קיטור",
+  other: "אחר",
+};
+
+const documentColumns: DataTableColumns<ClientDocumentRow> = [
+  {
+    title: "מסמך",
+    key: "file_name",
+    align: "right",
+    titleAlign: "right",
+    render(doc) {
+      return h(NSpace, { align: "center", size: 8 }, {
+        default: () => [
+          h(NIcon, { component: DocumentTextOutline }),
+          h(NButton, { text: true, type: "primary", onClick: (event: MouseEvent) => openDocument(doc, event) }, {
+            default: () => doc.file_name,
+          }),
+        ],
+      });
+    },
+  },
+  {
+    title: "סוג",
+    key: "document_type",
+    align: "right",
+    titleAlign: "right",
+    render: (doc) => doc.document_type || "-",
+  },
+  {
+    title: "סטטוס",
+    key: "processing_status",
+    align: "right",
+    titleAlign: "right",
+    render: (doc) => h(StatusBadge, { status: doc.processing_status }),
+  },
+  {
+    title: "תאריך בדיקה",
+    key: "inspection_date",
+    align: "right",
+    titleAlign: "right",
+    render: (doc) => formatDate(doc.inspection_date),
+  },
+  {
+    title: "בדיקה הבאה",
+    key: "next_inspection_date",
+    align: "right",
+    titleAlign: "right",
+    render: (doc) => formatDate(doc.next_inspection_date),
+  },
+  {
+    title: "ייבוא",
+    key: "import_date",
+    align: "right",
+    titleAlign: "right",
+    render: (doc) => formatDate(doc.import_date),
+  },
+  {
+    title: "",
+    key: "open",
+    align: "left",
+    titleAlign: "left",
+    width: 72,
+    render: (doc) => h(NButton, { size: "small", quaternary: true, onClick: (event: MouseEvent) => openDocument(doc, event) }, {
+      icon: () => h(NIcon, { component: OpenOutline }),
+    }),
+  },
+];
+
+const equipmentColumns: DataTableColumns<Equipment> = [
+  { title: "שם", key: "name", align: "right", titleAlign: "right" },
+  { title: "קטגוריה", key: "category", align: "right", titleAlign: "right", render: (eq) => categoryLabel(eq.category) },
+  { title: "יצרן", key: "manufacturer", align: "right", titleAlign: "right", render: (eq) => eq.manufacturer || "-" },
+  { title: "דגם", key: "model", align: "right", titleAlign: "right", render: (eq) => eq.model || "-" },
+  { title: "מספר סידורי", key: "serial_number", align: "right", titleAlign: "right", render: (eq) => eq.serial_number || "-" },
+  { title: "עומס", key: "capacity", align: "right", titleAlign: "right", render: (eq) => eq.capacity || "-" },
+  {
+    title: "מסמך מקור",
+    key: "document_id",
+    align: "left",
+    titleAlign: "left",
+    render(eq) {
+      if (!eq.document_id) return "-";
+      return h(NButton, { text: true, type: "primary", onClick: () => router.push(`/documents/${eq.document_id}`) }, {
+        default: () => eq.document_name || "מסמך מקור",
+      });
+    },
+  },
+];
+
+function documentRowProps(doc: ClientDocumentRow) {
+  return {
+    class: "detail-table__row",
+    onClick: () => router.push(`/documents/${doc.id}`),
+  };
+}
+
+function openDocument(doc: ClientDocumentRow, event: MouseEvent) {
+  event.stopPropagation();
+  router.push(`/documents/${doc.id}`);
+}
+
+function categoryLabel(c: string) {
+  return CATEGORY_LABELS[c] ?? c;
+}
+
+function detailItem(key: string, label: string, value: string | null | undefined): ClientDetailItem {
+  const text = displayValue(value);
+  return { key, label, value: text, empty: text === "-" };
+}
+
+function displayValue(value: string | null | undefined) {
+  const text = value?.trim();
+  return text ? text : "-";
+}
+
+function entityLabel(entityType: string) {
+  return entityType === "company" ? "חברה" : "אדם פרטי";
+}
+
+function cleanNotes(notes: string | null | undefined, contactPerson: string | null | undefined) {
+  const value = notes?.trim();
+  if (!value || !contactPerson?.trim()) return value ?? "";
+  const contactLine = new RegExp(`^\\s*איש\\s+קשר\\s*[:：-]\\s*${escapeRegExp(contactPerson.trim())}\\s*$`, "m");
+  return value.replace(contactLine, "").trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function formatDate(d: string | null | undefined) {
+  if (!d) return "-";
   return new Date(d).toLocaleDateString("he-IL");
 }
 
@@ -135,6 +323,7 @@ watch(showEdit, (open) => {
   if (open && store.active) {
     editForm.value = {
       display_name: store.active.display_name,
+      contact_person: store.active.contact_person ?? "",
       email: store.active.email ?? "",
       phone: store.active.phone ?? "",
       notes: store.active.notes ?? "",
@@ -179,3 +368,53 @@ onMounted(() => {
   loadEquipment(id);
 });
 </script>
+
+<style scoped>
+.client-detail {
+  direction: rtl;
+}
+
+.client-detail__header {
+  margin-bottom: 4px;
+}
+
+.client-detail__title {
+  margin: 0;
+}
+
+.client-details-table {
+  direction: rtl;
+}
+
+.client-details-table :deep(table),
+.client-details-table :deep(th),
+.client-details-table :deep(td),
+.client-details-table :deep(.n-descriptions-table-content),
+.client-details-table :deep(.n-descriptions-table-header) {
+  direction: rtl;
+  text-align: right;
+}
+
+.detail-table {
+  direction: rtl;
+}
+
+.detail-table :deep(.n-data-table-wrapper),
+.detail-table :deep(.n-data-table-base-table),
+.detail-table :deep(.n-data-table-table) {
+  direction: rtl;
+}
+
+.detail-table :deep(th),
+.detail-table :deep(td) {
+  text-align: right;
+}
+
+.detail-table :deep(td:last-child) {
+  text-align: left;
+}
+
+.detail-table :deep(.detail-table__row) {
+  cursor: pointer;
+}
+</style>

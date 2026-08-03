@@ -2,18 +2,18 @@
   <section class="rcal">
     <header class="rcal__head">
       <div class="rcal__title-wrap">
-        <h3 class="rcal__title">לוח תזכורות ותסקירים</h3>
-        <span class="rcal__count">{{ rows.length }} תזכורות</span>
+        <h3 class="rcal__title">{{ testsOnly ? "לוח בדיקות מתוכננות" : "לוח תזכורות ותסקירים" }}</h3>
+        <span v-if="!testsOnly" class="rcal__count">{{ rows.length }} תזכורות</span>
         <span v-if="(expiryItems ?? []).length" class="rcal__expiry-count">
           {{ (expiryItems ?? []).length }} תסקירים
         </span>
       </div>
       <div class="rcal__controls">
         <div class="rcal__legend">
-          <span class="rcal__legend-item">
+          <span v-if="!testsOnly" class="rcal__legend-item">
             <span class="rcal__legend-dot" style="background:var(--brand-color)"></span> תזכורות
           </span>
-          <span class="rcal__legend-item">
+          <span v-if="!testsOnly" class="rcal__legend-item">
             <span class="rcal__legend-dot" style="background:#2080f0"></span> נשלחה
           </span>
           <span class="rcal__legend-item">
@@ -97,17 +97,20 @@
               <template #trigger>
                 <button
                   :class="`rcal__pill--expiry-${expiryVisualStatus(e)}`"
-                  :title="`${expiryStatusLabel(e)}: ${e.equipment_name ?? e.contract_type ?? 'תסקירים'} — ${e.client_name ?? ''}`"
+                  :title="expiryCalendarTitle(e)"
                   class="rcal__pill rcal__pill--expiry"
                   @click.stop
                 >
-                  {{ e.equipment_name ?? e.contract_type ?? 'תסקירים' }}
+                  {{ expiryCalendarLabel(e) }}
                 </button>
               </template>
               <div class="rcal__expiry-pop">
-                <p class="rcal__expiry-pop__title">{{ e.equipment_name ?? e.contract_type ?? 'תסקירים' }}</p>
+                <p class="rcal__expiry-pop__title">{{ expiryCalendarLabel(e) }}</p>
+                <p v-if="e.equipment_name" class="rcal__expiry-pop__sub">ציוד: {{ e.equipment_name }}</p>
                 <p v-if="e.client_name" class="rcal__expiry-pop__sub">לקוח: {{ e.client_name }}</p>
-                <p v-if="e.contract_number" class="rcal__expiry-pop__sub">מס׳ {{ e.contract_number }}</p>
+                <p v-if="e.contact_person" class="rcal__expiry-pop__sub">איש קשר: {{ e.contact_person }}</p>
+                <p v-if="e.contact_phone" class="rcal__expiry-pop__sub">טלפון: {{ e.contact_phone }}</p>
+                <p v-if="e.contact_email" class="rcal__expiry-pop__sub">אימייל: {{ e.contact_email }}</p>
                 <p :class="`rcal__expiry-pop__days--${expiryVisualStatus(e)}`" class="rcal__expiry-pop__days">
                   {{ expiryTimeLabel(e) }}
                 </p>
@@ -141,7 +144,7 @@
                 <span class="rcal__agenda-dot" />
                 <span class="rcal__agenda-title">{{ reminderCalendarLabel(r) }}</span>
                 <span v-if="isReminderOverdue(r)" class="rcal__agenda-overdue">באיחור</span>
-                <span v-if="r.client_name" class="rcal__agenda-client">— {{ r.client_name }}</span>
+                <span v-if="reminderSecondaryLabel(r)" class="rcal__agenda-client">— {{ reminderSecondaryLabel(r) }}</span>
               </button>
             </template>
             <ReminderQuickView :reminder="r" @navigate="onNavigate" />
@@ -153,8 +156,8 @@
             class="rcal__agenda-item"
           >
             <span class="rcal__agenda-dot rcal__agenda-dot--expiry" />
-            <span class="rcal__agenda-title">{{ e.equipment_name ?? e.contract_type ?? 'תסקירים' }} — {{ expiryStatusLabel(e) }}</span>
-            <span v-if="e.client_name" class="rcal__agenda-client">— {{ e.client_name }}</span>
+            <span class="rcal__agenda-title">{{ expiryCalendarLabel(e) }} — {{ expiryStatusLabel(e) }}</span>
+            <span v-if="e.equipment_name" class="rcal__agenda-client">— {{ e.equipment_name }}</span>
           </button>
         </div>
       </div>
@@ -174,8 +177,9 @@ interface Props {
   rows: ReminderWithContext[];
   expiryItems?: ExpiryCalendarItem[];
   loading?: boolean;
+  testsOnly?: boolean;
 }
-const props = withDefaults(defineProps<Props>(), { loading: false, expiryItems: () => [] });
+const props = withDefaults(defineProps<Props>(), { loading: false, expiryItems: () => [], testsOnly: false });
 defineEmits<{ (e: "refresh"): void }>();
 
 const router = useRouter();
@@ -206,11 +210,24 @@ function reminderVisualStatus(r: ReminderWithContext): string {
 }
 
 function reminderDisplayTitle(r: ReminderWithContext): string {
-  const label = reminderCalendarLabel(r);
+  const label = [
+    reminderCalendarLabel(r),
+    r.title,
+    shortContractNumber(r.contract_number),
+  ].filter(Boolean).join(" — ");
   return isReminderOverdue(r) ? `באיחור: ${label}` : label;
 }
 
 function reminderCalendarLabel(r: ReminderWithContext): string {
+  const client = r.client_name?.trim();
+  const contact = r.contact_person?.trim();
+  if (client && contact) return `${client} · ${contact}`;
+  if (client) return client;
+  if (contact) return contact;
+  return [r.title, shortContractNumber(r.contract_number)].filter(Boolean).join(" ");
+}
+
+function reminderSecondaryLabel(r: ReminderWithContext): string {
   return [r.title, shortContractNumber(r.contract_number)].filter(Boolean).join(" ");
 }
 
@@ -225,6 +242,23 @@ function expiryVisualStatus(e: ExpiryCalendarItem): "overdue" | "critical" | "wa
   if (e.days_until <= 30) return "critical";
   if (e.days_until <= 90) return "warning";
   return "ok";
+}
+
+function expiryCalendarLabel(e: ExpiryCalendarItem): string {
+  const client = e.client_name?.trim();
+  const contact = e.contact_person?.trim();
+  if (client && contact) return `${client} · ${contact}`;
+  if (client) return client;
+  if (contact) return contact;
+  return e.equipment_name ?? e.contract_type ?? "תסקירים";
+}
+
+function expiryCalendarTitle(e: ExpiryCalendarItem): string {
+  return [
+    `${expiryStatusLabel(e)}: ${expiryCalendarLabel(e)}`,
+    e.equipment_name ? `ציוד: ${e.equipment_name}` : null,
+    e.contract_number ? `מס׳ ${e.contract_number}` : null,
+  ].filter(Boolean).join(" — ");
 }
 
 function expiryStatusLabel(e: ExpiryCalendarItem): string {

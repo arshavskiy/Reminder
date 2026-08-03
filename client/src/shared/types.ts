@@ -93,6 +93,7 @@ export interface UserSettings extends PipelineFlags {
   monthly_report_formats?: string;
   monthly_report_last_sent?: string | null;
   monthly_report_last_error?: string | null;
+  calendar_next_tests_only?: boolean;
   features?: Record<string, boolean> | null;
 }
 
@@ -131,6 +132,10 @@ export interface Document {
   processing_status: ProcessingStatus;
   error_message: string | null;
   raw_text: string | null;
+  extracted_fields?: string | null;
+  document_type?: string | null;
+  inspection_date?: string | null;
+  next_inspection_date?: string | null;
   language: string;
   page_count: number | null;
   created_at: string;
@@ -145,7 +150,7 @@ export interface Client {
   id_number: string | null;
   email: string | null;
   phone: string | null;
-  address: string | null;
+  address?: string | null;
   notes: string | null;
   tags: string | null; // JSON array string
   created_at: string;
@@ -185,6 +190,7 @@ export interface ContractManualFields {
   po_box?: string | null;
   client_zipcode?: string | null;
   equipment_description?: string | null;
+  checked_equipment?: string | null;
   _equipment?: Array<{
     name: string;
     manufacturer: string | null;
@@ -278,6 +284,7 @@ export interface ContractWithClient extends Contract {
   po_box: string | null;
   client_zipcode: string | null;
   equipment_description: string | null;
+  checked_equipment: string | null;
   _equipment: Array<{
     name: string;
     manufacturer: string | null;
@@ -292,12 +299,15 @@ export interface ContractWithClient extends Contract {
 
 export interface ReminderWithContext extends Reminder {
   client_name: string | null;
+  contact_person?: string | null;
   client_email?: string | null;
+  client_phone?: string | null;
   document_name: string | null;
 }
 
 export interface ClientDetail extends Client {
-  document_count: number;
+  doc_count: number;
+  document_count?: number;
   contract_count: number;
   open_reminder_count: number;
 }

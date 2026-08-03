@@ -22,6 +22,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
         reminder_advance_days: "[90,60,30]",
         ocr_language: "heb+eng",
         features: DEFAULT_FEATURES,
+        calendar_next_tests_only: false,
         monthly_report_enabled: false,
         monthly_report_recipients: "",
         monthly_report_day: 1,
@@ -69,6 +70,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
       monthly_report_day?: number;
       monthly_report_hour?: number;
       monthly_report_formats?: string;
+      calendar_next_tests_only?: boolean;
       features?: Record<string, boolean> | string | null;
       features_json?: string | null;
     };
@@ -83,6 +85,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
     if (body.monthly_report_day !== undefined) patch.monthly_report_day = Math.min(28, Math.max(1, Number(body.monthly_report_day)));
     if (body.monthly_report_hour !== undefined) patch.monthly_report_hour = Math.min(23, Math.max(0, Number(body.monthly_report_hour)));
     if (body.monthly_report_formats !== undefined) patch.monthly_report_formats = body.monthly_report_formats;
+    if (body.calendar_next_tests_only !== undefined) patch.calendar_next_tests_only = Boolean(body.calendar_next_tests_only);
     const rawFeatures = body.features !== undefined ? body.features : body.features_json;
     if (rawFeatures !== undefined) {
       try {

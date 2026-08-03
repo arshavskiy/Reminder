@@ -97,8 +97,11 @@ GENERAL RULES:
 • All dates must be normalized to ISO 8601 (YYYY-MM-DD). Hebrew calendar → convert to Gregorian. Israeli DD/MM/YYYY → YYYY-MM-DD.
 • Phone numbers: keep original Israeli format (e.g. "050-1234567"). If the number appears as 10 consecutive digits with no dash (e.g. "0537285690"), insert the dash after the 3rd digit → "053-7285690".
 • Email addresses: Hebrew PDFs sometimes output email addresses in reversed visual order, e.g. "il.co1945.shelev@klodin" which is actually "klodin@shelev1945.co.il". Recognize a reversed email by checking whether the part after "@" looks like a name/word and the part before "@" looks like a domain (contains dots and a TLD like .co.il / .com / .org). If reversed, swap the two parts around "@".
-• Address fields: keep each piece separate — client_address = street + city only (e.g. "הקידמה 235, אשדוד"), po_box = P.O. Box number only (e.g. "679"), client_zipcode = postal code only (5–7 digits labeled "מיקוד"). Do NOT mix ת.ד into client_address or client_zipcode.
 • Report number: report_number / "מספר תסקיר" is the CURRENT report number only. If the text also contains "מספר תסקיר קודם", "תסקיר קודם", or "previous report", do NOT use that previous value for report_number. Example: "מספר תסקיר: 17924/484590" and "מספר תסקיר קודם: 161748/340" means report_number="17924/484590".
+• Client company names may contain numbers. Never drop numbers that are part of a company name. Example: "מולטיפק פלסטיק 1990" must stay exactly with "1990" in client_company.
+• Inspection equipment summary fields:
+  - equipment_description / "תיאור" is the general description value. If the document shows "תיאור מכונת הרמה", return equipment_description="מכונת הרמה"; do NOT put the full phrase "תיאור מכונת הרמה" in the value and do NOT use the detailed equipment table row here.
+  - checked_equipment / "ציוד שנבדק" is the specific checked item, usually the first equipment table/item description such as "מלגזה חשמלית".
 • Contact fields for inspection reports:
   - contact_person, contact_phone, and contact_email must come from the CLIENT / HOLDER details block in the BODY of the report, preferably the first details block near labels such as "פרטי הלקוח/תופש", "איש קשר", "נייד", "טלפון", "מייל", "שם מעביד / בעל הציוד".
   - Example from a client block: "איש קשר: בר", "נייד: 053-8801490", "מייל: benitaliftingplat@gmail.com" means contact_person="בר", contact_phone="053-8801490", contact_email="benitaliftingplat@gmail.com".
@@ -128,6 +131,7 @@ GENERAL RULES:
 ${inspectorExclusionNote}• IMPORTANT — company names with embedded numbers: Hebrew PDFs sometimes output
   company names in reversed visual order with digits attached without spaces, e.g.
   "מ\"הובלות בע1945שלב" which is actually "שלב 1945 הובלות בע\"מ".
+  Another normal case is a numeric suffix in the company name, e.g. "מולטיפק פלסטיק 1990".
   When you see a company/client name that looks garbled (Hebrew words in wrong order,
   digits concatenated without spaces), reconstruct the correct name using context clues
   such as the email domain, address, or other mentions in the document.

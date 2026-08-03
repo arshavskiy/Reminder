@@ -121,7 +121,7 @@
             <div v-else class="fields-table">
               <div
                 v-for="f in extractedFields"
-                v-show="editingFields || showEmptyFields || (f.value !== null && f.value !== '' && !(Array.isArray(f.value) && f.value.length === 0))"
+                v-show="shouldShowExtractedField(f)"
                 :key="f.key"
                 class="fields-row"
               >
@@ -314,12 +314,10 @@ const DEFAULT_FIELDS: { key: string; label: string }[] = [
   { key: "contact_person",        label: "איש קשר" },
   { key: "contact_phone",         label: "נייד" },
   { key: "contact_email",         label: "מייל" },
-  { key: "client_address",        label: "ישוב / רחוב" },
-  { key: "po_box",                label: "ת.ד" },
-  { key: "client_zipcode",        label: "מיקוד" },
   { key: "inspection_date",       label: "תאריך בדיקה" },
   { key: "next_inspection_date",  label: "בתוקף עד" },
-  { key: "equipment_description", label: "תיאור מכונת הרמה" },
+  { key: "equipment_description", label: "תיאור" },
+  { key: "checked_equipment",     label: "ציוד שנבדק" },
   { key: "license_number",        label: "מספר רישוי" },
   { key: "manufacturer",          label: "יצרן" },
   { key: "model",                 label: "דגם" },
@@ -333,7 +331,8 @@ const LABEL_MAP: Record<string, string> = Object.fromEntries(
   DEFAULT_FIELDS.map(f => [f.key, f.label])
 );
 
-const SKIP_KEYS = new Set(["parties", "tasks", "amount", "currency"]);
+const SKIP_KEYS = new Set(["parties", "tasks", "amount", "currency", "client_address", "po_box", "client_zipcode"]);
+const ALWAYS_VISIBLE_FIELD_KEYS = new Set(["license_number"]);
 
 const extractedFields = computed(() => {
   const raw = extractionRaw.value ?? {};
@@ -348,6 +347,12 @@ const extractedFields = computed(() => {
     value: raw[f.key] ?? null,
   }));
 });
+
+function shouldShowExtractedField(field: { key: string; value: unknown }) {
+  if (editingFields.value || showEmptyFields.value || ALWAYS_VISIBLE_FIELD_KEYS.has(field.key)) return true;
+  if (Array.isArray(field.value)) return field.value.length > 0;
+  return field.value !== null && field.value !== "";
+}
 
 const displayText = computed(() => extractionRawText.value ?? doc.value?.raw_text ?? null);
 
@@ -390,26 +395,13 @@ async function reloadDoc() {
   extractionRawText.value = null;
   doc.value = await api.documents.get(id);
   await loadLinkedContracts(id);
-  const rows = await fetch(`${SERVER}/api/documents/${id}/extractions`, { credentials: "include" })
-    .then((r) => r.ok ? r.json() : [])
-    .catch(() => []);
-  // doc.extracted_fields is the authoritative source (updated by PUT /fields)
-  if ((doc.value as any).extracted_fields) {
+  const extractionPayload = await fetch(`${SERVER}/api/documents/${id}/extractions`, { credentials: "include" })
+    .then((r) => r.ok ? r.json() : null)
+    .catch(() => null);
+  if (extractionPayload?.fields) {
+    extractionRaw.value = extractionPayload.fields;
+  } else if ((doc.value as any).extracted_fields) {
     try { extractionRaw.value = JSON.parse((doc.value as any).extracted_fields); } catch {}
-  }
-  if (Array.isArray(rows) && rows.length) {
-    const best = rows.find((r: any) => (r.parsed_ok && r.result_json) || r.fields || r.raw_json) ?? rows[0];
-    // Only use extraction record if document has no extracted_fields yet
-    if (!extractionRaw.value) {
-      if (best?.fields) {
-        extractionRaw.value = best.fields;
-      } else if (best?.result_json) {
-        try { extractionRaw.value = JSON.parse(best.result_json); } catch {}
-      } else if (best?.raw_json) {
-        try { extractionRaw.value = JSON.parse(best.raw_json); } catch {}
-      }
-    }
-    if (best?.raw_text) extractionRawText.value = best.raw_text;
   }
 }
 
