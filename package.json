@@ -10,6 +10,14 @@
     "dev": "npm --prefix client run dev:all",
     "dev:client": "npm --prefix client run dev",
     "dev:server": "npm --prefix server run dev",
+    "report:send-all": "npm --prefix server run report:send-all --",
+    "report:send-both": "npm --prefix server run report:send-both --",
+    "report:send-client": "npm --prefix server run report:send-client --",
+    "report:send-client-monthly-owner": "npm --prefix server run report:send-client-monthly-owner --",
+    "report:send-client-future-owner": "npm --prefix server run report:send-client-future-owner --",
+    "report:send-client-future": "npm --prefix server run report:send-client-future --",
+    "report:send-client-links": "npm --prefix server run report:send-client-links --",
+    "report:send-client-future-links": "npm --prefix server run report:send-client-future-links --",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

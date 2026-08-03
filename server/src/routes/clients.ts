@@ -2,6 +2,7 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {normalizeClientDisplayName} from "../utils/clientNames";
 
 export function registerClientRoutes(app: express.Application) {
   // GET /api/clients
@@ -228,18 +229,6 @@ function flatClientDocument(doc: any) {
     inspection_date: stringField(fields, "inspection_date"),
     next_inspection_date: stringField(fields, "next_inspection_date") ?? stringField(fields, "expiry_date"),
   };
-}
-
-function normalizeClientDisplayName(value: unknown): unknown {
-  if (typeof value !== "string") return value;
-  const spaced = value
-    .replace(/([א-ת])(\d{2,})/g, "$1 $2")
-    .replace(/(\d{2,})([א-ת])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim();
-  const numericPrefix = spaced.match(/^(\d{3,4})\s+(.+[\u0590-\u05FF].*)$/);
-  if (numericPrefix) return `${numericPrefix[2].trim()} ${numericPrefix[1]}`;
-  return spaced;
 }
 
 function extractContactPersonFromNotes(value: unknown): string | null {

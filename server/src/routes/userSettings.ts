@@ -27,7 +27,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
         monthly_report_recipients: "",
         monthly_report_day: 1,
         monthly_report_hour: 8,
-        monthly_report_formats: JSON.stringify(["pdf", "csv"]),
+        monthly_report_formats: JSON.stringify(["docx", "xlsx"]),
         monthly_report_last_sent: null,
       };
       await col("user_settings").updateOne(

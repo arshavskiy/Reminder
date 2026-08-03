@@ -268,7 +268,7 @@ export const api = {
   },
 
   reports: {
-    downloadMonthly: async (params: { year: number; month: number; format: "pdf" | "csv"; fields?: string[]; clientId?: string }) => {
+    downloadMonthly: async (params: { year: number; month?: number; format: "docx" | "xlsx" | "csv"; fields?: string[]; clientId?: string }) => {
       const res = await fetch(`${BASE}/reports/monthly/download${qs(params)}`, {credentials: "include"});
       if (!res.ok) {
         const err = await res.json().catch(() => ({error: `HTTP ${res.status}`}));
@@ -277,7 +277,7 @@ export const api = {
       const blob = await res.blob();
       const disposition = res.headers.get("Content-Disposition") ?? "";
       const match = disposition.match(/filename\*=UTF-8''(.+)|filename="([^"]+)"/);
-      const filename = match ? decodeURIComponent(match[1] ?? match[2]) : `contracts-report-${params.year}-${String(params.month).padStart(2, "0")}.${params.format}`;
+      const filename = match ? decodeURIComponent(match[1] ?? match[2]) : `contracts-report-${params.year}${params.month ? `-${String(params.month).padStart(2, "0")}` : ""}.${params.format}`;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -285,7 +285,15 @@ export const api = {
       anchor.click();
       URL.revokeObjectURL(url);
     },
-    sendMonthly: (body?: { year?: number; month?: number; formats?: string[]; recipients?: string[]; clientId?: string }) =>
+    sendMonthly: (body?: {
+      year?: number;
+      month?: number;
+      formats?: string[];
+      recipients?: string[];
+      clientId?: string;
+      fields?: string[];
+      deliveryMode?: "combined" | "client";
+    }) =>
       post<{ success: boolean; count?: number; reportsSent?: number; error?: string }>("/reports/monthly/send", body ?? {}),
   },
 

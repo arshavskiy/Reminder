@@ -2,9 +2,10 @@ import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {getSettings} from "../settings";
 import {sendReminderEmail, sendEmailWithAttachments} from "./emailSender";
-import {sendMonthlyReportsPerClient} from "../reports/monthlyReports";
+import {sendMonthlyReportToRecipients} from "../reports/monthlyReports";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
+import {clientDisplayName} from "../utils/clientNames";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
@@ -37,7 +38,7 @@ async function checkMonthlyReports() {
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const settingsRows = await col("user_settings").find({monthly_report_enabled: true}).toArray();
   for (const row of settingsRows as any[]) {
-    const day = Number(row.monthly_report_day ?? 1);
+    const day = 1;
     const hour = Number(row.monthly_report_hour ?? 8);
     if (now.getDate() < day || (now.getDate() === day && now.getHours() < hour)) continue;
     if (row.monthly_report_last_sent === monthKey) continue;
@@ -48,12 +49,13 @@ async function checkMonthlyReports() {
     const formats = parseFormats(row.monthly_report_formats);
     if (!recipients.length || !formats.length) continue;
 
-    const result = await sendMonthlyReportsPerClient({
+    const result = await sendMonthlyReportToRecipients({
       userId: row.user_id,
       year: now.getFullYear(),
       month: now.getMonth() + 1,
       recipients,
       formats,
+      includeClientRecipient: false,
     });
     if (result.success) {
       await col("user_settings").updateOne({_id: row._id}, {$set: {monthly_report_last_sent: monthKey, monthly_report_last_error: null}});
@@ -134,8 +136,12 @@ function uniqueEmails(values: Array<unknown>) {
 function parseFormats(raw: unknown): string[] {
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    return Array.isArray(parsed) ? parsed.filter((format) => format === "pdf" || format === "csv") : ["pdf", "csv"];
-  } catch { return ["pdf", "csv"]; }
+    if (!Array.isArray(parsed)) return ["docx", "xlsx"];
+    const selected = parsed
+      .map((format) => format === "doc" ? "docx" : format)
+      .filter((format) => format === "docx" || format === "xlsx" || format === "csv");
+    return selected.length ? selected : ["docx", "xlsx"];
+  } catch { return ["docx", "xlsx"]; }
 }
 
 async function checkReminders() {
@@ -175,7 +181,7 @@ async function checkReminders() {
     const enriched: ReminderWithContext = {
       ...r,
       id: remId,
-      client_name: (client as any)?.display_name ?? null,
+      client_name: clientDisplayName((client as any)?.display_name),
       document_name: (document as any)?.file_name ?? null,
       contract_number: (contract as any)?.contract_number ?? null,
       contract_type: (contract as any)?.contract_type ?? null,

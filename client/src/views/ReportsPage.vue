@@ -22,17 +22,21 @@
           </div>
         </div>
         <div class="generator-controls">
+          <n-form-item label="שנת הדוח" :show-feedback="false">
+            <n-select v-model:value="reportYear" :options="yearOptions"/>
+          </n-form-item>
           <n-form-item label="חודש הדוח" :show-feedback="false">
-            <n-date-picker v-model:value="reportMonth" type="month" clearable="false" format="MM/yyyy"/>
+            <n-select v-model:value="reportMonth" :options="monthOptions" clearable placeholder="כל השנה"/>
           </n-form-item>
           <n-form-item label="לקוח" :show-feedback="false">
-            <n-select v-model:value="selectedClientId" :options="clientOptions" placeholder="כל הלקוחות" clearable/>
+            <n-select v-model:value="selectedClientId" :options="clientOptions"/>
           </n-form-item>
-          <n-button :loading="downloading === 'pdf'" :disabled="!hasFields" @click="downloadReport('pdf')">הורד PDF</n-button>
-          <n-button :loading="downloading === 'csv'" :disabled="!hasFields" @click="downloadReport('csv')">הורד CSV</n-button>
+          <n-button :loading="downloading === 'docx'" :disabled="!hasFields" @click="downloadReport('docx')">הורד DOCX</n-button>
+          <n-button :loading="downloading === 'xlsx'" :disabled="!hasFields" @click="downloadReport('xlsx')">הורד XLSX</n-button>
         </div>
-        <p v-if="selectedClientEmail" class="generator-recipient">שליחה ללקוח: {{ selectedClientEmail }} וגם למשתמש החשבון.</p>
-        <p v-else-if="selectedClientId" class="generator-recipient generator-recipient--warning">ללקוח הנבחר לא מוגדר אימייל. הדוח יישלח רק למשתמש החשבון.</p>
+        <p v-if="selectedClientEmail" class="generator-recipient">דוח לקוח {{ selectedPeriodLabel }} יישלח ללקוח: {{ selectedClientEmail }} וגם לנמענים/כתובת החשבון.</p>
+        <p v-else-if="selectedReportClientId" class="generator-recipient generator-recipient--warning">ללקוח הנבחר לא מוגדר אימייל. דוח הלקוח {{ selectedPeriodLabel }} יישלח רק לנמענים/כתובת החשבון.</p>
+        <p v-else class="generator-recipient">דוח כולל לכל הלקוחות יישלח רק לנמענים או לכתובת החשבון שלך.</p>
         <div class="field-selector">
           <div class="field-selector__head">
             <span>שדות בדוח: {{ selectedFields.length }} נבחרו</span>
@@ -43,12 +47,18 @@
           </div>
           <n-checkbox-group v-model:value="selectedFields">
             <div class="field-selector__grid">
-              <n-checkbox v-for="field in reportFieldOptions" :key="field.key" :value="field.key">
+              <n-checkbox v-for="field in activeReportFieldOptions" :key="field.key" :value="field.key">
                 {{ field.label }}
               </n-checkbox>
             </div>
           </n-checkbox-group>
-        </div>        <div class="generator-note">הקבצים כוללים את פרטי הלקוח, תאריכים, ציוד ותזכורות המשויכים לרשומות שנוצרו בחודש שנבחר.</div>
+        </div>
+        <div class="reports-actions reports-actions--generator">
+          <n-button :loading="sending" :disabled="!canSendReport" type="primary" @click="sendNow">
+            {{ sendButtonLabel }}
+          </n-button>
+        </div>
+        <div class="generator-note">הקבצים כוללים את פרטי הלקוח, תאריכים, ציוד ותזכורות המשויכים לרשומות עם בדיקה הבאה {{ selectedPeriodLabel }}.</div>
       </section>
       <section class="reports-panel reports-panel--schedule">
         <div class="reports-panel__header">
@@ -68,9 +78,7 @@
             <p class="hint">השאר ריק כדי לשלוח לכתובת החשבון. אפשר להפריד כתובות בפסיק.</p>
           </n-gi>
           <n-gi>
-            <n-form-item label="יום בחודש">
-              <n-select v-model:value="form.day" :options="dayOptions"/>
-            </n-form-item>
+            <n-alert type="info" :show-icon="false">הדוח נשלח בכל חודש בתאריך 01.</n-alert>
           </n-gi>
           <n-gi>
             <n-form-item label="שעת שליחה">
@@ -80,8 +88,8 @@
           <n-gi :span="2">
             <n-form-item label="קבצים מצורפים">
               <n-space>
-                <n-checkbox v-model:checked="form.pdf">PDF</n-checkbox>
-                <n-checkbox v-model:checked="form.csv">CSV</n-checkbox>
+                <n-checkbox v-model:checked="form.docx">DOCX</n-checkbox>
+                <n-checkbox v-model:checked="form.xlsx">XLSX</n-checkbox>
               </n-space>
             </n-form-item>
           </n-gi>
@@ -96,7 +104,6 @@
 
         <div class="reports-actions">
           <n-button :loading="saving" type="primary" @click="saveSettings">שמור הגדרות</n-button>
-          <n-button :loading="sending" :disabled="!hasFormat" @click="sendNow">הפק ושלח עכשיו</n-button>
         </div>
       </section>
       </div>
@@ -105,13 +112,12 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, onMounted, reactive, ref} from "vue";
+import {computed, onMounted, reactive, ref, watch} from "vue";
 import {
   NAlert,
   NButton,
   NCheckbox,
   NCheckboxGroup,
-  NDatePicker,
   NDivider,
   NFormItem,
   NGi,
@@ -129,12 +135,24 @@ const message = useMessage();
 const loading = ref(true);
 const saving = ref(false);
 const sending = ref(false);
-const downloading = ref<"pdf" | "csv" | null>(null);
-const reportMonth = ref(Date.now());
-const selectedClientId = ref<string | null>(null);
-const clientOptions = ref<Array<{label: string; value: string | null}>>([{label: "כל הלקוחות", value: null}]);
+const downloading = ref<"docx" | "xlsx" | null>(null);
+const now = new Date();
+const reportYear = ref(now.getFullYear());
+const reportMonth = ref<number | null>(now.getMonth() + 1);
+const allClientsValue = "__all__";
+const selectedClientId = ref<string>(allClientsValue);
+const clientOptions = ref<Array<{label: string; value: string}>>([{label: "כל הלקוחות", value: allClientsValue}]);
 const clientEmailById = ref<Record<string, string>>({});
-const reportFieldOptions = [
+const trackingReportFieldOptions = [
+  {key: "tracking_date", label: "תאריך"},
+  {key: "tracking_checked", label: "מה נבדק"},
+  {key: "tracking_holder_contact", label: "תופש/איש קשר"},
+  {key: "tracking_phone", label: "טלפון"},
+  {key: "tracking_relevant", label: "רלוונטי"},
+  {key: "tracking_license_number", label: "מספר רישוי"},
+  {key: "tracking_notes", label: "הערות"},
+] as const;
+const clientReportFieldOptions = [
   {key: "contract_number", label: "מספר חוזה"},
   {key: "contract_type", label: "סוג מסמך"},
   {key: "client", label: "לקוח"},
@@ -151,33 +169,67 @@ const reportFieldOptions = [
   {key: "equipment", label: "ציוד"},
   {key: "reminders", label: "תזכורות"},
 ] as const;
-const defaultReportFields = reportFieldOptions.map((field) => field.key);
-const selectedFields = ref<string[]>([...defaultReportFields]);
+const defaultTrackingReportFields = trackingReportFieldOptions.map((field) => field.key);
+const defaultClientReportFields = clientReportFieldOptions.map((field) => field.key);
+const allClientReportFieldOptions = [...trackingReportFieldOptions, ...clientReportFieldOptions] as const;
+const selectedReportClientId = computed(() => selectedClientId.value === allClientsValue ? undefined : selectedClientId.value);
+const activeReportFieldOptions = computed(() => selectedReportClientId.value ? clientReportFieldOptions : allClientReportFieldOptions);
+const defaultReportFields = computed(() => selectedReportClientId.value ? defaultClientReportFields : defaultTrackingReportFields);
+const selectedFields = ref<string[]>([...defaultTrackingReportFields]);
 const form = reactive({
   enabled: false,
   recipients: "",
   day: 1,
   hour: 8,
-  pdf: true,
-  csv: true,
+  docx: true,
+  xlsx: true,
   lastSent: null as string | null,
   lastError: null as string | null,
 });
 
-const dayOptions = Array.from({length: 28}, (_, index) => ({label: String(index + 1), value: index + 1}));
+const yearOptions = Array.from({length: 8}, (_, index) => {
+  const year = now.getFullYear() - 2 + index;
+  return {label: String(year), value: year};
+});
+const monthOptions = [
+  {label: "ינואר", value: 1},
+  {label: "פברואר", value: 2},
+  {label: "מרץ", value: 3},
+  {label: "אפריל", value: 4},
+  {label: "מאי", value: 5},
+  {label: "יוני", value: 6},
+  {label: "יולי", value: 7},
+  {label: "אוגוסט", value: 8},
+  {label: "ספטמבר", value: 9},
+  {label: "אוקטובר", value: 10},
+  {label: "נובמבר", value: 11},
+  {label: "דצמבר", value: 12},
+];
 const hourOptions = Array.from({length: 24}, (_, hour) => ({
   label: `${String(hour).padStart(2, "0")}:00`,
   value: hour
 }));
-const hasFormat = computed(() => form.pdf || form.csv);
+const hasFormat = computed(() => form.docx || form.xlsx);
 const hasFields = computed(() => selectedFields.value.length > 0);
-const selectedClientEmail = computed(() => selectedClientId.value ? clientEmailById.value[selectedClientId.value] ?? null : null);
+const canSendReport = computed(() => hasFormat.value && hasFields.value);
+const selectedClientEmail = computed(() => selectedReportClientId.value ? clientEmailById.value[selectedReportClientId.value] ?? null : null);
+const sendButtonLabel = computed(() => selectedReportClientId.value ? "שלח דוח לקוח" : "שלח דוח כולל אליי");
+const selectedPeriodLabel = computed(() => reportMonth.value ? "בחודש שנבחר" : "בשנה שנבחרה");
+
+watch(selectedClientId, () => {
+  selectedFields.value = [...defaultReportFields.value];
+});
 
 function parseFormats(raw: unknown): string[] {
   try {
-    return Array.isArray(raw) ? raw : JSON.parse(String(raw ?? "[]"));
+    const parsed = Array.isArray(raw) ? raw : JSON.parse(String(raw ?? "[]"));
+    if (!Array.isArray(parsed)) return ["docx", "xlsx"];
+    const selected = parsed
+      .map((format) => format === "doc" ? "docx" : format)
+      .filter((format) => format === "docx" || format === "xlsx");
+    return selected.length ? selected : ["docx", "xlsx"];
   } catch {
-    return [];
+    return ["docx", "xlsx"];
   }
 }
 
@@ -189,17 +241,17 @@ async function loadSettings() {
       api.clients.list({limit: 1000}),
     ]);
     clientOptions.value = [
-      {label: "כל הלקוחות", value: null},
+      {label: "כל הלקוחות", value: allClientsValue},
       ...clients.rows.map((client) => ({label: client.display_name, value: String(client.id)})),
     ];
     clientEmailById.value = Object.fromEntries(clients.rows.filter((client) => Boolean(client.email)).map((client) => [String(client.id), String(client.email)]));
     const formats = parseFormats(settings.monthly_report_formats);
     form.enabled = Boolean(settings.monthly_report_enabled);
     form.recipients = settings.monthly_report_recipients ?? "";
-    form.day = Number(settings.monthly_report_day ?? 1);
+    form.day = 1;
     form.hour = Number(settings.monthly_report_hour ?? 8);
-    form.pdf = formats.length ? formats.includes("pdf") : true;
-    form.csv = formats.length ? formats.includes("csv") : true;
+    form.docx = formats.length ? formats.includes("docx") : true;
+    form.xlsx = formats.length ? formats.includes("xlsx") : true;
     form.lastSent = settings.monthly_report_last_sent ?? null;
     form.lastError = settings.monthly_report_last_error ?? null;
   } catch (error) {
@@ -219,9 +271,9 @@ async function saveSettings() {
     const saved = await api.userSettings.save({
       monthly_report_enabled: form.enabled,
       monthly_report_recipients: form.recipients,
-      monthly_report_day: form.day,
+      monthly_report_day: 1,
       monthly_report_hour: form.hour,
-      monthly_report_formats: JSON.stringify([...(form.pdf ? ["pdf"] : []), ...(form.csv ? ["csv"] : [])]),
+      monthly_report_formats: JSON.stringify([...(form.docx ? ["docx"] : []), ...(form.xlsx ? ["xlsx"] : [])]),
     });
     form.lastSent = saved.monthly_report_last_sent ?? form.lastSent;
     form.lastError = saved.monthly_report_last_error ?? null;
@@ -233,11 +285,10 @@ async function saveSettings() {
   }
 }
 
-async function downloadReport(format: "pdf" | "csv") {
-  const date = new Date(reportMonth.value);
+async function downloadReport(format: "docx" | "xlsx") {
   downloading.value = format;
   try {
-    await api.reports.downloadMonthly({year: date.getFullYear(), month: date.getMonth() + 1, format, fields: selectedFields.value, clientId: selectedClientId.value ?? undefined});
+    await api.reports.downloadMonthly({year: reportYear.value, month: reportMonth.value ?? undefined, format, fields: selectedFields.value, clientId: selectedReportClientId.value});
     message.success(`דוח ${format.toUpperCase()} הורד בהצלחה`);
   } catch (error) {
     message.error(String(error));
@@ -247,20 +298,29 @@ async function downloadReport(format: "pdf" | "csv") {
 }
 
 async function sendNow() {
-  if (!hasFormat.value) return;
+  if (!hasFormat.value) {
+    message.warning("יש לבחור לפחות סוג קובץ אחד");
+    return;
+  }
+  if (!hasFields.value) {
+    message.warning("יש לבחור לפחות שדה אחד לדוח");
+    return;
+  }
   sending.value = true;
   try {
-    await saveSettings();
-    const selectedMonth = new Date(reportMonth.value);
     const result = await api.reports.sendMonthly({
-      year: selectedMonth.getFullYear(),
-      month: selectedMonth.getMonth() + 1,
-      formats: [...(form.pdf ? ["pdf"] : []), ...(form.csv ? ["csv"] : [])],
+      year: reportYear.value,
+      month: reportMonth.value ?? undefined,
+      formats: [...(form.docx ? ["docx"] : []), ...(form.xlsx ? ["xlsx"] : [])],
       recipients: form.recipients.split(/[;,\s]+/).map((value) => value.trim()).filter(Boolean),
-      clientId: selectedClientId.value ?? undefined,
+      clientId: selectedReportClientId.value,
+      fields: selectedFields.value,
+      deliveryMode: selectedReportClientId.value ? "client" : "combined",
     });
     if (!result.success) throw new Error(result.error ?? "Report delivery failed");
-    message.success(`נשלחו ${result.reportsSent ?? 0} דוחות ללקוחות (${result.count ?? 0} רשומות)`);
+    message.success(selectedReportClientId.value
+      ? `דוח הלקוח נשלח (${result.count ?? 0} רשומות)`
+      : `הדוח הכולל נשלח אליך (${result.count ?? 0} רשומות)`);
     await loadSettings();
   } catch (error) {
     message.error(String(error));
@@ -386,7 +446,7 @@ onMounted(loadSettings);
 
 .generator-controls {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   gap: 10px;
   margin-top: 24px;
@@ -394,7 +454,7 @@ onMounted(loadSettings);
 
 .generator-controls :deep(.n-form-item) { margin: 0; }
 .generator-controls :deep(.n-button) { min-height: 38px; width: 100%; }
-.generator-controls :deep(.n-date-picker) { width: 100%; }
+.generator-controls :deep(.n-select) { width: 100%; }
 
 .generator-recipient {
   margin: 14px 0 0;

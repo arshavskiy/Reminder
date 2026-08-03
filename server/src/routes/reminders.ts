@@ -7,6 +7,7 @@ import type {EquipmentCategory, ReminderWithContext} from "../../src/shared/type
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSettings} from "../settings";
 import {pickEmailTemplate} from "../templates/seedEmailTemplates";
+import {clientDisplayName as normalizeClientNameForDisplay, normalizeClientDisplayName} from "../utils/clientNames";
 
 const HYDRAULIC_CATEGORIES: EquipmentCategory[] = ["lift", "scaffold", "ladder"];
 const HYDRAULIC_INTERVAL_MONTHS = [4, 6, 12, 14] as const;
@@ -155,7 +156,7 @@ export function registerReminderRoutes(app: express.Application) {
         const contactFields = contactFieldsFromSources(contract, document);
         return {
           ...flatDoc(r),
-          client_name: textField((client as any)?.display_name) ?? null,
+          client_name: normalizeClientNameForDisplay((client as any)?.display_name),
           contact_person: textField((client as any)?.contact_person) ?? contactFields.contact_person ?? extractContactPersonFromNotes((client as any)?.notes),
           client_email: textField((client as any)?.email) ?? contactFields.contact_email ?? firstReminderEmail(r.email_to),
           client_phone: textField((client as any)?.phone) ?? contactFields.contact_phone ?? null,
@@ -309,9 +310,9 @@ export function registerReminderRoutes(app: express.Application) {
       }
       selectedClient = existing;
       clientId = existing._id.toString();
-      clientDisplayName = existing.display_name;
+      clientDisplayName = normalizeClientNameForDisplay(existing.display_name) ?? existing.display_name;
     } else {
-      const businessName = body.business?.display_name?.trim();
+      const businessName = normalizeClientNameForDisplay(body.business?.display_name);
       if (!businessName) {
         res.status(400).json({ error: "business.display_name or client_id required" });
         return;
@@ -319,7 +320,7 @@ export function registerReminderRoutes(app: express.Application) {
 
       const clientDoc = {
         user_id: userId,
-        display_name: businessName,
+        display_name: normalizeClientDisplayName(businessName),
         entity_type: body.business?.entity_type ?? "company",
         id_number: body.business?.id_number?.trim() || null,
         contact_person: body.business?.contact_person?.trim() || null,
@@ -603,7 +604,7 @@ export function registerReminderRoutes(app: express.Application) {
 
     const reminder: ReminderWithContext & { client_email?: string } = {
       ...flatDoc(r),
-      client_name: textField(client?.display_name) ?? null,
+      client_name: normalizeClientNameForDisplay(client?.display_name),
       contact_person: textField(client?.contact_person) ?? contactFields.contact_person ?? extractContactPersonFromNotes(client?.notes),
       document_name: document?.file_name ?? null,
       contract_number: contract?.contract_number ?? null,
