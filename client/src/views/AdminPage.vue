@@ -950,6 +950,8 @@ onMounted(async () => {
   height: 100vh;
   background: var(--bg-body);
   overflow: hidden;
+  direction: ltr;
+  text-align: left;
 }
 
 /* ── Sidebar ────────────────────────────────────────────────────────────── */
