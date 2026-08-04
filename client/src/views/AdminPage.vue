@@ -1,7 +1,7 @@
 <template>
   <div class="admin-shell">
     <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
-    <aside class="admin-sidebar">
+    <aside class="admin-sidebar" :class="{ 'admin-sidebar--open': showMobileNav }">
       <div class="admin-sidebar__brand" @click="router.push('/')">
         <n-icon :component="BriefcaseOutline" :size="20" />
         <span>ReminderOCR</span>
@@ -38,6 +38,9 @@
     <div class="admin-main">
       <header class="admin-main__header">
         <div class="admin-main__title-row">
+          <button class="admin-mobile-toggle" @click="showMobileNav = !showMobileNav" type="button">
+            <n-icon :component="MenuOutline" :size="20" />
+          </button>
           <h1 class="admin-main__title">{{ currentItem?.label }}</h1>
           <n-button size="small" :loading="sectionLoading" @click="reloadSection">↻ Refresh</n-button>
         </div>
@@ -547,6 +550,7 @@ import {
   CloseCircleOutline,
   CloudUploadOutline,
   DocumentOutline,
+  MenuOutline,
   NotificationsOutline,
   PeopleOutline,
   SearchOutline,
@@ -611,9 +615,9 @@ const roleOptions = [
   { label: "Admin",        value: "admin"},
 ];
 
-const roleTagType: Record<string, "default" | "info" | "warning"> = {
+const roleTagType: Record<string, "default" | "warning" | "error"> = {
   user:  "default",
-  pro:   "info",
+  pro:   "default",
   admin: "warning",
 };
 const roleLabel: Record<string, string> = {
@@ -637,6 +641,9 @@ function openErrorModal(error: any) {
   errorDetail.value = error;
   showErrorModal.value = true;
 }
+
+// Mobile nav
+const showMobileNav = ref(false);
 const editingUser = ref<any>(null);
 const editingRole = ref<string>("");
 const savingRole = ref(false);
@@ -691,7 +698,7 @@ const userColumns: DataTableColumns<any> = [
   {
     title: "Status", key: "is_active", align: "center", width: 90,
     render: (row) =>
-      h(NTag, { type: row.is_active === 0 ? "error" : "success", size: "small", round: true },
+      h(NTag, { type: row.is_active === 0 ? "error" : "default", size: "small", round: true },
         { default: () => row.is_active === 0 ? "Inactive" : "Active" }),
   },
   {
@@ -1022,7 +1029,7 @@ const cronJobColumns: DataTableColumns<any> = [
     title: "Status", key: "status", align: "center", width: 90,
     render: (row) => {
       const ok = !row.last_error && (row.consecutive_failures ?? 0) === 0;
-      return h(NTag, { type: ok ? "success" : "error", size: "small", round: true },
+      return h(NTag, { type: ok ? "default" : "error", size: "small", round: true },
         { default: () => ok ? "Healthy" : `${row.consecutive_failures} failures` });
     },
   },
@@ -1050,7 +1057,7 @@ const monthlyScheduleColumns: DataTableColumns<any> = [
   {
     title: "Enabled", key: "enabled", align: "center", width: 70,
     render: (row) =>
-      h(NTag, { type: row.enabled ? "success" : "default", size: "small", round: true },
+      h(NTag, { type: row.enabled ? "default" : "error", size: "small", round: true },
         { default: () => row.enabled ? "Yes" : "No" }),
   },
   {
@@ -1083,7 +1090,7 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
   {
     title: "Enabled", key: "enabled", align: "center", width: 70,
     render: (row) =>
-      h(NTag, { type: row.enabled ? "success" : "default", size: "small", round: true },
+      h(NTag, { type: row.enabled ? "default" : "error", size: "small", round: true },
         { default: () => row.enabled ? "Yes" : "No" }),
   },
   {
@@ -1329,6 +1336,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  direction: ltr;
 }
 
 .admin-main__header {
@@ -1362,6 +1370,7 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 20px 28px 32px;
+  direction: ltr;
 }
 
 .admin-section__toolbar {
@@ -1459,6 +1468,73 @@ onUnmounted(() => {
   font-weight: 400;
   opacity: 0.75;
   margin-right: 2px;
+}
+
+/* ── Mobile toggle ───────────────────────────────────────────────────────── */
+.admin-mobile-toggle {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  padding: 4px;
+  margin-right: 12px;
+  flex: 0 0 auto;
+}
+
+/* ── Mobile media query ──────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-shell {
+    flex-direction: column;
+  }
+
+  .admin-sidebar {
+    width: 100%;
+    max-width: 250px;
+    height: auto;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    background: var(--bg-card);
+  }
+
+  .admin-sidebar--open {
+    max-height: 500px;
+  }
+
+  .admin-mobile-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .admin-main {
+    flex: 1;
+    width: 100%;
+  }
+
+  .admin-main__header {
+    padding: 12px 16px;
+  }
+
+  .admin-main__title {
+    font-size: 16px;
+  }
+
+  .admin-section {
+    padding: 12px 16px;
+  }
+
+  .admin-data-table {
+    font-size: 12px;
+  }
 }
 </style>
 
