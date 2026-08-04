@@ -606,6 +606,50 @@ export async function saveTemplateEntitiesForDoc(
   return saveTemplateEntities(documentId, template, fields, userId, skipReminders);
 }
 
+/**
+ * Post-processing pipeline applied to every LLM extraction result before saving.
+ * Runs in this order:
+ *
+ * 1. removeAddressExtractionFields — drops client_address / po_box / client_zipcode
+ *    (address extraction is unreliable; these fields are not used downstream).
+ *
+ * 2. normalizeClientCompany — cleans client_company:
+ *    - Inserts spaces between Hebrew letters and digit runs (e.g. "חברה123" → "חברה 123").
+ *    - Strips a stray single leading Hebrew letter+dot (e.g. "מ הנסון בע"מ" → "הנסון בע"מ"),
+ *      which occurs when OCR captures "מ." or "מר" fused to the company name.
+ *    - If the value starts with 3-4 digits followed by Hebrew text and the reversed form
+ *      ("Text 1234") appears verbatim in the raw PDF, swaps them to match the source.
+ *
+ * 3. report_number (template opt-in) — if the template declares a `report_number` field
+ *    and the LLM left it empty, falls back to regex on raw text:
+ *    - Looks for lines starting with "מספר תסקיר" (excluding "מספר תסקיר קודם").
+ *    - Splits on tabs / 2+ spaces / " | " to take only the first token.
+ *
+ * 4. contact_person (template opt-in) — if the template declares `contact_person` and
+ *    the LLM left it empty, falls back to regex:
+ *    - Matches "איש קשר: <value>" (label before value) or "<value>: איש קשר" (RTL layout).
+ *    - Strips phone numbers, "נייד/טלפון/פקס" prefixes/suffixes, and trailing punctuation.
+ *    - Rejects the result if it contains no Hebrew characters.
+ *
+ * 5. contact_email — always attempted if LLM left it empty:
+ *    - First scans lines containing "מייל / דוא"ל / email" for an email pattern.
+ *    - Falls back to scanning lines before the first "section boundary" keyword
+ *      (תיאור / ציוד / מקום הבדיקה / מספר רישוי / סעיף 3 / 3.) or the first 20 lines.
+ *    - Skips lines that look like inspector footer lines (חתימ / בודק / מהנדס …).
+ *
+ * 6. license_number (template opt-in) — if the template declares `license_number` and
+ *    the LLM value is not 4-8 digits, runs two fallback passes:
+ *    a. After "מקום הבדיקה": scans the next 3 lines for a bare 4-8 digit number.
+ *    b. Line scan: matches "מספר רישוי: <digits>" or "<digits> מספר רישוי" anywhere.
+ *
+ * 7. Equipment backfill — if _equipment rows were extracted but flat fields are empty,
+ *    copies from the first equipment row:
+ *    - checked_equipment  ← first row name
+ *    - equipment_description ← "מכונת הרמה" for lifting machines (heuristic),
+ *      or header-extracted description, or first row name
+ *    - serial_number, manufacturer, model ← first row values
+ *    - load_capacity ← first row load_capacity_work joined with " / "
+ */
 export function normalizeExtractionFieldsForTemplate(
   rawText: string,
   template: DocTemplate,
@@ -769,13 +813,52 @@ function extractLicenseNumber(rawText: string): string | null {
   if (locationSectionValue) return locationSectionValue;
 
   const lines = rawText.split(/\r?\n/).map((rawLine) => rawLine.replace(/\s+/g, " ").trim());
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (!line) continue;
 
-    const afterLabel = line.match(/(?:^|\s)מספר\s+רישוי\s*[:：-]?\s*(\d+)/i);
-    const beforeLabel = line.match(/(\d+)\s+מספר\s+רישוי\s*[:：-]?/i);
-    const value = cleanInlineFieldValue(afterLabel?.[1] ?? beforeLabel?.[1]);
-    if (value && isLikelyLicenseNumber(value)) return value;
+    // Value on same line as label (both directions); value is digits or "פנימי NNN"
+    const afterLabel = line.match(/(?:^|\s)מספר\s+רישוי\s*[:：-]?\s*(פנימי\s*\d{3,5}|\d+)/i);
+    const beforeLabel = line.match(/(פנימי\s*\d{3,5}|\d+)\s*[:：-]?\s*מספר\s+רישוי/i);
+    const inline = cleanInlineFieldValue(afterLabel?.[1] ?? beforeLabel?.[1]);
+    if (inline && isLikelyLicenseNumber(inline)) return inline;
+
+    // Label-only line — value on the next line (common in RTL table PDFs)
+    if (/^מספר\s+רישוי\s*[:：-]?$/i.test(line)) {
+      for (const candidate of [lines[i + 1]?.trim(), lines[i + 2]?.trim()]) {
+        if (candidate && isLikelyLicenseNumber(candidate)) return candidate;
+      }
+    }
+
+    // Value-only line immediately before the label line (cell order flipped by PDF parser)
+    if (/מספר\s+רישוי/i.test(line) && i > 0) {
+      const prev = lines[i - 1]?.trim();
+      if (prev && isLikelyLicenseNumber(prev)) return prev;
+    }
+  }
+
+  // Last resort: document mentions "מספר רישוי" but value was separated from label
+  // by many lines (RTL table PDF column ordering). Collect all standalone 4-8 digit
+  // lines, skip ones that look like load-table values (appear on lines adjacent to
+  // decimal radius values like "2.6", "4.8" etc.) or unrelated labels, then return
+  // the first remaining candidate.
+  if (/מספר\s+רישוי/i.test(rawText)) {
+    const skipLinePattern = /מיקוד|ישוב|מייל|דוא|טלפון|פקס|תאריך|ת\.ד|כתובת/i;
+    // Lines that are part of a load/radius table (decimal number, or adjacent to one)
+    const isLoadTableLine = (idx: number): boolean => {
+      for (let d = -1; d <= 1; d++) {
+        const l = lines[idx + d]?.trim() ?? "";
+        if (/^\d+\.\d+/.test(l)) return true;
+      }
+      return false;
+    };
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (skipLinePattern.test(lines[i])) continue;
+      if (/^פנימי\s*\d{3,5}$/i.test(line)) return line;
+      if (isLoadTableLine(i)) continue;
+      if (/^\d{4,8}$/.test(line)) return line;
+    }
   }
 
   return null;
@@ -802,7 +885,9 @@ function cleanInlineFieldValue(value: string | undefined): string | null {
 }
 
 function isLikelyLicenseNumber(value: unknown): boolean {
-  return typeof value === "string" && /^\d{4,6}$/.test(value.trim());
+  if (typeof value !== "string") return false;
+  const v = value.trim();
+  return /^\d{4,8}$/.test(v) || /^פנימי\s*\d{3,5}$/i.test(v);
 }
 
 function hasMeaningfulValue(value: unknown): boolean {
@@ -826,7 +911,10 @@ function normalizeClientName(value: string, rawText?: string): string {
     .replace(/(\d{2,})([א-ת])/g, "$1 $2")
     .replace(/\s+/g, " ")
     .trim();
-  return preferHebrewNameWithNumericSuffix(spaced, rawText);
+  // Strip a stray single Hebrew letter prefix (e.g. "מ הנסון" → "הנסון") that
+  // results from OCR splitting "מ." or "מר" off a company/person name.
+  const stripped = spaced.replace(/^[א-ת]\.?\s+(?=[א-ת])/, "");
+  return preferHebrewNameWithNumericSuffix(stripped, rawText);
 }
 
 function preferHebrewNameWithNumericSuffix(value: string, rawText?: string): string {
@@ -1090,6 +1178,15 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       phone: { $regex: new RegExp(escapeRegex(normPhone)) },
     }) as any;
     if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "phone", client_id: existing._id?.toString() });
+  }
+
+  // 2b. Email
+  if (!existing && email) {
+    existing = await col("clients").findOne({
+      ...userScope,
+      email: { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, "i") },
+    }) as any;
+    if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "email", client_id: existing._id?.toString() });
   }
 
   // 3. Exact name match (case-insensitive)

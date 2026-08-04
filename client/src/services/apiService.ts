@@ -200,6 +200,7 @@ export const api = {
     create: (body: Partial<Client>) => post<Client>("/clients", body),
     update: (id: string, body: Partial<Client>) => put<Client>(`/clients/${id}`, body),
     delete: (id: string) => del(`/clients/${id}`),
+    deleteAll: () => del("/clients"),
     timeline: (id: string) => get(`/clients/${id}/timeline`),
     documents: (id: string) => get<Document[]>(`/clients/${id}/documents`),
   },

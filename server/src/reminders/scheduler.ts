@@ -564,6 +564,29 @@ export async function generateContractReminders(
     // otherwise reads as if the inspection itself is on the earlier date.
     const title = `${baseLabel} ב-${expiryDate}`;
 
+    // Check if the same client already has a reminder on this trigger date —
+    // if so, append this contract's equipment to it instead of creating a duplicate.
+    const equipment = contract?.equipment_description ?? contract?.checked_equipment ?? null;
+    if (clientId) {
+      const sameClientReminder = await col("reminders").findOne({
+        ...(userId && { user_id: userId }),
+        client_id: clientId,
+        trigger_date: triggerDate,
+        advance_days: days,
+        status: { $ne: "dismissed" },
+        source_type: "contract_expiry",
+      });
+      if (sameClientReminder) {
+        if (equipment && !sameClientReminder.title.includes(equipment)) {
+          await col("reminders").updateOne(
+            { _id: sameClientReminder._id },
+            { $set: { title: `${sameClientReminder.title} | ${equipment}`, updated_at: new Date() } }
+          );
+        }
+        continue;
+      }
+    }
+
     await col("reminders").insertOne({
       ...(userId && { user_id: userId }),
       source_type: "contract_expiry",
@@ -572,7 +595,7 @@ export async function generateContractReminders(
       document_id: documentId,
       trigger_date: triggerDate,
       advance_days: days,
-      title,
+      title: equipment ? `${title} | ${equipment}` : title,
       status: "pending",
       created_at: new Date(),
       updated_at: new Date(),

@@ -1,7 +1,7 @@
 import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {sendMonthlyReportEmail} from "../reminders/emailSender";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import {AlignmentType, BorderStyle, Document, PageOrientation, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType} from "docx";
 
 const RTL_MARK = "\u200F";
@@ -134,7 +134,7 @@ export async function generateMonthlyContractReports(userId: string, year: numbe
   const periodTitle = reportPeriodTitle(year, month);
   return {
     docx: await buildDocx(rows, periodTitle, selectedFields),
-    xlsx: buildXlsx(rows, selectedFields),
+    xlsx: await buildXlsx(rows, selectedFields),
     csv: buildCsv(rows, selectedFields),
     count: rows.length,
   };
@@ -152,7 +152,7 @@ export async function generateMonthlyTrackingReport(userId: string, year: number
   });
   return {
     docx: await buildDocxTable(periodTitle, headers, data, true),
-    xlsx: buildXlsxTable(headers, data, true),
+    xlsx: await buildXlsxTable(headers, data, true),
     csv: buildCsvTable(headers, data, true),
     count: rows.length,
   };
@@ -163,7 +163,7 @@ export async function generateFutureClientReports(userId: string, rawFields?: un
   const selectedFields = normalizeMonthlyReportFields(rawFields);
   return {
     docx: await buildDocx(rows, "בדיקות עתידיות", selectedFields),
-    xlsx: buildXlsx(rows, selectedFields),
+    xlsx: await buildXlsx(rows, selectedFields),
     csv: buildCsv(rows, selectedFields),
     count: rows.length,
   };
@@ -398,25 +398,34 @@ function quote(value: unknown): string {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function buildXlsx(rows: MonthlyReportRow[], selectedFields: MonthlyReportField[]): Buffer {
+async function buildXlsx(rows: MonthlyReportRow[], selectedFields: MonthlyReportField[]): Promise<Buffer> {
   const fieldMap = new Map(MONTHLY_REPORT_FIELDS.map((field) => [field.key, field.label]));
   const headers = selectedFields.map((key) => fieldMap.get(key) ?? key);
   const data = rows.map((row) => selectedFields.map((key) => rowValue(row, key) ?? ""));
   return buildXlsxTable(headers, data);
 }
 
-function buildXlsxTable(headers: string[], data: unknown[][], rtl = false): Buffer {
-  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...data]);
-  worksheet["!cols"] = headers.map((header) => ({wch: Math.max(14, Math.min(34, String(header).length + 8))}));
-  worksheet["!autofilter"] = {ref: XLSX.utils.encode_range({s: {r: 0, c: 0}, e: {r: Math.max(data.length, 1), c: Math.max(headers.length - 1, 0)}})};
-  for (const address of Object.keys(worksheet)) {
-    if (address.startsWith("!")) continue;
-    worksheet[address].s = {alignment: {horizontal: "right", readingOrder: 2}};
+async function buildXlsxTable(headers: string[], data: unknown[][], rtl = false): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("דוח", {views: [{rightToLeft: true}]});
+  worksheet.columns = headers.map((header) => ({
+    header,
+    width: Math.max(14, Math.min(34, String(header).length + 8)),
+  }));
+  const rtlAlignment: Partial<ExcelJS.Alignment> = {horizontal: "right", readingOrder: "rtl"};
+  worksheet.getRow(1).eachCell((cell) => {
+    cell.alignment = rtlAlignment;
+    cell.font = {bold: true};
+  });
+  for (const row of data) {
+    const added = worksheet.addRow(row.map((v) => v ?? ""));
+    added.eachCell((cell) => { cell.alignment = rtlAlignment; });
   }
-  const workbook = XLSX.utils.book_new();
-  if (rtl) workbook.Workbook = {Views: [{RTL: true}]};
-  XLSX.utils.book_append_sheet(workbook, worksheet, "דוח");
-  return XLSX.write(workbook, {type: "buffer", bookType: "xlsx"}) as Buffer;
+  worksheet.autoFilter = {
+    from: {row: 1, column: 1},
+    to: {row: Math.max(data.length + 1, 2), column: headers.length},
+  };
+  return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
 async function buildDocx(rows: MonthlyReportRow[], periodTitle: string, selectedFields: MonthlyReportField[]): Promise<Buffer> {
@@ -432,8 +441,8 @@ async function buildDocxTable(periodTitle: string, headers: string[], rows: unkn
     if (header.includes("הערות") || header.includes("מה נבדק") || header.includes("תופש")) return 2450;
     return 1900;
   };
-  const displayHeaders = rtl ? [...headers].reverse() : headers;
-  const displayRows = rtl ? rows.map((row) => [...row].reverse()) : rows;
+  const displayHeaders = [...headers].reverse();
+  const displayRows = rows.map((row) => [...row].reverse());
   const paragraph = (text: unknown, bold = false) => new Paragraph({
     alignment: AlignmentType.END,
     bidirectional: true,
@@ -454,6 +463,7 @@ async function buildDocxTable(periodTitle: string, headers: string[], rows: unkn
   const doc = new Document({
     sections: [{
       properties: {
+        bidirectional: true,
         page: {
           size: {orientation: PageOrientation.LANDSCAPE},
           margin: {top: 720, right: 720, bottom: 720, left: 720},

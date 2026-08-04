@@ -147,6 +147,21 @@ export function registerClientRoutes(app: express.Application) {
     res.json({ ok: true });
   });
 
+  // DELETE /api/clients — delete all clients for the user
+  app.delete("/api/clients", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const result = await col("clients").deleteMany({ user_id: userId });
+    res.json({ ok: true, deleted: result.deletedCount });
+  });
+
   // GET /api/clients/:id/timeline
   app.get("/api/clients/:id/timeline", async (req, res) => {
     try {

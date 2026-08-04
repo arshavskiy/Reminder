@@ -11,6 +11,10 @@
           <template #icon><n-icon :component="RefreshOutline" /></template>
           רענן
         </n-button>
+        <n-button v-if="store.rows.length" type="error" quaternary @click="doDeleteAll">
+          <template #icon><n-icon :component="TrashOutline" /></template>
+          מחק הכל
+        </n-button>
         <n-button type="primary" @click="showCreate = true">
           <template #icon><n-icon :component="AddOutline" /></template>
           צור לקוח
@@ -299,6 +303,22 @@ function doDelete(row: Client) {
         refresh();
       } catch {
         message.error("שגיאה במחיקה");
+      }
+    },
+  });
+}
+
+function doDeleteAll() {
+  confirm({
+    title: "מחיקת כל הלקוחות",
+    content: `למחוק את כל ${store.total} הלקוחות? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק הכל",
+    onConfirm: async () => {
+      try {
+        await store.removeAll();
+        message.success("כל הלקוחות נמחקו");
+      } catch (e) {
+        message.error(String(e));
       }
     },
   });

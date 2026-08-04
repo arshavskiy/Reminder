@@ -415,6 +415,15 @@ export function registerDocumentRoutes(app: express.Application) {
     res.json({ queued: errorDocs.length });
   });
 
+  // GET /api/documents/:id/raw-text — debug: dump stored raw text
+  app.get("/api/documents/:id/raw-text", async (req, res) => {
+    let userId: string;
+    try { userId = (await requireAuth(req.headers.cookie)).userId; } catch (e) { const err = e as HTTPException; res.status(err.status ?? 401).json({ error: err.message }); return; }
+    const doc = await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
+    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+    res.type("text/plain; charset=utf-8").send(doc.raw_text ?? "(empty)");
+  });
+
   // POST /api/documents/:id/extract — re-run AI extraction with the best-fit template
   app.post("/api/documents/:id/extract", async (req, res) => {
     let userId: string;
