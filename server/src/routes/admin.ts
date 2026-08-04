@@ -189,10 +189,10 @@ export function registerAdminRoutes(app: express.Application) {
       const expiresAt: Date | null = doc.signed_url_expires_at ? new Date(doc.signed_url_expires_at) : null;
       const needsRefresh = !doc.download_url || !expiresAt || expiresAt.getTime() - Date.now() < 3600_000;
       let url: string = doc.download_url ?? "";
-      if (needsRefresh) {
+       if (needsRefresh) {
         url = await getSpacesSignedUrl(doc.spaces_key, SIGNED_URL_TTL, doc.file_name ?? undefined);
-        const { idFilter } = await import("../db/db.js");
-        await col("documents").updateOne(idFilter(req.params.id), {
+        const { ObjectId } = await import("mongodb");
+        await col("documents").updateOne({ _id: new ObjectId(req.params.id) }, {
           $set: { download_url: url, signed_url_expires_at: new Date(Date.now() + SIGNED_URL_TTL * 1000), updated_at: new Date() },
         });
       }

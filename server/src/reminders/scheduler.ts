@@ -619,10 +619,11 @@ export async function generateContractReminders(
         source_type: "contract_expiry",
       });
       if (sameClientReminder) {
-        if (equipment && !sameClientReminder.title.includes(equipment)) {
+        const reminderWithTitle = sameClientReminder as any as { title: string };
+        if (equipment && !reminderWithTitle.title.includes(equipment)) {
           await col("reminders").updateOne(
             { _id: sameClientReminder._id },
-            { $set: { title: `${sameClientReminder.title} | ${equipment}`, updated_at: new Date() } }
+            { $set: { title: `${reminderWithTitle.title} | ${equipment}`, updated_at: new Date() } }
           );
         }
         continue;
