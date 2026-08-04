@@ -146,9 +146,30 @@ export async function generateMonthlyTrackingReport(userId: string, year: number
   const selectedFields = normalizeAllReportFields(rawFields);
   const fieldMap = new Map(ALL_REPORT_FIELDS.map((field) => [field.key, field.label]));
   const headers = selectedFields.map((field) => fieldMap.get(field) ?? field);
-  const data = rows.map((row) => {
-    const trackingRow = toTrackingRow(row);
-    return selectedFields.map((field) => reportValue(row, trackingRow, field));
+
+  // Group rows by client+date so multiple equipment on the same day become one merged row
+  const trackingRows = rows.map(toTrackingRow);
+  const grouped = new Map<string, TrackingRow[]>();
+  for (const tr of trackingRows) {
+    const key = `${tr.holderContact}||${tr.date}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(tr);
+  }
+  const mergedRows = [...grouped.values()].map((group) => {
+    if (group.length === 1) return group[0];
+    return {
+      ...group[0],
+      checked: group.map((r) => r.checked).filter(Boolean).join("\n"),
+      licenseNumber: group.map((r) => r.licenseNumber).filter(Boolean).join("\n"),
+    };
+  });
+
+  const data = mergedRows.map((trackingRow) => {
+    const matchingRow = rows.find((r) => {
+      const tr = toTrackingRow(r);
+      return tr.holderContact === trackingRow.holderContact && tr.date === trackingRow.date;
+    }) ?? rows[0];
+    return selectedFields.map((field) => reportValue(matchingRow, trackingRow, field));
   });
   return {
     docx: await buildDocxTable(periodTitle, headers, data, true),
@@ -412,7 +433,7 @@ async function buildXlsxTable(headers: string[], data: unknown[][], rtl = false)
     header,
     width: Math.max(14, Math.min(34, String(header).length + 8)),
   }));
-  const rtlAlignment: Partial<ExcelJS.Alignment> = {horizontal: "right", readingOrder: "rtl"};
+  const rtlAlignment: Partial<ExcelJS.Alignment> = {horizontal: "right", readingOrder: "rtl", wrapText: true};
   worksheet.getRow(1).eachCell((cell) => {
     cell.alignment = rtlAlignment;
     cell.font = {bold: true};
@@ -443,17 +464,20 @@ async function buildDocxTable(periodTitle: string, headers: string[], rows: unkn
   };
   const displayHeaders = [...headers].reverse();
   const displayRows = rows.map((row) => [...row].reverse());
-  const paragraph = (text: unknown, bold = false) => new Paragraph({
+  const makeParagraph = (text: string, bold = false) => new Paragraph({
     alignment: AlignmentType.END,
     bidirectional: true,
     spacing: {before: 0, after: 0},
-    children: [new TextRun({text: `${RTL_MARK}${String(text ?? "")}`, bold, rightToLeft: true, size: bold ? 18 : 16})],
+    children: [new TextRun({text: `${RTL_MARK}${text}`, bold, rightToLeft: true, size: bold ? 18 : 16})],
   });
-  const cell = (text: unknown, header: string, bold = false) => new TableCell({
-    width: {size: widthByHeader(header), type: WidthType.DXA},
-    margins: {top: 80, bottom: 80, left: 90, right: 90},
-    children: [paragraph(text, bold)],
-  });
+  const cell = (text: unknown, header: string, bold = false) => {
+    const lines = String(text ?? "").split("\n");
+    return new TableCell({
+      width: {size: widthByHeader(header), type: WidthType.DXA},
+      margins: {top: 80, bottom: 80, left: 90, right: 90},
+      children: lines.map((line) => makeParagraph(line, bold)),
+    });
+  };
   const tableRows = [
     new TableRow({tableHeader: true, children: displayHeaders.map((header) => cell(header, header, true))}),
     ...displayRows.map((row) => new TableRow({children: row.map((value, index) => cell(value, displayHeaders[index] ?? ""))})),
