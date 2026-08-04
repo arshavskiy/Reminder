@@ -7,6 +7,7 @@ import type {EquipmentCategory, ReminderWithContext} from "../../src/shared/type
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSettings} from "../settings";
 import {pickEmailTemplate} from "../templates/seedEmailTemplates";
+import {clientDisplayName as normalizeClientNameForDisplay, normalizeClientDisplayName} from "../utils/clientNames";
 
 const HYDRAULIC_CATEGORIES: EquipmentCategory[] = ["lift", "scaffold", "ladder"];
 const HYDRAULIC_INTERVAL_MONTHS = [4, 6, 12, 14] as const;
@@ -147,15 +148,18 @@ export function registerReminderRoutes(app: express.Application) {
 
     const rows = await Promise.all(
       reminderDocs.map(async (r: any) => {
-        const [client, document, contract] = await Promise.all([
-          r.client_id ? col("clients").findOne({ _id: tryObjectId(r.client_id) }) : null,
+        const [document, contract] = await Promise.all([
           r.document_id ? col("documents").findOne({ _id: tryObjectId(r.document_id) }) : null,
           resolveReminderContract(r, userId),
         ]);
+        const client = await resolveReminderClient(r, contract, userId);
+        const contactFields = contactFieldsFromSources(contract, document);
         return {
           ...flatDoc(r),
-          client_name: (client as any)?.display_name ?? null,
-          client_email: (client as any)?.email ?? null,
+          client_name: normalizeClientNameForDisplay((client as any)?.display_name),
+          contact_person: textField((client as any)?.contact_person) ?? contactFields.contact_person ?? extractContactPersonFromNotes((client as any)?.notes),
+          client_email: textField((client as any)?.email) ?? contactFields.contact_email ?? firstReminderEmail(r.email_to),
+          client_phone: textField((client as any)?.phone) ?? contactFields.contact_phone ?? null,
           document_name: (document as any)?.file_name ?? null,
           contract_number: (contract as any)?.contract_number ?? null,
           contract_type: (contract as any)?.contract_type ?? null,
@@ -306,9 +310,9 @@ export function registerReminderRoutes(app: express.Application) {
       }
       selectedClient = existing;
       clientId = existing._id.toString();
-      clientDisplayName = existing.display_name;
+      clientDisplayName = normalizeClientNameForDisplay(existing.display_name) ?? existing.display_name;
     } else {
-      const businessName = body.business?.display_name?.trim();
+      const businessName = normalizeClientNameForDisplay(body.business?.display_name);
       if (!businessName) {
         res.status(400).json({ error: "business.display_name or client_id required" });
         return;
@@ -316,7 +320,7 @@ export function registerReminderRoutes(app: express.Application) {
 
       const clientDoc = {
         user_id: userId,
-        display_name: businessName,
+        display_name: normalizeClientDisplayName(businessName),
         entity_type: body.business?.entity_type ?? "company",
         id_number: body.business?.id_number?.trim() || null,
         contact_person: body.business?.contact_person?.trim() || null,
@@ -517,6 +521,21 @@ export function registerReminderRoutes(app: express.Application) {
     res.json(flatDoc(updated));
   });
 
+  // DELETE /api/reminders — delete all reminders for the current user
+  app.delete("/api/reminders", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const result = await col("reminders").deleteMany({ user_id: userId });
+    res.json({ ok: true, deleted: result.deletedCount });
+  });
+
   // DELETE /api/reminders/:id
   app.delete("/api/reminders/:id", async (req, res) => {
     let userId: string;
@@ -591,19 +610,22 @@ export function registerReminderRoutes(app: express.Application) {
       return;
     }
 
-    const [client, document, contract] = await Promise.all([
-      r.client_id ? col("clients").findOne({ _id: tryObjectId(r.client_id) }) as any : null,
+    const [document, contract] = await Promise.all([
       r.document_id ? col("documents").findOne({ _id: tryObjectId(r.document_id) }) as any : null,
       resolveReminderContract(r, userId),
     ]);
+    const client = await resolveReminderClient(r, contract, userId);
+    const contactFields = contactFieldsFromSources(contract, document);
 
     const reminder: ReminderWithContext & { client_email?: string } = {
       ...flatDoc(r),
-      client_name: client?.display_name ?? null,
+      client_name: normalizeClientNameForDisplay(client?.display_name),
+      contact_person: textField(client?.contact_person) ?? contactFields.contact_person ?? extractContactPersonFromNotes(client?.notes),
       document_name: document?.file_name ?? null,
       contract_number: contract?.contract_number ?? null,
       contract_type: contract?.contract_type ?? null,
-      client_email: client?.email ?? undefined,
+      client_email: textField(client?.email) ?? contactFields.contact_email ?? firstReminderEmail(r.email_to) ?? undefined,
+      client_phone: textField(client?.phone) ?? contactFields.contact_phone ?? undefined,
     } as any;
 
     let recipients: string[] = [];
@@ -686,8 +708,66 @@ async function resolveReminderContract(reminder: any, userId: string): Promise<a
   });
 }
 
+async function resolveReminderClient(reminder: any, contract: any, userId: string): Promise<any | null> {
+  const clientId = reminder.client_id ?? contract?.client_id;
+  if (!clientId) return null;
+  return col("clients").findOne({
+    _id: tryObjectId(String(clientId)),
+    user_id: userId,
+  });
+}
+
 function flatDoc(doc: any) {
   if (!doc) return doc;
   const { _id, ...rest } = doc;
   return { id: _id?.toString(), ...rest };
+}
+
+function extractContactPersonFromNotes(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = value.match(/(?:^|\n)\s*איש\s+קשר\s*[:：-]\s*([^\n]+)/);
+  return match?.[1]?.trim() || null;
+}
+
+function firstReminderEmail(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.find((item) => typeof item === "string" && item.trim())?.trim() ?? null;
+    }
+  } catch {
+    // Manual reminders may still contain a plain email string.
+  }
+  return value.includes("@") ? value.trim() : null;
+}
+
+function contactFieldsFromSources(contract: any, document: any): {
+  contact_person: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+} {
+  const contractFields = parseManualFields(contract?.manual_fields);
+  const documentFields = parseManualFields(document?.extracted_fields);
+  return {
+    contact_person: textField(contractFields?.contact_person) ?? textField(documentFields?.contact_person) ?? textField(documentFields?.client_name),
+    contact_email: textField(contractFields?.contact_email) ?? textField(documentFields?.contact_email) ?? textField(documentFields?.client_email) ?? textField(documentFields?.email),
+    contact_phone: textField(contractFields?.contact_phone) ?? textField(documentFields?.contact_phone) ?? textField(documentFields?.client_phone) ?? textField(documentFields?.phone),
+  };
+}
+
+function parseManualFields(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "object") return value as Record<string, unknown>;
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function textField(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }

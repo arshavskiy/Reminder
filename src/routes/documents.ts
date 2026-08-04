@@ -13,7 +13,7 @@ import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {extractWithTemplate} from "../pipeline/extractor";
-import {loadAllTemplates, pickTemplate} from "../templates/seedTemplates";
+import {loadAllTemplates, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import multer from "multer";
 import {logger} from "../logger";
 
@@ -201,6 +201,7 @@ export function registerDocumentRoutes(app: express.Application) {
       mkdirSync(uploadDir, { recursive: true });
 
       const ids: string[] = [];
+      const duplicates: string[] = [];
       for (const file of files) {
         const ext = extname(file.originalname) || "";
         const destPath = join(uploadDir, `${Date.now()}${ext}`);
@@ -212,11 +213,14 @@ export function registerDocumentRoutes(app: express.Application) {
           displayName = Buffer.from(file.originalname, "latin1").toString("utf8");
           if (displayName.includes("�")) displayName = file.originalname;
         } catch { /* keep original */ }
+        const beforeCount = await col("documents").countDocuments({ user_id: userId });
         const id = await importFile(destPath, undefined, userId, displayName, pipelineOptions);
+        const afterCount = await col("documents").countDocuments({ user_id: userId });
         ids.push(String(id));
+        if (afterCount === beforeCount) duplicates.push(String(id));
       }
 
-      res.json({ ids });
+      res.json({ ids, duplicates });
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }
@@ -287,7 +291,18 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
-    await col("documents").deleteOne({ ...idFilter(req.params.id), user_id: userId });
+    const doc = await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
+    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+
+    await col("documents").deleteOne({ _id: doc._id });
+
+    if (doc.spaces_key) {
+      const { deleteFromSpaces } = await import("../storage/spaces.js");
+      deleteFromSpaces(doc.spaces_key).catch((err) =>
+        logger.warn("document_s3_delete_failed", { document_id: req.params.id, spaces_key: doc.spaces_key, error: err })
+      );
+    }
+
     res.json({ ok: true });
   });
 
@@ -305,7 +320,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     const errorDocs = await col("documents")
       .find({ user_id: userId, processing_status: "error" })
-      .project({ _id: 1 })
+      .project({ _id: 1, spaces_key: 1 })
       .toArray();
 
     const ids = errorDocs.map((d: any) => d._id?.toString());
@@ -334,6 +349,16 @@ export function registerDocumentRoutes(app: express.Application) {
     }
 
     await col("documents").deleteMany({ user_id: userId, processing_status: "error" });
+
+    // Fire-and-forget S3 cleanup for all corrupt docs that had a spaces_key
+    const { deleteFromSpaces } = await import("../storage/spaces.js");
+    for (const d of errorDocs as any[]) {
+      if (d.spaces_key) {
+        deleteFromSpaces(d.spaces_key).catch((err) =>
+          logger.warn("document_s3_delete_failed", { spaces_key: d.spaces_key, error: err })
+        );
+      }
+    }
 
     logger.warn("corrupt_documents_deleted", { user_id: userId, deleted_count: ids.length });
     res.json({ deleted: ids.length });
@@ -413,6 +438,15 @@ export function registerDocumentRoutes(app: express.Application) {
 
     logger.info("document_rescan_queued", { user_id: userId, queued_count: errorDocs.length });
     res.json({ queued: errorDocs.length });
+  });
+
+  // GET /api/documents/:id/raw-text — debug: dump stored raw text
+  app.get("/api/documents/:id/raw-text", async (req, res) => {
+    let userId: string;
+    try { userId = (await requireAuth(req.headers.cookie)).userId; } catch (e) { const err = e as HTTPException; res.status(err.status ?? 401).json({ error: err.message }); return; }
+    const doc = await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
+    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+    res.type("text/plain; charset=utf-8").send(doc.raw_text ?? "(empty)");
   });
 
   // POST /api/documents/:id/extract — re-run AI extraction with the best-fit template
@@ -524,11 +558,8 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
-    const rows = await col("extractions")
-      .find({ document_id: req.params.id })
-      .sort({ created_at: -1 })
-      .toArray();
-    res.json(rows.map(flatDoc));
+    const fields = await resolveCurrentExtractionFields(doc, userId);
+    res.json({ fields });
   });
 
   // POST /api/documents/:id/reprocess
@@ -653,7 +684,7 @@ export function registerDocumentRoutes(app: express.Application) {
       $set: { extracted_fields: JSON.stringify(merged), updated_at: new Date() },
     });
 
-    // Also update the latest extraction record so reloadDoc reads the new values
+    // Keep the audit row roughly in sync for diagnostics; the client reads documents.extracted_fields.
     await col("extractions").updateOne(
       { document_id: id },
       { $set: { fields: merged, updated_at: new Date() } },
@@ -747,5 +778,36 @@ function flatDoc(doc: any) {
   if (!doc) return doc;
   const { _id, ...rest } = doc;
   return { id: _id?.toString(), ...rest };
+}
+
+async function resolveCurrentExtractionFields(doc: any, userId: string): Promise<Record<string, unknown> | null> {
+  const fields = parseObjectJson(doc?.extracted_fields);
+  if (!fields) return null;
+
+  const rawText = typeof doc?.raw_text === "string" ? doc.raw_text : "";
+  if (!rawText.trim()) return fields;
+
+  let template = null;
+  if (doc?.template_id) {
+    template = await loadTemplate(String(doc.template_id));
+  }
+  if (!template) {
+    template = await pickTemplate(rawText, userId);
+  }
+  if (!template) return fields;
+
+  return normalizeExtractionFieldsForTemplate(rawText, template, fields as any) ?? fields;
+}
+
+function parseObjectJson(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 

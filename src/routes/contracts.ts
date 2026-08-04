@@ -7,6 +7,7 @@ import {ObjectId} from "mongodb";
 import {generateContractReminders} from "../reminders/scheduler";
 import {type EquipmentInput, upsertEquipmentForClient} from "../reminders/equipmentUpsert";
 import {HTTPException, requireAuth} from "../auth/middleware";
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HEBREW_FONT = join(__dirname, "../../../scripts/NotoSansHebrew.ttf");
 
@@ -511,6 +512,21 @@ export function registerContractRoutes(app: express.Application) {
     );
 
     res.json(rows);
+  });
+
+  // DELETE /api/contracts — delete all contracts for the current user
+  app.delete("/api/contracts", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const result = await col("contracts").deleteMany({ user_id: userId });
+    res.json({ ok: true, deleted: result.deletedCount });
   });
 
   // DELETE /api/contracts/:id

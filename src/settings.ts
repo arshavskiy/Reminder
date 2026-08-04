@@ -1,128 +1,118 @@
 import {join} from "path";
-import {existsSync, mkdirSync, readFileSync, writeFileSync} from "fs";
 import type {AppSettings} from "../src/shared/types.js";
 
 export type { AppSettings };
 
-const DEFAULTS: AppSettings = {
-  theme: "light",
-  port: 3737,
+// ── Required env vars ─────────────────────────────────────────────────────────
+// Call validateEnv() once at startup. Missing required vars abort the process.
+const REQUIRED: Array<keyof NodeJS.ProcessEnv> = [
+  "MONGODB_URI",
+  "SESSION_SECRET",
+  "SMTP_HOST",
+  "SMTP_USER",
+  "SMTP_PASS",
+  "EMAIL_FROM",
+  "OPENAI_LOCAL_API_KEY",
+];
 
-  aiBackend: (process.env.AI_BACKEND as "openai" | "ollama") ?? "openai",
-  openAiKey: process.env.OPENAI_LOCAL_API_KEY ?? "",
-  openAiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-  ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
-  ollamaModel: process.env.OLLAMA_MODEL ?? "llama3",
-
-  ocrLanguage: process.env.OCR_LANGUAGE ?? "heb+eng",
-  autoExtract: process.env.AUTO_EXTRACT !== "false",
-  extractionMaxChars: process.env.EXTRACTION_MAX_CHARS ? parseInt(process.env.EXTRACTION_MAX_CHARS) : 12000,
-
-  smtpHost: process.env.SMTP_HOST ?? "",
-  smtpPort: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587,
-  smtpSecure: process.env.SMTP_SECURE === "true",
-  smtpUser: process.env.SMTP_USER ?? "",
-  smtpPass: process.env.SMTP_PASS ?? "",
-  smtpRejectUnauthorized: true,
-  emailFrom: process.env.EMAIL_FROM ?? "",
-  emailFromName: process.env.EMAIL_FROM_NAME ?? " ReminderOCR ",
-
-  reminderEnabled: true,
-  reminderAdvanceDays: process.env.REMINDER_ADVANCE_DAYS
-    ? process.env.REMINDER_ADVANCE_DAYS.split(",").map((d) => parseInt(d.trim(), 10)).filter((n) => Number.isFinite(n))
-    : [30, 14, 3],
-  reminderCheckIntervalMs: 600000,
-  testEmail: "",
-  testEmailTemplateId: null,
-
-  watchFolderEnabled: false,
-  watchFolder: "",
-
-  // Phase 2: Google OAuth
-  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
-  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
-  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:3737/auth/google/callback",
-  sessionSecret: process.env.SESSION_SECRET ?? "",
-  allowedEmails: process.env.ALLOWED_EMAILS?.split(",").map(e => e.trim()) ?? [],
-
-  userDocumentLimit: parseInt(process.env.USER_DOCUMENT_LIMIT ?? "25"),
-
-  escalationEmail: process.env.ESCALATION_EMAIL ?? "",
-  escalationThresholdDays: 3,
-};
-
-function resolveDataDir(): string {
-  if (process.env.DATA_DIR) return process.env.DATA_DIR;
-  // In dev: ./data relative to project root; in production same
-  return join(process.cwd(), "data");
+export function validateEnv(): void {
+  const missing = REQUIRED.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    console.error(`[settings] Missing required environment variables:\n  ${missing.join("\n  ")}`);
+    process.exit(1);
+  }
 }
 
-const _dataDir = resolveDataDir();
+// ── Pure env-based settings ───────────────────────────────────────────────────
+function buildSettings(): AppSettings {
+  return {
+    theme: "light",
+    port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3737,
 
-export function getDataDir(): string {
-  return _dataDir;
+    aiBackend: (process.env.AI_BACKEND as "openai" | "ollama") ?? "openai",
+    openAiKey: process.env.OPENAI_LOCAL_API_KEY ?? "",
+    openAiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+    ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
+    ollamaModel: process.env.OLLAMA_MODEL ?? "llama3",
+
+    ocrLanguage: process.env.OCR_LANGUAGE ?? "heb+eng",
+    autoExtract: process.env.AUTO_EXTRACT !== "false",
+    extractionMaxChars: process.env.EXTRACTION_MAX_CHARS ? parseInt(process.env.EXTRACTION_MAX_CHARS, 10) : 12000,
+
+    smtpHost: process.env.SMTP_HOST ?? "",
+    smtpPort: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587,
+    smtpSecure: process.env.SMTP_SECURE === "true",
+    smtpUser: process.env.SMTP_USER ?? "",
+    smtpPass: process.env.SMTP_PASS ?? "",
+    smtpRejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== "false",
+    emailFrom: process.env.EMAIL_FROM ?? "",
+    emailFromName: process.env.EMAIL_FROM_NAME ?? "ReminderOCR",
+
+    reminderEnabled: process.env.REMINDER_ENABLED !== "false",
+    reminderAdvanceDays: process.env.REMINDER_ADVANCE_DAYS
+      ? process.env.REMINDER_ADVANCE_DAYS.split(",").map((d) => parseInt(d.trim(), 10)).filter((n) => Number.isFinite(n))
+      : [30, 14, 3],
+    reminderCheckIntervalMs: process.env.REMINDER_CHECK_INTERVAL_MS
+      ? parseInt(process.env.REMINDER_CHECK_INTERVAL_MS, 10)
+      : 3600000,
+    testEmail: process.env.TEST_EMAIL ?? "",
+    testEmailTemplateId: process.env.TEST_EMAIL_TEMPLATE_ID ? parseInt(process.env.TEST_EMAIL_TEMPLATE_ID, 10) : null,
+
+    watchFolderEnabled: process.env.WATCH_FOLDER_ENABLED === "true",
+    watchFolder: process.env.WATCH_FOLDER ?? "",
+
+    googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
+    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+    googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:3737/auth/google/callback",
+    sessionSecret: process.env.SESSION_SECRET ?? "",
+    allowedEmails: process.env.ALLOWED_EMAILS
+      ? process.env.ALLOWED_EMAILS.split(",").map((e) => e.trim()).filter(Boolean)
+      : [],
+
+    doSpacesKey: process.env.ACCESS_KEY_ID ?? process.env.DO_SPACES_KEY ?? "",
+    doSpacesSecret: process.env.SECRET_ACCESS_KEY ?? process.env.DO_SPACES_SECRET ?? "",
+    doSpacesEndpoint: process.env.ENDPOINT ?? process.env.DO_SPACES_ENDPOINT ?? "",
+    doSpacesBucket: process.env.BUCKET ?? process.env.DO_SPACES_BUCKET ?? "",
+    doSpacesRegion: process.env.REGION ?? process.env.DO_SPACES_REGION ?? "",
+
+    allowedOrigins: process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+      : [],
+
+    userDocumentLimit: process.env.USER_DOCUMENT_LIMIT ? parseInt(process.env.USER_DOCUMENT_LIMIT, 10) : 25,
+
+    escalationEmail: process.env.ESCALATION_EMAIL ?? "",
+    escalationThresholdDays: process.env.ESCALATION_THRESHOLD_DAYS
+      ? parseInt(process.env.ESCALATION_THRESHOLD_DAYS, 10)
+      : 3,
+  };
 }
 
-const SETTINGS_PATH = join(_dataDir, "settings.json");
-
+// Singleton — built once per process, immutable after that.
 let _settings: AppSettings | null = null;
 
-export function loadSettings(): AppSettings {
-  if (_settings) return _settings;
-
-  mkdirSync(_dataDir, { recursive: true });
-
-  if (existsSync(SETTINGS_PATH)) {
-    try {
-      const raw = readFileSync(SETTINGS_PATH, "utf-8");
-      const parsed = JSON.parse(raw) as Partial<AppSettings>;
-      // Env vars always win for secrets — never let saved settings override them
-      const envOverrides: Partial<AppSettings> = {};
-      if (process.env.OPENAI_LOCAL_API_KEY)  envOverrides.openAiKey          = process.env.OPENAI_LOCAL_API_KEY;
-      if (process.env.GOOGLE_CLIENT_ID)     envOverrides.googleClientId     = process.env.GOOGLE_CLIENT_ID;
-      if (process.env.GOOGLE_CLIENT_SECRET) envOverrides.googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-      if (process.env.GOOGLE_REDIRECT_URI)  envOverrides.googleRedirectUri  = process.env.GOOGLE_REDIRECT_URI;
-      if (process.env.SESSION_SECRET)       envOverrides.sessionSecret      = process.env.SESSION_SECRET;
-      if (process.env.ALLOWED_EMAILS)       envOverrides.allowedEmails      = process.env.ALLOWED_EMAILS.split(",").map(e => e.trim());
-      if (process.env.SMTP_HOST)            envOverrides.smtpHost           = process.env.SMTP_HOST;
-      if (process.env.SMTP_PORT)            envOverrides.smtpPort           = parseInt(process.env.SMTP_PORT);
-      if (process.env.SMTP_SECURE)          envOverrides.smtpSecure         = process.env.SMTP_SECURE === "true";
-      if (process.env.SMTP_USER)            envOverrides.smtpUser           = process.env.SMTP_USER;
-      if (process.env.SMTP_PASS)            envOverrides.smtpPass           = process.env.SMTP_PASS;
-      if (process.env.EMAIL_FROM)           envOverrides.emailFrom          = process.env.EMAIL_FROM;
-      if (process.env.EMAIL_FROM_NAME)      envOverrides.emailFromName      = process.env.EMAIL_FROM_NAME;
-      if (process.env.DO_SPACES_KEY)        envOverrides.doSpacesKey        = process.env.DO_SPACES_KEY;
-      if (process.env.DO_SPACES_SECRET)     envOverrides.doSpacesSecret     = process.env.DO_SPACES_SECRET;
-      if (process.env.DO_SPACES_ENDPOINT)   envOverrides.doSpacesEndpoint   = process.env.DO_SPACES_ENDPOINT;
-      if (process.env.DO_SPACES_BUCKET)     envOverrides.doSpacesBucket     = process.env.DO_SPACES_BUCKET;
-      if (process.env.DO_SPACES_REGION)     envOverrides.doSpacesRegion     = process.env.DO_SPACES_REGION;
-      if (process.env.ALLOWED_ORIGINS)      envOverrides.allowedOrigins     = process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim());
-      if (process.env.USER_DOCUMENT_LIMIT)  envOverrides.userDocumentLimit  = parseInt(process.env.USER_DOCUMENT_LIMIT);
-      _settings = { ...DEFAULTS, ...parsed, ...envOverrides };
-      return _settings;
-    } catch {
-      // corrupted — fall through to defaults
-    }
-  }
-
-  _settings = { ...DEFAULTS };
-  saveSettings(_settings);
+export function getSettings(): AppSettings {
+  if (!_settings) _settings = buildSettings();
   return _settings;
 }
 
-export function saveSettings(settings: AppSettings) {
-  mkdirSync(_dataDir, { recursive: true });
-  writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8");
-  _settings = settings;
+// Kept for backwards compatibility — resolves to the data dir used by file storage.
+export function getDataDir(): string {
+  return process.env.DATA_DIR || join(process.cwd(), "data");
 }
 
-export function setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
-  const current = loadSettings();
-  const updated = { ...current, [key]: value };
-  saveSettings(updated);
-  return updated;
+// Stubs retained so import sites don't break at compile time.
+// They are no-ops: settings are read-only from env.
+export function loadSettings(): AppSettings {
+  return getSettings();
 }
 
-export function getSettings(): AppSettings {
-  return loadSettings();
+/** @deprecated settings are now env-only; this is a no-op */
+export function saveSettings(_settings: AppSettings): void {
+  // intentional no-op
+}
+
+/** @deprecated settings are now env-only; this is a no-op */
+export function setSetting<K extends keyof AppSettings>(_key: K, _value: AppSettings[K]): AppSettings {
+  return getSettings();
 }

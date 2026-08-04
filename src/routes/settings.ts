@@ -1,17 +1,8 @@
 import express from "express";
-import type {AppSettings} from "../settings";
-import {getSettings, saveSettings} from "../settings";
+import {getSettings} from "../settings";
 import {requireAuth, requireRole} from "../auth/middleware";
 
-type OnSettingsSaved = (settings: AppSettings) => void;
-let _onSaved: OnSettingsSaved | undefined;
-
-export function registerSettingsRoutes(
-  app: express.Application,
-  onSaved?: OnSettingsSaved
-) {
-  _onSaved = onSaved;
-
+export function registerSettingsRoutes(app: express.Application) {
   // Public config — non-sensitive values any authenticated client may read
   app.get("/api/config", async (req, res) => {
     try {
@@ -21,9 +12,14 @@ export function registerSettingsRoutes(
       return;
     }
     const s = getSettings();
-    res.json({ userDocumentLimit: s.userDocumentLimit });
+    res.json({
+      userDocumentLimit: s.userDocumentLimit,
+      appEnv: process.env.APP_ENV ?? "development",
+      dbName: process.env.MONGODB_DB ?? "unknown",
+    });
   });
 
+  // GET /api/settings — admin read of current settings (from env)
   app.get("/api/settings", async (req, res) => {
     try {
       const auth = await requireAuth(req.headers.cookie ?? undefined);
@@ -32,22 +28,14 @@ export function registerSettingsRoutes(
       res.status(err.status ?? 403).json({ error: err.message });
       return;
     }
-    res.json(getSettings());
+    const s = getSettings();
+    // Strip secrets before returning
+    const { openAiKey, smtpPass, googleClientSecret, sessionSecret, doSpacesSecret, ...safe } = s as any;
+    res.json(safe);
   });
 
-  app.post("/api/settings", async (req, res) => {
-    try {
-      const auth = await requireAuth(req.headers.cookie ?? undefined);
-      requireRole(auth, "admin");
-    } catch (err: any) {
-      res.status(err.status ?? 403).json({ error: err.message });
-      return;
-    }
-    const body = req.body as Partial<AppSettings>;
-    const current = getSettings();
-    const updated = { ...current, ...body };
-    saveSettings(updated);
-    _onSaved?.(updated);
-    res.json(updated);
+  // POST /api/settings — disabled; settings are env-only
+  app.post("/api/settings", (_req, res) => {
+    res.status(405).json({ error: "Settings are managed via environment variables. Use .env to configure the server." });
   });
 }

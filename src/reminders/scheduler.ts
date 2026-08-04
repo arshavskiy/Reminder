@@ -1,23 +1,67 @@
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {getSettings} from "../settings";
-import {sendReminderEmail, sendEmailWithAttachments} from "./emailSender";
-import {sendMonthlyReportsPerClient} from "../reports/monthlyReports";
+import {sendReminderEmail} from "./emailSender";
+import {sendMonthlyReportToRecipients} from "../reports/monthlyReports";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
+import {clientDisplayName} from "../utils/clientNames";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
+async function runWithHealth(name: string, fn: () => Promise<void>) {
+  const startedAt = new Date();
+  try {
+    await fn();
+    await col("scheduler_health").updateOne(
+      { name },
+      {
+        $set: {
+          name,
+          last_run_at: startedAt,
+          last_success_at: startedAt,
+          last_error: null,
+          consecutive_failures: 0,
+        },
+      },
+      { upsert: true },
+    );
+  } catch (error: any) {
+    const msg = error?.message ?? String(error);
+    logger.error(`${name}_failed`, { error: msg });
+    await col("scheduler_health").updateOne(
+      { name },
+      {
+        $set: { name, last_run_at: startedAt, last_error: msg },
+        $inc: { consecutive_failures: 1 },
+      },
+      { upsert: true },
+    );
+  }
+}
+
 export function startScheduler() {
   const settings = getSettings();
-  if (settings.reminderEnabled) checkReminders().catch((error) => logger.error("reminder_check_failed", { error }));
-  checkMonthlyReports().catch((error) => logger.error("monthly_report_check_failed", { error }));
-  if (settings.reminderEnabled) checkEscalations().catch((error) => logger.error("escalation_check_failed", { error }));
-  _timer = setInterval(() => {
-    if (settings.reminderEnabled) checkReminders().catch((error) => logger.error("reminder_check_failed", { error }));
-    checkMonthlyReports().catch((error) => logger.error("monthly_report_check_failed", { error }));
-    if (settings.reminderEnabled) checkEscalations().catch((error) => logger.error("escalation_check_failed", { error }));
-  }, settings.reminderCheckIntervalMs);
+  const isProd = (process.env.APP_ENV ?? "development") === "production";
+
+  if (!isProd) {
+    logger.info("scheduler_skipped", { reason: "APP_ENV is not 'production' — no emails or DB writes from scheduler in dev" });
+    return;
+  }
+
+  async function tick() {
+    if (settings.reminderEnabled) await runWithHealth("checkReminders", checkReminders);
+    await runWithHealth("checkMonthlyReports", checkMonthlyReports);
+    if (settings.reminderEnabled) await runWithHealth("checkEscalations", checkEscalations);
+    await col("scheduler_health").updateOne(
+      { name: "tick" },
+      { $set: { name: "tick", last_run_at: new Date(), last_error: null, consecutive_failures: 0 } },
+      { upsert: true },
+    );
+  }
+
+  tick();
+  _timer = setInterval(tick, settings.reminderCheckIntervalMs);
 
   logger.info("scheduler_started", {
     reminder_enabled: settings.reminderEnabled,
@@ -37,7 +81,7 @@ async function checkMonthlyReports() {
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const settingsRows = await col("user_settings").find({monthly_report_enabled: true}).toArray();
   for (const row of settingsRows as any[]) {
-    const day = Number(row.monthly_report_day ?? 1);
+    const day = 1;
     const hour = Number(row.monthly_report_hour ?? 8);
     if (now.getDate() < day || (now.getDate() === day && now.getHours() < hour)) continue;
     if (row.monthly_report_last_sent === monthKey) continue;
@@ -48,12 +92,13 @@ async function checkMonthlyReports() {
     const formats = parseFormats(row.monthly_report_formats);
     if (!recipients.length || !formats.length) continue;
 
-    const result = await sendMonthlyReportsPerClient({
+    const result = await sendMonthlyReportToRecipients({
       userId: row.user_id,
       year: now.getFullYear(),
       month: now.getMonth() + 1,
       recipients,
       formats,
+      includeClientRecipient: false,
     });
     if (result.success) {
       await col("user_settings").updateOne({_id: row._id}, {$set: {monthly_report_last_sent: monthKey, monthly_report_last_error: null}});
@@ -134,8 +179,12 @@ function uniqueEmails(values: Array<unknown>) {
 function parseFormats(raw: unknown): string[] {
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    return Array.isArray(parsed) ? parsed.filter((format) => format === "pdf" || format === "csv") : ["pdf", "csv"];
-  } catch { return ["pdf", "csv"]; }
+    if (!Array.isArray(parsed)) return ["docx", "xlsx"];
+    const selected = parsed
+      .map((format) => format === "doc" ? "docx" : format)
+      .filter((format) => format === "docx" || format === "xlsx" || format === "csv");
+    return selected.length ? selected : ["docx", "xlsx"];
+  } catch { return ["docx", "xlsx"]; }
 }
 
 async function checkReminders() {
@@ -175,7 +224,7 @@ async function checkReminders() {
     const enriched: ReminderWithContext = {
       ...r,
       id: remId,
-      client_name: (client as any)?.display_name ?? null,
+      client_name: clientDisplayName((client as any)?.display_name),
       document_name: (document as any)?.file_name ?? null,
       contract_number: (contract as any)?.contract_number ?? null,
       contract_type: (contract as any)?.contract_type ?? null,
@@ -558,6 +607,28 @@ export async function generateContractReminders(
     // otherwise reads as if the inspection itself is on the earlier date.
     const title = `${baseLabel} ב-${expiryDate}`;
 
+    // Check if the same client already has a reminder on this trigger date —
+    // if so, append this contract's equipment to it instead of creating a duplicate.
+    const equipment = contract?.equipment_description ?? contract?.checked_equipment ?? null;
+    if (clientId) {
+      const sameClientReminder = await col("reminders").findOne({
+        ...(userId && { user_id: userId }),
+        client_id: clientId,
+        trigger_date: triggerDate,
+        status: { $ne: "dismissed" },
+        source_type: "contract_expiry",
+      });
+      if (sameClientReminder) {
+        if (equipment && !sameClientReminder.title.includes(equipment)) {
+          await col("reminders").updateOne(
+            { _id: sameClientReminder._id },
+            { $set: { title: `${sameClientReminder.title} | ${equipment}`, updated_at: new Date() } }
+          );
+        }
+        continue;
+      }
+    }
+
     await col("reminders").insertOne({
       ...(userId && { user_id: userId }),
       source_type: "contract_expiry",
@@ -566,7 +637,7 @@ export async function generateContractReminders(
       document_id: documentId,
       trigger_date: triggerDate,
       advance_days: days,
-      title,
+      title: equipment ? `${title} | ${equipment}` : title,
       status: "pending",
       created_at: new Date(),
       updated_at: new Date(),

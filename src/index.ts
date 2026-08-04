@@ -3,43 +3,37 @@ import express from "express";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yaml";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-import { existsSync, watch } from "fs";
-import { connectDb } from "./db/db";
-import { loadSettings } from "./settings";
-import { startScheduler } from "./reminders/scheduler";
-import { seedBuiltinTemplates } from "./templates/seedTemplates";
-import { seedDefaultEmailTemplate } from "./templates/seedEmailTemplates";
-import { seedFeatureDefinitions } from "./features";
-import { registerDocumentRoutes } from "./routes/documents";
-import { registerClientRoutes } from "./routes/clients";
-import { registerContractRoutes } from "./routes/contracts";
-import { registerReportRoutes } from "./routes/reports";
-import { registerReminderRoutes } from "./routes/reminders";
-import { registerTaskRoutes } from "./routes/tasks";
-import { registerSearchRoutes } from "./routes/search";
-import { registerEmailRoutes } from "./routes/email";
-import { registerSettingsRoutes } from "./routes/settings";
-import { registerDashboardRoutes } from "./routes/dashboard";
-import { registerTemplateRoutes } from "./routes/templates";
-import { registerEquipmentRoutes } from "./routes/equipment";
-import { registerAuthRoutes } from "./routes/auth";
-import { registerUserSettingsRoutes } from "./routes/userSettings";
-import { registerProfileRoutes } from "./routes/profile";
-import { registerAdminRoutes } from "./routes/admin";
-import { registerExtractRemindersRoutes } from "./routes/extractReminders";
-import { registerFeatureRoutes } from "./routes/features";
-import { importFile } from "./pipeline/importer";
-import {
-  applyScannedKeys,
-  scanFileForKeys,
-  scanWatchFolder,
-  shouldScanFile,
-} from "./pipeline/keyScanner";
-import { logger, requestLogger } from "./logger";
-import { requireAnyFeature } from "./auth/middleware";
+import {existsSync, readFileSync, watch} from "fs";
+import {dirname, join} from "path";
+import {fileURLToPath} from "url";
+import {connectDb} from "./db/db";
+import {getSettings, validateEnv} from "./settings";
+import {startScheduler} from "./reminders/scheduler";
+import {seedBuiltinTemplates} from "./templates/seedTemplates";
+import {seedDefaultEmailTemplate} from "./templates/seedEmailTemplates";
+import {seedFeatureDefinitions} from "./features";
+import {registerDocumentRoutes} from "./routes/documents";
+import {registerClientRoutes} from "./routes/clients";
+import {registerContractRoutes} from "./routes/contracts";
+import {registerReportRoutes} from "./routes/reports";
+import {registerReminderRoutes} from "./routes/reminders";
+import {registerTaskRoutes} from "./routes/tasks";
+import {registerSearchRoutes} from "./routes/search";
+import {registerEmailRoutes} from "./routes/email";
+import {registerSettingsRoutes} from "./routes/settings";
+import {registerDashboardRoutes} from "./routes/dashboard";
+import {registerTemplateRoutes} from "./routes/templates";
+import {registerEquipmentRoutes} from "./routes/equipment";
+import {registerAuthRoutes} from "./routes/auth";
+import {registerUserSettingsRoutes} from "./routes/userSettings";
+import {registerProfileRoutes} from "./routes/profile";
+import {registerAdminRoutes} from "./routes/admin";
+import {registerExtractRemindersRoutes} from "./routes/extractReminders";
+import {registerFeatureRoutes} from "./routes/features";
+import {importFile} from "./pipeline/importer";
+import {applyScannedKeys, scanFileForKeys, shouldScanFile} from "./pipeline/keyScanner";
+import {logger, requestLogger} from "./logger";
+import {requireAnyFeature} from "./auth/middleware";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -150,9 +144,7 @@ registerReminderRoutes(app);
 registerTaskRoutes(app);
 registerSearchRoutes(app);
 registerEmailRoutes(app);
-registerSettingsRoutes(app, (updated) => {
-  if (updated.watchFolderEnabled && updated.watchFolder) startWatchFolder();
-});
+registerSettingsRoutes(app);
 registerDashboardRoutes(app);
 registerTemplateRoutes(app);
 registerEquipmentRoutes(app);
@@ -171,7 +163,8 @@ if (process.env.NODE_ENV === "production" && existsSync(STATIC_DIR)) {
 
 // ── HTTP server ───────────────────────────────────────────────────────────────
 async function main() {
-  const settings = loadSettings();
+  validateEnv();
+  const settings = getSettings();
   await connectDb();
   await seedFeatureDefinitions();
   await seedBuiltinTemplates();
@@ -180,7 +173,6 @@ async function main() {
   app.listen(settings.port, () => {
     logger.info("server_started", {
       port: settings.port,
-      data_dir: join(process.cwd(), "data"),
       health_url: `http://localhost:${settings.port}/health`,
       api_docs_url: `http://localhost:${settings.port}/api-docs`,
     });
@@ -188,9 +180,6 @@ async function main() {
 
   startScheduler();
   startWatchFolder();
-
-  // Scan watch folder for dropped credential files on startup
-  scanWatchFolder();
 }
 
 main().catch((err) => {
@@ -221,7 +210,7 @@ const SUPPORTED_EXTS = new Set([
 ]);
 
 function startWatchFolder() {
-  const s = loadSettings();
+  const s = getSettings();
   if (!s.watchFolderEnabled || !s.watchFolder) return;
   if (!existsSync(s.watchFolder)) {
     logger.warn("watch_folder_missing", { path: s.watchFolder });

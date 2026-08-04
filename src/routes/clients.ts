@@ -2,6 +2,7 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {normalizeClientDisplayName} from "../utils/clientNames";
 
 export function registerClientRoutes(app: express.Application) {
   // GET /api/clients
@@ -36,7 +37,7 @@ export function registerClientRoutes(app: express.Application) {
       col("clients").countDocuments(filter),
     ]);
 
-    res.json({ rows: rows.map(flatDoc), total });
+    res.json({ rows: rows.map(flatClient), total });
   });
 
   // GET /api/clients/:id
@@ -65,7 +66,7 @@ export function registerClientRoutes(app: express.Application) {
       col("reminders").countDocuments({ client_id: id, status: "pending", user_id: userId }),
     ]);
 
-    res.json({ ...flatDoc(client), doc_count, contract_count, open_reminder_count });
+    res.json({ ...flatClient(client), doc_count, contract_count, open_reminder_count });
   });
 
   // POST /api/clients
@@ -84,13 +85,12 @@ export function registerClientRoutes(app: express.Application) {
     const now = new Date();
     const doc = {
       user_id: userId,
-      display_name: body.display_name,
+      display_name: normalizeClientDisplayName(body.display_name),
       entity_type: body.entity_type ?? "person",
       contact_person: body.contact_person ?? null,
       id_number: body.id_number ?? null,
       email: body.email ?? null,
       phone: body.phone ?? null,
-      address: body.address ?? null,
       notes: body.notes ?? null,
       tags: body.tags ?? null,
       created_at: now,
@@ -98,7 +98,7 @@ export function registerClientRoutes(app: express.Application) {
     };
     const result = await col("clients").insertOne(doc as any);
     const inserted = await col("clients").findOne({ _id: result.insertedId });
-    res.status(201).json(flatDoc(inserted));
+    res.status(201).json(flatClient(inserted));
   });
 
   // PUT /api/clients/:id
@@ -117,19 +117,18 @@ export function registerClientRoutes(app: express.Application) {
     const body = req.body as Record<string, unknown>;
 
     const updates: Record<string, any> = { updated_at: new Date() };
-    if (body.display_name !== undefined) updates.display_name = body.display_name;
+    if (body.display_name !== undefined) updates.display_name = normalizeClientDisplayName(body.display_name);
     if (body.entity_type !== undefined) updates.entity_type = body.entity_type;
     if (body.contact_person !== undefined) updates.contact_person = body.contact_person;
     if (body.id_number !== undefined) updates.id_number = body.id_number;
     if (body.email !== undefined) updates.email = body.email;
     if (body.phone !== undefined) updates.phone = body.phone;
-    if (body.address !== undefined) updates.address = body.address;
     if (body.notes !== undefined) updates.notes = body.notes;
     if (body.tags !== undefined) updates.tags = body.tags;
 
     await col("clients").updateOne(filter, { $set: updates });
     const updated = await col("clients").findOne(filter);
-    res.json(flatDoc(updated));
+    res.json(flatClient(updated));
   });
 
   // DELETE /api/clients/:id
@@ -146,6 +145,21 @@ export function registerClientRoutes(app: express.Application) {
 
     await col("clients").deleteOne({ ...idFilter(req.params.id), user_id: userId });
     res.json({ ok: true });
+  });
+
+  // DELETE /api/clients — delete all clients for the user
+  app.delete("/api/clients", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const result = await col("clients").deleteMany({ user_id: userId });
+    res.json({ ok: true, deleted: result.deletedCount });
   });
 
   // GET /api/clients/:id/timeline
@@ -193,7 +207,7 @@ export function registerClientRoutes(app: express.Application) {
           .toArray()
       : [];
 
-    res.json(docs.map(flatDoc));
+    res.json(docs.map(flatClientDocument));
   });
 }
 
@@ -209,4 +223,48 @@ function flatDoc(doc: any) {
   if (!doc) return doc;
   const { _id, ...rest } = doc;
   return { id: _id?.toString(), ...rest };
+}
+
+function flatClient(doc: any) {
+  if (!doc) return doc;
+  const { _id, address: _address, ...rest } = doc;
+  return {
+    id: _id?.toString(),
+    ...rest,
+    display_name: normalizeClientDisplayName(rest.display_name),
+    contact_person: rest.contact_person ?? extractContactPersonFromNotes(rest.notes),
+  };
+}
+
+function flatClientDocument(doc: any) {
+  const flat = flatDoc(doc);
+  const fields = parseObjectJson(doc?.extracted_fields);
+  return {
+    ...flat,
+    inspection_date: stringField(fields, "inspection_date"),
+    next_inspection_date: stringField(fields, "next_inspection_date") ?? stringField(fields, "expiry_date"),
+  };
+}
+
+function extractContactPersonFromNotes(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = value.match(/(?:^|\n)\s*איש\s+קשר\s*[:：-]\s*([^\n]+)/);
+  return match?.[1]?.trim() || null;
+}
+
+function parseObjectJson(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function stringField(fields: Record<string, unknown> | null, key: string): string | null {
+  const value = fields?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
