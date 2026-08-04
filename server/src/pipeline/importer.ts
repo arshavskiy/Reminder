@@ -844,6 +844,8 @@ function extractLicenseNumber(rawText: string): string | null {
   // the first remaining candidate.
   if (/מספר\s+רישוי/i.test(rawText)) {
     const skipLinePattern = /מיקוד|ישוב|מייל|דוא|טלפון|פקס|תאריך|ת\.ד|כתובת/i;
+    // Lines near equipment-table headers (serial numbers, load values, etc.)
+    const equipTablePattern = /סידורי|דגם|יצר|עומס|כמות|רדיוס/i;
     // Lines that are part of a load/radius table (decimal number, or adjacent to one)
     const isLoadTableLine = (idx: number): boolean => {
       for (let d = -1; d <= 1; d++) {
@@ -852,11 +854,19 @@ function extractLicenseNumber(rawText: string): string | null {
       }
       return false;
     };
+    // Returns true if any of the 3 lines around idx contain equipment-table keywords
+    const isEquipTableLine = (idx: number): boolean => {
+      for (let d = -2; d <= 2; d++) {
+        if (equipTablePattern.test(lines[idx + d] ?? "")) return true;
+      }
+      return false;
+    };
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (skipLinePattern.test(lines[i])) continue;
       if (/^פנימי\s*\d{3,5}$/i.test(line)) return line;
       if (isLoadTableLine(i)) continue;
+      if (isEquipTableLine(i)) continue;
       if (/^\d{4,8}$/.test(line)) return line;
     }
   }
