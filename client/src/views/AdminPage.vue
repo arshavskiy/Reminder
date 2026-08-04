@@ -352,46 +352,42 @@
       <section v-if="activeSection === 'scheduler'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="schedulerMonitor">
-          <div class="admin-stats-grid" style="margin-bottom:24px">
-            <div class="admin-stat-card">
-              <n-icon :component="TimeOutline" :size="24" class="admin-stat-card__icon" />
-              <div class="admin-stat-card__body">
-                <div class="admin-stat-card__num" style="font-size:16px">{{ formatDate(schedulerMonitor.lastRunTime) }}</div>
-                <div class="admin-stat-card__label">Last Run</div>
-              </div>
-            </div>
-            <div class="admin-stat-card">
-              <n-icon :component="AlarmOutline" :size="24" class="admin-stat-card__icon" />
-              <div class="admin-stat-card__body">
-                <div class="admin-stat-card__num" style="font-size:16px">{{ formatDate(schedulerMonitor.nextRunTime) }}</div>
-                <div class="admin-stat-card__label">Next Run (estimated)</div>
-              </div>
-            </div>
-            <div class="admin-stat-card">
-              <n-icon :component="TimerOutline" :size="24" class="admin-stat-card__icon" />
-              <div class="admin-stat-card__body">
-                <div class="admin-stat-card__num">{{ formatInterval(schedulerMonitor.intervalSeconds) }}</div>
-                <div class="admin-stat-card__label">Check Interval</div>
-              </div>
-            </div>
-            <div class="admin-stat-card">
-              <n-icon :component="CheckmarkCircleOutline" :size="24" class="admin-stat-card__icon" style="color:var(--success-color,#18a058)" />
-              <div class="admin-stat-card__body">
-                <div class="admin-stat-card__num">{{ schedulerMonitor.sentLastHour }}</div>
-                <div class="admin-stat-card__label">Sent Last Hour</div>
-              </div>
-            </div>
-            <div class="admin-stat-card">
-              <n-icon :component="CloseCircleOutline" :size="24" class="admin-stat-card__icon" style="color:var(--error-color,#d03050)" />
-              <div class="admin-stat-card__body">
-                <div class="admin-stat-card__num">{{ schedulerMonitor.failedLastHour }}</div>
-                <div class="admin-stat-card__label">Failed Last Hour</div>
-              </div>
-            </div>
+          <!-- Scheduler Health Summary Cards -->
+          <div class="admin-stats-grid">
+            <AdminStatCard
+              title="Scheduler Health"
+              :primary="schedulerMonitor.jobs.filter((j: any) => !j.last_error && (j.consecutive_failures ?? 0) === 0).length"
+              :primary-label="`Healthy Jobs`"
+              :secondary="schedulerMonitor.jobs.length"
+              secondary-label="Total Jobs"
+              :status="schedulerMonitor.jobs.some((j: any) => j.last_error || (j.consecutive_failures ?? 0) > 0) ? 'warning' : 'success'"
+            />
+            <AdminStatCard
+              title="Emails Sent (Last Hour)"
+              :primary="schedulerMonitor.sentLastHour"
+              primary-label="Successful Sends"
+              :secondary="schedulerMonitor.failedLastHour"
+              secondary-label="Failed Attempts"
+              :status="schedulerMonitor.failedLastHour === 0 ? 'success' : 'warning'"
+            />
+            <AdminStatCard
+              title="Last Run"
+              :primary="formatDate(schedulerMonitor.lastRunTime)"
+              primary-label="Most Recent Tick"
+              :secondary="formatDate(schedulerMonitor.nextRunTime)"
+              secondary-label="Next Scheduled"
+              :status="'default'"
+            />
+            <AdminStatCard
+              title="Check Interval"
+              :primary="formatInterval(schedulerMonitor.intervalSeconds)"
+              primary-label="Scheduler Period"
+              :status="'default'"
+            />
           </div>
 
           <!-- Per-job health table -->
-          <div class="monitor-block">
+          <div class="monitor-block" style="margin-top: 20px">
             <div class="monitor-block__title">Cron Job Health</div>
             <n-data-table
               :columns="cronJobColumns"
