@@ -348,6 +348,7 @@
       preset="card"
       size="huge"
       style="width:92vw;max-width:1200px"
+      dir="rtl"
       @after-leave="docModalId = null"
     >
       <div style="max-height:76vh;overflow-y:auto;padding:0 8px 8px">
@@ -356,7 +357,7 @@
     </n-modal>
 
     <!-- Role edit modal -->
-    <n-modal v-model:show="showRoleModal" preset="dialog" title="Change User Role" style="width: 360px" :mask-closable="false">
+    <n-modal v-model:show="showRoleModal" preset="dialog" title="Change User Role" style="width: 360px" :mask-closable="false" dir="rtl">
       <div style="padding: 8px 0">
         <p style="margin: 0 0 12px; font-size: 14px">
           <strong>{{ editingUser?.email }}</strong>
@@ -365,7 +366,7 @@
           v-model:value="editingRole"
           :options="roleOptions"
           placeholder="Select role"
-          style="direction: ltr"
+          style="direction: rtl"
         />
       </div>
       <template #action>
@@ -509,27 +510,27 @@ async function toggleActive(user: any) {
 
 const userColumns: DataTableColumns<any> = [
   {
-    title: "Email", key: "email", align: "left", ellipsis: { tooltip: true },
+    title: "Email", key: "email", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:13px" }, row.email ?? "—"),
   },
   {
-    title: "Name", key: "name", align: "left", ellipsis: { tooltip: true },
+    title: "Name", key: "name", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:13px" }, row.name ?? "—"),
   },
   {
-    title: "Role", key: "role", align: "left", width: 100,
+    title: "Role", key: "role", align: "right", width: 100,
     render: (row) =>
       h(NTag, { type: roleTagType[row.role] ?? "default", size: "small", round: true },
         { default: () => roleLabel[row.role] ?? row.role }),
   },
   {
-    title: "Status", key: "is_active", align: "left", width: 90,
+    title: "Status", key: "is_active", align: "right", width: 90,
     render: (row) =>
       h(NTag, { type: row.is_active === 0 ? "error" : "success", size: "small", round: true },
         { default: () => row.is_active === 0 ? "Inactive" : "Active" }),
   },
   {
-    title: "Registered", key: "created_at", align: "left", width: 110,
+    title: "Registered", key: "created_at", align: "right", width: 110,
     render: (row) =>
       h("span", { style: "font-size:12px; color: var(--text-secondary)" },
         row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—"),
@@ -610,17 +611,17 @@ const extractionTreeData = computed(() => {
 
 const extractionColumns: DataTableColumns<any> = [
   {
-    title: "File / User", key: "filename", align: "left", ellipsis: { tooltip: true },
+    title: "File / User", key: "filename", align: "right", ellipsis: { tooltip: true },
     render: (row) => row._isGroup
       ? h("span", { style: "font-size:12px;font-weight:600;color:var(--text-primary)" }, row.filename)
       : h("span", { style: "font-size:12px" }, row.filename ?? "—"),
   },
   {
-    title: "Document Type", key: "document_type", align: "left", width: 140,
+    title: "Document Type", key: "document_type", align: "right", width: 140,
     render: (row) => h("span", { style: "font-size:12px" }, row._isGroup ? "" : (row.document_type ?? "—")),
   },
   {
-    title: "Date", key: "created_at", align: "left", width: 110,
+    title: "Date", key: "created_at", align: "right", width: 110,
     render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" },
       row._isGroup ? "" : (row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—")),
   },
@@ -647,7 +648,7 @@ const docStatusRows = computed(() => {
 });
 
 const docStatusColumns: DataTableColumns<any> = [
-  { title: "User", key: "user", align: "left", ellipsis: { tooltip: true } },
+  { title: "User", key: "user", align: "right", ellipsis: { tooltip: true } },
   ...DOC_STATUSES.map((s) => ({
     title: STATUS_HE[s] ?? s,
     key: s,
@@ -659,19 +660,19 @@ const docStatusColumns: DataTableColumns<any> = [
 
 const failedDocsColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left", width: 130,
+    title: "User", key: "user_id", align: "right", width: 130,
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "File", key: "filename", align: "left", ellipsis: { tooltip: true },
+    title: "File", key: "filename", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—"),
   },
   {
-    title: "Error", key: "error", align: "left", ellipsis: { tooltip: true },
+    title: "Error", key: "error", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.error ?? "—"),
   },
   {
-    title: "Date", key: "created_at", align: "left", width: 110,
+    title: "Date", key: "created_at", align: "right", width: 110,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—"),
   },
@@ -679,15 +680,15 @@ const failedDocsColumns: DataTableColumns<any> = [
 
 const stuckDocsColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left", width: 130,
+    title: "User", key: "user_id", align: "right", width: 130,
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "File", key: "filename", align: "left", ellipsis: { tooltip: true },
+    title: "File", key: "filename", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—"),
   },
   {
-    title: "Upload Date", key: "created_at", align: "left", width: 130,
+    title: "Upload Date", key: "created_at", align: "right", width: 130,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.created_at ? new Date(row.created_at).toLocaleString("en-US") : "—"),
   },
@@ -710,7 +711,7 @@ const reminderStatusRows = computed(() => {
 });
 
 const reminderStatusColumns: DataTableColumns<any> = [
-  { title: "User", key: "user", align: "left", ellipsis: { tooltip: true } },
+  { title: "User", key: "user", align: "right", ellipsis: { tooltip: true } },
   ...REMINDER_STATUSES.map((s) => ({
     title: REMINDER_STATUS_HE[s] ?? s,
     key: s,
@@ -722,19 +723,19 @@ const reminderStatusColumns: DataTableColumns<any> = [
 
 const pendingReminderColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left", width: 130,
+    title: "User", key: "user_id", align: "right", width: 130,
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "Type", key: "doc_type", align: "left", width: 110,
+    title: "Type", key: "doc_type", align: "right", width: 110,
     render: (row) => h("span", { style: "font-size:12px" }, row.doc_type ?? "—"),
   },
   {
-    title: "Note", key: "note", align: "left", ellipsis: { tooltip: true },
+    title: "Note", key: "note", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.note ?? "—"),
   },
   {
-    title: "Trigger Date", key: "trigger_date", align: "left", width: 120,
+    title: "Trigger Date", key: "trigger_date", align: "right", width: 120,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.trigger_date ? new Date(row.trigger_date).toLocaleDateString("en-US") : "—"),
   },
@@ -742,19 +743,19 @@ const pendingReminderColumns: DataTableColumns<any> = [
 
 const failedSendsColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left", width: 130,
+    title: "User", key: "user_id", align: "right", width: 130,
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "Recipient", key: "recipient", align: "left", ellipsis: { tooltip: true },
+    title: "Recipient", key: "recipient", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.recipient ?? "—"),
   },
   {
-    title: "Error", key: "error", align: "left", ellipsis: { tooltip: true },
+    title: "Error", key: "error", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.error ?? "—"),
   },
   {
-    title: "Date", key: "sent_at", align: "left", width: 130,
+    title: "Date", key: "sent_at", align: "right", width: 130,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.sent_at ? new Date(row.sent_at).toLocaleString("en-US") : "—"),
   },
@@ -772,7 +773,7 @@ const JOB_NAME_HE: Record<string, string> = {
 
 const cronJobColumns: DataTableColumns<any> = [
   {
-    title: "Service", key: "name", align: "left",
+    title: "Service", key: "name", align: "right",
     render: (row) => h("span", { style: "font-size:13px; font-weight:500" }, JOB_NAME_HE[row.name] ?? row.name),
   },
   {
@@ -784,24 +785,24 @@ const cronJobColumns: DataTableColumns<any> = [
     },
   },
   {
-    title: "Last Run", key: "last_run_at", align: "left", width: 150,
+    title: "Last Run", key: "last_run_at", align: "right", width: 150,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.last_run_at ? new Date(row.last_run_at).toLocaleString("en-US") : "—"),
   },
   {
-    title: "Last Success", key: "last_success_at", align: "left", width: 150,
+    title: "Last Success", key: "last_success_at", align: "right", width: 150,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.last_success_at ? new Date(row.last_success_at).toLocaleString("en-US") : "—"),
   },
   {
-    title: "Last Error", key: "last_error", align: "left", ellipsis: { tooltip: true },
+    title: "Last Error", key: "last_error", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color:var(--error-color,#d03050)" }, row.last_error ?? "—"),
   },
 ];
 
 const monthlyScheduleColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left",
+    title: "User", key: "user_id", align: "right",
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
@@ -819,12 +820,12 @@ const monthlyScheduleColumns: DataTableColumns<any> = [
     render: (row) => h("span", { style: "font-size:12px" }, row.hour != null ? `${row.hour}:00` : "—"),
   },
   {
-    title: "Last Sent", key: "last_sent", align: "left", width: 130,
+    title: "Last Sent", key: "last_sent", align: "right", width: 130,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.last_sent ? new Date(row.last_sent).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "Last Error", key: "last_error", align: "left", ellipsis: { tooltip: true },
+    title: "Last Error", key: "last_error", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.last_error ?? "—"),
   },
 ];
@@ -834,7 +835,7 @@ const monthlyMonitor = ref<any>(null);
 
 const monthlyScheduleDetailColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left",
+    title: "User", key: "user_id", align: "right",
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
@@ -852,7 +853,7 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
     render: (row) => h("span", { style: "font-size:12px" }, row.hour != null ? `${row.hour}:00` : "—"),
   },
   {
-    title: "Formats", key: "formats", align: "left", width: 110,
+    title: "Formats", key: "formats", align: "right", width: 110,
     render: (row) => {
       let formats = row.formats ?? [];
       if (typeof formats === "string") { try { formats = JSON.parse(formats); } catch { formats = []; } }
@@ -860,7 +861,7 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
     },
   },
   {
-    title: "Recipients", key: "recipients", align: "left", ellipsis: { tooltip: true },
+    title: "Recipients", key: "recipients", align: "right", ellipsis: { tooltip: true },
     render: (row) => {
       let recipients = row.recipients ?? [];
       if (typeof recipients === "string") { try { recipients = JSON.parse(recipients); } catch { recipients = []; } }
@@ -868,12 +869,12 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
     },
   },
   {
-    title: "Last Sent", key: "last_sent", align: "left", width: 130,
+    title: "Last Sent", key: "last_sent", align: "right", width: 130,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.last_sent ? new Date(row.last_sent).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "Error", key: "last_error", align: "left", ellipsis: { tooltip: true },
+    title: "Error", key: "last_error", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.last_error ?? "—"),
   },
 ];
@@ -954,8 +955,8 @@ onMounted(async () => {
   height: 100vh;
   background: var(--bg-body);
   overflow: hidden;
-  direction: ltr;
-  text-align: left;
+  direction: rtl;
+  text-align: right;
 }
 
 /* ── Sidebar ────────────────────────────────────────────────────────────── */
@@ -963,7 +964,7 @@ onMounted(async () => {
   width: 220px;
   flex: 0 0 220px;
   background: var(--bg-card);
-  border-right: 1px solid var(--border-color);
+  border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
 }
@@ -999,7 +1000,7 @@ onMounted(async () => {
   color: var(--text-secondary);
   font-size: 14px;
   cursor: pointer;
-  text-align: left;
+  text-align: right;
   width: 100%;
   transition: background 0.15s, color 0.15s;
 }
@@ -1159,3 +1160,4 @@ onMounted(async () => {
   margin-right: 2px;
 }
 </style>
+
