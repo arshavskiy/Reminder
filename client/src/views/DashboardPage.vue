@@ -257,6 +257,7 @@ interface UploadResultRow {
   date: string;
   docType: string;
   contractNumber: string;
+  licenseNumber: string;
   id?: string;
 }
 const showUploadResults = ref(false);
@@ -306,6 +307,13 @@ const uploadResultColumns: DataTableColumns<UploadResultRow> = [
     align: "right",
     ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.docType || "—"),
+  },
+  {
+    title: "מספר רישוי",
+    key: "licenseNumber",
+    align: "right",
+    width: 110,
+    render: (row) => h("span", { style: "font-size:12px" }, row.licenseNumber || "—"),
   },
   {
     title: "תאריך",
@@ -360,6 +368,7 @@ async function uploadDashboardFiles(
     date: "",
     docType: "",
     contractNumber: "",
+    licenseNumber: "",
   }));
   uploadResultsLoading.value = true;
   showUploadResults.value = true;
@@ -429,6 +438,7 @@ async function pollDocumentResults(pendingIds: string[], allIds: string[]) {
                       date: fields.expiry_date ?? fields.next_inspection_date ?? fields.start_date ?? "",
                       docType: fields.document_type ?? fields.contract_type ?? (doc as any).document_type ?? "",
                       contractNumber: fields.contract_number ?? fields.report_number ?? "",
+                      licenseNumber: fields.license_number ?? "",
                     }
                   : row,
               );
