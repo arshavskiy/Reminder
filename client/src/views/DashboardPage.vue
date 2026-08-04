@@ -253,6 +253,7 @@ const fileInput = ref<HTMLInputElement | null>(null);
 interface UploadResultRow {
   fileName: string;
   status: "pending" | "uploading" | "processing" | "done" | "error" | "duplicate";
+  duplicate: boolean;
   client: string;
   date: string;
   docType: string;
@@ -280,7 +281,7 @@ const uploadResultColumns: DataTableColumns<UploadResultRow> = [
     title: "סטטוס",
     key: "status",
     align: "right",
-    width: 110,
+    width: 130,
     render: (row) => {
       const map: Record<string, { type: "success"|"warning"|"error"|"info"|"default"; label: string }> = {
         pending:    { type: "default", label: "ממתין" },
@@ -288,10 +289,11 @@ const uploadResultColumns: DataTableColumns<UploadResultRow> = [
         done:       { type: "success", label: "הושלם" },
         processing: { type: "warning", label: "מעבד..." },
         error:      { type: "error",   label: "שגיאה" },
-        duplicate:  { type: "default", label: "כפול" },
       };
       const { type, label } = map[row.status] ?? map.pending;
-      return h(NTag, { type, size: "small", round: true }, { default: () => label });
+      const tags = [h(NTag, { type, size: "small", round: true }, { default: () => label })];
+      if (row.duplicate) tags.push(h(NTag, { type: "default", size: "small", round: true, style: "margin-right:4px; opacity:0.7" }, { default: () => "כפול" }));
+      return h("div", { style: "display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap" }, tags);
     },
   },
   {
@@ -364,6 +366,7 @@ async function uploadDashboardFiles(
   uploadResultRows.value = files.map((f) => ({
     fileName: f.name,
     status: "pending",
+    duplicate: false,
     client: "",
     date: "",
     docType: "",
@@ -384,7 +387,7 @@ async function uploadDashboardFiles(
       const { id, duplicate } = await api.documents.uploadOne(files[i], options);
       allIds[i] = id;
       uploadResultRows.value = uploadResultRows.value.map((r, idx) =>
-        idx === i ? { ...r, id, status: duplicate ? "duplicate" : "processing" } : r,
+        idx === i ? { ...r, id, duplicate, status: "processing" } : r,
       );
     } catch (err) {
       uploadResultRows.value = uploadResultRows.value.map((r, idx) =>
@@ -400,7 +403,7 @@ async function uploadDashboardFiles(
 
   await store.fetch(true);
 
-  // Poll only the successfully uploaded non-duplicate documents
+  // Poll all successfully uploaded documents (including duplicates — they resolve immediately)
   const pendingIds = (allIds.filter(Boolean) as string[]).filter(
     (id) => uploadResultRows.value.find((r) => r.id === id)?.status === "processing",
   );
@@ -439,6 +442,7 @@ async function pollDocumentResults(pendingIds: string[], allIds: string[]) {
                       docType: fields.document_type ?? fields.contract_type ?? (doc as any).document_type ?? "",
                       contractNumber: fields.contract_number ?? fields.report_number ?? "",
                       licenseNumber: fields.license_number ?? "",
+                      // preserve duplicate flag
                     }
                   : row,
               );
