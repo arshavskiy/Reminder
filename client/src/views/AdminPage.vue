@@ -1340,7 +1340,7 @@ onUnmounted(() => {
 }
 
 .admin-main__header {
-  padding: 20px 28px 14px;
+  padding: 14px 20px 10px;
   border-bottom: 1px solid var(--border-color);
   flex: 0 0 auto;
 }
@@ -1353,7 +1353,7 @@ onUnmounted(() => {
 
 .admin-main__title {
   margin: 0 0 2px;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
   flex: 1;
@@ -1369,7 +1369,7 @@ onUnmounted(() => {
 .admin-section {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 28px 32px;
+  padding: 14px 20px 24px;
   direction: ltr;
 }
 
@@ -1383,17 +1383,18 @@ onUnmounted(() => {
 .admin-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 14px;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .admin-stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 14px;
-  padding: 18px;
+  border-radius: 12px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .admin-stat-card__icon {
@@ -1419,8 +1420,8 @@ onUnmounted(() => {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 18px 20px;
-  margin-bottom: 18px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
 }
 
 .monitor-block__title {
@@ -1480,6 +1481,11 @@ onUnmounted(() => {
   padding: 4px;
   margin-right: 12px;
   flex: 0 0 auto;
+}
+
+/* ── Data table spacing ──────────────────────────────────────────────────── */
+.n-data-table {
+  margin-top: 8px !important;
 }
 
 /* ── Mobile media query ──────────────────────────────────────────────────── */
