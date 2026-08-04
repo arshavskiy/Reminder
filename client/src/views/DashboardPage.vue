@@ -13,28 +13,24 @@
         "
         :class="{
           'drop-strip--active': isDragging,
-          'drop-strip--uploading': uploading,
+          'drop-strip--uploading': isUploading,
         }"
         class="drop-strip"
-        @dragover.prevent="!uploading && (isDragging = true)"
+        @dragover.prevent="!isUploading && (isDragging = true)"
         @dragleave.prevent="isDragging = false"
-        @click="!uploading && fileInput?.click()"
-        @drop.prevent="!uploading && onStripDrop($event)"
+        @click="!isUploading && fileInput?.click()"
+        @drop.prevent="!isUploading && onStripDrop($event)"
       >
         <div class="drop-strip__icon">
           <n-icon :component="CloudUploadOutline" :size="30" />
         </div>
         <div class="drop-strip__copy">
           <strong>{{
-            uploading
-              ? "מעלה קבצים..."
-              : isDragging
-                ? "שחרר כאן והייבוא יתחיל"
-                : "גרור מסמכים לכאן"
+            isDragging
+              ? "שחרר כאן והייבוא יתחיל"
+              : "גרור מסמכים לכאן"
           }}</strong>
-          <span>{{
-            uploading ? "הקבצים נשלחים לעיבוד" : "גרירה או לחיצה מעלות מיד"
-          }}</span>
+          <span>גרירה או לחיצה מעלות מיד</span>
         </div>
       </div>
       <input
@@ -250,22 +246,26 @@ const expiryItems = ref<ExpiryCalendarItem[]>([]);
 const loadingExpiryItems = ref(false);
 const calendarNextTestsOnly = ref(true);
 const savingCalendarPreference = ref(false);
-const uploading = ref(false);
 const isDragging = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 
 // ── Upload results modal ──────────────────────────────────────────────────────
 interface UploadResultRow {
   fileName: string;
-  status: "processing" | "done" | "error" | "duplicate";
+  status: "pending" | "uploading" | "processing" | "done" | "error" | "duplicate";
   client: string;
   date: string;
   docType: string;
   contractNumber: string;
+  id?: string;
 }
 const showUploadResults = ref(false);
 const uploadResultsLoading = ref(false);
 const uploadResultRows = ref<UploadResultRow[]>([]);
+
+const isUploading = computed(() =>
+  uploadResultRows.value.some((r) => r.status === "pending" || r.status === "uploading"),
+);
 
 const uploadResultColumns: DataTableColumns<UploadResultRow> = [
   {
@@ -279,15 +279,17 @@ const uploadResultColumns: DataTableColumns<UploadResultRow> = [
     title: "סטטוס",
     key: "status",
     align: "right",
-    width: 100,
+    width: 110,
     render: (row) => {
-      const map: Record<string, { type: "success"|"warning"|"error"|"info"; label: string }> = {
-        done:       { type: "success", label: "עובד" },
-        processing: { type: "info",    label: "מעבד..." },
+      const map: Record<string, { type: "success"|"warning"|"error"|"info"|"default"; label: string }> = {
+        pending:    { type: "default", label: "ממתין" },
+        uploading:  { type: "info",    label: "מעלה..." },
+        done:       { type: "success", label: "הושלם" },
+        processing: { type: "warning", label: "מעבד..." },
         error:      { type: "error",   label: "שגיאה" },
-        duplicate:  { type: "warning", label: "כפול" },
+        duplicate:  { type: "default", label: "כפול" },
       };
-      const { type, label } = map[row.status] ?? map.processing;
+      const { type, label } = map[row.status] ?? map.pending;
       return h(NTag, { type, size: "small", round: true }, { default: () => label });
     },
   },
@@ -350,41 +352,57 @@ async function uploadDashboardFiles(
     doReminders: true,
   },
 ) {
-  uploading.value = true;
-  try {
-    const { ids, duplicates } = await api.documents.upload(files, options);
-    const dupSet = new Set(duplicates ?? []);
+  // Seed all rows as pending and open modal immediately
+  uploadResultRows.value = files.map((f) => ({
+    fileName: f.name,
+    status: "pending",
+    client: "",
+    date: "",
+    docType: "",
+    contractNumber: "",
+  }));
+  uploadResultsLoading.value = true;
+  showUploadResults.value = true;
 
-    // Seed the modal rows immediately so the user sees file names right away
-    uploadResultRows.value = files.map((f, i) => ({
-      fileName: f.name,
-      status: dupSet.has(ids[i]) ? "duplicate" : "processing",
-      client: "",
-      date: "",
-      docType: "",
-      contractNumber: "",
-    }));
-    uploadResultsLoading.value = true;
-    showUploadResults.value = true;
+  const allIds: (string | null)[] = new Array(files.length).fill(null);
 
-    await store.fetch(true);
+  // Upload files one by one, updating each row's status live
+  for (let i = 0; i < files.length; i++) {
+    uploadResultRows.value = uploadResultRows.value.map((r, idx) =>
+      idx === i ? { ...r, status: "uploading" } : r,
+    );
+    try {
+      const { id, duplicate } = await api.documents.uploadOne(files[i], options);
+      allIds[i] = id;
+      uploadResultRows.value = uploadResultRows.value.map((r, idx) =>
+        idx === i ? { ...r, id, status: duplicate ? "duplicate" : "processing" } : r,
+      );
+    } catch (err) {
+      uploadResultRows.value = uploadResultRows.value.map((r, idx) =>
+        idx === i ? { ...r, status: "error" } : r,
+      );
+      // Show error only for quota/auth failures (not per-file OCR errors)
+      const e = err as any;
+      if (e.remaining != null || e.status === 401 || e.status === 403) {
+        message.error(e.message ?? "שגיאה בהעלאת הקבצים");
+      }
+    }
+  }
 
-    // Poll each non-duplicate document until processing_status is done/error
-    const pendingIds = ids.filter((id) => !dupSet.has(id));
-    await pollDocumentResults(pendingIds, files, dupSet, ids);
-  } catch (err) {
-    message.error(err instanceof Error ? err.message : "שגיאה בהעלאת הקבצים");
-  } finally {
-    uploading.value = false;
+  await store.fetch(true);
+
+  // Poll only the successfully uploaded non-duplicate documents
+  const pendingIds = (allIds.filter(Boolean) as string[]).filter(
+    (id) => uploadResultRows.value.find((r) => r.id === id)?.status === "processing",
+  );
+  if (pendingIds.length) {
+    await pollDocumentResults(pendingIds, allIds as string[]);
+  } else {
+    uploadResultsLoading.value = false;
   }
 }
 
-async function pollDocumentResults(
-  pendingIds: string[],
-  files: File[],
-  dupSet: Set<string>,
-  allIds: string[],
-) {
+async function pollDocumentResults(pendingIds: string[], allIds: string[]) {
   const MAX_POLLS = 30;
   const INTERVAL = 2000;
   const settled = new Set<string>();
@@ -398,13 +416,12 @@ async function pollDocumentResults(
         .map(async (id) => {
           try {
             const doc = await api.documents.get(id);
-            const fileIndex = allIds.indexOf(id);
             if (doc.processing_status === "done" || doc.processing_status === "error") {
               settled.add(id);
               let fields: Record<string, any> = {};
               try { fields = doc.extracted_fields ? JSON.parse(doc.extracted_fields as string) : {}; } catch { /* ignore */ }
-              uploadResultRows.value = uploadResultRows.value.map((row, i) =>
-                i === fileIndex
+              uploadResultRows.value = uploadResultRows.value.map((row) =>
+                row.id === id
                   ? {
                       ...row,
                       status: doc.processing_status === "error" ? "error" : "done",

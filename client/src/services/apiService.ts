@@ -182,6 +182,32 @@ export const api = {
       }
       return res.json() as Promise<{ ids: string[]; duplicates: string[] }>;
     },
+    uploadOne: async (
+      file: File,
+      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean },
+      templateId?: number
+    ): Promise<{ id: string; duplicate: boolean }> => {
+      const fd = new FormData();
+      fd.append("files", file);
+      const params = new URLSearchParams();
+      if (options?.doAi === false) params.set("skipAi", "true");
+      if (options?.doEntities === false) params.set("skipEntities", "true");
+      if (options?.doReminders === false) params.set("skipReminders", "true");
+      if (templateId) params.set("templateId", String(templateId));
+      const qs = params.toString();
+      const url = `${BASE}/documents/upload${qs ? "?" + qs : ""}`;
+      const res = await fetch(url, { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as any;
+        const err = new Error(data.error ?? `Upload failed: ${res.status}`) as any;
+        err.serverMessage = data.message;
+        err.remaining = data.remaining;
+        err.limit = data.limit;
+        throw err;
+      }
+      const json = await res.json() as { ids: string[]; duplicates: string[] };
+      return { id: json.ids[0], duplicate: (json.duplicates ?? []).includes(json.ids[0]) };
+    },
     extract: (id: string, templateId?: string) =>
       post<{ ok: boolean; fields: Record<string, unknown> | null; template: string; document: import('../shared/types.js').Document }>(`/documents/${id}/extract`, templateId ? { templateId } : {}),
     delete: (id: string) => del(`/documents/${id}`),
