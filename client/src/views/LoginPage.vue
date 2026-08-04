@@ -224,6 +224,10 @@ async function handleLogin() {
       return;
     }
     authStore.setUser(data.user);
+    if (data.user?.role === "admin") {
+      router.replace("/admin");
+      return;
+    }
     // Preload key stores in background so pages feel instant
     Promise.all([
       dashStore.fetch(),
