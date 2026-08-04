@@ -44,5 +44,11 @@ export const useContractsStore = defineStore("contracts", () => {
     total.value--;
   }
 
-  return { rows, total, loading, expiringSoon, fetch, fetchExpiring, create, update, remove };
+  async function removeAll() {
+    await api.contracts.deleteAll();
+    rows.value = [];
+    total.value = 0;
+  }
+
+  return { rows, total, loading, expiringSoon, fetch, fetchExpiring, create, update, remove, removeAll };
 });

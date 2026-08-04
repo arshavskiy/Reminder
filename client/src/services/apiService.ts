@@ -232,6 +232,7 @@ export const api = {
     create: (body: Partial<Contract>) => post<Contract>("/contracts", body),
     update: (id: string, body: Partial<Contract>) => put<Contract>(`/contracts/${id}`, body),
     delete: (id: string, params?: { deleteRelatedReminders?: boolean }) => del(`/contracts/${id}${qs(params)}`),
+    deleteAll: () => del("/contracts"),
   },
 
   reminders: {
@@ -242,6 +243,7 @@ export const api = {
     create: (body: Partial<Reminder>) => post<Reminder>("/reminders", body),
     update: (id: number, body: Partial<Reminder>) => put<Reminder>(`/reminders/${id}`, body),
     delete: (id: number) => del(`/reminders/${id}`),
+    deleteAll: () => del("/reminders"),
     dismiss: (id: number) => post(`/reminders/${id}/dismiss`),
     snooze: (id: number, until: string) => post(`/reminders/${id}/snooze`, { until }),
     sendNow: (id: number) => post<{ success: boolean; error?: string }>(`/reminders/${id}/send-now`),

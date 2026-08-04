@@ -8,6 +8,7 @@
 <!--          🧪 תזכורת בדיקה-->
 <!--        </n-button>-->
         <n-button type="primary" :loading="loadingEmailTemplates" @click="openCreate">+ תזכורת חדשה</n-button>
+        <n-button v-if="store.rows.length > 0" type="error" quaternary @click="doDeleteAll">מחק הכל</n-button>
       </n-space>
     </n-space>
 
@@ -605,6 +606,23 @@ function confirmDelete(row: ReminderWithContext) {
         await store.remove(row.id);
         message.success("התזכורת נמחקה");
         load();
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
+}
+
+function doDeleteAll() {
+  const count = store.rows.length;
+  confirm({
+    title: "מחיקת כל התזכורות",
+    content: `למחוק את כל ${count} התזכורות? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק הכל",
+    onConfirm: async () => {
+      try {
+        await store.removeAll();
+        message.success(`${count} תזכורות נמחקו`);
       } catch (e) {
         message.error(String(e));
       }

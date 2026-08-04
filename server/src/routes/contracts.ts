@@ -513,6 +513,21 @@ export function registerContractRoutes(app: express.Application) {
     res.json(rows);
   });
 
+  // DELETE /api/contracts — delete all contracts for the current user
+  app.delete("/api/contracts", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const result = await col("contracts").deleteMany({ user_id: userId });
+    res.json({ ok: true, deleted: result.deletedCount });
+  });
+
   // DELETE /api/contracts/:id
   app.delete("/api/contracts/:id", async (req, res) => {
     let userId: string;

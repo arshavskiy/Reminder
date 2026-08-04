@@ -33,5 +33,11 @@ export const useRemindersStore = defineStore("reminders", () => {
     return api.reminders.sendNow(id);
   }
 
-  return { rows, total, loading, fetch, dismiss, remove, sendNow };
+  async function removeAll() {
+    await api.reminders.deleteAll();
+    rows.value = [];
+    total.value = 0;
+  }
+
+  return { rows, total, loading, fetch, dismiss, remove, sendNow, removeAll };
 });

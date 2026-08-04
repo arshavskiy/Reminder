@@ -48,6 +48,9 @@
         <button class="btn btn--ghost" :disabled="store.loading" @click="refresh" title="רענן">
           <span class="refresh-icon" :class="{ 'refresh-icon--spin': store.loading }">↻</span> רענן
         </button>
+        <button v-if="store.rows.length > 0" class="btn btn--danger-ghost" @click="showDeleteAllConfirm = true">
+          🗑 מחק הכל
+        </button>
 
       </div>
     </header>
@@ -397,6 +400,14 @@
       <p style="font-size:13px; color:var(--text-secondary)">
         פעולה זו אינה הפיכה. {{ bulkDeleteRelatedReminders ? "התזכורות ורישומי האימייל הקשורים יימחקו גם כן." : "התזכורות ורישומי האימייל הקשורים יישארו במערכת." }}
       </p>
+    </n-modal>
+
+    <!-- ── Delete all confirm modal ──────────────────────────────────── -->
+    <n-modal v-model:show="showDeleteAllConfirm" title="מחיקת כל הרשומות" preset="dialog" type="error" :positive-text="'מחק הכל'" :negative-text="'ביטול'" @positive-click="doDeleteAll" @negative-click="showDeleteAllConfirm = false">
+      <p>למחוק את כל <strong>{{ store.rows.length }}</strong> הרשומות? פעולה זו אינה הפיכה.</p>
+      <n-checkbox v-model:checked="deleteAllRelatedReminders" style="margin: 8px 0 4px">
+        מחק גם את כל התזכורות הקשורות
+      </n-checkbox>
     </n-modal>
 
     <!-- ── Add reminder modal ─────────────────────────────────────────── -->
@@ -1098,6 +1109,8 @@ const equipmentCategoryOptions: { label: string; value: EquipmentCategory }[] = 
 const showDeleteConfirm = ref(false);
 const deletingRow = ref<ContractWithClient | null>(null);
 const deleteRelatedReminders = ref(false);
+const showDeleteAllConfirm = ref(false);
+const deleteAllRelatedReminders = ref(false);
 
 // ── Client picker ─────────────────────────────────────────────────────────────
 const clientOptions = ref<{ label: string; value: string }[]>([]);
@@ -1514,6 +1527,22 @@ async function doDelete() {
   }
 }
 
+async function doDeleteAll() {
+  const count = store.rows.length;
+  try {
+    await store.removeAll();
+    if (deleteAllRelatedReminders.value) {
+      await api.reminders.deleteAll();
+    }
+    message.success(`${count} רשומות נמחקו`);
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    showDeleteAllConfirm.value = false;
+    deleteAllRelatedReminders.value = false;
+  }
+}
+
 function openDoc(row: ContractWithClient) {
   if (row.document_id) router.push(`/documents/${row.document_id}`);
 }
@@ -1621,6 +1650,12 @@ function exportToExcel() {
   color: var(--error-color, #d03050);
 }
 .btn--danger:hover { background: rgba(208, 48, 80, 0.08); }
+.btn--danger-ghost {
+  background: transparent;
+  border-color: var(--error-color, #d03050);
+  color: var(--error-color, #d03050);
+}
+.btn--danger-ghost:hover { background: rgba(208, 48, 80, 0.08); }
 .btn--xs { padding: 4px 10px; font-size: 12px; }
 .refresh-icon { display: inline-block; transition: transform 0.4s; }
 .refresh-icon--spin { animation: spin 0.8s linear infinite; }
