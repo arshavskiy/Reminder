@@ -41,7 +41,12 @@
           <h1 class="admin-main__title">{{ currentItem?.label }}</h1>
           <n-button size="small" :loading="sectionLoading" @click="reloadSection">↻ Refresh</n-button>
         </div>
-        <div class="admin-main__meta">System Admin Dashboard</div>
+        <div class="admin-main__meta">
+          System Admin Dashboard
+          <span v-if="activeSection !== 'users'" style="margin-left: 12px; color: var(--text-secondary); font-size: 12px">
+            Last updated: {{ getLastRefreshedText(activeSection) }}
+          </span>
+        </div>
       </header>
 
       <!-- ── Users ── -->
@@ -529,7 +534,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, h, onMounted, ref} from "vue";
+import {computed, h, onMounted, onUnmounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import type {DataTableColumns} from "naive-ui";
 import {NButton, NDataTable, NIcon, NInput, NModal, NSelect, NSpin, NTag, useMessage,} from "naive-ui";
@@ -1176,6 +1181,59 @@ async function loadSectionData(key: string) {
   }
 }
 
+// ── Polling / Auto-refresh ────────────────────────────────────────────────────
+const lastRefreshed = ref<Map<string, Date>>(new Map());
+const pollingIntervals = ref<Map<string, NodeJS.Timeout>>(new Map());
+const POLLING_SCHEDULE = {
+  scheduler: 30000,    // 30s for scheduler health
+  reminders: 60000,    // 60s for email delivery stats
+  documents: 90000,    // 90s for extraction pipeline
+};
+
+function getLastRefreshedText(section: string): string {
+  const last = lastRefreshed.value.get(section);
+  if (!last) return "Never";
+  const seconds = Math.floor((Date.now() - last.getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ago`;
+}
+
+async function startPolling() {
+  // Scheduler polling (30s)
+  if (pollingIntervals.value.has("scheduler")) clearInterval(pollingIntervals.value.get("scheduler")!);
+  pollingIntervals.value.set("scheduler", setInterval(async () => {
+    if (activeSection.value === "scheduler" && schedulerMonitor.value) {
+      try {
+        schedulerMonitor.value = await api.admin.monitorScheduler();
+        lastRefreshed.value.set("scheduler", new Date());
+      } catch { /* silent fail */ }
+    }
+  }, POLLING_SCHEDULE.scheduler));
+
+  // Reminders polling (60s)
+  if (pollingIntervals.value.has("reminders")) clearInterval(pollingIntervals.value.get("reminders")!);
+  pollingIntervals.value.set("reminders", setInterval(async () => {
+    if (activeSection.value === "reminders" && reminderMonitor.value) {
+      try {
+        reminderMonitor.value = await api.admin.monitorReminders();
+        lastRefreshed.value.set("reminders", new Date());
+      } catch { /* silent fail */ }
+    }
+  }, POLLING_SCHEDULE.reminders));
+
+  // Documents polling (90s)
+  if (pollingIntervals.value.has("documents")) clearInterval(pollingIntervals.value.get("documents")!);
+  pollingIntervals.value.set("documents", setInterval(async () => {
+    if (activeSection.value === "documents" && docMonitor.value) {
+      try {
+        docMonitor.value = await api.admin.monitorDocuments();
+        lastRefreshed.value.set("documents", new Date());
+      } catch { /* silent fail */ }
+    }
+  }, POLLING_SCHEDULE.documents));
+}
+
 onMounted(async () => {
   try {
     const cfg = await api.config.getAdmin();
@@ -1183,6 +1241,12 @@ onMounted(async () => {
     dbName.value = cfg.dbName ?? "";
   } catch { /* non-critical */ }
   await loadUsers();
+  startPolling();
+});
+
+onUnmounted(() => {
+  pollingIntervals.value.forEach((interval) => clearInterval(interval));
+  pollingIntervals.value.clear();
 });
 </script>
 
