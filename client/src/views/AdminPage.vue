@@ -781,7 +781,7 @@ const extractionColumns: DataTableColumns<any> = [
       row._isGroup ? "" : (row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—")),
   },
   {
-    title: "", key: "actions", align: "center", width: 70,
+    title: "", key: "actions", align: "center", width: 100,
     render: (row) => row._isGroup ? null : h(NButton, {
       size: "tiny",
       onClick: () => openDocModal(row.id),
@@ -867,7 +867,7 @@ const docStatusColumns: DataTableColumns<any> = [
     title: STATUS_HE[s] ?? s,
     key: s,
     align: "center" as const,
-    width: 80,
+    width: 110,
     render: (row: any) => h("span", { style: row[s] ? "font-weight:600" : "color:var(--text-secondary)" }, row[s] ?? "0"),
   })),
 ];
@@ -1038,7 +1038,7 @@ const monthlyScheduleColumns: DataTableColumns<any> = [
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "Enabled", key: "enabled", align: "center", width: 70,
+    title: "Enabled", key: "enabled", align: "center", width: 90,
     render: (row) =>
       h(NTag, { type: row.enabled ? "default" : "error", size: "small", round: true },
         { default: () => row.enabled ? "Yes" : "No" }),
@@ -1048,7 +1048,7 @@ const monthlyScheduleColumns: DataTableColumns<any> = [
     render: (row) => h("span", { style: "font-size:12px" }, row.day ?? "—"),
   },
   {
-    title: "Hour", key: "hour", align: "center", width: 70,
+    title: "Hour", key: "hour", align: "center", width: 90,
     render: (row) => h("span", { style: "font-size:12px" }, row.hour != null ? `${row.hour}:00` : "—"),
   },
   {
@@ -1071,17 +1071,17 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "Enabled", key: "enabled", align: "center", width: 70,
+    title: "Enabled", key: "enabled", align: "center", width: 90,
     render: (row) =>
       h(NTag, { type: row.enabled ? "default" : "error", size: "small", round: true },
         { default: () => row.enabled ? "Yes" : "No" }),
   },
   {
-    title: "Day", key: "day", align: "center", width: 70,
+    title: "Day", key: "day", align: "center", width: 90,
     render: (row) => h("span", { style: "font-size:12px" }, row.day ?? "—"),
   },
   {
-    title: "Hour", key: "hour", align: "center", width: 70,
+    title: "Hour", key: "hour", align: "center", width: 90,
     render: (row) => h("span", { style: "font-size:12px" }, row.hour != null ? `${row.hour}:00` : "—"),
   },
   {
