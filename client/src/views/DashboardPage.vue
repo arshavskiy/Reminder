@@ -1,14 +1,20 @@
 <template>
   <div class="dash">
     <header class="dash__topbar">
-<!--      <h1 class="dash__greet">{{ greeting }}{{ userName ? `, ${userName}` : "" }}</h1>-->
-<!--      <n-button :loading="store.loading" @click="store.fetch(true)">↻ רענן</n-button>-->
+      <!--      <h1 class="dash__greet">{{ greeting }}{{ userName ? `, ${userName}` : "" }}</h1>-->
+      <!--      <n-button :loading="store.loading" @click="store.fetch(true)">↻ רענן</n-button>-->
     </header>
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
       <div
-        v-if="hasFeature(FEATURES.dashboard.dropStrip) && hasFeature(FEATURES.pages.documents)"
-        :class="{ 'drop-strip--active': isDragging, 'drop-strip--uploading': uploading }"
+        v-if="
+          hasFeature(FEATURES.dashboard.dropStrip) &&
+          hasFeature(FEATURES.pages.documents)
+        "
+        :class="{
+          'drop-strip--active': isDragging,
+          'drop-strip--uploading': uploading,
+        }"
         class="drop-strip"
         @dragover.prevent="!uploading && (isDragging = true)"
         @dragleave.prevent="isDragging = false"
@@ -19,8 +25,16 @@
           <n-icon :component="CloudUploadOutline" :size="30" />
         </div>
         <div class="drop-strip__copy">
-          <strong>{{ uploading ? "מעלה קבצים..." : isDragging ? "שחרר כאן והייבוא יתחיל" : "גרור מסמכים לכאן" }}</strong>
-          <span>{{ uploading ? "הקבצים נשלחים לעיבוד" : "גרירה או לחיצה מעלות מיד" }}</span>
+          <strong>{{
+            uploading
+              ? "מעלה קבצים..."
+              : isDragging
+                ? "שחרר כאן והייבוא יתחיל"
+                : "גרור מסמכים לכאן"
+          }}</strong>
+          <span>{{
+            uploading ? "הקבצים נשלחים לעיבוד" : "גרירה או לחיצה מעלות מיד"
+          }}</span>
         </div>
       </div>
       <input
@@ -30,6 +44,29 @@
         type="file"
         @change="onFileInputChange"
       />
+
+      <!-- ── Upload results modal ───────────────────────────────────────── -->
+      <n-modal v-model:show="showUploadResults" :mask-closable="!uploadResultsLoading" style="width: min(680px, 96vw)">
+        <n-card :title="`תוצאות העלאה — ${uploadResultRows.length} קבצים`" :bordered="false" size="medium" role="dialog">
+          <n-spin :show="uploadResultsLoading" description="מעבד מסמכים...">
+            <n-data-table
+              :columns="uploadResultColumns"
+              :data="uploadResultRows"
+              :bordered="false"
+              :pagination="false"
+              size="small"
+              dir="rtl"
+              style="min-height: 120px"
+            />
+          </n-spin>
+          <template #footer>
+            <div style="display:flex; justify-content:flex-end; gap:8px">
+              <n-button :disabled="uploadResultsLoading" @click="showUploadResults = false">סגור</n-button>
+              <n-button type="primary" :disabled="uploadResultsLoading" @click="() => { showUploadResults = false; router.push('/documents') }">עבור למסמכים</n-button>
+            </div>
+          </template>
+        </n-card>
+      </n-modal>
 
       <!-- Quick stats — small chips line, easy to scan -->
       <div class="dash__stats">
@@ -45,12 +82,25 @@
           <span class="stat__num">{{ stats?.total_inspections ?? 0 }}</span>
           <span class="stat__label">תסקירים</span>
         </div>
-        <div v-if="hasFeature(FEATURES.dashboard.statPendingReminders)" class="stat">
-          <span class="stat__num stat__num--accent">{{ stats?.pending_reminders ?? 0 }}</span>
+        <div
+          v-if="hasFeature(FEATURES.dashboard.statPendingReminders)"
+          class="stat"
+        >
+          <span class="stat__num stat__num--accent">{{
+            stats?.pending_reminders ?? 0
+          }}</span>
           <span class="stat__label">תזכורות ממתינות</span>
         </div>
-        <div v-if="hasFeature(FEATURES.dashboard.statExpiringSoon) && (stats?.expiring_soon ?? 0) > 0" class="stat">
-          <span class="stat__num stat__num--warn">{{ stats?.expiring_soon }}</span>
+        <div
+          v-if="
+            hasFeature(FEATURES.dashboard.statExpiringSoon) &&
+            (stats?.expiring_soon ?? 0) > 0
+          "
+          class="stat"
+        >
+          <span class="stat__num stat__num--warn">{{
+            stats?.expiring_soon
+          }}</span>
           <span class="stat__label">פגי תוקף ב-30 יום</span>
         </div>
       </div>
@@ -74,7 +124,9 @@
       />
 
       <!-- ── Module cards ──────────────────────────────────────────────── -->
-      <h2 v-if="hasFeature(FEATURES.dashboard.modules)" class="dash__section">סביבת העבודה</h2>
+      <h2 v-if="hasFeature(FEATURES.dashboard.modules)" class="dash__section">
+        סביבת העבודה
+      </h2>
       <div v-if="hasFeature(FEATURES.dashboard.modules)" class="module-grid">
         <article
           v-for="m in data_cards"
@@ -89,25 +141,39 @@
               </div>
               <div class="module__heading">
                 <h3 class="module__title">{{ m.title }}</h3>
-                <span v-if="m.count" class="module__count">{{ m.count() }}</span>
+                <span v-if="m.count" class="module__count">{{
+                  m.count()
+                }}</span>
               </div>
             </div>
             <p class="module__desc">{{ m.desc }}</p>
-            <span class="module__cta">פתח   </span>
+            <span class="module__cta">פתח </span>
           </div>
         </article>
       </div>
 
       <!-- ── Two-column: recent docs + upcoming reminders ──────────────── -->
       <div class="dash__two-col">
-        <section v-if="hasFeature(FEATURES.dashboard.recentDocuments)" class="panel">
+        <section
+          v-if="hasFeature(FEATURES.dashboard.recentDocuments)"
+          class="panel"
+        >
           <header class="panel__head">
             <h3>מסמכים אחרונים</h3>
-            <router-link class="panel__more" to="/documents">כל המסמכים   </router-link>
+            <router-link class="panel__more" to="/documents"
+              >כל המסמכים
+            </router-link>
           </header>
           <ul v-if="stats?.recent_documents?.length" class="panel__list">
-            <li v-for="doc in stats.recent_documents" :key="doc.id" class="panel__row">
-              <router-link :to="`/documents/${doc.id}`" class="panel__row-title">
+            <li
+              v-for="doc in stats.recent_documents"
+              :key="doc.id"
+              class="panel__row"
+            >
+              <router-link
+                :to="`/documents/${doc.id}`"
+                class="panel__row-title"
+              >
                 {{ doc.file_name }}
               </router-link>
               <StatusBadge :status="doc.processing_status" />
@@ -116,16 +182,27 @@
           <p v-else class="panel__empty">אין מסמכים עדיין</p>
         </section>
 
-        <section v-if="hasFeature(FEATURES.dashboard.upcomingReminders)" class="panel">
+        <section
+          v-if="hasFeature(FEATURES.dashboard.upcomingReminders)"
+          class="panel"
+        >
           <header class="panel__head">
             <h3>תזכורות קרובות</h3>
-            <router-link class="panel__more" to="/reminders">כל התזכורות   </router-link>
+            <router-link class="panel__more" to="/reminders"
+              >כל התזכורות
+            </router-link>
           </header>
           <ul v-if="stats?.upcoming_reminders?.length" class="panel__list">
-            <li v-for="r in stats.upcoming_reminders" :key="r.id" class="panel__row">
+            <li
+              v-for="r in stats.upcoming_reminders"
+              :key="r.id"
+              class="panel__row"
+            >
               <div class="panel__row-stack">
                 <strong class="panel__row-title">{{ r.title }}</strong>
-                <span v-if="r.client_name" class="panel__row-sub">{{ r.client_name }}</span>
+                <span v-if="r.client_name" class="panel__row-sub">{{
+                  r.client_name
+                }}</span>
               </div>
               <span class="panel__row-date">{{ r.trigger_date }}</span>
             </li>
@@ -134,14 +211,14 @@
         </section>
       </div>
     </n-spin>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from "vue";
-import {useRouter} from "vue-router";
-import {NIcon, NSpin, NSwitch, useMessage} from "naive-ui";
+import { computed, h, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
+import { NButton, NCard, NDataTable, NIcon, NModal, NSpin, NSwitch, NTag, useMessage } from "naive-ui";
+import type { DataTableColumns } from "naive-ui";
 import {
   AlarmOutline,
   CloudUploadOutline,
@@ -152,13 +229,13 @@ import {
   PeopleOutline,
   SettingsOutline,
 } from "@vicons/ionicons5";
-import {useDashboardStore} from "../stores/dashboard.js";
-import {useRemindersStore} from "../stores/reminders.js";
-import {useAuthStore} from "../stores/auth.js";
-import {useFeaturesStore} from "../stores/features.js";
-import type {ExpiryCalendarItem} from "../services/apiService.js";
-import {api} from "../services/apiService.js";
-import {FEATURES, type FeatureKey} from "../shared/features.js";
+import { useDashboardStore } from "../stores/dashboard.js";
+import { useRemindersStore } from "../stores/reminders.js";
+import { useAuthStore } from "../stores/auth.js";
+import { useFeaturesStore } from "../stores/features.js";
+import type { ExpiryCalendarItem } from "../services/apiService.js";
+import { api } from "../services/apiService.js";
+import { FEATURES, type FeatureKey } from "../shared/features.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 
@@ -171,19 +248,83 @@ const message = useMessage();
 const stats = computed(() => store.stats);
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
 const loadingExpiryItems = ref(false);
-const calendarNextTestsOnly = ref(false);
+const calendarNextTestsOnly = ref(true);
 const savingCalendarPreference = ref(false);
 const uploading = ref(false);
 const isDragging = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 
+// ── Upload results modal ──────────────────────────────────────────────────────
+interface UploadResultRow {
+  fileName: string;
+  status: "processing" | "done" | "error" | "duplicate";
+  client: string;
+  date: string;
+  docType: string;
+  contractNumber: string;
+}
+const showUploadResults = ref(false);
+const uploadResultsLoading = ref(false);
+const uploadResultRows = ref<UploadResultRow[]>([]);
+
+const uploadResultColumns: DataTableColumns<UploadResultRow> = [
+  {
+    title: "קובץ",
+    key: "fileName",
+    align: "right",
+    ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.fileName),
+  },
+  {
+    title: "סטטוס",
+    key: "status",
+    align: "right",
+    width: 100,
+    render: (row) => {
+      const map: Record<string, { type: "success"|"warning"|"error"|"info"; label: string }> = {
+        done:       { type: "success", label: "עובד" },
+        processing: { type: "info",    label: "מעבד..." },
+        error:      { type: "error",   label: "שגיאה" },
+        duplicate:  { type: "warning", label: "כפול" },
+      };
+      const { type, label } = map[row.status] ?? map.processing;
+      return h(NTag, { type, size: "small", round: true }, { default: () => label });
+    },
+  },
+  {
+    title: "לקוח",
+    key: "client",
+    align: "right",
+    ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.client || "—"),
+  },
+  {
+    title: "סוג",
+    key: "docType",
+    align: "right",
+    ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.docType || "—"),
+  },
+  {
+    title: "תאריך",
+    key: "date",
+    align: "right",
+    width: 100,
+    render: (row) => h("span", { style: "font-size:12px" }, row.date || "—"),
+  },
+];
+
 function hasFeature(feature: FeatureKey): boolean {
   return featuresStore.hasFeature(feature);
 }
 
-const calendarRows = computed(() => calendarNextTestsOnly.value ? [] : remindersStore.rows);
-const calendarLoading = computed(() =>
-  loadingExpiryItems.value || (!calendarNextTestsOnly.value && remindersStore.loading)
+const calendarRows = computed(() =>
+  calendarNextTestsOnly.value ? [] : remindersStore.rows,
+);
+const calendarLoading = computed(
+  () =>
+    loadingExpiryItems.value ||
+    (!calendarNextTestsOnly.value && remindersStore.loading),
 );
 
 function onFileInputChange(e: Event) {
@@ -207,20 +348,87 @@ async function uploadDashboardFiles(
     doAi: true,
     doEntities: true,
     doReminders: true,
-  }
+  },
 ) {
   uploading.value = true;
   try {
-    const {ids, duplicates} = await api.documents.upload(files, options);
-    const newCount = ids.length - (duplicates?.length ?? 0);
-    if (newCount > 0) message.success(`${newCount} מסמכים נוספו לתור עיבוד`);
-    if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיימים`);
+    const { ids, duplicates } = await api.documents.upload(files, options);
+    const dupSet = new Set(duplicates ?? []);
+
+    // Seed the modal rows immediately so the user sees file names right away
+    uploadResultRows.value = files.map((f, i) => ({
+      fileName: f.name,
+      status: dupSet.has(ids[i]) ? "duplicate" : "processing",
+      client: "",
+      date: "",
+      docType: "",
+      contractNumber: "",
+    }));
+    uploadResultsLoading.value = true;
+    showUploadResults.value = true;
+
     await store.fetch(true);
+
+    // Poll each non-duplicate document until processing_status is done/error
+    const pendingIds = ids.filter((id) => !dupSet.has(id));
+    await pollDocumentResults(pendingIds, files, dupSet, ids);
   } catch (err) {
     message.error(err instanceof Error ? err.message : "שגיאה בהעלאת הקבצים");
   } finally {
     uploading.value = false;
   }
+}
+
+async function pollDocumentResults(
+  pendingIds: string[],
+  files: File[],
+  dupSet: Set<string>,
+  allIds: string[],
+) {
+  const MAX_POLLS = 30;
+  const INTERVAL = 2000;
+  const settled = new Set<string>();
+
+  for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
+    await new Promise((r) => setTimeout(r, INTERVAL));
+
+    await Promise.all(
+      pendingIds
+        .filter((id) => !settled.has(id))
+        .map(async (id) => {
+          try {
+            const doc = await api.documents.get(id);
+            const fileIndex = allIds.indexOf(id);
+            if (doc.processing_status === "done" || doc.processing_status === "error") {
+              settled.add(id);
+              let fields: Record<string, any> = {};
+              try { fields = doc.extracted_fields ? JSON.parse(doc.extracted_fields as string) : {}; } catch { /* ignore */ }
+              uploadResultRows.value = uploadResultRows.value.map((row, i) =>
+                i === fileIndex
+                  ? {
+                      ...row,
+                      status: doc.processing_status === "error" ? "error" : "done",
+                      client: fields.client_company ?? fields.client_name ?? "",
+                      date: fields.expiry_date ?? fields.next_inspection_date ?? fields.start_date ?? "",
+                      docType: fields.document_type ?? fields.contract_type ?? (doc as any).document_type ?? "",
+                      contractNumber: fields.contract_number ?? fields.report_number ?? "",
+                    }
+                  : row,
+              );
+            }
+          } catch { /* ignore individual poll failures */ }
+        }),
+    );
+
+    if (settled.size >= pendingIds.length) break;
+  }
+
+  // Mark any still-processing as error (timed out)
+  uploadResultRows.value = uploadResultRows.value.map((row) =>
+    row.status === "processing" ? { ...row, status: "error" } : row,
+  );
+  uploadResultsLoading.value = false;
+  await store.fetch(true);
 }
 
 onMounted(async () => {
@@ -253,7 +461,9 @@ async function saveCalendarPreference(value: boolean) {
     await refreshCalendar(true);
   } catch (err) {
     calendarNextTestsOnly.value = !value;
-    message.error(err instanceof Error ? err.message : "שגיאה בשמירת הגדרת הלוח");
+    message.error(
+      err instanceof Error ? err.message : "שגיאה בשמירת הגדרת הלוח",
+    );
   } finally {
     savingCalendarPreference.value = false;
   }
@@ -266,7 +476,7 @@ async function refreshCalendar(force: boolean) {
   loadingExpiryItems.value = true;
   try {
     expiryItems.value = await api.equipment.expiryCalendar(
-      calendarNextTestsOnly.value ? { from: todayIso() } : undefined
+      calendarNextTestsOnly.value ? { from: todayIso() } : undefined,
     );
   } catch {
     expiryItems.value = [];
@@ -292,7 +502,7 @@ const userName = computed(() => {
 // "בוקר טוב / צהריים טובים / ערב טוב / לילה טוב" by local hour
 const greeting = computed(() => {
   const h = new Date().getHours();
-  if (h >= 5  && h < 12) return "בוקר טוב";
+  if (h >= 5 && h < 12) return "בוקר טוב";
   if (h >= 12 && h < 17) return "צהריים טובים";
   if (h >= 17 && h < 21) return "ערב טוב";
   return "לילה טוב";
@@ -302,7 +512,10 @@ const greeting = computed(() => {
 const dateLine = computed(() => {
   const d = new Date();
   return d.toLocaleDateString("he-IL", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 });
 
@@ -316,7 +529,8 @@ const modules = [
     icon: ClipboardOutline,
     to: "/contracts",
     show: true,
-  }, {
+  },
+  {
     key: "contracts",
     feature: FEATURES.pages.contracts,
     title: "תסקירים",
@@ -384,15 +598,19 @@ const modules = [
     icon: SettingsOutline,
     to: "/settings",
     show: authStore.user?.role === "admin", // Only show to admins
-
   },
 ];
 
-const data_cards = computed(() => modules.filter((m) => m.show && hasFeature(m.feature)))
+const data_cards = computed(() =>
+  modules.filter((m) => m.show && hasFeature(m.feature)),
+);
 </script>
 
 <style scoped>
-.dash { max-width: 1200px; margin: 0 auto; }
+.dash {
+  max-width: 1200px;
+  margin: 0 auto;
+}
 
 .dash__topbar {
   display: flex;
@@ -435,12 +653,16 @@ const data_cards = computed(() => modules.filter((m) => m.show && hasFeature(m.f
   color: var(--text-primary);
   cursor: pointer;
   background:
-    linear-gradient(135deg, rgba(24, 160, 88, 0.18), rgba(32, 128, 240, 0.10)),
+    linear-gradient(135deg, rgba(24, 160, 88, 0.18), rgba(32, 128, 240, 0.1)),
     var(--bg-card);
   box-shadow:
     0 14px 36px rgba(24, 160, 88, 0.12),
     inset 0 0 0 1px rgba(255, 255, 255, 0.38);
-  transition: transform 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  transition:
+    transform 0.15s,
+    border-color 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
 }
 
 .drop-strip:hover,
@@ -526,8 +748,12 @@ const data_cards = computed(() => modules.filter((m) => m.show && hasFeature(m.f
   color: var(--text-primary);
   line-height: 1;
 }
-.stat__num--accent { color: var(--brand-color); }
-.stat__num--warn   { color: var(--color-warning); }
+.stat__num--accent {
+  color: var(--brand-color);
+}
+.stat__num--warn {
+  color: var(--color-warning);
+}
 .stat__label {
   font-size: 13px;
   color: var(--text-secondary);
@@ -554,7 +780,10 @@ const data_cards = computed(() => modules.filter((m) => m.show && hasFeature(m.f
   border-radius: 16px;
   padding: 22px;
   cursor: pointer;
-  transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -581,7 +810,9 @@ const data_cards = computed(() => modules.filter((m) => m.show && hasFeature(m.f
   align-items: center;
   justify-content: center;
 }
-html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
+html[data-theme="light"] .module__icon {
+  background: rgba(24, 160, 88, 0.1);
+}
 
 .module__heading {
   display: flex;
@@ -633,7 +864,9 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
   gap: 18px;
 }
 @media (max-width: 900px) {
-  .dash__two-col { grid-template-columns: 1fr; }
+  .dash__two-col {
+    grid-template-columns: 1fr;
+  }
 }
 
 .panel {
@@ -676,7 +909,9 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
   padding: 10px 0;
   border-bottom: 1px solid var(--border-color);
 }
-.panel__row:last-child { border-bottom: none; }
+.panel__row:last-child {
+  border-bottom: none;
+}
 .panel__row-title {
   color: var(--text-primary);
   font-size: 13px;
@@ -686,8 +921,15 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.panel__row-title:hover { color: var(--brand-color); }
-.panel__row-stack { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.panel__row-title:hover {
+  color: var(--brand-color);
+}
+.panel__row-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
 .panel__row-sub {
   font-size: 12px;
   color: var(--text-muted);
@@ -764,7 +1006,6 @@ html[data-theme="light"] .module__icon { background: rgba(24, 160, 88, 0.10); }
     flex: 1 1 auto;
     max-width: 100%;
   }
-
 }
 
 @media (max-width: 430px) {

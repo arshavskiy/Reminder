@@ -201,6 +201,7 @@ export function registerDocumentRoutes(app: express.Application) {
       mkdirSync(uploadDir, { recursive: true });
 
       const ids: string[] = [];
+      const duplicates: string[] = [];
       for (const file of files) {
         const ext = extname(file.originalname) || "";
         const destPath = join(uploadDir, `${Date.now()}${ext}`);
@@ -212,11 +213,14 @@ export function registerDocumentRoutes(app: express.Application) {
           displayName = Buffer.from(file.originalname, "latin1").toString("utf8");
           if (displayName.includes("�")) displayName = file.originalname;
         } catch { /* keep original */ }
+        const beforeCount = await col("documents").countDocuments({ user_id: userId });
         const id = await importFile(destPath, undefined, userId, displayName, pipelineOptions);
+        const afterCount = await col("documents").countDocuments({ user_id: userId });
         ids.push(String(id));
+        if (afterCount === beforeCount) duplicates.push(String(id));
       }
 
-      res.json({ ids });
+      res.json({ ids, duplicates });
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }

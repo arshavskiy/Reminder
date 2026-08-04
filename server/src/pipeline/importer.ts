@@ -82,7 +82,7 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   const SIGNED_URL_TTL = 7 * 24 * 3600; // 7 days
   if (spacesEnabled()) {
     try {
-      spacesKey = `documents/${fileHash}${ext}`;
+      spacesKey = userId ? `documents/${userId}/${fileHash}${ext}` : `documents/${fileHash}${ext}`;
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
       downloadUrl = await getSpacesSignedUrl(spacesKey, SIGNED_URL_TTL, fileName);
       logger.info("document_storage_uploaded", { user_id: userId ?? null, spaces_key: spacesKey });
