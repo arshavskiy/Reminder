@@ -63,7 +63,6 @@
           :loading="usersLoading"
           :bordered="false"
           :pagination="{ pageSize: 20 }"
-          dir="rtl"
           size="small"
           style="margin-top: 16px"
         />
@@ -958,7 +957,7 @@ onMounted(async () => {
   width: 220px;
   flex: 0 0 220px;
   background: var(--bg-card);
-  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
 }
@@ -994,7 +993,7 @@ onMounted(async () => {
   color: var(--text-secondary);
   font-size: 14px;
   cursor: pointer;
-  text-align: right;
+  text-align: left;
   width: 100%;
   transition: background 0.15s, color 0.15s;
 }
