@@ -340,6 +340,10 @@ export const api = {
     listUsers: () => get<any[]>("/admin/users"),
     updateUser: (id: string, body: { role?: string; is_active?: number }) =>
       put<any>(`/admin/users/${id}`, body),
+    monitorDocuments: () => get<any>("/admin/monitor/documents"),
+    monitorReminders: () => get<any>("/admin/monitor/reminders"),
+    monitorScheduler: () => get<any>("/admin/monitor/scheduler"),
+    monitorMonthlyReports: () => get<any>("/admin/monitor/monthly-reports"),
   },
 
   config: {

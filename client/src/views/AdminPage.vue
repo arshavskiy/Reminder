@@ -14,7 +14,7 @@
           class="admin-sidebar__item"
           :class="{ 'admin-sidebar__item--active': activeSection === item.key }"
           type="button"
-          @click="activeSection = item.key"
+          @click="switchSection(item.key)"
         >
           <n-icon :component="item.icon" :size="18" />
           <span>{{ item.label }}</span>
@@ -32,11 +32,14 @@
     <!-- ── Main content ─────────────────────────────────────────────────── -->
     <div class="admin-main">
       <header class="admin-main__header">
-        <h1 class="admin-main__title">{{ currentItem?.label }}</h1>
+        <div class="admin-main__title-row">
+          <h1 class="admin-main__title">{{ currentItem?.label }}</h1>
+          <n-button size="small" :loading="sectionLoading" @click="reloadSection">↻ רענן</n-button>
+        </div>
         <div class="admin-main__meta">לוח ניהול מערכת</div>
       </header>
 
-      <!-- Users section -->
+      <!-- ── Users ── -->
       <section v-if="activeSection === 'users'" class="admin-section">
         <div class="admin-section__toolbar">
           <n-input
@@ -48,7 +51,6 @@
           >
             <template #prefix><n-icon :component="SearchOutline" /></template>
           </n-input>
-          <n-button :loading="usersLoading" @click="loadUsers">↻ רענן</n-button>
         </div>
 
         <n-data-table
@@ -63,7 +65,7 @@
         />
       </section>
 
-      <!-- Stats section -->
+      <!-- ── Stats ── -->
       <section v-if="activeSection === 'stats'" class="admin-section">
         <div class="admin-stats-grid">
           <div v-for="s in systemStats" :key="s.label" class="admin-stat-card">
@@ -74,6 +76,218 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- ── Documents & Extraction ── -->
+      <section v-if="activeSection === 'documents'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="docMonitor">
+          <!-- Storage per user -->
+          <div class="monitor-block">
+            <div class="monitor-block__title">אחסון S3 לפי משתמש</div>
+            <div class="admin-stats-grid" style="margin-top:10px">
+              <div v-for="s in docMonitor.storage" :key="s.user_id" class="admin-stat-card">
+                <n-icon :component="CloudUploadOutline" :size="24" class="admin-stat-card__icon" />
+                <div class="admin-stat-card__body">
+                  <div class="admin-stat-card__num">{{ formatBytes(s.total_bytes) }}</div>
+                  <div class="admin-stat-card__label">{{ resolveUserEmail(s.user_id) }} · {{ s.doc_count }} קבצים</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Per-user status matrix -->
+          <div class="monitor-block">
+            <div class="monitor-block__title">סטטוס מסמכים לפי משתמש</div>
+            <n-data-table
+              :columns="docStatusColumns"
+              :data="docStatusRows"
+              :bordered="false"
+              size="small"
+              dir="rtl"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <!-- Failed extractions -->
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              חילוץ נכשל
+              <n-tag v-if="docMonitor.failed.length" type="error" size="small" round style="margin-right:8px">{{ docMonitor.failed.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="failedDocsColumns"
+              :data="docMonitor.failed"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              dir="rtl"
+              style="margin-top:10px"
+              :row-class-name="() => 'row-error'"
+            />
+          </div>
+
+          <!-- Stuck in queued -->
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              תקוע בתור (מעל 10 דקות)
+              <n-tag v-if="docMonitor.stuck.length" type="warning" size="small" round style="margin-right:8px">{{ docMonitor.stuck.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="stuckDocsColumns"
+              :data="docMonitor.stuck"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              dir="rtl"
+              style="margin-top:10px"
+            />
+          </div>
+        </template>
+      </section>
+
+      <!-- ── Reminders ── -->
+      <section v-if="activeSection === 'reminders'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="reminderMonitor">
+          <!-- Status counts per user -->
+          <div class="monitor-block">
+            <div class="monitor-block__title">סטטוס תזכורות לפי משתמש</div>
+            <n-data-table
+              :columns="reminderStatusColumns"
+              :data="reminderStatusRows"
+              :bordered="false"
+              size="small"
+              dir="rtl"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <!-- Pending reminders -->
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              תזכורות ממתינות
+              <n-tag v-if="reminderMonitor.pending.length" type="warning" size="small" round style="margin-right:8px">{{ reminderMonitor.pending.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="pendingReminderColumns"
+              :data="reminderMonitor.pending"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              dir="rtl"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <!-- Failed reminder sends -->
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              שליחות נכשלו
+              <n-tag v-if="reminderMonitor.failedSends.length" type="error" size="small" round style="margin-right:8px">{{ reminderMonitor.failedSends.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="failedSendsColumns"
+              :data="reminderMonitor.failedSends"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              dir="rtl"
+              style="margin-top:10px"
+            />
+          </div>
+        </template>
+      </section>
+
+      <!-- ── Scheduler ── -->
+      <section v-if="activeSection === 'scheduler'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="schedulerMonitor">
+          <div class="admin-stats-grid" style="margin-bottom:24px">
+            <div class="admin-stat-card">
+              <n-icon :component="TimeOutline" :size="24" class="admin-stat-card__icon" />
+              <div class="admin-stat-card__body">
+                <div class="admin-stat-card__num" style="font-size:16px">{{ formatDate(schedulerMonitor.lastRunTime) }}</div>
+                <div class="admin-stat-card__label">ריצה אחרונה</div>
+              </div>
+            </div>
+            <div class="admin-stat-card">
+              <n-icon :component="AlarmOutline" :size="24" class="admin-stat-card__icon" />
+              <div class="admin-stat-card__body">
+                <div class="admin-stat-card__num" style="font-size:16px">{{ formatDate(schedulerMonitor.nextRunTime) }}</div>
+                <div class="admin-stat-card__label">ריצה הבאה (משוערת)</div>
+              </div>
+            </div>
+            <div class="admin-stat-card">
+              <n-icon :component="TimerOutline" :size="24" class="admin-stat-card__icon" />
+              <div class="admin-stat-card__body">
+                <div class="admin-stat-card__num">{{ formatInterval(schedulerMonitor.intervalSeconds) }}</div>
+                <div class="admin-stat-card__label">מרווח בדיקה</div>
+              </div>
+            </div>
+            <div class="admin-stat-card">
+              <n-icon :component="CheckmarkCircleOutline" :size="24" class="admin-stat-card__icon" style="color:var(--success-color,#18a058)" />
+              <div class="admin-stat-card__body">
+                <div class="admin-stat-card__num">{{ schedulerMonitor.sentLastHour }}</div>
+                <div class="admin-stat-card__label">נשלחו בשעה האחרונה</div>
+              </div>
+            </div>
+            <div class="admin-stat-card">
+              <n-icon :component="CloseCircleOutline" :size="24" class="admin-stat-card__icon" style="color:var(--error-color,#d03050)" />
+              <div class="admin-stat-card__body">
+                <div class="admin-stat-card__num">{{ schedulerMonitor.failedLastHour }}</div>
+                <div class="admin-stat-card__label">נכשלו בשעה האחרונה</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">לוח דוח חודשי לפי משתמש</div>
+            <n-data-table
+              :columns="monthlyScheduleColumns"
+              :data="schedulerMonitor.monthlySchedule"
+              :bordered="false"
+              size="small"
+              dir="rtl"
+              style="margin-top:10px"
+            />
+          </div>
+        </template>
+      </section>
+
+      <!-- ── Monthly Reports ── -->
+      <section v-if="activeSection === 'monthly'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="monthlyMonitor">
+          <div class="monitor-block">
+            <div class="monitor-block__title">תצורת דוח חודשי לפי משתמש</div>
+            <n-data-table
+              :columns="monthlyScheduleDetailColumns"
+              :data="monthlyMonitor.schedules"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              dir="rtl"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              כשלי משלוח דוחות חודשיים
+              <n-tag v-if="monthlyMonitor.failedDeliveries.length" type="error" size="small" round style="margin-right:8px">{{ monthlyMonitor.failedDeliveries.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="failedSendsColumns"
+              :data="monthlyMonitor.failedDeliveries"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              dir="rtl"
+              style="margin-top:10px"
+            />
+          </div>
+        </template>
       </section>
     </div>
 
@@ -102,15 +316,24 @@
 import { computed, h, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
-  NButton, NDataTable, NIcon, NInput, NModal, NSelect, NTag, useMessage,
+  NButton, NDataTable, NIcon, NInput, NModal, NSelect, NSpin, NTag, useMessage,
 } from "naive-ui";
 import type { DataTableColumns } from "naive-ui";
 import {
+  AlarmOutline,
   ArrowBackOutline,
   BriefcaseOutline,
+  CalendarOutline,
+  CheckmarkCircleOutline,
+  CloseCircleOutline,
+  CloudUploadOutline,
+  DocumentOutline,
+  NotificationsOutline,
   PeopleOutline,
   SearchOutline,
   StatsChartOutline,
+  TimeOutline,
+  TimerOutline,
 } from "@vicons/ionicons5";
 import { api } from "../services/apiService.js";
 
@@ -119,11 +342,16 @@ const message = useMessage();
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
 const sidebarItems = [
-  { key: "users",  label: "משתמשים",    icon: PeopleOutline },
-  { key: "stats",  label: "סטטיסטיקות", icon: StatsChartOutline },
+  { key: "users",     label: "משתמשים",             icon: PeopleOutline },
+  { key: "stats",     label: "סטטיסטיקות",          icon: StatsChartOutline },
+  { key: "documents", label: "מסמכים וחילוץ",        icon: DocumentOutline },
+  { key: "reminders", label: "תזכורות",              icon: NotificationsOutline },
+  { key: "scheduler", label: "מתזמן",                icon: TimerOutline },
+  { key: "monthly",   label: "דוחות חודשיים",        icon: CalendarOutline },
 ];
 const activeSection = ref("users");
 const currentItem = computed(() => sidebarItems.find((i) => i.key === activeSection.value));
+const sectionLoading = ref(false);
 
 // ── Users ──────────────────────────────────────────────────────────────────
 const users = ref<any[]>([]);
@@ -142,11 +370,15 @@ async function loadUsers() {
   usersLoading.value = true;
   try {
     users.value = await api.admin.listUsers();
-  } catch (e) {
+  } catch {
     message.error("שגיאה בטעינת משתמשים");
   } finally {
     usersLoading.value = false;
   }
+}
+
+function resolveUserEmail(userId: string) {
+  return users.value.find((u) => u.id === userId)?.email ?? userId?.slice(-6) ?? "—";
 }
 
 const roleOptions = [
@@ -166,7 +398,6 @@ const roleLabel: Record<string, string> = {
   admin: "מנהל",
 };
 
-// Role edit modal
 const showRoleModal = ref(false);
 const editingUser = ref<any>(null);
 const editingRole = ref<string>("");
@@ -206,55 +437,38 @@ async function toggleActive(user: any) {
 
 const userColumns: DataTableColumns<any> = [
   {
-    title: "אימייל",
-    key: "email",
-    align: "right",
-    ellipsis: { tooltip: true },
+    title: "אימייל", key: "email", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:13px" }, row.email ?? "—"),
   },
   {
-    title: "שם",
-    key: "name",
-    align: "right",
-    ellipsis: { tooltip: true },
+    title: "שם", key: "name", align: "right", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:13px" }, row.name ?? "—"),
   },
   {
-    title: "תפקיד",
-    key: "role",
-    align: "right",
-    width: 100,
+    title: "תפקיד", key: "role", align: "right", width: 100,
     render: (row) =>
-      h(NTag, { type: roleTagType[row.role] ?? "default", size: "small", round: true }, { default: () => roleLabel[row.role] ?? row.role }),
+      h(NTag, { type: roleTagType[row.role] ?? "default", size: "small", round: true },
+        { default: () => roleLabel[row.role] ?? row.role }),
   },
   {
-    title: "סטטוס",
-    key: "is_active",
-    align: "right",
-    width: 90,
+    title: "סטטוס", key: "is_active", align: "right", width: 90,
     render: (row) =>
-      h(NTag, { type: row.is_active === 0 ? "error" : "success", size: "small", round: true }, { default: () => row.is_active === 0 ? "מושבת" : "פעיל" }),
+      h(NTag, { type: row.is_active === 0 ? "error" : "success", size: "small", round: true },
+        { default: () => row.is_active === 0 ? "מושבת" : "פעיל" }),
   },
   {
-    title: "נרשם",
-    key: "created_at",
-    align: "right",
-    width: 110,
-    render: (row) => h("span", { style: "font-size:12px; color: var(--text-secondary)" },
-      row.created_at ? new Date(row.created_at).toLocaleDateString("he-IL") : "—"),
+    title: "נרשם", key: "created_at", align: "right", width: 110,
+    render: (row) =>
+      h("span", { style: "font-size:12px; color: var(--text-secondary)" },
+        row.created_at ? new Date(row.created_at).toLocaleDateString("he-IL") : "—"),
   },
   {
-    title: "פעולות",
-    key: "actions",
-    align: "center",
-    width: 160,
+    title: "פעולות", key: "actions", align: "center", width: 160,
     render: (row) =>
       h("div", { style: "display:flex; gap:6px; justify-content:center" }, [
         h(NButton, { size: "tiny", onClick: () => openRoleModal(row) }, { default: () => "שנה תפקיד" }),
         h(NButton, {
-          size: "tiny",
-          type: row.is_active === 0 ? "primary" : "error",
-          ghost: true,
+          size: "tiny", type: row.is_active === 0 ? "primary" : "error", ghost: true,
           onClick: () => toggleActive(row),
         }, { default: () => row.is_active === 0 ? "הפעל" : "השבת" }),
       ]),
@@ -263,11 +477,270 @@ const userColumns: DataTableColumns<any> = [
 
 // ── Stats ──────────────────────────────────────────────────────────────────
 const systemStats = computed(() => [
-  { label: "סה\"כ משתמשים",  value: users.value.length,                               icon: PeopleOutline },
+  { label: "סה\"כ משתמשים",  value: users.value.length,                                  icon: PeopleOutline },
   { label: "מנהלים",         value: users.value.filter((u) => u.role === "admin").length, icon: PeopleOutline },
   { label: "משתמשי Pro",     value: users.value.filter((u) => u.role === "pro").length,   icon: PeopleOutline },
   { label: "מושבתים",        value: users.value.filter((u) => u.is_active === 0).length,  icon: PeopleOutline },
 ]);
+
+// ── Documents monitor ──────────────────────────────────────────────────────
+const docMonitor = ref<any>(null);
+
+const DOC_STATUSES = ["queued", "processing", "done", "error"];
+const STATUS_HE: Record<string, string> = {
+  queued: "בתור", processing: "מעבד", done: "הושלם", error: "שגיאה",
+};
+
+const docStatusRows = computed(() => {
+  if (!docMonitor.value) return [];
+  return Object.entries(docMonitor.value.byUserStatus).map(([userId, counts]: [string, any]) => ({
+    user: resolveUserEmail(userId),
+    ...counts,
+  }));
+});
+
+const docStatusColumns: DataTableColumns<any> = [
+  { title: "משתמש", key: "user", align: "right", ellipsis: { tooltip: true } },
+  ...DOC_STATUSES.map((s) => ({
+    title: STATUS_HE[s] ?? s,
+    key: s,
+    align: "center" as const,
+    width: 80,
+    render: (row: any) => h("span", { style: row[s] ? "font-weight:600" : "color:var(--text-secondary)" }, row[s] ?? "0"),
+  })),
+];
+
+const failedDocsColumns: DataTableColumns<any> = [
+  {
+    title: "משתמש", key: "user_id", align: "right", width: 130,
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  {
+    title: "קובץ", key: "filename", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—"),
+  },
+  {
+    title: "שגיאה", key: "error", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.error ?? "—"),
+  },
+  {
+    title: "תאריך", key: "created_at", align: "right", width: 110,
+    render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
+      row.created_at ? new Date(row.created_at).toLocaleDateString("he-IL") : "—"),
+  },
+];
+
+const stuckDocsColumns: DataTableColumns<any> = [
+  {
+    title: "משתמש", key: "user_id", align: "right", width: 130,
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  {
+    title: "קובץ", key: "filename", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—"),
+  },
+  {
+    title: "תאריך העלאה", key: "created_at", align: "right", width: 130,
+    render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
+      row.created_at ? new Date(row.created_at).toLocaleString("he-IL") : "—"),
+  },
+];
+
+// ── Reminders monitor ──────────────────────────────────────────────────────
+const reminderMonitor = ref<any>(null);
+
+const REMINDER_STATUSES = ["pending", "sent", "snoozed", "dismissed", "error"];
+const REMINDER_STATUS_HE: Record<string, string> = {
+  pending: "ממתין", sent: "נשלח", snoozed: "דחוי", dismissed: "בוטל", error: "שגיאה",
+};
+
+const reminderStatusRows = computed(() => {
+  if (!reminderMonitor.value) return [];
+  return Object.entries(reminderMonitor.value.byUserStatus).map(([userId, counts]: [string, any]) => ({
+    user: resolveUserEmail(userId),
+    ...counts,
+  }));
+});
+
+const reminderStatusColumns: DataTableColumns<any> = [
+  { title: "משתמש", key: "user", align: "right", ellipsis: { tooltip: true } },
+  ...REMINDER_STATUSES.map((s) => ({
+    title: REMINDER_STATUS_HE[s] ?? s,
+    key: s,
+    align: "center" as const,
+    width: 75,
+    render: (row: any) => h("span", { style: row[s] ? "font-weight:600" : "color:var(--text-secondary)" }, row[s] ?? "0"),
+  })),
+];
+
+const pendingReminderColumns: DataTableColumns<any> = [
+  {
+    title: "משתמש", key: "user_id", align: "right", width: 130,
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  {
+    title: "סוג", key: "doc_type", align: "right", width: 110,
+    render: (row) => h("span", { style: "font-size:12px" }, row.doc_type ?? "—"),
+  },
+  {
+    title: "הערה", key: "note", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.note ?? "—"),
+  },
+  {
+    title: "תאריך טריגר", key: "trigger_date", align: "right", width: 120,
+    render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
+      row.trigger_date ? new Date(row.trigger_date).toLocaleDateString("he-IL") : "—"),
+  },
+];
+
+const failedSendsColumns: DataTableColumns<any> = [
+  {
+    title: "משתמש", key: "user_id", align: "right", width: 130,
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  {
+    title: "נמען", key: "recipient", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.recipient ?? "—"),
+  },
+  {
+    title: "שגיאה", key: "error", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.error ?? "—"),
+  },
+  {
+    title: "תאריך", key: "sent_at", align: "right", width: 130,
+    render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
+      row.sent_at ? new Date(row.sent_at).toLocaleString("he-IL") : "—"),
+  },
+];
+
+// ── Scheduler monitor ──────────────────────────────────────────────────────
+const schedulerMonitor = ref<any>(null);
+
+const monthlyScheduleColumns: DataTableColumns<any> = [
+  {
+    title: "משתמש", key: "user_id", align: "right",
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  {
+    title: "פעיל", key: "enabled", align: "center", width: 70,
+    render: (row) =>
+      h(NTag, { type: row.enabled ? "success" : "default", size: "small", round: true },
+        { default: () => row.enabled ? "כן" : "לא" }),
+  },
+  {
+    title: "יום בחודש", key: "day", align: "center", width: 100,
+    render: (row) => h("span", { style: "font-size:12px" }, row.day ?? "—"),
+  },
+  {
+    title: "שעה", key: "hour", align: "center", width: 70,
+    render: (row) => h("span", { style: "font-size:12px" }, row.hour != null ? `${row.hour}:00` : "—"),
+  },
+  {
+    title: "נשלח לאחרונה", key: "last_sent", align: "right", width: 130,
+    render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
+      row.last_sent ? new Date(row.last_sent).toLocaleDateString("he-IL") : "—"),
+  },
+  {
+    title: "שגיאה אחרונה", key: "last_error", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.last_error ?? "—"),
+  },
+];
+
+// ── Monthly reports monitor ────────────────────────────────────────────────
+const monthlyMonitor = ref<any>(null);
+
+const monthlyScheduleDetailColumns: DataTableColumns<any> = [
+  {
+    title: "משתמש", key: "user_id", align: "right",
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  {
+    title: "פעיל", key: "enabled", align: "center", width: 70,
+    render: (row) =>
+      h(NTag, { type: row.enabled ? "success" : "default", size: "small", round: true },
+        { default: () => row.enabled ? "כן" : "לא" }),
+  },
+  {
+    title: "יום", key: "day", align: "center", width: 70,
+    render: (row) => h("span", { style: "font-size:12px" }, row.day ?? "—"),
+  },
+  {
+    title: "שעה", key: "hour", align: "center", width: 70,
+    render: (row) => h("span", { style: "font-size:12px" }, row.hour != null ? `${row.hour}:00` : "—"),
+  },
+  {
+    title: "פורמטים", key: "formats", align: "right", width: 110,
+    render: (row) => h("span", { style: "font-size:12px" }, (row.formats ?? []).join(", ") || "—"),
+  },
+  {
+    title: "נמענים", key: "recipients", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, (row.recipients ?? []).join(", ") || "—"),
+  },
+  {
+    title: "נשלח לאחרונה", key: "last_sent", align: "right", width: 130,
+    render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
+      row.last_sent ? new Date(row.last_sent).toLocaleDateString("he-IL") : "—"),
+  },
+  {
+    title: "שגיאה", key: "last_error", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.last_error ?? "—"),
+  },
+];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function formatBytes(bytes: number): string {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let v = bytes;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(1)} ${units[i]}`;
+}
+
+function formatDate(d: string | null): string {
+  if (!d) return "—";
+  return new Date(d).toLocaleString("he-IL");
+}
+
+function formatInterval(seconds: number): string {
+  if (!seconds) return "—";
+  if (seconds < 60) return `${seconds}ש`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} דקות`;
+  return `${Math.round(seconds / 3600)} שעות`;
+}
+
+// ── Section switching & loading ────────────────────────────────────────────
+async function switchSection(key: string) {
+  activeSection.value = key;
+  await loadSectionData(key);
+}
+
+async function reloadSection() {
+  await loadSectionData(activeSection.value);
+}
+
+async function loadSectionData(key: string) {
+  if (key === "users" || key === "stats") {
+    if (users.value.length === 0) await loadUsers();
+    return;
+  }
+  sectionLoading.value = true;
+  try {
+    if (key === "documents") {
+      docMonitor.value = await api.admin.monitorDocuments();
+    } else if (key === "reminders") {
+      reminderMonitor.value = await api.admin.monitorReminders();
+    } else if (key === "scheduler") {
+      schedulerMonitor.value = await api.admin.monitorScheduler();
+    } else if (key === "monthly") {
+      monthlyMonitor.value = await api.admin.monitorMonthlyReports();
+    }
+  } catch {
+    message.error("שגיאה בטעינת נתונים");
+  } finally {
+    sectionLoading.value = false;
+  }
+}
 
 onMounted(loadUsers);
 </script>
@@ -288,7 +761,6 @@ onMounted(loadUsers);
   border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  padding: 0;
 }
 
 .admin-sidebar__brand {
@@ -353,28 +825,36 @@ onMounted(loadUsers);
 }
 
 .admin-main__header {
-  padding: 24px 28px 16px;
+  padding: 20px 28px 14px;
   border-bottom: 1px solid var(--border-color);
   flex: 0 0 auto;
 }
 
+.admin-main__title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .admin-main__title {
   margin: 0 0 2px;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
+  flex: 1;
 }
 
 .admin-main__meta {
   font-size: 13px;
   color: var(--text-secondary);
+  margin-top: 2px;
 }
 
 /* ── Section ─────────────────────────────────────────────────────────────── */
 .admin-section {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 28px;
+  padding: 20px 28px 32px;
 }
 
 .admin-section__toolbar {
@@ -387,17 +867,17 @@ onMounted(loadUsers);
 .admin-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 .admin-stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 14px;
-  padding: 20px;
+  padding: 18px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .admin-stat-card__icon {
@@ -406,15 +886,34 @@ onMounted(loadUsers);
 }
 
 .admin-stat-card__num {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1;
 }
 
 .admin-stat-card__label {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
   margin-top: 4px;
+}
+
+/* ── Monitor blocks ──────────────────────────────────────────────────────── */
+.monitor-block {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+
+.monitor-block__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 </style>
