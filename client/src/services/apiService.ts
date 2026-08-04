@@ -94,6 +94,7 @@ const BASE = `${SERVER}/api`;
 const ADMIN_SERVER = (import.meta.env.VITE_ADMIN_API_BASE as string | undefined) || SERVER;
 const ADMIN_BASE = `${ADMIN_SERVER}/api`;
 
+
 async function get<T>(path: string, force = false): Promise<T> {
   const res = await fetch(BASE + path, {
     credentials: "include",
@@ -154,6 +155,7 @@ async function adminPut<T>(path: string, body: unknown): Promise<T> {
   if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`);
   return res.json() as Promise<T>;
 }
+
 
 /**
  * Serialize an object to a querystring while dropping undefined/null/empty
