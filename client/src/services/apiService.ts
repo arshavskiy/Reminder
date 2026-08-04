@@ -336,6 +336,12 @@ export const api = {
     list: () => get<{ rows: FeatureDefinition[] }>("/features"),
   },
 
+  admin: {
+    listUsers: () => get<any[]>("/admin/users"),
+    updateUser: (id: string, body: { role?: string; is_active?: number }) =>
+      put<any>(`/admin/users/${id}`, body),
+  },
+
   config: {
     get: () => get<{ userDocumentLimit: number }>("/config"),
   },

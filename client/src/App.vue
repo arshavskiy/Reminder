@@ -4,7 +4,7 @@
       <n-dialog-provider>
         <div class="app-shell">
           <!-- ── Top horizontal app bar ─────────────────────────────────── -->
-          <header v-if="route.path !== '/login'" class="appbar">
+          <header v-if="route.path !== '/login' && !route.path.startsWith('/admin')" class="appbar">
             <!-- Brand on the right (RTL "start") -->
             <div class="appbar__brand" @click="router.push('/')">
               <div class="appbar__logo">
@@ -69,8 +69,8 @@
           </n-drawer>
 
           <!-- ── Main content ───────────────────────────────────────────── -->
-          <main :class="['content', { 'content--fullpage': route.path === '/login' }]">
-            <div :class="route.path === '/login' ? '' : 'page'">
+          <main :class="['content', { 'content--fullpage': route.path === '/login' || route.path.startsWith('/admin') }]">
+            <div :class="(route.path === '/login' || route.path.startsWith('/admin')) ? '' : 'page'">
             <router-view />
             </div>
           </main>

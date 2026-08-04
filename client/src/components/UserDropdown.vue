@@ -60,7 +60,10 @@ const dropdownItems = computed(() => [
     key: 'profile',
   },
   ...(props.userRole === 'admin'
-    ? [{ label: '⚙️ הגדרות אישיות', key: 'settings' }]
+    ? [
+        { label: '⚙️ הגדרות אישיות', key: 'settings' },
+        { label: '🛡 פאנל ניהול', key: 'admin' },
+      ]
     : []
   ),
   {
@@ -77,6 +80,8 @@ async function handleSelect(key: string) {
     router.push('/profile');
   } else if (key === 'settings') {
     router.push('/settings');
+  } else if (key === 'admin') {
+    router.push('/admin');
   } else if (key === 'logout') {
     await authStore.logout();
   }
