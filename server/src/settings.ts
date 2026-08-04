@@ -97,7 +97,10 @@ export function loadSettings(): AppSettings {
       if (process.env.DO_SPACES_BUCKET)     envOverrides.doSpacesBucket     = process.env.DO_SPACES_BUCKET;
       if (process.env.DO_SPACES_REGION)     envOverrides.doSpacesRegion     = process.env.DO_SPACES_REGION;
       if (process.env.ALLOWED_ORIGINS)      envOverrides.allowedOrigins     = process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim());
-      if (process.env.USER_DOCUMENT_LIMIT)  envOverrides.userDocumentLimit  = parseInt(process.env.USER_DOCUMENT_LIMIT);
+      if (process.env.USER_DOCUMENT_LIMIT)       envOverrides.userDocumentLimit       = parseInt(process.env.USER_DOCUMENT_LIMIT);
+      if (process.env.REMINDER_CHECK_INTERVAL_MS) envOverrides.reminderCheckIntervalMs = parseInt(process.env.REMINDER_CHECK_INTERVAL_MS, 10);
+      if (process.env.REMINDER_ENABLED)           envOverrides.reminderEnabled         = process.env.REMINDER_ENABLED !== "false";
+      if (process.env.REMINDER_ADVANCE_DAYS)      envOverrides.reminderAdvanceDays     = process.env.REMINDER_ADVANCE_DAYS.split(",").map((d) => parseInt(d.trim(), 10)).filter((n) => Number.isFinite(n));
       _settings = { ...DEFAULTS, ...parsed, ...envOverrides };
       return _settings;
     } catch {
