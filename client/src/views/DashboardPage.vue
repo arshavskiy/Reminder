@@ -403,10 +403,40 @@ async function uploadDashboardFiles(
 
   await store.fetch(true);
 
-  // Poll all successfully uploaded documents (including duplicates — they resolve immediately)
-  const pendingIds = (allIds.filter(Boolean) as string[]).filter(
-    (id) => uploadResultRows.value.find((r) => r.id === id)?.status === "processing",
-  );
+  // For duplicate files: immediately fetch and apply the existing doc's data
+  const dupIds = [...new Set(
+    (allIds.filter(Boolean) as string[]).filter(
+      (id) => uploadResultRows.value.find((r) => r.id === id)?.duplicate,
+    )
+  )];
+  await Promise.all(dupIds.map(async (id) => {
+    try {
+      const doc = await api.documents.get(id);
+      let fields: Record<string, any> = {};
+      try { fields = doc.extracted_fields ? JSON.parse(doc.extracted_fields as string) : {}; } catch { /* ignore */ }
+      const resolvedStatus = doc.processing_status === "done" ? "done" : doc.processing_status === "error" ? "error" : "processing";
+      uploadResultRows.value = uploadResultRows.value.map((row) =>
+        row.id === id && row.duplicate
+          ? {
+              ...row,
+              status: resolvedStatus,
+              client: fields.client_company ?? fields.client_name ?? "",
+              date: fields.expiry_date ?? fields.next_inspection_date ?? fields.start_date ?? "",
+              docType: fields.document_type ?? fields.contract_type ?? (doc as any).document_type ?? "",
+              contractNumber: fields.contract_number ?? fields.report_number ?? "",
+              licenseNumber: fields.license_number ?? "",
+            }
+          : row,
+      );
+    } catch { /* ignore */ }
+  }));
+
+  // Poll only genuinely new (non-duplicate) documents
+  const pendingIds = [...new Set(
+    (allIds.filter(Boolean) as string[]).filter(
+      (id) => uploadResultRows.value.find((r) => r.id === id && !r.duplicate)?.status === "processing",
+    )
+  )];
   if (pendingIds.length) {
     await pollDocumentResults(pendingIds, allIds as string[]);
   } else {
