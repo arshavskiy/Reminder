@@ -174,6 +174,7 @@
           </div>
 
           <!-- Failed extractions -->
+          <div class="monitor-block">
             <div class="monitor-block__title">
               חילוץ נכשל
               <n-tag v-if="docMonitor.failed.length" type="error" size="small" round style="margin-right:8px">{{ docMonitor.failed.length }}</n-tag>
