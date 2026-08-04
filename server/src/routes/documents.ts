@@ -291,7 +291,18 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
-    await col("documents").deleteOne({ ...idFilter(req.params.id), user_id: userId });
+    const doc = await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
+    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+
+    await col("documents").deleteOne({ _id: doc._id });
+
+    if (doc.spaces_key) {
+      const { deleteFromSpaces } = await import("../storage/spaces.js");
+      deleteFromSpaces(doc.spaces_key).catch((err) =>
+        logger.warn("document_s3_delete_failed", { document_id: req.params.id, spaces_key: doc.spaces_key, error: err })
+      );
+    }
+
     res.json({ ok: true });
   });
 
@@ -309,7 +320,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     const errorDocs = await col("documents")
       .find({ user_id: userId, processing_status: "error" })
-      .project({ _id: 1 })
+      .project({ _id: 1, spaces_key: 1 })
       .toArray();
 
     const ids = errorDocs.map((d: any) => d._id?.toString());
@@ -338,6 +349,16 @@ export function registerDocumentRoutes(app: express.Application) {
     }
 
     await col("documents").deleteMany({ user_id: userId, processing_status: "error" });
+
+    // Fire-and-forget S3 cleanup for all corrupt docs that had a spaces_key
+    const { deleteFromSpaces } = await import("../storage/spaces.js");
+    for (const d of errorDocs as any[]) {
+      if (d.spaces_key) {
+        deleteFromSpaces(d.spaces_key).catch((err) =>
+          logger.warn("document_s3_delete_failed", { spaces_key: d.spaces_key, error: err })
+        );
+      }
+    }
 
     logger.warn("corrupt_documents_deleted", { user_id: userId, deleted_count: ids.length });
     res.json({ deleted: ids.length });
