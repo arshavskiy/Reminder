@@ -224,19 +224,14 @@ export function registerAdminRoutes(app: express.Application) {
   app.get("/api/admin/monitor/scheduler", async (req, res) => {
     if (!await adminAuth(req, res)) return;
 
-    const [lastRun, lastRunStats, monthlySettings] = await Promise.all([
-      // Last scheduler run = last email_log entry of any type
-      col("email_log").find({}).sort({ sent_at: -1 }).limit(1).toArray(),
+    const [healthRows, lastRunStats, monthlySettings] = await Promise.all([
+      // Health records for each named cron job
+      col("scheduler_health").find({}).toArray(),
 
       // Stats from the most recent batch: emails sent/failed in last 1 hour window
       col("email_log").aggregate([
         { $match: { sent_at: { $gte: new Date(Date.now() - 3600 * 1000) } } },
-        {
-          $group: {
-            _id: "$success",
-            count: { $sum: 1 },
-          },
-        },
+        { $group: { _id: "$success", count: { $sum: 1 } } },
       ]).toArray(),
 
       // Monthly report schedule per user
@@ -244,25 +239,23 @@ export function registerAdminRoutes(app: express.Application) {
         {},
         {
           projection: {
-            _id: 0,
-            user_id: 1,
-            monthly_report_enabled: 1,
-            monthly_report_day: 1,
-            monthly_report_hour: 1,
-            monthly_report_last_sent: 1,
+            _id: 0, user_id: 1,
+            monthly_report_enabled: 1, monthly_report_day: 1,
+            monthly_report_hour: 1, monthly_report_last_sent: 1,
             monthly_report_last_error: 1,
           },
         },
       ).toArray(),
     ]);
 
-    const lastRunTime = (lastRun[0] as any)?.sent_at ?? null;
     const sentLastHour = lastRunStats.find((r: any) => r._id === 1)?.count ?? 0;
     const failedLastHour = lastRunStats.find((r: any) => r._id === 0)?.count ?? 0;
 
-    // Import settings to get interval
     const { getSettings } = await import("../settings.js");
     const intervalMs = getSettings().reminderCheckIntervalMs;
+
+    const tickHealth = healthRows.find((r: any) => r.name === "tick") as any;
+    const lastRunTime = tickHealth?.last_run_at ?? null;
     const nextRunTime = lastRunTime ? new Date(new Date(lastRunTime).getTime() + intervalMs) : null;
 
     res.json({
@@ -271,6 +264,13 @@ export function registerAdminRoutes(app: express.Application) {
       intervalSeconds: Math.round(intervalMs / 1000),
       sentLastHour,
       failedLastHour,
+      jobs: healthRows.map((r: any) => ({
+        name: r.name,
+        last_run_at: r.last_run_at ?? null,
+        last_success_at: r.last_success_at ?? null,
+        last_error: r.last_error ?? null,
+        consecutive_failures: r.consecutive_failures ?? 0,
+      })),
       monthlySchedule: monthlySettings.map((s: any) => ({
         user_id: s.user_id,
         enabled: !!s.monthly_report_enabled,

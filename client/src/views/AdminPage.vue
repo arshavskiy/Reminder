@@ -241,6 +241,19 @@
             </div>
           </div>
 
+          <!-- Per-job health table -->
+          <div class="monitor-block">
+            <div class="monitor-block__title">בריאות שירותי Cron</div>
+            <n-data-table
+              :columns="cronJobColumns"
+              :data="schedulerMonitor.jobs ?? []"
+              :bordered="false"
+              size="small"
+              dir="rtl"
+              style="margin-top:10px"
+            />
+          </div>
+
           <div class="monitor-block">
             <div class="monitor-block__title">לוח דוח חודשי לפי משתמש</div>
             <n-data-table
@@ -616,6 +629,42 @@ const failedSendsColumns: DataTableColumns<any> = [
 // ── Scheduler monitor ──────────────────────────────────────────────────────
 const schedulerMonitor = ref<any>(null);
 
+const JOB_NAME_HE: Record<string, string> = {
+  tick: "לולאה ראשית",
+  checkReminders: "בדיקת תזכורות",
+  checkMonthlyReports: "דוחות חודשיים",
+  checkEscalations: "הסלמות",
+};
+
+const cronJobColumns: DataTableColumns<any> = [
+  {
+    title: "שירות", key: "name", align: "right",
+    render: (row) => h("span", { style: "font-size:13px; font-weight:500" }, JOB_NAME_HE[row.name] ?? row.name),
+  },
+  {
+    title: "סטטוס", key: "status", align: "center", width: 90,
+    render: (row) => {
+      const ok = !row.last_error && (row.consecutive_failures ?? 0) === 0;
+      return h(NTag, { type: ok ? "success" : "error", size: "small", round: true },
+        { default: () => ok ? "תקין" : `${row.consecutive_failures} כשלים` });
+    },
+  },
+  {
+    title: "ריצה אחרונה", key: "last_run_at", align: "right", width: 150,
+    render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
+      row.last_run_at ? new Date(row.last_run_at).toLocaleString("he-IL") : "—"),
+  },
+  {
+    title: "הצלחה אחרונה", key: "last_success_at", align: "right", width: 150,
+    render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
+      row.last_success_at ? new Date(row.last_success_at).toLocaleString("he-IL") : "—"),
+  },
+  {
+    title: "שגיאה אחרונה", key: "last_error", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px; color:var(--error-color,#d03050)" }, row.last_error ?? "—"),
+  },
+];
+
 const monthlyScheduleColumns: DataTableColumns<any> = [
   {
     title: "משתמש", key: "user_id", align: "right",
@@ -704,9 +753,13 @@ function formatDate(d: string | null): string {
 
 function formatInterval(seconds: number): string {
   if (!seconds) return "—";
-  if (seconds < 60) return `${seconds}ש`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)} דקות`;
-  return `${Math.round(seconds / 3600)} שעות`;
+  if (seconds < 60) return `${seconds} שניות`;
+  if (seconds < 3600) {
+    const m = Math.round(seconds / 60);
+    return m === 1 ? "דקה" : `${m} דקות`;
+  }
+  const h = Math.round(seconds / 3600);
+  return h === 1 ? "שעה" : `${h} שעות`;
 }
 
 // ── Section switching & loading ────────────────────────────────────────────

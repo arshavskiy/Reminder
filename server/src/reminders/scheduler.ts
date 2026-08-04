@@ -9,16 +9,53 @@ import {clientDisplayName} from "../utils/clientNames";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
+async function runWithHealth(name: string, fn: () => Promise<void>) {
+  const startedAt = new Date();
+  try {
+    await fn();
+    await col("scheduler_health").updateOne(
+      { name },
+      {
+        $set: {
+          name,
+          last_run_at: startedAt,
+          last_success_at: startedAt,
+          last_error: null,
+          consecutive_failures: 0,
+        },
+      },
+      { upsert: true },
+    );
+  } catch (error: any) {
+    const msg = error?.message ?? String(error);
+    logger.error(`${name}_failed`, { error: msg });
+    await col("scheduler_health").updateOne(
+      { name },
+      {
+        $set: { name, last_run_at: startedAt, last_error: msg },
+        $inc: { consecutive_failures: 1 },
+      },
+      { upsert: true },
+    );
+  }
+}
+
 export function startScheduler() {
   const settings = getSettings();
-  if (settings.reminderEnabled) checkReminders().catch((error) => logger.error("reminder_check_failed", { error }));
-  checkMonthlyReports().catch((error) => logger.error("monthly_report_check_failed", { error }));
-  if (settings.reminderEnabled) checkEscalations().catch((error) => logger.error("escalation_check_failed", { error }));
-  _timer = setInterval(() => {
-    if (settings.reminderEnabled) checkReminders().catch((error) => logger.error("reminder_check_failed", { error }));
-    checkMonthlyReports().catch((error) => logger.error("monthly_report_check_failed", { error }));
-    if (settings.reminderEnabled) checkEscalations().catch((error) => logger.error("escalation_check_failed", { error }));
-  }, settings.reminderCheckIntervalMs);
+
+  async function tick() {
+    if (settings.reminderEnabled) await runWithHealth("checkReminders", checkReminders);
+    await runWithHealth("checkMonthlyReports", checkMonthlyReports);
+    if (settings.reminderEnabled) await runWithHealth("checkEscalations", checkEscalations);
+    await col("scheduler_health").updateOne(
+      { name: "tick" },
+      { $set: { name: "tick", last_run_at: new Date(), last_error: null, consecutive_failures: 0 } },
+      { upsert: true },
+    );
+  }
+
+  tick();
+  _timer = setInterval(tick, settings.reminderCheckIntervalMs);
 
   logger.info("scheduler_started", {
     reminder_enabled: settings.reminderEnabled,
