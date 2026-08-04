@@ -572,7 +572,6 @@ export async function generateContractReminders(
         ...(userId && { user_id: userId }),
         client_id: clientId,
         trigger_date: triggerDate,
-        advance_days: days,
         status: { $ne: "dismissed" },
         source_type: "contract_expiry",
       });
