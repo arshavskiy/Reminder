@@ -1,6 +1,6 @@
 import {existsSync, readFileSync} from "fs";
 import {basename, extname} from "path";
-import {getSettings, saveSettings} from "../settings";
+import {getSettings} from "../settings";
 
 // Patterns that identify credential values
 const KEY_PATTERNS: Array<{ name: string; regex: RegExp; settingKey: string }> = [
@@ -65,33 +65,32 @@ export function scanFileForKeys(filePath: string): ScanResult {
 }
 
 export function applyScannedKeys(results: ScanResult[]): number {
-  const settings = getSettings();
   let applied = 0;
 
   for (const result of results) {
     for (const item of result.found) {
-      // MongoDB URI is an env var only — set process.env, not saved settings
-      if (item.settingKey === "_mongoUri") {
-        if (!process.env.MONGODB_URI) {
-          process.env.MONGODB_URI = item.value;
-          console.log(`[keyScanner] Set MONGODB_URI from ${result.file}`);
-          applied++;
-        }
-        continue;
-      }
-
-      const key = item.settingKey as keyof typeof settings;
-      if (key in settings && !settings[key]) {
-        (settings as any)[key] = item.value;
-        console.log(`[keyScanner] Applied ${item.name} from ${result.file}`);
+      // Map settingKey → env var name
+      const envMap: Record<string, string> = {
+        _mongoUri:       "MONGODB_URI",
+        openAiKey:       "OPENAI_LOCAL_API_KEY",
+        smtpPass:        "SMTP_PASS",
+        smtpUser:        "SMTP_USER",
+        smtpHost:        "SMTP_HOST",
+        emailFrom:       "EMAIL_FROM",
+        googleClientId:  "GOOGLE_CLIENT_ID",
+        googleClientSecret: "GOOGLE_CLIENT_SECRET",
+        doSpacesKey:     "ACCESS_KEY_ID",
+        doSpacesSecret:  "SECRET_ACCESS_KEY",
+        doSpacesBucket:  "BUCKET",
+        doSpacesEndpoint:"ENDPOINT",
+      };
+      const envKey = envMap[item.settingKey];
+      if (envKey && !process.env[envKey]) {
+        process.env[envKey] = item.value;
+        console.log(`[keyScanner] Set ${envKey} from ${result.file}`);
         applied++;
       }
     }
-  }
-
-  if (applied > 0) {
-    saveSettings(settings);
-    console.log(`[keyScanner] Applied ${applied} credential(s) from scanned files`);
   }
 
   return applied;

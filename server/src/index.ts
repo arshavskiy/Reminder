@@ -8,7 +8,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { existsSync, watch } from "fs";
 import { connectDb } from "./db/db";
-import { loadSettings } from "./settings";
+import { getSettings, validateEnv } from "./settings";
 import { startScheduler } from "./reminders/scheduler";
 import { seedBuiltinTemplates } from "./templates/seedTemplates";
 import { seedDefaultEmailTemplate } from "./templates/seedEmailTemplates";
@@ -32,12 +32,7 @@ import { registerAdminRoutes } from "./routes/admin";
 import { registerExtractRemindersRoutes } from "./routes/extractReminders";
 import { registerFeatureRoutes } from "./routes/features";
 import { importFile } from "./pipeline/importer";
-import {
-  applyScannedKeys,
-  scanFileForKeys,
-  scanWatchFolder,
-  shouldScanFile,
-} from "./pipeline/keyScanner";
+import { applyScannedKeys, scanFileForKeys, shouldScanFile } from "./pipeline/keyScanner";
 import { logger, requestLogger } from "./logger";
 import { requireAnyFeature } from "./auth/middleware";
 
@@ -150,9 +145,7 @@ registerReminderRoutes(app);
 registerTaskRoutes(app);
 registerSearchRoutes(app);
 registerEmailRoutes(app);
-registerSettingsRoutes(app, (updated) => {
-  if (updated.watchFolderEnabled && updated.watchFolder) startWatchFolder();
-});
+registerSettingsRoutes(app);
 registerDashboardRoutes(app);
 registerTemplateRoutes(app);
 registerEquipmentRoutes(app);
@@ -171,7 +164,8 @@ if (process.env.NODE_ENV === "production" && existsSync(STATIC_DIR)) {
 
 // ── HTTP server ───────────────────────────────────────────────────────────────
 async function main() {
-  const settings = loadSettings();
+  validateEnv();
+  const settings = getSettings();
   await connectDb();
   await seedFeatureDefinitions();
   await seedBuiltinTemplates();
@@ -180,7 +174,6 @@ async function main() {
   app.listen(settings.port, () => {
     logger.info("server_started", {
       port: settings.port,
-      data_dir: join(process.cwd(), "data"),
       health_url: `http://localhost:${settings.port}/health`,
       api_docs_url: `http://localhost:${settings.port}/api-docs`,
     });
@@ -188,9 +181,6 @@ async function main() {
 
   startScheduler();
   startWatchFolder();
-
-  // Scan watch folder for dropped credential files on startup
-  scanWatchFolder();
 }
 
 main().catch((err) => {
@@ -221,7 +211,7 @@ const SUPPORTED_EXTS = new Set([
 ]);
 
 function startWatchFolder() {
-  const s = loadSettings();
+  const s = getSettings();
   if (!s.watchFolderEnabled || !s.watchFolder) return;
   if (!existsSync(s.watchFolder)) {
     logger.warn("watch_folder_missing", { path: s.watchFolder });
