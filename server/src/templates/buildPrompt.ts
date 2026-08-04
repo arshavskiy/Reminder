@@ -70,7 +70,7 @@ export function buildPromptForTemplate(tpl: DocTemplate, inspector?: InspectorPr
       "name": string,                   // תיאור / "תיאור" column — full description text of the equipment item. BiDi note: may appear as "ראית" or "רואית" in reversed text — still map to this field.
       "manufacturer": string | null,    // יצרן
       "model": string | null,           // דגם (keep Latin model codes as-is, e.g. "SLR-CLU")
-      "serial_number": string | null,   // מספר סידורי / "מס' סידורי" — ONE serial per object; keep mixed Hebrew+Latin as-is. BiDi note: column header may appear reversed as "ירודיס 'סמ" or "ירודיס רפסמ" — still map values in that column to serial_number.
+      "serial_number": string | null,   // מספר סידורי / "מס' סידורי" — ONE serial per object; keep mixed Hebrew+Latin as-is. BiDi note: column header may appear reversed as "ירודיס 'סמ" or "ירודיס רפסמ" — still map values in that column to serial_number. EXCEPTION: for category="accessory" (אביזרי הרמה), serial_number is often not present — do not force a value, use null.
       "load_capacity_work": string[],   // עומס עבודה בטוח — extract ONLY from the equipment table column/header "עומס עבודה בטוח (ק\"ג)" or equivalent. One entry per load configuration, include units and context exactly as written, e.g. ["230 ק\"ג - עד 2 אנשים בבמה", "115 ק\"ג - אדם אחד בלבד"]. Empty array if not present.
       "load_capacity_test": string[],   // עומס מבחן / "ומס מבחן" — test load. BiDi note: column header may appear reversed as "ןחבמ סמוע" or "ןחבמ סמ" — still map values to load_capacity_test. Include ק\"ג units. Empty array if not present.
       "load_radius": string[],          // רדיוס עומס — one entry per radius. Empty array if not present.

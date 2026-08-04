@@ -60,52 +60,52 @@
         </n-tab-pane>
 
         <!-- Register tab -->
-        <n-tab-pane name="register" tab="הרשמה">
-          <n-form @submit.prevent="handleRegister" style="margin-top:8px">
-            <n-form-item label="שם מלא" :show-feedback="false" style="margin-bottom:12px">
-              <n-input
-                v-model:value="regName"
-                placeholder="ישראל ישראלי"
-                size="large"
-                autocomplete="name"
-                :disabled="loading"
-              />
-            </n-form-item>
-            <n-form-item label="אימייל" :show-feedback="false" style="margin-bottom:12px">
-              <n-input
-                v-model:value="regEmail"
-                type="email"
-                placeholder="you@example.com"
-                size="large"
-                autocomplete="email"
-                :disabled="loading"
-              />
-            </n-form-item>
-            <n-form-item label="סיסמה" :show-feedback="false" style="margin-bottom:4px">
-              <n-input
-                v-model:value="regPassword"
-                type="password"
-                placeholder="לפחות 8 תווים"
-                size="large"
-                show-password-on="click"
-                autocomplete="new-password"
-                :disabled="loading"
-              />
-            </n-form-item>
-            <p v-if="regPassword && regPassword.length < 8" style="color:#f0a020;font-size:12px;margin:4px 0 12px">הסיסמה חייבת להכיל לפחות 8 תווים</p>
-            <div style="height:12px" v-else />
-            <n-button
-              type="primary"
-              size="large"
-              style="width:100%"
-              attr-type="submit"
-              :loading="loading"
-              :disabled="!regEmail || !regPassword || regPassword.length < 8"
-            >
-              הרשמה
-            </n-button>
-          </n-form>
-        </n-tab-pane>
+<!--        <n-tab-pane name="register" tab="הרשמה">-->
+<!--          <n-form @submit.prevent="handleRegister" style="margin-top:8px">-->
+<!--            <n-form-item label="שם מלא" :show-feedback="false" style="margin-bottom:12px">-->
+<!--              <n-input-->
+<!--                v-model:value="regName"-->
+<!--                placeholder="ישראל ישראלי"-->
+<!--                size="large"-->
+<!--                autocomplete="name"-->
+<!--                :disabled="loading"-->
+<!--              />-->
+<!--            </n-form-item>-->
+<!--            <n-form-item label="אימייל" :show-feedback="false" style="margin-bottom:12px">-->
+<!--              <n-input-->
+<!--                v-model:value="regEmail"-->
+<!--                type="email"-->
+<!--                placeholder="you@example.com"-->
+<!--                size="large"-->
+<!--                autocomplete="email"-->
+<!--                :disabled="loading"-->
+<!--              />-->
+<!--            </n-form-item>-->
+<!--            <n-form-item label="סיסמה" :show-feedback="false" style="margin-bottom:4px">-->
+<!--              <n-input-->
+<!--                v-model:value="regPassword"-->
+<!--                type="password"-->
+<!--                placeholder="לפחות 8 תווים"-->
+<!--                size="large"-->
+<!--                show-password-on="click"-->
+<!--                autocomplete="new-password"-->
+<!--                :disabled="loading"-->
+<!--              />-->
+<!--            </n-form-item>-->
+<!--            <p v-if="regPassword && regPassword.length < 8" style="color:#f0a020;font-size:12px;margin:4px 0 12px">הסיסמה חייבת להכיל לפחות 8 תווים</p>-->
+<!--            <div style="height:12px" v-else />-->
+<!--            <n-button-->
+<!--              type="primary"-->
+<!--              size="large"-->
+<!--              style="width:100%"-->
+<!--              attr-type="submit"-->
+<!--              :loading="loading"-->
+<!--              :disabled="!regEmail || !regPassword || regPassword.length < 8"-->
+<!--            >-->
+<!--              הרשמה-->
+<!--            </n-button>-->
+<!--          </n-form>-->
+<!--        </n-tab-pane>-->
       </n-tabs>
 
       <p class="login-footer">גישה מוגבלת למשתמשים מורשים בלבד</p>
@@ -133,17 +133,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { NIcon, NAlert, NTabs, NTabPane, NForm, NFormItem, NInput, NButton, NModal } from "naive-ui";
-import { BriefcaseOutline } from "@vicons/ionicons5";
-import { useAuthStore } from "../stores/auth.js";
-import { useDashboardStore } from "../stores/dashboard.js";
-import { useDocumentsStore } from "../stores/documents.js";
-import { useContractsStore } from "../stores/contracts.js";
-import { useClientsStore } from "../stores/clients.js";
-import { useRemindersStore } from "../stores/reminders.js";
-import GoogleSignIn from "../components/GoogleSignIn.vue";
+import {computed, onMounted, ref} from "vue";
+import {useRoute, useRouter} from "vue-router";
+import {NAlert, NButton, NForm, NFormItem, NIcon, NInput, NModal, NTabPane, NTabs} from "naive-ui";
+import {BriefcaseOutline} from "@vicons/ionicons5";
+import {useAuthStore} from "../stores/auth.js";
+import {useDashboardStore} from "../stores/dashboard.js";
+import {useDocumentsStore} from "../stores/documents.js";
+import {useContractsStore} from "../stores/contracts.js";
+import {useClientsStore} from "../stores/clients.js";
+import {useRemindersStore} from "../stores/reminders.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
