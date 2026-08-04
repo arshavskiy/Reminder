@@ -343,11 +343,14 @@
     <n-modal
       v-model:show="showDocModal"
       :mask-closable="true"
-      :show-icon="false"
+      title="Document Details"
+      :show-icon="true"
+      preset="card"
+      size="huge"
       style="width:92vw;max-width:1200px"
       @after-leave="docModalId = null"
     >
-      <div style="max-height:88vh;overflow-y:auto;padding:16px 0 8px">
+      <div style="max-height:76vh;overflow-y:auto;padding:0 8px 8px">
         <DocumentDetailPage v-if="docModalId" :doc-id="docModalId" />
       </div>
     </n-modal>
