@@ -500,7 +500,6 @@ async function buildDocxTable(periodTitle: string, headers: string[], rows: unkn
   const doc = new Document({
     sections: [{
       properties: {
-        bidirectional: true,
         page: {
           size: {orientation: PageOrientation.LANDSCAPE},
           margin: {top: 720, right: 720, bottom: 720, left: 720},
