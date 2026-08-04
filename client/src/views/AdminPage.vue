@@ -29,7 +29,7 @@
         </div>
         <button class="admin-sidebar__item" type="button" @click="router.push('/')">
           <n-icon :component="ArrowBackOutline" :size="18" />
-          <span>חזור לאפליקציה</span>
+          <span>Back to App</span>
         </button>
       </div>
     </aside>
@@ -39,9 +39,9 @@
       <header class="admin-main__header">
         <div class="admin-main__title-row">
           <h1 class="admin-main__title">{{ currentItem?.label }}</h1>
-          <n-button size="small" :loading="sectionLoading" @click="reloadSection">↻ רענן</n-button>
+          <n-button size="small" :loading="sectionLoading" @click="reloadSection">↻ Refresh</n-button>
         </div>
-        <div class="admin-main__meta">לוח ניהול מערכת</div>
+        <div class="admin-main__meta">System Admin Dashboard</div>
       </header>
 
       <!-- ── Users ── -->
@@ -49,9 +49,8 @@
         <div class="admin-section__toolbar">
           <n-input
             v-model:value="userSearch"
-            placeholder="חיפוש לפי שם / אימייל..."
+            placeholder="Search by name / email..."
             clearable
-            dir="rtl"
             style="max-width: 280px"
           >
             <template #prefix><n-icon :component="SearchOutline" /></template>
@@ -89,13 +88,13 @@
         <template v-else-if="docMonitor">
           <!-- Storage per user -->
           <div class="monitor-block">
-            <div class="monitor-block__title">אחסון S3 לפי משתמש</div>
+            <div class="monitor-block__title">S3 Storage by User</div>
             <div class="admin-stats-grid" style="margin-top:10px">
               <div v-for="s in docMonitor.storage" :key="s.user_id" class="admin-stat-card">
                 <n-icon :component="CloudUploadOutline" :size="24" class="admin-stat-card__icon" />
                 <div class="admin-stat-card__body">
                   <div class="admin-stat-card__num">{{ formatBytes(s.total_bytes) }}</div>
-                  <div class="admin-stat-card__label">{{ resolveUserEmail(s.user_id) }} · {{ s.doc_count }} קבצים</div>
+                  <div class="admin-stat-card__label">{{ resolveUserEmail(s.user_id) }} · {{ s.doc_count }} files</div>
                 </div>
               </div>
             </div>
@@ -103,31 +102,29 @@
 
           <!-- Per-user status matrix -->
           <div class="monitor-block">
-            <div class="monitor-block__title">סטטוס מסמכים לפי משתמש</div>
+            <div class="monitor-block__title">Document Status by User</div>
             <n-data-table
               :columns="docStatusColumns"
               :data="docStatusRows"
               :bordered="false"
               size="small"
-              dir="rtl"
               style="margin-top:10px"
             />
           </div>
 
           <!-- Extracted field values per document -->
           <div class="monitor-block">
-            <div class="monitor-block__title">ערכים שחולצו ממסמכים</div>
+            <div class="monitor-block__title">Extracted Field Values</div>
             <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
               <n-select
                 v-model:value="extractionUserId"
                 :options="userSelectOptions"
-                placeholder="כל המשתמשים"
+                placeholder="All Users"
                 clearable
-                dir="rtl"
                 style="width:220px"
                 @update:value="loadExtractions(1)"
               />
-              <span style="font-size:12px;color:var(--text-secondary)">{{ extractionsTotal }} מסמכים</span>
+              <span style="font-size:12px;color:var(--text-secondary)">{{ extractionsTotal }} documents</span>
             </div>
 
             <n-data-table
@@ -136,7 +133,6 @@
               :loading="extractionsLoading"
               :bordered="false"
               size="small"
-              dir="rtl"
               style="margin-top:12px"
               :row-key="(row: any) => row._rowKey"
             />
@@ -146,22 +142,22 @@
                 size="small"
                 :disabled="extractionPage <= 1"
                 @click="loadExtractions(extractionPage - 1)"
-              >הקודם</n-button>
+              >Previous</n-button>
               <span style="font-size:12px;line-height:28px;color:var(--text-secondary)">
-                עמוד {{ extractionPage }} / {{ Math.ceil(extractionsTotal / extractionLimit) }}
+                Page {{ extractionPage }} / {{ Math.ceil(extractionsTotal / extractionLimit) }}
               </span>
               <n-button
                 size="small"
                 :disabled="extractionPage >= Math.ceil(extractionsTotal / extractionLimit)"
                 @click="loadExtractions(extractionPage + 1)"
-              >הבא</n-button>
+              >Next</n-button>
             </div>
           </div>
 
           <!-- Failed extractions -->
           <div class="monitor-block">
             <div class="monitor-block__title">
-              חילוץ נכשל
+              Failed Extraction
               <n-tag v-if="docMonitor.failed.length" type="error" size="small" round style="margin-right:8px">{{ docMonitor.failed.length }}</n-tag>
             </div>
             <n-data-table
@@ -170,7 +166,6 @@
               :bordered="false"
               :pagination="{ pageSize: 10 }"
               size="small"
-              dir="rtl"
               style="margin-top:10px"
               :row-class-name="() => 'row-error'"
             />
@@ -179,7 +174,7 @@
           <!-- Stuck in queued -->
           <div class="monitor-block">
             <div class="monitor-block__title">
-              תקוע בתור (מעל 10 דקות)
+              Stuck in Queue (over 10 minutes)
               <n-tag v-if="docMonitor.stuck.length" type="warning" size="small" round style="margin-right:8px">{{ docMonitor.stuck.length }}</n-tag>
             </div>
             <n-data-table
@@ -188,7 +183,6 @@
               :bordered="false"
               :pagination="{ pageSize: 10 }"
               size="small"
-              dir="rtl"
               style="margin-top:10px"
             />
           </div>
@@ -201,13 +195,12 @@
         <template v-else-if="reminderMonitor">
           <!-- Status counts per user -->
           <div class="monitor-block">
-            <div class="monitor-block__title">סטטוס תזכורות לפי משתמש</div>
+            <div class="monitor-block__title">Reminder Status by User</div>
             <n-data-table
               :columns="reminderStatusColumns"
               :data="reminderStatusRows"
               :bordered="false"
               size="small"
-              dir="rtl"
               style="margin-top:10px"
             />
           </div>
@@ -215,7 +208,7 @@
           <!-- Pending reminders -->
           <div class="monitor-block">
             <div class="monitor-block__title">
-              תזכורות ממתינות
+              Pending Reminders
               <n-tag v-if="reminderMonitor.pending.length" type="warning" size="small" round style="margin-right:8px">{{ reminderMonitor.pending.length }}</n-tag>
             </div>
             <n-data-table
@@ -224,7 +217,6 @@
               :bordered="false"
               :pagination="{ pageSize: 10 }"
               size="small"
-              dir="rtl"
               style="margin-top:10px"
             />
           </div>
@@ -232,7 +224,7 @@
           <!-- Failed reminder sends -->
           <div class="monitor-block">
             <div class="monitor-block__title">
-              שליחות נכשלו
+              Failed Sends
               <n-tag v-if="reminderMonitor.failedSends.length" type="error" size="small" round style="margin-right:8px">{{ reminderMonitor.failedSends.length }}</n-tag>
             </div>
             <n-data-table
@@ -241,7 +233,6 @@
               :bordered="false"
               :pagination="{ pageSize: 10 }"
               size="small"
-              dir="rtl"
               style="margin-top:10px"
             />
           </div>
@@ -257,60 +248,58 @@
               <n-icon :component="TimeOutline" :size="24" class="admin-stat-card__icon" />
               <div class="admin-stat-card__body">
                 <div class="admin-stat-card__num" style="font-size:16px">{{ formatDate(schedulerMonitor.lastRunTime) }}</div>
-                <div class="admin-stat-card__label">ריצה אחרונה</div>
+                <div class="admin-stat-card__label">Last Run</div>
               </div>
             </div>
             <div class="admin-stat-card">
               <n-icon :component="AlarmOutline" :size="24" class="admin-stat-card__icon" />
               <div class="admin-stat-card__body">
                 <div class="admin-stat-card__num" style="font-size:16px">{{ formatDate(schedulerMonitor.nextRunTime) }}</div>
-                <div class="admin-stat-card__label">ריצה הבאה (משוערת)</div>
+                <div class="admin-stat-card__label">Next Run (estimated)</div>
               </div>
             </div>
             <div class="admin-stat-card">
               <n-icon :component="TimerOutline" :size="24" class="admin-stat-card__icon" />
               <div class="admin-stat-card__body">
                 <div class="admin-stat-card__num">{{ formatInterval(schedulerMonitor.intervalSeconds) }}</div>
-                <div class="admin-stat-card__label">מרווח בדיקה</div>
+                <div class="admin-stat-card__label">Check Interval</div>
               </div>
             </div>
             <div class="admin-stat-card">
               <n-icon :component="CheckmarkCircleOutline" :size="24" class="admin-stat-card__icon" style="color:var(--success-color,#18a058)" />
               <div class="admin-stat-card__body">
                 <div class="admin-stat-card__num">{{ schedulerMonitor.sentLastHour }}</div>
-                <div class="admin-stat-card__label">נשלחו בשעה האחרונה</div>
+                <div class="admin-stat-card__label">Sent Last Hour</div>
               </div>
             </div>
             <div class="admin-stat-card">
               <n-icon :component="CloseCircleOutline" :size="24" class="admin-stat-card__icon" style="color:var(--error-color,#d03050)" />
               <div class="admin-stat-card__body">
                 <div class="admin-stat-card__num">{{ schedulerMonitor.failedLastHour }}</div>
-                <div class="admin-stat-card__label">נכשלו בשעה האחרונה</div>
+                <div class="admin-stat-card__label">Failed Last Hour</div>
               </div>
             </div>
           </div>
 
           <!-- Per-job health table -->
           <div class="monitor-block">
-            <div class="monitor-block__title">בריאות שירותי Cron</div>
+            <div class="monitor-block__title">Cron Job Health</div>
             <n-data-table
               :columns="cronJobColumns"
               :data="schedulerMonitor.jobs ?? []"
               :bordered="false"
               size="small"
-              dir="rtl"
               style="margin-top:10px"
             />
           </div>
 
           <div class="monitor-block">
-            <div class="monitor-block__title">לוח דוח חודשי לפי משתמש</div>
+            <div class="monitor-block__title">Monthly Report Schedule by User</div>
             <n-data-table
               :columns="monthlyScheduleColumns"
               :data="schedulerMonitor.monthlySchedule"
               :bordered="false"
               size="small"
-              dir="rtl"
               style="margin-top:10px"
             />
           </div>
@@ -322,21 +311,20 @@
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="monthlyMonitor">
           <div class="monitor-block">
-            <div class="monitor-block__title">תצורת דוח חודשי לפי משתמש</div>
+            <div class="monitor-block__title">Monthly Report Configuration by User</div>
             <n-data-table
               :columns="monthlyScheduleDetailColumns"
               :data="monthlyMonitor.schedules"
               :bordered="false"
               :pagination="{ pageSize: 15 }"
               size="small"
-              dir="rtl"
               style="margin-top:10px"
             />
           </div>
 
           <div class="monitor-block">
             <div class="monitor-block__title">
-              כשלי משלוח דוחות חודשיים
+              Monthly Report Send Failures
               <n-tag v-if="monthlyMonitor.failedDeliveries.length" type="error" size="small" round style="margin-right:8px">{{ monthlyMonitor.failedDeliveries.length }}</n-tag>
             </div>
             <n-data-table
@@ -345,7 +333,6 @@
               :bordered="false"
               :pagination="{ pageSize: 10 }"
               size="small"
-              dir="rtl"
               style="margin-top:10px"
             />
           </div>
@@ -367,21 +354,20 @@
     </n-modal>
 
     <!-- Role edit modal -->
-    <n-modal v-model:show="showRoleModal" preset="dialog" title="שינוי תפקיד משתמש" style="width: 360px" :mask-closable="false">
-      <div dir="rtl" style="padding: 8px 0">
+    <n-modal v-model:show="showRoleModal" preset="dialog" title="Change User Role" style="width: 360px" :mask-closable="false">
+      <div style="padding: 8px 0">
         <p style="margin: 0 0 12px; font-size: 14px">
           <strong>{{ editingUser?.email }}</strong>
         </p>
         <n-select
           v-model:value="editingRole"
           :options="roleOptions"
-          placeholder="בחר תפקיד"
-          dir="rtl"
+          placeholder="Select role"
         />
       </div>
       <template #action>
-        <n-button @click="showRoleModal = false">ביטול</n-button>
-        <n-button type="primary" :loading="savingRole" @click="saveRole">שמור</n-button>
+        <n-button @click="showRoleModal = false">Cancel</n-button>
+        <n-button type="primary" :loading="savingRole" @click="saveRole">Save</n-button>
       </template>
     </n-modal>
   </div>
@@ -419,12 +405,12 @@ const dbName = ref("");
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
 const sidebarItems = [
-  { key: "users",     label: "משתמשים",             icon: PeopleOutline },
-  { key: "stats",     label: "סטטיסטיקות",          icon: StatsChartOutline },
-  { key: "documents", label: "מסמכים וחילוץ",        icon: DocumentOutline },
-  { key: "reminders", label: "תזכורות",              icon: NotificationsOutline },
-  { key: "scheduler", label: "מתזמן",                icon: TimerOutline },
-  { key: "monthly",   label: "דוחות חודשיים",        icon: CalendarOutline },
+  { key: "users",     label: "Users",                 icon: PeopleOutline },
+  { key: "stats",     label: "Statistics",            icon: StatsChartOutline },
+  { key: "documents", label: "Documents & Extraction",icon: DocumentOutline },
+  { key: "reminders", label: "Reminders",             icon: NotificationsOutline },
+  { key: "scheduler", label: "Scheduler",             icon: TimerOutline },
+  { key: "monthly",   label: "Monthly Reports",       icon: CalendarOutline },
 ];
 const activeSection = ref("users");
 const currentItem = computed(() => sidebarItems.find((i) => i.key === activeSection.value));
@@ -448,7 +434,7 @@ async function loadUsers() {
   try {
     users.value = await api.admin.listUsers();
   } catch {
-    message.error("שגיאה בטעינת משתמשים");
+    message.error("Error loading users");
   } finally {
     usersLoading.value = false;
   }
@@ -459,9 +445,9 @@ function resolveUserEmail(userId: string) {
 }
 
 const roleOptions = [
-  { label: "משתמש רגיל", value: "user" },
-  { label: "Pro",        value: "pro"  },
-  { label: "מנהל",       value: "admin"},
+  { label: "Regular User", value: "user" },
+  { label: "Pro",          value: "pro"  },
+  { label: "Admin",        value: "admin"},
 ];
 
 const roleTagType: Record<string, "default" | "info" | "warning"> = {
@@ -470,9 +456,9 @@ const roleTagType: Record<string, "default" | "info" | "warning"> = {
   admin: "warning",
 };
 const roleLabel: Record<string, string> = {
-  user:  "משתמש",
+  user:  "User",
   pro:   "Pro",
-  admin: "מנהל",
+  admin: "Admin",
 };
 
 const showRoleModal = ref(false);
@@ -499,9 +485,9 @@ async function saveRole() {
     const updated = await api.admin.updateUser(editingUser.value.id, { role: editingRole.value });
     users.value = users.value.map((u) => (u.id === updated.id ? updated : u));
     showRoleModal.value = false;
-    message.success("התפקיד עודכן");
+    message.success("Role updated");
   } catch {
-    message.error("שגיאה בעדכון התפקיד");
+    message.error("Error updating role");
   } finally {
     savingRole.value = false;
   }
@@ -512,58 +498,58 @@ async function toggleActive(user: any) {
   try {
     const updated = await api.admin.updateUser(user.id, { is_active: newActive });
     users.value = users.value.map((u) => (u.id === updated.id ? updated : u));
-    message.success(newActive ? "המשתמש הופעל" : "המשתמש הושבת");
+    message.success(newActive ? "User activated" : "User deactivated");
   } catch {
-    message.error("שגיאה בעדכון הסטטוס");
+    message.error("Error updating status");
   }
 }
 
 const userColumns: DataTableColumns<any> = [
   {
-    title: "אימייל", key: "email", align: "right", ellipsis: { tooltip: true },
+    title: "Email", key: "email", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:13px" }, row.email ?? "—"),
   },
   {
-    title: "שם", key: "name", align: "right", ellipsis: { tooltip: true },
+    title: "Name", key: "name", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:13px" }, row.name ?? "—"),
   },
   {
-    title: "תפקיד", key: "role", align: "right", width: 100,
+    title: "Role", key: "role", align: "left", width: 100,
     render: (row) =>
       h(NTag, { type: roleTagType[row.role] ?? "default", size: "small", round: true },
         { default: () => roleLabel[row.role] ?? row.role }),
   },
   {
-    title: "סטטוס", key: "is_active", align: "right", width: 90,
+    title: "Status", key: "is_active", align: "left", width: 90,
     render: (row) =>
       h(NTag, { type: row.is_active === 0 ? "error" : "success", size: "small", round: true },
-        { default: () => row.is_active === 0 ? "מושבת" : "פעיל" }),
+        { default: () => row.is_active === 0 ? "Inactive" : "Active" }),
   },
   {
-    title: "נרשם", key: "created_at", align: "right", width: 110,
+    title: "Registered", key: "created_at", align: "left", width: 110,
     render: (row) =>
       h("span", { style: "font-size:12px; color: var(--text-secondary)" },
-        row.created_at ? new Date(row.created_at).toLocaleDateString("he-IL") : "—"),
+        row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "פעולות", key: "actions", align: "center", width: 160,
+    title: "Actions", key: "actions", align: "center", width: 160,
     render: (row) =>
       h("div", { style: "display:flex; gap:6px; justify-content:center" }, [
-        h(NButton, { size: "tiny", onClick: () => openRoleModal(row) }, { default: () => "שנה תפקיד" }),
+        h(NButton, { size: "tiny", onClick: () => openRoleModal(row) }, { default: () => "Change Role" }),
         h(NButton, {
           size: "tiny", type: row.is_active === 0 ? "primary" : "error", ghost: true,
           onClick: () => toggleActive(row),
-        }, { default: () => row.is_active === 0 ? "הפעל" : "השבת" }),
+        }, { default: () => row.is_active === 0 ? "Activate" : "Deactivate" }),
       ]),
   },
 ];
 
 // ── Stats ──────────────────────────────────────────────────────────────────
 const systemStats = computed(() => [
-  { label: "סה\"כ משתמשים",  value: users.value.length,                                  icon: PeopleOutline },
-  { label: "מנהלים",         value: users.value.filter((u) => u.role === "admin").length, icon: PeopleOutline },
-  { label: "משתמשי Pro",     value: users.value.filter((u) => u.role === "pro").length,   icon: PeopleOutline },
-  { label: "מושבתים",        value: users.value.filter((u) => u.is_active === 0).length,  icon: PeopleOutline },
+  { label: "Total Users",   value: users.value.length,                                  icon: PeopleOutline },
+  { label: "Admins",        value: users.value.filter((u) => u.role === "admin").length, icon: PeopleOutline },
+  { label: "Pro Users",     value: users.value.filter((u) => u.role === "pro").length,   icon: PeopleOutline },
+  { label: "Inactive",      value: users.value.filter((u) => u.is_active === 0).length,  icon: PeopleOutline },
 ]);
 
 // ── Documents monitor ──────────────────────────────────────────────────────
@@ -593,7 +579,7 @@ async function loadExtractions(page = 1) {
     extractionsTotal.value = res.total;
     extractionPage.value = res.page;
   } catch {
-    message.error("שגיאה בטעינת חילוצים");
+    message.error("Error loading extractions");
   } finally {
     extractionsLoading.value = false;
   }
@@ -621,32 +607,32 @@ const extractionTreeData = computed(() => {
 
 const extractionColumns: DataTableColumns<any> = [
   {
-    title: "קובץ / משתמש", key: "filename", align: "right", ellipsis: { tooltip: true },
+    title: "File / User", key: "filename", align: "left", ellipsis: { tooltip: true },
     render: (row) => row._isGroup
       ? h("span", { style: "font-size:12px;font-weight:600;color:var(--text-primary)" }, row.filename)
       : h("span", { style: "font-size:12px" }, row.filename ?? "—"),
   },
   {
-    title: "סוג מסמך", key: "document_type", align: "right", width: 140,
+    title: "Document Type", key: "document_type", align: "left", width: 140,
     render: (row) => h("span", { style: "font-size:12px" }, row._isGroup ? "" : (row.document_type ?? "—")),
   },
   {
-    title: "תאריך", key: "created_at", align: "right", width: 110,
+    title: "Date", key: "created_at", align: "left", width: 110,
     render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" },
-      row._isGroup ? "" : (row.created_at ? new Date(row.created_at).toLocaleDateString("he-IL") : "—")),
+      row._isGroup ? "" : (row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—")),
   },
   {
     title: "", key: "actions", align: "center", width: 70,
     render: (row) => row._isGroup ? null : h(NButton, {
       size: "tiny",
       onClick: () => openDocModal(row.id),
-    }, { default: () => "📄 פתח" }),
+    }, { default: () => "📄 Open" }),
   },
 ];
 
 const DOC_STATUSES = ["queued", "processing", "done", "error"];
 const STATUS_HE: Record<string, string> = {
-  queued: "בתור", processing: "מעבד", done: "הושלם", error: "שגיאה",
+  queued: "Queued", processing: "Processing", done: "Completed", error: "Error",
 };
 
 const docStatusRows = computed(() => {
@@ -658,7 +644,7 @@ const docStatusRows = computed(() => {
 });
 
 const docStatusColumns: DataTableColumns<any> = [
-  { title: "משתמש", key: "user", align: "right", ellipsis: { tooltip: true } },
+  { title: "User", key: "user", align: "left", ellipsis: { tooltip: true } },
   ...DOC_STATUSES.map((s) => ({
     title: STATUS_HE[s] ?? s,
     key: s,
@@ -670,37 +656,37 @@ const docStatusColumns: DataTableColumns<any> = [
 
 const failedDocsColumns: DataTableColumns<any> = [
   {
-    title: "משתמש", key: "user_id", align: "right", width: 130,
+    title: "User", key: "user_id", align: "left", width: 130,
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "קובץ", key: "filename", align: "right", ellipsis: { tooltip: true },
+    title: "File", key: "filename", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—"),
   },
   {
-    title: "שגיאה", key: "error", align: "right", ellipsis: { tooltip: true },
+    title: "Error", key: "error", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.error ?? "—"),
   },
   {
-    title: "תאריך", key: "created_at", align: "right", width: 110,
+    title: "Date", key: "created_at", align: "left", width: 110,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
-      row.created_at ? new Date(row.created_at).toLocaleDateString("he-IL") : "—"),
+      row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—"),
   },
 ];
 
 const stuckDocsColumns: DataTableColumns<any> = [
   {
-    title: "משתמש", key: "user_id", align: "right", width: 130,
+    title: "User", key: "user_id", align: "left", width: 130,
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "קובץ", key: "filename", align: "right", ellipsis: { tooltip: true },
+    title: "File", key: "filename", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—"),
   },
   {
-    title: "תאריך העלאה", key: "created_at", align: "right", width: 130,
+    title: "Upload Date", key: "created_at", align: "left", width: 130,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
-      row.created_at ? new Date(row.created_at).toLocaleString("he-IL") : "—"),
+      row.created_at ? new Date(row.created_at).toLocaleString("en-US") : "—"),
   },
 ];
 
@@ -709,7 +695,7 @@ const reminderMonitor = ref<any>(null);
 
 const REMINDER_STATUSES = ["pending", "sent", "snoozed", "dismissed", "error"];
 const REMINDER_STATUS_HE: Record<string, string> = {
-  pending: "ממתין", sent: "נשלח", snoozed: "דחוי", dismissed: "בוטל", error: "שגיאה",
+  pending: "Pending", sent: "Sent", snoozed: "Snoozed", dismissed: "Dismissed", error: "Error",
 };
 
 const reminderStatusRows = computed(() => {
@@ -721,7 +707,7 @@ const reminderStatusRows = computed(() => {
 });
 
 const reminderStatusColumns: DataTableColumns<any> = [
-  { title: "משתמש", key: "user", align: "right", ellipsis: { tooltip: true } },
+  { title: "User", key: "user", align: "left", ellipsis: { tooltip: true } },
   ...REMINDER_STATUSES.map((s) => ({
     title: REMINDER_STATUS_HE[s] ?? s,
     key: s,
@@ -733,41 +719,41 @@ const reminderStatusColumns: DataTableColumns<any> = [
 
 const pendingReminderColumns: DataTableColumns<any> = [
   {
-    title: "משתמש", key: "user_id", align: "right", width: 130,
+    title: "User", key: "user_id", align: "left", width: 130,
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "סוג", key: "doc_type", align: "right", width: 110,
+    title: "Type", key: "doc_type", align: "left", width: 110,
     render: (row) => h("span", { style: "font-size:12px" }, row.doc_type ?? "—"),
   },
   {
-    title: "הערה", key: "note", align: "right", ellipsis: { tooltip: true },
+    title: "Note", key: "note", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.note ?? "—"),
   },
   {
-    title: "תאריך טריגר", key: "trigger_date", align: "right", width: 120,
+    title: "Trigger Date", key: "trigger_date", align: "left", width: 120,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
-      row.trigger_date ? new Date(row.trigger_date).toLocaleDateString("he-IL") : "—"),
+      row.trigger_date ? new Date(row.trigger_date).toLocaleDateString("en-US") : "—"),
   },
 ];
 
 const failedSendsColumns: DataTableColumns<any> = [
   {
-    title: "משתמש", key: "user_id", align: "right", width: 130,
+    title: "User", key: "user_id", align: "left", width: 130,
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "נמען", key: "recipient", align: "right", ellipsis: { tooltip: true },
+    title: "Recipient", key: "recipient", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.recipient ?? "—"),
   },
   {
-    title: "שגיאה", key: "error", align: "right", ellipsis: { tooltip: true },
+    title: "Error", key: "error", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.error ?? "—"),
   },
   {
-    title: "תאריך", key: "sent_at", align: "right", width: 130,
+    title: "Date", key: "sent_at", align: "left", width: 130,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
-      row.sent_at ? new Date(row.sent_at).toLocaleString("he-IL") : "—"),
+      row.sent_at ? new Date(row.sent_at).toLocaleString("en-US") : "—"),
   },
 ];
 
@@ -775,67 +761,67 @@ const failedSendsColumns: DataTableColumns<any> = [
 const schedulerMonitor = ref<any>(null);
 
 const JOB_NAME_HE: Record<string, string> = {
-  tick: "לולאה ראשית",
-  checkReminders: "בדיקת תזכורות",
-  checkMonthlyReports: "דוחות חודשיים",
-  checkEscalations: "הסלמות",
+  tick: "Main Loop",
+  checkReminders: "Check Reminders",
+  checkMonthlyReports: "Monthly Reports",
+  checkEscalations: "Escalations",
 };
 
 const cronJobColumns: DataTableColumns<any> = [
   {
-    title: "שירות", key: "name", align: "right",
+    title: "Service", key: "name", align: "left",
     render: (row) => h("span", { style: "font-size:13px; font-weight:500" }, JOB_NAME_HE[row.name] ?? row.name),
   },
   {
-    title: "סטטוס", key: "status", align: "center", width: 90,
+    title: "Status", key: "status", align: "center", width: 90,
     render: (row) => {
       const ok = !row.last_error && (row.consecutive_failures ?? 0) === 0;
       return h(NTag, { type: ok ? "success" : "error", size: "small", round: true },
-        { default: () => ok ? "תקין" : `${row.consecutive_failures} כשלים` });
+        { default: () => ok ? "Healthy" : `${row.consecutive_failures} failures` });
     },
   },
   {
-    title: "ריצה אחרונה", key: "last_run_at", align: "right", width: 150,
+    title: "Last Run", key: "last_run_at", align: "left", width: 150,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
-      row.last_run_at ? new Date(row.last_run_at).toLocaleString("he-IL") : "—"),
+      row.last_run_at ? new Date(row.last_run_at).toLocaleString("en-US") : "—"),
   },
   {
-    title: "הצלחה אחרונה", key: "last_success_at", align: "right", width: 150,
+    title: "Last Success", key: "last_success_at", align: "left", width: 150,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
-      row.last_success_at ? new Date(row.last_success_at).toLocaleString("he-IL") : "—"),
+      row.last_success_at ? new Date(row.last_success_at).toLocaleString("en-US") : "—"),
   },
   {
-    title: "שגיאה אחרונה", key: "last_error", align: "right", ellipsis: { tooltip: true },
+    title: "Last Error", key: "last_error", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color:var(--error-color,#d03050)" }, row.last_error ?? "—"),
   },
 ];
 
 const monthlyScheduleColumns: DataTableColumns<any> = [
   {
-    title: "משתמש", key: "user_id", align: "right",
+    title: "User", key: "user_id", align: "left",
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "פעיל", key: "enabled", align: "center", width: 70,
+    title: "Enabled", key: "enabled", align: "center", width: 70,
     render: (row) =>
       h(NTag, { type: row.enabled ? "success" : "default", size: "small", round: true },
-        { default: () => row.enabled ? "כן" : "לא" }),
+        { default: () => row.enabled ? "Yes" : "No" }),
   },
   {
-    title: "יום בחודש", key: "day", align: "center", width: 100,
+    title: "Day of Month", key: "day", align: "center", width: 100,
     render: (row) => h("span", { style: "font-size:12px" }, row.day ?? "—"),
   },
   {
-    title: "שעה", key: "hour", align: "center", width: 70,
+    title: "Hour", key: "hour", align: "center", width: 70,
     render: (row) => h("span", { style: "font-size:12px" }, row.hour != null ? `${row.hour}:00` : "—"),
   },
   {
-    title: "נשלח לאחרונה", key: "last_sent", align: "right", width: 130,
+    title: "Last Sent", key: "last_sent", align: "left", width: 130,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
-      row.last_sent ? new Date(row.last_sent).toLocaleDateString("he-IL") : "—"),
+      row.last_sent ? new Date(row.last_sent).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "שגיאה אחרונה", key: "last_error", align: "right", ellipsis: { tooltip: true },
+    title: "Last Error", key: "last_error", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.last_error ?? "—"),
   },
 ];
@@ -845,25 +831,25 @@ const monthlyMonitor = ref<any>(null);
 
 const monthlyScheduleDetailColumns: DataTableColumns<any> = [
   {
-    title: "משתמש", key: "user_id", align: "right",
+    title: "User", key: "user_id", align: "left",
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "פעיל", key: "enabled", align: "center", width: 70,
+    title: "Enabled", key: "enabled", align: "center", width: 70,
     render: (row) =>
       h(NTag, { type: row.enabled ? "success" : "default", size: "small", round: true },
-        { default: () => row.enabled ? "כן" : "לא" }),
+        { default: () => row.enabled ? "Yes" : "No" }),
   },
   {
-    title: "יום", key: "day", align: "center", width: 70,
+    title: "Day", key: "day", align: "center", width: 70,
     render: (row) => h("span", { style: "font-size:12px" }, row.day ?? "—"),
   },
   {
-    title: "שעה", key: "hour", align: "center", width: 70,
+    title: "Hour", key: "hour", align: "center", width: 70,
     render: (row) => h("span", { style: "font-size:12px" }, row.hour != null ? `${row.hour}:00` : "—"),
   },
   {
-    title: "פורמטים", key: "formats", align: "right", width: 110,
+    title: "Formats", key: "formats", align: "left", width: 110,
     render: (row) => {
       let formats = row.formats ?? [];
       if (typeof formats === "string") { try { formats = JSON.parse(formats); } catch { formats = []; } }
@@ -871,7 +857,7 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
     },
   },
   {
-    title: "נמענים", key: "recipients", align: "right", ellipsis: { tooltip: true },
+    title: "Recipients", key: "recipients", align: "left", ellipsis: { tooltip: true },
     render: (row) => {
       let recipients = row.recipients ?? [];
       if (typeof recipients === "string") { try { recipients = JSON.parse(recipients); } catch { recipients = []; } }
@@ -879,12 +865,12 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
     },
   },
   {
-    title: "נשלח לאחרונה", key: "last_sent", align: "right", width: 130,
+    title: "Last Sent", key: "last_sent", align: "left", width: 130,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
-      row.last_sent ? new Date(row.last_sent).toLocaleDateString("he-IL") : "—"),
+      row.last_sent ? new Date(row.last_sent).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "שגיאה", key: "last_error", align: "right", ellipsis: { tooltip: true },
+    title: "Error", key: "last_error", align: "left", ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.last_error ?? "—"),
   },
 ];
@@ -906,13 +892,13 @@ function formatDate(d: string | null): string {
 
 function formatInterval(seconds: number): string {
   if (!seconds) return "—";
-  if (seconds < 60) return `${seconds} שניות`;
+  if (seconds < 60) return `${seconds} seconds`;
   if (seconds < 3600) {
     const m = Math.round(seconds / 60);
-    return m === 1 ? "דקה" : `${m} דקות`;
+    return m === 1 ? "minute" : `${m} minutes`;
   }
   const h = Math.round(seconds / 3600);
-  return h === 1 ? "שעה" : `${h} שעות`;
+  return h === 1 ? "hour" : `${h} hours`;
 }
 
 // ── Section switching & loading ────────────────────────────────────────────
@@ -943,7 +929,7 @@ async function loadSectionData(key: string) {
       monthlyMonitor.value = await api.admin.monitorMonthlyReports();
     }
   } catch {
-    message.error("שגיאה בטעינת נתונים");
+    message.error("Error loading data");
   } finally {
     sectionLoading.value = false;
   }
