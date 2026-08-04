@@ -175,7 +175,7 @@ export function registerAdminRoutes(app: express.Application) {
     const [docs, total] = await Promise.all([
       col("documents").find(filter, {
         projection: {
-          _id: 1, user_id: 1, original_filename: 1, document_type: 1,
+          _id: 1, user_id: 1, file_name: 1, document_type: 1,
           extracted_fields: 1, processing_status: 1, created_at: 1,
         },
       }).sort({ created_at: -1 }).skip(skip).limit(limit).toArray(),
@@ -192,7 +192,7 @@ export function registerAdminRoutes(app: express.Application) {
         return {
           id: d._id?.toString(),
           user_id: d.user_id,
-          filename: d.original_filename,
+          filename: d.file_name,
           document_type: d.document_type ?? fields.document_type ?? null,
           created_at: d.created_at,
           fields,
