@@ -820,20 +820,23 @@ function extractLicenseNumber(rawText: string): string | null {
     // Value on same line as label (both directions); value is digits or "פנימי NNN"
     const afterLabel = line.match(/(?:^|\s)מספר\s+רישוי\s*[:：-]?\s*(פנימי\s*\d{3,5}|\d+)/i);
     const beforeLabel = line.match(/(פנימי\s*\d{3,5}|\d+)\s*[:：-]?\s*מספר\s+רישוי/i);
-    const inline = cleanInlineFieldValue(afterLabel?.[1] ?? beforeLabel?.[1]);
-    if (inline && isLikelyLicenseNumber(inline)) return inline;
+    // Also match reversed RTL rendering: "145פנימי" on same line as label
+    const afterLabelRev = line.match(/(?:^|\s)מספר\s+רישוי\s*[:：-]?\s*(\d{3,5}\s*פנימי)/i);
+    const beforeLabelRev = line.match(/(\d{3,5}\s*פנימי)\s*[:：-]?\s*מספר\s+רישוי/i);
+    const inline = cleanInlineFieldValue(afterLabel?.[1] ?? beforeLabel?.[1] ?? afterLabelRev?.[1] ?? beforeLabelRev?.[1]);
+    if (inline && isLikelyLicenseNumber(inline)) return normalizePenimiLicense(inline);
 
     // Label-only line — value on the next line (common in RTL table PDFs)
     if (/^מספר\s+רישוי\s*[:：-]?$/i.test(line)) {
       for (const candidate of [lines[i + 1]?.trim(), lines[i + 2]?.trim()]) {
-        if (candidate && isLikelyLicenseNumber(candidate)) return candidate;
+        if (candidate && isLikelyLicenseNumber(candidate)) return normalizePenimiLicense(candidate);
       }
     }
 
     // Value-only line immediately before the label line (cell order flipped by PDF parser)
     if (/מספר\s+רישוי/i.test(line) && i > 0) {
       const prev = lines[i - 1]?.trim();
-      if (prev && isLikelyLicenseNumber(prev)) return prev;
+      if (prev && isLikelyLicenseNumber(prev)) return normalizePenimiLicense(prev);
     }
   }
 
@@ -864,7 +867,7 @@ function extractLicenseNumber(rawText: string): string | null {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (skipLinePattern.test(lines[i])) continue;
-      if (/^פנימי\s*\d{3,5}$/i.test(line)) return line;
+      if (isLikelyLicenseNumber(line) && /פנימי/i.test(line)) return normalizePenimiLicense(line);
       if (isLoadTableLine(i)) continue;
       if (isEquipTableLine(i)) continue;
       if (/^\d{4,8}$/.test(line)) return line;
@@ -879,7 +882,7 @@ function extractLicenseNumberAfterInspectionLocation(rawText: string): string | 
   for (let i = 0; i < lines.length; i++) {
     if (!/מקום\s+הבדיקה/.test(lines[i])) continue;
     for (const candidateLine of lines.slice(i + 1, i + 4)) {
-      if (isLikelyLicenseNumber(candidateLine)) return candidateLine;
+      if (isLikelyLicenseNumber(candidateLine)) return normalizePenimiLicense(candidateLine);
     }
   }
   return null;
@@ -897,7 +900,14 @@ function cleanInlineFieldValue(value: string | undefined): string | null {
 function isLikelyLicenseNumber(value: unknown): boolean {
   if (typeof value !== "string") return false;
   const v = value.trim();
-  return /^\d{4,8}$/.test(v) || /^פנימי\s*\d{3,5}$/i.test(v);
+  return /^\d{4,8}$/.test(v) || /^פנימי\s*\d{3,5}$/i.test(v) || /^\d{3,5}\s*פנימי$/i.test(v);
+}
+
+// Normalize reversed "145פנימי" → "פנימי 145" for consistent storage
+function normalizePenimiLicense(v: string): string {
+  const rev = v.trim().match(/^(\d{3,5})\s*פנימי$/i);
+  if (rev) return `פנימי ${rev[1]}`;
+  return v.trim();
 }
 
 function hasMeaningfulValue(value: unknown): boolean {
