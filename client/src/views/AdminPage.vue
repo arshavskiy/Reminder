@@ -805,7 +805,7 @@ async function loadSectionData(key: string) {
 
 onMounted(async () => {
   try {
-    const cfg = await api.config.get();
+    const cfg = await api.config.getAdmin();
     appEnv.value = cfg.appEnv ?? "development";
     dbName.value = cfg.dbName ?? "";
   } catch { /* non-critical */ }

@@ -90,6 +90,10 @@ export interface ExpiryCalendarItem {
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const BASE = `${SERVER}/api`;
 
+// Admin panel always hits the production server when VITE_ADMIN_API_BASE is set.
+const ADMIN_SERVER = (import.meta.env.VITE_ADMIN_API_BASE as string | undefined) || SERVER;
+const ADMIN_BASE = `${ADMIN_SERVER}/api`;
+
 async function get<T>(path: string, force = false): Promise<T> {
   const res = await fetch(BASE + path, {
     credentials: "include",
@@ -128,6 +132,27 @@ async function put<T>(path: string, body: unknown): Promise<T> {
 async function del(path: string): Promise<void> {
   const res = await fetch(BASE + path, { method: "DELETE", credentials: "include" });
   if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`);
+}
+
+async function adminGet<T>(path: string): Promise<T> {
+  const res = await fetch(ADMIN_BASE + path, { credentials: "include" });
+  if (!res.ok) {
+    const err = new Error(`GET ${path} failed: ${res.status}`) as any;
+    err.status = res.status;
+    throw err;
+  }
+  return res.json() as Promise<T>;
+}
+
+async function adminPut<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(ADMIN_BASE + path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`);
+  return res.json() as Promise<T>;
 }
 
 /**
@@ -337,17 +362,18 @@ export const api = {
   },
 
   admin: {
-    listUsers: () => get<any[]>("/admin/users"),
+    listUsers: () => adminGet<any[]>("/admin/users"),
     updateUser: (id: string, body: { role?: string; is_active?: number }) =>
-      put<any>(`/admin/users/${id}`, body),
-    monitorDocuments: () => get<any>("/admin/monitor/documents"),
-    monitorReminders: () => get<any>("/admin/monitor/reminders"),
-    monitorScheduler: () => get<any>("/admin/monitor/scheduler"),
-    monitorMonthlyReports: () => get<any>("/admin/monitor/monthly-reports"),
+      adminPut<any>(`/admin/users/${id}`, body),
+    monitorDocuments: () => adminGet<any>("/admin/monitor/documents"),
+    monitorReminders: () => adminGet<any>("/admin/monitor/reminders"),
+    monitorScheduler: () => adminGet<any>("/admin/monitor/scheduler"),
+    monitorMonthlyReports: () => adminGet<any>("/admin/monitor/monthly-reports"),
   },
 
   config: {
     get: () => get<{ userDocumentLimit: number; appEnv: string; dbName: string }>("/config"),
+    getAdmin: () => adminGet<{ userDocumentLimit: number; appEnv: string; dbName: string }>("/config"),
   },
 
   settings: {
