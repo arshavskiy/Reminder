@@ -51,7 +51,7 @@
             v-model:value="userSearch"
             placeholder="Search by name / email..."
             clearable
-            style="max-width: 280px"
+            style="max-width: 280px; direction: ltr"
           >
             <template #prefix><n-icon :component="SearchOutline" /></template>
           </n-input>
@@ -120,7 +120,7 @@
                 :options="userSelectOptions"
                 placeholder="All Users"
                 clearable
-                style="width:220px"
+                style="width:220px; direction: ltr"
                 @update:value="loadExtractions(1)"
               />
               <span style="font-size:12px;color:var(--text-secondary)">{{ extractionsTotal }} documents</span>
@@ -365,6 +365,7 @@
           v-model:value="editingRole"
           :options="roleOptions"
           placeholder="Select role"
+          style="direction: ltr"
         />
       </div>
       <template #action>
