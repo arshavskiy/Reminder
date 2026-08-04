@@ -480,6 +480,51 @@
         <n-button type="primary" :loading="savingRole" @click="saveRole">Save</n-button>
       </template>
     </n-modal>
+
+    <!-- Error Detail Modal -->
+    <n-modal v-model:show="showErrorModal" preset="dialog" title="Error Details" style="width: 500px; max-width:90vw">
+      <div v-if="errorDetail" style="padding: 12px 0">
+        <div style="margin-bottom: 16px">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px">EMAIL / RECIPIENT</div>
+          <div style="font-size: 13px; font-family: monospace; padding: 8px; background: var(--bg-elevated); border-radius: 6px">
+            {{ errorDetail.recipient || errorDetail.email || "—" }}
+          </div>
+        </div>
+
+        <div style="margin-bottom: 16px">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px">ERROR MESSAGE</div>
+          <div style="font-size: 13px; padding: 10px; background: rgba(208, 48, 80, 0.05); border-left: 3px solid #d03050; border-radius: 4px; overflow-x: auto">
+            {{ errorDetail.error || errorDetail.error_message || errorDetail.last_error || "Unknown error" }}
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px">
+          <div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px">TIMESTAMP</div>
+            <div style="font-size: 13px">
+              {{ errorDetail.sent_at || errorDetail.created_at ? new Date(errorDetail.sent_at || errorDetail.created_at).toLocaleString("en-US") : "—" }}
+            </div>
+          </div>
+          <div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px">USER</div>
+            <div style="font-size: 13px">
+              {{ resolveUserEmail(errorDetail.user_id) }}
+            </div>
+          </div>
+        </div>
+
+        <div v-if="errorDetail.reminder_id || errorDetail.filename" style="margin-bottom: 16px">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px">CONTEXT</div>
+          <div style="font-size: 13px; color: var(--text-secondary)">
+            {{ errorDetail.reminder_id ? `Reminder: ${errorDetail.reminder_id.slice(-6)}` : "" }}
+            {{ errorDetail.filename ? `Document: ${errorDetail.filename}` : "" }}
+          </div>
+        </div>
+      </div>
+      <template #action>
+        <n-button @click="showErrorModal = false">Close</n-button>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -575,9 +620,17 @@ const roleLabel: Record<string, string> = {
 const showRoleModal = ref(false);
 const showDocModal = ref(false);
 const docModalId = ref<string | null>(null);
+const showErrorModal = ref(false);
+const errorDetail = ref<any>(null);
+
 function openDocModal(id: string) {
   docModalId.value = id;
   showDocModal.value = true;
+}
+
+function openErrorModal(error: any) {
+  errorDetail.value = error;
+  showErrorModal.value = true;
 }
 const editingUser = ref<any>(null);
 const editingRole = ref<string>("");
@@ -842,6 +895,15 @@ const failedDocsColumns: DataTableColumns<any> = [
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—"),
   },
+  {
+    title: "Action", key: "action", align: "center", width: 100,
+    render: (row) => h("n-button", {
+      text: true,
+      type: "primary",
+      size: "small",
+      onClick: () => openErrorModal(row),
+    }, "View Error"),
+  },
 ];
 
 const stuckDocsColumns: DataTableColumns<any> = [
@@ -924,6 +986,15 @@ const failedSendsColumns: DataTableColumns<any> = [
     title: "Date", key: "sent_at", align: "right", width: 130,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.sent_at ? new Date(row.sent_at).toLocaleString("en-US") : "—"),
+  },
+  {
+    title: "Action", key: "action", align: "center", width: 100,
+    render: (row) => h("n-button", {
+      text: true,
+      type: "primary",
+      size: "small",
+      onClick: () => openErrorModal(row),
+    }, "View Error"),
   },
 ];
 
