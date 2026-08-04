@@ -160,6 +160,47 @@ export function registerAdminRoutes(app: express.Application) {
     });
   });
 
+  // GET /api/admin/monitor/extractions?user_id=&page=&limit=
+  app.get("/api/admin/monitor/extractions", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+
+    const userId = req.query.user_id as string | undefined;
+    const page = Math.max(1, parseInt(req.query.page as string ?? "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string ?? "50", 10)));
+    const skip = (page - 1) * limit;
+
+    const filter: Record<string, any> = { processing_status: "done" };
+    if (userId) filter.user_id = userId;
+
+    const [docs, total] = await Promise.all([
+      col("documents").find(filter, {
+        projection: {
+          _id: 1, user_id: 1, original_filename: 1, document_type: 1,
+          extracted_fields: 1, processing_status: 1, created_at: 1,
+        },
+      }).sort({ created_at: -1 }).skip(skip).limit(limit).toArray(),
+      col("documents").countDocuments(filter),
+    ]);
+
+    res.json({
+      total,
+      page,
+      limit,
+      docs: docs.map((d: any) => {
+        let fields: Record<string, any> = {};
+        try { fields = d.extracted_fields ? JSON.parse(d.extracted_fields) : {}; } catch { fields = {}; }
+        return {
+          id: d._id?.toString(),
+          user_id: d.user_id,
+          filename: d.original_filename,
+          document_type: d.document_type ?? fields.document_type ?? null,
+          created_at: d.created_at,
+          fields,
+        };
+      }),
+    });
+  });
+
   // ── Monitoring: Reminders ─────────────────────────────────────────────────
   // GET /api/admin/monitor/reminders
   app.get("/api/admin/monitor/reminders", async (req, res) => {

@@ -368,6 +368,14 @@ export const api = {
     updateUser: (id: string, body: { role?: string; is_active?: number }) =>
       adminPut<any>(`/admin/users/${id}`, body),
     monitorDocuments: () => adminGet<any>("/admin/monitor/documents"),
+    monitorExtractions: (params?: { user_id?: string; page?: number; limit?: number }) => {
+      const qs = new URLSearchParams();
+      if (params?.user_id) qs.set("user_id", params.user_id);
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.limit) qs.set("limit", String(params.limit));
+      const q = qs.toString();
+      return adminGet<any>(`/admin/monitor/extractions${q ? "?" + q : ""}`);
+    },
     monitorReminders: () => adminGet<any>("/admin/monitor/reminders"),
     monitorScheduler: () => adminGet<any>("/admin/monitor/scheduler"),
     monitorMonthlyReports: () => adminGet<any>("/admin/monitor/monthly-reports"),

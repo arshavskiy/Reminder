@@ -114,8 +114,66 @@
             />
           </div>
 
-          <!-- Failed extractions -->
+          <!-- Extracted field values per document -->
           <div class="monitor-block">
+            <div class="monitor-block__title">ערכים שחולצו ממסמכים</div>
+            <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
+              <n-select
+                v-model:value="extractionUserId"
+                :options="userSelectOptions"
+                placeholder="כל המשתמשים"
+                clearable
+                dir="rtl"
+                style="width:220px"
+              />
+              <n-button :loading="extractionsLoading" size="small" @click="loadExtractions(1)">חפש</n-button>
+              <span style="font-size:12px;color:var(--text-secondary)">{{ extractionsTotal }} מסמכים</span>
+            </div>
+
+            <n-data-table
+              :columns="extractionColumns"
+              :data="extractionDocs"
+              :loading="extractionsLoading"
+              :bordered="false"
+              size="small"
+              dir="rtl"
+              style="margin-top:12px"
+              :row-key="(row: any) => row.id"
+              :expanded-row-keys="expandedRows"
+              @update:expanded-row-keys="expandedRows = $event"
+            >
+              <template #expand="{ row }">
+                <div class="extraction-fields">
+                  <div
+                    v-for="[k, v] in fieldEntries(row.fields)"
+                    :key="k"
+                    class="extraction-field"
+                  >
+                    <span class="extraction-field__key">{{ k }}</span>
+                    <span class="extraction-field__val">{{ v }}</span>
+                  </div>
+                </div>
+              </template>
+            </n-data-table>
+
+            <div v-if="extractionsTotal > extractionLimit" style="display:flex;justify-content:center;gap:8px;margin-top:12px">
+              <n-button
+                size="small"
+                :disabled="extractionPage <= 1"
+                @click="loadExtractions(extractionPage - 1)"
+              >הקודם</n-button>
+              <span style="font-size:12px;line-height:28px;color:var(--text-secondary)">
+                עמוד {{ extractionPage }} / {{ Math.ceil(extractionsTotal / extractionLimit) }}
+              </span>
+              <n-button
+                size="small"
+                :disabled="extractionPage >= Math.ceil(extractionsTotal / extractionLimit)"
+                @click="loadExtractions(extractionPage + 1)"
+              >הבא</n-button>
+            </div>
+          </div>
+
+          <!-- Failed extractions -->
             <div class="monitor-block__title">
               חילוץ נכשל
               <n-tag v-if="docMonitor.failed.length" type="error" size="small" round style="margin-right:8px">{{ docMonitor.failed.length }}</n-tag>
@@ -507,6 +565,73 @@ const systemStats = computed(() => [
 // ── Documents monitor ──────────────────────────────────────────────────────
 const docMonitor = ref<any>(null);
 
+// Extractions sub-section
+const extractionDocs = ref<any[]>([]);
+const extractionsTotal = ref(0);
+const extractionPage = ref(1);
+const extractionLimit = 50;
+const extractionUserId = ref<string | null>(null);
+const extractionsLoading = ref(false);
+const expandedRows = ref<string[]>([]);
+
+const userSelectOptions = computed(() =>
+  users.value.map((u) => ({ label: u.email ?? u.id, value: u.id })),
+);
+
+const FIELD_LABEL: Record<string, string> = {
+  client_name: "שם לקוח", date: "תאריך", expiry_date: "תאריך פקיעה",
+  license_number: "מספר רישוי", document_type: "סוג מסמך",
+  contract_number: "מספר חוזה", inspector: "בודק", pass_fail: "תוצאה",
+  id_number: "ח.פ / ת.ז", address: "כתובת", phone: "טלפון", email: "אימייל",
+};
+
+function fieldEntries(fields: Record<string, any>): [string, string][] {
+  const SKIP = new Set(["_confidence", "_raw", "document_kind"]);
+  return Object.entries(fields ?? {})
+    .filter(([k, v]) => !SKIP.has(k) && v !== null && v !== undefined && v !== "")
+    .map(([k, v]) => [FIELD_LABEL[k] ?? k, String(v)]);
+}
+
+async function loadExtractions(page = 1) {
+  extractionsLoading.value = true;
+  try {
+    const res = await api.admin.monitorExtractions({
+      user_id: extractionUserId.value ?? undefined,
+      page,
+      limit: extractionLimit,
+    });
+    extractionDocs.value = res.docs;
+    extractionsTotal.value = res.total;
+    extractionPage.value = res.page;
+    expandedRows.value = [];
+  } catch {
+    message.error("שגיאה בטעינת חילוצים");
+  } finally {
+    extractionsLoading.value = false;
+  }
+}
+
+const extractionColumns: DataTableColumns<any> = [
+  { type: "expand" },
+  {
+    title: "משתמש", key: "user_id", align: "right", width: 140,
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  {
+    title: "קובץ", key: "filename", align: "right", ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—"),
+  },
+  {
+    title: "סוג מסמך", key: "document_type", align: "right", width: 140,
+    render: (row) => h("span", { style: "font-size:12px" }, row.document_type ?? "—"),
+  },
+  {
+    title: "תאריך", key: "created_at", align: "right", width: 110,
+    render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" },
+      row.created_at ? new Date(row.created_at).toLocaleDateString("he-IL") : "—"),
+  },
+];
+
 const DOC_STATUSES = ["queued", "processing", "done", "error"];
 const STATUS_HE: Record<string, string> = {
   queued: "בתור", processing: "מעבד", done: "הושלם", error: "שגיאה",
@@ -796,7 +921,8 @@ async function loadSectionData(key: string) {
   sectionLoading.value = true;
   try {
     if (key === "documents") {
-      docMonitor.value = await api.admin.monitorDocuments();
+      const [monitor] = await Promise.all([api.admin.monitorDocuments(), loadExtractions(1)]);
+      docMonitor.value = monitor;
     } else if (key === "reminders") {
       reminderMonitor.value = await api.admin.monitorReminders();
     } else if (key === "scheduler") {
@@ -1021,6 +1147,31 @@ onMounted(async () => {
   border-radius: 50%;
   background: currentColor;
   flex: 0 0 auto;
+}
+
+/* ── Extraction fields expand ────────────────────────────────────────────── */
+.extraction-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 10px 16px;
+}
+
+.extraction-field {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.extraction-field__key {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.extraction-field__val {
+  color: var(--text-primary);
+  font-weight: 500;
+  word-break: break-word;
 }
 
 .admin-env-badge__db {
