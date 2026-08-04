@@ -262,6 +262,62 @@
       <section v-if="activeSection === 'reminders'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="reminderMonitor">
+          <!-- Email Delivery Summary Cards (MOST IMPORTANT) -->
+          <div class="admin-stats-grid">
+            <AdminStatCard
+              title="Email Delivery Success"
+              :primary="emailStats.successRate"
+              primary-label="Success Rate %"
+              :secondary="emailStats.sent"
+              secondary-label="Sent Successfully"
+              :status="emailStats.successRate >= 90 ? 'success' : emailStats.successRate >= 70 ? 'warning' : 'error'"
+              format="percent"
+            />
+            <AdminStatCard
+              title="Failed Email Sends"
+              :primary="emailStats.failed"
+              primary-label="Failed Attempts"
+              :secondary="reminderMonitor.failedSends?.length ?? 0"
+              secondary-label="Recent Failures"
+              :status="emailStats.failed > 0 ? 'error' : 'success'"
+            />
+            <AdminStatCard
+              title="Pending Reminders"
+              :primary="emailStats.pending"
+              primary-label="Waiting to Send"
+              :secondary="reminderMonitor.pending?.length ?? 0"
+              secondary-label="Upcoming Soon"
+              :status="emailStats.pending > 100 ? 'warning' : 'default'"
+            />
+            <AdminStatCard
+              title="Total Reminders"
+              :primary="emailStats.total"
+              primary-label="Sent + Failed"
+              :status="'default'"
+            />
+          </div>
+
+          <!-- ⚠️ CRITICAL: Failed Sends (at top for visibility) -->
+          <div class="monitor-block" style="margin-top: 20px; border-color: rgba(208, 48, 80, 0.3); background: rgba(208, 48, 80, 0.02)">
+            <div class="monitor-block__title" style="color: #d03050">
+              🔴 Failed Email Deliveries
+              <n-tag v-if="reminderMonitor.failedSends.length" type="error" size="small" round style="margin-right:8px">{{ reminderMonitor.failedSends.length }}</n-tag>
+            </div>
+            <div v-if="reminderMonitor.failedSends.length === 0" style="padding: 20px; text-align: center; color: var(--text-secondary)">
+              ✅ No failed sends detected
+            </div>
+            <n-data-table
+              v-else
+              :columns="failedSendsColumns"
+              :data="reminderMonitor.failedSends"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+              :row-class-name="() => 'row-error'"
+            />
+          </div>
+
           <!-- Status counts per user -->
           <div class="monitor-block">
             <div class="monitor-block__title">Reminder Status by User</div>
@@ -274,31 +330,15 @@
             />
           </div>
 
-          <!-- Pending reminders -->
+          <!-- Pending reminders (those about to trigger) -->
           <div class="monitor-block">
             <div class="monitor-block__title">
-              Pending Reminders
+              Pending Reminders (Waiting to Send)
               <n-tag v-if="reminderMonitor.pending.length" type="warning" size="small" round style="margin-right:8px">{{ reminderMonitor.pending.length }}</n-tag>
             </div>
             <n-data-table
               :columns="pendingReminderColumns"
               :data="reminderMonitor.pending"
-              :bordered="false"
-              :pagination="{ pageSize: 10 }"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-
-          <!-- Failed reminder sends -->
-          <div class="monitor-block">
-            <div class="monitor-block__title">
-              Failed Sends
-              <n-tag v-if="reminderMonitor.failedSends.length" type="error" size="small" round style="margin-right:8px">{{ reminderMonitor.failedSends.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="failedSendsColumns"
-              :data="reminderMonitor.failedSends"
               :bordered="false"
               :pagination="{ pageSize: 10 }"
               size="small"
