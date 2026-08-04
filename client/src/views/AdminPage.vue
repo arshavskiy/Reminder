@@ -85,8 +85,46 @@
       <section v-if="activeSection === 'documents'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="docMonitor">
+          <!-- Pipeline Summary Cards -->
+          <div class="admin-stats-grid">
+            <AdminStatCard
+              title="Total Processed"
+              :primary="pipelineStats.total"
+              primary-label="Documents"
+              :secondary="pipelineStats.processing"
+              secondary-label="Processing"
+              :status="pipelineStats.total === 0 ? 'default' : 'success'"
+              :icon="DocumentOutline"
+            />
+            <AdminStatCard
+              title="Success Rate"
+              :primary="pipelineStats.successRate"
+              primary-label="Completion %"
+              :secondary="pipelineStats.done"
+              secondary-label="Completed"
+              :status="pipelineStats.successRate >= 80 ? 'success' : pipelineStats.successRate >= 50 ? 'warning' : 'error'"
+              format="percent"
+            />
+            <AdminStatCard
+              title="S3 Storage"
+              :primary="pipelineStats.storage"
+              :primary-label="`${docMonitor.storage.length} users`"
+              format="bytes"
+              :status="pipelineStats.storage > 5 * 1024 * 1024 * 1024 ? 'warning' : 'default'"
+              :icon="CloudUploadOutline"
+            />
+            <AdminStatCard
+              title="Failed Documents"
+              :primary="pipelineStats.failed"
+              primary-label="Extraction Errors"
+              :secondary="pipelineStats.stuck"
+              secondary-label="Stuck (>10min)"
+              :status="pipelineStats.failed > 0 || pipelineStats.stuck > 0 ? 'error' : 'success'"
+            />
+          </div>
+
           <!-- Storage per user -->
-          <div class="monitor-block">
+          <div class="monitor-block" style="margin-top: 20px">
             <div class="monitor-block__title">S3 Storage by User</div>
             <div class="admin-stats-grid" style="margin-top:10px">
               <div v-for="s in docMonitor.storage" :key="s.user_id" class="admin-stat-card">
@@ -111,6 +149,38 @@
             />
           </div>
 
+          <!-- Failed extractions -->
+          <div class="monitor-block" v-if="docMonitor.failed.length > 0">
+            <div class="monitor-block__title">
+              Failed Extraction
+              <n-tag v-if="docMonitor.failed.length" type="error" size="small" round style="margin-right:8px">{{ docMonitor.failed.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="failedDocsColumns"
+              :data="docMonitor.failed"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              style="margin-top:10px"
+              :row-class-name="() => 'row-error'"
+            />
+          </div>
+
+          <!-- Stuck documents -->
+          <div class="monitor-block" v-if="docMonitor.stuck.length > 0">
+            <div class="monitor-block__title">
+              Stuck Documents (Queued > 10 min)
+              <n-tag type="warning" size="small" round style="margin-right:8px">{{ docMonitor.stuck.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="stuckDocsColumns"
+              :data="docMonitor.stuck"
+              :bordered="false"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+
           <!-- Extracted field values per document -->
           <div class="monitor-block">
             <div class="monitor-block__title">Extracted Field Values</div>
@@ -120,7 +190,7 @@
                 :options="userSelectOptions"
                 placeholder="All Users"
                 clearable
-                style="width:220px; direction: ltr"
+                style="width:220px; direction: rtl"
                 @update:value="loadExtractions(1)"
               />
               <span style="font-size:12px;color:var(--text-secondary)">{{ extractionsTotal }} documents</span>
@@ -400,6 +470,7 @@ import {
 } from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import DocumentDetailPage from "./DocumentDetailPage.vue";
+import AdminStatCard from "../components/AdminStatCard.vue";
 
 const router = useRouter();
 const message = useMessage();
@@ -645,6 +716,65 @@ const docStatusRows = computed(() => {
     user: resolveUserEmail(userId),
     ...counts,
   }));
+});
+
+// Pipeline statistics for summary cards
+const pipelineStats = computed(() => {
+  if (!docMonitor.value) return {
+    total: 0, done: 0, failed: 0, stuck: 0, processing: 0,
+    successRate: 0, storage: 0, storageUsage: "0 B",
+  };
+
+  const counts = Object.entries(docMonitor.value.byUserStatus).reduce(
+    (acc, [_, statuses]: [string, any]) => {
+      acc.done += statuses.done ?? 0;
+      acc.failed += statuses.error ?? 0;
+      acc.processing += statuses.processing ?? 0;
+      acc.queued += statuses.queued ?? 0;
+      return acc;
+    },
+    { done: 0, failed: 0, processing: 0, queued: 0 }
+  );
+
+  const total = counts.done + counts.failed + counts.processing + counts.queued;
+  const storageBytes = docMonitor.value.storage.reduce((sum: number, s: any) => sum + (s.total_bytes ?? 0), 0);
+  
+  return {
+    total,
+    done: counts.done,
+    failed: counts.failed,
+    processing: counts.processing,
+    stuck: docMonitor.value.stuck?.length ?? 0,
+    successRate: total > 0 ? Math.round((counts.done / total) * 100) : 0,
+    storage: storageBytes,
+    storageUsage: formatBytes(storageBytes),
+  };
+});
+
+// Email delivery statistics
+const emailStats = computed(() => {
+  if (!reminderMonitor.value) return {
+    total: 0, sent: 0, failed: 0, successRate: 0, pending: 0,
+  };
+
+  const statuses = Object.entries(reminderMonitor.value.byUserStatus).reduce(
+    (acc, [_, counts]: [string, any]) => {
+      acc.sent += counts.sent ?? 0;
+      acc.failed += counts.error ?? 0;
+      acc.pending += counts.pending ?? 0;
+      return acc;
+    },
+    { sent: 0, failed: 0, pending: 0 }
+  );
+
+  const total = statuses.sent + statuses.failed;
+  return {
+    total,
+    sent: statuses.sent,
+    failed: statuses.failed,
+    pending: statuses.pending,
+    successRate: total > 0 ? Math.round((statuses.sent / total) * 100) : 0,
+  };
 });
 
 const docStatusColumns: DataTableColumns<any> = [
