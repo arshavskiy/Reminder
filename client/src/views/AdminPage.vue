@@ -231,23 +231,6 @@
             </div>
           </div>
 
-          <!-- Failed extractions -->
-          <div class="monitor-block">
-            <div class="monitor-block__title">
-              Failed Extraction
-              <n-tag v-if="docMonitor.failed.length" type="error" size="small" round style="margin-right:8px">{{ docMonitor.failed.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="failedDocsColumns"
-              :data="docMonitor.failed"
-              :bordered="false"
-              :pagination="{ pageSize: 10 }"
-              size="small"
-              style="margin-top:10px"
-              :row-class-name="() => 'row-error'"
-            />
-          </div>
-
           <!-- Stuck in queued -->
           <div class="monitor-block">
             <div class="monitor-block__title">
