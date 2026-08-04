@@ -1,6 +1,6 @@
 import express from "express";
-import { getSettings } from "../settings";
-import { requireAuth, requireRole } from "../auth/middleware";
+import {getSettings} from "../settings";
+import {requireAuth, requireRole} from "../auth/middleware";
 
 export function registerSettingsRoutes(app: express.Application) {
   // Public config — non-sensitive values any authenticated client may read

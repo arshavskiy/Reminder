@@ -1,13 +1,13 @@
 import express from "express";
-import { ObjectId } from "mongodb";
-import { col } from "../db/db";
-import { requireAuth, HTTPException } from "../auth/middleware";
+import {ObjectId} from "mongodb";
+import {col} from "../db/db";
+import {HTTPException, requireAuth} from "../auth/middleware";
 import {
-  generateMonthlyContractReports,
-  generateMonthlyTrackingReport,
-  reportPeriodKey,
-  sendMonthlyReportsPerClient,
-  sendMonthlyReportToRecipients,
+    generateMonthlyContractReports,
+    generateMonthlyTrackingReport,
+    reportPeriodKey,
+    sendMonthlyReportsPerClient,
+    sendMonthlyReportToRecipients,
 } from "../reports/monthlyReports";
 
 export function registerReportRoutes(app: express.Application) {

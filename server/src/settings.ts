@@ -1,5 +1,5 @@
-import { join } from "path";
-import type { AppSettings } from "../src/shared/types.js";
+import {join} from "path";
+import type {AppSettings} from "../src/shared/types.js";
 
 export type { AppSettings };
 

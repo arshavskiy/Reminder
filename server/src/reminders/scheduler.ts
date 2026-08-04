@@ -1,7 +1,7 @@
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {getSettings} from "../settings";
-import {sendReminderEmail, sendEmailWithAttachments} from "./emailSender";
+import {sendReminderEmail} from "./emailSender";
 import {sendMonthlyReportToRecipients} from "../reports/monthlyReports";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";

@@ -160,6 +160,48 @@ export function registerAdminRoutes(app: express.Application) {
     });
   });
 
+  // GET /api/admin/documents/:id — fetch any document regardless of owner
+  app.get("/api/admin/documents/:id", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    let filter: Record<string, any>;
+    try { filter = { _id: new ObjectId(req.params.id) }; } catch {
+      res.status(400).json({ error: "Invalid id" }); return;
+    }
+    const doc = await col("documents").findOne(filter);
+    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+    const { _id, ...rest } = doc as any;
+    res.json({ id: _id.toString(), ...rest });
+  });
+
+  // GET /api/admin/documents/:id/download — signed URL for any document
+  app.get("/api/admin/documents/:id/download", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    let filter: Record<string, any>;
+    try { filter = { _id: new ObjectId(req.params.id) }; } catch {
+      res.status(400).json({ error: "Invalid id" }); return;
+    }
+    const doc = (await col("documents").findOne(filter)) as any;
+    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+    if (!doc.spaces_key) { res.status(404).json({ error: "No S3 file" }); return; }
+    try {
+      const { getSpacesSignedUrl } = await import("../storage/spaces.js");
+      const SIGNED_URL_TTL = 7 * 24 * 3600;
+      const expiresAt: Date | null = doc.signed_url_expires_at ? new Date(doc.signed_url_expires_at) : null;
+      const needsRefresh = !doc.download_url || !expiresAt || expiresAt.getTime() - Date.now() < 3600_000;
+      let url: string = doc.download_url ?? "";
+      if (needsRefresh) {
+        url = await getSpacesSignedUrl(doc.spaces_key, SIGNED_URL_TTL, doc.file_name ?? undefined);
+        const { idFilter } = await import("../db/db.js");
+        await col("documents").updateOne(idFilter(req.params.id), {
+          $set: { download_url: url, signed_url_expires_at: new Date(Date.now() + SIGNED_URL_TTL * 1000), updated_at: new Date() },
+        });
+      }
+      res.json({ url, source: "s3" });
+    } catch {
+      res.status(500).json({ error: "Failed to generate signed URL" });
+    }
+  });
+
   // GET /api/admin/monitor/extractions?user_id=&page=&limit=
   app.get("/api/admin/monitor/extractions", async (req, res) => {
     if (!await adminAuth(req, res)) return;

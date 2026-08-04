@@ -2,7 +2,20 @@ import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {sendMonthlyReportEmail} from "../reminders/emailSender";
 import ExcelJS from "exceljs";
-import {AlignmentType, BorderStyle, Document, PageOrientation, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType} from "docx";
+import {
+  AlignmentType,
+  BorderStyle,
+  Document,
+  Packer,
+  PageOrientation,
+  Paragraph,
+  Table,
+  TableCell,
+  TableLayoutType,
+  TableRow,
+  TextRun,
+  WidthType
+} from "docx";
 
 const RTL_MARK = "\u200F";
 

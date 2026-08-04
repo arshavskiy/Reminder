@@ -7,6 +7,7 @@ import {ObjectId} from "mongodb";
 import {generateContractReminders} from "../reminders/scheduler";
 import {type EquipmentInput, upsertEquipmentForClient} from "../reminders/equipmentUpsert";
 import {HTTPException, requireAuth} from "../auth/middleware";
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HEBREW_FONT = join(__dirname, "../../../scripts/NotoSansHebrew.ttf");
 

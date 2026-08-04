@@ -3,12 +3,12 @@ import {ObjectId} from "mongodb";
 import {closeDb, col, connectDb} from "../db/db";
 import {sendEmailWithAttachments} from "../reminders/emailSender";
 import {
-  generateFutureClientReports,
-  generateMonthlyContractReports,
-  loadFutureReportRows,
-  loadMonthlyReportRows,
-  reportPeriodKey,
-  sendMonthlyReportToRecipients,
+    generateFutureClientReports,
+    generateMonthlyContractReports,
+    loadFutureReportRows,
+    loadMonthlyReportRows,
+    reportPeriodKey,
+    sendMonthlyReportToRecipients,
 } from "../reports/monthlyReports";
 import {getSpacesSignedUrl} from "../storage/spaces";
 
