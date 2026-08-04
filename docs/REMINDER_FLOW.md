@@ -6,7 +6,7 @@ This document explains exactly how future reminders are scheduled, polled, and d
 
 ## TL;DR
 
-There is **no real cron job**. The trigger is a simple **`setInterval` loop inside the Bun server process**. Every minute it asks SQLite: *"any reminders with `trigger_date <= today` and `status = 'pending'`?"* — if yes, it sends them via SMTP.
+There is **no real cron job**. The trigger is a simple **`setInterval` loop inside the Bun server process**. Every minute it asks SQLite: _"any reminders with `trigger_date <= today` and `status = 'pending'`?"_ — if yes, it sends them via SMTP.
 
 ```
 Bun server starts
@@ -45,16 +45,17 @@ That function lives in [`src/server/reminders/scheduler.ts:11`](../src/server/re
 ```typescript
 export function startScheduler(push: PushFn) {
   const settings = getSettings();
-  if (!settings.reminderEnabled) return;          // killswitch
+  if (!settings.reminderEnabled) return; // killswitch
 
-  checkReminders().catch(console.error);          // run once immediately
+  checkReminders().catch(console.error); // run once immediately
   _timer = setInterval(() => {
     checkReminders().catch(console.error);
-  }, settings.reminderCheckIntervalMs);           // default: 60_000 ms (1 min)
+  }, settings.reminderCheckIntervalMs); // default: 360_0000 ms (60 min)
 }
 ```
 
 **Notes:**
+
 - Only one scheduler runs per Bun process. If the server restarts, the interval starts over (no missed runs because the DB is the source of truth).
 - The interval is configurable in **Settings → Reminders → check interval** (`reminderCheckIntervalMs`).
 - The scheduler does **not** persist across restarts — it always queries the DB fresh, so reboots are safe.
@@ -79,6 +80,7 @@ WHERE r.status = 'pending'
 ```
 
 A reminder fires when **all three** are true:
+
 1. `status = 'pending'` — not yet sent, not dismissed, not snoozed past, not in error state
 2. `trigger_date <= date('now')` — today or earlier (uses SQLite's date function, server's local timezone)
 3. Has no successful entry in `email_log` yet — defensive dedup so a row can't be sent twice even if status update fails
@@ -110,6 +112,7 @@ INSERT INTO reminders (trigger_date='2027-06-16', advance_days=30, ...)
 ```
 
 Each row gets a title derived from `contract_type`:
+
 - "תסקיר/בדיקה" → `בדיקה הבאה בעוד 90 יום (2027-07-16)`
 - "ביטוח" → `חידוש ביטוח בעוד 90 יום ...`
 - "תעודה/אישור" → `חידוש תעודה בעוד 90 יום ...`
@@ -160,13 +163,13 @@ Each row gets a title derived from `contract_type`:
 
 ## 5. Manual trigger (skip the wait)
 
-You can fire a reminder *right now* without waiting for the next 60-second tick:
+You can fire a reminder _right now_ without waiting for the next 60-second tick:
 
-| Where | What it does |
-|---|---|
+| Where                                            | What it does                                                                                                                        |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Reminders page → **"שלח עכשיו"** button on a row | `POST /api/reminders/:id/send-now` → runs the same email-sending code path synchronously, marks `sent`, broadcasts `reminder:fired` |
-| Reminders page → **🧪 תזכורת בדיקה** | Creates `trigger_date = today` + calls send-now |
-| Settings → SMTP → **"שלח אימייל בדיקה"** | `POST /api/email/test` — bypasses reminders entirely; just verifies SMTP works |
+| Reminders page → **🧪 תזכורת בדיקה**             | Creates `trigger_date = today` + calls send-now                                                                                     |
+| Settings → SMTP → **"שלח אימייל בדיקה"**         | `POST /api/email/test` — bypasses reminders entirely; just verifies SMTP works                                                      |
 
 These three endpoints share the same `nodemailer` transport from [`emailSender.ts`](../src/server/reminders/emailSender.ts).
 
@@ -241,11 +244,11 @@ These three endpoints share the same `nodemailer` transport from [`emailSender.t
 
 ## 8. Key files
 
-| File | Role |
-|---|---|
-| [`src/server/index.ts`](../src/server/index.ts) | Starts the scheduler at boot |
-| [`src/server/reminders/scheduler.ts`](../src/server/reminders/scheduler.ts) | `setInterval` loop, due-row SELECT, `generateContractReminders()` |
-| [`src/server/reminders/emailSender.ts`](../src/server/reminders/emailSender.ts) | nodemailer transport, RTL HTML template, `sendTestEmail()` |
-| [`src/server/routes/reminders.ts`](../src/server/routes/reminders.ts) | REST: create / send-now / dismiss / snooze |
-| [`src/server/pipeline/importer.ts`](../src/server/pipeline/importer.ts) | Calls `generateContractReminders()` after AI extraction |
-| [`src/client/views/RemindersPage.vue`](../src/client/views/RemindersPage.vue) | UI to create, list, dismiss, fire-now |
+| File                                                                            | Role                                                              |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [`src/server/index.ts`](../src/server/index.ts)                                 | Starts the scheduler at boot                                      |
+| [`src/server/reminders/scheduler.ts`](../src/server/reminders/scheduler.ts)     | `setInterval` loop, due-row SELECT, `generateContractReminders()` |
+| [`src/server/reminders/emailSender.ts`](../src/server/reminders/emailSender.ts) | nodemailer transport, RTL HTML template, `sendTestEmail()`        |
+| [`src/server/routes/reminders.ts`](../src/server/routes/reminders.ts)           | REST: create / send-now / dismiss / snooze                        |
+| [`src/server/pipeline/importer.ts`](../src/server/pipeline/importer.ts)         | Calls `generateContractReminders()` after AI extraction           |
+| [`src/client/views/RemindersPage.vue`](../src/client/views/RemindersPage.vue)   | UI to create, list, dismiss, fire-now                             |

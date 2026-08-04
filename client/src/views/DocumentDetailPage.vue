@@ -3,7 +3,7 @@
     <PageHeader v-if="doc" :title="doc.file_name">
       <template #actions>
         <StatusBadge :status="doc.processing_status" />
-        <n-button size="small" @click="$router.back()">   חזרה</n-button>
+        <n-button v-if="!props.docId" size="small" @click="$router.back()">   חזרה</n-button>
         <n-button :loading="downloading" size="small" @click="openDownload"> הורד</n-button>
         <n-button :loading="extracting" size="small" type="primary" @click="rerunExtract">✨ חלץ AI</n-button>
       </template>
@@ -190,11 +190,14 @@ import ContractCard from "../components/contracts/ContractCard.vue";
 import type {ContractWithClient, Document, ReminderWithContext} from "@shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
 
+const props = defineProps<{ docId?: string }>();
+
 const authStore = useAuthStore();
 const message = useMessage();
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const route = useRoute();
+const resolvedId = () => props.docId ?? (route.params.id as string);
 const doc = ref<Document | null>(null);
 const extractionRaw = ref<Record<string, any> | null>(null);
 const extractionRawText = ref<string | null>(null);
@@ -239,11 +242,17 @@ const xlsxPreviewSheets = computed(() => {
   return sheets.filter((sheet) => sheet.rows.length).slice(0, 4);
 });
 
+function downloadEndpoint(id: string) {
+  return props.docId
+    ? `${SERVER}/api/admin/documents/${id}/download`
+    : `${SERVER}/api/documents/${id}/download`;
+}
+
 async function loadPreview() {
   if (isSpreadsheet.value) return;
   if (!doc.value?.spaces_key) return;
   try {
-    const res = await fetch(`${SERVER}/api/documents/${doc.value.id}/download`, { credentials: "include" });
+    const res = await fetch(downloadEndpoint(String(doc.value.id)), { credentials: "include" });
     if (!res.ok) throw new Error(await res.text());
     const { url } = await res.json() as { url: string };
     previewUrl.value = url;
@@ -256,7 +265,7 @@ async function openDownload() {
   if (!doc.value) return;
   downloading.value = true;
   try {
-    const res = await fetch(`${SERVER}/api/documents/${doc.value.id}/download`, { credentials: "include" });
+    const res = await fetch(downloadEndpoint(String(doc.value.id)), { credentials: "include" });
     if (!res.ok) throw new Error(await res.text());
     const { url } = await res.json() as { url: string };
     window.open(url, "_blank", "noopener");
@@ -390,10 +399,12 @@ const equipmentColumns = computed(() => {
 });
 
 async function reloadDoc() {
-  const id = route.params.id as string;
+  const id = resolvedId();
   extractionRaw.value = null;
   extractionRawText.value = null;
-  doc.value = await api.documents.get(id);
+  doc.value = props.docId
+    ? await api.admin.getDocument(id)
+    : await api.documents.get(id);
   await loadLinkedContracts(id);
   const extractionPayload = await fetch(`${SERVER}/api/documents/${id}/extractions`, { credentials: "include" })
     .then((r) => r.ok ? r.json() : null)

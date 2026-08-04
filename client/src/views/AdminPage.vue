@@ -125,36 +125,21 @@
                 clearable
                 dir="rtl"
                 style="width:220px"
+                @update:value="loadExtractions(1)"
               />
-              <n-button :loading="extractionsLoading" size="small" @click="loadExtractions(1)">חפש</n-button>
               <span style="font-size:12px;color:var(--text-secondary)">{{ extractionsTotal }} מסמכים</span>
             </div>
 
             <n-data-table
               :columns="extractionColumns"
-              :data="extractionDocs"
+              :data="extractionTreeData"
               :loading="extractionsLoading"
               :bordered="false"
               size="small"
               dir="rtl"
               style="margin-top:12px"
-              :row-key="(row: any) => row.id"
-              :expanded-row-keys="expandedRows"
-              @update:expanded-row-keys="expandedRows = $event"
-            >
-              <template #expand="{ row }">
-                <div class="extraction-fields">
-                  <div
-                    v-for="[k, v] in fieldEntries(row.fields)"
-                    :key="k"
-                    class="extraction-field"
-                  >
-                    <span class="extraction-field__key">{{ k }}</span>
-                    <span class="extraction-field__val">{{ v }}</span>
-                  </div>
-                </div>
-              </template>
-            </n-data-table>
+              :row-key="(row: any) => row._rowKey"
+            />
 
             <div v-if="extractionsTotal > extractionLimit" style="display:flex;justify-content:center;gap:8px;margin-top:12px">
               <n-button
@@ -368,6 +353,19 @@
       </section>
     </div>
 
+    <!-- Document preview modal -->
+    <n-modal
+      v-model:show="showDocModal"
+      :mask-closable="true"
+      :show-icon="false"
+      style="width:92vw;max-width:1200px"
+      @after-leave="docModalId = null"
+    >
+      <div style="max-height:88vh;overflow-y:auto;padding:16px 0 8px">
+        <DocumentDetailPage v-if="docModalId" :doc-id="docModalId" />
+      </div>
+    </n-modal>
+
     <!-- Role edit modal -->
     <n-modal v-model:show="showRoleModal" preset="dialog" title="שינוי תפקיד משתמש" style="width: 360px" :mask-closable="false">
       <div dir="rtl" style="padding: 8px 0">
@@ -390,12 +388,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import {
-  NButton, NDataTable, NIcon, NInput, NModal, NSelect, NSpin, NTag, useMessage,
-} from "naive-ui";
-import type { DataTableColumns } from "naive-ui";
+import {computed, h, onMounted, ref} from "vue";
+import {useRouter} from "vue-router";
+import type {DataTableColumns} from "naive-ui";
+import {NButton, NDataTable, NIcon, NInput, NModal, NSelect, NSpin, NTag, useMessage,} from "naive-ui";
 import {
   AlarmOutline,
   ArrowBackOutline,
@@ -412,7 +408,8 @@ import {
   TimeOutline,
   TimerOutline,
 } from "@vicons/ionicons5";
-import { api } from "../services/apiService.js";
+import {api} from "../services/apiService.js";
+import DocumentDetailPage from "./DocumentDetailPage.vue";
 
 const router = useRouter();
 const message = useMessage();
@@ -479,6 +476,12 @@ const roleLabel: Record<string, string> = {
 };
 
 const showRoleModal = ref(false);
+const showDocModal = ref(false);
+const docModalId = ref<string | null>(null);
+function openDocModal(id: string) {
+  docModalId.value = id;
+  showDocModal.value = true;
+}
 const editingUser = ref<any>(null);
 const editingRole = ref<string>("");
 const savingRole = ref(false);
@@ -573,25 +576,10 @@ const extractionPage = ref(1);
 const extractionLimit = 50;
 const extractionUserId = ref<string | null>(null);
 const extractionsLoading = ref(false);
-const expandedRows = ref<string[]>([]);
-
 const userSelectOptions = computed(() =>
   users.value.map((u) => ({ label: u.email ?? u.id, value: u.id })),
 );
 
-const FIELD_LABEL: Record<string, string> = {
-  client_name: "שם לקוח", date: "תאריך", expiry_date: "תאריך פקיעה",
-  license_number: "מספר רישוי", document_type: "סוג מסמך",
-  contract_number: "מספר חוזה", inspector: "בודק", pass_fail: "תוצאה",
-  id_number: "ח.פ / ת.ז", address: "כתובת", phone: "טלפון", email: "אימייל",
-};
-
-function fieldEntries(fields: Record<string, any>): [string, string][] {
-  const SKIP = new Set(["_confidence", "_raw", "document_kind"]);
-  return Object.entries(fields ?? {})
-    .filter(([k, v]) => !SKIP.has(k) && v !== null && v !== undefined && v !== "")
-    .map(([k, v]) => [FIELD_LABEL[k] ?? k, String(v)]);
-}
 
 async function loadExtractions(page = 1) {
   extractionsLoading.value = true;
@@ -604,7 +592,6 @@ async function loadExtractions(page = 1) {
     extractionDocs.value = res.docs;
     extractionsTotal.value = res.total;
     extractionPage.value = res.page;
-    expandedRows.value = [];
   } catch {
     message.error("שגיאה בטעינת חילוצים");
   } finally {
@@ -612,24 +599,48 @@ async function loadExtractions(page = 1) {
   }
 }
 
+// Group extraction docs by user for tree-table display
+const extractionTreeData = computed(() => {
+  const groups: Record<string, any[]> = {};
+  for (const doc of extractionDocs.value) {
+    const uid = doc.user_id ?? "unknown";
+    if (!groups[uid]) groups[uid] = [];
+    groups[uid].push(doc);
+  }
+  return Object.entries(groups).map(([uid, docs]) => ({
+    _rowKey: `user-${uid}`,
+    _isGroup: true,
+    user_id: uid,
+    filename: `${resolveUserEmail(uid)} (${docs.length})`,
+    document_type: null,
+    created_at: null,
+    id: null,
+    children: docs.map((d) => ({ ...d, _rowKey: d.id })),
+  }));
+});
+
 const extractionColumns: DataTableColumns<any> = [
-  { type: "expand" },
   {
-    title: "משתמש", key: "user_id", align: "right", width: 140,
-    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
-  },
-  {
-    title: "קובץ", key: "filename", align: "right", ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—"),
+    title: "קובץ / משתמש", key: "filename", align: "right", ellipsis: { tooltip: true },
+    render: (row) => row._isGroup
+      ? h("span", { style: "font-size:12px;font-weight:600;color:var(--text-primary)" }, row.filename)
+      : h("span", { style: "font-size:12px" }, row.filename ?? "—"),
   },
   {
     title: "סוג מסמך", key: "document_type", align: "right", width: 140,
-    render: (row) => h("span", { style: "font-size:12px" }, row.document_type ?? "—"),
+    render: (row) => h("span", { style: "font-size:12px" }, row._isGroup ? "" : (row.document_type ?? "—")),
   },
   {
     title: "תאריך", key: "created_at", align: "right", width: 110,
     render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" },
-      row.created_at ? new Date(row.created_at).toLocaleDateString("he-IL") : "—"),
+      row._isGroup ? "" : (row.created_at ? new Date(row.created_at).toLocaleDateString("he-IL") : "—")),
+  },
+  {
+    title: "", key: "actions", align: "center", width: 70,
+    render: (row) => row._isGroup ? null : h(NButton, {
+      size: "tiny",
+      onClick: () => openDocModal(row.id),
+    }, { default: () => "📄 פתח" }),
   },
 ];
 
@@ -1150,30 +1161,6 @@ onMounted(async () => {
   flex: 0 0 auto;
 }
 
-/* ── Extraction fields expand ────────────────────────────────────────────── */
-.extraction-fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  padding: 10px 16px;
-}
-
-.extraction-field {
-  display: flex;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.extraction-field__key {
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.extraction-field__val {
-  color: var(--text-primary);
-  font-weight: 500;
-  word-break: break-word;
-}
 
 .admin-env-badge__db {
   font-weight: 400;

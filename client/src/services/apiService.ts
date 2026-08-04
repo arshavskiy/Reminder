@@ -367,6 +367,7 @@ export const api = {
     listUsers: () => adminGet<any[]>("/admin/users"),
     updateUser: (id: string, body: { role?: string; is_active?: number }) =>
       adminPut<any>(`/admin/users/${id}`, body),
+    getDocument: (id: string) => adminGet<any>(`/admin/documents/${id}`),
     monitorDocuments: () => adminGet<any>("/admin/monitor/documents"),
     monitorExtractions: (params?: { user_id?: string; page?: number; limit?: number }) => {
       const qs = new URLSearchParams();
