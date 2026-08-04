@@ -42,6 +42,12 @@ async function runWithHealth(name: string, fn: () => Promise<void>) {
 
 export function startScheduler() {
   const settings = getSettings();
+  const isProd = (process.env.APP_ENV ?? "development") === "production";
+
+  if (!isProd) {
+    logger.info("scheduler_skipped", { reason: "APP_ENV is not 'production' — no emails or DB writes from scheduler in dev" });
+    return;
+  }
 
   async function tick() {
     if (settings.reminderEnabled) await runWithHealth("checkReminders", checkReminders);

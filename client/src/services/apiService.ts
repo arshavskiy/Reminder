@@ -347,7 +347,7 @@ export const api = {
   },
 
   config: {
-    get: () => get<{ userDocumentLimit: number }>("/config"),
+    get: () => get<{ userDocumentLimit: number; appEnv: string; dbName: string }>("/config"),
   },
 
   settings: {

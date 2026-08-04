@@ -22,6 +22,11 @@
       </nav>
 
       <div class="admin-sidebar__footer">
+        <div class="admin-env-badge" :class="`admin-env-badge--${appEnv}`">
+          <span class="admin-env-badge__dot" />
+          <span>{{ appEnv === 'production' ? 'PRODUCTION' : appEnv.toUpperCase() }}</span>
+          <span v-if="dbName" class="admin-env-badge__db">{{ dbName }}</span>
+        </div>
         <button class="admin-sidebar__item" type="button" @click="router.push('/')">
           <n-icon :component="ArrowBackOutline" :size="18" />
           <span>חזור לאפליקציה</span>
@@ -352,6 +357,9 @@ import { api } from "../services/apiService.js";
 
 const router = useRouter();
 const message = useMessage();
+
+const appEnv = ref("development");
+const dbName = ref("");
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
 const sidebarItems = [
@@ -795,7 +803,14 @@ async function loadSectionData(key: string) {
   }
 }
 
-onMounted(loadUsers);
+onMounted(async () => {
+  try {
+    const cfg = await api.config.get();
+    appEnv.value = cfg.appEnv ?? "development";
+    dbName.value = cfg.dbName ?? "";
+  } catch { /* non-critical */ }
+  await loadUsers();
+});
 </script>
 
 <style scoped>
@@ -968,5 +983,41 @@ onMounted(loadUsers);
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ── Env badge ───────────────────────────────────────────────────────────── */
+.admin-env-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 10px 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgba(99, 226, 183, 0.1);
+  color: var(--brand-color);
+  border: 1px solid rgba(99, 226, 183, 0.25);
+}
+
+.admin-env-badge--production {
+  background: rgba(208, 48, 80, 0.1);
+  color: #d03050;
+  border-color: rgba(208, 48, 80, 0.3);
+}
+
+.admin-env-badge__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.admin-env-badge__db {
+  font-weight: 400;
+  opacity: 0.75;
+  margin-right: 2px;
 }
 </style>

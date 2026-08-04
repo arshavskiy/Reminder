@@ -12,7 +12,11 @@ export function registerSettingsRoutes(app: express.Application) {
       return;
     }
     const s = getSettings();
-    res.json({ userDocumentLimit: s.userDocumentLimit });
+    res.json({
+      userDocumentLimit: s.userDocumentLimit,
+      appEnv: process.env.APP_ENV ?? "development",
+      dbName: process.env.MONGODB_DB ?? "unknown",
+    });
   });
 
   // GET /api/settings — admin read of current settings (from env)
