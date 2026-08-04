@@ -316,3 +316,9 @@ html[dir="rtl"] .n-base-clear {
 }
 
 .page { max-width: 1200px; margin: 0 auto; }
+
+/* ── Force LTR data tables ─────────────────────────────────────────────────── */
+.n-data-table.n-data-table--rtl {
+  direction: ltr !important;
+}
+
