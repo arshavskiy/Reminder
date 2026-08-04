@@ -727,11 +727,19 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
   },
   {
     title: "פורמטים", key: "formats", align: "right", width: 110,
-    render: (row) => h("span", { style: "font-size:12px" }, (row.formats ?? []).join(", ") || "—"),
+    render: (row) => {
+      let formats = row.formats ?? [];
+      if (typeof formats === "string") { try { formats = JSON.parse(formats); } catch { formats = []; } }
+      return h("span", { style: "font-size:12px" }, Array.isArray(formats) ? formats.join(", ") || "—" : "—");
+    },
   },
   {
     title: "נמענים", key: "recipients", align: "right", ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, (row.recipients ?? []).join(", ") || "—"),
+    render: (row) => {
+      let recipients = row.recipients ?? [];
+      if (typeof recipients === "string") { try { recipients = JSON.parse(recipients); } catch { recipients = []; } }
+      return h("span", { style: "font-size:12px" }, Array.isArray(recipients) ? recipients.join(", ") || "—" : "—");
+    },
   },
   {
     title: "נשלח לאחרונה", key: "last_sent", align: "right", width: 130,
