@@ -405,7 +405,7 @@ export async function advanceContractAfterSentReminder(reminder: ReminderWithCon
     } as any
   );
 
-  await col("contract_advances").insertOne({
+  await col<Record<string, any>>("contract_advances").insertOne({
     user_id: r.user_id,
     contract_id: contractId,
     client_id: contract.client_id ?? r.client_id ?? null,

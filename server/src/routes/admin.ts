@@ -1,5 +1,6 @@
 import express from "express";
 import {ObjectId} from "mongodb";
+import {extname} from "path";
 import {col} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
 import type {UserRole} from "../../src/shared/types.js";
@@ -562,13 +563,23 @@ export function registerAdminRoutes(app: express.Application) {
     });
 
     try {
-      const { processDocument } = await import("../pipeline/importer.js");
-      processDocument(req.params.id, doc.user_id, { skipAi: false }).catch(() => {});
+      const importer = await import("../pipeline/importer.js");
+      const processFn = (importer as any).processDocument;
+      const reprocessFn = (importer as any).reprocessDocument ?? (importer as any).importDocument;
+      const filePath = doc.file_path ?? doc.original_path;
+      const mimeType = doc.mime_type ?? "application/octet-stream";
+      const ext = extname(String(filePath ?? doc.file_name ?? "")).toLowerCase();
+
+      if (typeof processFn === "function" && filePath && ext) {
+        processFn(req.params.id, String(filePath), mimeType, ext, undefined, doc.user_id, { skipAi: false }).catch(() => {});
+      } else if (typeof reprocessFn === "function") {
+        reprocessFn(req.params.id, doc.user_id, { skipAi: false }).catch(() => {});
+      }
     } catch {
       // importer may export different name — try alternative
       try {
         const importer = await import("../pipeline/importer.js");
-        const fn = (importer as any).reprocessDocument ?? (importer as any).importDocument ?? (importer as any).processDocument;
+        const fn = (importer as any).reprocessDocument ?? (importer as any).importDocument;
         if (fn) fn(req.params.id, doc.user_id, { skipAi: false }).catch(() => {});
       } catch { /* will process on next queue check */ }
     }
@@ -606,7 +617,7 @@ export function registerAdminRoutes(app: express.Application) {
         [settings.escalationEmail]
       );
 
-      await col("email_log").insertOne({
+      await col<Record<string, any>>("email_log").insertOne({
         reminder_id: remId,
         log_type: "escalation",
         to_address: settings.escalationEmail,
@@ -773,7 +784,7 @@ export function registerAdminRoutes(app: express.Application) {
             includeClientRecipient: false,
           });
 
-      await col("email_log").insertOne({
+      await col<Record<string, any>>("email_log").insertOne({
         user_id: userId,
         log_type: "monthly_report",
         sent_at: new Date(),
