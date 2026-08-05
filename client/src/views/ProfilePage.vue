@@ -8,8 +8,12 @@
           <span v-else class="sidebar-avatar__initials">{{ initials }}</span>
         </div>
         <div class="sidebar-user__info">
-          <div class="sidebar-user__name">{{ user?.name || user?.email || '—' }}</div>
-          <n-tag :type="roleTag.type" size="small" style="margin-top:4px">{{ roleTag.label }}</n-tag>
+          <div class="sidebar-user__name">
+            {{ user?.name || user?.email || "—" }}
+          </div>
+          <n-tag :type="roleTag.type" size="small" style="margin-top: 4px">{{
+            roleTag.label
+          }}</n-tag>
         </div>
       </div>
 
@@ -30,32 +34,59 @@
     <!-- ── Main content area ─────────────────────────────────────────────── -->
     <main class="profile-content">
       <n-spin :show="loading">
-
         <!-- פרטים אישיים -->
         <section v-if="activeSection === 'personal'">
           <div class="section-header">
             <h2 class="section-title">פרטים אישיים</h2>
-            <n-button v-if="!editingPersonal" size="small" @click="startEditPersonal">✏️ עריכה</n-button>
+            <n-button
+              v-if="!editingPersonal"
+              size="small"
+              @click="startEditPersonal"
+              >✏️ עריכה</n-button
+            >
             <n-space v-else>
-              <n-button size="small" @click="cancelEditPersonal">ביטול</n-button>
-              <n-button size="small" type="primary" :loading="savingPersonal" @click="savePersonal">שמור</n-button>
+              <n-button size="small" @click="cancelEditPersonal"
+                >ביטול</n-button
+              >
+              <n-button
+                size="small"
+                type="primary"
+                :loading="savingPersonal"
+                @click="savePersonal"
+                >שמור</n-button
+              >
             </n-space>
           </div>
           <div class="info-card">
             <div class="info-row">
               <span class="info-label">שם מלא</span>
-              <n-input v-if="editingPersonal" v-model:value="personalForm.name" class="info-input" />
-              <span v-else class="info-val">{{ user?.name || '—' }}</span>
+              <n-input
+                v-if="editingPersonal"
+                v-model:value="personalForm.name"
+                class="info-input"
+              />
+              <span v-else class="info-val">{{ user?.name || "—" }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">טלפון</span>
-              <n-input v-if="editingPersonal" v-model:value="personalForm.phone" class="info-input" />
-              <span v-else class="info-val">{{ user?.phone || '—' }}</span>
+              <n-input
+                v-if="editingPersonal"
+                v-model:value="personalForm.phone"
+                class="info-input"
+              />
+              <span v-else class="info-val">{{ user?.phone || "—" }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">שם חברה</span>
-              <n-input v-if="editingPersonal" v-model:value="personalForm.company_name" class="info-input" placeholder="לדוגמה: M.A.D הנדסה ובטיחות" />
-              <span v-else class="info-val">{{ (user as any)?.company_name || '—' }}</span>
+              <n-input
+                v-if="editingPersonal"
+                v-model:value="personalForm.company_name"
+                class="info-input"
+                placeholder="לדוגמה: M.A.D הנדסה ובטיחות"
+              />
+              <span v-else class="info-val">{{
+                (user as any)?.company_name || "—"
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">אימייל</span>
@@ -68,80 +99,175 @@
         <section v-if="activeSection === 'engineer'">
           <div class="section-header">
             <h2 class="section-title">פרופיל מהנדס</h2>
-            <n-button v-if="!editingEngineer" size="small" @click="startEditEngineer">✏️ עריכה</n-button>
+            <n-button
+              v-if="!editingEngineer"
+              size="small"
+              @click="startEditEngineer"
+              >✏️ עריכה</n-button
+            >
             <n-space v-else>
-              <n-button size="small" @click="cancelEditEngineer">ביטול</n-button>
-              <n-button size="small" type="primary" :loading="savingEngineer" @click="saveEngineer">שמור</n-button>
+              <n-button size="small" @click="cancelEditEngineer"
+                >ביטול</n-button
+              >
+              <n-button
+                size="small"
+                type="primary"
+                :loading="savingEngineer"
+                @click="saveEngineer"
+                >שמור</n-button
+              >
             </n-space>
           </div>
           <div class="info-card">
             <div class="info-row">
               <span class="info-label">מספר מפקח</span>
-              <n-input v-if="editingEngineer" v-model:value="engineerForm.inspector_number" class="info-input" />
-              <span v-else class="info-val">{{ engineerProfile?.inspector_number || '—' }}</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.inspector_number"
+                class="info-input"
+              />
+              <span v-else class="info-val">{{
+                engineerProfile?.inspector_number || "—"
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">כתובת</span>
-              <n-input v-if="editingEngineer" v-model:value="engineerForm.address" class="info-input" />
-              <span v-else class="info-val">{{ engineerProfile?.address || '—' }}</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.address"
+                class="info-input"
+              />
+              <span v-else class="info-val">{{
+                engineerProfile?.address || "—"
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">תואר מקצועי</span>
-              <n-input v-if="editingEngineer" v-model:value="engineerForm.title" class="info-input" />
-              <span v-else class="info-val">{{ engineerProfile?.title || '—' }}</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.title"
+                class="info-input"
+              />
+              <span v-else class="info-val">{{
+                engineerProfile?.title || "—"
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">התמחות</span>
-              <n-input v-if="editingEngineer" v-model:value="engineerForm.expertise" class="info-input" />
-              <span v-else class="info-val">{{ engineerProfile?.expertise || '—' }}</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.expertise"
+                class="info-input"
+              />
+              <span v-else class="info-val">{{
+                engineerProfile?.expertise || "—"
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">מספר מ.ר.</span>
-              <n-input v-if="editingEngineer" v-model:value="engineerForm.mr_number" class="info-input" />
-              <span v-else class="info-val">{{ engineerProfile?.mr_number || '—' }}</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.mr_number"
+                class="info-input"
+              />
+              <span v-else class="info-val">{{
+                engineerProfile?.mr_number || "—"
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">מספר מ.ג.</span>
-              <n-input v-if="editingEngineer" v-model:value="engineerForm.mg_number" class="info-input" />
-              <span v-else class="info-val">{{ engineerProfile?.mg_number || '—' }}</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.mg_number"
+                class="info-input"
+              />
+              <span v-else class="info-val">{{
+                engineerProfile?.mg_number || "—"
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">תאריך תחילת חברות</span>
-              <n-date-picker v-if="editingEngineer" v-model:value="engineerForm.membership_start_ms" type="date" style="flex:1" />
-              <span v-else class="info-val">{{ formatDate(engineerProfile?.membership_start_date) }}</span>
+              <n-date-picker
+                v-if="editingEngineer"
+                v-model:value="engineerForm.membership_start_ms"
+                type="date"
+                style="flex: 1"
+              />
+              <span v-else class="info-val">{{
+                formatDate(engineerProfile?.membership_start_date)
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">מספר התחלת תסקירים</span>
-              <div v-if="editingEngineer" style="flex:1;display:flex;flex-direction:column;gap:4px">
-                <n-input v-model:value="engineerForm.inspector_id_start" placeholder="לדוגמה: 16125" />
+              <div
+                v-if="editingEngineer"
+                style="flex: 1; display: flex; flex-direction: column; gap: 4px"
+              >
+                <n-input
+                  v-model:value="engineerForm.inspector_id_start"
+                  placeholder="לדוגמה: 16125"
+                />
                 <span v-if="engineerForm.inspector_id_start" class="info-hint">
-                  🔒 מספר זה נקבע כבר. הבא יהיה: {{ engineerProfile?.inspector_number ?? '—' }}/{{ engineerForm.inspector_id_start }}
+                  🔒 מספר זה נקבע כבר. הבא יהיה:
+                  {{ engineerProfile?.inspector_number ?? "—" }}/{{
+                    engineerForm.inspector_id_start
+                  }}
                 </span>
               </div>
-              <div v-else class="info-val" style="display:flex;flex-direction:column;gap:4px">
-                <span>{{ engineerProfile?.inspector_id_start || '—' }}</span>
-                <span v-if="engineerProfile?.inspector_id_start" class="info-hint">
+              <div
+                v-else
+                class="info-val"
+                style="display: flex; flex-direction: column; gap: 4px"
+              >
+                <span>{{ engineerProfile?.inspector_id_start || "—" }}</span>
+                <span
+                  v-if="engineerProfile?.inspector_id_start"
+                  class="info-hint"
+                >
                   הבא יהיה: {{ nextInspectionId }}
                 </span>
               </div>
             </div>
 
             <!-- ── Inspector company details (used to filter out from AI extraction) ── -->
-            <div class="info-section-divider">פרטי החברה / בית העסק (לסינון מהחילוץ)</div>
+            <div class="info-section-divider">
+              פרטי החברה / בית העסק (לסינון מהחילוץ)
+            </div>
             <div class="info-row">
               <span class="info-label">שם החברה</span>
-              <n-input v-if="editingEngineer" v-model:value="engineerForm.company_name" class="info-input" placeholder="לדוגמה: M.A.D הנדסה ובטיחות" />
-              <span v-else class="info-val">{{ (engineerProfile as any)?.company_name || '—' }}</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.company_name"
+                class="info-input"
+                placeholder="לדוגמה: M.A.D הנדסה ובטיחות"
+              />
+              <span v-else class="info-val">{{
+                (engineerProfile as any)?.company_name || "—"
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">טלפון / נייד</span>
-              <n-input v-if="editingEngineer" v-model:value="engineerForm.company_phone" class="info-input" placeholder="052-8195650" />
-              <span v-else class="info-val">{{ (engineerProfile as any)?.company_phone || '—' }}</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.company_phone"
+                class="info-input"
+                placeholder="052-8195650"
+              />
+              <span v-else class="info-val">{{
+                (engineerProfile as any)?.company_phone || "—"
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">אימייל</span>
-              <n-input v-if="editingEngineer" v-model:value="engineerForm.company_email" class="info-input" placeholder="name@company.com" />
-              <span v-else class="info-val">{{ (engineerProfile as any)?.company_email || '—' }}</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.company_email"
+                class="info-input"
+                placeholder="name@company.com"
+              />
+              <span v-else class="info-val">{{
+                (engineerProfile as any)?.company_email || "—"
+              }}</span>
             </div>
           </div>
         </section>
@@ -151,8 +277,17 @@
           <div class="section-header">
             <h2 class="section-title">תעודות והסמכות</h2>
             <n-space>
-              <input ref="certFileInput" accept=".pdf,.docx,.xlsx,.txt,.md,.png,.jpg,.jpeg,.tif,.tiff" multiple style="display:none" type="file" @change="onCertFileChange" />
-              <n-button :loading="certUploading" @click="certFileInput?.click()">📂 העלה מסמך תעודה</n-button>
+              <input
+                ref="certFileInput"
+                accept=".pdf,.docx,.xlsx,.txt,.md,.png,.jpg,.jpeg,.tif,.tiff"
+                multiple
+                style="display: none"
+                type="file"
+                @change="onCertFileChange"
+              />
+              <n-button :loading="certUploading" @click="certFileInput?.click()"
+                >📂 העלה מסמך תעודה</n-button
+              >
             </n-space>
           </div>
 
@@ -160,15 +295,17 @@
           <div
             :class="{ 'drop-zone--active': certDragging }"
             class="drop-zone"
-            style="margin-bottom:16px"
+            style="margin-bottom: 16px"
             @dragover.prevent="certDragging = true"
             @dragleave.prevent="certDragging = false"
             @drop.prevent="onCertDrop($event)"
           >
             <span v-if="certDragging">שחרר כאן לייבוא...</span>
-            <span v-else style="color:#666">גרור קבצי תעודות לכאן (PDF, DOCX, PNG...)</span>
+            <span v-else style="color: #666"
+              >גרור קבצי תעודות לכאן (PDF, DOCX, PNG...)</span
+            >
           </div>
-          <div class="stats-row" style="margin-bottom:20px">
+          <div class="stats-row" style="margin-bottom: 20px">
             <div class="stat-pill">
               <span class="stat-pill__num">{{ certStats.total }}</span>
               <span class="stat-pill__label">סה״כ תעודות</span>
@@ -195,7 +332,9 @@
         <section v-if="activeSection === 'stats'">
           <div class="section-header">
             <h2 class="section-title">סטטיסטיקות</h2>
-            <n-button size="small" @click="exportStatsCsv">📥 יצוא CSV</n-button>
+            <n-button size="small" @click="exportStatsCsv"
+              >📥 יצוא CSV</n-button
+            >
           </div>
           <div class="stats-row">
             <div class="stat-card">
@@ -203,7 +342,9 @@
               <span class="stat-card__label">סה״כ תסקירים</span>
             </div>
             <div class="stat-card stat-card--green">
-              <span class="stat-card__num">{{ inspectionStats.completed }}</span>
+              <span class="stat-card__num">{{
+                inspectionStats.completed
+              }}</span>
               <span class="stat-card__label">הושלמו</span>
             </div>
             <div class="stat-card stat-card--orange">
@@ -211,33 +352,53 @@
               <span class="stat-card__label">ממתינים</span>
             </div>
           </div>
-          <div class="info-card" style="margin-top:20px">
+          <div class="info-card" style="margin-top: 20px">
             <div class="info-row">
               <span class="info-label">סה״כ תסקירים</span>
               <div class="progress-wrap">
-                <n-progress type="line" :percentage="100" :height="8" color="#18a058" :show-indicator="false" />
+                <n-progress
+                  type="line"
+                  :percentage="100"
+                  :height="8"
+                  color="#18a058"
+                  :show-indicator="false"
+                />
                 <span class="info-val">{{ inspectionStats.total }}</span>
               </div>
             </div>
             <div class="info-row">
               <span class="info-label">הושלמו</span>
               <div class="progress-wrap">
-                <n-progress type="line" :percentage="completedPct" :height="8" color="#18a058" :show-indicator="false" />
+                <n-progress
+                  type="line"
+                  :percentage="completedPct"
+                  :height="8"
+                  color="#18a058"
+                  :show-indicator="false"
+                />
                 <span class="info-val">{{ inspectionStats.completed }}</span>
               </div>
             </div>
             <div class="info-row">
               <span class="info-label">ממתינים</span>
               <div class="progress-wrap">
-                <n-progress type="line" :percentage="pendingPct" :height="8" color="#f0a020" :show-indicator="false" />
+                <n-progress
+                  type="line"
+                  :percentage="pendingPct"
+                  :height="8"
+                  color="#f0a020"
+                  :show-indicator="false"
+                />
                 <span class="info-val">{{ inspectionStats.pending }}</span>
               </div>
             </div>
           </div>
-          <div class="info-card" style="margin-top:16px">
+          <div class="info-card" style="margin-top: 16px">
             <div class="info-row">
               <span class="info-label">סיכום חודשי</span>
-              <span class="info-val">{{ inspectionStats.monthly }} תסקירים החודש</span>
+              <span class="info-val"
+                >{{ inspectionStats.monthly }} תסקירים החודש</span
+              >
             </div>
           </div>
         </section>
@@ -250,7 +411,7 @@
               v-model:value="notifFilter"
               :options="notifFilterOptions"
               size="small"
-              style="width:160px"
+              style="width: 160px"
             />
           </div>
           <div class="notif-list">
@@ -260,13 +421,20 @@
               class="notif-item"
               :class="{ 'notif-item--unread': !notif.read }"
             >
-              <n-tag :type="notifTagType(notif.type)" size="small" style="flex-shrink:0">{{ notifTypeLabel(notif.type) }}</n-tag>
+              <n-tag
+                :type="notifTagType(notif.type)"
+                size="small"
+                style="flex-shrink: 0"
+                >{{ notifTypeLabel(notif.type) }}</n-tag
+              >
               <div class="notif-body">
                 <div class="notif-title">{{ notif.title }}</div>
                 <div class="notif-date">{{ formatDate(notif.created_at) }}</div>
               </div>
             </div>
-            <div v-if="filteredNotifications.length === 0" class="empty-state">אין התראות</div>
+            <div v-if="filteredNotifications.length === 0" class="empty-state">
+              אין התראות
+            </div>
           </div>
         </section>
 
@@ -276,17 +444,34 @@
 
           <div class="settings-group">
             <h3 class="settings-group__title">שינוי סיסמה</h3>
-            <n-form label-placement="top" style="max-width:400px">
+            <n-form label-placement="top" style="max-width: 400px">
               <n-form-item label="סיסמה נוכחית">
-                <n-input v-model:value="pwForm.current" type="password" show-password-on="click" />
+                <n-input
+                  v-model:value="pwForm.current"
+                  type="password"
+                  show-password-on="click"
+                />
               </n-form-item>
               <n-form-item label="סיסמה חדשה">
-                <n-input v-model:value="pwForm.next" type="password" show-password-on="click" />
+                <n-input
+                  v-model:value="pwForm.next"
+                  type="password"
+                  show-password-on="click"
+                />
               </n-form-item>
               <n-form-item label="אימות סיסמה חדשה">
-                <n-input v-model:value="pwForm.confirm" type="password" show-password-on="click" />
+                <n-input
+                  v-model:value="pwForm.confirm"
+                  type="password"
+                  show-password-on="click"
+                />
               </n-form-item>
-              <n-button type="primary" :loading="savingPw" @click="changePassword">שנה סיסמה</n-button>
+              <n-button
+                type="primary"
+                :loading="savingPw"
+                @click="changePassword"
+                >שנה סיסמה</n-button
+              >
             </n-form>
           </div>
 
@@ -294,26 +479,50 @@
             <h3 class="settings-group__title">תמונת פרופיל</h3>
             <div class="avatar-upload-row">
               <div class="sidebar-avatar sidebar-avatar--lg">
-                <img v-if="user?.picture_url" :src="user.picture_url" alt="avatar" />
-                <span v-else class="sidebar-avatar__initials">{{ initials }}</span>
+                <img
+                  v-if="user?.picture_url"
+                  :src="user.picture_url"
+                  alt="avatar"
+                />
+                <span v-else class="sidebar-avatar__initials">{{
+                  initials
+                }}</span>
               </div>
-              <input ref="avatarInput" type="file" accept="image/*" style="display:none" @change="onAvatarChange" />
-              <n-button size="small" :loading="uploadingAvatar" @click="avatarInput?.click()">📷 שנה תמונה</n-button>
+              <input
+                ref="avatarInput"
+                type="file"
+                accept="image/*"
+                style="display: none"
+                @change="onAvatarChange"
+              />
+              <n-button
+                size="small"
+                :loading="uploadingAvatar"
+                @click="avatarInput?.click()"
+                >📷 שנה תמונה</n-button
+              >
             </div>
           </div>
 
-<!--          <div class="settings-group">-->
-<!--            <h3 class="settings-group__title">יצוא נתונים</h3>-->
-<!--            <n-space>-->
-<!--              <n-button size="small" @click="exportPdf">📄 יצוא PDF</n-button>-->
-<!--              <n-button size="small" @click="exportWord">📝 יצוא Word</n-button>-->
-<!--            </n-space>-->
-<!--          </div>-->
+          <!--          <div class="settings-group">-->
+          <!--            <h3 class="settings-group__title">יצוא נתונים</h3>-->
+          <!--            <n-space>-->
+          <!--              <n-button size="small" @click="exportPdf">📄 יצוא PDF</n-button>-->
+          <!--              <n-button size="small" @click="exportWord">📝 יצוא Word</n-button>-->
+          <!--            </n-space>-->
+          <!--          </div>-->
 
           <div class="settings-group">
             <h3 class="settings-group__title">ניהול הפעלות</h3>
-            <p class="settings-desc">סיים את כל ההפעלות הפעילות בכל המכשירים.</p>
-            <n-button type="error" :loading="disconnecting" @click="disconnectAll">התנתק מכל המכשירים</n-button>
+            <p class="settings-desc">
+              סיים את כל ההפעלות הפעילות בכל המכשירים.
+            </p>
+            <n-button
+              type="error"
+              :loading="disconnecting"
+              @click="disconnectAll"
+              >התנתק מכל המכשירים</n-button
+            >
           </div>
         </section>
 
@@ -349,24 +558,30 @@
         <!-- מנוי ותשלומים -->
         <section v-if="activeSection === 'subscription'">
           <h2 class="section-title">מנוי ותשלומים</h2>
-          <div class="info-card" style="margin-bottom:20px">
+          <div class="info-card" style="margin-bottom: 20px">
             <div class="info-row">
               <span class="info-label">תוכנית נוכחית</span>
               <span class="info-val">
-                <n-tag :type="roleTag.type" size="small">{{ roleTag.label }}</n-tag>
+                <n-tag :type="roleTag.type" size="small">{{
+                  roleTag.label
+                }}</n-tag>
               </span>
             </div>
             <div class="info-row">
               <span class="info-label">תוקף מנוי</span>
-              <span class="info-val">{{ subscription.validUntil || 'חינמי' }}</span>
+              <span class="info-val">{{
+                subscription.validUntil || "חינמי"
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">תסקירים החודש</span>
               <span class="info-val">{{ subscription.monthlyCount }}</span>
             </div>
           </div>
-          <div class="section-header" style="margin-bottom:12px">
-            <h3 class="settings-group__title" style="margin:0">היסטוריית חיוב</h3>
+          <div class="section-header" style="margin-bottom: 12px">
+            <h3 class="settings-group__title" style="margin: 0">
+              היסטוריית חיוב
+            </h3>
           </div>
           <n-data-table
             :columns="billingColumns"
@@ -376,14 +591,13 @@
             size="small"
           />
         </section>
-
       </n-spin>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, h, onMounted, ref} from "vue";
+import { computed, h, onMounted, ref } from "vue";
 import {
   NButton,
   NDataTable,
@@ -398,9 +612,9 @@ import {
   NTag,
   useMessage,
 } from "naive-ui";
-import {useAuthStore} from "../stores/auth.js";
-import {api} from "../services/apiService.js";
-import type {User, UserSettings} from "@shared/types.js";
+import { useAuthStore } from "../stores/auth.js";
+import { api } from "../services/apiService.js";
+import type { User, UserSettings } from "@shared/types.js";
 
 const message = useMessage();
 const authStore = useAuthStore();
@@ -415,33 +629,49 @@ const userSettings = ref<UserSettings | null>(null);
 
 // ── Sidebar nav ──────────────────────────────────────────────────────────────
 const navItems = [
-  { key: "personal",      icon: "👤", label: "פרטים אישיים" },
-  { key: "engineer",      icon: "🔧", label: "פרופיל מהנדס" },
-  { key: "certs",         icon: "📜", label: "תעודות והסמכות" },
+  { key: "personal", icon: "👤", label: "פרטים אישיים" },
+  { key: "engineer", icon: "🔧", label: "פרופיל מהנדס" },
+  { key: "certs", icon: "📜", label: "תעודות והסמכות" },
   // { key: "stats",         icon: "📊", label: "סטטיסטיקות" },
   // { key: "notifications", icon: "🔔", label: "התראות ועדכונים" },
-  { key: "settings",      icon: "⚙️", label: "הגדרות" },
+  { key: "settings", icon: "⚙️", label: "הגדרות" },
   // { key: "theme",         icon: "🎨", label: "נושא עיצוב" },
-  { key: "subscription",  icon: "💳", label: "מנוי ותשלומים" },
+  { key: "subscription", icon: "💳", label: "מנוי ותשלומים" },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const initials = computed(() => {
   const name = user.value?.name ?? "";
-  return name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase()
-    || (user.value?.email ?? "").substring(0, 2).toUpperCase();
+  return (
+    name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase() || (user.value?.email ?? "").substring(0, 2).toUpperCase()
+  );
 });
 
-const ROLE_META: Record<string, { label: string; type: "warning" | "info" | "default" }> = {
+const ROLE_META: Record<
+  string,
+  { label: string; type: "warning" | "info" | "default" }
+> = {
   admin: { label: "מנהל מערכת", type: "warning" },
-  pro:   { label: "Pro",        type: "info" },
-  user:  { label: "משתמש",      type: "default" },
+  pro: { label: "Pro", type: "info" },
+  user: { label: "משתמש", type: "default" },
 };
-const roleTag = computed(() => ROLE_META[user.value?.role ?? "user"] ?? ROLE_META.user);
+const roleTag = computed(
+  () => ROLE_META[user.value?.role ?? "user"] ?? ROLE_META.user,
+);
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("he-IL", { year: "numeric", month: "long", day: "numeric" });
+  return new Date(d).toLocaleDateString("he-IL", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }
 
 // ── Personal info ────────────────────────────────────────────────────────────
@@ -457,7 +687,9 @@ function startEditPersonal() {
   };
   editingPersonal.value = true;
 }
-function cancelEditPersonal() { editingPersonal.value = false; }
+function cancelEditPersonal() {
+  editingPersonal.value = false;
+}
 async function savePersonal() {
   savingPersonal.value = true;
   try {
@@ -465,7 +697,11 @@ async function savePersonal() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ name: personalForm.value.name, phone: personalForm.value.phone, company_name: personalForm.value.company_name }),
+      body: JSON.stringify({
+        name: personalForm.value.name,
+        phone: personalForm.value.phone,
+        company_name: personalForm.value.company_name,
+      }),
     });
     await authStore.fetchMe();
     editingPersonal.value = false;
@@ -499,10 +735,17 @@ const nextInspectionId = computed(() => {
 const editingEngineer = ref(false);
 const savingEngineer = ref(false);
 const engineerForm = ref({
-  inspector_number: "", address: "", title: "", expertise: "",
-  mr_number: "", mg_number: "", membership_start_ms: null as number | null,
+  inspector_number: "",
+  address: "",
+  title: "",
+  expertise: "",
+  mr_number: "",
+  mg_number: "",
+  membership_start_ms: null as number | null,
   inspector_id_start: "",
-  company_name: "", company_phone: "", company_email: "",
+  company_name: "",
+  company_phone: "",
+  company_email: "",
 });
 
 function startEditEngineer() {
@@ -514,7 +757,9 @@ function startEditEngineer() {
     expertise: p?.expertise ?? "",
     mr_number: p?.mr_number ?? "",
     mg_number: p?.mg_number ?? "",
-    membership_start_ms: p?.membership_start_date ? new Date(p.membership_start_date).getTime() : null,
+    membership_start_ms: p?.membership_start_date
+      ? new Date(p.membership_start_date).getTime()
+      : null,
     inspector_id_start: p?.inspector_id_start ?? "",
     company_name: (p as any)?.company_name ?? "",
     company_phone: (p as any)?.company_phone ?? "",
@@ -522,14 +767,18 @@ function startEditEngineer() {
   };
   editingEngineer.value = true;
 }
-function cancelEditEngineer() { editingEngineer.value = false; }
+function cancelEditEngineer() {
+  editingEngineer.value = false;
+}
 async function saveEngineer() {
   savingEngineer.value = true;
   try {
     const payload = {
       ...engineerForm.value,
       membership_start_date: engineerForm.value.membership_start_ms
-        ? new Date(engineerForm.value.membership_start_ms).toISOString().slice(0, 10)
+        ? new Date(engineerForm.value.membership_start_ms)
+            .toISOString()
+            .slice(0, 10)
         : null,
       inspector_id_start: engineerForm.value.inspector_id_start || null,
     };
@@ -580,16 +829,22 @@ async function uploadCertFiles(files: File[]) {
       body: fd,
     });
     if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       uploaded: number;
-      created: Array<{ documentId: string; certificateId: string | null; result: any }>;
+      created: Array<{
+        documentId: string;
+        certificateId: string | null;
+        result: any;
+      }>;
       profile_fields_updated: string[];
     };
 
     await Promise.all([loadCertificates(), loadEngineerProfile()]);
 
     if (data.profile_fields_updated.length) {
-      message.success(`תעודות נוספו. עודכנו שדות בפרופיל: ${data.profile_fields_updated.length}`);
+      message.success(
+        `תעודות נוספו. עודכנו שדות בפרופיל: ${data.profile_fields_updated.length}`,
+      );
     } else {
       message.success(`${data.uploaded} תעודות נוספו`);
     }
@@ -601,12 +856,16 @@ async function uploadCertFiles(files: File[]) {
 }
 
 async function loadCertificates() {
-  const res = await fetch(`${SERVER}/api/profile/certificates`, { credentials: "include" });
+  const res = await fetch(`${SERVER}/api/profile/certificates`, {
+    credentials: "include",
+  });
   if (res.ok) certificates.value = await res.json();
 }
 
 async function loadEngineerProfile() {
-  const res = await fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" });
+  const res = await fetch(`${SERVER}/api/profile/engineer`, {
+    credentials: "include",
+  });
   if (res.ok) engineerProfile.value = await res.json();
 }
 
@@ -622,37 +881,64 @@ const certColumns = [
   { title: "שם תעודה", key: "name" },
   { title: "סוג", key: "type" },
   { title: "גוף מנפיק", key: "issuer" },
-  { title: "תאריך הנפקה", key: "issued_date", render: (r: any) => formatDate(r.issued_date) },
-  { title: "תאריך פקיעה", key: "expiry_date", render: (r: any) => formatDate(r.expiry_date) },
   {
-    title: "סטטוס", key: "status",
-    render: (r: any) => h(NTag, {
-      type: r.status === "active" ? "success" : "error",
-      size: "small",
-    }, () => r.status === "active" ? "בתוקף" : "פג תוקף"),
+    title: "תאריך הנפקה",
+    key: "issued_date",
+    render: (r: any) => formatDate(r.issued_date),
+  },
+  {
+    title: "תאריך פקיעה",
+    key: "expiry_date",
+    render: (r: any) => formatDate(r.expiry_date),
+  },
+  {
+    title: "סטטוס",
+    key: "status",
+    render: (r: any) =>
+      h(
+        NTag,
+        {
+          type: r.status === "active" ? "success" : "error",
+          size: "small",
+        },
+        () => (r.status === "active" ? "בתוקף" : "פג תוקף"),
+      ),
   },
   {
     title: "",
     key: "download",
     width: 80,
-    render: (r: any) => r.document_id
-      ? h("a", {
-          href: api.documents.downloadUrl(r.document_id),
-          target: "_blank",
-          style: "color:#63e2b7;font-size:18px;text-decoration:none",
-          title: "הורד מסמך",
-        }, "⬇")
-      : null,
+    render: (r: any) =>
+      r.document_id
+        ? h(
+            "a",
+            {
+              href: api.documents.downloadUrl(r.document_id),
+              target: "_blank",
+              style: "color:#63e2b7;font-size:18px;text-decoration:none",
+              title: "הורד מסמך",
+            },
+            "⬇",
+          )
+        : null,
   },
 ];
 
 // ── Statistics ───────────────────────────────────────────────────────────────
 const inspectionStats = ref({ total: 0, completed: 0, pending: 0, monthly: 0 });
 const completedPct = computed(() =>
-  inspectionStats.value.total ? Math.round((inspectionStats.value.completed / inspectionStats.value.total) * 100) : 0
+  inspectionStats.value.total
+    ? Math.round(
+        (inspectionStats.value.completed / inspectionStats.value.total) * 100,
+      )
+    : 0,
 );
 const pendingPct = computed(() =>
-  inspectionStats.value.total ? Math.round((inspectionStats.value.pending / inspectionStats.value.total) * 100) : 0
+  inspectionStats.value.total
+    ? Math.round(
+        (inspectionStats.value.pending / inspectionStats.value.total) * 100,
+      )
+    : 0,
 );
 
 function exportStatsCsv() {
@@ -665,7 +951,9 @@ function exportStatsCsv() {
   ];
   const csv = rows.map((r) => r.join(",")).join("\n");
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+  a.href = URL.createObjectURL(
+    new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }),
+  );
   a.download = "stats.csv";
   a.click();
 }
@@ -680,11 +968,15 @@ const notifFilterOptions = [
   { label: "שגיאה", value: "error" },
 ];
 const filteredNotifications = computed(() =>
-  notifFilter.value ? notifications.value.filter((n) => n.type === notifFilter.value) : notifications.value
+  notifFilter.value
+    ? notifications.value.filter((n) => n.type === notifFilter.value)
+    : notifications.value,
 );
 function notifTagType(type: string): "info" | "warning" | "error" | "default" {
   const map: Record<string, "info" | "warning" | "error" | "default"> = {
-    info: "info", warning: "warning", error: "error",
+    info: "info",
+    warning: "warning",
+    error: "error",
   };
   return map[type] ?? "default";
 }
@@ -735,7 +1027,10 @@ async function changePassword() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ current_password: pwForm.value.current, new_password: pwForm.value.next }),
+      body: JSON.stringify({
+        current_password: pwForm.value.current,
+        new_password: pwForm.value.next,
+      }),
     });
     if (!res.ok) throw new Error(`${res.status}`);
     pwForm.value = { current: "", next: "", confirm: "" };
@@ -789,7 +1084,9 @@ const billingColumns = [
 function buildProfileHtml(): string {
   const ep = engineerProfile.value;
   const rows = (pairs: [string, string | null | undefined][]) =>
-    pairs.map(([k, v]) => `<tr><td class="lbl">${k}</td><td>${v || '—'}</td></tr>`).join("");
+    pairs
+      .map(([k, v]) => `<tr><td class="lbl">${k}</td><td>${v || "—"}</td></tr>`)
+      .join("");
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="he">
@@ -805,7 +1102,7 @@ function buildProfileHtml(): string {
 </style>
 </head>
 <body>
-  <h1>${user.value?.name || user.value?.email || ''}</h1>
+  <h1>${user.value?.name || user.value?.email || ""}</h1>
   <span class="role">${roleTag.value.label}</span>
 
   <h2>פרטים אישיים</h2>
@@ -815,7 +1112,9 @@ function buildProfileHtml(): string {
     ["אימייל", user.value?.email],
   ])}</table>
 
-  ${ep ? `<h2>פרופיל מהנדס</h2>
+  ${
+    ep
+      ? `<h2>פרופיל מהנדס</h2>
   <table>${rows([
     ["מספר מפקח", ep.inspector_number],
     ["כתובת", ep.address],
@@ -824,7 +1123,9 @@ function buildProfileHtml(): string {
     ["מספר מ.ר.", ep.mr_number],
     ["מספר מ.ג.", ep.mg_number],
     ["תחילת חברות", formatDate(ep.membership_start_date)],
-  ])}</table>` : ""}
+  ])}</table>`
+      : ""
+  }
 
   <h2>סטטיסטיקות</h2>
   <table>${rows([
@@ -842,7 +1143,9 @@ function exportPdf() {
   win.document.write(buildProfileHtml());
   win.document.close();
   win.focus();
-  setTimeout(() => { win.print(); }, 400);
+  setTimeout(() => {
+    win.print();
+  }, 400);
 }
 
 function exportWord() {
@@ -858,13 +1161,16 @@ function exportWord() {
 // ── Mount ────────────────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
-    const [settingsRes, statsRes, engineerRes, certsRes, notifsRes] = await Promise.allSettled([
-      fetch(`${SERVER}/api/user-settings`, { credentials: "include" }),
-      fetch(`${SERVER}/api/profile/stats`, { credentials: "include" }),
-      fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" }),
-      fetch(`${SERVER}/api/profile/certificates`, { credentials: "include" }),
-      fetch(`${SERVER}/api/profile/notifications`, { credentials: "include" }),
-    ]);
+    const [settingsRes, statsRes, engineerRes, certsRes, notifsRes] =
+      await Promise.allSettled([
+        fetch(`${SERVER}/api/user-settings`, { credentials: "include" }),
+        fetch(`${SERVER}/api/profile/stats`, { credentials: "include" }),
+        fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" }),
+        fetch(`${SERVER}/api/profile/certificates`, { credentials: "include" }),
+        fetch(`${SERVER}/api/profile/notifications`, {
+          credentials: "include",
+        }),
+      ]);
 
     if (settingsRes.status === "fulfilled" && settingsRes.value.ok) {
       userSettings.value = await settingsRes.value.json();
@@ -873,7 +1179,8 @@ onMounted(async () => {
       const data = await statsRes.value.json();
       if (data.active !== undefined) {
         inspectionStats.value = {
-          total: (data.active ?? 0) + (data.snoozed ?? 0) + (data.completed ?? 0),
+          total:
+            (data.active ?? 0) + (data.snoozed ?? 0) + (data.completed ?? 0),
           completed: data.completed ?? 0,
           pending: data.active ?? 0,
           monthly: data.monthly ?? 0,
@@ -928,18 +1235,31 @@ onMounted(async () => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #DDEAFE;
+  background: #ddeafe;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
 }
-.sidebar-avatar--lg { width: 64px; height: 64px; }
-.sidebar-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.sidebar-avatar__initials { font-size: 16px; font-weight: 700; color: #0F172A; }
+.sidebar-avatar--lg {
+  width: 64px;
+  height: 64px;
+}
+.sidebar-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.sidebar-avatar__initials {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
 
-.sidebar-user__info { min-width: 0; }
+.sidebar-user__info {
+  min-width: 0;
+}
 .sidebar-user__name {
   font-size: 13px;
   font-weight: 600;
@@ -949,7 +1269,11 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .sidebar-nav__item {
   display: flex;
   align-items: center;
@@ -959,19 +1283,26 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
   user-select: none;
 }
-.sidebar-nav__item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sidebar-nav__item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
 .sidebar-nav__item--active {
   background: rgba(99, 226, 183, 0.14);
   color: var(--brand-color, #18a058);
   font-weight: 600;
 }
 html[data-theme="light"] .sidebar-nav__item--active {
-  background: rgba(24, 160, 88, 0.10);
+  background: rgba(24, 160, 88, 0.1);
 }
-.sidebar-nav__icon { font-size: 16px; }
+.sidebar-nav__icon {
+  font-size: 16px;
+}
 
 /* ── Content ─────────────────────────────────────────────────────────────── */
 .profile-content {
@@ -1008,11 +1339,25 @@ html[data-theme="light"] .sidebar-nav__item--active {
   border-bottom: 1px solid var(--border-color);
   font-size: 14px;
 }
-.info-row:last-child { border-bottom: none; }
-.info-label { color: var(--text-secondary); min-width: 160px; flex-shrink: 0; }
-.info-val { color: var(--text-primary); font-weight: 500; }
-.info-input { flex: 1; }
-.info-hint { font-size: 11px; color: var(--color-warning, #f0a020); }
+.info-row:last-child {
+  border-bottom: none;
+}
+.info-label {
+  color: var(--text-secondary);
+  min-width: 160px;
+  flex-shrink: 0;
+}
+.info-val {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.info-input {
+  flex: 1;
+}
+.info-hint {
+  font-size: 11px;
+  color: var(--color-warning, #f0a020);
+}
 .info-section-divider {
   grid-column: 1 / -1;
   font-size: 12px;
@@ -1033,7 +1378,11 @@ html[data-theme="light"] .sidebar-nav__item--active {
 }
 
 /* ── Stats ───────────────────────────────────────────────────────────────── */
-.stats-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
 
 .stat-pill {
   display: flex;
@@ -1045,10 +1394,23 @@ html[data-theme="light"] .sidebar-nav__item--active {
   padding: 16px 24px;
   min-width: 100px;
 }
-.stat-pill--green { border-color: rgba(24,160,88,0.3); }
-.stat-pill--red { border-color: rgba(208,48,80,0.3); }
-.stat-pill__num { font-size: 28px; font-weight: 700; color: var(--text-primary); }
-.stat-pill__label { font-size: 11px; color: var(--text-secondary); margin-top: 4px; text-align: center; }
+.stat-pill--green {
+  border-color: rgba(24, 160, 88, 0.3);
+}
+.stat-pill--red {
+  border-color: rgba(208, 48, 80, 0.3);
+}
+.stat-pill__num {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.stat-pill__label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  text-align: center;
+}
 
 .stat-card {
   flex: 1;
@@ -1061,13 +1423,29 @@ html[data-theme="light"] .sidebar-nav__item--active {
   flex-direction: column;
   align-items: center;
 }
-.stat-card--green { border-color: rgba(24,160,88,0.3); }
-.stat-card--orange { border-color: rgba(240,160,32,0.3); }
-.stat-card__num { font-size: 32px; font-weight: 700; color: var(--text-primary); }
-.stat-card__label { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+.stat-card--green {
+  border-color: rgba(24, 160, 88, 0.3);
+}
+.stat-card--orange {
+  border-color: rgba(240, 160, 32, 0.3);
+}
+.stat-card__num {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.stat-card__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
 
 /* ── Notifications ───────────────────────────────────────────────────────── */
-.notif-list { display: flex; flex-direction: column; gap: 8px; }
+.notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .notif-item {
   display: flex;
   align-items: flex-start;
@@ -1077,11 +1455,28 @@ html[data-theme="light"] .sidebar-nav__item--active {
   border-radius: 10px;
   padding: 12px 16px;
 }
-.notif-item--unread { border-color: var(--brand-color, #18a058); }
-.notif-body { flex: 1; }
-.notif-title { font-size: 14px; color: var(--text-primary); font-weight: 500; }
-.notif-date { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
-.empty-state { padding: 32px; text-align: center; color: var(--text-secondary); font-size: 14px; }
+.notif-item--unread {
+  border-color: var(--brand-color, #18a058);
+}
+.notif-body {
+  flex: 1;
+}
+.notif-title {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.notif-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.empty-state {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
 
 /* ── Settings ────────────────────────────────────────────────────────────── */
 .settings-group {
@@ -1091,12 +1486,29 @@ html[data-theme="light"] .sidebar-nav__item--active {
   padding: 20px 24px;
   margin-bottom: 16px;
 }
-.settings-group__title { margin: 0 0 16px; font-size: 15px; font-weight: 600; color: var(--text-primary); }
-.settings-desc { margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); }
-.avatar-upload-row { display: flex; align-items: center; gap: 16px; }
+.settings-group__title {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.settings-desc {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.avatar-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
 
 /* ── Theme ───────────────────────────────────────────────────────────────── */
-.theme-cards { display: flex; gap: 20px; flex-wrap: wrap; }
+.theme-cards {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
 .theme-card {
   cursor: pointer;
   border: 2px solid var(--border-color);
@@ -1105,7 +1517,9 @@ html[data-theme="light"] .sidebar-nav__item--active {
   width: 160px;
   transition: border-color 0.15s;
 }
-.theme-card--active { border-color: var(--brand-color, #18a058); }
+.theme-card--active {
+  border-color: var(--brand-color, #18a058);
+}
 .theme-card__preview {
   height: 100px;
   display: flex;
@@ -1113,17 +1527,21 @@ html[data-theme="light"] .sidebar-nav__item--active {
   gap: 8px;
   padding: 12px;
 }
-.theme-card__preview--light { background: #f5f5f5; }
-.theme-card__preview--dark { background: #1a1a2e; }
+.theme-card__preview--light {
+  background: #f5f5f5;
+}
+.theme-card__preview--dark {
+  background: #1a1a2e;
+}
 .theme-preview-bar {
   height: 10px;
   border-radius: 4px;
-  background: rgba(128,128,128,0.3);
+  background: rgba(128, 128, 128, 0.3);
 }
 .theme-preview-content {
   flex: 1;
   border-radius: 6px;
-  background: rgba(128,128,128,0.15);
+  background: rgba(128, 128, 128, 0.15);
 }
 .theme-card__label {
   padding: 10px;
@@ -1139,7 +1557,9 @@ html[data-theme="light"] .sidebar-nav__item--active {
   border-radius: 8px;
   padding: 16px;
   text-align: center;
-  transition: border-color 0.2s, background 0.2s;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
   cursor: pointer;
   font-size: 13px;
 }

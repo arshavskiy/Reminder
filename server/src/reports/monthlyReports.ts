@@ -42,9 +42,9 @@ export const TRACKING_REPORT_FIELDS = [
   {key: "tracking_checked", label: "מה נבדק"},
   {key: "tracking_holder_contact", label: "תופש/איש קשר"},
   {key: "tracking_phone", label: "טלפון"},
-  {key: "tracking_relevant", label: "רלוונטי"},
   {key: "tracking_license_number", label: "מספר רישוי"},
   {key: "tracking_notes", label: "הערות"},
+  {key: "tracking_relevant", label: "רלוונטי"},
 ] as const;
 
 export type MonthlyReportField = typeof MONTHLY_REPORT_FIELDS[number]["key"];

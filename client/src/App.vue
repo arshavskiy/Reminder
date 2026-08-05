@@ -42,6 +42,22 @@
                  </template>
                  {{ isDark ? "מצב בהיר" : "מצב כהה" }}
                </n-tooltip>
+               <n-tooltip v-if="pwa.canInstall.value && !pwa.isInstalled.value" placement="bottom" :keep-alive-on-hover="false">
+                 <template #trigger>
+                   <button class="iconbtn" aria-label="התקן אפליקציה" @click="pwa.install()">
+                     <n-icon :component="DownloadOutline" :size="18" />
+                   </button>
+                 </template>
+                 התקן אפליקציה
+               </n-tooltip>
+               <n-tooltip v-if="pwa.updateAvailable.value" placement="bottom" :keep-alive-on-hover="false">
+                 <template #trigger>
+                   <button class="iconbtn iconbtn--update" aria-label="עדכן אפליקציה" @click="pwa.applyUpdate()">
+                     <n-icon :component="RefreshOutline" :size="18" />
+                   </button>
+                 </template>
+                 עדכון זמין — לחץ להפעלה מחדש
+               </n-tooltip>
                <UserDropdown
                  :userName="authStore.user?.name ?? authStore.user?.email ?? null"
                  :userEmail="authStore.user?.email ?? null"
@@ -127,7 +143,8 @@ import {
   unstableTreeSelectRtl,
   unstableUploadsRtl,
 } from "naive-ui";
-import {BriefcaseOutline, MoonOutline, SunnyOutline,} from "@vicons/ionicons5";
+import {BriefcaseOutline, DownloadOutline, MoonOutline, RefreshOutline, SunnyOutline,} from "@vicons/ionicons5";
+import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
 import {useAuthStore} from "./stores/auth.js";
@@ -153,6 +170,7 @@ const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 const featuresStore = useFeaturesStore();
+const pwa = usePwa();
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const mobileNavOpen = ref(false);
@@ -397,6 +415,14 @@ html[data-theme="light"] .mobile-nav-list__item--active {
 .iconbtn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+.iconbtn--update {
+  color: #f0a020;
+  border-color: rgba(240, 160, 32, 0.4);
+}
+.iconbtn--update:hover {
+  background: rgba(240, 160, 32, 0.1);
+  color: #f0a020;
 }
 
 .avatar {

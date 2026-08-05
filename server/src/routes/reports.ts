@@ -123,10 +123,10 @@ export function registerReportRoutes(app: express.Application) {
       )
         .split(/[;,\s]+/)
         .filter(Boolean);
+      const baseRecipients = body.recipients?.length ? body.recipients : configuredRecipients;
       const recipients = uniqueEmails([
-        ...((body.recipients?.length
-          ? body.recipients
-          : configuredRecipients) || user?.email),
+        ...baseRecipients,
+        ...(baseRecipients.length ? [] : (user?.email ? [user.email] : [])),
       ]);
       const formats = body.formats?.length
         ? normalizeFormats(body.formats)

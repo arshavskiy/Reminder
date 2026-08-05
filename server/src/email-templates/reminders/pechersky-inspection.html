@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; padding: 24px; background: #f0f4f8; font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; color: #1a2540; }
+    .wrap { max-width: 600px; margin: 0 auto; border-radius: 14px; overflow: hidden; box-shadow: 0 6px 28px rgba(0,0,0,0.12); }
+
+    /* Header */
+    .header { background: linear-gradient(135deg, #0d1f4c 0%, #1a3a7c 100%); padding: 32px 28px 24px; text-align: center; position: relative; }
+    .header-bell { font-size: 36px; margin-bottom: 10px; display: block; }
+    .header h1 { margin: 0 0 6px; color: #f5c842; font-size: 26px; font-weight: 800; letter-spacing: 0.5px; }
+    .header-sub { color: #cdd8f0; font-size: 15px; line-height: 1.5; margin: 0; }
+    .header-days { display: inline-block; background: #f5c842; color: #0d1f4c; border-radius: 999px; padding: 5px 18px; font-size: 14px; font-weight: 700; margin-top: 12px; }
+
+    /* Info box */
+    .info-box { background: #f7f9ff; border: 1px solid #dde4f5; padding: 14px 20px; font-size: 13px; color: #3a4a6b; line-height: 1.6; text-align: center; }
+
+    /* Details */
+    .body { background: #ffffff; padding: 24px 28px; }
+    .section-title { background: #0d1f4c; color: #f5c842; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; padding: 8px 16px; border-radius: 6px; margin: 0 0 14px; display: block; }
+    .fields { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .fields tr td { padding: 8px 10px; font-size: 14px; border-bottom: 1px solid #eef0f6; }
+    .fields tr:last-child td { border-bottom: none; }
+    .fields .lbl { color: #5a6c8a; text-align: right; width: 45%; }
+    .fields .val { color: #1a2540; font-weight: 600; text-align: left; }
+
+    /* Checklist items */
+    .checklist { list-style: none; padding: 0; margin: 0 0 20px; }
+    .checklist li { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 14px; color: #1a2540; border-bottom: 1px solid #eef0f6; }
+    .checklist li:last-child { border-bottom: none; }
+    .check-icon { width: 20px; height: 20px; background: #0d1f4c; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #f5c842; font-size: 13px; font-weight: 700; }
+
+    /* Body text */
+    .body-text { background: #fff8e6; border-right: 3px solid #f5c842; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 14px; color: #5a4000; margin: 0 0 20px; line-height: 1.6; }
+
+    /* Document link */
+    .doc-link-wrap { text-align: center; margin: 20px 0; }
+    .doc-link { display: inline-block; background: linear-gradient(135deg, #0d1f4c, #1a3a7c); color: #f5c842 !important; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 700; letter-spacing: 0.3px; }
+
+    /* Why box */
+    .why-box { background: #f0f4ff; border: 1px solid #c8d4f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-size: 13px; color: #2c3e6b; line-height: 1.6; }
+    .why-box strong { display: block; margin-bottom: 4px; color: #0d1f4c; }
+
+    /* Contact */
+    .contact { background: #0d1f4c; border-radius: 10px; padding: 18px 22px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .contact-name { color: #f5c842; font-size: 14px; font-weight: 700; }
+    .contact-sub { color: #cdd8f0; font-size: 12px; margin-top: 2px; }
+    .contact-phone { color: #f5c842; font-size: 20px; font-weight: 800; direction: ltr; }
+
+    /* Footer */
+    .footer { background: #f7f9ff; border-top: 1px solid #dde4f5; padding: 16px 24px; text-align: center; font-size: 12px; color: #8a9bb8; }
+    .footer-sig { font-style: italic; color: #0d1f4c; font-weight: 600; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- Header -->
+    <div class="header">
+      <span class="header-bell">🔔</span>
+      <h1>תזכורת חשובה!</h1>
+      <p class="header-sub">
+        בעוד <strong>{{advance_days}} ימים</strong> יפוג תוקף<br>
+        של התסקיר הקיים.
+      </p>
+      <span class="header-days">{{advance_days}} ימים לפני תאריך היעד</span>
+    </div>
+
+    <!-- Info bar -->
+    <div class="info-box">
+      עמידה בבדיקה התקופתית מבטיחה רציפות תוקף ועמידה בדרישות החוק ובטיחות מקסימלית.
+    </div>
+
+    <!-- Body -->
+    <div class="body">
+
+      <!-- Details section -->
+      <span class="section-title">פרטי הציוד / הלקוח</span>
+      <table cellpadding="0" cellspacing="0" class="fields">
+        {{#if client_company}}<tr><td class="lbl">לקוח / חברה</td><td class="val">{{client_company}}</td></tr>{{/if}}
+        {{#if contact_person}}<tr><td class="lbl">איש קשר</td><td class="val">{{contact_person}}</td></tr>{{/if}}
+        {{#if contact_phone}}<tr><td class="lbl">טלפון</td><td class="val">{{contact_phone}}</td></tr>{{/if}}
+        {{#if contract_number}}<tr><td class="lbl">מספר חוזה</td><td class="val">{{contract_number}}</td></tr>{{/if}}
+        {{#if document_number}}<tr><td class="lbl">מספר מסמך</td><td class="val">{{document_number}}</td></tr>{{/if}}
+        {{#if expiry_date}}<tr><td class="lbl">תאריך פקיעה</td><td class="val">{{expiry_date}}</td></tr>{{/if}}
+        {{#if equipment_type}}<tr><td class="lbl">סוג ציוד</td><td class="val">{{equipment_type}}</td></tr>{{/if}}
+        {{#if manufacturer}}<tr><td class="lbl">יצרן</td><td class="val">{{manufacturer}}</td></tr>{{/if}}
+        {{#if model}}<tr><td class="lbl">דגם</td><td class="val">{{model}}</td></tr>{{/if}}
+        {{#if serial_number}}<tr><td class="lbl">מספר סידורי</td><td class="val">{{serial_number}}</td></tr>{{/if}}
+        {{#if amount}}<tr><td class="lbl">סכום</td><td class="val">{{amount}} {{currency}}</td></tr>{{/if}}
+      </table>
+
+      <!-- Checklist -->
+      <span class="section-title">פרטי הציוד הנבדקים</span>
+      <ul class="checklist">
+        <li><span class="check-icon">✓</span> ציוד עבודה בגובה — פיגומים, סולמות, במות הרמה</li>
+        <li><span class="check-icon">✓</span> מכשירי הרמה — מלגזה, מנוף קטן, קומפרסור וגוד</li>
+        <li><span class="check-icon">✓</span> כלי לחץ — מיכלי אוויר, דודים, צנרת לחץ</li>
+        <li><span class="check-icon">✓</span> מערכות חשמל — לוחות חשמל, הארקות ובדיקות</li>
+        <li><span class="check-icon">✓</span> עגורנים — עגורן צריח, ניד, משאית וכרזמה</li>
+      </ul>
+
+      {{#if body}}
+      <div class="body-text">{{body}}</div>
+      {{/if}}
+
+      <!-- Document download link -->
+      {{#if document_url}}
+      <div class="doc-link-wrap">
+        <a href="{{document_url}}" class="doc-link" target="_blank">📄 הורד את המסמך המצורף</a>
+      </div>
+      {{/if}}
+
+      <!-- Why important -->
+      <div class="why-box">
+        <strong>למה זה חשוב?</strong>
+        שמירה על בטיחות העובדים, מניעת תקלות, עמידה בדרישות החוק והימנעות מקנסות והפסקות עבודה.
+      </div>
+
+      <!-- Contact -->
+      <div class="contact">
+        <div>
+          <div class="contact-name">👷 מהנדס בודק: {{from_name|מיכאל פצ׳רסקי}}</div>
+          <div class="contact-sub">מספר רישיון: 484590</div>
+          <div class="contact-sub" style="margin-top:6px;color:#a0b4d8">לפרטים נוספים</div>
+        </div>
+        <div class="contact-phone">052-8195650</div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div>{{from_name|ReminderOCR}} — תזכורת אוטומטית, אין צורך להשיב</div>
+      <div class="footer-sig">בטיחות מתחילה בבדיקה! ♥</div>
+    </div>
+
+  </div>
+</body>
+</html>

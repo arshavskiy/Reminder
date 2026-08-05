@@ -81,7 +81,7 @@ async function checkMonthlyReports() {
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const settingsRows = await col("user_settings").find({monthly_report_enabled: true}).toArray();
   for (const row of settingsRows as any[]) {
-    const day = 1;
+    const day = Math.min(28, Math.max(1, Number(row.monthly_report_day ?? 1)));
     const hour = Number(row.monthly_report_hour ?? 8);
     if (now.getDate() < day || (now.getDate() === day && now.getHours() < hour)) continue;
     if (row.monthly_report_last_sent === monthKey) continue;
@@ -404,6 +404,16 @@ export async function advanceContractAfterSentReminder(reminder: ReminderWithCon
       },
     } as any
   );
+
+  await col("contract_advances").insertOne({
+    user_id: r.user_id,
+    contract_id: contractId,
+    client_id: contract.client_id ?? r.client_id ?? null,
+    previous_expiry: currentExpiryIso,
+    new_expiry: nextExpiryIso,
+    interval_months: intervalMonths,
+    advanced_at: new Date(),
+  });
 
   await generateContractReminders(
     contractId,

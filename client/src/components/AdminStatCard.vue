@@ -39,6 +39,7 @@ interface Props {
   trend?: "up" | "down" | "stable";
   trendText?: string;
   format?: "number" | "percent" | "bytes" | "custom";
+  secondaryFormat?: "number" | "percent" | "bytes";
   customFormat?: (val: any) => string;
 }
 
@@ -57,8 +58,9 @@ const formattedPrimary = computed(() => {
 const formattedSecondary = computed(() => {
   if (props.secondary === undefined) return "";
   if (props.customFormat) return props.customFormat(props.secondary);
-  if (props.format === "percent") return `${props.secondary}%`;
-  if (props.format === "bytes") return formatBytes(Number(props.secondary));
+  const fmt = props.secondaryFormat ?? "number";
+  if (fmt === "percent") return `${props.secondary}%`;
+  if (fmt === "bytes") return formatBytes(Number(props.secondary));
   return String(props.secondary);
 });
 

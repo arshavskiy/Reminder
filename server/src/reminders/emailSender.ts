@@ -204,6 +204,12 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
     if (d) {
       vars.document_type = d.document_type;
       vars.document_number = d.document_number;
+      if (d.spaces_key) {
+        try {
+          const { getSpacesSignedUrl } = await import("../storage/spaces.js");
+          vars.document_url = await getSpacesSignedUrl(d.spaces_key, 7 * 24 * 3600, d.file_name ?? undefined);
+        } catch { /* non-critical — omit var if storage not configured */ }
+      }
       if (d.extracted_fields) {
         try {
           const fields = JSON.parse(d.extracted_fields) as Record<string, unknown>;

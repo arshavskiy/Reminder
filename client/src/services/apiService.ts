@@ -380,6 +380,41 @@ export const api = {
     monitorReminders: () => adminGet<any>("/admin/monitor/reminders"),
     monitorScheduler: () => adminGet<any>("/admin/monitor/scheduler"),
     monitorMonthlyReports: () => adminGet<any>("/admin/monitor/monthly-reports"),
+    monitorExtractionQuality: () => adminGet<any>("/admin/monitor/extraction-quality"),
+    monitorPipelineGaps: () => adminGet<any>("/admin/monitor/pipeline-gaps"),
+    monitorContractAdvances: () => adminGet<any>("/admin/monitor/contract-advances"),
+    getAdminSettings: () => adminGet<any>("/admin/settings"),
+    getUserDetail: (id: string) => adminGet<any>(`/admin/users/${id}/detail`),
+    getUserSettings: (id: string) => adminGet<any>(`/admin/users/${id}/settings`),
+    setUserDefaultTemplate: (id: string, templateId: number | null) => {
+      return fetch(`${ADMIN_BASE}/admin/users/${id}/settings`, {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ default_email_template_id: templateId }),
+      }).then(r => r.json());
+    },
+    downloadDocument: (id: string) => adminGet<any>(`/admin/documents/${id}/download`),
+    reprocessDocument: (id: string) => {
+      return fetch(`${ADMIN_BASE}/admin/documents/${id}/reprocess`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      }).then(r => r.json());
+    },
+    retryEscalation: (reminderId: string) => {
+      return fetch(`${ADMIN_BASE}/admin/reminders/${reminderId}/retry-escalation`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      }).then(r => r.json());
+    },
+    triggerMonthlyReport: (userId: string) => {
+      return fetch(`${ADMIN_BASE}/admin/monthly-reports/trigger/${userId}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      }).then(r => r.json());
+    },
   },
 
   config: {

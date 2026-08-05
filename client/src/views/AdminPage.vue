@@ -54,6 +54,14 @@
 
       <!-- ── Users ── -->
       <section v-if="activeSection === 'users'" class="admin-section">
+        <!-- User stat pills -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+          <div v-for="s in systemStats" :key="s.label" class="user-stat-pill">
+            <span class="user-stat-pill__num">{{ s.value }}</span>
+            <span class="user-stat-pill__label">{{ s.label }}</span>
+          </div>
+        </div>
+
         <div class="admin-section__toolbar">
           <n-input
             v-model:value="userSearch"
@@ -71,22 +79,10 @@
           :loading="usersLoading"
           :bordered="false"
           :pagination="{ pageSize: 20 }"
+          :max-height="500"
           size="small"
-          style="margin-top: 16px"
+          style="margin-top: 12px"
         />
-      </section>
-
-      <!-- ── Stats ── -->
-      <section v-if="activeSection === 'stats'" class="admin-section">
-        <div class="admin-stats-grid">
-          <div v-for="s in systemStats" :key="s.label" class="admin-stat-card">
-            <n-icon :component="s.icon" :size="28" class="admin-stat-card__icon" />
-            <div class="admin-stat-card__body">
-              <div class="admin-stat-card__num">{{ s.value }}</div>
-              <div class="admin-stat-card__label">{{ s.label }}</div>
-            </div>
-          </div>
-        </div>
       </section>
 
       <!-- ── Documents & Extraction ── -->
@@ -152,6 +148,8 @@
               :columns="docStatusColumns"
               :data="docStatusRows"
               :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              :max-height="350"
               size="small"
               style="margin-top:10px"
             />
@@ -184,6 +182,8 @@
               :columns="stuckDocsColumns"
               :data="docMonitor.stuck"
               :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              :max-height="300"
               size="small"
               style="margin-top:10px"
             />
@@ -212,6 +212,7 @@
               size="small"
               style="margin-top:12px"
               :row-key="(row: any) => row._rowKey"
+              default-expand-all
             />
 
             <div v-if="extractionsTotal > extractionLimit" style="display:flex;justify-content:center;gap:8px;margin-top:12px">
@@ -246,7 +247,136 @@
               style="margin-top:10px"
             />
           </div>
+
+          <!-- Pipeline Gaps -->
+          <div v-if="pipelineGaps" class="monitor-block" style="border-color:rgba(208,48,80,0.25)">
+            <div class="monitor-block__title">Pipeline Gaps</div>
+
+            <div v-if="pipelineGaps.stuck_processing.length > 0" style="margin-top:14px">
+              <div style="font-size:13px;font-weight:600;color:#d03050;margin-bottom:6px">
+                Stuck in Processing
+                <n-tag type="error" size="small" round style="margin-right:6px">{{ pipelineGaps.stuck_processing.length }}</n-tag>
+              </div>
+              <n-data-table :columns="stuckDocsColumns" :data="pipelineGaps.stuck_processing" :bordered="false" size="small" :pagination="{ pageSize: 10 }" :max-height="300" />
+            </div>
+
+            <div v-if="pipelineGaps.no_s3.length > 0" style="margin-top:14px">
+              <div style="font-size:13px;font-weight:600;color:#f0a020;margin-bottom:6px">
+                No S3 File (upload failed silently)
+                <n-tag type="warning" size="small" round style="margin-right:6px">{{ pipelineGaps.no_s3.length }}</n-tag>
+              </div>
+              <n-data-table :columns="noS3Columns" :data="pipelineGaps.no_s3" :bordered="false" size="small" :pagination="{ pageSize: 10 }" />
+            </div>
+
+            <div v-if="pipelineGaps.skipped_reminders.length > 0" style="margin-top:14px">
+              <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:6px">
+                Skipped Reminders (no recipient email)
+                <n-tag size="small" round style="margin-right:6px">{{ pipelineGaps.skipped_reminders.length }}</n-tag>
+              </div>
+              <n-data-table :columns="skippedReminderColumns" :data="pipelineGaps.skipped_reminders" :bordered="false" size="small" :pagination="{ pageSize: 10 }" />
+            </div>
+
+            <div v-if="pipelineGaps.stuck_processing.length === 0 && pipelineGaps.no_s3.length === 0 && pipelineGaps.skipped_reminders.length === 0"
+                 style="padding:20px;text-align:center;color:var(--text-secondary)">
+              ✅ No pipeline gaps detected
+            </div>
+          </div>
         </template>
+      </section>
+
+      <!-- ── Extraction Quality ── -->
+      <section v-if="activeSection === 'extraction_quality'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="extractionQuality">
+          <!-- Summary cards -->
+          <div class="admin-stats-grid">
+            <AdminStatCard
+              title="Total AI Runs"
+              :primary="extractionQuality.summary.total_runs"
+              primary-label="Extraction Attempts"
+              :status="'default'"
+              :icon="FlashOutline"
+            />
+            <AdminStatCard
+              title="Parse Success Rate"
+              :primary="extractionQuality.summary.parse_success_rate"
+              primary-label="Parsed OK %"
+              :secondary="extractionQuality.summary.parsed_ok"
+              secondary-label="Successful Parses"
+              :status="extractionQuality.summary.parse_success_rate >= 80 ? 'success' : extractionQuality.summary.parse_success_rate >= 50 ? 'warning' : 'error'"
+              format="percent"
+            />
+            <AdminStatCard
+              title="Avg Exec Time"
+              :primary="extractionQuality.summary.avg_exec_ms ? (extractionQuality.summary.avg_exec_ms / 1000).toFixed(1) : '0'"
+              primary-label="Seconds per Run"
+              :status="extractionQuality.summary.avg_exec_ms > 30000 ? 'warning' : 'default'"
+            />
+            <AdminStatCard
+              title="Parse Failures"
+              :primary="extractionQuality.summary.total_runs - extractionQuality.summary.parsed_ok"
+              primary-label="Failed Parses"
+              :secondary="extractionQuality.recent_failures.length"
+              secondary-label="Recent (last 50)"
+              :status="(extractionQuality.summary.total_runs - extractionQuality.summary.parsed_ok) > 0 ? 'error' : 'success'"
+            />
+          </div>
+
+          <!-- By Backend -->
+          <div class="monitor-block">
+            <div class="monitor-block__title">Success Rate by Backend</div>
+            <n-data-table
+              :columns="backendQualityColumns"
+              :data="Object.entries(extractionQuality.summary.by_backend).map(([backend, data]: [string, any]) => ({ backend, ...data }))"
+              :bordered="false"
+              :max-height="300"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <!-- Recent parse failures -->
+          <div class="monitor-block" v-if="extractionQuality.recent_failures.length > 0">
+            <div class="monitor-block__title">
+              Recent Parse Failures
+              <n-tag type="error" size="small" round style="margin-right:8px">{{ extractionQuality.recent_failures.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="parseFailureColumns"
+              :data="extractionQuality.recent_failures"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+              :row-class-name="() => 'row-error'"
+            />
+          </div>
+
+          <!-- Slow runs -->
+          <div class="monitor-block" v-if="extractionQuality.slow_runs.length > 0">
+            <div class="monitor-block__title">
+              Slow Runs (&gt;30s)
+              <n-tag type="warning" size="small" round style="margin-right:8px">{{ extractionQuality.slow_runs.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="slowRunColumns"
+              :data="extractionQuality.slow_runs"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              :max-height="300"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <div v-if="extractionQuality.recent_failures.length === 0 && extractionQuality.slow_runs.length === 0"
+               style="text-align:center;padding:40px;color:var(--text-secondary)">
+            ✅ No parse failures or slow runs detected
+          </div>
+        </template>
+        <div v-else style="text-align:center;padding:60px;color:var(--text-secondary)">
+          Click Refresh to load extraction quality data
+        </div>
       </section>
 
       <!-- ── Reminders ── -->
@@ -303,6 +433,7 @@
               :data="reminderMonitor.failedSends"
               :bordered="false"
               :pagination="{ pageSize: 15 }"
+              :max-height="350"
               size="small"
               style="margin-top:10px"
               :row-class-name="() => 'row-error'"
@@ -316,6 +447,8 @@
               :columns="reminderStatusColumns"
               :data="reminderStatusRows"
               :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              :max-height="350"
               size="small"
               style="margin-top:10px"
             />
@@ -330,6 +463,40 @@
             <n-data-table
               :columns="pendingReminderColumns"
               :data="reminderMonitor.pending"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <!-- Failed Escalations -->
+          <div class="monitor-block" v-if="(reminderMonitor.failedEscalations ?? []).length > 0"
+               style="border-color:rgba(208,48,80,0.3);background:rgba(208,48,80,0.02)">
+            <div class="monitor-block__title" style="color:#d03050">
+              🔴 Failed Escalations
+              <n-tag type="error" size="small" round style="margin-right:8px">{{ reminderMonitor.failedEscalations.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="failedEscalationColumns"
+              :data="reminderMonitor.failedEscalations"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              style="margin-top:10px"
+              :row-class-name="() => 'row-error'"
+            />
+          </div>
+
+          <!-- Contract Auto-Advances -->
+          <div class="monitor-block" v-if="contractAdvances.length > 0">
+            <div class="monitor-block__title">
+              Contract Auto-Advances
+              <n-tag size="small" round style="margin-right:8px">{{ contractAdvances.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="contractAdvanceColumns"
+              :data="contractAdvances"
               :bordered="false"
               :pagination="{ pageSize: 10 }"
               size="small"
@@ -384,6 +551,8 @@
               :columns="cronJobColumns"
               :data="schedulerMonitor.jobs ?? []"
               :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              :max-height="350"
               size="small"
               style="margin-top:10px"
             />
@@ -395,6 +564,8 @@
               :columns="monthlyScheduleColumns"
               :data="schedulerMonitor.monthlySchedule"
               :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              :max-height="350"
               size="small"
               style="margin-top:10px"
             />
@@ -434,6 +605,58 @@
           </div>
         </template>
       </section>
+      <!-- ── Settings ── -->
+      <section v-if="activeSection === 'settings'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="adminSettings">
+          <!-- Config grid -->
+          <div class="monitor-block">
+            <div class="monitor-block__title">Application Configuration</div>
+            <div class="admin-settings-grid" style="margin-top:12px">
+              <div class="admin-setting-row"><span class="admin-setting-key">Environment</span><span class="admin-setting-val">{{ adminSettings.appEnv }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Database</span><span class="admin-setting-val">{{ adminSettings.dbName || '—' }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Auto Extract</span>
+                <n-tag :type="adminSettings.autoExtract ? 'default' : 'error'" size="small" round>{{ adminSettings.autoExtract ? 'Enabled' : 'Disabled' }}</n-tag>
+              </div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Reminders</span>
+                <n-tag :type="adminSettings.reminderEnabled ? 'default' : 'error'" size="small" round>{{ adminSettings.reminderEnabled ? 'Enabled' : 'Disabled' }}</n-tag>
+              </div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Check Interval</span><span class="admin-setting-val">{{ formatInterval(adminSettings.reminderCheckIntervalMs / 1000) }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Escalation Email</span><span class="admin-setting-val">{{ adminSettings.escalationEmail || '—' }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Escalation Threshold</span><span class="admin-setting-val">{{ adminSettings.escalationThresholdDays }} days</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">SMTP Host</span><span class="admin-setting-val">{{ adminSettings.smtpHost || '—' }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">SMTP Port</span><span class="admin-setting-val">{{ adminSettings.smtpPort }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Email From</span><span class="admin-setting-val">{{ adminSettings.smtpFrom || '—' }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">AI Backend</span><span class="admin-setting-val">{{ adminSettings.aiBackend }} / {{ adminSettings.openAiModel }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">OpenAI Key</span>
+                <n-tag :type="adminSettings.openAiKeyPresent ? 'default' : 'error'" size="small" round>{{ adminSettings.openAiKeyPresent ? '✅ Present' : '❌ Missing' }}</n-tag>
+              </div>
+              <div class="admin-setting-row"><span class="admin-setting-key">S3 Bucket</span>
+                <n-tag :type="adminSettings.s3BucketPresent ? 'default' : 'error'" size="small" round>{{ adminSettings.s3BucketPresent ? '✅ Configured' : '❌ Not set' }}</n-tag>
+              </div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Doc Limit / User</span><span class="admin-setting-val">{{ adminSettings.userDocumentLimit }}</span></div>
+            </div>
+          </div>
+
+          <!-- Manual report trigger -->
+          <div class="monitor-block" style="margin-top:14px">
+            <div class="monitor-block__title">Manual Monthly Report Trigger</div>
+            <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 12px">
+              Send this month's report immediately for any user, regardless of their schedule.
+            </p>
+            <n-data-table
+              :columns="monthlyTriggerColumns"
+              :data="monthlyMonitor?.schedules ?? []"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+            />
+          </div>
+        </template>
+        <div v-else style="text-align:center;padding:60px;color:var(--text-secondary)">
+          Click Refresh to load settings
+        </div>
+      </section>
     </div>
 
     <!-- Document preview modal -->
@@ -471,6 +694,123 @@
         <n-button type="primary" :loading="savingRole" @click="saveRole">Save</n-button>
       </template>
     </n-modal>
+
+    <!-- User Detail Drawer -->
+    <n-drawer v-model:show="showUserDrawer" :width="680" placement="right">
+      <n-drawer-content :title="userDetailUser ? (userDetailUser.email ?? userDetailUser.name ?? 'User Detail') : 'User Detail'" closable>
+        <n-spin v-if="userDetailLoading" style="display:flex;justify-content:center;padding:60px" />
+        <template v-else-if="userDetailData">
+          <!-- Reminder status summary -->
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+            <n-tag v-for="(count, status) in userDetailData.reminderStatus" :key="status"
+              :type="status === 'error' ? 'error' : status === 'pending' ? 'warning' : status === 'sent' ? 'success' : 'default'"
+              size="small" round>
+              {{ status }}: {{ count }}
+            </n-tag>
+            <span v-if="!Object.keys(userDetailData.reminderStatus).length" style="font-size:12px;color:var(--text-secondary)">No reminders</span>
+          </div>
+
+          <n-tabs type="line" size="small" animated>
+            <!-- Documents tab -->
+            <n-tab-pane name="docs" :tab="`Documents (${userDetailData.documents.length})`">
+              <n-data-table
+                :columns="userDetailDocColumns"
+                :data="userDetailData.documents"
+                :bordered="false"
+                :pagination="{ pageSize: 15 }"
+                :max-height="400"
+                size="small"
+                style="margin-top:10px"
+              />
+            </n-tab-pane>
+
+            <!-- Email log tab -->
+            <n-tab-pane name="email" :tab="`Emails (${userDetailData.emailLogs.length})`">
+              <n-data-table
+                :columns="userDetailEmailColumns"
+                :data="userDetailData.emailLogs"
+                :bordered="false"
+                :pagination="{ pageSize: 15 }"
+                :max-height="400"
+                size="small"
+                style="margin-top:10px"
+                :row-class-name="(row: any) => row.success ? '' : 'row-error'"
+              />
+            </n-tab-pane>
+
+            <!-- Extractions tab -->
+            <n-tab-pane name="extractions" :tab="`AI Runs (${userDetailData.extractions.length})`">
+              <n-data-table
+                :columns="userDetailExtractionColumns"
+                :data="userDetailData.extractions"
+                :bordered="false"
+                :pagination="{ pageSize: 15 }"
+                :max-height="400"
+                size="small"
+                style="margin-top:10px"
+                :row-class-name="(row: any) => row.parsed_ok ? '' : 'row-error'"
+              />
+            </n-tab-pane>
+
+            <!-- Failed emails tab -->
+            <n-tab-pane name="errors" :tab="`Errors (${userDetailData.failedEmails.length})`">
+              <div v-if="userDetailData.failedEmails.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary)">
+                ✅ No failed emails
+              </div>
+              <div v-else>
+                <div v-for="err in userDetailData.failedEmails" :key="err.id"
+                     style="padding:10px 12px;background:rgba(208,48,80,0.04);border-left:3px solid #d03050;border-radius:4px;margin-bottom:8px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <n-tag type="error" size="small" round>{{ err.log_type }}</n-tag>
+                    <span style="font-size:11px;color:var(--text-secondary)">{{ err.sent_at ? new Date(err.sent_at).toLocaleString('en-US') : '—' }}</span>
+                  </div>
+                  <div style="font-size:12px;color:var(--text-secondary)">{{ err.recipient ?? '—' }}</div>
+                  <div style="font-size:12px;color:#d03050;margin-top:2px;font-family:monospace">{{ err.error ?? 'Unknown error' }}</div>
+                </div>
+              </div>
+            </n-tab-pane>
+
+            <!-- Email Templates tab -->
+            <n-tab-pane name="templates" tab="Templates">
+              <div style="margin-top:12px">
+                <div style="font-size:13px;font-weight:600;margin-bottom:8px">Default Email Template</div>
+                <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
+                  Template used when a reminder is created for this user. Overrides the system default.
+                </p>
+                <div style="display:flex;gap:10px;align-items:center">
+                  <n-select
+                    v-model:value="userDefaultTemplateId"
+                    :options="[{ label: '— System Default —', value: null }, ...emailTemplatesList.map(t => ({ label: t.name, value: t.id }))]"
+                    placeholder="System Default"
+                    clearable
+                    style="flex:1"
+                  />
+                  <n-button type="primary" size="small" :loading="savingTemplate" @click="saveUserDefaultTemplate">Save</n-button>
+                </div>
+
+                <n-divider style="margin:20px 0 14px" />
+                <div style="font-size:13px;font-weight:600;margin-bottom:10px">Available Templates ({{ emailTemplatesList.length }})</div>
+                <div v-for="tpl in emailTemplatesList" :key="tpl.id"
+                     style="padding:10px 12px;background:var(--bg-hover);border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+                  <div>
+                    <div style="font-size:13px;font-weight:500">{{ tpl.name }}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);margin-top:2px">{{ tpl.subject ?? '—' }}</div>
+                  </div>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <n-tag v-if="tpl.is_default" type="success" size="small" round>Default</n-tag>
+                    <n-tag v-if="userDefaultTemplateId === tpl.id" type="primary" size="small" round>User Default</n-tag>
+                    <n-button size="tiny" @click="userDefaultTemplateId = tpl.id">Set</n-button>
+                  </div>
+                </div>
+                <div v-if="emailTemplatesList.length === 0" style="padding:30px;text-align:center;color:var(--text-secondary)">
+                  No email templates found
+                </div>
+              </div>
+            </n-tab-pane>
+          </n-tabs>
+        </template>
+      </n-drawer-content>
+    </n-drawer>
 
     <!-- Error Detail Modal -->
     <n-modal v-model:show="showErrorModal" preset="dialog" title="Error Details" style="width: 500px; max-width:90vw">
@@ -516,6 +856,14 @@
         <n-button @click="showErrorModal = false">Close</n-button>
       </template>
     </n-modal>
+
+    <!-- Report modal -->
+    <AdminReportModal
+      v-if="reportModalUser"
+      v-model:show="showReportModal"
+      :user-id="reportModalUser.id"
+      :user-name="reportModalUser.name"
+    />
   </div>
 </template>
 
@@ -523,7 +871,7 @@
 import {computed, h, onMounted, onUnmounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import type {DataTableColumns} from "naive-ui";
-import {NButton, NDataTable, NIcon, NInput, NModal, NSelect, NSpin, NTag, useMessage,} from "naive-ui";
+import {NButton, NDataTable, NDrawer, NDrawerContent, NDivider, NIcon, NInput, NModal, NSelect, NSpin, NTag, NTabs, NTabPane, NTooltip, useMessage,} from "naive-ui";
 import {
   AlarmOutline,
   ArrowBackOutline,
@@ -533,17 +881,22 @@ import {
   CloseCircleOutline,
   CloudUploadOutline,
   DocumentOutline,
+  FlashOutline,
   MenuOutline,
   NotificationsOutline,
   PeopleOutline,
+  RefreshOutline,
   SearchOutline,
+  SettingsOutline,
   StatsChartOutline,
   TimeOutline,
   TimerOutline,
+  WarningOutline,
 } from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import DocumentDetailPage from "./DocumentDetailPage.vue";
 import AdminStatCard from "../components/AdminStatCard.vue";
+import AdminReportModal from "../components/AdminReportModal.vue";
 
 const router = useRouter();
 const message = useMessage();
@@ -553,12 +906,13 @@ const dbName = ref("");
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
 const sidebarItems = [
-  { key: "users",     label: "Users",                 icon: PeopleOutline },
-  { key: "stats",     label: "Statistics",            icon: StatsChartOutline },
-  { key: "documents", label: "Documents & Extraction",icon: DocumentOutline },
-  { key: "reminders", label: "Reminders",             icon: NotificationsOutline },
-  { key: "scheduler", label: "Scheduler",             icon: TimerOutline },
-  { key: "monthly",   label: "Monthly Reports",       icon: CalendarOutline },
+  { key: "users",              label: "Users",                  icon: PeopleOutline },
+  { key: "documents",          label: "Documents & Extraction", icon: DocumentOutline },
+  { key: "extraction_quality", label: "Extraction Quality",     icon: FlashOutline },
+  { key: "reminders",          label: "Reminders",              icon: NotificationsOutline },
+  { key: "scheduler",          label: "Scheduler",              icon: TimerOutline },
+  { key: "monthly",            label: "Monthly Reports",        icon: CalendarOutline },
+  { key: "settings",           label: "Settings",               icon: SettingsOutline },
 ];
 const activeSection = ref("users");
 const currentItem = computed(() => sidebarItems.find((i) => i.key === activeSection.value));
@@ -663,13 +1017,143 @@ async function toggleActive(user: any) {
   }
 }
 
+// ── User detail drawer ─────────────────────────────────────────────────────
+const showUserDrawer = ref(false);
+const userDetailData = ref<any>(null);
+const userDetailLoading = ref(false);
+const userDetailUser = ref<any>(null);
+const downloadingDocId = ref<string | null>(null);
+const emailTemplatesList = ref<any[]>([]);
+const userDefaultTemplateId = ref<number | null>(null);
+const savingTemplate = ref(false);
+
+async function openUserDetail(user: any) {
+  userDetailUser.value = user;
+  showUserDrawer.value = true;
+  userDetailLoading.value = true;
+  userDetailData.value = null;
+  userDefaultTemplateId.value = null;
+  try {
+    const [detail, userSettings, templates] = await Promise.all([
+      api.admin.getUserDetail(user.id),
+      api.admin.getUserSettings(user.id),
+      emailTemplatesList.value.length ? Promise.resolve(emailTemplatesList.value) :
+        fetch(`${location.origin}/api/email-templates`, { credentials: "include" }).then(r => r.json()),
+    ]);
+    userDetailData.value = detail;
+    userDefaultTemplateId.value = userSettings.default_email_template_id ?? null;
+    if (!emailTemplatesList.value.length) emailTemplatesList.value = templates;
+  } catch {
+    message.error("Failed to load user detail");
+  } finally {
+    userDetailLoading.value = false;
+  }
+}
+
+async function saveUserDefaultTemplate() {
+  if (!userDetailUser.value) return;
+  savingTemplate.value = true;
+  try {
+    await api.admin.setUserDefaultTemplate(userDetailUser.value.id, userDefaultTemplateId.value);
+    message.success("Default template saved");
+  } catch {
+    message.error("Failed to save template");
+  } finally {
+    savingTemplate.value = false;
+  }
+}
+
+async function downloadDoc(docId: string) {
+  downloadingDocId.value = docId;
+  try {
+    const { url } = await api.admin.downloadDocument(docId);
+    if (url) window.open(url, "_blank");
+    else message.error("No S3 file for this document");
+  } catch {
+    message.error("Failed to get download URL");
+  } finally {
+    downloadingDocId.value = null;
+  }
+}
+
+const userDetailDocColumns: DataTableColumns<any> = [
+  { title: "File", key: "filename", align: "left", ellipsis: { tooltip: true }, minWidth: 130,
+    render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
+  { title: "Status", key: "status", align: "center", width: 90,
+    render: (row) => h(NTag, {
+      type: row.status === "done" ? "success" : row.status === "error" ? "error" : row.status === "processing" ? "warning" : "default",
+      size: "small", round: true,
+    }, { default: () => row.status }) },
+  { title: "Coverage", key: "field_coverage", align: "center", width: 90,
+    render: (row) => {
+      const fc = row.field_coverage;
+      if (!fc) return h("span", { style: "font-size:11px;color:var(--text-secondary)" }, "—");
+      const color = fc.coverage_pct >= 80 ? "#18a058" : fc.coverage_pct >= 50 ? "#f0a020" : "#d03050";
+      const tooltip = [
+        fc.missing.length ? `Missing: ${fc.missing.join(", ")}` : "",
+        fc.nulled.length ? `Empty: ${fc.nulled.join(", ")}` : "",
+        fc.present.length ? `OK: ${fc.present.join(", ")}` : "",
+      ].filter(Boolean).join("\n");
+      return h("span", {
+        title: tooltip,
+        style: `font-size:11px;font-weight:600;color:${color};cursor:default`,
+      }, `${fc.coverage_pct}% (${fc.present.length}/${fc.total_fields})`);
+    }},
+  { title: "Missing", key: "missing_fields", align: "left", minWidth: 120, ellipsis: { tooltip: true },
+    render: (row) => {
+      const fc = row.field_coverage;
+      if (!fc || (!fc.missing.length && !fc.nulled.length)) return h("span", { style: "color:#18a058;font-size:11px" }, "✓ all present");
+      const all = [...fc.missing, ...fc.nulled.map((k: string) => `${k}(null)`)];
+      return h("span", { style: "font-size:11px;color:#d03050", title: all.join(", ") }, all.join(", "));
+    }},
+  { title: "Date", key: "created_at", align: "left", width: 85,
+    render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
+      row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
+  { title: "↓", key: "download", align: "center", width: 50,
+    render: (row) => row.has_s3
+      ? h(NButton, { size: "tiny", loading: downloadingDocId.value === row.id, onClick: () => downloadDoc(row.id) }, { default: () => "↓" })
+      : h("span", { style: "font-size:11px;color:var(--text-secondary)" }, "—") },
+];
+
+const userDetailEmailColumns: DataTableColumns<any> = [
+  { title: "Type", key: "log_type", align: "center", width: 110,
+    render: (row) => h(NTag, {
+      type: row.success ? "success" : "error", size: "small", round: true,
+    }, { default: () => (row.success ? "✓ " : "✗ ") + (row.log_type ?? "—") }) },
+  { title: "Recipient", key: "recipient", align: "left", minWidth: 120, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.recipient ?? "—") },
+  { title: "Error", key: "error", align: "left", minWidth: 140, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: `font-size:11px;color:${row.error ? "#d03050" : "var(--text-secondary)"}` }, row.error ?? "OK") },
+  { title: "Date", key: "sent_at", align: "left", width: 90,
+    render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
+      row.sent_at ? new Date(row.sent_at).toLocaleDateString("en-US") : "—") },
+];
+
+const userDetailExtractionColumns: DataTableColumns<any> = [
+  { title: "Backend", key: "backend", align: "left", width: 90,
+    render: (row) => h("span", { style: "font-size:12px" }, row.backend ?? "—") },
+  { title: "Model", key: "model", align: "left", width: 110, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" }, row.model ?? "—") },
+  { title: "OK", key: "parsed_ok", align: "center", width: 55,
+    render: (row) => h(NTag, { type: row.parsed_ok ? "success" : "error", size: "small", round: true },
+      { default: () => row.parsed_ok ? "✓" : "✗" }) },
+  { title: "Time", key: "exec_ms", align: "right", width: 70,
+    render: (row) => h("span", { style: `font-size:11px;color:${(row.exec_ms ?? 0) > 30000 ? "#f0a020" : "var(--text-secondary)"}` },
+      row.exec_ms ? (row.exec_ms / 1000).toFixed(1) + "s" : "—") },
+  { title: "Error", key: "error", align: "left", minWidth: 120, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:11px;color:#d03050" }, row.error ?? "") },
+  { title: "Date", key: "created_at", align: "left", width: 90,
+    render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
+      row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
+];
+
 const userColumns: DataTableColumns<any> = [
   {
-    title: "Email", key: "email", align: "left", ellipsis: { tooltip: true },
+    title: "Email", key: "email", align: "left", minWidth: 160, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:13px" }, row.email ?? "—"),
   },
   {
-    title: "Name", key: "name", align: "left", ellipsis: { tooltip: true },
+    title: "Name", key: "name", align: "left", minWidth: 120, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:13px" }, row.name ?? "—"),
   },
   {
@@ -691,14 +1175,28 @@ const userColumns: DataTableColumns<any> = [
         row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "Actions", key: "actions", align: "center", width: 160,
+    title: "Actions", key: "actions", align: "center", width: 340,
     render: (row) =>
-      h("div", { style: "display:flex; gap:6px; justify-content:center" }, [
-        h(NButton, { size: "tiny", onClick: () => openRoleModal(row) }, { default: () => "Change Role" }),
-        h(NButton, {
-          size: "tiny", type: row.is_active === 0 ? "primary" : "error", ghost: true,
-          onClick: () => toggleActive(row),
-        }, { default: () => row.is_active === 0 ? "Activate" : "Deactivate" }),
+      h("div", { style: "display:flex; gap:6px; justify-content:center; flex-wrap:wrap" }, [
+        h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
+          trigger: () => h(NButton, { size: "tiny", type: "primary", ghost: true, onClick: () => openUserDetail(row) }, { default: () => "Details" }),
+          default: () => "View documents, emails, extractions and errors for this user",
+        }),
+        h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
+          trigger: () => h(NButton, { size: "tiny", type: "default", onClick: () => openReportModal(row) }, { default: () => "📧 Report" }),
+          default: () => "Send a monthly report email on behalf of this user",
+        }),
+        h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
+          trigger: () => h(NButton, { size: "tiny", onClick: () => openRoleModal(row) }, { default: () => "Role" }),
+          default: () => "Change this user's role (user / pro / admin)",
+        }),
+        h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
+          trigger: () => h(NButton, {
+            size: "tiny", type: row.is_active === 0 ? "primary" : "error", ghost: true,
+            onClick: () => toggleActive(row),
+          }, { default: () => row.is_active === 0 ? "Activate" : "Deactivate" }),
+          default: () => row.is_active === 0 ? "Re-enable this user's access" : "Block this user from logging in",
+        }),
       ]),
   },
 ];
@@ -781,11 +1279,11 @@ const extractionColumns: DataTableColumns<any> = [
       row._isGroup ? "" : (row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—")),
   },
   {
-    title: "", key: "actions", align: "center", width: 100,
+    title: "View", key: "actions", align: "center", width: 90,
     render: (row) => row._isGroup ? null : h(NButton, {
       size: "tiny",
       onClick: () => openDocModal(row.id),
-    }, { default: () => "📄 Open" }),
+    }, { default: () => "Open" }),
   },
 ];
 
@@ -917,12 +1415,108 @@ const stuckDocsColumns: DataTableColumns<any> = [
   },
 ];
 
+// ── Extraction quality columns ─────────────────────────────────────────────
+const backendQualityColumns: DataTableColumns<any> = [
+  { title: "Backend", key: "backend", align: "left", render: (row) => h("span", { style: "font-size:13px;font-weight:500" }, row.backend ?? "—") },
+  { title: "Runs", key: "runs", align: "center", width: 80, render: (row) => h("span", { style: "font-size:13px" }, row.runs) },
+  {
+    title: "Success Rate", key: "success_rate", align: "center", width: 120,
+    render: (row) => {
+      const ok = row.success_rate >= 80;
+      return h(NTag, { type: ok ? "default" : "error", size: "small", round: true }, { default: () => `${row.success_rate}%` });
+    },
+  },
+  { title: "Avg Time", key: "avg_exec_ms", align: "center", width: 100, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.avg_exec_ms ? `${(row.avg_exec_ms / 1000).toFixed(1)}s` : "—") },
+];
+
+const parseFailureColumns: DataTableColumns<any> = [
+  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "Backend", key: "backend", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px" }, row.backend ?? "—") },
+  { title: "Model", key: "model", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px" }, row.model ?? "—") },
+  { title: "Error", key: "error", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;color:var(--error-color,#d03050)" }, row.error ?? "—") },
+  { title: "Date", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
+  {
+    title: "Action", key: "action", align: "center", width: 110,
+    render: (row) => row.document_id ? h(NButton, {
+      size: "tiny", loading: reprocessingIds.value.has(row.document_id),
+      onClick: () => reprocessDoc(row.document_id),
+    }, { default: () => "Reprocess" }) : null,
+  },
+];
+
+const slowRunColumns: DataTableColumns<any> = [
+  { title: "Backend", key: "backend", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px" }, row.backend ?? "—") },
+  { title: "Model", key: "model", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, row.model ?? "—") },
+  { title: "Exec Time", key: "exec_ms", align: "center", width: 110, render: (row) => h("span", { style: "font-size:13px;font-weight:600;color:#f0a020" }, row.exec_ms ? `${(row.exec_ms / 1000).toFixed(1)}s` : "—") },
+  { title: "Date", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
+  {
+    title: "View", key: "action", align: "center", width: 80,
+    render: (row) => row.document_id ? h(NButton, { size: "tiny", onClick: () => openDocModal(row.document_id) }, { default: () => "Open" }) : null,
+  },
+];
+
+const noS3Columns: DataTableColumns<any> = [
+  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "File", key: "filename", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
+  { title: "Date", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
+];
+
+const skippedReminderColumns: DataTableColumns<any> = [
+  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "Note", key: "note", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.note ?? "—") },
+  { title: "Date", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
+];
+
+const contractAdvanceColumns: DataTableColumns<any> = [
+  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "Previous Expiry", key: "previous_expiry", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, row.previous_expiry ?? "—") },
+  { title: "New Expiry", key: "new_expiry", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px;font-weight:600;color:#18a058" }, row.new_expiry ?? "—") },
+  { title: "Interval", key: "interval_months", align: "center", width: 90, render: (row) => h("span", { style: "font-size:12px" }, row.interval_months ? `${row.interval_months}mo` : "—") },
+  { title: "Date", key: "advanced_at", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.advanced_at ? new Date(row.advanced_at).toLocaleDateString("en-US") : "—") },
+];
+
+const failedEscalationColumns: DataTableColumns<any> = [
+  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "Recipient", key: "recipient", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.recipient ?? "—") },
+  { title: "Error", key: "error", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;color:var(--error-color,#d03050)" }, row.error ?? "—") },
+  { title: "Date", key: "sent_at", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.sent_at ? new Date(row.sent_at).toLocaleString("en-US") : "—") },
+  {
+    title: "Action", key: "action", align: "center", width: 90,
+    render: (row) => h(NButton, {
+      size: "tiny", type: "primary", ghost: true,
+      loading: row.reminder_id ? retryingIds.value.has(row.reminder_id) : false,
+      onClick: () => row.reminder_id && retryEscalation(row.reminder_id),
+    }, { default: () => "Retry" }),
+  },
+];
+
+const monthlyTriggerColumns: DataTableColumns<any> = [
+  { title: "User", key: "user_id", align: "left", minWidth: 180, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;white-space:nowrap" }, resolveUserEmail(row.user_id)) },
+  { title: "Enabled", key: "enabled", align: "center", width: 90, render: (row) => h(NTag, { type: row.enabled ? "default" : "error", size: "small", round: true }, { default: () => row.enabled ? "Yes" : "No" }) },
+  { title: "Recipients", key: "recipients", align: "left", ellipsis: { tooltip: true }, render: (row) => {
+    let r = row.recipients ?? [];
+    if (typeof r === "string") { try { r = JSON.parse(r); } catch { r = []; } }
+    return h("span", { style: "font-size:12px" }, Array.isArray(r) ? r.join(", ") || "—" : "—");
+  }},
+  { title: "Last Sent", key: "last_sent", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.last_sent ? new Date(row.last_sent).toLocaleDateString("en-US") : "—") },
+  {
+    title: "Action", key: "action", align: "center", width: 110,
+    render: (row) => h(NButton, {
+      size: "tiny", type: "primary",
+      onClick: () => openReportModal(row),
+    }, { default: () => "Send Now" }),
+  },
+];
+
 // ── Reminders monitor ──────────────────────────────────────────────────────
 const reminderMonitor = ref<any>(null);
 
 const REMINDER_STATUSES = ["pending", "sent", "snoozed", "dismissed", "error"];
 const REMINDER_STATUS_HE: Record<string, string> = {
   pending: "Pending", sent: "Sent", snoozed: "Snoozed", dismissed: "Dismissed", error: "Error",
+};
+const REMINDER_STATUS_WIDTH: Record<string, number> = {
+  pending: 80, sent: 65, snoozed: 80, dismissed: 95, error: 65,
 };
 
 const reminderStatusRows = computed(() => {
@@ -939,7 +1533,7 @@ const reminderStatusColumns: DataTableColumns<any> = [
     title: REMINDER_STATUS_HE[s] ?? s,
     key: s,
     align: "center" as const,
-    width: 75,
+    width: REMINDER_STATUS_WIDTH[s] ?? 80,
     render: (row: any) => h("span", { style: row[s] ? "font-weight:600" : "color:var(--text-secondary)" }, row[s] ?? "0"),
   })),
 ];
@@ -1005,11 +1599,11 @@ const JOB_NAME_HE: Record<string, string> = {
 
 const cronJobColumns: DataTableColumns<any> = [
   {
-    title: "Service", key: "name", align: "left",
-    render: (row) => h("span", { style: "font-size:13px; font-weight:500" }, JOB_NAME_HE[row.name] ?? row.name),
+    title: "Service", key: "name", align: "left", minWidth: 150,
+    render: (row) => h("span", { style: "font-size:13px; font-weight:500; white-space:nowrap" }, JOB_NAME_HE[row.name] ?? row.name),
   },
   {
-    title: "Status", key: "status", align: "center", width: 90,
+    title: "Status", key: "status", align: "center", width: 110,
     render: (row) => {
       const ok = !row.last_error && (row.consecutive_failures ?? 0) === 0;
       return h(NTag, { type: ok ? "default" : "error", size: "small", round: true },
@@ -1017,12 +1611,12 @@ const cronJobColumns: DataTableColumns<any> = [
     },
   },
   {
-    title: "Last Run", key: "last_run_at", align: "left", width: 150,
+    title: "Last Run", key: "last_run_at", align: "left", minWidth: 150,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.last_run_at ? new Date(row.last_run_at).toLocaleString("en-US") : "—"),
   },
   {
-    title: "Last Success", key: "last_success_at", align: "left", width: 150,
+    title: "Last Success", key: "last_success_at", align: "left", minWidth: 150,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.last_success_at ? new Date(row.last_success_at).toLocaleString("en-US") : "—"),
   },
@@ -1034,8 +1628,8 @@ const cronJobColumns: DataTableColumns<any> = [
 
 const monthlyScheduleColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left",
-    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+    title: "User", key: "user_id", align: "left", minWidth: 180, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px; white-space:nowrap" }, resolveUserEmail(row.user_id)),
   },
   {
     title: "Enabled", key: "enabled", align: "center", width: 90,
@@ -1065,10 +1659,36 @@ const monthlyScheduleColumns: DataTableColumns<any> = [
 // ── Monthly reports monitor ────────────────────────────────────────────────
 const monthlyMonitor = ref<any>(null);
 
+// ── Extraction quality ─────────────────────────────────────────────────────
+const extractionQuality = ref<any>(null);
+
+// ── Pipeline gaps ──────────────────────────────────────────────────────────
+const pipelineGaps = ref<any>(null);
+
+// ── Contract advances ──────────────────────────────────────────────────────
+const contractAdvances = ref<any[]>([]);
+
+// ── Admin settings ─────────────────────────────────────────────────────────
+const adminSettings = ref<any>(null);
+
+// ── Action loading states ──────────────────────────────────────────────────
+const reprocessingIds = ref<Set<string>>(new Set());
+const retryingIds = ref<Set<string>>(new Set());
+const triggeringReportIds = ref<Set<string>>(new Set());
+
+// ── Report modal ───────────────────────────────────────────────────────────
+const showReportModal = ref(false);
+const reportModalUser = ref<{ id: string; name: string } | null>(null);
+
+function openReportModal(user: any) {
+  reportModalUser.value = { id: user.id ?? user.user_id, name: user.name ?? user.email ?? user.user_id };
+  showReportModal.value = true;
+}
+
 const monthlyScheduleDetailColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left",
-    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+    title: "User", key: "user_id", align: "left", minWidth: 180, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px; white-space:nowrap" }, resolveUserEmail(row.user_id)),
   },
   {
     title: "Enabled", key: "enabled", align: "center", width: 90,
@@ -1110,6 +1730,53 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.last_error ?? "—"),
   },
 ];
+
+// ── Action handlers ────────────────────────────────────────────────────────
+async function reprocessDoc(docId: string) {
+  reprocessingIds.value = new Set([...reprocessingIds.value, docId]);
+  try {
+    await api.admin.reprocessDocument(docId);
+    message.success("Reprocess queued");
+    setTimeout(() => loadSectionData("extraction_quality"), 2000);
+  } catch {
+    message.error("Reprocess failed");
+  } finally {
+    const s = new Set(reprocessingIds.value);
+    s.delete(docId);
+    reprocessingIds.value = s;
+  }
+}
+
+async function retryEscalation(reminderId: string) {
+  retryingIds.value = new Set([...retryingIds.value, reminderId]);
+  try {
+    const res = await api.admin.retryEscalation(reminderId);
+    if (res.ok) message.success("Escalation retried successfully");
+    else message.error(res.error ?? "Retry failed");
+    await loadSectionData("reminders");
+  } catch {
+    message.error("Retry failed");
+  } finally {
+    const s = new Set(retryingIds.value);
+    s.delete(reminderId);
+    retryingIds.value = s;
+  }
+}
+
+async function triggerMonthlyReport(userId: string) {
+  triggeringReportIds.value = new Set([...triggeringReportIds.value, userId]);
+  try {
+    const res = await api.admin.triggerMonthlyReport(userId);
+    if (res.success) message.success(`Report sent (${res.count} contracts)`);
+    else message.warning(res.error ?? "Sent with issues");
+  } catch {
+    message.error("Trigger failed");
+  } finally {
+    const s = new Set(triggeringReportIds.value);
+    s.delete(userId);
+    triggeringReportIds.value = s;
+  }
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function formatBytes(bytes: number): string {
@@ -1155,14 +1822,21 @@ async function loadSectionData(key: string) {
   sectionLoading.value = true;
   try {
     if (key === "documents") {
-      const [monitor] = await Promise.all([api.admin.monitorDocuments(), loadExtractions(1)]);
+      const [monitor, gaps] = await Promise.all([api.admin.monitorDocuments(), api.admin.monitorPipelineGaps(), loadExtractions(1)]);
       docMonitor.value = monitor;
+      pipelineGaps.value = gaps;
+    } else if (key === "extraction_quality") {
+      extractionQuality.value = await api.admin.monitorExtractionQuality();
     } else if (key === "reminders") {
-      reminderMonitor.value = await api.admin.monitorReminders();
+      const [rem, advances] = await Promise.all([api.admin.monitorReminders(), api.admin.monitorContractAdvances()]);
+      reminderMonitor.value = rem;
+      contractAdvances.value = advances;
     } else if (key === "scheduler") {
       schedulerMonitor.value = await api.admin.monitorScheduler();
     } else if (key === "monthly") {
       monthlyMonitor.value = await api.admin.monitorMonthlyReports();
+    } else if (key === "settings") {
+      adminSettings.value = await api.admin.getAdminSettings();
     }
   } catch {
     message.error("Error loading data");
@@ -1524,6 +2198,65 @@ onUnmounted(() => {
   .admin-data-table {
     font-size: 12px;
   }
+}
+
+.user-stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+}
+
+.user-stat-pill__num {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.user-stat-pill__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.admin-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .admin-settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-hover);
+  border-radius: 8px;
+  gap: 12px;
+}
+
+.admin-setting-key {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.admin-setting-val {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
 

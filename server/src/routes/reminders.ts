@@ -25,9 +25,14 @@ function formatIsoDateOnly(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-async function resolveEmailTemplateId(value: unknown): Promise<string | null> {
+async function resolveEmailTemplateId(value: unknown, userId?: string): Promise<string | null> {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  // Check user's default template preference
+  if (userId) {
+    const userSettings = await col("user_settings").findOne({ user_id: userId }) as any;
+    if (userSettings?.default_email_template_id) return String(userSettings.default_email_template_id);
+  }
   const template = await pickEmailTemplate(null);
   return template?.id ? String(template.id) : null;
 }
@@ -184,7 +189,7 @@ export function registerReminderRoutes(app: express.Application) {
 
     const body = req.body as Record<string, unknown>;
     const now = new Date();
-    const emailTemplateId = await resolveEmailTemplateId(body.email_template_id);
+    const emailTemplateId = await resolveEmailTemplateId(body.email_template_id, userId);
     const doc = {
       user_id: userId,
       source_type: body.source_type ?? "manual",
@@ -513,7 +518,7 @@ export function registerReminderRoutes(app: express.Application) {
       if (body[f] !== undefined) updates[f] = body[f];
     }
     if (body.email_template_id !== undefined) {
-      updates.email_template_id = await resolveEmailTemplateId(body.email_template_id);
+      updates.email_template_id = await resolveEmailTemplateId(body.email_template_id, userId);
     }
 
     await col("reminders").updateOne(filter, { $set: updates });

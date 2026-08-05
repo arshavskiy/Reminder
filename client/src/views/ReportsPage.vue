@@ -78,7 +78,9 @@
             <p class="hint">השאר ריק כדי לשלוח לכתובת החשבון. אפשר להפריד כתובות בפסיק.</p>
           </n-gi>
           <n-gi>
-            <n-alert type="info" :show-icon="false">הדוח נשלח בכל חודש בתאריך 01.</n-alert>
+            <n-form-item label="יום בחודש">
+              <n-select v-model:value="form.day" :options="dayOptions"/>
+            </n-form-item>
           </n-gi>
           <n-gi>
             <n-form-item label="שעת שליחה">
@@ -148,9 +150,9 @@ const trackingReportFieldOptions = [
   {key: "tracking_checked", label: "מה נבדק"},
   {key: "tracking_holder_contact", label: "תופש/איש קשר"},
   {key: "tracking_phone", label: "טלפון"},
-  {key: "tracking_relevant", label: "רלוונטי"},
   {key: "tracking_license_number", label: "מספר רישוי"},
   {key: "tracking_notes", label: "הערות"},
+  {key: "tracking_relevant", label: "רלוונטי"},
 ] as const;
 const clientReportFieldOptions = [
   {key: "contract_number", label: "מספר חוזה"},
@@ -172,10 +174,14 @@ const clientReportFieldOptions = [
 const defaultTrackingReportFields = trackingReportFieldOptions.map((field) => field.key);
 const defaultClientReportFields = clientReportFieldOptions.map((field) => field.key);
 const allClientReportFieldOptions = [...trackingReportFieldOptions, ...clientReportFieldOptions] as const;
+const defaultAllReportFields = [
+  "tracking_date", "tracking_phone", "tracking_license_number", "tracking_notes",
+  "tracking_relevant", "contract_type", "contact_person",
+];
 const selectedReportClientId = computed(() => selectedClientId.value === allClientsValue ? undefined : selectedClientId.value);
 const activeReportFieldOptions = computed(() => selectedReportClientId.value ? clientReportFieldOptions : allClientReportFieldOptions);
-const defaultReportFields = computed(() => selectedReportClientId.value ? defaultClientReportFields : defaultTrackingReportFields);
-const selectedFields = ref<string[]>([...defaultTrackingReportFields]);
+const defaultReportFields = computed(() => selectedReportClientId.value ? defaultClientReportFields : defaultAllReportFields);
+const selectedFields = ref<string[]>([...defaultAllReportFields]);
 const form = reactive({
   enabled: false,
   recipients: "",
@@ -205,6 +211,10 @@ const monthOptions = [
   {label: "נובמבר", value: 11},
   {label: "דצמבר", value: 12},
 ];
+const dayOptions = Array.from({length: 28}, (_, i) => ({
+  label: `${i + 1}`,
+  value: i + 1,
+}));
 const hourOptions = Array.from({length: 24}, (_, hour) => ({
   label: `${String(hour).padStart(2, "0")}:00`,
   value: hour
@@ -248,7 +258,7 @@ async function loadSettings() {
     const formats = parseFormats(settings.monthly_report_formats);
     form.enabled = Boolean(settings.monthly_report_enabled);
     form.recipients = settings.monthly_report_recipients ?? "";
-    form.day = 1;
+    form.day = Math.min(28, Math.max(1, Number(settings.monthly_report_day ?? 1)));
     form.hour = Number(settings.monthly_report_hour ?? 8);
     form.docx = formats.length ? formats.includes("docx") : true;
     form.xlsx = formats.length ? formats.includes("xlsx") : true;
@@ -271,7 +281,7 @@ async function saveSettings() {
     const saved = await api.userSettings.save({
       monthly_report_enabled: form.enabled,
       monthly_report_recipients: form.recipients,
-      monthly_report_day: 1,
+      monthly_report_day: form.day,
       monthly_report_hour: form.hour,
       monthly_report_formats: JSON.stringify([...(form.docx ? ["docx"] : []), ...(form.xlsx ? ["xlsx"] : [])]),
     });
