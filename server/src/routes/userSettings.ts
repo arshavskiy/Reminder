@@ -71,6 +71,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
       monthly_report_hour?: number;
       monthly_report_formats?: string;
       calendar_next_tests_only?: boolean;
+      default_email_template_id?: string | null;
       features?: Record<string, boolean> | string | null;
       features_json?: string | null;
     };
@@ -86,6 +87,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
     if (body.monthly_report_hour !== undefined) patch.monthly_report_hour = Math.min(23, Math.max(0, Number(body.monthly_report_hour)));
     if (body.monthly_report_formats !== undefined) patch.monthly_report_formats = body.monthly_report_formats;
     if (body.calendar_next_tests_only !== undefined) patch.calendar_next_tests_only = Boolean(body.calendar_next_tests_only);
+    if (body.default_email_template_id !== undefined) patch.default_email_template_id = body.default_email_template_id ?? null;
     const rawFeatures = body.features !== undefined ? body.features : body.features_json;
     if (rawFeatures !== undefined) {
       try {

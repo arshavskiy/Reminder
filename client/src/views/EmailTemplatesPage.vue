@@ -14,6 +14,13 @@
             {{ docTplName(t.doc_template_id) || "לכל סוגי המסמכים" }}
           </p>
           <p style="font-size: 12px; color: var(--text-muted); margin: 8px 0 0">{{ t.subject }}</p>
+          <template #footer>
+            <n-button
+              v-if="!(userDefaultTemplateId ? t.id === userDefaultTemplateId : t.is_default)"
+              size="small" text type="primary"
+              @click.stop="setMyDefault(t.id)"
+            >הגדר כברירת מחדל שלי</n-button>
+          </template>
         </n-card>
       </n-gi>
     </n-grid>
@@ -205,6 +212,12 @@ const docTplOptions = computed(() =>
 function docTplName(id: string | null): string {
   if (!id) return "";
   return docTemplates.value.find((t) => t.id === id)?.name ?? "";
+}
+
+async function setMyDefault(templateId: string) {
+  await api.userSettings.save({ default_email_template_id: templateId } as any);
+  userDefaultTemplateId.value = templateId;
+  message.success("ברירת המחדל עודכנה");
 }
 
 async function load() {
