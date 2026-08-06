@@ -15,11 +15,14 @@
           </p>
           <p style="font-size: 12px; color: var(--text-muted); margin: 8px 0 0">{{ t.subject }}</p>
           <template #footer>
-            <n-button
-              v-if="!(userDefaultTemplateId ? t.id === userDefaultTemplateId : t.is_default)"
-              size="small" text type="primary"
-              @click.stop="setMyDefault(t.id)"
-            >הגדר כברירת מחדל שלי</n-button>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+              <n-button
+                v-if="!(userDefaultTemplateId ? t.id === userDefaultTemplateId : t.is_default)"
+                size="small" text type="primary"
+                @click.stop="setMyDefault(t.id)"
+              >הגדר כברירת מחדל שלי</n-button>
+              <n-button size="small" text @click.stop="openSendTest(t)">📧 שלח דוגמה</n-button>
+            </div>
           </template>
         </n-card>
       </n-gi>
@@ -29,6 +32,19 @@
     </n-alert>
 
     <!-- Editor drawer -->
+    <!-- Send test email modal -->
+    <n-modal v-model:show="showSendTest" preset="card" title="שלח אימייל לדוגמה" style="max-width:420px">
+      <n-form-item label="כתובת אימייל" :show-feedback="false" style="margin-bottom:16px">
+        <n-input v-model:value="sendTestEmail" placeholder="email@example.com" @keydown.enter="sendTest" />
+      </n-form-item>
+      <template #footer>
+        <div style="display:flex; gap:8px; justify-content:flex-end">
+          <n-button @click="showSendTest=false">ביטול</n-button>
+          <n-button type="primary" :loading="sendingTest" :disabled="!sendTestEmail.trim()" @click="sendTest">שלח</n-button>
+        </div>
+      </template>
+    </n-modal>
+
     <n-drawer v-model:show="showEdit" :width="drawerWidth" placement="left">
       <n-drawer-content :title="editing?.id ? 'עריכת תבנית אימייל' : 'תבנית אימייל חדשה'" closable>
         <n-tabs v-if="editing" v-model:value="activeTab" type="line" animated @update:value="onTabChange">
@@ -161,6 +177,7 @@ import {
   NAlert,
   NButton,
   NCard,
+  NModal,
   NCheckbox,
   NDrawer,
   NDrawerContent,
@@ -212,6 +229,41 @@ const docTplOptions = computed(() =>
 function docTplName(id: string | null): string {
   if (!id) return "";
   return docTemplates.value.find((t) => t.id === id)?.name ?? "";
+}
+
+const showSendTest = ref(false);
+const sendTestEmail = ref("");
+const sendingTest = ref(false);
+const sendTestTemplateId = ref<string | null>(null);
+
+function openSendTest(t: EmailTemplate) {
+  sendTestTemplateId.value = t.id;
+  sendTestEmail.value = "";
+  showSendTest.value = true;
+}
+
+async function sendTest() {
+  if (!sendTestEmail.value.trim() || !sendTestTemplateId.value) return;
+  sendingTest.value = true;
+  try {
+    const res = await fetch(`/api/email-templates/${sendTestTemplateId.value}/send-test`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: sendTestEmail.value.trim() }),
+    });
+    const data = await res.json() as { success: boolean; error?: string };
+    if (data.success) {
+      message.success("אימייל נשלח בהצלחה");
+      showSendTest.value = false;
+    } else {
+      message.error(data.error ?? "שגיאה בשליחה");
+    }
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    sendingTest.value = false;
+  }
 }
 
 async function setMyDefault(templateId: string) {

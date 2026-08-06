@@ -266,6 +266,15 @@ export function registerTemplateRoutes(app: express.Application) {
     res.json({ ok: true });
   });
 
+  app.post("/api/email-templates/:id/send-test", async (req, res) => {
+    try { await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
+    const { to } = req.body as { to?: string };
+    if (!to) { res.status(400).json({ error: "to is required" }); return; }
+    const { sendTestEmail } = await import("../reminders/emailSender.js");
+    const result = await sendTestEmail(to, req.params.id);
+    res.json(result);
+  });
+
   // Detect variables in an email template body
   app.post("/api/email-templates/vars", async (req, res) => {
     const { html } = req.body as { html: string };
