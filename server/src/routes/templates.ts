@@ -267,12 +267,36 @@ export function registerTemplateRoutes(app: express.Application) {
   });
 
   app.post("/api/email-templates/:id/send-test", async (req, res) => {
-    try { await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const { to } = req.body as { to?: string };
+    let auth: Awaited<ReturnType<typeof requireAuth>>;
+    try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
+    const { to, reminder_id } = req.body as { to?: string; reminder_id?: string };
     if (!to) { res.status(400).json({ error: "to is required" }); return; }
-    const { sendTestEmail } = await import("../reminders/emailSender.js");
-    const result = await sendTestEmail(to, req.params.id);
-    res.json(result);
+    const { sendTestEmail, sendReminderEmailTo } = await import("../reminders/emailSender.js");
+    if (reminder_id) {
+      const { ObjectId } = await import("mongodb");
+      let rid: any;
+      try { rid = new ObjectId(reminder_id); } catch { rid = Number(reminder_id); }
+      const r = await col("reminders").findOne({ _id: rid }) as any;
+      if (!r || String(r.user_id) !== String(auth.userId)) {
+        res.status(404).json({ error: "Reminder not found" }); return;
+      }
+      const [clientDoc, documentDoc] = await Promise.all([
+        r.client_id ? col("clients").findOne({ _id: tryObjectId(String(r.client_id)) }) : null,
+        r.document_id ? col("documents").findOne({ _id: tryObjectId(String(r.document_id)) }) : null,
+      ]);
+      const reminderCtx = {
+        ...r,
+        id: r._id?.toString(),
+        client_name: (clientDoc as any)?.display_name ?? null,
+        document_name: (documentDoc as any)?.file_name ?? null,
+        email_template_id: req.params.id,
+      };
+      const result = await sendReminderEmailTo(to, reminderCtx as any);
+      res.json(result);
+    } else {
+      const result = await sendTestEmail(to, req.params.id);
+      res.json(result);
+    }
   });
 
   // Detect variables in an email template body

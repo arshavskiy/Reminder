@@ -426,6 +426,13 @@ export async function sendReminderEmail(
   }
 }
 
+export async function sendReminderEmailTo(
+  to: string,
+  reminder: ReminderWithContext
+): Promise<{ success: boolean; error?: string }> {
+  return sendReminderEmail(reminder, [to]);
+}
+
 export async function sendEmailWithAttachments(
   recipients: string[],
   subject: string,

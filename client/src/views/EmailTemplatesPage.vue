@@ -33,10 +33,26 @@
 
     <!-- Editor drawer -->
     <!-- Send test email modal -->
-    <n-modal v-model:show="showSendTest" preset="card" title="שלח אימייל לדוגמה" style="max-width:420px">
-      <n-form-item label="כתובת אימייל" :show-feedback="false" style="margin-bottom:16px">
-        <n-input v-model:value="sendTestEmail" placeholder="email@example.com" @keydown.enter="sendTest" />
-      </n-form-item>
+    <n-modal v-model:show="showSendTest" preset="card" title="שלח אימייל לדוגמה" style="max-width:480px">
+      <n-form label-placement="top" :show-feedback="false">
+        <n-form-item label="כתובת אימייל" style="margin-bottom:16px">
+          <n-input v-model:value="sendTestEmail" placeholder="email@example.com" @keydown.enter="sendTest" />
+        </n-form-item>
+        <n-form-item style="margin-bottom:0">
+          <template #label>
+            <span>תזכורת לדוגמה <span style="color:var(--text-muted);font-size:12px">(אופציונלי — ישתמש בנתונים אמיתיים)</span></span>
+          </template>
+          <n-select
+            v-model:value="sendTestReminderId"
+            :options="reminderOptions"
+            placeholder="ללא — נשתמש בנתוני דוגמה"
+            clearable
+            filterable
+            :loading="loadingReminders"
+            :virtual-scroll="false"
+          />
+        </n-form-item>
+      </n-form>
       <template #footer>
         <div style="display:flex; gap:8px; justify-content:flex-end">
           <n-button @click="showSendTest=false">ביטול</n-button>
@@ -235,22 +251,40 @@ const showSendTest = ref(false);
 const sendTestEmail = ref("");
 const sendingTest = ref(false);
 const sendTestTemplateId = ref<string | null>(null);
+const sendTestReminderId = ref<string | null>(null);
+const loadingReminders = ref(false);
+const reminderOptions = ref<{ label: string; value: string }[]>([]);
 
-function openSendTest(t: EmailTemplate) {
+async function openSendTest(t: EmailTemplate) {
   sendTestTemplateId.value = t.id;
   sendTestEmail.value = "";
+  sendTestReminderId.value = null;
   showSendTest.value = true;
+  loadingReminders.value = true;
+  try {
+    const result = await api.reminders.list({ limit: 200 });
+    reminderOptions.value = (result.rows ?? []).map((r: any) => ({
+      label: `${r.title}${r.client_name ? ` — ${r.client_name}` : ""}`,
+      value: String(r.id),
+    }));
+  } catch {
+    reminderOptions.value = [];
+  } finally {
+    loadingReminders.value = false;
+  }
 }
 
 async function sendTest() {
   if (!sendTestEmail.value.trim() || !sendTestTemplateId.value) return;
   sendingTest.value = true;
   try {
+    const body: Record<string, string> = { to: sendTestEmail.value.trim() };
+    if (sendTestReminderId.value) body.reminder_id = sendTestReminderId.value;
     const res = await fetch(`/api/email-templates/${sendTestTemplateId.value}/send-test`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: sendTestEmail.value.trim() }),
+      body: JSON.stringify(body),
     });
     const data = await res.json() as { success: boolean; error?: string };
     if (data.success) {
