@@ -189,24 +189,28 @@
             <div class="contact-icon">👷</div>
             <div>
               <div class="contact-label">מהנדס בודק</div>
-              <div class="contact-value">{{from_name|מיכאל פצ׳רסקי}}</div>
+              <div class="contact-value">{{engineer_name}}</div>
             </div>
           </div>
+          {{#if license_number}}
           <div class="contact-row">
             <div class="contact-icon">🪪</div>
             <div>
               <div class="contact-label">מספר רישיון</div>
-              <div class="contact-value">484590</div>
+              <div class="contact-value">{{license_number}}</div>
             </div>
           </div>
+          {{/if}}
         </div>
+        {{#if engineer_phone}}
         <div class="contact-phone-wrap">
           <div>
             <div class="phone-label">לפרטים נוספים</div>
-            <div class="phone-number">052-8195650</div>
+            <div class="phone-number">{{engineer_phone}}</div>
           </div>
           <div class="phone-circle">📞</div>
         </div>
+        {{/if}}
       </div>
 
     </div>

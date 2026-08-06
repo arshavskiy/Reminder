@@ -170,7 +170,12 @@ function applyEquipmentVars(vars: EmailVars, eq: any): void {
 }
 
 async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars> {
-  const senderName = await resolveSenderName((reminder as any).user_id);
+  const userId = String((reminder as any).user_id ?? "");
+  const [senderName, engineerProfile, user] = await Promise.all([
+    resolveSenderName(userId),
+    userId ? col("engineer_profiles").findOne({ user_id: userId }) as Promise<any> : Promise.resolve(null),
+    userId ? col("users").findOne({ _id: tryObjectId(userId) } as any) as Promise<any> : Promise.resolve(null),
+  ]);
   const vars: EmailVars = {
     title: reminder.title,
     trigger_date: reminder.trigger_date,
@@ -181,6 +186,10 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
     contract_number: (reminder as any).contract_number ?? null,
     contract_type: (reminder as any).contract_type ?? null,
     from_name: senderName,
+    engineer_name: firstNonEmpty(engineerProfile?.full_name, user?.name, senderName) ?? senderName,
+    license_number: firstNonEmpty(engineerProfile?.inspector_number) ?? null,
+    engineer_phone: firstNonEmpty(engineerProfile?.company_phone, user?.phone) ?? null,
+    engineer_company: firstNonEmpty(engineerProfile?.company_name, user?.company_name) ?? null,
   };
 
   // Equipment fields stored directly on the reminder take precedence over the
