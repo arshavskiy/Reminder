@@ -312,6 +312,17 @@ async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ sub
   }
 
   if (!tpl) {
+    // Check user's personal default template before falling back to global default
+    const userId = String((reminder as any).user_id ?? "");
+    if (userId) {
+      const userSettings = await col("user_settings").findOne({ user_id: userId }) as any;
+      if (userSettings?.default_email_template_id) {
+        tpl = await loadEmailTemplate(userSettings.default_email_template_id);
+      }
+    }
+  }
+
+  if (!tpl) {
     let docTemplateId: string | null = null;
     if (reminder.document_id) {
       const row = await col("documents").findOne({ _id: reminder.document_id } as any) as any;
