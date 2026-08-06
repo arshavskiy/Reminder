@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body, table, td { margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
-    body { background: #f0f4f8; direction: rtl; }
+    body { background: #f0f4f8; }
     img { border: 0; display: block; }
   </style>
 </head>
-<body style="background:#f0f4f8; margin:0; padding:20px 0; direction:rtl;">
+<body style="background:#f0f4f8; margin:0; padding:20px 0;">
 
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f4f8;">
 <tr><td align="center" style="padding:20px 8px;">
@@ -28,7 +28,7 @@
           </td>
           {{/if}}
           <td valign="middle">
-            {{#if engineer_company}}<div style="color:#5a6c7d; font-size:12px; font-weight:500; margin-bottom:3px;">{{engineer_company}}</div>{{/if}}
+            {{#if engineer_company}}<div style="color:#5a6c7d; font-size:12px; font-weight:700; margin-bottom:3px;">{{engineer_company}}</div>{{/if}}
             {{#if company_exp}}<div style="color:#5a6c7d; font-size:12px; font-weight:500;">{{company_exp}}</div>{{/if}}
           </td>
         </tr>
@@ -48,7 +48,7 @@
               תזכורת חשובה!<br>
               <span style="color:#c9a84c;">בעוד {{advance_days}} ימים</span> יפוג תוקף
             </div>
-            <div style="color:#cdd8f0; font-size:14px; line-height:1.6;">של התסקיר הקיים.</div>
+            <div style="color:#fff; font-size:28px; font-weight:900; line-height:1.15;">של התסקיר הקיים.</div>
           </td>
           <td width="110" valign="bottom" align="center" style="padding-top:8px;">
             <table width="90" cellpadding="0" cellspacing="0" border="0" style="background:#fff; border-radius:10px; box-shadow:4px 4px 12px rgba(0,0,0,0.25); margin:0 auto;">
@@ -95,8 +95,8 @@
           <td valign="middle" style="font-size:15px; color:#3a4a6b; line-height:1.7; font-weight:500;">
             עמידה בבדיקה התקופתית מבטיחה רציפות תוקף<br>ועמידה בדרישות החוק ובטיחות מקסימלית.
           </td>
-          <td width="50" valign="middle" align="center" style="padding-right:14px;">
-            <table width="42" height="42" cellpadding="0" cellspacing="0" border="0" style="background:#0d1f4c; border-radius:8px; margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:20px; text-align:center; vertical-align:middle;">📅</td></tr></table>
+          <td width="50" valign="middle" align="center" style="padding-right:14px; direction:ltr; text-align:center;">
+            <table width="42" height="42" cellpadding="0" cellspacing="0" border="0" style="background:#0d1f4c; border-radius:8px; margin:0 auto; direction:ltr;"><tr><td align="center" valign="middle" style="font-size:20px; text-align:center; vertical-align:middle; direction:ltr;">📅</td></tr></table>
           </td>
         </tr>
       </table>
@@ -108,48 +108,45 @@
     <td style="background:#0d1f4c; padding:14px 20px 20px;">
       <div style="color:#fff; font-size:15px; font-weight:700; text-align:center; margin-bottom:16px; letter-spacing:0.04em;">פרטי הציוד הנבדקים</div>
       {{#if equipment_type}}
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:12px;">
         <tr>
-          <td align="center" style="padding:10px 20px 6px;">
-            <div style="background:rgba(201,168,76,0.12); border:2px solid #c9a84c; border-radius:12px; padding:16px 24px; text-align:center;">
-              <div style="font-size:32px; margin-bottom:10px;">🔧</div>
-              <div style="color:#f0f4ff; font-size:18px; font-weight:900; letter-spacing:0.02em;">{{equipment_type}}</div>
+          <td align="center" style="padding:0 20px 6px;">
+            <div style="background:rgba(201,168,76,0.12); border:2px solid #c9a84c; border-radius:12px; padding:12px 24px; text-align:center;">
+              <div style="color:#f0f4ff; font-size:16px; font-weight:900; letter-spacing:0.02em;">🔧 {{equipment_type}}</div>
             </div>
           </td>
         </tr>
       </table>
       {{/if}}
-      {{#if equipment_type}}{{else}}
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td width="20%" align="center" valign="top" style="padding:0 4px;">
-            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px;"><tr><td align="center" valign="middle" style="font-size:22px; text-align:center; vertical-align:middle;">🪜</td></tr></table>
+          <td width="20%" align="center" valign="top" style="padding:0 4px; direction:ltr;">
+            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px; direction:ltr;"><tr><td align="center" valign="middle" style="font-size:22px; text-align:center; vertical-align:middle; direction:ltr;">🪜</td></tr></table>
             <div style="color:#f0f4ff; font-size:11px; font-weight:700; margin-bottom:3px; text-align:center;">ציוד עבודה בגובה</div>
             <div style="color:#8a9bb8; font-size:10px; line-height:1.4; text-align:center;">פיגומים, סולמות, במות הרמה</div>
           </td>
-          <td width="20%" align="center" valign="top" style="padding:0 4px;">
-            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px;"><tr><td align="center" valign="middle" style="font-size:22px; text-align:center; vertical-align:middle;">⚡</td></tr></table>
+          <td width="20%" align="center" valign="top" style="padding:0 4px; direction:ltr;">
+            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px; direction:ltr;"><tr><td align="center" valign="middle" style="font-size:22px; text-align:center; vertical-align:middle; direction:ltr;">⚡</td></tr></table>
             <div style="color:#f0f4ff; font-size:11px; font-weight:700; margin-bottom:3px; text-align:center;">מערכות חשמל</div>
             <div style="color:#8a9bb8; font-size:10px; line-height:1.4; text-align:center;">לוחות חשמל, הארקות ובדיקות</div>
           </td>
-          <td width="20%" align="center" valign="top" style="padding:0 4px;">
-            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px;"><tr><td align="center" valign="middle" style="font-size:22px; text-align:center; vertical-align:middle;">🔵</td></tr></table>
+          <td width="20%" align="center" valign="top" style="padding:0 4px; direction:ltr;">
+            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px; direction:ltr;"><tr><td align="center" valign="middle" style="font-size:22px; text-align:center; vertical-align:middle; direction:ltr;">🔵</td></tr></table>
             <div style="color:#f0f4ff; font-size:11px; font-weight:700; margin-bottom:3px; text-align:center;">כלי לחץ</div>
             <div style="color:#8a9bb8; font-size:10px; line-height:1.4; text-align:center;">מיכלי אוויר, דודים, צנרת לחץ</div>
           </td>
-          <td width="20%" align="center" valign="top" style="padding:0 4px;">
-            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px;"><tr><td align="center" valign="middle" style="font-size:22px; text-align:center; vertical-align:middle;">⚙️</td></tr></table>
+          <td width="20%" align="center" valign="top" style="padding:0 4px; direction:ltr;">
+            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px; direction:ltr;"><tr><td align="center" valign="middle" style="font-size:22px; text-align:center; vertical-align:middle; direction:ltr;">⚙️</td></tr></table>
             <div style="color:#f0f4ff; font-size:11px; font-weight:700; margin-bottom:3px; text-align:center;">מכשירי הרמה</div>
             <div style="color:#8a9bb8; font-size:10px; line-height:1.4; text-align:center;">מלגזה, מנוף קטן, קומפרסור ועוד</div>
           </td>
-          <td width="20%" align="center" valign="top" style="padding:0 4px;">
-            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px;"><tr><td align="center" valign="middle" style="font-size:22px; text-align:center; vertical-align:middle;">🏗️</td></tr></table>
+          <td width="20%" align="center" valign="top" style="padding:0 4px; direction:ltr;">
+            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px; direction:ltr;"><tr><td align="center" valign="middle" style="font-size:22px; text-align:center; vertical-align:middle; direction:ltr;">🏗️</td></tr></table>
             <div style="color:#f0f4ff; font-size:11px; font-weight:700; margin-bottom:3px; text-align:center;">עגורנים</div>
             <div style="color:#8a9bb8; font-size:10px; line-height:1.4; text-align:center;">עגורן צריח, ניד, משאית וכדומה</div>
           </td>
         </tr>
       </table>
-      {{/if}}
     </td>
   </tr>
 
@@ -192,7 +189,9 @@
                   <div style="color:#0d1f4c; font-size:14px; font-weight:700; margin-bottom:4px;">למה זה חשוב?</div>
                   <div style="color:#5a4a00; font-size:13px; line-height:1.6;">שמירה על בטיחות העובדים, מניעת תקלות, עמידה בדרישות החוק והימנעות מקנסות והפסקות עבודה.</div>
                 </td>
-                <td width="40" valign="top" align="center" style="padding-right:14px; font-size:28px;">🛡️</td>
+                <td width="40" valign="top" align="center" style="padding-right:14px; direction:ltr; text-align:center;">
+                  <table width="36" height="36" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto; direction:ltr;"><tr><td align="center" valign="middle" style="font-size:28px; text-align:center; vertical-align:middle; direction:ltr;">🛡️</td></tr></table>
+                </td>
               </tr>
             </table>
           </td>
@@ -209,8 +208,8 @@
                 <td valign="middle">
                   <table cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
                     <tr>
-                      <td width="40" align="center" valign="middle" style="padding-left:10px; text-align:center;">
-                        <table width="34" height="34" cellpadding="0" cellspacing="0" border="0" style="border:1.5px solid #c9a84c; border-radius:50%; background:#f7f9ff; margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:16px; text-align:center; vertical-align:middle;">👷</td></tr></table>
+                      <td width="40" align="center" valign="middle" style="padding-left:10px; text-align:center; direction:ltr;">
+                        <table width="34" height="34" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto; direction:ltr;"><tr><td align="center" valign="middle" style="font-size:26px; text-align:center; vertical-align:middle; direction:ltr;">👷</td></tr></table>
                       </td>
                       <td valign="middle">
                         <div style="color:#8a9bb8; font-size:11px; margin-bottom:2px;">מהנדס בודק</div>
@@ -221,8 +220,8 @@
                   {{#if license_number}}
                   <table cellpadding="0" cellspacing="0" border="0">
                     <tr>
-                      <td width="40" align="center" valign="middle" style="padding-left:10px; text-align:center;">
-                        <table width="34" height="34" cellpadding="0" cellspacing="0" border="0" style="border:1.5px solid #c9a84c; border-radius:50%; background:#f7f9ff; margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:16px; text-align:center; vertical-align:middle;">🪪</td></tr></table>
+                      <td width="40" align="center" valign="middle" style="padding-left:10px; text-align:center; direction:ltr;">
+                        <table width="34" height="34" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto; direction:ltr;"><tr><td align="center" valign="middle" style="font-size:26px; text-align:center; vertical-align:middle; direction:ltr;">🪪</td></tr></table>
                       </td>
                       <td valign="middle">
                         <div style="color:#8a9bb8; font-size:11px; margin-bottom:2px;">מספר רישיון</div>
@@ -238,8 +237,8 @@
                   <div style="color:#8a9bb8; font-size:11px; margin-bottom:6px; text-align:center;">התקשרו אלינו</div>
                   <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
                     <tr>
-                      <td width="50" valign="middle" align="center" style="text-align:center;">
-                        <table width="46" height="46" cellpadding="0" cellspacing="0" border="0" style="background:#c9a84c; border-radius:50%; margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:20px; text-align:center; vertical-align:middle;">📞</td></tr></table>
+                      <td width="50" valign="middle" align="center" style="text-align:center; direction:ltr;">
+                        <table width="46" height="46" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto; direction:ltr;"><tr><td align="center" valign="middle" style="font-size:26px; text-align:center; vertical-align:middle; direction:ltr;">📞</td></tr></table>
                       </td>
                       <td valign="middle" style="padding-right:10px;">
                         <div style="color:#0d1f4c; font-size:20px; font-weight:900; direction:ltr; white-space:nowrap;">{{engineer_phone}}</div>
@@ -261,7 +260,7 @@
   <tr>
     <td style="background:#f7f9ff; border-top:3px solid #c9a84c; padding:18px 24px; text-align:center;">
       <div style="font-family:Georgia,serif; font-style:italic; color:#0d1f4c; font-size:17px; font-weight:700; margin-bottom:8px;">בטיחות מתחילה בבדיקה!</div>
-      <div style="color:#c9a84c; font-size:20px;">♥</div>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" valign="middle" style="font-size:20px; color:#c9a84c; text-align:center; direction:ltr;">♥</td></tr></table>
       <div style="font-size:11px; color:#8a9bb8; margin-top:6px;">{{from_name|ReminderOCR}} — תזכורת אוטומטית, אין צורך להשיב</div>
     </td>
   </tr>

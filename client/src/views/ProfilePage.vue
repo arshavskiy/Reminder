@@ -142,39 +142,6 @@
               }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">תואר מקצועי</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.title"
-                class="info-input"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.title || "—"
-              }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">התמחות</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.expertise"
-                class="info-input"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.expertise || "—"
-              }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">מספר מ.ר.</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.mr_number"
-                class="info-input"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.mr_number || "—"
-              }}</span>
-            </div>
-            <div class="info-row">
               <span class="info-label">מספר מ.ג.</span>
               <n-input
                 v-if="editingEngineer"

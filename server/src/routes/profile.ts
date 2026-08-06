@@ -112,12 +112,18 @@ export function registerProfileRoutes(app: express.Application) {
     if (!ctx) return;
     if (!req.file) { res.status(400).json({ error: "no_file" }); return; }
 
-    const { spacesEnabled, uploadBufferToSpaces } = await import("../storage/spaces.js");
+    const { publicBucketEnabled, uploadBufferToPublicSpaces, spacesEnabled, uploadBufferToSpaces } = await import("../storage/spaces.js");
 
     let logoUrl: string;
-    if (spacesEnabled()) {
-      const ext = extname(req.file.originalname).toLowerCase() || ".png";
-      const key = `images/${ctx.userId}/logo_${Date.now()}${ext}`;
+    const ext = extname(req.file.originalname).toLowerCase() || ".png";
+    const key = `images/${ctx.userId}/logo_${Date.now()}${ext}`;
+
+    if (publicBucketEnabled()) {
+      // Upload to public bucket — URL served via Railway presigner proxy
+      await uploadBufferToPublicSpaces(req.file.buffer, key, req.file.mimetype);
+      const publicBase = (process.env.BUCKET_PUBLIC_URL ?? "").replace(/\/$/, "");
+      logoUrl = publicBase ? `${publicBase}/${key}` : `https://${process.env.BUCKET_PUBLIC_NAME}.${new URL(process.env.BUCKET_PUBLIC_ENDPOINT!).host}/${key}`;
+    } else if (spacesEnabled()) {
       logoUrl = await uploadBufferToSpaces(req.file.buffer, key, req.file.mimetype);
     } else {
       logoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
