@@ -8,7 +8,7 @@
       <n-gi v-for="t in templates" :key="t.id">
         <n-card hoverable :title="t.name" @click="select(t)" style="cursor: pointer">
           <template #header-extra>
-            <n-tag v-if="t.is_default" size="small" type="success">ברירת מחדל</n-tag>
+            <n-tag v-if="userDefaultTemplateId ? t.id === userDefaultTemplateId : t.is_default" size="small" type="success">ברירת מחדל</n-tag>
           </template>
           <p style="font-size: 13px; color: var(--text-secondary); margin: 0">
             {{ docTplName(t.doc_template_id) || "לכל סוגי המסמכים" }}
@@ -177,6 +177,7 @@ import type {DocTemplate, EmailTemplate} from "@shared/types.js";
 
 const templates = ref<EmailTemplate[]>([]);
 const docTemplates = ref<DocTemplate[]>([]);
+const userDefaultTemplateId = ref<string | null>(null);
 const showEdit = ref(false);
 const editing = ref<EmailTemplate | null>(null);
 const saving = ref(false);
@@ -207,12 +208,14 @@ function docTplName(id: string | null): string {
 }
 
 async function load() {
-  const [tplResult, docResult] = await Promise.allSettled([
+  const [tplResult, docResult, settingsResult] = await Promise.allSettled([
     api.emailTemplates.list(),
     api.docTemplates.list(),
+    api.userSettings.get(),
   ]);
   if (tplResult.status === "fulfilled") templates.value = tplResult.value;
   if (docResult.status === "fulfilled") docTemplates.value = docResult.value;
+  if (settingsResult.status === "fulfilled") userDefaultTemplateId.value = (settingsResult.value as any)?.default_email_template_id ?? null;
 }
 onMounted(() => {
   updateViewport();
