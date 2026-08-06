@@ -75,8 +75,8 @@ const { Resend } = await import("resend");
 const resend = new Resend(process.env.RESEND_API_KEY!);
 const settings = (await import("../settings.js")).getSettings();
 const from = settings.emailFromName
-  ? `${settings.emailFromName} <${settings.emailFrom || "noreply@handcoded.tech"}>`
-  : (settings.emailFrom || "noreply@handcoded.tech");
+  ? `${settings.emailFromName} <${settings.emailFrom || settings.smtpUser}>`
+  : (settings.emailFrom || settings.smtpUser);
 
 const result = await resend.emails.send({ from, to: recipient, subject, html });
 if (result.error) {

@@ -107,8 +107,8 @@ function useResend(): boolean {
 
 function formatFrom(settings: ReturnType<typeof getSettings>): string {
   return settings.emailFromName
-    ? `${settings.emailFromName} <${settings.emailFrom || settings.smtpUser || "noreply@example.com"}>`
-    : (settings.emailFrom || settings.smtpUser || "noreply@example.com");
+    ? `${settings.emailFromName} <${settings.emailFrom || settings.smtpUser}>`
+    : (settings.emailFrom || settings.smtpUser);
 }
 
 function tryObjectId(id: string | number): any {
