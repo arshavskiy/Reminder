@@ -453,6 +453,7 @@ export const api = {
     create: (body: Partial<EmailTemplate>) => post<EmailTemplate>("/email-templates", body),
     update: (id: string, body: Partial<EmailTemplate>) => put<EmailTemplate>(`/email-templates/${id}`, body),
     delete: (id: string) => del(`/email-templates/${id}`),
+    sendTest: (id: string, body: Record<string, string>) => post<{ success: boolean; error?: string }>(`/email-templates/${id}/send-test`, body),
     detectVars: (html: string) => post<{ vars: string[] }>("/email-templates/vars", { html }),
     preview: (html: string, subject: string, vars: Record<string, unknown>) =>
       post<{ html: string; subject: string }>("/email-templates/preview", { html, subject, vars }),

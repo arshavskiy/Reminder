@@ -280,13 +280,7 @@ async function sendTest() {
   try {
     const body: Record<string, string> = { to: sendTestEmail.value.trim() };
     if (sendTestReminderId.value) body.reminder_id = sendTestReminderId.value;
-    const res = await fetch(`/api/email-templates/${sendTestTemplateId.value}/send-test`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json() as { success: boolean; error?: string };
+    const data = await api.emailTemplates.sendTest(sendTestTemplateId.value!, body);
     if (data.success) {
       message.success("אימייל נשלח בהצלחה");
       showSendTest.value = false;
