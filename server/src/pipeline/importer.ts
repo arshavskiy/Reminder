@@ -680,9 +680,14 @@ export function normalizeExtractionFieldsForTemplate(
     /אביזרי\s*הרמה/i.test(rawText.split(/\r?\n/).slice(0, 5).join(" "));
   if (isAccessoryEquipment) {
     normalized.license_number = undefined;
-  } else if (supportsLicenseNumber && !isLikelyLicenseNumber(normalized.license_number)) {
-    const licenseNumber = extractLicenseNumber(rawText);
-    if (licenseNumber) normalized.license_number = licenseNumber;
+  } else if (supportsLicenseNumber) {
+    if (typeof normalized.license_number === "string" && isPostalCode(normalized.license_number, rawText)) {
+      normalized.license_number = undefined;
+    }
+    if (!isLikelyLicenseNumber(normalized.license_number)) {
+      const licenseNumber = extractLicenseNumber(rawText);
+      if (licenseNumber) normalized.license_number = licenseNumber;
+    }
   }
 
   const headerEquipmentDescription = extractEquipmentDescriptionFromHeader(rawText);
@@ -909,6 +914,16 @@ function isLikelyLicenseNumber(value: unknown): boolean {
   // Round thousands (1000, 2000, 3000 …) are load-capacity values, never license numbers
   if (/^\d+$/.test(v) && Number(v) % 1000 === 0) return false;
   return true;
+}
+
+function isPostalCode(value: string, rawText: string): boolean {
+  const v = value.trim();
+  if (!/^\d{7}$/.test(v)) return false;
+  const lines = rawText.split(/\r?\n/);
+  for (const line of lines) {
+    if (line.includes(v) && /מיקוד/i.test(line)) return true;
+  }
+  return false;
 }
 
 // Normalize reversed "145פנימי" → "פנימי 145" for consistent storage
