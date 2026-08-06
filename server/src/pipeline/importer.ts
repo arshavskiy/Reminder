@@ -675,7 +675,12 @@ export function normalizeExtractionFieldsForTemplate(
     if (contactEmail) normalized.contact_email = contactEmail;
   }
   const supportsLicenseNumber = template.fields.some((field) => field.key === "license_number");
-  if (supportsLicenseNumber && !isLikelyLicenseNumber(normalized.license_number)) {
+  const isAccessoryEquipment = /אביזרי\s*הרמה/i.test(normalized.checked_equipment ?? "") ||
+    /אביזרי\s*הרמה/i.test(normalized.equipment_description ?? "") ||
+    /אביזרי\s*הרמה/i.test(rawText.split(/\r?\n/).slice(0, 5).join(" "));
+  if (isAccessoryEquipment) {
+    normalized.license_number = undefined;
+  } else if (supportsLicenseNumber && !isLikelyLicenseNumber(normalized.license_number)) {
     const licenseNumber = extractLicenseNumber(rawText);
     if (licenseNumber) normalized.license_number = licenseNumber;
   }
