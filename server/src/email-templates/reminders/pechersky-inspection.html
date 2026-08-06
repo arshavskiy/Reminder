@@ -4,54 +4,84 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { margin: 0; padding: 24px; background: #f0f4f8; font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; color: #1a2540; }
-    .wrap { max-width: 600px; margin: 0 auto; border-radius: 14px; overflow: hidden; box-shadow: 0 6px 28px rgba(0,0,0,0.12); }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #f0f4f8; font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; color: #0d1f4c; padding: 20px 8px; }
+    .wrap { max-width: 600px; margin: 0 auto; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
 
-    /* Header */
-    .header { background: linear-gradient(135deg, #0d1f4c 0%, #1a3a7c 100%); padding: 32px 28px 24px; text-align: center; position: relative; }
-    .header-bell { font-size: 36px; margin-bottom: 10px; display: block; }
-    .header h1 { margin: 0 0 6px; color: #f5c842; font-size: 26px; font-weight: 800; letter-spacing: 0.5px; }
-    .header-sub { color: #cdd8f0; font-size: 15px; line-height: 1.5; margin: 0; }
-    .header-days { display: inline-block; background: #f5c842; color: #0d1f4c; border-radius: 999px; padding: 5px 18px; font-size: 14px; font-weight: 700; margin-top: 12px; }
+    /* ── Header ── */
+    .header { background: #0d1f4c; padding: 0; position: relative; overflow: hidden; }
+    .header-top { padding: 28px 28px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .header-text { flex: 1; }
+    .header-bell { font-size: 28px; margin-bottom: 8px; display: block; color: #c9a84c; }
+    .header-title { color: #ffffff; font-size: 30px; font-weight: 900; line-height: 1.1; margin-bottom: 10px; }
+    .header-title span { color: #c9a84c; }
+    .header-sub { color: #cdd8f0; font-size: 15px; line-height: 1.6; }
+    .header-graphic { flex-shrink: 0; width: 110px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 0; }
+    /* clipboard graphic */
+    .clipboard { background: #fff; border-radius: 10px; width: 90px; padding: 10px 10px 12px; box-shadow: 4px 4px 12px rgba(0,0,0,0.25); position: relative; margin-top: 8px; }
+    .clipboard-clip { background: #8a9bb8; width: 30px; height: 12px; border-radius: 6px 6px 0 0; margin: -16px auto 6px; }
+    .clipboard-row { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+    .clipboard-check { width: 16px; height: 16px; background: #c9a84c; border-radius: 3px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 900; flex-shrink: 0; }
+    .clipboard-line { height: 6px; background: #dde4f5; border-radius: 3px; flex: 1; }
+    .bell-badge { background: #c9a84c; color: #0d1f4c; font-size: 18px; font-weight: 900; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: -10px auto 0; z-index: 2; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
 
-    /* Info box */
-    .info-box { background: #f7f9ff; border: 1px solid #dde4f5; padding: 14px 20px; font-size: 13px; color: #3a4a6b; line-height: 1.6; text-align: center; }
+    /* gold divider line */
+    .gold-bar { height: 3px; background: linear-gradient(90deg, #c9a84c 0%, #e8c96d 50%, #c9a84c 100%); margin-top: 20px; }
 
-    /* Details */
-    .body { background: #ffffff; padding: 24px 28px; }
-    .section-title { background: #0d1f4c; color: #f5c842; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; padding: 8px 16px; border-radius: 6px; margin: 0 0 14px; display: block; }
-    .fields { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    .fields tr td { padding: 8px 10px; font-size: 14px; border-bottom: 1px solid #eef0f6; }
+    /* ── Info strip ── */
+    .info-strip { background: #f7f9ff; padding: 14px 24px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid #dde4f5; }
+    .info-icon { width: 42px; height: 42px; background: #0d1f4c; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .info-text { font-size: 13px; color: #3a4a6b; line-height: 1.6; }
+
+    /* ── Equipment section ── */
+    .eq-section { background: #0d1f4c; padding: 14px 20px 20px; }
+    .eq-title { color: #ffffff; font-size: 15px; font-weight: 700; text-align: center; margin-bottom: 16px; letter-spacing: 0.04em; }
+    .eq-grid { display: flex; justify-content: space-between; gap: 6px; }
+    .eq-item { flex: 1; text-align: center; }
+    .eq-icon-wrap { width: 48px; height: 48px; border: 2px solid #c9a84c; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; font-size: 22px; background: rgba(201,168,76,0.08); }
+    .eq-name { color: #f0f4ff; font-size: 11px; font-weight: 700; margin-bottom: 3px; }
+    .eq-sub { color: #8a9bb8; font-size: 10px; line-height: 1.4; }
+
+    /* ── Body ── */
+    .body { background: #ffffff; padding: 22px 24px; }
+
+    /* Details table */
+    .fields { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+    .fields tr td { padding: 9px 10px; font-size: 14px; border-bottom: 1px solid #eef0f6; }
     .fields tr:last-child td { border-bottom: none; }
-    .fields .lbl { color: #5a6c8a; text-align: right; width: 45%; }
-    .fields .val { color: #1a2540; font-weight: 600; text-align: left; }
-
-    /* Checklist items */
-    .checklist { list-style: none; padding: 0; margin: 0 0 20px; }
-    .checklist li { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 14px; color: #1a2540; border-bottom: 1px solid #eef0f6; }
-    .checklist li:last-child { border-bottom: none; }
-    .check-icon { width: 20px; height: 20px; background: #0d1f4c; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #f5c842; font-size: 13px; font-weight: 700; }
-
-    /* Body text */
-    .body-text { background: #fff8e6; border-right: 3px solid #f5c842; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 14px; color: #5a4000; margin: 0 0 20px; line-height: 1.6; }
-
-    /* Document link */
-    .doc-link-wrap { text-align: center; margin: 20px 0; }
-    .doc-link { display: inline-block; background: linear-gradient(135deg, #0d1f4c, #1a3a7c); color: #f5c842 !important; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 700; letter-spacing: 0.3px; }
+    .fields .lbl { color: #5a6c8a; text-align: right; width: 42%; font-size: 13px; }
+    .fields .val { color: #0d1f4c; font-weight: 700; text-align: left; }
 
     /* Why box */
-    .why-box { background: #f0f4ff; border: 1px solid #c8d4f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-size: 13px; color: #2c3e6b; line-height: 1.6; }
-    .why-box strong { display: block; margin-bottom: 4px; color: #0d1f4c; }
+    .why-box { background: #fffbee; border: 1px solid #e8c96d; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px; display: flex; gap: 14px; align-items: flex-start; }
+    .why-shield { font-size: 28px; flex-shrink: 0; margin-top: 2px; }
+    .why-text strong { display: block; color: #0d1f4c; font-size: 14px; margin-bottom: 4px; }
+    .why-text p { color: #5a4a00; font-size: 13px; line-height: 1.6; }
+
+    /* Body text */
+    .body-text { background: #f7f9ff; border-right: 3px solid #c9a84c; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 14px; color: #3a4a6b; margin: 0 0 18px; line-height: 1.6; }
+
+    /* Document link */
+    .doc-link-wrap { text-align: center; margin: 18px 0; }
+    .doc-link { display: inline-block; background: linear-gradient(135deg, #0d1f4c, #1a3a7c); color: #c9a84c !important; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-size: 15px; font-weight: 700; letter-spacing: 0.3px; }
 
     /* Contact */
-    .contact { background: #0d1f4c; border-radius: 10px; padding: 18px 22px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
-    .contact-name { color: #f5c842; font-size: 14px; font-weight: 700; }
-    .contact-sub { color: #cdd8f0; font-size: 12px; margin-top: 2px; }
-    .contact-phone { color: #f5c842; font-size: 20px; font-weight: 800; direction: ltr; }
+    .contact { background: #0d1f4c; border-radius: 12px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 0; flex-wrap: wrap; }
+    .contact-left { display: flex; flex-direction: column; gap: 6px; }
+    .contact-row { display: flex; align-items: center; gap: 10px; }
+    .contact-icon { width: 34px; height: 34px; border: 1.5px solid #c9a84c; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .contact-label { color: #8a9bb8; font-size: 11px; }
+    .contact-value { color: #ffffff; font-size: 14px; font-weight: 700; }
+    .contact-phone-wrap { display: flex; align-items: center; gap: 12px; }
+    .phone-circle { width: 50px; height: 50px; background: #c9a84c; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+    .phone-number { color: #c9a84c; font-size: 22px; font-weight: 900; direction: ltr; }
+    .phone-label { color: #8a9bb8; font-size: 11px; margin-bottom: 2px; }
 
     /* Footer */
-    .footer { background: #f7f9ff; border-top: 1px solid #dde4f5; padding: 16px 24px; text-align: center; font-size: 12px; color: #8a9bb8; }
-    .footer-sig { font-style: italic; color: #0d1f4c; font-weight: 600; margin-top: 4px; }
+    .footer { background: #f7f9ff; border-top: 3px solid #c9a84c; padding: 18px 24px; text-align: center; }
+    .footer-sig { font-family: 'Georgia', serif; font-style: italic; color: #0d1f4c; font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .footer-heart { color: #c9a84c; font-size: 18px; }
+    .footer-sub { font-size: 11px; color: #8a9bb8; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -59,25 +89,68 @@
 
     <!-- Header -->
     <div class="header">
-      <span class="header-bell">🔔</span>
-      <h1>תזכורת חשובה!</h1>
-      <p class="header-sub">
-        בעוד <strong>{{advance_days}} ימים</strong> יפוג תוקף<br>
-        של התסקיר הקיים.
-      </p>
-      <span class="header-days">{{advance_days}} ימים לפני תאריך היעד</span>
+      <div class="header-top">
+        <div class="header-text">
+          <span class="header-bell">🔔</span>
+          <div class="header-title">תזכורת חשובה!<br><span>בעוד {{advance_days}} ימים</span> יפוג תוקף</div>
+          <div class="header-sub">של התסקיר הקיים.</div>
+        </div>
+        <div class="header-graphic">
+          <div class="clipboard">
+            <div class="clipboard-clip"></div>
+            <div class="clipboard-row"><div class="clipboard-check">✓</div><div class="clipboard-line"></div></div>
+            <div class="clipboard-row"><div class="clipboard-check">✓</div><div class="clipboard-line"></div></div>
+            <div class="clipboard-row"><div class="clipboard-check">✓</div><div class="clipboard-line" style="width:60%"></div></div>
+          </div>
+          <div class="bell-badge">{{advance_days}}</div>
+        </div>
+      </div>
+      <div class="gold-bar"></div>
     </div>
 
-    <!-- Info bar -->
-    <div class="info-box">
-      עמידה בבדיקה התקופתית מבטיחה רציפות תוקף ועמידה בדרישות החוק ובטיחות מקסימלית.
+    <!-- Info strip -->
+    <div class="info-strip">
+      <div class="info-icon">📅</div>
+      <div class="info-text">עמידה בבדיקה התקופתית מבטיחה רציפות תוקף<br>ועמידה בדרישות החוק ובטיחות מקסימלית.</div>
+    </div>
+
+    <!-- Equipment grid -->
+    <div class="eq-section">
+      <div class="eq-title">פרטי הציוד הנבדקים</div>
+      <div class="eq-grid">
+        <div class="eq-item">
+          <div class="eq-icon-wrap">🪜</div>
+          <div class="eq-name">ציוד עבודה בגובה</div>
+          <div class="eq-sub">פיגומים, סולמות, במות הרמה</div>
+        </div>
+        <div class="eq-item">
+          <div class="eq-icon-wrap">⚡</div>
+          <div class="eq-name">מערכות חשמל</div>
+          <div class="eq-sub">לוחות חשמל, הארקות ובדיקות</div>
+        </div>
+        <div class="eq-item">
+          <div class="eq-icon-wrap">🔵</div>
+          <div class="eq-name">כלי לחץ</div>
+          <div class="eq-sub">מיכלי אוויר, דודים, צנרת לחץ</div>
+        </div>
+        <div class="eq-item">
+          <div class="eq-icon-wrap">⚙️</div>
+          <div class="eq-name">מכשירי הרמה</div>
+          <div class="eq-sub">מלגזה, מנוף קטן, קומפרסור ועוד</div>
+        </div>
+        <div class="eq-item">
+          <div class="eq-icon-wrap">🏗️</div>
+          <div class="eq-name">עגורנים</div>
+          <div class="eq-sub">עגורן צריח, ניד, משאית וכדומה</div>
+        </div>
+      </div>
     </div>
 
     <!-- Body -->
     <div class="body">
 
-      <!-- Details section -->
-      <span class="section-title">פרטי הציוד / הלקוח</span>
+      <!-- Details -->
+      {{#if client_company}}
       <table cellpadding="0" cellspacing="0" class="fields">
         {{#if client_company}}<tr><td class="lbl">לקוח / חברה</td><td class="val">{{client_company}}</td></tr>{{/if}}
         {{#if contact_person}}<tr><td class="lbl">איש קשר</td><td class="val">{{contact_person}}</td></tr>{{/if}}
@@ -86,27 +159,14 @@
         {{#if document_number}}<tr><td class="lbl">מספר מסמך</td><td class="val">{{document_number}}</td></tr>{{/if}}
         {{#if expiry_date}}<tr><td class="lbl">תאריך פקיעה</td><td class="val">{{expiry_date}}</td></tr>{{/if}}
         {{#if equipment_type}}<tr><td class="lbl">סוג ציוד</td><td class="val">{{equipment_type}}</td></tr>{{/if}}
-        {{#if manufacturer}}<tr><td class="lbl">יצרן</td><td class="val">{{manufacturer}}</td></tr>{{/if}}
-        {{#if model}}<tr><td class="lbl">דגם</td><td class="val">{{model}}</td></tr>{{/if}}
-        {{#if serial_number}}<tr><td class="lbl">מספר סידורי</td><td class="val">{{serial_number}}</td></tr>{{/if}}
-        {{#if amount}}<tr><td class="lbl">סכום</td><td class="val">{{amount}} {{currency}}</td></tr>{{/if}}
       </table>
-
-      <!-- Checklist -->
-      <span class="section-title">פרטי הציוד הנבדקים</span>
-      <ul class="checklist">
-        <li><span class="check-icon">✓</span> ציוד עבודה בגובה — פיגומים, סולמות, במות הרמה</li>
-        <li><span class="check-icon">✓</span> מכשירי הרמה — מלגזה, מנוף קטן, קומפרסור וגוד</li>
-        <li><span class="check-icon">✓</span> כלי לחץ — מיכלי אוויר, דודים, צנרת לחץ</li>
-        <li><span class="check-icon">✓</span> מערכות חשמל — לוחות חשמל, הארקות ובדיקות</li>
-        <li><span class="check-icon">✓</span> עגורנים — עגורן צריח, ניד, משאית וכרזמה</li>
-      </ul>
+      {{/if}}
 
       {{#if body}}
       <div class="body-text">{{body}}</div>
       {{/if}}
 
-      <!-- Document download link -->
+      <!-- Document download -->
       {{#if document_url}}
       <div class="doc-link-wrap">
         <a href="{{document_url}}" class="doc-link" target="_blank">📄 הורד את המסמך המצורף</a>
@@ -115,26 +175,47 @@
 
       <!-- Why important -->
       <div class="why-box">
-        <strong>למה זה חשוב?</strong>
-        שמירה על בטיחות העובדים, מניעת תקלות, עמידה בדרישות החוק והימנעות מקנסות והפסקות עבודה.
+        <div class="why-shield">🛡️</div>
+        <div class="why-text">
+          <strong>למה זה חשוב?</strong>
+          <p>שמירה על בטיחות העובדים, מניעת תקלות, עמידה בדרישות החוק והימנעות מקנסות והפסקות עבודה.</p>
+        </div>
       </div>
 
       <!-- Contact -->
       <div class="contact">
-        <div>
-          <div class="contact-name">👷 מהנדס בודק: {{from_name|מיכאל פצ׳רסקי}}</div>
-          <div class="contact-sub">מספר רישיון: 484590</div>
-          <div class="contact-sub" style="margin-top:6px;color:#a0b4d8">לפרטים נוספים</div>
+        <div class="contact-left">
+          <div class="contact-row">
+            <div class="contact-icon">👷</div>
+            <div>
+              <div class="contact-label">מהנדס בודק</div>
+              <div class="contact-value">{{from_name|מיכאל פצ׳רסקי}}</div>
+            </div>
+          </div>
+          <div class="contact-row">
+            <div class="contact-icon">🪪</div>
+            <div>
+              <div class="contact-label">מספר רישיון</div>
+              <div class="contact-value">484590</div>
+            </div>
+          </div>
         </div>
-        <div class="contact-phone">052-8195650</div>
+        <div class="contact-phone-wrap">
+          <div>
+            <div class="phone-label">לפרטים נוספים</div>
+            <div class="phone-number">052-8195650</div>
+          </div>
+          <div class="phone-circle">📞</div>
+        </div>
       </div>
 
     </div>
 
     <!-- Footer -->
     <div class="footer">
-      <div>{{from_name|ReminderOCR}} — תזכורת אוטומטית, אין צורך להשיב</div>
-      <div class="footer-sig">בטיחות מתחילה בבדיקה! ♥</div>
+      <div class="footer-sig">בטיחות מתחילה בבדיקה!</div>
+      <div class="footer-heart">♥</div>
+      <div class="footer-sub">{{from_name|ReminderOCR}} — תזכורת אוטומטית, אין צורך להשיב</div>
     </div>
 
   </div>

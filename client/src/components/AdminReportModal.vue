@@ -132,7 +132,12 @@ const clientFieldOptions = [
 const allFieldOptions = [...trackingFieldOptions, ...clientFieldOptions];
 const activeFieldOptions = computed(() => clientId.value ? clientFieldOptions : allFieldOptions);
 const allFieldKeys = computed(() => activeFieldOptions.value.map((f) => f.key));
-const selectedFields = ref<string[]>(allFieldKeys.value);
+
+const DEFAULT_FIELDS = [
+  "tracking_date", "tracking_phone", "tracking_checked", "tracking_license_number",
+  "tracking_notes", "tracking_relevant", "contact_person",
+];
+const selectedFields = ref<string[]>([...DEFAULT_FIELDS]);
 
 const yearOptions = Array.from({ length: 8 }, (_, i) => {
   const y = now.getFullYear() - 2 + i;
@@ -151,7 +156,7 @@ watch(() => props.show, async (open) => {
   if (!open) return;
   lastResult.value = null;
   clientId.value = null;
-  selectedFields.value = allFieldOptions.map((f) => f.key);
+  selectedFields.value = [...DEFAULT_FIELDS];
   if (clientOptions.value.length) return;
   loadingClients.value = true;
   try {
