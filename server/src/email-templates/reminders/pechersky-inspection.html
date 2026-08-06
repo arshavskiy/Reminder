@@ -1,274 +1,1251 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="he" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body, table, td { margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
-    body { background: #f0f4f8; }
-    img { border: 0; display: block; }
-  </style>
-</head>
-<body style="background:#f0f4f8; margin:0; padding:20px 0;">
-
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f4f8;">
-<tr><td align="center" style="padding:20px 8px;">
-
-<!-- OUTER WRAP -->
-<table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; border-radius:16px; overflow:hidden; box-shadow:0 8px 32px rgba(0,0,0,0.15);">
-
-  <!-- ═══ COMPANY BRAND BAR ═══ -->
-  <tr>
-    <td style="background:#ffffff; padding:16px 24px 12px 24px;">
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          {{#if comp_logo}}
-          <td width="80" align="center" valign="middle" style="padding-left:14px;">
-            <img src="{{comp_logo}}" alt="לוגו חברה" width="72" style="max-height:56px; width:auto; max-width:72px; display:block; margin:0 auto; border-radius:6px; object-fit:contain;" />
-          </td>
-          {{/if}}
-          <td valign="middle">
-            {{#if engineer_company}}<div style="color:#5a6c7d; font-size:12px; font-weight:700; margin-bottom:3px;">{{engineer_company}}</div>{{/if}}
-            {{#if company_exp}}<div style="color:#5a6c7d; font-size:12px; font-weight:500;">{{company_exp}}</div>{{/if}}
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-  <tr><td style="font-size:0; line-height:0; height:2px; background:#e8eaf0;">&nbsp;</td></tr>
-
-  <!-- ═══ HEADER ═══ -->
-  <tr>
-    <td style="background:#0d1f4c; padding:28px 28px 0 28px;">
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td valign="top" style="color:#fff;">
-            <div style="font-size:28px; color:#c9a84c; margin-bottom:6px;">🔔</div>
-            <div style="font-size:28px; font-weight:900; line-height:1.15; margin-bottom:10px;">
-              תזכורת חשובה!<br>
-              <span style="color:#c9a84c;">בעוד {{advance_days}} ימים</span> יפוג תוקף
-            </div>
-            <div style="color:#fff; font-size:28px; font-weight:900; line-height:1.15;">של התסקיר הקיים.</div>
-          </td>
-          <td width="110" valign="bottom" align="center" style="padding-top:8px;">
-            <table width="90" cellpadding="0" cellspacing="0" border="0" style="background:#fff; border-radius:10px; box-shadow:4px 4px 12px rgba(0,0,0,0.25); margin:0 auto;">
-              <tr><td align="center">
-                <div style="background:#8a9bb8; width:30px; height:12px; border-radius:6px 6px 0 0; margin:0 auto;"></div>
-              </td></tr>
-              <tr><td style="padding:8px 10px 10px;">
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:6px;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body,
+      table,
+      td {
+        margin: 0;
+        padding: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+      body {
+        background: #f0f4f8;
+      }
+      img {
+        border: 0;
+        display: block;
+      }
+    </style>
+  </head>
+  <body style="background: #f0f4f8; margin: 0; padding: 20px 0">
+    <table
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background: #f0f4f8"
+    >
+      <tr>
+        <td align="center" style="padding: 20px 8px">
+          <!-- OUTER WRAP -->
+          <table
+            width="600"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="
+              max-width: 600px;
+              border-radius: 16px;
+              overflow: hidden;
+              box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            "
+          >
+            <!-- ═══ COMPANY BRAND BAR ═══ -->
+            <tr>
+              <td style="background: #ffffff; padding: 16px 24px 12px 24px">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
                   <tr>
-                    <td width="16" style="background:#c9a84c; width:16px; height:16px; border-radius:3px; color:#fff; font-size:10px; font-weight:900; vertical-align:middle;">✓</td>
-                    <td style="padding-right:6px;"><div style="height:6px; background:#dde4f5; border-radius:3px;"></div></td>
+                    {{#if comp_logo}}
+                    <td
+                      width="80"
+                      align="center"
+                      valign="middle"
+                      style="padding-left: 14px"
+                    >
+                      <img
+                        src="{{comp_logo}}"
+                        alt="לוגו חברה"
+                        width="72"
+                        style="
+                          max-height: 56px;
+                          width: auto;
+                          max-width: 72px;
+                          display: block;
+                          margin: 0 auto;
+                          border-radius: 6px;
+                          object-fit: contain;
+                        "
+                      />
+                    </td>
+                    {{/if}}
+                    <td valign="middle">
+                      {{#if engineer_company}}
+                      <div
+                        style="
+                          color: #5a6c7d;
+                          font-size: 12px;
+                          font-weight: 700;
+                          margin-bottom: 3px;
+                        "
+                      >
+                        {{engineer_company}}
+                      </div>
+                      {{/if}} {{#if company_exp}}
+                      <div
+                        style="
+                          color: #5a6c7d;
+                          font-size: 12px;
+                          font-weight: 500;
+                        "
+                      >
+                        {{company_exp}}
+                      </div>
+                      {{/if}}
+                    </td>
                   </tr>
                 </table>
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:6px;">
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="
+                  font-size: 0;
+                  line-height: 0;
+                  height: 2px;
+                  background: #e8eaf0;
+                "
+              >
+                &nbsp;
+              </td>
+            </tr>
+
+            <!-- ═══ HEADER ═══ -->
+            <tr>
+              <td style="background: #0d1f4c; padding: 28px 28px 0 28px">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
                   <tr>
-                    <td width="16" style="background:#c9a84c; width:16px; height:16px; border-radius:3px; color:#fff; font-size:10px; font-weight:900; vertical-align:middle;">✓</td>
-                    <td style="padding-right:6px;"><div style="height:6px; background:#dde4f5; border-radius:3px;"></div></td>
+                    <td valign="top" style="color: #fff">
+                      <div
+                        style="
+                          font-size: 28px;
+                          color: #c9a84c;
+                          margin-bottom: 6px;
+                        "
+                      >
+                        🔔
+                      </div>
+                      <div
+                        style="
+                          font-size: 28px;
+                          font-weight: 900;
+                          line-height: 1.15;
+                          margin-bottom: 10px;
+                        "
+                      >
+                        תזכורת חשובה!<br />
+                        <span style="color: #c9a84c"
+                          >בעוד {{advance_days}} ימים</span
+                        >
+                        יפוג תוקף
+                      </div>
+                      <div
+                        style="
+                          color: #fff;
+                          font-size: 28px;
+                          font-weight: 900;
+                          line-height: 1.15;
+                        "
+                      >
+                        של התסקיר הקיים.
+                      </div>
+                    </td>
+                    <td
+                      width="110"
+                      valign="bottom"
+                      align="center"
+                      style="padding-top: 8px"
+                    >
+                      <table
+                        width="90"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                        style="
+                          background: #fff;
+                          border-radius: 10px;
+                          box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.25);
+                          margin: 0 auto;
+                        "
+                      >
+                        <tr>
+                          <td align="center">
+                            <div
+                              style="
+                                background: #8a9bb8;
+                                width: 30px;
+                                height: 12px;
+                                border-radius: 6px 6px 0 0;
+                                margin: 0 auto;
+                              "
+                            ></div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 8px 10px 10px">
+                            <table
+                              width="100%"
+                              cellpadding="0"
+                              cellspacing="0"
+                              border="0"
+                              style="margin-bottom: 6px"
+                            >
+                              <tr>
+                                <td
+                                  width="16"
+                                  style="
+                                    background: #c9a84c;
+                                    width: 16px;
+                                    height: 16px;
+                                    border-radius: 3px;
+                                    color: #fff;
+                                    font-size: 10px;
+                                    font-weight: 900;
+                                    vertical-align: middle;
+                                  "
+                                >
+                                  ✓
+                                </td>
+                                <td style="padding-right: 6px">
+                                  <div
+                                    style="
+                                      height: 6px;
+                                      background: #dde4f5;
+                                      border-radius: 3px;
+                                    "
+                                  ></div>
+                                </td>
+                              </tr>
+                            </table>
+                            <table
+                              width="100%"
+                              cellpadding="0"
+                              cellspacing="0"
+                              border="0"
+                              style="margin-bottom: 6px"
+                            >
+                              <tr>
+                                <td
+                                  width="16"
+                                  style="
+                                    background: #c9a84c;
+                                    width: 16px;
+                                    height: 16px;
+                                    border-radius: 3px;
+                                    color: #fff;
+                                    font-size: 10px;
+                                    font-weight: 900;
+                                    vertical-align: middle;
+                                  "
+                                >
+                                  ✓
+                                </td>
+                                <td style="padding-right: 6px">
+                                  <div
+                                    style="
+                                      height: 6px;
+                                      background: #dde4f5;
+                                      border-radius: 3px;
+                                    "
+                                  ></div>
+                                </td>
+                              </tr>
+                            </table>
+                            <table
+                              width="70%"
+                              cellpadding="0"
+                              cellspacing="0"
+                              border="0"
+                            >
+                              <tr>
+                                <td
+                                  width="16"
+                                  style="
+                                    background: #c9a84c;
+                                    width: 16px;
+                                    height: 16px;
+                                    border-radius: 3px;
+                                    color: #fff;
+                                    font-size: 10px;
+                                    font-weight: 900;
+                                    vertical-align: middle;
+                                  "
+                                >
+                                  ✓
+                                </td>
+                                <td style="padding-right: 6px">
+                                  <div
+                                    style="
+                                      height: 6px;
+                                      background: #dde4f5;
+                                      border-radius: 3px;
+                                    "
+                                  ></div>
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                      <div
+                        style="
+                          background: #c9a84c;
+                          color: #0d1f4c;
+                          font-size: 16px;
+                          font-weight: 900;
+                          width: 34px;
+                          height: 34px;
+                          border-radius: 50%;
+                          line-height: 34px;
+                          margin: -12px auto 0;
+                          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                        "
+                      >
+                        {{advance_days}}
+                      </div>
+                    </td>
                   </tr>
                 </table>
-                <table width="70%" cellpadding="0" cellspacing="0" border="0">
+              </td>
+            </tr>
+            <!-- Gold bar -->
+            <tr>
+              <td
+                style="
+                  background: linear-gradient(90deg, #c9a84c, #e8c96d, #c9a84c);
+                  height: 3px;
+                  font-size: 0;
+                  line-height: 0;
+                "
+              >
+                &nbsp;
+              </td>
+            </tr>
+
+            <!-- ═══ INFO STRIP ═══ -->
+            <tr>
+              <td
+                style="
+                  background: #f7f9ff;
+                  border-bottom: 1px solid #dde4f5;
+                  padding: 14px 24px;
+                "
+              >
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
                   <tr>
-                    <td width="16" style="background:#c9a84c; width:16px; height:16px; border-radius:3px; color:#fff; font-size:10px; font-weight:900; vertical-align:middle;">✓</td>
-                    <td style="padding-right:6px;"><div style="height:6px; background:#dde4f5; border-radius:3px;"></div></td>
+                    <td
+                      valign="middle"
+                      style="
+                        font-size: 15px;
+                        color: #3a4a6b;
+                        line-height: 1.7;
+                        font-weight: 500;
+                      "
+                    >
+                      עמידה בבדיקה התקופתית מבטיחה רציפות תוקף<br />ועמידה
+                      בדרישות החוק ובטיחות מקסימלית.
+                    </td>
+                    <td
+                      width="50"
+                      valign="middle"
+                      align="center"
+                      style="padding-right: 14px"
+                    >
+                      <table
+                        width="42"
+                        height="42"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                        style="
+                          background: #0d1f4c;
+                          border-radius: 8px;
+                          margin: 0 auto;
+                        "
+                      >
+                        <tr>
+                          <td
+                            align="center"
+                            valign="middle"
+                            style="font-size: 20px; vertical-align: middle"
+                          >
+                            📅
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
                   </tr>
                 </table>
-              </td></tr>
-            </table>
-            <div style="background:#c9a84c; color:#0d1f4c; font-size:16px; font-weight:900; width:34px; height:34px; border-radius:50%; line-height:34px; margin:-12px auto 0; box-shadow:0 2px 8px rgba(0,0,0,0.3);">{{advance_days}}</div>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-  <!-- Gold bar -->
-  <tr>
-    <td style="background:linear-gradient(90deg,#c9a84c,#e8c96d,#c9a84c); height:3px; font-size:0; line-height:0;">&nbsp;</td>
-  </tr>
+              </td>
+            </tr>
 
-  <!-- ═══ INFO STRIP ═══ -->
-  <tr>
-    <td style="background:#f7f9ff; border-bottom:1px solid #dde4f5; padding:14px 24px;">
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td valign="middle" style="font-size:15px; color:#3a4a6b; line-height:1.7; font-weight:500;">
-            עמידה בבדיקה התקופתית מבטיחה רציפות תוקף<br>ועמידה בדרישות החוק ובטיחות מקסימלית.
-          </td>
-          <td width="50" valign="middle" align="center" style="padding-right:14px;">
-            <table width="42" height="42" cellpadding="0" cellspacing="0" border="0" style="background:#0d1f4c; border-radius:8px; margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:20px; vertical-align:middle;">📅</td></tr></table>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-
-  <!-- ═══ EQUIPMENT GRID ═══ -->
-  <tr>
-    <td style="background:#0d1f4c; padding:14px 20px 20px;">
-      <div style="color:#fff; font-size:15px; font-weight:700; margin-bottom:16px; letter-spacing:0.04em;">פרטי הציוד הנבדקים</div>
-      {{#if equipment_type}}
-      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:12px;">
-        <tr>
-          <td align="center" style="padding:0 20px 6px;">
-            <div style="background:rgba(201,168,76,0.12); border:2px solid #c9a84c; border-radius:12px; padding:12px 24px;">
-              <div style="color:#f0f4ff; font-size:16px; font-weight:900; letter-spacing:0.02em;">🔧 {{equipment_type}}</div>
-            </div>
-          </td>
-        </tr>
-      </table>
-      {{/if}}
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td width="20%" align="center" valign="top" style="padding:0 4px;">
-            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px;"><tr><td align="center" valign="middle" style="font-size:22px; vertical-align:middle;">🪜</td></tr></table>
-            <div style="color:#f0f4ff; font-size:11px; font-weight:700; margin-bottom:3px;">ציוד עבודה בגובה</div>
-            <div style="color:#8a9bb8; font-size:10px; line-height:1.4;">פיגומים, סולמות, במות הרמה</div>
-          </td>
-          <td width="20%" align="center" valign="top" style="padding:0 4px;">
-            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px;"><tr><td align="center" valign="middle" style="font-size:22px; vertical-align:middle;">⚡</td></tr></table>
-            <div style="color:#f0f4ff; font-size:11px; font-weight:700; margin-bottom:3px;">מערכות חשמל</div>
-            <div style="color:#8a9bb8; font-size:10px; line-height:1.4;">לוחות חשמל, הארקות ובדיקות</div>
-          </td>
-          <td width="20%" align="center" valign="top" style="padding:0 4px;">
-            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px;"><tr><td align="center" valign="middle" style="font-size:22px; vertical-align:middle;">🔵</td></tr></table>
-            <div style="color:#f0f4ff; font-size:11px; font-weight:700; margin-bottom:3px;">כלי לחץ</div>
-            <div style="color:#8a9bb8; font-size:10px; line-height:1.4;">מיכלי אוויר, דודים, צנרת לחץ</div>
-          </td>
-          <td width="20%" align="center" valign="top" style="padding:0 4px;">
-            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px;"><tr><td align="center" valign="middle" style="font-size:22px; vertical-align:middle;">⚙️</td></tr></table>
-            <div style="color:#f0f4ff; font-size:11px; font-weight:700; margin-bottom:3px;">מכשירי הרמה</div>
-            <div style="color:#8a9bb8; font-size:10px; line-height:1.4;">מלגזה, מנוף קטן, קומפרסור ועוד</div>
-          </td>
-          <td width="20%" align="center" valign="top" style="padding:0 4px;">
-            <table width="52" height="52" cellpadding="0" cellspacing="0" border="0" style="border:2px solid #c9a84c; border-radius:50%; background:rgba(201,168,76,0.08); margin:0 auto 8px;"><tr><td align="center" valign="middle" style="font-size:22px; vertical-align:middle;">🏗️</td></tr></table>
-            <div style="color:#f0f4ff; font-size:11px; font-weight:700; margin-bottom:3px;">עגורנים</div>
-            <div style="color:#8a9bb8; font-size:10px; line-height:1.4;">עגורן צריח, ניד, משאית וכדומה</div>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-
-  <!-- ═══ BODY ═══ -->
-  <tr>
-    <td style="background:#ffffff; padding:22px 24px;">
-
-      <!-- Details table (conditional) -->
-      {{#if client_company}}
-      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:18px; border-collapse:collapse;">
-        {{#if client_company}}<tr><td style="padding:9px 10px; font-size:13px; color:#5a6c8a; border-bottom:1px solid #eef0f6; width:42%; text-align:right;">לקוח / חברה</td><td style="padding:9px 10px; font-size:14px; color:#0d1f4c; font-weight:700; border-bottom:1px solid #eef0f6; text-align:left;">{{client_company}}</td></tr>{{/if}}
-        {{#if contact_person}}<tr><td style="padding:9px 10px; font-size:13px; color:#5a6c8a; border-bottom:1px solid #eef0f6; text-align:right;">איש קשר</td><td style="padding:9px 10px; font-size:14px; color:#0d1f4c; font-weight:700; border-bottom:1px solid #eef0f6; text-align:left;">{{contact_person}}</td></tr>{{/if}}
-        {{#if contact_phone}}<tr><td style="padding:9px 10px; font-size:13px; color:#5a6c8a; border-bottom:1px solid #eef0f6; text-align:right;">טלפון</td><td style="padding:9px 10px; font-size:14px; color:#0d1f4c; font-weight:700; border-bottom:1px solid #eef0f6; text-align:left;">{{contact_phone}}</td></tr>{{/if}}
-        {{#if contract_number}}<tr><td style="padding:9px 10px; font-size:13px; color:#5a6c8a; border-bottom:1px solid #eef0f6; text-align:right;">מספר חוזה</td><td style="padding:9px 10px; font-size:14px; color:#0d1f4c; font-weight:700; border-bottom:1px solid #eef0f6; text-align:left;">{{contract_number}}</td></tr>{{/if}}
-        {{#if document_number}}<tr><td style="padding:9px 10px; font-size:13px; color:#5a6c8a; border-bottom:1px solid #eef0f6; text-align:right;">מספר מסמך</td><td style="padding:9px 10px; font-size:14px; color:#0d1f4c; font-weight:700; border-bottom:1px solid #eef0f6; text-align:left;">{{document_number}}</td></tr>{{/if}}
-        {{#if expiry_date}}<tr><td style="padding:9px 10px; font-size:13px; color:#5a6c8a; border-bottom:1px solid #eef0f6; text-align:right;">תאריך פקיעה</td><td style="padding:9px 10px; font-size:14px; color:#0d1f4c; font-weight:700; border-bottom:1px solid #eef0f6; text-align:left;">{{expiry_date}}</td></tr>{{/if}}
-        {{#if equipment_type}}<tr><td style="padding:9px 10px; font-size:13px; color:#5a6c8a; text-align:right;">סוג ציוד</td><td style="padding:9px 10px; font-size:14px; color:#0d1f4c; font-weight:700; text-align:left;">{{equipment_type}}</td></tr>{{/if}}
-      </table>
-      {{/if}}
-
-      {{#if body}}
-      <div style="background:#f7f9ff; border-right:3px solid #c9a84c; padding:12px 16px; border-radius:0 8px 8px 0; font-size:14px; color:#3a4a6b; margin-bottom:18px; line-height:1.6;">{{body}}</div>
-      {{/if}}
-
-      {{#if document_url}}
-      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:18px;">
-        <tr><td align="center">
-          <a href="{{document_url}}" target="_blank" style="display:inline-block; background:linear-gradient(135deg,#0d1f4c,#1a3a7c); color:#c9a84c; text-decoration:none; padding:12px 32px; border-radius:8px; font-size:15px; font-weight:700; letter-spacing:0.3px;">📄 הורד את המסמך המצורף</a>
-        </td></tr>
-      </table>
-      {{/if}}
-
-      <!-- Why box -->
-      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fffbee; border:1px solid #e8c96d; border-radius:10px; margin-bottom:18px;">
-        <tr>
-          <td style="padding:14px 18px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td valign="top">
-                  <div style="color:#0d1f4c; font-size:14px; font-weight:700; margin-bottom:4px;">למה זה חשוב?</div>
-                  <div style="color:#5a4a00; font-size:13px; line-height:1.6;">שמירה על בטיחות העובדים, מניעת תקלות, עמידה בדרישות החוק והימנעות מקנסות והפסקות עבודה.</div>
-                </td>
-                <td width="40" valign="top" align="center" style="padding-right:14px;">
-                  <table width="36" height="36" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:28px; vertical-align:middle;">🛡️</td></tr></table>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Contact box -->
-      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #dde4f5; border-radius:12px;">
-        <tr>
-          <td style="padding:18px 20px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <!-- Engineer info (right) -->
-                <td valign="middle">
-                  <table cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
-                    <tr>
-                      <td width="40" align="center" valign="middle" style="padding-left:10px;">
-                        <table width="34" height="34" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:26px; vertical-align:middle;">👷</td></tr></table>
-                      </td>
-                      <td valign="middle">
-                        <div style="color:#8a9bb8; font-size:11px; margin-bottom:2px;">מהנדס בודק</div>
-                        <div style="color:#0d1f4c; font-size:14px; font-weight:700;">{{engineer_name}}</div>
-                      </td>
-                    </tr>
-                  </table>
-                  {{#if license_number}}
-                  <table cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td width="40" align="center" valign="middle" style="padding-left:10px;">
-                        <table width="34" height="34" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:26px; vertical-align:middle;">🪪</td></tr></table>
-                      </td>
-                      <td valign="middle">
-                        <div style="color:#8a9bb8; font-size:11px; margin-bottom:2px;">מספר רישיון</div>
-                        <div style="color:#0d1f4c; font-size:14px; font-weight:700;">{{license_number}}</div>
-                      </td>
-                    </tr>
-                  </table>
-                  {{/if}}
-                </td>
-                <!-- Phone (left) -->
-                {{#if engineer_phone}}
-                <td width="180" valign="middle" align="center" style="">
-                  <div style="color:#8a9bb8; font-size:11px; margin-bottom:6px;">התקשרו אלינו</div>
-                  <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
-                    <tr>
-                      <td width="50" valign="middle" align="center" style="">
-                        <table width="46" height="46" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:26px; vertical-align:middle;">📞</td></tr></table>
-                      </td>
-                      <td valign="middle" style="padding-right:10px;">
-                        <div style="color:#0d1f4c; font-size:20px; font-weight:900; white-space:nowrap;">{{engineer_phone}}</div>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
+            <!-- ═══ EQUIPMENT GRID ═══ -->
+            <tr>
+              <td style="background: #0d1f4c; padding: 14px 20px 20px">
+                <div
+                  style="
+                    color: #fff;
+                    font-size: 15px;
+                    font-weight: 700;
+                    margin-bottom: 16px;
+                    letter-spacing: 0.04em;
+                  "
+                >
+                  פרטי הציוד הנבדקים
+                </div>
+                {{#if equipment_type}}
+                <table
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="margin-bottom: 12px"
+                >
+                  <tr>
+                    <td align="center" style="padding: 0 20px 6px">
+                      <div
+                        style="
+                          background: rgba(201, 168, 76, 0.12);
+                          border: 2px solid #c9a84c;
+                          border-radius: 12px;
+                          padding: 12px 24px;
+                        "
+                      >
+                        <div
+                          style="
+                            color: #f0f4ff;
+                            font-size: 16px;
+                            font-weight: 900;
+                            letter-spacing: 0.02em;
+                          "
+                        >
+                          🔧 {{equipment_type}}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </table>
                 {{/if}}
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td
+                      width="20%"
+                      align="center"
+                      valign="top"
+                      style="padding: 0 4px"
+                    >
+                      <table
+                        width="52"
+                        height="52"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                        style="
+                          border: 2px solid #c9a84c;
+                          border-radius: 50%;
+                          background: rgba(201, 168, 76, 0.08);
+                          margin: 0 auto 8px;
+                        "
+                      >
+                        <tr>
+                          <td
+                            align="center"
+                            valign="middle"
+                            style="font-size: 22px; vertical-align: middle"
+                          >
+                            🪜
+                          </td>
+                        </tr>
+                      </table>
+                      <div
+                        style="
+                          color: #f0f4ff;
+                          font-size: 11px;
+                          font-weight: 700;
+                          margin-bottom: 3px;
+                        "
+                      >
+                        ציוד עבודה בגובה
+                      </div>
+                      <div
+                        style="
+                          color: #8a9bb8;
+                          font-size: 10px;
+                          line-height: 1.4;
+                        "
+                      >
+                        פיגומים, סולמות, במות הרמה
+                      </div>
+                    </td>
+                    <td
+                      width="20%"
+                      align="center"
+                      valign="top"
+                      style="padding: 0 4px"
+                    >
+                      <table
+                        width="52"
+                        height="52"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                        style="
+                          border: 2px solid #c9a84c;
+                          border-radius: 50%;
+                          background: rgba(201, 168, 76, 0.08);
+                          margin: 0 auto 8px;
+                        "
+                      >
+                        <tr>
+                          <td
+                            align="center"
+                            valign="middle"
+                            style="font-size: 22px; vertical-align: middle"
+                          >
+                            ⚡
+                          </td>
+                        </tr>
+                      </table>
+                      <div
+                        style="
+                          color: #f0f4ff;
+                          font-size: 11px;
+                          font-weight: 700;
+                          margin-bottom: 3px;
+                        "
+                      >
+                        מערכות חשמל
+                      </div>
+                      <div
+                        style="
+                          color: #8a9bb8;
+                          font-size: 10px;
+                          line-height: 1.4;
+                        "
+                      >
+                        לוחות חשמל, הארקות ובדיקות
+                      </div>
+                    </td>
+                    <td
+                      width="20%"
+                      align="center"
+                      valign="top"
+                      style="padding: 0 4px"
+                    >
+                      <table
+                        width="52"
+                        height="52"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                        style="
+                          border: 2px solid #c9a84c;
+                          border-radius: 50%;
+                          background: rgba(201, 168, 76, 0.08);
+                          margin: 0 auto 8px;
+                        "
+                      >
+                        <tr>
+                          <td
+                            align="center"
+                            valign="middle"
+                            style="font-size: 22px; vertical-align: middle"
+                          >
+                            🔵
+                          </td>
+                        </tr>
+                      </table>
+                      <div
+                        style="
+                          color: #f0f4ff;
+                          font-size: 11px;
+                          font-weight: 700;
+                          margin-bottom: 3px;
+                        "
+                      >
+                        כלי לחץ
+                      </div>
+                      <div
+                        style="
+                          color: #8a9bb8;
+                          font-size: 10px;
+                          line-height: 1.4;
+                        "
+                      >
+                        מיכלי אוויר, דודים, צנרת לחץ
+                      </div>
+                    </td>
+                    <td
+                      width="20%"
+                      align="center"
+                      valign="top"
+                      style="padding: 0 4px"
+                    >
+                      <table
+                        width="52"
+                        height="52"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                        style="
+                          border: 2px solid #c9a84c;
+                          border-radius: 50%;
+                          background: rgba(201, 168, 76, 0.08);
+                          margin: 0 auto 8px;
+                        "
+                      >
+                        <tr>
+                          <td
+                            align="center"
+                            valign="middle"
+                            style="font-size: 22px; vertical-align: middle"
+                          >
+                            ⚙️
+                          </td>
+                        </tr>
+                      </table>
+                      <div
+                        style="
+                          color: #f0f4ff;
+                          font-size: 11px;
+                          font-weight: 700;
+                          margin-bottom: 3px;
+                        "
+                      >
+                        מכשירי הרמה
+                      </div>
+                      <div
+                        style="
+                          color: #8a9bb8;
+                          font-size: 10px;
+                          line-height: 1.4;
+                        "
+                      >
+                        מלגזה, מנוף קטן, קומפרסור ועוד
+                      </div>
+                    </td>
+                    <td
+                      width="20%"
+                      align="center"
+                      valign="top"
+                      style="padding: 0 4px"
+                    >
+                      <table
+                        width="52"
+                        height="52"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                        style="
+                          border: 2px solid #c9a84c;
+                          border-radius: 50%;
+                          background: rgba(201, 168, 76, 0.08);
+                          margin: 0 auto 8px;
+                        "
+                      >
+                        <tr>
+                          <td
+                            align="center"
+                            valign="middle"
+                            style="font-size: 22px; vertical-align: middle"
+                          >
+                            🏗️
+                          </td>
+                        </tr>
+                      </table>
+                      <div
+                        style="
+                          color: #f0f4ff;
+                          font-size: 11px;
+                          font-weight: 700;
+                          margin-bottom: 3px;
+                        "
+                      >
+                        עגורנים
+                      </div>
+                      <div
+                        style="
+                          color: #8a9bb8;
+                          font-size: 10px;
+                          line-height: 1.4;
+                        "
+                      >
+                        עגורן צריח, ניד, משאית וכדומה
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
 
-    </td>
-  </tr>
+            <!-- ═══ BODY ═══ -->
+            <tr>
+              <td style="background: #ffffff; padding: 22px 24px">
+                <!-- Details table (conditional) -->
+                <table
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="margin-bottom: 18px; border-collapse: collapse"
+                >
+                  {{#if client_company}}
+                  <tr>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 13px;
+                        color: #5a6c8a;
+                        border-bottom: 1px solid #eef0f6;
+                        width: 42%;
+                        text-align: right;
+                      "
+                    >
+                      לקוח / חברה
+                    </td>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 14px;
+                        color: #0d1f4c;
+                        font-weight: 700;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: left;
+                      "
+                    >
+                      {{client_company}}
+                    </td>
+                  </tr>
+                  {{/if}} {{#if contact_person}}
+                  <tr>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 13px;
+                        color: #5a6c8a;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: right;
+                      "
+                    >
+                      איש קשר
+                    </td>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 14px;
+                        color: #0d1f4c;
+                        font-weight: 700;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: left;
+                      "
+                    >
+                      {{contact_person}}
+                    </td>
+                  </tr>
+                  {{/if}} {{#if contact_phone}}
+                  <tr>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 13px;
+                        color: #5a6c8a;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: right;
+                      "
+                    >
+                      טלפון
+                    </td>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 14px;
+                        color: #0d1f4c;
+                        font-weight: 700;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: left;
+                      "
+                    >
+                      {{contact_phone}}
+                    </td>
+                  </tr>
+                  {{/if}} {{#if contract_number}}
+                  <tr>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 13px;
+                        color: #5a6c8a;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: right;
+                      "
+                    >
+                      מספר חוזה
+                    </td>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 14px;
+                        color: #0d1f4c;
+                        font-weight: 700;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: left;
+                      "
+                    >
+                      {{contract_number}}
+                    </td>
+                  </tr>
+                  {{/if}} {{#if document_number}}
+                  <tr>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 13px;
+                        color: #5a6c8a;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: right;
+                      "
+                    >
+                      מספר מסמך
+                    </td>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 14px;
+                        color: #0d1f4c;
+                        font-weight: 700;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: left;
+                      "
+                    >
+                      {{document_number}}
+                    </td>
+                  </tr>
+                  {{/if}} {{#if expiry_date}}
+                  <tr>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 13px;
+                        color: #5a6c8a;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: right;
+                      "
+                    >
+                      תאריך פקיעה
+                    </td>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 14px;
+                        color: #0d1f4c;
+                        font-weight: 700;
+                        border-bottom: 1px solid #eef0f6;
+                        text-align: left;
+                      "
+                    >
+                      {{expiry_date}}
+                    </td>
+                  </tr>
+                  {{/if}} {{#if equipment_type}}
+                  <tr>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 13px;
+                        color: #5a6c8a;
+                        text-align: right;
+                      "
+                    >
+                      סוג ציוד
+                    </td>
+                    <td
+                      style="
+                        padding: 9px 10px;
+                        font-size: 14px;
+                        color: #0d1f4c;
+                        font-weight: 700;
+                        text-align: left;
+                      "
+                    >
+                      {{equipment_type}}
+                    </td>
+                  </tr>
+                  {{/if}}
+                </table>
 
-  <!-- ═══ FOOTER ═══ -->
-  <tr>
-    <td style="background:#f7f9ff; border-top:3px solid #c9a84c; padding:18px 24px;">
-      <div style="font-family:Georgia,serif; font-style:italic; color:#0d1f4c; font-size:17px; font-weight:700; margin-bottom:8px;">בטיחות מתחילה בבדיקה!</div>
-      <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" valign="middle" style="font-size:20px; color:#c9a84c;">♥</td></tr></table>
-      <div style="font-size:11px; color:#8a9bb8; margin-top:6px;">{{from_name|ReminderOCR}} — תזכורת אוטומטית, אין צורך להשיב</div>
-    </td>
-  </tr>
+                {{#if body}}
+                <div
+                  style="
+                    background: #f7f9ff;
+                    border-right: 3px solid #c9a84c;
+                    padding: 12px 16px;
+                    border-radius: 0 8px 8px 0;
+                    font-size: 14px;
+                    color: #3a4a6b;
+                    margin-bottom: 18px;
+                    line-height: 1.6;
+                  "
+                >
+                  {{body}}
+                </div>
+                {{/if}} {{#if document_url}}
+                <table
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="margin-bottom: 18px"
+                >
+                  <tr>
+                    <td align="center">
+                      <a
+                        href="{{document_url}}"
+                        target="_blank"
+                        style="
+                          display: inline-block;
+                          background: linear-gradient(135deg, #0d1f4c, #1a3a7c);
+                          color: #c9a84c;
+                          text-decoration: none;
+                          padding: 12px 32px;
+                          border-radius: 8px;
+                          font-size: 15px;
+                          font-weight: 700;
+                          letter-spacing: 0.3px;
+                        "
+                        >📄 הורד את המסמך המצורף</a
+                      >
+                    </td>
+                  </tr>
+                </table>
+                {{/if}}
 
-</table>
+                <!-- Why box -->
+                <table
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="
+                    background: #fffbee;
+                    border: 1px solid #e8c96d;
+                    border-radius: 10px;
+                    margin-bottom: 18px;
+                  "
+                >
+                  <tr>
+                    <td style="padding: 14px 18px">
+                      <table
+                        width="100%"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                      >
+                        <tr>
+                          <td valign="top">
+                            <div
+                              style="
+                                color: #0d1f4c;
+                                font-size: 14px;
+                                font-weight: 700;
+                                margin-bottom: 4px;
+                              "
+                            >
+                              למה זה חשוב?
+                            </div>
+                            <div
+                              style="
+                                color: #5a4a00;
+                                font-size: 13px;
+                                line-height: 1.6;
+                              "
+                            >
+                              שמירה על בטיחות העובדים, מניעת תקלות, עמידה
+                              בדרישות החוק והימנעות מקנסות והפסקות עבודה.
+                            </div>
+                          </td>
+                          <td
+                            width="40"
+                            valign="top"
+                            align="center"
+                            style="padding-right: 14px"
+                          >
+                            <table
+                              width="36"
+                              height="36"
+                              cellpadding="0"
+                              cellspacing="0"
+                              border="0"
+                              style="margin: 0 auto"
+                            >
+                              <tr>
+                                <td
+                                  align="center"
+                                  valign="middle"
+                                  style="
+                                    font-size: 28px;
+                                    vertical-align: middle;
+                                  "
+                                >
+                                  🛡️
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
 
-</td></tr>
-</table>
+                <!-- Contact box -->
+                <table
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="border: 1px solid #dde4f5; border-radius: 12px"
+                >
+                  <tr>
+                    <td style="padding: 18px 20px">
+                      <table
+                        width="100%"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                      >
+                        <tr>
+                          <!-- Engineer info (right) -->
+                          <td valign="middle">
+                            <table
+                              cellpadding="0"
+                              cellspacing="0"
+                              border="0"
+                              style="margin-bottom: 10px"
+                            >
+                              <tr>
+                                <td
+                                  width="40"
+                                  align="center"
+                                  valign="middle"
+                                  style="padding-left: 10px"
+                                >
+                                  <table
+                                    width="34"
+                                    height="34"
+                                    cellpadding="0"
+                                    cellspacing="0"
+                                    border="0"
+                                    style="margin: 0 auto"
+                                  >
+                                    <tr>
+                                      <td
+                                        align="center"
+                                        valign="middle"
+                                        style="
+                                          font-size: 26px;
+                                          vertical-align: middle;
+                                        "
+                                      >
+                                        👷
+                                      </td>
+                                    </tr>
+                                  </table>
+                                </td>
+                                <td valign="middle">
+                                  <div
+                                    style="
+                                      color: #8a9bb8;
+                                      font-size: 11px;
+                                      margin-bottom: 2px;
+                                    "
+                                  >
+                                    מהנדס בודק
+                                  </div>
+                                  <div
+                                    style="
+                                      color: #0d1f4c;
+                                      font-size: 14px;
+                                      font-weight: 700;
+                                    "
+                                  >
+                                    {{engineer_name}}
+                                  </div>
+                                </td>
+                              </tr>
+                            </table>
+                            {{#if license_number}}
+                            <table cellpadding="0" cellspacing="0" border="0">
+                              <tr>
+                                <td
+                                  width="40"
+                                  align="center"
+                                  valign="middle"
+                                  style="padding-left: 10px"
+                                >
+                                  <table
+                                    width="34"
+                                    height="34"
+                                    cellpadding="0"
+                                    cellspacing="0"
+                                    border="0"
+                                    style="margin: 0 auto"
+                                  >
+                                    <tr>
+                                      <td
+                                        align="center"
+                                        valign="middle"
+                                        style="
+                                          font-size: 26px;
+                                          vertical-align: middle;
+                                        "
+                                      >
+                                        🪪
+                                      </td>
+                                    </tr>
+                                  </table>
+                                </td>
+                                <td valign="middle">
+                                  <div
+                                    style="
+                                      color: #8a9bb8;
+                                      font-size: 11px;
+                                      margin-bottom: 2px;
+                                    "
+                                  >
+                                    מספר רישיון
+                                  </div>
+                                  <div
+                                    style="
+                                      color: #0d1f4c;
+                                      font-size: 14px;
+                                      font-weight: 700;
+                                    "
+                                  >
+                                    {{license_number}}
+                                  </div>
+                                </td>
+                              </tr>
+                            </table>
+                            {{/if}}
+                          </td>
+                          <!-- Phone (left) -->
+                          {{#if engineer_phone}}
+                          <td
+                            width="180"
+                            valign="middle"
+                            align="center"
+                            style=""
+                          >
+                            <div
+                              style="
+                                color: #8a9bb8;
+                                font-size: 11px;
+                                margin-bottom: 6px;
+                              "
+                            >
+                              התקשרו אלינו
+                            </div>
+                            <table
+                              cellpadding="0"
+                              cellspacing="0"
+                              border="0"
+                              style="margin: 0 auto"
+                            >
+                              <tr>
+                                <td
+                                  width="50"
+                                  valign="middle"
+                                  align="center"
+                                  style=""
+                                >
+                                  <table
+                                    width="46"
+                                    height="46"
+                                    cellpadding="0"
+                                    cellspacing="0"
+                                    border="0"
+                                    style="margin: 0 auto"
+                                  >
+                                    <tr>
+                                      <td
+                                        align="center"
+                                        valign="middle"
+                                        style="
+                                          font-size: 26px;
+                                          vertical-align: middle;
+                                        "
+                                      >
+                                        📞
+                                      </td>
+                                    </tr>
+                                  </table>
+                                </td>
+                                <td valign="middle" style="padding-right: 10px">
+                                  <div
+                                    style="
+                                      color: #0d1f4c;
+                                      font-size: 20px;
+                                      font-weight: 900;
+                                      white-space: nowrap;
+                                    "
+                                  >
+                                    {{engineer_phone}}
+                                  </div>
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                          {{/if}}
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
 
-</body>
+            <!-- ═══ FOOTER ═══ -->
+            <tr>
+              <td
+                style="
+                  background: #f7f9ff;
+                  border-top: 3px solid #c9a84c;
+                  padding: 18px 24px;
+                "
+              >
+                <div
+                  style="
+                    font-family: Georgia, serif;
+                    font-style: italic;
+                    color: #0d1f4c;
+                    font-size: 17px;
+                    font-weight: 700;
+                    margin-bottom: 8px;
+                  "
+                >
+                  בטיחות מתחילה בבדיקה!
+                </div>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td
+                      align="center"
+                      valign="middle"
+                      style="font-size: 20px; color: #c9a84c"
+                    >
+                      ♥
+                    </td>
+                  </tr>
+                </table>
+                <div style="font-size: 11px; color: #8a9bb8; margin-top: 6px">
+                  {{from_name|ReminderOCR}} — תזכורת אוטומטית, אין צורך להשיב
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
 </html>
