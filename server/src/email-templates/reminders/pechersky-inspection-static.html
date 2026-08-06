@@ -18,6 +18,26 @@
 <!-- OUTER WRAP -->
 <table class="wrap" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; border-radius:16px; overflow:hidden; box-shadow:0 8px 32px rgba(0,0,0,0.15);">
 
+  <!-- ═══ COMPANY BRAND BAR ═══ -->
+  <tr>
+    <td style="background:#ffffff; padding:16px 24px 12px 24px;">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          {{#if comp_logo}}
+          <td width="80" align="center" valign="middle" style="padding-left:14px;">
+            <img src="{{comp_logo}}" alt="לוגו חברה" width="72" style="max-height:56px; width:auto; max-width:72px; display:block; margin:0 auto; border-radius:6px; object-fit:contain;" />
+          </td>
+          {{/if}}
+          <td valign="middle">
+            {{#if engineer_company}}<div style="color:#5a6c7d; font-size:12px; font-weight:500; margin-bottom:3px;">{{engineer_company}}</div>{{/if}}
+            {{#if company_exp}}<div style="color:#5a6c7d; font-size:12px; font-weight:500;">{{company_exp}}</div>{{/if}}
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr><td style="font-size:0; line-height:0; height:2px; background:#e8eaf0;">&nbsp;</td></tr>
+
   <!-- ═══ HEADER ═══ -->
   <tr>
     <td style="background:#0d1f4c; padding:28px 28px 0 28px;">
@@ -164,38 +184,38 @@
                   <!-- Name row -->
                   <table cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
                     <tr>
+                      <td width="40" align="center" valign="middle" style="padding-left:10px; text-align:center;">
+                        <table width="34" height="34" cellpadding="0" cellspacing="0" border="0" style="border:1.5px solid #c9a84c; border-radius:50%; background:#f7f9ff; margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:16px; text-align:center; vertical-align:middle;">👷</td></tr></table>
+                      </td>
                       <td valign="middle">
                         <div style="color:#8a9bb8; font-size:11px; margin-bottom:2px;">מהנדס בודק</div>
                         <div style="color:#0d1f4c; font-size:14px; font-weight:700;">מיכאל פצ׳רסקי</div>
-                      </td>
-                      <td width="40" align="center" valign="middle" style="padding-right:10px;">
-                        <table width="34" height="34" cellpadding="0" cellspacing="0" border="0" style="border:1.5px solid #c9a84c; border-radius:50%; background:#f7f9ff; margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:16px; text-align:center; vertical-align:middle;">👷</td></tr></table>
                       </td>
                     </tr>
                   </table>
                   <!-- License row -->
                   <table cellpadding="0" cellspacing="0" border="0">
                     <tr>
+                      <td width="40" align="center" valign="middle" style="padding-left:10px; text-align:center;">
+                        <table width="34" height="34" cellpadding="0" cellspacing="0" border="0" style="border:1.5px solid #c9a84c; border-radius:50%; background:#f7f9ff; margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:16px; text-align:center; vertical-align:middle;">🪪</td></tr></table>
+                      </td>
                       <td valign="middle">
                         <div style="color:#8a9bb8; font-size:11px; margin-bottom:2px;">מספר רישיון לפרטים נוספים</div>
                         <div style="color:#0d1f4c; font-size:14px; font-weight:700;">484590</div>
-                      </td>
-                      <td width="40" align="center" valign="middle" style="padding-right:10px;">
-                        <table width="34" height="34" cellpadding="0" cellspacing="0" border="0" style="border:1.5px solid #c9a84c; border-radius:50%; background:#f7f9ff; margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:16px; text-align:center; vertical-align:middle;">🪪</td></tr></table>
                       </td>
                     </tr>
                   </table>
                 </td>
                 <!-- Phone (left) -->
-                <td width="180" valign="middle" align="center">
+                <td width="180" valign="middle" align="center" style="text-align:center;">
                   <div style="color:#8a9bb8; font-size:11px; margin-bottom:6px; text-align:center;">התקשרו אלינו</div>
                   <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
                     <tr>
-                      <td valign="middle" style="padding-left:10px;">
-                        <div style="color:#0d1f4c; font-size:20px; font-weight:900; direction:ltr; white-space:nowrap;">052-8195650</div>
-                      </td>
-                      <td width="50" valign="middle">
+                      <td width="50" valign="middle" align="center" style="text-align:center;">
                         <table width="46" height="46" cellpadding="0" cellspacing="0" border="0" style="background:#c9a84c; border-radius:50%; margin:0 auto;"><tr><td align="center" valign="middle" style="font-size:20px; text-align:center; vertical-align:middle;">📞</td></tr></table>
+                      </td>
+                      <td valign="middle" style="padding-right:10px;">
+                        <div style="color:#0d1f4c; font-size:20px; font-weight:900; direction:ltr; white-space:nowrap;">052-8195650</div>
                       </td>
                     </tr>
                   </table>

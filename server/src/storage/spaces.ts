@@ -15,6 +15,7 @@ interface StorageConfig {
   secret: string;
   bucket: string;
   forcePathStyle: boolean;
+  cdnUrl?: string;
 }
 
 function normaliseEndpoint(endpoint: string): string {
@@ -38,6 +39,7 @@ function getStorageConfig(): StorageConfig | null {
       secret: railwaySecret,
       bucket: railwayBucket,
       forcePathStyle: process.env.BUCKET_FORCE_PATH_STYLE === "true",
+      cdnUrl: process.env.BUCKET_PUBLIC_URL ? normaliseEndpoint(process.env.BUCKET_PUBLIC_URL) : undefined,
     };
   }
 
@@ -56,6 +58,7 @@ function getStorageConfig(): StorageConfig | null {
     secret,
     bucket,
     forcePathStyle: false,
+    cdnUrl: process.env.DO_SPACES_CDN_URL ? normaliseEndpoint(process.env.DO_SPACES_CDN_URL) : undefined,
   };
 }
 
@@ -98,6 +101,32 @@ export async function uploadToSpaces(
   return `${endpointUrl.protocol}//${config.bucket}.${endpointUrl.host}/${key}`;
 }
 
+export async function uploadBufferToSpaces(
+  buffer: Buffer,
+  key: string,
+  contentType: string
+): Promise<string> {
+  const client = getClient();
+  const config = getStorageConfig();
+  if (!client || !config) throw new Error("Object storage not configured");
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      ACL: "public-read" as any,
+    })
+  );
+
+  if (config.cdnUrl) {
+    return `${config.cdnUrl.replace(/\/$/, "")}/${key}`;
+  }
+  const endpointUrl = new URL(config.endpoint);
+  return `${endpointUrl.protocol}//${config.bucket}.${endpointUrl.host}/${key}`;
+}
+
 export async function deleteFromSpaces(key: string): Promise<void> {
   const client = getClient();
   const config = getStorageConfig();
@@ -120,6 +149,54 @@ export async function getSpacesSignedUrl(key: string, expiresIn = 3600, fileName
     }),
     { expiresIn }
   );
+}
+
+function getPublicStorageConfig(): StorageConfig | null {
+  const endpoint = process.env.BUCKET_PUBLIC_ENDPOINT;
+  const bucket = process.env.BUCKET_PUBLIC_NAME;
+  const key = process.env.BUCKET_PUBLIC_ACCESS_KEY_ID;
+  const secret = process.env.BUCKET_PUBLIC_SECRET_ACCESS_KEY;
+  if (!endpoint || !bucket || !key || !secret) return null;
+  return {
+    endpoint: normaliseEndpoint(endpoint),
+    region: process.env.BUCKET_PUBLIC_REGION ?? "auto",
+    key,
+    secret,
+    bucket,
+    forcePathStyle: process.env.BUCKET_PUBLIC_FORCE_PATH_STYLE === "true",
+  };
+}
+
+export function publicBucketEnabled(): boolean {
+  return getPublicStorageConfig() !== null;
+}
+
+export async function uploadBufferToPublicSpaces(
+  buffer: Buffer,
+  key: string,
+  contentType: string
+): Promise<string> {
+  const config = getPublicStorageConfig();
+  if (!config) throw new Error("Public object storage not configured");
+
+  const client = new S3Client({
+    endpoint: config.endpoint,
+    region: config.region,
+    credentials: { accessKeyId: config.key, secretAccessKey: config.secret },
+    forcePathStyle: config.forcePathStyle,
+  });
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    })
+  );
+
+  const endpointUrl = new URL(config.endpoint);
+  return `${endpointUrl.protocol}//${config.bucket}.${endpointUrl.host}/${key}`;
 }
 
 export async function fileExistsInSpaces(key: string): Promise<boolean> {

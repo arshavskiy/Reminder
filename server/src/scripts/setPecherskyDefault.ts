@@ -11,24 +11,24 @@ await client.connect();
 const db = client.db("reminder-app");
 
 const STATIC_TEMPLATE_ID = "6a746437c57da3e065b88b7a";
-const DYNAMIC_TEMPLATE_ID = "6a73a1d0c57da3e065b7b2d1";
 const PECHERSKY_USER_ID = "6a15e851abbd87e1e1071c6e";
 
-// pechersky → static template
+// pechersky user_settings → static template
 await db.collection("user_settings").updateOne(
   { user_id: PECHERSKY_USER_ID },
   { $set: { default_email_template_id: STATIC_TEMPLATE_ID, updated_at: new Date() } },
   { upsert: true }
 );
-console.log("pechersky.m → static", STATIC_TEMPLATE_ID);
+console.log("pechersky.m user_settings → static", STATIC_TEMPLATE_ID);
 
-// dynamic → global default (is_default: 1), clear others
+// is_default flag: clear all, set static as the one with is_default=1
+// (this controls the badge in the UI)
 await db.collection("email_templates").updateMany({}, { $set: { is_default: 0 } });
 await db.collection("email_templates").updateOne(
-  { _id: new ObjectId(DYNAMIC_TEMPLATE_ID) },
+  { _id: new ObjectId(STATIC_TEMPLATE_ID) },
   { $set: { is_default: 1 } }
 );
-console.log("dynamic template → global default");
+console.log("static template is_default=1 (badge visible)");
 
 await client.close();
 process.exit(0);

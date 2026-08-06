@@ -190,6 +190,9 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
     license_number: firstNonEmpty(engineerProfile?.inspector_number) ?? null,
     engineer_phone: firstNonEmpty(engineerProfile?.company_phone, user?.phone) ?? null,
     engineer_company: firstNonEmpty(engineerProfile?.company_name, user?.company_name) ?? null,
+    engineer_subtitle: firstNonEmpty(engineerProfile?.company_subtitle) ?? null,
+    company_exp: firstNonEmpty(engineerProfile?.company_subtitle) ?? null,
+    comp_logo: firstNonEmpty(engineerProfile?.company_logo_url, user?.picture_url) ?? null,
   };
 
   // Equipment fields stored directly on the reminder take precedence over the
@@ -496,7 +499,7 @@ export async function previewReminderEmail(reminder: ReminderWithContext) {
   return renderReminderEmail(reminder);
 }
 
-export async function sendTestEmail(to: string, emailTemplateId: string | number | null = null): Promise<{ success: boolean; error?: string }> {
+export async function sendTestEmail(to: string, emailTemplateId: string | number | null = null, userId?: string): Promise<{ success: boolean; error?: string }> {
   const settings = getSettings();
   if (!settings.smtpHost && !useResend()) return { success: false, error: "SMTP not configured (host is empty)" };
   if (!to) return { success: false, error: "Recipient address is empty" };
@@ -505,6 +508,16 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
     const transport = useResend() ? null : buildTransport();
     if (transport) await transport.verify();
 
+    // Load real engineer profile vars when userId provided
+    let engineerProfile: any = null;
+    let user: any = null;
+    if (userId) {
+      [engineerProfile, user] = await Promise.all([
+        col("engineer_profiles").findOne({ user_id: userId }),
+        col("users").findOne({ _id: tryObjectId(userId) } as any),
+      ]);
+    }
+
     const sampleVars: EmailVars = {
       title: "בדיקה לדוגמה",
       trigger_date: new Date().toISOString().split("T")[0],
@@ -512,7 +525,7 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
       body: " זהו דוא״ל בדיקה באמצעות תבנית שנבחרה.",
       client_name: " לקוח לדוגמה",
       document_name: " מסמך לדוגמה",
-      from_name: settings.emailFromName || " ReminderOCR ",
+      from_name: firstNonEmpty((engineerProfile as any)?.company_name, user?.company_name, settings.emailFromName, "ReminderOCR") ?? "ReminderOCR",
       client_company: " חברה לדוגמה",
       contact_email: to,
       contact_phone: "050-1234567 ",
@@ -520,6 +533,13 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
       document_number: "001 ",
       contact_person: " איש קשר לדוגמה",
       expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+      engineer_name: firstNonEmpty((engineerProfile as any)?.full_name, user?.name) ?? null,
+      license_number: firstNonEmpty((engineerProfile as any)?.inspector_number) ?? null,
+      engineer_phone: firstNonEmpty((engineerProfile as any)?.company_phone, user?.phone) ?? null,
+      engineer_company: firstNonEmpty((engineerProfile as any)?.company_name, user?.company_name) ?? null,
+      engineer_subtitle: firstNonEmpty((engineerProfile as any)?.company_subtitle) ?? null,
+      company_exp: firstNonEmpty((engineerProfile as any)?.company_subtitle) ?? null,
+      comp_logo: firstNonEmpty((engineerProfile as any)?.company_logo_url) ?? null,
     };
 
     const tpl = emailTemplateId

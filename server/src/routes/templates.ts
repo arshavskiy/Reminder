@@ -273,28 +273,33 @@ export function registerTemplateRoutes(app: express.Application) {
     if (!to) { res.status(400).json({ error: "to is required" }); return; }
     const { sendTestEmail, sendReminderEmailTo } = await import("../reminders/emailSender.js");
     if (reminder_id) {
-      const { ObjectId } = await import("mongodb");
-      let rid: any;
-      try { rid = new ObjectId(reminder_id); } catch { rid = Number(reminder_id); }
-      const r = await col("reminders").findOne({ _id: rid }) as any;
-      if (!r || String(r.user_id) !== String(auth.userId)) {
-        res.status(404).json({ error: "Reminder not found" }); return;
+      try {
+        const { ObjectId } = await import("mongodb");
+        let rid: any;
+        try { rid = new ObjectId(reminder_id); } catch { rid = Number(reminder_id); }
+        const r = await col("reminders").findOne({ _id: rid }) as any;
+        if (!r || String(r.user_id) !== String(auth.userId)) {
+          res.status(404).json({ error: "Reminder not found" }); return;
+        }
+        const [clientDoc, documentDoc] = await Promise.all([
+          r.client_id ? col("clients").findOne({ _id: tryObjectId(String(r.client_id)) }) : null,
+          r.document_id ? col("documents").findOne({ _id: tryObjectId(String(r.document_id)) }) : null,
+        ]);
+        const reminderCtx = {
+          ...r,
+          id: r._id?.toString(),
+          user_id: r.user_id ?? auth.userId,
+          client_name: (clientDoc as any)?.display_name ?? null,
+          document_name: (documentDoc as any)?.file_name ?? null,
+          email_template_id: req.params.id,
+        };
+        const result = await sendReminderEmailTo(to, reminderCtx as any);
+        res.json(result);
+      } catch (err) {
+        res.status(500).json({ error: String(err) });
       }
-      const [clientDoc, documentDoc] = await Promise.all([
-        r.client_id ? col("clients").findOne({ _id: tryObjectId(String(r.client_id)) }) : null,
-        r.document_id ? col("documents").findOne({ _id: tryObjectId(String(r.document_id)) }) : null,
-      ]);
-      const reminderCtx = {
-        ...r,
-        id: r._id?.toString(),
-        client_name: (clientDoc as any)?.display_name ?? null,
-        document_name: (documentDoc as any)?.file_name ?? null,
-        email_template_id: req.params.id,
-      };
-      const result = await sendReminderEmailTo(to, reminderCtx as any);
-      res.json(result);
     } else {
-      const result = await sendTestEmail(to, req.params.id);
+      const result = await sendTestEmail(to, req.params.id, auth.userId);
       res.json(result);
     }
   });

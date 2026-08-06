@@ -229,6 +229,19 @@
               </div>
             </div>
 
+            <div class="info-row">
+              <span class="info-label">עוסק מורשה (ח.פ)</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.company_registration"
+                class="info-input"
+                placeholder="לדוגמה: 51646673"
+              />
+              <span v-else class="info-val">{{
+                (engineerProfile as any)?.company_registration || "—"
+              }}</span>
+            </div>
+
             <!-- ── Inspector company details (used to filter out from AI extraction) ── -->
             <div class="info-section-divider">
               פרטי החברה / בית העסק (לסינון מהחילוץ)
@@ -243,6 +256,18 @@
               />
               <span v-else class="info-val">{{
                 (engineerProfile as any)?.company_name || "—"
+              }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">תיאור / כותרת</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.company_subtitle"
+                class="info-input"
+                placeholder="לדוגמה: בדיקות בטיחות למתקני הרמה ומכלי לחץ"
+              />
+              <span v-else class="info-val">{{
+                (engineerProfile as any)?.company_subtitle || "—"
               }}</span>
             </div>
             <div class="info-row">
@@ -268,6 +293,27 @@
               <span v-else class="info-val">{{
                 (engineerProfile as any)?.company_email || "—"
               }}</span>
+            </div>
+            <div class="info-row" style="align-items:flex-start">
+              <span class="info-label">לוגו החברה</span>
+              <div style="display:flex; flex-direction:column; gap:8px; flex:1">
+                <img
+                  v-if="(engineerProfile as any)?.company_logo_url"
+                  :src="(engineerProfile as any)?.company_logo_url"
+                  style="max-height:56px; max-width:180px; border-radius:6px; object-fit:contain"
+                  alt="לוגו חברה"
+                />
+                <input
+                  ref="companyLogoInput"
+                  type="file"
+                  accept="image/*"
+                  style="display:none"
+                  @change="uploadCompanyLogo"
+                />
+                <n-button size="small" secondary @click="(companyLogoInput as HTMLInputElement)?.click()">
+                  {{ (engineerProfile as any)?.company_logo_url ? 'החלף לוגו' : 'העלה לוגו' }}
+                </n-button>
+              </div>
             </div>
           </div>
         </section>
@@ -744,6 +790,8 @@ const engineerForm = ref({
   membership_start_ms: null as number | null,
   inspector_id_start: "",
   company_name: "",
+  company_registration: "",
+  company_subtitle: "",
   company_phone: "",
   company_email: "",
 });
@@ -762,6 +810,8 @@ function startEditEngineer() {
       : null,
     inspector_id_start: p?.inspector_id_start ?? "",
     company_name: (p as any)?.company_name ?? "",
+    company_registration: (p as any)?.company_registration ?? "",
+    company_subtitle: (p as any)?.company_subtitle ?? "",
     company_phone: (p as any)?.company_phone ?? "",
     company_email: (p as any)?.company_email ?? "",
   };
@@ -797,6 +847,33 @@ async function saveEngineer() {
     savingEngineer.value = false;
   }
 }
+
+async function uploadCompanyLogo(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append("logo", file);
+  try {
+    const res = await fetch(`${SERVER}/api/profile/company-logo`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (engineerProfile.value) (engineerProfile.value as any).company_logo_url = data.company_logo_url;
+      else engineerProfile.value = { company_logo_url: data.company_logo_url } as any;
+      message.success("הלוגו הועלה");
+    } else {
+      message.error("שגיאה בהעלאת הלוגו");
+    }
+  } catch {
+    message.error("שגיאה בהעלאת הלוגו");
+  }
+  (e.target as HTMLInputElement).value = "";
+}
+
+const companyLogoInput = ref<HTMLInputElement | null>(null);
 
 // ── Certificate document upload ───────────────────────────────────────────────
 const certFileInput = ref<HTMLInputElement | null>(null);

@@ -70,6 +70,7 @@ export async function verifySession(sessionId: string): Promise<User | null> {
     email: user.email,
     name: user.name,
     phone: user.phone ?? null,
+    company_name: user.company_name ?? null,
     picture_url: user.picture_url,
     role: user.role,
     is_active: user.is_active,

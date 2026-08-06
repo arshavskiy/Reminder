@@ -73,8 +73,8 @@ export function registerProfileRoutes(app: express.Application) {
     const {
       inspector_number, address, title, expertise,
       mr_number, mg_number, membership_start_date,
-      company_name, company_phone, company_email,
-      inspector_id_start,
+      company_name, company_registration, company_subtitle, company_phone, company_email,
+      company_logo_url, inspector_id_start,
     } = req.body as Record<string, string | null>;
 
     await col("engineer_profiles").updateOne(
@@ -90,6 +90,9 @@ export function registerProfileRoutes(app: express.Application) {
           mg_number: mg_number ?? null,
           membership_start_date: membership_start_date ?? null,
           company_name: company_name ?? null,
+          company_registration: company_registration ?? null,
+          company_subtitle: company_subtitle ?? null,
+          company_logo_url: company_logo_url ?? null,
           company_phone: company_phone ?? null,
           company_email: company_email ?? null,
           inspector_id_start: inspector_id_start ?? null,
@@ -101,6 +104,31 @@ export function registerProfileRoutes(app: express.Application) {
 
     const updated = await col("engineer_profiles").findOne({ user_id: ctx.userId });
     res.json(updated ?? {});
+  });
+
+  // ── Company logo upload ────────────────────────────────────────────────────
+  app.post("/api/profile/company-logo", avatarUpload.single("logo"), async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+    if (!req.file) { res.status(400).json({ error: "no_file" }); return; }
+
+    const { spacesEnabled, uploadBufferToSpaces } = await import("../storage/spaces.js");
+
+    let logoUrl: string;
+    if (spacesEnabled()) {
+      const ext = extname(req.file.originalname).toLowerCase() || ".png";
+      const key = `images/${ctx.userId}/logo_${Date.now()}${ext}`;
+      logoUrl = await uploadBufferToSpaces(req.file.buffer, key, req.file.mimetype);
+    } else {
+      logoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+    }
+
+    await col("engineer_profiles").updateOne(
+      { user_id: ctx.userId },
+      { $set: { company_logo_url: logoUrl, updated_at: new Date().toISOString() } },
+      { upsert: true },
+    );
+    res.json({ company_logo_url: logoUrl });
   });
 
   // ── Update personal info (name + phone) on the users collection ──────────
