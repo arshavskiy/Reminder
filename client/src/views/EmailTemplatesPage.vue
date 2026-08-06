@@ -207,10 +207,12 @@ function docTplName(id: string | null): string {
 }
 
 async function load() {
-  [templates.value, docTemplates.value] = await Promise.all([
+  const [tplResult, docResult] = await Promise.allSettled([
     api.emailTemplates.list(),
     api.docTemplates.list(),
   ]);
+  if (tplResult.status === "fulfilled") templates.value = tplResult.value;
+  if (docResult.status === "fulfilled") docTemplates.value = docResult.value;
 }
 onMounted(() => {
   updateViewport();
