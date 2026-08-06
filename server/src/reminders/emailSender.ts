@@ -70,14 +70,45 @@ function buildTransport() {
     tls: {
       rejectUnauthorized: s.smtpRejectUnauthorized !== false,
     },
-    // Without explicit timeouts, an unreachable/slow SMTP host (common on
-    // some hosting providers' outbound network) leaves send-now hanging for
-    // nodemailer's default ~2 minutes with no feedback to the user, instead
-    // of failing fast with a clear error.
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 20000,
   });
+}
+
+// Resend HTTP API transport — used when RESEND_API_KEY is set (bypasses SMTP port blocks)
+async function sendViaResend(opts: {
+  from: string;
+  to: string[];
+  subject: string;
+  html: string;
+  text?: string;
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
+}): Promise<void> {
+  const { Resend } = await import("resend");
+  const client = new Resend(process.env.RESEND_API_KEY);
+  const result = await client.emails.send({
+    from: opts.from,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+    text: opts.text,
+    attachments: opts.attachments?.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+    })),
+  });
+  if (result.error) throw new Error(result.error.message ?? JSON.stringify(result.error));
+}
+
+function useResend(): boolean {
+  return !!process.env.RESEND_API_KEY;
+}
+
+function formatFrom(settings: ReturnType<typeof getSettings>): string {
+  return settings.emailFromName
+    ? `${settings.emailFromName} <${settings.emailFrom || settings.smtpUser || "noreply@example.com"}>`
+    : (settings.emailFrom || settings.smtpUser || "noreply@example.com");
 }
 
 function tryObjectId(id: string | number): any {
@@ -346,25 +377,23 @@ export async function sendReminderEmail(
 ): Promise<{ success: boolean; error?: string }> {
   const settings = getSettings();
 
-  if (!settings.smtpHost) {
+  if (!settings.smtpHost && !useResend()) {
     return { success: false, error: "SMTP not configured" };
   }
 
   try {
-    const transport = buildTransport();
     const { subject, html } = await renderReminderEmail(reminder);
     const senderName = await resolveSenderName((reminder as any).user_id);
-    const info = await transport.sendMail({
-      from: formatAddress(senderName, settings.emailFrom),
-      to: recipients.join(", "),
-      subject,
-      html,
-      text: `תזכורת: ${reminder.title}\nלקוח: ${reminder.client_name ?? ""}\nתאריך: ${reminder.trigger_date}`,
-    });
+    const from = formatAddress(senderName, settings.emailFrom);
+    if (useResend()) {
+      await sendViaResend({ from, to: recipients, subject, html, text: `תזכורת: ${reminder.title}\nלקוח: ${reminder.client_name ?? ""}\nתאריך: ${reminder.trigger_date}` });
+    } else {
+      await buildTransport().sendMail({ from, to: recipients.join(", "), subject, html, text: `תזכורת: ${reminder.title}\nלקוח: ${reminder.client_name ?? ""}\nתאריך: ${reminder.trigger_date}` });
+    }
     logger.info("reminder_email_sent", {
       reminder_id: reminder.id,
       recipient_count: recipients.length,
-      message_id: (info as any).messageId ?? null,
+      via: useResend() ? "resend" : "smtp",
     });
     return { success: true };
   } catch (err) {
@@ -385,22 +414,19 @@ export async function sendEmailWithAttachments(
   html?: string,
 ): Promise<{ success: boolean; error?: string }> {
   const settings = getSettings();
-  if (!settings.smtpHost) return { success: false, error: "SMTP not configured" };
+  if (!settings.smtpHost && !useResend()) return { success: false, error: "SMTP not configured" };
   if (!recipients.length) return { success: false, error: "No recipients configured" };
   try {
-    const transport = buildTransport();
-    const info = await transport.sendMail({
-      from: settings.emailFrom ? `"${settings.emailFromName}" <${settings.emailFrom}>` : settings.emailFrom,
-      to: recipients.join(", "),
-      subject,
-      text,
-      html,
-      attachments,
-    });
+    const from = formatFrom(settings);
+    if (useResend()) {
+      await sendViaResend({ from, to: recipients, subject, html: html ?? `<pre>${text}</pre>`, text, attachments });
+    } else {
+      await buildTransport().sendMail({ from, to: recipients.join(", "), subject, text, html, attachments });
+    }
     logger.info("email_with_attachments_sent", {
       recipient_count: recipients.length,
-      message_id: (info as any).messageId ?? null,
       attachment_count: attachments.length,
+      via: useResend() ? "resend" : "smtp",
     });
     return { success: true };
   } catch (err) {
@@ -445,12 +471,12 @@ export async function previewReminderEmail(reminder: ReminderWithContext) {
 
 export async function sendTestEmail(to: string, emailTemplateId: string | number | null = null): Promise<{ success: boolean; error?: string }> {
   const settings = getSettings();
-  if (!settings.smtpHost) return { success: false, error: "SMTP not configured (host is empty)" };
+  if (!settings.smtpHost && !useResend()) return { success: false, error: "SMTP not configured (host is empty)" };
   if (!to) return { success: false, error: "Recipient address is empty" };
 
   try {
-    const transport = buildTransport();
-    await transport.verify();
+    const transport = useResend() ? null : buildTransport();
+    if (transport) await transport.verify();
 
     const sampleVars: EmailVars = {
       title: "בדיקה לדוגמה",
@@ -483,14 +509,12 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
       html = ensureRtl(renderTemplate(FALLBACK_TEST_HTML, sampleVars, { escape: false }));
     }
 
-    await transport.sendMail({
-      from: settings.emailFromName
-        ? `"${settings.emailFromName}" <${settings.emailFrom || settings.smtpUser}>`
-        : settings.emailFrom || settings.smtpUser,
-      to,
-      subject,
-      html,
-    });
+    const from = formatFrom(settings);
+    if (useResend()) {
+      await sendViaResend({ from, to: [to], subject, html });
+    } else {
+      await transport!.sendMail({ from, to, subject, html });
+    }
     return { success: true };
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);

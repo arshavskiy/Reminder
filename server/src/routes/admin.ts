@@ -744,7 +744,8 @@ export function registerAdminRoutes(app: express.Application) {
       const { sendMonthlyReportToRecipients, sendMonthlyReportsPerClient } = await import("../reports/monthlyReports.js");
       const now = new Date();
       const year = Number(body.year ?? now.getFullYear());
-      const month = body.month != null ? Number(body.month) : now.getMonth() + 1;
+      // month: null means "whole year"; undefined/missing also means whole year for admin trigger
+      const month = (body.month != null && body.month !== 0) ? Number(body.month) : undefined;
 
       // Resolve recipients: body > user settings > user email
       let recipients: string[] = body.recipients?.length ? body.recipients : [];
@@ -791,7 +792,7 @@ export function registerAdminRoutes(app: express.Application) {
         success: result.success ? 1 : 0,
         error: result.error ?? null,
         recipient: recipients.join(", ") || null,
-        subject: `Monthly Report — Admin Triggered ${year}-${String(month).padStart(2, "0")}`,
+        subject: `Monthly Report — Admin Triggered ${year}${month ? `-${String(month).padStart(2, "0")}` : ""}`,
       });
 
       res.json(result);
