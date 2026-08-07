@@ -1,10 +1,12 @@
 import {config} from "dotenv";
 import {dirname, resolve} from "path";
 import {fileURLToPath} from "url";
+import {createRequire} from "module";
 import {MongoClient, ObjectId} from "mongodb";
 import {existsSync, mkdirSync, writeFileSync} from "fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 config({ path: resolve(__dirname, "../../.env") });
 
 const DOC_ID = process.argv[2] || "6a7455b9637d40b675a9b4d1";
@@ -39,7 +41,7 @@ if (doc.spaces_key) {
   // pdf-table-extractor
   console.log("\n\n=== pdf-table-extractor output ===\n");
   try {
-    const pdfTableExtractor = (await import("pdf-table-extractor")).default;
+    const pdfTableExtractor = require("pdf-table-extractor").default;
     const tables = await new Promise<any>((resolve, reject) => {
       pdfTableExtractor(tmpPath, resolve, reject);
     });

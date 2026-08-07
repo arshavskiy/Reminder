@@ -676,24 +676,26 @@ export function normalizeExtractionFieldsForTemplate(
   }
   const supportsLicenseNumber = template.fields.some((field) => field.key === "license_number");
   // Equipment that structurally never carries a license plate.
-  const neverLicensedPattern = /עגורן\s*שער|עגרן\s*שער/i;
+  const neverLicensedPattern = /עגורן\s*שער|עגרן\s*שער|ג['׳]ק\s*גירים/i;
 
   const headerEquipmentDescription = extractEquipmentDescriptionFromHeader(rawText);
   const headerCheckedEquipment = extractCheckedEquipmentFromHeader(rawText);
-  if (headerCheckedEquipment && (!hasMeaningfulValue(normalized.checked_equipment) || neverLicensedPattern.test(headerCheckedEquipment))) {
+  if (headerCheckedEquipment && shouldUseHeaderCheckedEquipment(normalized.checked_equipment, headerCheckedEquipment)) {
     normalized.checked_equipment = headerCheckedEquipment;
   }
 
-  const isNeverLicensed = neverLicensedPattern.test(normalized.checked_equipment ?? "") ||
-    neverLicensedPattern.test(normalized.equipment_description ?? "");
+  const checkedEquipmentText = typeof normalized.checked_equipment === "string" ? normalized.checked_equipment : "";
+  const equipmentDescriptionText = typeof normalized.equipment_description === "string" ? normalized.equipment_description : "";
+  const isNeverLicensed = neverLicensedPattern.test(checkedEquipmentText) ||
+    neverLicensedPattern.test(equipmentDescriptionText);
   if (isNeverLicensed) {
-    normalized.license_number = undefined;
+    delete normalized.license_number;
   } else if (supportsLicenseNumber) {
     if (typeof normalized.license_number === "string" && isPostalCode(normalized.license_number, rawText)) {
-      normalized.license_number = undefined;
+      delete normalized.license_number;
     }
     if (!isLikelyLicenseNumber(normalized.license_number)) {
-      normalized.license_number = undefined;
+      delete normalized.license_number;
       const licenseNumber = extractLicenseNumber(rawText);
       if (licenseNumber) normalized.license_number = licenseNumber;
     }
@@ -841,20 +843,19 @@ function extractLicenseNumber(rawText: string): string | null {
     const afterLabelRev = line.match(/(?:^|\s)מספר\s+רישוי\s*[:：-]?\s*(\d{3,5}\s*פנימי)/i);
     const beforeLabelRev = line.match(/(\d{3,5}\s*פנימי)\s*[:：-]?\s*מספר\s+רישוי/i);
     const inline = cleanInlineFieldValue(afterLabel?.[1] ?? beforeLabel?.[1] ?? afterLabelRev?.[1] ?? beforeLabelRev?.[1]);
-    if (inline && isLikelyLicenseNumber(inline)) return normalizePenimiLicense(inline);
+    if (inline && isLikelyLicenseNumber(inline) && !isPostalCodeContext(lines, i, inline)) {
+      return normalizePenimiLicense(inline);
+    }
 
     // Label-only line — value on the next line (common in RTL table PDFs)
     if (/^מספר\s+רישוי\s*[:：-]?$/i.test(line)) {
-      for (const candidate of [lines[i + 1]?.trim(), lines[i + 2]?.trim()]) {
-        if (candidate && isLikelyLicenseNumber(candidate)) return normalizePenimiLicense(candidate);
+      for (const [offset, candidate] of [[1, lines[i + 1]?.trim()], [2, lines[i + 2]?.trim()]] as const) {
+        if (candidate && isLikelyLicenseNumber(candidate) && !isPostalCodeContext(lines, i + offset, candidate)) {
+          return normalizePenimiLicense(candidate);
+        }
       }
     }
 
-    // Value-only line immediately before the label line (cell order flipped by PDF parser)
-    if (/מספר\s+רישוי/i.test(line) && i > 0) {
-      const prev = lines[i - 1]?.trim();
-      if (prev && isLikelyLicenseNumber(prev)) return normalizePenimiLicense(prev);
-    }
   }
 
   // Last resort: document mentions "מספר רישוי" but value was separated from label
@@ -863,6 +864,8 @@ function extractLicenseNumber(rawText: string): string | null {
   // decimal radius values like "2.6", "4.8" etc.) or unrelated labels, then return
   // the first remaining candidate.
   if (/מספר\s+רישוי/i.test(rawText)) {
+    const labelIndex = lines.findIndex((line) => /מספר\s+רישוי/i.test(line));
+    if (labelIndex < 0) return null;
     const skipLinePattern = /מיקוד|ישוב|מייל|דוא|טלפון|פקס|תאריך|ת\.ד|כתובת/i;
     // Lines near equipment-table headers (serial numbers, load values, etc.)
     const equipTablePattern = /סידורי|דגם|יצר|עומס|כמות|רדיוס/i;
@@ -881,13 +884,14 @@ function extractLicenseNumber(rawText: string): string | null {
       }
       return false;
     };
-    for (let i = 0; i < lines.length; i++) {
+    for (let i = labelIndex + 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (skipLinePattern.test(lines[i])) continue;
+      if (isPostalCodeContext(lines, i, line)) continue;
       if (isLikelyLicenseNumber(line) && /פנימי/i.test(line)) return normalizePenimiLicense(line);
       if (isLoadTableLine(i)) continue;
       if (isEquipTableLine(i)) continue;
-      if (/^\d{4,8}$/.test(line)) return line;
+      if (/^\d{4,6}$/.test(line)) return line;
     }
   }
 
@@ -917,7 +921,7 @@ function cleanInlineFieldValue(value: string | undefined): string | null {
 function isLikelyLicenseNumber(value: unknown): boolean {
   if (typeof value !== "string") return false;
   const v = value.trim();
-  if (!/^\d{4,8}$/.test(v) && !/^פנימי\s*\d{3,5}$/i.test(v) && !/^\d{3,5}\s*פנימי$/i.test(v)) return false;
+  if (!/^(?:\d{4,6}|\d{8})$/.test(v) && !/^פנימי\s*\d{3,5}$/i.test(v) && !/^\d{3,5}\s*פנימי$/i.test(v)) return false;
   // Round thousands (1000, 2000, 3000 …) are load-capacity values, never license numbers
   if (/^\d+$/.test(v) && Number(v) % 1000 === 0) return false;
   return true;
@@ -925,11 +929,23 @@ function isLikelyLicenseNumber(value: unknown): boolean {
 
 function isPostalCode(value: string, rawText: string): boolean {
   const v = value.trim();
-  if (!/^\d{7}$/.test(v)) return false;
+  if (!/^\d{5,7}$/.test(v)) return false;
   const lines = rawText.split(/\r?\n/);
-  for (const line of lines) {
-    if (line.includes(v) && /מיקוד/i.test(line)) return true;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i]?.includes(v) && isPostalCodeContext(lines, i, v)) return true;
   }
+  return false;
+}
+
+function isPostalCodeContext(lines: string[], index: number, value: string): boolean {
+  const v = value.trim();
+  if (!/^\d{5,7}$/.test(v)) return false;
+
+  for (let delta = -1; delta <= 1; delta++) {
+    const line = lines[index + delta]?.trim() ?? "";
+    if (/(?:מיקוד|מקוד)/i.test(line)) return true;
+  }
+
   return false;
 }
 
@@ -980,6 +996,10 @@ function preferHebrewNameWithNumericSuffix(value: string, rawText?: string): str
 
 export function extractCheckedEquipmentFromHeader(rawText: string): string | null {
   const lines = rawText.split(/\r?\n/).map(l => l.replace(/\s+/g, " ").trim());
+  for (const line of lines) {
+    const inspectionLocationValue = extractCheckedEquipmentFromInspectionLocationLine(line);
+    if (inspectionLocationValue) return inspectionLocationValue;
+  }
   for (let i = 0; i < lines.length; i++) {
     if (/תיאור\s+מכונת\s+הרמה/i.test(lines[i])) {
       const afterColon = lines[i].match(/תיאור\s+מכונת\s+הרמה\s*[.:：]?\s*\d*[.\s:：]*([^\d\s].*)/i);
@@ -991,12 +1011,50 @@ export function extractCheckedEquipmentFromHeader(rawText: string): string | nul
         if (!lines[j]) continue;
         const known = /פרטי\s+הלקוח|מקום\s+הבדיקה|יש\s+לשמור|הערות|ליקוי/i;
         if (known.test(lines[j])) break;
-        const equipMatch = lines[j].match(/(עגורן\s*שער|עגרן\s*שער|אביזרי\s*הרמה|מלגזה|מנוף|במת?\s*הרמה|עגורן|מגבה|מהפכי?)/i);
-        if (equipMatch) return equipMatch[1];
+        const detailValue = extractCheckedEquipmentFromDetailLine(lines[j]);
+        if (detailValue) return detailValue;
       }
     }
   }
   return null;
+}
+
+function extractCheckedEquipmentFromInspectionLocationLine(line: string): string | null {
+  if (!/מקום\s+הבדיקה/.test(line)) return null;
+  const rawSuffix = line.split(/מקום\s+הבדיקה/i)[1] ?? "";
+  const candidate = normalizeInspectionLocationEquipment(rawSuffix);
+  return isLikelyCheckedEquipment(candidate) ? candidate : null;
+}
+
+function extractCheckedEquipmentFromDetailLine(line: string): string | null {
+  const cleaned = cleanHeaderValue(
+    line
+      .replace(/^בהפעלה\s*[,.:：-]?\s*/i, "")
+      .replace(/^ציוד\s+שנבדק\s*[:：-]?\s*/i, "")
+  );
+  if (!cleaned) return null;
+  return isLikelyCheckedEquipment(cleaned) ? cleaned : null;
+}
+
+function normalizeInspectionLocationEquipment(value: string): string | null {
+  const cleaned = cleanHeaderValue(value);
+  if (!cleaned) return null;
+  const repairedJack = cleaned.replace(/^ק\s*(.+?)'ג$/i, "ג'ק $1").replace(/\s+/g, " ").trim();
+  return repairedJack || null;
+}
+
+function isLikelyCheckedEquipment(value: string | null): value is string {
+  if (!value || !/[א-ת]/.test(value)) return false;
+  if (/מקום\s+הבדיקה|יש\s+לשמור|הערות|ליקוי|בדיקה\s+פונקציונלית|וויזואלית/i.test(value)) return false;
+  return /(עגורן\s*שער|עגרן\s*שער|אביזרי\s*הרמה|מלגזה|מנוף|במת?\s*הרמה|עגורן|מגבה|מהפכי?|ג['׳]?ק|גירים)/i.test(value);
+}
+
+function shouldUseHeaderCheckedEquipment(current: unknown, candidate: string): boolean {
+  if (!hasMeaningfulValue(current)) return true;
+  const currentText = String(current).trim();
+  if (currentText === candidate) return false;
+  if (candidate.includes(currentText) && candidate.length > currentText.length) return true;
+  return /^(מלגזה|מנוף|עגורן|עגורן שער|מגבה|במת הרמה|אביזרי הרמה)$/i.test(currentText);
 }
 
 function extractEquipmentDescriptionFromHeader(rawText: string): string | null {
@@ -1322,4 +1380,3 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   });
   return r.insertedId.toString();
 }
-

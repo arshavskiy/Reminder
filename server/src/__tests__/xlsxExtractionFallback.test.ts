@@ -198,6 +198,21 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(fields?.license_number).toBeUndefined();
   });
 
+  it("does not infer license_number from a five-digit value under a mikud label", () => {
+    const rawText = [
+      "מאספת הזמנות חשמלית",
+      ": פקס089427325: טלפון",
+      ": מיקוד",
+      "80200",
+      ": מספר רישוי",
+    ].join("\n");
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {
+      client_company: "מ.הנסון בע\"מ",
+    });
+
+    expect(fields?.license_number).toBeUndefined();
+  });
+
   it("fills license_number from the standalone number after inspection location", () => {
     const rawText = [
       ": תיאור מכונת הרמה. 2",
