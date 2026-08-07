@@ -16,6 +16,10 @@ export default defineConfig({
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       },
+      devOptions: {
+        enabled: true,
+        type: "module",
+      },
       includeAssets: ["favicon.svg", "favicon-32.png", "apple-touch-icon.png"],
       manifest: {
         name: "בודק ציוד",

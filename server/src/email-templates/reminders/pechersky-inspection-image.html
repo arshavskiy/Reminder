@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body style="background: #f0f4f8; margin: 0; padding: 20px 0; font-family: 'Segoe UI', Arial, sans-serif">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #f0f4f8">
+      <tr>
+        <td align="center" style="padding: 12px 8px">
+          <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px">
+            <!-- Poster image -->
+            <tr>
+              <td align="center" style="padding: 0">
+                <img
+                  src="{{poster_url}}"
+                  alt="תזכורת חשובה — בעוד {{advance_days}} ימים יפוג תוקף התסקיר"
+                  width="600"
+                  style="display: block; width: 100%; max-width: 600px; height: auto; border: 0; border-radius: 14px"
+                />
+              </td>
+            </tr>
+
+            <!-- Dynamic download link -->
+            {{#if document_url}}
+            <tr>
+              <td align="center" style="padding: 18px 20px 6px">
+                <a
+                  href="{{document_url}}"
+                  target="_blank"
+                  style="color: #0d1f4c; text-decoration: underline; font-size: 15px; font-weight: 700"
+                  >📄 הורד את מסמך הבדיקה</a
+                >
+              </td>
+            </tr>
+            {{/if}}
+
+            <!-- Footer note -->
+            <tr>
+              <td align="center" style="padding: 14px 20px 4px; font-size: 11px; color: #8a9bb8">
+                הנדסה וניהול בע״מ M.A.D — תזכורת אוטומטית, אין צורך להשיב
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
