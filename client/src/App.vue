@@ -135,14 +135,14 @@ import {
   unstableTreeSelectRtl,
   unstableUploadsRtl,
 } from "naive-ui";
-import { BriefcaseOutline, DownloadOutline, MoonOutline, SunnyOutline } from "@vicons/ionicons5";
+import {BriefcaseOutline, DownloadOutline, MoonOutline, SunnyOutline} from "@vicons/ionicons5";
 import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
 import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
 import {dateHeIL, heIL} from "./locales/heIL.js";
-import {FEATURES, type FeatureKey} from "./shared/features.js";
+import {type FeatureKey, FEATURES} from "./shared/features.js";
 
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
@@ -229,7 +229,7 @@ const allNav = [
   {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
   {label: "הגדרת ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
-  {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
+  // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
   {label: "תבניות", key: "email-templates", minRole: "user", feature: FEATURES.pages.emailTemplates},
   {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];
