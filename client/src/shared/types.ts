@@ -438,6 +438,8 @@ export interface EmailTemplate {
   subject: string;              // may contain {{vars}}
   html: string;                 // body with {{vars}} placeholders
   logo_path: string | null;
+  poster_url: string | null;
+  example_document_url: string | null;
   is_default: number;
   created_at: string;
   updated_at: string;

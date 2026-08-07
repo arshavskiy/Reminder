@@ -239,6 +239,8 @@ export function registerTemplateRoutes(app: express.Application) {
       subject: body.subject ?? "[תזכורת] {{title}}",
       html: body.html,
       logo_path: body.logo_path ?? null,
+      poster_url: body.poster_url ?? null,
+      example_document_url: body.example_document_url ?? null,
       is_default: body.is_default ?? 0,
       created_at: now,
       updated_at: now,
@@ -252,7 +254,7 @@ export function registerTemplateRoutes(app: express.Application) {
     const body = req.body as Partial<EmailTemplate>;
 
     const updates: Record<string, any> = { updated_at: new Date() };
-    const fields = ["name", "doc_template_id", "subject", "html", "logo_path", "is_default"];
+    const fields = ["name", "doc_template_id", "subject", "html", "logo_path", "poster_url", "example_document_url", "is_default"];
     for (const f of fields) {
       if ((body as any)[f] !== undefined) updates[f] = (body as any)[f];
     }
@@ -364,6 +366,63 @@ export function registerTemplateRoutes(app: express.Application) {
       writeFileSync(dest, file.buffer);
       res.json({ logo_path: fileName });
     } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // Upload a template asset (poster image or example document) to the public
+  // bucket so it gets a stable, permanently-public URL that email clients can
+  // fetch. Mirrors the company-logo flow in profile.ts.
+  app.post("/api/email-templates/asset", upload.single("file"), async (req, res) => {
+    let userId: string | undefined;
+    try {
+      userId = await currentUserId(req);
+    } catch {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "file required" });
+      return;
+    }
+    const kind = (req.body?.kind === "doc" ? "doc" : "poster") as "poster" | "doc";
+    const isImage = file.mimetype.startsWith("image/");
+    if (kind === "poster" && !isImage) {
+      res.status(400).json({ error: "poster must be an image" });
+      return;
+    }
+
+    const { publicBucketEnabled, uploadBufferToPublicSpaces, spacesEnabled, uploadBufferToSpaces } =
+      await import("../storage/spaces.js");
+
+    const ext = extname(file.originalname).toLowerCase() || (isImage ? ".png" : "");
+    const base = file.originalname
+      .replace(ext, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")   // sanitize non-URL-safe chars
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || kind;
+    const key = `images/${userId}/${base}_${Date.now()}${ext}`;
+
+    try {
+      let url: string;
+      if (publicBucketEnabled()) {
+        await uploadBufferToPublicSpaces(file.buffer, key, file.mimetype);
+        const publicBase = (process.env.BUCKET_PUBLIC_URL ?? "").replace(/\/$/, "");
+        url = publicBase
+          ? `${publicBase}/${key}`
+          : `https://${process.env.BUCKET_PUBLIC_NAME}.${new URL(process.env.BUCKET_PUBLIC_ENDPOINT!).host}/${key}`;
+      } else if (spacesEnabled()) {
+        url = await uploadBufferToSpaces(file.buffer, key, file.mimetype);
+      } else if (isImage) {
+        url = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+      } else {
+        res.status(500).json({ error: "object storage not configured for document upload" });
+        return;
+      }
+      res.json({ url });
+    } catch (err) {
+      logger.error("template_asset_upload_failed", { kind, error: String(err) });
       res.status(500).json({ error: String(err) });
     }
   });

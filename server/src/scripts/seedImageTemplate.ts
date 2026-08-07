@@ -9,19 +9,16 @@ import { MongoClient } from "mongodb";
 
 const name = "תזכורת בדיקה — פצ׳רסקי (תמונה)";
 
-// The poster is served as a static asset from the Vercel client
-// (client/src/public/) — a stable, permanently-public HTTPS URL that Gmail can
-// fetch (unlike Railway storage, which redirects to expiring signed URLs, and
-// unlike base64, which Gmail blocks).
+// poster_url is stored as a template FIELD (not baked into the HTML). The
+// render layer substitutes {{poster_url}} from this field, so the raw template
+// HTML keeps the placeholder and stays editable in the app UI.
 const posterUrl = process.env.POSTER_URL || "https://app.handcoded.tech/pechersky-reminder-poster.png";
 console.log("Poster URL:", posterUrl);
 
-// Load template HTML and bake the poster URL in (poster_url is not a standard
-// reminder var; document_url / advance_days stay dynamic).
-let html = readFileSync(resolve(__dirname, "../email-templates/reminders/pechersky-inspection-image.html"), "utf-8");
-html = html.replace(/\{\{poster_url\}\}/g, posterUrl);
+// Load template HTML as-is ({{poster_url}} placeholder preserved).
+const html = readFileSync(resolve(__dirname, "../email-templates/reminders/pechersky-inspection-image.html"), "utf-8");
 
-// 3. Seed / update the template in Atlas.
+// Seed / update the template in Atlas.
 const client = new MongoClient(process.env.MONGODB_URI!);
 await client.connect();
 const db = client.db("reminder-app");
@@ -30,8 +27,8 @@ const now = new Date();
 const result = await db.collection("email_templates").findOneAndUpdate(
   { name },
   {
-    $set: { html, subject: "תזכורת בדיקה תקופתית — מיכאל פצ׳רסקי", updated_at: now },
-    $setOnInsert: { name, is_default: 0, doc_template_id: null, logo_path: null, created_at: now },
+    $set: { html, poster_url: posterUrl, subject: "תזכורת בדיקה תקופתית — מיכאל פצ׳רסקי", updated_at: now },
+    $setOnInsert: { name, is_default: 0, doc_template_id: null, logo_path: null, example_document_url: null, created_at: now },
   },
   { upsert: true, returnDocument: "after" },
 ) as any;

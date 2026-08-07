@@ -336,6 +336,13 @@ async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ sub
 
   const vars = await buildEmailVars(reminder);
   vars.logo_url = logoToDataUrl(tpl?.logo_path);
+  // Poster is already a hosted public URL — pass through as-is.
+  vars.poster_url = (tpl as any)?.poster_url ?? null;
+  // Fall back to the template's example document when the reminder has no
+  // real document attached, so the download link still renders.
+  if (vars.document_url == null && (tpl as any)?.example_document_url) {
+    vars.document_url = (tpl as any).example_document_url;
+  }
 
   const filledKeys = Object.entries(vars).filter(([, v]) => v != null && v !== "").map(([k]) => k);
   logger.debug("reminder_email_rendered", {
@@ -556,6 +563,11 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
     const tpl = emailTemplateId
       ? await loadEmailTemplate(emailTemplateId)
       : await pickEmailTemplate(null);
+
+    // Poster + example document come from the template itself so the preview /
+    // test render exactly what a real send would show.
+    sampleVars.poster_url = (tpl as any)?.poster_url ?? null;
+    sampleVars.document_url = (tpl as any)?.example_document_url ?? null;
 
     let subject = "[Client Reminder] בדיקת חיבור אימייל";
     let html: string;

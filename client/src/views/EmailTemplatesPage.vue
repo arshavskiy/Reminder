@@ -125,6 +125,43 @@
                 </div>
               </n-form-item>
 
+              <n-form-item label="תמונת פוסטר">
+                <div style="display:flex; gap:12px; align-items:center; flex-wrap: wrap">
+                  <img
+                    v-if="editing.poster_url"
+                    :src="editing.poster_url"
+                    style="max-height:80px; border-radius:6px"
+                  />
+                  <n-upload
+                    :show-file-list="false"
+                    :custom-request="uploadPoster as any"
+                    accept="image/*"
+                  >
+                    <n-button size="small">העלה פוסטר</n-button>
+                  </n-upload>
+                  <n-button v-if="editing.poster_url" size="small" quaternary @click="editing.poster_url = null">הסר</n-button>
+                </div>
+              </n-form-item>
+
+              <n-form-item label="מסמך לדוגמה (לקישור ההורדה)">
+                <div style="display:flex; gap:12px; align-items:center; flex-wrap: wrap">
+                  <a
+                    v-if="editing.example_document_url"
+                    :href="editing.example_document_url"
+                    target="_blank"
+                    style="font-size:13px"
+                  >📄 מסמך לדוגמה הועלה ✓</a>
+                  <n-upload
+                    :show-file-list="false"
+                    :custom-request="uploadExampleDoc as any"
+                    accept="image/*,application/pdf,.doc,.docx"
+                  >
+                    <n-button size="small">העלה מסמך</n-button>
+                  </n-upload>
+                  <n-button v-if="editing.example_document_url" size="small" quaternary @click="editing.example_document_url = null">הסר</n-button>
+                </div>
+              </n-form-item>
+
               <n-form-item label="גוף ה-HTML">
                 <div style="width:100%">
                   <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap">
@@ -159,7 +196,9 @@
                 <code v-pre>{{contact_person}}</code>,
                 <code v-pre>{{contact_phone}}</code>,
                 <code v-pre>{{document_number}}</code>,
-                <code v-pre>{{logo_url}}</code>
+                <code v-pre>{{logo_url}}</code>,
+                <code v-pre>{{poster_url}}</code>,
+                <code v-pre>{{document_url}}</code>
                 וכל שדה מתבנית המסמך לפי ה-<code>key</code> שלו.
                 <br/>
                 בלוקים מותנים: <code v-pre>{{#if var}}...{{/if}}</code> &nbsp;|&nbsp;
@@ -338,6 +377,8 @@ function newTemplate() {
     subject: "[תזכורת] {{title}}",
     html: "",
     logo_path: null,
+    poster_url: null,
+    example_document_url: null,
     is_default: 0,
     created_at: "",
     updated_at: "",
@@ -368,6 +409,28 @@ async function uploadLogo({ file, onFinish, onError }: any) {
     onFinish();
   } catch (e) {
     message.error("העלאת הלוגו נכשלה");
+    onError();
+  }
+}
+
+async function uploadPoster({ file, onFinish, onError }: any) {
+  try {
+    const result = await api.emailTemplates.uploadAsset("poster", file.file as File);
+    if (editing.value) editing.value.poster_url = result.url;
+    onFinish();
+  } catch (e) {
+    message.error("העלאת הפוסטר נכשלה");
+    onError();
+  }
+}
+
+async function uploadExampleDoc({ file, onFinish, onError }: any) {
+  try {
+    const result = await api.emailTemplates.uploadAsset("doc", file.file as File);
+    if (editing.value) editing.value.example_document_url = result.url;
+    onFinish();
+  } catch (e) {
+    message.error("העלאת המסמך נכשלה");
     onError();
   }
 }
@@ -449,6 +512,8 @@ async function refreshPreview() {
       from_name: " ReminderOCR ",
       body: "טקסט גוף לדוגמה",
       logo_url: editing.value.logo_path ? api.assets.url(editing.value.logo_path) : null,
+      poster_url: editing.value.poster_url ?? null,
+      document_url: editing.value.example_document_url ?? null,
     };
     const r = await api.emailTemplates.preview(editing.value.html, editing.value.subject, sampleVars);
     previewHtml.value = r.html;

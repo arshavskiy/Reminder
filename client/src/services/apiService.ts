@@ -475,6 +475,14 @@ export const api = {
       post<{ html: string; subject: string }>("/email-templates/preview", { html, subject, vars }),
     getDefault: (name: "default" | "inspection" | "contract" | "invoice" | "verify-email" | "reset-password") =>
       get<{ html: string }>(`/email-templates/defaults/${name}`),
+    uploadAsset: async (kind: "poster" | "doc", file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("kind", kind);
+      const res = await fetch(`${BASE}/email-templates/asset`, { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      return res.json() as Promise<{ url: string }>;
+    },
   },
 
   equipment: {
