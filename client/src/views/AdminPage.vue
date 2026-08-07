@@ -892,16 +892,29 @@
 import {computed, h, onMounted, onUnmounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import type {DataTableColumns} from "naive-ui";
-import {NButton, NDataTable, NDrawer, NDrawerContent, NDivider, NIcon, NInput, NModal, NSelect, NSpin, NTag, NTabs, NTabPane, NTooltip, useMessage,} from "naive-ui";
 import {
-  AlarmOutline,
+  NButton,
+  NDataTable,
+  NDivider,
+  NDrawer,
+  NDrawerContent,
+  NIcon,
+  NInput,
+  NModal,
+  NSelect,
+  NSpin,
+  NTabPane,
+  NTabs,
+  NTag,
+  NTooltip,
+  useMessage,
+} from "naive-ui";
+import {
   ArrowBackOutline,
   BriefcaseOutline,
   CalendarOutline,
-  CheckmarkCircleOutline,
   ChevronBackOutline,
   ChevronForwardOutline,
-  CloseCircleOutline,
   CloseOutline,
   CloudUploadOutline,
   DocumentOutline,
@@ -909,13 +922,9 @@ import {
   MenuOutline,
   NotificationsOutline,
   PeopleOutline,
-  RefreshOutline,
   SearchOutline,
   SettingsOutline,
-  StatsChartOutline,
-  TimeOutline,
   TimerOutline,
-  WarningOutline,
 } from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import DocumentDetailPage from "./DocumentDetailPage.vue";
@@ -2071,6 +2080,11 @@ onUnmounted(() => {
   flex-direction: column;
   overflow: hidden;
   direction: ltr;
+  transition: margin-left 0.2s ease;
+}
+
+.admin-shell--sidebar-collapsed .admin-main {
+  margin-left: 40px;
 }
 
 .admin-main__header {
