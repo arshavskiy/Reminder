@@ -16,6 +16,7 @@ import {generateContractReminders, generateTaskReminders} from "../reminders/sch
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 import {logger} from "../logger";
+import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
 
 type PushFn = (event: Record<string, unknown>) => void;
 
@@ -127,6 +128,7 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
     file_size_bytes: fileSize,
     ai_enabled: !pipeline?.skipAi,
   });
+  notifyDocumentUploaded({ fileName });
 
   processDocument(documentId, managedPath, mimeType, ext, push, userId, pipeline).catch(async (err) => {
     logger.error("document_processing_failed", { document_id: documentId, user_id: userId ?? null, error: err });
@@ -134,6 +136,7 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
       { _id: insertResult.insertedId },
       { $set: { processing_status: "error", error_message: String(err), updated_at: new Date() } }
     );
+    notifyExtractionFailed({ fileName, error: String(err) });
     push?.({ type: "document:done", documentId: documentId as any, status: "error", error: String(err) });
   });
 
@@ -185,6 +188,8 @@ export async function processDocument(
     await col("documents").updateOne(docFilter, {
       $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
     });
+    const failedDoc = await col("documents").findOne(docFilter, { projection: { file_name: 1 } } as any) as any;
+    notifyExtractionFailed({ fileName: failedDoc?.file_name ?? documentId, error: msg });
     push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
     return;
   }

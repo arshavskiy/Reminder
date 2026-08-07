@@ -631,8 +631,25 @@
       <section v-if="activeSection === 'settings'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="adminSettings">
-          <!-- Config grid -->
+          <!-- Push notifications -->
           <div class="monitor-block">
+            <div class="monitor-block__title">Admin Push Notifications</div>
+            <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 12px">
+              Get OS notifications for failed sends, extraction failures, new uploads and pipeline gaps — even when this tab is closed.
+            </p>
+            <div v-if="!pushSupported" style="font-size:13px;color:var(--text-secondary)">
+              Push isn't available here (needs HTTPS + a browser that supports notifications).
+            </div>
+            <div v-else style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <n-switch :value="pushSubscribed" :loading="pushBusy" @update:value="onTogglePush" />
+              <span style="font-size:13px">{{ pushSubscribed ? 'Enabled' : 'Disabled' }}</span>
+              <n-button v-if="pushSubscribed" size="small" tertiary :loading="pushBusy" @click="onTestPush">Send test</n-button>
+              <n-tag v-if="pushPermission === 'denied'" type="error" size="small" round>Blocked in browser</n-tag>
+            </div>
+          </div>
+
+          <!-- Config grid -->
+          <div class="monitor-block" style="margin-top:14px">
             <div class="monitor-block__title">Application Configuration</div>
             <div class="admin-settings-grid" style="margin-top:12px">
               <div class="admin-setting-row"><span class="admin-setting-key">Environment</span><span class="admin-setting-val">{{ adminSettings.appEnv }}</span></div>
@@ -903,12 +920,14 @@ import {
   NModal,
   NSelect,
   NSpin,
+  NSwitch,
   NTabPane,
   NTabs,
   NTag,
   NTooltip,
   useMessage,
 } from "naive-ui";
+import {useAdminPush} from "../composables/useAdminPush";
 import {
   ArrowBackOutline,
   BriefcaseOutline,
@@ -933,6 +952,40 @@ import AdminReportModal from "../components/AdminReportModal.vue";
 
 const router = useRouter();
 const message = useMessage();
+
+// ── Admin push notifications ──
+const {
+  supported: pushSupported,
+  permission: pushPermission,
+  subscribed: pushSubscribed,
+  busy: pushBusy,
+  refreshState: refreshPushState,
+  enablePush,
+  disablePush,
+} = useAdminPush();
+
+async function onTogglePush(next: boolean) {
+  try {
+    if (next) {
+      await enablePush();
+      message.success("התראות אדמין הופעלו");
+    } else {
+      await disablePush();
+      message.info("התראות אדמין בוטלו");
+    }
+  } catch (err: any) {
+    message.error(err?.message ?? "פעולת ההתראות נכשלה");
+  }
+}
+
+async function onTestPush() {
+  try {
+    await api.admin.pushTest();
+    message.success("נשלחה התראת בדיקה");
+  } catch (err: any) {
+    message.error(err?.message ?? "שליחת בדיקה נכשלה");
+  }
+}
 
 const appEnv = ref("development");
 const dbName = ref("");
@@ -1980,6 +2033,7 @@ onMounted(async () => {
   } catch { /* non-critical */ }
   await loadUsers();
   startPolling();
+  refreshPushState();
 });
 
 onUnmounted(() => {

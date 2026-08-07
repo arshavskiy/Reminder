@@ -1,0 +1,26 @@
+import { sendPushToAdmins } from "./pushService";
+import { logger } from "../logger";
+
+// Fire-and-forget admin push helpers. Never throw into the caller's flow — a
+// failed notification must not break the event that triggered it.
+function fire(title: string, body: string, url = "/#/admin"): void {
+  sendPushToAdmins({ title, body, data: { url } }).catch((err) => {
+    logger.warn("admin_notify_failed", { title, error: err instanceof Error ? err.message : String(err) });
+  });
+}
+
+export function notifyEmailSendFailed(opts: { recipient?: string | null; error?: string | null; title?: string | null }): void {
+  fire("שליחת תזכורת נכשלה", `${opts.title ?? "תזכורת"} → ${opts.recipient ?? "?"}: ${opts.error ?? "שגיאה"}`);
+}
+
+export function notifyExtractionFailed(opts: { fileName?: string | null; error?: string | null }): void {
+  fire("חילוץ מסמך נכשל", `${opts.fileName ?? "מסמך"}: ${opts.error ?? "שגיאה"}`);
+}
+
+export function notifyDocumentUploaded(opts: { fileName?: string | null; userEmail?: string | null }): void {
+  fire("מסמך חדש הועלה", `${opts.fileName ?? "מסמך"}${opts.userEmail ? ` · ${opts.userEmail}` : ""}`, "/#/admin");
+}
+
+export function notifyReminderSkipped(opts: { title?: string | null }): void {
+  fire("תזכורת נשלחה ללא נמען", `${opts.title ?? "תזכורת"} — אין נמען מוגדר`);
+}

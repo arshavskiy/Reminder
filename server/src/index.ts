@@ -28,6 +28,7 @@ import {registerAuthRoutes} from "./routes/auth";
 import {registerUserSettingsRoutes} from "./routes/userSettings";
 import {registerProfileRoutes} from "./routes/profile";
 import {registerAdminRoutes} from "./routes/admin";
+import {initPush} from "./push/pushService";
 import {registerExtractRemindersRoutes} from "./routes/extractReminders";
 import {registerFeatureRoutes} from "./routes/features";
 import {importFile} from "./pipeline/importer";
@@ -166,6 +167,7 @@ async function main() {
   validateEnv();
   const settings = getSettings();
   await connectDb();
+  initPush();
   await seedFeatureDefinitions();
   await seedBuiltinTemplates();
   await seedDefaultEmailTemplate();

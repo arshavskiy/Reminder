@@ -10,16 +10,11 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      workbox: {
+      strategies: "injectManifest",
+      srcDir: ".",
+      filename: "sw.ts",
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        navigateFallback: "/index.html",
-        runtimeCaching: [
-          {
-            urlPattern: /^\/api\//,
-            handler: "NetworkFirst",
-            options: { cacheName: "api-cache", networkTimeoutSeconds: 5 },
-          },
-        ],
       },
       includeAssets: ["favicon.svg", "favicon-32.png", "apple-touch-icon.png"],
       manifest: {

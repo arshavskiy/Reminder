@@ -6,6 +6,7 @@ import {sendMonthlyReportToRecipients} from "../reports/monthlyReports";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {clientDisplayName} from "../utils/clientNames";
+import {notifyEmailSendFailed, notifyReminderSkipped} from "../push/adminNotify";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
@@ -282,6 +283,7 @@ async function processReminder(reminder: ReminderWithContext) {
       error: "no recipients resolved",
       smtp_host: settings.smtpHost || "in-app-only",
     } as any);
+    notifyReminderSkipped({ title: reminder.title });
     await markSent(reminder);
     return;
   }
@@ -336,6 +338,7 @@ async function processReminder(reminder: ReminderWithContext) {
       attempt: failCount + 1,
       error: result.error,
     });
+    notifyEmailSendFailed({ recipient: recipients.join(", "), error: result.error, title: reminder.title });
   } else {
     logger.warn("reminder_send_failed", {
       reminder_id: remId,

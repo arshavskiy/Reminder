@@ -5,6 +5,7 @@ import {col} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
 import type {UserRole} from "../../src/shared/types.js";
 import {getSettings} from "../settings.js";
+import {sendPushToAdmins} from "../push/pushService.js";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 
@@ -37,6 +38,50 @@ export function registerAdminRoutes(app: express.Application) {
       .toArray();
 
     res.json(users.map(flatUser));
+  });
+
+  // ── Web Push subscription (admin notifications) ───────────────────────────
+  // GET /api/admin/push/vapid-key
+  app.get("/api/admin/push/vapid-key", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    res.json({ key: process.env.VAPID_PUBLIC_KEY || null });
+  });
+
+  // POST /api/admin/push/subscribe
+  app.post("/api/admin/push/subscribe", async (req, res) => {
+    const auth = await adminAuth(req, res);
+    if (!auth) return;
+    const { endpoint, keys } = req.body as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+      res.status(400).json({ error: "Invalid subscription" });
+      return;
+    }
+    await col("push_subscriptions").updateOne(
+      { user_id: auth.userId, endpoint },
+      { $set: { user_id: auth.userId, endpoint, keys, updated_at: new Date() }, $setOnInsert: { created_at: new Date() } },
+      { upsert: true },
+    );
+    res.status(201).json({ ok: true });
+  });
+
+  // POST /api/admin/push/unsubscribe
+  app.post("/api/admin/push/unsubscribe", async (req, res) => {
+    const auth = await adminAuth(req, res);
+    if (!auth) return;
+    const { endpoint } = req.body as { endpoint?: string };
+    await col("push_subscriptions").deleteOne({ user_id: auth.userId, endpoint });
+    res.json({ ok: true });
+  });
+
+  // POST /api/admin/push/test — send a test notification to the caller's admins
+  app.post("/api/admin/push/test", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    await sendPushToAdmins({
+      title: "בדיקת התראה",
+      body: "התראות אדמין פעילות ✓",
+      data: { url: "/#/admin" },
+    });
+    res.json({ ok: true });
   });
 
   // PUT /api/admin/users/:id — update role / is_active

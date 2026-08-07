@@ -415,6 +415,22 @@ export const api = {
         headers: { "Content-Type": "application/json" },
       }).then(r => r.json());
     },
+    pushVapidKey: () => adminGet<{ key: string | null }>("/admin/push/vapid-key"),
+    pushSubscribe: (body: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+      fetch(`${ADMIN_BASE}/admin/push/subscribe`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      }).then(r => r.json()),
+    pushUnsubscribe: (endpoint: string) =>
+      fetch(`${ADMIN_BASE}/admin/push/unsubscribe`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint }),
+      }).then(r => r.json()),
+    pushTest: () =>
+      fetch(`${ADMIN_BASE}/admin/push/test`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      }).then(r => r.json()),
   },
 
   config: {
