@@ -54,12 +54,18 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 // Vercel deployments: any subdomain under vercel.app for this project
 const VERCEL_PREVIEW_RE = /^https:\/\/reminder[a-z0-9-]*\.vercel\.app$/;
 
+// Production custom domains — any handcoded.tech subdomain (app, reminder, …)
+// so new front-end hostnames work without editing ALLOWED_ORIGINS.
+const HANDCODED_DOMAIN_RE = /^https:\/\/([a-z0-9-]+\.)*handcoded\.tech$/;
+
 app.use(
   cors({
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
       if (allowedOrigins.includes(origin)) return cb(null, true);
       if (VERCEL_PREVIEW_RE.test(origin)) return cb(null, true);
+      if (HANDCODED_DOMAIN_RE.test(origin)) return cb(null, true);
+      logger.warn("cors_origin_rejected", { origin });
       cb(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
