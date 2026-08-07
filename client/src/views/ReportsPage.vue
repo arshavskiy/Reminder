@@ -161,12 +161,10 @@ const clientReportFieldOptions = [
   {key: "contact_person", label: "איש קשר"},
   {key: "contact_phone", label: "טלפון"},
   {key: "contact_email", label: "אימייל"},
-  {key: "client_address", label: "כתובת"},
+  {key: "client_address", label: "כתובת"},s
   {key: "start_date", label: "תאריך התחלה"},
   {key: "expiry_date", label: "תאריך סיום / בדיקה הבאה"},
   {key: "status", label: "סטטוס"},
-  {key: "amount", label: "סכום"},
-  {key: "currency", label: "מטבע"},
   {key: "source_document", label: "מסמך מקור"},
   {key: "equipment", label: "ציוד"},
   {key: "reminders", label: "תזכורות"},
@@ -175,8 +173,8 @@ const defaultTrackingReportFields = trackingReportFieldOptions.map((field) => fi
 const defaultClientReportFields = clientReportFieldOptions.map((field) => field.key);
 const allClientReportFieldOptions = [...trackingReportFieldOptions, ...clientReportFieldOptions] as const;
 const defaultAllReportFields = [
-  "tracking_date", "tracking_phone", "tracking_license_number", "tracking_notes",
-  "tracking_relevant", "contract_type", "contact_person",
+  "tracking_date", "tracking_checked", "contact_person", "tracking_phone",
+  "tracking_license_number", "tracking_relevant", "tracking_notes",
 ];
 const selectedReportClientId = computed(() => selectedClientId.value === allClientsValue ? undefined : selectedClientId.value);
 const activeReportFieldOptions = computed(() => selectedReportClientId.value ? clientReportFieldOptions : allClientReportFieldOptions);
