@@ -14,8 +14,11 @@ import {
     createSession,
     extractSessionFromCookie,
     revokeSession,
+    setActingAsUser,
     verifySession,
+    verifySessionIdentity,
 } from "../auth/session";
+import {HTTPException, requireAuth, requireRole} from "../auth/middleware";
 import {
     generateToken,
     hashPassword,
@@ -262,11 +265,12 @@ export function registerAuthRoutes(app: express.Application) {
       return;
     }
 
-    const user = await verifySession(sessionId);
-    if (!user) {
+    const identity = await verifySessionIdentity(sessionId);
+    if (!identity) {
       res.json({ user: null });
       return;
     }
+    const { user, actingAs } = identity;
 
     res.json({
       user: {
@@ -278,6 +282,73 @@ export function registerAuthRoutes(app: express.Application) {
         picture_url: user.picture_url,
         role: user.role,
       },
+      actingAs: actingAs
+        ? {
+            id: (actingAs as any).id,
+            email: actingAs.email,
+            name: actingAs.name,
+            picture_url: actingAs.picture_url,
+            role: actingAs.role,
+          }
+        : null,
+    });
+  });
+
+  // POST /api/auth/act-as — admin selects which user's data the app shows.
+  // Stored on the session, so every route's `{ user_id: ctx.userId }` filter
+  // follows the selection. Pass userId: null to go back to viewing own data.
+  app.post("/api/auth/act-as", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    const sessionId = extractSessionFromCookie(cookieHeader);
+    if (!sessionId) {
+      res.status(401).json({ error: "No session cookie" });
+      return;
+    }
+
+    let ctx;
+    try {
+      ctx = await requireAuth(cookieHeader);
+      // Role gating deliberately uses ctx.user (the real session owner), never
+      // the impersonated user — otherwise an admin viewing as a regular user
+      // could not switch back.
+      requireRole(ctx, "admin");
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 403).json({ error: err.message });
+      return;
+    }
+
+    const { userId } = req.body as { userId?: string | null };
+
+    if (!userId) {
+      await setActingAsUser(sessionId, null);
+      logger.info("admin_act_as_cleared", { admin_user_id: ctx.realUserId });
+      res.json({ ok: true, actingAs: null });
+      return;
+    }
+
+    let target: any = null;
+    try {
+      target = await col("users").findOne({ _id: new ObjectId(userId) } as any);
+    } catch {
+      res.status(400).json({ error: "Invalid user id" });
+      return;
+    }
+    if (!target) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    await setActingAsUser(sessionId, userId);
+    logger.info("admin_act_as", {
+      admin_user_id: ctx.realUserId,
+      target_user_id: userId,
+      target_email: target.email,
+    });
+
+    res.json({
+      ok: true,
+      actingAs: { id: target._id.toString(), email: target.email, name: target.name, role: target.role },
     });
   });
 

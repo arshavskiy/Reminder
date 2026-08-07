@@ -13,6 +13,20 @@
               <span class="appbar__brand-text"> ReminderOCR </span>
             </div>
 
+            <!-- Admin: view the whole app as another user -->
+            <n-select
+              v-if="authStore.isAdmin"
+              :value="authStore.actingAs?.id ?? null"
+              :options="actAsOptions"
+              :loading="actAsLoading"
+              placeholder="צפה כמשתמש"
+              size="small"
+              clearable
+              filterable
+              class="actas-select"
+              @update:value="onActAsChange"
+            />
+
             <!-- Center nav -->
             <nav class="appbar__nav">
               <a
@@ -59,6 +73,13 @@
              </div>
           </header>
 
+          <!-- Impersonation banner — always visible while acting as someone
+               else, because writes (uploads, emails) really affect that user -->
+          <div v-if="authStore.actingAs" class="actas-banner">
+            <span>צופה כ: <b>{{ authStore.actingAs.email }}</b></span>
+            <button class="actas-banner__exit" @click="onActAsChange(null)">חזור לעצמי</button>
+          </div>
+
           <n-drawer v-model:show="mobileNavOpen" :width="280" placement="right">
             <n-drawer-content title="ניווט" closable>
               <nav class="mobile-nav-list">
@@ -101,6 +122,7 @@ import {
   NDrawerContent,
   NIcon,
   NMessageProvider,
+  NSelect,
   NTooltip,
   unstableAlertRtl,
   unstableAvatarGroupRtl,
@@ -167,6 +189,38 @@ const pwa = usePwa();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const mobileNavOpen = ref(false);
 
+// ── Admin "view as user" ────────────────────────────────────────────────────
+const actAsUsers = ref<Array<{ id: string; email: string; name: string | null }>>([]);
+const actAsLoading = ref(false);
+
+const actAsOptions = computed(() =>
+  actAsUsers.value.map((u) => ({ label: u.name ? `${u.name} — ${u.email}` : u.email, value: u.id })),
+);
+
+async function loadActAsUsers() {
+  if (!authStore.isAdmin || actAsUsers.value.length) return;
+  actAsLoading.value = true;
+  try {
+    const { api } = await import("./services/apiService.js");
+    const users = await api.admin.listUsers();
+    actAsUsers.value = (users as any[]).map((u) => ({ id: String(u.id), email: u.email, name: u.name ?? null }));
+  } catch {
+    // Non-critical — the selector just stays empty.
+  } finally {
+    actAsLoading.value = false;
+  }
+}
+
+// Switching reloads the page (handled in the store) so no stale data from the
+// previous identity lingers in any Pinia store.
+async function onActAsChange(userId: string | null) {
+  try {
+    await authStore.setActingAs(userId);
+  } catch {
+    /* store surfaces the failure; keep the current view */
+  }
+}
+
 // ── Theme ────────────────────────────────────────────────────────────────────
 const darkPref = ref<boolean>(localStorage.getItem("theme") === "dark");
 const isDark = computed(() => darkPref.value);
@@ -207,6 +261,7 @@ onMounted(async () => {
   } catch { /* keep localStorage value */ }
   if (authStore.user) {
     featuresStore.fetchFeatures().catch(() => {});
+    loadActAsUsers();
   }
 });
 
@@ -389,6 +444,48 @@ html[data-theme="light"] .mobile-nav-list__item--active {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.actas-select {
+  width: 200px;
+  min-width: 140px;
+  margin-inline-start: 14px;
+  flex-shrink: 0;
+}
+
+.actas-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 7px 16px;
+  background: rgba(240, 160, 32, 0.14);
+  border-bottom: 1px solid rgba(240, 160, 32, 0.4);
+  color: #8a5a00;
+  font-size: 13px;
+}
+
+.actas-banner__exit {
+  border: 1px solid rgba(240, 160, 32, 0.55);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.actas-banner__exit:hover {
+  background: rgba(240, 160, 32, 0.2);
+}
+
+@media (max-width: 768px) {
+  .actas-select {
+    width: 130px;
+    min-width: 110px;
+  }
 }
 
 .iconbtn {

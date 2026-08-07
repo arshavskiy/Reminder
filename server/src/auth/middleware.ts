@@ -1,11 +1,24 @@
-import {extractSessionFromCookie, verifySession} from "./session";
+import {extractSessionFromCookie, verifySessionIdentity} from "./session";
 import type {User, UserRole} from "../../src/shared/types.js";
 import {isAnyFeatureEnabledForUser} from "../features";
 import type {NextFunction, Request, Response} from "express";
 
 export interface AuthContext {
+  /**
+   * Effective user for data scoping. When an admin is viewing as another user
+   * this is the impersonated user, so every `{ user_id: ctx.userId }` filter
+   * follows the selection with no per-route changes.
+   */
   userId: string;
+  /**
+   * The user the session belongs to. Role checks use this, so impersonating a
+   * non-admin never strips the admin's own privileges.
+   */
   user: User;
+  /** The impersonated user, when an admin is viewing as someone else. */
+  actingAs: User | null;
+  /** The real (session-owning) user's id, regardless of impersonation. */
+  realUserId: string;
 }
 
 export class HTTPException extends Error {
@@ -19,11 +32,19 @@ export async function requireAuth(cookieHeader: string | undefined): Promise<Aut
   const sessionId = extractSessionFromCookie(cookieHeader);
   if (!sessionId) throw new HTTPException(401, "No session cookie");
 
-  const user = await verifySession(sessionId);
-  if (!user) throw new HTTPException(401, "Invalid or expired session");
+  const identity = await verifySessionIdentity(sessionId);
+  if (!identity) throw new HTTPException(401, "Invalid or expired session");
+
+  const { user, actingAs } = identity;
   if ((user as any).is_active === 0) throw new HTTPException(403, "User account is inactive");
 
-  return { userId: (user as any).id ?? (user as any)._id?.toString(), user };
+  const realUserId = (user as any).id ?? (user as any)._id?.toString();
+  return {
+    userId: actingAs?.id ?? realUserId,
+    user,
+    actingAs,
+    realUserId,
+  };
 }
 
 const ROLE_RANK: Record<UserRole, number> = { user: 0, pro: 1, admin: 2 };

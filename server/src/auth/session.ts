@@ -52,7 +52,34 @@ export async function createSession(
   return { sessionId, cookies: setCookieHeader };
 }
 
-export async function verifySession(sessionId: string): Promise<User | null> {
+function toUser(doc: any): User {
+  return {
+    id: doc._id.toString(),
+    google_sub: doc.google_sub,
+    email: doc.email,
+    name: doc.name,
+    phone: doc.phone ?? null,
+    company_name: doc.company_name ?? null,
+    picture_url: doc.picture_url,
+    role: doc.role,
+    is_active: doc.is_active,
+    created_at: doc.created_at?.toISOString() ?? "",
+    last_login_at: doc.last_login_at?.toISOString() ?? null,
+  } as any;
+}
+
+export interface SessionIdentity {
+  /** The user the session actually belongs to. Role checks must use this. */
+  user: User;
+  /** Admin-selected user whose data is being viewed, when impersonating. */
+  actingAs: User | null;
+}
+
+/**
+ * Resolves a session to its real user plus any admin "view as" target.
+ * The override is honoured only when the session's OWN user is an admin.
+ */
+export async function verifySessionIdentity(sessionId: string): Promise<SessionIdentity | null> {
   const db = getDb();
   const session = await db.collection("sessions").findOne({
     _id: sessionId as any,
@@ -61,22 +88,37 @@ export async function verifySession(sessionId: string): Promise<User | null> {
 
   if (!session) return null;
 
-  const user = await db.collection("users").findOne({ _id: new ObjectId(session.user_id as string) }) as any;
-  if (!user) return null;
+  const userDoc = await db.collection("users").findOne({ _id: new ObjectId(session.user_id as string) }) as any;
+  if (!userDoc) return null;
+  const user = toUser(userDoc);
 
-  return {
-    id: user._id.toString(),
-    google_sub: user.google_sub,
-    email: user.email,
-    name: user.name,
-    phone: user.phone ?? null,
-    company_name: user.company_name ?? null,
-    picture_url: user.picture_url,
-    role: user.role,
-    is_active: user.is_active,
-    created_at: user.created_at?.toISOString() ?? "",
-    last_login_at: user.last_login_at?.toISOString() ?? null,
-  } as any;
+  let actingAs: User | null = null;
+  const targetId = (session as any).acting_as_user_id as string | undefined;
+  if (targetId && user.role === "admin" && targetId !== String(user.id)) {
+    try {
+      const targetDoc = await db.collection("users").findOne({ _id: new ObjectId(targetId) }) as any;
+      if (targetDoc) actingAs = toUser(targetDoc);
+    } catch {
+      // Malformed id stored on the session — ignore and act as self.
+    }
+  }
+
+  return { user, actingAs };
+}
+
+export async function verifySession(sessionId: string): Promise<User | null> {
+  const identity = await verifySessionIdentity(sessionId);
+  return identity?.user ?? null;
+}
+
+/** Sets (or clears, with null) the admin's "view as" target for this session. */
+export async function setActingAsUser(sessionId: string, targetUserId: string | null): Promise<void> {
+  await getDb().collection("sessions").updateOne(
+    { _id: sessionId as any },
+    targetUserId
+      ? { $set: { acting_as_user_id: targetUserId } }
+      : { $unset: { acting_as_user_id: "" } },
+  );
 }
 
 export async function revokeSession(sessionId: string): Promise<void> {

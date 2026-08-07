@@ -7,6 +7,8 @@ function makeCtx(role: UserRole): AuthContext {
   return {
     userId: "u1",
     user: { id: 1, google_sub: "", email: "test@test.com", name: null, phone: null, picture_url: null, role, is_active: 1, created_at: "", last_login_at: null },
+    actingAs: null,
+    realUserId: "u1",
   };
 }
 

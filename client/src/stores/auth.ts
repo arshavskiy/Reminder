@@ -1,8 +1,8 @@
 import {defineStore} from "pinia";
-import {ref} from "vue";
+import {computed, ref} from "vue";
 
 interface AuthUser {
-  id: number;
+  id: string;
   email: string;
   name: string | null;
   picture_url: string | null;
@@ -34,13 +34,19 @@ export const useAuthStore = defineStore("auth", () => {
   const user = ref<AuthUser | null>(loadCached());
   const loading = ref(false);
   const initialized = ref(false);
+  // Admin "view as" target. Server-side state (stored on the session), so this
+  // is only a mirror for the UI — never the source of truth.
+  const actingAs = ref<AuthUser | null>(null);
+
+  const isAdmin = computed(() => user.value?.role === "admin");
 
   async function fetchMe() {
     loading.value = true;
     try {
       const res = await fetch(`${SERVER}/api/auth/me`, { credentials: "include" });
-      const data = await res.json() as { user: AuthUser | null };
+      const data = await res.json() as { user: AuthUser | null; actingAs?: AuthUser | null };
       user.value = data.user;
+      actingAs.value = data.actingAs ?? null;
       saveCache(data.user);
     } catch {
       // Network error — keep cached user so app stays usable offline
@@ -48,6 +54,25 @@ export const useAuthStore = defineStore("auth", () => {
       loading.value = false;
       initialized.value = true;
     }
+  }
+
+  /**
+   * Switch which user's data the whole app shows (admin only). Reloads the page
+   * so every store refetches under the new identity instead of showing a mix of
+   * the previous user's cached data.
+   */
+  async function setActingAs(userId: string | null) {
+    const res = await fetch(`${SERVER}/api/auth/act-as`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as { error?: string };
+      throw new Error(err.error ?? `Failed to switch user (${res.status})`);
+    }
+    window.location.reload();
   }
 
   async function logout() {
@@ -70,5 +95,5 @@ export const useAuthStore = defineStore("auth", () => {
     initialized.value = true;
   }
 
-  return { user, loading, initialized, fetchMe, logout, loginWithGoogle, setUser };
+  return { user, actingAs, isAdmin, loading, initialized, fetchMe, logout, loginWithGoogle, setUser, setActingAs };
 });
