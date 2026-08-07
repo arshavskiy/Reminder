@@ -1,5 +1,6 @@
 <template>
   <div
+    dir="ltr"
     class="admin-shell"
     :class="{
       'admin-shell--sidebar-collapsed': !isMobileViewport && !showDesktopSidebar,
@@ -698,7 +699,7 @@
     </n-modal>
 
     <!-- Role edit modal -->
-    <n-modal v-model:show="showRoleModal" preset="dialog" title="Change User Role" style="width: 360px" :mask-closable="false" dir="rtl">
+    <n-modal v-model:show="showRoleModal" preset="dialog" title="Change User Role" style="width: 360px" :mask-closable="false" dir="ltr">
       <div style="padding: 8px 0">
         <p style="margin: 0 0 12px; font-size: 14px">
           <strong>{{ editingUser?.email }}</strong>
@@ -707,7 +708,6 @@
           v-model:value="editingRole"
           :options="roleOptions"
           placeholder="Select role"
-          style="direction: rtl"
         />
       </div>
       <template #action>
@@ -717,7 +717,7 @@
     </n-modal>
 
     <!-- User Detail Drawer -->
-    <n-drawer v-model:show="showUserDrawer" :width="680" placement="right">
+    <n-drawer v-model:show="showUserDrawer" :width="680" placement="right" dir="ltr">
       <n-drawer-content :title="userDetailUser ? (userDetailUser.email ?? userDetailUser.name ?? 'User Detail') : 'User Detail'" closable>
         <n-spin v-if="userDetailLoading" style="display:flex;justify-content:center;padding:60px" />
         <template v-else-if="userDetailData">
@@ -834,7 +834,7 @@
     </n-drawer>
 
     <!-- Error Detail Modal -->
-    <n-modal v-model:show="showErrorModal" preset="dialog" title="Error Details" style="width: 500px; max-width:90vw">
+    <n-modal v-model:show="showErrorModal" preset="dialog" title="Error Details" style="width: 500px; max-width:90vw" dir="ltr">
       <div v-if="errorDetail" style="padding: 12px 0">
         <div style="margin-bottom: 16px">
           <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px">EMAIL / RECIPIENT</div>
@@ -1990,6 +1990,19 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Admin UI is English/LTR. The app root is RTL (Hebrew), and Naive UI renders
+   data-table header and body in separate DOM subtrees, so relying on an
+   inherited dir="ltr" flips only the header — forcing LTR on the table and both
+   its header/body wrappers keeps columns aligned. */
+.admin-shell :deep(.n-data-table),
+.admin-shell :deep(.n-data-table-base-table),
+.admin-shell :deep(.n-data-table-base-table-header),
+.admin-shell :deep(.n-data-table-base-table-body),
+.admin-shell :deep(.n-data-table-thead),
+.admin-shell :deep(.n-data-table-tbody),
+.admin-shell :deep(.n-data-table-tr) {
+  direction: ltr;
+}
 .admin-shell {
   position: relative;
   display: flex;
@@ -2314,12 +2327,26 @@ onUnmounted(() => {
   }
 
   .admin-section {
-    padding: 12px 16px;
+    padding: 8px 4px;
   }
 
   .admin-data-table {
     font-size: 12px;
   }
+
+  /* Naive UI clamps its scrollbar content to the container width, squeezing
+     columns until they wrap one char per line. Let the content grow to the
+     table's natural width so columns keep their size and the row scrolls
+     horizontally instead. */
+  .admin-shell :deep(.n-data-table-base-table-body .n-scrollbar-content),
+  .admin-shell :deep(.n-data-table-base-table-header .n-scrollbar-content) {
+    min-width: max-content;
+  }
+  .admin-shell :deep(.n-data-table-th),
+  .admin-shell :deep(.n-data-table-td) {
+    white-space: nowrap;
+  }
+
 }
 
 .user-stat-pill {

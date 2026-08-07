@@ -116,10 +116,23 @@
                 </p>
               </div>
             </n-popover>
-            <span v-if="cell.items.length + cell.expiryItems.length > 4" class="rcal__more">
-              +{{ cell.items.length + cell.expiryItems.length - 4 }}
-            </span>
+            <button
+              v-if="cell.items.length + cell.expiryItems.length > 4"
+              class="rcal__more"
+              type="button"
+              @click.stop="openDay(cell)"
+            >
+              +{{ cell.items.length + cell.expiryItems.length - 4 }} עוד
+            </button>
           </div>
+          <button
+            v-if="cell.items.length + cell.expiryItems.length > 0"
+            class="rcal__cell-all"
+            type="button"
+            title="הצג את כל התזכורות של היום"
+            @click.stop="openDay(cell)"
+          >
+            הצג הכל</button>
         </div>
       </div>
     </div>
@@ -162,13 +175,52 @@
         </div>
       </div>
     </div>
+
+    <!-- ── Day detail modal (all reminders/expiries for a date) ──────────── -->
+    <n-modal v-model:show="dayModalOpen">
+      <div class="rcal__day-modal" dir="rtl">
+        <header class="rcal__day-modal-head">
+          <h3 class="rcal__day-modal-title">{{ dayModalLabel }}</h3>
+          <span class="rcal__day-modal-count">
+            {{ (dayModalItems.length + dayModalExpiry.length) }} פריטים
+          </span>
+          <button class="rcal__day-modal-close" type="button" @click="dayModalOpen = false">✕</button>
+        </header>
+        <div class="rcal__day-modal-body">
+          <button
+            v-for="r in dayModalItems"
+            :key="`m-${r.id}`"
+            :class="`rcal__day-row--${reminderVisualStatus(r)}`"
+            class="rcal__day-row"
+            type="button"
+            @click="onNavigate({ type: 'reminder', id: r.id })"
+          >
+            <span class="rcal__day-dot" />
+            <span class="rcal__day-row-title">{{ reminderCalendarLabel(r) }}</span>
+            <span v-if="isReminderOverdue(r)" class="rcal__day-badge">באיחור</span>
+            <span v-if="reminderSecondaryLabel(r)" class="rcal__day-row-sub">— {{ reminderSecondaryLabel(r) }}</span>
+          </button>
+          <button
+            v-for="e in dayModalExpiry"
+            :key="`me-${e.id}`"
+            :class="`rcal__day-row--expiry-${expiryVisualStatus(e)}`"
+            class="rcal__day-row"
+            type="button"
+          >
+            <span class="rcal__day-dot rcal__day-dot--expiry" />
+            <span class="rcal__day-row-title">{{ expiryCalendarLabel(e) }} — {{ expiryStatusLabel(e) }}</span>
+            <span v-if="e.equipment_name" class="rcal__day-row-sub">— {{ e.equipment_name }}</span>
+          </button>
+        </div>
+      </div>
+    </n-modal>
   </section>
 </template>
 
 <script lang="ts" setup>
 import {computed, ref} from "vue";
 import {useRouter} from "vue-router";
-import {NButton, NPopover} from "naive-ui";
+import {NButton, NModal, NPopover} from "naive-ui";
 import type {ReminderWithContext} from "@shared/types.js";
 import type {ExpiryCalendarItem} from "../services/apiService.js";
 import ReminderQuickView from "./ReminderQuickView.vue";
@@ -185,6 +237,20 @@ defineEmits<{ (e: "refresh"): void }>();
 const router = useRouter();
 const view = ref<"month" | "agenda">(isMobileViewport() ? "agenda" : "month");
 const cursor = ref(new Date());
+
+// Day detail modal — shows every reminder/expiry for a clicked calendar day
+const dayModalOpen = ref(false);
+const dayModalItems = ref<ReminderWithContext[]>([]);
+const dayModalExpiry = ref<ExpiryCalendarItem[]>([]);
+const dayModalLabel = ref("");
+
+function openDay(cell: { iso: string; items: ReminderWithContext[]; expiryItems: ExpiryCalendarItem[] }) {
+  dayModalItems.value = cell.items;
+  dayModalExpiry.value = cell.expiryItems;
+  const d = new Date(cell.iso + "T00:00:00");
+  dayModalLabel.value = d.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  dayModalOpen.value = true;
+}
 
 const weekdayLabels = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
 
@@ -355,6 +421,7 @@ function shiftMonth(delta: number) {
 function goToday() { cursor.value = new Date(); }
 
 function onNavigate(target: { type: "contract" | "document" | "reminder"; id: number | string }) {
+  dayModalOpen.value = false;
   if (target.type === "contract") router.push(`/contracts/${target.id}`);
   else if (target.type === "document") router.push(`/documents/${target.id}`);
   else if (target.type === "reminder") router.push("/reminders");
@@ -476,7 +543,118 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
 .rcal__pill--dismissed { background: var(--text-muted); }
 .rcal__pill--error { background: var(--color-error, #d03050); }
 .rcal__pill--failed { background: var(--color-error, #d03050); }
-.rcal__more { font-size: 10px; color: var(--text-muted); padding: 1px 4px; }
+.rcal__more {
+  font-size: 10px;
+  color: var(--brand-color);
+  padding: 1px 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: start;
+  font-weight: 600;
+}
+.rcal__more:hover { text-decoration: underline; }
+.rcal__cell-all {
+  margin-top: auto;
+  font-size: 9px;
+  color: var(--text-muted);
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 1px 2px;
+  text-align: start;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.rcal__cell:hover .rcal__cell-all { opacity: 1; }
+.rcal__cell-all:hover { color: var(--brand-color); text-decoration: underline; }
+
+/* ── Day detail modal ──────────────────────────────────────────────────── */
+.rcal__day-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  width: min(520px, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.rcal__day-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-color);
+}
+.rcal__day-modal-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); flex: 1; }
+.rcal__day-modal-count {
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+.rcal__day-modal-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.rcal__day-modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+.rcal__day-modal-body {
+  padding: 12px 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rcal__day-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  padding: 9px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  text-align: start;
+  transition: background 0.12s, border-color 0.12s;
+}
+.rcal__day-row:hover { background: var(--bg-hover); border-color: var(--brand-color); }
+.rcal__day-row--overdue { border-color: rgba(208,48,80,0.35); background: rgba(208,48,80,0.06); }
+.rcal__day-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--brand-color); flex-shrink: 0; }
+.rcal__day-row--overdue .rcal__day-dot { background: #d03050; }
+.rcal__day-row--sent .rcal__day-dot { background: #2080f0; }
+.rcal__day-row--dismissed .rcal__day-dot { background: var(--text-muted); }
+.rcal__day-row--error .rcal__day-dot,
+.rcal__day-row--failed .rcal__day-dot { background: var(--color-error, #d03050); }
+.rcal__day-row--expiry-overdue  .rcal__day-dot { background: #d03050; }
+.rcal__day-row--expiry-critical .rcal__day-dot { background: #f0a020; }
+.rcal__day-row--expiry-warning  .rcal__day-dot { background: #e8c84a; }
+.rcal__day-row--expiry-ok       .rcal__day-dot { background: #18a058; }
+.rcal__day-dot--expiry { border-radius: 2px; }
+.rcal__day-row-title { font-weight: 500; flex: 1; }
+.rcal__day-row-sub { color: var(--text-muted); font-size: 12px; }
+.rcal__day-badge {
+  border: 1px solid rgba(208,48,80,0.26);
+  border-radius: 999px;
+  color: #d03050;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+}
 
 /* ── Expiry pills ──────────────────────────────────────────────────────────── */
 .rcal__pill--expiry { font-style: italic; }
