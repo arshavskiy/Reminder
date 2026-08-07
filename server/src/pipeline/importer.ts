@@ -675,22 +675,31 @@ export function normalizeExtractionFieldsForTemplate(
     if (contactEmail) normalized.contact_email = contactEmail;
   }
   const supportsLicenseNumber = template.fields.some((field) => field.key === "license_number");
-  const isAccessoryEquipment = /אביזרי\s*הרמה/i.test(normalized.checked_equipment ?? "") ||
-    /אביזרי\s*הרמה/i.test(normalized.equipment_description ?? "") ||
-    /אביזרי\s*הרמה/i.test(rawText.split(/\r?\n/).slice(0, 5).join(" "));
-  if (isAccessoryEquipment) {
+  const noLicensePattern = /אביזרי\s*הרמה|עגורן\s*שער|עגרן\s*שער/i;
+  const isNoLicenseEquipment = noLicensePattern.test(normalized.checked_equipment ?? "") ||
+    noLicensePattern.test(normalized.equipment_description ?? "") ||
+    noLicensePattern.test(rawText);
+  if (isNoLicenseEquipment) {
     normalized.license_number = undefined;
   } else if (supportsLicenseNumber) {
     if (typeof normalized.license_number === "string" && isPostalCode(normalized.license_number, rawText)) {
       normalized.license_number = undefined;
     }
     if (!isLikelyLicenseNumber(normalized.license_number)) {
+      normalized.license_number = undefined;
       const licenseNumber = extractLicenseNumber(rawText);
       if (licenseNumber) normalized.license_number = licenseNumber;
     }
   }
 
   const headerEquipmentDescription = extractEquipmentDescriptionFromHeader(rawText);
+  const headerCheckedEquipment = extractCheckedEquipmentFromHeader(rawText);
+  if (headerCheckedEquipment && (!hasMeaningfulValue(normalized.checked_equipment) || noLicensePattern.test(headerCheckedEquipment))) {
+    normalized.checked_equipment = headerCheckedEquipment;
+  }
+  if (noLicensePattern.test(normalized.checked_equipment ?? "")) {
+    normalized.license_number = undefined;
+  }
 
   // When flat equipment fields are empty but _equipment rows were extracted,
   // backfill from the first row so the document card shows something useful.
@@ -969,6 +978,27 @@ function preferHebrewNameWithNumericSuffix(value: string, rawText?: string): str
 
   const normalizedText = rawText.replace(/\s+/g, " ");
   return normalizedText.includes(candidate) ? candidate : value;
+}
+
+function extractCheckedEquipmentFromHeader(rawText: string): string | null {
+  const lines = rawText.split(/\r?\n/).map(l => l.replace(/\s+/g, " ").trim());
+  for (let i = 0; i < lines.length; i++) {
+    if (/תיאור\s+מכונת\s+הרמה/i.test(lines[i])) {
+      const afterColon = lines[i].match(/תיאור\s+מכונת\s+הרמה\s*[.:：]?\s*\d*\s*(.+)/i);
+      if (afterColon?.[1]) {
+        const value = cleanHeaderValue(afterColon[1].split(/מספר\s*רישוי/)[0]);
+        if (value) return value;
+      }
+      for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+        if (!lines[j]) continue;
+        const known = /פרטי\s+הלקוח|מקום\s+הבדיקה|יש\s+לשמור|הערות|ליקוי/i;
+        if (known.test(lines[j])) break;
+        const equipMatch = lines[j].match(/(עגורן\s*שער|עגרן\s*שער|אביזרי\s*הרמה|מלגזה|מנוף|במת?\s*הרמה|עגורן|מגבה|מהפכי?)/i);
+        if (equipMatch) return equipMatch[1];
+      }
+    }
+  }
+  return null;
 }
 
 function extractEquipmentDescriptionFromHeader(rawText: string): string | null {

@@ -827,6 +827,7 @@ export function registerAdminRoutes(app: express.Application) {
   // GET /api/admin/users/:id/detail
   app.get("/api/admin/users/:id/detail", async (req, res) => {
     if (!await adminAuth(req, res)) return;
+    try {
     const userId = req.params.id;
 
     const [documents, emailLogs, reminderCounts, extractions, schedulerErrors] = await Promise.all([
@@ -865,7 +866,7 @@ export function registerAdminRoutes(app: express.Application) {
     for (const r of reminderCounts) reminderStatusMap[r._id ?? "unknown"] = r.count;
 
     // Fetch templates for field coverage analysis
-    const templateIds = [...new Set(documents.map((d: any) => d.doc_template_id).filter(Boolean))];
+    const templateIds = [...new Set(documents.map((d: any) => d.template_id).filter(Boolean))];
     const templates = templateIds.length
       ? await col("doc_templates").find({ id: { $in: templateIds } }).toArray()
       : [];
@@ -877,7 +878,12 @@ export function registerAdminRoutes(app: express.Application) {
       if (!tplId || !templateMap[tplId]) return null;
       const tpl = templateMap[tplId];
       let extracted: Record<string, any> = {};
-      try { extracted = doc.extracted_fields ? JSON.parse(doc.extracted_fields) : {}; } catch { extracted = {}; }
+      try {
+        const raw = doc.extracted_fields;
+        if (!raw) extracted = {};
+        else if (typeof raw === "string") extracted = JSON.parse(raw);
+        else extracted = raw;
+      } catch { extracted = {}; }
       const present: string[] = [];
       const missing: string[] = [];
       const nulled: string[] = [];
@@ -940,5 +946,9 @@ export function registerAdminRoutes(app: express.Application) {
         recipient: e.recipient,
       })),
     });
+    } catch (err: any) {
+      console.error("user detail error:", err);
+      res.status(500).json({ error: err.message ?? "Failed to load user detail" });
+    }
   });
 }

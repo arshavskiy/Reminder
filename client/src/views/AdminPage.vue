@@ -1,7 +1,20 @@
 <template>
-  <div class="admin-shell">
+  <div
+    class="admin-shell"
+    :class="{
+      'admin-shell--sidebar-collapsed': !isMobileViewport && !showDesktopSidebar,
+      'admin-shell--mobile-sidebar-open': isMobileViewport && showMobileNav,
+    }"
+  >
     <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
-    <aside class="admin-sidebar" :class="{ 'admin-sidebar--open': showMobileNav }">
+    <aside
+      id="admin-sidebar-panel"
+      class="admin-sidebar"
+      :class="{
+        'admin-sidebar--open': showMobileNav,
+        'admin-sidebar--collapsed': !isMobileViewport && !showDesktopSidebar,
+      }"
+    >
       <div class="admin-sidebar__brand" @click="router.push('/')">
         <n-icon :component="BriefcaseOutline" :size="20" />
         <span>ReminderOCR</span>
@@ -34,13 +47,21 @@
       </div>
     </aside>
 
+    <button
+      class="admin-sidebar-toggle"
+      type="button"
+      :aria-controls="'admin-sidebar-panel'"
+      :aria-expanded="isSidebarVisible"
+      :aria-label="sidebarToggleLabel"
+      @click="toggleSidebar"
+    >
+      <n-icon :component="sidebarToggleIcon" :size="20" />
+    </button>
+
     <!-- ── Main content ─────────────────────────────────────────────────── -->
     <div class="admin-main">
       <header class="admin-main__header">
         <div class="admin-main__title-row">
-          <button class="admin-mobile-toggle" @click="showMobileNav = !showMobileNav" type="button">
-            <n-icon :component="MenuOutline" :size="20" />
-          </button>
           <h1 class="admin-main__title">{{ currentItem?.label }}</h1>
           <n-button size="small" :loading="sectionLoading" @click="reloadSection">↻ Refresh</n-button>
         </div>
@@ -878,7 +899,10 @@ import {
   BriefcaseOutline,
   CalendarOutline,
   CheckmarkCircleOutline,
+  ChevronBackOutline,
+  ChevronForwardOutline,
   CloseCircleOutline,
+  CloseOutline,
   CloudUploadOutline,
   DocumentOutline,
   FlashOutline,
@@ -980,10 +1004,46 @@ function openErrorModal(error: any) {
 }
 
 // Mobile nav
+const MOBILE_BREAKPOINT = 768;
 const showMobileNav = ref(false);
+const showDesktopSidebar = ref(true);
+const isMobileViewport = ref(false);
 const editingUser = ref<any>(null);
 const editingRole = ref<string>("");
 const savingRole = ref(false);
+
+const isSidebarVisible = computed(() => (
+  isMobileViewport.value ? showMobileNav.value : showDesktopSidebar.value
+));
+
+const sidebarToggleIcon = computed(() => {
+  if (isMobileViewport.value) {
+    return showMobileNav.value ? CloseOutline : MenuOutline;
+  }
+  return showDesktopSidebar.value ? ChevronBackOutline : ChevronForwardOutline;
+});
+
+const sidebarToggleLabel = computed(() => {
+  if (isMobileViewport.value) {
+    return showMobileNav.value ? "Close navigation panel" : "Open navigation panel";
+  }
+  return showDesktopSidebar.value ? "Collapse navigation panel" : "Expand navigation panel";
+});
+
+function updateViewportState() {
+  isMobileViewport.value = window.innerWidth <= MOBILE_BREAKPOINT;
+  if (!isMobileViewport.value) {
+    showMobileNav.value = false;
+  }
+}
+
+function toggleSidebar() {
+  if (isMobileViewport.value) {
+    showMobileNav.value = !showMobileNav.value;
+    return;
+  }
+  showDesktopSidebar.value = !showDesktopSidebar.value;
+}
 
 function openRoleModal(user: any) {
   editingUser.value = user;
@@ -1807,6 +1867,9 @@ function formatInterval(seconds: number): string {
 // ── Section switching & loading ────────────────────────────────────────────
 async function switchSection(key: string) {
   activeSection.value = key;
+  if (isMobileViewport.value) {
+    showMobileNav.value = false;
+  }
   await loadSectionData(key);
 }
 
@@ -1899,6 +1962,8 @@ async function startPolling() {
 }
 
 onMounted(async () => {
+  updateViewportState();
+  window.addEventListener("resize", updateViewportState);
   try {
     const cfg = await api.config.getAdmin();
     appEnv.value = cfg.appEnv ?? "development";
@@ -1909,6 +1974,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener("resize", updateViewportState);
   pollingIntervals.value.forEach((interval) => clearInterval(interval));
   pollingIntervals.value.clear();
 });
@@ -1916,6 +1982,7 @@ onUnmounted(() => {
 
 <style scoped>
 .admin-shell {
+  position: relative;
   display: flex;
   height: 100vh;
   background: var(--bg-body);
@@ -1932,6 +1999,16 @@ onUnmounted(() => {
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  transition: width 0.2s ease, flex-basis 0.2s ease, opacity 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-sidebar--collapsed {
+  width: 0;
+  flex-basis: 0;
+  border-right-color: transparent;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .admin-sidebar__brand {
@@ -2128,16 +2205,39 @@ onUnmounted(() => {
   margin-right: 2px;
 }
 
-/* ── Mobile toggle ───────────────────────────────────────────────────────── */
-.admin-mobile-toggle {
-  display: none;
-  background: none;
-  border: none;
+/* ── Sidebar toggle ──────────────────────────────────────────────────────── */
+.admin-sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 18px;
+  left: 204px;
+  z-index: 30;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   cursor: pointer;
   color: var(--text-primary);
-  padding: 4px;
-  margin-right: 12px;
-  flex: 0 0 auto;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  transition: left 0.2s ease, transform 0.2s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.admin-shell--sidebar-collapsed .admin-sidebar-toggle {
+  left: 12px;
+}
+
+.admin-sidebar-toggle:hover {
+  background: var(--bg-hover, rgba(99, 226, 183, 0.08));
+  color: var(--brand-color);
+  transform: scale(1.03);
+}
+
+.admin-sidebar-toggle:focus-visible {
+  outline: 2px solid rgba(24, 160, 88, 0.35);
+  outline-offset: 2px;
 }
 
 /* ── Data table spacing ──────────────────────────────────────────────────── */
@@ -2151,31 +2251,39 @@ onUnmounted(() => {
     flex-direction: column;
   }
 
+  .admin-sidebar-toggle {
+    top: 14px;
+    left: 12px;
+  }
+
   .admin-sidebar {
-    width: 100%;
-    max-width: 250px;
+    width: min(280px, calc(100vw - 24px));
+    max-width: min(280px, calc(100vw - 24px));
     height: auto;
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
     border-right: none;
-    border-bottom: 1px solid var(--border-color);
+    border: 1px solid var(--border-color);
+    border-left: none;
+    border-radius: 0 16px 16px 0;
     position: absolute;
     top: 60px;
     left: 0;
-    right: 0;
-    z-index: 10;
+    z-index: 20;
     background: var(--bg-card);
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+    transform: translateX(-100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.2s ease, opacity 0.2s ease;
   }
 
   .admin-sidebar--open {
-    max-height: 500px;
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
   }
 
-  .admin-mobile-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .admin-shell--mobile-sidebar-open .admin-sidebar-toggle {
+    left: min(244px, calc(100vw - 48px));
   }
 
   .admin-main {
@@ -2184,7 +2292,7 @@ onUnmounted(() => {
   }
 
   .admin-main__header {
-    padding: 12px 16px;
+    padding: 12px 16px 12px 56px;
   }
 
   .admin-main__title {
@@ -2259,4 +2367,3 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 </style>
-
