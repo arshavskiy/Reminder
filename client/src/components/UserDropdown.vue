@@ -30,15 +30,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
-import { useRouter } from "vue-router";
-import { NDropdown, NIcon } from "naive-ui";
-import {
-  PersonOutline,
-  LogOutOutline,
-  SettingsOutline,
-} from "@vicons/ionicons5";
-import { useAuthStore } from "../stores/auth.js";
+import {computed} from "vue";
+import {useRouter} from "vue-router";
+import {NDropdown, NIcon} from "naive-ui";
+import {PersonOutline,} from "@vicons/ionicons5";
+import {useAuthStore} from "../stores/auth.js";
 
 interface Props {
   userName?: string | null;
@@ -118,7 +114,7 @@ async function handleSelect(key: string) {
 }
 
 .user-dropdown__trigger:hover {
-  background: var(--bg-hover);
+  //background: var(--bg-hover);
 }
 
 .user-dropdown__avatar {
