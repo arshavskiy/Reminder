@@ -272,8 +272,10 @@ async function processReminder(reminder: ReminderWithContext) {
     });
     await col("email_log").insertOne({
       reminder_id: remId,
+      user_id: (reminder as any).user_id ?? null,
       log_type: "skipped",
       to_address: "",
+      recipient: "",
       subject: `תזכורת - ${reminder.title}`,
       sent_at: new Date(),
       success: 0,
@@ -302,13 +304,16 @@ async function processReminder(reminder: ReminderWithContext) {
 
   await col("email_log").insertOne({
     reminder_id: remId,
+    user_id: (reminder as any).user_id ?? null,
     log_type: "send",
     to_address: recipients.join(", "),
+    recipient: recipients.join(", "),
     subject: `תזכורת - ${reminder.title}`,
     sent_at: new Date(),
     success: result.success ? 1 : 0,
     error: result.error ?? null,
     smtp_host: settings.smtpHost || "in-app-only",
+    via: (process.env.RESEND_API_KEY ? "resend" : "smtp"),
   } as any);
 
   if (result.success) {

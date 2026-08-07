@@ -50,14 +50,6 @@
                  </template>
                  התקן אפליקציה
                </n-tooltip>
-               <n-tooltip v-if="pwa.updateAvailable.value" placement="bottom" :keep-alive-on-hover="false">
-                 <template #trigger>
-                   <button class="iconbtn iconbtn--update" aria-label="עדכן אפליקציה" @click="pwa.applyUpdate()">
-                     <n-icon :component="RefreshOutline" :size="18" />
-                   </button>
-                 </template>
-                 עדכון זמין — לחץ להפעלה מחדש
-               </n-tooltip>
                <UserDropdown
                  :userName="authStore.user?.name ?? authStore.user?.email ?? null"
                  :userEmail="authStore.user?.email ?? null"
@@ -143,7 +135,7 @@ import {
   unstableTreeSelectRtl,
   unstableUploadsRtl,
 } from "naive-ui";
-import {BriefcaseOutline, DownloadOutline, MoonOutline, RefreshOutline, SunnyOutline,} from "@vicons/ionicons5";
+import { BriefcaseOutline, DownloadOutline, MoonOutline, SunnyOutline } from "@vicons/ionicons5";
 import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
@@ -416,15 +408,6 @@ html[data-theme="light"] .mobile-nav-list__item--active {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-.iconbtn--update {
-  color: #f0a020;
-  border-color: rgba(240, 160, 32, 0.4);
-}
-.iconbtn--update:hover {
-  background: rgba(240, 160, 32, 0.1);
-  color: #f0a020;
-}
-
 .avatar {
   width: 36px;
   height: 36px;

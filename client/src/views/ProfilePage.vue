@@ -285,62 +285,6 @@
           </div>
         </section>
 
-        <!-- תעודות והסמכות -->
-        <section v-if="activeSection === 'certs'">
-          <div class="section-header">
-            <h2 class="section-title">תעודות והסמכות</h2>
-            <n-space>
-              <input
-                ref="certFileInput"
-                accept=".pdf,.docx,.xlsx,.txt,.md,.png,.jpg,.jpeg,.tif,.tiff"
-                multiple
-                style="display: none"
-                type="file"
-                @change="onCertFileChange"
-              />
-              <n-button :loading="certUploading" @click="certFileInput?.click()"
-                >📂 העלה מסמך תעודה</n-button
-              >
-            </n-space>
-          </div>
-
-          <!-- Drag-drop zone for certificate docs -->
-          <div
-            :class="{ 'drop-zone--active': certDragging }"
-            class="drop-zone"
-            style="margin-bottom: 16px"
-            @dragover.prevent="certDragging = true"
-            @dragleave.prevent="certDragging = false"
-            @drop.prevent="onCertDrop($event)"
-          >
-            <span v-if="certDragging">שחרר כאן לייבוא...</span>
-            <span v-else style="color: #666"
-              >גרור קבצי תעודות לכאן (PDF, DOCX, PNG...)</span
-            >
-          </div>
-          <div class="stats-row" style="margin-bottom: 20px">
-            <div class="stat-pill">
-              <span class="stat-pill__num">{{ certStats.total }}</span>
-              <span class="stat-pill__label">סה״כ תעודות</span>
-            </div>
-            <div class="stat-pill stat-pill--green">
-              <span class="stat-pill__num">{{ certStats.active }}</span>
-              <span class="stat-pill__label">בתוקף</span>
-            </div>
-            <div class="stat-pill stat-pill--red">
-              <span class="stat-pill__num">{{ certStats.expired }}</span>
-              <span class="stat-pill__label">פגו תוקף</span>
-            </div>
-          </div>
-          <n-data-table
-            :columns="certColumns"
-            :data="certificates"
-            :pagination="{ pageSize: 10 }"
-            :scroll-x="760"
-            size="small"
-          />
-        </section>
-
         <!-- סטטיסטיקות -->
         <section v-if="activeSection === 'stats'">
           <div class="section-header">
@@ -610,10 +554,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import {
   NButton,
-  NDataTable,
   NDatePicker,
   NForm,
   NFormItem,
@@ -622,11 +565,9 @@ import {
   NSelect,
   NSpace,
   NSpin,
-  NTag,
   useMessage,
 } from "naive-ui";
 import { useAuthStore } from "../stores/auth.js";
-import { api } from "../services/apiService.js";
 import type { User, UserSettings } from "@shared/types.js";
 
 const message = useMessage();
@@ -644,7 +585,6 @@ const userSettings = ref<UserSettings | null>(null);
 const navItems = [
   { key: "personal", icon: "👤", label: "פרטים אישיים" },
   { key: "engineer", icon: "🔧", label: "פרופיל מהנדס" },
-  { key: "certs", icon: "📜", label: "תעודות והסמכות" },
   // { key: "stats",         icon: "📊", label: "סטטיסטיקות" },
   // { key: "notifications", icon: "🔔", label: "התראות ועדכונים" },
   { key: "settings", icon: "⚙️", label: "הגדרות" },
@@ -842,131 +782,12 @@ async function uploadCompanyLogo(e: Event) {
 
 const companyLogoInput = ref<HTMLInputElement | null>(null);
 
-// ── Certificate document upload ───────────────────────────────────────────────
-const certFileInput = ref<HTMLInputElement | null>(null);
-const certUploading = ref(false);
-const certDragging = ref(false);
-
-async function onCertFileChange(e: Event) {
-  const files = Array.from((e.target as HTMLInputElement).files ?? []);
-  if (!files.length) return;
-  (e.target as HTMLInputElement).value = "";
-  await uploadCertFiles(files);
-}
-
-async function onCertDrop(e: DragEvent) {
-  certDragging.value = false;
-  const files = Array.from(e.dataTransfer?.files ?? []);
-  if (files.length) await uploadCertFiles(files);
-}
-
-async function uploadCertFiles(files: File[]) {
-  certUploading.value = true;
-  try {
-    const fd = new FormData();
-    for (const f of files) fd.append("files", f);
-    message.info(`${files.length} מסמך/ים בעיבוד...`);
-
-    const res = await fetch(`${SERVER}/api/profile/certificate-upload`, {
-      method: "POST",
-      credentials: "include",
-      body: fd,
-    });
-    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-    const data = (await res.json()) as {
-      uploaded: number;
-      created: Array<{
-        documentId: string;
-        certificateId: string | null;
-        result: any;
-      }>;
-      profile_fields_updated: string[];
-    };
-
-    await Promise.all([loadCertificates(), loadEngineerProfile()]);
-
-    if (data.profile_fields_updated.length) {
-      message.success(
-        `תעודות נוספו. עודכנו שדות בפרופיל: ${data.profile_fields_updated.length}`,
-      );
-    } else {
-      message.success(`${data.uploaded} תעודות נוספו`);
-    }
-  } catch (e: any) {
-    message.error(String(e));
-  } finally {
-    certUploading.value = false;
-  }
-}
-
-async function loadCertificates() {
-  const res = await fetch(`${SERVER}/api/profile/certificates`, {
-    credentials: "include",
-  });
-  if (res.ok) certificates.value = await res.json();
-}
-
 async function loadEngineerProfile() {
   const res = await fetch(`${SERVER}/api/profile/engineer`, {
     credentials: "include",
   });
   if (res.ok) engineerProfile.value = await res.json();
 }
-
-// ── Certificates ─────────────────────────────────────────────────────────────
-const certificates = ref<any[]>([]);
-const certStats = computed(() => ({
-  total: certificates.value.length,
-  active: certificates.value.filter((c) => c.status === "active").length,
-  expired: certificates.value.filter((c) => c.status === "expired").length,
-}));
-
-const certColumns = [
-  { title: "שם תעודה", key: "name" },
-  { title: "סוג", key: "type" },
-  { title: "גוף מנפיק", key: "issuer" },
-  {
-    title: "תאריך הנפקה",
-    key: "issued_date",
-    render: (r: any) => formatDate(r.issued_date),
-  },
-  {
-    title: "תאריך פקיעה",
-    key: "expiry_date",
-    render: (r: any) => formatDate(r.expiry_date),
-  },
-  {
-    title: "סטטוס",
-    key: "status",
-    render: (r: any) =>
-      h(
-        NTag,
-        {
-          type: r.status === "active" ? "success" : "error",
-          size: "small",
-        },
-        () => (r.status === "active" ? "בתוקף" : "פג תוקף"),
-      ),
-  },
-  {
-    title: "",
-    key: "download",
-    width: 80,
-    render: (r: any) =>
-      r.document_id
-        ? h(
-            "a",
-            {
-              href: api.documents.downloadUrl(r.document_id),
-              target: "_blank",
-              style: "color:#63e2b7;font-size:18px;text-decoration:none",
-              title: "הורד מסמך",
-            },
-            "⬇",
-          )
-        : null,
-  },
-];
 
 // ── Statistics ───────────────────────────────────────────────────────────────
 const inspectionStats = ref({ total: 0, completed: 0, pending: 0, monthly: 0 });
@@ -1205,12 +1026,11 @@ function exportWord() {
 // ── Mount ────────────────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
-    const [settingsRes, statsRes, engineerRes, certsRes, notifsRes] =
+    const [settingsRes, statsRes, engineerRes, notifsRes] =
       await Promise.allSettled([
         fetch(`${SERVER}/api/user-settings`, { credentials: "include" }),
         fetch(`${SERVER}/api/profile/stats`, { credentials: "include" }),
         fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" }),
-        fetch(`${SERVER}/api/profile/certificates`, { credentials: "include" }),
         fetch(`${SERVER}/api/profile/notifications`, {
           credentials: "include",
         }),
@@ -1233,9 +1053,6 @@ onMounted(async () => {
     }
     if (engineerRes.status === "fulfilled" && engineerRes.value.ok) {
       engineerProfile.value = await engineerRes.value.json();
-    }
-    if (certsRes.status === "fulfilled" && certsRes.value.ok) {
-      certificates.value = await certsRes.value.json();
     }
     if (notifsRes.status === "fulfilled" && notifsRes.value.ok) {
       notifications.value = await notifsRes.value.json();

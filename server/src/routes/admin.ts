@@ -263,16 +263,16 @@ export function registerAdminRoutes(app: express.Application) {
         { $sort: { "_id.user_id": 1 } },
       ]).toArray(),
 
-      // Failed sends from email_log
+      // Failed sends from email_log (scheduler writes log_type "send")
       col("email_log").find(
-        { success: 0, log_type: "reminder" },
-        { projection: { _id: 1, user_id: 1, recipient: 1, error: 1, sent_at: 1, reminder_id: 1 } },
+        { success: 0, log_type: { $in: ["send", "reminder"] } },
+        { projection: { _id: 1, user_id: 1, recipient: 1, to_address: 1, error: 1, sent_at: 1, reminder_id: 1 } },
       ).sort({ sent_at: -1 }).limit(50).toArray(),
 
       // Failed escalations
       col("email_log").find(
         { success: 0, log_type: "escalation" },
-        { projection: { _id: 1, user_id: 1, recipient: 1, error: 1, sent_at: 1, reminder_id: 1 } },
+        { projection: { _id: 1, user_id: 1, recipient: 1, to_address: 1, error: 1, sent_at: 1, reminder_id: 1 } },
       ).sort({ sent_at: -1 }).limit(50).toArray(),
     ]);
 
@@ -297,7 +297,7 @@ export function registerAdminRoutes(app: express.Application) {
       failedSends: failedSends.map((l: any) => ({
         id: l._id?.toString(),
         user_id: l.user_id,
-        recipient: l.recipient,
+        recipient: l.recipient ?? l.to_address ?? null,
         error: l.error,
         sent_at: l.sent_at,
         reminder_id: l.reminder_id?.toString?.() ?? l.reminder_id,
@@ -305,7 +305,7 @@ export function registerAdminRoutes(app: express.Application) {
       failedEscalations: failedEscalations.map((l: any) => ({
         id: l._id?.toString(),
         user_id: l.user_id,
-        recipient: l.recipient,
+        recipient: l.recipient ?? l.to_address ?? null,
         error: l.error,
         sent_at: l.sent_at,
         reminder_id: l.reminder_id?.toString?.() ?? l.reminder_id,
@@ -840,7 +840,7 @@ export function registerAdminRoutes(app: express.Application) {
       // All email log entries for this user
       col("email_log").find(
         { user_id: userId },
-        { projection: { _id: 1, log_type: 1, success: 1, recipient: 1, subject: 1, error: 1, sent_at: 1, reminder_id: 1 } },
+        { projection: { _id: 1, log_type: 1, success: 1, recipient: 1, to_address: 1, subject: 1, error: 1, sent_at: 1, reminder_id: 1 } },
       ).sort({ sent_at: -1 }).limit(100).toArray(),
 
       // Reminder status counts
@@ -921,7 +921,7 @@ export function registerAdminRoutes(app: express.Application) {
         id: l._id?.toString(),
         log_type: l.log_type,
         success: l.success,
-        recipient: l.recipient,
+        recipient: l.recipient ?? l.to_address ?? null,
         subject: l.subject ?? null,
         error: l.error ?? null,
         sent_at: l.sent_at,

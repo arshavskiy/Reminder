@@ -408,6 +408,14 @@ export async function sendReminderEmail(
     const { subject, html } = await renderReminderEmail(reminder);
     const senderName = await resolveSenderName((reminder as any).user_id);
     const from = formatAddress(senderName, settings.emailFrom);
+    logger.info("reminder_email_sending", {
+      reminder_id: reminder.id,
+      user_id: (reminder as any).user_id ?? null,
+      from,
+      to: recipients,
+      subject,
+      via: useResend() ? "resend" : "smtp",
+    });
     if (useResend()) {
       await sendViaResend({ from, to: recipients, subject, html, text: `תזכורת: ${reminder.title}\nלקוח: ${reminder.client_name ?? ""}\nתאריך: ${reminder.trigger_date}` });
     } else {
@@ -415,7 +423,10 @@ export async function sendReminderEmail(
     }
     logger.info("reminder_email_sent", {
       reminder_id: reminder.id,
+      user_id: (reminder as any).user_id ?? null,
       recipient_count: recipients.length,
+      recipients,
+      from,
       via: useResend() ? "resend" : "smtp",
     });
     return { success: true };
