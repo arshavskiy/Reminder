@@ -20,7 +20,6 @@
               :options="actAsOptions"
               :loading="actAsLoading"
               placeholder="צפה כמשתמש"
-              size="small"
               clearable
               filterable
               class="actas-select"
@@ -447,7 +446,7 @@ html[data-theme="light"] .mobile-nav-list__item--active {
 }
 
 .actas-select {
-  width: 200px;
+  width: 300px;
   min-width: 140px;
   margin-inline-start: 14px;
   flex-shrink: 0;
