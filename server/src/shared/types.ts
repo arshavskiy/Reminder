@@ -441,3 +441,33 @@ export interface ExtractionResult {
   summary_hebrew: string | null;
   confidence: "high" | "medium" | "low";
 }
+
+// ── Runtime-overridable settings ─────────────────────────────────────────────
+// Subset of AppSettings saveable to the `system_settings` DB collection via the
+// admin UI.  Secrets (API keys, passwords, OAuth/infra credentials) are excluded.
+export interface SystemSettingsOverride {
+  aiBackend?: "openai" | "ollama";
+  openAiModel?: string;
+  ollamaUrl?: string;
+  ollamaModel?: string;
+  ocrLanguage?: string;
+  autoExtract?: boolean;
+  extractionMaxChars?: number;
+  reminderEnabled?: boolean;
+  reminderAdvanceDays?: number[];
+  reminderCheckIntervalMs?: number;
+  escalationEmail?: string;
+  escalationThresholdDays?: number;
+  watchFolderEnabled?: boolean;
+  watchFolder?: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpSecure?: boolean;
+  smtpRejectUnauthorized?: boolean;
+  smtpUser?: string;
+  emailFrom?: string;
+  emailFromName?: string;
+  testEmail?: string;
+  testEmailTemplateId?: number | null;
+  userDocumentLimit?: number;
+}

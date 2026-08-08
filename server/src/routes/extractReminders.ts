@@ -9,7 +9,8 @@ import {parseDocx} from "../pipeline/docxParser";
 import {parseXlsx} from "../pipeline/xlsxParser";
 import {extractDocument, extractWithTemplate} from "../pipeline/extractor";
 import {pickTemplate} from "../templates/seedTemplates";
-import {getDataDir, getSettings} from "../settings";
+import {getDataDir} from "../settings.js";
+import {getEffectiveSettings} from "../effectiveSettings.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -49,7 +50,7 @@ export function registerExtractRemindersRoutes(app: express.Application) {
       return;
     }
 
-    const settings = getSettings();
+    const settings = await getEffectiveSettings();
     const advanceDays: number[] = settings.reminderAdvanceDays?.length
       ? settings.reminderAdvanceDays
       : [7, 30];
@@ -238,8 +239,8 @@ async function extractFromXlsx(
 ): Promise<ReminderPreview[]> {
   // Ask AI to find ALL date-bearing rows in the spreadsheet at once.
   // Returns an array of objects rather than a single record.
-  const { getSettings } = await import("../settings.js");
-  const settings = getSettings();
+  const { getEffectiveSettings } = await import("../effectiveSettings.js");
+  const settings = await getEffectiveSettings();
   const OpenAI = (await import("openai")).default;
 
   const client = settings.aiBackend === "ollama"

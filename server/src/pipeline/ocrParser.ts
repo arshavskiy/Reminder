@@ -1,11 +1,11 @@
 import {createWorker} from "tesseract.js";
-import {getSettings} from "../settings";
+import {getEffectiveSettings} from "../effectiveSettings.js";
 import {fixHebrewBidi} from "./hebrewBidi";
 
 const OCR_TIMEOUT_MS = 120_000;
 
 export async function ocrFile(filePath: string): Promise<string> {
-  const settings = getSettings();
+  const settings = await getEffectiveSettings();
   const lang = settings.ocrLanguage; // e.g. "heb+eng"
 
   const worker = await createWorker(lang);

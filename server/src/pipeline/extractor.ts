@@ -1,8 +1,9 @@
 import OpenAI from "openai";
 import {mkdirSync, writeFileSync} from "fs";
 import {join} from "path";
-import {getDataDir, getSettings} from "../settings";
-import type {DocTemplate, DynamicExtraction, ExtractionResult} from "../../src/shared/types.js";
+import {getDataDir} from "../settings.js";
+import {getEffectiveSettings} from "../effectiveSettings.js";
+import type {AppSettings, DocTemplate, DynamicExtraction, ExtractionResult} from "../../src/shared/types.js";
 import {buildPromptForTemplate, InspectorProfile} from "../templates/buildPrompt";
 import {logger} from "../logger";
 
@@ -50,7 +51,7 @@ JSON schema:
   "confidence": "high" | "medium" | "low"
 }`;
 
-function buildClient(settings: ReturnType<typeof getSettings>) {
+function buildClient(settings: AppSettings) {
 
   if (settings.aiBackend === "ollama") {
     return new OpenAI({
@@ -63,7 +64,7 @@ function buildClient(settings: ReturnType<typeof getSettings>) {
 
 function logExtractorSettings(
   scope: "extractor" | "extractor:tpl",
-  settings: ReturnType<typeof getSettings>,
+  settings: AppSettings,
   model: string,
   rawTextLength: number,
   inputTextLength: number,
@@ -113,7 +114,7 @@ export async function extractDocument(
   documentId?: string | number,
   fileName?: string
 ): Promise<ExtractionRun> {
-  const settings = getSettings();
+  const settings = await getEffectiveSettings();
   const model = settings.aiBackend === "ollama" ? settings.ollamaModel : settings.openAiModel;
   const backend = settings.aiBackend;
   const text = rawText.slice(0, settings.extractionMaxChars);
@@ -213,7 +214,7 @@ export async function extractWithTemplate(
   inspector?: InspectorProfile,
   prebuiltSystemPrompt?: string
 ): Promise<TemplateExtractionRun> {
-  const settings = getSettings();
+  const settings = await getEffectiveSettings();
   const model = settings.aiBackend === "ollama" ? settings.ollamaModel : settings.openAiModel;
   const backend = settings.aiBackend;
   const text = rawText.slice(0, settings.extractionMaxChars);

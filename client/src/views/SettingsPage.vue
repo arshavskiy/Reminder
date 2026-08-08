@@ -15,9 +15,9 @@
               </n-radio-group>
             </n-form-item>
             <template v-if="form.aiBackend === 'openai'">
-              <n-form-item label="OpenAI API Key">
-                <n-input v-model:value="form.openAiKey" type="password" show-password-on="click" placeholder="sk-..." />
-              </n-form-item>
+              <n-alert type="default" :show-icon="false" style="margin-bottom: 12px; font-size: 12px">
+                מפתח OpenAI API מוגדר דרך משתנה סביבה <strong>OPENAI_LOCAL_API_KEY</strong> בשרת — אינו ניתן לשינוי מה-UI.
+              </n-alert>
               <n-form-item label="מודל">
                 <n-input v-model:value="form.openAiModel" placeholder="gpt-4o-mini" />
               </n-form-item>
@@ -30,6 +30,21 @@
                 <n-input v-model:value="form.ollamaModel" placeholder="llama3.1" />
               </n-form-item>
             </template>
+          </n-form>
+        </n-card>
+
+        <n-card title="OCR וחילוץ טקסט" style="margin-bottom: 16px">
+          <n-form label-placement="top">
+            <n-form-item label="שפת OCR (Tesseract)">
+              <n-input v-model:value="form.ocrLanguage" placeholder="heb+eng" />
+              <template #feedback>שפות מופרדות ב-+  (למשל: heb+eng | heb+eng+ara)</template>
+            </n-form-item>
+            <n-form-item label="חילוץ AI אוטומטי עם העלאה">
+              <n-switch v-model:value="form.autoExtract" />
+            </n-form-item>
+            <n-form-item label="מקסימום תווים לחילוץ AI">
+              <n-input-number v-model:value="form.extractionMaxChars" :min="1000" :step="1000" />
+            </n-form-item>
           </n-form>
         </n-card>
 
@@ -60,9 +75,9 @@
             <n-form-item label="שם משתמש">
               <n-input v-model:value="form.smtpUser" />
             </n-form-item>
-            <n-form-item label="סיסמה">
-              <n-input v-model:value="form.smtpPass" type="password" show-password-on="click" />
-            </n-form-item>
+            <n-alert type="default" :show-icon="false" style="margin-bottom: 12px; font-size: 12px">
+              סיסמת SMTP מוגדרת דרך משתנה סביבה <strong>SMTP_PASS</strong> בשרת — אינה ניתנת לשינוי מה-UI.
+            </n-alert>
             <n-form-item label="כתובת שולח">
               <n-input v-model:value="form.emailFrom" placeholder="reminder@example.com" />
             </n-form-item>

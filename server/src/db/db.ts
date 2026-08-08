@@ -52,6 +52,7 @@ const ALL_COLLECTIONS = [
   "engineer_profiles",
   "certificates",
   "notifications",
+  "system_settings",   // global admin-editable settings overlay
 ];
 
 async function ensureCollections(db: Db): Promise<void> {
