@@ -211,33 +211,35 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import { NButton, NCard, NDataTable, NIcon, NModal, NSpin, NSwitch, NTag, useMessage } from "naive-ui";
-import type { DataTableColumns } from "naive-ui";
+import {computed, h, onMounted, ref} from "vue";
+import {useRouter} from "vue-router";
+import type {DataTableColumns} from "naive-ui";
+import {NButton, NCard, NDataTable, NIcon, NModal, NSpin, NSwitch, NTag, useMessage} from "naive-ui";
 import {
   AlarmOutline,
-  CloudUploadOutline,
   ClipboardOutline,
+  CloudUploadOutline,
   ConstructOutline,
   ExtensionPuzzleOutline,
   MailOutline,
   PeopleOutline,
   SettingsOutline,
 } from "@vicons/ionicons5";
-import { useDashboardStore } from "../stores/dashboard.js";
-import { useRemindersStore } from "../stores/reminders.js";
-import { useAuthStore } from "../stores/auth.js";
-import { useFeaturesStore } from "../stores/features.js";
-import type { ExpiryCalendarItem } from "../services/apiService.js";
-import { api } from "../services/apiService.js";
-import { FEATURES, type FeatureKey } from "../shared/features.js";
+import {useDashboardStore} from "../stores/dashboard.js";
+import {useRemindersStore} from "../stores/reminders.js";
+import {useAuthStore} from "../stores/auth.js";
+import {useFeaturesStore} from "../stores/features.js";
+import type {ExpiryCalendarItem} from "../services/apiService.js";
+import {api} from "../services/apiService.js";
+import {type FeatureKey, FEATURES} from "../shared/features.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 
 const store = useDashboardStore();
 const remindersStore = useRemindersStore();
 const authStore = useAuthStore();
+// While impersonating, gate admin-only modules by the acted-as user's role.
+const effectiveRole = computed(() => authStore.actingAs?.role ?? authStore.user?.role ?? "user");
 const featuresStore = useFeaturesStore();
 const router = useRouter();
 const message = useMessage();
@@ -639,7 +641,7 @@ const modules = [
     count: () => stats.value?.total_email_templates ?? 0,
     icon: MailOutline,
     to: "/email-templates",
-    show: authStore.user?.role === "admin", // Only show to admins
+    show: effectiveRole.value === "admin", // Only show to admins (acted-as role while impersonating)
   },
   {
     key: "reminders",

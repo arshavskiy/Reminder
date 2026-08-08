@@ -172,6 +172,116 @@
           <n-form-item>
             <n-checkbox v-model:checked="editing.is_default as any">תבנית ברירת מחדל</n-checkbox>
           </n-form-item>
+
+          <n-divider style="margin: 16px 0 12px" />
+
+          <n-collapse>
+            <n-collapse-item name="ai" title="AI ו-Pipeline (מתקדם)">
+              <n-alert :show-icon="false" style="margin-bottom: 12px; font-size: 12px" type="info">
+                השאר ריק כדי להשתמש בהגדרות המערכת. ערכים כאן גוברים על הגדרות המערכת רק עבור תבנית זו.
+              </n-alert>
+
+              <n-grid :cols="2" :x-gap="16">
+                <n-gi>
+                  <n-form-item label="מנוע AI">
+                    <n-select
+                      v-model:value="editing.ai_backend"
+                      :options="aiBackendOptions"
+                      :virtual-scroll="false"
+                      clearable
+                      placeholder="ברירת מחדל (הגדרות מערכת)"
+                    />
+                  </n-form-item>
+                </n-gi>
+                <n-gi>
+                  <n-form-item label="מודל AI">
+                    <n-input
+                      v-model:value="editing.ai_model"
+                      placeholder="ברירת מחדל (הגדרות מערכת)"
+                    />
+                  </n-form-item>
+                </n-gi>
+              </n-grid>
+
+              <n-grid :cols="2" :x-gap="16">
+                <n-gi>
+                  <n-form-item label="שפת OCR">
+                    <n-input
+                      v-model:value="editing.ocr_language"
+                      placeholder="למשל: heb+eng"
+                    />
+                  </n-form-item>
+                </n-gi>
+                <n-gi>
+                  <n-form-item label="מקסימום תווים לחילוץ">
+                    <n-input-number
+                      v-model:value="editing.extraction_max_chars"
+                      :min="0"
+                      clearable
+                      placeholder="ברירת מחדל"
+                      style="width: 100%"
+                    />
+                  </n-form-item>
+                </n-gi>
+              </n-grid>
+
+              <n-form-item label="ימי התראה מראש (מופרדים בפסיק)">
+                <n-input
+                  :value="(editing.reminder_advance_days || []).join(', ')"
+                  placeholder="למשל: 30, 14, 7"
+                  @update:value="onAdvanceDaysInput"
+                />
+              </n-form-item>
+
+              <n-form-item label="כללי פרומפט מותאמים (נוספים לפרומפט האוטומטי)">
+                <n-input
+                  v-model:value="editing.custom_prompt_rules"
+                  :rows="3"
+                  placeholder="הוראות נוספות ל-AI עבור תבנית זו..."
+                  type="textarea"
+                />
+              </n-form-item>
+
+              <n-form-item label="דריסת פרומפט מלאה">
+                <n-input
+                  v-model:value="editing.full_prompt_override"
+                  :rows="4"
+                  placeholder="השאר ריק כדי להשתמש בפרומפט האוטומטי"
+                  type="textarea"
+                />
+              </n-form-item>
+              <n-alert v-if="editing.full_prompt_override" :show-icon="false" style="font-size: 12px" type="warning">
+                ⚠️ מחליף את הפרומפט האוטומטי כולו — השדות המוגדרים למעלה לא ישפיעו על הפרומפט.
+              </n-alert>
+
+              <n-divider style="margin: 12px 0" />
+              <n-form-item label="בדיקת חילוץ (עם הפרומפט והשדות שלמעלה — ללא שמירה)">
+                <div style="width: 100%">
+                  <n-input
+                    v-model:value="tplTestText"
+                    :autosize="{ minRows: 3, maxRows: 8 }"
+                    placeholder="הדבק טקסט מסמך לדוגמה לבדיקה..."
+                    type="textarea"
+                  />
+                  <n-button
+                    :disabled="tplTestText.trim().length < 20"
+                    :loading="tplTesting"
+                    style="margin-top: 8px"
+                    @click="runTemplateTest"
+                  >בדוק חילוץ</n-button>
+                  <n-alert v-if="tplTestError" :show-icon="false" style="margin-top: 8px; font-size: 12px" type="error">
+                    {{ tplTestError }}
+                  </n-alert>
+                  <div v-if="tplTestResult" style="margin-top: 8px">
+                    <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px">
+                      מודל: {{ tplTestModel }} · {{ tplTestMs }}ms
+                    </div>
+                    <pre class="ai-diff__pre">{{ tplTestResult }}</pre>
+                  </div>
+                </div>
+              </n-form-item>
+            </n-collapse-item>
+          </n-collapse>
         </n-form>
 
         <template #footer>
@@ -182,11 +292,86 @@
               type="error"
               @click="deleteTpl"
             >מחק</n-button>
+            <n-button
+              v-if="editing?.id && isAdmin"
+              @click="openAiEdit"
+            >✨ ערוך עם AI</n-button>
             <n-button type="primary" :loading="saving" @click="save">שמור</n-button>
           </n-space>
         </template>
       </n-drawer-content>
     </n-drawer>
+
+    <!-- AI edit modal (admin) -->
+    <n-modal v-model:show="showAiEdit" preset="card" style="width: 900px; max-width: 96vw" title="✨ עריכת תבנית עם AI">
+      <n-alert :show-icon="false" style="margin-bottom: 12px; font-size: 13px" type="info">
+        תאר בשפה חופשית מה לשנות — המודל החכם יעדכן את הפרומפט ואת סכמת השדות יחד, וישמור על עקביות ביניהם.
+        התוצאה מוצגת להשוואה לפני החלה. עדיין צריך ללחוץ "שמור" בסוף כדי לשמור לתבנית.
+      </n-alert>
+
+      <n-input
+        v-model:value="aiInstruction"
+        :rows="3"
+        placeholder="למשל: הוסף שדה למספר רישוי רכב · הקשח את הכללים למספרים סידוריים · תמוך במקרה חדש של חוזי שכירות"
+        type="textarea"
+      />
+      <n-space align="center" justify="space-between" style="margin: 12px 0">
+        <span v-if="aiProposal" style="font-size: 12px; color: var(--text-muted)">
+          מודל: {{ aiModelUsed }} · שדות: {{ editing?.fields.length }} → {{ aiProposal.fields.length }}
+        </span>
+        <span></span>
+        <n-button
+          :disabled="aiInstruction.trim().length < 3"
+          :loading="aiLoading"
+          type="primary"
+          @click="runAiEdit"
+        >{{ aiProposal ? "צור מחדש" : "צור הצעה" }}</n-button>
+      </n-space>
+
+      <div v-if="aiProposal">
+        <n-alert v-if="aiProposal.change_summary" :show-icon="false" style="margin-bottom: 12px; font-size: 13px" type="success">
+          <b>מה השתנה:</b> {{ aiProposal.change_summary }}
+        </n-alert>
+
+        <n-tabs animated size="small" type="line">
+          <n-tab-pane name="fields" tab="שדות (סכמה)">
+            <div class="ai-diff">
+              <div class="ai-diff__col">
+                <div class="ai-diff__h">לפני ({{ editing?.fields.length }})</div>
+                <div v-for="f in editing?.fields || []" :key="'o'+f.key" class="ai-diff__field">
+                  <code>{{ f.key }}</code> · {{ f.label_he }} <span class="ai-diff__t">{{ f.type }}</span>
+                </div>
+              </div>
+              <div class="ai-diff__col">
+                <div class="ai-diff__h">אחרי ({{ aiProposal.fields.length }})</div>
+                <div v-for="f in aiProposal.fields" :key="'n'+f.key" :class="{ 'ai-diff__field--new': !existingKeys.has(f.key) }" class="ai-diff__field">
+                  <code>{{ f.key }}</code> · {{ f.label_he }} <span class="ai-diff__t">{{ f.type }}</span>
+                </div>
+              </div>
+            </div>
+          </n-tab-pane>
+          <n-tab-pane name="prompt" tab="פרומפט מלא">
+            <div class="ai-diff">
+              <div class="ai-diff__col">
+                <div class="ai-diff__h">לפני ({{ (currentPromptForDiff || '').length }} תווים)</div>
+                <pre class="ai-diff__pre">{{ currentPromptForDiff || "— (פרומפט נוצר אוטומטית)" }}</pre>
+              </div>
+              <div class="ai-diff__col">
+                <div class="ai-diff__h">אחרי ({{ aiProposal.full_prompt_override.length }} תווים)</div>
+                <pre class="ai-diff__pre">{{ aiProposal.full_prompt_override }}</pre>
+              </div>
+            </div>
+          </n-tab-pane>
+        </n-tabs>
+      </div>
+
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showAiEdit = false">סגור</n-button>
+          <n-button v-if="aiProposal" type="primary" @click="applyAiProposal">החל על התבנית</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -197,6 +382,8 @@ import {
   NButton,
   NCard,
   NCheckbox,
+  NCollapse,
+  NCollapseItem,
   NDivider,
   NDrawer,
   NDrawerContent,
@@ -206,6 +393,7 @@ import {
   NGi,
   NGrid,
   NInput,
+  NInputNumber,
   NModal,
   NSelect,
   NSpace,
@@ -218,6 +406,7 @@ import {
   useMessage,
 } from "naive-ui";
 import {api} from "../services/apiService.js";
+import {useAuthStore} from "../stores/auth.js";
 import type {DocTemplate, DocumentKind, FieldType, TemplateField} from "@shared/types.js";
 
 const templates = ref<DocTemplate[]>([]);
@@ -225,6 +414,88 @@ const showEdit = ref(false);
 const editing = ref<DocTemplate | null>(null);
 const saving = ref(false);
 const message = useMessage();
+const authStore = useAuthStore();
+const isAdmin = computed(() => authStore.user?.role === "admin");
+
+// AI edit state
+const showAiEdit = ref(false);
+const aiInstruction = ref("");
+const aiLoading = ref(false);
+const aiModelUsed = ref("");
+const currentPromptForDiff = ref("");
+const aiProposal = ref<{
+  description: string;
+  expiry_field: string | null;
+  fields: TemplateField[];
+  full_prompt_override: string;
+  change_summary: string;
+} | null>(null);
+const existingKeys = computed(() => new Set((editing.value?.fields || []).map((f) => f.key)));
+
+// Template test-extraction (as-typed prompt + fields, not saved)
+const tplTestText = ref("");
+const tplTesting = ref(false);
+const tplTestResult = ref("");
+const tplTestError = ref("");
+const tplTestModel = ref("");
+const tplTestMs = ref(0);
+
+async function runTemplateTest() {
+  if (!editing.value || tplTestText.value.trim().length < 20) return;
+  tplTesting.value = true;
+  tplTestError.value = "";
+  tplTestResult.value = "";
+  try {
+    const res = await api.docTemplates.testExtraction({
+      sampleText: tplTestText.value,
+      prompt: editing.value.full_prompt_override || "",
+      mode: "template",
+      fields: editing.value.fields,
+      name: editing.value.name,
+      expiry_field: editing.value.expiry_field,
+    });
+    tplTestModel.value = res.model;
+    tplTestMs.value = res.execMs;
+    if (res.error) tplTestError.value = res.error;
+    else tplTestResult.value = JSON.stringify(res.result, null, 2);
+  } catch (e) {
+    tplTestError.value = String(e);
+  } finally {
+    tplTesting.value = false;
+  }
+}
+
+function openAiEdit() {
+  aiInstruction.value = "";
+  aiProposal.value = null;
+  aiModelUsed.value = "";
+  currentPromptForDiff.value = editing.value?.full_prompt_override?.trim() || "";
+  showAiEdit.value = true;
+}
+
+async function runAiEdit() {
+  if (!editing.value?.id || aiInstruction.value.trim().length < 3) return;
+  aiLoading.value = true;
+  try {
+    const res = await api.docTemplates.aiEdit(String(editing.value.id), aiInstruction.value.trim());
+    aiProposal.value = res.proposal;
+    aiModelUsed.value = res.model;
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    aiLoading.value = false;
+  }
+}
+
+function applyAiProposal() {
+  if (!editing.value || !aiProposal.value) return;
+  editing.value.fields = aiProposal.value.fields;
+  editing.value.full_prompt_override = aiProposal.value.full_prompt_override;
+  if (aiProposal.value.description) editing.value.description = aiProposal.value.description;
+  if (aiProposal.value.expiry_field !== undefined) editing.value.expiry_field = aiProposal.value.expiry_field;
+  showAiEdit.value = false;
+  message.success("ההצעה הוחלה — לחץ שמור כדי לשמור לתבנית");
+}
 const isMobile = ref(false);
 const templateGridCols = computed(() => isMobile.value ? 1 : 3);
 const drawerWidth = computed(() => isMobile.value ? "100vw" : 960);
@@ -256,6 +527,20 @@ const kindOptions = [
   { label: "תעודה / הסמכה", value: "certificate" },
   { label: "אחר / לא ידוע", value: "unknown" },
 ];
+
+const aiBackendOptions = [
+  { label: "OpenAI", value: "openai" },
+  { label: "Ollama", value: "ollama" },
+];
+
+function onAdvanceDaysInput(v: string) {
+  if (!editing.value) return;
+  const days = v
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n >= 0);
+  editing.value.reminder_advance_days = days.length ? days : null;
+}
 
 function kindLabel(kind: DocumentKind): string {
   return kindOptions.find((o) => o.value === kind)?.label ?? kind;
@@ -310,6 +595,13 @@ function newTemplate() {
     cached_system_prompt: null,
     is_default: 0,
     is_builtin: 0,
+    ai_backend: null,
+    ai_model: null,
+    ocr_language: null,
+    extraction_max_chars: null,
+    reminder_advance_days: null,
+    custom_prompt_rules: null,
+    full_prompt_override: null,
     created_at: "",
     updated_at: "",
   };
@@ -327,6 +619,11 @@ async function save() {
   if (!editing.value.name.trim()) {
     message.warning("יש להזין שם");
     return;
+  }
+  // Normalize blank overrides to null so they fall back to system settings
+  const t = editing.value;
+  for (const k of ["ai_backend", "ai_model", "ocr_language", "custom_prompt_rules", "full_prompt_override"] as const) {
+    if (typeof t[k] === "string" && !(t[k] as string).trim()) (t as any)[k] = null;
   }
   saving.value = true;
   try {
@@ -413,6 +710,45 @@ async function onGenFile({ file }: { file: { file: File } }) {
   border: 1px solid var(--border-color);
   border-radius: 4px;
   margin-bottom: 6px;
+}
+
+.ai-diff {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.ai-diff__h {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.ai-diff__field {
+  font-size: 12px;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+.ai-diff__field--new {
+  background: rgba(24, 160, 88, 0.12);
+  border-radius: 4px;
+}
+.ai-diff__t {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.ai-diff__pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11px;
+  max-height: 340px;
+  overflow: auto;
+  background: var(--code-bg, rgba(128,128,128,0.08));
+  padding: 8px;
+  border-radius: 6px;
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .ai-diff { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {

@@ -35,6 +35,7 @@ function buildSettings(): AppSettings {
     ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
     ollamaModel: process.env.OLLAMA_MODEL ?? "llama3",
 
+    promptEditorModel: process.env.PROMPT_EDITOR_MODEL ?? "gpt-4.1",
     ocrLanguage: process.env.OCR_LANGUAGE ?? "heb+eng",
     autoExtract: process.env.AUTO_EXTRACT !== "false",
     extractionMaxChars: process.env.EXTRACTION_MAX_CHARS ? parseInt(process.env.EXTRACTION_MAX_CHARS, 10) : 12000,

@@ -90,6 +90,25 @@
           <n-form-item label="אימייל"><n-input v-model:value="editForm.email" /></n-form-item>
           <n-form-item label="טלפון"><n-input v-model:value="editForm.phone" /></n-form-item>
           <n-form-item label="הערות"><n-input v-model:value="editForm.notes" type="textarea" :rows="3" /></n-form-item>
+
+          <n-form-item label="פרופיל Pipeline">
+            <n-select
+              v-model:value="editForm.pipeline_profile_id"
+              :options="profileOptions"
+              :virtual-scroll="false"
+              clearable
+              placeholder="ללא פרופיל"
+            />
+          </n-form-item>
+          <n-form-item label="תבנית מועדפת (עוקפת זיהוי אוטומטי)">
+            <n-select
+              v-model:value="editForm.preferred_template_id"
+              :options="templateOptions"
+              :virtual-scroll="false"
+              clearable
+              placeholder="זיהוי אוטומטי"
+            />
+          </n-form-item>
         </n-form>
         <template #action>
           <n-button @click="showEdit = false">ביטול</n-button>
@@ -101,24 +120,41 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import {computed, h, onMounted, ref, watch} from "vue";
+import {useRoute, useRouter} from "vue-router";
 import {
-  NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NEmpty, NForm,
-  NFormItem, NGi, NGrid, NH2, NIcon, NInput, NModal, NSpace, NSpin, NStatistic,
-  NTabPane, NTabs, NTag, NText, NTimeline, NTimelineItem, useMessage,
   type DataTableColumns,
+  NButton,
+  NCard,
+  NDataTable,
+  NDescriptions,
+  NDescriptionsItem,
+  NEmpty,
+  NForm,
+  NFormItem,
+  NGi,
+  NGrid,
+  NH2,
+  NIcon,
+  NInput,
+  NModal,
+  NSelect,
+  NSpace,
+  NSpin,
+  NStatistic,
+  NTabPane,
+  NTabs,
+  NTag,
+  NText,
+  NTimeline,
+  NTimelineItem,
+  useMessage,
 } from "naive-ui";
-import {
-  ArrowBackOutline,
-  CreateOutline,
-  DocumentTextOutline,
-  OpenOutline,
-} from "@vicons/ionicons5";
-import { useClientsStore } from "../stores/clients.js";
-import { api } from "../services/apiService.js";
+import {ArrowBackOutline, CreateOutline, DocumentTextOutline, OpenOutline,} from "@vicons/ionicons5";
+import {useClientsStore} from "../stores/clients.js";
+import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type { Document, Equipment, EventType } from "@shared/types.js";
+import type {DocTemplate, Document, Equipment, EventType, PipelineProfile} from "@shared/types.js";
 
 type ClientDocumentRow = Document & {
   inspection_date?: string | null;
@@ -141,7 +177,23 @@ const message = useMessage();
 
 const showEdit = ref(false);
 const saving = ref(false);
-const editForm = ref<{ display_name: string; contact_person: string; email: string; phone: string; notes: string } | null>(null);
+const editForm = ref<{
+  display_name: string;
+  contact_person: string;
+  email: string;
+  phone: string;
+  notes: string;
+  pipeline_profile_id: string | null;
+  preferred_template_id: string | null;
+} | null>(null);
+const profiles = ref<PipelineProfile[]>([]);
+const docTemplates = ref<DocTemplate[]>([]);
+const profileOptions = computed(() =>
+  profiles.value.map((p) => ({ label: p.name, value: p.id }))
+);
+const templateOptions = computed(() =>
+  docTemplates.value.map((t) => ({ label: t.name, value: t.id }))
+);
 const equipment = ref<Equipment[]>([]);
 const loadingEquipment = ref(false);
 
@@ -327,7 +379,15 @@ watch(showEdit, (open) => {
       email: store.active.email ?? "",
       phone: store.active.phone ?? "",
       notes: store.active.notes ?? "",
+      pipeline_profile_id: store.active.pipeline_profile_id ?? null,
+      preferred_template_id: store.active.preferred_template_id ?? null,
     };
+    if (!profiles.value.length) {
+      api.pipelineProfiles.list().then((r) => (profiles.value = r)).catch(() => {});
+    }
+    if (!docTemplates.value.length) {
+      api.docTemplates.list().then((r) => (docTemplates.value = r)).catch(() => {});
+    }
   }
 });
 

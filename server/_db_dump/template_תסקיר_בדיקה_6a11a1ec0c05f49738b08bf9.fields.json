@@ -1,0 +1,95 @@
+[
+  {
+    "key": "report_number",
+    "label_he": "מספר תסקיר",
+    "type": "text",
+    "required": true,
+    "hint_he": "מספר התסקיר הנוכחי בלבד. אם מופיע גם 'מספר תסקיר קודם', אל תשתמש בו כ-report_number. למשל: 'מספר תסקיר: 17924/484590' ו-'מספר תסקיר קודם: 161748/340' => report_number='17924/484590'"
+  },
+  {
+    "key": "client_company",
+    "label_he": "שם החברה / תופש",
+    "type": "text",
+    "required": true,
+    "hint_he": "החברה שעבורה בוצעה הבדיקה — שדה 'פרטי הלקוח/תופש'. מספרים יכולים להיות חלק משם החברה, למשל 'מולטיפק פלסטיק 1990' — לא להסיר אותם"
+  },
+  {
+    "key": "contact_person",
+    "label_he": "איש קשר",
+    "type": "text",
+    "required": true,
+    "hint_he": "איש הקשר של הלקוח/תופש מתוך בלוק פרטי הלקוח העליון, למשל 'איש קשר: בר'. לא לקחת מחתימת הבודק, פוטר או הוראות סוף המסמך"
+  },
+  {
+    "key": "contact_phone",
+    "label_he": "נייד",
+    "type": "phone",
+    "required": true,
+    "hint_he": "טלפון/נייד של איש הקשר מתוך בלוק פרטי הלקוח העליון, למשל 'נייד: 053-8801490'. לא לקחת טלפון של הבודק או החברה הבודקת"
+  },
+  {
+    "key": "contact_email",
+    "label_he": "מייל",
+    "type": "email",
+    "required": true,
+    "hint_he": "מייל של איש הקשר מתוך בלוק פרטי הלקוח העליון, למשל 'מייל: benitaliftingplat@gmail.com'. לא לקחת מייל מפוטר/חתימת הבודק"
+  },
+  {
+    "key": "inspection_date",
+    "label_he": "תאריך בדיקה",
+    "type": "date",
+    "required": true
+  },
+  {
+    "key": "next_inspection_date",
+    "label_he": "בתוקף עד",
+    "type": "date",
+    "required": true,
+    "hint_he": "שדה 'בתוקף עד' — זה מה שיפעיל את התזכורת"
+  },
+  {
+    "key": "equipment_description",
+    "label_he": "תיאור",
+    "type": "text",
+    "required": true,
+    "hint_he": "ערך שדה התיאור הכללי. אם מופיע בטקסט 'תיאור מכונת הרמה', הערך הוא 'מכונת הרמה' ולא תיאור הפריט שנבדק"
+  },
+  {
+    "key": "checked_equipment",
+    "label_he": "ציוד שנבדק",
+    "type": "text",
+    "hint_he": "הפריט הספציפי שנבדק, למשל \"מלגזה חשמלית\", \"רצועות הרמה\", \"שאקל אומגה\", \"עגורן\""
+  },
+  {
+    "key": "license_number",
+    "label_he": "מספר רישוי",
+    "type": "text",
+    "hint_he": "מספר רישוי / מספר כרטיס הבדיקה של הציוד. אם הציוד הוא אביזרי הרמה (כמו רצועות, שרשרות, קלעים), שדה זה לעתים קרובות לא קיים — השאר null"
+  },
+  {
+    "key": "manufacturer",
+    "label_he": "יצרן",
+    "type": "text"
+  },
+  {
+    "key": "model",
+    "label_he": "דגם",
+    "type": "text"
+  },
+  {
+    "key": "serial_number",
+    "label_he": "מספר סידורי",
+    "type": "text"
+  },
+  {
+    "key": "load_capacity",
+    "label_he": "כושר עמיסה",
+    "type": "text",
+    "hint_he": "אם יש כמה ערכי עומס עבודה בטוח בטבלת הציוד, שמור את כולם לפי סדר הופעתם. אל תיקח ערכים מהוראות/פוטר סוף המסמך"
+  },
+  {
+    "key": "findings",
+    "label_he": "ממצאים / הערות",
+    "type": "text"
+  }
+]

@@ -23,6 +23,7 @@ import {registerEmailRoutes} from "./routes/email";
 import {registerSettingsRoutes} from "./routes/settings";
 import {registerDashboardRoutes} from "./routes/dashboard";
 import {registerTemplateRoutes} from "./routes/templates";
+import {registerPipelineProfileRoutes} from "./routes/pipelineProfiles";
 import {registerEquipmentRoutes} from "./routes/equipment";
 import {registerAuthRoutes} from "./routes/auth";
 import {registerUserSettingsRoutes} from "./routes/userSettings";
@@ -160,6 +161,7 @@ registerFeatureRoutes(app);
 registerProfileRoutes(app);
 registerAdminRoutes(app);
 registerExtractRemindersRoutes(app);
+registerPipelineProfileRoutes(app);
 
 // Static file serving (production)
 const STATIC_DIR = join(__dirname, "../../dist/client");

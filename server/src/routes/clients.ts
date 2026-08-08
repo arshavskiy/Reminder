@@ -93,6 +93,8 @@ export function registerClientRoutes(app: express.Application) {
       phone: body.phone ?? null,
       notes: body.notes ?? null,
       tags: body.tags ?? null,
+      pipeline_profile_id: body.pipeline_profile_id ?? null,
+      preferred_template_id: body.preferred_template_id ?? null,
       created_at: now,
       updated_at: now,
     };
@@ -125,6 +127,8 @@ export function registerClientRoutes(app: express.Application) {
     if (body.phone !== undefined) updates.phone = body.phone;
     if (body.notes !== undefined) updates.notes = body.notes;
     if (body.tags !== undefined) updates.tags = body.tags;
+    if (body.pipeline_profile_id !== undefined) updates.pipeline_profile_id = body.pipeline_profile_id;
+    if (body.preferred_template_id !== undefined) updates.preferred_template_id = body.preferred_template_id;
 
     await col("clients").updateOne(filter, { $set: updates });
     const updated = await col("clients").findOne(filter);

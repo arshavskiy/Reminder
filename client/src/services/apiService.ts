@@ -1,22 +1,23 @@
 import type {
-    AppSettings,
-    Client,
-    ClientDetail,
-    Contract,
-    ContractWithClient,
-    DashboardStats,
-    DocTemplate,
-    Document,
-    EmailLogEntry,
-    EmailTemplate,
-    Equipment,
-    FeatureDefinition,
-    GlobalSearchResult,
-    PipelineFlags,
-    Reminder,
-    ReminderWithContext,
-    Task,
-    UserSettings,
+  AppSettings,
+  Client,
+  ClientDetail,
+  Contract,
+  ContractWithClient,
+  DashboardStats,
+  DocTemplate,
+  Document,
+  EmailLogEntry,
+  EmailTemplate,
+  Equipment,
+  FeatureDefinition,
+  GlobalSearchResult,
+  PipelineFlags,
+  PipelineProfile,
+  Reminder,
+  ReminderWithContext,
+  Task,
+  UserSettings,
 } from "../../src/shared/types.js";
 
 export interface EquipmentHistoryEvent {
@@ -454,6 +455,36 @@ export const api = {
         "/doc-templates/generate-from-text",
         { text }
       ),
+    testExtraction: (body: {
+      sampleText: string;
+      prompt?: string;
+      mode: "generic" | "template";
+      fields?: DocTemplate["fields"];
+      name?: string;
+      expiry_field?: string | null;
+    }) =>
+      post<{
+        result: unknown | null;
+        rawJson: string;
+        model: string;
+        backend: string;
+        execMs: number;
+        error: string | null;
+        usage: unknown;
+      }>("/extraction/test", body),
+    aiEdit: (id: string, instruction: string) =>
+      post<{
+        proposal: {
+          description: string;
+          expiry_field: string | null;
+          fields: DocTemplate["fields"];
+          full_prompt_override: string;
+          change_summary: string;
+        };
+        usage: unknown;
+        model: string;
+        exec_ms: number;
+      }>(`/doc-templates/${id}/ai-edit`, { instruction }),
     generateFromFile: async (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
@@ -461,6 +492,14 @@ export const api = {
       if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
       return res.json() as Promise<{ draft: Partial<DocTemplate>; sample_text_preview: string; usage: unknown; model: string; exec_ms: number }>;
     },
+  },
+
+  pipelineProfiles: {
+    list: () => get<PipelineProfile[]>("/pipeline-profiles"),
+    get: (id: string) => get<PipelineProfile>(`/pipeline-profiles/${id}`),
+    create: (body: Partial<PipelineProfile>) => post<PipelineProfile>("/pipeline-profiles", body),
+    update: (id: string, body: Partial<PipelineProfile>) => put<PipelineProfile>(`/pipeline-profiles/${id}`, body),
+    delete: (id: string) => del(`/pipeline-profiles/${id}`),
   },
 
   emailTemplates: {

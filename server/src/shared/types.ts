@@ -8,11 +8,13 @@ export interface AppSettings {
   openAiModel: string;
   ollamaUrl: string;
   ollamaModel: string;
+  promptEditorModel?: string;   // strong model used for the AI prompt/schema editor (admin authoring tool)
 
   // OCR
   ocrLanguage: string;
   autoExtract: boolean;
   extractionMaxChars: number;
+  genericExtractionPrompt?: string;   // system prompt for generic (no-template) extraction; falls back to built-in default
 
   // SMTP
   smtpHost: string;
@@ -142,6 +144,26 @@ export interface Client {
   address?: string | null;
   notes: string | null;
   tags: string | null; // JSON array string
+  // Multi-client pipeline: per-client config links (Phase 3)
+  pipeline_profile_id?: string | null;   // -> pipeline_profiles._id
+  preferred_template_id?: string | null; // -> doc_templates._id; force a template, skip auto-detect
+  created_at: string;
+  updated_at: string;
+}
+
+// Shared per-client extraction config block; many clients can reference one profile.
+export interface PipelineProfile {
+  id: string;                 // ObjectId hex
+  user_id: string;
+  name: string;
+  description?: string | null;
+  ai_backend?: "openai" | "ollama" | null;
+  ai_model?: string | null;
+  ocr_language?: string | null;
+  extraction_max_chars?: number | null;
+  reminder_advance_days?: number[] | null;
+  default_template_id?: string | null;  // -> doc_templates._id
+  custom_prompt_rules?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -458,6 +480,7 @@ export interface SystemSettingsOverride {
   openAiModel?: string;
   ollamaUrl?: string;
   ollamaModel?: string;
+  promptEditorModel?: string;
   ocrLanguage?: string;
   autoExtract?: boolean;
   extractionMaxChars?: number;
@@ -478,4 +501,5 @@ export interface SystemSettingsOverride {
   testEmail?: string;
   testEmailTemplateId?: number | null;
   userDocumentLimit?: number;
+  genericExtractionPrompt?: string;   // system prompt for docs with no matching template
 }

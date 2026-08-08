@@ -18,7 +18,7 @@ import ResetPasswordPage from "../views/ResetPasswordPage.vue";
 import AdminPage from "../views/AdminPage.vue";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
-import {FEATURES, type FeatureKey} from "../shared/features.js";
+import {type FeatureKey, FEATURES} from "../shared/features.js";
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -41,6 +41,7 @@ export const router = createRouter({
     { path: "/reports", component: ReportsPage, meta: { feature: FEATURES.pages.reports } },
     { path: "/field", component: () => import("../views/FieldPage.vue"), meta: { feature: FEATURES.pages.field } },
     { path: "/admin", component: AdminPage, meta: { requireRole: "admin" } },
+    { path: "/pipeline-profiles", component: () => import("../views/PipelineProfilesPage.vue"), meta: { requireRole: "admin" } },
     { path: "/403", component: () => import("../views/ForbiddenPage.vue") },
   ],
 });

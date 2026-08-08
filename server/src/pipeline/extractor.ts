@@ -3,11 +3,21 @@ import {mkdirSync, writeFileSync} from "fs";
 import {join} from "path";
 import {getDataDir} from "../settings.js";
 import {getEffectiveSettings} from "../effectiveSettings.js";
-import type {AppSettings, DocTemplate, DynamicExtraction, ExtractionResult} from "../../src/shared/types.js";
+import type {
+  AppSettings,
+  DocTemplate,
+  DynamicExtraction,
+  ExtractionResult,
+  PipelineProfile
+} from "../../src/shared/types.js";
 import {buildPromptForTemplate, InspectorProfile} from "../templates/buildPrompt";
+import {col} from "../db/db.js";
+import {ObjectId} from "mongodb";
 import {logger} from "../logger";
 
-const SYSTEM_PROMPT = `You are a document intelligence assistant specializing in Hebrew business, legal, and technical documents (contracts, invoices, inspection reports / תסקירים, certificates, etc.).
+// Built-in default generic prompt. Used only when system_settings.genericExtractionPrompt
+// is unset — that DB value, when present, wins (see extractDocument).
+export const DEFAULT_GENERIC_SYSTEM_PROMPT = `You are a document intelligence assistant specializing in Hebrew business, legal, and technical documents (contracts, invoices, inspection reports / תסקירים, certificates, etc.).
 Extract structured information from the provided document text and return ONLY valid JSON matching the schema below.
 
 CRITICAL RULES:
@@ -119,6 +129,7 @@ export async function extractDocument(
   const backend = settings.aiBackend;
   const text = rawText.slice(0, settings.extractionMaxChars);
   logExtractorSettings("extractor", settings, model, rawText.length, text.length, documentId);
+  const systemPrompt = settings.genericExtractionPrompt?.trim() || DEFAULT_GENERIC_SYSTEM_PROMPT;
 
   const t0 = Date.now();
   let rawJson = "";
@@ -131,7 +142,7 @@ export async function extractDocument(
     const response = await client.chat.completions.create({
       model,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user", content: `Document text:\n\n${text}` },
       ],
       response_format: { type: "json_object" },
@@ -206,21 +217,56 @@ export async function extractDocument(
 // Template-driven extraction (dynamic fields from user-defined templates)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function extractWithTemplate(
-  rawText: string,
-  template: DocTemplate,
-  documentId?: string | number,
-  fileName?: string,
-  inspector?: InspectorProfile,
-  prebuiltSystemPrompt?: string
-): Promise<TemplateExtractionRun> {
-  const effectiveSettings = await getEffectiveSettings();
-  // Template AI overrides take priority over system_settings / env
-  const backend = (template.ai_backend ?? effectiveSettings.aiBackend) as "openai" | "ollama";
-  const model = template.ai_model
+// ─────────────────────────────────────────────────────────────────────────────
+// Config resolution — the 4-layer chain (highest → lowest priority):
+//   template overrides → pipeline_profiles (via client) → system_settings → env
+// Secrets (API keys, SMTP) are never resolved here — they stay env-only via
+// getEffectiveSettings().
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ResolvedExtractionConfig {
+  settings: AppSettings;   // settings-shaped object; buildClient() consumes it unchanged
+  backend: "openai" | "ollama";
+  model: string;
+  maxChars: number;
+  customPromptRules: string | null;   // extra rules layered from profile (template rules handled in buildPrompt)
+}
+
+async function loadClientProfile(clientId?: string): Promise<PipelineProfile | null> {
+  if (!clientId) return null;
+  try {
+    const filter = (() => { try { return { _id: new ObjectId(clientId) }; } catch { return { _id: clientId }; } })();
+    const client = await col<any>("clients").findOne(filter as any);
+    const profileId = client?.pipeline_profile_id;
+    if (!profileId) return null;
+    const pf = (() => { try { return { _id: new ObjectId(profileId) }; } catch { return { _id: profileId }; } })();
+    return (await col<any>("pipeline_profiles").findOne(pf as any)) as PipelineProfile | null;
+  } catch (err) {
+    logger.warn("pipeline_profile_load_failed", { client_id: clientId, error: String(err) });
+    return null;
+  }
+}
+
+/**
+ * Pure merge of the config chain: template overrides > profile > system settings.
+ * Kept side-effect-free so the precedence rules are unit-testable without a DB.
+ */
+export function mergeExtractionConfig(
+  effectiveSettings: AppSettings,
+  template?: DocTemplate | null,
+  profile?: PipelineProfile | null
+): ResolvedExtractionConfig {
+  // Priority: template ?? profile ?? system
+  const backend = (template?.ai_backend ?? profile?.ai_backend ?? effectiveSettings.aiBackend) as "openai" | "ollama";
+  const model =
+    template?.ai_model
+    ?? profile?.ai_model
     ?? (backend === "ollama" ? effectiveSettings.ollamaModel : effectiveSettings.openAiModel);
-  const maxChars = template.extraction_max_chars ?? effectiveSettings.extractionMaxChars;
-  // Merge overrides into a settings-shaped object so buildClient() works unchanged
+  const maxChars =
+    template?.extraction_max_chars
+    ?? profile?.extraction_max_chars
+    ?? effectiveSettings.extractionMaxChars;
+
   const settings: AppSettings = {
     ...effectiveSettings,
     aiBackend: backend,
@@ -228,9 +274,44 @@ export async function extractWithTemplate(
     ollamaModel: model,
     extractionMaxChars: maxChars,
   };
+
+  return {
+    settings,
+    backend,
+    model,
+    maxChars,
+    customPromptRules: profile?.custom_prompt_rules ?? null,
+  };
+}
+
+export async function resolveExtractionConfig(
+  template?: DocTemplate | null,
+  clientId?: string
+): Promise<ResolvedExtractionConfig> {
+  const effectiveSettings = await getEffectiveSettings();
+  const profile = await loadClientProfile(clientId);
+  return mergeExtractionConfig(effectiveSettings, template, profile);
+}
+
+export async function extractWithTemplate(
+  rawText: string,
+  template: DocTemplate,
+  documentId?: string | number,
+  fileName?: string,
+  inspector?: InspectorProfile,
+  prebuiltSystemPrompt?: string,
+  clientId?: string
+): Promise<TemplateExtractionRun> {
+  const resolved = await resolveExtractionConfig(template, clientId);
+  const {settings, backend, model, maxChars} = resolved;
   const text = rawText.slice(0, maxChars);
   logExtractorSettings("extractor:tpl", settings, model, rawText.length, text.length, documentId);
-  const systemPrompt = prebuiltSystemPrompt ?? buildPromptForTemplate(template, inspector);
+  // Profile-level custom rules layer on top of whatever the template prompt already carries.
+  const profileRules = resolved.customPromptRules?.trim();
+  let systemPrompt = prebuiltSystemPrompt ?? buildPromptForTemplate(template, inspector);
+  if (profileRules && !template.full_prompt_override?.trim()) {
+    systemPrompt += `\n\nPROFILE RULES:\n${profileRules}\n`;
+  }
 
   const t0 = Date.now();
   let rawJson = "";

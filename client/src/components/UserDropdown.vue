@@ -73,6 +73,7 @@ const dropdownItems = computed(() => [
     ? [
         { label: "⚙️ הגדרות אישיות", key: "settings" },
         { label: "🛡 פאנל ניהול", key: "admin" },
+        { label: "🔧 פרופילי Pipeline", key: "pipeline-profiles" },
       ]
     : []),
   {
@@ -91,6 +92,8 @@ async function handleSelect(key: string) {
     router.push("/settings");
   } else if (key === "admin") {
     router.push("/admin");
+  } else if (key === "pipeline-profiles") {
+    router.push("/pipeline-profiles");
   } else if (key === "logout") {
     await authStore.logout();
   }

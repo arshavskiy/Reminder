@@ -53,6 +53,7 @@ const ALL_COLLECTIONS = [
   "certificates",
   "notifications",
   "system_settings",   // global admin-editable settings overlay
+  "pipeline_profiles", // shared per-client extraction config blocks
 ];
 
 async function ensureCollections(db: Db): Promise<void> {
@@ -188,6 +189,10 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("notifications").createIndex({ user_id: 1 });
   await db.collection("notifications").createIndex({ created_at: -1 });
   await db.collection("notifications").createIndex({ read: 1 });
+
+  // pipeline_profiles
+  await db.collection("pipeline_profiles").createIndex({ user_id: 1 });
+  await db.collection("pipeline_profiles").createIndex({ user_id: 1, name: 1 }, { unique: true });
 }
 
 // Typed collection helper

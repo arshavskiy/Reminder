@@ -288,8 +288,15 @@ const allNav = [
   {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];
 
+// While impersonating, gate the nav by the acted-as user's role — so the admin
+// sees exactly what that user sees. The real-admin selector + exit banner stay
+// visible (they key off authStore.isAdmin / actingAs, not this rank).
+const effectiveRole = computed(() =>
+  authStore.actingAs?.role ?? authStore.user?.role ?? "user"
+);
+
 const primaryNav = computed(() => {
-  const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
+  const userRank = ROLE_RANK[effectiveRole.value] ?? 0;
   return allNav.filter((item) =>
     userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
     featuresStore.hasFeature(item.feature as FeatureKey)

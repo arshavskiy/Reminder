@@ -1,0 +1,42 @@
+[
+  {
+    "name": "תסקיר בדיקה",
+    "id": "6a11a1ec0c05f49738b08bf9",
+    "builtin": 1,
+    "user_id": null,
+    "promptChars": 10838,
+    "source": "full_prompt_override",
+    "fields": 15,
+    "expiry_field": "next_inspection_date"
+  },
+  {
+    "name": "חוזה שירות",
+    "id": "6a11a1ec0c05f49738b08bfa",
+    "builtin": 1,
+    "user_id": null,
+    "promptChars": 6296,
+    "source": "full_prompt_override",
+    "fields": 12,
+    "expiry_field": "expiry_date"
+  },
+  {
+    "name": "חשבונית",
+    "id": "6a11a1ec0c05f49738b08bfb",
+    "builtin": 1,
+    "user_id": null,
+    "promptChars": 6071,
+    "source": "full_prompt_override",
+    "fields": 9,
+    "expiry_field": "payment_due_date"
+  },
+  {
+    "name": "תסקיר בדיקה",
+    "id": "6a6fad49c1b3165d87c71719",
+    "builtin": 0,
+    "user_id": "6a15e851abbd87e1e1071c6e",
+    "promptChars": 29,
+    "source": "runtime",
+    "fields": 11,
+    "expiry_field": "next_inspection_date"
+  }
+]

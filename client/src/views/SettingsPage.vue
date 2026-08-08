@@ -45,6 +45,43 @@
             <n-form-item label="מקסימום תווים לחילוץ AI">
               <n-input-number v-model:value="form.extractionMaxChars" :min="1000" :step="1000" />
             </n-form-item>
+            <n-form-item label="פרומפט חילוץ כללי (למסמכים ללא תבנית תואמת)">
+              <n-input
+                v-model:value="form.genericExtractionPrompt"
+                :autosize="{ minRows: 8, maxRows: 24 }"
+                placeholder="הפרומפט המשמש כשאף תבנית לא תואמת למסמך..."
+                type="textarea"
+              />
+              <template #feedback>
+                זהו ה-system prompt לחילוץ מסמכים כלליים. שמירה תיכנס לתוקף מיד (ללא deploy). השאר ריק כדי לחזור לברירת המחדל המובנית.
+              </template>
+            </n-form-item>
+
+            <n-form-item label="בדיקת חילוץ (עם הפרומפט שלמעלה — ללא שמירה)">
+              <div style="width: 100%">
+                <n-input
+                  v-model:value="genTestText"
+                  :autosize="{ minRows: 3, maxRows: 8 }"
+                  placeholder="הדבק טקסט מסמך לדוגמה לבדיקה..."
+                  type="textarea"
+                />
+                <n-button
+                  :disabled="genTestText.trim().length < 20"
+                  :loading="genTesting"
+                  style="margin-top: 8px"
+                  @click="runGenericTest"
+                >בדוק חילוץ</n-button>
+                <n-alert v-if="genTestError" :show-icon="false" style="margin-top: 8px; font-size: 12px" type="error">
+                  {{ genTestError }}
+                </n-alert>
+                <div v-if="genTestResult" style="margin-top: 8px">
+                  <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px">
+                    מודל: {{ genTestModel }} · {{ genTestMs }}ms
+                  </div>
+                  <pre class="test-result">{{ genTestResult }}</pre>
+                </div>
+              </div>
+            </n-form-item>
           </n-form>
         </n-card>
 
@@ -179,6 +216,36 @@ const form = ref<AppSettings | null>(null);
 const testing = ref(false);
 const emailTemplates = ref<EmailTemplate[]>([]);
 
+// Generic-prompt test-extraction (uses the as-typed prompt, does not save)
+const genTestText = ref("");
+const genTesting = ref(false);
+const genTestResult = ref("");
+const genTestError = ref("");
+const genTestModel = ref("");
+const genTestMs = ref(0);
+
+async function runGenericTest() {
+  if (!form.value || genTestText.value.trim().length < 20) return;
+  genTesting.value = true;
+  genTestError.value = "";
+  genTestResult.value = "";
+  try {
+    const res = await api.docTemplates.testExtraction({
+      sampleText: genTestText.value,
+      prompt: form.value.genericExtractionPrompt || "",
+      mode: "generic",
+    });
+    genTestModel.value = res.model;
+    genTestMs.value = res.execMs;
+    if (res.error) genTestError.value = res.error;
+    else genTestResult.value = JSON.stringify(res.result, null, 2);
+  } catch (e) {
+    genTestError.value = String(e);
+  } finally {
+    genTesting.value = false;
+  }
+}
+
 const emailTemplateOptions = computed(() =>
   emailTemplates.value.map((t) => ({ label: t.name, value: t.id }))
 );
@@ -227,6 +294,17 @@ async function testSmtp() {
 .settings-page {
   max-width: 600px;
   width: 100%;
+}
+.test-result {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  max-height: 300px;
+  overflow: auto;
+  background: var(--code-bg, rgba(128,128,128,0.08));
+  padding: 8px;
+  border-radius: 6px;
+  margin: 0;
 }
 
 @media (max-width: 640px) {

@@ -14,8 +14,8 @@ import {getDb} from "./db/db.js";
 // Fields that can be overridden from the admin UI.
 // Secrets (openAiKey, smtpPass, OAuth creds, infra keys) are intentionally absent.
 export const OVERRIDABLE_KEYS: ReadonlyArray<keyof SystemSettingsOverride> = [
-  "aiBackend", "openAiModel", "ollamaUrl", "ollamaModel",
-  "ocrLanguage", "autoExtract", "extractionMaxChars",
+  "aiBackend", "openAiModel", "ollamaUrl", "ollamaModel", "promptEditorModel",
+  "ocrLanguage", "autoExtract", "extractionMaxChars", "genericExtractionPrompt",
   "reminderEnabled", "reminderAdvanceDays", "reminderCheckIntervalMs",
   "escalationEmail", "escalationThresholdDays",
   "watchFolderEnabled", "watchFolder",

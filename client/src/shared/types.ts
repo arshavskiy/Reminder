@@ -153,6 +153,26 @@ export interface Client {
   address?: string | null;
   notes: string | null;
   tags: string | null; // JSON array string
+  // Multi-client pipeline links (Phase 3)
+  pipeline_profile_id?: string | null;
+  preferred_template_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Shared per-client extraction config block (Phase 3).
+export interface PipelineProfile {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string | null;
+  ai_backend?: "openai" | "ollama" | null;
+  ai_model?: string | null;
+  ocr_language?: string | null;
+  extraction_max_chars?: number | null;
+  reminder_advance_days?: number[] | null;
+  default_template_id?: string | null;
+  custom_prompt_rules?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -394,6 +414,14 @@ export interface DocTemplate {
   is_default: number;
   is_builtin: number;
   extract_equipment?: boolean;
+  // Phase 2: per-template AI + prompt overrides (nullable = fall back to system settings)
+  ai_backend?: "openai" | "ollama" | null;
+  ai_model?: string | null;
+  ocr_language?: string | null;
+  extraction_max_chars?: number | null;
+  reminder_advance_days?: number[] | null;
+  custom_prompt_rules?: string | null;
+  full_prompt_override?: string | null;
   created_at: string;
   updated_at: string;
 }

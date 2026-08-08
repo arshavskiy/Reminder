@@ -9,13 +9,21 @@ import {loadAuthTemplate, loadReminderTemplate} from "../email-templates/loader"
 import {listTemplateVars, renderTemplate} from "../templates/renderEmail";
 import {previewReminderEmail} from "../reminders/emailSender";
 import {generateTemplateFromText, toDraft} from "../templates/generateTemplate";
-import {requireAuth} from "../auth/middleware";
+import {editTemplateWithAI} from "../templates/editTemplateWithAI";
+import {runTestExtraction} from "../pipeline/testExtraction";
+import {buildPromptForTemplate} from "../templates/buildPrompt";
+import type {
+  DocTemplate as DocTemplateType,
+  DocTemplate,
+  EmailTemplate,
+  ReminderWithContext
+} from "../../src/shared/types.js";
+import {requireAuth, requireRole} from "../auth/middleware";
 import {parsePdf} from "../pipeline/pdfParser";
 import {ocrFile} from "../pipeline/ocrParser";
 import {parseDocx} from "../pipeline/docxParser";
 import {parseXlsx} from "../pipeline/xlsxParser";
 import multer from "multer";
-import type {DocTemplate, EmailTemplate, ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -128,6 +136,91 @@ export function registerTemplateRoutes(app: express.Application) {
       model: run.model,
       exec_ms: run.execMs,
     });
+  });
+
+  // ── AI-assisted edit of an existing template (admin only) ─────────────────
+  // Returns a PROPOSAL (updated prompt + fields); does not persist. The client
+  // shows a diff and the admin applies + saves via the normal PUT.
+  app.post("/api/doc-templates/:id/ai-edit", async (req, res) => {
+    try {
+      const auth = await requireAuth(req.headers.cookie ?? undefined);
+      requireRole(auth, "admin");
+    } catch (err: any) {
+      res.status(err.status ?? 403).json({ error: err.message });
+      return;
+    }
+
+    const { instruction } = req.body as { instruction?: string };
+    if (!instruction || instruction.trim().length < 3) {
+      res.status(400).json({ error: "instruction required" });
+      return;
+    }
+
+    const template = await loadTemplate(req.params.id);
+    if (!template) {
+      res.status(404).json({ error: "template not found" });
+      return;
+    }
+
+    const run = await editTemplateWithAI(template, instruction);
+    if (!run.proposal || run.error) {
+      res.status(500).json({ error: run.error ?? "AI failed to edit the template" });
+      return;
+    }
+    res.json({
+      proposal: run.proposal,
+      usage: run.usage,
+      model: run.model,
+      exec_ms: run.execMs,
+    });
+  });
+
+  // ── Test extraction with an as-typed prompt (admin only) ──────────────────
+  // Runs a one-off extraction using the supplied prompt WITHOUT saving anything.
+  // mode "generic": use `prompt` directly.
+  // mode "template": use `prompt` if given, else build from `fields`/`name`.
+  app.post("/api/extraction/test", async (req, res) => {
+    try {
+      const auth = await requireAuth(req.headers.cookie ?? undefined);
+      requireRole(auth, "admin");
+    } catch (err: any) {
+      res.status(err.status ?? 403).json({ error: err.message });
+      return;
+    }
+
+    const body = req.body as {
+      sampleText?: string;
+      prompt?: string;
+      mode?: "generic" | "template";
+      fields?: DocTemplateType["fields"];
+      name?: string;
+      expiry_field?: string | null;
+    };
+
+    if (!body.sampleText || body.sampleText.trim().length < 20) {
+      res.status(400).json({ error: "sampleText required (at least 20 chars)" });
+      return;
+    }
+
+    let systemPrompt = body.prompt?.trim() ?? "";
+    // Template mode with no explicit prompt → build one from the given fields.
+    if (!systemPrompt && body.mode === "template") {
+      const shell = {
+        name: body.name ?? "template",
+        description: null,
+        match_keywords: [],
+        fields: body.fields ?? [],
+        expiry_field: body.expiry_field ?? null,
+      } as unknown as DocTemplateType;
+      systemPrompt = buildPromptForTemplate(shell);
+    }
+    if (!systemPrompt) {
+      res.status(400).json({ error: "prompt required" });
+      return;
+    }
+
+    const run = await runTestExtraction(systemPrompt, body.sampleText);
+    res.json(run);
   });
 
   // ── Generate template from an uploaded sample document ────────────────────

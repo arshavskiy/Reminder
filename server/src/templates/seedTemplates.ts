@@ -184,10 +184,22 @@ function safeJson<T>(raw: unknown, fallback: T): T {
 
 /**
  * Pick the best matching template for a given raw document text.
- * Returns the one whose match_keywords have the most hits, falling back to
- * is_default, then to the first row, then null.
+ * If a clientId is supplied and that client has a preferred_template_id, that
+ * template is returned directly (skipping keyword auto-detect). Otherwise falls
+ * back to the one whose match_keywords have the most hits, then is_default,
+ * then the first row, then null.
  */
-export async function pickTemplate(rawText: string, userId?: string): Promise<DocTemplate | null> {
+export async function pickTemplate(
+  rawText: string,
+  userId?: string,
+  clientId?: string
+): Promise<DocTemplate | null> {
+  // Client-forced template — highest priority, skips keyword scan.
+  if (clientId) {
+    const preferred = await loadClientPreferredTemplate(clientId);
+    if (preferred) return preferred;
+  }
+
   const all = await loadAllTemplates(userId);
   if (!all.length) return null;
 
@@ -204,6 +216,18 @@ export async function pickTemplate(rawText: string, userId?: string): Promise<Do
   return all.find((t) => userId && t.user_id === userId && t.is_default) ??
     all.find((t) => t.is_default) ??
     all[0];
+}
+
+async function loadClientPreferredTemplate(clientId: string): Promise<DocTemplate | null> {
+  try {
+    const cf = (() => { try { return { _id: new ObjectId(clientId) }; } catch { return { _id: clientId }; } })();
+    const client = await col<any>("clients").findOne(cf as any);
+    const templateId = client?.preferred_template_id;
+    if (!templateId) return null;
+    return await loadTemplate(String(templateId));
+  } catch {
+    return null;
+  }
 }
 
 // ── Keyword tables for document-kind classification ─────────────────────────

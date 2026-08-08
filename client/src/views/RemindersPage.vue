@@ -68,7 +68,7 @@
     </n-modal>
 
     <!-- Create reminder modal -->
-    <n-modal v-model:show="showCreate" title="תזכורת חדשה" :show-icon="false" preset="dialog" style="width: 520px; max-width: 95vw">
+    <n-modal v-model:show="showCreate" :show-icon="false" preset="dialog" style="min-width: 620px; max-width: 95vw" title="תזכורת חדשה">
       <n-form label-placement="top" v-if="newReminder">
         <n-form-item label="לקוח" required>
           <n-select
@@ -190,7 +190,7 @@ import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import {FEATURES} from "../shared/features.js";
-import type {Client, EmailTemplate, EquipmentCategory, ReminderWithContext, ContractWithClient} from "@shared/types.js";
+import type {Client, ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
 // Date-only strings (YYYY-MM-DD) must round-trip through the date picker using
 // local calendar days, not UTC — new Date("2026-08-01").getTime() parses as

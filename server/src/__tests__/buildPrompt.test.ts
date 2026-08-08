@@ -58,4 +58,26 @@ describe("buildPromptForTemplate", () => {
     expect(prompt).toContain("1990");
     expect(prompt).toContain("Never drop numbers that are part of a company name");
   });
+
+  it("appends custom_prompt_rules to the generated prompt", () => {
+    const tpl = inspectionTemplate();
+    tpl.custom_prompt_rules = "Always treat field X as a serial number.";
+    const prompt = buildPromptForTemplate(tpl);
+
+    expect(prompt).toContain("CUSTOM RULES FOR THIS TEMPLATE");
+    expect(prompt).toContain("Always treat field X as a serial number.");
+    // still the full generated prompt
+    expect(prompt).toContain("JSON schema:");
+  });
+
+  it("full_prompt_override replaces the entire generated prompt", () => {
+    const tpl = inspectionTemplate();
+    tpl.full_prompt_override = "ONLY return {\"foo\": 1}.";
+    const prompt = buildPromptForTemplate(tpl);
+
+    expect(prompt).toBe("ONLY return {\"foo\": 1}.");
+    // none of the auto-generated boilerplate leaks through
+    expect(prompt).not.toContain("JSON schema:");
+    expect(prompt).not.toContain("contact_person");
+  });
 });

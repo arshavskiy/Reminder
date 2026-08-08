@@ -1,0 +1,54 @@
+[
+  {
+    "key": "invoice_number",
+    "label_he": "מספר חשבונית",
+    "type": "text",
+    "required": true
+  },
+  {
+    "key": "client_company",
+    "label_he": "שם הלקוח",
+    "type": "text",
+    "required": true
+  },
+  {
+    "key": "client_id",
+    "label_he": "ח.פ / ת.ז",
+    "type": "text"
+  },
+  {
+    "key": "issue_date",
+    "label_he": "תאריך הוצאה",
+    "type": "date",
+    "required": true
+  },
+  {
+    "key": "payment_due_date",
+    "label_he": "תאריך לתשלום",
+    "type": "date",
+    "required": true,
+    "hint_he": "מתי צריך לשלם — מפעיל תזכורת"
+  },
+  {
+    "key": "amount",
+    "label_he": "סכום לתשלום",
+    "type": "currency",
+    "required": true
+  },
+  {
+    "key": "currency",
+    "label_he": "מטבע",
+    "type": "text",
+    "example_he": "ILS"
+  },
+  {
+    "key": "vat_amount",
+    "label_he": "סכום מע\"מ",
+    "type": "currency"
+  },
+  {
+    "key": "items",
+    "label_he": "פירוט פריטים",
+    "type": "list"
+  }
+]

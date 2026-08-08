@@ -1,0 +1,69 @@
+[
+  {
+    "key": "contract_number",
+    "label_he": "מספר חוזה",
+    "type": "text",
+    "required": true
+  },
+  {
+    "key": "client_company",
+    "label_he": "שם הלקוח / חברה",
+    "type": "text",
+    "required": true
+  },
+  {
+    "key": "contact_person",
+    "label_he": "איש קשר",
+    "type": "text"
+  },
+  {
+    "key": "contact_phone",
+    "label_he": "טלפון",
+    "type": "phone"
+  },
+  {
+    "key": "contact_email",
+    "label_he": "אימייל",
+    "type": "email"
+  },
+  {
+    "key": "contract_type",
+    "label_he": "סוג החוזה",
+    "type": "text"
+  },
+  {
+    "key": "start_date",
+    "label_he": "תאריך תחילה",
+    "type": "date",
+    "required": true
+  },
+  {
+    "key": "expiry_date",
+    "label_he": "תאריך פקיעה",
+    "type": "date",
+    "required": true,
+    "hint_he": "התאריך שבו החוזה פג — זה מה שיפעיל את התזכורת"
+  },
+  {
+    "key": "amount",
+    "label_he": "סכום",
+    "type": "currency"
+  },
+  {
+    "key": "currency",
+    "label_he": "מטבע",
+    "type": "text",
+    "example_he": "ILS"
+  },
+  {
+    "key": "auto_renewal",
+    "label_he": "חידוש אוטומטי?",
+    "type": "text",
+    "example_he": "כן / לא"
+  },
+  {
+    "key": "notes",
+    "label_he": "הערות",
+    "type": "text"
+  }
+]
