@@ -27,6 +27,9 @@ const TYPE_DESCRIPTIONS: Record<TemplateField["type"], string> = {
  * template's field `key`s.
  */
 export function buildPromptForTemplate(tpl: DocTemplate, inspector?: InspectorProfile): string {
+  // Full override — admin-provided prompt replaces everything
+  if (tpl.full_prompt_override?.trim()) return tpl.full_prompt_override.trim();
+
   const fieldLines = tpl.fields
     .map((f) => {
       const parts: string[] = [];
@@ -136,7 +139,7 @@ ${inspectorExclusionNote}• IMPORTANT — company names with embedded numbers: 
   digits concatenated without spaces), reconstruct the correct name using context clues
   such as the email domain, address, or other mentions in the document.
 ${expiryNote}
-
+${tpl.custom_prompt_rules ? `\nCUSTOM RULES FOR THIS TEMPLATE:\n${tpl.custom_prompt_rules}\n` : ""}
 JSON schema:
 {
 ${fieldLines},${equipmentSection}

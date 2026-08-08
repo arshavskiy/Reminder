@@ -214,10 +214,21 @@ export async function extractWithTemplate(
   inspector?: InspectorProfile,
   prebuiltSystemPrompt?: string
 ): Promise<TemplateExtractionRun> {
-  const settings = await getEffectiveSettings();
-  const model = settings.aiBackend === "ollama" ? settings.ollamaModel : settings.openAiModel;
-  const backend = settings.aiBackend;
-  const text = rawText.slice(0, settings.extractionMaxChars);
+  const effectiveSettings = await getEffectiveSettings();
+  // Template AI overrides take priority over system_settings / env
+  const backend = (template.ai_backend ?? effectiveSettings.aiBackend) as "openai" | "ollama";
+  const model = template.ai_model
+    ?? (backend === "ollama" ? effectiveSettings.ollamaModel : effectiveSettings.openAiModel);
+  const maxChars = template.extraction_max_chars ?? effectiveSettings.extractionMaxChars;
+  // Merge overrides into a settings-shaped object so buildClient() works unchanged
+  const settings: AppSettings = {
+    ...effectiveSettings,
+    aiBackend: backend,
+    openAiModel: model,
+    ollamaModel: model,
+    extractionMaxChars: maxChars,
+  };
+  const text = rawText.slice(0, maxChars);
   logExtractorSettings("extractor:tpl", settings, model, rawText.length, text.length, documentId);
   const systemPrompt = prebuiltSystemPrompt ?? buildPromptForTemplate(template, inspector);
 

@@ -2,7 +2,6 @@ import express from "express";
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from "fs";
 import {extname, join} from "path";
 import {col} from "../db/db";
-import {ObjectId} from "mongodb";
 import {getDataDir} from "../settings";
 import {loadAllTemplates, loadTemplate} from "../templates/seedTemplates";
 import {loadEmailTemplate} from "../templates/seedEmailTemplates";
@@ -76,9 +75,18 @@ export function registerTemplateRoutes(app: express.Application) {
     if (body.fields !== undefined) updates.fields = body.fields;
     if (body.expiry_field !== undefined) updates.expiry_field = body.expiry_field;
     if (body.is_default !== undefined) updates.is_default = body.is_default;
+    // Phase 2: per-template AI + prompt overrides
+    if (body.ai_backend !== undefined) updates.ai_backend = body.ai_backend;
+    if (body.ai_model !== undefined) updates.ai_model = body.ai_model;
+    if (body.ocr_language !== undefined) updates.ocr_language = body.ocr_language;
+    if (body.extraction_max_chars !== undefined) updates.extraction_max_chars = body.extraction_max_chars;
+    if (body.reminder_advance_days !== undefined) updates.reminder_advance_days = body.reminder_advance_days;
+    if (body.custom_prompt_rules !== undefined) updates.custom_prompt_rules = body.custom_prompt_rules;
+    if (body.full_prompt_override !== undefined) updates.full_prompt_override = body.full_prompt_override;
 
     // Prompt-affecting fields changed — clear the cache so it's rebuilt on next use.
-    const promptInvalidatingFields = ["name", "fields", "expiry_field", "match_keywords"];
+    const promptInvalidatingFields = ["name", "fields", "expiry_field", "match_keywords",
+      "custom_prompt_rules", "full_prompt_override"];
     if (promptInvalidatingFields.some((f) => (body as any)[f] !== undefined)) {
       updates.cached_system_prompt = null;
     }

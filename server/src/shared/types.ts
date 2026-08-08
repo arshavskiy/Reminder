@@ -365,6 +365,14 @@ export interface DocTemplate {
   is_default: number;
   is_builtin: number;
   extract_equipment?: boolean;
+  // Phase 2: Per-template AI + prompt overrides (all nullable = fall back to system_settings / env)
+  ai_backend?: "openai" | "ollama" | null;
+  ai_model?: string | null;
+  ocr_language?: string | null;
+  extraction_max_chars?: number | null;
+  reminder_advance_days?: number[] | null;
+  custom_prompt_rules?: string | null;         // appended to auto-generated system prompt
+  full_prompt_override?: string | null;        // replaces buildPromptForTemplate entirely
   created_at: string;
   updated_at: string;
 }
