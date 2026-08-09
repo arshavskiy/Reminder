@@ -70,6 +70,41 @@ The Tesseract worker is always terminated in a `finally` block to prevent memory
 
 ---
 
+### Local Hebrew PDF parser CLI
+
+For debugging one PDF without importing it, running AI, creating clients/contracts, or generating reminders, use the local script:
+
+```powershell
+cd server
+npm run pdf:hebrew -- "C:\path\to\file.pdf"
+```
+
+The script runs the same Stage 1 behavior used by uploads:
+
+1. Try `pdfParser.ts` (`pdf-parse`, garbage stripping, Hebrew BiDi fix).
+2. Fall back to `ocrParser.ts` when the PDF appears scanned or the extracted text is too sparse.
+3. Run `ocrExtractor.ts` over the resulting text and print the extracted regex fields.
+4. Apply CLI-only invoice conveniences for local debugging, such as `לכבוד`, `לתשלום עד`, and phone numbers glued before `טלפון`. These do not affect the production upload/API pipeline.
+5. Print the full raw text.
+
+Useful flags:
+
+| Flag | Behavior |
+|---|---|
+| `--ocr-only` | Skip `pdf-parse`, render PDF pages to PNG with Poppler/`pdftoppm`, then force Tesseract OCR |
+| `--fields-only` | Print only the JSON fields from `extractFromOcr()` |
+| `--out <txt-path>` | Save the extracted raw text to a UTF-8 text file |
+
+Examples:
+
+```powershell
+npm run pdf:hebrew:ocr -- "C:\docs\inspection.pdf"
+npm run pdf:hebrew:fields -- "C:\docs\inspection.pdf"
+npm run pdf:hebrew -- "C:\docs\inspection.pdf" --out "C:\tmp\inspection-ocr.txt"
+```
+
+---
+
 ### Other file types
 
 | Extension | Parser |

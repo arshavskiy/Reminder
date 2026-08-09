@@ -415,6 +415,7 @@ npm run dev          # tsx watch — hot reload
 npm run build        # tsc --noEmit (type check only)
 npm test             # vitest run
 npm run test:watch   # vitest watch
+npm run pdf:hebrew -- "C:\path\file.pdf"  # parse Hebrew PDF text + OCR fallback, no DB writes
 
 # Client
 cd client
