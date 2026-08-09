@@ -1155,20 +1155,35 @@ async function openUserDetail(user: any) {
   userDetailLoading.value = true;
   userDetailData.value = null;
   userDefaultTemplateId.value = null;
-  try {
-    const [detail, userSettings, templates] = await Promise.all([
-      api.admin.getUserDetail(user.id),
-      api.admin.getUserSettings(user.id),
-      emailTemplatesList.value.length ? Promise.resolve(emailTemplatesList.value) :
-        fetch(`${location.origin}/api/email-templates`, { credentials: "include" }).then(r => r.json()),
-    ]);
-    userDetailData.value = detail;
-    userDefaultTemplateId.value = userSettings.default_email_template_id ?? null;
-    if (!emailTemplatesList.value.length) emailTemplatesList.value = templates;
-  } catch {
+  const [detailResult, settingsResult] = await Promise.allSettled([
+    api.admin.getUserDetail(user.id),
+    api.admin.getUserSettings(user.id),
+  ]);
+
+  if (detailResult.status === "fulfilled") {
+    userDetailData.value = detailResult.value;
+  } else {
+    console.error("Failed to load admin user detail", detailResult.reason);
     message.error("Failed to load user detail");
-  } finally {
-    userDetailLoading.value = false;
+  }
+
+  if (settingsResult.status === "fulfilled") {
+    userDefaultTemplateId.value = settingsResult.value.default_email_template_id ?? null;
+  } else {
+    console.error("Failed to load admin user settings", settingsResult.reason);
+    message.error("Failed to load user settings");
+  }
+
+  userDetailLoading.value = false;
+
+  if (!emailTemplatesList.value.length) {
+    try {
+      const templates = await api.emailTemplates.list();
+      emailTemplatesList.value = Array.isArray(templates) ? templates : [];
+    } catch (err) {
+      console.warn("Failed to load email templates for admin user detail", err);
+      emailTemplatesList.value = [];
+    }
   }
 }
 

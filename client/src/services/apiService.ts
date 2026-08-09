@@ -391,7 +391,10 @@ export const api = {
         method: "PUT", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ default_email_template_id: templateId }),
-      }).then(r => r.json());
+      }).then((r) => {
+        if (!r.ok) throw new Error(`PUT /admin/users/${id}/settings failed: ${r.status}`);
+        return r.json();
+      });
     },
     downloadDocument: (id: string) => adminGet<any>(`/admin/documents/${id}/download`),
     reprocessDocument: (id: string) => {

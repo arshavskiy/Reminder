@@ -198,7 +198,7 @@ const actAsOptions = computed(() =>
 );
 
 async function loadActAsUsers() {
-  if (!authStore.isAdmin || actAsUsers.value.length) return;
+  if (!authStore.isAdmin || actAsLoading.value || actAsUsers.value.length) return;
   actAsLoading.value = true;
   try {
     const { api } = await import("./services/apiService.js");
@@ -256,6 +256,17 @@ onMounted(async () => {
     loadActAsUsers();
   }
 });
+
+watch(
+  () => authStore.user?.id,
+  () => {
+    if (authStore.isAdmin) {
+      loadActAsUsers();
+    } else {
+      actAsUsers.value = [];
+    }
+  },
+);
 
 watch(isDark, (dark) => {
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");

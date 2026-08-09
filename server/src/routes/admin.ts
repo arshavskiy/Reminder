@@ -850,8 +850,13 @@ export function registerAdminRoutes(app: express.Application) {
   // GET /api/admin/users/:id/settings
   app.get("/api/admin/users/:id/settings", async (req, res) => {
     if (!await adminAuth(req, res)) return;
-    const row = await col("user_settings").findOne({ user_id: req.params.id }) as any;
-    res.json(row ? (() => { const { _id, ...r } = row; return r; })() : {});
+    try {
+      const row = await col("user_settings").findOne({ user_id: req.params.id }) as any;
+      res.json(row ? (() => { const { _id, ...r } = row; return r; })() : {});
+    } catch (err: any) {
+      console.error("admin user settings error:", err);
+      res.status(500).json({ error: err.message ?? "Failed to load user settings" });
+    }
   });
 
   // PUT /api/admin/users/:id/settings
@@ -862,7 +867,10 @@ export function registerAdminRoutes(app: express.Application) {
     if (default_email_template_id !== undefined) patch.default_email_template_id = default_email_template_id ?? null;
     await col("user_settings").updateOne(
       { user_id: req.params.id },
-      { $set: patch },
+      {
+        $set: patch,
+        $setOnInsert: { user_id: req.params.id },
+      },
       { upsert: true },
     );
     res.json({ ok: true });
@@ -912,16 +920,37 @@ export function registerAdminRoutes(app: express.Application) {
 
     // Fetch templates for field coverage analysis
     const templateIds = [...new Set(documents.map((d: any) => d.template_id).filter(Boolean))];
-    const templates = templateIds.length
-      ? await col("doc_templates").find({ id: { $in: templateIds } }).toArray()
+    const templateLookupIds = [...new Set(templateIds.flatMap((id: any) => {
+      const ids: any[] = [id, String(id)];
+      const numericId = Number(id);
+      if (Number.isFinite(numericId)) ids.push(numericId);
+      return ids;
+    }))];
+    const templates = templateLookupIds.length
+      ? await col("doc_templates").find({ id: { $in: templateLookupIds } }).toArray()
       : [];
-    const templateMap: Record<number, any> = {};
-    for (const t of templates) templateMap[(t as any).id] = t;
+    const templateMap: Record<string, any> = {};
+    for (const t of templates) templateMap[String((t as any).id)] = t;
+
+    function normalizeTemplateFields(raw: any): Array<{ key: string }> {
+      if (typeof raw === "string") {
+        try {
+          return normalizeTemplateFields(JSON.parse(raw));
+        } catch {
+          return [];
+        }
+      }
+      if (!Array.isArray(raw)) return [];
+      return raw
+        .map((field) => typeof field === "string" ? { key: field } : field)
+        .filter((field) => field && typeof field.key === "string");
+    }
 
     function computeFieldCoverage(doc: any) {
       const tplId = doc.template_id;
-      if (!tplId || !templateMap[tplId]) return null;
-      const tpl = templateMap[tplId];
+      if (!tplId || !templateMap[String(tplId)]) return null;
+      const tpl = templateMap[String(tplId)];
+      const fields = normalizeTemplateFields(tpl.fields);
       let extracted: Record<string, any> = {};
       try {
         const raw = doc.extracted_fields;
@@ -932,7 +961,7 @@ export function registerAdminRoutes(app: express.Application) {
       const present: string[] = [];
       const missing: string[] = [];
       const nulled: string[] = [];
-      for (const f of (tpl.fields ?? [])) {
+      for (const f of fields) {
         const val = extracted[f.key];
         if (!(f.key in extracted)) missing.push(f.key);
         else if (val === null || val === "" || (Array.isArray(val) && val.length === 0)) nulled.push(f.key);
@@ -940,12 +969,12 @@ export function registerAdminRoutes(app: express.Application) {
       }
       return {
         template_name: tpl.name,
-        total_fields: tpl.fields?.length ?? 0,
+        total_fields: fields.length,
         present,
         missing,
         nulled,
-        coverage_pct: tpl.fields?.length
-          ? Math.round((present.length / tpl.fields.length) * 100)
+        coverage_pct: fields.length
+          ? Math.round((present.length / fields.length) * 100)
           : null,
       };
     }
