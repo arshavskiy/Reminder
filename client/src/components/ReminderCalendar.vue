@@ -51,7 +51,7 @@
           <strong>{{ item.count }}</strong>
         </button>
       </div>
-      <div class="rcal__filters">
+      <div v-if="featuresStore.hasFeature(FEATURES.dashboard.calendarFilters)" class="rcal__filters">
         <button
           v-for="filter in calendarFilters"
           :key="filter.key"
@@ -286,7 +286,11 @@ import {useRouter} from "vue-router";
 import {NButton, NModal, NPopover, useMessage} from "naive-ui";
 import type {ReminderWithContext} from "@shared/types.js";
 import {api, type ExpiryCalendarItem} from "../services/apiService.js";
+import {useFeaturesStore} from "../stores/features.js";
+import {FEATURES} from "../shared/features.js";
 import ReminderQuickView from "./ReminderQuickView.vue";
+
+const featuresStore = useFeaturesStore();
 
 interface Props {
   rows: ReminderWithContext[];
