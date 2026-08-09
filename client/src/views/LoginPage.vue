@@ -28,6 +28,11 @@
             <a class="btn-primary" href="#login-card">כניסה למערכת</a>
             <a class="btn-secondary" href="#features">למד עוד</a>
           </div>
+          <img
+            class="hero-visual"
+            src="/system-pages.gif"
+            alt="עמודי המערכת"
+          />
         </div>
 
         <div id="login-card" class="login-card">
@@ -250,13 +255,17 @@
     </n-modal>
 
     <footer class="landing-footer">
-      <strong>ReminderOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
+      <p><strong>ReminderOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים</p>
+      <p>
+        פותח עם ❤️ <a href="https://handcoded.tech/">handcoded.tech</a> |
+        <a href="https://app.handcoded.tech/">כניסה למערכת</a>
+      </p>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from "vue";
+import {computed, onBeforeUnmount, onMounted, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {NAlert, NButton, NForm, NFormItem, NIcon, NInput, NModal, NTabPane, NTabs} from "naive-ui";
 import {BriefcaseOutline} from "@vicons/ionicons5";
@@ -283,6 +292,8 @@ const loading = ref(false);
 const successMsg = ref<string | null>(null);
 const gisError = ref<string | null>(null);
 const routeError = ref<string | null>(null);
+const isLoginCardInView = ref(false);
+let loginCardObserver: IntersectionObserver | null = null;
 
 // Login form
 const loginEmail = ref("");
@@ -421,10 +432,28 @@ onMounted(async () => {
 
   if (!authStore.initialized) await authStore.fetchMe();
   if (authStore.user) router.replace("/");
+
+  const loginCard = document.getElementById("login-card");
+  if (loginCard) {
+    loginCardObserver = new IntersectionObserver(
+      ([entry]) => {
+        isLoginCardInView.value = entry.isIntersecting;
+      },
+      {threshold: 0.2},
+    );
+    loginCardObserver.observe(loginCard);
+  }
+});
+
+onBeforeUnmount(() => {
+  loginCardObserver?.disconnect();
+  loginCardObserver = null;
 });
 </script>
 
 <style scoped>
+@import url("https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap");
+
 .login-page {
   --landing-nav-height: 64px;
   --login-font-family: "Rubik", "Lato", "Arial", "Helvetica Neue", sans-serif;
@@ -559,6 +588,16 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.hero-visual {
+  display: block;
+  width: min(100%, 720px);
+  margin-top: 34px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
 }
 
 .btn-primary,
@@ -862,6 +901,23 @@ onMounted(async () => {
   color: #fff;
 }
 
+.landing-footer p {
+  margin: 0;
+}
+
+.landing-footer p + p {
+  margin-top: 8px;
+}
+
+.landing-footer a {
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: none;
+}
+
+.landing-footer a:hover {
+  color: #fff;
+}
+
 :deep(.n-tabs) {
   width: 100%;
 }
@@ -917,6 +973,11 @@ onMounted(async () => {
     width: 100%;
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .hero-visual {
+    width: 100%;
+    margin-top: 26px;
   }
 
   .btn-primary,
