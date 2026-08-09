@@ -4,10 +4,10 @@ import {mkdirSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {
-    importFile,
-    normalizeExtractionFieldsForTemplate,
-    processDocument,
-    saveTemplateEntitiesForDoc
+  importFile,
+  normalizeExtractionFieldsForTemplate,
+  processDocument,
+  saveTemplateEntitiesForDoc
 } from "../pipeline/importer";
 import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
@@ -25,7 +25,7 @@ function readNonNegativeIntEnv(name: string, fallback: number, max = 60_000): nu
   return Math.min(Math.floor(value), max);
 }
 
-const RESCAN_START_STAGGER_MS = readNonNegativeIntEnv("DOCUMENT_RESCAN_START_STAGGER_MS", 1200);
+const RESCAN_START_STAGGER_MS = readNonNegativeIntEnv("DOCUMENT_RESCAN_START_STAGGER_MS", 250);
 const UPLOAD_START_STAGGER_MS = readNonNegativeIntEnv("DOCUMENT_UPLOAD_START_STAGGER_MS", 0);
 
 export function registerDocumentRoutes(app: express.Application) {
