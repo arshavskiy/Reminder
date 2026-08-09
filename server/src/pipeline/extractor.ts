@@ -100,9 +100,9 @@ async function withRateLimitRetry<T>(
   meta: { documentId?: string | number; model: string; backend: string; scope: string }
 ): Promise<T> {
   const maxAttempts = readIntEnv("AI_RATE_LIMIT_MAX_ATTEMPTS", 5, 1, 10);
-  const baseWaitMs = readIntEnv("AI_RATE_LIMIT_BASE_WAIT_MS", 750, 100, 60_000);
-  const minWaitMs = readIntEnv("AI_RATE_LIMIT_MIN_WAIT_MS", 500, 0, 60_000);
-  const maxWaitMs = readIntEnv("AI_RATE_LIMIT_MAX_WAIT_MS", 20_000, 500, 120_000);
+  const baseWaitMs = readIntEnv("AI_RATE_LIMIT_BASE_WAIT_MS", 750, 100, 5_000);
+  const minWaitMs = readIntEnv("AI_RATE_LIMIT_MIN_WAIT_MS", 500, 0, 10_000);
+  const maxWaitMs = readIntEnv("AI_RATE_LIMIT_MAX_WAIT_MS", 10_000, 500, 20_000);
   let lastErr: unknown;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
