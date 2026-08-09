@@ -20,6 +20,7 @@
           <span :class="statusTagClass(row.status)">{{ statusLabel(row.status) }}</span>
           <span class="tag tag--neutral">{{ row.contract_type ?? "-" }}</span>
           <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
+          <span v-if="!row.contact_email" class="tag tag--warn">⚠ חסר אימייל</span>
         </div>
       </div>
 
@@ -325,6 +326,8 @@ function reminderStatusClass(status: string): string {
 .tag--info { background: rgba(32,128,240,0.10); color: #1560bd; border-color: rgba(32,128,240,0.2); }
 .tag--neutral { background: var(--bg-elevated); color: var(--text-secondary); border-color: var(--border-color); }
 .tag--muted { background: transparent; color: var(--text-muted); border-color: var(--border-color); }
+.tag--warn { background: rgba(240,160,32,0.12); color: #b27a02; border-color: rgba(240,160,32,0.3); }
+html[data-theme="dark"] .tag--warn { color: #f0a020; }
 html[data-theme="dark"] .tag--ok { color: #63e2b7; }
 html[data-theme="dark"] .tag--bad { color: #ff7875; }
 html[data-theme="dark"] .tag--info { color: #63b3ed; }

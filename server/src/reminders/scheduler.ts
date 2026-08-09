@@ -605,6 +605,23 @@ export async function generateContractReminders(
     });
   }
 
+  // Skip reminder creation when no email is resolvable on the contract or its client.
+  const hasEmail = Boolean(contract?.contact_email?.trim()) ||
+    (clientId ? (() => {
+      let clientOid: any = clientId;
+      try { const { ObjectId } = require("mongodb"); clientOid = new ObjectId(clientId); } catch {}
+      return col("clients").findOne({ _id: clientOid }).then((c: any) => Boolean(c?.email?.trim()));
+    })() : Promise.resolve(false));
+
+  const emailResolved = hasEmail instanceof Promise ? await hasEmail : hasEmail;
+  if (!emailResolved) {
+    logger.info("contract_reminder_skipped_no_email", {
+      contract_id: contractId,
+      user_id: userId ?? null,
+    });
+    return;
+  }
+
   // Past expiry: mark contract overdue, skip all reminders.
   if (expiryDate < today) {
     if (contract && contract.status !== "overdue") {
