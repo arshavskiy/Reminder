@@ -787,6 +787,52 @@ async function openDownload(row: Document) {
 <style scoped>
 .hidden { display: none; }
 
+/* ── Filter bar ──────────────────────────────────────────────────────────── */
+.filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 6px;
+  background: var(--bg-elevated);
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+}
+.filterbar--compact {
+  margin-top: -8px;
+  padding: 5px;
+  background: transparent;
+}
+.pill {
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.pill--compact { padding: 6px 13px; font-size: 12px; }
+.pill:hover { background: var(--bg-hover); color: var(--text-primary); }
+.pill--active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+.pill__badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
 /* ── Quota bar ───────────────────────────────────────────────────────────── */
 .quota-bar { margin-bottom: 12px; }
 .quota-bar__text { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); margin-bottom: 5px; }
