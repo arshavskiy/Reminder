@@ -173,7 +173,7 @@ const defaultTrackingReportFields = trackingReportFieldOptions.map((field) => fi
 const defaultClientReportFields = clientReportFieldOptions.map((field) => field.key);
 const allClientReportFieldOptions = [...trackingReportFieldOptions, ...clientReportFieldOptions] as const;
 const defaultAllReportFields = [
-  "tracking_date", "tracking_checked", "contact_person", "tracking_phone",
+  "tracking_date", "tracking_checked", "client","contact_person", "tracking_phone",
   "tracking_license_number", "tracking_relevant", "tracking_notes",
 ];
 const selectedReportClientId = computed(() => selectedClientId.value === allClientsValue ? undefined : selectedClientId.value);
