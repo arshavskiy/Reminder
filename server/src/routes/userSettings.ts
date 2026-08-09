@@ -148,9 +148,13 @@ export function registerUserSettingsRoutes(app: express.Application) {
       }
     }
 
+    const setOnInsert: Record<string, unknown> = { user_id: auth.userId };
+    if (patch.features === undefined) setOnInsert.features = DEFAULT_FEATURES;
+    if (patch.report_config === undefined) setOnInsert.report_config = DEFAULT_REPORT_CONFIG;
+
     const update: Record<string, unknown> = {
       $set: patch,
-      $setOnInsert: { user_id: auth.userId, features: DEFAULT_FEATURES, report_config: DEFAULT_REPORT_CONFIG },
+      $setOnInsert: setOnInsert,
     };
     if (rawFeatures !== undefined) update.$unset = { features_json: "" };
 
