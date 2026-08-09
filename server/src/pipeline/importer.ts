@@ -46,6 +46,47 @@ function computeHash(filePath: string): string {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
+function parseIsoDateOnly(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function formatIsoDateOnly(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function forwardPastNextActionDate(value: string | null | undefined, today = new Date()): string | null {
+  if (!value) return null;
+  const parsed = parseIsoDateOnly(value);
+  if (!parsed) return value;
+
+  const todayOnly = new Date(today);
+  todayOnly.setHours(0, 0, 0, 0);
+
+  const forwarded = new Date(parsed);
+  while (forwarded < todayOnly) {
+    forwarded.setFullYear(forwarded.getFullYear() + 1);
+  }
+  return formatIsoDateOnly(forwarded);
+}
+
+function normalizeNextActionDateFields(fields: Record<string, unknown>, expiryField?: string | null): void {
+  const keys = new Set(["expiry_date", "next_inspection_date"]);
+  if (expiryField) keys.add(expiryField);
+  for (const key of keys) {
+    if (typeof fields[key] === "string") {
+      fields[key] = forwardPastNextActionDate(fields[key]);
+    }
+  }
+}
+
 export async function importFile(originalPath: string, push?: PushFn, userId?: string, displayName?: string, pipeline?: PipelineOptions): Promise<string> {
   const settings = getSettings();
 
@@ -206,6 +247,7 @@ export async function processDocument(
   // AI (Stage B) will overwrite these with richer data if enabled.
   if (rawText.trim().length > 0) {
     const ocr = extractFromOcr(rawText);
+    normalizeNextActionDateFields(ocr as unknown as Record<string, unknown>);
     const documentKind = classifyDocumentKind(rawText);
     logger.debug("document_ocr_extracted", {
       document_id: documentId,
@@ -459,12 +501,13 @@ export async function processDocument(
             document_id: documentId,
             user_id: userId ?? null,
             document_type: extraction.result.document_type ?? null,
-            has_client: Boolean(extraction.result.client_company ?? extraction.result.client_name),
-            has_expiry_date: Boolean(extraction.result.expiry_date),
-            confidence: extraction.result.confidence ?? null,
-            exec_ms: extraction.execMs,
-          });
-          if (!pipeline?.skipEntities) {
+        has_client: Boolean(extraction.result.client_company ?? extraction.result.client_name),
+        has_expiry_date: Boolean(extraction.result.expiry_date),
+        confidence: extraction.result.confidence ?? null,
+        exec_ms: extraction.execMs,
+      });
+      extraction.result.expiry_date = forwardPastNextActionDate(extraction.result.expiry_date);
+      if (!pipeline?.skipEntities) {
             push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
             await saveExtractionEntities(documentId, extraction.result, userId, pipeline?.skipReminders);
           }
@@ -545,14 +588,15 @@ async function saveExtractionEntities(
     } as any);
   }
 
-  if (result.expiry_date || result.start_date || result.contract_number || result.document_number) {
+  const expiryDate = forwardPastNextActionDate(result.expiry_date);
+  if (expiryDate || result.start_date || result.contract_number || result.document_number) {
     const contractFields = {
       ...(userId && { user_id: userId }),
       client_id: clientId,
       contract_number: result.contract_number ?? result.document_number ?? null,
       contract_type: result.contract_type ?? result.document_type ?? null,
       start_date: result.start_date ?? null,
-      expiry_date: result.expiry_date ?? null,
+      expiry_date: expiryDate,
       amount: result.amount ?? null,
       currency: result.currency ?? "ILS",
       counterparty:
@@ -572,8 +616,8 @@ async function saveExtractionEntities(
       { upsert: true, returnDocument: "after" }
     );
     const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
-    if (result.expiry_date && !skipReminders) {
-      await generateContractReminders(contractId, clientId, documentId, result.expiry_date, userId);
+    if (expiryDate && !skipReminders) {
+      await generateContractReminders(contractId, clientId, documentId, expiryDate, userId);
     }
   }
 
@@ -665,6 +709,7 @@ export function normalizeExtractionFieldsForTemplate(
   const normalized: DynamicExtraction = { ...fields };
   removeAddressExtractionFields(normalized);
   normalizeClientCompany(rawText, normalized);
+  normalizeNextActionDateFields(normalized, template.expiry_field);
   const supportsReportNumber = template.fields.some((field) => field.key === "report_number");
   if (supportsReportNumber && !hasMeaningfulValue(normalized.report_number)) {
     const reportNumber = extractCurrentReportNumber(rawText);
@@ -1179,7 +1224,7 @@ async function saveTemplateEntities(
     getStr("contract_number") ?? getStr("report_number") ?? getStr("invoice_number");
   const startDate =
     getStr("start_date") ?? getStr("inspection_date") ?? getStr("issue_date");
-  const expiryDate = template.expiry_field ? getStr(template.expiry_field) : null;
+  const expiryDate = forwardPastNextActionDate(template.expiry_field ? getStr(template.expiry_field) : null);
 
   if (docNumber || startDate || expiryDate) {
     const contractFields = {

@@ -425,6 +425,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+@import "https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap";
 .login-page {
   --landing-nav-height: 64px;
   --login-font-family: "Rubik", "Lato", "Arial", "Helvetica Neue", sans-serif;

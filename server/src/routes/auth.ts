@@ -28,6 +28,7 @@ import {
 } from "../auth/emailAuth";
 import {clientIp, logger} from "../logger";
 import {DEFAULT_FEATURES} from "../features";
+import {notifyPasswordResetRequested} from "../push/adminNotify";
 
 export function registerAuthRoutes(app: express.Application) {
   // GET /auth/google — kick off OAuth flow
@@ -582,6 +583,7 @@ export function registerAuthRoutes(app: express.Application) {
     const base = serverBaseUrl(req);
     try {
       await sendPasswordResetEmail(emailLower, resetToken, base);
+      notifyPasswordResetRequested({email: emailLower});
       logger.info("password_reset_requested", { user_id: user._id.toString(), email: emailLower, user_found: true, ip: clientIp(req) ?? null });
     } catch (err) {
       logger.error("password_reset_email_failed", { user_id: user._id.toString(), email: emailLower, error: err, ip: clientIp(req) ?? null });

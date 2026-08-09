@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {normalizeExtractionFieldsForTemplate} from "../pipeline/importer";
+import {forwardPastNextActionDate, normalizeExtractionFieldsForTemplate} from "../pipeline/importer";
 import type {DocTemplate} from "../../src/shared/types.js";
 
 const inspectionTemplate: DocTemplate = {
@@ -30,6 +30,22 @@ const inspectionTemplate: DocTemplate = {
 };
 
 describe("normalizeExtractionFieldsForTemplate", () => {
+  it("forwards a past next-action date to the next future year", () => {
+    expect(forwardPastNextActionDate("2026-07-15", new Date(2026, 7, 9))).toBe("2027-07-15");
+  });
+
+  it("keeps a future next-action date unchanged", () => {
+    expect(forwardPastNextActionDate("2026-09-15", new Date(2026, 7, 9))).toBe("2026-09-15");
+  });
+
+  it("normalizes template next inspection dates before saving extracted fields", () => {
+    const fields = normalizeExtractionFieldsForTemplate("תסקיר בדיקה", inspectionTemplate, {
+      next_inspection_date: "2026-07-15",
+    });
+
+    expect(fields?.next_inspection_date).toBe(forwardPastNextActionDate("2026-07-15"));
+  });
+
   it("fills report_number from current inspection text and ignores previous report number", () => {
     const rawText = [
       "מספר תסקיר: 17924/484590",

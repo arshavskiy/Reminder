@@ -8,15 +8,17 @@ export type { AppSettings };
 const REQUIRED: Array<keyof NodeJS.ProcessEnv> = [
   "MONGODB_URI",
   "SESSION_SECRET",
-  "SMTP_HOST",
-  "SMTP_USER",
-  "SMTP_PASS",
   "EMAIL_FROM",
   "OPENAI_LOCAL_API_KEY",
 ];
 
 export function validateEnv(): void {
   const missing = REQUIRED.filter((key) => !process.env[key]);
+  const hasResend = Boolean(process.env.RESEND_API_KEY);
+  const hasSmtp = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  if (!hasResend && !hasSmtp) {
+    missing.push("RESEND_API_KEY or SMTP_HOST/SMTP_USER/SMTP_PASS" as keyof NodeJS.ProcessEnv);
+  }
   if (missing.length > 0) {
     console.error(`[settings] Missing required environment variables:\n  ${missing.join("\n  ")}`);
     process.exit(1);

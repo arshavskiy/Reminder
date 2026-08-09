@@ -24,3 +24,7 @@ export function notifyDocumentUploaded(opts: { fileName?: string | null; userEma
 export function notifyReminderSkipped(opts: { title?: string | null }): void {
   fire("תזכורת נשלחה ללא נמען", `${opts.title ?? "תזכורת"} — אין נמען מוגדר`);
 }
+
+export function notifyPasswordResetRequested(opts: { email?: string | null }): void {
+  fire("בקשת איפוס סיסמה", opts.email ? `נשלח קישור איפוס אל ${opts.email}` : "נשלח קישור איפוס סיסמה", "/#/admin");
+}

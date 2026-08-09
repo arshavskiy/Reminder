@@ -29,23 +29,58 @@ function buildTransport() {
   });
 }
 
+function useResend(): boolean {
+  return Boolean(process.env.RESEND_API_KEY);
+}
+
 function renderHtml(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
 }
 
-export async function sendVerificationEmail(email: string, token: string, baseUrl: string) {
+async function sendAuthEmail(options: {to: string; subject: string; html: string; text: string}) {
   const s = getSettings();
-  if (!s.smtpHost || !s.emailFrom) {
-    console.warn("[emailAuth] SMTP not configured — skipping verification email");
+  const appName = s.emailFromName ?? "ReminderOCR";
+  if (!s.emailFrom) {
+    console.warn("[emailAuth] EMAIL_FROM not configured — skipping auth email");
     return;
   }
 
-  const verifyUrl = `${baseUrl}/auth/verify-email?token=${token}`;
-  const appName = s.emailFromName ?? " ReminderOCR ";
-  const html = renderHtml(loadAuthTemplate("verify-email"), { verify_url: verifyUrl, app_name: appName });
+  const from = `"${appName}" <${s.emailFrom}>`;
+  if (useResend()) {
+    const { Resend } = await import("resend");
+    const client = new Resend(process.env.RESEND_API_KEY);
+    const result = await client.emails.send({
+      from,
+      to: [options.to],
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
+    if ((result as any).error) throw new Error((result as any).error.message ?? "Resend email failed");
+    return;
+  }
+
+  if (!s.smtpHost) {
+    console.warn("[emailAuth] SMTP/Resend not configured — skipping auth email");
+    return;
+  }
 
   await buildTransport().sendMail({
-    from: `"${appName}" <${s.emailFrom}>`,
+    from,
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+    text: options.text,
+  });
+}
+
+export async function sendVerificationEmail(email: string, token: string, baseUrl: string) {
+  const s = getSettings();
+  const verifyUrl = `${baseUrl}/auth/verify-email?token=${token}`;
+  const appName = s.emailFromName ?? "ReminderOCR";
+  const html = renderHtml(loadAuthTemplate("verify-email"), { verify_url: verifyUrl, app_name: appName });
+
+  await sendAuthEmail({
     to: email,
     subject: `אימות כתובת אימייל — ${appName}`,
     html,
@@ -55,17 +90,11 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
 
 export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string) {
   const s = getSettings();
-  if (!s.smtpHost || !s.emailFrom) {
-    console.warn("[emailAuth] SMTP not configured — skipping password reset email");
-    return;
-  }
-
   const resetUrl = `${baseUrl}/#/reset-password?token=${token}`;
-  const appName = s.emailFromName ?? " ReminderOCR ";
+  const appName = s.emailFromName ?? "ReminderOCR";
   const html = renderHtml(loadAuthTemplate("reset-password"), { reset_url: resetUrl, app_name: appName });
 
-  await buildTransport().sendMail({
-    from: `"${appName}" <${s.emailFrom}>`,
+  await sendAuthEmail({
     to: email,
     subject: `איפוס סיסמה — ${appName}`,
     html,
