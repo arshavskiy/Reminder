@@ -104,7 +104,7 @@ export function registerReportRoutes(app: express.Application) {
       const now = new Date();
       const body = req.body as {
         year?: number;
-        month?: number;
+        month?: number | string | null;
         formats?: string[];
         recipients?: string[];
         clientId?: string;
@@ -112,7 +112,7 @@ export function registerReportRoutes(app: express.Application) {
         deliveryMode?: "combined" | "client";
       };
       const year = Number(body.year ?? now.getFullYear());
-      const month = body.month == null ? undefined : Number(body.month);
+      const month = body.month == null || body.month === "" ? undefined : Number(body.month);
       if (!validPeriod(year, month)) {
         res.status(400).json({ error: "Invalid year or month" });
         return;
