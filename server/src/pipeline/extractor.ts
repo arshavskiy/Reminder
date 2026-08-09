@@ -61,6 +61,66 @@ function buildClient(settings: ReturnType<typeof getSettings>) {
   return new OpenAI({ apiKey: settings.openAiKey });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRetryAfterMs(err: unknown): number | null {
+  const anyErr = err as any;
+  const headers = anyErr?.headers;
+  const retryAfterMs = headers?.["retry-after-ms"] ?? headers?.get?.("retry-after-ms");
+  const retryAfterSeconds = headers?.["retry-after"] ?? headers?.get?.("retry-after");
+  const retryAfterMsNumber = Number(retryAfterMs);
+  if (Number.isFinite(retryAfterMsNumber) && retryAfterMsNumber > 0) return Math.ceil(retryAfterMsNumber);
+  const retryAfterSecondsNumber = Number(retryAfterSeconds);
+  if (Number.isFinite(retryAfterSecondsNumber) && retryAfterSecondsNumber > 0) return Math.ceil(retryAfterSecondsNumber * 1000);
+
+  const message = err instanceof Error ? err.message : String(err);
+  const msMatch = message.match(/try again in\s+(\d+)\s*ms/i);
+  if (msMatch) return Number(msMatch[1]);
+  const secMatch = message.match(/try again in\s+([\d.]+)\s*s/i);
+  if (secMatch) return Math.ceil(Number(secMatch[1]) * 1000);
+  return null;
+}
+
+function isRateLimitError(err: unknown): boolean {
+  const anyErr = err as any;
+  const message = err instanceof Error ? err.message : String(err);
+  return anyErr?.status === 429 || anyErr?.code === "rate_limit_exceeded" || /429|rate limit/i.test(message);
+}
+
+async function withRateLimitRetry<T>(
+  fn: () => Promise<T>,
+  meta: { documentId?: string | number; model: string; backend: string; scope: string }
+): Promise<T> {
+  const maxAttempts = 5;
+  let lastErr: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isRateLimitError(err) || attempt === maxAttempts) break;
+
+      const retryAfter = getRetryAfterMs(err);
+      const fallback = 750 * Math.pow(2, attempt - 1);
+      const waitMs = Math.min(Math.max(retryAfter ?? fallback, 500), 20_000);
+      logger.warn("ai_extraction_rate_limited_retry", {
+        document_id: meta.documentId ?? null,
+        backend: meta.backend,
+        model: meta.model,
+        scope: meta.scope,
+        attempt,
+        wait_ms: waitMs,
+      });
+      await sleep(waitMs);
+    }
+  }
+
+  throw lastErr;
+}
+
 function logExtractorSettings(
   scope: "extractor" | "extractor:tpl",
   settings: ReturnType<typeof getSettings>,
@@ -127,15 +187,18 @@ export async function extractDocument(
 
   try {
     const client = buildClient(settings);
-    const response = await client.chat.completions.create({
-      model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Document text:\n\n${text}` },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0,
-    });
+    const response = await withRateLimitRetry(
+      () => client.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: `Document text:\n\n${text}` },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0,
+      }),
+      { documentId, model, backend, scope: "extractor" }
+    );
 
     rawJson = response.choices[0]?.message?.content ?? "";
     result = JSON.parse(rawJson) as ExtractionResult;
@@ -228,15 +291,18 @@ export async function extractWithTemplate(
 
   try {
     const client = buildClient(settings);
-    const response = await client.chat.completions.create({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `Document text:\n\n${text}` },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0,
-    });
+    const response = await withRateLimitRetry(
+      () => client.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Document text:\n\n${text}` },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0,
+      }),
+      { documentId, model, backend, scope: "extractor:tpl" }
+    );
     rawJson = response.choices[0]?.message?.content ?? "";
     fields = JSON.parse(rawJson) as DynamicExtraction;
     if (response.usage) {

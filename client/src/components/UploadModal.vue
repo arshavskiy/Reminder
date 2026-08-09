@@ -278,15 +278,15 @@
       <div class="rescan-summary">
         <div class="rescan-stat">
           <span class="rescan-stat__value">{{ props.rescan?.queued ?? 0 }}</span>
-          <span class="rescan-stat__label">נסרקים</span>
+          <span class="rescan-stat__label">{{ isUploadSession ? "בהעלאה" : "נסרקים" }}</span>
         </div>
         <div class="rescan-stat">
-          <span class="rescan-stat__value">{{ rescanAssigned }}</span>
-          <span class="rescan-stat__label">קיבלו תזכורת</span>
+          <span class="rescan-stat__value">{{ isUploadSession ? uploadCompleted : rescanAssigned }}</span>
+          <span class="rescan-stat__label">{{ isUploadSession ? "עובדו" : "קיבלו תזכורת" }}</span>
         </div>
         <div class="rescan-stat">
-          <span class="rescan-stat__value">{{ rescanMissing }}</span>
-          <span class="rescan-stat__label">ללא תזכורת</span>
+          <span class="rescan-stat__value">{{ isUploadSession ? uploadDuplicates : rescanMissing }}</span>
+          <span class="rescan-stat__label">{{ isUploadSession ? "כפולים" : "ללא תזכורת" }}</span>
         </div>
         <div class="rescan-stat">
           <span class="rescan-stat__value">{{ rescanFailed }}</span>
@@ -308,11 +308,15 @@
           <div class="preview-card__body">
             <div class="preview-card__title">{{ row.file_name }}</div>
             <div class="preview-card__meta">
-              <span :class="`preview-card__badge--rescan-${row.reminder_status ?? 'pending'}`" class="preview-card__badge">
+              <span :class="rescanRowClass(row)" class="preview-card__badge">
                 {{ rescanRowLabel(row) }}
               </span>
+              <span v-if="row.duplicate" class="preview-card__badge preview-card__badge--duplicate">כפול</span>
               <span v-if="row.reminder_date" class="preview-card__badge preview-card__badge--next">בדיקה הבאה: {{ row.reminder_date }}</span>
               <span v-if="row.document_type" class="preview-card__badge">{{ row.document_type }}</span>
+            </div>
+            <div v-if="row.error_message" class="preview-card__error">
+              {{ row.error_message }}
             </div>
           </div>
         </div>
@@ -417,12 +421,15 @@ interface RescanRow {
   reminder_status?: string | null;
   reminder_date?: string | null;
   document_type?: string | null;
+  error_message?: string | null;
+  duplicate?: boolean;
 }
 interface RescanState {
   queued: number;
   remaining: number;
   rows: RescanRow[];
   done: boolean;
+  kind?: "rescan" | "upload";
 }
 
 const props = defineProps<{ uploading: boolean; rescan?: RescanState | null }>();
@@ -455,11 +462,14 @@ const savingExtract = ref(false);
 const savedCount = ref(0);
 
 const confirmedCount = computed(() => extractPreviews.value.filter((p) => p.selected).length);
-const modalTitle = computed(() => activeTab.value === "rescan" ? "סריקה מחדש" : "העלאת מסמכים");
+const isUploadSession = computed(() => props.rescan?.kind === "upload");
+const modalTitle = computed(() => activeTab.value === "rescan" ? (isUploadSession.value ? "עיבוד העלאה" : "סריקה מחדש") : "העלאת מסמכים");
 const rescanRunning = computed(() => activeTab.value === "rescan" && !!props.rescan && !props.rescan.done);
 const rescanAssigned = computed(() => (props.rescan?.rows ?? []).filter((row) => row.reminder_status === "assigned").length);
 const rescanMissing = computed(() => (props.rescan?.rows ?? []).filter((row) => row.reminder_status === "missing").length);
 const rescanFailed = computed(() => (props.rescan?.rows ?? []).filter((row) => row.processing_status === "error").length);
+const uploadCompleted = computed(() => (props.rescan?.rows ?? []).filter((row) => row.processing_status === "done").length);
+const uploadDuplicates = computed(() => (props.rescan?.rows ?? []).filter((row) => row.duplicate).length);
 const rescanHasIssues = computed(() => rescanMissing.value > 0 || rescanFailed.value > 0);
 const rescanProgress = computed(() => {
   const queued = props.rescan?.queued ?? 0;
@@ -467,14 +477,15 @@ const rescanProgress = computed(() => {
   return Math.round(((queued - (props.rescan?.remaining ?? 0)) / queued) * 100);
 });
 const rescanTitle = computed(() => {
-  if (!props.rescan?.queued) return "אין מסמכים לסריקה מחדש";
-  if (rescanRunning.value) return "סריקה מחדש פעילה";
-  return "סריקה מחדש הסתיימה";
+  if (!props.rescan?.queued) return isUploadSession.value ? "אין מסמכים בעיבוד" : "אין מסמכים לסריקה מחדש";
+  if (rescanRunning.value) return isUploadSession.value ? "עיבוד העלאה פעיל" : "סריקה מחדש פעילה";
+  return isUploadSession.value ? "עיבוד העלאה הסתיים" : "סריקה מחדש הסתיימה";
 });
 const rescanSubtitle = computed(() => {
   const queued = props.rescan?.queued ?? 0;
-  if (!queued) return "לא נמצאו מסמכים שצריכים סריקה מחדש";
+  if (!queued) return isUploadSession.value ? "לא נמצאו מסמכים בעיבוד" : "לא נמצאו מסמכים שצריכים סריקה מחדש";
   if (rescanRunning.value) return `${props.rescan?.remaining ?? 0} מתוך ${queued} עדיין בעיבוד`;
+  if (isUploadSession.value) return `${uploadCompleted.value} עובדו · ${uploadDuplicates.value} כפולים · ${rescanFailed.value} שגיאות`;
   return `${rescanAssigned.value} קיבלו תזכורת · ${rescanMissing.value} ללא תזכורת · ${rescanFailed.value} שגיאות`;
 });
 
@@ -649,9 +660,17 @@ function openRescan() {
 function rescanRowLabel(row: RescanRow) {
   if (row.processing_status === "queued" || row.processing_status === "processing") return "בעיבוד";
   if (row.processing_status === "error") return "שגיאה";
+  if (isUploadSession.value && row.duplicate) return "כפול";
+  if (isUploadSession.value && row.processing_status === "done") return "עובד";
   if (row.reminder_status === "assigned") return "תזכורת נקבעה";
   if (row.reminder_status === "missing") return "אין תזכורת";
   return "ממתין";
+}
+
+function rescanRowClass(row: RescanRow) {
+  if (row.processing_status === "error") return "preview-card__badge--rescan-error";
+  if (row.processing_status === "queued" || row.processing_status === "processing") return "preview-card__badge--rescan-pending";
+  return `preview-card__badge--rescan-${row.reminder_status ?? "pending"}`;
 }
 
 defineExpose({ addFiles, openRescan });
@@ -1110,6 +1129,16 @@ defineExpose({ addFiles, openRescan });
 .preview-card__badge--rescan-missing { color: #f59e0b; border-color: #f59e0b; }
 .preview-card__badge--rescan-error { color: #ef4444; border-color: #ef4444; }
 .preview-card__badge--rescan-pending { color: var(--info-color, #3b82f6); border-color: currentColor; }
+.preview-card__badge--duplicate { color: #8b5cf6; border-color: #8b5cf6; }
+.preview-card__error {
+  margin-top: 8px;
+  color: #ef4444;
+  font-size: 12px;
+  line-height: 1.5;
+  direction: ltr;
+  text-align: left;
+  word-break: break-word;
+}
 .modal-footer__actions { display: flex; gap: 8px; align-items: center; }
 .footer-count { font-size: 13px; color: var(--text-muted); }
 

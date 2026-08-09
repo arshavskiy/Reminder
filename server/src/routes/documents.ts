@@ -18,6 +18,7 @@ import multer from "multer";
 import {logger} from "../logger";
 
 const upload = multer({ storage: multer.memoryStorage() });
+const RESCAN_START_STAGGER_MS = 1200;
 
 export function registerDocumentRoutes(app: express.Application) {
   // GET /api/documents
@@ -471,7 +472,7 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
-    for (const doc of rescanDocs as any[]) {
+    for (const [index, doc] of (rescanDocs as any[]).entries()) {
       const id = doc._id?.toString();
       const docIdFilter = idFilter(id);
 
@@ -516,12 +517,14 @@ export function registerDocumentRoutes(app: express.Application) {
         continue;
       }
       const ext = extname(filePath);
-      processDocument(id, filePath, doc.mime_type, ext, undefined, userId).catch(async (err) => {
-        logger.error("document_rescan_failed", { document_id: id, user_id: userId, error: err });
-        await col("documents").updateOne(docIdFilter, {
-          $set: { processing_status: "error", error_message: String(err), updated_at: new Date() },
+      setTimeout(() => {
+        processDocument(id, filePath, doc.mime_type, ext, undefined, userId).catch(async (err) => {
+          logger.error("document_rescan_failed", { document_id: id, user_id: userId, error: err });
+          await col("documents").updateOne(docIdFilter, {
+            $set: { processing_status: "error", error_message: String(err), updated_at: new Date() },
+          });
         });
-      });
+      }, index * RESCAN_START_STAGGER_MS);
     }
 
     logger.info("document_rescan_queued", {

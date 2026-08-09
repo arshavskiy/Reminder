@@ -6,6 +6,9 @@
           📂 העלה קבצים
         </n-button>
         <n-button :loading="store.loading" size="small" @click="store.fetch(undefined, true)">↻ רענן</n-button>
+        <n-button v-if="rescanStore.hasSession" size="small" secondary @click="openRescanModal">
+          {{ rescanStore.kind === "upload" ? "הצג העלאה אחרונה" : "הצג סריקה אחרונה" }}
+        </n-button>
         <n-button :disabled="rescanningAll" :loading="rescanning" size="small" @click="doRescan">↻ סריקה מחדש</n-button>
         <n-button
           v-if="authStore.isAdmin"
@@ -81,12 +84,12 @@
     </div>
 
     <n-alert
-      v-if="queuedCount > 0 && !showUploadModal"
+      v-if="rescanStore.hasSession && !showUploadModal"
       type="info"
       class="mb-3"
       :title="rescanAlertTitle"
       closable
-      @close="queuedCount = 0"
+      @close="rescanStore.clear()"
     />
 
     <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
@@ -128,6 +131,21 @@
           @click="viewMode = 'list'"
         >☰ רשימה</n-button>
       </div>
+    </div>
+
+    <div class="status-filter" dir="rtl">
+      <n-button
+        v-for="option in statusFilterOptions"
+        :key="option.key"
+        :class="{ 'status-filter__btn--active': statusFilter === option.key }"
+        :type="statusFilter === option.key ? 'primary' : 'default'"
+        size="small"
+        secondary
+        @click="setStatusFilter(option.key)"
+      >
+        <span>{{ option.label }}</span>
+        <span class="status-filter__count">{{ option.count }}</span>
+      </n-button>
     </div>
 
     <!-- ── Tile grid ──────────────────────────────────────────────────── -->
@@ -327,6 +345,7 @@ import {
 } from "naive-ui";
 import {useDocumentsStore} from "../stores/documents.js";
 import {useAuthStore} from "../stores/auth.js";
+import {useRescanModalStore} from "../stores/rescanModal.js";
 import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
@@ -339,6 +358,7 @@ const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 const store = useDocumentsStore();
 const authStore = useAuthStore();
+const rescanStore = useRescanModalStore();
 const router = useRouter();
 const message = useMessage();
 
@@ -348,10 +368,6 @@ const limitReached = computed(() => isRegularUser.value && store.totalAll >= sto
 
 const uploading = ref(false);
 const isDragging = ref(false);
-const queuedCount = ref(0);
-const rescanRemaining = ref(0);
-const rescanIds = ref<string[]>([]);
-const rescanDone = ref(false);
 let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
 const rescanning = ref(false);
 const rescanningAll = ref(false);
@@ -361,28 +377,23 @@ const showRescanAllConfirm = ref(false);
 const showLimitModal = ref(false);
 const viewMode = ref<"grid" | "list">("list");
 const rescanAlertTitle = computed(() => {
-  if (rescanRemaining.value > 0) {
-    return `סריקה מחדש פעילה: ${rescanRemaining.value} מתוך ${queuedCount.value} עדיין בעיבוד`;
+  const action = rescanStore.kind === "upload" ? "העלאה" : "סריקה מחדש";
+  if (rescanStore.remaining > 0) {
+    return `${action} פעילה: ${rescanStore.remaining} מתוך ${rescanStore.queued} עדיין בעיבוד`;
   }
-  return `${queuedCount.value} מסמכים נשלחו לסריקה מחדש`;
+  return `${rescanStore.queued} מסמכים נשלחו ל${rescanStore.kind === "upload" ? "עיבוד" : "סריקה מחדש"}`;
 });
 const rescanRows = computed(() =>
-  rescanIds.value
+  rescanStore.ids
     .map((id) => store.rows.find((row) => String(row.id) === id))
     .filter((row): row is Document => Boolean(row))
 );
 const rescanModalState = computed(() => ({
-  queued: queuedCount.value,
-  remaining: rescanRemaining.value,
-  done: rescanDone.value,
-  rows: rescanRows.value.map((row) => ({
-    id: row.id,
-    file_name: row.file_name,
-    processing_status: row.processing_status,
-    reminder_status: (row as any).reminder_status ?? null,
-    reminder_date: (row as any).reminder_date ?? null,
-    document_type: (row as any).document_type ?? null,
-  })),
+  queued: rescanStore.queued,
+  remaining: rescanStore.remaining,
+  done: rescanStore.done,
+  kind: rescanStore.kind,
+  rows: rescanStore.rows,
 }));
 
 // ── Upload modal ───────────────────────────────────────────────────────────────
@@ -423,9 +434,12 @@ async function onModalUpload(
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────
+type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder";
+
 const search = ref("");
 const filterClientId = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
+const statusFilter = ref<DocumentStatusFilter>("all");
 
 const clientOptions = ref<{ label: string; value: string }[]>([]);
 async function loadClients() {
@@ -438,7 +452,7 @@ async function loadClients() {
 // ── Pagination ─────────────────────────────────────────────────────────────────
 const pageSize = 24;
 const currentPage = ref(1);
-watch([search, filterClientId, filterDateRange], () => { currentPage.value = 1; });
+watch([search, filterClientId, filterDateRange, statusFilter], () => { currentPage.value = 1; });
 
 // Refetch from server whenever the client filter changes (so we always get
 // the canonical client→document mapping rather than relying on cached rows).
@@ -448,6 +462,9 @@ watch(filterClientId, (cid) => {
 
 const filteredRows = computed(() => {
   let rows = store.rows ?? [];
+  if (statusFilter.value !== "all") {
+    rows = rows.filter((row) => matchesStatusFilter(row, statusFilter.value));
+  }
   const q = search.value.trim().toLowerCase();
   if (q) rows = rows.filter((r) => (r.file_name ?? "").toLowerCase().includes(q));
   if (filterDateRange.value) {
@@ -459,6 +476,17 @@ const filteredRows = computed(() => {
     });
   }
   return rows;
+});
+
+const statusFilterOptions = computed(() => {
+  const rows = store.rows ?? [];
+  return [
+    { key: "all" as const, label: "הכל", count: rows.length },
+    { key: "done" as const, label: "הושלם", count: rows.filter((row) => row.processing_status === "done").length },
+    { key: "in_progress" as const, label: "בעיבוד", count: rows.filter((row) => matchesStatusFilter(row, "in_progress")).length },
+    { key: "error" as const, label: "שגיאה", count: rows.filter((row) => row.processing_status === "error").length },
+    { key: "no_reminder" as const, label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length },
+  ];
 });
 
 const pagedRows = computed(() => {
@@ -489,6 +517,17 @@ function reminderTagType(status: string | null | undefined): "success" | "warnin
   if (status === "missing") return "warning";
   if (status === "error") return "error";
   return "info";
+}
+function matchesStatusFilter(row: Document, filter: DocumentStatusFilter) {
+  if (filter === "all") return true;
+  if (filter === "done") return row.processing_status === "done";
+  if (filter === "in_progress") return row.processing_status === "queued" || row.processing_status === "processing";
+  if (filter === "error") return row.processing_status === "error";
+  if (filter === "no_reminder") return (row as any).reminder_status === "missing";
+  return true;
+}
+function setStatusFilter(filter: DocumentStatusFilter) {
+  statusFilter.value = statusFilter.value === filter && filter !== "all" ? "all" : filter;
 }
 function fileIcon(mime: string | null | undefined) {
   if (!mime) return "📄";
@@ -590,7 +629,11 @@ async function uploadFiles(
     const newCount = ids.length - (duplicates?.length ?? 0);
     if (newCount > 0) message.info(`${newCount} מסמכים נוספו לתור עיבוד`);
     if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);
-    await store.fetch(undefined, true);
+    rescanStore.start({ queued: ids.length, ids, duplicates, kind: "upload" });
+    await store.fetch({ limit: 500 }, true);
+    updateRescanRowsFromDocuments();
+    await openRescanModal();
+    startBatchPolling(ids);
   } catch (e: any) {
     if (e?.message === "document_limit_reached") {
       showLimitModal.value = true;
@@ -631,13 +674,11 @@ async function runRescan(all: boolean) {
     message.info(all ? "אין מסמכים זמינים לסריקה מחדש" : "אין מסמכים שצריכים סריקה מחדש");
   } else {
     message.success(`${data.queued} מסמכים נשלחו לסריקה מחדש`);
-    queuedCount.value = data.queued;
-    rescanRemaining.value = data.queued;
-    rescanIds.value = (data.ids ?? []).map(String);
-    rescanDone.value = false;
+    rescanStore.start({ queued: data.queued, ids: data.ids ?? [], mode: data.mode, kind: "rescan" });
     await store.fetch({ limit: 500 }, true);
+    updateRescanRowsFromDocuments();
     await openRescanModal();
-    startRescanPolling(data.ids ?? []);
+    startBatchPolling(data.ids ?? []);
   }
   await store.fetch(undefined, true);
 }
@@ -649,7 +690,7 @@ function stopRescanPolling() {
   }
 }
 
-function startRescanPolling(ids: string[]) {
+function startBatchPolling(ids: string[]) {
   stopRescanPolling();
   const watchIds = new Set(ids.map(String));
   if (!watchIds.size) return;
@@ -660,29 +701,50 @@ function startRescanPolling(ids: string[]) {
     try {
       await store.fetch({ limit: 500 }, true);
       const watchedRows = store.rows.filter((row) => watchIds.has(String(row.id)));
+      updateRescanRowsFromDocuments();
       const running = watchedRows.filter((row) => row.processing_status === "queued" || row.processing_status === "processing");
-      rescanRemaining.value = running.length;
+      rescanStore.setRemaining(running.length);
 
       if (running.length === 0 && watchedRows.length > 0) {
         stopRescanPolling();
-        rescanDone.value = true;
+        rescanStore.markDone();
         const assigned = watchedRows.filter((row) => (row as any).reminder_status === "assigned").length;
         const missing = watchedRows.filter((row) => (row as any).reminder_status === "missing").length;
         const failed = watchedRows.filter((row) => row.processing_status === "error").length;
-        if (missing || failed) {
+        if (rescanStore.kind === "upload") {
+          const completed = watchedRows.filter((row) => row.processing_status === "done").length;
+          if (failed) {
+            message.warning(`העלאה הסתיימה: ${completed} עובדו, ${failed} שגיאות`);
+          } else {
+            message.success(`העלאה הסתיימה: ${completed} מסמכים עובדו`);
+          }
+        } else if (missing || failed) {
           message.warning(`סריקה הסתיימה: ${assigned} עם תזכורת, ${missing} ללא תזכורת, ${failed} שגיאות`);
         } else {
           message.success(`סריקה הסתיימה: ${assigned} מסמכים קיבלו תזכורת`);
         }
       } else if (attempts >= 40) {
         stopRescanPolling();
-        rescanDone.value = false;
+        rescanStore.markBackground();
         message.info("הסריקה עדיין רצה ברקע, הרשימה תתעדכן ברענון הבא");
       }
     } catch {
       if (attempts >= 3) stopRescanPolling();
     }
   }, 3000);
+}
+
+function updateRescanRowsFromDocuments() {
+  const rows = rescanRows.value.map((row) => ({
+    id: row.id,
+    file_name: row.file_name,
+    processing_status: row.processing_status,
+    reminder_status: (row as any).reminder_status ?? null,
+    reminder_date: (row as any).reminder_date ?? null,
+    document_type: (row as any).document_type ?? null,
+    error_message: (row as any).error_message ?? null,
+  }));
+  rescanStore.updateRows(rows);
 }
 function confirmDeleteAll() { showDeleteAllConfirm.value = true; }
 async function doDeleteAll() {
@@ -787,6 +849,36 @@ async function openDownload(row: Document) {
   width: 260px;
 }
 .toolbar__view-toggle { display: flex; gap: 4px; margin-right: auto; }
+
+.status-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -6px 0 16px;
+}
+.status-filter :deep(.n-button__content) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.status-filter__count {
+  min-width: 24px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.status-filter__btn--active .status-filter__count {
+  background: rgba(255, 255, 255, 0.22);
+  color: inherit;
+}
 
 /* ── Tile grid ───────────────────────────────────────────────────────────── */
 .tile-grid {
@@ -1014,6 +1106,14 @@ async function openDownload(row: Document) {
 
   .toolbar__view-toggle :deep(.n-button) {
     flex: 1;
+  }
+
+  .status-filter {
+    gap: 6px;
+  }
+
+  .status-filter :deep(.n-button) {
+    flex: 1 1 calc(50% - 6px);
   }
 
   :deep(.list-card) {
