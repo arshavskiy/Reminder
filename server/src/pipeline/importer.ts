@@ -1140,7 +1140,41 @@ function removeAddressExtractionFields(fields: DynamicExtraction): void {
 
 function normalizeClientCompany(rawText: string, fields: DynamicExtraction): void {
   if (typeof fields.client_company !== "string") return;
-  fields.client_company = normalizeClientName(fields.client_company, rawText);
+  const original = fields.client_company;
+  const current = normalizeClientName(fields.client_company, rawText);
+  const rawClientCompany = extractClientCompanyFromHeader(rawText);
+  fields.client_company = rawClientCompany && shouldUseRawClientCompany(original, current)
+    ? rawClientCompany
+    : current;
+}
+
+function extractClientCompanyFromHeader(rawText: string): string | null {
+  for (const rawLine of rawText.split(/\r?\n/)) {
+    const line = rawLine.replace(/\\/g, "").replace(/\s+/g, " ").trim();
+    if (!line) continue;
+
+    const afterLabel = line.match(/(?:פרטי\s+הלקוח\s*\/\s*תופש|תופש\s*\/\s*פרטי\s+הלקוח)\s*[:：]\s*(.+)$/i);
+    const beforeLabel = line.match(/^(.+?)\s*[:：]\s*(?:פרטי\s+הלקוח\s*\/\s*תופש|תופש\s*\/\s*פרטי\s+הלקוח)/i);
+    const value = afterLabel?.[1] ?? beforeLabel?.[1];
+    if (!value) continue;
+
+    const cleaned = cleanHeaderValue(
+      value
+        .replace(/^\d+\.\s*/, "")
+        .split(/איש\s+קשר|נייד|טלפון|פקס|סוג\s+בדיקה|כתובת/i)[0]
+    );
+    if (!cleaned || !/[א-ת]/.test(cleaned)) continue;
+
+    return normalizeClientName(cleaned);
+  }
+  return null;
+}
+
+function shouldUseRawClientCompany(original: string, current: string): boolean {
+  if (!current) return true;
+  if (/^מגרש\s+/.test(original.trim())) return true;
+  if (/^מגרש\s+/.test(current)) return true;
+  return false;
 }
 
 function normalizeClientName(value: string, rawText?: string): string {
@@ -1151,6 +1185,7 @@ function normalizeClientName(value: string, rawText?: string): string {
     .replace(/\s*[:：]?\s*(?:תופש|פרטי\s+הלקוח|איש\s+קשר).*$/i, "")
     .replace(/\s+/g, " ")
     .replace(/^[\s:：,.;-]+/, "")
+    .replace(/\s+מ["״]\s*ע["״]?\s*מ$/i, " בע\"מ")
     .replace(/\s+מ["״]$/, " בע\"מ")
     .trim();
   // Strip a stray single Hebrew letter prefix (e.g. "מ הנסון" → "הנסון") that
@@ -1158,7 +1193,7 @@ function normalizeClientName(value: string, rawText?: string): string {
   const stripped = spaced
     .replace(/^מ["״]\s*(?=[א-ת])/, "")
     .replace(/^[א-ת]\.?\s+(?=[א-ת])/, "");
-  return preferHebrewNameWithNumericSuffix(stripLeadingLegalSuffixFragment(stripped, rawText), rawText);
+  return preferHebrewNameWithNumericSuffix(stripInspectionSitePrefix(stripLeadingLegalSuffixFragment(stripped, rawText)), rawText);
 }
 
 function stripLeadingLegalSuffixFragment(value: string, rawText?: string): string {
@@ -1264,6 +1299,10 @@ function extractEquipmentDescriptionFromHeader(rawText: string): string | null {
   }
 
   return null;
+}
+
+function stripInspectionSitePrefix(value: string): string {
+  return value.replace(/^מגרש\s+(?=[א-ת])/, "").trim();
 }
 
 function normalizeReportNumberValue(value: string, rawText?: string): string {
@@ -1499,7 +1538,8 @@ export function normalizeClientIdentityKey(s: string): string {
     .replace(/ב\s*ע\s*מ/g, " ")
     .replace(/בעמ/g, " ")
     // OCR sometimes turns בע"מ into מ"ע / מ״ע / מ׳׳ע.
-    .replace(/(?:^|\s)מ\s*"?\s*ע(?=\s|$)/g, " ")
+    .replace(/(?:^|\s)מ\s*"?\s*ע\s*"?\s*מ?(?=\s|$)/g, " ")
+    .replace(/^מגרש\s+(?=[א-ת])/, "")
     .replace(/[^\p{L}\p{N}]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();

@@ -206,13 +206,40 @@ describe("normalizeExtractionFieldsForTemplate", () => {
   it("deduplicates Hebrew company-name legal suffix OCR variants", () => {
     const variants = [
       "מנופי סמי 2000 מ\"ע",
+      "מנופי סמי 2000 מ\"ע\"מ",
       "מנופי סמי 2000 מ״ע",
+      "מנופי סמי 2000 מ״ע״מ",
       "מנופי סמי 2000 בע\"מ",
       "מנופי סמי 2000 בע״מ",
       "מנופי סמי 2000",
     ];
 
     expect(new Set(variants.map(normalizeClientIdentityKey))).toEqual(new Set(["מנופי סמי 2000"]));
+  });
+
+  it("repairs a trailing OCR legal suffix typo in the displayed company name", () => {
+    const fields = normalizeExtractionFieldsForTemplate("", inspectionTemplate, {
+      client_company: "מנופי סמי 2000 מ\"ע\"מ",
+    });
+
+    expect(fields?.client_company).toBe("מנופי סמי 2000 בע\"מ");
+  });
+
+  it("removes an inspection-site prefix from a leaked company name", () => {
+    const fields = normalizeExtractionFieldsForTemplate("", inspectionTemplate, {
+      client_company: "מגרש מנופי סמי 2000 מ\"ע\"מ",
+    });
+
+    expect(fields?.client_company).toBe("מנופי סמי 2000 בע\"מ");
+    expect(normalizeClientIdentityKey(String(fields?.client_company ?? ""))).toBe("מנופי סמי 2000");
+  });
+
+  it("prefers the raw client header over a leaked inspection-site company value", () => {
+    const fields = normalizeExtractionFieldsForTemplate("פרטי הלקוח/תופש: מנופי סמי 2000 בע\"מ", inspectionTemplate, {
+      client_company: "מגרש מנופי סמי",
+    });
+
+    expect(fields?.client_company).toBe("מנופי סמי 2000 בע\"מ");
   });
 
   it("deduplicates Israeli phone formatting variants", () => {
