@@ -3,29 +3,14 @@
     <header class="rcal__head">
       <div class="rcal__title-wrap">
         <h3 class="rcal__title">{{ testsOnly ? "לוח בדיקות מתוכננות" : "לוח תזכורות ותסקירים" }}</h3>
-        <span v-if="!testsOnly" class="rcal__count">{{ rows.length }} תזכורות</span>
-        <span v-if="(expiryItems ?? []).length" class="rcal__expiry-count">
-          {{ (expiryItems ?? []).length }} תסקירים
-        </span>
-      </div>
-      <div class="rcal__controls">
-        <div class="rcal__legend">
-          <span v-if="!testsOnly" class="rcal__legend-item">
-            <span class="rcal__legend-dot" style="background:var(--brand-color)"></span> תזכורות
-          </span>
-          <span v-if="!testsOnly" class="rcal__legend-item">
-            <span class="rcal__legend-dot" style="background:#2080f0"></span> נשלחה
-          </span>
-          <span class="rcal__legend-item">
-            <span class="rcal__legend-dot" style="background:#d03050"></span> פג תוקף
-          </span>
-          <span class="rcal__legend-item">
-            <span class="rcal__legend-dot" style="background:#f0a020"></span> ≤30 יום
-          </span>
-          <span class="rcal__legend-item">
-            <span class="rcal__legend-dot" style="background:#e8c84a"></span> ≤90 יום
+        <div class="rcal__counts">
+          <span v-if="!testsOnly" class="rcal__count">{{ rows.length }} תזכורות</span>
+          <span v-if="(expiryItems ?? []).length" class="rcal__expiry-count">
+            {{ (expiryItems ?? []).length }} תסקירים
           </span>
         </div>
+      </div>
+      <div class="rcal__controls">
         <div class="rcal__toggle">
           <n-button
             :type="view === 'month' ? 'primary' : 'default'"
@@ -40,15 +25,32 @@
         </div>
         <n-button :loading="loading" size="small" @click="$emit('refresh')">↻</n-button>
       </div>
+      <div class="rcal__legend">
+        <span v-if="!testsOnly" class="rcal__legend-item">
+          <span class="rcal__legend-dot" style="background:var(--brand-color)"></span> תזכורות
+        </span>
+        <span v-if="!testsOnly" class="rcal__legend-item">
+          <span class="rcal__legend-dot" style="background:#2080f0"></span> נשלחה
+        </span>
+        <span class="rcal__legend-item">
+          <span class="rcal__legend-dot" style="background:#d03050"></span> פג תוקף
+        </span>
+        <span class="rcal__legend-item">
+          <span class="rcal__legend-dot" style="background:#f0a020"></span> ≤30 יום
+        </span>
+        <span class="rcal__legend-item">
+          <span class="rcal__legend-dot" style="background:#e8c84a"></span> ≤90 יום
+        </span>
+      </div>
     </header>
 
     <!-- ── Month grid ──────────────────────────────────────────────────── -->
     <div v-if="view === 'month'" class="rcal__month">
       <div class="rcal__nav">
-        <n-button size="tiny" @click="shiftMonth(-1)">‹</n-button>
+        <n-button class="rcal__nav-btn" size="small" @click="shiftMonth(-1)">‹</n-button>
         <span class="rcal__nav-label">{{ monthLabel }}</span>
-        <n-button size="tiny" @click="shiftMonth(1)">›</n-button>
-        <n-button size="tiny" tertiary @click="goToday">היום</n-button>
+        <n-button class="rcal__nav-btn" size="small" @click="shiftMonth(1)">›</n-button>
+        <n-button class="rcal__today-btn" size="small" tertiary @click="goToday">היום</n-button>
       </div>
 
       <div class="rcal__weekdays">
@@ -69,7 +71,7 @@
           <div class="rcal__cell-num">{{ cell.day }}</div>
           <div v-if="cell.items.length || cell.expiryItems.length" class="rcal__cell-items">
             <n-popover
-              v-for="r in cell.items.slice(0, 2)"
+              v-for="r in visibleReminderItems(cell)"
               :key="r.id"
               :width="320"
               placement="right"
@@ -88,7 +90,7 @@
               <ReminderQuickView :reminder="r" @navigate="onNavigate" />
             </n-popover>
             <n-popover
-              v-for="e in cell.expiryItems.slice(0, 2)"
+              v-for="e in visibleExpiryItems(cell)"
               :key="`exp-${e.id}`"
               :width="260"
               placement="right"
@@ -114,15 +116,18 @@
                 <p :class="`rcal__expiry-pop__days--${expiryVisualStatus(e)}`" class="rcal__expiry-pop__days">
                   {{ expiryTimeLabel(e) }}
                 </p>
+                <n-button class="rcal__expiry-pop__action" size="tiny" type="primary" ghost @click="onExpiryNavigate(e)">
+                  פתח מקור
+                </n-button>
               </div>
             </n-popover>
             <button
-              v-if="cell.items.length + cell.expiryItems.length > 4"
+              v-if="hiddenItemCount(cell) > 0"
               class="rcal__more"
               type="button"
               @click.stop="openDay(cell)"
             >
-              +{{ cell.items.length + cell.expiryItems.length - 4 }} עוד
+              +{{ hiddenItemCount(cell) }} עוד
             </button>
           </div>
           <button
@@ -167,6 +172,8 @@
             :key="`exp-${e.id}`"
             :class="`rcal__agenda-item--expiry-${expiryVisualStatus(e)}`"
             class="rcal__agenda-item"
+            type="button"
+            @click="onExpiryNavigate(e)"
           >
             <span class="rcal__agenda-dot rcal__agenda-dot--expiry" />
             <span class="rcal__agenda-title">{{ expiryCalendarLabel(e) }} — {{ expiryStatusLabel(e) }}</span>
@@ -206,6 +213,7 @@
             :class="`rcal__day-row--expiry-${expiryVisualStatus(e)}`"
             class="rcal__day-row"
             type="button"
+            @click="onExpiryNavigate(e)"
           >
             <span class="rcal__day-dot rcal__day-dot--expiry" />
             <span class="rcal__day-row-title">{{ expiryCalendarLabel(e) }} — {{ expiryStatusLabel(e) }}</span>
@@ -392,6 +400,32 @@ const monthCells = computed(() => {
   return cells;
 });
 
+type CalendarCell = {
+  iso: string;
+  day: number;
+  inMonth: boolean;
+  isToday: boolean;
+  items: ReminderWithContext[];
+  expiryItems: ExpiryCalendarItem[];
+};
+
+function visibleReminderItems(cell: CalendarCell): ReminderWithContext[] {
+  const expiryReserve = Math.min(cell.expiryItems.length, 2);
+  return cell.items.slice(0, Math.max(0, 4 - expiryReserve));
+}
+
+function visibleExpiryItems(cell: CalendarCell): ExpiryCalendarItem[] {
+  const reminderCount = visibleReminderItems(cell).length;
+  return cell.expiryItems.slice(0, Math.max(0, 4 - reminderCount));
+}
+
+function hiddenItemCount(cell: CalendarCell): number {
+  return Math.max(
+    0,
+    cell.items.length + cell.expiryItems.length - visibleReminderItems(cell).length - visibleExpiryItems(cell).length,
+  );
+}
+
 const agendaGroups = computed(() => {
   const now = today.getTime();
   const isoSet = new Set<string>();
@@ -426,27 +460,48 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
   else if (target.type === "document") router.push(`/documents/${target.id}`);
   else if (target.type === "reminder") router.push("/reminders");
 }
+
+function onExpiryNavigate(item: ExpiryCalendarItem) {
+  dayModalOpen.value = false;
+  if (item.document_id) router.push(`/documents/${item.document_id}`);
+  else router.push(`/contracts/${item.id}`);
+}
 </script>
 
 <style scoped>
 .rcal {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: 10px;
+  padding: 16px;
   margin-bottom: 24px;
 }
 
 .rcal__head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  margin-bottom: 12px;
-  gap: 12px;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+.rcal__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.rcal__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.rcal__counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex-wrap: wrap;
 }
-.rcal__title-wrap { display: flex; align-items: center; gap: 8px; }
-.rcal__title { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
 .rcal__count {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
@@ -456,22 +511,38 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
   padding: 1px 8px;
   border-radius: 999px;
 }
-.rcal__controls { display: flex; gap: 8px; align-items: center; }
+.rcal__controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
 .rcal__toggle { display: flex; gap: 4px; }
 
 /* ── Month nav ─────────────────────────────────────────────────────────── */
 .rcal__nav {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 10px;
   justify-content: center;
 }
+.rcal__nav-btn {
+  min-width: 38px;
+  height: 34px;
+  font-size: 20px;
+  font-weight: 700;
+}
+.rcal__today-btn {
+  min-width: 54px;
+  height: 34px;
+  font-weight: 700;
+}
 .rcal__nav-label {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--text-primary);
-  min-width: 140px;
+  min-width: 150px;
   text-align: center;
 }
 
@@ -494,11 +565,11 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
 .rcal__grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: 6px;
 }
 .rcal__cell {
-  min-height: 80px;
-  padding: 4px 6px;
+  min-height: 106px;
+  padding: 6px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
   background: var(--bg-card);
@@ -522,10 +593,11 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
   border: none;
   background: var(--brand-color);
   color: #fff;
-  font-size: 10px;
-  font-weight: 500;
+  font-size: 10.5px;
+  font-weight: 600;
+  min-height: 20px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -557,19 +629,22 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
 .rcal__more:hover { text-decoration: underline; }
 .rcal__cell-all {
   margin-top: auto;
-  font-size: 9px;
-  color: var(--text-muted);
-  border: none;
-  background: none;
+  font-size: 10px;
+  color: var(--brand-color);
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--brand-color) 8%, transparent);
   cursor: pointer;
   font-family: inherit;
-  padding: 1px 2px;
-  text-align: start;
-  opacity: 0;
-  transition: opacity 0.12s;
+  padding: 2px 5px;
+  border-radius: 5px;
+  text-align: center;
+  opacity: 1;
+  transition: background 0.12s, border-color 0.12s;
 }
-.rcal__cell:hover .rcal__cell-all { opacity: 1; }
-.rcal__cell-all:hover { color: var(--brand-color); text-decoration: underline; }
+.rcal__cell-all:hover {
+  background: color-mix(in srgb, var(--brand-color) 14%, transparent);
+  border-color: color-mix(in srgb, var(--brand-color) 26%, transparent);
+}
 
 /* ── Day detail modal ──────────────────────────────────────────────────── */
 .rcal__day-modal {
@@ -671,6 +746,7 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
 .rcal__expiry-pop__days--critical { color: #f0a020; }
 .rcal__expiry-pop__days--warning  { color: #c9a800; }
 .rcal__expiry-pop__days--ok       { color: #18a058; }
+.rcal__expiry-pop__action { margin-top: 8px; }
 
 /* ── Agenda ─────────────────────────────────────────────────────────────── */
 .rcal__agenda { display: flex; flex-direction: column; gap: 14px; max-height: 480px; overflow-y: auto; }
@@ -742,8 +818,10 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
 .rcal__legend {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px 12px;
   flex-wrap: wrap;
+  grid-column: 1 / -1;
+  padding-top: 2px;
 }
 .rcal__legend-item {
   display: flex;
@@ -765,5 +843,49 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
   color: #f0a020;
   border-radius: 10px;
   padding: 2px 8px;
+}
+
+@media (max-width: 780px) {
+  .rcal {
+    padding: 12px;
+  }
+
+  .rcal__head {
+    grid-template-columns: 1fr;
+  }
+
+  .rcal__title-wrap,
+  .rcal__controls,
+  .rcal__legend {
+    justify-content: flex-start;
+  }
+
+  .rcal__controls {
+    flex-wrap: wrap;
+  }
+
+  .rcal__toggle {
+    flex: 1 1 auto;
+  }
+
+  .rcal__toggle :deep(.n-button) {
+    flex: 1;
+  }
+
+  .rcal__month {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .rcal__weekdays,
+  .rcal__grid {
+    min-width: 680px;
+  }
+
+  .rcal__agenda-item,
+  .rcal__day-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
 }
 </style>

@@ -3,6 +3,9 @@
     <n-dropdown
       trigger="click"
       :options="dropdownItems"
+      :render-label="renderDropdownLabel"
+      :theme-overrides="dropdownThemeOverrides"
+      show-arrow
       @select="handleSelect"
       placement="bottom-end"
     >
@@ -17,12 +20,8 @@
           <n-icon v-else :component="PersonOutline" :size="18" />
         </div>
         <div class="user-dropdown__meta">
-          <span v-if="userName" class="user-dropdown__name">{{
-            userName
-          }}</span>
-          <span v-if="props.userRole" class="user-dropdown__role">{{
-            props.userRole === "admin" ? "👑 מנהל" : "👤 משתמש"
-          }}</span>
+          <span v-if="userName" class="user-dropdown__name">{{ userName }}</span>
+          <span v-if="props.userRole" class="user-dropdown__role">{{ roleLabel }}</span>
         </div>
       </div>
     </n-dropdown>
@@ -30,10 +29,10 @@
 </template>
 
 <script setup lang="ts">
-import {computed} from "vue";
+import {computed, h} from "vue";
 import {useRouter} from "vue-router";
 import {NDropdown, NIcon} from "naive-ui";
-import {PersonOutline,} from "@vicons/ionicons5";
+import {PersonOutline} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
 
 interface Props {
@@ -64,25 +63,55 @@ const avatarUrl = computed<string>(() => {
 
 const avatarSrc = computed<string>(() => avatarUrl.value || "");
 
+const roleLabel = computed(() => {
+  if (props.userRole === "admin") return "מנהל";
+  if (props.userRole === "pro") return "Pro";
+  return "משתמש";
+});
+
+const dropdownThemeOverrides = {
+  borderRadius: "10px",
+  padding: "6px",
+  optionHeightMedium: "40px",
+  fontSizeMedium: "13px",
+  optionColorHover: "rgba(24, 160, 88, 0.08)",
+  optionTextColorHover: "#18a058",
+  dividerColor: "rgba(17, 24, 39, 0.08)",
+};
+
+const menuIcons: Record<string, string> = {
+  profile: "👤",
+  settings: "⚙",
+  admin: "♡",
+  logout: "▦",
+};
+
 const dropdownItems = computed(() => [
   {
-    label: "👤 הפרופיל שלי",
+    label: "הפרופיל שלי",
     key: "profile",
   },
   ...(props.userRole === "admin"
     ? [
-        { label: "⚙️ הגדרות אישיות", key: "settings" },
-        { label: "🛡 פאנל ניהול", key: "admin" },
+        { label: "הגדרות אישיות", key: "settings" },
+        { label: "פאנל ניהול", key: "admin" },
       ]
     : []),
   {
     type: "divider",
   },
   {
-    label: "🚪 התנתק",
+    label: "התנתק",
     key: "logout",
   },
 ]);
+
+function renderDropdownLabel(option: any) {
+  return h("span", { class: "user-menu-label", dir: "rtl" }, [
+    h("span", { class: "user-menu-label__icon" }, menuIcons[String(option.key)] ?? ""),
+    h("span", { class: "user-menu-label__text" }, String(option.label ?? "")),
+  ]);
+}
 
 async function handleSelect(key: string) {
   if (key === "profile") {
@@ -106,20 +135,27 @@ async function handleSelect(key: string) {
 .user-dropdown__trigger {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 50%;
+  gap: 10px;
+  min-height: 44px;
+  padding: 5px 8px 5px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .user-dropdown__trigger:hover {
-  //background: var(--bg-hover);
+  background: var(--bg-hover);
+  border-color: var(--border-color);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
 }
 
 .user-dropdown__avatar {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
@@ -138,8 +174,8 @@ async function handleSelect(key: string) {
 .user-dropdown__name {
   font-size: 13px;
   color: var(--text-primary);
-  font-weight: 500;
-  max-width: 120px;
+  font-weight: 600;
+  max-width: 132px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -148,16 +184,66 @@ async function handleSelect(key: string) {
 .user-dropdown__meta {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
 }
+
 .user-dropdown__role {
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  color: var(--primary-color);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 @media (max-width: 768px) {
   .user-dropdown__name {
     display: none;
   }
+
+  .user-dropdown__role {
+    display: none;
+  }
+
+  .user-dropdown__trigger {
+    padding: 4px;
+  }
 }
+
+:global(.user-menu-label) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-width: 132px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+:global(.user-menu-label__icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  color: var(--primary-color);
+  font-size: 13px;
+  line-height: 1;
+}
+
+:global(.user-menu-label__text) {
+  flex: 1;
+  text-align: right;
+}
+
 </style>

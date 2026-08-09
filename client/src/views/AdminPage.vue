@@ -64,6 +64,14 @@
       <header class="admin-main__header">
         <div class="admin-main__title-row">
           <h1 class="admin-main__title">{{ currentItem?.label }}</h1>
+          <n-button
+            size="small"
+            :type="activeSection === 'settings' ? 'primary' : 'default'"
+            @click="switchSection('settings')"
+          >
+            <template #icon><n-icon :component="SettingsOutline" /></template>
+            Settings
+          </n-button>
           <n-button size="small" :loading="sectionLoading" @click="reloadSection">↻ Refresh</n-button>
         </div>
         <div class="admin-main__meta">
@@ -745,29 +753,120 @@
       </div>
     </n-modal>
 
-    <!-- Role edit modal -->
-    <n-modal v-model:show="showRoleModal" preset="dialog" title="Change User Role" style="width: 360px" :mask-closable="false" dir="ltr">
-      <div style="padding: 8px 0">
-        <p style="margin: 0 0 12px; font-size: 14px">
-          <strong>{{ editingUser?.email }}</strong>
-        </p>
-        <n-select
-          v-model:value="editingRole"
-          :options="roleOptions"
-          placeholder="Select role"
-        />
-      </div>
-      <template #action>
-        <n-button @click="showRoleModal = false">Cancel</n-button>
-        <n-button type="primary" :loading="savingRole" @click="saveRole">Save</n-button>
-      </template>
-    </n-modal>
-
     <!-- User Detail Drawer -->
     <n-drawer v-model:show="showUserDrawer" :width="680" placement="right" dir="ltr">
       <n-drawer-content :title="userDetailUser ? (userDetailUser.email ?? userDetailUser.name ?? 'User Detail') : 'User Detail'" closable>
         <n-spin v-if="userDetailLoading" style="display:flex;justify-content:center;padding:60px" />
         <template v-else-if="userDetailData">
+          <template v-if="userDrawerView === 'settings'">
+            <div v-if="userSettingsForm" class="admin-user-settings">
+              <div class="admin-user-settings__actions">
+                <div class="admin-user-settings__role">
+                  <span>Role</span>
+                  <n-select v-model:value="editingRole" :options="roleOptions" size="small" style="width: 150px" />
+                  <n-button
+                    size="small"
+                    type="primary"
+                    ghost
+                    :loading="savingRole"
+                    :disabled="!editingRole || editingRole === userDetailUser?.role"
+                    @click="saveRole"
+                  >
+                    Save Role
+                  </n-button>
+                </div>
+                <n-button type="primary" size="small" :loading="savingUserSettings" @click="saveUserSettings">Save Settings</n-button>
+              </div>
+
+              <div class="admin-user-settings__section">
+                <div class="admin-user-settings__title">General</div>
+                <div class="admin-user-settings__grid">
+                  <label class="admin-setting-control">
+                    <span>Theme</span>
+                    <n-select v-model:value="userSettingsForm.theme" :options="themeOptions" size="small" />
+                  </label>
+                  <label class="admin-setting-control">
+                    <span>Email sender name</span>
+                    <n-input v-model:value="userSettingsForm.email_from_name" size="small" placeholder="ReminderOCR" />
+                  </label>
+                  <label class="admin-setting-control">
+                    <span>Reminder advance days</span>
+                    <n-input v-model:value="userSettingsForm.reminder_advance_days" size="small" placeholder="[90,60,30]" />
+                  </label>
+                  <label class="admin-setting-control">
+                    <span>OCR language</span>
+                    <n-input v-model:value="userSettingsForm.ocr_language" size="small" placeholder="heb+eng" />
+                  </label>
+                </div>
+                <div class="admin-user-settings__switches">
+                  <label><n-switch v-model:value="userSettingsForm.calendar_next_tests_only" size="small" /> Calendar next tests only</label>
+                  <label><n-switch v-model:value="userSettingsForm.pipeline_ocr" size="small" /> OCR</label>
+                  <label><n-switch v-model:value="userSettingsForm.pipeline_ai" size="small" /> AI extraction</label>
+                  <label><n-switch v-model:value="userSettingsForm.pipeline_s3" size="small" /> S3 upload</label>
+                  <label><n-switch v-model:value="userSettingsForm.pipeline_entities" size="small" /> Entity creation</label>
+                </div>
+              </div>
+
+              <div class="admin-user-settings__section">
+                <div class="admin-user-settings__title">Monthly reports</div>
+                <div class="admin-user-settings__switches">
+                  <label><n-switch v-model:value="userSettingsForm.monthly_report_enabled" size="small" /> Enabled</label>
+                </div>
+                <div class="admin-user-settings__grid">
+                  <label class="admin-setting-control">
+                    <span>Recipients</span>
+                    <n-input v-model:value="userSettingsForm.monthly_report_recipients" size="small" placeholder="email@example.com" />
+                  </label>
+                  <label class="admin-setting-control">
+                    <span>Day</span>
+                    <n-input-number v-model:value="userSettingsForm.monthly_report_day" size="small" :min="1" :max="28" />
+                  </label>
+                  <label class="admin-setting-control">
+                    <span>Hour</span>
+                    <n-input-number v-model:value="userSettingsForm.monthly_report_hour" size="small" :min="0" :max="23" />
+                  </label>
+                  <label class="admin-setting-control">
+                    <span>Formats</span>
+                    <n-checkbox-group v-model:value="userSettingsForm.monthly_report_formats">
+                      <n-space size="small">
+                        <n-checkbox v-for="format in formatOptions" :key="format.value" :value="format.value">{{ format.label }}</n-checkbox>
+                      </n-space>
+                    </n-checkbox-group>
+                  </label>
+                </div>
+              </div>
+
+              <div class="admin-user-settings__section">
+                <div class="admin-user-settings__title">Report fields</div>
+                <div class="admin-user-settings__subhead">All clients report</div>
+                <n-checkbox-group v-model:value="userSettingsForm.report_config.all_fields">
+                  <div class="admin-user-settings__checks">
+                    <n-checkbox v-for="field in allReportFieldOptions" :key="field.key" :value="field.key">{{ field.label }}</n-checkbox>
+                  </div>
+                </n-checkbox-group>
+                <div class="admin-user-settings__subhead">Client report</div>
+                <n-checkbox-group v-model:value="userSettingsForm.report_config.client_fields">
+                  <div class="admin-user-settings__checks">
+                    <n-checkbox v-for="field in clientReportFieldOptions" :key="field.key" :value="field.key">{{ field.label }}</n-checkbox>
+                  </div>
+                </n-checkbox-group>
+              </div>
+
+              <div class="admin-user-settings__section">
+                <div class="admin-user-settings__title">Client features</div>
+                <div class="admin-user-settings__checks">
+                  <label v-for="feature in featureDefinitions" :key="feature.key" class="admin-feature-toggle">
+                    <n-switch v-model:value="userSettingsForm.features[feature.key]" size="small" />
+                    <span>
+                      <strong>{{ feature.label_he || feature.label_en }}</strong>
+                      <small>{{ feature.key }}</small>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </template>
+          <template v-else>
           <!-- Reminder status summary -->
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
             <n-tag v-for="(count, status) in userDetailData.reminderStatus" :key="status"
@@ -838,102 +937,6 @@
               </div>
             </n-tab-pane>
 
-            <!-- Settings tab -->
-            <n-tab-pane name="settings" tab="Settings">
-              <div v-if="userSettingsForm" class="admin-user-settings">
-                <div class="admin-user-settings__actions">
-                  <n-button type="primary" size="small" :loading="savingUserSettings" @click="saveUserSettings">Save Settings</n-button>
-                </div>
-
-                <div class="admin-user-settings__section">
-                  <div class="admin-user-settings__title">General</div>
-                  <div class="admin-user-settings__grid">
-                    <label class="admin-setting-control">
-                      <span>Theme</span>
-                      <n-select v-model:value="userSettingsForm.theme" :options="themeOptions" size="small" />
-                    </label>
-                    <label class="admin-setting-control">
-                      <span>Email sender name</span>
-                      <n-input v-model:value="userSettingsForm.email_from_name" size="small" placeholder="ReminderOCR" />
-                    </label>
-                    <label class="admin-setting-control">
-                      <span>Reminder advance days</span>
-                      <n-input v-model:value="userSettingsForm.reminder_advance_days" size="small" placeholder="[90,60,30]" />
-                    </label>
-                    <label class="admin-setting-control">
-                      <span>OCR language</span>
-                      <n-input v-model:value="userSettingsForm.ocr_language" size="small" placeholder="heb+eng" />
-                    </label>
-                  </div>
-                  <div class="admin-user-settings__switches">
-                    <label><n-switch v-model:value="userSettingsForm.calendar_next_tests_only" size="small" /> Calendar next tests only</label>
-                    <label><n-switch v-model:value="userSettingsForm.pipeline_ocr" size="small" /> OCR</label>
-                    <label><n-switch v-model:value="userSettingsForm.pipeline_ai" size="small" /> AI extraction</label>
-                    <label><n-switch v-model:value="userSettingsForm.pipeline_s3" size="small" /> S3 upload</label>
-                    <label><n-switch v-model:value="userSettingsForm.pipeline_entities" size="small" /> Entity creation</label>
-                  </div>
-                </div>
-
-                <div class="admin-user-settings__section">
-                  <div class="admin-user-settings__title">Monthly reports</div>
-                  <div class="admin-user-settings__switches">
-                    <label><n-switch v-model:value="userSettingsForm.monthly_report_enabled" size="small" /> Enabled</label>
-                  </div>
-                  <div class="admin-user-settings__grid">
-                    <label class="admin-setting-control">
-                      <span>Recipients</span>
-                      <n-input v-model:value="userSettingsForm.monthly_report_recipients" size="small" placeholder="email@example.com" />
-                    </label>
-                    <label class="admin-setting-control">
-                      <span>Day</span>
-                      <n-input-number v-model:value="userSettingsForm.monthly_report_day" size="small" :min="1" :max="28" />
-                    </label>
-                    <label class="admin-setting-control">
-                      <span>Hour</span>
-                      <n-input-number v-model:value="userSettingsForm.monthly_report_hour" size="small" :min="0" :max="23" />
-                    </label>
-                    <label class="admin-setting-control">
-                      <span>Formats</span>
-                      <n-checkbox-group v-model:value="userSettingsForm.monthly_report_formats">
-                        <n-space size="small">
-                          <n-checkbox v-for="format in formatOptions" :key="format.value" :value="format.value">{{ format.label }}</n-checkbox>
-                        </n-space>
-                      </n-checkbox-group>
-                    </label>
-                  </div>
-                </div>
-
-                <div class="admin-user-settings__section">
-                  <div class="admin-user-settings__title">Report fields</div>
-                  <div class="admin-user-settings__subhead">All clients report</div>
-                  <n-checkbox-group v-model:value="userSettingsForm.report_config.all_fields">
-                    <div class="admin-user-settings__checks">
-                      <n-checkbox v-for="field in allReportFieldOptions" :key="field.key" :value="field.key">{{ field.label }}</n-checkbox>
-                    </div>
-                  </n-checkbox-group>
-                  <div class="admin-user-settings__subhead">Client report</div>
-                  <n-checkbox-group v-model:value="userSettingsForm.report_config.client_fields">
-                    <div class="admin-user-settings__checks">
-                      <n-checkbox v-for="field in clientReportFieldOptions" :key="field.key" :value="field.key">{{ field.label }}</n-checkbox>
-                    </div>
-                  </n-checkbox-group>
-                </div>
-
-                <div class="admin-user-settings__section">
-                  <div class="admin-user-settings__title">Client features</div>
-                  <div class="admin-user-settings__checks">
-                    <label v-for="feature in featureDefinitions" :key="feature.key" class="admin-feature-toggle">
-                      <n-switch v-model:value="userSettingsForm.features[feature.key]" size="small" />
-                      <span>
-                        <strong>{{ feature.label_he || feature.label_en }}</strong>
-                        <small>{{ feature.key }}</small>
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </n-tab-pane>
-
             <!-- Email Templates tab -->
             <n-tab-pane name="templates" tab="Templates">
               <div style="margin-top:12px">
@@ -972,6 +975,7 @@
               </div>
             </n-tab-pane>
           </n-tabs>
+          </template>
         </template>
       </n-drawer-content>
     </n-drawer>
@@ -1122,7 +1126,7 @@ const appEnv = ref("development");
 const dbName = ref("");
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
-const sidebarItems = [
+const adminSections = [
   { key: "users",              label: "Users",                  icon: PeopleOutline },
   { key: "documents",          label: "Documents & Extraction", icon: DocumentOutline },
   { key: "extraction_quality", label: "Extraction Quality",     icon: FlashOutline },
@@ -1131,8 +1135,9 @@ const sidebarItems = [
   { key: "monthly",            label: "Monthly Reports",        icon: CalendarOutline },
   { key: "settings",           label: "Settings",               icon: SettingsOutline },
 ];
+const sidebarItems = adminSections.filter((item) => item.key !== "settings");
 const activeSection = ref("users");
-const currentItem = computed(() => sidebarItems.find((i) => i.key === activeSection.value));
+const currentItem = computed(() => adminSections.find((i) => i.key === activeSection.value));
 const sectionLoading = ref(false);
 
 // ── Users ──────────────────────────────────────────────────────────────────
@@ -1180,7 +1185,6 @@ const roleLabel: Record<string, string> = {
   admin: "Admin",
 };
 
-const showRoleModal = ref(false);
 const showDocModal = ref(false);
 const docModalId = ref<string | null>(null);
 const showErrorModal = ref(false);
@@ -1201,7 +1205,6 @@ const MOBILE_BREAKPOINT = 768;
 const showMobileNav = ref(false);
 const showDesktopSidebar = ref(true);
 const isMobileViewport = ref(false);
-const editingUser = ref<any>(null);
 const editingRole = ref<string>("");
 const savingRole = ref(false);
 
@@ -1238,19 +1241,14 @@ function toggleSidebar() {
   showDesktopSidebar.value = !showDesktopSidebar.value;
 }
 
-function openRoleModal(user: any) {
-  editingUser.value = user;
-  editingRole.value = user.role;
-  showRoleModal.value = true;
-}
-
 async function saveRole() {
-  if (!editingUser.value) return;
+  if (!userDetailUser.value) return;
   savingRole.value = true;
   try {
-    const updated = await api.admin.updateUser(editingUser.value.id, { role: editingRole.value });
+    const updated = await api.admin.updateUser(userDetailUser.value.id, { role: editingRole.value });
     users.value = users.value.map((u) => (u.id === updated.id ? updated : u));
-    showRoleModal.value = false;
+    userDetailUser.value = { ...userDetailUser.value, ...updated };
+    editingRole.value = updated.role;
     message.success("Role updated");
   } catch {
     message.error("Error updating role");
@@ -1272,6 +1270,7 @@ async function toggleActive(user: any) {
 
 // ── User detail drawer ─────────────────────────────────────────────────────
 const showUserDrawer = ref(false);
+const userDrawerView = ref<"details" | "settings">("details");
 const userDetailData = ref<any>(null);
 const userDetailLoading = ref(false);
 const userDetailUser = ref<any>(null);
@@ -1384,8 +1383,10 @@ function applyFeatureDefaultsToUserSettingsForm() {
   };
 }
 
-async function openUserDetail(user: any) {
+async function openUserDetail(user: any, view: "details" | "settings" = "details") {
   userDetailUser.value = user;
+  userDrawerView.value = view;
+  editingRole.value = user.role ?? "user";
   showUserDrawer.value = true;
   userDetailLoading.value = true;
   userDetailData.value = null;
@@ -1596,7 +1597,7 @@ const userColumns: DataTableColumns<any> = [
         row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "Actions", key: "actions", align: "center", width: 340,
+    title: "Actions", key: "actions", align: "center", width: 410,
     render: (row) =>
       h("div", { style: "display:flex; gap:6px; justify-content:center; flex-wrap:wrap" }, [
         h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
@@ -1604,12 +1605,12 @@ const userColumns: DataTableColumns<any> = [
           default: () => "View documents, emails, extractions and errors for this user",
         }),
         h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
-          trigger: () => h(NButton, { size: "tiny", type: "default", onClick: () => openReportModal(row) }, { default: () => "📧 Report" }),
-          default: () => "Send a monthly report email on behalf of this user",
+          trigger: () => h(NButton, { size: "tiny", type: "primary", ghost: true, onClick: () => openUserDetail(row, "settings") }, { default: () => "Settings" }),
+          default: () => "Edit role, reports, fields and user settings",
         }),
         h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
-          trigger: () => h(NButton, { size: "tiny", onClick: () => openRoleModal(row) }, { default: () => "Role" }),
-          default: () => "Change this user's role (user / pro / admin)",
+          trigger: () => h(NButton, { size: "tiny", type: "default", onClick: () => openReportModal(row) }, { default: () => "📧 Report" }),
+          default: () => "Send a monthly report email on behalf of this user",
         }),
         h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
           trigger: () => h(NButton, {
@@ -2766,7 +2767,19 @@ onUnmounted(() => {
 
 .admin-user-settings__actions {
   display: flex;
+  align-items: center;
+  gap: 10px;
   justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.admin-user-settings__role {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .admin-user-settings__section {

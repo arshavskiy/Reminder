@@ -149,6 +149,7 @@ export function registerEquipmentRoutes(app: express.Application) {
 
       return {
         id: c._id?.toString(),
+        document_id: c.document_id ?? null,
         expiry_date: expiry,
         contract_type: c.contract_type ?? null,
         contract_number: c.contract_number ?? null,

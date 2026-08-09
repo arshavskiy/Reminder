@@ -75,6 +75,7 @@ export interface HydraulicCheckResult {
 
 export interface ExpiryCalendarItem {
   id: string;
+  document_id: string | null;
   expiry_date: string;
   contract_type: string | null;
   contract_number: string | null;
