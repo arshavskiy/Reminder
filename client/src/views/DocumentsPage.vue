@@ -620,7 +620,7 @@ function savePipelineFlags() {
 watch([flagOcr, flagAi, flagS3, flagEntities], savePipelineFlags);
 
 onMounted(() => {
-  store.fetch(undefined, true);
+  store.fetch({ limit: 500 }, true);
   loadPipelineFlags();
   loadClients();
 });

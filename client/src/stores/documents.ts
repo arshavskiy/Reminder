@@ -33,7 +33,7 @@ export const useDocumentsStore = defineStore("documents", () => {
 
   async function deleteDoc(id: number) {
     await api.documents.delete(id);
-    await fetch(undefined, true);
+    await fetch({ limit: 500 }, true);
   }
 
   return { rows, total, totalAll, documentLimit, loading, hasInProgress, fetch, importFile, deleteDoc };
