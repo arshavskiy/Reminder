@@ -79,7 +79,7 @@ export function registerAdminRoutes(app: express.Application) {
     await sendPushToAdmins({
       title: "בדיקת התראה",
       body: "התראות אדמין פעילות ✓",
-      data: { url: "/#/admin" },
+      data: { url: "/admin" },
     });
     res.json({ ok: true });
   });
@@ -551,7 +551,7 @@ export function registerAdminRoutes(app: express.Application) {
 
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-    const [noS3, stuckProcessing, skippedReminders] = await Promise.all([
+    const [noS3, stuckProcessing, skippedReminders, scannedWithoutReminder] = await Promise.all([
       col("documents").find(
         { processing_status: "done", $or: [{ spaces_key: { $exists: false } }, { spaces_key: null }] },
         { projection: { _id: 1, user_id: 1, file_name: 1, original_filename: 1, created_at: 1 } },
@@ -566,7 +566,46 @@ export function registerAdminRoutes(app: express.Application) {
         { log_type: "skipped" },
         { projection: { _id: 1, user_id: 1, reminder_id: 1, created_at: 1, sent_at: 1, subject: 1 } },
       ).sort({ sent_at: -1 }).limit(50).toArray(),
+
+      col("documents").aggregate([
+        { $match: { processing_status: "done" } },
+        { $addFields: { document_id_string: { $toString: "$_id" } } },
+        {
+          $lookup: {
+            from: "reminders",
+            localField: "document_id_string",
+            foreignField: "document_id",
+            as: "reminders",
+          },
+        },
+        { $match: { reminders: { $size: 0 } } },
+        { $sort: { created_at: -1 } },
+        { $limit: 100 },
+        {
+          $project: {
+            _id: 1,
+            user_id: 1,
+            file_name: 1,
+            original_filename: 1,
+            document_type: 1,
+            document_kind: 1,
+            extracted_fields: 1,
+            created_at: 1,
+          },
+        },
+      ]).toArray(),
     ]);
+
+    function readReminderDate(extractedFields: unknown): string | null {
+      let fields: Record<string, any> = {};
+      try {
+        if (typeof extractedFields === "string") fields = JSON.parse(extractedFields);
+        else if (extractedFields && typeof extractedFields === "object") fields = extractedFields as Record<string, any>;
+      } catch {
+        fields = {};
+      }
+      return fields.expiry_date ?? fields.next_inspection_date ?? fields.next_action_date ?? null;
+    }
 
     res.json({
       no_s3: noS3.map((d: any) => ({
@@ -587,6 +626,14 @@ export function registerAdminRoutes(app: express.Application) {
         reminder_id: l.reminder_id?.toString?.() ?? l.reminder_id,
         note: l.subject,
         created_at: l.sent_at ?? l.created_at,
+      })),
+      scanned_without_reminder: scannedWithoutReminder.map((d: any) => ({
+        id: d._id?.toString(),
+        user_id: d.user_id,
+        filename: d.file_name ?? d.original_filename,
+        document_type: d.document_type ?? d.document_kind ?? null,
+        reminder_date: readReminderDate(d.extracted_fields),
+        created_at: d.created_at,
       })),
     });
   });

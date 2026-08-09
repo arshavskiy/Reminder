@@ -77,16 +77,43 @@ export function registerDocumentRoutes(app: express.Application) {
       status ? col("documents").countDocuments(baseFilter) : Promise.resolve(-1),
     ]);
 
-    // Enrich with linked client (via document_clients) so the documents list
-    // can display the associated client without extra round-trips.
+    // Enrich with linked client + reminder status so the documents list can
+    // display operational state without extra round-trips.
     const docIds = rows.map((r) => r._id);
+    const docIdStrings = docIds.map((id) => id.toString());
     const links = docIds.length
-      ? await col("document_clients").find({ document_id: { $in: docIds.map((id) => id.toString()) } } as any).toArray()
+      ? await col("document_clients").find({ document_id: { $in: docIdStrings } } as any).toArray()
       : [];
     const clientIds = [...new Set(links.map((l: any) => l.client_id).filter(Boolean))];
-    const clients = clientIds.length
-      ? await col("clients").find({ _id: { $in: clientIds.map((id) => new ObjectId(String(id))) } } as any).toArray()
-      : [];
+    const [clients, reminders, contracts] = await Promise.all([
+      clientIds.length
+        ? col("clients").find({ _id: { $in: clientIds.map((id) => new ObjectId(String(id))) } } as any).toArray()
+        : [],
+      docIds.length
+        ? col("reminders").find(
+          {
+            user_id: userId,
+            $or: [
+              { document_id: { $in: docIdStrings } },
+              { document_id: { $in: docIds } },
+            ],
+          } as any,
+          { projection: { _id: 1, document_id: 1, trigger_date: 1, status: 1 } } as any,
+        ).toArray()
+        : [],
+      docIds.length
+        ? col("contracts").find(
+          {
+            user_id: userId,
+            $or: [
+              { document_id: { $in: docIdStrings } },
+              { document_id: { $in: docIds } },
+            ],
+          } as any,
+          { projection: { _id: 1, document_id: 1, expiry_date: 1 } } as any,
+        ).toArray()
+        : [],
+    ]);
     const clientMap = new Map(clients.map((c: any) => [c._id.toString(), c]));
     const linkMap = new Map<string, any>();
     for (const link of links) {
@@ -94,13 +121,32 @@ export function registerDocumentRoutes(app: express.Application) {
       const client = clientMap.get(cid);
       if (client) linkMap.set(String((link as any).document_id), { id: cid, name: (client as any).display_name });
     }
+    const reminderMap = new Map<string, any[]>();
+    for (const reminder of reminders as any[]) {
+      const documentId = reminder.document_id?.toString?.() ?? reminder.document_id;
+      if (!documentId) continue;
+      const key = String(documentId);
+      const list = reminderMap.get(key) ?? [];
+      list.push(reminder);
+      reminderMap.set(key, list);
+    }
+    const contractMap = new Map<string, any>();
+    for (const contract of contracts as any[]) {
+      const documentId = contract.document_id?.toString?.() ?? contract.document_id;
+      if (documentId) contractMap.set(String(documentId), contract);
+    }
 
     const enriched = rows.map((r) => {
       const link = linkMap.get(r._id.toString());
+      const documentReminders = reminderMap.get(r._id.toString()) ?? [];
+      const contract = contractMap.get(r._id.toString());
       return {
         ...flatDoc(r),
         client_id: link?.id ?? null,
         client_name: link?.name ?? null,
+        reminder_count: documentReminders.length,
+        reminder_status: getDocumentReminderStatus(r, documentReminders),
+        reminder_date: getDocumentReminderDate(r, contract, documentReminders),
       };
     });
 
@@ -364,7 +410,8 @@ export function registerDocumentRoutes(app: express.Application) {
     res.json({ deleted: ids.length });
   });
 
-  // POST /api/documents/rescan — reprocess all error-status docs for the user
+  // POST /api/documents/rescan — reprocess error docs and completed docs that
+  // did not create a reminder for the user.
   app.post("/api/documents/rescan", async (req, res) => {
     let userId: string;
     try {
@@ -376,16 +423,36 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
-    const errorDocs = await col("documents")
-      .find({ user_id: userId, processing_status: "error" })
+    const candidateDocs = await col("documents")
+      .find({ user_id: userId, processing_status: { $in: ["error", "done"] }, document_kind: { $ne: "certificate" } })
       .toArray();
+    const candidateIds = candidateDocs.map((d: any) => d._id?.toString()).filter(Boolean);
+    const candidateObjectIds = candidateDocs.map((d: any) => d._id).filter(Boolean);
+    const existingReminderIds = candidateIds.length
+      ? await col("reminders")
+        .find({
+          user_id: userId,
+          $or: [
+            { document_id: { $in: candidateIds } },
+            { document_id: { $in: candidateObjectIds } },
+          ],
+        } as any, { projection: { document_id: 1 } } as any)
+        .toArray()
+      : [];
+    const docsWithReminder = new Set(existingReminderIds.map((r: any) => String(r.document_id)));
+    const rescanDocs = (candidateDocs as any[]).filter((doc) => {
+      const id = doc._id?.toString();
+      return doc.processing_status === "error" || (doc.processing_status === "done" && id && !docsWithReminder.has(id));
+    });
 
-    if (errorDocs.length === 0) {
-      res.json({ queued: 0 });
+    const rescanIds = rescanDocs.map((doc: any) => doc._id?.toString()).filter(Boolean);
+
+    if (rescanDocs.length === 0) {
+      res.json({ queued: 0, ids: [] });
       return;
     }
 
-    for (const doc of errorDocs as any[]) {
+    for (const doc of rescanDocs as any[]) {
       const id = doc._id?.toString();
       const docIdFilter = idFilter(id);
 
@@ -436,8 +503,8 @@ export function registerDocumentRoutes(app: express.Application) {
       });
     }
 
-    logger.info("document_rescan_queued", { user_id: userId, queued_count: errorDocs.length });
-    res.json({ queued: errorDocs.length });
+    logger.info("document_rescan_queued", { user_id: userId, queued_count: rescanDocs.length });
+    res.json({ queued: rescanDocs.length, ids: rescanIds });
   });
 
   // GET /api/documents/:id/raw-text — debug: dump stored raw text
@@ -778,6 +845,25 @@ function flatDoc(doc: any) {
   if (!doc) return doc;
   const { _id, ...rest } = doc;
   return { id: _id?.toString(), ...rest };
+}
+
+function getDocumentReminderStatus(doc: any, reminders: any[]): "pending" | "assigned" | "missing" | "error" {
+  if (doc.processing_status === "queued" || doc.processing_status === "processing") return "pending";
+  if (doc.processing_status === "error") return "error";
+  if (reminders.length > 0) return "assigned";
+  return "missing";
+}
+
+function getDocumentReminderDate(doc: any, contract: any, reminders: any[]): string | null {
+  const fields = parseObjectJson(doc?.extracted_fields);
+  return String(
+    contract?.expiry_date ??
+    fields?.expiry_date ??
+    fields?.next_inspection_date ??
+    fields?.next_action_date ??
+    reminders[0]?.trigger_date ??
+    ""
+  ) || null;
 }
 
 async function resolveCurrentExtractionFields(doc: any, userId: string): Promise<Record<string, unknown> | null> {

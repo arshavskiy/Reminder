@@ -70,10 +70,10 @@
     </div>
 
     <n-alert
-      v-if="queuedCount > 0"
+      v-if="queuedCount > 0 && !showUploadModal"
       type="info"
       class="mb-3"
-      :title="`${queuedCount} מסמכים בתור עיבוד`"
+      :title="rescanAlertTitle"
       closable
       @close="queuedCount = 0"
     />
@@ -137,6 +137,14 @@
             </div>
             <span v-else class="tile__icon">{{ fileIcon(row.mime_type) }}</span>
             <StatusBadge :status="row.processing_status" class="tile__status" />
+            <n-tag
+              :type="reminderTagType((row as any).reminder_status)"
+              class="tile__reminder-status"
+              round
+              size="small"
+            >
+              {{ reminderStatusLabel((row as any).reminder_status) }}
+            </n-tag>
           </div>
           <div class="tile__body">
             <div :title="row.file_name" class="tile__name">{{ row.file_name }}</div>
@@ -182,6 +190,9 @@
           </template>
           <template #pills>
             <StatusBadge :status="row.processing_status" />
+            <n-tag :type="reminderTagType((row as any).reminder_status)" round size="small">
+              {{ reminderStatusLabel((row as any).reminder_status) }}
+            </n-tag>
             <span class="tag tag--neutral">{{ row.mime_type }}</span>
           </template>
           <template #footer>
@@ -194,6 +205,10 @@
               <span v-if="(row as any).expiry_date" class="kv">
                 <strong>תפוגה:</strong>
                 <span :class="expiryClass((row as any).expiry_date)">{{ formatDate((row as any).expiry_date) }}</span>
+              </span>
+              <span v-if="(row as any).reminder_date" class="kv">
+                <strong>תזכורת:</strong>
+                <span :class="expiryClass((row as any).reminder_date)">{{ formatDate((row as any).reminder_date) }}</span>
               </span>
             </div>
           </template>
@@ -249,6 +264,7 @@
     <UploadModal
       ref="uploadModalRef"
       v-model="showUploadModal"
+      :rescan="rescanModalState"
       :uploading="uploading"
       @upload="onModalUpload"
     />
@@ -256,7 +272,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, onUnmounted, ref, watch} from "vue";
+import {computed, nextTick, onMounted, onUnmounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {
   NAlert,
@@ -271,6 +287,7 @@ import {
   NSelect,
   NSpace,
   NSpin,
+  NTag,
   NTooltip,
   useMessage,
 } from "naive-ui";
@@ -298,11 +315,39 @@ const limitReached = computed(() => isRegularUser.value && store.totalAll >= sto
 const uploading = ref(false);
 const isDragging = ref(false);
 const queuedCount = ref(0);
+const rescanRemaining = ref(0);
+const rescanIds = ref<string[]>([]);
+const rescanDone = ref(false);
+let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
 const rescanning = ref(false);
 const deletingAll = ref(false);
 const showDeleteAllConfirm = ref(false);
 const showLimitModal = ref(false);
 const viewMode = ref<"grid" | "list">("list");
+const rescanAlertTitle = computed(() => {
+  if (rescanRemaining.value > 0) {
+    return `סריקה מחדש פעילה: ${rescanRemaining.value} מתוך ${queuedCount.value} עדיין בעיבוד`;
+  }
+  return `${queuedCount.value} מסמכים נשלחו לסריקה מחדש`;
+});
+const rescanRows = computed(() =>
+  rescanIds.value
+    .map((id) => store.rows.find((row) => String(row.id) === id))
+    .filter((row): row is Document => Boolean(row))
+);
+const rescanModalState = computed(() => ({
+  queued: queuedCount.value,
+  remaining: rescanRemaining.value,
+  done: rescanDone.value,
+  rows: rescanRows.value.map((row) => ({
+    id: row.id,
+    file_name: row.file_name,
+    processing_status: row.processing_status,
+    reminder_status: (row as any).reminder_status ?? null,
+    reminder_date: (row as any).reminder_date ?? null,
+    document_type: (row as any).document_type ?? null,
+  })),
+}));
 
 // ── Upload modal ───────────────────────────────────────────────────────────────
 const showUploadModal = ref(false);
@@ -310,6 +355,12 @@ const uploadModalRef = ref<InstanceType<typeof UploadModal> | null>(null);
 
 function openUploadModal() {
   showUploadModal.value = true;
+}
+
+async function openRescanModal() {
+  showUploadModal.value = true;
+  await nextTick();
+  uploadModalRef.value?.openRescan();
 }
 
 function onStripDrop(e: DragEvent) {
@@ -385,6 +436,18 @@ function expiryClass(date: string | null | undefined) {
   if (diff < 0) return "expiry expiry--expired";
   if (diff < 30) return "expiry expiry--warn";
   return "expiry expiry--ok";
+}
+function reminderStatusLabel(status: string | null | undefined) {
+  if (status === "assigned") return "תזכורת נקבעה";
+  if (status === "missing") return "אין תזכורת";
+  if (status === "error") return "שגיאת סריקה";
+  return "ממתין";
+}
+function reminderTagType(status: string | null | undefined): "success" | "warning" | "error" | "info" | "default" {
+  if (status === "assigned") return "success";
+  if (status === "missing") return "warning";
+  if (status === "error") return "error";
+  return "info";
 }
 function fileIcon(mime: string | null | undefined) {
   if (!mime) return "📄";
@@ -471,6 +534,7 @@ onMounted(() => {
 });
 onUnmounted(() => {
   if (saveFlagsTimer) clearTimeout(saveFlagsTimer);
+  stopRescanPolling();
 });
 
 
@@ -501,12 +565,18 @@ async function doRescan() {
   rescanning.value = true;
   try {
     const res = await fetch(`${SERVER}/api/documents/rescan`, { method: "POST", credentials: "include" });
-    const data = await res.json() as { queued: number };
+    const data = await res.json() as { queued: number; ids?: string[] };
     if (data.queued === 0) {
-      message.info("אין מסמכים שגויים לסריקה מחדש");
+      message.info("אין מסמכים שצריכים סריקה מחדש");
     } else {
       message.success(`${data.queued} מסמכים נשלחו לסריקה מחדש`);
-      queuedCount.value += data.queued;
+      queuedCount.value = data.queued;
+      rescanRemaining.value = data.queued;
+      rescanIds.value = (data.ids ?? []).map(String);
+      rescanDone.value = false;
+      await store.fetch({ limit: 500 }, true);
+      await openRescanModal();
+      startRescanPolling(data.ids ?? []);
     }
     await store.fetch(undefined, true);
   } catch {
@@ -514,6 +584,49 @@ async function doRescan() {
   } finally {
     rescanning.value = false;
   }
+}
+
+function stopRescanPolling() {
+  if (rescanPollTimer) {
+    clearInterval(rescanPollTimer);
+    rescanPollTimer = null;
+  }
+}
+
+function startRescanPolling(ids: string[]) {
+  stopRescanPolling();
+  const watchIds = new Set(ids.map(String));
+  if (!watchIds.size) return;
+
+  let attempts = 0;
+  rescanPollTimer = setInterval(async () => {
+    attempts += 1;
+    try {
+      await store.fetch({ limit: 500 }, true);
+      const watchedRows = store.rows.filter((row) => watchIds.has(String(row.id)));
+      const running = watchedRows.filter((row) => row.processing_status === "queued" || row.processing_status === "processing");
+      rescanRemaining.value = running.length;
+
+      if (running.length === 0 && watchedRows.length > 0) {
+        stopRescanPolling();
+        rescanDone.value = true;
+        const assigned = watchedRows.filter((row) => (row as any).reminder_status === "assigned").length;
+        const missing = watchedRows.filter((row) => (row as any).reminder_status === "missing").length;
+        const failed = watchedRows.filter((row) => row.processing_status === "error").length;
+        if (missing || failed) {
+          message.warning(`סריקה הסתיימה: ${assigned} עם תזכורת, ${missing} ללא תזכורת, ${failed} שגיאות`);
+        } else {
+          message.success(`סריקה הסתיימה: ${assigned} מסמכים קיבלו תזכורת`);
+        }
+      } else if (attempts >= 40) {
+        stopRescanPolling();
+        rescanDone.value = false;
+        message.info("הסריקה עדיין רצה ברקע, הרשימה תתעדכן ברענון הבא");
+      }
+    } catch {
+      if (attempts >= 3) stopRescanPolling();
+    }
+  }, 3000);
 }
 function confirmDeleteAll() { showDeleteAllConfirm.value = true; }
 async function doDeleteAll() {
@@ -634,6 +747,12 @@ async function openDownload(row: Document) {
   justify-content: center;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-color);
+}
+.tile__reminder-status {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 16px);
 }
 .tile__icon { font-size: 44px; opacity: 0.85; }
 .tile__pdf-icon { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }

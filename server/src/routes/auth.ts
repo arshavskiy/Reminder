@@ -65,12 +65,12 @@ export function registerAuthRoutes(app: express.Application) {
     const error = req.query.error as string | undefined;
 
     if (error) {
-      res.redirect(frontendUrl(`/#/login?error=${encodeURIComponent(error)}`));
+      res.redirect(frontendUrl(`/login?error=${encodeURIComponent(error)}`));
       return;
     }
 
     if (!code || !state) {
-      res.redirect(frontendUrl("/#/login?error=missing_params"));
+      res.redirect(frontendUrl("/login?error=missing_params"));
       return;
     }
 
@@ -79,7 +79,7 @@ export function registerAuthRoutes(app: express.Application) {
     ).findOne({ state, expires_at: { $gt: new Date() } });
 
     if (!pkce) {
-      res.redirect(frontendUrl("/#/login?error=invalid_state"));
+      res.redirect(frontendUrl("/login?error=invalid_state"));
       return;
     }
     await col("oauth_states").deleteOne({ state });
@@ -92,7 +92,7 @@ export function registerAuthRoutes(app: express.Application) {
       // Email whitelist check
       if (settings.allowedEmails && settings.allowedEmails.length > 0) {
         if (!settings.allowedEmails.includes(profile.email)) {
-          res.redirect(frontendUrl("/#/login?error=not_allowed"));
+          res.redirect(frontendUrl("/login?error=not_allowed"));
           return;
         }
       }
@@ -149,7 +149,7 @@ export function registerAuthRoutes(app: express.Application) {
       res.redirect(frontendUrl("/"));
     } catch (err) {
       logger.error("login_failed", { method: "google_oauth", reason: "callback_error", error: err, ip: clientIp(req) ?? null });
-      res.redirect(frontendUrl("/#/login?error=auth_failed"));
+      res.redirect(frontendUrl("/login?error=auth_failed"));
     }
   });
 
@@ -485,21 +485,21 @@ export function registerAuthRoutes(app: express.Application) {
   app.get("/auth/magic", async (req, res) => {
     const token = req.query.token as string | undefined;
     if (!token) {
-      res.redirect(frontendUrl("/#/login?error=invalid_token"));
+      res.redirect(frontendUrl("/login?error=invalid_token"));
       return;
     }
 
     const userId = await consumeMagicLinkToken(token);
     if (!userId) {
       logger.warn("login_failed", { method: "magic_link", reason: "token_expired", ip: clientIp(req) ?? null });
-      res.redirect(frontendUrl("/#/login?error=token_expired"));
+      res.redirect(frontendUrl("/login?error=token_expired"));
       return;
     }
 
     const user = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
     if (!user || !user.is_active) {
       logger.warn("login_failed", { method: "magic_link", reason: "account_disabled", user_id: userId, ip: clientIp(req) ?? null });
-      res.redirect(frontendUrl("/#/login?error=account_disabled"));
+      res.redirect(frontendUrl("/login?error=account_disabled"));
       return;
     }
 
@@ -518,7 +518,7 @@ export function registerAuthRoutes(app: express.Application) {
   app.get("/auth/verify-email", async (req, res) => {
     const token = req.query.token as string | undefined;
     if (!token) {
-      res.redirect(frontendUrl("/#/login?error=invalid_token"));
+      res.redirect(frontendUrl("/login?error=invalid_token"));
       return;
     }
 
@@ -528,7 +528,7 @@ export function registerAuthRoutes(app: express.Application) {
     }) as any;
 
     if (!user) {
-      res.redirect(frontendUrl("/#/login?error=token_expired"));
+      res.redirect(frontendUrl("/login?error=token_expired"));
       return;
     }
 

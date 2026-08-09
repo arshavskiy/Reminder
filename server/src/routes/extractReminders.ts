@@ -17,6 +17,7 @@ export interface ReminderPreview {
   title: string;
   trigger_date: string;       // ISO YYYY-MM-DD
   expiry_date: string | null; // the raw expiry extracted
+  next_check_date: string | null;
   advance_days: number;
   contact_name: string | null;
   contact_email: string | null;
@@ -129,6 +130,7 @@ export function registerExtractRemindersRoutes(app: express.Application) {
         body: [
           preview.contact_name ? `איש קשר: ${preview.contact_name}` : null,
           preview.contact_phone ? `טלפון: ${preview.contact_phone}` : null,
+          preview.next_check_date ? `בדיקה הבאה: ${preview.next_check_date}` : null,
           preview.expiry_date ? `תאריך יעד: ${preview.expiry_date}` : null,
           preview.document_type ? `סוג מסמך: ${preview.document_type}` : null,
           `מקור: ${preview.source_file}`,
@@ -341,6 +343,7 @@ function buildPreviews(
         : `${baseTitle} (${days} ימים לפני)`,
       trigger_date: triggerDate,
       expiry_date: expiryDate,
+      next_check_date: expiryDate,
       advance_days: days,
       contact_name: contactName,
       contact_email: contactEmail,

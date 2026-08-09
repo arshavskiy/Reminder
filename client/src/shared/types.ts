@@ -113,6 +113,7 @@ export interface FeatureDefinition {
 }
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
+export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error";
 export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
 export type EntityType = "person" | "company";
@@ -140,6 +141,9 @@ export interface Document {
   document_type?: string | null;
   inspection_date?: string | null;
   next_inspection_date?: string | null;
+  reminder_count?: number;
+  reminder_status?: DocumentReminderAssignmentStatus;
+  reminder_date?: string | null;
   language: string;
   page_count: number | null;
   created_at: string;

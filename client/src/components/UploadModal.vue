@@ -10,11 +10,11 @@
     style="width: min(860px, calc(100vw - 24px)); max-height: calc(100vh - 24px)"
   >
     <template #header>
-      <span style="font-size: 15px; font-weight: 600">העלאת מסמכים</span>
+      <span style="font-size: 15px; font-weight: 600">{{ modalTitle }}</span>
     </template>
 
     <!-- Mode tabs -->
-    <n-tabs v-model:value="activeTab" size="small" style="margin-bottom: 16px" type="line">
+    <n-tabs v-if="activeTab !== 'rescan'" v-model:value="activeTab" size="small" style="margin-bottom: 16px" type="line">
       <n-tab name="upload">העלאת מסמך</n-tab>
       <n-tab name="extract">חילוץ תזכורות</n-tab>
     </n-tabs>
@@ -130,7 +130,7 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════ TAB: EXTRACT ══ -->
-    <div v-else class="extract-tab">
+    <div v-else-if="activeTab === 'extract'" class="extract-tab">
       <!-- Step 1: file picker -->
       <div v-if="extractStep === 'pick'" class="extract-pick">
         <div
@@ -220,6 +220,7 @@
                 <div class="preview-card__title">{{ p.title }}</div>
                 <div class="preview-card__meta">
                   <span class="preview-card__badge preview-card__badge--date">📅 שלח: {{ p.trigger_date }}</span>
+                  <span v-if="p.next_check_date" class="preview-card__badge preview-card__badge--next">בדיקה הבאה: {{ p.next_check_date }}</span>
                   <span v-if="p.expiry_date" class="preview-card__badge preview-card__badge--expiry">⏰ יעד: {{ p.expiry_date }}</span>
                   <span v-if="p.document_type" class="preview-card__badge">{{ p.document_type }}</span>
                   <span :class="`preview-card__badge--conf-${p.confidence}`" class="preview-card__badge preview-card__badge--conf">{{ confidenceLabel(p.confidence) }}</span>
@@ -254,6 +255,65 @@
       </div>
     </div>
 
+    <!-- ══════════════════════════════════════════════════ TAB: RESCAN ═══ -->
+    <div v-else class="rescan-tab">
+      <div class="rescan-hero">
+        <n-spin v-if="rescanRunning" size="large" />
+        <div v-else class="rescan-hero__done">{{ rescanHasIssues ? "!" : "✓" }}</div>
+        <div>
+          <div class="rescan-hero__title">{{ rescanTitle }}</div>
+          <div class="rescan-hero__sub">{{ rescanSubtitle }}</div>
+        </div>
+      </div>
+
+      <n-progress
+        type="line"
+        :percentage="rescanProgress"
+        :show-indicator="false"
+        :height="7"
+        :color="rescanHasIssues ? '#f0a020' : 'var(--brand-color)'"
+        rail-color="rgba(128,128,128,0.15)"
+      />
+
+      <div class="rescan-summary">
+        <div class="rescan-stat">
+          <span class="rescan-stat__value">{{ props.rescan?.queued ?? 0 }}</span>
+          <span class="rescan-stat__label">נסרקים</span>
+        </div>
+        <div class="rescan-stat">
+          <span class="rescan-stat__value">{{ rescanAssigned }}</span>
+          <span class="rescan-stat__label">קיבלו תזכורת</span>
+        </div>
+        <div class="rescan-stat">
+          <span class="rescan-stat__value">{{ rescanMissing }}</span>
+          <span class="rescan-stat__label">ללא תזכורת</span>
+        </div>
+        <div class="rescan-stat">
+          <span class="rescan-stat__value">{{ rescanFailed }}</span>
+          <span class="rescan-stat__label">שגיאות</span>
+        </div>
+      </div>
+
+      <div class="preview-list rescan-list">
+        <div v-for="row in props.rescan?.rows ?? []" :key="row.id" class="preview-card preview-card--selected">
+          <div class="preview-card__body">
+            <div class="preview-card__title">{{ row.file_name }}</div>
+            <div class="preview-card__meta">
+              <span :class="`preview-card__badge--rescan-${row.reminder_status ?? 'pending'}`" class="preview-card__badge">
+                {{ rescanRowLabel(row) }}
+              </span>
+              <span v-if="row.reminder_date" class="preview-card__badge preview-card__badge--next">בדיקה הבאה: {{ row.reminder_date }}</span>
+              <span v-if="row.document_type" class="preview-card__badge">{{ row.document_type }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="!(props.rescan?.rows ?? []).length" class="fields-empty">
+          <div class="fields-empty__icon">↻</div>
+          <div class="fields-empty__text">אין מסמכים בסריקה מחדש</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ─────────────────────────────────────────────────────── FOOTER ── -->
     <template #footer>
       <!-- Upload tab footer -->
@@ -273,7 +333,7 @@
       </div>
 
       <!-- Extract tab footer -->
-      <div v-else class="modal-footer">
+      <div v-else-if="activeTab === 'extract'" class="modal-footer">
         <n-button @click="cancel">ביטול</n-button>
         <div class="modal-footer__actions">
           <!-- Step: pick -->
@@ -306,13 +366,21 @@
           </template>
         </div>
       </div>
+
+      <!-- Rescan footer -->
+      <div v-else class="modal-footer">
+        <n-button @click="cancel">{{ rescanRunning ? "המשך ברקע" : "סגור" }}</n-button>
+        <div class="modal-footer__actions">
+          <span class="footer-count">{{ rescanSubtitle }}</span>
+        </div>
+      </div>
     </template>
   </n-modal>
 </template>
 
 <script lang="ts" setup>
 import {computed, ref, watch} from "vue";
-import {NButton, NCheckbox, NInput, NModal, NSelect, NSpin, NSwitch, NTab, NTabs, NTag} from "naive-ui";
+import {NButton, NCheckbox, NInput, NModal, NProgress, NSelect, NSpin, NSwitch, NTab, NTabs, NTag} from "naive-ui";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -323,6 +391,7 @@ interface ReminderPreview {
   title: string;
   trigger_date: string;
   expiry_date: string | null;
+  next_check_date: string | null;
   advance_days: number;
   contact_name: string | null;
   contact_email: string | null;
@@ -332,8 +401,22 @@ interface ReminderPreview {
   confidence: "high" | "medium" | "low";
   selected: boolean;
 }
+interface RescanRow {
+  id: string | number;
+  file_name: string;
+  processing_status: string;
+  reminder_status?: string | null;
+  reminder_date?: string | null;
+  document_type?: string | null;
+}
+interface RescanState {
+  queued: number;
+  remaining: number;
+  rows: RescanRow[];
+  done: boolean;
+}
 
-const props = defineProps<{ uploading: boolean }>();
+const props = defineProps<{ uploading: boolean; rescan?: RescanState | null }>();
 const emit = defineEmits<{
   (e: "upload", files: File[], fields: ExtractionField[], options: UploadOptions): void;
   (e: "reminders-saved", count: number): void;
@@ -351,7 +434,7 @@ const doEntities = ref(true);
 const doReminders = ref(true);
 
 // ── Extract tab state ───────────────────────────────────────────────────────
-const activeTab = ref<"upload" | "extract">("upload");
+const activeTab = ref<"upload" | "extract" | "rescan">("upload");
 const extractInput = ref<HTMLInputElement | null>(null);
 const extractDragOver = ref(false);
 const extractFiles = ref<File[]>([]);
@@ -362,6 +445,28 @@ const savingExtract = ref(false);
 const savedCount = ref(0);
 
 const confirmedCount = computed(() => extractPreviews.value.filter((p) => p.selected).length);
+const modalTitle = computed(() => activeTab.value === "rescan" ? "סריקה מחדש" : "העלאת מסמכים");
+const rescanRunning = computed(() => activeTab.value === "rescan" && !!props.rescan && !props.rescan.done);
+const rescanAssigned = computed(() => (props.rescan?.rows ?? []).filter((row) => row.reminder_status === "assigned").length);
+const rescanMissing = computed(() => (props.rescan?.rows ?? []).filter((row) => row.reminder_status === "missing").length);
+const rescanFailed = computed(() => (props.rescan?.rows ?? []).filter((row) => row.processing_status === "error").length);
+const rescanHasIssues = computed(() => rescanMissing.value > 0 || rescanFailed.value > 0);
+const rescanProgress = computed(() => {
+  const queued = props.rescan?.queued ?? 0;
+  if (!queued) return 0;
+  return Math.round(((queued - (props.rescan?.remaining ?? 0)) / queued) * 100);
+});
+const rescanTitle = computed(() => {
+  if (!props.rescan?.queued) return "אין מסמכים לסריקה מחדש";
+  if (rescanRunning.value) return "סריקה מחדש פעילה";
+  return "סריקה מחדש הסתיימה";
+});
+const rescanSubtitle = computed(() => {
+  const queued = props.rescan?.queued ?? 0;
+  if (!queued) return "לא נמצאו מסמכים שצריכים סריקה מחדש";
+  if (rescanRunning.value) return `${props.rescan?.remaining ?? 0} מתוך ${queued} עדיין בעיבוד`;
+  return `${rescanAssigned.value} קיבלו תזכורת · ${rescanMissing.value} ללא תזכורת · ${rescanFailed.value} שגיאות`;
+});
 
 const typeOptions = [
   { label: "טקסט",   value: "text" },
@@ -465,7 +570,11 @@ async function runExtract() {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error ?? "שגיאה בחילוץ");
 
-    extractPreviews.value = (data.reminders ?? []).map((r: any) => ({ ...r, selected: true }));
+    extractPreviews.value = (data.reminders ?? []).map((r: any) => ({
+      ...r,
+      next_check_date: r.next_check_date ?? r.next_inspection_date ?? r.expiry_date ?? null,
+      selected: true,
+    }));
     extractErrors.value = data.errors ?? [];
     extractStep.value = "preview";
   } catch (err) {
@@ -523,7 +632,19 @@ function confidenceLabel(c: string) {
   return c === "high" ? "בטוח" : c === "medium" ? "בינוני" : "נמוך";
 }
 
-defineExpose({ addFiles });
+function openRescan() {
+  activeTab.value = "rescan";
+}
+
+function rescanRowLabel(row: RescanRow) {
+  if (row.processing_status === "queued" || row.processing_status === "processing") return "בעיבוד";
+  if (row.processing_status === "error") return "שגיאה";
+  if (row.reminder_status === "assigned") return "תזכורת נקבעה";
+  if (row.reminder_status === "missing") return "אין תזכורת";
+  return "ממתין";
+}
+
+defineExpose({ addFiles, openRescan });
 </script>
 
 <style scoped>
@@ -842,6 +963,7 @@ defineExpose({ addFiles });
   white-space: nowrap;
 }
 .preview-card__badge--date { color: var(--info-color, #3b82f6); border-color: currentColor; }
+.preview-card__badge--next { color: #22c55e; border-color: currentColor; }
 .preview-card__badge--expiry { color: var(--warning-color, #f59e0b); border-color: currentColor; }
 
 .preview-card__badge--conf { font-weight: 600; }
@@ -893,6 +1015,87 @@ defineExpose({ addFiles });
   align-items: center;
   gap: 12px;
 }
+
+/* ── Rescan mode ─────────────────────────────────────────────────────────── */
+.rescan-tab {
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rescan-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.rescan-hero__done {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(24, 160, 88, 0.12);
+  color: var(--brand-color);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.rescan-hero__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.rescan-hero__sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.rescan-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rescan-stat {
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-card);
+  text-align: center;
+}
+
+.rescan-stat__value {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.rescan-stat__label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+
+.rescan-list {
+  max-height: 260px;
+}
+
+.preview-card__badge--rescan-assigned { color: #22c55e; border-color: #22c55e; }
+.preview-card__badge--rescan-missing { color: #f59e0b; border-color: #f59e0b; }
+.preview-card__badge--rescan-error { color: #ef4444; border-color: #ef4444; }
+.preview-card__badge--rescan-pending { color: var(--info-color, #3b82f6); border-color: currentColor; }
 .modal-footer__actions { display: flex; gap: 8px; align-items: center; }
 .footer-count { font-size: 13px; color: var(--text-muted); }
 

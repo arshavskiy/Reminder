@@ -298,7 +298,22 @@
               <n-data-table :columns="skippedReminderColumns" :data="pipelineGaps.skipped_reminders" :bordered="false" size="small" :pagination="{ pageSize: 10 }" />
             </div>
 
-            <div v-if="pipelineGaps.stuck_processing.length === 0 && pipelineGaps.no_s3.length === 0 && pipelineGaps.skipped_reminders.length === 0"
+            <div v-if="pipelineGaps.scanned_without_reminder.length > 0" style="margin-top:14px">
+              <div style="font-size:13px;font-weight:600;color:#d03050;margin-bottom:6px">
+                Scanned Documents Without Reminder
+                <n-tag type="error" size="small" round style="margin-right:6px">{{ pipelineGaps.scanned_without_reminder.length }}</n-tag>
+              </div>
+              <n-data-table
+                :columns="scannedWithoutReminderColumns"
+                :data="pipelineGaps.scanned_without_reminder"
+                :bordered="false"
+                size="small"
+                :pagination="{ pageSize: 10 }"
+                :max-height="360"
+              />
+            </div>
+
+            <div v-if="pipelineGaps.stuck_processing.length === 0 && pipelineGaps.no_s3.length === 0 && pipelineGaps.skipped_reminders.length === 0 && pipelineGaps.scanned_without_reminder.length === 0"
                  style="padding:20px;text-align:center;color:var(--text-secondary)">
               ✅ No pipeline gaps detected
             </div>
@@ -1602,6 +1617,18 @@ const skippedReminderColumns: DataTableColumns<any> = [
   { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
   { title: "Note", key: "note", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.note ?? "—") },
   { title: "Date", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
+];
+
+const scannedWithoutReminderColumns: DataTableColumns<any> = [
+  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "File", key: "filename", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
+  { title: "Type", key: "document_type", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, row.document_type ?? "—") },
+  { title: "Reminder Date", key: "reminder_date", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.reminder_date ?? "—") },
+  { title: "Uploaded", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
+  {
+    title: "View", key: "action", align: "center", width: 80,
+    render: (row) => h(NButton, { size: "tiny", onClick: () => openDocModal(row.id) }, { default: () => "Open" }),
+  },
 ];
 
 const contractAdvanceColumns: DataTableColumns<any> = [

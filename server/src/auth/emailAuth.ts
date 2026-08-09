@@ -90,7 +90,7 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
 
 export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string) {
   const s = getSettings();
-  const resetUrl = `${baseUrl}/#/reset-password?token=${token}`;
+  const resetUrl = `${baseUrl}/reset-password?token=${token}`;
   const appName = s.emailFromName ?? "ReminderOCR";
   const html = renderHtml(loadAuthTemplate("reset-password"), { reset_url: resetUrl, app_name: appName });
 

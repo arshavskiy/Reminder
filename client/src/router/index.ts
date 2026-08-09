@@ -1,4 +1,4 @@
-import {createRouter, createWebHashHistory} from "vue-router";
+import {createRouter, createWebHistory} from "vue-router";
 import DashboardPage from "../views/DashboardPage.vue";
 import DocumentsPage from "../views/DocumentsPage.vue";
 import DocumentDetailPage from "../views/DocumentDetailPage.vue";
@@ -21,7 +21,7 @@ import {useFeaturesStore} from "../stores/features.js";
 import {FEATURES, type FeatureKey} from "../shared/features.js";
 
 export const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(),
   routes: [
     { path: "/login", component: LoginPage, meta: { public: true } },
     { path: "/reset-password", component: ResetPasswordPage, meta: { public: true } },

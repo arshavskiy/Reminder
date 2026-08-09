@@ -31,7 +31,7 @@ webpush.setVapidDetails(
 const payload = JSON.stringify({
   title: "בדיקת התראה",
   body: "צינור ה-push עובד מקצה לקצה ✓",
-  data: { url: "/#/admin" },
+  data: { url: "/admin" },
 });
 
 try {

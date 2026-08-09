@@ -107,6 +107,7 @@ export interface UserSettings {
 }
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
+export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error";
 export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
 export type EntityType = "person" | "company";
@@ -132,6 +133,9 @@ export interface Document {
   raw_text: string | null;
   extracted_fields: string | null;  // JSON string of DynamicExtraction
   document_type: string | null;
+  reminder_count?: number;
+  reminder_status?: DocumentReminderAssignmentStatus;
+  reminder_date?: string | null;
   language: string;
   page_count: number | null;
   spaces_key: string | null;
