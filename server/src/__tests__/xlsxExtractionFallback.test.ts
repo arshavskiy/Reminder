@@ -130,6 +130,32 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(fields?.client_company).toBe("מולטיפק פלסטיק 1990");
   });
 
+  it("removes a leading OCR legal-suffix fragment from company names", () => {
+    const fields = normalizeExtractionFieldsForTemplate("פרטי הלקוח/תופש: חלפים ושירותי מוסך בע\"מ", inspectionTemplate, {
+      client_company: "מ\"חלפים ושירותי מוסך בע. א.ג.ר",
+    });
+
+    expect(fields?.client_company).toBe("חלפים ושירותי מוסך בע. א.ג.ר");
+  });
+
+  it("removes a leading OCR legal-suffix fragment when the quote was lost", () => {
+    const rawText = "יפית: איש קשרמ\"חלפים ושירותי מוסך בע. א.ג.ר: תופש/פרטי הלקוח";
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {
+      client_company: "מחלפים ושירותי מוסך בע. א.ג.ר",
+    });
+
+    expect(fields?.client_company).toBe("חלפים ושירותי מוסך בע. א.ג.ר");
+  });
+
+  it("removes literal backslash artifacts before quote characters in company names", () => {
+    const rawText = "יפית: איש קשרמ\\\"חלפים ושירותי מוסך בע. א.ג.ר: תופש/פרטי הלקוח";
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {
+      client_company: "מ\\\"חלפים ושירותי מוסך בע. א.ג.ר",
+    });
+
+    expect(fields?.client_company).toBe("חלפים ושירותי מוסך בע. א.ג.ר");
+  });
+
   it("deduplicates Hebrew company-name legal suffix OCR variants", () => {
     const variants = [
       "מנופי סמי 2000 מ\"ע",
@@ -331,6 +357,16 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(fields?.license_number).toBe("201207");
   });
 
+  it("clears license_number when it was copied from model", () => {
+    const fields = normalizeExtractionFieldsForTemplate("", inspectionTemplate, {
+      license_number: "1008",
+      model: "1008",
+    });
+
+    expect(fields?.license_number).toBeUndefined();
+    expect(fields?.model).toBe("1008");
+  });
+
   it("does not extract a non-numeric license_number", () => {
     const fields = normalizeExtractionFieldsForTemplate("מספר רישוי: ABC-123", inspectionTemplate, {
       client_company: "מ.הנסון בע\"מ",
@@ -381,6 +417,27 @@ describe("normalizeExtractionFieldsForTemplate", () => {
 
     expect(fields?.equipment_description).toBe("מכונת הרמה");
     expect(fields?.checked_equipment).toBe("מלגזה חשמלית");
+  });
+
+  it("repairs accessory reports and clears copied model values from license_number", () => {
+    const rawText = [
+      "2. תיאור אביזר הרמה:",
+      "קורת הרמה",
+      "דגם",
+      "1008",
+      "מספר רישוי",
+    ].join("\n");
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {
+      equipment_description: "קורת הרמה",
+      checked_equipment: "קורת הרמה",
+      license_number: "1008",
+      model: "1008",
+    });
+
+    expect(fields?.equipment_description).toBe("אביזר הרמה");
+    expect(fields?.checked_equipment).toBe("קורת הרמה");
+    expect(fields?.license_number).toBeUndefined();
+    expect(fields?.model).toBe("1008");
   });
 
   it("repairs a full label phrase into the equipment description value", () => {

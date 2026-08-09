@@ -590,6 +590,20 @@ export async function generateContractReminders(
   let contractOid: any;
   try { const { ObjectId } = await import("mongodb"); contractOid = new ObjectId(contractId); } catch { contractOid = contractId; }
   const contract = await col("contracts").findOne({ _id: contractOid }) as any;
+  const cleared = await col("reminders").deleteMany({
+    ...(userId && { user_id: userId }),
+    source_type: "contract_expiry",
+    source_id: contractId,
+    status: { $in: ["pending", "snoozed", "error"] },
+  });
+  if (cleared.deletedCount) {
+    logger.info("contract_reminders_replaced", {
+      user_id: userId ?? null,
+      contract_id: contractId,
+      deleted_count: cleared.deletedCount,
+      expiry_date: expiryDate,
+    });
+  }
 
   const baseLabel = (() => {
     const t = (contract?.contract_type ?? "").toLowerCase();
@@ -626,28 +640,7 @@ export async function generateContractReminders(
     // otherwise reads as if the inspection itself is on the earlier date.
     const title = `${baseLabel} ב-${expiryDate}`;
 
-    // Check if the same client already has a reminder on this trigger date —
-    // if so, append this contract's equipment to it instead of creating a duplicate.
     const equipment = contract?.equipment_description ?? contract?.checked_equipment ?? null;
-    if (clientId) {
-      const sameClientReminder = await col("reminders").findOne({
-        ...(userId && { user_id: userId }),
-        client_id: clientId,
-        trigger_date: triggerDate,
-        status: { $ne: "dismissed" },
-        source_type: "contract_expiry",
-      });
-      if (sameClientReminder) {
-        const reminderWithTitle = sameClientReminder as any as { title: string };
-        if (equipment && !reminderWithTitle.title.includes(equipment)) {
-          await col("reminders").updateOne(
-            { _id: sameClientReminder._id },
-            { $set: { title: `${reminderWithTitle.title} | ${equipment}`, updated_at: new Date() } }
-          );
-        }
-        continue;
-      }
-    }
 
     await col("reminders").insertOne({
       ...(userId && { user_id: userId }),

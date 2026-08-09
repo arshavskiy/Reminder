@@ -468,20 +468,26 @@ function reminderDisplayTitle(r: ReminderWithContext): string {
 function reminderCalendarLabel(r: ReminderWithContext): string {
   const client = r.client_name?.trim();
   const contact = r.contact_person?.trim();
-  if (client && contact) return `${client} · ${contact}`;
-  if (client) return client;
-  if (contact) return contact;
-  return [r.title, shortContractNumber(r.contract_number)].filter(Boolean).join(" ");
+  const identity = client && contact ? `${client} · ${contact}` : client || contact || r.title;
+  return [contractNumberLabel(r.contract_number), identity].filter(Boolean).join(" · ");
 }
 
 function reminderSecondaryLabel(r: ReminderWithContext): string {
-  return [r.title, shortContractNumber(r.contract_number)].filter(Boolean).join(" ");
+  return r.title ?? "";
 }
 
 function shortContractNumber(contractNumber: string | null | undefined): string | null {
   if (!contractNumber) return null;
-  const parts = contractNumber.split("/");
+  const parts = contractNumber.split("/").map((part) => part.trim()).filter(Boolean);
+  if (parts.length > 1 && parts.every((part) => /^\d+$/.test(part))) {
+    return [...parts].sort((a, b) => a.length - b.length)[0] ?? null;
+  }
   return (parts.at(-1) ?? contractNumber).trim() || contractNumber;
+}
+
+function contractNumberLabel(contractNumber: string | null | undefined): string | null {
+  const value = shortContractNumber(contractNumber);
+  return value ? `מס׳ ${value}` : null;
 }
 
 function expiryVisualStatus(e: ExpiryCalendarItem): "overdue" | "critical" | "warning" | "ok" {
@@ -494,10 +500,8 @@ function expiryVisualStatus(e: ExpiryCalendarItem): "overdue" | "critical" | "wa
 function expiryCalendarLabel(e: ExpiryCalendarItem): string {
   const client = e.client_name?.trim();
   const contact = e.contact_person?.trim();
-  if (client && contact) return `${client} · ${contact}`;
-  if (client) return client;
-  if (contact) return contact;
-  return e.equipment_name ?? e.contract_type ?? "תסקירים";
+  const identity = client && contact ? `${client} · ${contact}` : client || contact || e.equipment_name || e.contract_type || "תסקירים";
+  return [contractNumberLabel(e.contract_number), identity].filter(Boolean).join(" · ");
 }
 
 function expiryCalendarTitle(e: ExpiryCalendarItem): string {

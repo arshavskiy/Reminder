@@ -280,10 +280,13 @@ export async function processDocument(
 
   push?.({ type: "document:progress", documentId: documentId as any, stage: "ai_extraction", progress: 50 });
 
+  const aiWillRun = settings.autoExtract && rawText.trim().length > 0 && !pipeline?.skipAi;
+
   // ── Stage A: OCR regex baseline — always runs when there is text ────────────
-  // Runs regardless of AI setting. Creates extractions row, extracted_fields,
-  // client, contract and reminders from regex-parsed data.
-  // AI (Stage B) will overwrite these with richer data if enabled.
+  // Runs regardless of AI setting. Persists a diagnostic extraction row and a
+  // temporary extracted_fields snapshot. Entity creation is only allowed when
+  // AI/template extraction will not run, because regex contact fields are weak
+  // and can otherwise leave a bad client linked to the document.
   if (rawText.trim().length > 0) {
     const ocr = extractFromOcr(rawText);
     normalizeNextActionDateFields(ocr as unknown as Record<string, unknown>);
@@ -318,8 +321,8 @@ export async function processDocument(
       created_at: new Date(),
     } as any);
 
-    // Create client / contract / reminders from OCR data (unless disabled)
-    if (!pipeline?.skipEntities && (ocr.expiry_date || ocr.contact_name || ocr.contact_phone)) {
+    // Create client / contract / reminders from OCR data only as a fallback.
+    if (!aiWillRun && !pipeline?.skipEntities && (ocr.expiry_date || ocr.contact_name || ocr.contact_phone)) {
       let clientId: string | null = null;
       if (ocr.contact_name || ocr.contact_phone || ocr.contact_email) {
         clientId = await findOrCreateClient({
@@ -367,11 +370,19 @@ export async function processDocument(
         has_contact: Boolean(ocr.contact_name || ocr.contact_phone),
         reminders_queued: Boolean(ocr.expiry_date && !pipeline?.skipReminders),
       });
+    } else if (aiWillRun && !pipeline?.skipEntities && (ocr.expiry_date || ocr.contact_name || ocr.contact_phone)) {
+      logger.info("document_ocr_entities_skipped", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        reason: "ai_extraction_enabled",
+        has_expiry_date: Boolean(ocr.expiry_date),
+        has_contact: Boolean(ocr.contact_name || ocr.contact_phone),
+      });
     }
   }
 
   // ── Stage B: AI extraction — enriches OCR baseline when enabled ─────────────
-  if (settings.autoExtract && rawText.trim().length > 0 && !pipeline?.skipAi) {
+  if (aiWillRun) {
     const docRow = await col("documents").findOne(docFilter) as any;
 
     // ── Stage 1: classify document kind by keyword scoring ───────────────────
@@ -609,6 +620,10 @@ async function saveExtractionEntities(
       userId,
     });
 
+    await col("document_clients").deleteMany({
+      document_id: documentId,
+      client_id: { $ne: clientId },
+    });
     await col("document_clients").updateOne(
       { document_id: documentId, client_id: clientId },
       { $setOnInsert: { document_id: documentId, client_id: clientId, role: "party_a" } },
@@ -780,7 +795,7 @@ export function normalizeExtractionFieldsForTemplate(
   }
   const supportsLicenseNumber = template.fields.some((field) => field.key === "license_number");
   // Equipment that structurally never carries a license plate.
-  const neverLicensedPattern = /עגורן\s*שער|עגרן\s*שער|ג['׳]ק\s*גירים/i;
+  const neverLicensedPattern = /עגורן\s*שער|עגרן\s*שער|ג['׳]ק\s*גירים|אביזר(?:י)?\s*הרמה|קורת\s*הרמה/i;
 
   const headerEquipmentDescription = extractEquipmentDescriptionFromHeader(rawText);
   const headerCheckedEquipment = extractCheckedEquipmentFromHeader(rawText);
@@ -795,6 +810,13 @@ export function normalizeExtractionFieldsForTemplate(
   if (isNeverLicensed) {
     delete normalized.license_number;
   } else if (supportsLicenseNumber) {
+    if (
+      hasMeaningfulValue(normalized.license_number) &&
+      hasMeaningfulValue(normalized.model) &&
+      String(normalized.license_number).trim() === String(normalized.model).trim()
+    ) {
+      delete normalized.license_number;
+    }
     if (typeof normalized.license_number === "string" && isPostalCode(normalized.license_number, rawText)) {
       delete normalized.license_number;
     }
@@ -816,7 +838,7 @@ export function normalizeExtractionFieldsForTemplate(
     if (shouldUseDefaultLiftingMachineDescription(rawText, template, normalized)) {
       normalized.equipment_description = "מכונת הרמה";
     }
-    if (headerEquipmentDescription && shouldUseHeaderEquipmentDescription(normalized.equipment_description, first?.name)) {
+    if (headerEquipmentDescription && shouldUseHeaderEquipmentDescription(normalized.equipment_description, first?.name ?? normalized.checked_equipment)) {
       normalized.equipment_description = headerEquipmentDescription;
     }
     if (!hasMeaningfulValue(normalized.equipment_description) && hasMeaningfulValue(first?.name)) {
@@ -840,7 +862,7 @@ export function normalizeExtractionFieldsForTemplate(
     if (shouldUseDefaultLiftingMachineDescription(rawText, template, normalized)) {
       normalized.equipment_description = "מכונת הרמה";
     }
-    if (headerEquipmentDescription && shouldUseHeaderEquipmentDescription(normalized.equipment_description, null)) {
+    if (headerEquipmentDescription && shouldUseHeaderEquipmentDescription(normalized.equipment_description, normalized.checked_equipment)) {
       normalized.equipment_description = headerEquipmentDescription;
     }
   }
@@ -1094,14 +1116,27 @@ function normalizeClientCompany(rawText: string, fields: DynamicExtraction): voi
 
 function normalizeClientName(value: string, rawText?: string): string {
   const spaced = value
+    .replace(/\\/g, "")
     .replace(/([א-ת])(\d{2,})/g, "$1 $2")
     .replace(/(\d{2,})([א-ת])/g, "$1 $2")
     .replace(/\s+/g, " ")
     .trim();
   // Strip a stray single Hebrew letter prefix (e.g. "מ הנסון" → "הנסון") that
   // results from OCR splitting "מ." or "מר" off a company/person name.
-  const stripped = spaced.replace(/^[א-ת]\.?\s+(?=[א-ת])/, "");
-  return preferHebrewNameWithNumericSuffix(stripped, rawText);
+  const stripped = spaced
+    .replace(/^מ["״]\s*(?=[א-ת])/, "")
+    .replace(/^[א-ת]\.?\s+(?=[א-ת])/, "");
+  return preferHebrewNameWithNumericSuffix(stripLeadingLegalSuffixFragment(stripped, rawText), rawText);
+}
+
+function stripLeadingLegalSuffixFragment(value: string, rawText?: string): string {
+  if (!rawText) return value;
+  const normalizedRawText = rawText.replace(/\\/g, "");
+  const match = value.match(/^מ([א-ת].*)$/);
+  if (!match?.[1]) return value;
+  const remainder = match[1].trim();
+  if (!remainder) return value;
+  return normalizedRawText.includes(`מ"${remainder}`) || normalizedRawText.includes(`מ״${remainder}`) ? remainder : value;
 }
 
 function preferHebrewNameWithNumericSuffix(value: string, rawText?: string): string {
@@ -1273,6 +1308,10 @@ async function saveTemplateEntities(
       userId,
     });
 
+    await col("document_clients").deleteMany({
+      document_id: documentId,
+      client_id: { $ne: clientId },
+    });
     await col("document_clients").updateOne(
       { document_id: documentId, client_id: clientId },
       { $setOnInsert: { document_id: documentId, client_id: clientId, role: "party_a" } },
@@ -1387,6 +1426,7 @@ function escapeRegex(s: string): string {
 export function normalizeClientIdentityKey(s: string): string {
   return s
     .toLowerCase()
+    .replace(/\\/g, "")
     .replace(/[״“”׳‘’`'"]/g, "\"")
     .replace(/\b(?:ltd|inc|llc)\.?\b/gi, " ")
     .replace(/חברה\s+בע\s*"?\s*מ/g, " ")
