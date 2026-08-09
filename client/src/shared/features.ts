@@ -25,6 +25,7 @@ export const FEATURES = {
     modules: "dashboard.modules",
     recentDocuments: "dashboard.recent_documents",
     upcomingReminders: "dashboard.upcoming_reminders",
+    calendarFilters: "dashboard.calendar_filters",
   },
 } as const;
 

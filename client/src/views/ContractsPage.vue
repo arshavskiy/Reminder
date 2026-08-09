@@ -55,27 +55,14 @@
       </div>
     </header>
 
-    <!-- ── Pill filter bar ─────────────────────────────────────────────── -->
-    <div class="filterbar">
-      <button
-        v-for="f in pillFilters"
-        :key="f.value ?? 'all'"
-        class="pill"
-        :class="{ 'pill--active': statusFilter === f.value }"
-        @click="statusFilter = f.value; load()"
-      >
-        {{ f.label }}
-        <span v-if="f.count !== undefined" class="pill__badge">{{ f.count }}</span>
-      </button>
-    </div>
-
+    <!-- ── Unified filter bar ─────────────────────────────────────────── -->
     <div class="filterbar filterbar--compact">
       <button
-        v-for="f in dueFilters"
-        :key="f.value"
+        v-for="f in combinedFilters"
+        :key="f.key"
         class="pill pill--compact"
-        :class="{ 'pill--active': dueFilter === f.value }"
-        @click="dueFilter = f.value"
+        :class="{ 'pill--active': activeFilterKey === f.key }"
+        @click="applyFilter(f)"
       >
         {{ f.label }}
         <span class="pill__badge">{{ f.count }}</span>
@@ -1358,17 +1345,48 @@ const currencyOptions = [
 const statusOptions = [
   { label: "פעיל", value: "active" },
   { label: "פג תוקף", value: "expired" },
+  { label: "באיחור", value: "overdue" },
   { label: "בוטל", value: "cancelled" },
   { label: "חודש", value: "renewed" },
 ];
 
-const pillFilters = computed(() => [
-  { label: "הכל",     value: null },
-  { label: "פעיל",    value: "active" },
-  { label: "פג תוקף", value: "expired" },
-  { label: "בוטל",    value: "cancelled" },
-  { label: "חודש",    value: "renewed" },
-]);
+type CombinedFilter = {
+  key: string;
+  label: string;
+  count: number;
+  type: "status" | "due";
+  statusValue?: string | null;
+  dueValue?: DueFilter;
+};
+
+const combinedFilters = computed<CombinedFilter[]>(() => {
+  const rows = store.rows ?? [];
+  return [
+    { key: "all",      label: "הכל",       count: rows.length,                                                              type: "status", statusValue: null },
+    { key: "active",   label: "פעיל",      count: rows.filter((r) => r.status === "active").length,                         type: "status", statusValue: "active" },
+    { key: "expired",  label: "פג תוקף",   count: rows.filter((r) => r.status === "expired").length,                        type: "status", statusValue: "expired" },
+    { key: "overdue",  label: "באיחור",    count: rows.filter((r) => contractMatchesDueFilter(r, "overdue")).length,         type: "due",    dueValue: "overdue" },
+    { key: "month",    label: "החודש",     count: rows.filter((r) => contractMatchesDueFilter(r, "month")).length,           type: "due",    dueValue: "month" },
+    { key: "sent",     label: "נשלחו",     count: rows.filter((r) => contractMatchesDueFilter(r, "sent")).length,            type: "due",    dueValue: "sent" },
+    { key: "no_email", label: "חסר אימייל", count: rows.filter((r) => contractMatchesDueFilter(r, "no_email")).length,       type: "due",    dueValue: "no_email" },
+    { key: "cancelled", label: "בוטל",     count: rows.filter((r) => r.status === "cancelled").length,                      type: "status", statusValue: "cancelled" },
+  ];
+});
+
+const activeFilterKey = ref("all");
+
+function applyFilter(f: CombinedFilter) {
+  activeFilterKey.value = f.key;
+  if (f.type === "status") {
+    statusFilter.value = f.statusValue ?? null;
+    dueFilter.value = "all";
+    load();
+  } else {
+    statusFilter.value = null;
+    dueFilter.value = f.dueValue!;
+    load();
+  }
+}
 
 function todayIso(): string {
   return formatLocalDate(Date.now());
@@ -1402,16 +1420,6 @@ function contractMatchesDueFilter(row: ContractWithClient, filter: DueFilter): b
   return true;
 }
 
-const dueFilters = computed(() => {
-  const rows = store.rows ?? [];
-  return [
-    { label: "הכל", value: "all" as DueFilter, count: rows.length },
-    { label: "באיחור", value: "overdue" as DueFilter, count: rows.filter((row) => contractMatchesDueFilter(row, "overdue")).length },
-    { label: "החודש", value: "month" as DueFilter, count: rows.filter((row) => contractMatchesDueFilter(row, "month")).length },
-    { label: "נשלחו", value: "sent" as DueFilter, count: rows.filter((row) => contractMatchesDueFilter(row, "sent")).length },
-    { label: "חסר אימייל", value: "no_email" as DueFilter, count: rows.filter((row) => contractMatchesDueFilter(row, "no_email")).length },
-  ];
-});
 
 function load() {
   store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value });
@@ -1630,7 +1638,7 @@ function formatDate(d: string | null | undefined): string {
 
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
-    active: "פעיל", expired: "פג תוקף", cancelled: "בוטל", renewed: "חודש",
+    active: "פעיל", expired: "פג תוקף", overdue: "באיחור", cancelled: "בוטל", renewed: "חודש",
   };
   return map[status] ?? status;
 }

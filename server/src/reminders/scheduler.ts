@@ -605,6 +605,22 @@ export async function generateContractReminders(
     });
   }
 
+  // Past expiry: mark contract overdue, skip all reminders.
+  if (expiryDate < today) {
+    if (contract && contract.status !== "overdue") {
+      await col("contracts").updateOne(
+        { _id: contractOid },
+        { $set: { status: "overdue", updated_at: new Date() } }
+      );
+      logger.info("contract_marked_overdue", {
+        contract_id: contractId,
+        expiry_date: expiryDate,
+        user_id: userId ?? null,
+      });
+    }
+    return;
+  }
+
   const baseLabel = (() => {
     const t = (contract?.contract_type ?? "").toLowerCase();
     if (t.includes("תסקיר") || t.includes("בדיקה")) return "בדיקה הבאה";
@@ -619,9 +635,6 @@ export async function generateContractReminders(
     expiry.setDate(expiry.getDate() - days);
     const calculatedTrigger = expiry.toISOString().slice(0, 10);
 
-    // If the expiry date itself is already past, skip entirely — nothing to remind about.
-    if (expiryDate < today) continue;
-
     // If the advance-warning trigger is already past but expiry is still future,
     // clamp to today so the scheduler fires it on the next check.
     const triggerDate = calculatedTrigger < today ? today : calculatedTrigger;
@@ -635,9 +648,6 @@ export async function generateContractReminders(
     });
     if (existing) continue;
 
-    // The date shown must be the inspection/expiry target ("בדיקה הבאה ב-…"),
-    // not the trigger date (when the email fires, e.g. 30 days earlier), which
-    // otherwise reads as if the inspection itself is on the earlier date.
     const title = `${baseLabel} ב-${expiryDate}`;
 
     const equipment = contract?.equipment_description ?? contract?.checked_equipment ?? null;

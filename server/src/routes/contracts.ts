@@ -40,10 +40,13 @@ export function registerContractRoutes(app: express.Application) {
         summary: body.summary ?? null,
         manual_fields: body.manual_fields ?? null,
         confidence: body.confidence ?? "medium",
-        status: body.status ?? "active",
         created_at: now,
         updated_at: now,
       };
+      const today = now.toISOString().slice(0, 10);
+      const isPast = doc.expiry_date && String(doc.expiry_date) < today;
+      doc.status = body.status ?? (isPast ? "overdue" : "active");
+
       // Only set document_id when it's a real id — a stored null collides under
       // the unique index, so leave the field absent for manual contracts.
       if (body.document_id) doc.document_id = body.document_id;
@@ -65,7 +68,7 @@ export function registerContractRoutes(app: express.Application) {
         );
       }
 
-      if (doc.expiry_date) {
+      if (doc.expiry_date && !isPast) {
         await generateContractReminders(contractId, doc.client_id, doc.document_id ?? null, String(doc.expiry_date), userId);
       }
       const inserted = await col("contracts").findOne({ _id: r.insertedId });
@@ -422,6 +425,14 @@ export function registerContractRoutes(app: express.Application) {
       ];
       for (const f of fields) {
         if (body[f] !== undefined) updates[f] = body[f];
+      }
+
+      // Auto-set overdue when expiry_date is changed to a past date (unless caller explicitly sets status)
+      if (body.expiry_date && !body.status) {
+        const today = new Date().toISOString().slice(0, 10);
+        if (String(body.expiry_date) < today) {
+          updates.status = "overdue";
+        }
       }
 
       await col("contracts").updateOne(filter, { $set: updates });

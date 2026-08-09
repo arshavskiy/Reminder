@@ -36,6 +36,7 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
   {key: "dashboard.modules", scope: "dashboard", label_he: "כרטיסי מודולים", label_en: "Module cards", description_he: "הצגת כרטיסי סביבת העבודה.", default_enabled: true, sort_order: 280},
   {key: "dashboard.recent_documents", scope: "dashboard", label_he: "מסמכים אחרונים", label_en: "Recent documents", description_he: "הצגת רשימת מסמכים אחרונים.", default_enabled: true, sort_order: 290},
   {key: "dashboard.upcoming_reminders", scope: "dashboard", label_he: "תזכורות קרובות", label_en: "Upcoming reminders", description_he: "הצגת רשימת תזכורות קרובות.", default_enabled: true, sort_order: 300},
+  {key: "dashboard.calendar_filters", scope: "dashboard", label_he: "פילטרי לוח שנה", label_en: "Calendar filters", description_he: "הצגת כפתורי סינון בלוח התזכורות.", default_enabled: true, sort_order: 310},
 ];
 
 export const DEFAULT_FEATURES = Object.fromEntries(

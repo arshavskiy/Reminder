@@ -92,6 +92,20 @@
       @close="rescanStore.clear()"
     />
 
+    <!-- ── Unified filter bar ─────────────────────────────────────────── -->
+    <div class="filterbar filterbar--compact">
+      <button
+        v-for="f in combinedFilters"
+        :key="f.key"
+        class="pill pill--compact"
+        :class="{ 'pill--active': activeFilterKey === f.key }"
+        @click="applyFilter(f)"
+      >
+        {{ f.label }}
+        <span class="pill__badge">{{ f.count }}</span>
+      </button>
+    </div>
+
     <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
     <div class="toolbar">
       <n-input
@@ -133,20 +147,6 @@
       </div>
     </div>
 
-    <div class="status-filter" dir="rtl">
-      <n-button
-        v-for="option in statusFilterOptions"
-        :key="option.key"
-        :class="{ 'status-filter__btn--active': statusFilter === option.key }"
-        :type="statusFilter === option.key ? 'primary' : 'default'"
-        size="small"
-        secondary
-        @click="setStatusFilter(option.key)"
-      >
-        <span>{{ option.label }}</span>
-        <span class="status-filter__count">{{ option.count }}</span>
-      </n-button>
-    </div>
 
     <!-- ── Tile grid ──────────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
@@ -441,6 +441,32 @@ const filterClientId = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
 const statusFilter = ref<DocumentStatusFilter>("all");
 
+type CombinedFilter = {
+  key: string;
+  label: string;
+  count: number;
+  statusValue?: DocumentStatusFilter;
+};
+
+const combinedFilters = computed<CombinedFilter[]>(() => {
+  const rows = store.rows ?? [];
+  return [
+    { key: "all",          label: "הכל",         count: rows.length,                                              statusValue: "all" },
+    { key: "done",         label: "הושלם",       count: rows.filter((row) => row.processing_status === "done").length, statusValue: "done" },
+    { key: "in_progress",  label: "בעיבוד",      count: rows.filter((row) => matchesStatusFilter(row, "in_progress")).length, statusValue: "in_progress" },
+    { key: "error",        label: "שגיאה",       count: rows.filter((row) => row.processing_status === "error").length, statusValue: "error" },
+    { key: "no_reminder",  label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length, statusValue: "no_reminder" },
+  ];
+});
+
+const activeFilterKey = ref("all");
+
+function applyFilter(f: CombinedFilter) {
+  activeFilterKey.value = f.key;
+  statusFilter.value = f.statusValue ?? "all";
+  currentPage.value = 1;
+}
+
 const clientOptions = ref<{ label: string; value: string }[]>([]);
 async function loadClients() {
   try {
@@ -476,17 +502,6 @@ const filteredRows = computed(() => {
     });
   }
   return rows;
-});
-
-const statusFilterOptions = computed(() => {
-  const rows = store.rows ?? [];
-  return [
-    { key: "all" as const, label: "הכל", count: rows.length },
-    { key: "done" as const, label: "הושלם", count: rows.filter((row) => row.processing_status === "done").length },
-    { key: "in_progress" as const, label: "בעיבוד", count: rows.filter((row) => matchesStatusFilter(row, "in_progress")).length },
-    { key: "error" as const, label: "שגיאה", count: rows.filter((row) => row.processing_status === "error").length },
-    { key: "no_reminder" as const, label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length },
-  ];
 });
 
 const pagedRows = computed(() => {
@@ -525,9 +540,6 @@ function matchesStatusFilter(row: Document, filter: DocumentStatusFilter) {
   if (filter === "error") return row.processing_status === "error";
   if (filter === "no_reminder") return (row as any).reminder_status === "missing";
   return true;
-}
-function setStatusFilter(filter: DocumentStatusFilter) {
-  statusFilter.value = statusFilter.value === filter && filter !== "all" ? "all" : filter;
 }
 function fileIcon(mime: string | null | undefined) {
   if (!mime) return "📄";
