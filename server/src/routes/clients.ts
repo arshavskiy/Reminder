@@ -3,6 +3,7 @@ import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {normalizeClientDisplayName, normalizePhoneIdentityKey} from "../utils/clientNames";
+import {logger} from "../logger";
 
 export function registerClientRoutes(app: express.Application) {
   // GET /api/clients
@@ -83,6 +84,18 @@ export function registerClientRoutes(app: express.Application) {
 
     const body = req.body as Record<string, unknown>;
     const now = new Date();
+    const displayName = normalizeClientDisplayName(body.display_name);
+    const phoneKey = normalizePhoneIdentityKey(body.phone);
+    logger.info("client_create_request", {
+      user_id: userId,
+      display_name: displayName,
+      entity_type: body.entity_type ?? "person",
+      id_number: body.id_number ?? null,
+      email: body.email ?? null,
+      phone: body.phone ?? null,
+      phone_key: phoneKey,
+    });
+
     const existingByPhone = await findClientByPhone(userId, body.phone);
     if (existingByPhone) {
       const updates: Record<string, any> = { updated_at: now };
@@ -95,12 +108,21 @@ export function registerClientRoutes(app: express.Application) {
       if (body.tags !== undefined && !existingByPhone.tags) updates.tags = body.tags;
       await col("clients").updateOne({_id: existingByPhone._id}, {$set: updates});
       const updated = await col("clients").findOne({_id: existingByPhone._id});
+      logger.info("client_create_reused_existing", {
+        user_id: userId,
+        strategy: "phone",
+        client_id: existingByPhone._id?.toString(),
+        display_name: displayName,
+        matched_display_name: existingByPhone.display_name ?? null,
+        phone: body.phone ?? null,
+        phone_key: phoneKey,
+      });
       res.status(200).json(flatClient(updated));
       return;
     }
     const doc = {
       user_id: userId,
-      display_name: normalizeClientDisplayName(body.display_name),
+      display_name: displayName,
       entity_type: body.entity_type ?? "person",
       contact_person: body.contact_person ?? null,
       id_number: body.id_number ?? null,
@@ -113,6 +135,16 @@ export function registerClientRoutes(app: express.Application) {
     };
     const result = await col("clients").insertOne(doc as any);
     const inserted = await col("clients").findOne({ _id: result.insertedId });
+    logger.info("client_created_from_api", {
+      user_id: userId,
+      client_id: result.insertedId.toString(),
+      display_name: doc.display_name,
+      entity_type: doc.entity_type,
+      id_number: doc.id_number,
+      email: doc.email,
+      phone: doc.phone,
+      phone_key: phoneKey,
+    });
     res.status(201).json(flatClient(inserted));
   });
 

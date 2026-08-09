@@ -32,7 +32,7 @@
           size="small"
           type="primary"
           ghost
-          @click="sendVisibleReminders"
+          @click="showSendVisibleConfirm = true"
         >
           שלח נראות ({{ sendableVisibleReminders.length }})
         </n-button>
@@ -260,6 +260,23 @@
         </div>
       </div>
     </n-modal>
+
+    <n-modal
+      v-model:show="showSendVisibleConfirm"
+      preset="dialog"
+      type="warning"
+      title="שליחת תזכורות גלויות"
+      positive-text="שלח תזכורות"
+      negative-text="ביטול"
+      :positive-button-props="{ loading: sendingVisible, disabled: sendingVisible }"
+      :negative-button-props="{ disabled: sendingVisible }"
+      @positive-click="sendVisibleReminders"
+    >
+      <div class="rcal__confirm" dir="rtl">
+        <p>לשלוח {{ sendableVisibleReminders.length }} תזכורות גלויות?</p>
+        <p>הפעולה תשלח רק תזכורות שמופיעות בחודש ובסינון הנוכחי, עם אימייל תקין ועדיין בסטטוס ממתין.</p>
+      </div>
+    </n-modal>
   </section>
 </template>
 
@@ -286,6 +303,7 @@ const view = ref<"month" | "agenda">(isMobileViewport() ? "agenda" : "month");
 const cursor = ref(new Date());
 const activeFilter = ref<CalendarFilterKey>("all");
 const sendingVisible = ref(false);
+const showSendVisibleConfirm = ref(false);
 
 // Day detail modal — shows every reminder/expiry for a clicked calendar day
 const dayModalOpen = ref(false);
@@ -696,8 +714,6 @@ function printCalendar() {
 async function sendVisibleReminders() {
   const rows = sendableVisibleReminders.value;
   if (!rows.length) return;
-  const ok = window.confirm(`לשלוח ${rows.length} תזכורות גלויות?`);
-  if (!ok) return;
 
   sendingVisible.value = true;
   let sent = 0;
@@ -711,6 +727,7 @@ async function sendVisibleReminders() {
     }
   }
   sendingVisible.value = false;
+  showSendVisibleConfirm.value = false;
   if (failed) message.warning(`נשלחו ${sent}, נכשלו ${failed}`);
   else message.success(`${sent} תזכורות נשלחו`);
   emit("refresh");

@@ -1456,26 +1456,47 @@ interface ClientInput {
 async function findOrCreateClient(input: ClientInput): Promise<string> {
   const { displayName, entityType, idNumber, contactPerson, email, phone, notes, userId } = input;
   const normalizedDisplayName = normalizeClientName(displayName);
+  const normalizedPhone = normalizePhoneIdentityKey(phone);
+  const normalizedNameKey = normalizeClientIdentityKey(normalizedDisplayName);
   const userScope = userId ? { user_id: userId } : {};
+  const logMeta = {
+    user_id: userId ?? null,
+    display_name: normalizedDisplayName,
+    entity_type: entityType,
+    id_number: idNumber ?? null,
+    email: email ?? null,
+    phone: phone ?? null,
+    phone_key: normalizedPhone,
+    name_key: normalizedNameKey,
+  };
+
+  logger.info("client_find_or_create_started", logMeta);
 
   let existing: any = null;
 
   // 1. Strongest signal: government-issued id / company registration number
   if (idNumber) {
     existing = await col("clients").findOne({ ...userScope, id_number: idNumber }) as any;
-    if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "id_number", client_id: existing._id?.toString() });
+    if (existing) logger.info("client_matched", { ...logMeta, strategy: "id_number", client_id: existing._id?.toString() });
   }
 
   // 2. Phone (normalised on both sides: 050-1234567, 050 1234567, +972501234567).
   // Phone is treated as the hard dedupe anchor because OCR often corrupts the
   // company name while keeping the phone number stable.
   if (!existing && phone) {
-    const normPhone = normalizePhoneIdentityKey(phone);
-    if (normPhone) {
+    if (normalizedPhone) {
       const all = await col("clients").find({ ...userScope, phone: { $exists: true, $ne: null } }).toArray() as any[];
-      const matches = all.filter((c: any) => normalizePhoneIdentityKey(c.phone) === normPhone);
+      const matches = all.filter((c: any) => normalizePhoneIdentityKey(c.phone) === normalizedPhone);
       existing = chooseCanonicalClient(matches);
-      if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "phone", client_id: existing._id?.toString() });
+      if (existing) {
+        logger.info("client_matched", {
+          ...logMeta,
+          strategy: "phone",
+          client_id: existing._id?.toString(),
+          match_count: matches.length,
+          matched_display_name: existing.display_name ?? null,
+        });
+      }
     }
   }
 
@@ -1485,19 +1506,26 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       ...userScope,
       email: { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, "i") },
     }) as any;
-    if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "email", client_id: existing._id?.toString() });
+    if (existing) logger.info("client_matched", { ...logMeta, strategy: "email", client_id: existing._id?.toString(), matched_display_name: existing.display_name ?? null });
   }
 
   // 3. Normalised name match (strips בע"מ / punctuation / OCR legal suffixes).
   // This intentionally runs before exact-name matching so a previously-created
   // bad OCR variant does not keep attracting new contracts.
   if (!existing) {
-    const norm = normalizeClientIdentityKey(normalizedDisplayName);
-    if (norm.length >= 3) {
+    if (normalizedNameKey.length >= 3) {
       const all = await col("clients").find(userScope).toArray() as any[];
-      const matches = all.filter((c: any) => normalizeClientIdentityKey(c.display_name ?? "") === norm);
+      const matches = all.filter((c: any) => normalizeClientIdentityKey(c.display_name ?? "") === normalizedNameKey);
       existing = chooseCanonicalClient(matches);
-      if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "normalized_name", client_id: existing._id?.toString() });
+      if (existing) {
+        logger.info("client_matched", {
+          ...logMeta,
+          strategy: "normalized_name",
+          client_id: existing._id?.toString(),
+          match_count: matches.length,
+          matched_display_name: existing.display_name ?? null,
+        });
+      }
     }
   }
 
@@ -1507,7 +1535,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       ...userScope,
       display_name: { $regex: new RegExp(`^${escapeRegex(normalizedDisplayName)}$`, "i") },
     }) as any;
-    if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "exact_name", client_id: existing._id?.toString() });
+    if (existing) logger.info("client_matched", { ...logMeta, strategy: "exact_name", client_id: existing._id?.toString(), matched_display_name: existing.display_name ?? null });
   }
 
   if (existing) {
@@ -1530,6 +1558,11 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
         },
       }
     );
+    logger.info("client_reused_from_document", {
+      ...logMeta,
+      client_id: clientId,
+      matched_display_name: existing.display_name ?? null,
+    });
     return clientId;
   }
 
@@ -1547,9 +1580,8 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
     updated_at: new Date(),
   } as any);
   logger.info("client_created_from_document", {
-    user_id: userId ?? null,
+    ...logMeta,
     client_id: r.insertedId.toString(),
-    display_name: normalizedDisplayName,
   });
   return r.insertedId.toString();
 }

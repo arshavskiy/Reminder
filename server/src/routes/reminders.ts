@@ -8,6 +8,7 @@ import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSettings} from "../settings";
 import {pickEmailTemplate} from "../templates/seedEmailTemplates";
 import {clientDisplayName as normalizeClientNameForDisplay, normalizeClientDisplayName, normalizePhoneIdentityKey} from "../utils/clientNames";
+import {logger} from "../logger";
 
 const HYDRAULIC_CATEGORIES: EquipmentCategory[] = ["lift", "scaffold", "ladder"];
 const HYDRAULIC_INTERVAL_MONTHS = [4, 6, 12, 14] as const;
@@ -317,35 +318,66 @@ export function registerReminderRoutes(app: express.Application) {
       clientId = existing._id.toString();
       clientDisplayName = normalizeClientNameForDisplay(existing.display_name) ?? existing.display_name;
     } else {
+      const requestedName = normalizeClientNameForDisplay(body.business?.display_name);
+      const requestedPhoneKey = normalizePhoneIdentityKey(body.business?.phone);
+      logger.info("reminder_client_resolve_started", {
+        user_id: userId,
+        display_name: requestedName,
+        entity_type: body.business?.entity_type ?? "company",
+        id_number: body.business?.id_number ?? null,
+        email: body.business?.email ?? null,
+        phone: body.business?.phone ?? null,
+        phone_key: requestedPhoneKey,
+      });
+
       const existingByPhone = await findClientByPhone(userId, body.business?.phone);
       if (existingByPhone) {
         selectedClient = existingByPhone;
         clientId = existingByPhone._id.toString();
         clientDisplayName = normalizeClientNameForDisplay(existingByPhone.display_name) ?? existingByPhone.display_name;
+        logger.info("reminder_client_reused_existing", {
+          user_id: userId,
+          strategy: "phone",
+          client_id: clientId,
+          display_name: requestedName,
+          matched_display_name: existingByPhone.display_name ?? null,
+          phone: body.business?.phone ?? null,
+          phone_key: requestedPhoneKey,
+        });
       } else {
-      const businessName = normalizeClientNameForDisplay(body.business?.display_name);
-      if (!businessName) {
-        res.status(400).json({ error: "business.display_name or client_id required" });
-        return;
-      }
+        const businessName = requestedName;
+        if (!businessName) {
+          res.status(400).json({ error: "business.display_name or client_id required" });
+          return;
+        }
 
-      const clientDoc = {
-        user_id: userId,
-        display_name: normalizeClientDisplayName(businessName),
-        entity_type: body.business?.entity_type ?? "company",
-        id_number: body.business?.id_number?.trim() || null,
-        contact_person: body.business?.contact_person?.trim() || null,
-        email: body.business?.email?.trim() || null,
-        phone: body.business?.phone?.trim() || null,
-        address: body.business?.address?.trim() || null,
-        notes: body.business?.notes?.trim() || null,
-        tags: null,
-        created_at: now,
-        updated_at: now,
-      };
-      const clientResult = await col("clients").insertOne(clientDoc as any);
-      clientId = clientResult.insertedId.toString();
-      clientDisplayName = businessName;
+        const clientDoc = {
+          user_id: userId,
+          display_name: normalizeClientDisplayName(businessName),
+          entity_type: body.business?.entity_type ?? "company",
+          id_number: body.business?.id_number?.trim() || null,
+          contact_person: body.business?.contact_person?.trim() || null,
+          email: body.business?.email?.trim() || null,
+          phone: body.business?.phone?.trim() || null,
+          address: body.business?.address?.trim() || null,
+          notes: body.business?.notes?.trim() || null,
+          tags: null,
+          created_at: now,
+          updated_at: now,
+        };
+        const clientResult = await col("clients").insertOne(clientDoc as any);
+        clientId = clientResult.insertedId.toString();
+        clientDisplayName = businessName;
+        logger.info("client_created_from_reminder_api", {
+          user_id: userId,
+          client_id: clientId,
+          display_name: clientDoc.display_name,
+          entity_type: clientDoc.entity_type,
+          id_number: clientDoc.id_number,
+          email: clientDoc.email,
+          phone: clientDoc.phone,
+          phone_key: requestedPhoneKey,
+        });
       }
     }
 
