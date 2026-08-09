@@ -240,6 +240,8 @@ export const api = {
       post<{ ok: boolean; fields: Record<string, unknown> | null; template: string; document: import('../shared/types.js').Document }>(`/documents/${id}/extract`, templateId ? { templateId } : {}),
     delete: (id: string) => del(`/documents/${id}`),
     downloadUrl: (id: string) => `${BASE}/documents/${id}/download`,
+    rescan: (options?: { all?: boolean; mode?: "all" | "missing"; limit?: number }) =>
+      post<{ queued: number; ids: string[]; mode: "all" | "missing"; candidates: number }>("/documents/rescan", options ?? {}),
     reprocess: (id: string) =>
       post<{ ok: boolean; fields?: Record<string, unknown> | null; document?: Document }>(`/documents/${id}/reprocess`),
     updateFields: (id: string, fields: Record<string, unknown>) =>

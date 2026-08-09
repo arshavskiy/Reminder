@@ -410,21 +410,38 @@ export function registerDocumentRoutes(app: express.Application) {
     res.json({ deleted: ids.length });
   });
 
-  // POST /api/documents/rescan — reprocess error docs and completed docs that
-  // did not create a reminder for the user.
+  // POST /api/documents/rescan — by default reprocess error docs and completed
+  // docs that did not create a reminder. Pass { all: true } or ?all=true to
+  // intentionally rebuild every completed/error non-certificate document for
+  // the user, including its derived contracts and reminders.
   app.post("/api/documents/rescan", async (req, res) => {
     let userId: string;
+    let isAdmin = false;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
+      isAdmin = ctx.user.role === "admin";
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
       return;
     }
 
+    const body = (req.body ?? {}) as { all?: boolean; mode?: string; limit?: number | string };
+    const rescanAll = req.query.all === "true" || body.all === true || body.mode === "all";
+    if (rescanAll && !isAdmin) {
+      res.status(403).json({ error: "Admin role required for full rescan" });
+      return;
+    }
+    const rawLimit = Number(req.query.limit ?? body.limit);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0
+      ? Math.min(Math.floor(rawLimit), 1000)
+      : null;
+
     const candidateDocs = await col("documents")
       .find({ user_id: userId, processing_status: { $in: ["error", "done"] }, document_kind: { $ne: "certificate" } })
+      .sort({ import_date: -1, _id: -1 } as any)
+      .limit(limit ?? 0)
       .toArray();
     const candidateIds = candidateDocs.map((d: any) => d._id?.toString()).filter(Boolean);
     const candidateObjectIds = candidateDocs.map((d: any) => d._id).filter(Boolean);
@@ -440,15 +457,17 @@ export function registerDocumentRoutes(app: express.Application) {
         .toArray()
       : [];
     const docsWithReminder = new Set(existingReminderIds.map((r: any) => String(r.document_id)));
-    const rescanDocs = (candidateDocs as any[]).filter((doc) => {
-      const id = doc._id?.toString();
-      return doc.processing_status === "error" || (doc.processing_status === "done" && id && !docsWithReminder.has(id));
-    });
+    const rescanDocs = rescanAll
+      ? candidateDocs as any[]
+      : (candidateDocs as any[]).filter((doc) => {
+          const id = doc._id?.toString();
+          return doc.processing_status === "error" || (doc.processing_status === "done" && id && !docsWithReminder.has(id));
+        });
 
     const rescanIds = rescanDocs.map((doc: any) => doc._id?.toString()).filter(Boolean);
 
     if (rescanDocs.length === 0) {
-      res.json({ queued: 0, ids: [] });
+      res.json({ queued: 0, ids: [], mode: rescanAll ? "all" : "missing", candidates: candidateDocs.length });
       return;
     }
 
@@ -478,6 +497,8 @@ export function registerDocumentRoutes(app: express.Application) {
           processing_status: "queued",
           error_message: null,
           raw_text: null,
+          extracted_fields: null,
+          template_id: null,
           document_type: null,
           document_number: null,
           updated_at: new Date(),
@@ -503,8 +524,13 @@ export function registerDocumentRoutes(app: express.Application) {
       });
     }
 
-    logger.info("document_rescan_queued", { user_id: userId, queued_count: rescanDocs.length });
-    res.json({ queued: rescanDocs.length, ids: rescanIds });
+    logger.info("document_rescan_queued", {
+      user_id: userId,
+      queued_count: rescanDocs.length,
+      mode: rescanAll ? "all" : "missing",
+      candidates: candidateDocs.length,
+    });
+    res.json({ queued: rescanDocs.length, ids: rescanIds, mode: rescanAll ? "all" : "missing", candidates: candidateDocs.length });
   });
 
   // GET /api/documents/:id/raw-text — debug: dump stored raw text

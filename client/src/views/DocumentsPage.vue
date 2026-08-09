@@ -6,7 +6,18 @@
           📂 העלה קבצים
         </n-button>
         <n-button :loading="store.loading" size="small" @click="store.fetch(undefined, true)">↻ רענן</n-button>
-        <n-button :loading="rescanning" size="small" @click="doRescan">↻ סריקה מחדש</n-button>
+        <n-button :disabled="rescanningAll" :loading="rescanning" size="small" @click="doRescan">↻ סריקה מחדש</n-button>
+        <n-button
+          v-if="authStore.isAdmin"
+          :disabled="rescanning"
+          :loading="rescanningAll"
+          secondary
+          size="small"
+          type="warning"
+          @click="doRescanAll"
+        >
+          ↻ סרוק הכל מחדש
+        </n-button>
         <n-button :loading="deletingAll" size="small" type="error" @click="confirmDeleteAll">🗑 מחק הכל</n-button>
 
         <!-- Pipeline settings popover -->
@@ -321,6 +332,7 @@ const rescanIds = ref<string[]>([]);
 const rescanDone = ref(false);
 let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
 const rescanning = ref(false);
+const rescanningAll = ref(false);
 const deletingAll = ref(false);
 const showDeleteAllConfirm = ref(false);
 const showLimitModal = ref(false);
@@ -570,26 +582,43 @@ async function uploadFiles(
 async function doRescan() {
   rescanning.value = true;
   try {
-    const res = await fetch(`${SERVER}/api/documents/rescan`, { method: "POST", credentials: "include" });
-    const data = await res.json() as { queued: number; ids?: string[] };
-    if (data.queued === 0) {
-      message.info("אין מסמכים שצריכים סריקה מחדש");
-    } else {
-      message.success(`${data.queued} מסמכים נשלחו לסריקה מחדש`);
-      queuedCount.value = data.queued;
-      rescanRemaining.value = data.queued;
-      rescanIds.value = (data.ids ?? []).map(String);
-      rescanDone.value = false;
-      await store.fetch({ limit: 500 }, true);
-      await openRescanModal();
-      startRescanPolling(data.ids ?? []);
-    }
-    await store.fetch(undefined, true);
+    await runRescan(false);
   } catch {
     message.error("שגיאה בסריקה מחדש");
   } finally {
     rescanning.value = false;
   }
+}
+
+async function doRescanAll() {
+  const ok = window.confirm("לסרוק מחדש את כל המסמכים? הפעולה תמחק ותיצור מחדש חוזים ותזכורות שנוצרו מהמסמכים.");
+  if (!ok) return;
+
+  rescanningAll.value = true;
+  try {
+    await runRescan(true);
+  } catch {
+    message.error("שגיאה בסריקה מחדש של כל המסמכים");
+  } finally {
+    rescanningAll.value = false;
+  }
+}
+
+async function runRescan(all: boolean) {
+  const data = await api.documents.rescan(all ? { all: true } : undefined);
+  if (data.queued === 0) {
+    message.info(all ? "אין מסמכים זמינים לסריקה מחדש" : "אין מסמכים שצריכים סריקה מחדש");
+  } else {
+    message.success(`${data.queued} מסמכים נשלחו לסריקה מחדש`);
+    queuedCount.value = data.queued;
+    rescanRemaining.value = data.queued;
+    rescanIds.value = (data.ids ?? []).map(String);
+    rescanDone.value = false;
+    await store.fetch({ limit: 500 }, true);
+    await openRescanModal();
+    startRescanPolling(data.ids ?? []);
+  }
+  await store.fetch(undefined, true);
 }
 
 function stopRescanPolling() {

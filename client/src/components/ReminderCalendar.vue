@@ -4,9 +4,9 @@
       <div class="rcal__title-wrap">
         <h3 class="rcal__title">{{ testsOnly ? "לוח בדיקות מתוכננות" : "לוח תזכורות ותסקירים" }}</h3>
         <div class="rcal__counts">
-          <span v-if="!testsOnly" class="rcal__count">{{ rows.length }} תזכורות</span>
-          <span v-if="(expiryItems ?? []).length" class="rcal__expiry-count">
-            {{ (expiryItems ?? []).length }} תסקירים
+          <span v-if="!testsOnly" class="rcal__count">{{ filteredRows.length }} תזכורות</span>
+          <span v-if="filteredExpiryItems.length" class="rcal__expiry-count">
+            {{ filteredExpiryItems.length }} תסקירים
           </span>
         </div>
       </div>
@@ -23,7 +23,45 @@
             @click="view = 'agenda'"
           >☰ רשימה</n-button>
         </div>
+        <n-button size="small" secondary @click="downloadVisibleMonthDoc">DOC דוח חודש נוכחי</n-button>
+        <n-button size="small" secondary @click="printCalendar">הדפסה</n-button>
+        <n-button
+          v-if="!testsOnly"
+          :disabled="sendableVisibleReminders.length === 0 || sendingVisible"
+          :loading="sendingVisible"
+          size="small"
+          type="primary"
+          ghost
+          @click="sendVisibleReminders"
+        >
+          שלח נראות ({{ sendableVisibleReminders.length }})
+        </n-button>
         <n-button :loading="loading" size="small" @click="$emit('refresh')">↻</n-button>
+      </div>
+      <div class="rcal__summary">
+        <button
+          v-for="item in summaryFilters"
+          :key="item.key"
+          class="rcal__summary-chip"
+          :class="{ 'rcal__summary-chip--active': activeFilter === item.key }"
+          type="button"
+          @click="activeFilter = item.key"
+        >
+          <span>{{ item.label }}</span>
+          <strong>{{ item.count }}</strong>
+        </button>
+      </div>
+      <div class="rcal__filters">
+        <button
+          v-for="filter in calendarFilters"
+          :key="filter.key"
+          class="rcal__filter"
+          :class="{ 'rcal__filter--active': activeFilter === filter.key }"
+          type="button"
+          @click="activeFilter = filter.key"
+        >
+          {{ filter.label }}
+        </button>
       </div>
       <div class="rcal__legend">
         <span v-if="!testsOnly" class="rcal__legend-item">
@@ -228,9 +266,9 @@
 <script lang="ts" setup>
 import {computed, ref} from "vue";
 import {useRouter} from "vue-router";
-import {NButton, NModal, NPopover} from "naive-ui";
+import {NButton, NModal, NPopover, useMessage} from "naive-ui";
 import type {ReminderWithContext} from "@shared/types.js";
-import type {ExpiryCalendarItem} from "../services/apiService.js";
+import {api, type ExpiryCalendarItem} from "../services/apiService.js";
 import ReminderQuickView from "./ReminderQuickView.vue";
 
 interface Props {
@@ -240,11 +278,14 @@ interface Props {
   testsOnly?: boolean;
 }
 const props = withDefaults(defineProps<Props>(), { loading: false, expiryItems: () => [], testsOnly: false });
-defineEmits<{ (e: "refresh"): void }>();
+const emit = defineEmits<{ (e: "refresh"): void }>();
 
 const router = useRouter();
+const message = useMessage();
 const view = ref<"month" | "agenda">(isMobileViewport() ? "agenda" : "month");
 const cursor = ref(new Date());
+const activeFilter = ref<CalendarFilterKey>("all");
+const sendingVisible = ref(false);
 
 // Day detail modal — shows every reminder/expiry for a clicked calendar day
 const dayModalOpen = ref(false);
@@ -273,6 +314,120 @@ function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0, 0, 0, 
 function sameDay(a: Date, b: Date): boolean { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 
 const today = startOfDay(new Date());
+type CalendarFilterKey = "all" | "overdue" | "next30" | "month" | "sent" | "no_email" | "reminders" | "expiries";
+
+const calendarFilters: Array<{ key: CalendarFilterKey; label: string }> = [
+  { key: "all", label: "הכל" },
+  { key: "overdue", label: "פג / באיחור" },
+  { key: "next30", label: "30 יום" },
+  { key: "month", label: "החודש" },
+  { key: "sent", label: "נשלחו" },
+  { key: "no_email", label: "חסר אימייל" },
+  { key: "reminders", label: "תזכורות" },
+  { key: "expiries", label: "תסקירים" },
+];
+
+function monthBounds(date: Date) {
+  const from = new Date(date.getFullYear(), date.getMonth(), 1);
+  const to = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return { from: toIso(from), to: toIso(to) };
+}
+
+function isIsoInRange(value: string | null | undefined, from: string, to: string): boolean {
+  const iso = value?.slice(0, 10);
+  return Boolean(iso && iso >= from && iso <= to);
+}
+
+function reminderHasEmail(r: ReminderWithContext): boolean {
+  return Boolean((r.email_to || r.client_email || "").trim());
+}
+
+function reminderMatchesFilter(r: ReminderWithContext, filter: CalendarFilterKey): boolean {
+  const iso = r.trigger_date?.slice(0, 10);
+  const { from, to } = monthBounds(cursor.value);
+  if (filter === "overdue") return isReminderOverdue(r);
+  if (filter === "next30") {
+    const limit = toIso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30));
+    return Boolean(iso && iso >= toIso(today) && iso <= limit);
+  }
+  if (filter === "month") return isIsoInRange(iso, from, to);
+  if (filter === "sent") return r.status === "sent";
+  if (filter === "no_email") return !reminderHasEmail(r);
+  if (filter === "expiries") return false;
+  return true;
+}
+
+function expiryMatchesFilter(e: ExpiryCalendarItem, filter: CalendarFilterKey): boolean {
+  const { from, to } = monthBounds(cursor.value);
+  if (filter === "overdue") return e.days_until < 0;
+  if (filter === "next30") return e.days_until >= 0 && e.days_until <= 30;
+  if (filter === "month") return isIsoInRange(e.expiry_date, from, to);
+  if (filter === "sent") return false;
+  if (filter === "no_email") return !e.contact_email;
+  if (filter === "reminders") return false;
+  return true;
+}
+
+const filteredRows = computed(() =>
+  props.rows.filter((row) => reminderMatchesFilter(row, activeFilter.value)),
+);
+
+const filteredExpiryItems = computed(() =>
+  (props.expiryItems ?? []).filter((item) => expiryMatchesFilter(item, activeFilter.value)),
+);
+
+const visibleMonthRange = computed(() => monthBounds(cursor.value));
+
+const visibleMonthReminders = computed(() =>
+  filteredRows.value.filter((row) =>
+    isIsoInRange(row.trigger_date, visibleMonthRange.value.from, visibleMonthRange.value.to),
+  ),
+);
+
+const visibleMonthExpiryItems = computed(() =>
+  filteredExpiryItems.value.filter((item) =>
+    isIsoInRange(item.expiry_date, visibleMonthRange.value.from, visibleMonthRange.value.to),
+  ),
+);
+
+const monthReminders = computed(() =>
+  props.rows.filter((row) =>
+    isIsoInRange(row.trigger_date, visibleMonthRange.value.from, visibleMonthRange.value.to),
+  ),
+);
+
+const monthExpiryItems = computed(() =>
+  (props.expiryItems ?? []).filter((item) =>
+    isIsoInRange(item.expiry_date, visibleMonthRange.value.from, visibleMonthRange.value.to),
+  ),
+);
+
+const summaryFilters = computed(() => [
+  {
+    key: "overdue" as CalendarFilterKey,
+    label: "באיחור",
+    count: monthReminders.value.filter(isReminderOverdue).length + monthExpiryItems.value.filter((item) => item.days_until < 0).length,
+  },
+  {
+    key: "month" as CalendarFilterKey,
+    label: "החודש",
+    count: monthReminders.value.length + monthExpiryItems.value.length,
+  },
+  {
+    key: "sent" as CalendarFilterKey,
+    label: "נשלחו",
+    count: monthReminders.value.filter((row) => row.status === "sent").length,
+  },
+  {
+    key: "no_email" as CalendarFilterKey,
+    label: "חסר אימייל",
+    count: monthReminders.value.filter((row) => !reminderHasEmail(row)).length + monthExpiryItems.value.filter((item) => !item.contact_email).length,
+  },
+]);
+
+const sendableVisibleReminders = computed(() =>
+  visibleMonthReminders.value.filter((row) => row.status === "pending" && reminderHasEmail(row)),
+);
 
 function isReminderOverdue(r: ReminderWithContext): boolean {
   if (r.status !== "pending" || !r.trigger_date) return false;
@@ -351,7 +506,7 @@ function expiryTimeLabel(e: ExpiryCalendarItem): string {
 
 const rowsByIso = computed(() => {
   const m = new Map<string, ReminderWithContext[]>();
-  for (const r of props.rows) {
+  for (const r of filteredRows.value) {
     if (!r.trigger_date) continue;
     const iso = r.trigger_date.slice(0, 10);
     if (!m.has(iso)) m.set(iso, []);
@@ -362,7 +517,7 @@ const rowsByIso = computed(() => {
 
 const expiryByIso = computed(() => {
   const m = new Map<string, ExpiryCalendarItem[]>();
-  for (const e of props.expiryItems ?? []) {
+  for (const e of filteredExpiryItems.value) {
     if (!e.expiry_date) continue;
     const iso = e.expiry_date.slice(0, 10);
     if (!m.has(iso)) m.set(iso, []);
@@ -430,8 +585,8 @@ const agendaGroups = computed(() => {
   const now = today.getTime();
   const isoSet = new Set<string>();
 
-  for (const r of props.rows) { if (r.trigger_date) isoSet.add(r.trigger_date.slice(0, 10)); }
-  for (const e of props.expiryItems ?? []) { if (e.expiry_date) isoSet.add(e.expiry_date.slice(0, 10)); }
+  for (const r of filteredRows.value) { if (r.trigger_date) isoSet.add(r.trigger_date.slice(0, 10)); }
+  for (const e of filteredExpiryItems.value) { if (e.expiry_date) isoSet.add(e.expiry_date.slice(0, 10)); }
 
   const sorted = [...isoSet].sort();
   return sorted.map((iso) => {
@@ -453,6 +608,113 @@ function shiftMonth(delta: number) {
   cursor.value = c;
 }
 function goToday() { cursor.value = new Date(); }
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function groupedVisibleMonthDocRows() {
+  const rows = [
+    ...visibleMonthReminders.value.map((row) => ({
+      date: row.trigger_date?.slice(0, 10) ?? "",
+      client: row.client_name ?? "",
+      type: "תזכורת",
+      title: reminderSecondaryLabel(row) || row.title || "",
+      email: row.email_to || row.client_email || "",
+      status: row.status ?? "",
+    })),
+    ...visibleMonthExpiryItems.value.map((item) => ({
+      date: item.expiry_date?.slice(0, 10) ?? "",
+      client: item.client_name ?? "",
+      type: "תסקיר",
+      title: [item.equipment_name, item.contract_number].filter(Boolean).join(" / "),
+      email: item.contact_email ?? "",
+      status: expiryStatusLabel(item),
+    })),
+  ];
+  return rows.sort((a, b) =>
+    a.date.localeCompare(b.date) ||
+    a.client.localeCompare(b.client, "he") ||
+    a.type.localeCompare(b.type, "he"),
+  );
+}
+
+function downloadVisibleMonthDoc() {
+  const rows = groupedVisibleMonthDocRows();
+  const month = cursor.value.toLocaleDateString("he-IL", { month: "long", year: "numeric" });
+  const body = rows.length
+    ? rows.map((row) => `
+      <tr>
+        <td>${escapeHtml(row.date)}</td>
+        <td>${escapeHtml(row.client || "ללא לקוח")}</td>
+        <td>${escapeHtml(row.type)}</td>
+        <td>${escapeHtml(row.title)}</td>
+        <td>${escapeHtml(row.email)}</td>
+        <td>${escapeHtml(row.status)}</td>
+      </tr>
+    `).join("")
+    : `<tr><td colspan="6">אין פריטים גלויים לחודש זה</td></tr>`;
+  const html = `<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; direction: rtl; color: #1f2937; }
+    h1 { font-size: 22px; margin: 0 0 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #d1d5db; padding: 8px; text-align: right; }
+    th { background: #f3f4f6; }
+  </style>
+</head>
+<body>
+  <h1>דוח חודש נוכחי - ${escapeHtml(month)}</h1>
+  <table>
+    <thead>
+      <tr><th>תאריך</th><th>לקוח</th><th>סוג</th><th>פירוט</th><th>אימייל</th><th>סטטוס</th></tr>
+    </thead>
+    <tbody>${body}</tbody>
+  </table>
+</body>
+</html>`;
+  const blob = new Blob(["\ufeff", html], { type: "application/msword;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `calendar-${visibleMonthRange.value.from.slice(0, 7)}.doc`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function printCalendar() {
+  window.print();
+}
+
+async function sendVisibleReminders() {
+  const rows = sendableVisibleReminders.value;
+  if (!rows.length) return;
+  const ok = window.confirm(`לשלוח ${rows.length} תזכורות גלויות?`);
+  if (!ok) return;
+
+  sendingVisible.value = true;
+  let sent = 0;
+  let failed = 0;
+  for (const row of rows) {
+    try {
+      await api.reminders.sendNow(row.id);
+      sent += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  sendingVisible.value = false;
+  if (failed) message.warning(`נשלחו ${sent}, נכשלו ${failed}`);
+  else message.success(`${sent} תזכורות נשלחו`);
+  emit("refresh");
+}
 
 function onNavigate(target: { type: "contract" | "document" | "reminder"; id: number | string }) {
   dayModalOpen.value = false;
