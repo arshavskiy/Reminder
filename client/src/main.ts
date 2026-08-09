@@ -20,7 +20,7 @@ if (authStore.user) {
   authStore.fetchMe().then(() => {
     // If server says session is invalid, redirect to login
     if (!authStore.user) {
-      window.location.href = "/#/login";
+      window.location.href = "/login";
     }
   });
 } else {

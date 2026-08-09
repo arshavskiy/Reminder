@@ -56,7 +56,7 @@ export const useAuthStore = defineStore("auth", () => {
     } finally {
       user.value = null;
       saveCache(null);
-      window.location.href = "/#/login";
+      window.location.href = "/login";
     }
   }
 

@@ -30,7 +30,7 @@ function buildTransport() {
 }
 
 function renderHtml(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
+  return template.replace(/\{\{(\w+)(?:\|([^}]*))?\}\}/g, (_, key, fallback) => vars[key] ?? fallback ?? "");
 }
 
 export async function sendVerificationEmail(email: string, token: string, baseUrl: string) {
@@ -53,16 +53,18 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
   });
 }
 
-export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string) {
+export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string, userName?: string) {
   const s = getSettings();
   if (!s.smtpHost || !s.emailFrom) {
     console.warn("[emailAuth] SMTP not configured — skipping password reset email");
     return;
   }
 
-  const resetUrl = `${baseUrl}/#/reset-password?token=${token}`;
+  const resetUrl = `${baseUrl}/reset-password?token=${token}`;
   const appName = s.emailFromName ?? " ReminderOCR ";
-  const html = renderHtml(loadAuthTemplate("reset-password"), { reset_url: resetUrl, app_name: appName });
+  const vars: Record<string, string> = { reset_url: resetUrl, app_name: appName };
+  if (userName) vars.name = userName;
+  const html = renderHtml(loadAuthTemplate("reset-password"), vars);
 
   await buildTransport().sendMail({
     from: `"${appName}" <${s.emailFrom}>`,
