@@ -25,6 +25,7 @@
     "report:send-client-future": "tsx src/scripts/sendMonthlyReportEmail.ts send-client-future",
     "report:send-client-links": "tsx src/scripts/sendMonthlyReportEmail.ts client-links",
     "report:send-client-future-links": "tsx src/scripts/sendMonthlyReportEmail.ts client-future-links",
+    "clients:merge-duplicates": "tsx src/scripts/mergeDuplicateClients.ts",
     "storage:test": "tsx src/scripts/testObjectStorage.ts",
     "storage:migrate-documents": "tsx src/scripts/migrateDocumentsToStorage.ts",
     "storage:migrate-documents:dry": "tsx src/scripts/migrateDocumentsToStorage.ts --dry"

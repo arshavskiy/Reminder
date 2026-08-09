@@ -32,11 +32,24 @@
         style="width: 160px"
         @update:value="load"
       />
+      <div class="quick-filterbar">
+        <button
+          v-for="f in dueFilters"
+          :key="f.value"
+          class="quick-pill"
+          :class="{ 'quick-pill--active': dueFilter === f.value }"
+          type="button"
+          @click="dueFilter = f.value"
+        >
+          {{ f.label }}
+          <span>{{ f.count }}</span>
+        </button>
+      </div>
     </n-space>
 
     <n-data-table
       :columns="columns"
-      :data="store.rows"
+      :data="filteredRows"
       :loading="store.loading"
       :pagination="{ pageSize: 20 }"
       :row-key="(r: any) => r.id"
@@ -227,6 +240,8 @@ const router = useRouter();
 const message = useMessage();
 
 const statusFilter = ref<string | null>(null);
+type DueFilter = "all" | "overdue" | "month" | "sent" | "no_email";
+const dueFilter = ref<DueFilter>("all");
 const showCreate = ref(false);
 const showQuickTest = ref(false);
 const quickTestTemplateId = ref<string | null>(null);
@@ -313,6 +328,45 @@ const statusOptions = [
   { label: "בוטל", value: "dismissed" },
   { label: "שגיאה", value: "error" },
 ];
+
+function todayIso(): string {
+  return msToLocalDateStr(Date.now());
+}
+
+function monthRangeIso() {
+  const now = new Date();
+  return {
+    from: msToLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 1).getTime()),
+    to: msToLocalDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 0).getTime()),
+  };
+}
+
+function reminderMatchesDueFilter(row: ReminderWithContext, filter: DueFilter): boolean {
+  const trigger = row.trigger_date?.slice(0, 10);
+  if (filter === "overdue") return row.status === "pending" && Boolean(trigger && trigger < todayIso());
+  if (filter === "month") {
+    const range = monthRangeIso();
+    return Boolean(trigger && trigger >= range.from && trigger <= range.to);
+  }
+  if (filter === "sent") return row.status === "sent";
+  if (filter === "no_email") return !effectiveEmailTo(row);
+  return true;
+}
+
+const dueFilters = computed(() => {
+  const rows = store.rows ?? [];
+  return [
+    { label: "הכל", value: "all" as DueFilter, count: rows.length },
+    { label: "באיחור", value: "overdue" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "overdue")).length },
+    { label: "החודש", value: "month" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "month")).length },
+    { label: "נשלחו", value: "sent" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "sent")).length },
+    { label: "חסר אימייל", value: "no_email" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "no_email")).length },
+  ];
+});
+
+const filteredRows = computed(() =>
+  (store.rows ?? []).filter((row) => reminderMatchesDueFilter(row, dueFilter.value)),
+);
 
 function load() {
   store.fetch({ status: statusFilter.value ?? undefined, limit: 100 }, true);
@@ -738,6 +792,50 @@ const columns = [
   flex-wrap: wrap;
 }
 
+.quick-filterbar {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 5px 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.quick-pill span {
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  text-align: center;
+  font-weight: 700;
+}
+
+.quick-pill:hover,
+.quick-pill--active {
+  border-color: var(--brand-color);
+  color: var(--brand-color);
+}
+
+.quick-pill--active {
+  background: color-mix(in srgb, var(--brand-color) 10%, var(--bg-card));
+  font-weight: 700;
+}
+
 @media (max-width: 720px) {
   .reminders-head,
   .reminders-head :deep(.n-space) {
@@ -751,8 +849,23 @@ const columns = [
     width: 100%;
   }
 
-  .reminders-filters {
+  .reminders-filters,
+  .quick-filterbar {
     width: 100%;
+  }
+
+  .quick-filterbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .quick-filterbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .quick-pill {
+    flex: 0 0 auto;
   }
 
   .reminders-table {

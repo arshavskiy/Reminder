@@ -778,8 +778,66 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   gap: 8px;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 .rcal__toggle { display: flex; gap: 4px; }
+.rcal__summary,
+.rcal__filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+.rcal__summary {
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+}
+.rcal__summary-chip,
+.rcal__filter {
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.rcal__summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.rcal__summary-chip strong {
+  min-width: 24px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  text-align: center;
+}
+.rcal__filter {
+  min-height: 30px;
+  padding: 4px 11px;
+  font-size: 12px;
+}
+.rcal__summary-chip:hover,
+.rcal__filter:hover {
+  border-color: var(--brand-color);
+  color: var(--text-primary);
+}
+.rcal__summary-chip--active,
+.rcal__filter--active {
+  background: color-mix(in srgb, var(--brand-color) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--brand-color) 45%, var(--border-color));
+  color: var(--brand-color);
+  font-weight: 700;
+}
 
 /* ── Month nav ─────────────────────────────────────────────────────────── */
 .rcal__nav {
@@ -1134,6 +1192,18 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
     flex: 1;
   }
 
+  .rcal__summary,
+  .rcal__filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .rcal__summary::-webkit-scrollbar,
+  .rcal__filters::-webkit-scrollbar {
+    display: none;
+  }
+
   .rcal__month {
     overflow-x: auto;
     padding-bottom: 4px;
@@ -1148,6 +1218,38 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   .rcal__day-row {
     align-items: flex-start;
     flex-wrap: wrap;
+  }
+}
+
+@media print {
+  .rcal {
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .rcal__controls,
+  .rcal__summary,
+  .rcal__filters,
+  .rcal__legend,
+  .rcal__cell-all,
+  .rcal__more {
+    display: none !important;
+  }
+
+  .rcal__head {
+    display: block;
+  }
+
+  .rcal__grid,
+  .rcal__weekdays {
+    min-width: 0;
+  }
+
+  .rcal__cell {
+    min-height: 92px;
+    break-inside: avoid;
   }
 }
 </style>

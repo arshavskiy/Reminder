@@ -14,7 +14,7 @@
           secondary
           size="small"
           type="warning"
-          @click="doRescanAll"
+          @click="showRescanAllConfirm = true"
         >
           ↻ סרוק הכל מחדש
         </n-button>
@@ -271,6 +271,28 @@
       <p class="text-sm text-[var(--text-secondary)]">פעולה זו אינה הפיכה.</p>
     </n-modal>
 
+    <n-modal
+      v-model:show="showRescanAllConfirm"
+      negative-text="ביטול"
+      positive-text="סרוק הכל מחדש"
+      preset="dialog"
+      title="סריקה מחדש לכל המסמכים"
+      type="warning"
+      @positive-click="doRescanAll"
+      @negative-click="showRescanAllConfirm = false"
+    >
+      <div class="rescan-confirm" dir="rtl">
+        <p>
+          הפעולה תסרוק מחדש את כל המסמכים הזמינים ותיצור מחדש את הנתונים שנוצרו מהם.
+        </p>
+        <ul>
+          <li>חוזים ותסקירים שנוצרו מהמסמך ייבנו מחדש.</li>
+          <li>תזכורות שנוצרו מהמסמך יימחקו ויחושבו מחדש.</li>
+          <li>הפעולה מיועדת לתיקוני מערכת כמו חישוב הפרש חודשים.</li>
+        </ul>
+      </div>
+    </n-modal>
+
     <!-- ── Upload modal ───────────────────────────────────────────────── -->
     <UploadModal
       ref="uploadModalRef"
@@ -335,6 +357,7 @@ const rescanning = ref(false);
 const rescanningAll = ref(false);
 const deletingAll = ref(false);
 const showDeleteAllConfirm = ref(false);
+const showRescanAllConfirm = ref(false);
 const showLimitModal = ref(false);
 const viewMode = ref<"grid" | "list">("list");
 const rescanAlertTitle = computed(() => {
@@ -591,9 +614,7 @@ async function doRescan() {
 }
 
 async function doRescanAll() {
-  const ok = window.confirm("לסרוק מחדש את כל המסמכים? הפעולה תמחק ותיצור מחדש חוזים ותזכורות שנוצרו מהמסמכים.");
-  if (!ok) return;
-
+  showRescanAllConfirm.value = false;
   rescanningAll.value = true;
   try {
     await runRescan(true);
@@ -731,6 +752,21 @@ async function openDownload(row: Document) {
 /* ── Settings popover ────────────────────────────────────────────────────── */
 .settings-pop { padding: 6px 4px; }
 .settings-pop__title { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text-primary); }
+.rescan-confirm {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.rescan-confirm p {
+  margin: 0 0 10px;
+}
+.rescan-confirm ul {
+  margin: 0;
+  padding-inline-start: 20px;
+}
+.rescan-confirm li + li {
+  margin-top: 4px;
+}
 
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
 .toolbar {

@@ -21,3 +21,11 @@ export function clientDisplayName(value: unknown): string | null {
   const normalized = normalizeClientDisplayName(value);
   return typeof normalized === "string" && normalized.trim() ? normalized.trim() : null;
 }
+
+export function normalizePhoneIdentityKey(value: unknown): string | null {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  let digits = String(value).replace(/\D/g, "");
+  if (digits.startsWith("00972")) digits = `0${digits.slice(5)}`;
+  else if (digits.startsWith("972")) digits = `0${digits.slice(3)}`;
+  return digits.length >= 7 ? digits : null;
+}

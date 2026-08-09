@@ -7,7 +7,7 @@ import type {EquipmentCategory, ReminderWithContext} from "../../src/shared/type
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSettings} from "../settings";
 import {pickEmailTemplate} from "../templates/seedEmailTemplates";
-import {clientDisplayName as normalizeClientNameForDisplay, normalizeClientDisplayName} from "../utils/clientNames";
+import {clientDisplayName as normalizeClientNameForDisplay, normalizeClientDisplayName, normalizePhoneIdentityKey} from "../utils/clientNames";
 
 const HYDRAULIC_CATEGORIES: EquipmentCategory[] = ["lift", "scaffold", "ladder"];
 const HYDRAULIC_INTERVAL_MONTHS = [4, 6, 12, 14] as const;
@@ -317,6 +317,12 @@ export function registerReminderRoutes(app: express.Application) {
       clientId = existing._id.toString();
       clientDisplayName = normalizeClientNameForDisplay(existing.display_name) ?? existing.display_name;
     } else {
+      const existingByPhone = await findClientByPhone(userId, body.business?.phone);
+      if (existingByPhone) {
+        selectedClient = existingByPhone;
+        clientId = existingByPhone._id.toString();
+        clientDisplayName = normalizeClientNameForDisplay(existingByPhone.display_name) ?? existingByPhone.display_name;
+      } else {
       const businessName = normalizeClientNameForDisplay(body.business?.display_name);
       if (!businessName) {
         res.status(400).json({ error: "business.display_name or client_id required" });
@@ -340,6 +346,7 @@ export function registerReminderRoutes(app: express.Application) {
       const clientResult = await col("clients").insertOne(clientDoc as any);
       clientId = clientResult.insertedId.toString();
       clientDisplayName = businessName;
+      }
     }
 
     const equipmentName = body.equipment?.name?.trim() || clientDisplayName;
@@ -662,6 +669,13 @@ export function registerReminderRoutes(app: express.Application) {
 
     res.json(result);
   });
+}
+
+async function findClientByPhone(userId: string, phone: unknown): Promise<any | null> {
+  const phoneKey = normalizePhoneIdentityKey(phone);
+  if (!phoneKey) return null;
+  const clients = await col("clients").find({user_id: userId, phone: {$exists: true, $ne: null}}).toArray() as any[];
+  return clients.find((client) => normalizePhoneIdentityKey(client.phone) === phoneKey) ?? null;
 }
 
 function extractInspectionSequence(contractNumber: unknown, inspectorNumber: string): number | null {

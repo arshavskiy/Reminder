@@ -1383,15 +1383,58 @@ function escapeRegex(s: string): string {
 }
 
 // Normalise a company/person name for fuzzy dedup:
-// lower-case, collapse whitespace, strip common legal suffixes and punctuation
-function normaliseName(s: string): string {
+// lower-case, collapse whitespace, strip common legal suffixes and punctuation.
+export function normalizeClientIdentityKey(s: string): string {
   return s
     .toLowerCase()
-    .replace(/["""''`״׳]/g, '"')   // normalise quote chars
-    .replace(/בע"מ|בע''מ|בעמ|ltd\.?|inc\.?|llc\.?/gi, "")
-    .replace(/[^\p{L}\p{N}]/gu, " ")  // non-letter/digit → space
+    .replace(/[״“”׳‘’`'"]/g, "\"")
+    .replace(/\b(?:ltd|inc|llc)\.?\b/gi, " ")
+    .replace(/חברה\s+בע\s*"?\s*מ/g, " ")
+    .replace(/בע\s*"?\s*מ/g, " ")
+    .replace(/ב\s*ע\s*מ/g, " ")
+    .replace(/בעמ/g, " ")
+    // OCR sometimes turns בע"מ into מ"ע / מ״ע / מ׳׳ע.
+    .replace(/(?:^|\s)מ\s*"?\s*ע(?=\s|$)/g, " ")
+    .replace(/[^\p{L}\p{N}]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function legalSuffixPenalty(name: string): number {
+  const normalized = name
+    .toLowerCase()
+    .replace(/[״“”׳‘’`'"]/g, "\"");
+  if (/(?:^|\s)מ\s*"?\s*ע(?=\s|$)/.test(normalized)) return 20;
+  if (/בע\s*"?\s*מ|ב\s*ע\s*מ|בעמ/.test(normalized)) return 5;
+  return 0;
+}
+
+function chooseCanonicalClient(candidates: any[]): any | null {
+  if (!candidates.length) return null;
+  return [...candidates].sort((a, b) => {
+    const aName = String(a.display_name ?? "");
+    const bName = String(b.display_name ?? "");
+    const aScore =
+      legalSuffixPenalty(aName) -
+      (a.email ? 3 : 0) -
+      (a.id_number ? 3 : 0) -
+      (a.phone ? 1 : 0);
+    const bScore =
+      legalSuffixPenalty(bName) -
+      (b.email ? 3 : 0) -
+      (b.id_number ? 3 : 0) -
+      (b.phone ? 1 : 0);
+    if (aScore !== bScore) return aScore - bScore;
+    return aName.length - bName.length;
+  })[0] ?? null;
+}
+
+export function normalizePhoneIdentityKey(value: string | null | undefined): string | null {
+  if (!value) return null;
+  let digits = String(value).replace(/\D/g, "");
+  if (digits.startsWith("00972")) digits = `0${digits.slice(5)}`;
+  else if (digits.startsWith("972")) digits = `0${digits.slice(3)}`;
+  return digits.length >= 7 ? digits : null;
 }
 
 interface ClientInput {
@@ -1406,7 +1449,7 @@ interface ClientInput {
 }
 
 /**
- * Find an existing client by id_number, phone, or normalised name — in that
+ * Find an existing client by id_number, phone, email, or normalised name — in that
  * priority order — then merge any new fields into it.  If no match is found,
  * insert a new client.  Returns the client's _id as a string.
  */
@@ -1423,14 +1466,17 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
     if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "id_number", client_id: existing._id?.toString() });
   }
 
-  // 2. Phone (normalised — strip spaces and dashes)
+  // 2. Phone (normalised on both sides: 050-1234567, 050 1234567, +972501234567).
+  // Phone is treated as the hard dedupe anchor because OCR often corrupts the
+  // company name while keeping the phone number stable.
   if (!existing && phone) {
-    const normPhone = phone.replace(/[\s\-]/g, "");
-    existing = await col("clients").findOne({
-      ...userScope,
-      phone: { $regex: new RegExp(escapeRegex(normPhone)) },
-    }) as any;
-    if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "phone", client_id: existing._id?.toString() });
+    const normPhone = normalizePhoneIdentityKey(phone);
+    if (normPhone) {
+      const all = await col("clients").find({ ...userScope, phone: { $exists: true, $ne: null } }).toArray() as any[];
+      const matches = all.filter((c: any) => normalizePhoneIdentityKey(c.phone) === normPhone);
+      existing = chooseCanonicalClient(matches);
+      if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "phone", client_id: existing._id?.toString() });
+    }
   }
 
   // 2b. Email
@@ -1442,23 +1488,26 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
     if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "email", client_id: existing._id?.toString() });
   }
 
-  // 3. Exact name match (case-insensitive)
+  // 3. Normalised name match (strips בע"מ / punctuation / OCR legal suffixes).
+  // This intentionally runs before exact-name matching so a previously-created
+  // bad OCR variant does not keep attracting new contracts.
+  if (!existing) {
+    const norm = normalizeClientIdentityKey(normalizedDisplayName);
+    if (norm.length >= 3) {
+      const all = await col("clients").find(userScope).toArray() as any[];
+      const matches = all.filter((c: any) => normalizeClientIdentityKey(c.display_name ?? "") === norm);
+      existing = chooseCanonicalClient(matches);
+      if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "normalized_name", client_id: existing._id?.toString() });
+    }
+  }
+
+  // 4. Exact name fallback for names that do not produce a useful normalized key.
   if (!existing) {
     existing = await col("clients").findOne({
       ...userScope,
       display_name: { $regex: new RegExp(`^${escapeRegex(normalizedDisplayName)}$`, "i") },
     }) as any;
     if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "exact_name", client_id: existing._id?.toString() });
-  }
-
-  // 4. Normalised name match (strips bע"מ / punctuation)
-  if (!existing) {
-    const norm = normaliseName(normalizedDisplayName);
-    if (norm.length >= 3) {
-      const all = await col("clients").find(userScope).toArray() as any[];
-      existing = all.find((c: any) => normaliseName(c.display_name ?? "") === norm) ?? null;
-      if (existing) logger.debug("client_matched", { user_id: userId ?? null, strategy: "normalized_name", client_id: existing._id?.toString() });
-    }
   }
 
   if (existing) {

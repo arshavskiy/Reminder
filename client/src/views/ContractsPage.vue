@@ -69,6 +69,19 @@
       </button>
     </div>
 
+    <div class="filterbar filterbar--compact">
+      <button
+        v-for="f in dueFilters"
+        :key="f.value"
+        class="pill pill--compact"
+        :class="{ 'pill--active': dueFilter === f.value }"
+        @click="dueFilter = f.value"
+      >
+        {{ f.label }}
+        <span class="pill__badge">{{ f.count }}</span>
+      </button>
+    </div>
+
     <!-- ── Secondary controls row ──────────────────────────────────────── -->
     <div class="toolbar">
       <input
@@ -658,6 +671,8 @@ const canSelectEmailTemplates = computed(() => featuresStore.hasFeature(FEATURES
 
 const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
+type DueFilter = "all" | "overdue" | "month" | "sent" | "no_email";
+const dueFilter = ref<DueFilter>("all");
 const search = ref("");
 const filterClientId = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
@@ -1355,6 +1370,49 @@ const pillFilters = computed(() => [
   { label: "חודש",    value: "renewed" },
 ]);
 
+function todayIso(): string {
+  return formatLocalDate(Date.now());
+}
+
+function monthRangeIso() {
+  const now = new Date();
+  return {
+    from: formatLocalDate(new Date(now.getFullYear(), now.getMonth(), 1).getTime()),
+    to: formatLocalDate(new Date(now.getFullYear(), now.getMonth() + 1, 0).getTime()),
+  };
+}
+
+function contractHasEmail(row: ContractWithClient): boolean {
+  return Boolean((row.contact_email ?? "").trim());
+}
+
+function contractHasSentReminder(row: ContractWithClient): boolean {
+  return remindersFor(String(row.id)).some((reminder) => reminder.status === "sent");
+}
+
+function contractMatchesDueFilter(row: ContractWithClient, filter: DueFilter): boolean {
+  const expiry = row.expiry_date?.slice(0, 10);
+  if (filter === "overdue") return Boolean(expiry && expiry < todayIso());
+  if (filter === "month") {
+    const range = monthRangeIso();
+    return Boolean(expiry && expiry >= range.from && expiry <= range.to);
+  }
+  if (filter === "sent") return contractHasSentReminder(row);
+  if (filter === "no_email") return !contractHasEmail(row);
+  return true;
+}
+
+const dueFilters = computed(() => {
+  const rows = store.rows ?? [];
+  return [
+    { label: "הכל", value: "all" as DueFilter, count: rows.length },
+    { label: "באיחור", value: "overdue" as DueFilter, count: rows.filter((row) => contractMatchesDueFilter(row, "overdue")).length },
+    { label: "החודש", value: "month" as DueFilter, count: rows.filter((row) => contractMatchesDueFilter(row, "month")).length },
+    { label: "נשלחו", value: "sent" as DueFilter, count: rows.filter((row) => contractMatchesDueFilter(row, "sent")).length },
+    { label: "חסר אימייל", value: "no_email" as DueFilter, count: rows.filter((row) => contractMatchesDueFilter(row, "no_email")).length },
+  ];
+});
+
 function load() {
   store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value });
 }
@@ -1407,6 +1465,9 @@ const filteredRows = computed(() => {
       return d >= from && d <= to;
     });
   }
+  if (dueFilter.value !== "all") {
+    rows = rows.filter((row) => contractMatchesDueFilter(row, dueFilter.value));
+  }
   return [...rows].sort(compareBySerialLastFirst);
 });
 
@@ -1415,7 +1476,7 @@ const pageStart = computed(() => (page.value - 1) * pageSize.value);
 const pageEnd = computed(() => Math.min(filteredRows.value.length, pageStart.value + pageSize.value));
 const pagedRows = computed(() => filteredRows.value.slice(pageStart.value, pageEnd.value));
 
-watch([search, filterClientId, filterDateRange, statusFilter, kind, pageSize], () => {
+watch([search, filterClientId, filterDateRange, statusFilter, dueFilter, kind, pageSize], () => {
   page.value = 1;
 });
 
@@ -1683,6 +1744,11 @@ function exportToExcel() {
   border-radius: 14px;
   border: 1px solid var(--border-color);
 }
+.filterbar--compact {
+  margin-top: -8px;
+  padding: 5px;
+  background: transparent;
+}
 .pill {
   padding: 8px 18px;
   border-radius: 10px;
@@ -1696,6 +1762,10 @@ function exportToExcel() {
   align-items: center;
   gap: 6px;
   transition: background var(--transition-fast), color var(--transition-fast);
+}
+.pill--compact {
+  padding: 6px 13px;
+  font-size: 12px;
 }
 .pill:hover { background: var(--bg-hover); color: var(--text-primary); }
 .pill--active {

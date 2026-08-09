@@ -1,5 +1,10 @@
 import {describe, expect, it} from "vitest";
-import {forwardPastNextActionDate, normalizeExtractionFieldsForTemplate} from "../pipeline/importer";
+import {
+  forwardPastNextActionDate,
+  normalizeClientIdentityKey,
+  normalizeExtractionFieldsForTemplate,
+  normalizePhoneIdentityKey,
+} from "../pipeline/importer";
 import type {DocTemplate} from "../../src/shared/types.js";
 
 const inspectionTemplate: DocTemplate = {
@@ -123,6 +128,29 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     });
 
     expect(fields?.client_company).toBe("מולטיפק פלסטיק 1990");
+  });
+
+  it("deduplicates Hebrew company-name legal suffix OCR variants", () => {
+    const variants = [
+      "מנופי סמי 2000 מ\"ע",
+      "מנופי סמי 2000 מ״ע",
+      "מנופי סמי 2000 בע\"מ",
+      "מנופי סמי 2000 בע״מ",
+      "מנופי סמי 2000",
+    ];
+
+    expect(new Set(variants.map(normalizeClientIdentityKey))).toEqual(new Set(["מנופי סמי 2000"]));
+  });
+
+  it("deduplicates Israeli phone formatting variants", () => {
+    const variants = [
+      "050-5872885",
+      "050 587 2885",
+      "+972-50-587-2885",
+      "972505872885",
+    ];
+
+    expect(new Set(variants.map(normalizePhoneIdentityKey))).toEqual(new Set(["0505872885"]));
   });
 
   it("restores numeric suffixes when OCR puts the number before the company name", () => {

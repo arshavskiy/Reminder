@@ -2,7 +2,7 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {HTTPException, requireAuth} from "../auth/middleware";
-import {normalizeClientDisplayName} from "../utils/clientNames";
+import {normalizeClientDisplayName, normalizePhoneIdentityKey} from "../utils/clientNames";
 
 export function registerClientRoutes(app: express.Application) {
   // GET /api/clients
@@ -83,6 +83,21 @@ export function registerClientRoutes(app: express.Application) {
 
     const body = req.body as Record<string, unknown>;
     const now = new Date();
+    const existingByPhone = await findClientByPhone(userId, body.phone);
+    if (existingByPhone) {
+      const updates: Record<string, any> = { updated_at: now };
+      if (body.display_name !== undefined && !existingByPhone.display_name) updates.display_name = normalizeClientDisplayName(body.display_name);
+      if (body.entity_type !== undefined && !existingByPhone.entity_type) updates.entity_type = body.entity_type;
+      if (body.contact_person !== undefined && !existingByPhone.contact_person) updates.contact_person = body.contact_person;
+      if (body.id_number !== undefined && !existingByPhone.id_number) updates.id_number = body.id_number;
+      if (body.email !== undefined && !existingByPhone.email) updates.email = body.email;
+      if (body.notes !== undefined && !existingByPhone.notes) updates.notes = body.notes;
+      if (body.tags !== undefined && !existingByPhone.tags) updates.tags = body.tags;
+      await col("clients").updateOne({_id: existingByPhone._id}, {$set: updates});
+      const updated = await col("clients").findOne({_id: existingByPhone._id});
+      res.status(200).json(flatClient(updated));
+      return;
+    }
     const doc = {
       user_id: userId,
       display_name: normalizeClientDisplayName(body.display_name),
@@ -209,6 +224,13 @@ export function registerClientRoutes(app: express.Application) {
 
     res.json(docs.map(flatClientDocument));
   });
+}
+
+async function findClientByPhone(userId: string, phone: unknown): Promise<any | null> {
+  const phoneKey = normalizePhoneIdentityKey(phone);
+  if (!phoneKey) return null;
+  const clients = await col("clients").find({user_id: userId, phone: {$exists: true, $ne: null}}).toArray() as any[];
+  return clients.find((client) => normalizePhoneIdentityKey(client.phone) === phoneKey) ?? null;
 }
 
 function idFilter(id: string): Record<string, any> {
