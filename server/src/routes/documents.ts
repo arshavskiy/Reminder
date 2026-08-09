@@ -826,30 +826,23 @@ export function registerDocumentRoutes(app: express.Application) {
       });
     }
 
-    // Regenerate reminders when expiry_date changed
-    const expiryChanged = sanitized.expiry_date !== undefined || sanitized.next_inspection_date !== undefined;
-    if (expiryChanged) {
-      let oid: ObjectId | null = null;
-      try { oid = new ObjectId(id); } catch {}
-      const contracts = await col("contracts").find({
-        $or: [
-          { document_id: id, user_id: userId },
-          ...(oid ? [{ document_id: oid, user_id: userId }] : []),
-        ],
-      }).toArray();
+    // Refresh pending reminders from the rebuilt contract so client/date/title
+    // changes made in the document fields are reflected without a full rescan.
+    let oid: ObjectId | null = null;
+    try { oid = new ObjectId(id); } catch {}
+    const contracts = await col("contracts").find({
+      $or: [
+        { document_id: id, user_id: userId },
+        ...(oid ? [{ document_id: oid, user_id: userId }] : []),
+      ],
+    }).toArray();
 
+    if (contracts.length > 0) {
+      const { generateContractReminders } = await import("../reminders/scheduler.js");
       for (const c of contracts) {
         const cid = (c._id as ObjectId).toString();
-        const expiryDate = String(
-          sanitized.expiry_date ?? sanitized.next_inspection_date ?? (c as any).expiry_date ?? ""
-        );
+        const expiryDate = String((c as any).expiry_date ?? "");
         if (expiryDate) {
-          const { generateContractReminders } = await import("../reminders/scheduler.js");
-          await col("reminders").deleteMany({
-            source_type: "contract_expiry",
-            source_id: cid,
-            status: "pending",
-          });
           await generateContractReminders(cid, (c as any).client_id ?? null, id, expiryDate, userId);
         }
       }

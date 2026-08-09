@@ -4,6 +4,8 @@ import {
   normalizeClientIdentityKey,
   normalizeExtractionFieldsForTemplate,
   normalizePhoneIdentityKey,
+  shouldPreferNamedClientOverPhoneMatch,
+  shouldPromoteClientDisplayName,
 } from "../pipeline/importer";
 import type {DocTemplate} from "../../src/shared/types.js";
 
@@ -154,6 +156,31 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     });
 
     expect(fields?.client_company).toBe("חלפים ושירותי מוסך בע. א.ג.ר");
+  });
+
+  it("removes raw-text label spillover from legal-suffix OCR fragments", () => {
+    const rawText = "מ\"גלובוס בע:תופש/פרטי הלקוח. 1נורית:איש קשר";
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {
+      client_company: "מ\"גלובוס בע:תופש/פרטי הלקוח. 1נורית:איש קשר",
+    });
+
+    expect(fields?.client_company).toBe("גלובוס בע");
+  });
+
+  it("removes leading punctuation from extracted company names", () => {
+    const fields = normalizeExtractionFieldsForTemplate("פרטי הלקוח/תופש: גלובוס בע\"מ", inspectionTemplate, {
+      client_company: ":גלובוס בע\"מ",
+    });
+
+    expect(fields?.client_company).toBe("גלובוס בע\"מ");
+  });
+
+  it("repairs trailing OCR legal-suffix fragments in company names", () => {
+    const fields = normalizeExtractionFieldsForTemplate("מ\"גלובוס בע:תופש/פרטי הלקוח. 1נורית:איש קשר", inspectionTemplate, {
+      client_company: "גלובוס מ\"",
+    });
+
+    expect(fields?.client_company).toBe("גלובוס בע\"מ");
   });
 
   it("deduplicates Hebrew company-name legal suffix OCR variants", () => {
@@ -440,11 +467,71 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(fields?.model).toBe("1008");
   });
 
+  it("repairs accessory description when AI copied the defects section label", () => {
+    const rawText = [
+      "תיאור אביזרי הרמה. 2",
+      "סל הרמת אדם",
+      "3. ליקוים",
+    ].join("\n");
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {
+      equipment_description: "ליקוים. 3",
+      checked_equipment: "סל הרמת אדם",
+    });
+
+    expect(fields?.equipment_description).toBe("אביזרי הרמה");
+    expect(fields?.checked_equipment).toBe("סל הרמת אדם");
+  });
+
+  it("cleans section numbering from an already extracted accessory description", () => {
+    const fields = normalizeExtractionFieldsForTemplate("תיאור אביזרי הרמה. 2", inspectionTemplate, {
+      equipment_description: "אביזרי הרמה. 2",
+      checked_equipment: "סל הרמת אדם",
+    });
+
+    expect(fields?.equipment_description).toBe("אביזרי הרמה");
+  });
+
   it("repairs a full label phrase into the equipment description value", () => {
     const fields = normalizeExtractionFieldsForTemplate("2. תיאור מכונת הרמה:", inspectionTemplate, {
       equipment_description: "תיאור מכונת הרמה",
     });
 
     expect(fields?.equipment_description).toBe("מכונת הרמה");
+  });
+
+  it("promotes a phone-matched bad client name to the extracted company name", () => {
+    const shouldPromote = shouldPromoteClientDisplayName(
+      { display_name: "יוסף שקומה 30", entity_type: "company" },
+      "מן הנדסת חשמל",
+      "company",
+      "יוסף",
+      "phone",
+    );
+
+    expect(shouldPromote).toBe(true);
+  });
+
+  it("promotes an OCR legal-suffix display name to its cleaned company name", () => {
+    const shouldPromote = shouldPromoteClientDisplayName(
+      { display_name: "גלובוס מ\"", entity_type: "company" },
+      "גלובוס בע\"מ",
+      "company",
+      "נורית",
+      "phone",
+    );
+
+    expect(shouldPromote).toBe(true);
+  });
+
+  it("prefers an existing company-name match over a bad phone-matched client", () => {
+    const shouldPrefer = shouldPreferNamedClientOverPhoneMatch(
+      { display_name: "יוסף שקומה 30", entity_type: "company" },
+      { display_name: "מן הנדסת חשמל", entity_type: "company" },
+      "מן הנדסת חשמל",
+      "יוסף",
+      "phone",
+    );
+
+    expect(shouldPrefer).toBe(true);
   });
 });

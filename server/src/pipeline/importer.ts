@@ -1119,7 +1119,10 @@ function normalizeClientName(value: string, rawText?: string): string {
     .replace(/\\/g, "")
     .replace(/([א-ת])(\d{2,})/g, "$1 $2")
     .replace(/(\d{2,})([א-ת])/g, "$1 $2")
+    .replace(/\s*[:：]?\s*(?:תופש|פרטי\s+הלקוח|איש\s+קשר).*$/i, "")
     .replace(/\s+/g, " ")
+    .replace(/^[\s:：,.;-]+/, "")
+    .replace(/\s+מ["״]$/, " בע\"מ")
     .trim();
   // Strip a stray single Hebrew letter prefix (e.g. "מ הנסון" → "הנסון") that
   // results from OCR splitting "מ." or "מר" off a company/person name.
@@ -1220,14 +1223,14 @@ function extractEquipmentDescriptionFromHeader(rawText: string): string | null {
 
     const inlineValue = line.match(/(?:^|\s)תיאור\s*[:：-]\s*([^|:：]+)$/);
     if (inlineValue?.[1]) {
-      const value = cleanHeaderValue(inlineValue[1]);
+      const value = cleanEquipmentDescriptionValue(inlineValue[1]);
       if (value) return value;
     }
 
     const labelAndValue = line.match(/(?:^|\s)תיאור\s+([^:：|]+)\s*[:：]?$/);
     if (labelAndValue?.[1]) {
-      const value = cleanHeaderValue(labelAndValue[1]);
-      if (value && value !== "תיאור") return value;
+      const value = cleanEquipmentDescriptionValue(labelAndValue[1]);
+      if (value && value !== "תיאור" && !isBadEquipmentDescriptionValue(value)) return value;
     }
   }
 
@@ -1241,12 +1244,27 @@ function cleanHeaderValue(value: string): string | null {
   return cleaned || null;
 }
 
+function cleanEquipmentDescriptionValue(value: string): string | null {
+  const cleaned = cleanHeaderValue(value)
+    ?.replace(/^\d+\s*[.:：-]\s*/, "")
+    .replace(/\s*[.:：-]\s*\d+$/g, "")
+    .trim();
+  return cleaned || null;
+}
+
 function shouldUseHeaderEquipmentDescription(current: unknown, firstEquipmentName: unknown): boolean {
   if (!hasMeaningfulValue(current)) return true;
   const currentText = String(current).trim();
   if (/^תיאור\s+/.test(currentText)) return true;
+  if (isBadEquipmentDescriptionValue(currentText)) return true;
+  const cleanedCurrent = cleanEquipmentDescriptionValue(currentText);
+  if (cleanedCurrent && cleanedCurrent !== currentText) return true;
   if (!hasMeaningfulValue(firstEquipmentName)) return false;
   return currentText === String(firstEquipmentName).trim();
+}
+
+function isBadEquipmentDescriptionValue(value: string): boolean {
+  return /ליקו[יי]?ם|הערות|ממצאים|המלצות/i.test(value);
 }
 
 function shouldUseDefaultLiftingMachineDescription(
@@ -1477,6 +1495,49 @@ export function normalizePhoneIdentityKey(value: string | null | undefined): str
   return digits.length >= 7 ? digits : null;
 }
 
+export function shouldPromoteClientDisplayName(
+  existing: { display_name?: unknown; entity_type?: unknown },
+  incomingDisplayName: string,
+  incomingEntityType: "company" | "person",
+  contactPerson?: string | null,
+  matchStrategy?: string | null
+): boolean {
+  if (incomingEntityType !== "company") return false;
+  if (!["phone", "email", "id_number"].includes(matchStrategy ?? "")) return false;
+
+  const existingRawName = String(existing.display_name ?? "").trim();
+  const existingName = normalizeClientName(existingRawName);
+  const incomingName = normalizeClientName(incomingDisplayName);
+  if (!existingName || !incomingName) return false;
+  if (existingName === incomingName) return existingRawName !== incomingName;
+
+  const existingKey = normalizeClientIdentityKey(existingName);
+  const incomingKey = normalizeClientIdentityKey(incomingName);
+  if (existingKey === incomingKey) return false;
+
+  const contact = contactPerson?.trim();
+  if (existing.entity_type !== "company") return true;
+  if (contact && existingName.includes(contact)) return true;
+  if (/\d/.test(existingName) && !/\d/.test(incomingName)) return true;
+  if (legalSuffixPenalty(existingName) > legalSuffixPenalty(incomingName)) return true;
+
+  return false;
+}
+
+export function shouldPreferNamedClientOverPhoneMatch(
+  phoneMatched: { display_name?: unknown; entity_type?: unknown },
+  namedMatched: { display_name?: unknown; entity_type?: unknown },
+  incomingDisplayName: string,
+  contactPerson?: string | null,
+  matchStrategy?: string | null
+): boolean {
+  if (matchStrategy !== "phone") return false;
+  const incomingKey = normalizeClientIdentityKey(incomingDisplayName);
+  const namedKey = normalizeClientIdentityKey(String(namedMatched.display_name ?? ""));
+  if (!incomingKey || incomingKey !== namedKey) return false;
+  return shouldPromoteClientDisplayName(phoneMatched, incomingDisplayName, "company", contactPerson, "phone");
+}
+
 interface ClientInput {
   displayName: string;
   entityType: "company" | "person";
@@ -1513,11 +1574,15 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   logger.info("client_find_or_create_started", logMeta);
 
   let existing: any = null;
+  let matchStrategy: string | null = null;
 
   // 1. Strongest signal: government-issued id / company registration number
   if (idNumber) {
     existing = await col("clients").findOne({ ...userScope, id_number: idNumber }) as any;
-    if (existing) logger.info("client_matched", { ...logMeta, strategy: "id_number", client_id: existing._id?.toString() });
+    if (existing) {
+      matchStrategy = "id_number";
+      logger.info("client_matched", { ...logMeta, strategy: matchStrategy, client_id: existing._id?.toString() });
+    }
   }
 
   // 2. Phone (normalised on both sides: 050-1234567, 050 1234567, +972501234567).
@@ -1529,14 +1594,36 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       const matches = all.filter((c: any) => normalizePhoneIdentityKey(c.phone) === normalizedPhone);
       existing = chooseCanonicalClient(matches);
       if (existing) {
+        matchStrategy = "phone";
         logger.info("client_matched", {
           ...logMeta,
-          strategy: "phone",
+          strategy: matchStrategy,
           client_id: existing._id?.toString(),
           match_count: matches.length,
           matched_display_name: existing.display_name ?? null,
         });
       }
+    }
+  }
+
+  if (existing && entityType === "company" && normalizedNameKey.length >= 3) {
+    const all = await col("clients").find(userScope).toArray() as any[];
+    const nameMatches = all.filter((c: any) => normalizeClientIdentityKey(c.display_name ?? "") === normalizedNameKey);
+    const namedExisting = chooseCanonicalClient(nameMatches);
+    if (
+      namedExisting &&
+      String(namedExisting._id) !== String(existing._id) &&
+      shouldPreferNamedClientOverPhoneMatch(existing, namedExisting, normalizedDisplayName, contactPerson, matchStrategy)
+    ) {
+      logger.info("client_match_promoted_to_named_company", {
+        ...logMeta,
+        phone_client_id: existing._id?.toString(),
+        phone_display_name: existing.display_name ?? null,
+        named_client_id: namedExisting._id?.toString(),
+        named_display_name: namedExisting.display_name ?? null,
+      });
+      existing = namedExisting;
+      matchStrategy = "normalized_name";
     }
   }
 
@@ -1546,7 +1633,10 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       ...userScope,
       email: { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, "i") },
     }) as any;
-    if (existing) logger.info("client_matched", { ...logMeta, strategy: "email", client_id: existing._id?.toString(), matched_display_name: existing.display_name ?? null });
+    if (existing) {
+      matchStrategy = "email";
+      logger.info("client_matched", { ...logMeta, strategy: matchStrategy, client_id: existing._id?.toString(), matched_display_name: existing.display_name ?? null });
+    }
   }
 
   // 3. Normalised name match (strips בע"מ / punctuation / OCR legal suffixes).
@@ -1558,9 +1648,10 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       const matches = all.filter((c: any) => normalizeClientIdentityKey(c.display_name ?? "") === normalizedNameKey);
       existing = chooseCanonicalClient(matches);
       if (existing) {
+        matchStrategy = "normalized_name";
         logger.info("client_matched", {
           ...logMeta,
-          strategy: "normalized_name",
+          strategy: matchStrategy,
           client_id: existing._id?.toString(),
           match_count: matches.length,
           matched_display_name: existing.display_name ?? null,
@@ -1575,11 +1666,21 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       ...userScope,
       display_name: { $regex: new RegExp(`^${escapeRegex(normalizedDisplayName)}$`, "i") },
     }) as any;
-    if (existing) logger.info("client_matched", { ...logMeta, strategy: "exact_name", client_id: existing._id?.toString(), matched_display_name: existing.display_name ?? null });
+    if (existing) {
+      matchStrategy = "exact_name";
+      logger.info("client_matched", { ...logMeta, strategy: matchStrategy, client_id: existing._id?.toString(), matched_display_name: existing.display_name ?? null });
+    }
   }
 
   if (existing) {
     const clientId = existing._id.toString();
+    const shouldPromoteName = shouldPromoteClientDisplayName(
+      existing,
+      normalizedDisplayName,
+      entityType,
+      contactPerson,
+      matchStrategy
+    );
     const mergedNotes =
       notes && !(existing.notes ?? "").includes(notes)
         ? [existing.notes, notes].filter(Boolean).join("\n")
@@ -1589,6 +1690,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       { _id: existing._id },
       {
         $set: {
+          ...(shouldPromoteName && { display_name: normalizedDisplayName, entity_type: entityType }),
           ...(email && !existing.email && { email }),
           ...(phone && !existing.phone && { phone }),
           ...(contactPerson && !existing.contact_person && { contact_person: contactPerson }),
@@ -1602,6 +1704,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       ...logMeta,
       client_id: clientId,
       matched_display_name: existing.display_name ?? null,
+      promoted_display_name: shouldPromoteName ? normalizedDisplayName : null,
     });
     return clientId;
   }
