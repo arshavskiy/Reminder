@@ -777,7 +777,7 @@ export function normalizeExtractionFieldsForTemplate(
   normalizeClientCompany(rawText, normalized);
   normalizeNextActionDateFields(normalized, template.expiry_field);
   const supportsReportNumber = template.fields.some((field) => field.key === "report_number");
-  if (supportsReportNumber && !hasMeaningfulValue(normalized.report_number)) {
+  if (supportsReportNumber) {
     const reportNumber = extractCurrentReportNumber(rawText);
     if (reportNumber) normalized.report_number = reportNumber;
   }
@@ -786,11 +786,20 @@ export function normalizeExtractionFieldsForTemplate(
     const contactPerson = extractContactPerson(rawText);
     if (contactPerson) normalized.contact_person = contactPerson;
   }
+  if (typeof normalized.contact_email === "string" && normalized.contact_email.trim()) {
+    normalized.contact_email = normalizeEmail(normalized.contact_email);
+  }
   if (!hasMeaningfulValue(normalized.contact_email)) {
     const contactEmail = extractContactEmail(rawText);
     if (contactEmail) normalized.contact_email = contactEmail;
   }
-  if (!hasMeaningfulValue(normalized.client_email) && hasMeaningfulValue(normalized.contact_email)) {
+  if (typeof normalized.client_email === "string" && normalized.client_email.trim()) {
+    normalized.client_email = normalizeEmail(normalized.client_email);
+  }
+  if (
+    hasMeaningfulValue(normalized.contact_email) &&
+    (!hasMeaningfulValue(normalized.client_email) || normalized.client_email !== normalized.contact_email)
+  ) {
     normalized.client_email = normalized.contact_email;
   }
   const supportsLicenseNumber = template.fields.some((field) => field.key === "license_number");
@@ -810,6 +819,7 @@ export function normalizeExtractionFieldsForTemplate(
   if (isNeverLicensed) {
     delete normalized.license_number;
   } else if (supportsLicenseNumber) {
+    const explicitLicenseNumber = extractLicenseNumber(rawText);
     if (
       hasMeaningfulValue(normalized.license_number) &&
       hasMeaningfulValue(normalized.model) &&
@@ -820,10 +830,18 @@ export function normalizeExtractionFieldsForTemplate(
     if (typeof normalized.license_number === "string" && isPostalCode(normalized.license_number, rawText)) {
       delete normalized.license_number;
     }
+    if (
+      explicitLicenseNumber &&
+      typeof normalized.license_number === "string" &&
+      /^\d{4,5}$/.test(normalized.license_number.trim()) &&
+      /^\d{7,8}$/.test(explicitLicenseNumber) &&
+      normalized.license_number.trim() !== explicitLicenseNumber
+    ) {
+      normalized.license_number = explicitLicenseNumber;
+    }
     if (!isLikelyLicenseNumber(normalized.license_number)) {
       delete normalized.license_number;
-      const licenseNumber = extractLicenseNumber(rawText);
-      if (licenseNumber) normalized.license_number = licenseNumber;
+      if (explicitLicenseNumber) normalized.license_number = explicitLicenseNumber;
     }
   }
 
@@ -876,10 +894,11 @@ function extractCurrentReportNumber(rawText: string): string | null {
     if (!line) continue;
     if (/מספר\s+תסקיר\s+קודם/i.test(line)) continue;
 
-    const match = line.match(/^מספר\s+תסקיר(?!\s+קודם)\s*[:：-]?\s*(.+)$/i);
+    const match = line.match(/^מספר\s+תסקיר(?!\s+קודם)\s*[:：-]?\s*(.+)$/i) ??
+      line.match(/^(.+?)\s*[:：]\s*מספר\s+תסקיר(?!\s+קודם)/i);
     if (!match) continue;
 
-    const value = match[1]
+    const value = normalizeReportNumberValue(match[1], rawText)
       .split(/\t|\s{2,}|\s+\|\s+/)[0]
       .trim()
       .replace(/[|]$/, "");
@@ -962,7 +981,11 @@ function normalizeEmail(value: string): string {
       .join(".");
     return `${afterAt}@${domain.toLowerCase()}`;
   }
-  if (beforeAt && afterAt) return `${beforeAt}@${afterAt.toLowerCase()}`;
+  if (beforeAt && afterAt) {
+    const rtlLocal = beforeAt.match(/^(\d{2,})([A-Z][A-Z0-9._%+-]*)$/i);
+    const local = rtlLocal ? `${rtlLocal[2]}${rtlLocal[1]}` : beforeAt;
+    return `${local}@${afterAt.toLowerCase()}`;
+  }
   return cleaned;
 }
 
@@ -971,9 +994,6 @@ function isLikelyInspectorFooterLine(line: string): boolean {
 }
 
 function extractLicenseNumber(rawText: string): string | null {
-  const locationSectionValue = extractLicenseNumberAfterInspectionLocation(rawText);
-  if (locationSectionValue) return locationSectionValue;
-
   const lines = rawText.split(/\r?\n/).map((rawLine) => rawLine.replace(/\s+/g, " ").trim());
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -991,15 +1011,24 @@ function extractLicenseNumber(rawText: string): string | null {
     }
 
     // Label-only line — value on the next line (common in RTL table PDFs)
-    if (/^מספר\s+רישוי\s*[:：-]?$/i.test(line)) {
-      for (const [offset, candidate] of [[1, lines[i + 1]?.trim()], [2, lines[i + 2]?.trim()]] as const) {
-        if (candidate && isLikelyLicenseNumber(candidate) && !isPostalCodeContext(lines, i + offset, candidate)) {
+    if (/^[:：-]?\s*מספר\s+רישוי\s*[:：-]?$/i.test(line)) {
+      const nearby = [[-2, lines[i - 2]?.trim()], [-1, lines[i - 1]?.trim()], [1, lines[i + 1]?.trim()], [2, lines[i + 2]?.trim()], [3, lines[i + 3]?.trim()], [4, lines[i + 4]?.trim()], [5, lines[i + 5]?.trim()]] as const;
+      const plateCandidate = nearby.find(([offset, candidate]) =>
+        candidate && (offset > 0 || /^\d{7,8}$/.test(candidate)) && /^\d{7,8}$/.test(candidate) && !isPostalCodeContext(lines, i + offset, candidate)
+      );
+      if (plateCandidate?.[1]) return normalizePenimiLicense(plateCandidate[1]);
+      for (const [offset, candidate] of nearby) {
+        const previousLinePlate = offset < 0 && /^\d{7,8}$/.test(candidate ?? "");
+        if (candidate && (previousLinePlate || offset > 0) && isLikelyLicenseNumber(candidate) && !isPostalCodeContext(lines, i + offset, candidate)) {
           return normalizePenimiLicense(candidate);
         }
       }
     }
 
   }
+
+  const locationSectionValue = extractLicenseNumberAfterInspectionLocation(rawText);
+  if (locationSectionValue) return locationSectionValue;
 
   // Last resort: document mentions "מספר רישוי" but value was separated from label
   // by many lines (RTL table PDF column ordering). Collect all standalone 4-8 digit
@@ -1235,6 +1264,24 @@ function extractEquipmentDescriptionFromHeader(rawText: string): string | null {
   }
 
   return null;
+}
+
+function normalizeReportNumberValue(value: string, rawText?: string): string {
+  const cleaned = value.trim();
+  const parts = cleaned.split("/").map((part) => part.trim());
+  if (parts.length === 2 && parts.every((part) => /^\d+$/.test(part))) {
+    let inspector = parts.find((part) => part.length >= 6);
+    let report = parts.find((part) => part !== inspector);
+    if (!inspector && rawText) {
+      const shortInspector = parts.find((part) => part.length === 5);
+      if (shortInspector && rawText.includes(`${shortInspector}0`)) {
+        inspector = `${shortInspector}0`;
+        report = parts.find((part) => part !== shortInspector);
+      }
+    }
+    if (inspector && report) return `${inspector}/${report}`;
+  }
+  return cleaned;
 }
 
 function cleanHeaderValue(value: string): string | null {
@@ -1515,6 +1562,8 @@ export function shouldPromoteClientDisplayName(
   const incomingKey = normalizeClientIdentityKey(incomingName);
   if (existingKey === incomingKey) return false;
 
+  if (matchStrategy === "phone") return true;
+
   const contact = contactPerson?.trim();
   if (existing.entity_type !== "company") return true;
   if (contact && existingName.includes(contact)) return true;
@@ -1691,7 +1740,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       {
         $set: {
           ...(shouldPromoteName && { display_name: normalizedDisplayName, entity_type: entityType }),
-          ...(email && !existing.email && { email }),
+          ...(email && existing.email !== email && { email }),
           ...(phone && !existing.phone && { phone }),
           ...(contactPerson && !existing.contact_person && { contact_person: contactPerson }),
           ...(idNumber && !existing.id_number && { id_number: idNumber }),

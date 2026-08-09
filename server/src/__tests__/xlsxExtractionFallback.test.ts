@@ -90,7 +90,7 @@ describe("normalizeExtractionFieldsForTemplate", () => {
       client_company: "שי מגן",
     });
 
-    expect(fields?.report_number).toBe("17924/484590");
+    expect(fields?.report_number).toBe("484590/17924");
     expect(fields?.client_company).toBe("שי מגן");
   });
 
@@ -99,7 +99,27 @@ describe("normalizeExtractionFieldsForTemplate", () => {
       report_number: "custom",
     });
 
-    expect(fields?.report_number).toBe("custom");
+    expect(fields?.report_number).toBe("484590/17924");
+  });
+
+  it("normalizes reversed report_number values from raw text", () => {
+    const fields = normalizeExtractionFieldsForTemplate("8868/484590: מספר תסקיר", inspectionTemplate, {
+      report_number: "48459/8868",
+    });
+
+    expect(fields?.report_number).toBe("484590/8868");
+  });
+
+  it("repairs a truncated inspector number in report_number when raw text contains the full id", () => {
+    const rawText = [
+      "48459/8868: מספר תסקיר",
+      "484590 ':בעל תעודה מס",
+    ].join("\n");
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {
+      report_number: "48459/8868",
+    });
+
+    expect(fields?.report_number).toBe("484590/8868");
   });
 
   it("removes address fields from normalized extraction output", () => {
@@ -282,6 +302,25 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(fields?.client_email).toBe("Dafar@d-afar.com");
   });
 
+  it("repairs RTL-reordered email local parts that start with digits", () => {
+    const fields = normalizeExtractionFieldsForTemplate("מייל: 155david@012.net.il", inspectionTemplate, {
+      client_company: "נתיב 10",
+    });
+
+    expect(fields?.contact_email).toBe("david155@012.net.il");
+    expect(fields?.client_email).toBe("david155@012.net.il");
+  });
+
+  it("repairs an already extracted RTL-reordered email", () => {
+    const fields = normalizeExtractionFieldsForTemplate("", inspectionTemplate, {
+      contact_email: "155david@012.net.il",
+      client_email: "155david@012.net.il",
+    });
+
+    expect(fields?.contact_email).toBe("david155@012.net.il");
+    expect(fields?.client_email).toBe("david155@012.net.il");
+  });
+
   it("fills license_number from inspection text", () => {
     const fields = normalizeExtractionFieldsForTemplate("מספר רישוי: 201207", inspectionTemplate, {
       client_company: "מ.הנסון בע\"מ",
@@ -392,6 +431,50 @@ describe("normalizeExtractionFieldsForTemplate", () => {
 
     expect(fields?.license_number).toBeUndefined();
     expect(fields?.model).toBe("1008");
+  });
+
+  it("replaces a load-table value with the explicit header license_number", () => {
+    const rawText = [
+      "מספר רישוי:",
+      "67451601",
+      "עומס עבודה בטוח",
+      "4566",
+      "3325",
+      "2565",
+    ].join("\n");
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {
+      license_number: "3325",
+    });
+
+    expect(fields?.license_number).toBe("67451601");
+  });
+
+  it("fills license_number when the value is before a label-only line", () => {
+    const rawText = [
+      "67451601",
+      "מספר רישוי:",
+      "עומס עבודה בטוח",
+      "3325",
+    ].join("\n");
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {
+      license_number: "3325",
+    });
+
+    expect(fields?.license_number).toBe("67451601");
+  });
+
+  it("prefers a nearby vehicle plate over a load value after a label-only line", () => {
+    const rawText = [
+      ": מספר רישוי",
+      "3325",
+      "484590 ':בעל תעודה מס",
+      "67451601",
+    ].join("\n");
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {
+      license_number: "3325",
+    });
+
+    expect(fields?.license_number).toBe("67451601");
   });
 
   it("does not extract a non-numeric license_number", () => {
@@ -505,6 +588,18 @@ describe("normalizeExtractionFieldsForTemplate", () => {
       "מן הנדסת חשמל",
       "company",
       "יוסף",
+      "phone",
+    );
+
+    expect(shouldPromote).toBe(true);
+  });
+
+  it("promotes a different phone-matched company name to the extracted company name", () => {
+    const shouldPromote = shouldPromoteClientDisplayName(
+      { display_name: "גלובל הנדסה 30", entity_type: "company" },
+      "נתיב 10",
+      "company",
+      "דוד",
       "phone",
     );
 

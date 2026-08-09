@@ -619,8 +619,11 @@ export function registerDocumentRoutes(app: express.Application) {
         },
       });
 
-      // Update contract, client, and equipment records
+      // Rebuild derived records from the fresh extraction. This keeps the
+      // document fields as the source of truth when AI extraction changes a
+      // client, contract number, dates, or reminder schedule.
       try {
+        await clearDerivedDocumentData(id, userId);
         await saveTemplateEntitiesForDoc(id, template, normalizedFields, userId);
       } catch (e) {
         logger.error("document_extract_entities_failed", { document_id: id, user_id: userId, error: e });
@@ -858,6 +861,35 @@ function idFilter(id: string): Record<string, any> {
   } catch {
     return { _id: id };
   }
+}
+
+async function clearDerivedDocumentData(id: string, userId: string): Promise<void> {
+  const objectId = (() => {
+    try { return new ObjectId(id); } catch { return null; }
+  })();
+  const documentIds = [id, ...(objectId ? [objectId] : [])];
+  const contracts = await col("contracts")
+    .find({ user_id: userId, document_id: { $in: documentIds } } as any)
+    .project({ _id: 1 })
+    .toArray();
+  const contractIds = contracts.map((contract: any) => contract._id?.toString()).filter(Boolean);
+
+  if (contractIds.length > 0) {
+    await col("reminders").deleteMany({
+      user_id: userId,
+      source_type: "contract_expiry",
+      source_id: { $in: contractIds },
+    } as any);
+  }
+
+  await Promise.all([
+    col("tasks").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
+    col("document_clients").deleteMany({ document_id: { $in: documentIds } } as any),
+    col("timeline_events").deleteMany({ source_type: "document", source_id: id } as any),
+    col("reminders").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
+    col("contracts").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
+    col("equipment").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
+  ]);
 }
 
 function flatDoc(doc: any) {
