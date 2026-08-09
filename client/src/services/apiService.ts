@@ -181,7 +181,7 @@ export const api = {
 
   documents: {
     list: (params?: { status?: string; limit?: number; offset?: number; clientId?: string }, force = false) => {
-      return get<{ rows: Document[]; total: number; totalAll: number; documentLimit: number }>(`/documents${qs(params)}`, force);
+      return get<{ rows: Document[]; total: number; totalAll: number; documentLimit: number; counts?: { all: number; done: number; in_progress: number; error: number } }>(`/documents${qs(params)}`, force);
     },
     get: (id: string) => get<Document>(`/documents/${id}`),
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),

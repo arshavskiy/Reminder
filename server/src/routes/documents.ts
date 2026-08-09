@@ -75,7 +75,7 @@ export function registerDocumentRoutes(app: express.Application) {
       filter._id = { $in: docIds.map((id) => new ObjectId(id)) };
     }
 
-    const [rows, total, totalAll] = await Promise.all([
+    const [rows, total, totalAll, statusCounts] = await Promise.all([
       col("documents")
         .find(filter)
         .sort({ created_at: -1 })
@@ -84,6 +84,10 @@ export function registerDocumentRoutes(app: express.Application) {
         .toArray(),
       col("documents").countDocuments(filter),
       status ? col("documents").countDocuments(baseFilter) : Promise.resolve(-1),
+      col("documents").aggregate([
+        { $match: baseFilter },
+        { $group: { _id: "$processing_status", count: { $sum: 1 } } },
+      ]).toArray(),
     ]);
 
     // Enrich with linked client + reminder status so the documents list can
@@ -159,7 +163,18 @@ export function registerDocumentRoutes(app: express.Application) {
       };
     });
 
-    res.json({ rows: enriched, total, totalAll: totalAll === -1 ? total : totalAll });
+    const countsByStatus: Record<string, number> = {};
+    for (const g of statusCounts as any[]) {
+      if (g._id) countsByStatus[g._id] = g.count;
+    }
+    const allCount = (totalAll === -1 ? total : totalAll);
+    const counts = {
+      all: allCount,
+      done: countsByStatus["done"] ?? 0,
+      in_progress: (countsByStatus["queued"] ?? 0) + (countsByStatus["processing"] ?? 0),
+      error: countsByStatus["error"] ?? 0,
+    };
+    res.json({ rows: enriched, total, totalAll: allCount, counts });
   });
 
   // GET /api/documents/:id

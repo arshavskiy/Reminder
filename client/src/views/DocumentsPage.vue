@@ -449,13 +449,14 @@ type CombinedFilter = {
 };
 
 const combinedFilters = computed<CombinedFilter[]>(() => {
+  const c = store.counts;
   const rows = store.rows ?? [];
   return [
-    { key: "all",          label: "הכל",         count: rows.length,                                              statusValue: "all" },
-    { key: "done",         label: "הושלם",       count: rows.filter((row) => row.processing_status === "done").length, statusValue: "done" },
-    { key: "in_progress",  label: "בעיבוד",      count: rows.filter((row) => matchesStatusFilter(row, "in_progress")).length, statusValue: "in_progress" },
-    { key: "error",        label: "שגיאה",       count: rows.filter((row) => row.processing_status === "error").length, statusValue: "error" },
-    { key: "no_reminder",  label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length, statusValue: "no_reminder" },
+    { key: "all",         label: "הכל",         count: c.all,          statusValue: "all" },
+    { key: "done",        label: "הושלם",       count: c.done,         statusValue: "done" },
+    { key: "in_progress", label: "בעיבוד",      count: c.in_progress,  statusValue: "in_progress" },
+    { key: "error",       label: "שגיאה",       count: c.error,        statusValue: "error" },
+    { key: "no_reminder", label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length, statusValue: "no_reminder" },
   ];
 });
 

@@ -5,10 +5,11 @@ import type {Document} from "../../src/shared/types.js";
 
 export const useDocumentsStore = defineStore("documents", () => {
   const rows = ref<Document[]>([]);
-  const total = ref(0);           // filtered total (for pagination)
-  const totalAll = ref(0);        // scanned_count from user_settings
-  const documentLimit = ref(25);  // document_limit from user_settings
+  const total = ref(0);
+  const totalAll = ref(0);
+  const documentLimit = ref(25);
   const loading = ref(false);
+  const counts = ref<{ all: number; done: number; in_progress: number; error: number }>({ all: 0, done: 0, in_progress: 0, error: 0 });
 
   const hasInProgress = computed(() =>
     rows.value.some(r => r.processing_status === "queued" || r.processing_status === "processing")
@@ -22,6 +23,7 @@ export const useDocumentsStore = defineStore("documents", () => {
       total.value = r.total;
       totalAll.value = r.totalAll ?? 0;
       documentLimit.value = r.documentLimit ?? 25;
+      if (r.counts) counts.value = r.counts;
     } finally {
       loading.value = false;
     }
@@ -36,5 +38,5 @@ export const useDocumentsStore = defineStore("documents", () => {
     await fetch({ limit: 500 }, true);
   }
 
-  return { rows, total, totalAll, documentLimit, loading, hasInProgress, fetch, importFile, deleteDoc };
+  return { rows, total, totalAll, documentLimit, loading, hasInProgress, counts, fetch, importFile, deleteDoc };
 });
