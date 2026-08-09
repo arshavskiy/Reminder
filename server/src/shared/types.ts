@@ -91,6 +91,17 @@ export interface UserSettings {
   email_from_name: string | null;
   reminder_advance_days: string;  // JSON array as string
   ocr_language: string;
+  monthly_report_enabled?: boolean;
+  monthly_report_recipients?: string;
+  monthly_report_day?: number;
+  monthly_report_hour?: number;
+  monthly_report_formats?: string;
+  monthly_report_last_sent?: string | null;
+  monthly_report_last_error?: string | null;
+  report_config?: {
+    all_fields?: string[];
+    client_fields?: string[];
+  } | null;
   calendar_next_tests_only?: boolean;
   features?: Record<string, boolean> | null;
 }

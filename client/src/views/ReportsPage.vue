@@ -132,8 +132,10 @@ import {
   useMessage,
 } from "naive-ui";
 import {api} from "../services/apiService.js";
+import {useUserSettingsStore} from "../stores/userSettings.js";
 
 const message = useMessage();
+const userSettingsStore = useUserSettingsStore();
 const loading = ref(true);
 const saving = ref(false);
 const sending = ref(false);
@@ -225,8 +227,25 @@ const sendButtonLabel = computed(() => selectedReportClientId.value ? "שלח ד
 const selectedPeriodLabel = computed(() => reportMonth.value ? "בחודש שנבחר" : "בשנה שנבחרה");
 
 watch(selectedClientId, () => {
-  selectedFields.value = [...defaultReportFields.value];
+  selectedFields.value = fieldsForCurrentMode();
 });
+
+function currentReportMode(): "all" | "client" {
+  return selectedReportClientId.value ? "client" : "all";
+}
+
+function fieldsForCurrentMode(): string[] {
+  const config = userSettingsStore.settings?.report_config;
+  const saved = currentReportMode() === "client" ? config?.client_fields : config?.all_fields;
+  return Array.isArray(saved) && saved.length ? [...saved] : [...defaultReportFields.value];
+}
+
+function nextReportConfig() {
+  const existing = userSettingsStore.settings?.report_config ?? {};
+  return currentReportMode() === "client"
+    ? {...existing, client_fields: [...selectedFields.value]}
+    : {...existing, all_fields: [...selectedFields.value]};
+}
 
 function parseFormats(raw: unknown): string[] {
   try {
@@ -245,9 +264,10 @@ async function loadSettings() {
   loading.value = true;
   try {
     const [settings, clients] = await Promise.all([
-      api.userSettings.get(),
+      userSettingsStore.load(),
       api.clients.list({limit: 1000}),
     ]);
+    if (!settings) throw new Error("Settings unavailable");
     clientOptions.value = [
       {label: "כל הלקוחות", value: allClientsValue},
       ...clients.rows.map((client) => ({label: client.display_name, value: String(client.id)})),
@@ -262,6 +282,7 @@ async function loadSettings() {
     form.xlsx = formats.length ? formats.includes("xlsx") : true;
     form.lastSent = settings.monthly_report_last_sent ?? null;
     form.lastError = settings.monthly_report_last_error ?? null;
+    selectedFields.value = fieldsForCurrentMode();
   } catch (error) {
     message.error(String(error));
   } finally {
@@ -276,12 +297,13 @@ async function saveSettings() {
   }
   saving.value = true;
   try {
-    const saved = await api.userSettings.save({
+    const saved = await userSettingsStore.save({
       monthly_report_enabled: form.enabled,
       monthly_report_recipients: form.recipients,
       monthly_report_day: form.day,
       monthly_report_hour: form.hour,
       monthly_report_formats: JSON.stringify([...(form.docx ? ["docx"] : []), ...(form.xlsx ? ["xlsx"] : [])]),
+      report_config: nextReportConfig(),
     });
     form.lastSent = saved.monthly_report_last_sent ?? form.lastSent;
     form.lastError = saved.monthly_report_last_error ?? null;
@@ -296,6 +318,7 @@ async function saveSettings() {
 async function downloadReport(format: "docx" | "xlsx") {
   downloading.value = format;
   try {
+    await userSettingsStore.save({report_config: nextReportConfig()});
     await api.reports.downloadMonthly({year: reportYear.value, month: reportMonth.value ?? undefined, format, fields: selectedFields.value, clientId: selectedReportClientId.value});
     message.success(`דוח ${format.toUpperCase()} הורד בהצלחה`);
   } catch (error) {
@@ -316,6 +339,7 @@ async function sendNow() {
   }
   sending.value = true;
   try {
+    await userSettingsStore.save({report_config: nextReportConfig()});
     const result = await api.reports.sendMonthly({
       year: reportYear.value,
       month: reportMonth.value ?? undefined,

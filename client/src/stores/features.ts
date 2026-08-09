@@ -1,7 +1,7 @@
 import {defineStore} from "pinia";
 import {computed, ref} from "vue";
-import {api} from "../services/apiService.js";
 import {type FeatureFlags, type FeatureKey, isFeatureEnabled, normalizeFeatureFlags} from "../shared/features.js";
+import {useUserSettingsStore} from "./userSettings.js";
 
 export const useFeaturesStore = defineStore("features", () => {
   const flags = ref<FeatureFlags>({});
@@ -18,8 +18,9 @@ export const useFeaturesStore = defineStore("features", () => {
     if (initialized.value && !force) return;
     loading.value = true;
     try {
-      const settings = await api.userSettings.get();
-      flags.value = normalizeFeatureFlags(settings.features);
+      const userSettingsStore = useUserSettingsStore();
+      const settings = await userSettingsStore.load(force);
+      flags.value = normalizeFeatureFlags(settings?.features);
       initialized.value = true;
     } catch {
       flags.value = {};

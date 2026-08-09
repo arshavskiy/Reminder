@@ -52,6 +52,16 @@ export type TrackingReportField = typeof TRACKING_REPORT_FIELDS[number]["key"];
 export const DEFAULT_MONTHLY_REPORT_FIELDS = MONTHLY_REPORT_FIELDS.map((field) => field.key);
 export const DEFAULT_TRACKING_REPORT_FIELDS = TRACKING_REPORT_FIELDS.map((field) => field.key);
 export const ALL_REPORT_FIELDS = [...TRACKING_REPORT_FIELDS, ...MONTHLY_REPORT_FIELDS] as const;
+export const DEFAULT_ALL_REPORT_FIELDS = [
+  "tracking_date",
+  "tracking_checked",
+  "client",
+  "contact_person",
+  "tracking_phone",
+  "tracking_license_number",
+  "tracking_relevant",
+  "tracking_notes",
+] as const;
 
 export interface MonthlyReportRow {
   contract: any;
@@ -337,11 +347,11 @@ export function normalizeTrackingReportFields(raw?: unknown): TrackingReportFiel
   return selected.length ? [...new Set(selected)] : [...DEFAULT_TRACKING_REPORT_FIELDS];
 }
 
-function normalizeAllReportFields(raw?: unknown): Array<TrackingReportField | MonthlyReportField> {
+export function normalizeAllReportFields(raw?: unknown): Array<TrackingReportField | MonthlyReportField> {
   const requested = Array.isArray(raw) ? raw : [];
   const valid = new Set(ALL_REPORT_FIELDS.map((field) => field.key));
   const selected = requested.filter((field): field is TrackingReportField | MonthlyReportField => typeof field === "string" && valid.has(field as any));
-  return selected.length ? [...new Set(selected)] : [...DEFAULT_TRACKING_REPORT_FIELDS];
+  return selected.length ? [...new Set(selected)] : [...DEFAULT_ALL_REPORT_FIELDS];
 }
 
 function reportValue(row: MonthlyReportRow, trackingRow: TrackingRow, key: TrackingReportField | MonthlyReportField): unknown {

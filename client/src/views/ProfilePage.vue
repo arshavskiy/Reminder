@@ -568,10 +568,12 @@ import {
   useMessage,
 } from "naive-ui";
 import { useAuthStore } from "../stores/auth.js";
+import { useUserSettingsStore } from "../stores/userSettings.js";
 import type { User, UserSettings } from "@shared/types.js";
 
 const message = useMessage();
 const authStore = useAuthStore();
+const userSettingsStore = useUserSettingsStore();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -926,12 +928,7 @@ async function setTheme(t: string) {
   currentTheme.value = t;
   localStorage.setItem("theme", t);
   document.documentElement.setAttribute("data-theme", t);
-  fetch(`${SERVER}/api/user-settings`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ theme: t }),
-  }).catch(() => {});
+  userSettingsStore.save({ theme: t as "dark" | "light" }).catch(() => {});
   message.success(t === "dark" ? "הוחלף למצב כהה" : "הוחלף למצב בהיר");
 }
 
@@ -1028,7 +1025,7 @@ onMounted(async () => {
   try {
     const [settingsRes, statsRes, engineerRes, notifsRes] =
       await Promise.allSettled([
-        fetch(`${SERVER}/api/user-settings`, { credentials: "include" }),
+        userSettingsStore.load(),
         fetch(`${SERVER}/api/profile/stats`, { credentials: "include" }),
         fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" }),
         fetch(`${SERVER}/api/profile/notifications`, {
@@ -1036,8 +1033,8 @@ onMounted(async () => {
         }),
       ]);
 
-    if (settingsRes.status === "fulfilled" && settingsRes.value.ok) {
-      userSettings.value = await settingsRes.value.json();
+    if (settingsRes.status === "fulfilled") {
+      userSettings.value = settingsRes.value;
     }
     if (statsRes.status === "fulfilled" && statsRes.value.ok) {
       const data = await statsRes.value.json();

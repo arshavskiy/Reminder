@@ -99,6 +99,7 @@ async function checkMonthlyReports() {
       month: now.getMonth() + 1,
       recipients,
       formats,
+      rawFields: row.report_config?.client_fields,
       includeClientRecipient: false,
     });
     if (result.success) {

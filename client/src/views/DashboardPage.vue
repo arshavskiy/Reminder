@@ -229,6 +229,7 @@ import { useDashboardStore } from "../stores/dashboard.js";
 import { useRemindersStore } from "../stores/reminders.js";
 import { useAuthStore } from "../stores/auth.js";
 import { useFeaturesStore } from "../stores/features.js";
+import { useUserSettingsStore } from "../stores/userSettings.js";
 import type { ExpiryCalendarItem } from "../services/apiService.js";
 import { api } from "../services/apiService.js";
 import { FEATURES, type FeatureKey } from "../shared/features.js";
@@ -239,6 +240,7 @@ const store = useDashboardStore();
 const remindersStore = useRemindersStore();
 const authStore = useAuthStore();
 const featuresStore = useFeaturesStore();
+const userSettingsStore = useUserSettingsStore();
 const router = useRouter();
 const message = useMessage();
 const stats = computed(() => store.stats);
@@ -508,7 +510,7 @@ onMounted(async () => {
 
 async function loadCalendarPreference() {
   try {
-    const settings = await api.userSettings.get();
+    const settings = await userSettingsStore.load();
     calendarNextTestsOnly.value = Boolean(settings.calendar_next_tests_only);
   } catch {
     calendarNextTestsOnly.value = false;
@@ -518,7 +520,7 @@ async function loadCalendarPreference() {
 async function saveCalendarPreference(value: boolean) {
   savingCalendarPreference.value = true;
   try {
-    await api.userSettings.save({ calendar_next_tests_only: value });
+    await userSettingsStore.save({ calendar_next_tests_only: value });
     await refreshCalendar(true);
   } catch (err) {
     calendarNextTestsOnly.value = !value;

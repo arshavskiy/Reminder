@@ -5,6 +5,8 @@ import {HTTPException, requireAuth} from "../auth/middleware";
 import {
     generateMonthlyContractReports,
     generateMonthlyTrackingReport,
+    normalizeAllReportFields,
+    normalizeMonthlyReportFields,
     reportPeriodKey,
     sendMonthlyReportsPerClient,
     sendMonthlyReportToRecipients,
@@ -29,9 +31,10 @@ export function registerReportRoutes(app: express.Application) {
           ? undefined
           : Number(req.query.month);
       const format = String(req.query.format ?? "docx");
-      const selectedFields = parseSelectedFields(req.query.fields);
       const clientId =
         typeof req.query.clientId === "string" ? req.query.clientId : undefined;
+      const selectedFields = parseSelectedFields(req.query.fields)
+        ?? await loadSavedReportFields(userId, clientId ? "client" : "all");
       if (!validPeriod(year, month)) {
         res.status(400).json({ error: "Invalid year or month" });
         return;
@@ -131,6 +134,8 @@ export function registerReportRoutes(app: express.Application) {
       const formats = body.formats?.length
         ? normalizeFormats(body.formats)
         : parseFormats(settings?.monthly_report_formats);
+      const savedFields = savedReportFieldsFromSettings(settings, "client");
+      const selectedFields = body.fields?.length ? body.fields : savedFields;
       if (!recipients.length || !formats.length) {
         res
           .status(400)
@@ -148,7 +153,7 @@ export function registerReportRoutes(app: express.Application) {
               month,
               recipients,
               formats,
-              rawFields: body.fields,
+              rawFields: selectedFields,
               clientId: body.clientId,
               includeClientRecipient: false,
             })
@@ -158,7 +163,7 @@ export function registerReportRoutes(app: express.Application) {
               month,
               recipients,
               formats,
-              rawFields: body.fields,
+              rawFields: selectedFields,
               clientId: body.clientId,
               includeClientRecipient: true,
             });
@@ -184,6 +189,20 @@ export function registerReportRoutes(app: express.Application) {
         });
     }
   });
+}
+
+async function loadSavedReportFields(userId: string, mode: "all" | "client"): Promise<string[]> {
+  const settings = await col("user_settings").findOne({ user_id: userId }) as any;
+  return savedReportFieldsFromSettings(settings, mode);
+}
+
+function savedReportFieldsFromSettings(settings: any, mode: "all" | "client"): string[] {
+  const raw = mode === "client"
+    ? settings?.report_config?.client_fields
+    : settings?.report_config?.all_fields;
+  return mode === "client"
+    ? normalizeMonthlyReportFields(raw)
+    : normalizeAllReportFields(raw);
 }
 
 function parseSelectedFields(raw: unknown): string[] | undefined {

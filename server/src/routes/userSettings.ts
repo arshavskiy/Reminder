@@ -3,6 +3,46 @@ import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
 import {DEFAULT_FEATURES, normalizeFeatures} from "../features";
 
+const DEFAULT_REPORT_CONFIG = {
+  all_fields: [
+    "tracking_date",
+    "tracking_checked",
+    "client",
+    "contact_person",
+    "tracking_phone",
+    "tracking_license_number",
+    "tracking_relevant",
+    "tracking_notes",
+  ],
+  client_fields: [
+    "contract_number",
+    "contract_type",
+    "client",
+    "contact_person",
+    "contact_phone",
+    "contact_email",
+    "client_address",
+    "start_date",
+    "expiry_date",
+    "status",
+    "source_document",
+    "equipment",
+    "reminders",
+  ],
+};
+
+function normalizeReportConfig(raw: unknown) {
+  const value = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const cleanArray = (input: unknown) =>
+    Array.isArray(input)
+      ? [...new Set(input.filter((field): field is string => typeof field === "string" && field.trim() !== "").map((field) => field.trim()))]
+      : undefined;
+  return {
+    all_fields: cleanArray(value.all_fields) ?? DEFAULT_REPORT_CONFIG.all_fields,
+    client_fields: cleanArray(value.client_fields) ?? DEFAULT_REPORT_CONFIG.client_fields,
+  };
+}
+
 export function registerUserSettingsRoutes(app: express.Application) {
   app.get("/api/user-settings", async (req, res) => {
     let auth;
@@ -29,6 +69,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
         monthly_report_hour: 8,
         monthly_report_formats: JSON.stringify(["docx", "xlsx"]),
         monthly_report_last_sent: null,
+        report_config: DEFAULT_REPORT_CONFIG,
       };
       await col("user_settings").updateOne(
         { user_id: auth.userId },
@@ -46,6 +87,13 @@ export function registerUserSettingsRoutes(app: express.Application) {
       );
       (row as any).features = features;
       delete (row as any).features_json;
+    }
+    if (!(row as any).report_config) {
+      await col("user_settings").updateOne(
+        { user_id: auth.userId },
+        { $set: { report_config: DEFAULT_REPORT_CONFIG } },
+      );
+      (row as any).report_config = DEFAULT_REPORT_CONFIG;
     }
     const { _id, ...rest } = row as any;
     res.json({ id: _id?.toString(), ...rest });
@@ -70,6 +118,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
       monthly_report_day?: number;
       monthly_report_hour?: number;
       monthly_report_formats?: string;
+      report_config?: unknown;
       calendar_next_tests_only?: boolean;
       default_email_template_id?: string | null;
       features?: Record<string, boolean> | string | null;
@@ -86,6 +135,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
     if (body.monthly_report_day !== undefined) patch.monthly_report_day = Math.min(28, Math.max(1, Number(body.monthly_report_day)));
     if (body.monthly_report_hour !== undefined) patch.monthly_report_hour = Math.min(23, Math.max(0, Number(body.monthly_report_hour)));
     if (body.monthly_report_formats !== undefined) patch.monthly_report_formats = body.monthly_report_formats;
+    if (body.report_config !== undefined) patch.report_config = normalizeReportConfig(body.report_config);
     if (body.calendar_next_tests_only !== undefined) patch.calendar_next_tests_only = Boolean(body.calendar_next_tests_only);
     if (body.default_email_template_id !== undefined) patch.default_email_template_id = body.default_email_template_id ?? null;
     const rawFeatures = body.features !== undefined ? body.features : body.features_json;
@@ -100,7 +150,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
 
     const update: Record<string, unknown> = {
       $set: patch,
-      $setOnInsert: { user_id: auth.userId, features: DEFAULT_FEATURES },
+      $setOnInsert: { user_id: auth.userId, features: DEFAULT_FEATURES, report_config: DEFAULT_REPORT_CONFIG },
     };
     if (rawFeatures !== undefined) update.$unset = { features_json: "" };
 

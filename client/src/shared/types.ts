@@ -93,6 +93,10 @@ export interface UserSettings extends PipelineFlags {
   monthly_report_formats?: string;
   monthly_report_last_sent?: string | null;
   monthly_report_last_error?: string | null;
+  report_config?: {
+    all_fields?: string[];
+    client_fields?: string[];
+  } | null;
   calendar_next_tests_only?: boolean;
   features?: Record<string, boolean> | null;
 }

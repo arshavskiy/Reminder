@@ -93,6 +93,14 @@ async function findOwnerUserId(): Promise<string> {
   return user._id.toString();
 }
 
+async function loadSavedClientReportFields(userId: string): Promise<string[] | undefined> {
+  const settings = await col("user_settings").findOne({user_id: userId}) as any;
+  const fields = settings?.report_config?.client_fields;
+  return Array.isArray(fields) && fields.length
+    ? fields.filter((field): field is string => typeof field === "string")
+    : undefined;
+}
+
 async function findClientId(userId: string): Promise<string> {
   const raw = arg("client") ?? arg("client-id") ?? arg("clientId");
   if (!raw) {
@@ -356,11 +364,11 @@ async function main() {
   const needsMonth = mode === "all" || mode === "client" || mode === "client-monthly-owner" || mode === "send-both" || mode === "client-links";
   const period = needsMonth ? parsePeriod() : null;
   const formats = parseFormats();
-  const fields = parseCsvArg("fields");
 
   await connectDb();
 
   const userId = await findOwnerUserId();
+  const fields = parseCsvArg("fields") ?? await loadSavedClientReportFields(userId);
   if (mode === "client-future") {
     const result = await sendOwnerFutureClientReports(userId, formats, fields);
     console.log(`[monthly-report] Sent ${result.sent} future client report email(s) to ${OWNER_EMAIL}; records=${result.records}`);

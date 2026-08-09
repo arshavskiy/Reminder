@@ -162,6 +162,7 @@ import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
 import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
+import {useUserSettingsStore} from "./stores/userSettings.js";
 import {dateHeIL, heIL} from "./locales/heIL.js";
 import {type FeatureKey, FEATURES} from "./shared/features.js";
 
@@ -183,9 +184,9 @@ const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 const featuresStore = useFeaturesStore();
+const userSettingsStore = useUserSettingsStore();
 const pwa = usePwa();
 
-const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const mobileNavOpen = ref(false);
 
 // ── Admin "view as user" ────────────────────────────────────────────────────
@@ -237,28 +238,20 @@ async function toggleTheme() {
   const next = isDark.value ? "light" : "dark";
   darkPref.value = next === "dark";
   localStorage.setItem("theme", next);
-  // Persist to user-settings in the background (best-effort)
-  fetch(`${SERVER}/api/user-settings`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ theme: next }),
-  }).catch(() => {});
+  userSettingsStore.save({ theme: next }).catch(() => {});
 }
 
 onMounted(async () => {
-  // Sync theme from user-settings on load
-  try {
-    const res = await fetch(`${SERVER}/api/user-settings`, { credentials: "include" });
-    if (res.ok) {
-      const data = await res.json() as { theme?: string };
-      if (data.theme) {
+  if (authStore.user) {
+    // Sync theme from user-settings only after auth is known. The login page
+    // should not call protected user-settings endpoints.
+    try {
+      const data = await userSettingsStore.load();
+      if (data?.theme) {
         darkPref.value = data.theme === "dark";
         localStorage.setItem("theme", data.theme);
       }
-    }
-  } catch { /* keep localStorage value */ }
-  if (authStore.user) {
+    } catch { /* keep localStorage value */ }
     featuresStore.fetchFeatures().catch(() => {});
     loadActAsUsers();
   }
