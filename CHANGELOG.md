@@ -1,5 +1,32 @@
 # Change Log
 
+## 2026-08-09
+
+### Document Processing
+
+- Added a shared upload/rescan processing session so the modal can be closed and reopened with the last batch state.
+- Added per-document processing rows for uploads and rescans, including errors, duplicates, reminder assigned/missing state, and remaining count.
+- Added document status filters and counters on the documents page: all, completed, processing, error, and no reminder.
+- Added admin-only rescan-all flow with a custom confirmation modal and background polling.
+
+### AI Extraction
+
+- Added OpenAI 429/rate-limit retry handling with retry-after parsing, exponential fallback, and retry logging.
+- Staggered bulk rescan AI starts to reduce token-per-minute spikes during many-document rescans.
+- Documented the latest extraction rebuild flow: OCR/AI updates `documents.extracted_fields`, then client/contract/equipment/reminder data should rebuild from those fields.
+
+### Hebrew PDF Cleanup
+
+- Documented company-name cleanup rules for bidi-damaged `בע"מ` values and `פרטי הלקוח/תופש:` prefixes.
+- Documented single-email behavior using `client_email`.
+- Documented equipment field rules so `תיאור`, `ציוד שנבדק`, `מספר רישוי`, and `דגם` do not overwrite each other incorrectly.
+- Documented client dedupe fallback by normalized phone number to avoid duplicate companies from slightly different parsed names.
+
+### Reminders and Calendar
+
+- Documented next-check interval logic based on the month difference between `start_date` and `expiry_date`.
+- Documented calendar visible-month report/filter actions and monthly summary counters.
+
 ## 2026-08-03
 
 ### Document Extraction

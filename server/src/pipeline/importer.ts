@@ -24,6 +24,7 @@ export interface PipelineOptions {
   skipAi?: boolean;        // skip all AI extraction
   skipEntities?: boolean;  // skip client/contract/equipment creation
   skipReminders?: boolean; // skip reminder generation
+  startDelayMs?: number;   // optional batch pacing before background processing starts
 }
 
 function getMimeType(ext: string): string {
@@ -210,7 +211,7 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   });
   notifyDocumentUploaded({ fileName });
 
-  processDocument(documentId, managedPath, mimeType, ext, push, userId, pipeline).catch(async (err) => {
+  const startProcessing = () => processDocument(documentId, managedPath, mimeType, ext, push, userId, pipeline).catch(async (err) => {
     logger.error("document_processing_failed", { document_id: documentId, user_id: userId ?? null, error: err });
     await col("documents").updateOne(
       { _id: insertResult.insertedId },
@@ -219,6 +220,13 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
     notifyExtractionFailed({ fileName, error: String(err) });
     push?.({ type: "document:done", documentId: documentId as any, status: "error", error: String(err) });
   });
+
+  const startDelayMs = Number(pipeline?.startDelayMs ?? 0);
+  if (Number.isFinite(startDelayMs) && startDelayMs > 0) {
+    setTimeout(startProcessing, startDelayMs);
+  } else {
+    startProcessing();
+  }
 
   return documentId;
 }

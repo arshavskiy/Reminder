@@ -241,6 +241,31 @@ All extraction calls use:
 
 The input text is truncated to `extractionMaxChars` (default: 12,000 characters) before sending.
 
+### Rate-limit retry behavior
+
+OpenAI extraction can hit a 429 token-per-minute limit during bulk upload or rescan. The extractor retries rate-limit failures before marking a document as failed:
+
+1. Detect 429/rate-limit errors from status, code, or message.
+2. Prefer provider retry timing from `retry-after-ms` or `retry-after`.
+3. Parse retry messages such as `Please try again in 731ms` when headers are not exposed.
+4. Fall back to exponential backoff.
+5. Retry up to 5 attempts and log each wait as `ai_extraction_rate_limited_retry`.
+
+Full-document rescans also stagger document starts so many PDFs do not all enter AI extraction in the same token window.
+
+Configurable env knobs:
+
+| Env var | Default | Effect |
+|---|---:|---|
+| `AI_RATE_LIMIT_MAX_ATTEMPTS` | `5` | Number of total attempts for a rate-limited AI call |
+| `AI_RATE_LIMIT_BASE_WAIT_MS` | `750` | Exponential backoff base when the provider does not send retry timing |
+| `AI_RATE_LIMIT_MIN_WAIT_MS` | `500` | Minimum wait before retry |
+| `AI_RATE_LIMIT_MAX_WAIT_MS` | `20000` | Maximum wait before retry |
+| `DOCUMENT_UPLOAD_START_STAGGER_MS` | `0` | Optional delay between starting background processing for uploaded files |
+| `DOCUMENT_RESCAN_START_STAGGER_MS` | `1200` | Delay between starting background processing for rescan-all documents |
+
+Lower stagger values make batches start faster but increase 429 risk. Higher values make large batches smoother and easier to complete. The actual OpenAI organization token-per-minute/burst quota cannot be raised by app env vars; increase that in the OpenAI dashboard or use a lower-token model/input.
+
 ---
 
 ## Audit Logs
@@ -345,3 +370,24 @@ extractWithTemplate        extractDocument
   Save contracts / clients / equipment
   Generate reminders from expiry_date
 ```
+
+---
+
+## Rebuild Behavior After Extraction
+
+`documents.extracted_fields` is the source snapshot for document-derived entities.
+
+When upload, rescan, or manual **חלץ AI** runs:
+
+1. OCR regex may create a baseline `extracted_fields` snapshot.
+2. AI/template extraction overwrites that snapshot when it succeeds.
+3. Client, contract, equipment, and reminder data are rebuilt from the latest fields.
+
+Manual field edits on the document detail page should also flow back into the linked contract/reminder data. This prevents the document view and contract/reminder view from drifting apart after a user fixes extracted values.
+
+Important cleanup rules:
+
+- Do not save UI/client company names with the label prefix `פרטי הלקוח/תופש:`.
+- Normalize broken `בע"מ` artifacts such as `בע\"מ`.
+- Use `client_email` as the single email field shown in the document UI.
+- Do not copy `דגם` into `מספר רישוי`; if both are the same because of parsing noise, keep the model and leave the license empty unless the source explicitly labels it as license.

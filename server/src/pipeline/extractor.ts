@@ -89,11 +89,20 @@ function isRateLimitError(err: unknown): boolean {
   return anyErr?.status === 429 || anyErr?.code === "rate_limit_exceeded" || /429|rate limit/i.test(message);
 }
 
+function readIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(Math.floor(value), min), max);
+}
+
 async function withRateLimitRetry<T>(
   fn: () => Promise<T>,
   meta: { documentId?: string | number; model: string; backend: string; scope: string }
 ): Promise<T> {
-  const maxAttempts = 5;
+  const maxAttempts = readIntEnv("AI_RATE_LIMIT_MAX_ATTEMPTS", 5, 1, 10);
+  const baseWaitMs = readIntEnv("AI_RATE_LIMIT_BASE_WAIT_MS", 750, 100, 60_000);
+  const minWaitMs = readIntEnv("AI_RATE_LIMIT_MIN_WAIT_MS", 500, 0, 60_000);
+  const maxWaitMs = readIntEnv("AI_RATE_LIMIT_MAX_WAIT_MS", 20_000, 500, 120_000);
   let lastErr: unknown;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -104,8 +113,8 @@ async function withRateLimitRetry<T>(
       if (!isRateLimitError(err) || attempt === maxAttempts) break;
 
       const retryAfter = getRetryAfterMs(err);
-      const fallback = 750 * Math.pow(2, attempt - 1);
-      const waitMs = Math.min(Math.max(retryAfter ?? fallback, 500), 20_000);
+      const fallback = baseWaitMs * Math.pow(2, attempt - 1);
+      const waitMs = Math.min(Math.max(retryAfter ?? fallback, minWaitMs), maxWaitMs);
       logger.warn("ai_extraction_rate_limited_retry", {
         document_id: meta.documentId ?? null,
         backend: meta.backend,

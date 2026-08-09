@@ -99,6 +99,21 @@ Statuses that are **excluded**:
 
 Reminders are created **in the future** with `trigger_date = some date months/years ahead`. The scheduler ignores them every minute until the calendar catches up.
 
+### Next-check interval logic
+
+For inspection documents, the next generated check cycle is based on the difference between the document `start_date` and `expiry_date`, not a hardcoded yearly jump.
+
+Examples:
+
+| Start date | Next check / expiry date | Diff | Future jump |
+|---|---|---|---|
+| `2025-02-17` | `2025-08-16` | 6 months | Add 6 months from the next-check date |
+| `2025-02-17` | `2026-08-16` | 18 months | Add 18 months from the next-check date |
+
+The document field shown for this value is `הפרש בחודשים לבדיקה`.
+
+This matters when rescanning old documents: if the extracted next-check date is already in the past, the system should jump forward by the detected inspection interval until the next date is in the future.
+
 ### Where reminders are created
 
 **A. Auto from contract expiry** — [`generateContractReminders()`](../src/server/reminders/scheduler.ts) is called by the document importer right after a contract row is saved.

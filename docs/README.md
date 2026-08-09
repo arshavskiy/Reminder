@@ -21,6 +21,8 @@ Complete documentation for the ReminderOCR platform.
 - **[API.md](./API.md)** — Detailed API documentation (authentication, endpoints)
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — System design and component relationships
 - **[REMINDER_FLOW.md](./REMINDER_FLOW.md)** — How reminders are created, scheduled, and sent
+- **[ocr-and-ai-extraction.md](./ocr-and-ai-extraction.md)** — OCR, regex extraction, AI extraction, and rebuild flow
+- **[WORKFLOW_NOTES_2026-08-09.md](./WORKFLOW_NOTES_2026-08-09.md)** — Latest document processing, rescan, calendar, and reminder logic notes
 
 ### 🚀 Operations
 
@@ -40,6 +42,8 @@ Complete documentation for the ReminderOCR platform.
 | **API.md** | Detailed endpoint documentation | API users |
 | **ARCHITECTURE.md** | System design and patterns | Architects, senior developers |
 | **REMINDER_FLOW.md** | Reminder scheduling logic | Feature developers |
+| **ocr-and-ai-extraction.md** | OCR, AI extraction, retry behavior, entity rebuild flow | Feature developers |
+| **WORKFLOW_NOTES_2026-08-09.md** | Dated summary of today's processing and UI flow changes | Developers |
 | **DEPLOYMENT.md** | Production deployment steps | DevOps, release managers |
 | **PROJECT_STATUS_REPORT.md** | Progress, roadmap, milestones | Project managers, stakeholders |
 | **FEATURES.md** | Feature list and descriptions | Product managers, clients |
@@ -146,6 +150,8 @@ docs/
 ├── API.md
 ├── ARCHITECTURE.md
 ├── REMINDER_FLOW.md
+├── ocr-and-ai-extraction.md
+├── WORKFLOW_NOTES_2026-08-09.md
 ├── PROJECT_STATUS_REPORT.md
 ├── FEATURES.md
 ├── USE_CASES.md
@@ -229,7 +235,7 @@ A: SMTP configured in `.env`. See [DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md) →
 A: Yes! Use the REST API documented in [openapi.yaml](./openapi.yaml) or [API_QUICK_REFERENCE.md](./API_QUICK_REFERENCE.md).
 
 ### Q: How is OCR extraction done?
-A: Python pipeline using Tesseract + Claude AI. See [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) → Key Workflows → Workflow 1.
+A: The server parses PDFs with `pdf-parse`, falls back to Tesseract OCR when needed, runs a regex baseline, then optionally runs OpenAI/Ollama AI extraction. See [ocr-and-ai-extraction.md](./ocr-and-ai-extraction.md).
 
 ### Q: Is there a mobile app?
 A: Not yet, but the responsive web app works on mobile browsers. See roadmap in [PROJECT_STATUS_REPORT.md](./PROJECT_STATUS_REPORT.md).
@@ -243,5 +249,5 @@ Documentation is kept in sync with code. When adding features:
 2. Update `openapi.yaml` if adding/changing API endpoints
 3. Include doc updates in the same commit/PR
 
-Last updated: **2026-07-24**  
+Last updated: **2026-08-09**  
 API version: **1.0.0**

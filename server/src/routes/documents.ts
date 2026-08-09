@@ -18,7 +18,15 @@ import multer from "multer";
 import {logger} from "../logger";
 
 const upload = multer({ storage: multer.memoryStorage() });
-const RESCAN_START_STAGGER_MS = 1200;
+
+function readNonNegativeIntEnv(name: string, fallback: number, max = 60_000): number {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value) || value < 0) return fallback;
+  return Math.min(Math.floor(value), max);
+}
+
+const RESCAN_START_STAGGER_MS = readNonNegativeIntEnv("DOCUMENT_RESCAN_START_STAGGER_MS", 1200);
+const UPLOAD_START_STAGGER_MS = readNonNegativeIntEnv("DOCUMENT_UPLOAD_START_STAGGER_MS", 0);
 
 export function registerDocumentRoutes(app: express.Application) {
   // GET /api/documents
@@ -249,7 +257,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
       const ids: string[] = [];
       const duplicates: string[] = [];
-      for (const file of files) {
+      for (const [index, file] of files.entries()) {
         const ext = extname(file.originalname) || "";
         const destPath = join(uploadDir, `${Date.now()}${ext}`);
         writeFileSync(destPath, file.buffer);
@@ -261,7 +269,10 @@ export function registerDocumentRoutes(app: express.Application) {
           if (displayName.includes("�")) displayName = file.originalname;
         } catch { /* keep original */ }
         const beforeCount = await col("documents").countDocuments({ user_id: userId });
-        const id = await importFile(destPath, undefined, userId, displayName, pipelineOptions);
+        const id = await importFile(destPath, undefined, userId, displayName, {
+          ...pipelineOptions,
+          startDelayMs: index * UPLOAD_START_STAGGER_MS,
+        });
         const afterCount = await col("documents").countDocuments({ user_id: userId });
         ids.push(String(id));
         if (afterCount === beforeCount) duplicates.push(String(id));
