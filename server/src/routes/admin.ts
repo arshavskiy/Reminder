@@ -6,8 +6,48 @@ import {requireAuth, requireRole} from "../auth/middleware";
 import type {UserRole} from "../../src/shared/types.js";
 import {getSettings} from "../settings.js";
 import {sendPushToAdmins} from "../push/pushService.js";
+import {DEFAULT_FEATURES, normalizeFeatures} from "../features.js";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
+const DEFAULT_REPORT_CONFIG = {
+  all_fields: [
+    "tracking_date",
+    "tracking_checked",
+    "client",
+    "contact_person",
+    "tracking_phone",
+    "tracking_license_number",
+    "tracking_relevant",
+    "tracking_notes",
+  ],
+  client_fields: [
+    "contract_number",
+    "contract_type",
+    "client",
+    "contact_person",
+    "contact_phone",
+    "contact_email",
+    "client_address",
+    "start_date",
+    "expiry_date",
+    "status",
+    "source_document",
+    "equipment",
+    "reminders",
+  ],
+};
+
+function normalizeReportConfig(raw: unknown) {
+  const value = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const cleanArray = (input: unknown) =>
+    Array.isArray(input)
+      ? [...new Set(input.filter((field): field is string => typeof field === "string" && field.trim() !== "").map((field) => field.trim()))]
+      : undefined;
+  return {
+    all_fields: cleanArray(value.all_fields) ?? DEFAULT_REPORT_CONFIG.all_fields,
+    client_fields: cleanArray(value.client_fields) ?? DEFAULT_REPORT_CONFIG.client_fields,
+  };
+}
 
 function flatUser(doc: any) {
   if (!doc) return doc;
@@ -551,7 +591,7 @@ export function registerAdminRoutes(app: express.Application) {
 
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-    const [noS3, stuckProcessing, skippedReminders, scannedWithoutReminder] = await Promise.all([
+    const [noS3, stuckProcessing, skippedReminders, scannedWithoutReminder, documentsForEmailAudit] = await Promise.all([
       col("documents").find(
         { processing_status: "done", $or: [{ spaces_key: { $exists: false } }, { spaces_key: null }] },
         { projection: { _id: 1, user_id: 1, file_name: 1, original_filename: 1, created_at: 1 } },
@@ -594,18 +634,46 @@ export function registerAdminRoutes(app: express.Application) {
           },
         },
       ]).toArray(),
+
+      col("documents").find(
+        { processing_status: "done", extracted_fields: { $exists: true, $ne: null } },
+        { projection: { _id: 1, user_id: 1, file_name: 1, original_filename: 1, document_type: 1, document_kind: 1, extracted_fields: 1, created_at: 1 } },
+      ).sort({ created_at: -1 }).limit(250).toArray(),
     ]);
 
-    function readReminderDate(extractedFields: unknown): string | null {
-      let fields: Record<string, any> = {};
+    function parseExtractedFields(extractedFields: unknown): Record<string, any> {
       try {
-        if (typeof extractedFields === "string") fields = JSON.parse(extractedFields);
-        else if (extractedFields && typeof extractedFields === "object") fields = extractedFields as Record<string, any>;
+        if (typeof extractedFields === "string") return JSON.parse(extractedFields);
+        if (extractedFields && typeof extractedFields === "object") return extractedFields as Record<string, any>;
       } catch {
-        fields = {};
+        return {};
       }
+      return {};
+    }
+
+    function readReminderDate(extractedFields: unknown): string | null {
+      const fields = parseExtractedFields(extractedFields);
       return fields.expiry_date ?? fields.next_inspection_date ?? fields.next_action_date ?? null;
     }
+
+    function readExtractedEmail(extractedFields: unknown): string | null {
+      const fields = parseExtractedFields(extractedFields);
+      const value = fields.client_email ?? fields.contact_email ?? fields.email;
+      return typeof value === "string" && value.trim() ? value.trim() : null;
+    }
+
+    const missingEmails = documentsForEmailAudit
+      .map((d: any) => ({
+        id: d._id?.toString(),
+        user_id: d.user_id,
+        filename: d.file_name ?? d.original_filename,
+        document_type: d.document_type ?? d.document_kind ?? null,
+        reminder_date: readReminderDate(d.extracted_fields),
+        extracted_email: readExtractedEmail(d.extracted_fields),
+        created_at: d.created_at,
+      }))
+      .filter((d: any) => d.reminder_date && !d.extracted_email)
+      .slice(0, 100);
 
     res.json({
       no_s3: noS3.map((d: any) => ({
@@ -627,6 +695,7 @@ export function registerAdminRoutes(app: express.Application) {
         note: l.subject,
         created_at: l.sent_at ?? l.created_at,
       })),
+      missing_emails: missingEmails,
       scanned_without_reminder: scannedWithoutReminder.map((d: any) => ({
         id: d._id?.toString(),
         user_id: d.user_id,
@@ -909,15 +978,63 @@ export function registerAdminRoutes(app: express.Application) {
   // PUT /api/admin/users/:id/settings
   app.put("/api/admin/users/:id/settings", async (req, res) => {
     if (!await adminAuth(req, res)) return;
-    const { default_email_template_id } = req.body as { default_email_template_id?: number | null };
+    const body = req.body as {
+      theme?: string;
+      email_from_name?: string | null;
+      reminder_advance_days?: string;
+      ocr_language?: string;
+      pipeline_ocr?: boolean;
+      pipeline_ai?: boolean;
+      pipeline_s3?: boolean;
+      pipeline_entities?: boolean;
+      monthly_report_enabled?: boolean;
+      monthly_report_recipients?: string;
+      monthly_report_day?: number;
+      monthly_report_hour?: number;
+      monthly_report_formats?: string;
+      report_config?: unknown;
+      calendar_next_tests_only?: boolean;
+      default_email_template_id?: number | string | null;
+      features?: Record<string, boolean> | string | null;
+      features_json?: string | null;
+    };
     const patch: Record<string, any> = { updated_at: new Date() };
-    if (default_email_template_id !== undefined) patch.default_email_template_id = default_email_template_id ?? null;
+    if (body.theme !== undefined) patch.theme = body.theme === "dark" ? "dark" : "light";
+    if (body.email_from_name !== undefined) patch.email_from_name = body.email_from_name ?? null;
+    if (body.reminder_advance_days !== undefined) patch.reminder_advance_days = String(body.reminder_advance_days ?? "[90,60,30]");
+    if (body.ocr_language !== undefined) patch.ocr_language = String(body.ocr_language ?? "heb+eng");
+    if (body.pipeline_ocr !== undefined) patch.pipeline_ocr = Boolean(body.pipeline_ocr);
+    if (body.pipeline_ai !== undefined) patch.pipeline_ai = Boolean(body.pipeline_ai);
+    if (body.pipeline_s3 !== undefined) patch.pipeline_s3 = Boolean(body.pipeline_s3);
+    if (body.pipeline_entities !== undefined) patch.pipeline_entities = Boolean(body.pipeline_entities);
+    if (body.monthly_report_enabled !== undefined) patch.monthly_report_enabled = Boolean(body.monthly_report_enabled);
+    if (body.monthly_report_recipients !== undefined) patch.monthly_report_recipients = String(body.monthly_report_recipients ?? "");
+    if (body.monthly_report_day !== undefined) patch.monthly_report_day = Math.min(28, Math.max(1, Number(body.monthly_report_day)));
+    if (body.monthly_report_hour !== undefined) patch.monthly_report_hour = Math.min(23, Math.max(0, Number(body.monthly_report_hour)));
+    if (body.monthly_report_formats !== undefined) patch.monthly_report_formats = body.monthly_report_formats;
+    if (body.report_config !== undefined) patch.report_config = normalizeReportConfig(body.report_config);
+    if (body.calendar_next_tests_only !== undefined) patch.calendar_next_tests_only = Boolean(body.calendar_next_tests_only);
+    if (body.default_email_template_id !== undefined) patch.default_email_template_id = body.default_email_template_id ?? null;
+    const rawFeatures = body.features !== undefined ? body.features : body.features_json;
+    if (rawFeatures !== undefined) {
+      try {
+        patch.features = normalizeFeatures(rawFeatures);
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : "Invalid features" });
+        return;
+      }
+    }
+    const setOnInsert: Record<string, any> = { user_id: req.params.id };
+    if (patch.features === undefined) setOnInsert.features = DEFAULT_FEATURES;
+    if (patch.report_config === undefined) setOnInsert.report_config = DEFAULT_REPORT_CONFIG;
+    const update: Record<string, any> = {
+      $set: patch,
+      $setOnInsert: setOnInsert,
+    };
+    if (rawFeatures !== undefined) update.$unset = { features_json: "" };
     await col("user_settings").updateOne(
       { user_id: req.params.id },
-      {
-        $set: patch,
-        $setOnInsert: { user_id: req.params.id },
-      },
+      update,
       { upsert: true },
     );
     res.json({ ok: true });

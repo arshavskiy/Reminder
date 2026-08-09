@@ -34,6 +34,21 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(forwardPastNextActionDate("2026-07-15", new Date(2026, 7, 9))).toBe("2027-07-15");
   });
 
+  it("forwards a past next-action date using the start-to-next-date interval", () => {
+    expect(forwardPastNextActionDate("2025-08-16", new Date(2026, 7, 9), "2025-02-17")).toBe("2026-08-16");
+  });
+
+  it("uses an 18-month start-to-expiry interval when the document dates show it", () => {
+    const fields = normalizeExtractionFieldsForTemplate("תסקיר בדיקה", inspectionTemplate, {
+      start_date: "2025-02-17",
+      next_inspection_date: "2026-08-16",
+    });
+
+    expect(fields?.next_inspection_date).toBe("2026-08-16");
+    expect(fields?.inspection_interval_months).toBe(18);
+    expect(fields?.date_diff_months).toBe(18);
+  });
+
   it("keeps a future next-action date unchanged", () => {
     expect(forwardPastNextActionDate("2026-09-15", new Date(2026, 7, 9))).toBe("2026-09-15");
   });
@@ -44,6 +59,17 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     });
 
     expect(fields?.next_inspection_date).toBe(forwardPastNextActionDate("2026-07-15"));
+  });
+
+  it("normalizes template next inspection dates using the extracted inspection interval", () => {
+    const fields = normalizeExtractionFieldsForTemplate("תסקיר בדיקה", inspectionTemplate, {
+      start_date: "2025-02-17",
+      next_inspection_date: "2025-08-16",
+    });
+
+    expect(fields?.next_inspection_date).toBe("2026-08-16");
+    expect(fields?.inspection_interval_months).toBe(6);
+    expect(fields?.date_diff_months).toBe(6);
   });
 
   it("fills report_number from current inspection text and ignores previous report number", () => {
@@ -164,6 +190,15 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     });
 
     expect(fields?.contact_email).toBe("reymond.adir@hanson.biz");
+  });
+
+  it("fills contact_email from a Hebrew table line fused to a reversed email", () => {
+    const fields = normalizeExtractionFieldsForTemplate("תקופתית: סוג בדיקהcom.afar-d@Dafar:", inspectionTemplate, {
+      client_company: "דפר עפר בע\"מ",
+    });
+
+    expect(fields?.contact_email).toBe("Dafar@d-afar.com");
+    expect(fields?.client_email).toBe("Dafar@d-afar.com");
   });
 
   it("fills license_number from inspection text", () => {

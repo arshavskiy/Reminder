@@ -126,6 +126,11 @@ describe("extractFromOcr — contact_email", () => {
     expect(r.contact_email).toBe("klodin@il.co1945.shelev");
   });
 
+  it("corrects Hebrew table text fused to a reversed email with hyphenated domain", () => {
+    const r = extractFromOcr("תקופתית: סוג בדיקהcom.afar-d@Dafar:");
+    expect(r.contact_email).toBe("Dafar@d-afar.com");
+  });
+
   it("returns null when no email present", () => {
     const r = extractFromOcr("איש קשר: יוסי\nנייד: 050-1234567");
     expect(r.contact_email).toBeNull();

@@ -62,7 +62,27 @@ function formatIsoDateOnly(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-export function forwardPastNextActionDate(value: string | null | undefined, today = new Date()): string | null {
+function addMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  const day = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() + months);
+  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(day, lastDay));
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function inspectionIntervalMonths(startValue: string | null | undefined, nextValue: string | null | undefined): number | null {
+  if (!startValue || !nextValue) return null;
+  const start = parseIsoDateOnly(startValue);
+  const next = parseIsoDateOnly(nextValue);
+  if (!start || !next || next.getTime() <= start.getTime()) return null;
+  const months = (next.getFullYear() - start.getFullYear()) * 12 + next.getMonth() - start.getMonth();
+  return Number.isFinite(months) && months > 0 ? months : null;
+}
+
+export function forwardPastNextActionDate(value: string | null | undefined, today = new Date(), cycleStartValue?: string | null): string | null {
   if (!value) return null;
   const parsed = parseIsoDateOnly(value);
   if (!parsed) return value;
@@ -71,8 +91,15 @@ export function forwardPastNextActionDate(value: string | null | undefined, toda
   todayOnly.setHours(0, 0, 0, 0);
 
   const forwarded = new Date(parsed);
+  const intervalMonths = inspectionIntervalMonths(cycleStartValue, value);
   while (forwarded < todayOnly) {
-    forwarded.setFullYear(forwarded.getFullYear() + 1);
+    if (intervalMonths) {
+      const next = addMonths(forwarded, intervalMonths);
+      if (next.getTime() <= forwarded.getTime()) break;
+      forwarded.setTime(next.getTime());
+    } else {
+      forwarded.setFullYear(forwarded.getFullYear() + 1);
+    }
   }
   return formatIsoDateOnly(forwarded);
 }
@@ -80,9 +107,21 @@ export function forwardPastNextActionDate(value: string | null | undefined, toda
 function normalizeNextActionDateFields(fields: Record<string, unknown>, expiryField?: string | null): void {
   const keys = new Set(["expiry_date", "next_inspection_date"]);
   if (expiryField) keys.add(expiryField);
+  const cycleStart = ["start_date", "inspection_date", "issue_date", "check_date"]
+    .map((key) => fields[key])
+    .find((value): value is string => typeof value === "string" && Boolean(parseIsoDateOnly(value)));
   for (const key of keys) {
     if (typeof fields[key] === "string") {
-      fields[key] = forwardPastNextActionDate(fields[key]);
+      const intervalMonths = inspectionIntervalMonths(cycleStart, fields[key]);
+      if (intervalMonths) {
+        if (typeof fields.inspection_interval_months !== "number") {
+          fields.inspection_interval_months = intervalMonths;
+        }
+        if (typeof fields.date_diff_months !== "number") {
+          fields.date_diff_months = intervalMonths;
+        }
+      }
+      fields[key] = forwardPastNextActionDate(fields[key], new Date(), cycleStart);
     }
   }
 }
@@ -588,7 +627,18 @@ async function saveExtractionEntities(
     } as any);
   }
 
-  const expiryDate = forwardPastNextActionDate(result.expiry_date);
+  const resultFields = result as any;
+  const inspectionInterval = Number(resultFields.inspection_interval_months ?? resultFields.date_diff_months) ||
+    inspectionIntervalMonths(result.start_date, result.expiry_date);
+  if (inspectionInterval) {
+    resultFields.inspection_interval_months = inspectionInterval;
+    resultFields.date_diff_months = inspectionInterval;
+    await col("documents").updateOne(
+      { _id: new ObjectId(documentId) } as any,
+      { $set: { extracted_fields: JSON.stringify(resultFields), updated_at: new Date() } }
+    );
+  }
+  const expiryDate = forwardPastNextActionDate(result.expiry_date, new Date(), result.start_date);
   if (expiryDate || result.start_date || result.contract_number || result.document_number) {
     const contractFields = {
       ...(userId && { user_id: userId }),
@@ -597,6 +647,7 @@ async function saveExtractionEntities(
       contract_type: result.contract_type ?? result.document_type ?? null,
       start_date: result.start_date ?? null,
       expiry_date: expiryDate,
+      ...(inspectionInterval && { inspection_interval_months: inspectionInterval }),
       amount: result.amount ?? null,
       currency: result.currency ?? "ILS",
       counterparty:
@@ -723,6 +774,9 @@ export function normalizeExtractionFieldsForTemplate(
   if (!hasMeaningfulValue(normalized.contact_email)) {
     const contactEmail = extractContactEmail(rawText);
     if (contactEmail) normalized.contact_email = contactEmail;
+  }
+  if (!hasMeaningfulValue(normalized.client_email) && hasMeaningfulValue(normalized.contact_email)) {
+    normalized.client_email = normalized.contact_email;
   }
   const supportsLicenseNumber = template.fields.some((field) => field.key === "license_number");
   // Equipment that structurally never carries a license plate.
@@ -855,7 +909,7 @@ function extractContactEmail(rawText: string): string | null {
   }
 
   const clientBlockEnd = lines.findIndex((line) => /(?:תיאור|ציוד|מקום\s+הבדיקה|מספר\s+רישוי|סעיף\s*3|3\.)/.test(line));
-  const searchLines = clientBlockEnd > 0 ? lines.slice(0, clientBlockEnd) : lines.slice(0, Math.min(lines.length, 20));
+  const searchLines = clientBlockEnd > 0 ? lines.slice(0, clientBlockEnd) : lines.slice(0, Math.min(lines.length, 35));
   for (const line of searchLines) {
     const email = firstEmailInText(line);
     if (email && !isLikelyInspectorFooterLine(line)) return normalizeEmail(email);
@@ -865,12 +919,29 @@ function extractContactEmail(rawText: string): string | null {
 }
 
 function firstEmailInText(value: string): string | null {
-  const match = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  return match?.[0] ?? null;
+  const compact = value
+    .replace(/\s*@\s*/g, "@")
+    .replace(/(?<=\b[A-Z0-9._%+-])\s+(?=[A-Z0-9._%+-]*@)/gi, "")
+    .replace(/(?<=@[\w.-]*)\s+(?=[A-Z0-9.-]+\.[A-Z]{2,})/gi, "");
+  const normal = compact.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  if (normal) return normal[0];
+  const reversed = compact.match(/[A-Z0-9.-]+\.[A-Z0-9-]{2,}@[A-Z0-9._%+-]+/i);
+  return reversed?.[0] ?? null;
 }
 
 function normalizeEmail(value: string): string {
-  return value.trim().replace(/[.,;:]+$/g, "").toLowerCase();
+  const cleaned = value.trim().replace(/[.,;:]+$/g, "");
+  const [beforeAt, afterAt] = cleaned.split("@");
+  if (beforeAt?.includes(".") && afterAt && !afterAt.includes(".")) {
+    const domain = beforeAt
+      .split(".")
+      .reverse()
+      .map((part) => part.includes("-") ? part.split("-").reverse().join("-") : part)
+      .join(".");
+    return `${afterAt}@${domain.toLowerCase()}`;
+  }
+  if (beforeAt && afterAt) return `${beforeAt}@${afterAt.toLowerCase()}`;
+  return cleaned;
 }
 
 function isLikelyInspectorFooterLine(line: string): boolean {
@@ -1196,7 +1267,7 @@ async function saveTemplateEntities(
       entityType,
       idNumber: getStr("client_id"),
       contactPerson,
-      email: getStr("contact_email"),
+      email: getStr("client_email") ?? getStr("contact_email") ?? getStr("email"),
       phone: getStr("contact_phone"),
       notes: contactNote,
       userId,
@@ -1224,7 +1295,9 @@ async function saveTemplateEntities(
     getStr("contract_number") ?? getStr("report_number") ?? getStr("invoice_number");
   const startDate =
     getStr("start_date") ?? getStr("inspection_date") ?? getStr("issue_date");
-  const expiryDate = forwardPastNextActionDate(template.expiry_field ? getStr(template.expiry_field) : null);
+  const rawExpiryDate = template.expiry_field ? getStr(template.expiry_field) : null;
+  const inspectionInterval = getNum("inspection_interval_months") ?? getNum("date_diff_months") ?? inspectionIntervalMonths(startDate, rawExpiryDate);
+  const expiryDate = forwardPastNextActionDate(rawExpiryDate, new Date(), startDate);
 
   if (docNumber || startDate || expiryDate) {
     const contractFields = {
@@ -1234,6 +1307,7 @@ async function saveTemplateEntities(
       contract_type: template.name,
       start_date: startDate,
       expiry_date: expiryDate,
+      ...(inspectionInterval && { inspection_interval_months: inspectionInterval }),
       amount: getNum("amount"),
       currency: getStr("currency") ?? "ILS",
       summary: getStr("findings") ?? getStr("notes") ?? getStr("summary_hebrew"),

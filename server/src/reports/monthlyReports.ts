@@ -327,7 +327,7 @@ function rowValue(row: MonthlyReportRow, key: MonthlyReportField): unknown {
     case "client": return row.client?.display_name;
     case "contact_person": return f.contact_person;
     case "contact_phone": return f.contact_phone;
-    case "contact_email": return f.contact_email;
+    case "contact_email": return f.client_email ?? f.contact_email;
     case "client_address": return f.client_address;
     case "start_date": return formatReportDate(c.start_date);
     case "expiry_date": return formatReportDate(c.expiry_date);

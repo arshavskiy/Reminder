@@ -267,6 +267,7 @@
       :rescan="rescanModalState"
       :uploading="uploading"
       @upload="onModalUpload"
+      @view-document="openDocumentFromModal"
     />
   </div>
 </template>
@@ -355,6 +356,11 @@ const uploadModalRef = ref<InstanceType<typeof UploadModal> | null>(null);
 
 function openUploadModal() {
   showUploadModal.value = true;
+}
+
+function openDocumentFromModal(id: string) {
+  showUploadModal.value = false;
+  router.push(`/documents/${id}`);
 }
 
 async function openRescanModal() {

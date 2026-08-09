@@ -39,8 +39,8 @@
         <button class="btn btn--ghost" @click="openExport" title="ייצוא CSV / Excel / PDF">
           📊 ייצוא CSV / Excel / PDF
         </button>
-        <button class="btn btn--ghost" @click="openMonthlyReport" title="הורדת דוח חודשי PDF">
-          📄 דוח חודשי PDF
+        <button class="btn btn--ghost" @click="openMonthlyReport" title="הורדת דוח חודשי">
+          📄 דוח חודשי
         </button>
         <button class="btn btn--ghost" @click="router.push('/documents')">
           📁 ארכיון
@@ -154,7 +154,7 @@
     </n-spin>
 
     <!-- ── Monthly report modal ─────────────────────────────────────────── -->
-    <n-modal v-model:show="showMonthlyReport" preset="dialog" :show-icon="false" title="דוח חודשי PDF" style="width: 420px; max-width: 95vw">
+    <n-modal v-model:show="showMonthlyReport" preset="dialog" :show-icon="false" title="דוח חודשי" style="width: 420px; max-width: 95vw">
       <n-form label-placement="top">
         <n-form-item label="חודש הדוח">
           <n-date-picker v-model:value="monthlyReportMonthMs" type="month" style="width: 100%" />
@@ -162,7 +162,7 @@
       </n-form>
       <template #action>
         <n-button @click="showMonthlyReport = false">ביטול</n-button>
-        <n-button type="primary" :loading="monthlyReportLoading" @click="doMonthlyReport">הורד PDF</n-button>
+        <n-button type="primary" :loading="monthlyReportLoading" @click="doMonthlyReport">הורד DOC</n-button>
       </template>
     </n-modal>
     <!-- ── Export wizard modal ──────────────────────────────────────────── -->
@@ -641,6 +641,7 @@ import {
 } from "naive-ui";
 import {useContractsStore} from "../stores/contracts.js";
 import {useFeaturesStore} from "../stores/features.js";
+import {useUserSettingsStore} from "../stores/userSettings.js";
 import {api} from "../services/apiService.js";
 import type {HydraulicCheckRequest} from "../services/apiService.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
@@ -650,6 +651,7 @@ import type {ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithC
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
 const featuresStore = useFeaturesStore();
+const userSettingsStore = useUserSettingsStore();
 const router = useRouter();
 const message = useMessage();
 const canSelectEmailTemplates = computed(() => featuresStore.hasFeature(FEATURES.pages.emailTemplates));
@@ -892,7 +894,16 @@ async function doMonthlyReport() {
   const date = new Date(monthlyReportMonthMs.value ?? Date.now());
   monthlyReportLoading.value = true;
   try {
-    await api.contracts.downloadMonthlyReport({ year: date.getFullYear(), month: date.getMonth() + 1, kind: "all" });
+    const settings = await userSettingsStore.load();
+    const selectedFields = settings?.report_config?.all_fields;
+    await api.reports.downloadMonthly({
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      format: "docx",
+      mode: "all",
+      fields: Array.isArray(selectedFields) && selectedFields.length ? selectedFields : undefined,
+    });
+    message.success("דוח DOC הורד בהצלחה");
     showMonthlyReport.value = false;
   } catch (e) {
     message.error(String(e));

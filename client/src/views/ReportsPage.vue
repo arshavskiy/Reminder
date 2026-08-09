@@ -244,7 +244,7 @@ function nextReportConfig() {
   const existing = userSettingsStore.settings?.report_config ?? {};
   return currentReportMode() === "client"
     ? {...existing, client_fields: [...selectedFields.value]}
-    : {...existing, all_fields: [...selectedFields.value]};
+    : {...existing, all_fields: [...selectedFields.value], client_fields: [...selectedFields.value]};
 }
 
 function parseFormats(raw: unknown): string[] {

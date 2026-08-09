@@ -263,23 +263,6 @@ export const api = {
       return get<{ rows: ContractWithClient[]; total: number }>(`/contracts${qs(params)}`, force);
     },
     expiring: (days = 30) => get<ContractWithClient[]>(`/contracts/expiring?days=${days}`),
-    downloadMonthlyReport: async (params?: { year?: number; month?: number; kind?: "contract" | "inspection" | "all" }) => {
-      const res = await fetch(`${BASE}/contracts/monthly-report.pdf${qs(params)}`, { credentials: "include" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(err.error ?? `HTTP ${res.status}`);
-      }
-      const blob = await res.blob();
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const match = disposition.match(/filename\*=UTF-8''(.+)|filename="([^"]+)"/);
-      const filename = match ? decodeURIComponent(match[1] ?? match[2]) : "contracts-report.pdf";
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    },
     get: (id: string) => get<ContractWithClient>(`/contracts/${id}`),
     byDocument: (documentId: string, force = false) => get<ContractWithClient[]>(`/contracts/by-document/${documentId}`, force),
     create: (body: Partial<Contract>) => post<Contract>("/contracts", body),
@@ -324,7 +307,7 @@ export const api = {
   },
 
   reports: {
-    downloadMonthly: async (params: { year: number; month?: number; format: "docx" | "xlsx" | "csv"; fields?: string[]; clientId?: string }) => {
+    downloadMonthly: async (params: { year: number; month?: number; format: "docx" | "xlsx" | "csv"; fields?: string[]; clientId?: string; mode?: "all" | "client" }) => {
       const res = await fetch(`${BASE}/reports/monthly/download${qs(params)}`, {credentials: "include"});
       if (!res.ok) {
         const err = await res.json().catch(() => ({error: `HTTP ${res.status}`}));
@@ -383,9 +366,12 @@ export const api = {
     monitorExtractionQuality: () => adminGet<any>("/admin/monitor/extraction-quality"),
     monitorPipelineGaps: () => adminGet<any>("/admin/monitor/pipeline-gaps"),
     monitorContractAdvances: () => adminGet<any>("/admin/monitor/contract-advances"),
+    listFeatures: () => adminGet<{ rows: FeatureDefinition[] }>("/features"),
     getAdminSettings: () => adminGet<any>("/admin/settings"),
     getUserDetail: (id: string) => adminGet<any>(`/admin/users/${id}/detail`),
     getUserSettings: (id: string) => adminGet<any>(`/admin/users/${id}/settings`),
+    saveUserSettings: (id: string, body: Partial<UserSettings & { default_email_template_id: number | string | null }>) =>
+      adminPut<{ ok: boolean }>(`/admin/users/${id}/settings`, body),
     setUserDefaultTemplate: (id: string, templateId: number | null) => {
       return fetch(`${ADMIN_BASE}/admin/users/${id}/settings`, {
         method: "PUT", credentials: "include",

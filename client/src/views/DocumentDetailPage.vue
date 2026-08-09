@@ -322,9 +322,10 @@ const DEFAULT_FIELDS: { key: string; label: string }[] = [
   { key: "client_company",        label: "שם החברה / תופש" },
   { key: "contact_person",        label: "איש קשר" },
   { key: "contact_phone",         label: "נייד" },
-  { key: "contact_email",         label: "מייל" },
+  { key: "client_email",          label: "מייל" },
   { key: "inspection_date",       label: "תאריך בדיקה" },
   { key: "next_inspection_date",  label: "בתוקף עד" },
+  { key: "date_diff_months",      label: "הפרש בחודשים לבדיקה" },
   { key: "equipment_description", label: "תיאור" },
   { key: "checked_equipment",     label: "ציוד שנבדק" },
   { key: "license_number",        label: "מספר רישוי" },
@@ -340,7 +341,7 @@ const LABEL_MAP: Record<string, string> = Object.fromEntries(
   DEFAULT_FIELDS.map(f => [f.key, f.label])
 );
 
-const SKIP_KEYS = new Set(["parties", "tasks", "amount", "currency", "client_address", "po_box", "client_zipcode"]);
+const SKIP_KEYS = new Set(["parties", "tasks", "amount", "currency", "client_address", "po_box", "client_zipcode", "contact_email", "email", "inspection_interval_months"]);
 const ALWAYS_VISIBLE_FIELD_KEYS = new Set(["license_number"]);
 
 const extractedFields = computed(() => {
@@ -353,7 +354,11 @@ const extractedFields = computed(() => {
   return [...DEFAULT_FIELDS, ...extraFields].map(f => ({
     key: f.key,
     label: f.label,
-    value: raw[f.key] ?? null,
+    value: f.key === "client_email"
+      ? raw.client_email ?? raw.contact_email ?? raw.email ?? null
+      : f.key === "date_diff_months"
+        ? raw.date_diff_months ?? raw.inspection_interval_months ?? null
+      : raw[f.key] ?? null,
   }));
 });
 

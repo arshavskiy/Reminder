@@ -33,8 +33,14 @@ export function registerReportRoutes(app: express.Application) {
       const format = String(req.query.format ?? "docx");
       const clientId =
         typeof req.query.clientId === "string" ? req.query.clientId : undefined;
+      const mode = typeof req.query.mode === "string" ? req.query.mode : undefined;
+      if (mode && mode !== "all" && mode !== "client") {
+        res.status(400).json({ error: "mode must be all or client" });
+        return;
+      }
+      const reportMode = clientId || mode === "client" ? "client" : "all";
       const selectedFields = parseSelectedFields(req.query.fields)
-        ?? await loadSavedReportFields(userId, clientId ? "client" : "all");
+        ?? await loadSavedReportFields(userId, reportMode);
       if (!validPeriod(year, month)) {
         res.status(400).json({ error: "Invalid year or month" });
         return;
@@ -44,7 +50,7 @@ export function registerReportRoutes(app: express.Application) {
         return;
       }
 
-      const report = clientId
+      const report = reportMode === "client"
         ? await generateMonthlyContractReports(
             userId,
             year,

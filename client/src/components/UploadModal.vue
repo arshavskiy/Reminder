@@ -295,7 +295,16 @@
       </div>
 
       <div class="preview-list rescan-list">
-        <div v-for="row in props.rescan?.rows ?? []" :key="row.id" class="preview-card preview-card--selected">
+        <div
+          v-for="row in props.rescan?.rows ?? []"
+          :key="row.id"
+          class="preview-card preview-card--selected preview-card--link"
+          role="link"
+          tabindex="0"
+          @click="emit('view-document', String(row.id))"
+          @keydown.enter.prevent="emit('view-document', String(row.id))"
+          @keydown.space.prevent="emit('view-document', String(row.id))"
+        >
           <div class="preview-card__body">
             <div class="preview-card__title">{{ row.file_name }}</div>
             <div class="preview-card__meta">
@@ -420,6 +429,7 @@ const props = defineProps<{ uploading: boolean; rescan?: RescanState | null }>()
 const emit = defineEmits<{
   (e: "upload", files: File[], fields: ExtractionField[], options: UploadOptions): void;
   (e: "reminders-saved", count: number): void;
+  (e: "view-document", id: string): void;
 }>();
 
 const visible = defineModel<boolean>({ required: true });
@@ -922,6 +932,10 @@ defineExpose({ addFiles, openRescan });
   transition: border-color 0.15s, background 0.15s;
 }
 .preview-card:hover { border-color: var(--brand-color); }
+.preview-card--link:focus-visible {
+  outline: 2px solid var(--brand-color);
+  outline-offset: 2px;
+}
 .preview-card--selected {
   border-color: var(--brand-color);
   background: rgba(99, 226, 183, 0.06);

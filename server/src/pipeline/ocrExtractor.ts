@@ -152,7 +152,7 @@ function extractEmail(text: string): string | null {
   // Match both normal and reversed bidi emails
   const m = text.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+/);
   if (!m?.[0]) return null;
-  const addr = m[0];
+  const addr = m[0].replace(/[.,;:]+$/g, "");
   const atIdx = addr.indexOf("@");
   const before = addr.slice(0, atIdx);
   const after  = addr.slice(atIdx + 1);
@@ -161,10 +161,15 @@ function extractEmail(text: string): string | null {
   // Reversed bidi: domain-like part is before @, user part after
   // Detect: before has dots (looks like domain) AND after has no dots (looks like user)
   if (beforeHasDot && !afterHasDot && after.length >= 1) {
-    return `${after}@${before}`;
+    const parts = before.split(".");
+    const shouldReverseDomainParts = /^(?:com|net|org|biz|info)$/i.test(parts[0] ?? "");
+    const domain = (shouldReverseDomainParts ? parts.reverse() : parts)
+      .map((part) => shouldReverseDomainParts && part.includes("-") ? part.split("-").reverse().join("-") : part)
+      .join(".");
+    return `${after}@${domain.toLowerCase()}`;
   }
   // Normal: must have a dot after @
-  if (afterHasDot) return addr;
+  if (afterHasDot) return `${before}@${after.toLowerCase()}`;
   return null;
 }
 

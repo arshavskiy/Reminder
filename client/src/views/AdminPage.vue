@@ -298,6 +298,21 @@
               <n-data-table :columns="skippedReminderColumns" :data="pipelineGaps.skipped_reminders" :bordered="false" size="small" :pagination="{ pageSize: 10 }" />
             </div>
 
+            <div v-if="(pipelineGaps.missing_emails ?? []).length > 0" style="margin-top:14px">
+              <div style="font-size:13px;font-weight:600;color:#f0a020;margin-bottom:6px">
+                Missing Emails by Document
+                <n-tag type="warning" size="small" round style="margin-right:6px">{{ (pipelineGaps.missing_emails ?? []).length }}</n-tag>
+              </div>
+              <n-data-table
+                :columns="missingEmailColumns"
+                :data="pipelineGaps.missing_emails ?? []"
+                :bordered="false"
+                size="small"
+                :pagination="{ pageSize: 10 }"
+                :max-height="360"
+              />
+            </div>
+
             <div v-if="pipelineGaps.scanned_without_reminder.length > 0" style="margin-top:14px">
               <div style="font-size:13px;font-weight:600;color:#d03050;margin-bottom:6px">
                 Scanned Documents Without Reminder
@@ -313,7 +328,7 @@
               />
             </div>
 
-            <div v-if="pipelineGaps.stuck_processing.length === 0 && pipelineGaps.no_s3.length === 0 && pipelineGaps.skipped_reminders.length === 0 && pipelineGaps.scanned_without_reminder.length === 0"
+            <div v-if="pipelineGaps.stuck_processing.length === 0 && pipelineGaps.no_s3.length === 0 && pipelineGaps.skipped_reminders.length === 0 && (pipelineGaps.missing_emails ?? []).length === 0 && pipelineGaps.scanned_without_reminder.length === 0"
                  style="padding:20px;text-align:center;color:var(--text-secondary)">
               ✅ No pipeline gaps detected
             </div>
@@ -823,6 +838,102 @@
               </div>
             </n-tab-pane>
 
+            <!-- Settings tab -->
+            <n-tab-pane name="settings" tab="Settings">
+              <div v-if="userSettingsForm" class="admin-user-settings">
+                <div class="admin-user-settings__actions">
+                  <n-button type="primary" size="small" :loading="savingUserSettings" @click="saveUserSettings">Save Settings</n-button>
+                </div>
+
+                <div class="admin-user-settings__section">
+                  <div class="admin-user-settings__title">General</div>
+                  <div class="admin-user-settings__grid">
+                    <label class="admin-setting-control">
+                      <span>Theme</span>
+                      <n-select v-model:value="userSettingsForm.theme" :options="themeOptions" size="small" />
+                    </label>
+                    <label class="admin-setting-control">
+                      <span>Email sender name</span>
+                      <n-input v-model:value="userSettingsForm.email_from_name" size="small" placeholder="ReminderOCR" />
+                    </label>
+                    <label class="admin-setting-control">
+                      <span>Reminder advance days</span>
+                      <n-input v-model:value="userSettingsForm.reminder_advance_days" size="small" placeholder="[90,60,30]" />
+                    </label>
+                    <label class="admin-setting-control">
+                      <span>OCR language</span>
+                      <n-input v-model:value="userSettingsForm.ocr_language" size="small" placeholder="heb+eng" />
+                    </label>
+                  </div>
+                  <div class="admin-user-settings__switches">
+                    <label><n-switch v-model:value="userSettingsForm.calendar_next_tests_only" size="small" /> Calendar next tests only</label>
+                    <label><n-switch v-model:value="userSettingsForm.pipeline_ocr" size="small" /> OCR</label>
+                    <label><n-switch v-model:value="userSettingsForm.pipeline_ai" size="small" /> AI extraction</label>
+                    <label><n-switch v-model:value="userSettingsForm.pipeline_s3" size="small" /> S3 upload</label>
+                    <label><n-switch v-model:value="userSettingsForm.pipeline_entities" size="small" /> Entity creation</label>
+                  </div>
+                </div>
+
+                <div class="admin-user-settings__section">
+                  <div class="admin-user-settings__title">Monthly reports</div>
+                  <div class="admin-user-settings__switches">
+                    <label><n-switch v-model:value="userSettingsForm.monthly_report_enabled" size="small" /> Enabled</label>
+                  </div>
+                  <div class="admin-user-settings__grid">
+                    <label class="admin-setting-control">
+                      <span>Recipients</span>
+                      <n-input v-model:value="userSettingsForm.monthly_report_recipients" size="small" placeholder="email@example.com" />
+                    </label>
+                    <label class="admin-setting-control">
+                      <span>Day</span>
+                      <n-input-number v-model:value="userSettingsForm.monthly_report_day" size="small" :min="1" :max="28" />
+                    </label>
+                    <label class="admin-setting-control">
+                      <span>Hour</span>
+                      <n-input-number v-model:value="userSettingsForm.monthly_report_hour" size="small" :min="0" :max="23" />
+                    </label>
+                    <label class="admin-setting-control">
+                      <span>Formats</span>
+                      <n-checkbox-group v-model:value="userSettingsForm.monthly_report_formats">
+                        <n-space size="small">
+                          <n-checkbox v-for="format in formatOptions" :key="format.value" :value="format.value">{{ format.label }}</n-checkbox>
+                        </n-space>
+                      </n-checkbox-group>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="admin-user-settings__section">
+                  <div class="admin-user-settings__title">Report fields</div>
+                  <div class="admin-user-settings__subhead">All clients report</div>
+                  <n-checkbox-group v-model:value="userSettingsForm.report_config.all_fields">
+                    <div class="admin-user-settings__checks">
+                      <n-checkbox v-for="field in allReportFieldOptions" :key="field.key" :value="field.key">{{ field.label }}</n-checkbox>
+                    </div>
+                  </n-checkbox-group>
+                  <div class="admin-user-settings__subhead">Client report</div>
+                  <n-checkbox-group v-model:value="userSettingsForm.report_config.client_fields">
+                    <div class="admin-user-settings__checks">
+                      <n-checkbox v-for="field in clientReportFieldOptions" :key="field.key" :value="field.key">{{ field.label }}</n-checkbox>
+                    </div>
+                  </n-checkbox-group>
+                </div>
+
+                <div class="admin-user-settings__section">
+                  <div class="admin-user-settings__title">Client features</div>
+                  <div class="admin-user-settings__checks">
+                    <label v-for="feature in featureDefinitions" :key="feature.key" class="admin-feature-toggle">
+                      <n-switch v-model:value="userSettingsForm.features[feature.key]" size="small" />
+                      <span>
+                        <strong>{{ feature.label_he || feature.label_en }}</strong>
+                        <small>{{ feature.key }}</small>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </n-tab-pane>
+
             <!-- Email Templates tab -->
             <n-tab-pane name="templates" tab="Templates">
               <div style="margin-top:12px">
@@ -926,14 +1037,18 @@ import {useRouter} from "vue-router";
 import type {DataTableColumns} from "naive-ui";
 import {
   NButton,
+  NCheckbox,
+  NCheckboxGroup,
   NDataTable,
   NDivider,
   NDrawer,
   NDrawerContent,
   NIcon,
   NInput,
+  NInputNumber,
   NModal,
   NSelect,
+  NSpace,
   NSpin,
   NSwitch,
   NTabPane,
@@ -964,6 +1079,7 @@ import {api} from "../services/apiService.js";
 import DocumentDetailPage from "./DocumentDetailPage.vue";
 import AdminStatCard from "../components/AdminStatCard.vue";
 import AdminReportModal from "../components/AdminReportModal.vue";
+import type {FeatureDefinition} from "@shared/types.js";
 
 const router = useRouter();
 const message = useMessage();
@@ -1161,8 +1277,112 @@ const userDetailLoading = ref(false);
 const userDetailUser = ref<any>(null);
 const downloadingDocId = ref<string | null>(null);
 const emailTemplatesList = ref<any[]>([]);
+const featureDefinitions = ref<FeatureDefinition[]>([]);
 const userDefaultTemplateId = ref<number | null>(null);
 const savingTemplate = ref(false);
+const savingUserSettings = ref(false);
+const userSettingsForm = ref<any>(null);
+
+const allReportFieldOptions = [
+  {key: "tracking_date", label: "תאריך"},
+  {key: "tracking_checked", label: "מה נבדק"},
+  {key: "client", label: "לקוח"},
+  {key: "contact_person", label: "איש קשר"},
+  {key: "tracking_phone", label: "טלפון"},
+  {key: "tracking_license_number", label: "מספר רישוי"},
+  {key: "tracking_relevant", label: "רלוונטי"},
+  {key: "tracking_notes", label: "הערות"},
+  {key: "contract_number", label: "מספר חוזה"},
+  {key: "contract_type", label: "סוג מסמך"},
+  {key: "contact_phone", label: "טלפון קשר"},
+  {key: "contact_email", label: "אימייל"},
+  {key: "client_address", label: "כתובת"},
+  {key: "start_date", label: "תאריך תסקיר"},
+  {key: "expiry_date", label: "תאריך סיום / בדיקה הבאה"},
+  {key: "status", label: "סטטוס"},
+  {key: "source_document", label: "מסמך מקור"},
+  {key: "equipment", label: "ציוד"},
+  {key: "reminders", label: "תזכורות"},
+];
+const clientReportFieldOptions = [
+  {key: "contract_number", label: "מספר חוזה"},
+  {key: "contract_type", label: "סוג מסמך"},
+  {key: "client", label: "לקוח"},
+  {key: "contact_person", label: "איש קשר"},
+  {key: "contact_phone", label: "טלפון"},
+  {key: "contact_email", label: "אימייל"},
+  {key: "client_address", label: "כתובת"},
+  {key: "start_date", label: "תאריך תסקיר"},
+  {key: "expiry_date", label: "תאריך סיום / בדיקה הבאה"},
+  {key: "status", label: "סטטוס"},
+  {key: "source_document", label: "מסמך מקור"},
+  {key: "equipment", label: "ציוד"},
+  {key: "reminders", label: "תזכורות"},
+];
+const defaultAllReportFields = [
+  "tracking_date",
+  "tracking_checked",
+  "client",
+  "contact_person",
+  "tracking_phone",
+  "tracking_license_number",
+  "tracking_relevant",
+  "tracking_notes",
+];
+const defaultClientReportFields = clientReportFieldOptions.map((field) => field.key);
+const formatOptions = [
+  {label: "DOCX", value: "docx"},
+  {label: "XLSX", value: "xlsx"},
+];
+const themeOptions = [
+  {label: "Light", value: "light"},
+  {label: "Dark", value: "dark"},
+];
+
+function parseMonthlyFormats(raw: unknown): string[] {
+  try {
+    const parsed = Array.isArray(raw) ? raw : JSON.parse(String(raw ?? "[]"));
+    const formats = Array.isArray(parsed) ? parsed.filter((format) => format === "docx" || format === "xlsx") : [];
+    return formats.length ? formats : ["docx", "xlsx"];
+  } catch {
+    return ["docx", "xlsx"];
+  }
+}
+
+function makeUserSettingsForm(settings: any) {
+  const reportConfig = settings?.report_config ?? {};
+  return {
+    theme: settings?.theme === "dark" ? "dark" : "light",
+    email_from_name: settings?.email_from_name ?? "",
+    reminder_advance_days: settings?.reminder_advance_days ?? "[90,60,30]",
+    ocr_language: settings?.ocr_language ?? "heb+eng",
+    pipeline_ocr: settings?.pipeline_ocr ?? true,
+    pipeline_ai: settings?.pipeline_ai ?? true,
+    pipeline_s3: settings?.pipeline_s3 ?? true,
+    pipeline_entities: settings?.pipeline_entities ?? true,
+    calendar_next_tests_only: Boolean(settings?.calendar_next_tests_only),
+    monthly_report_enabled: Boolean(settings?.monthly_report_enabled),
+    monthly_report_recipients: settings?.monthly_report_recipients ?? "",
+    monthly_report_day: Math.min(28, Math.max(1, Number(settings?.monthly_report_day ?? 1))),
+    monthly_report_hour: Math.min(23, Math.max(0, Number(settings?.monthly_report_hour ?? 8))),
+    monthly_report_formats: parseMonthlyFormats(settings?.monthly_report_formats),
+    report_config: {
+      all_fields: Array.isArray(reportConfig.all_fields) && reportConfig.all_fields.length ? [...reportConfig.all_fields] : [...defaultAllReportFields],
+      client_fields: Array.isArray(reportConfig.client_fields) && reportConfig.client_fields.length ? [...reportConfig.client_fields] : [...defaultClientReportFields],
+    },
+    features: settings?.features && typeof settings.features === "object" && !Array.isArray(settings.features)
+      ? {...settings.features}
+      : {},
+  };
+}
+
+function applyFeatureDefaultsToUserSettingsForm() {
+  if (!userSettingsForm.value || !featureDefinitions.value.length) return;
+  userSettingsForm.value.features = {
+    ...Object.fromEntries(featureDefinitions.value.map((feature) => [feature.key, feature.default_enabled])),
+    ...(userSettingsForm.value.features ?? {}),
+  };
+}
 
 async function openUserDetail(user: any) {
   userDetailUser.value = user;
@@ -1170,6 +1390,7 @@ async function openUserDetail(user: any) {
   userDetailLoading.value = true;
   userDetailData.value = null;
   userDefaultTemplateId.value = null;
+  userSettingsForm.value = null;
   const [detailResult, settingsResult] = await Promise.allSettled([
     api.admin.getUserDetail(user.id),
     api.admin.getUserSettings(user.id),
@@ -1184,6 +1405,8 @@ async function openUserDetail(user: any) {
 
   if (settingsResult.status === "fulfilled") {
     userDefaultTemplateId.value = settingsResult.value.default_email_template_id ?? null;
+    userSettingsForm.value = makeUserSettingsForm(settingsResult.value);
+    applyFeatureDefaultsToUserSettingsForm();
   } else {
     console.error("Failed to load admin user settings", settingsResult.reason);
     message.error("Failed to load user settings");
@@ -1200,6 +1423,17 @@ async function openUserDetail(user: any) {
       emailTemplatesList.value = [];
     }
   }
+
+  if (!featureDefinitions.value.length) {
+    try {
+      const response = await api.admin.listFeatures();
+      featureDefinitions.value = [...(response.rows ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+      applyFeatureDefaultsToUserSettingsForm();
+    } catch (err) {
+      console.warn("Failed to load feature definitions for admin user settings", err);
+      featureDefinitions.value = [];
+    }
+  }
 }
 
 async function saveUserDefaultTemplate() {
@@ -1212,6 +1446,41 @@ async function saveUserDefaultTemplate() {
     message.error("Failed to save template");
   } finally {
     savingTemplate.value = false;
+  }
+}
+
+async function saveUserSettings() {
+  if (!userDetailUser.value || !userSettingsForm.value) return;
+  savingUserSettings.value = true;
+  try {
+    const form = userSettingsForm.value;
+    await api.admin.saveUserSettings(userDetailUser.value.id, {
+      theme: form.theme,
+      email_from_name: form.email_from_name || null,
+      reminder_advance_days: form.reminder_advance_days || "[90,60,30]",
+      ocr_language: form.ocr_language || "heb+eng",
+      pipeline_ocr: Boolean(form.pipeline_ocr),
+      pipeline_ai: Boolean(form.pipeline_ai),
+      pipeline_s3: Boolean(form.pipeline_s3),
+      pipeline_entities: Boolean(form.pipeline_entities),
+      calendar_next_tests_only: Boolean(form.calendar_next_tests_only),
+      monthly_report_enabled: Boolean(form.monthly_report_enabled),
+      monthly_report_recipients: form.monthly_report_recipients ?? "",
+      monthly_report_day: form.monthly_report_day,
+      monthly_report_hour: form.monthly_report_hour,
+      monthly_report_formats: JSON.stringify(form.monthly_report_formats?.length ? form.monthly_report_formats : ["docx"]),
+      report_config: {
+        all_fields: form.report_config?.all_fields ?? [],
+        client_fields: form.report_config?.client_fields ?? [],
+      },
+      features: form.features ?? {},
+      default_email_template_id: userDefaultTemplateId.value,
+    });
+    message.success("User settings saved");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "Failed to save user settings");
+  } finally {
+    savingUserSettings.value = false;
   }
 }
 
@@ -1619,6 +1888,28 @@ const skippedReminderColumns: DataTableColumns<any> = [
   { title: "Date", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
 ];
 
+const missingEmailColumns: DataTableColumns<any> = [
+  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "File", key: "filename", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
+  { title: "Doc ID", key: "id", align: "left", width: 90, render: (row) => h("span", { style: "font-size:11px;font-family:monospace;color:var(--text-secondary)" }, row.id ? row.id.slice(-8) : "—") },
+  { title: "Type", key: "document_type", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px" }, row.document_type ?? "—") },
+  { title: "Reminder Date", key: "reminder_date", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px;color:#f0a020;font-weight:600" }, row.reminder_date ?? "—") },
+  { title: "Uploaded", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
+  {
+    title: "Action", key: "action", align: "center", width: 140,
+    render: (row) => h("div", { style: "display:flex;gap:6px;justify-content:center" }, [
+      h(NButton, { size: "tiny", onClick: () => openDocModal(row.id) }, { default: () => "Open" }),
+      h(NButton, {
+        size: "tiny",
+        type: "primary",
+        ghost: true,
+        loading: reprocessingIds.value.has(row.id),
+        onClick: () => reprocessDoc(row.id),
+      }, { default: () => "Rescan" }),
+    ]),
+  },
+];
+
 const scannedWithoutReminderColumns: DataTableColumns<any> = [
   { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
   { title: "File", key: "filename", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
@@ -1901,7 +2192,7 @@ async function reprocessDoc(docId: string) {
   try {
     await api.admin.reprocessDocument(docId);
     message.success("Reprocess queued");
-    setTimeout(() => loadSectionData("extraction_quality"), 2000);
+    setTimeout(() => loadSectionData(activeSection.value), 2000);
   } catch {
     message.error("Reprocess failed");
   } finally {
@@ -2466,6 +2757,89 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
+.admin-user-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 0 12px;
+}
+
+.admin-user-settings__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.admin-user-settings__section {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.admin-user-settings__title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.admin-user-settings__subhead {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 10px 0 8px;
+}
+
+.admin-user-settings__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.admin-setting-control {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.admin-user-settings__switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 10px;
+}
+
+.admin-user-settings__switches label,
+.admin-feature-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.admin-user-settings__checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.admin-feature-toggle {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.admin-feature-toggle span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-feature-toggle small {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
 .admin-settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2473,6 +2847,8 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
+  .admin-user-settings__grid,
+  .admin-user-settings__checks,
   .admin-settings-grid {
     grid-template-columns: 1fr;
   }
