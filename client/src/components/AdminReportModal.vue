@@ -120,7 +120,7 @@ const clientFieldOptions = [
   { key: "contact_phone", label: "טלפון" },
   { key: "contact_email", label: "אימייל" },
   { key: "client_address", label: "כתובת" },
-  { key: "start_date", label: "תאריך התחלה" },
+  { key: "start_date", label: "תאריך תסקיר" },
   { key: "expiry_date", label: "תאריך סיום / בדיקה הבאה" },
   { key: "status", label: "סטטוס" },
   { key: "amount", label: "סכום" },

@@ -25,7 +25,7 @@ export const heIL = createLocale(
       datetimePlaceholder: 'בחר תאריך ושעה',
       monthPlaceholder: 'בחר חודש',
       yearPlaceholder: 'בחר שנה',
-      startDatePlaceholder: 'תאריך התחלה',
+      startDatePlaceholder: 'תאריך תסקיר',
       endDatePlaceholder: 'תאריך סיום',
       startDatetimePlaceholder: 'תאריך ושעת התחלה',
       endDatetimePlaceholder: 'תאריך ושעת סיום',

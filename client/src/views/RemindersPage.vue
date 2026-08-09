@@ -457,7 +457,7 @@ function contractBody(contract: ContractWithClient): string {
   const lines = [
     contract.contract_type ? `סוג: ${contract.contract_type}` : null,
     contract.contract_number ? `מספר: ${contract.contract_number}` : null,
-    contract.start_date ? `תאריך התחלה: ${contract.start_date}` : null,
+    contract.start_date ? `תאריך תסקיר: ${contract.start_date}` : null,
     contract.expiry_date ? `תאריך תפוגה: ${contract.expiry_date}` : null,
     contractEquipmentLabel(contract) ? `ציוד: ${contractEquipmentLabel(contract)}` : null,
     contract.summary,

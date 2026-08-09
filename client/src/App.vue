@@ -354,7 +354,7 @@ function navigate(key: string) {
   justify-content: center;
 }
 .navlink {
-  padding: 8px 14px;
+  padding: 8px 12px;
   border-radius: 999px;
   font-size: 14px;
   color: var(--text-secondary);

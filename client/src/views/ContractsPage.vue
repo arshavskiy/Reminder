@@ -302,7 +302,7 @@
           </n-gi>
 
           <n-gi>
-            <n-form-item label="תאריך התחלה">
+            <n-form-item label="תאריך תסקיר">
               <n-input v-model:value="form.start_date" type="text" placeholder="YYYY-MM-DD" />
             </n-form-item>
           </n-gi>
@@ -924,7 +924,7 @@ const exportColumns = ref([
   { key: "client_address",        label: "ישוב / רחוב",        selected: true },
   { key: "po_box",                label: "ת.ד",                selected: true },
   { key: "client_zipcode",        label: "מיקוד",              selected: true },
-  { key: "start_date",            label: "תאריך בדיקה",        selected: true },
+  { key: "start_date",            label: "תאריך תסקיר",        selected: true },
   { key: "expiry_date",           label: "בתוקף עד",           selected: true },
   { key: "equipment_description", label: "תיאור",              selected: true },
   { key: "status",                label: "סטטוס",              selected: false },
@@ -1565,7 +1565,7 @@ function statusLabel(status: string): string {
 
 function exportToExcel() {
   const rows = filteredRows.value;
-  const header = ["מספר", "סוג", "לקוח", "תאריך התחלה", "תאריך תפוגה", "סכום", "מטבע", "סטטוס"];
+  const header = ["מספר", "סוג", "לקוח", "תאריך תסקיר", "תאריך תפוגה", "סכום", "מטבע", "סטטוס"];
   const lines = [header.join(",")];
   for (const r of rows) {
     lines.push([

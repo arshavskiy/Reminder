@@ -52,7 +52,7 @@
     <div class="card__foot">
       <div class="card__foot-col">
         <span class="kv"><strong>לקוח:</strong> {{ row.client_name ?? "-" }}</span>
-        <span class="kv"><strong>תאריך התחלה:</strong> {{ formatDate(row.start_date) }}</span>
+        <span class="kv"><strong>תאריך תסקיר:</strong> {{ formatDate(row.start_date) }}</span>
         <span v-if="equipmentLabel" class="kv kv--equipment"><strong>ציוד נבדק:</strong> {{ equipmentLabel }}</span>
       </div>
       <div class="card__foot-col card__foot-col--end">
