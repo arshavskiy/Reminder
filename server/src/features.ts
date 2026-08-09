@@ -39,9 +39,24 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
   {key: "dashboard.calendar_filters", scope: "dashboard", label_he: "פילטרי לוח שנה", label_en: "Calendar filters", description_he: "הצגת כפתורי סינון בלוח התזכורות.", default_enabled: true, sort_order: 310},
 ];
 
+// Flat dotted-key map — used internally for lookups.
 export const DEFAULT_FEATURES = Object.fromEntries(
   FEATURE_DEFINITIONS.map((feature) => [feature.key, feature.default_enabled])
 ) as Record<string, boolean>;
+
+// Nested object — used for DB storage and API responses.
+export const DEFAULT_FEATURES_NESTED: Record<string, Record<string, boolean>> = (() => {
+  const nested: Record<string, Record<string, boolean>> = {};
+  for (const def of FEATURE_DEFINITIONS) {
+    const dot = def.key.indexOf(".");
+    if (dot === -1) continue;
+    const scope = def.key.slice(0, dot);
+    const name = def.key.slice(dot + 1);
+    if (!nested[scope]) nested[scope] = {};
+    nested[scope][name] = def.default_enabled;
+  }
+  return nested;
+})();
 
 export async function seedFeatureDefinitions(): Promise<void> {
   for (const feature of FEATURE_DEFINITIONS) {
@@ -80,6 +95,8 @@ export async function isAnyFeatureEnabledForUser(userId: string, featureKeys: st
   return false;
 }
 
+// Accepts flat {"pages.dashboard": true} or nested {pages: {dashboard: true}}.
+// Returns flat dotted-key map for internal use.
 export function normalizeFeatures(value: unknown): Record<string, boolean> | null {
   if (value == null || value === "") return null;
   let parsed = value;
@@ -97,9 +114,34 @@ export function normalizeFeatures(value: unknown): Record<string, boolean> | nul
   }
 
   const normalized: Record<string, boolean> = {};
-  for (const [key, enabled] of Object.entries(parsed)) {
-    if (typeof enabled === "boolean") normalized[key] = enabled;
+  function walk(obj: Record<string, unknown>, prefix: string) {
+    for (const [k, v] of Object.entries(obj)) {
+      const key = prefix ? `${prefix}.${k}` : k;
+      if (typeof v === "boolean") {
+        normalized[key] = v;
+      } else if (typeof v === "string") {
+        if (v === "true") normalized[key] = true;
+        else if (v === "false") normalized[key] = false;
+      } else if (v && typeof v === "object" && !Array.isArray(v)) {
+        walk(v as Record<string, unknown>, key);
+      }
+    }
   }
+  walk(parsed as Record<string, unknown>, "");
 
   return normalized;
+}
+
+// Convert flat dotted-key map to nested object for DB storage and API responses.
+export function featuresToNested(flat: Record<string, boolean>): Record<string, Record<string, boolean>> {
+  const nested: Record<string, Record<string, boolean>> = {};
+  for (const [dotKey, val] of Object.entries(flat)) {
+    const dot = dotKey.indexOf(".");
+    if (dot === -1) continue;
+    const scope = dotKey.slice(0, dot);
+    const name = dotKey.slice(dot + 1);
+    if (!nested[scope]) nested[scope] = {};
+    nested[scope][name] = val;
+  }
+  return nested;
 }

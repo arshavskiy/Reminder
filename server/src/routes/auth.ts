@@ -27,7 +27,7 @@ import {
     verifyPassword,
 } from "../auth/emailAuth";
 import {clientIp, logger} from "../logger";
-import {DEFAULT_FEATURES} from "../features";
+import {DEFAULT_FEATURES_NESTED} from "../features";
 import {notifyPasswordResetRequested} from "../push/adminNotify";
 
 export function registerAuthRoutes(app: express.Application) {
@@ -130,7 +130,7 @@ export function registerAuthRoutes(app: express.Application) {
             email_from_name: null,
             reminder_advance_days: "[90,60,30]",
             ocr_language: "heb+eng",
-            features: DEFAULT_FEATURES,
+            features: DEFAULT_FEATURES_NESTED,
           },
         },
         { upsert: true }
@@ -206,7 +206,7 @@ export function registerAuthRoutes(app: express.Application) {
             email_from_name: null,
             reminder_advance_days: "[90,60,30]",
             ocr_language: "heb+eng",
-            features: DEFAULT_FEATURES,
+            features: DEFAULT_FEATURES_NESTED,
           },
         },
         { upsert: true }

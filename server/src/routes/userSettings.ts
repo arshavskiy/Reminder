@@ -1,7 +1,7 @@
 import express from "express";
 import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
-import {DEFAULT_FEATURES, normalizeFeatures} from "../features";
+import {DEFAULT_FEATURES, DEFAULT_FEATURES_NESTED, featuresToNested, normalizeFeatures} from "../features";
 
 const DEFAULT_REPORT_CONFIG = {
   all_fields: [
@@ -61,7 +61,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
         email_from_name: null,
         reminder_advance_days: "[90,60,30]",
         ocr_language: "heb+eng",
-        features: DEFAULT_FEATURES,
+        features: DEFAULT_FEATURES_NESTED,
         calendar_next_tests_only: false,
         monthly_report_enabled: false,
         monthly_report_recipients: "",
@@ -79,13 +79,23 @@ export function registerUserSettingsRoutes(app: express.Application) {
       res.json(defaults);
       return;
     }
-    if (!(row as any).features) {
-      const features = normalizeFeatures((row as any).features_json) ?? DEFAULT_FEATURES;
-      await col("user_settings").updateOne(
-        { user_id: auth.userId },
-        { $set: { features }, $unset: { features_json: "" } },
-      );
-      (row as any).features = features;
+    // Always normalize features to nested format — fixes flat keys, string booleans, mixed corrupt data
+    {
+      const rawFeatures = (row as any).features ?? (row as any).features_json;
+      const flat = normalizeFeatures(rawFeatures) ?? DEFAULT_FEATURES;
+      const nested = featuresToNested(flat);
+      // Only write if not already clean nested (avoid unnecessary writes)
+      const alreadyNested = rawFeatures && typeof rawFeatures === "object" &&
+        !Array.isArray(rawFeatures) &&
+        Object.values(rawFeatures).every((v) => typeof v === "object" && v !== null && !Array.isArray(v)) &&
+        Object.values(rawFeatures).every((v) => Object.values(v as object).every((vv) => typeof vv === "boolean"));
+      if (!alreadyNested) {
+        await col("user_settings").updateOne(
+          { user_id: auth.userId },
+          { $set: { features: nested }, $unset: { features_json: "" } },
+        );
+        (row as any).features = nested;
+      }
       delete (row as any).features_json;
     }
     if (!(row as any).report_config) {
@@ -141,7 +151,8 @@ export function registerUserSettingsRoutes(app: express.Application) {
     const rawFeatures = body.features !== undefined ? body.features : body.features_json;
     if (rawFeatures !== undefined) {
       try {
-        patch.features = normalizeFeatures(rawFeatures);
+        const flat = normalizeFeatures(rawFeatures);
+        patch.features = flat ? featuresToNested(flat) : null;
       } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : "Invalid features" });
         return;
@@ -149,7 +160,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
     }
 
     const setOnInsert: Record<string, unknown> = { user_id: auth.userId };
-    if (patch.features === undefined) setOnInsert.features = DEFAULT_FEATURES;
+    if (patch.features === undefined) setOnInsert.features = DEFAULT_FEATURES_NESTED;
     if (patch.report_config === undefined) setOnInsert.report_config = DEFAULT_REPORT_CONFIG;
 
     const update: Record<string, unknown> = {

@@ -42,13 +42,41 @@ export const DEFAULT_FEATURES: Record<FeatureKey, boolean> = Object.fromEntries(
   ].map((key) => [key, true])
 ) as Record<FeatureKey, boolean>;
 
+// Convert nested {pages: {dashboard: true}, dashboard: {calendar: true}}
+// or flat {"pages.dashboard": true} to internal flat dotted-key format.
 export function normalizeFeatureFlags(raw: unknown): FeatureFlags {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const normalized: FeatureFlags = {};
-  for (const [key, enabled] of Object.entries(raw)) {
-    if (typeof enabled === "boolean") normalized[key as FeatureKey] = enabled;
+  function walk(obj: Record<string, unknown>, prefix: string) {
+    for (const [k, v] of Object.entries(obj)) {
+      const key = prefix ? `${prefix}.${k}` : k;
+      if (typeof v === "boolean") {
+        normalized[key as FeatureKey] = v;
+      } else if (typeof v === "string") {
+        if (v === "true") normalized[key as FeatureKey] = true;
+        else if (v === "false") normalized[key as FeatureKey] = false;
+      } else if (v && typeof v === "object" && !Array.isArray(v)) {
+        walk(v as Record<string, unknown>, key);
+      }
+    }
   }
+  walk(raw as Record<string, unknown>, "");
   return normalized;
+}
+
+// Convert internal flat dotted-key flags to nested object for storage/display.
+export function featureFlagsToNested(flags: FeatureFlags): Record<string, Record<string, boolean>> {
+  const nested: Record<string, Record<string, boolean>> = {};
+  for (const [dotKey, val] of Object.entries(flags)) {
+    if (typeof val !== "boolean") continue;
+    const dot = dotKey.indexOf(".");
+    if (dot === -1) continue;
+    const scope = dotKey.slice(0, dot);
+    const name = dotKey.slice(dot + 1);
+    if (!nested[scope]) nested[scope] = {};
+    nested[scope][name] = val;
+  }
+  return nested;
 }
 
 export function isFeatureEnabled(flags: FeatureFlags | null | undefined, key: FeatureKey): boolean {
