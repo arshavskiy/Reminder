@@ -1364,8 +1364,7 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
   return [
     { key: "all",      label: "הכל",       count: rows.length,                                                              type: "status", statusValue: null },
     { key: "active",   label: "פעיל",      count: rows.filter((r) => r.status === "active").length,                         type: "status", statusValue: "active" },
-    { key: "expired",  label: "פג תוקף",   count: rows.filter((r) => r.status === "expired").length,                        type: "status", statusValue: "expired" },
-    { key: "overdue",  label: "באיחור",    count: rows.filter((r) => contractMatchesDueFilter(r, "overdue")).length,         type: "due",    dueValue: "overdue" },
+    { key: "overdue",  label: "פג תוקף",   count: rows.filter((r) => r.status === "overdue" || r.status === "expired" || contractMatchesDueFilter(r, "overdue")).length, type: "due", dueValue: "overdue" },
     { key: "month",    label: "החודש",     count: rows.filter((r) => contractMatchesDueFilter(r, "month")).length,           type: "due",    dueValue: "month" },
     { key: "sent",     label: "נשלחו",     count: rows.filter((r) => contractMatchesDueFilter(r, "sent")).length,            type: "due",    dueValue: "sent" },
     { key: "no_email", label: "חסר אימייל", count: rows.filter((r) => contractMatchesDueFilter(r, "no_email")).length,       type: "due",    dueValue: "no_email" },
@@ -1410,7 +1409,7 @@ function contractHasSentReminder(row: ContractWithClient): boolean {
 
 function contractMatchesDueFilter(row: ContractWithClient, filter: DueFilter): boolean {
   const expiry = row.expiry_date?.slice(0, 10);
-  if (filter === "overdue") return Boolean(expiry && expiry < todayIso());
+  if (filter === "overdue") return row.status === "overdue" || row.status === "expired" || Boolean(expiry && expiry < todayIso());
   if (filter === "month") {
     const range = monthRangeIso();
     return Boolean(expiry && expiry >= range.from && expiry <= range.to);

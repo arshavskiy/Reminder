@@ -663,7 +663,10 @@ async function saveExtractionEntities(
   }
   const expiryDate = forwardPastNextActionDate(result.expiry_date, new Date(), result.start_date);
   if (expiryDate || result.start_date || result.contract_number || result.document_number) {
-    const contractFields = {
+    const today = new Date().toISOString().slice(0, 10);
+    const originalExpiry = result.expiry_date ? String(result.expiry_date).slice(0, 10) : null;
+    const isOriginalOverdue = originalExpiry ? originalExpiry < today : false;
+    const contractFields: Record<string, unknown> = {
       ...(userId && { user_id: userId }),
       client_id: clientId,
       contract_number: result.contract_number ?? result.document_number ?? null,
@@ -680,12 +683,13 @@ async function saveExtractionEntities(
       summary: result.summary_hebrew ?? null,
       confidence: result.confidence ?? "medium",
       updated_at: new Date(),
+      ...(isOriginalOverdue && { status: "overdue" }),
     };
     const upsertResult = await col("contracts").findOneAndUpdate(
       { document_id: documentId },
       {
         $set: contractFields,
-        $setOnInsert: { document_id: documentId, status: "active", created_at: new Date() },
+        $setOnInsert: { document_id: documentId, status: isOriginalOverdue ? "overdue" : "active", created_at: new Date() },
       },
       { upsert: true, returnDocument: "after" }
     );
@@ -1451,7 +1455,10 @@ async function saveTemplateEntities(
   const expiryDate = forwardPastNextActionDate(rawExpiryDate, new Date(), startDate);
 
   if (docNumber || startDate || expiryDate) {
-    const contractFields = {
+    const today2 = new Date().toISOString().slice(0, 10);
+    const originalExpiry2 = rawExpiryDate ? String(rawExpiryDate).slice(0, 10) : null;
+    const isOriginalOverdue2 = originalExpiry2 ? originalExpiry2 < today2 : false;
+    const contractFields: Record<string, unknown> = {
       ...(userId && { user_id: userId }),
       client_id: clientId,
       contract_number: docNumber,
@@ -1464,12 +1471,13 @@ async function saveTemplateEntities(
       summary: getStr("findings") ?? getStr("notes") ?? getStr("summary_hebrew"),
       confidence: (getStr("_confidence") as "high" | "medium" | "low") ?? "medium",
       updated_at: new Date(),
+      ...(isOriginalOverdue2 && { status: "overdue" }),
     };
     const upsertResult = await col("contracts").findOneAndUpdate(
       { document_id: documentId },
       {
         $set: contractFields,
-        $setOnInsert: { document_id: documentId, status: "active", created_at: new Date() },
+        $setOnInsert: { document_id: documentId, status: isOriginalOverdue2 ? "overdue" : "active", created_at: new Date() },
       },
       { upsert: true, returnDocument: "after" }
     );
