@@ -17,17 +17,17 @@
     <section id="top" class="hero-section">
       <div class="hero">
         <div class="hero-content">
-          <div class="hero-badge">
-            <span>מותאם לעסקים ישראלים</span>
-          </div>
+<!--          <div class="hero-badge">-->
+<!--            <span>מותאם לעסקים ישראלים</span>-->
+<!--          </div>-->
           <h1>ניהול תסקירים ותזכורות <span>בלי כאב ראש</span></h1>
           <p class="hero-desc">
             ייבא מסמכים, חלץ נתונים אוטומטית עם AI, נהל לקוחות וקבל תזכורות לפני שכל חוזה או תסקיר פג תוקף.
           </p>
-          <div class="hero-actions">
-            <a class="btn-primary" href="#login-card">כניסה למערכת</a>
-            <a class="btn-secondary" href="#features">למד עוד</a>
-          </div>
+<!--          <div class="hero-actions">-->
+<!--            <a class="btn-primary" href="#login-card">כניסה למערכת</a>-->
+<!--            <a class="btn-secondary" href="#features">למד עוד</a>-->
+<!--          </div>-->
         </div>
 
         <div id="login-card" class="login-card">
@@ -167,32 +167,32 @@
       </div>
       <div class="features-grid">
         <article class="feature-card">
-          <div class="feature-icon">📄</div>
+<!--          <div class="feature-icon">📄</div>-->
           <h3>ייבוא מסמכים חכם</h3>
           <p>גרור ושחרר PDF, Word, Excel ועוד. AI יחלץ אוטומטית את שם הלקוח, תאריכים, סכומים ועוד.</p>
         </article>
         <article class="feature-card">
-          <div class="feature-icon">⏰</div>
+<!--          <div class="feature-icon">⏰</div>-->
           <h3>תזכורות אוטומטיות</h3>
           <p>קבל אימייל 90, 60 ו-30 יום לפני שחוזה או תסקיר פג תוקף. לא עוד הפתעות.</p>
         </article>
         <article class="feature-card">
-          <div class="feature-icon">👥</div>
+<!--          <div class="feature-icon">👥</div>-->
           <h3>ניהול לקוחות</h3>
           <p>כרטיס לקוח מלא עם היסטוריית חוזים, תזכורות ומשימות. כולל חיפוש מהיר.</p>
         </article>
         <article class="feature-card">
-          <div class="feature-icon">🔍</div>
+<!--          <div class="feature-icon">🔍</div>-->
           <h3>חיפוש מלא בתוך המסמכים</h3>
           <p>חפש לפי שם לקוח, מספר חוזה, תאריך ועוד — גם בתוכן המסמך עצמו.</p>
         </article>
         <article class="feature-card">
-          <div class="feature-icon">🏭</div>
+<!--          <div class="feature-icon">🏭</div>-->
           <h3>קטלוג ציוד</h3>
           <p>נהל מלאי ציוד — מנופים, פיגומים, מעליות ועוד — מקושר לתסקירי הבדיקה.</p>
         </article>
         <article class="feature-card">
-          <div class="feature-icon">📊</div>
+<!--          <div class="feature-icon">📊</div>-->
           <h3>דוחות חודשיים</h3>
           <p>הפק דוחות לפי לקוח, שדות וסדר עמודות שנשמרים לכל משתמש.</p>
         </article>
@@ -209,7 +209,7 @@
           <div class="step">
             <div class="step__num">1</div>
             <h3>ייבא מסמך</h3>
-            <p>גרור קבצים. המערכת מטפלת ב-PDF, Word, Excel ותמונות.</p>
+            <p>גרור קבצים. המערכת מטפלת ב- Word, Excel ותמונות.</p>
           </div>
           <div class="step">
             <div class="step__num">2</div>
@@ -218,17 +218,17 @@
           </div>
           <div class="step">
             <div class="step__num">3</div>
-            <h3>קבל תזכורות</h3>
-            <p>בוחר ימים מראש, ומקבל אימייל עם כל הפרטים כשמתקרבים לפקיעה.</p>
+            <h3>שלח תזכורות</h3>
+            <p>מערכת מתזמנת התרעות אימייל ללקוח עם כל הפרטים כשמתקרבים לפקיעה.</p>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="cta-section">
-      <h2>מוכן להתחיל?</h2>
-      <a class="btn-white" href="#login-card">כנס למערכת</a>
-    </section>
+<!--    <section class="cta-section">-->
+<!--      <h2>מוכן להתחיל?</h2>-->
+<!--      <a class="btn-white" href="#login-card">כנס למערכת</a>-->
+<!--    </section>-->
 
     <!-- Forgot password modal -->
     <n-modal v-model:show="showForgot" preset="card" title="שחזור סיסמה" style="max-width:380px;direction:rtl">
