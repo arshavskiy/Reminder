@@ -584,15 +584,18 @@ const user = computed(() => authStore.user as User | null);
 const userSettings = ref<UserSettings | null>(null);
 
 // ── Sidebar nav ──────────────────────────────────────────────────────────────
-const navItems = [
-  { key: "personal", icon: "👤", label: "פרטים אישיים" },
-  { key: "engineer", icon: "🔧", label: "פרופיל מהנדס" },
-  // { key: "stats",         icon: "📊", label: "סטטיסטיקות" },
-  // { key: "notifications", icon: "🔔", label: "התראות ועדכונים" },
-  { key: "settings", icon: "⚙️", label: "הגדרות" },
-  // { key: "theme",         icon: "🎨", label: "נושא עיצוב" },
-  { key: "subscription", icon: "💳", label: "מנוי ותשלומים" },
-];
+const navItems = computed(() => {
+  const isAdmin = user.value?.role === "admin";
+  return [
+    { key: "personal", icon: "👤", label: "פרטים אישיים" },
+    { key: "engineer", icon: "🔧", label: "פרופיל מהנדס" },
+    ...(isAdmin ? [{ key: "stats", icon: "📊", label: "סטטיסטיקות" }] : []),
+    ...(isAdmin ? [{ key: "notifications", icon: "🔔", label: "התראות ועדכונים" }] : []),
+    { key: "settings", icon: "⚙️", label: "הגדרות" },
+    ...(isAdmin ? [{ key: "theme", icon: "🎨", label: "נושא עיצוב" }] : []),
+    ...(isAdmin ? [{ key: "subscription", icon: "💳", label: "מנוי ותשלומים" }] : []),
+  ];
+});
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const initials = computed(() => {
