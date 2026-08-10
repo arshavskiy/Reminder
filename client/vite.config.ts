@@ -22,9 +22,9 @@ export default defineConfig({
       },
       includeAssets: ["favicon.svg", "favicon-32.png", "apple-touch-icon.png"],
       manifest: {
-        name: "בודק ציוד",
-        short_name: "ציוד",
-        description: "מערכת לניהול בדיקות ציוד הידראוליות",
+        name: "ReminderOCR",
+        short_name: "ReminderOCR",
+        description: "מערכת לניהול התראות תסקירים",
         theme_color: "#18181b",
         background_color: "#18181b",
         display: "standalone",
