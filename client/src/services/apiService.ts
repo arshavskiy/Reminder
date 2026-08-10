@@ -19,6 +19,21 @@ import type {
     UserSettings,
 } from "../../src/shared/types.js";
 
+export interface GmailAttachment {
+  attachmentId: string;
+  filename: string;
+  size: number;
+}
+
+export interface GmailEmail {
+  id: string;
+  subject: string;
+  from: string;
+  date: string;
+  internalDate: string;
+  attachments: GmailAttachment[];
+}
+
 export interface EquipmentHistoryEvent {
   id: string;
   contract_type: string | null;
@@ -488,6 +503,15 @@ export const api = {
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       return res.json() as Promise<{ url: string }>;
     },
+  },
+
+  gmail: {
+    status: () => get<{ connected: boolean }>("/gmail/status"),
+    authUrl: () => get<{ url: string }>("/gmail/auth-url"),
+    inbox: (q?: string, limit?: number) => get<{ emails: GmailEmail[] }>(`/gmail/inbox${qs({ q, limit })}`),
+    attachmentUrl: (messageId: string, attachmentId: string, filename: string) =>
+      `${BASE}/gmail/attachment/${messageId}/${attachmentId}?filename=${encodeURIComponent(filename)}`,
+    disconnect: () => del("/gmail/disconnect"),
   },
 
   equipment: {

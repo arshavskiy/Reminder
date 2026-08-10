@@ -10,6 +10,7 @@ import SearchPage from "../views/SearchPage.vue";
 import SettingsPage from "../views/SettingsPage.vue";
 import ProfilePage from "../views/ProfilePage.vue";
 import DocTemplatesPage from "../views/DocTemplatesPage.vue";
+import GmailInboxPage from "../views/GmailInboxPage.vue";
 import EmailTemplatesPage from "../views/EmailTemplatesPage.vue";
 import EquipmentPage from "../views/EquipmentPage.vue";
 import ReportsPage from "../views/ReportsPage.vue";
@@ -40,6 +41,7 @@ export const router = createRouter({
     { path: "/equipment", component: EquipmentPage, meta: { feature: FEATURES.pages.equipment } },
     { path: "/reports", component: ReportsPage, meta: { feature: FEATURES.pages.reports } },
     { path: "/field", component: () => import("../views/FieldPage.vue"), meta: { feature: FEATURES.pages.field } },
+    { path: "/gmail-inbox", component: GmailInboxPage },
     { path: "/admin", component: AdminPage, meta: { requireRole: "admin" } },
     { path: "/403", component: () => import("../views/ForbiddenPage.vue") },
   ],

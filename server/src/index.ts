@@ -25,6 +25,7 @@ import {registerDashboardRoutes} from "./routes/dashboard";
 import {registerTemplateRoutes} from "./routes/templates";
 import {registerEquipmentRoutes} from "./routes/equipment";
 import {registerAuthRoutes} from "./routes/auth";
+import {registerGmailRoutes} from "./routes/gmail";
 import {registerUserSettingsRoutes} from "./routes/userSettings";
 import {registerProfileRoutes} from "./routes/profile";
 import {registerAdminRoutes} from "./routes/admin";
@@ -143,6 +144,7 @@ app.use("/api/equipment", (req, res, next) => {
 });
 
 registerAuthRoutes(app);
+registerGmailRoutes(app);
 registerDocumentRoutes(app);
 registerClientRoutes(app);
 registerContractRoutes(app);
