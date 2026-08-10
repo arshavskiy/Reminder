@@ -34,7 +34,9 @@ function useResend(): boolean {
 }
 
 function renderHtml(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
+  return template.replace(/\{\{(\w+)\s*(?:\|([^}]*))?\}\}/g, (_, key, fallback) =>
+    vars[key] ?? (fallback != null ? fallback.trim() : "")
+  );
 }
 
 async function sendAuthEmail(options: {to: string; subject: string; html: string; text: string}) {
