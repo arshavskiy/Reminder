@@ -98,7 +98,7 @@ export function registerAuthRoutes(app: express.Application) {
       }
 
       // Upsert user — match by google_sub OR email (handles existing email/password accounts)
-      await col("users").updateOne(
+      const upsert = await col("users").updateOne(
         { $or: [{ google_sub: profile.sub }, { email: profile.email }] },
         {
           $set: {
