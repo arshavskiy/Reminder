@@ -582,7 +582,8 @@ export async function generateContractReminders(
   clientId: string | null,
   documentId: string | null,
   expiryDate: string,
-  userId?: string
+  userId?: string,
+  contactEmail?: string | null
 ) {
   const settings = getSettings();
   const today = new Date().toISOString().slice(0, 10);
@@ -590,6 +591,20 @@ export async function generateContractReminders(
   let contractOid: any;
   try { const { ObjectId } = await import("mongodb"); contractOid = new ObjectId(contractId); } catch { contractOid = contractId; }
   const contract = await col("contracts").findOne({ _id: contractOid }) as any;
+
+  // Resolve email: extracted email > client DB email. Skip if none.
+  let emailResolved = Boolean(contactEmail?.trim());
+  if (!emailResolved && clientId) {
+    let clientOid: any = clientId;
+    try { const { ObjectId } = await import("mongodb"); clientOid = new ObjectId(clientId); } catch {}
+    const client = await col("clients").findOne({ _id: clientOid }) as any;
+    emailResolved = Boolean(client?.email?.trim());
+  }
+  if (!emailResolved) {
+    logger.info("contract_reminder_skipped_no_email", { contract_id: contractId, user_id: userId ?? null });
+    return;
+  }
+
   const cleared = await col("reminders").deleteMany({
     ...(userId && { user_id: userId }),
     source_type: "contract_expiry",

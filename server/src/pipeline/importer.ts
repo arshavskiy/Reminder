@@ -371,7 +371,7 @@ export async function processDocument(
         );
         const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
         if (!pipeline?.skipReminders) {
-          await generateContractReminders(contractId, clientId, documentId, ocr.expiry_date, userId);
+          await generateContractReminders(contractId, clientId, documentId, ocr.expiry_date, userId, ocr.contact_email ?? null);
         }
       }
 
@@ -702,7 +702,7 @@ async function saveExtractionEntities(
     );
     const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
     if (expiryDate && !skipReminders && !isOriginalOverdue) {
-      await generateContractReminders(contractId, clientId, documentId, expiryDate, userId);
+      await generateContractReminders(contractId, clientId, documentId, expiryDate, userId, result.client_email ?? null);
     }
   }
 
