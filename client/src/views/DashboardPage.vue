@@ -42,9 +42,9 @@
       />
 
       <!-- ── Upload results modal ───────────────────────────────────────── -->
-      <n-modal v-model:show="showUploadResults" :mask-closable="!uploadResultsLoading" style="width: min(680px, 96vw)">
-        <n-card :title="`תוצאות העלאה — ${uploadResultRows.length} קבצים`" :bordered="false" size="medium" role="dialog">
-          <n-spin :show="uploadResultsLoading" description="מעבד מסמכים...">
+      <n-modal v-model:show="showUploadResults" :mask-closable="!uploadResultsLoading" style="width: min(780px, 96vw)">
+        <n-card :title="`תוצאות העלאה — ${uploadResultRows.length} קבצים`" :bordered="false" size="medium" role="dialog" style="max-height:80vh;display:flex;flex-direction:column">
+          <n-spin :show="uploadResultsLoading" description="מעבד מסמכים..." style="flex:1;overflow:hidden">
             <n-data-table
               :columns="uploadResultColumns"
               :data="uploadResultRows"
@@ -52,6 +52,8 @@
               :pagination="false"
               size="small"
               dir="rtl"
+              :max-height="420"
+              virtual-scroll
               style="min-height: 120px"
             />
           </n-spin>
@@ -261,6 +263,8 @@ interface UploadResultRow {
   docType: string;
   contractNumber: string;
   licenseNumber: string;
+  email: string;
+  remindersCreated: number | null;
   id?: string;
 }
 const showUploadResults = ref(false);
@@ -306,18 +310,25 @@ const uploadResultColumns: DataTableColumns<UploadResultRow> = [
     render: (row) => h("span", { style: "font-size:12px" }, row.client || "—"),
   },
   {
-    title: "סוג",
-    key: "docType",
+    title: "אימייל",
+    key: "email",
     align: "right",
     ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.docType || "—"),
+    render: (row) => h("span", { style: "font-size:12px" }, row.email || "—"),
   },
   {
-    title: "מספר רישוי",
-    key: "licenseNumber",
+    title: "תזכורות",
+    key: "remindersCreated",
     align: "right",
-    width: 110,
-    render: (row) => h("span", { style: "font-size:12px" }, row.licenseNumber || "—"),
+    width: 90,
+    render: (row) => {
+      if (row.status !== "done") return h("span", { style: "font-size:12px;color:var(--n-text-color-3)" }, "—");
+      if (row.remindersCreated === null) return h("span", { style: "font-size:12px;color:var(--n-text-color-3)" }, "—");
+      return h(NTag, {
+        type: row.remindersCreated > 0 ? "success" : "default",
+        size: "small", round: true,
+      }, { default: () => row.remindersCreated! > 0 ? `✓ ${row.remindersCreated}` : "אין" });
+    },
   },
   {
     title: "תאריך",
@@ -374,6 +385,8 @@ async function uploadDashboardFiles(
     docType: "",
     contractNumber: "",
     licenseNumber: "",
+    email: "",
+    remindersCreated: null,
   }));
   uploadResultsLoading.value = true;
   showUploadResults.value = true;
@@ -464,6 +477,13 @@ async function pollDocumentResults(pendingIds: string[], allIds: string[]) {
               settled.add(id);
               let fields: Record<string, any> = {};
               try { fields = doc.extracted_fields ? JSON.parse(doc.extracted_fields as string) : {}; } catch { /* ignore */ }
+              let remindersCreated: number | null = null;
+              if (doc.processing_status === "done") {
+                try {
+                  const rems = await api.reminders.list({ documentId: id, limit: 100 });
+                  remindersCreated = rems.total ?? rems.rows?.length ?? 0;
+                } catch { remindersCreated = 0; }
+              }
               uploadResultRows.value = uploadResultRows.value.map((row) =>
                 row.id === id
                   ? {
@@ -474,7 +494,8 @@ async function pollDocumentResults(pendingIds: string[], allIds: string[]) {
                       docType: fields.document_type ?? fields.contract_type ?? (doc as any).document_type ?? "",
                       contractNumber: fields.contract_number ?? fields.report_number ?? "",
                       licenseNumber: fields.license_number ?? "",
-                      // preserve duplicate flag
+                      email: fields.client_email ?? fields.contact_email ?? "",
+                      remindersCreated,
                     }
                   : row,
               );

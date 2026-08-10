@@ -132,6 +132,8 @@ export function registerReminderRoutes(app: express.Application) {
 
     const filter: Record<string, any> = { user_id: userId };
     if (status) filter.status = status;
+    const documentId = req.query.documentId as string | undefined;
+    if (documentId) filter.document_id = documentId;
     if (days) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
