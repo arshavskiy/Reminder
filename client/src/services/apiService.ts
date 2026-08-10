@@ -438,6 +438,8 @@ export const api = {
   docTemplates: {
     list: () => get<DocTemplate[]>("/doc-templates"),
     kinds: () => get<{ kinds: string[] }>("/doc-templates/kinds"),
+    suggestKind: (body: { name: string; description: string; fields: unknown[]; match_keywords: string[] }) =>
+      post<{ kind: string | null }>("/doc-templates/suggest-kind", body),
     get: (id: number) => get<DocTemplate>(`/doc-templates/${id}`),
     create: (body: Partial<DocTemplate>) => post<DocTemplate>("/doc-templates", body),
     update: (id: number, body: Partial<DocTemplate>) => put<DocTemplate>(`/doc-templates/${id}`, body),

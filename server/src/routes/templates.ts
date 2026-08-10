@@ -50,6 +50,53 @@ export function registerTemplateRoutes(app: express.Application) {
     res.json({ kinds: all });
   });
 
+  // AI-suggest a document_kind from template metadata
+  app.post("/api/doc-templates/suggest-kind", async (req, res) => {
+    try {
+      const { name, description, fields, match_keywords } = req.body as {
+        name: string;
+        description: string;
+        fields: { key: string; label_he: string }[];
+        match_keywords: string[];
+      };
+
+      const { getSettings } = await import("../settings.js");
+      const OpenAI = (await import("openai")).default;
+      const settings = getSettings();
+      const client = settings.aiBackend === "ollama"
+        ? new OpenAI({ baseURL: `${settings.ollamaUrl}/v1`, apiKey: "ollama" })
+        : new OpenAI({ apiKey: settings.openAiKey });
+      const model = settings.aiBackend === "ollama" ? settings.ollamaModel : settings.openAiModel;
+
+      const prompt = [
+        `Template name: ${name}`,
+        description ? `Description: ${description}` : "",
+        match_keywords?.length ? `Keywords: ${match_keywords.join(", ")}` : "",
+        fields?.length ? `Fields: ${fields.map((f) => f.label_he || f.key).join(", ")}` : "",
+      ].filter(Boolean).join("\n");
+
+      const response = await client.chat.completions.create({
+        model,
+        temperature: 0,
+        max_tokens: 60,
+        messages: [
+          {
+            role: "system",
+            content: `You classify document templates. Based on the metadata, suggest ONE concise Hebrew document type name (סוג מסמך), 2-4 words max. Use existing kinds if they fit: inspection_report, contract, invoice, certificate, unknown. If none fit, invent a short Hebrew label. Return ONLY valid JSON: {"kind": "..."}`,
+          },
+          { role: "user", content: prompt },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const raw = response.choices[0]?.message?.content ?? "{}";
+      const parsed = JSON.parse(raw) as { kind?: string };
+      res.json({ kind: parsed.kind ?? null });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   app.get("/api/doc-templates/:id", async (req, res) => {
     const tpl = await loadTemplate(req.params.id);
     if (!tpl) {

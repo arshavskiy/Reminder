@@ -95,14 +95,23 @@
             </n-gi>
             <n-gi>
               <n-form-item label="סוג מסמך">
-                <n-select
-                  v-model:value="editing.document_kind"
-                  :options="kindOptions"
-                  :virtual-scroll="false"
-                  filterable
-                  tag
-                  placeholder="בחר או הקלד סוג חדש..."
-                />
+                <n-input-group>
+                  <n-select
+                    v-model:value="editing.document_kind"
+                    :options="kindOptions"
+                    :virtual-scroll="false"
+                    filterable
+                    tag
+                    placeholder="בחר או הקלד סוג חדש..."
+                    style="flex: 1"
+                  />
+                  <n-tooltip placement="bottom">
+                    <template #trigger>
+                      <n-button :loading="suggestingKind" secondary @click="suggestKind">✨</n-button>
+                    </template>
+                    AI יציע סוג מסמך לפי שם, תיאור ושדות
+                  </n-tooltip>
+                </n-input-group>
               </n-form-item>
             </n-gi>
           </n-grid>
@@ -249,6 +258,7 @@ import {
   NGi,
   NGrid,
   NInput,
+  NInputGroup,
   NModal,
   NSelect,
   NSpace,
@@ -256,6 +266,7 @@ import {
   NTabPane,
   NTabs,
   NTag,
+  NTooltip,
   NUpload,
   NUploadDragger,
   useMessage,
@@ -472,6 +483,34 @@ async function onGenFile({ file }: { file: { file: File } }) {
     message.error(String(e));
   } finally {
     generating.value = false;
+  }
+}
+
+// ── Suggest document kind ───────────────────────────────────────────────────
+const suggestingKind = ref(false);
+
+async function suggestKind() {
+  if (!editing.value) return;
+  suggestingKind.value = true;
+  try {
+    const { kind } = await api.docTemplates.suggestKind({
+      name: editing.value.name,
+      description: editing.value.description ?? "",
+      fields: editing.value.fields,
+      match_keywords: editing.value.match_keywords,
+    });
+    if (kind) {
+      editing.value.document_kind = kind as DocumentKind;
+      // Add to dropdown if it's a new custom kind
+      if (!kindOptions.value.find((o) => o.value === kind)) {
+        kindOptions.value = [...kindOptions.value, { label: kind, value: kind }];
+      }
+      message.success(`AI הציע: ${kind}`);
+    }
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    suggestingKind.value = false;
   }
 }
 
