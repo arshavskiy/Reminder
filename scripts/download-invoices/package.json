@@ -1,0 +1,9 @@
+{
+  "name": "gmail-invoice-downloader",
+  "type": "module",
+  "version": "1.0.0",
+  "dependencies": {
+    "googleapis": "^144.0.0",
+    "open": "^10.1.0"
+  }
+}
