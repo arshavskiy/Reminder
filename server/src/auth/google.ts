@@ -1,3 +1,4 @@
+import { createPublicKey } from "crypto";
 import { getSettings } from "../settings";
 
 /**
@@ -112,9 +113,10 @@ export async function verifyIdToken(idToken: string): Promise<{
     const signingInput = `${parts[0]}.${parts[1]}`;
     const signature = Buffer.from(parts[2], "base64url");
 
+    const spkiDer = createPublicKey(pemKey).export({ type: "spki", format: "der" });
     const cryptoKey = await crypto.subtle.importKey(
       "spki",
-      pemToDer(pemKey),
+      spkiDer,
       { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
       false,
       ["verify"]
@@ -146,13 +148,6 @@ export async function verifyIdToken(idToken: string): Promise<{
   };
 }
 
-function pemToDer(pem: string): ArrayBuffer {
-  const b64 = pem
-    .replace(/-----BEGIN CERTIFICATE-----/, "")
-    .replace(/-----END CERTIFICATE-----/, "")
-    .replace(/\s+/g, "");
-  return Buffer.from(b64, "base64").buffer;
-}
 
 /**
  * Generate a random state string for OAuth

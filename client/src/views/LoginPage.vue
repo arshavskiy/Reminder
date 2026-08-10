@@ -81,8 +81,8 @@
                 </div>
               </n-form>
 
-<!--          <div class="divider"><span>או</span></div>-->
-<!--          <GoogleSignIn @error="onGisError" />-->
+          <div class="divider"><span>או</span></div>
+          <GoogleSignIn @error="onGisError" />
             </n-tab-pane>
 
         <!-- Register tab -->
@@ -261,6 +261,7 @@ import {useRoute, useRouter} from "vue-router";
 import {NAlert, NButton, NForm, NFormItem, NIcon, NInput, NModal, NTabPane, NTabs} from "naive-ui";
 import {BriefcaseOutline} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
+import GoogleSignIn from "../components/GoogleSignIn.vue";
 import {useDashboardStore} from "../stores/dashboard.js";
 import {useDocumentsStore} from "../stores/documents.js";
 import {useContractsStore} from "../stores/contracts.js";

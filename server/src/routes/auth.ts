@@ -97,18 +97,18 @@ export function registerAuthRoutes(app: express.Application) {
         }
       }
 
-      // Upsert user
-      const upsert = await col("users").updateOne(
-        { google_sub: profile.sub },
+      // Upsert user — match by google_sub OR email (handles existing email/password accounts)
+      await col("users").updateOne(
+        { $or: [{ google_sub: profile.sub }, { email: profile.email }] },
         {
           $set: {
+            google_sub: profile.sub,
             email: profile.email,
             name: profile.name ?? null,
             picture_url: profile.picture ?? null,
             last_login_at: new Date(),
           },
           $setOnInsert: {
-            google_sub: profile.sub,
             role: "user",
             is_active: 1,
             created_at: new Date(),
@@ -117,7 +117,7 @@ export function registerAuthRoutes(app: express.Application) {
         { upsert: true }
       );
 
-      const user = await col("users").findOne({ google_sub: profile.sub }) as any;
+      const user = await col("users").findOne({ $or: [{ google_sub: profile.sub }, { email: profile.email }] }) as any;
       if (!user) throw new Error("User not found after upsert");
 
       // Ensure user_settings row exists
@@ -173,18 +173,18 @@ export function registerAuthRoutes(app: express.Application) {
         }
       }
 
-      // Upsert user
+      // Upsert user — match by google_sub OR email (handles existing email/password accounts)
       const upsert = await col("users").updateOne(
-        { google_sub: profile.sub },
+        { $or: [{ google_sub: profile.sub }, { email: profile.email }] },
         {
           $set: {
+            google_sub: profile.sub,
             email: profile.email,
             name: profile.name ?? null,
             picture_url: profile.picture ?? null,
             last_login_at: new Date(),
           },
           $setOnInsert: {
-            google_sub: profile.sub,
             role: "user",
             is_active: 1,
             created_at: new Date(),
@@ -193,7 +193,7 @@ export function registerAuthRoutes(app: express.Application) {
         { upsert: true }
       );
 
-      const user = await col("users").findOne({ google_sub: profile.sub }) as any;
+      const user = await col("users").findOne({ $or: [{ google_sub: profile.sub }, { email: profile.email }] }) as any;
       if (!user) throw new Error("User not found after upsert");
 
       // Ensure user_settings row exists
