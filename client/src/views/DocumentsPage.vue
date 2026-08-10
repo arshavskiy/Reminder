@@ -319,6 +319,7 @@
       :uploading="uploading"
       @upload="onModalUpload"
       @view-document="openDocumentFromModal"
+      @create-template="onCreateTemplate"
     />
   </div>
 </template>
@@ -407,6 +408,16 @@ function openUploadModal() {
 function openDocumentFromModal(id: string) {
   showUploadModal.value = false;
   router.push(`/documents/${id}`);
+}
+
+function onCreateTemplate(file: File) {
+  // Store the file in sessionStorage key so DocTemplatesPage can pick it up
+  // We navigate there; the page reads the flag and auto-opens the generator
+  sessionStorage.setItem("doc_templates_pending_file_name", file.name);
+  sessionStorage.setItem("doc_templates_pending_file_size", String(file.size));
+  // Store the actual file in a module-level variable (same session)
+  (window as any).__pendingTemplateFile = file;
+  router.push("/doc-templates");
 }
 
 async function openRescanModal() {

@@ -99,6 +99,9 @@
                   v-model:value="editing.document_kind"
                   :options="kindOptions"
                   :virtual-scroll="false"
+                  filterable
+                  tag
+                  placeholder="בחר או הקלד סוג חדש..."
                 />
               </n-form-item>
             </n-gi>
@@ -173,6 +176,46 @@
             <n-checkbox v-model:checked="editing.is_default as any">תבנית ברירת מחדל</n-checkbox>
           </n-form-item>
         </n-form>
+
+        <!-- ── Test extraction panel ───────────────────────────────────── -->
+        <n-divider style="margin: 8px 0 12px" />
+        <div class="test-panel">
+          <n-space align="center" justify="space-between" style="margin-bottom: 10px">
+            <span style="font-weight: 600; font-size: 14px">בדוק חילוץ על מסמך לדוגמה</span>
+            <n-tag :bordered="false" size="small" type="warning">לא נשמר</n-tag>
+          </n-space>
+          <n-upload
+            :show-file-list="false"
+            :custom-request="onTestFile as any"
+            accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg,.txt"
+          >
+            <n-button :loading="testing" secondary size="small" style="width: 100%">
+              {{ testFile ? `📄 ${testFile.name}` : '📂 העלה קובץ לבדיקה' }}
+            </n-button>
+          </n-upload>
+
+          <div v-if="testResult" class="test-result">
+            <div class="test-result__meta">
+              מודל: {{ testResult.model }} · {{ testResult.exec_ms }}ms
+            </div>
+            <div v-if="testResult.error" class="test-result__error">
+              שגיאה: {{ testResult.error }}
+            </div>
+            <div v-else-if="testResult.fields" class="test-result__fields">
+              <div
+                v-for="[k, v] in Object.entries(testResult.fields).filter(([,v]) => v !== null && v !== '')"
+                :key="k"
+                class="test-result__row"
+              >
+                <span class="test-result__key">{{ editing?.fields.find(f => f.key === k)?.label_he ?? k }}</span>
+                <span class="test-result__val">{{ Array.isArray(v) ? v.join(', ') : String(v) }}</span>
+              </div>
+              <div v-if="!Object.values(testResult.fields).some(v => v !== null && v !== '')" class="test-result__empty">
+                לא חולצו שדות
+              </div>
+            </div>
+          </div>
+        </div>
 
         <template #footer>
           <n-space>
@@ -249,7 +292,7 @@ const typeOptions = [
   { label: "רשימה", value: "list" },
 ];
 
-const kindOptions = [
+const BUILTIN_KIND_OPTIONS = [
   { label: "תסקיר בדיקה", value: "inspection_report" },
   { label: "חוזה / הסכם",  value: "contract" },
   { label: "חשבונית",      value: "invoice" },
@@ -257,19 +300,32 @@ const kindOptions = [
   { label: "אחר / לא ידוע", value: "unknown" },
 ];
 
+const kindOptions = ref([...BUILTIN_KIND_OPTIONS]);
+
+async function loadKinds() {
+  try {
+    const { kinds } = await api.docTemplates.kinds();
+    const builtinValues = new Set(BUILTIN_KIND_OPTIONS.map((o) => o.value));
+    const custom = kinds
+      .filter((k) => !builtinValues.has(k))
+      .map((k) => ({ label: k, value: k }));
+    kindOptions.value = [...BUILTIN_KIND_OPTIONS, ...custom];
+  } catch { /* fallback to builtins */ }
+}
+
 function kindLabel(kind: DocumentKind): string {
-  return kindOptions.find((o) => o.value === kind)?.label ?? kind;
+  return kindOptions.value.find((o) => o.value === kind)?.label ?? kind;
 }
 
 function kindTagType(kind: DocumentKind): "default" | "info" | "success" | "warning" | "error" {
-  const map: Record<DocumentKind, "default" | "info" | "success" | "warning" | "error"> = {
+  const map: Record<string, "default" | "info" | "success" | "warning" | "error"> = {
     inspection_report: "warning",
     contract: "info",
     invoice: "success",
     certificate: "error",
     unknown: "default",
   };
-  return map[kind] ?? "default";
+  return map[kind] ?? "info";
 }
 
 const dateFieldOptions = computed(() => {
@@ -282,10 +338,20 @@ const dateFieldOptions = computed(() => {
 async function load() {
   templates.value = await api.docTemplates.list();
 }
-onMounted(() => {
+onMounted(async () => {
   updateViewport();
   window.addEventListener("resize", updateViewport);
   load();
+  loadKinds();
+
+  // Auto-open generator if a file was passed from the documents page
+  const pendingFile = (window as any).__pendingTemplateFile as File | undefined;
+  if (pendingFile) {
+    delete (window as any).__pendingTemplateFile;
+    sessionStorage.removeItem("doc_templates_pending_file_name");
+    sessionStorage.removeItem("doc_templates_pending_file_size");
+    await openGenerateWithFile(pendingFile);
+  }
 });
 
 onBeforeUnmount(() => {
@@ -293,8 +359,9 @@ onBeforeUnmount(() => {
 });
 
 function select(t: DocTemplate) {
-  // deep-ish clone so we don't mutate the table row
   editing.value = JSON.parse(JSON.stringify(t));
+  testFile.value = null;
+  testResult.value = null;
   showEdit.value = true;
 }
 
@@ -313,6 +380,8 @@ function newTemplate() {
     created_at: "",
     updated_at: "",
   };
+  testFile.value = null;
+  testResult.value = null;
   showEdit.value = true;
 }
 
@@ -405,6 +474,45 @@ async function onGenFile({ file }: { file: { file: File } }) {
     generating.value = false;
   }
 }
+
+// ── Test extraction ─────────────────────────────────────────────────────────
+const testing = ref(false);
+const testFile = ref<File | null>(null);
+interface TestResult { fields: Record<string, unknown> | null; model: string; exec_ms: number; error: string | null }
+const testResult = ref<TestResult | null>(null);
+
+async function onTestFile({ file }: { file: { file: File } }) {
+  if (!editing.value) return;
+  testFile.value = file.file;
+  testResult.value = null;
+  testing.value = true;
+  try {
+    const result = await api.docTemplates.testExtract(file.file, editing.value);
+    testResult.value = result;
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    testing.value = false;
+  }
+}
+
+// Called externally (e.g. from upload modal) to generate a template from a specific file
+async function openGenerateWithFile(file: File) {
+  showGenerate.value = true;
+  genMode.value = "file";
+  generating.value = true;
+  try {
+    const { draft } = await api.docTemplates.generateFromFile(file);
+    openDraft(draft);
+  } catch (e) {
+    message.error(String(e));
+    showGenerate.value = false;
+  } finally {
+    generating.value = false;
+  }
+}
+
+defineExpose({ openGenerateWithFile });
 </script>
 
 <style scoped>
@@ -413,6 +521,61 @@ async function onGenFile({ file }: { file: { file: File } }) {
   border: 1px solid var(--border-color);
   border-radius: 4px;
   margin-bottom: 6px;
+}
+
+.test-panel {
+  padding: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.test-result {
+  margin-top: 12px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 10px;
+}
+
+.test-result__meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.test-result__error {
+  color: var(--error-color, #ef4444);
+  font-size: 13px;
+}
+
+.test-result__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.test-result__row {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.test-result__key {
+  color: var(--text-muted);
+  min-width: 120px;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.test-result__val {
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.test-result__empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 @media (max-width: 720px) {

@@ -33,6 +33,23 @@ export function registerTemplateRoutes(app: express.Application) {
     res.json(await loadAllTemplates(userId));
   });
 
+  // Return all unique document_kind values (builtins + user-defined)
+  app.get("/api/doc-templates/kinds", async (req, res) => {
+    const userId = await currentUserId(req).catch(() => undefined);
+    const builtin = ["inspection_report", "contract", "invoice", "certificate", "unknown"];
+    const filter = userId
+      ? { $or: [{ is_builtin: 1 }, { user_id: userId }] }
+      : { is_builtin: 1 };
+    const rows = await col("doc_templates")
+      .find(filter, { projection: { document_kind: 1 } })
+      .toArray();
+    const custom = rows
+      .map((r) => (r as any).document_kind as string)
+      .filter((k) => k && !builtin.includes(k));
+    const all = [...builtin, ...Array.from(new Set(custom))];
+    res.json({ kinds: all });
+  });
+
   app.get("/api/doc-templates/:id", async (req, res) => {
     const tpl = await loadTemplate(req.params.id);
     if (!tpl) {
@@ -181,6 +198,82 @@ export function registerTemplateRoutes(app: express.Application) {
           usage: run.usage,
           model: run.model,
           exec_ms: run.execMs,
+        });
+      } catch (err) {
+        res.status(500).json({ error: String(err) });
+      }
+    }
+  );
+
+  // ── Test extraction against a (possibly unsaved) template ─────────────────
+  app.post(
+    "/api/doc-templates/test-extract",
+    upload.single("file"),
+    async (req, res) => {
+      try {
+        const file = req.file;
+        if (!file) { res.status(400).json({ error: "file required" }); return; }
+
+        // Parse template fields from form body
+        let fields: DocTemplate["fields"] = [];
+        try { fields = JSON.parse(req.body.fields ?? "[]"); } catch {}
+
+        const tmpDir = join(getDataDir(), "template_samples");
+        mkdirSync(tmpDir, { recursive: true });
+        const ext = extname(file.originalname).toLowerCase();
+        const safeName = file.originalname.replace(/[^\p{L}\p{N}._-]/gu, "_");
+        const tmpPath = join(tmpDir, `${Date.now()}_${safeName}`);
+        writeFileSync(tmpPath, file.buffer);
+
+        const mime = file.mimetype || "";
+        let text = "";
+        try {
+          if (mime === "application/pdf" || ext === ".pdf") {
+            const pdf = await parsePdf(tmpPath);
+            text = pdf.text;
+            if (pdf.needsOcr) text = await ocrFile(tmpPath);
+          } else if (mime.startsWith("image/") || [".png", ".jpg", ".jpeg", ".tif", ".tiff"].includes(ext)) {
+            text = await ocrFile(tmpPath);
+          } else if (ext === ".docx") {
+            text = await parseDocx(tmpPath);
+          } else if (ext === ".xlsx") {
+            text = parseXlsx(tmpPath);
+          } else {
+            text = readFileSync(tmpPath, "utf-8");
+          }
+        } catch (err) {
+          res.status(500).json({ error: `Failed to extract text: ${err}` }); return;
+        }
+
+        if (text.trim().length < 10) {
+          res.status(400).json({ error: "could not extract enough text from the document" }); return;
+        }
+
+        // Build a temporary template object for extraction
+        const { extractWithTemplate } = await import("../pipeline/extractor.js");
+        const tpl: DocTemplate = {
+          id: 0,
+          name: "test",
+          description: null,
+          match_keywords: [],
+          document_kind: (req.body.document_kind as any) ?? "unknown",
+          fields,
+          expiry_field: req.body.expiry_field ?? null,
+          cached_system_prompt: null,
+          is_default: 0,
+          is_builtin: 0,
+          created_at: "",
+          updated_at: "",
+        };
+
+        const run = await extractWithTemplate(text, tpl, undefined, file.originalname);
+        res.json({
+          fields: run.fields,
+          raw_json: run.rawJson,
+          text_preview: text.slice(0, 800),
+          model: run.model,
+          exec_ms: run.execMs,
+          error: run.error,
         });
       } catch (err) {
         res.status(500).json({ error: String(err) });

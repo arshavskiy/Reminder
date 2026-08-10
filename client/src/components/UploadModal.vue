@@ -335,6 +335,13 @@
         <div class="modal-footer__actions">
           <span v-if="files.length" class="footer-count">{{ files.length }} קובץ/ים נבחרו</span>
           <n-button
+            v-if="files.length"
+            secondary
+            @click="createTemplate"
+          >
+            ✨ צור תבנית מהמסמך
+          </n-button>
+          <n-button
             :disabled="!files.length"
             :loading="uploading"
             type="primary"
@@ -437,6 +444,7 @@ const emit = defineEmits<{
   (e: "upload", files: File[], fields: ExtractionField[], options: UploadOptions): void;
   (e: "reminders-saved", count: number): void;
   (e: "view-document", id: string): void;
+  (e: "create-template", file: File): void;
 }>();
 
 const visible = defineModel<boolean>({ required: true });
@@ -544,6 +552,12 @@ function addField() {
 }
 
 function cancel() {
+  visible.value = false;
+}
+
+function createTemplate() {
+  if (!files.value.length) return;
+  emit("create-template", files.value[0]);
   visible.value = false;
 }
 

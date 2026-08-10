@@ -437,6 +437,7 @@ export const api = {
 
   docTemplates: {
     list: () => get<DocTemplate[]>("/doc-templates"),
+    kinds: () => get<{ kinds: string[] }>("/doc-templates/kinds"),
     get: (id: number) => get<DocTemplate>(`/doc-templates/${id}`),
     create: (body: Partial<DocTemplate>) => post<DocTemplate>("/doc-templates", body),
     update: (id: number, body: Partial<DocTemplate>) => put<DocTemplate>(`/doc-templates/${id}`, body),
@@ -452,6 +453,16 @@ export const api = {
       const res = await fetch(`${BASE}/doc-templates/generate-from-file`, { method: "POST", body: fd, credentials: "include" });
       if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
       return res.json() as Promise<{ draft: Partial<DocTemplate>; sample_text_preview: string; usage: unknown; model: string; exec_ms: number }>;
+    },
+    testExtract: async (file: File, tpl: Partial<DocTemplate>) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("fields", JSON.stringify(tpl.fields ?? []));
+      if (tpl.document_kind) fd.append("document_kind", tpl.document_kind);
+      if (tpl.expiry_field) fd.append("expiry_field", tpl.expiry_field);
+      const res = await fetch(`${BASE}/doc-templates/test-extract`, { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
+      return res.json() as Promise<{ fields: Record<string, unknown> | null; raw_json: string; text_preview: string; model: string; exec_ms: number; error: string | null }>;
     },
   },
 

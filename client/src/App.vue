@@ -322,6 +322,7 @@ const allNav = [
   {label: "הגדרת ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
   // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
+  {label: "סוגי מסמכים", key: "doc-templates", minRole: "user", feature: FEATURES.pages.docTemplates},
   {label: "תבניות", key: "email-templates", minRole: "user", feature: FEATURES.pages.emailTemplates},
   {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];

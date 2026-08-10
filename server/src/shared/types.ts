@@ -346,7 +346,8 @@ export type DocumentKind =
   | "contract"           // חוזה / הסכם
   | "invoice"            // חשבונית
   | "certificate"        // תעודה / הסמכה / רישיון
-  | "unknown";
+  | "unknown"
+  | (string & {});       // user-defined custom kinds
 
 // ── Document templates ──────────────────────────────────────────────────────
 export type FieldType =
