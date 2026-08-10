@@ -35,7 +35,7 @@ async function main() {
     });
     deletedReminders += del.deletedCount;
 
-    console.log(`  ${contractId} expiry=${c.expiry_date} → overdue, deleted ${del.deletedCount} reminders`);
+    console.log(`  ${contractId} expiry=${(c as any).expiry_date} → overdue, deleted ${del.deletedCount} reminders`);
   }
 
   // 2. Also delete stale pending reminders for contracts already marked overdue
