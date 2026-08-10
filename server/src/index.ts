@@ -74,6 +74,10 @@ app.use(
 );
 
 app.use(express.json({ limit: "50mb" }));
+app.use((_req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
+  next();
+});
 app.use(requestLogger);
 
 // Railway health check — must return 200 before traffic is routed
