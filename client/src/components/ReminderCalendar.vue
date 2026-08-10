@@ -70,15 +70,17 @@
         <span v-if="!testsOnly" class="rcal__legend-item">
           <span class="rcal__legend-dot" style="background:#2080f0"></span> נשלחה
         </span>
-        <span class="rcal__legend-item">
-          <span class="rcal__legend-dot" style="background:#d03050"></span> פג תוקף
-        </span>
-        <span class="rcal__legend-item">
-          <span class="rcal__legend-dot" style="background:#f0a020"></span> ≤30 יום
-        </span>
-        <span class="rcal__legend-item">
-          <span class="rcal__legend-dot" style="background:#e8c84a"></span> ≤90 יום
-        </span>
+        <template v-if="featuresStore.hasFeature(FEATURES.dashboard.calendarFilters)">
+          <span class="rcal__legend-item">
+            <span class="rcal__legend-dot" style="background:#d03050"></span> פג תוקף
+          </span>
+          <span class="rcal__legend-item">
+            <span class="rcal__legend-dot" style="background:#f0a020"></span> ≤30 יום
+          </span>
+          <span class="rcal__legend-item">
+            <span class="rcal__legend-dot" style="background:#e8c84a"></span> ≤90 יום
+          </span>
+        </template>
       </div>
     </header>
 
@@ -495,6 +497,7 @@ function contractNumberLabel(contractNumber: string | null | undefined): string 
 }
 
 function expiryVisualStatus(e: ExpiryCalendarItem): "overdue" | "critical" | "warning" | "ok" {
+  if (!featuresStore.hasFeature(FEATURES.dashboard.calendarFilters)) return "ok";
   if (e.days_until < 0) return "overdue";
   if (e.days_until <= 30) return "critical";
   if (e.days_until <= 90) return "warning";

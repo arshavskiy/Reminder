@@ -31,8 +31,6 @@
           <n-form-item label="לקוח" :show-feedback="false">
             <n-select v-model:value="selectedClientId" :options="clientOptions"/>
           </n-form-item>
-          <n-button :loading="downloading === 'docx'" :disabled="!hasFields" @click="downloadReport('docx')">הורד DOCX</n-button>
-          <n-button :loading="downloading === 'xlsx'" :disabled="!hasFields" @click="downloadReport('xlsx')">הורד XLSX</n-button>
         </div>
         <p v-if="selectedClientEmail" class="generator-recipient">דוח לקוח {{ selectedPeriodLabel }} יישלח ללקוח: {{ selectedClientEmail }} וגם לנמענים/כתובת החשבון.</p>
         <p v-else-if="selectedReportClientId" class="generator-recipient generator-recipient--warning">ללקוח הנבחר לא מוגדר אימייל. דוח הלקוח {{ selectedPeriodLabel }} יישלח רק לנמענים/כתובת החשבון.</p>
@@ -54,6 +52,8 @@
           </n-checkbox-group>
         </div>
         <div class="reports-actions reports-actions--generator">
+          <n-button :loading="downloading === 'docx'" :disabled="!hasFields" type="primary" @click="downloadReport('docx')">הורד DOCX</n-button>
+          <n-button :loading="downloading === 'xlsx'" :disabled="!hasFields" type="primary" @click="downloadReport('xlsx')">הורד XLSX</n-button>
           <n-button :loading="sending" :disabled="!canSendReport" type="primary" @click="sendNow">
             {{ sendButtonLabel }}
           </n-button>
@@ -479,7 +479,7 @@ onMounted(loadSettings);
 .generator-controls {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: center;
+  align-items: end;
   gap: 10px;
   margin-top: 24px;
 }
