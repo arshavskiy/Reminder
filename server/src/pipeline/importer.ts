@@ -661,11 +661,14 @@ async function saveExtractionEntities(
       { $set: { extracted_fields: JSON.stringify(resultFields), updated_at: new Date() } }
     );
   }
-  const expiryDate = forwardPastNextActionDate(result.expiry_date, new Date(), result.start_date);
+  const today = new Date().toISOString().slice(0, 10);
+  const originalExpiry = result.expiry_date ? String(result.expiry_date).slice(0, 10) : null;
+  const isOriginalOverdue = originalExpiry ? originalExpiry < today : false;
+  // Overdue contracts: keep original expiry date, no forwarding, no reminders.
+  const expiryDate = isOriginalOverdue
+    ? originalExpiry
+    : forwardPastNextActionDate(result.expiry_date, new Date(), result.start_date);
   if (expiryDate || result.start_date || result.contract_number || result.document_number) {
-    const today = new Date().toISOString().slice(0, 10);
-    const originalExpiry = result.expiry_date ? String(result.expiry_date).slice(0, 10) : null;
-    const isOriginalOverdue = originalExpiry ? originalExpiry < today : false;
     const contractFields: Record<string, unknown> = {
       ...(userId && { user_id: userId }),
       client_id: clientId,
@@ -694,7 +697,7 @@ async function saveExtractionEntities(
       { upsert: true, returnDocument: "after" }
     );
     const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
-    if (expiryDate && !skipReminders) {
+    if (expiryDate && !skipReminders && !isOriginalOverdue) {
       await generateContractReminders(contractId, clientId, documentId, expiryDate, userId);
     }
   }
@@ -1452,12 +1455,15 @@ async function saveTemplateEntities(
     getStr("start_date") ?? getStr("inspection_date") ?? getStr("issue_date");
   const rawExpiryDate = template.expiry_field ? getStr(template.expiry_field) : null;
   const inspectionInterval = getNum("inspection_interval_months") ?? getNum("date_diff_months") ?? inspectionIntervalMonths(startDate, rawExpiryDate);
-  const expiryDate = forwardPastNextActionDate(rawExpiryDate, new Date(), startDate);
+  const today2 = new Date().toISOString().slice(0, 10);
+  const originalExpiry2 = rawExpiryDate ? String(rawExpiryDate).slice(0, 10) : null;
+  const isOriginalOverdue2 = originalExpiry2 ? originalExpiry2 < today2 : false;
+  // Overdue contracts: keep original expiry, no forwarding, no reminders.
+  const expiryDate = isOriginalOverdue2
+    ? originalExpiry2
+    : forwardPastNextActionDate(rawExpiryDate, new Date(), startDate);
 
   if (docNumber || startDate || expiryDate) {
-    const today2 = new Date().toISOString().slice(0, 10);
-    const originalExpiry2 = rawExpiryDate ? String(rawExpiryDate).slice(0, 10) : null;
-    const isOriginalOverdue2 = originalExpiry2 ? originalExpiry2 < today2 : false;
     const contractFields: Record<string, unknown> = {
       ...(userId && { user_id: userId }),
       client_id: clientId,
@@ -1482,7 +1488,7 @@ async function saveTemplateEntities(
       { upsert: true, returnDocument: "after" }
     );
     const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
-    if (expiryDate && !skipReminders) {
+    if (expiryDate && !skipReminders && !isOriginalOverdue2) {
       await generateContractReminders(contractId, clientId, documentId, expiryDate, userId);
     }
   }
