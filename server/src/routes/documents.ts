@@ -123,7 +123,7 @@ export function registerDocumentRoutes(app: express.Application) {
               { document_id: { $in: docIds } },
             ],
           } as any,
-          { projection: { _id: 1, document_id: 1, expiry_date: 1 } } as any,
+          { projection: { _id: 1, document_id: 1, expiry_date: 1, status: 1 } } as any,
         ).toArray()
         : [],
     ]);
@@ -160,6 +160,7 @@ export function registerDocumentRoutes(app: express.Application) {
         reminder_count: documentReminders.length,
         reminder_status: getDocumentReminderStatus(r, documentReminders),
         reminder_date: getDocumentReminderDate(r, contract, documentReminders),
+        contract_status: contract?.status ?? null,
       };
     });
 

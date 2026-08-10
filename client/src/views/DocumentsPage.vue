@@ -236,7 +236,7 @@
                 <span :class="expiryClass((row as any).expiry_date)">{{ formatDate((row as any).expiry_date) }}</span>
               </span>
               <span v-if="(row as any).reminder_date" class="kv">
-                <strong>תזכורת:</strong>
+                <strong>תוקף:</strong>
                 <span :class="expiryClass((row as any).reminder_date)">{{ formatDate((row as any).reminder_date) }}</span>
               </span>
             </div>
@@ -434,7 +434,7 @@ async function onModalUpload(
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────
-type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder";
+type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder" | "contract_expired";
 
 const search = ref("");
 const filterClientId = ref<string | null>(null);
@@ -456,7 +456,8 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
     { key: "done",        label: "הושלם",       count: c.done,         statusValue: "done" },
     { key: "in_progress", label: "בעיבוד",      count: c.in_progress,  statusValue: "in_progress" },
     { key: "error",       label: "שגיאה",       count: c.error,        statusValue: "error" },
-    { key: "no_reminder", label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length, statusValue: "no_reminder" },
+    { key: "no_reminder",       label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length,                                                              statusValue: "no_reminder" },
+    { key: "contract_expired",  label: "פג תוקף",   count: rows.filter((row) => (row as any).contract_status === "expired" || (row as any).contract_status === "overdue").length, statusValue: "contract_expired" },
   ];
 });
 
@@ -540,6 +541,7 @@ function matchesStatusFilter(row: Document, filter: DocumentStatusFilter) {
   if (filter === "in_progress") return row.processing_status === "queued" || row.processing_status === "processing";
   if (filter === "error") return row.processing_status === "error";
   if (filter === "no_reminder") return (row as any).reminder_status === "missing";
+  if (filter === "contract_expired") return (row as any).contract_status === "expired" || (row as any).contract_status === "overdue";
   return true;
 }
 function fileIcon(mime: string | null | undefined) {
