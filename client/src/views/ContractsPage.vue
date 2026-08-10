@@ -658,7 +658,7 @@ const canSelectEmailTemplates = computed(() => featuresStore.hasFeature(FEATURES
 
 const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
-type DueFilter = "all" | "overdue" | "month" | "sent" | "no_email";
+type DueFilter = "all" | "overdue" | "month" | "sent" | "no_email" | "has_reminder";
 const dueFilter = ref<DueFilter>("all");
 const search = ref("");
 const filterClientId = ref<string | null>(null);
@@ -1367,6 +1367,7 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
     { key: "month",    label: "החודש",     count: rows.filter((r) => contractMatchesDueFilter(r, "month")).length,           type: "due",    dueValue: "month" },
     { key: "sent",     label: "נשלחו",     count: rows.filter((r) => contractMatchesDueFilter(r, "sent")).length,            type: "due",    dueValue: "sent" },
     { key: "no_email", label: "חסר אימייל", count: rows.filter((r) => contractMatchesDueFilter(r, "no_email")).length,       type: "due",    dueValue: "no_email" },
+    { key: "has_reminder", label: "יש תזכורת", count: rows.filter((r) => remindersFor(String(r.id)).length > 0).length,    type: "due",    dueValue: "has_reminder" },
     { key: "cancelled", label: "בוטל",     count: rows.filter((r) => r.status === "cancelled").length,                      type: "status", statusValue: "cancelled" },
   ];
 });
@@ -1415,6 +1416,7 @@ function contractMatchesDueFilter(row: ContractWithClient, filter: DueFilter): b
   }
   if (filter === "sent") return contractHasSentReminder(row);
   if (filter === "no_email") return !contractHasEmail(row);
+  if (filter === "has_reminder") return remindersFor(String(row.id)).length > 0;
   return true;
 }
 

@@ -38,7 +38,7 @@
         </n-button>
         <n-button :loading="loading" size="small" @click="$emit('refresh')">↻</n-button>
       </div>
-      <div class="rcal__summary">
+      <div v-if="featuresStore.hasFeature(FEATURES.dashboard.calendarFilters)" class="rcal__summary">
         <button
           v-for="item in summaryFilters"
           :key="item.key"
