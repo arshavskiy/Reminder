@@ -111,6 +111,7 @@ function normalizeNextActionDateFields(fields: Record<string, unknown>, expiryFi
   const cycleStart = ["start_date", "inspection_date", "issue_date", "check_date"]
     .map((key) => fields[key])
     .find((value): value is string => typeof value === "string" && Boolean(parseIsoDateOnly(value)));
+  const todayNorm = new Date(); todayNorm.setHours(0, 0, 0, 0);
   for (const key of keys) {
     if (typeof fields[key] === "string") {
       const intervalMonths = inspectionIntervalMonths(cycleStart, fields[key]);
@@ -122,6 +123,9 @@ function normalizeNextActionDateFields(fields: Record<string, unknown>, expiryFi
           fields.date_diff_months = intervalMonths;
         }
       }
+      // Keep original date when it's already in the past — overdue, not forwarded.
+      const parsed = parseIsoDateOnly(String(fields[key]));
+      if (parsed && parsed < todayNorm) continue;
       fields[key] = forwardPastNextActionDate(fields[key], new Date(), cycleStart);
     }
   }
