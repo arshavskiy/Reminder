@@ -690,13 +690,13 @@ async function saveExtractionEntities(
       summary: result.summary_hebrew ?? null,
       confidence: result.confidence ?? "medium",
       updated_at: new Date(),
-      ...(isOriginalOverdue && { status: "expired" }),
     };
+    if (isOriginalOverdue) contractFields.status = "expired";
     const upsertResult = await col("contracts").findOneAndUpdate(
       { document_id: documentId },
       {
         $set: contractFields,
-        $setOnInsert: { document_id: documentId, status: isOriginalOverdue ? "expired" : "active", created_at: new Date() },
+        $setOnInsert: { document_id: documentId, ...(!isOriginalOverdue && { status: "active" }), created_at: new Date() },
       },
       { upsert: true, returnDocument: "after" }
     );
@@ -1481,13 +1481,13 @@ async function saveTemplateEntities(
       summary: getStr("findings") ?? getStr("notes") ?? getStr("summary_hebrew"),
       confidence: (getStr("_confidence") as "high" | "medium" | "low") ?? "medium",
       updated_at: new Date(),
-      ...(isOriginalOverdue2 && { status: "expired" }),
     };
+    if (isOriginalOverdue2) contractFields.status = "expired";
     const upsertResult = await col("contracts").findOneAndUpdate(
       { document_id: documentId },
       {
         $set: contractFields,
-        $setOnInsert: { document_id: documentId, status: isOriginalOverdue2 ? "expired" : "active", created_at: new Date() },
+        $setOnInsert: { document_id: documentId, ...(!isOriginalOverdue2 && { status: "active" }), created_at: new Date() },
       },
       { upsert: true, returnDocument: "after" }
     );
