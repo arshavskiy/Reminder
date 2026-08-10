@@ -854,15 +854,18 @@
 
               <div class="admin-user-settings__section">
                 <div class="admin-user-settings__title">Client features</div>
-                <div class="admin-user-settings__checks">
-                  <label v-for="feature in featureDefinitions" :key="feature.key" class="admin-feature-toggle">
-                    <n-switch v-model:value="userSettingsForm.features[feature.key]" size="small" />
-                    <span>
-                      <strong>{{ feature.label_he || feature.label_en }}</strong>
-                      <small>{{ feature.key }}</small>
-                    </span>
-                  </label>
-                </div>
+                <template v-for="[scope, features] in featuresByScope" :key="scope">
+                  <div class="admin-feature-scope-label">{{ scope }}</div>
+                  <div class="admin-user-settings__checks">
+                    <label v-for="feature in features" :key="feature.key" class="admin-feature-toggle">
+                      <n-switch v-model:value="userSettingsForm.features[feature.key]" size="small" />
+                      <span>
+                        <strong>{{ feature.label_he || feature.label_en }}</strong>
+                        <small>{{ feature.key }}</small>
+                      </span>
+                    </label>
+                  </div>
+                </template>
               </div>
             </div>
           </template>
@@ -1084,6 +1087,7 @@ import DocumentDetailPage from "./DocumentDetailPage.vue";
 import AdminStatCard from "../components/AdminStatCard.vue";
 import AdminReportModal from "../components/AdminReportModal.vue";
 import type {FeatureDefinition} from "@shared/types.js";
+import {normalizeFeatureFlags} from "../shared/features.js";
 
 const router = useRouter();
 const message = useMessage();
@@ -1277,6 +1281,15 @@ const userDetailUser = ref<any>(null);
 const downloadingDocId = ref<string | null>(null);
 const emailTemplatesList = ref<any[]>([]);
 const featureDefinitions = ref<FeatureDefinition[]>([]);
+const featuresByScope = computed(() => {
+  const groups = new Map<string, FeatureDefinition[]>();
+  for (const f of featureDefinitions.value) {
+    const scope = f.key.includes(".") ? f.key.slice(0, f.key.indexOf(".")) : "other";
+    if (!groups.has(scope)) groups.set(scope, []);
+    groups.get(scope)!.push(f);
+  }
+  return groups;
+});
 const userDefaultTemplateId = ref<number | null>(null);
 const savingTemplate = ref(false);
 const savingUserSettings = ref(false);
@@ -1377,9 +1390,10 @@ function makeUserSettingsForm(settings: any) {
 
 function applyFeatureDefaultsToUserSettingsForm() {
   if (!userSettingsForm.value || !featureDefinitions.value.length) return;
+  const flat = normalizeFeatureFlags(userSettingsForm.value.features);
   userSettingsForm.value.features = {
     ...Object.fromEntries(featureDefinitions.value.map((feature) => [feature.key, feature.default_enabled])),
-    ...(userSettingsForm.value.features ?? {}),
+    ...flat,
   };
 }
 
@@ -2829,6 +2843,15 @@ onUnmounted(() => {
   gap: 8px;
   font-size: 12px;
   color: var(--text-primary);
+}
+
+.admin-feature-scope-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin: 12px 0 6px;
 }
 
 .admin-user-settings__checks {

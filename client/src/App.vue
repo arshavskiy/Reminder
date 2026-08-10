@@ -72,6 +72,15 @@
              </div>
           </header>
 
+          <!-- PWA install banner -->
+          <div v-if="showInstallBanner && route.path !== '/login'" class="install-banner">
+            <span class="install-banner__text">📲 התקן את האפליקציה למחשב לגישה מהירה</span>
+            <div class="install-banner__actions">
+              <button class="install-banner__btn install-banner__btn--primary" @click="installAndDismiss">התקן</button>
+              <button class="install-banner__btn" @click="dismissInstallBanner">לא עכשיו</button>
+            </div>
+          </div>
+
           <!-- Impersonation banner — always visible while acting as someone
                else, because writes (uploads, emails) really affect that user -->
           <div v-if="authStore.actingAs" class="actas-banner">
@@ -111,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref, watch} from "vue";
+import {computed, onMounted, ref, watch, watchEffect} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
   darkTheme,
@@ -188,6 +197,31 @@ const userSettingsStore = useUserSettingsStore();
 const pwa = usePwa();
 
 const mobileNavOpen = ref(false);
+
+// ── PWA install banner ───────────────────────────────────────────────────────
+const showInstallBanner = ref(false);
+const INSTALL_DISMISSED_KEY = "pwa_install_dismissed";
+
+watchEffect(() => {
+  if (
+    pwa.canInstall.value &&
+    !pwa.isInstalled.value &&
+    authStore.user &&
+    !localStorage.getItem(INSTALL_DISMISSED_KEY)
+  ) {
+    showInstallBanner.value = true;
+  }
+});
+
+function dismissInstallBanner() {
+  showInstallBanner.value = false;
+  localStorage.setItem(INSTALL_DISMISSED_KEY, "1");
+}
+
+async function installAndDismiss() {
+  await pwa.install();
+  showInstallBanner.value = false;
+}
 
 // ── Admin "view as user" ────────────────────────────────────────────────────
 const actAsUsers = ref<Array<{ id: string; email: string; name: string | null }>>([]);
@@ -455,6 +489,54 @@ html[data-theme="light"] .mobile-nav-list__item--active {
   margin-inline-start: 14px;
   flex-shrink: 0;
 }
+
+.install-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 9px 16px;
+  background: rgba(24, 160, 88, 0.12);
+  border-bottom: 1px solid rgba(24, 160, 88, 0.3);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+html[data-theme="dark"] .install-banner {
+  background: rgba(99, 226, 183, 0.1);
+  border-bottom-color: rgba(99, 226, 183, 0.25);
+}
+
+.install-banner__text { font-weight: 500; }
+
+.install-banner__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.install-banner__btn {
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.install-banner__btn:hover { background: var(--bg-hover); }
+
+.install-banner__btn--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: #fff;
+  font-weight: 600;
+}
+
+.install-banner__btn--primary:hover { background: var(--brand-color-hover); }
 
 .actas-banner {
   display: flex;
