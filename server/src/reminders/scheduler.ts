@@ -624,10 +624,10 @@ export async function generateContractReminders(
 
   // Past expiry: mark contract overdue, skip all reminders.
   if (expiryDate < today) {
-    if (contract && contract.status !== "overdue") {
+    if (contract && contract.status !== "expired") {
       await col("contracts").updateOne(
         { _id: contractOid },
-        { $set: { status: "overdue", updated_at: new Date() } }
+        { $set: { status: "expired", updated_at: new Date() } }
       );
       logger.info("contract_marked_overdue", {
         contract_id: contractId,

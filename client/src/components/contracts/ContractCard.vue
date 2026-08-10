@@ -188,6 +188,7 @@ function statusLabel(status: string): string {
     expired: "פג תוקף",
     cancelled: "בוטל",
     renewed: "חודש",
+    overdue: "פג תוקף",
   };
   return map[status] ?? status;
 }
@@ -196,6 +197,7 @@ function statusTagClass(status: string): string {
   const map: Record<string, string> = {
     active: "tag tag--ok",
     expired: "tag tag--bad",
+    overdue: "tag tag--bad",
     cancelled: "tag tag--muted",
     renewed: "tag tag--info",
   };

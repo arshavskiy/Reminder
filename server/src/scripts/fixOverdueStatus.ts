@@ -1,6 +1,6 @@
 /**
  * One-time maintenance script:
- * 1. Find all contracts where expiry_date < today and status != "overdue" → set status = "overdue"
+ * 1. Find all contracts where expiry_date < today and status != "expired" → set status = "expired"
  * 2. For each overdue contract, delete all pending/snoozed/error reminders
  * Run: npx tsx src/scripts/fixOverdueStatus.ts
  */
@@ -12,7 +12,7 @@ async function main() {
 
   // 1. Find contracts past expiry not yet marked overdue
   const contracts = await col("contracts")
-    .find({ expiry_date: { $lt: today }, status: { $nin: ["overdue", "cancelled"] } })
+    .find({ expiry_date: { $lt: today }, status: { $nin: ["expired", "cancelled"] } })
     .toArray();
 
   console.log(`Found ${contracts.length} contracts to mark overdue`);
@@ -23,7 +23,7 @@ async function main() {
   for (const c of contracts) {
     await col("contracts").updateOne(
       { _id: c._id },
-      { $set: { status: "overdue", updated_at: new Date() } }
+      { $set: { status: "expired", updated_at: new Date() } }
     );
     markedOverdue++;
 
@@ -40,7 +40,7 @@ async function main() {
 
   // 2. Also delete stale pending reminders for contracts already marked overdue
   const overdueContracts = await col("contracts")
-    .find({ status: "overdue" })
+    .find({ status: "expired" })
     .project({ _id: 1 })
     .toArray();
 

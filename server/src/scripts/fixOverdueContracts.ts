@@ -1,6 +1,6 @@
 /**
  * One-off script: scan contracts with past expiry_date that are still "active",
- * mark them "overdue", and dismiss any pending reminders tied to them.
+ * mark them "expired", and dismiss any pending reminders tied to them.
  *
  * Usage: npx tsx src/scripts/fixOverdueContracts.ts [--dry-run]
  */
@@ -41,7 +41,7 @@ for (const c of overdueContracts as any[]) {
   if (!dryRun) {
     await db.collection("contracts").updateOne(
       {_id: c._id},
-      {$set: {status: "overdue", updated_at: new Date()}}
+      {$set: {status: "expired", updated_at: new Date()}}
     );
     contractsFixed++;
   }
