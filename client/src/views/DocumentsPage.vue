@@ -2,7 +2,7 @@
   <div class="page2">
     <PageHeader :count="store.total" title="מסמכים">
       <template #actions>
-        <n-button :disabled="limitReached" :loading="uploading" type="primary" @click="openUploadModal()">
+        <n-button v-if="authStore.isAdmin" :disabled="limitReached" :loading="uploading" type="primary" @click="openUploadModal()">
           📂 העלה קבצים
         </n-button>
         <n-button :loading="store.loading" size="small" @click="store.fetch(undefined, true)">↻ רענן</n-button>
@@ -69,19 +69,11 @@
       />
     </div>
 
-    <!-- Thin drop strip -->
-    <div
-      :class="{ 'drop-strip--active': isDragging, 'drop-strip--disabled': limitReached }"
-      class="drop-strip"
-      @dragover.prevent="!limitReached && (isDragging = true)"
-      @dragleave.prevent="isDragging = false"
-      @click="!limitReached && openUploadModal()"
-      @drop.prevent="!limitReached && onStripDrop($event)"
-    >
-      <span v-if="limitReached">הגעת למגבלת {{ store.documentLimit }} סריקות</span>
-      <span v-else-if="isDragging">שחרר כאן לייבוא...</span>
-      <span v-else>גרור קבצים לכאן או לחץ "העלה קבצים"</span>
+    <!-- Drop strip with inline upload + results modal -->
+    <div v-if="limitReached" class="drop-strip drop-strip--disabled">
+      <span>הגעת למגבלת {{ store.documentLimit }} סריקות</span>
     </div>
+    <DocumentDropStrip v-else @uploaded="store.fetch(undefined, true)" />
 
     <n-alert
       v-if="rescanStore.hasSession && !showUploadModal"
@@ -353,6 +345,7 @@ import PageHeader from "../components/PageHeader.vue";
 import ListCard from "../components/ListCard.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import UploadModal from "../components/UploadModal.vue";
+import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import type {Document} from "@shared/types.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -368,7 +361,6 @@ const quotaPercent = computed(() => Math.min(100, Math.round((store.totalAll / s
 const limitReached = computed(() => isRegularUser.value && store.totalAll >= store.documentLimit);
 
 const uploading = ref(false);
-const isDragging = ref(false);
 let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
 const rescanning = ref(false);
 const rescanningAll = ref(false);
@@ -424,15 +416,6 @@ async function openRescanModal() {
   showUploadModal.value = true;
   await nextTick();
   uploadModalRef.value?.openRescan();
-}
-
-function onStripDrop(e: DragEvent) {
-  isDragging.value = false;
-  const files = Array.from(e.dataTransfer?.files ?? []);
-  if (!files.length) return;
-  showUploadModal.value = true;
-  // Pre-load dropped files after the modal mounts on next tick
-  setTimeout(() => uploadModalRef.value?.addFiles(files), 50);
 }
 
 async function onModalUpload(
