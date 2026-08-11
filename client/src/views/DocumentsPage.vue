@@ -1070,7 +1070,7 @@ async function openDownload(row: Document) {
   line-height: 1.3;
   min-height: 2.6em;
 }
-.tile__meta { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--text-secondary); }
+.tile__meta { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--text-primary); }
 .tile__meta-item {
   background: var(--bg-elevated);
   padding: 1px 6px;
@@ -1080,7 +1080,7 @@ async function openDownload(row: Document) {
   text-overflow: ellipsis;
   max-width: 100%;
 }
-.tile__date { font-size: 11px; color: var(--text-muted); margin-top: auto; }
+.tile__date { font-size: 11px; color: var(--text-secondary); margin-top: auto; }
 .tile__actions { position: absolute; top: 6px; left: 6px; }
 
 /* ── List card extras ────────────────────────────────────────────────────── */
@@ -1094,8 +1094,8 @@ async function openDownload(row: Document) {
   white-space: nowrap;
 }
 .tag--neutral { background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border-color); }
-.kv { font-size: 12px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; }
-.kv strong { color: var(--text-muted); font-weight: 500; }
+.kv { font-size: 12px; color: var(--text-primary); display: inline-flex; align-items: center; gap: 6px; }
+.kv strong { color: var(--text-secondary); font-weight: 600; }
 .expiry { font-weight: 600; }
 .expiry--ok { color: #1a7951; }
 .expiry--warn { color: #b27a02; }
