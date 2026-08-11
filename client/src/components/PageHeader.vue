@@ -37,17 +37,19 @@ defineProps<Props>();
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
   flex-basis: 100%;
 }
 .page-header__breadcrumb :deep(a) {
-  color: var(--text-secondary);
+  color: var(--brand-color);
   text-decoration: none;
-  transition: color 0.15s;
+  transition: color 0.15s, opacity 0.15s;
 }
-.page-header__breadcrumb :deep(a:hover) { color: var(--text-primary); }
-.page-header__breadcrumb :deep(.sep) { opacity: 0.4; }
+.page-header__breadcrumb :deep(a:hover) { opacity: 0.75; }
+.page-header__breadcrumb :deep(.sep) { color: var(--text-secondary); font-size: 16px; }
+.page-header__breadcrumb :deep(span:last-child) { color: var(--text-secondary); }
 .page-header__title {
   margin: 0;
   font-size: 26px;
