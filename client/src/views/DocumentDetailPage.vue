@@ -2,7 +2,8 @@
   <div class="page2 doc-detail">
     <PageHeader v-if="doc" :title="doc.file_name">
       <template #breadcrumb>
-        <router-link to="/documents">מסמכים</router-link>
+        <router-link v-if="route.query.from === 'contracts'" to="/contracts">חוזים ותסקירים</router-link>
+        <router-link v-else to="/documents">מסמכים</router-link>
         <span class="sep">/</span>
         <span>{{ doc.file_name }}</span>
       </template>
