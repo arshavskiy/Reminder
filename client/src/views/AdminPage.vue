@@ -2566,7 +2566,7 @@ onUnmounted(() => {
 }
 
 .admin-stat-card__num {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1;

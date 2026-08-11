@@ -371,7 +371,7 @@ export async function processDocument(
         );
         const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
         if (!pipeline?.skipReminders) {
-          await generateContractReminders(contractId, clientId, documentId, ocr.expiry_date, userId);
+          await generateContractReminders(contractId, clientId, documentId, ocr.expiry_date, userId, ocr.contact_email ?? null);
         }
       }
 
@@ -702,7 +702,7 @@ async function saveExtractionEntities(
     );
     const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
     if (expiryDate && !skipReminders && !isOriginalOverdue) {
-      await generateContractReminders(contractId, clientId, documentId, expiryDate, userId);
+      await generateContractReminders(contractId, clientId, documentId, expiryDate, userId, result.client_email ?? null);
     }
   }
 
@@ -989,23 +989,44 @@ function firstEmailInText(value: string): string | null {
   return reversed?.[0] ?? null;
 }
 
+const KNOWN_TLDS = new Set(["com", "net", "org", "il", "co", "io", "me", "info", "biz", "edu", "gov"]);
+
+function reverseDotSegments(s: string): string {
+  return s.split(".").reverse().join(".");
+}
+
+function isReversedEmail(local: string, domain: string): boolean {
+  // A reversed email's local part, when dot-segments are reversed, ends with a known TLD.
+  // e.g. "com.gmail" reversed segments = "gmail.com" -> ends with "com" ✓
+  // e.g. "li.oc" reversed segments = "co.il" -> ends with "il" ✓
+  const reversedLocal = local.split(".").reverse().join(".");
+  const reversedLocalTld = reversedLocal.split(".").pop()?.toLowerCase() ?? "";
+  const domainLast = domain.split(".").pop()?.toLowerCase() ?? "";
+  return KNOWN_TLDS.has(reversedLocalTld) && !KNOWN_TLDS.has(domainLast);
+}
+
 function normalizeEmail(value: string): string {
-  const cleaned = value.trim().replace(/[.,;:]+$/g, "");
-  const [beforeAt, afterAt] = cleaned.split("@");
-  if (beforeAt?.includes(".") && afterAt && !afterAt.includes(".")) {
-    const domain = beforeAt
-      .split(".")
-      .reverse()
-      .map((part) => part.includes("-") ? part.split("-").reverse().join("-") : part)
-      .join(".");
-    return `${afterAt}@${domain.toLowerCase()}`;
+  const cleaned = value.trim().replace(/[.,;:]+$/g, "").toLowerCase();
+  const atIdx = cleaned.indexOf("@");
+  if (atIdx === -1) return cleaned;
+  const beforeAt = cleaned.slice(0, atIdx);
+  const afterAt = cleaned.slice(atIdx + 1);
+
+  // RTL-reversed email: "com.gmail@mezeg.car" -> swap sides and reverse dot segments of each
+  // before="com.gmail" after="mezeg.car" -> local=reverseDots("mezeg.car")="car.mezeg" domain=reverseDots("com.gmail")="gmail.com"
+  if (isReversedEmail(beforeAt, afterAt)) {
+    return `${reverseDotSegments(afterAt)}@${reverseDotSegments(beforeAt)}`;
   }
-  if (beforeAt && afterAt) {
-    const rtlLocal = beforeAt.match(/^(\d{2,})([A-Z][A-Z0-9._%+-]*)$/i);
-    const local = rtlLocal ? `${rtlLocal[2]}${rtlLocal[1]}` : beforeAt;
-    return `${local}@${afterAt.toLowerCase()}`;
+
+  // Domain in local part, no dots in domain: "com.gmail@username" -> "username@gmail.com"
+  if (beforeAt.includes(".") && !afterAt.includes(".")) {
+    return `${afterAt}@${reverseDotSegments(beforeAt)}`;
   }
-  return cleaned;
+
+  // Local part has digits prepended from RTL number glue
+  const rtlLocal = beforeAt.match(/^(\d{2,})([a-z][a-z0-9._%+-]*)$/i);
+  const local = rtlLocal ? `${rtlLocal[2]}${rtlLocal[1]}` : beforeAt;
+  return `${local}@${afterAt}`;
 }
 
 function isLikelyInspectorFooterLine(line: string): boolean {
@@ -1082,7 +1103,7 @@ function extractLicenseNumber(rawText: string): string | null {
       if (isLikelyLicenseNumber(line) && /פנימי/i.test(line)) return normalizePenimiLicense(line);
       if (isLoadTableLine(i)) continue;
       if (isEquipTableLine(i)) continue;
-      if (/^\d{4,6}$/.test(line)) return line;
+      if (/^\d{4,6}$/.test(line) && isLikelyLicenseNumber(line)) return line;
     }
   }
 

@@ -290,7 +290,7 @@ export const api = {
   },
 
   reminders: {
-    list: (params?: { status?: string; days?: number; limit?: number }, force = false) => {
+    list: (params?: { status?: string; days?: number; limit?: number; documentId?: string }, force = false) => {
       return get<{ rows: ReminderWithContext[]; total: number }>(`/reminders${qs(params)}`, force);
     },
     senderInfo: () => get<{ email: string | null; name: string }>("/reminders/email-sender"),

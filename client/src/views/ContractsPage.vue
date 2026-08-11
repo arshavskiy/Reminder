@@ -1624,7 +1624,7 @@ async function doDeleteAll() {
 }
 
 function openDoc(row: ContractWithClient) {
-  if (row.document_id) router.push(`/documents/${row.document_id}`);
+  if (row.document_id) router.push(`/documents/${row.document_id}?from=contracts`);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import {Collection, Db, MongoClient} from "mongodb";
 import {logger} from "../logger";
 
-const MONGODB_URI = process.env.MONGODB_URI ?? "mongodb://127.0.0.1:27017";
+const MONGODB_URI = process.env.MONGODB_LOCAL_URI ?? process.env.MONGODB_URI ?? "mongodb://127.0.0.1:27017";
 const DB_NAME = process.env.MONGODB_DB ?? "reminder-app";
 
 let _client: MongoClient | null = null;

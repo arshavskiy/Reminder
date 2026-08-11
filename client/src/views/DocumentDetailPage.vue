@@ -1,11 +1,19 @@
 <template>
   <div class="page2 doc-detail">
     <PageHeader v-if="doc" :title="doc.file_name">
+      <template #breadcrumb>
+        <router-link v-if="route.query.from === 'contracts'" to="/contracts">חוזים ותסקירים</router-link>
+        <router-link v-else-if="route.query.from === 'calendar'" to="/">לוח שנה</router-link>
+        <router-link v-else to="/documents">מסמכים</router-link>
+        <span class="sep">/</span>
+        <span>{{ doc.file_name }}</span>
+      </template>
       <template #actions>
         <StatusBadge :status="doc.processing_status" />
         <n-button v-if="!props.docId" size="small" @click="$router.back()">   חזרה</n-button>
         <n-button :loading="downloading" size="small" @click="openDownload"> הורד</n-button>
         <n-button :loading="extracting" size="small" type="primary" @click="rerunExtract">✨ חלץ AI</n-button>
+        <n-button :loading="deleting" size="small" type="error" @click="deleteDoc">🗑 מחק</n-button>
       </template>
     </PageHeader>
 
@@ -181,7 +189,7 @@
 
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
-import {useRoute} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {NAlert, NButton, NDataTable, NScrollbar, NSpin, NTag, useMessage,} from "naive-ui";
 import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
@@ -194,6 +202,7 @@ const props = defineProps<{ docId?: string }>();
 
 const authStore = useAuthStore();
 const message = useMessage();
+const router = useRouter();
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const route = useRoute();
@@ -206,6 +215,7 @@ const previewUrl = ref<string | null>(null);
 const previewError = ref<string | null>(null);
 const downloading = ref(false);
 const extracting = ref(false);
+const deleting = ref(false);
 const linkedContracts = ref<ContractWithClient[]>([]);
 const linkedReminders = ref<ReminderWithContext[]>([]);
 const editingFields = ref(false);
@@ -278,6 +288,21 @@ async function openDownload() {
 
 function openExternal() {
   if (previewUrl.value) window.open(previewUrl.value, "_blank", "noopener");
+}
+
+async function deleteDoc() {
+  if (!doc.value) return;
+  if (!confirm(`למחוק את המסמך "${doc.value.file_name}"? פעולה זו אינה ניתנת לביטול.`)) return;
+  deleting.value = true;
+  try {
+    await api.documents.delete(String(doc.value.id));
+    message.success("המסמך נמחק");
+    router.push("/documents");
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    deleting.value = false;
+  }
 }
 
 async function rerunExtract() {

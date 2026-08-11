@@ -6,63 +6,13 @@
     </header>
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
-      <div
+      <DocumentDropStrip
         v-if="
           hasFeature(FEATURES.dashboard.dropStrip) &&
           hasFeature(FEATURES.pages.documents)
         "
-        :class="{
-          'drop-strip--active': isDragging,
-          'drop-strip--uploading': isUploading,
-        }"
-        class="drop-strip"
-        @dragover.prevent="!isUploading && (isDragging = true)"
-        @dragleave.prevent="isDragging = false"
-        @click="!isUploading && fileInput?.click()"
-        @drop.prevent="!isUploading && onStripDrop($event)"
-      >
-        <div class="drop-strip__icon">
-          <n-icon :component="CloudUploadOutline" :size="30" />
-        </div>
-        <div class="drop-strip__copy">
-          <strong>{{
-            isDragging
-              ? "שחרר כאן והייבוא יתחיל"
-              : "גרור מסמכים לכאן"
-          }}</strong>
-          <span>גרירה או לחיצה מעלות מיד</span>
-        </div>
-      </div>
-      <input
-        ref="fileInput"
-        class="hidden-file-input"
-        multiple
-        type="file"
-        @change="onFileInputChange"
+        @uploaded="store.fetch(true)"
       />
-
-      <!-- ── Upload results modal ───────────────────────────────────────── -->
-      <n-modal v-model:show="showUploadResults" :mask-closable="!uploadResultsLoading" style="width: min(680px, 96vw)">
-        <n-card :title="`תוצאות העלאה — ${uploadResultRows.length} קבצים`" :bordered="false" size="medium" role="dialog">
-          <n-spin :show="uploadResultsLoading" description="מעבד מסמכים...">
-            <n-data-table
-              :columns="uploadResultColumns"
-              :data="uploadResultRows"
-              :bordered="false"
-              :pagination="false"
-              size="small"
-              dir="rtl"
-              style="min-height: 120px"
-            />
-          </n-spin>
-          <template #footer>
-            <div style="display:flex; justify-content:flex-end; gap:8px">
-              <n-button :disabled="uploadResultsLoading" @click="showUploadResults = false">סגור</n-button>
-              <n-button type="primary" :disabled="uploadResultsLoading" @click="() => { showUploadResults = false; router.push('/documents') }">עבור למסמכים</n-button>
-            </div>
-          </template>
-        </n-card>
-      </n-modal>
 
       <!-- Quick stats — small chips line, easy to scan -->
       <div class="dash__stats">
@@ -211,13 +161,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { NButton, NCard, NDataTable, NIcon, NModal, NSpin, NSwitch, NTag, useMessage } from "naive-ui";
-import type { DataTableColumns } from "naive-ui";
+import { NIcon, NSpin, NSwitch, useMessage } from "naive-ui";
 import {
   AlarmOutline,
-  CloudUploadOutline,
   ClipboardOutline,
   ConstructOutline,
   ExtensionPuzzleOutline,
@@ -235,6 +183,7 @@ import { api } from "../services/apiService.js";
 import { FEATURES, type FeatureKey } from "../shared/features.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
+import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 
 const store = useDashboardStore();
 const remindersStore = useRemindersStore();
@@ -248,86 +197,6 @@ const expiryItems = ref<ExpiryCalendarItem[]>([]);
 const loadingExpiryItems = ref(false);
 const calendarNextTestsOnly = ref(true);
 const savingCalendarPreference = ref(false);
-const isDragging = ref(false);
-const fileInput = ref<HTMLInputElement | null>(null);
-
-// ── Upload results modal ──────────────────────────────────────────────────────
-interface UploadResultRow {
-  fileName: string;
-  status: "pending" | "uploading" | "processing" | "done" | "error" | "duplicate";
-  duplicate: boolean;
-  client: string;
-  date: string;
-  docType: string;
-  contractNumber: string;
-  licenseNumber: string;
-  id?: string;
-}
-const showUploadResults = ref(false);
-const uploadResultsLoading = ref(false);
-const uploadResultRows = ref<UploadResultRow[]>([]);
-
-const isUploading = computed(() =>
-  uploadResultRows.value.some((r) => r.status === "pending" || r.status === "uploading"),
-);
-
-const uploadResultColumns: DataTableColumns<UploadResultRow> = [
-  {
-    title: "קובץ",
-    key: "fileName",
-    align: "right",
-    ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.fileName),
-  },
-  {
-    title: "סטטוס",
-    key: "status",
-    align: "right",
-    width: 130,
-    render: (row) => {
-      const map: Record<string, { type: "success"|"warning"|"error"|"info"|"default"; label: string }> = {
-        pending:    { type: "default", label: "ממתין" },
-        uploading:  { type: "info",    label: "מעלה..." },
-        done:       { type: "success", label: "הושלם" },
-        processing: { type: "warning", label: "מעבד..." },
-        error:      { type: "error",   label: "שגיאה" },
-      };
-      const { type, label } = map[row.status] ?? map.pending;
-      const tags = [h(NTag, { type, size: "small", round: true }, { default: () => label })];
-      if (row.duplicate) tags.push(h(NTag, { type: "default", size: "small", round: true, style: "margin-right:4px; opacity:0.7" }, { default: () => "כפול" }));
-      return h("div", { style: "display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap" }, tags);
-    },
-  },
-  {
-    title: "לקוח",
-    key: "client",
-    align: "right",
-    ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.client || "—"),
-  },
-  {
-    title: "סוג",
-    key: "docType",
-    align: "right",
-    ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.docType || "—"),
-  },
-  {
-    title: "מספר רישוי",
-    key: "licenseNumber",
-    align: "right",
-    width: 110,
-    render: (row) => h("span", { style: "font-size:12px" }, row.licenseNumber || "—"),
-  },
-  {
-    title: "תאריך",
-    key: "date",
-    align: "right",
-    width: 100,
-    render: (row) => h("span", { style: "font-size:12px" }, row.date || "—"),
-  },
-];
-
 function hasFeature(feature: FeatureKey): boolean {
   return featuresStore.hasFeature(feature);
 }
@@ -340,159 +209,6 @@ const calendarLoading = computed(
     loadingExpiryItems.value ||
     (!calendarNextTestsOnly.value && remindersStore.loading),
 );
-
-function onFileInputChange(e: Event) {
-  const input = e.target as HTMLInputElement;
-  const files = Array.from(input.files ?? []);
-  input.value = "";
-  if (!files.length) return;
-  uploadDashboardFiles(files);
-}
-
-function onStripDrop(e: DragEvent) {
-  isDragging.value = false;
-  const files = Array.from(e.dataTransfer?.files ?? []);
-  if (!files.length) return;
-  uploadDashboardFiles(files);
-}
-
-async function uploadDashboardFiles(
-  files: File[],
-  options: { doAi: boolean; doEntities: boolean; doReminders: boolean } = {
-    doAi: true,
-    doEntities: true,
-    doReminders: true,
-  },
-) {
-  // Seed all rows as pending and open modal immediately
-  uploadResultRows.value = files.map((f) => ({
-    fileName: f.name,
-    status: "pending",
-    duplicate: false,
-    client: "",
-    date: "",
-    docType: "",
-    contractNumber: "",
-    licenseNumber: "",
-  }));
-  uploadResultsLoading.value = true;
-  showUploadResults.value = true;
-
-  const allIds: (string | null)[] = new Array(files.length).fill(null);
-
-  // Upload files one by one, updating each row's status live
-  for (let i = 0; i < files.length; i++) {
-    uploadResultRows.value = uploadResultRows.value.map((r, idx) =>
-      idx === i ? { ...r, status: "uploading" } : r,
-    );
-    try {
-      const { id, duplicate } = await api.documents.uploadOne(files[i], options);
-      allIds[i] = id;
-      uploadResultRows.value = uploadResultRows.value.map((r, idx) =>
-        idx === i ? { ...r, id, duplicate, status: "processing" } : r,
-      );
-    } catch (err) {
-      uploadResultRows.value = uploadResultRows.value.map((r, idx) =>
-        idx === i ? { ...r, status: "error" } : r,
-      );
-      // Show error only for quota/auth failures (not per-file OCR errors)
-      const e = err as any;
-      if (e.remaining != null || e.status === 401 || e.status === 403) {
-        message.error(e.message ?? "שגיאה בהעלאת הקבצים");
-      }
-    }
-  }
-
-  await store.fetch(true);
-
-  // For duplicate files: immediately fetch and apply the existing doc's data
-  const dupIds = [...new Set(
-    (allIds.filter(Boolean) as string[]).filter(
-      (id) => uploadResultRows.value.find((r) => r.id === id)?.duplicate,
-    )
-  )];
-  await Promise.all(dupIds.map(async (id) => {
-    try {
-      const doc = await api.documents.get(id);
-      let fields: Record<string, any> = {};
-      try { fields = doc.extracted_fields ? JSON.parse(doc.extracted_fields as string) : {}; } catch { /* ignore */ }
-      const resolvedStatus = doc.processing_status === "done" ? "done" : doc.processing_status === "error" ? "error" : "processing";
-      uploadResultRows.value = uploadResultRows.value.map((row) =>
-        row.id === id && row.duplicate
-          ? {
-              ...row,
-              status: resolvedStatus,
-              client: fields.client_company ?? fields.client_name ?? "",
-              date: fields.expiry_date ?? fields.next_inspection_date ?? fields.start_date ?? "",
-              docType: fields.document_type ?? fields.contract_type ?? (doc as any).document_type ?? "",
-              contractNumber: fields.contract_number ?? fields.report_number ?? "",
-              licenseNumber: fields.license_number ?? "",
-            }
-          : row,
-      );
-    } catch { /* ignore */ }
-  }));
-
-  // Poll only genuinely new (non-duplicate) documents
-  const pendingIds = [...new Set(
-    (allIds.filter(Boolean) as string[]).filter(
-      (id) => uploadResultRows.value.find((r) => r.id === id && !r.duplicate)?.status === "processing",
-    )
-  )];
-  if (pendingIds.length) {
-    await pollDocumentResults(pendingIds, allIds as string[]);
-  } else {
-    uploadResultsLoading.value = false;
-  }
-}
-
-async function pollDocumentResults(pendingIds: string[], allIds: string[]) {
-  const MAX_POLLS = 30;
-  const INTERVAL = 2000;
-  const settled = new Set<string>();
-
-  for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
-    await new Promise((r) => setTimeout(r, INTERVAL));
-
-    await Promise.all(
-      pendingIds
-        .filter((id) => !settled.has(id))
-        .map(async (id) => {
-          try {
-            const doc = await api.documents.get(id);
-            if (doc.processing_status === "done" || doc.processing_status === "error") {
-              settled.add(id);
-              let fields: Record<string, any> = {};
-              try { fields = doc.extracted_fields ? JSON.parse(doc.extracted_fields as string) : {}; } catch { /* ignore */ }
-              uploadResultRows.value = uploadResultRows.value.map((row) =>
-                row.id === id
-                  ? {
-                      ...row,
-                      status: doc.processing_status === "error" ? "error" : "done",
-                      client: fields.client_company ?? fields.client_name ?? "",
-                      date: fields.expiry_date ?? fields.next_inspection_date ?? fields.start_date ?? "",
-                      docType: fields.document_type ?? fields.contract_type ?? (doc as any).document_type ?? "",
-                      contractNumber: fields.contract_number ?? fields.report_number ?? "",
-                      licenseNumber: fields.license_number ?? "",
-                      // preserve duplicate flag
-                    }
-                  : row,
-              );
-            }
-          } catch { /* ignore individual poll failures */ }
-        }),
-    );
-
-    if (settled.size >= pendingIds.length) break;
-  }
-
-  // Mark any still-processing as error (timed out)
-  uploadResultRows.value = uploadResultRows.value.map((row) =>
-    row.status === "processing" ? { ...row, status: "error" } : row,
-  );
-  uploadResultsLoading.value = false;
-  await store.fetch(true);
-}
 
 onMounted(async () => {
   // Always refetch fresh — stats can go stale after a client/contract/document
@@ -696,82 +412,6 @@ const data_cards = computed(() =>
   font-size: 15px;
   color: var(--text-secondary);
   margin: 0;
-}
-
-.hidden-file-input {
-  display: none;
-}
-
-/* ── Top upload strip ─────────────────────────────────────────────────── */
-.drop-strip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  min-height: 86px;
-  margin: 0 0 20px;
-  padding: 18px 22px;
-  border: 2px dashed rgba(24, 160, 88, 0.72);
-  border-radius: 12px;
-  color: var(--text-primary);
-  cursor: pointer;
-  background:
-    linear-gradient(135deg, rgba(24, 160, 88, 0.18), rgba(32, 128, 240, 0.1)),
-    var(--bg-card);
-  box-shadow:
-    0 14px 36px rgba(24, 160, 88, 0.12),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.38);
-  transition:
-    transform 0.15s,
-    border-color 0.15s,
-    background 0.15s,
-    box-shadow 0.15s;
-}
-
-.drop-strip:hover,
-.drop-strip--active {
-  transform: translateY(-1px);
-  border-color: var(--brand-color);
-  background:
-    linear-gradient(135deg, rgba(24, 160, 88, 0.25), rgba(32, 128, 240, 0.14)),
-    var(--bg-card);
-  box-shadow:
-    0 18px 42px rgba(24, 160, 88, 0.18),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.46);
-}
-
-.drop-strip--uploading {
-  cursor: progress;
-  opacity: 0.78;
-}
-
-.drop-strip__icon {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  color: #ffffff;
-  background: var(--brand-color);
-  box-shadow: 0 10px 24px rgba(24, 160, 88, 0.28);
-  flex: 0 0 auto;
-}
-
-.drop-strip__copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: right;
-}
-
-.drop-strip__copy strong {
-  font-size: 17px;
-  line-height: 1.2;
-}
-
-.drop-strip__copy span {
-  font-size: 13px;
-  color: var(--text-secondary);
 }
 
 .calendar-pref {

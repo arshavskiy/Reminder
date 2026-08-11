@@ -1,0 +1,6 @@
+{
+  "watch": ["src"],
+  "ext": "ts,json",
+  "ignore": ["src/**/*.test.ts"],
+  "exec": "node --disable-warning=DEP0040 --import tsx/esm src/index.ts"
+}

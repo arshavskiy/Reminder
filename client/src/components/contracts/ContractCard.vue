@@ -24,7 +24,7 @@
         </div>
       </div>
 
-      <div class="card__actions">
+      <div v-if="showActions" class="card__actions">
         <button class="btn btn--xs btn--danger" @click.stop="emit('delete', row)">
           <n-icon :component="TrashOutline" /> מחק
         </button>

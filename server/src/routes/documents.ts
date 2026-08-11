@@ -793,10 +793,10 @@ export function registerDocumentRoutes(app: express.Application) {
 
     const incoming = req.body as Record<string, unknown>;
 
-    // Strip empty strings so they don't overwrite real values
+    // Skip null (field not sent); empty string means user explicitly cleared the field
     const sanitized: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(incoming)) {
-      if (v !== "" && v !== null) sanitized[k] = v;
+      if (v !== null) sanitized[k] = v;
     }
 
     // Merge with existing extracted_fields
