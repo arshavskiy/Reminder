@@ -80,6 +80,7 @@ function buildTransport() {
 async function sendViaResend(opts: {
   from: string;
   to: string[];
+  cc?: string[];
   subject: string;
   html: string;
   text?: string;
@@ -90,6 +91,7 @@ async function sendViaResend(opts: {
   const result = await client.emails.send({
     from: opts.from,
     to: opts.to,
+    cc: opts.cc?.length ? opts.cc : undefined,
     subject: opts.subject,
     html: opts.html,
     text: opts.text,
@@ -413,20 +415,32 @@ export async function sendReminderEmail(
 
   try {
     const { subject, html } = await renderReminderEmail(reminder);
-    const senderName = await resolveSenderName((reminder as any).user_id);
+    const userId = String((reminder as any).user_id ?? "");
+    const senderName = await resolveSenderName(userId);
     const from = formatAddress(senderName, settings.emailFrom);
+
+    // CC the sending user so they get a copy of every reminder they send out.
+    const ccEmail: string[] = [];
+    if (userId) {
+      const u = await col("users").findOne({ _id: tryObjectId(userId) } as any) as any;
+      const userEmail = u?.email ?? null;
+      if (userEmail && !recipients.includes(userEmail)) ccEmail.push(userEmail);
+    }
+
+    const text = `תזכורת: ${reminder.title}\nלקוח: ${reminder.client_name ?? ""}\nתאריך: ${reminder.trigger_date}`;
     logger.info("reminder_email_sending", {
       reminder_id: reminder.id,
-      user_id: (reminder as any).user_id ?? null,
+      user_id: userId || null,
       from,
       to: recipients,
+      cc: ccEmail,
       subject,
       via: useResend() ? "resend" : "smtp",
     });
     if (useResend()) {
-      await sendViaResend({ from, to: recipients, subject, html, text: `תזכורת: ${reminder.title}\nלקוח: ${reminder.client_name ?? ""}\nתאריך: ${reminder.trigger_date}` });
+      await sendViaResend({ from, to: recipients, cc: ccEmail, subject, html, text });
     } else {
-      await buildTransport().sendMail({ from, to: recipients.join(", "), subject, html, text: `תזכורת: ${reminder.title}\nלקוח: ${reminder.client_name ?? ""}\nתאריך: ${reminder.trigger_date}` });
+      await buildTransport().sendMail({ from, to: recipients.join(", "), cc: ccEmail.join(", ") || undefined, subject, html, text });
     }
     logger.info("reminder_email_sent", {
       reminder_id: reminder.id,
