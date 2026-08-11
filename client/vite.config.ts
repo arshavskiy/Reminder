@@ -66,6 +66,23 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    port: 4173,
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:3737",
+        changeOrigin: true,
+      },
+      "/auth": {
+        target: "http://127.0.0.1:3737",
+        changeOrigin: true,
+      },
+      "/ws": {
+        target: "ws://127.0.0.1:3737",
+        ws: true,
+      },
+    },
+  },
   build: {
     outDir: resolve(__dirname, "dist"),
     emptyOutDir: true,
