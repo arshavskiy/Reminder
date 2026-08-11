@@ -1103,7 +1103,7 @@ function extractLicenseNumber(rawText: string): string | null {
       if (isLikelyLicenseNumber(line) && /פנימי/i.test(line)) return normalizePenimiLicense(line);
       if (isLoadTableLine(i)) continue;
       if (isEquipTableLine(i)) continue;
-      if (/^\d{4,6}$/.test(line)) return line;
+      if (/^\d{4,6}$/.test(line) && isLikelyLicenseNumber(line)) return line;
     }
   }
 
