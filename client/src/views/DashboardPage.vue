@@ -277,11 +277,39 @@ const isUploading = computed(() =>
 
 const uploadResultColumns: DataTableColumns<UploadResultRow> = [
   {
-    title: "קובץ",
-    key: "fileName",
+    title: "תאריך",
+    key: "date",
+    align: "right",
+    width: 100,
+    render: (row) => h("span", { style: "font-size:12px" }, row.date || "—"),
+  },
+  {
+    title: "תזכורות",
+    key: "remindersCreated",
+    align: "right",
+    width: 90,
+    render: (row) => {
+      if (row.status !== "done") return h("span", { style: "font-size:12px;color:var(--n-text-color-3)" }, "—");
+      if (row.remindersCreated === null) return h("span", { style: "font-size:12px;color:var(--n-text-color-3)" }, "—");
+      return h(NTag, {
+        type: row.remindersCreated > 0 ? "success" : "default",
+        size: "small", round: true,
+      }, { default: () => row.remindersCreated! > 0 ? `✓ ${row.remindersCreated}` : "אין" });
+    },
+  },
+  {
+    title: "אימייל",
+    key: "email",
     align: "right",
     ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.fileName),
+    render: (row) => h("span", { style: "font-size:12px" }, row.email || "—"),
+  },
+  {
+    title: "לקוח",
+    key: "client",
+    align: "right",
+    ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.client || "—"),
   },
   {
     title: "סטטוס",
@@ -303,39 +331,11 @@ const uploadResultColumns: DataTableColumns<UploadResultRow> = [
     },
   },
   {
-    title: "לקוח",
-    key: "client",
+    title: "קובץ",
+    key: "fileName",
     align: "right",
     ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.client || "—"),
-  },
-  {
-    title: "אימייל",
-    key: "email",
-    align: "right",
-    ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.email || "—"),
-  },
-  {
-    title: "תזכורות",
-    key: "remindersCreated",
-    align: "right",
-    width: 90,
-    render: (row) => {
-      if (row.status !== "done") return h("span", { style: "font-size:12px;color:var(--n-text-color-3)" }, "—");
-      if (row.remindersCreated === null) return h("span", { style: "font-size:12px;color:var(--n-text-color-3)" }, "—");
-      return h(NTag, {
-        type: row.remindersCreated > 0 ? "success" : "default",
-        size: "small", round: true,
-      }, { default: () => row.remindersCreated! > 0 ? `✓ ${row.remindersCreated}` : "אין" });
-    },
-  },
-  {
-    title: "תאריך",
-    key: "date",
-    align: "right",
-    width: 100,
-    render: (row) => h("span", { style: "font-size:12px" }, row.date || "—"),
+    render: (row) => h("span", { style: "font-size:12px" }, row.fileName),
   },
 ];
 
