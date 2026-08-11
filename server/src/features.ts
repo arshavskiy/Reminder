@@ -13,7 +13,7 @@ export interface FeatureDefinition {
 }
 
 export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
-  {key: "pages.dashboard", scope: "pages", label_he: "לוח בקרה", label_en: "Dashboard", description_he: "גישה לעמוד הראשי של המערכת.", default_enabled: true, sort_order: 10},
+  {key: "pages.dashboard", scope: "pages", label_he: "יומן", label_en: "Dashboard", description_he: "גישה לעמוד הראשי של המערכת.", default_enabled: true, sort_order: 10},
   {key: "pages.documents", scope: "pages", label_he: "מסמכים", label_en: "Documents", description_he: "העלאה, צפייה וניהול מסמכים.", default_enabled: true, sort_order: 20},
   {key: "pages.contracts", scope: "pages", label_he: "תסקירים", label_en: "Inspections", description_he: "ניהול תסקירים, חוזים ותוקפים.", default_enabled: true, sort_order: 30},
   {key: "pages.reminders", scope: "pages", label_he: "תזכורות", label_en: "Reminders", description_he: "ניהול ושליחת תזכורות.", default_enabled: true, sort_order: 40},
