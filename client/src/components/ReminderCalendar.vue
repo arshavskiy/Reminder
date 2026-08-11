@@ -763,13 +763,13 @@ async function sendVisibleReminders() {
 function onNavigate(target: { type: "contract" | "document" | "reminder"; id: number | string }) {
   dayModalOpen.value = false;
   if (target.type === "contract") router.push(`/contracts/${target.id}`);
-  else if (target.type === "document") router.push(`/documents/${target.id}`);
+  else if (target.type === "document") router.push(`/documents/${target.id}?from=calendar`);
   else if (target.type === "reminder") router.push("/reminders");
 }
 
 function onExpiryNavigate(item: ExpiryCalendarItem) {
   dayModalOpen.value = false;
-  if (item.document_id) router.push(`/documents/${item.document_id}`);
+  if (item.document_id) router.push(`/documents/${item.document_id}?from=calendar`);
   else router.push(`/contracts/${item.id}`);
 }
 </script>

@@ -3,6 +3,7 @@
     <PageHeader v-if="doc" :title="doc.file_name">
       <template #breadcrumb>
         <router-link v-if="route.query.from === 'contracts'" to="/contracts">חוזים ותסקירים</router-link>
+        <router-link v-else-if="route.query.from === 'calendar'" to="/">לוח שנה</router-link>
         <router-link v-else to="/documents">מסמכים</router-link>
         <span class="sep">/</span>
         <span>{{ doc.file_name }}</span>
