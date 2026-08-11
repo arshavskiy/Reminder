@@ -45,16 +45,18 @@
       <n-modal v-model:show="showUploadResults" :mask-closable="!uploadResultsLoading" style="width: min(780px, 96vw)">
         <n-card :title="`תוצאות העלאה — ${uploadResultRows.length} קבצים`" :bordered="false" size="medium" role="dialog" style="max-height:80vh;display:flex;flex-direction:column">
           <n-spin :show="uploadResultsLoading" description="מעבד מסמכים..." style="flex:1;overflow:hidden">
-            <n-data-table
-              :columns="uploadResultColumns"
-              :data="uploadResultRows"
-              :bordered="false"
-              :pagination="false"
-              size="small"
-              :max-height="420"
-              virtual-scroll
-              style="min-height: 120px"
-            />
+            <div dir="ltr">
+              <n-data-table
+                :columns="uploadResultColumns"
+                :data="uploadResultRows"
+                :bordered="false"
+                :pagination="false"
+                size="small"
+                :max-height="420"
+                virtual-scroll
+                style="min-height: 120px"
+              />
+            </div>
           </n-spin>
           <template #footer>
             <div style="display:flex; justify-content:flex-end; gap:8px">
