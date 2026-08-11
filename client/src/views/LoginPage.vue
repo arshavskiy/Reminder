@@ -3,7 +3,7 @@
     <nav class="landing-nav">
       <a class="nav-brand" href="#top" aria-label="ReminderOCR">
         <span class="nav-brand__icon">
-          <n-icon :component="BriefcaseOutline" :size="22" color="#fff" />
+          <n-icon :component="BriefcaseOutline" :size="22" color="#fff"/>
         </span>
         <span class="nav-brand__text">ReminderOCR</span>
       </a>
@@ -17,62 +17,64 @@
     <section id="top" class="hero-section">
       <div class="hero">
         <div class="hero-content">
-<!--          <div class="hero-badge">-->
-<!--            <span>מותאם לעסקים ישראלים</span>-->
-<!--          </div>-->
+          <!--          <div class="hero-badge">-->
+          <!--            <span>מותאם לעסקים ישראלים</span>-->
+          <!--          </div>-->
           <h1>ניהול תסקירים ותזכורות <span>בלי כאב ראש</span></h1>
           <p class="hero-desc">
             ייבא מסמכים, חלץ נתונים אוטומטית עם AI, נהל לקוחות וקבל תזכורות לפני שכל חוזה או תסקיר פג תוקף.
           </p>
-<!--          <div class="hero-actions">-->
-<!--            <a class="btn-primary" href="#login-card">כניסה למערכת</a>-->
-<!--            <a class="btn-secondary" href="#features">למד עוד</a>-->
-<!--          </div>-->
+          <!--          <div class="hero-actions">-->
+          <!--            <a class="btn-primary" href="#login-card">כניסה למערכת</a>-->
+          <!--            <a class="btn-secondary" href="#features">למד עוד</a>-->
+          <!--          </div>-->
         </div>
 
         <div id="login-card" class="login-card">
           <div class="login-brand">
             <div class="login-brand__icon">
-              <n-icon :component="BriefcaseOutline" :size="32" color="#fff" />
+              <n-icon :component="BriefcaseOutline" :size="32" color="#fff"/>
             </div>
             <h2 class="login-brand__title">ReminderOCR</h2>
             <p class="login-brand__sub">מערכת ניהול תסקירים ותזכורות</p>
           </div>
 
-          <n-alert v-if="successMsg" type="success" :title="successMsg" style="margin-bottom:16px" closable @close="successMsg = null" />
-          <n-alert v-if="errorMsg" type="error" :title="errorMsg" style="margin-bottom:16px" closable @close="clearError" />
+          <n-alert v-if="successMsg" type="success" :title="successMsg" style="margin-bottom:16px" closable
+                   @close="successMsg = null"/>
+          <n-alert v-if="errorMsg" type="error" :title="errorMsg" style="margin-bottom:16px" closable
+                   @close="clearError"/>
 
           <n-tabs v-model:value="activeTab" type="line" animated style="width:100%;margin-bottom:8px">
             <n-tab-pane name="login" tab="כניסה">
               <n-form @submit.prevent="handleLogin" style="margin-top:8px">
                 <n-form-item label="אימייל" :show-feedback="false" style="margin-bottom:12px">
                   <n-input
-                    v-model:value="loginEmail"
-                    type="email"
-                    placeholder="you@example.com"
-                    size="large"
-                    autocomplete="email"
-                    :disabled="loading"
+                      v-model:value="loginEmail"
+                      type="email"
+                      placeholder="you@example.com"
+                      size="large"
+                      autocomplete="email"
+                      :disabled="loading"
                   />
                 </n-form-item>
                 <n-form-item label="סיסמה" :show-feedback="false" style="margin-bottom:16px">
                   <n-input
-                    v-model:value="loginPassword"
-                    type="password"
-                    placeholder="••••••••"
-                    size="large"
-                    show-password-on="click"
-                    autocomplete="current-password"
-                    :disabled="loading"
+                      v-model:value="loginPassword"
+                      type="password"
+                      placeholder="••••••••"
+                      size="large"
+                      show-password-on="click"
+                      autocomplete="current-password"
+                      :disabled="loading"
                   />
                 </n-form-item>
                 <n-button
-                  type="primary"
-                  size="large"
-                  style="width:100%;margin-bottom:8px"
-                  attr-type="submit"
-                  :loading="loading"
-                  :disabled="!loginEmail || !loginPassword"
+                    type="primary"
+                    size="large"
+                    style="width:100%;margin-bottom:8px"
+                    attr-type="submit"
+                    :loading="loading"
+                    :disabled="!loginEmail || !loginPassword"
                 >
                   כניסה
                 </n-button>
@@ -81,57 +83,58 @@
                 </div>
               </n-form>
 
-<!--          <div class="divider"><span>או</span></div>-->
-<!--          <GoogleSignIn @error="onGisError" />-->
+              <div class="divider"><span>או</span></div>
+              <GoogleSignIn @error="onGisError"/>
             </n-tab-pane>
 
-        <!-- Register tab -->
-<!--        <n-tab-pane name="register" tab="הרשמה">-->
-<!--          <n-form @submit.prevent="handleRegister" style="margin-top:8px">-->
-<!--            <n-form-item label="שם מלא" :show-feedback="false" style="margin-bottom:12px">-->
-<!--              <n-input-->
-<!--                v-model:value="regName"-->
-<!--                placeholder="ישראל ישראלי"-->
-<!--                size="large"-->
-<!--                autocomplete="name"-->
-<!--                :disabled="loading"-->
-<!--              />-->
-<!--            </n-form-item>-->
-<!--            <n-form-item label="אימייל" :show-feedback="false" style="margin-bottom:12px">-->
-<!--              <n-input-->
-<!--                v-model:value="regEmail"-->
-<!--                type="email"-->
-<!--                placeholder="you@example.com"-->
-<!--                size="large"-->
-<!--                autocomplete="email"-->
-<!--                :disabled="loading"-->
-<!--              />-->
-<!--            </n-form-item>-->
-<!--            <n-form-item label="סיסמה" :show-feedback="false" style="margin-bottom:4px">-->
-<!--              <n-input-->
-<!--                v-model:value="regPassword"-->
-<!--                type="password"-->
-<!--                placeholder="לפחות 8 תווים"-->
-<!--                size="large"-->
-<!--                show-password-on="click"-->
-<!--                autocomplete="new-password"-->
-<!--                :disabled="loading"-->
-<!--              />-->
-<!--            </n-form-item>-->
-<!--            <p v-if="regPassword && regPassword.length < 8" style="color:#f0a020;font-size:12px;margin:4px 0 12px">הסיסמה חייבת להכיל לפחות 8 תווים</p>-->
-<!--            <div style="height:12px" v-else />-->
-<!--            <n-button-->
-<!--              type="primary"-->
-<!--              size="large"-->
-<!--              style="width:100%"-->
-<!--              attr-type="submit"-->
-<!--              :loading="loading"-->
-<!--              :disabled="!regEmail || !regPassword || regPassword.length < 8"-->
-<!--            >-->
-<!--              הרשמה-->
-<!--            </n-button>-->
-<!--          </n-form>-->
-<!--        </n-tab-pane>-->
+            Register tab
+            <n-tab-pane name="register" tab="הרשמה">
+              <n-form @submit.prevent="handleRegister" style="margin-top:8px">
+                <n-form-item label="שם מלא" :show-feedback="false" style="margin-bottom:12px">
+                  <n-input
+                      v-model:value="regName"
+                      placeholder="ישראל ישראלי"
+                      size="large"
+                      autocomplete="name"
+                      :disabled="loading"
+                  />
+                </n-form-item>
+                <n-form-item label="אימייל" :show-feedback="false" style="margin-bottom:12px">
+                  <n-input
+                      v-model:value="regEmail"
+                      type="email"
+                      placeholder="you@example.com"
+                      size="large"
+                      autocomplete="email"
+                      :disabled="loading"
+                  />
+                </n-form-item>
+                <n-form-item label="סיסמה" :show-feedback="false" style="margin-bottom:4px">
+                  <n-input
+                      v-model:value="regPassword"
+                      type="password"
+                      placeholder="לפחות 8 תווים"
+                      size="large"
+                      show-password-on="click"
+                      autocomplete="new-password"
+                      :disabled="loading"
+                  />
+                </n-form-item>
+                <p v-if="regPassword && regPassword.length < 8" style="color:#f0a020;font-size:12px;margin:4px 0 12px">
+                  הסיסמה חייבת להכיל לפחות 8 תווים</p>
+                <div style="height:12px" v-else/>
+                <n-button
+                    type="primary"
+                    size="large"
+                    style="width:100%"
+                    attr-type="submit"
+                    :loading="loading"
+                    :disabled="!regEmail || !regPassword || regPassword.length < 8"
+                >
+                  הרשמה
+                </n-button>
+              </n-form>
+            </n-tab-pane>
           </n-tabs>
 
           <p class="login-footer">גישה מוגבלת למשתמשים מורשים בלבד</p>
@@ -139,26 +142,26 @@
       </div>
     </section>
 
-<!--    <section class="stats">-->
-<!--      <div class="stats-inner">-->
-<!--        <div>-->
-<!--          <div class="stat-num">100%</div>-->
-<!--          <div class="stat-label">עברית מלאה — ממשק ו-OCR</div>-->
-<!--        </div>-->
-<!--        <div>-->
-<!--          <div class="stat-num">AI</div>-->
-<!--          <div class="stat-label">חילוץ נתונים אוטומטי</div>-->
-<!--        </div>-->
-<!--        <div>-->
-<!--          <div class="stat-num">0₪</div>-->
-<!--          <div class="stat-label">עלות הרצה עצמית</div>-->
-<!--        </div>-->
-<!--        <div>-->
-<!--          <div class="stat-num">∞</div>-->
-<!--          <div class="stat-label">לקוחות ומסמכים</div>-->
-<!--        </div>-->
-<!--      </div>-->
-<!--    </section>-->
+    <!--    <section class="stats">-->
+    <!--      <div class="stats-inner">-->
+    <!--        <div>-->
+    <!--          <div class="stat-num">100%</div>-->
+    <!--          <div class="stat-label">עברית מלאה — ממשק ו-OCR</div>-->
+    <!--        </div>-->
+    <!--        <div>-->
+    <!--          <div class="stat-num">AI</div>-->
+    <!--          <div class="stat-label">חילוץ נתונים אוטומטי</div>-->
+    <!--        </div>-->
+    <!--        <div>-->
+    <!--          <div class="stat-num">0₪</div>-->
+    <!--          <div class="stat-label">עלות הרצה עצמית</div>-->
+    <!--        </div>-->
+    <!--        <div>-->
+    <!--          <div class="stat-num">∞</div>-->
+    <!--          <div class="stat-label">לקוחות ומסמכים</div>-->
+    <!--        </div>-->
+    <!--      </div>-->
+    <!--    </section>-->
 
     <section id="features" class="content-section">
       <div class="section-header">
@@ -167,32 +170,32 @@
       </div>
       <div class="features-grid">
         <article class="feature-card">
-<!--          <div class="feature-icon">📄</div>-->
+          <!--          <div class="feature-icon">📄</div>-->
           <h3>ייבוא מסמכים חכם</h3>
           <p>גרור ושחרר PDF, Word, Excel ועוד. AI יחלץ אוטומטית את שם הלקוח, תאריכים, סכומים ועוד.</p>
         </article>
         <article class="feature-card">
-<!--          <div class="feature-icon">⏰</div>-->
+          <!--          <div class="feature-icon">⏰</div>-->
           <h3>תזכורות אוטומטיות</h3>
           <p>קבל אימייל 90, 60 ו-30 יום לפני שחוזה או תסקיר פג תוקף. לא עוד הפתעות.</p>
         </article>
         <article class="feature-card">
-<!--          <div class="feature-icon">👥</div>-->
+          <!--          <div class="feature-icon">👥</div>-->
           <h3>ניהול לקוחות</h3>
           <p>כרטיס לקוח מלא עם היסטוריית חוזים, תזכורות ומשימות. כולל חיפוש מהיר.</p>
         </article>
         <article class="feature-card">
-<!--          <div class="feature-icon">🔍</div>-->
+          <!--          <div class="feature-icon">🔍</div>-->
           <h3>חיפוש מלא בתוך המסמכים</h3>
           <p>חפש לפי שם לקוח, מספר חוזה, תאריך ועוד — גם בתוכן המסמך עצמו.</p>
         </article>
         <article class="feature-card">
-<!--          <div class="feature-icon">🏭</div>-->
+          <!--          <div class="feature-icon">🏭</div>-->
           <h3>קטלוג ציוד</h3>
           <p>נהל מלאי ציוד — מנופים, פיגומים, מעליות ועוד — מקושר לתסקירי הבדיקה.</p>
         </article>
         <article class="feature-card">
-<!--          <div class="feature-icon">📊</div>-->
+          <!--          <div class="feature-icon">📊</div>-->
           <h3>דוחות חודשיים</h3>
           <p>הפק דוחות לפי לקוח, שדות וסדר עמודות שנשמרים לכל משתמש.</p>
         </article>
@@ -225,21 +228,21 @@
       </div>
     </section>
 
-<!--    <section class="cta-section">-->
-<!--      <h2>מוכן להתחיל?</h2>-->
-<!--      <a class="btn-white" href="#login-card">כנס למערכת</a>-->
-<!--    </section>-->
+    <!--    <section class="cta-section">-->
+    <!--      <h2>מוכן להתחיל?</h2>-->
+    <!--      <a class="btn-white" href="#login-card">כנס למערכת</a>-->
+    <!--    </section>-->
 
     <!-- Forgot password modal -->
     <n-modal v-model:show="showForgot" preset="card" title="שחזור סיסמה" style="max-width:380px;direction:rtl">
       <p style="margin-top:0">הזן את כתובת האימייל שלך ונשלח לך קישור לאיפוס הסיסמה.</p>
       <n-input
-        v-model:value="forgotEmail"
-        type="email"
-        placeholder="you@example.com"
-        size="large"
-        :disabled="loading"
-        style="margin-bottom:16px"
+          v-model:value="forgotEmail"
+          type="email"
+          placeholder="you@example.com"
+          size="large"
+          :disabled="loading"
+          style="margin-bottom:16px"
       />
       <template #footer>
         <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -266,6 +269,7 @@ import {useDocumentsStore} from "../stores/documents.js";
 import {useContractsStore} from "../stores/contracts.js";
 import {useClientsStore} from "../stores/clients.js";
 import {useRemindersStore} from "../stores/reminders.js";
+import GoogleSignIn from "../components/GoogleSignIn.vue";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -336,9 +340,9 @@ async function handleLogin() {
   try {
     const res = await fetch(`${SERVER}/api/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {"Content-Type": "application/json"},
       credentials: "include",
-      body: JSON.stringify({ email: loginEmail.value, password: loginPassword.value }),
+      body: JSON.stringify({email: loginEmail.value, password: loginPassword.value}),
     });
     const data = await res.json() as any;
     if (!res.ok) {
@@ -354,10 +358,11 @@ async function handleLogin() {
     Promise.all([
       dashStore.fetch(),
       docsStore.fetch(),
-      contractsStore.fetch({ limit: 200 }),
-      clientsStore.fetch({ limit: 200 }),
+      contractsStore.fetch({limit: 200}),
+      clientsStore.fetch({limit: 200}),
       remindersStore.fetch(),
-    ]).catch(() => {});
+    ]).catch(() => {
+    });
     router.replace("/");
   } catch {
     routeError.value = "auth_failed";
@@ -374,9 +379,9 @@ async function handleRegister() {
   try {
     const res = await fetch(`${SERVER}/api/auth/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {"Content-Type": "application/json"},
       credentials: "include",
-      body: JSON.stringify({ email: regEmail.value, password: regPassword.value, name: regName.value }),
+      body: JSON.stringify({email: regEmail.value, password: regPassword.value, name: regName.value}),
     });
     const data = await res.json() as any;
     if (!res.ok) {
@@ -400,8 +405,8 @@ async function handleForgot() {
   try {
     await fetch(`${SERVER}/api/auth/forgot-password`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: forgotEmail.value }),
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({email: forgotEmail.value}),
     });
     showForgot.value = false;
     successMsg.value = "אם כתובת האימייל קיימת במערכת, נשלח קישור לאיפוס הסיסמה.";
@@ -426,6 +431,7 @@ onMounted(async () => {
 
 <style scoped>
 @import "https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap";
+
 .login-page {
   --landing-nav-height: 64px;
   --login-font-family: "Rubik", "Lato", "Arial", "Helvetica Neue", sans-serif;

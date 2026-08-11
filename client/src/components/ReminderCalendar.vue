@@ -23,7 +23,7 @@
             @click="view = 'agenda'"
           >☰ רשימה</n-button>
         </div>
-        <n-button size="small" secondary @click="downloadVisibleMonthDoc">DOC דוח חודש נוכחי</n-button>
+        <n-button size="small" secondary @click="downloadVisibleMonthDoc"> דוח חודש נוכחי</n-button>
         <n-button size="small" secondary @click="printCalendar">הדפסה</n-button>
         <n-button
           v-if="!testsOnly"
