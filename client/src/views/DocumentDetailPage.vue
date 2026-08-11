@@ -1,6 +1,11 @@
 <template>
   <div class="page2 doc-detail">
     <PageHeader v-if="doc" :title="doc.file_name">
+      <template #breadcrumb>
+        <router-link to="/documents">מסמכים</router-link>
+        <span class="sep">/</span>
+        <span>{{ doc.file_name }}</span>
+      </template>
       <template #actions>
         <StatusBadge :status="doc.processing_status" />
         <n-button v-if="!props.docId" size="small" @click="$router.back()">   חזרה</n-button>
