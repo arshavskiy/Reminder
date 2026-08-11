@@ -52,7 +52,7 @@ defineProps<Props>();
 .page-header__breadcrumb :deep(span:last-child) { color: var(--text-secondary); }
 .page-header__title {
   margin: 0;
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.3px;

@@ -340,7 +340,7 @@ function doDeleteAll() {
   gap: 10px;
 }
 .page__title {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;

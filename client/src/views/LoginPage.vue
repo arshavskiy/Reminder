@@ -1000,7 +1000,7 @@ onMounted(async () => {
   }
 
   .login-card {
-    padding: 32px 22px 26px;
+    padding: 32px 22px 24px;
   }
 
   .stats-inner {
