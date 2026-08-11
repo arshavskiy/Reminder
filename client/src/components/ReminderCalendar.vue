@@ -306,7 +306,18 @@ const emit = defineEmits<{ (e: "refresh"): void }>();
 const router = useRouter();
 const message = useMessage();
 const view = ref<"month" | "agenda">(isMobileViewport() ? "agenda" : "month");
-const cursor = ref(new Date());
+const CURSOR_KEY = "calendar_last_month";
+function loadCursor(): Date {
+  try {
+    const saved = localStorage.getItem(CURSOR_KEY);
+    if (saved) { const d = new Date(saved); if (!isNaN(d.getTime())) return d; }
+  } catch {}
+  return new Date();
+}
+function saveCursor(d: Date) {
+  try { localStorage.setItem(CURSOR_KEY, d.toISOString()); } catch {}
+}
+const cursor = ref(loadCursor());
 const activeFilter = ref<CalendarFilterKey>("all");
 const sendingVisible = ref(false);
 const showSendVisibleConfirm = ref(false);
@@ -635,8 +646,13 @@ function shiftMonth(delta: number) {
   const c = new Date(cursor.value);
   c.setMonth(c.getMonth() + delta);
   cursor.value = c;
+  saveCursor(c);
 }
-function goToday() { cursor.value = new Date(); }
+function goToday() {
+  const d = new Date();
+  cursor.value = d;
+  saveCursor(d);
+}
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
