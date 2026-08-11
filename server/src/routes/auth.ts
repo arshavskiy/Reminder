@@ -635,9 +635,9 @@ export function registerAuthRoutes(app: express.Application) {
 }
 
 const DEV_FRONTEND =
-  process.env.FRONTEND_URL ??
-  process.env.VITE_DEV_URL ??
-  (process.env.NODE_ENV === "production" ? "" : "http://localhost:4173");
+  process.env.NODE_ENV !== "production"
+    ? (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173")
+    : (process.env.FRONTEND_URL ?? "");
 
 function frontendUrl(path: string): string {
   return `${DEV_FRONTEND}${path}`;

@@ -237,5 +237,9 @@ function gmailRedirectUri(settings: ReturnType<typeof getSettings>) {
 }
 
 function frontendUrl(path: string) {
-  return `${process.env.FRONTEND_URL ?? process.env.VITE_DEV_URL ?? "http://localhost:4173"}${path}`;
+  const base =
+    process.env.NODE_ENV !== "production"
+      ? (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173")
+      : (process.env.FRONTEND_URL ?? "http://localhost:4173");
+  return `${base}${path}`;
 }
