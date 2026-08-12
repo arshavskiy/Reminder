@@ -13,7 +13,7 @@ index.html
                  └─→ views/*Page.vue (per route)
 ```
 
-The Vite dev server serves [src/client/index.html](../src/client/index.html) on `http://localhost:5173`, which loads [main.ts](../src/client/main.ts), which mounts the Vue app into `<div id="app">`.
+The Vite dev server serves [client/src/index.html](../client/src/index.html) on `http://localhost:4173`, which loads [main.ts](../client/src/main.ts), which mounts the Vue app into `<div id="app">`.
 
 ---
 
@@ -154,7 +154,7 @@ Each view typically calls its store's `fetch()` from `onMounted()`.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Browser hits http://localhost:5173                      │
+│  Browser hits http://localhost:4173                      │
 └─────────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -214,7 +214,7 @@ Each view typically calls its store's `fetch()` from `onMounted()`.
 
 | | Dev | Production |
 |---|---|---|
-| Frontend host | Vite (`:5173`) | Bun serves built files from `dist/client/` |
+| Frontend host | Vite (`:4173`) | Server serves built files from `dist/client/` |
 | API requests | Vite proxies `/api` → `:3737` | Same-origin, no proxy needed |
 | WebSocket | Vite proxies `/ws` → `:3737/ws` | Same-origin upgrade |
 | Build command | `bun run client:dev` | `vite build` → `dist/client/` |

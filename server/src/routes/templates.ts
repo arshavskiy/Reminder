@@ -2,6 +2,7 @@ import express from "express";
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from "fs";
 import {extname, join} from "path";
 import {col} from "../db/db";
+import {ObjectId} from "mongodb";
 import {getDataDir} from "../settings";
 import {loadAllTemplates, loadTemplate} from "../templates/seedTemplates";
 import {loadEmailTemplate} from "../templates/seedEmailTemplates";

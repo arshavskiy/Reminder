@@ -1,7 +1,7 @@
 # Features
 
 Current feature inventory for ReminderOCR.  
-Stack: Node.js 20 / Express · MongoDB · Vue 3 + Naive UI · Railway + Vercel
+Stack: Node.js 23+ / Express · MongoDB · Vue 3 + Naive UI · Railway + Vercel
 
 ---
 

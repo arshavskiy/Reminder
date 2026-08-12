@@ -16,7 +16,7 @@ cd server; npm run build
 cd server; npm test
 ```
 
-`client npm run dev` starts Vite on port `5173` and proxies API, auth, and WebSocket traffic to `127.0.0.1:3737`. `server npm run dev` runs `tsx watch src/index.ts`. `server npm run build` performs TypeScript checking with `tsc --noEmit`. The root `npm test` is a placeholder; use the server test command.
+`client npm run dev` starts Vite on port `4173` and proxies API, auth, and WebSocket traffic to `127.0.0.1:3737`. `server npm run dev` runs `tsx watch src/index.ts`. `server npm run build` performs TypeScript checking with `tsc --noEmit`. The root `npm test` is a placeholder; use the server test command.
 
 ## Coding Style & Naming Conventions
 

@@ -17,7 +17,7 @@
                                │ HTTP-only session cookie (sid)
                                │ WebSocket (/ws)
 ┌──────────────────────────────▼──────────────────────────────────────┐
-│  Express server (Railway — Node.js 20)                              │
+│  Express server (Railway — Node.js 23+)                             │
 │                                                                     │
 │  Middleware stack                                                   │
 │  cors → express.json → cookie-parser → routes                      │

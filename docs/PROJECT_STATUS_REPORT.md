@@ -44,7 +44,7 @@ E:\Projects\Reminder\
 │   ├── tsconfig.json
 │   └── .env.example
 │
-├── client/                    ← Vue 3 + Vite frontend (port 5173 dev)
+├── client/                    ← Vue 3 + Vite frontend (port 4173 dev)
 │   ├── src/
 │   │   ├── App.vue            ← Root component, top bar, RTL Naive UI
 │   │   ├── main.ts
@@ -200,7 +200,7 @@ E:\Projects\Reminder\
 bun run dev        # watch mode, port 3737
 
 # Frontend dev server (from client/)
-npm run dev        # Vite + proxy to :3737, port 5173
+npm run dev        # Vite + proxy to :3737, port 4173
 
 # Build client
 npm run build      # output → dist/client

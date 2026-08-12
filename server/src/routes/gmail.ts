@@ -14,6 +14,8 @@ export function registerGmailRoutes(app: express.Application) {
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
     const settings = getSettings();
+    const googleClientId = settings.googleClientId;
+    if (!googleClientId) { res.status(500).json({ error: "google_client_not_configured" }); return; }
     const state = generateState();
     const codeVerifier = generateCodeVerifier();
 
@@ -27,7 +29,7 @@ export function registerGmailRoutes(app: express.Application) {
     await col("oauth_states").deleteMany({ expires_at: { $lt: new Date() } });
 
     const params = new URLSearchParams({
-      client_id: settings.googleClientId,
+      client_id: googleClientId,
       redirect_uri: gmailRedirectUri(settings),
       response_type: "code",
       scope: GMAIL_SCOPE,
@@ -54,13 +56,19 @@ export function registerGmailRoutes(app: express.Application) {
     await col("oauth_states").deleteOne({ state });
 
     const settings = getSettings();
+    const googleClientId = settings.googleClientId;
+    const googleClientSecret = settings.googleClientSecret;
+    if (!googleClientId || !googleClientSecret) {
+      res.redirect(frontendUrl("/gmail-inbox?error=google_client_not_configured"));
+      return;
+    }
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         code,
-        client_id: settings.googleClientId,
-        client_secret: settings.googleClientSecret,
+        client_id: googleClientId,
+        client_secret: googleClientSecret,
         redirect_uri: gmailRedirectUri(settings),
         grant_type: "authorization_code",
         code_verifier: pkce.code_verifier,
@@ -203,12 +211,15 @@ async function fetchEmailMeta(accessToken: string, id: string) {
 async function refreshGmailToken(user: any, userId: string): Promise<string | null> {
   if (!user.gmail_refresh_token) return null;
   const settings = getSettings();
+  const googleClientId = settings.googleClientId;
+  const googleClientSecret = settings.googleClientSecret;
+  if (!googleClientId || !googleClientSecret) return null;
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: settings.googleClientId,
-      client_secret: settings.googleClientSecret,
+      client_id: googleClientId,
+      client_secret: googleClientSecret,
       refresh_token: user.gmail_refresh_token,
       grant_type: "refresh_token",
     }),
@@ -233,7 +244,8 @@ function gmailFetch(accessToken: string, path: string) {
 }
 
 function gmailRedirectUri(settings: ReturnType<typeof getSettings>) {
-  return process.env.GMAIL_REDIRECT_URI ?? settings.googleRedirectUri.replace("/auth/google/callback", "/auth/gmail/callback");
+  const googleRedirectUri = settings.googleRedirectUri ?? "http://localhost:3737/auth/google/callback";
+  return process.env.GMAIL_REDIRECT_URI ?? googleRedirectUri.replace("/auth/google/callback", "/auth/gmail/callback");
 }
 
 function frontendUrl(path: string) {

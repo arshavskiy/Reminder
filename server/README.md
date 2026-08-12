@@ -35,7 +35,7 @@ DigitalOcean Spaces → file storage (optional)
 
 | Layer | Technology |
 |-------|-----------|
-| Server | Node.js 20, Express, TypeScript (ESM) |
+| Server | Node.js 23+, Express, TypeScript (ESM) |
 | Database | MongoDB Atlas (native driver, no Mongoose) |
 | AI | OpenAI `gpt-4o-mini` · local Ollama fallback |
 | OCR | Tesseract.js (Hebrew + English) |
@@ -50,7 +50,7 @@ DigitalOcean Spaces → file storage (optional)
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 23+
 - MongoDB running locally (`mongodb://127.0.0.1:27017`) **or** a MongoDB Atlas URI
 - OpenAI API key **or** Ollama running locally
 
@@ -91,7 +91,7 @@ cd server && npm run dev
 cd client && npm run dev
 ```
 
-Open **http://localhost:5173**. Vite proxies `/api`, `/auth`, and `/ws` to the server on port 3737 — no `VITE_API_BASE` needed in dev.
+Open **http://localhost:4173**. Vite proxies `/api`, `/auth`, and `/ws` to the server on port 3737 — no `VITE_API_BASE` needed in dev.
 
 ---
 
@@ -119,7 +119,7 @@ Open **http://localhost:5173**. Vite proxies `/api`, `/auth`, and `/ws` to the s
 | `SMTP_PASS` | ✓ | — | SMTP password or Gmail app password |
 | `EMAIL_FROM` | ✓ | — | Sender address |
 | `EMAIL_FROM_NAME` | | `ReminderOCR` | Sender display name |
-| `ALLOWED_ORIGINS` | | `http://localhost:5173` | CORS origins (comma-separated) |
+| `ALLOWED_ORIGINS` | | `http://localhost:4173` | CORS origins (comma-separated) |
 | `SERVER_URL` | | — | Public URL for email verification links |
 | `DATA_DIR` | | `./data` | Local data directory |
 | `DO_SPACES_KEY` | | — | DigitalOcean Spaces access key |
@@ -419,7 +419,7 @@ npm run pdf:hebrew -- "C:\path\file.pdf"  # parse Hebrew PDF text + OCR fallback
 
 # Client
 cd client
-npm run dev          # Vite dev server on :5173
+npm run dev          # Vite dev server on :4173
 npm run build        # Production bundle → client/dist/
 ```
 

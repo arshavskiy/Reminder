@@ -40,7 +40,7 @@ MongoDB Atlas              S3-compatible storage
 
 | Layer | Technology |
 |-------|-----------|
-| Server | Node.js 20, Express, TypeScript (ESM) |
+| Server | Node.js 23+, Express, TypeScript (ESM) |
 | Database | MongoDB Atlas (native driver, no Mongoose) |
 | AI | OpenAI `gpt-4o-mini` · local Ollama fallback |
 | OCR | Tesseract.js (Hebrew + English) |
@@ -55,7 +55,7 @@ MongoDB Atlas              S3-compatible storage
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 23+
 - MongoDB running locally (`mongodb://127.0.0.1:27017`) **or** a MongoDB Atlas URI
 - OpenAI API key **or** Ollama running locally
 
@@ -96,7 +96,7 @@ cd server && npm run dev
 cd client && npm run dev
 ```
 
-Open **http://localhost:5173**. Vite proxies `/api`, `/auth`, and `/ws` to the server on port 3737 — no `VITE_API_BASE` needed in dev.
+Open **http://localhost:4173**. Vite proxies `/api`, `/auth`, and `/ws` to the server on port 3737 — no `VITE_API_BASE` needed in dev.
 
 ---
 
@@ -545,7 +545,7 @@ npm run test:watch   # vitest watch
 
 # Client
 cd client
-npm run dev          # Vite dev server on :5173
+npm run dev          # Vite dev server on :4173
 npm run build        # Production bundle → client/dist/
 ```
 

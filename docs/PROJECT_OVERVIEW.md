@@ -246,11 +246,11 @@ cd ../client && npm install
 
 # Start development servers
 cd server && npm run dev           # Runs on http://localhost:3737
-cd client && npm run dev           # Runs on http://localhost:5173
+cd client && npm run dev           # Runs on http://localhost:4173
 ```
 
 **First Time:**
-1. Register at http://localhost:5173/register
+1. Register at http://localhost:4173/register
 2. Verify email (check console in dev mode)
 3. Login and create a test client
 4. Upload a sample PDF contract

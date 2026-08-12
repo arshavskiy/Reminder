@@ -105,7 +105,7 @@ cd server
 npm run dev
 ```
 
-**Terminal 2 — Frontend (http://localhost:5173)**
+**Terminal 2 — Frontend (http://localhost:4173)**
 ```bash
 cd client
 npm run dev
@@ -121,7 +121,7 @@ mongod
 
 ### Step 5: Verify Setup
 
-1. Open http://localhost:5173
+1. Open http://localhost:4173
 2. Should see the login page
 3. Register a new account
 4. Verify email (check terminal for magic link)

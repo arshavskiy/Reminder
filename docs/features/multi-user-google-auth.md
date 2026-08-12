@@ -6,7 +6,7 @@
 
 ## Context
 
-The app today is a single-tenant Bun + Vue 3 + SQLite system. Every page is open, every row in every table is visible to anyone who opens `http://localhost:5173`. We want to:
+The app today is a single-tenant Bun + Vue 3 + SQLite system. Every page is open, every row in every table is visible to anyone who opens `http://localhost:4173`. We want to:
 
 1. Allow **multiple users** to log in independently with **Google OAuth**.
 2. Isolate each user's data — documents, clients, contracts, reminders.
@@ -275,7 +275,7 @@ No need for `passport`, `next-auth`, or `oauth2-server` — the Google authoriza
 
 1. Create a Google Cloud project, OAuth 2.0 Client ID (Web), add `http://localhost:3737/auth/google/callback` to redirect URIs, drop `clientId/clientSecret` into `data/settings.json`.
 2. Add your email to `allowedEmails`. First user logged in becomes `role = 'admin'` automatically.
-3. `bun run dev` → visit `http://localhost:5173` → redirected to `/login` → "Sign in with Google" → consent → land on dashboard.
+3. `bun run dev` → visit `http://localhost:4173` → redirected to `/login` → "Sign in with Google" → consent → land on dashboard.
 4. Sign out → see login page again.
 5. Open an incognito window, log in with a second allowlisted Gmail → verify it sees zero documents/clients/reminders. Upload a PDF. Switch back to first browser — still zero docs in user A's view.
 6. Delete user B's document via API call to `/api/documents/{userA_doc_id}` while logged in as B → expect 404 (not 403, to avoid leaking IDs).
