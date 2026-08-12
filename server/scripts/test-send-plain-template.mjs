@@ -38,7 +38,7 @@ const now = new Date();
 const { upsertedId } = await db.collection("email_templates").updateOne(
   { name: TEMPLATE_NAME },
   {
-    $set:         { html, subject: "[תזכורת בדיקה] {{client_company}} — {{advance_days}} ימים לבדיקה", updated_at: now },
+    $set:         { html, subject: "תזכורת בדיקה תקופתית — {{engineer_company|M.A.D הנדסה וניהול בע\"מ}}", updated_at: now },
     $setOnInsert: { name: TEMPLATE_NAME, is_default: 0, doc_template_id: null, logo_path: null, created_at: now },
   },
   { upsert: true }

@@ -357,7 +357,7 @@ async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ sub
 
   if (!tpl) {
     return {
-      subject: `[תזכורת] ${reminder.title}`,
+      subject: ` תזכורת בדיקה תקופתית ${reminder.title}`,
       html: `<div dir="rtl"><h2>${reminder.title}</h2><p>${reminder.body ?? ""}</p></div>`,
     };
   }
