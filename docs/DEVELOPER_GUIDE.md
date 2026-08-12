@@ -680,5 +680,84 @@ cd ../client && rm -rf node_modules && npm install
 
 ---
 
-Last updated: 2026-07-24  
+## Dev Scripts
+
+All scripts run from `server/` with `node --import tsx/esm`.
+
+### Extract CLI — test AI extraction on any file
+
+Runs the full extraction pipeline on one or more files and prints extracted fields. No DB writes.
+
+```bash
+cd server
+
+# Single PDF
+node --import tsx/esm scripts/extract-cli.mjs path/to/file.pdf
+
+# Multiple files
+node --import tsx/esm scripts/extract-cli.mjs file1.pdf file2.pdf
+
+# With a specific doc template (looked up by name from DB)
+node --import tsx/esm scripts/extract-cli.mjs file.pdf --template "תסקיר בדיקה"
+
+# Skip DB connection (uses env AI key directly, no template lookup)
+node --import tsx/esm scripts/extract-cli.mjs file.pdf --no-db
+```
+
+Output per file:
+```
+────────────────────────────────────────────────────────────
+FILE: report.pdf
+────────────────────────────────────────────────────────────
+[parse] PDF pages: 2, chars: 3410
+
+EXTRACTED FIELDS:
+  client_company    חברת חשמל לישראל
+  client_email      info@iec.co.il
+  document_type     תסקיר בדיקה
+  expiry_date       2026-11-01
+  checked_equipment מלגזה חשמלית
+  license_number    484590
+  confidence        high
+
+  [null/empty]: client_id, contract_number, amount, currency, ...
+
+  tokens: prompt=1842 completion=312 total=2154
+  time: 3201ms  model: gpt-4o
+```
+
+### Test Send — send plain email template with real reminder data
+
+Seeds `pechersky-inspection-plain.html` to DB and sends it to an address using the most recent reminder from DB.
+
+```bash
+cd server
+
+# Send to default address (arshavsky.pasha@gmail.com)
+node --import tsx/esm scripts/test-send-plain-template.mjs
+
+# Send to a custom address
+node --import tsx/esm scripts/test-send-plain-template.mjs --to test@example.com
+```
+
+### Backfill Reminders
+
+Creates missing reminders for contracts that have `expiry_date` but no pending reminders.
+
+```bash
+cd server
+
+# Dry run — show what would be created
+node scripts/backfill-reminders.mjs --dry-run
+
+# Run for all contracts
+node scripts/backfill-reminders.mjs --all
+
+# Run for a specific user
+node scripts/backfill-reminders.mjs --user <userId>
+```
+
+---
+
+Last updated: 2026-08-12  
 See also: [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md), [API_QUICK_REFERENCE.md](./API_QUICK_REFERENCE.md)

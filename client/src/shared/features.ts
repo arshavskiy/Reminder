@@ -13,6 +13,7 @@ export const FEATURES = {
     emailTemplates: "pages.email_templates",
     settings: "pages.settings",
     search: "pages.search",
+    gmail: "pages.gmail",
   },
   dashboard: {
     statDocuments: "dashboard.stat_documents",

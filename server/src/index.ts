@@ -149,6 +149,7 @@ app.use("/api/equipment", (req, res, next) => {
 });
 
 registerAuthRoutes(app);
+app.use("/api/gmail", requireAnyFeature(["pages.gmail"]));
 registerGmailRoutes(app);
 registerDocumentRoutes(app);
 registerClientRoutes(app);
