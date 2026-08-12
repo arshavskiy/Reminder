@@ -18,6 +18,5 @@ playwright-report/
 .specstory/
 .vscode/
 dist/
-.bson
 *.bson
-mongodump-atlas/
+mongodump-atlas/**
