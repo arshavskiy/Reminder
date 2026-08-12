@@ -437,6 +437,58 @@ export interface EmailTemplate {
 // New flow stores ALL extracted fields as a flat object in `documents.extracted_fields`.
 export type DynamicExtraction = Record<string, string | number | string[] | null>;
 
+// ── Print templates (תסקיר designer) ─────────────────────────────────────────
+export interface PrintTemplateCell {
+  r: number;
+  c: number;
+  type: "label" | "field";
+  text?: string;
+  bind?: string;
+  bold?: boolean;
+  align?: "right" | "center" | "left";
+  valign?: "top" | "middle" | "bottom";
+  colSpan?: number;
+  rowSpan?: number;
+}
+
+export interface PrintTemplate {
+  _id: string;
+  name: string;
+  page: "A4" | "A3";
+  dir: "rtl" | "ltr";
+  cols: Array<{ w: number }>;
+  rows: Array<{ h: number }>;
+  cells: PrintTemplateCell[];
+  hasFixedFrame?: boolean; // wrap section-2 grid with תסקיר header/footer
+  created_at: string;
+  updated_at: string;
+}
+
+// Fixed document-level fields surrounding the designer grid (section 1 client info +
+// section 3 findings + section 4 static notes/signature).
+// Binds marked "extracted" match ExtractionResult keys exactly, so compose can
+// auto-fill from a document's extracted_fields. Binds marked "manual" have no
+// extractor source yet (תסקיר-specific: report numbering, registration) — typed
+// by hand each time, not auto-filled.
+export const PRINT_HEADER_FIELDS = [
+  { bind: "document_number", label: "מספר תסקיר", source: "extracted" },        // ExtractionResult.document_number
+  { bind: "prev_report_number", label: "מספר תסקיר קודם", source: "manual" },
+  { bind: "start_date", label: "תאריך בדיקה", source: "extracted" },            // ExtractionResult.start_date
+  { bind: "expiry_date", label: "בתוקף עד", source: "extracted" },              // ExtractionResult.expiry_date
+  { bind: "client_company", label: "שם הלקוח/תופש", source: "extracted" },      // ExtractionResult.client_company
+  { bind: "client_name", label: "איש קשר", source: "extracted" },               // ExtractionResult.client_name (contact person)
+  { bind: "client_phone", label: "טלפון", source: "extracted" },                // ExtractionResult.client_phone
+  { bind: "client_email", label: "מייל", source: "extracted" },                 // ExtractionResult.client_email
+  { bind: "client_address", label: "כתובת/יישוב", source: "extracted" },        // ExtractionResult.client_address
+  { bind: "client_id", label: "מספר רישוי/ת.ז", source: "extracted" },          // ExtractionResult.client_id
+] as const;
+
+export const PRINT_FOOTER_FIELDS = [
+  { bind: "findings_general", label: "כללי", source: "manual" },
+  { bind: "findings_remedy", label: "ליקוי", source: "manual" },
+  { bind: "findings_deadline", label: "תוך", source: "manual" },
+] as const;
+
 export interface ExtractionResult {
   client_name: string | null;          // contact person (e.g. "שילה")
   client_company: string | null;       // company name (e.g. "מילניום שירותים ולוגיסטיקה בע\"מ")

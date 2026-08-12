@@ -2,7 +2,6 @@ import express from "express";
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from "fs";
 import {extname, join} from "path";
 import {col} from "../db/db";
-import {ObjectId} from "mongodb";
 import {getDataDir} from "../settings";
 import {loadAllTemplates, loadTemplate} from "../templates/seedTemplates";
 import {loadEmailTemplate} from "../templates/seedEmailTemplates";
@@ -411,7 +410,7 @@ export function registerTemplateRoutes(app: express.Application) {
   app.post("/api/email-templates/:id/send-test", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const { to, reminder_id } = req.body as { to?: string; reminder_id?: string };
+    const { to, reminder_id, no_cc } = req.body as { to?: string; reminder_id?: string; no_cc?: boolean };
     if (!to) { res.status(400).json({ error: "to is required" }); return; }
     const { sendTestEmail, sendReminderEmailTo } = await import("../reminders/emailSender.js");
     if (reminder_id) {
@@ -435,7 +434,7 @@ export function registerTemplateRoutes(app: express.Application) {
           document_name: (documentDoc as any)?.file_name ?? null,
           email_template_id: req.params.id,
         };
-        const result = await sendReminderEmailTo(to, reminderCtx as any);
+        const result = await sendReminderEmailTo(to, reminderCtx as any, { skipCc: !!no_cc });
         res.json(result);
       } catch (err) {
         res.status(500).json({ error: String(err) });

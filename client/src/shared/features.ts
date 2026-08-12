@@ -14,6 +14,7 @@ export const FEATURES = {
     settings: "pages.settings",
     search: "pages.search",
     gmail: "pages.gmail",
+    printTemplates: "pages.print_templates",
   },
   dashboard: {
     statDocuments: "dashboard.stat_documents",

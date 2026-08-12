@@ -405,7 +405,8 @@ function ensureRtl(html: string): string {
 
 export async function sendReminderEmail(
   reminder: ReminderWithContext,
-  recipients: string[]
+  recipients: string[],
+  opts: { skipCc?: boolean } = {}
 ): Promise<{ success: boolean; error?: string }> {
   const settings = getSettings();
 
@@ -420,8 +421,9 @@ export async function sendReminderEmail(
     const from = formatAddress(senderName, settings.emailFrom);
 
     // CC the sending user so they get a copy of every reminder they send out.
+    // Set SKIP_CC=true to disable (e.g. for test scripts).
     const ccEmail: string[] = [];
-    if (userId) {
+    if (userId && !opts.skipCc && process.env.SKIP_CC !== "true") {
       const u = await col("users").findOne({ _id: tryObjectId(userId) } as any) as any;
       const userEmail = u?.email ?? null;
       if (userEmail && !recipients.includes(userEmail)) ccEmail.push(userEmail);
@@ -463,9 +465,10 @@ export async function sendReminderEmail(
 
 export async function sendReminderEmailTo(
   to: string,
-  reminder: ReminderWithContext
+  reminder: ReminderWithContext,
+  opts: { skipCc?: boolean } = {}
 ): Promise<{ success: boolean; error?: string }> {
-  return sendReminderEmail(reminder, [to]);
+  return sendReminderEmail(reminder, [to], opts);
 }
 
 export async function sendEmailWithAttachments(

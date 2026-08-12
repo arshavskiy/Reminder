@@ -53,6 +53,9 @@
           />
         </n-form-item>
       </n-form>
+      <n-form-item style="margin-top:12px; margin-bottom:0">
+        <n-checkbox v-model:checked="sendTestNoCC">ללא CC (אל תשלח עותק אליי)</n-checkbox>
+      </n-form-item>
       <template #footer>
         <div style="display:flex; gap:8px; justify-content:flex-end">
           <n-button @click="showSendTest=false">ביטול</n-button>
@@ -232,7 +235,6 @@ import {
   NAlert,
   NButton,
   NCard,
-  NModal,
   NCheckbox,
   NDrawer,
   NDrawerContent,
@@ -241,6 +243,7 @@ import {
   NGi,
   NGrid,
   NInput,
+  NModal,
   NSelect,
   NSpace,
   NSpin,
@@ -293,6 +296,7 @@ const sendTestEmail = ref("");
 const sendingTest = ref(false);
 const sendTestTemplateId = ref<string | null>(null);
 const sendTestReminderId = ref<string | null>(null);
+const sendTestNoCC = ref(false);
 const loadingReminders = ref(false);
 const reminderOptions = ref<{ label: string; value: string }[]>([]);
 
@@ -300,6 +304,7 @@ async function openSendTest(t: EmailTemplate) {
   sendTestTemplateId.value = t.id;
   sendTestEmail.value = authStore.user?.email ?? "";
   sendTestReminderId.value = null;
+  sendTestNoCC.value = false;
   showSendTest.value = true;
   loadingReminders.value = true;
   try {
@@ -319,8 +324,9 @@ async function sendTest() {
   if (!sendTestEmail.value.trim() || !sendTestTemplateId.value) return;
   sendingTest.value = true;
   try {
-    const body: Record<string, string> = { to: sendTestEmail.value.trim() };
+    const body: Record<string, string | boolean> = { to: sendTestEmail.value.trim() };
     if (sendTestReminderId.value) body.reminder_id = sendTestReminderId.value;
+    if (sendTestNoCC.value) body.no_cc = true;
     const data = await api.emailTemplates.sendTest(sendTestTemplateId.value!, body);
     if (data.success) {
       message.success("אימייל נשלח בהצלחה");

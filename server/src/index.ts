@@ -31,6 +31,7 @@ import {registerProfileRoutes} from "./routes/profile";
 import {registerAdminRoutes} from "./routes/admin";
 import {initPush} from "./push/pushService";
 import {registerExtractRemindersRoutes} from "./routes/extractReminders";
+import {registerPrintTemplateRoutes} from "./routes/printTemplates";
 import {registerFeatureRoutes} from "./routes/features";
 import {registerLegalRoutes} from "./routes/legal";
 import {importFile} from "./pipeline/importer";
@@ -169,6 +170,7 @@ registerLegalRoutes(app);
 registerProfileRoutes(app);
 registerAdminRoutes(app);
 registerExtractRemindersRoutes(app);
+registerPrintTemplateRoutes(app);
 
 // Static file serving (production)
 const STATIC_DIR = join(__dirname, "../../dist/client");

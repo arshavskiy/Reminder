@@ -19,7 +19,7 @@ import ResetPasswordPage from "../views/ResetPasswordPage.vue";
 import AdminPage from "../views/AdminPage.vue";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
-import {FEATURES, type FeatureKey} from "../shared/features.js";
+import {type FeatureKey, FEATURES} from "../shared/features.js";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -41,6 +41,8 @@ export const router = createRouter({
     { path: "/equipment", component: EquipmentPage, meta: { feature: FEATURES.pages.equipment } },
     { path: "/reports", component: ReportsPage, meta: { feature: FEATURES.pages.reports } },
     { path: "/field", component: () => import("../views/FieldPage.vue"), meta: { feature: FEATURES.pages.field } },
+    { path: "/print-templates", component: () => import("../views/PrintTemplatesPage.vue"), meta: { feature: FEATURES.pages.printTemplates } },
+    { path: "/compose", component: () => import("../views/ComposePage.vue"), meta: { feature: FEATURES.pages.printTemplates } },
     { path: "/gmail-inbox", component: GmailInboxPage },
     { path: "/admin", component: AdminPage, meta: { requireRole: "admin" } },
     { path: "/403", component: () => import("../views/ForbiddenPage.vue") },

@@ -1,16 +1,21 @@
 /**
  * Seeds pechersky-inspection-plain email template then sends it
- * to a test address using the first pending reminder in DB.
+ * to a test address using a reminder from DB.
  *
  * Usage (from server/):
- *   node scripts/test-send-plain-template.mjs [--to email@example.com]
+ *   node --import tsx/esm scripts/test-send-plain-template.mjs [--to email] [--reminder <id>]
+ *
+ * Options:
+ *   --to <email>       Recipient (default: arshavsky.pasha@gmail.com)
+ *   --reminder <id>    MongoDB ObjectId of reminder to use (default: latest)
+ *   --no-cc            Skip CC to user email (sets SKIP_CC=true)
  */
 
-import { MongoClient, ObjectId } from "mongodb";
+import {MongoClient, ObjectId} from "mongodb";
 import dotenv from "dotenv";
-import { resolve, dirname } from "path";
-import { fileURLToPath, pathToFileURL } from "url";
-import { readFileSync } from "fs";
+import {dirname, resolve} from "path";
+import {fileURLToPath, pathToFileURL} from "url";
+import {readFileSync} from "fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, "../.env") });
@@ -20,7 +25,14 @@ const TO = (() => {
   return idx !== -1 ? process.argv[idx + 1] : "arshavsky.pasha@gmail.com";
 })();
 
-const MONGODB_URI = process.env.MONGODB_LOCAL_URI ?? process.env.MONGODB_URI;
+const REMINDER_ID = (() => {
+  const idx = process.argv.indexOf("--reminder");
+  return idx !== -1 ? process.argv[idx + 1] : null;
+})();
+
+if (process.argv.includes("--no-cc")) process.env.SKIP_CC = "true";
+
+const MONGODB_URI = process.env.MONGODB_URI;
 const MONGODB_DB  = process.env.MONGODB_DB ?? "reminder-app";
 
 if (!MONGODB_URI) { console.error("No MONGODB_URI"); process.exit(1); }
@@ -48,12 +60,11 @@ const tplDoc = await db.collection("email_templates").findOne({ name: TEMPLATE_N
 console.log(`Template saved: ${tplDoc._id} (${upsertedId ? "inserted" : "updated"})`);
 
 // ── 2. Pick a real reminder ───────────────────────────────────────────────────
-const reminder = await db.collection("reminders").findOne(
-  {},
-  { sort: { created_at: -1 } }
-);
+const reminder = REMINDER_ID
+  ? await db.collection("reminders").findOne({ _id: new ObjectId(REMINDER_ID) })
+  : await db.collection("reminders").findOne({}, { sort: { created_at: -1 } });
 
-if (!reminder) { console.error("No reminders in DB"); await client.close(); process.exit(1); }
+if (!reminder) { console.error(REMINDER_ID ? `Reminder ${REMINDER_ID} not found` : "No reminders in DB"); await client.close(); process.exit(1); }
 console.log(`Using reminder: ${reminder._id} — ${reminder.title ?? "(no title)"}`);
 
 // ── 3. Dynamically import emailSender (ESM, needs tsx) ───────────────────────
