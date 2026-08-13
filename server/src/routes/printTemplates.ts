@@ -127,8 +127,11 @@ export function registerPrintTemplateRoutes(app: Express) {
     const data: Record<string, unknown> = req.body.data ?? {};
     try {
       const html = renderTemplateHtml(t, data);
-      const { default: puppeteer } = await import("puppeteer");
-      const browser = await puppeteer.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+      const { default: puppeteer } = await import("puppeteer-core");
+      const browser = await puppeteer.launch({
+        executablePath: chromiumExecutablePath(),
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: "load" });
       const pdf = await page.pdf({ format: t.page ?? "A4", printBackground: true });
@@ -140,6 +143,13 @@ export function registerPrintTemplateRoutes(app: Express) {
       res.status(500).json({ error: String(err) });
     }
   });
+}
+
+function chromiumExecutablePath(): string {
+  return process.env.PUPPETEER_EXECUTABLE_PATH ??
+    process.env.CHROME_BIN ??
+    process.env.CHROMIUM_PATH ??
+    "/usr/bin/chromium";
 }
 
 function renderTemplateHtml(t: any, data: Record<string, unknown>): string {

@@ -725,7 +725,7 @@ function composeFieldInputMode(bind: string): "text" | "email" | "tel" | "numeri
 }
 
 function composeFieldHint(kind: ComposeFieldKind): string {
-  if (kind === "date") return "YYYY-MM-DD";
+  if (kind === "date") return "DD/MM/YYYY";
   if (kind === "email") return "name@example.com";
   if (kind === "phone") return "ספרות, רווחים, + או -";
   if (kind === "integer") return "ספרות בלבד";
@@ -751,10 +751,6 @@ function validateComposeField(bind: string, value: string): string {
 }
 
 function isValidComposeDate(value: string): boolean {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const date = new Date(`${value}T00:00:00`);
-    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-  }
   return Boolean(normalizeDateForContract(value));
 }
 
@@ -799,7 +795,6 @@ function setComposeValue(bind: string, value: string) {
   const kind = composeFieldKind(baseComposeBind(bind));
   let next = value;
   if (kind === "integer") next = value.replace(/\D/g, "");
-  if (kind === "date") next = normalizeDateForContract(value) ?? value;
   composeData.value = {...composeData.value, [bind]: next};
 }
 
@@ -897,7 +892,7 @@ async function saveComposeDraft() {
 function collectComposeData(): Record<string, unknown> {
   const data:Record<string,unknown>={};
   for(const [k,v] of Object.entries(composeData.value)) {
-    data[k]=composeFieldKind(baseComposeBind(k)) === "date" ? normalizeDateForContract(v) ?? v : v;
+    data[k]=composeFieldKind(baseComposeBind(k)) === "date" ? normalizeDateForDisplay(v) : v;
   }
   return data;
 }
@@ -913,7 +908,7 @@ function normalizeComposeData(data: Record<string,string>): Record<string,string
   for (const [key, value] of Object.entries(data)) {
     const kind = composeFieldKind(baseComposeBind(key));
     if (kind === "integer") normalized[key] = value.replace(/\D/g, "");
-    else if (kind === "date") normalized[key] = normalizeDateForContract(value) ?? value;
+    else if (kind === "date") normalized[key] = normalizeDateForDisplay(value);
     else normalized[key] = value;
   }
   return normalized;
@@ -997,22 +992,40 @@ function pickField(fields: Record<string,string>, names: string[]): string {
 function normalizeDateForContract(value: string): string | null {
   const raw = value.trim();
   if(!raw) return null;
-  if(/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    return isValidDateParts(year, month, day) ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
+  }
   const match = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/);
   if(match) {
-    const first = Number(match[1]);
-    const second = Number(match[2]);
-    const dayNumber = first > 12 ? first : second > 12 ? second : first;
-    const monthNumber = first > 12 ? second : second > 12 ? first : second;
+    const dayNumber = Number(match[1]);
+    const monthNumber = Number(match[2]);
     const day = String(dayNumber).padStart(2,"0");
     const month = String(monthNumber).padStart(2,"0");
     const year = match[3].length === 2 ? `20${match[3]}` : match[3];
-    const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
-    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0,10) !== `${year}-${month}-${day}`) return null;
+    if (!isValidDateParts(Number(year), monthNumber, dayNumber)) return null;
     return `${year}-${month}-${day}`;
   }
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0,10);
+  return null;
+}
+
+function isValidDateParts(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (year < 1900 || year > 2200 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const parsed = new Date(year, month - 1, day);
+  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
+}
+
+function normalizeDateForDisplay(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  const iso = normalizeDateForContract(raw);
+  if (!iso) return value;
+  const [year, month, day] = iso.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 // ── Designer — helpers ────────────────────────────────────────────────────────

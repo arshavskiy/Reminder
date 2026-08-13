@@ -13,19 +13,6 @@
               <span class="appbar__brand-text"> ReminderOCR </span>
             </div>
 
-            <!-- Admin: view the whole app as another user -->
-            <n-select
-              v-if="authStore.isAdmin"
-              :value="authStore.actingAs?.id ?? null"
-              :options="actAsOptions"
-              :loading="actAsLoading"
-              placeholder="צפה כמשתמש"
-              clearable
-              filterable
-              class="actas-select"
-              @update:value="onActAsChange"
-            />
-
             <!-- Center nav -->
             <nav class="appbar__nav">
               <a
@@ -43,6 +30,31 @@
 
              <!-- Tail actions: theme toggle + user dropdown -->
              <div class="appbar__actions">
+               <div v-if="authStore.isAdmin" class="actas-control" :class="{ 'actas-control--open': actAsExpanded }">
+                 <button
+                   v-if="!actAsExpanded"
+                   class="actas-toggle"
+                   type="button"
+                   @click="openActAsPicker"
+                 >
+                   {{ authStore.actingAs ? "החלף משתמש" : "צפה כ" }}
+                 </button>
+                 <div v-else class="actas-picker">
+                   <n-select
+                     :value="authStore.actingAs?.id ?? null"
+                     :options="actAsOptions"
+                     :loading="actAsLoading"
+                     placeholder="צפה כמשתמש"
+                     clearable
+                     filterable
+                     class="actas-select"
+                     @update:value="onActAsChange"
+                   />
+                   <button class="actas-close" type="button" aria-label="סגור בחירת משתמש" @click="actAsExpanded = false">
+                     ×
+                   </button>
+                 </div>
+               </div>
                <n-tooltip placement="bottom" :keep-alive-on-hover="false">
                  <template #trigger>
                    <button
@@ -226,6 +238,7 @@ async function installAndDismiss() {
 // ── Admin "view as user" ────────────────────────────────────────────────────
 const actAsUsers = ref<Array<{ id: string; email: string; name: string | null }>>([]);
 const actAsLoading = ref(false);
+const actAsExpanded = ref(false);
 
 const actAsOptions = computed(() =>
   actAsUsers.value.map((u) => ({ label: u.name ? `${u.name} — ${u.email}` : u.email, value: u.id })),
@@ -245,10 +258,16 @@ async function loadActAsUsers() {
   }
 }
 
+function openActAsPicker() {
+  actAsExpanded.value = true;
+  loadActAsUsers();
+}
+
 // Switching reloads the page (handled in the store) so no stale data from the
 // previous identity lingers in any Pinia store.
 async function onActAsChange(userId: string | null) {
   try {
+    actAsExpanded.value = false;
     await authStore.setActingAs(userId);
   } catch {
     /* store surfaces the failure; keep the current view */
@@ -487,11 +506,63 @@ html[data-theme="light"] .mobile-nav-list__item--active {
   gap: 10px;
 }
 
+.actas-control {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.actas-toggle {
+  min-width: 74px;
+  height: 34px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 12px;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.actas-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.actas-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .actas-select {
-  width: 300px;
-  min-width: 140px;
-  margin-inline-start: 14px;
-  flex-shrink: 0;
+  width: min(300px, 28vw);
+  min-width: 190px;
+  flex: 0 0 auto;
+}
+
+.actas-close {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.actas-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .install-banner {
@@ -572,8 +643,8 @@ html[data-theme="dark"] .install-banner {
 
 @media (max-width: 768px) {
   .actas-select {
-    width: 130px;
-    min-width: 110px;
+    width: 190px;
+    min-width: 160px;
   }
 }
 
