@@ -22,7 +22,7 @@ Vercel  ✅  Standalone client repo ready for deployment
 |------|--------|
 | Deploy backend | Fly.io / Railway / Hetzner — Bun server, SQLite on persistent volume |
 | Push client to GitHub | `E:\Projects\Reminder-client` → new GitHub repo |
-| Connect Vercel | Import repo, set `VITE_API_BASE_URL` + `VITE_GOOGLE_CLIENT_ID` |
+| Connect Vercel | Import repo, set `VITE_API_BASE` + `VITE_GOOGLE_CLIENT_ID` |
 | Update Google OAuth redirect URI | Add production URL to Google Cloud Console |
 | Smoke test in prod | Login → upload PDF → verify extraction → check reminder |
 

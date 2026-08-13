@@ -68,7 +68,7 @@ E:\Projects\Reminder\
 
 **Vercel Client Repo** (separate): `E:\Projects\Reminder-client\`
 - Standalone Vue 3 + Vite project for Vercel deployment
-- Uses `VITE_API_BASE_URL` env var to point at the Bun backend
+- Uses `VITE_API_BASE` env var to point at the backend
 - Own git repo, own `vercel.json` (SPA rewrite)
 
 ---
@@ -228,7 +228,7 @@ ALLOWED_EMAILS=
 Separate repo at `E:\Projects\Reminder-client`:
 1. Push to GitHub
 2. Import in Vercel
-3. Set env vars: `VITE_API_BASE_URL=https://your-backend.com`, `VITE_GOOGLE_CLIENT_ID=`
+3. Set env vars: `VITE_API_BASE=https://your-backend.com`, `VITE_GOOGLE_CLIENT_ID=`
 4. Build command: `vite build`, output: `dist`
 
 ---

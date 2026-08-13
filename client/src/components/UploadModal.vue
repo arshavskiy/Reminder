@@ -402,7 +402,7 @@
 import {computed, ref, watch} from "vue";
 import {NButton, NCheckbox, NInput, NModal, NProgress, NSelect, NSpin, NSwitch, NTab, NTabs, NTag} from "naive-ui";
 
-const API = import.meta.env.VITE_API_URL ?? "";
+const API = import.meta.env.VITE_API_BASE ?? "";
 
 interface ExtractionField { key: string; label_he: string; type: string }
 export interface UploadOptions { doAi: boolean; doEntities: boolean; doReminders: boolean }
