@@ -45,14 +45,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 // CORS — allow Vercel frontend and local dev
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : [
-      "http://localhost:5173",
-      "http://localhost:4173",
-      "http://localhost:5174",
-      "http://localhost:4174",
-    ];
+const defaultAllowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "http://localhost:5174",
+  "http://localhost:4174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:4173",
+  "http://127.0.0.1:5174",
+  "http://127.0.0.1:4174",
+];
+const configuredAllowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+  : [];
+const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...configuredAllowedOrigins])];
 
 // Vercel deployments: any subdomain under vercel.app for this project
 const VERCEL_PREVIEW_RE = /^https:\/\/reminder[a-z0-9-]*\.vercel\.app$/;
