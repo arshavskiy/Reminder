@@ -23,7 +23,7 @@
             @click="view = 'agenda'"
           >☰ רשימה</n-button>
         </div>
-        <n-button size="small" secondary @click="downloadVisibleMonthDoc"> דוח חודש נוכחי</n-button>
+        <n-button size="small" secondary @click="emit('open-monthly-report', cursor.getTime())">דוח חודשי</n-button>
         <n-button size="small" secondary @click="printCalendar">הדפסה</n-button>
         <n-button
           v-if="!testsOnly"
@@ -301,7 +301,10 @@ interface Props {
   testsOnly?: boolean;
 }
 const props = withDefaults(defineProps<Props>(), { loading: false, expiryItems: () => [], testsOnly: false });
-const emit = defineEmits<{ (e: "refresh"): void }>();
+const emit = defineEmits<{
+  (e: "refresh"): void;
+  (e: "open-monthly-report", monthMs: number): void;
+}>();
 
 const router = useRouter();
 const message = useMessage();
@@ -652,86 +655,6 @@ function goToday() {
   const d = new Date();
   cursor.value = d;
   saveCursor(d);
-}
-
-function escapeHtml(value: unknown): string {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function groupedVisibleMonthDocRows() {
-  const rows = [
-    ...visibleMonthReminders.value.map((row) => ({
-      date: row.trigger_date?.slice(0, 10) ?? "",
-      client: row.client_name ?? "",
-      type: "תזכורת",
-      title: reminderSecondaryLabel(row) || row.title || "",
-      email: row.email_to || row.client_email || "",
-      status: row.status ?? "",
-    })),
-    ...visibleMonthExpiryItems.value.map((item) => ({
-      date: item.expiry_date?.slice(0, 10) ?? "",
-      client: item.client_name ?? "",
-      type: "תסקיר",
-      title: [item.equipment_name, item.contract_number].filter(Boolean).join(" / "),
-      email: item.contact_email ?? "",
-      status: expiryStatusLabel(item),
-    })),
-  ];
-  return rows.sort((a, b) =>
-    a.date.localeCompare(b.date) ||
-    a.client.localeCompare(b.client, "he") ||
-    a.type.localeCompare(b.type, "he"),
-  );
-}
-
-function downloadVisibleMonthDoc() {
-  const rows = groupedVisibleMonthDocRows();
-  const month = cursor.value.toLocaleDateString("he-IL", { month: "long", year: "numeric" });
-  const body = rows.length
-    ? rows.map((row) => `
-      <tr>
-        <td>${escapeHtml(row.date)}</td>
-        <td>${escapeHtml(row.client || "ללא לקוח")}</td>
-        <td>${escapeHtml(row.type)}</td>
-        <td>${escapeHtml(row.title)}</td>
-        <td>${escapeHtml(row.email)}</td>
-        <td>${escapeHtml(row.status)}</td>
-      </tr>
-    `).join("")
-    : `<tr><td colspan="6">אין פריטים גלויים לחודש זה</td></tr>`;
-  const html = `<!doctype html>
-<html dir="rtl" lang="he">
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: Arial, sans-serif; direction: rtl; color: #1f2937; }
-    h1 { font-size: 22px; margin: 0 0 16px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #d1d5db; padding: 8px; text-align: right; }
-    th { background: #f3f4f6; }
-  </style>
-</head>
-<body>
-  <h1>דוח חודש נוכחי - ${escapeHtml(month)}</h1>
-  <table>
-    <thead>
-      <tr><th>תאריך</th><th>לקוח</th><th>סוג</th><th>פירוט</th><th>אימייל</th><th>סטטוס</th></tr>
-    </thead>
-    <tbody>${body}</tbody>
-  </table>
-</body>
-</html>`;
-  const blob = new Blob(["\ufeff", html], { type: "application/msword;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `calendar-${visibleMonthRange.value.from.slice(0, 7)}.doc`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 function printCalendar() {

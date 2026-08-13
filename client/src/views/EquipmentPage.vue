@@ -854,7 +854,7 @@ html[data-theme="light"] .row__tag { background: rgba(24, 160, 88, 0.10); }
   font-weight: 600;
 }
 .btn--primary:hover { background: var(--brand-color-hover); border-color: var(--brand-color-hover); }
-.btn--ghost { background: transparent; }
+.btn--ghost { background: transparent; font-weight: 600 }
 .btn--xs { padding: 4px 10px; font-size: 12px; }
 .btn--danger { color: var(--color-error); }
 .btn--danger:hover { background: rgba(208, 48, 80, 0.08); }

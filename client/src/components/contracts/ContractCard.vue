@@ -47,6 +47,9 @@
       <button class="btn btn--xs btn--ghost" @click.stop="emit('edit', row)">
         <n-icon :component="CreateOutline" /> ערוך
       </button>
+      <button class="btn btn--xs btn--ghost" @click.stop="emit('open-template', row)">
+        <n-icon :component="DocumentTextOutline" /> פתח בתבנית
+      </button>
     </div>
 
 
@@ -117,7 +120,7 @@
 <script lang="ts" setup>
 import {computed} from "vue";
 import {NCheckbox, NIcon} from "naive-ui";
-import {CreateOutline, EyeOutline, TrashOutline} from "@vicons/ionicons5";
+import {CreateOutline, DocumentTextOutline, EyeOutline, TrashOutline} from "@vicons/ionicons5";
 import ExpiryBadge from "../ExpiryBadge.vue";
 import {useRouter} from "vue-router";
 import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
@@ -147,6 +150,7 @@ const emit = defineEmits<{
   "toggle-select": [id: string];
   "open-document": [row: ContractWithClient];
   edit: [row: ContractWithClient];
+  "open-template": [row: ContractWithClient];
   delete: [row: ContractWithClient, options?: { deleteRelatedReminders?: boolean }];
   "add-reminder": [row: ContractWithClient];
   "send-reminder": [reminder: ReminderWithContext];
@@ -305,7 +309,7 @@ function reminderStatusClass(status: string): string {
 .btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn--ghost { background: transparent; }
+.btn--ghost { background: transparent; font-weight: 600}
 .btn--danger {
   background: transparent;
   border-color: var(--error-color, #d03050);

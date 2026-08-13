@@ -27,6 +27,20 @@ export interface PipelineOptions {
   startDelayMs?: number;   // optional batch pacing before background processing starts
 }
 
+function parseJsonObject(raw: unknown, fallback: unknown = null): Record<string, unknown> {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    } catch {
+      // Provider output can be malformed; keep audit rows queryable as an object.
+    }
+  }
+  if (fallback && typeof fallback === "object" && !Array.isArray(fallback)) return fallback as Record<string, unknown>;
+  return {};
+}
+
 function getMimeType(ext: string): string {
   const map: Record<string, string> = {
     ".pdf": "application/pdf",
@@ -325,7 +339,7 @@ export async function processDocument(
       document_id: documentId,
       backend: "ocr-regex",
       model: "regex",
-      result_json: JSON.stringify(ocr),
+      result_json: ocr,
       raw_text: rawText,
       parsed_ok: ocr.expiry_date || ocr.contact_name || ocr.contact_phone ? 1 : 0,
       error: null,
@@ -429,7 +443,7 @@ export async function processDocument(
         document_id: documentId,
         backend: certRun.backend,
         model: certRun.model,
-        result_json: certRun.rawJson,
+        result_json: parseJsonObject(certRun.rawJson, certRun.result),
         raw_text: rawText,
         parsed_ok: certRun.result ? 1 : 0,
         error: certRun.error ?? null,
@@ -497,7 +511,7 @@ export async function processDocument(
           document_id: documentId,
           backend: run.backend,
           model: run.model,
-          result_json: run.rawJson,
+          result_json: parseJsonObject(run.rawJson, normalizedFields),
           raw_text: rawText,
           parsed_ok: normalizedFields ? 1 : 0,
           error: run.error ?? null,
@@ -550,7 +564,7 @@ export async function processDocument(
           document_id: documentId,
           backend: extraction.backend,
           model: extraction.model,
-          result_json: extraction.rawJson,
+          result_json: parseJsonObject(extraction.rawJson, extraction.result),
           raw_text: rawText,
           parsed_ok: extraction.result ? 1 : 0,
           error: extraction.error ?? null,

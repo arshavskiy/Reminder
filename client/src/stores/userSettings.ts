@@ -44,6 +44,8 @@ export const useUserSettingsStore = defineStore("userSettings", () => {
       const row = await api.userSettings.save(updates);
       settings.value = row;
       initialized.value = true;
+      const {useFeaturesStore} = await import("./features.js");
+      useFeaturesStore().setFromRaw(row.features);
       return row;
     } finally {
       saving.value = false;

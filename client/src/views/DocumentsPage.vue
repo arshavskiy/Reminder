@@ -2,7 +2,6 @@
   <div class="page2">
     <PageHeader :count="store.total" title="מסמכים">
       <template #actions>
-        <n-button @click="showCompose = true">🖨 הדפסת תסקיר</n-button>
         <n-button v-if="authStore.isAdmin" :disabled="limitReached" :loading="uploading" type="primary" @click="openUploadModal()">
           📂 העלה קבצים
         </n-button>
@@ -304,19 +303,6 @@
       </div>
     </n-modal>
 
-    <!-- ── Compose modal ─────────────────────────────────────────────── -->
-    <n-modal v-model:show="showCompose" :mask-closable="true" style="width:95vw;max-width:1400px;height:90vh">
-      <n-card :bordered="false" content-style="flex:1;overflow:hidden;padding:0" style="height:100%;display:flex;flex-direction:column">
-        <template #header>
-          <span>הדפסת תסקיר</span>
-        </template>
-        <template #header-extra>
-          <n-button text @click="showCompose = false">✕</n-button>
-        </template>
-        <ComposePage style="height:100%;overflow:auto" />
-      </n-card>
-    </n-modal>
-
     <!-- ── Upload modal ───────────────────────────────────────────────── -->
     <UploadModal
       ref="uploadModalRef"
@@ -359,7 +345,6 @@ import PageHeader from "../components/PageHeader.vue";
 import ListCard from "../components/ListCard.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import UploadModal from "../components/UploadModal.vue";
-import ComposePage from "./ComposePage.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import type {Document} from "@shared/types.js";
 
@@ -382,7 +367,6 @@ const rescanningAll = ref(false);
 const deletingAll = ref(false);
 const showDeleteAllConfirm = ref(false);
 const showRescanAllConfirm = ref(false);
-const showCompose = ref(false);
 const showLimitModal = ref(false);
 const viewMode = ref<"grid" | "list">("list");
 const rescanAlertTitle = computed(() => {

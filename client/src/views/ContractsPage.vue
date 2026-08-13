@@ -13,6 +13,13 @@
           {{ kind === "inspection" ? "תסקיר חדש" : "חוזה חדש" }}
         </button>
         <button
+          v-if="kind === 'inspection' && canOpenPrintTemplates"
+          class="btn btn--ghost"
+          @click="router.push('/print-templates')"
+        >
+          תבניות הדפסה
+        </button>
+        <button
           v-if="bulkMode && selectedIds.size > 0"
           :disabled="bulkSending"
           class="btn btn--primary"
@@ -35,9 +42,6 @@
           @click="toggleBulkMode"
         >
           ☑ בחירה מרובה
-        </button>
-        <button class="btn btn--ghost" @click="openExport" title="ייצוא CSV / Excel / PDF">
-          📊 ייצוא CSV / Excel / PDF
         </button>
         <button class="btn btn--ghost" @click="openMonthlyReport" title="הורדת דוח חודשי">
           📄 דוח חודשי
@@ -124,6 +128,7 @@
               @edit="openEdit"
               @add-reminder="openAddReminder"
               @dismiss-reminder="dismissReminder"
+              @open-template="openContractInTemplate"
               @open-document="openDoc"
               @send-reminder="sendReminderNow"
               @toggle-select="toggleSelect"
@@ -153,18 +158,7 @@
       </div>
     </n-spin>
 
-    <!-- ── Monthly report modal ─────────────────────────────────────────── -->
-    <n-modal v-model:show="showMonthlyReport" preset="dialog" :show-icon="false" title="דוח חודשי" style="width: 420px; max-width: 95vw">
-      <n-form label-placement="top">
-        <n-form-item label="חודש הדוח">
-          <n-date-picker v-model:value="monthlyReportMonthMs" type="month" style="width: 100%" />
-        </n-form-item>
-      </n-form>
-      <template #action>
-        <n-button @click="showMonthlyReport = false">ביטול</n-button>
-        <n-button type="primary" :loading="monthlyReportLoading" @click="doMonthlyReport">הורד DOC</n-button>
-      </template>
-    </n-modal>
+    <MonthlyReportModal v-model:show="showMonthlyReport" @open-export="openExportFromMonthlyReport" />
     <!-- ── Export wizard modal ──────────────────────────────────────────── -->
     <n-modal v-model:show="showExport" preset="card" style="width:640px; max-width:95vw" :mask-closable="false">
       <template #header>
@@ -442,14 +436,33 @@
     </n-modal>
 
     <!-- Manual hydraulic-check modal: business + equipment + interval -->
-    <n-modal v-model:show="showHydraulicCheck" title="תסקיר חדש" :show-icon="false" preset="dialog" style="width: 760px; max-width: 95vw">
-      <n-form label-placement="top" v-if="hydraulicForm">
-        <n-grid :cols="formGridCols" :x-gap="16">
+    <n-modal v-model:show="showHydraulicCheck" title="תסקיר חדש" :show-icon="false" preset="dialog" style="width: 920px; max-width: 96vw">
+      <n-form v-if="hydraulicForm" class="hydraulic-compact-form" label-placement="top" size="small">
+        <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
           <n-gi>
             <n-form-item label="מספר תסקיר">
               <n-input
                 v-model:value="hydraulicForm.contract_number"
                 placeholder="אוטומטי לפי מספר מפקח והמספר הבא"
+                @blur="normalizeHydraulicContractNumberInput"
+              />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="מספר תסקיר קודם">
+              <n-input v-model:value="hydraulicPrevReportNumber" placeholder="אופציונלי" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="תבנית הדפסה">
+              <n-select
+                v-model:value="hydraulicTemplateId"
+                :loading="loadingHydraulicTemplates"
+                :options="hydraulicTemplateOptions"
+                :virtual-scroll="false"
+                filterable
+                placeholder="בחר תבנית לפתיחה עם הנתונים"
+                @update:value="selectHydraulicTemplate"
               />
             </n-form-item>
           </n-gi>
@@ -470,7 +483,7 @@
           <n-form-item label="שם העסק" required>
             <n-input v-model:value="hydraulicForm.business.display_name" placeholder="לדוגמה: מפעל דן בע&quot;מ" />
           </n-form-item>
-          <n-grid :cols="formGridCols" :x-gap="16">
+          <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
             <n-gi>
               <n-form-item label="ח.פ / ת.ז">
                 <n-input v-model:value="hydraulicForm.business.id_number" />
@@ -509,7 +522,7 @@
           </n-grid>
         </template>
         <template v-else>
-          <n-grid :cols="formGridCols" :x-gap="16">
+          <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
             <n-gi>
               <n-form-item label="איש קשר">
                 <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="אם שונה מפרטי הלקוח" />
@@ -543,52 +556,91 @@
           </n-grid>
         </template>
 
-        <n-h4 style="margin: 16px 0 4px">ציוד הידראולי</n-h4>
-        <n-form-item label="סוג ציוד" required>
-          <n-select v-model:value="hydraulicForm.equipment.category" :options="hydraulicCategoryOptions" />
-        </n-form-item>
-        <n-grid :cols="formGridCols" :x-gap="16">
-          <n-gi>
-            <n-form-item label="שם הציוד">
-              <n-input v-model:value="hydraulicForm.equipment.name" placeholder="לדוגמה: מלגזה חשמלית / במת הרמה / עגורן" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="יצרן">
-              <n-input v-model:value="hydraulicForm.equipment.manufacturer" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="דגם">
-              <n-input v-model:value="hydraulicForm.equipment.model" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="מספר סידורי">
-              <n-input v-model:value="hydraulicForm.equipment.serial_number" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="עומס עבודה">
-              <n-input v-model:value="hydraulicForm.equipment.load_capacity_work" placeholder="לדוגמה: 3 טון" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="עומס בדיקה">
-              <n-input v-model:value="hydraulicForm.equipment.load_capacity_test" placeholder="לדוגמה: 3.75 טון" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="רדיוס / טווח">
-              <n-input v-model:value="hydraulicForm.equipment.load_radius" />
-            </n-form-item>
-          </n-gi>
-          <n-gi :span="formGridCols">
-            <n-form-item label="תיאור ציוד">
-              <n-input v-model:value="hydraulicForm.equipment.description" type="textarea" :rows="2" />
-            </n-form-item>
-          </n-gi>
-        </n-grid>
+        <div class="hydraulic-section-head">
+          <n-h4 style="margin: 16px 0 4px">ציוד נבדק</n-h4>
+          <n-button size="small" @click="addHydraulicEquipment">+ מכונה נוספת</n-button>
+        </div>
+        <div v-for="(equipment, index) in hydraulicEquipmentRows" :key="equipment.id" class="hydraulic-equipment-card">
+          <div class="hydraulic-equipment-card__head">
+            <strong>מכונה {{ index + 1 }}</strong>
+            <n-button v-if="hydraulicEquipmentRows.length > 1" size="tiny" text type="error" @click="removeHydraulicEquipment(index)">מחק</n-button>
+          </div>
+          <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
+            <n-gi :span="2">
+              <n-form-item label="ציוד קיים ללקוח">
+                <n-select
+                  v-model:value="equipment.selected_equipment_id"
+                  :disabled="!hydraulicClientId"
+                  :loading="loadingHydraulicEquipment"
+                  :options="hydraulicEquipmentOptions"
+                  :virtual-scroll="false"
+                  clearable
+                  filterable
+                  placeholder="חפש לפי שם / יצרן / דגם / מספר סידורי"
+                  @update:value="(id) => selectHydraulicEquipment(index, id)"
+                />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="סוג ציוד" required>
+                <n-select v-model:value="equipment.category" :options="hydraulicCategoryOptions" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="שם הציוד">
+                <n-input v-model:value="equipment.name" placeholder="לדוגמה: מלגזה חשמלית / במת הרמה / עגורן" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="יצרן">
+                <n-input v-model:value="equipment.manufacturer" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="דגם">
+                <n-input v-model:value="equipment.model" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="מספר סידורי">
+                <n-input
+                  :value="equipment.serial_number"
+                  inputmode="numeric"
+                  @update:value="(value) => setNumericEquipmentField(equipment, 'serial_number', value)"
+                />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="מספר רישוי">
+                <n-input
+                  :value="equipment.license_number"
+                  inputmode="numeric"
+                  @update:value="(value) => setNumericEquipmentField(equipment, 'license_number', value)"
+                />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="עומס עבודה">
+                <n-input v-model:value="equipment.load_capacity_work" placeholder="לדוגמה: 3 טון" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="עומס בדיקה">
+                <n-input v-model:value="equipment.load_capacity_test" placeholder="לדוגמה: 3.75 טון" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="רדיוס / טווח">
+                <n-input v-model:value="equipment.load_radius" />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="hydraulicGridCols">
+              <n-form-item label="תיאור ציוד">
+                <n-input v-model:value="equipment.description" type="textarea" :rows="1" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+        </div>
 
 
 
@@ -607,9 +659,21 @@
             style="width: 100%"
           />
         </n-form-item>
+        <template v-if="hydraulicTemplateExtraFields.length">
+          <n-divider />
+          <n-h4 style="margin: 0 0 4px">שדות נוספים מהתבנית</n-h4>
+          <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
+            <n-gi v-for="field in hydraulicTemplateExtraFields" :key="field">
+              <n-form-item :label="field">
+                <n-input v-model:value="hydraulicTemplateValues[field]" :placeholder="field" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+        </template>
       </n-form>
       <template #action>
         <n-button @click="showHydraulicCheck = false">ביטול</n-button>
+        <n-button :loading="savingHydraulicDraft" @click="saveHydraulicDraftAndPreview">שמור טיוטה ופתח תצוגה</n-button>
         <n-button type="primary" :loading="creatingHydraulicCheck" @click="doCreateHydraulicCheck">צור</n-button>
       </template>
     </n-modal>
@@ -641,20 +705,22 @@ import {
 } from "naive-ui";
 import {useContractsStore} from "../stores/contracts.js";
 import {useFeaturesStore} from "../stores/features.js";
-import {useUserSettingsStore} from "../stores/userSettings.js";
+import {useHydraulicCheckDraftStore} from "../stores/hydraulicCheckDraft.js";
 import {api} from "../services/apiService.js";
 import type {HydraulicCheckRequest} from "../services/apiService.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
+import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import {FEATURES} from "../shared/features.js";
-import type {ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
+import type {ContractWithClient, EmailTemplate, Equipment, EquipmentCategory, PrintTemplate, ReminderWithContext} from "@shared/types.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
 const featuresStore = useFeaturesStore();
-const userSettingsStore = useUserSettingsStore();
+const hydraulicDraftStore = useHydraulicCheckDraftStore();
 const router = useRouter();
 const message = useMessage();
 const canSelectEmailTemplates = computed(() => featuresStore.hasFeature(FEATURES.pages.emailTemplates));
+const canOpenPrintTemplates = computed(() => featuresStore.hasFeature(FEATURES.pages.printTemplates));
 
 const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
@@ -667,6 +733,7 @@ const isMobile = ref(false);
 const page = ref(1);
 const pageSize = ref(10);
 const formGridCols = computed(() => isMobile.value ? 1 : 2);
+const hydraulicGridCols = computed(() => isMobile.value ? 1 : 4);
 const exportGridCols = computed(() => isMobile.value ? 1 : 3);
 
 function updateViewport() {
@@ -884,34 +951,14 @@ async function saveReminder() {
 // ── Export wizard ─────────────────────────────────────────────────────────────
 const showExport = ref(false);
 const showMonthlyReport = ref(false);
-const monthlyReportLoading = ref(false);
-const monthlyReportMonthMs = ref(Date.now());
 
 function openMonthlyReport() {
-  monthlyReportMonthMs.value = Date.now();
   showMonthlyReport.value = true;
 }
 
-async function doMonthlyReport() {
-  const date = new Date(monthlyReportMonthMs.value ?? Date.now());
-  monthlyReportLoading.value = true;
-  try {
-    const settings = await userSettingsStore.load();
-    const selectedFields = settings?.report_config?.all_fields;
-    await api.reports.downloadMonthly({
-      year: date.getFullYear(),
-      month: date.getMonth() + 1,
-      format: "docx",
-      mode: "all",
-      fields: Array.isArray(selectedFields) && selectedFields.length ? selectedFields : undefined,
-    });
-    message.success("דוח DOC הורד בהצלחה");
-    showMonthlyReport.value = false;
-  } catch (e) {
-    message.error(String(e));
-  } finally {
-    monthlyReportLoading.value = false;
-  }
+function openExportFromMonthlyReport() {
+  showMonthlyReport.value = false;
+  openExport();
 }
 
 const exportStep = ref(0);
@@ -1162,8 +1209,24 @@ function extractInspectionSequence(contractNumber: string | null | undefined, in
   return null;
 }
 
+function currentHydraulicInspectorNumber(): string {
+  return engineerProfile.value?.inspector_number?.trim() ?? "";
+}
+
+function formatHydraulicContractNumber(value: string | null | undefined): string {
+  const raw = String(value ?? "").trim();
+  if (!raw || raw.includes("/")) return raw;
+  const inspectorNumber = currentHydraulicInspectorNumber();
+  return inspectorNumber ? `${inspectorNumber}/${raw}` : raw;
+}
+
+function normalizeHydraulicContractNumberInput() {
+  if (!hydraulicForm.value) return;
+  hydraulicForm.value.contract_number = formatHydraulicContractNumber(hydraulicForm.value.contract_number);
+}
+
 const suggestedHydraulicContractNumber = computed(() => {
-  const inspectorNumber = engineerProfile.value?.inspector_number?.trim();
+  const inspectorNumber = currentHydraulicInspectorNumber();
   if (!inspectorNumber) return "";
   const parsedSeed = parseInt(engineerProfile.value?.inspector_id_start ?? "", 10);
   const seed = Number.isFinite(parsedSeed) && parsedSeed > 0 ? parsedSeed : null;
@@ -1180,10 +1243,39 @@ const suggestedHydraulicContractNumber = computed(() => {
 });
 
 // ── Manual hydraulic-check: business + equipment + interval ────────────────
+const HYDRAULIC_PRINT_TEMPLATE_ID = "6a7cfbee5e95a7b2e1e4b606";
+
+type HydraulicEquipmentRow = {
+  id: string;
+  selected_equipment_id: string | null;
+  category: EquipmentCategory;
+  name: string;
+  manufacturer: string;
+  model: string;
+  serial_number: string;
+  license_number: string;
+  load_capacity_work: string;
+  load_capacity_test: string;
+  load_radius: string;
+  description: string;
+};
+
 const showHydraulicCheck = ref(false);
 const creatingHydraulicCheck = ref(false);
+const savingHydraulicDraft = ref(false);
 const hydraulicForm = ref<HydraulicCheckRequest | null>(null);
 const hydraulicClientId = ref<string | null>(null);
+const hydraulicPrevReportNumber = ref("");
+const hydraulicEquipmentRows = ref<HydraulicEquipmentRow[]>([]);
+const hydraulicClientEquipment = ref<Equipment[]>([]);
+const loadingHydraulicEquipment = ref(false);
+const hydraulicTemplates = ref<PrintTemplate[]>([]);
+const hydraulicTemplateId = ref<string | null>(null);
+const hydraulicTemplate = ref<PrintTemplate | null>(null);
+const hydraulicTemplateValues = ref<Record<string, string>>({});
+const loadingHydraulicTemplates = ref(false);
+const hydratingHydraulicDraft = ref(false);
+const clearHydraulicDraftOnClose = ref(false);
 
 
 const hydraulicCategoryOptions: { label: string; value: EquipmentCategory }[] = [
@@ -1206,20 +1298,50 @@ const hydraulicIntervalOptions = [
   { label: "14 חודשים", value: 14 },
 ];
 
+const hydraulicTemplateOptions = computed(() =>
+  hydraulicTemplates.value.map((template) => ({
+    label: `${template.name} (${template.cells.filter((cell) => cell.type === "field").length} שדות)`,
+    value: template._id,
+  }))
+);
+
+const hydraulicEquipmentOptions = computed(() =>
+  hydraulicClientEquipment.value.map((equipment) => ({
+    label: [
+      equipment.name,
+      equipment.manufacturer,
+      equipment.model,
+      equipment.serial_number ? `מס׳ ${equipment.serial_number}` : null,
+    ].filter(Boolean).join(" · "),
+    value: String(equipment.id),
+  }))
+);
+
+const hydraulicTemplateKnownFields = new Set([
+  "document_number", "contract_number", "report_number", "prev_report_number",
+  "start_date", "inspection_date", "check_date", "expiry_date", "next_inspection_date",
+  "valid_until", "inspection_type", "client_name", "client_company", "client_phone",
+  "client_email", "client_address", "client_id", "zip_code", "contact_person",
+  "po_box", "chassis", "name", "manufacturer", "model", "serial_number", "license_number", "lisence_number",
+  "load_radius", "load_capacity_test", "load_capacity_work", "equipment_description",
+  "checked_equipment",
+]);
+
+const hydraulicTemplateExtraFields = computed(() => {
+  if (!hydraulicTemplate.value) return [];
+  const seen = new Set<string>();
+  return hydraulicTemplate.value.cells
+    .filter((cell) => cell.type === "field" && cell.bind && !seen.has(cell.bind) && seen.add(cell.bind))
+    .map((cell) => cell.bind!)
+    .filter((bind) => !hydraulicTemplateKnownFields.has(bind) && !bind.match(/_\d+$/));
+});
+
 function disablePastHydraulicDates(ts: number): boolean {
   return startOfLocalDay(ts) < startOfLocalDay(Date.now());
 }
 
-async function openHydraulicCheck() {
-  if (!engineerProfile.value) {
-    await loadEngineerProfile().catch(() => {});
-  }
-  hydraulicClientId.value = null;
-  hydraulicReminderMode.value = "months";
-  hydraulicReminderDateMs.value = null;
-  hydraulicIntervalMonths.value = 4;
-
-  hydraulicForm.value = {
+function defaultHydraulicCheckForm(): HydraulicCheckRequest {
+  return {
     contract_number: suggestedHydraulicContractNumber.value || "",
     business: {
       display_name: "",
@@ -1244,12 +1366,146 @@ async function openHydraulicCheck() {
     },
     interval_months: 4,
   };
+}
+
+async function openHydraulicCheck() {
+  if (!engineerProfile.value) {
+    await loadEngineerProfile().catch(() => {});
+  }
+  const draft = hydraulicDraftStore.draft;
+  hydratingHydraulicDraft.value = true;
+  hydraulicClientId.value = draft?.clientId ?? null;
+  hydraulicReminderMode.value = draft?.reminderMode ?? "months";
+  hydraulicReminderDateMs.value = draft?.reminderDateMs ?? null;
+  hydraulicIntervalMonths.value = draft?.intervalMonths ?? 4;
+  hydraulicPrevReportNumber.value = draft?.prevReportNumber ?? "";
+  hydraulicEquipmentRows.value = draft?.equipmentRows?.length
+    ? draft.equipmentRows.map((row) => ({ ...row, id: row.id || crypto.randomUUID() }))
+    : [emptyHydraulicEquipmentRow()];
+  hydraulicClientEquipment.value = [];
+  hydraulicTemplateValues.value = { ...(draft?.templateValues ?? {}) };
+  hydraulicForm.value = draft?.form ? { ...draft.form, business: { ...draft.form.business }, equipment: { ...draft.form.equipment } } : defaultHydraulicCheckForm();
+  hydratingHydraulicDraft.value = false;
+  await loadHydraulicPrintTemplates();
+  if (draft?.templateId) {
+    selectHydraulicTemplate(draft.templateId);
+    hydraulicTemplateValues.value = { ...(draft.templateValues ?? {}) };
+  }
+  if (hydraulicClientId.value) {
+    await loadHydraulicClientEquipment(hydraulicClientId.value);
+  }
   loadClients();
   showHydraulicCheck.value = true;
 }
 
-function applyHydraulicClient(clientId: string | null) {
+function emptyHydraulicEquipmentRow(): HydraulicEquipmentRow {
+  return {
+    id: crypto.randomUUID(),
+    selected_equipment_id: null,
+    category: "lift",
+    name: "",
+    manufacturer: "",
+    model: "",
+    serial_number: "",
+    license_number: "",
+    load_capacity_work: "",
+    load_capacity_test: "",
+    load_radius: "",
+    description: "",
+  };
+}
+
+function addHydraulicEquipment() {
+  hydraulicEquipmentRows.value.push(emptyHydraulicEquipmentRow());
+}
+
+function removeHydraulicEquipment(index: number) {
+  if (hydraulicEquipmentRows.value.length <= 1) return;
+  hydraulicEquipmentRows.value.splice(index, 1);
+}
+
+async function loadHydraulicClientEquipment(clientId: string | null) {
+  hydraulicClientEquipment.value = [];
+  if (!clientId) return;
+  loadingHydraulicEquipment.value = true;
+  try {
+    hydraulicClientEquipment.value = await api.equipment.list({ client_id: clientId }, true);
+  } catch {
+    hydraulicClientEquipment.value = [];
+  } finally {
+    loadingHydraulicEquipment.value = false;
+  }
+}
+
+function selectHydraulicEquipment(index: number, id: string | null) {
+  const row = hydraulicEquipmentRows.value[index];
+  if (!row) return;
+  row.selected_equipment_id = id;
+  if (!id) return;
+  const equipment = hydraulicClientEquipment.value.find((item) => String(item.id) === String(id));
+  if (!equipment) return;
+  row.category = equipment.category ?? row.category;
+  row.name = equipment.name ?? "";
+  row.manufacturer = equipment.manufacturer ?? "";
+  row.model = equipment.model ?? "";
+  row.serial_number = digitsOnly(equipment.serial_number ?? "");
+  row.license_number = digitsOnly((equipment as any).license_number ?? "");
+  row.load_capacity_work = String(equipment.capacity ?? "");
+  row.load_capacity_test = String((equipment as any).load_capacity_test ?? "");
+  row.load_radius = String((equipment as any).load_radius ?? "");
+  row.description = equipment.description ?? "";
+}
+
+function setNumericEquipmentField(row: HydraulicEquipmentRow, field: "serial_number" | "license_number", value: string) {
+  row[field] = digitsOnly(value);
+}
+
+function digitsOnly(value: unknown): string {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+async function loadHydraulicPrintTemplates() {
+  if (hydraulicTemplates.value.length) {
+    selectHydraulicTemplate(hydraulicTemplateId.value ?? defaultHydraulicTemplateId());
+    return;
+  }
+  loadingHydraulicTemplates.value = true;
+  try {
+    hydraulicTemplates.value = await api.printTemplates.list();
+    selectHydraulicTemplate(defaultHydraulicTemplateId());
+  } catch {
+    hydraulicTemplates.value = [];
+    hydraulicTemplateId.value = null;
+    hydraulicTemplate.value = null;
+  } finally {
+    loadingHydraulicTemplates.value = false;
+  }
+}
+
+function defaultHydraulicTemplateId(): string | null {
+  return hydraulicTemplates.value.some((template) => template._id === HYDRAULIC_PRINT_TEMPLATE_ID)
+    ? HYDRAULIC_PRINT_TEMPLATE_ID
+    : hydraulicTemplates.value[0]?._id ?? null;
+}
+
+function selectHydraulicTemplate(id: string | null) {
+  hydraulicTemplateId.value = id;
+  hydraulicTemplate.value = hydraulicTemplates.value.find((template) => template._id === id) ?? null;
+  if (!hydraulicTemplate.value) {
+    hydraulicTemplateValues.value = {};
+    return;
+  }
+  const nextValues: Record<string, string> = {};
+  for (const bind of hydraulicTemplateExtraFields.value) {
+    nextValues[bind] = hydraulicTemplateValues.value[bind] ?? "";
+  }
+  hydraulicTemplateValues.value = nextValues;
+}
+
+async function applyHydraulicClient(clientId: string | null) {
   if (!hydraulicForm.value) return;
+  if (hydratingHydraulicDraft.value) return;
+  hydraulicEquipmentRows.value = hydraulicEquipmentRows.value.map((row) => ({ ...row, selected_equipment_id: null }));
 
   if (!clientId) {
     hydraulicForm.value.business = {
@@ -1262,6 +1518,7 @@ function applyHydraulicClient(clientId: string | null) {
       po_box: "",
       client_zipcode: "",
     };
+    hydraulicClientEquipment.value = [];
     return;
   }
 
@@ -1278,9 +1535,34 @@ function applyHydraulicClient(clientId: string | null) {
     po_box: (client as any).po_box ?? "",
     client_zipcode: (client as any).client_zipcode ?? "",
   };
+  await loadHydraulicClientEquipment(clientId);
 }
 
 watch(hydraulicClientId, applyHydraulicClient);
+watch(showHydraulicCheck, (isOpen, wasOpen) => {
+  if (isOpen || !wasOpen) return;
+  if (clearHydraulicDraftOnClose.value) {
+    hydraulicDraftStore.clear();
+    clearHydraulicDraftOnClose.value = false;
+    return;
+  }
+  saveCurrentHydraulicDraft();
+});
+
+function saveCurrentHydraulicDraft() {
+  if (!hydraulicForm.value) return;
+  hydraulicDraftStore.save({
+    form: hydraulicForm.value,
+    clientId: hydraulicClientId.value,
+    prevReportNumber: hydraulicPrevReportNumber.value,
+    equipmentRows: hydraulicEquipmentRows.value,
+    reminderMode: hydraulicReminderMode.value,
+    reminderDateMs: hydraulicReminderDateMs.value,
+    intervalMonths: hydraulicIntervalMonths.value,
+    templateId: hydraulicTemplateId.value,
+    templateValues: hydraulicTemplateValues.value,
+  });
+}
 
 async function doCreateHydraulicCheck() {
   if (!hydraulicForm.value) return;
@@ -1294,10 +1576,13 @@ async function doCreateHydraulicCheck() {
   }
   creatingHydraulicCheck.value = true;
   try {
-    const contractNumber = hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value;
-    if (contractNumber && !hydraulicForm.value.contract_number?.trim()) {
+    const contractNumber = formatHydraulicContractNumber(
+      hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value,
+    );
+    if (contractNumber) {
       hydraulicForm.value.contract_number = contractNumber;
     }
+    syncPrimaryHydraulicEquipment();
     const payload: HydraulicCheckRequest = {
       ...hydraulicForm.value,
       contract_number: contractNumber || undefined,
@@ -1310,6 +1595,7 @@ async function doCreateHydraulicCheck() {
     };
     const result = await api.reminders.createHydraulicCheck(payload);
     message.success(`נוצרו ${result.reminders.length} תזכורות עבור ${result.client.display_name}`);
+    clearHydraulicDraftOnClose.value = true;
     showHydraulicCheck.value = false;
     loadClients(true);
     await Promise.all([refresh(), loadReminders()]);
@@ -1318,6 +1604,237 @@ async function doCreateHydraulicCheck() {
   } finally {
     creatingHydraulicCheck.value = false;
   }
+}
+
+function syncPrimaryHydraulicEquipment() {
+  if (!hydraulicForm.value) return;
+  const first = hydraulicEquipmentRows.value[0] ?? emptyHydraulicEquipmentRow();
+  hydraulicForm.value.equipment = {
+    category: first.category as HydraulicCheckRequest["equipment"]["category"],
+    name: first.name,
+    manufacturer: first.manufacturer,
+    model: first.model,
+    serial_number: first.serial_number,
+    load_capacity_work: first.load_capacity_work,
+    load_capacity_test: first.load_capacity_test,
+    load_radius: first.load_radius,
+    description: first.description,
+  };
+}
+
+async function saveHydraulicDraftAndPreview() {
+  if (!hydraulicForm.value) return;
+  if (!hydraulicTemplateId.value) {
+    message.warning("בחר תבנית הדפסה");
+    return;
+  }
+  savingHydraulicDraft.value = true;
+  try {
+    syncPrimaryHydraulicEquipment();
+    const data = buildHydraulicTemplateDraft();
+    await api.printTemplates.saveDraft(hydraulicTemplateId.value, data, buildHydraulicTemplateDraftMeta());
+    showHydraulicCheck.value = false;
+    await router.push(`/print-templates/${hydraulicTemplateId.value}/draft`);
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    savingHydraulicDraft.value = false;
+  }
+}
+
+async function openContractInTemplate(row: ContractWithClient) {
+  if (!canOpenPrintTemplates.value) {
+    message.warning("תבניות הדפסה כבויות בהגדרות");
+    return;
+  }
+  try {
+    const templateId = await resolveContractTemplateId();
+    if (!templateId) {
+      message.warning("לא נמצאה תבנית הדפסה");
+      return;
+    }
+    await api.printTemplates.saveDraft(
+      templateId,
+      buildContractTemplateDraft(row),
+      buildContractTemplateDraftMeta(row, templateId),
+    );
+    await router.push(`/print-templates/${templateId}/draft`);
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e));
+  }
+}
+
+async function resolveContractTemplateId(): Promise<string | null> {
+  if (!hydraulicTemplates.value.length) {
+    try {
+      hydraulicTemplates.value = await api.printTemplates.list();
+    } catch {
+      hydraulicTemplates.value = [];
+    }
+  }
+  return defaultHydraulicTemplateId();
+}
+
+function buildContractTemplateDraft(row: ContractWithClient): Record<string, string> {
+  const manual = plainStringMap(row.manual_fields);
+  const firstEquipment = row._equipment?.[0] ?? null;
+  const contractNumber = String(row.contract_number ?? "");
+  const data: Record<string, string> = {
+    ...manual,
+    document_number: manual.document_number ?? contractNumber,
+    contract_number: manual.contract_number ?? contractNumber,
+    report_number: manual.report_number ?? contractNumber,
+    start_date: manual.start_date ?? dateOnly(row.start_date),
+    inspection_date: manual.inspection_date ?? dateOnly(row.start_date),
+    check_date: manual.check_date ?? dateOnly(row.start_date),
+    expiry_date: manual.expiry_date ?? dateOnly(row.expiry_date),
+    next_inspection_date: manual.next_inspection_date ?? dateOnly(row.expiry_date),
+    valid_until: manual.valid_until ?? dateOnly(row.expiry_date),
+    inspection_type: manual.inspection_type ?? String(row.contract_type ?? ""),
+    client_name: manual.client_name ?? String(row.contact_person ?? ""),
+    contact_person: manual.contact_person ?? String(row.contact_person ?? ""),
+    client_company: manual.client_company ?? String(row.client_name ?? row.counterparty ?? ""),
+    client_phone: manual.client_phone ?? String(row.contact_phone ?? ""),
+    client_email: manual.client_email ?? String(row.contact_email ?? ""),
+    client_address: manual.client_address ?? String(row.client_address ?? ""),
+    client_id: manual.client_id ?? "",
+    zip_code: manual.zip_code ?? String(row.client_zipcode ?? ""),
+    po_box: manual.po_box ?? String(row.po_box ?? ""),
+    name: manual.name ?? String(firstEquipment?.name ?? row.checked_equipment ?? ""),
+    checked_equipment: manual.checked_equipment ?? String(row.checked_equipment ?? firstEquipment?.name ?? ""),
+    manufacturer: manual.manufacturer ?? String(firstEquipment?.manufacturer ?? ""),
+    model: manual.model ?? String(firstEquipment?.model ?? ""),
+    serial_number: manual.serial_number ?? String(firstEquipment?.serial_number ?? ""),
+    chassis: manual.chassis ?? String(firstEquipment?.serial_number ?? ""),
+    license_number: manual.license_number ?? "",
+    lisence_number: manual.lisence_number ?? manual.license_number ?? "",
+    load_capacity_work: manual.load_capacity_work ?? firstArrayValue(firstEquipment?.load_capacity_work),
+    load_capacity_test: manual.load_capacity_test ?? firstArrayValue(firstEquipment?.load_capacity_test),
+    load_radius: manual.load_radius ?? firstArrayValue(firstEquipment?.load_radius),
+    equipment_description: manual.equipment_description ?? String(row.equipment_description ?? ""),
+  };
+
+  row._equipment?.forEach((equipment, index) => {
+    const suffix = index === 0 ? "" : `_${index + 1}`;
+    data[`name${suffix}`] = data[`name${suffix}`] ?? String(equipment.name ?? "");
+    data[`checked_equipment${suffix}`] = data[`checked_equipment${suffix}`] ?? String(equipment.name ?? "");
+    data[`manufacturer${suffix}`] = data[`manufacturer${suffix}`] ?? String(equipment.manufacturer ?? "");
+    data[`model${suffix}`] = data[`model${suffix}`] ?? String(equipment.model ?? "");
+    data[`serial_number${suffix}`] = data[`serial_number${suffix}`] ?? String(equipment.serial_number ?? "");
+    data[`chassis${suffix}`] = data[`chassis${suffix}`] ?? String(equipment.serial_number ?? "");
+    data[`load_capacity_work${suffix}`] = data[`load_capacity_work${suffix}`] ?? firstArrayValue(equipment.load_capacity_work);
+    data[`load_capacity_test${suffix}`] = data[`load_capacity_test${suffix}`] ?? firstArrayValue(equipment.load_capacity_test);
+    data[`load_radius${suffix}`] = data[`load_radius${suffix}`] ?? firstArrayValue(equipment.load_radius);
+  });
+
+  return data;
+}
+
+function buildContractTemplateDraftMeta(row: ContractWithClient, templateId: string): Record<string, unknown> {
+  return {
+    source: "contract_card",
+    template_id: templateId,
+    client_id: row.client_id ?? null,
+    contract_id: String(row.id),
+    document_id: row.document_id ?? null,
+    equipment_count: row._equipment?.length ?? 0,
+  };
+}
+
+function plainStringMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (item == null) continue;
+    out[key] = String(item);
+  }
+  return out;
+}
+
+function dateOnly(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.includes("T") ? value.split("T")[0] : value.split(" ")[0] ?? value;
+}
+
+function firstArrayValue(value: string[] | null | undefined): string {
+  return Array.isArray(value) ? String(value.find(Boolean) ?? "") : "";
+}
+
+function buildHydraulicTemplateDraft(): Record<string, string> {
+  const form = hydraulicForm.value!;
+  const contractNumber = formatHydraulicContractNumber(form.contract_number?.trim() || suggestedHydraulicContractNumber.value);
+  const nextDate = hydraulicReminderMode.value === "date" && hydraulicReminderDateMs.value
+    ? formatLocalDate(hydraulicReminderDateMs.value)
+    : addMonthsToLocalDate(Date.now(), hydraulicIntervalMonths.value);
+  const today = todayIso();
+  const business = form.business;
+  const firstEquipment = hydraulicEquipmentRows.value[0] ?? emptyHydraulicEquipmentRow();
+  const data: Record<string, string> = {
+    document_number: contractNumber,
+    contract_number: contractNumber,
+    report_number: contractNumber,
+    prev_report_number: hydraulicPrevReportNumber.value,
+    start_date: today,
+    inspection_date: today,
+    check_date: today,
+    expiry_date: nextDate,
+    next_inspection_date: nextDate,
+    inspection_type: "בדיקה תקופתית",
+    client_name: business.contact_person ?? "",
+    client_company: business.display_name ?? "",
+    client_phone: business.phone ?? "",
+    client_email: business.email ?? "",
+    client_address: business.address ?? "",
+    client_id: business.id_number ?? "",
+    zip_code: business.client_zipcode ?? "",
+    po_box: business.po_box ?? "",
+    license_number: firstEquipment.license_number,
+    lisence_number: firstEquipment.license_number,
+  };
+
+  hydraulicEquipmentRows.value.forEach((equipment, index) => {
+    const suffix = index === 0 ? "" : `_${index + 1}`;
+    data[`name${suffix}`] = equipment.name;
+    data[`manufacturer${suffix}`] = equipment.manufacturer;
+    data[`model${suffix}`] = equipment.model;
+    data[`serial_number${suffix}`] = equipment.serial_number;
+    data[`license_number${suffix}`] = equipment.license_number;
+    data[`lisence_number${suffix}`] = equipment.license_number;
+    data[`load_radius${suffix}`] = equipment.load_radius;
+    data[`load_capacity_test${suffix}`] = equipment.load_capacity_test;
+    data[`load_capacity_work${suffix}`] = equipment.load_capacity_work;
+    data[`equipment_description${suffix}`] = equipment.description;
+    data[`checked_equipment${suffix}`] = equipment.name;
+    data[`chassis${suffix}`] = equipment.serial_number;
+  });
+
+  const templateBinds = new Set(hydraulicTemplate.value?.cells.map((cell) => cell.bind).filter(Boolean) ?? []);
+  if (templateBinds.has("client_id") && !templateBinds.has("license_number") && firstEquipment.license_number) {
+    data.client_id = firstEquipment.license_number;
+  }
+
+  for (const [key, value] of Object.entries(hydraulicTemplateValues.value)) {
+    data[key] = value ?? "";
+  }
+  return data;
+}
+
+function buildHydraulicTemplateDraftMeta(): Record<string, unknown> {
+  return {
+    source: "hydraulic_check",
+    client_id: hydraulicClientId.value,
+    template_id: hydraulicTemplateId.value,
+    equipment_ids: hydraulicEquipmentRows.value
+      .map((equipment) => equipment.selected_equipment_id)
+      .filter(Boolean),
+    equipment_count: hydraulicEquipmentRows.value.length,
+  };
+}
+
+function addMonthsToLocalDate(ms: number, months: number): string {
+  const d = new Date(ms);
+  d.setMonth(d.getMonth() + months);
+  return formatLocalDate(d.getTime());
 }
 
 const kindOptions = [
@@ -1723,7 +2240,7 @@ function exportToExcel() {
   font-weight: 600;
 }
 .btn--primary:hover { background: var(--brand-color-hover); border-color: var(--brand-color-hover); }
-.btn--ghost { background: transparent; }
+.btn--ghost { background: transparent;font-weight: 600 }
 .btn--danger {
   background: transparent;
   border-color: var(--error-color, #d03050);
@@ -1737,6 +2254,44 @@ function exportToExcel() {
 }
 .btn--danger-ghost:hover { background: rgba(208, 48, 80, 0.08); }
 .btn--xs { padding: 4px 10px; font-size: 12px; }
+
+.hydraulic-compact-form :deep(.n-form-item) {
+  margin-bottom: 6px;
+}
+
+.hydraulic-compact-form :deep(.n-form-item-label) {
+  min-height: 20px;
+  padding-bottom: 2px;
+  font-size: 12px;
+}
+
+.hydraulic-compact-form :deep(.n-input),
+.hydraulic-compact-form :deep(.n-base-selection) {
+  min-height: 34px;
+}
+
+.hydraulic-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.hydraulic-equipment-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 8px;
+  background: var(--bg-card);
+}
+
+.hydraulic-equipment-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
 .refresh-icon { display: inline-block; transition: transform 0.4s; }
 .refresh-icon--spin { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

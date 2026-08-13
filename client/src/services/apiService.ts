@@ -587,6 +587,22 @@ export const api = {
     create: (body: Partial<PrintTemplate>) => post<PrintTemplate>("/print-templates", body),
     update: (id: string, body: Partial<PrintTemplate>) => put<PrintTemplate>(`/print-templates/${id}`, body),
     delete: (id: string) => del(`/print-templates/${id}`),
+    getDraft: (id: string) => get<{
+      data: Record<string, string>;
+      meta?: Record<string, unknown>;
+      client_id?: string | null;
+      contract_id?: string | null;
+      updated_at: string | null;
+    }>(`/print-templates/${id}/draft`),
+    saveDraft: (id: string, data: Record<string, string>, meta?: Record<string, unknown>) =>
+      put<{
+        ok: boolean;
+        data: Record<string, string>;
+        meta: Record<string, unknown>;
+        client_id: string | null;
+        contract_id: string | null;
+        updated_at: string;
+      }>(`/print-templates/${id}/draft`, { data, meta }),
     renderPdf: async (id: string, data: Record<string, unknown>) => {
       const res = await fetch(`${BASE}/print-templates/${id}/pdf`, {
         method: "POST",

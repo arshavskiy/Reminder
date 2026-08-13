@@ -14,14 +14,18 @@ export const useFeaturesStore = defineStore("features", () => {
     return isFeatureEnabled(flags.value, key);
   }
 
+  function setFromRaw(raw: unknown) {
+    flags.value = normalizeFeatureFlags(raw);
+    initialized.value = true;
+  }
+
   async function fetchFeatures(force = false) {
     if (initialized.value && !force) return;
     loading.value = true;
     try {
       const userSettingsStore = useUserSettingsStore();
       const settings = await userSettingsStore.load(force);
-      flags.value = normalizeFeatureFlags(settings?.features);
-      initialized.value = true;
+      setFromRaw(settings?.features);
     } catch {
       flags.value = {};
       initialized.value = true;
@@ -35,5 +39,5 @@ export const useFeaturesStore = defineStore("features", () => {
     initialized.value = false;
   }
 
-  return {flags, enabled, loading, initialized, hasFeature, fetchFeatures, reset};
+  return {flags, enabled, loading, initialized, hasFeature, setFromRaw, fetchFeatures, reset};
 });

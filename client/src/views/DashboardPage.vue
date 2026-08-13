@@ -66,7 +66,13 @@
         :rows="calendarRows"
         :expiry-items="expiryItems"
         :tests-only="calendarNextTestsOnly"
+        @open-monthly-report="openMonthlyReport"
         @refresh="refreshCalendar(true)"
+      />
+      <MonthlyReportModal
+        v-model:show="showMonthlyReport"
+        :initial-month-ms="monthlyReportMonthMs"
+        @open-export="openMonthlyReportExport"
       />
 
       <!-- ── Module cards ──────────────────────────────────────────────── -->
@@ -184,6 +190,7 @@ import { FEATURES, type FeatureKey } from "../shared/features.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
+import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 
 const store = useDashboardStore();
 const remindersStore = useRemindersStore();
@@ -197,6 +204,8 @@ const expiryItems = ref<ExpiryCalendarItem[]>([]);
 const loadingExpiryItems = ref(false);
 const calendarNextTestsOnly = ref(true);
 const savingCalendarPreference = ref(false);
+const showMonthlyReport = ref(false);
+const monthlyReportMonthMs = ref<number | null>(null);
 function hasFeature(feature: FeatureKey): boolean {
   return featuresStore.hasFeature(feature);
 }
@@ -209,6 +218,16 @@ const calendarLoading = computed(
     loadingExpiryItems.value ||
     (!calendarNextTestsOnly.value && remindersStore.loading),
 );
+
+function openMonthlyReport(monthMs?: number) {
+  monthlyReportMonthMs.value = monthMs ?? Date.now();
+  showMonthlyReport.value = true;
+}
+
+function openMonthlyReportExport() {
+  showMonthlyReport.value = false;
+  router.push("/contracts");
+}
 
 onMounted(async () => {
   // Always refetch fresh — stats can go stale after a client/contract/document

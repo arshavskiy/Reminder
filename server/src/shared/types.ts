@@ -155,6 +155,8 @@ export interface Client {
   email: string | null;
   phone: string | null;
   address?: string | null;
+  po_box?: string | null;
+  client_zipcode?: string | null;
   notes: string | null;
   tags: string | null; // JSON array string
   created_at: string;
@@ -403,6 +405,7 @@ export interface Equipment {
   manufacturer: string | null;
   model: string | null;
   serial_number: string | null;
+  license_number?: string | null;
   capacity: string | null;           // safe working load (עומס עבודה)
   load_capacity_test: string | null; // test load (עומס מבחן)
   load_radius: string | null;        // load radius (רדיוס עומס)
@@ -441,10 +444,14 @@ export type DynamicExtraction = Record<string, string | number | string[] | null
 export interface PrintTemplateCell {
   r: number;
   c: number;
-  type: "label" | "field";
+  type: "label" | "field" | "image";
   text?: string;
+  html?: string;
   bind?: string;
+  src?: string;
+  alt?: string;
   bold?: boolean;
+  color?: string;
   align?: "right" | "center" | "left";
   valign?: "top" | "middle" | "bottom";
   colSpan?: number;
@@ -480,7 +487,8 @@ export const PRINT_HEADER_FIELDS = [
   { bind: "client_phone", label: "טלפון", source: "extracted" },                // ExtractionResult.client_phone
   { bind: "client_email", label: "מייל", source: "extracted" },                 // ExtractionResult.client_email
   { bind: "client_address", label: "כתובת/יישוב", source: "extracted" },        // ExtractionResult.client_address
-  { bind: "client_id", label: "מספר רישוי/ת.ז", source: "extracted" },          // ExtractionResult.client_id
+  { bind: "license_number", label: "מספר רישוי", source: "extracted" },
+  { bind: "client_id", label: "ח.פ / ת.ז לקוח", source: "extracted" },          // ExtractionResult.client_id
 ] as const;
 
 export const PRINT_FOOTER_FIELDS = [
@@ -493,6 +501,7 @@ export interface ExtractionResult {
   client_name: string | null;          // contact person (e.g. "שילה")
   client_company: string | null;       // company name (e.g. "מילניום שירותים ולוגיסטיקה בע\"מ")
   client_id: string | null;            // Israeli ID or company registration number
+  license_number?: string | null;
   client_email: string | null;
   client_phone: string | null;
   client_address: string | null;       // city / full address

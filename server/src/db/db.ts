@@ -48,6 +48,8 @@ const ALL_COLLECTIONS = [
   "equipment",
   "doc_templates",
   "email_templates",
+  "print_templates",
+  "print_template_drafts",
   "features",
   "engineer_profiles",
   "certificates",
@@ -171,6 +173,17 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("email_templates").createIndex({ name: 1 }, { unique: true });
   await db.collection("email_templates").createIndex({ doc_template_id: 1 });
   await db.collection("email_templates").createIndex({ is_default: 1 });
+
+  // print_templates
+  await db.collection("print_templates").createIndex({ user_id: 1 });
+  await db.collection("print_templates").createIndex({ user_id: 1, name: 1 });
+
+  // print_template_drafts — one saved fill-state per user/template
+  await db.collection("print_template_drafts").createIndex(
+    { user_id: 1, template_id: 1 },
+    { unique: true }
+  );
+  await db.collection("print_template_drafts").createIndex({ updated_at: -1 });
 
   // features
   await db.collection("features").createIndex({ key: 1 }, { unique: true });

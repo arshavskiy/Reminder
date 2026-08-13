@@ -322,12 +322,12 @@ const allNav = [
   {label: "הגדרת ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
   // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
-  {label: "תבניות הדפסה", key: "print-templates", minRole: "user", feature: FEATURES.pages.printTemplates},
-  {label: "הדפסת תסקיר", key: "compose", minRole: "user", feature: FEATURES.pages.printTemplates},
-  {label: "Gmail", key: "gmail-inbox", minRole: "user" ,feature: FEATURES.pages.gmail},
+  // Print templates are reached from the contracts page, next to "תסקיר חדש".
+  // {label: "הדפסת תסקיר", key: "compose", minRole: "user", feature: FEATURES.pages.printTemplates},
+  // {label: "Gmail", key: "gmail-inbox", minRole: "user" ,feature: FEATURES.pages.gmail},
   {label: "סוגי מסמכים", key: "doc-templates", minRole: "user", feature: FEATURES.pages.docTemplates},
   {label: "תבניות", key: "email-templates", minRole: "user", feature: FEATURES.pages.emailTemplates},
-  {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
+  // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];
 
 const primaryNav = computed(() => {

@@ -636,6 +636,7 @@ export function registerEquipmentRoutes(app: express.Application) {
       manufacturer: body.manufacturer ?? null,
       model: body.model ?? null,
       serial_number: body.serial_number ?? null,
+      license_number: (body as any).license_number ?? null,
       capacity: body.capacity ?? null,
       load_capacity_test: (body as any).load_capacity_test ?? null,
       load_radius: (body as any).load_radius ?? null,
@@ -668,7 +669,7 @@ export function registerEquipmentRoutes(app: express.Application) {
     const updates: Record<string, any> = { updated_at: new Date() };
     const fields = [
       "name", "category", "manufacturer", "model", "serial_number",
-      "capacity", "load_capacity_test", "load_radius",
+      "license_number", "capacity", "load_capacity_test", "load_radius",
       "description", "notes", "is_active", "client_id",
     ];
     for (const f of fields) {
@@ -868,7 +869,11 @@ export function registerEquipmentRoutes(app: express.Application) {
 
     for (const ext of extractions as any[]) {
       let fields: any;
-      try { fields = JSON.parse(ext.result_json ?? "{}"); } catch { continue; }
+      if (ext.result_json && typeof ext.result_json === "object" && !Array.isArray(ext.result_json)) {
+        fields = ext.result_json;
+      } else {
+        try { fields = JSON.parse(ext.result_json ?? "{}"); } catch { continue; }
+      }
       const equipmentList: any[] = Array.isArray(fields._equipment) ? fields._equipment : [];
       if (!equipmentList.length) continue;
 

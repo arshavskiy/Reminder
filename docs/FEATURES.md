@@ -388,6 +388,38 @@ The page also provides a monthly PDF report. It asks for a month and downloads a
 
 The Reports page (`/reports`) controls automatic monthly delivery of contract and inspection reports.
 
+---
+
+## Inspection Print Templates
+
+The Contracts page exposes `תבניות הדפסה` next to `תסקיר חדש`. This opens the Excel-style print-template designer and compose flow.
+
+Supported flow:
+
+1. `תסקיר חדש` collects client, equipment, interval, and template fields.
+2. Existing client selection fills business fields and loads equipment for that client.
+3. Equipment rows can be typed manually or selected from `GET /api/equipment?client_id=...`.
+4. `שמור טיוטה ופתח תצוגה` saves a `print_template_drafts` row and opens `/print-templates/:templateId/draft`.
+5. The compose page allows editing directly in table cells and in the side panel.
+6. The user can save a draft, save PDF, print PDF, or create a contract and reminders.
+
+Template designer features:
+
+- Excel-style grid with rows, columns, merge/unmerge, row clone, and formula line editing.
+- Field cells, label cells, and image cells.
+- Partial rich text in label cells: bold and color selected text.
+- Images from uploaded assets or safe image URLs.
+- Correct binding for `מספר רישוי` is `license_number`.
+
+Draft/client/contract linkage:
+
+- Drafts store `data` for rendered fields and `meta` for relationships.
+- `meta.client_id` and top-level `client_id` link the draft to the selected client.
+- `meta.equipment_ids` stores selected machine ids.
+- When `צור חוזה + תזכורת` is clicked, the created contract uses the draft `client_id`; the resulting `contract_id` is saved back to the draft.
+
+Full technical reference: [INSPECTION_TEMPLATE_FLOW.md](./INSPECTION_TEMPLATE_FLOW.md).
+
 Settings include:
 
 - Enable or disable automatic delivery

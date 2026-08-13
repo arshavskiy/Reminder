@@ -566,6 +566,52 @@ Common status codes:
 
 ## Contract and Inspection Reports
 
+## Print Templates
+
+Print templates power the Excel-style תסקיר designer and compose flow.
+
+### `GET /api/print-templates/:id/draft`
+
+Returns the authenticated user's saved fill draft for a template.
+
+Response fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `data` | object | Template bind/value map rendered into field cells |
+| `meta` | object | Non-render metadata such as source, client id, equipment ids |
+| `client_id` | string \| null | Selected client linked to this draft |
+| `contract_id` | string \| null | Contract created from this draft, when available |
+| `updated_at` | string \| null | Last save timestamp |
+
+### `PUT /api/print-templates/:id/draft`
+
+Saves a fill draft for a template.
+
+Request:
+
+```json
+{
+  "data": {
+    "client_company": "Example Ltd",
+    "expiry_date": "2027-10-29"
+  },
+  "meta": {
+    "source": "hydraulic_check",
+    "client_id": "66bd...",
+    "equipment_ids": ["66bf..."]
+  }
+}
+```
+
+The server stores sanitized `data`, sanitized `meta`, and copies `meta.client_id` / `meta.contract_id` to top-level `client_id` / `contract_id`.
+
+### `POST /api/print-templates/:id/pdf`
+
+Renders a filled template as PDF from request `data`.
+
+See [INSPECTION_TEMPLATE_FLOW.md](./INSPECTION_TEMPLATE_FLOW.md) for the full תסקיר draft, PDF, contract, client, and equipment flow.
+
 ### `GET /api/contracts/monthly-report.pdf`
 
 Downloads an authenticated PDF report for contracts and inspections whose `start_date` falls within the selected month.

@@ -228,6 +228,21 @@ Failure handling:
 
 Templates are stored in the `email_templates` collection as HTML with `{{variable}}` placeholders.
 
+## Print Templates
+
+Print templates are stored in `print_templates`; filled drafts are stored in `print_template_drafts`.
+
+`print_template_drafts` connects the manual תסקיר flow to real entities:
+
+- `data` stores renderable field values.
+- `meta` stores non-render linkage data such as `source`, `client_id`, and `equipment_ids`.
+- `client_id` is copied to a top-level field for efficient lookup and contract creation.
+- `contract_id` is written after the compose page creates a contract from the draft.
+
+The compose flow creates contracts through `POST /api/contracts` with `client_id` from the draft metadata, so generated reminders and client views remain linked to the selected client.
+
+See [INSPECTION_TEMPLATE_FLOW.md](./INSPECTION_TEMPLATE_FLOW.md) for the full user flow, API contract, and DB notes.
+
 Built-in templates (seeded on first run):
 - `inspection-reminder` — תסקיר expiry reminder
 - `contract-reminder` — contract expiry reminder

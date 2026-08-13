@@ -112,6 +112,18 @@ All endpoints require `sid` cookie (set by login) except where noted with 🔓.
 | POST | `/api/equipment/{id}/photos` | Upload equipment photo |
 | GET | `/api/equipment/{id}/photos/signed` | Get signed photo URLs |
 
+## Print Templates
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/print-templates` | List print templates |
+| POST | `/api/print-templates` | Create print template |
+| PUT | `/api/print-templates/{id}` | Update print template |
+| DELETE | `/api/print-templates/{id}` | Delete print template |
+| GET | `/api/print-templates/{id}/draft` | Get saved fill draft with `data`, `meta`, `client_id`, `contract_id` |
+| PUT | `/api/print-templates/{id}/draft` | Save fill draft data and linkage metadata |
+| POST | `/api/print-templates/{id}/pdf` | Render filled template as PDF |
+
 ---
 
 ## Documents

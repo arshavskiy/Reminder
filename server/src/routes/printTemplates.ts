@@ -63,6 +63,52 @@ export function registerPrintTemplateRoutes(app: Express) {
     res.json({ ...result, _id: result._id.toString() });
   });
 
+  // Get saved fill draft for a template
+  app.get("/api/print-templates/:id/draft", async (req, res) => {
+    let auth: Awaited<ReturnType<typeof requireAuth>>;
+    try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
+    const template = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId });
+    if (!template) { res.status(404).json({ error: "Not found" }); return; }
+    const draft = await col("print_template_drafts").findOne({ user_id: auth.userId, template_id: req.params.id }) as any;
+    res.json({
+      data: draft?.data ?? {},
+      meta: draft?.meta ?? {},
+      client_id: draft?.client_id ?? draft?.meta?.client_id ?? null,
+      contract_id: draft?.contract_id ?? draft?.meta?.contract_id ?? null,
+      updated_at: draft?.updated_at ?? null,
+    });
+  });
+
+  // Save fill draft for a template
+  app.put("/api/print-templates/:id/draft", async (req, res) => {
+    let auth: Awaited<ReturnType<typeof requireAuth>>;
+    try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
+    const template = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId });
+    if (!template) { res.status(404).json({ error: "Not found" }); return; }
+    const data = sanitizeDraftData(req.body?.data ?? {});
+    const meta = sanitizeDraftMeta(req.body?.meta ?? {});
+    const clientId = typeof meta.client_id === "string" && meta.client_id.trim() ? meta.client_id.trim() : null;
+    const contractId = typeof meta.contract_id === "string" && meta.contract_id.trim() ? meta.contract_id.trim() : null;
+    const now = new Date().toISOString();
+    await col("print_template_drafts").updateOne(
+      { user_id: auth.userId, template_id: req.params.id },
+      {
+        $set: {
+          user_id: auth.userId,
+          template_id: req.params.id,
+          data,
+          meta,
+          client_id: clientId,
+          contract_id: contractId,
+          updated_at: now,
+        },
+        $setOnInsert: { created_at: now },
+      },
+      { upsert: true }
+    );
+    res.json({ ok: true, data, meta, client_id: clientId, contract_id: contractId, updated_at: now });
+  });
+
   // Delete print template
   app.delete("/api/print-templates/:id", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
@@ -123,17 +169,20 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
       const cell = cells.find(c => c.r === ri && c.c === ci);
       const colspan = cell?.colSpan ? ` colspan="${cell.colSpan}"` : "";
       const rowspan = cell?.rowSpan ? ` rowspan="${cell.rowSpan}"` : "";
-      const align = cell?.align ?? dir === "rtl" ? "right" : "left";
+      const align = cell?.align ?? (dir === "rtl" ? "right" : "left");
       const valign = cell?.valign ?? "middle";
       const bold = cell?.bold ? "font-weight:700;" : "";
-      const style = `text-align:${align};vertical-align:${valign};${bold}padding:2px 4px;`;
+      const color = cell?.color ? `color:${cssColor(cell.color)};` : "";
+      const style = `text-align:${align};vertical-align:${valign};${bold}${color}padding:2px 4px;`;
       let content = "";
       if (cell?.type === "label") {
-        content = cell.text ?? "";
+        content = cell.html ? sanitizeRichHtml(cell.html) : escHtml(cell.text ?? "");
       } else if (cell?.type === "field" && cell.bind) {
-        content = String(data[cell.bind] ?? "");
+        content = escHtml(String(data[cell.bind] ?? ""));
+      } else if (cell?.type === "image") {
+        content = imageHtml(cell);
       }
-      return `<td${colspan}${rowspan} style="${style}">${escHtml(content)}</td>`;
+      return `<td${colspan}${rowspan} style="${style}">${content}</td>`;
     }).join("");
     return `<tr style="height:${row.h}px">${tds}</tr>`;
   }).join("");
@@ -147,6 +196,7 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
   body { font-family: Arial, sans-serif; font-size: 12px; direction: ${dir}; padding: 16px; }
   table.render { border-collapse: collapse; width: 100%; table-layout: fixed; }
   table.render td { border: 1px solid #000; vertical-align: middle; overflow: hidden; }
+  table.render img.cell-img { display: block; max-width: 100%; max-height: 100%; margin: 0 auto; object-fit: contain; }
 </style>
 </head>
 <body>
@@ -160,4 +210,76 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
 
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function sanitizeDraftData(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const clean: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!key || value == null) continue;
+    clean[key] = String(value);
+  }
+  return clean;
+}
+
+function sanitizeDraftMeta(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!key || value == null) continue;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      clean[key] = value;
+    } else if (Array.isArray(value)) {
+      clean[key] = value
+        .filter((item) => ["string", "number", "boolean"].includes(typeof item))
+        .map((item) => String(item));
+    }
+  }
+  return clean;
+}
+
+function imageHtml(cell: any): string {
+  const src = safeImageSrc(String(cell?.src ?? ""));
+  if (!src) return "";
+  return `<img class="cell-img" src="${escAttr(src)}" alt="${escAttr(String(cell?.alt ?? ""))}">`;
+}
+
+function safeImageSrc(src: string): string {
+  const value = src.trim();
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,/i.test(value)) return value;
+  if (value.startsWith("/")) return value;
+  return "";
+}
+
+function sanitizeRichHtml(html: string): string {
+  const tokens: string[] = [];
+  const protectedHtml = html.replace(
+    /<\/?(?:b|strong)>|<br\s*\/?>|<span\s+style=["']color:\s*#[0-9a-f]{3}(?:[0-9a-f]{3})?["']\s*>|<\/span>/gi,
+    (tag) => {
+      const normalized = normalizeRichTag(tag);
+      if (!normalized) return "";
+      const idx = tokens.push(normalized) - 1;
+      return `@@RICH_${idx}@@`;
+    },
+  );
+  return escHtml(protectedHtml).replace(/@@RICH_(\d+)@@/g, (_match, index) => tokens[Number(index)] ?? "");
+}
+
+function cssColor(color: unknown): string {
+  const value = String(color ?? "").trim();
+  return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ? value : "inherit";
+}
+
+function escAttr(s: string): string {
+  return escHtml(s).replace(/"/g, "&quot;");
+}
+
+function normalizeRichTag(tag: string): string {
+  if (/^<br/i.test(tag)) return "<br>";
+  if (/^<\/(?:b|strong)>$/i.test(tag)) return "</strong>";
+  if (/^<(?:b|strong)>$/i.test(tag)) return "<strong>";
+  if (/^<\/span>$/i.test(tag)) return "</span>";
+  const color = tag.match(/color:\s*(#[0-9a-f]{3}(?:[0-9a-f]{3})?)/i)?.[1];
+  return color ? `<span style="color:${color}">` : "";
 }

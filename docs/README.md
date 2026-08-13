@@ -22,6 +22,7 @@ Complete documentation for the ReminderOCR platform.
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — System design and component relationships
 - **[REMINDER_FLOW.md](./REMINDER_FLOW.md)** — How reminders are created, scheduled, and sent
 - **[ocr-and-ai-extraction.md](./ocr-and-ai-extraction.md)** — OCR, regex extraction, AI extraction, and rebuild flow
+- **[INSPECTION_TEMPLATE_FLOW.md](./INSPECTION_TEMPLATE_FLOW.md)** — תסקיר template drafts, PDF, contract/client/equipment linkage, and DB shape
 - **[WORKFLOW_NOTES_2026-08-09.md](./WORKFLOW_NOTES_2026-08-09.md)** — Latest document processing, rescan, calendar, and reminder logic notes
 
 ### 🚀 Operations
@@ -43,6 +44,7 @@ Complete documentation for the ReminderOCR platform.
 | **ARCHITECTURE.md** | System design and patterns | Architects, senior developers |
 | **REMINDER_FLOW.md** | Reminder scheduling logic | Feature developers |
 | **ocr-and-ai-extraction.md** | OCR, AI extraction, retry behavior, entity rebuild flow | Feature developers |
+| **INSPECTION_TEMPLATE_FLOW.md** | Manual תסקיר, print-template drafts, PDF, and client/contract/equipment linkage | Feature developers |
 | **WORKFLOW_NOTES_2026-08-09.md** | Dated summary of today's processing and UI flow changes | Developers |
 | **DEPLOYMENT.md** | Production deployment steps | DevOps, release managers |
 | **PROJECT_STATUS_REPORT.md** | Progress, roadmap, milestones | Project managers, stakeholders |
@@ -98,6 +100,11 @@ Complete documentation for the ReminderOCR platform.
 - Inspectable items (lifts, scaffolding, ladders, etc.)
 - Track inspection dates and maintenance history
 - Linked to clients and contracts
+
+### Print Templates
+- Excel-style תסקיר designer and compose flow
+- Drafts can be linked to clients, equipment, and created contracts
+- Generate saved PDFs, print PDFs, contracts, and reminders from filled template data
 
 ### Email Templates
 - Customizable HTML templates with dynamic variables
