@@ -1,4 +1,6 @@
 import type {Express} from "express";
+import {existsSync} from "node:fs";
+import {spawnSync} from "node:child_process";
 import {col} from "../db/db.js";
 import {requireAuth} from "../auth/middleware.js";
 import {ObjectId} from "mongodb";
@@ -128,8 +130,14 @@ export function registerPrintTemplateRoutes(app: Express) {
     try {
       const html = renderTemplateHtml(t, data);
       const { default: puppeteer } = await import("puppeteer-core");
+      const executablePath = chromiumExecutablePath();
+      if (!executablePath) {
+        throw new Error(
+          "Chromium/Chrome executable was not found. Set PUPPETEER_EXECUTABLE_PATH, CHROME_BIN, or CHROMIUM_PATH."
+        );
+      }
       const browser = await puppeteer.launch({
-        executablePath: chromiumExecutablePath(),
+        executablePath,
         args: ["--no-sandbox", "--disable-setuid-sandbox"],
       });
       const page = await browser.newPage();
@@ -145,11 +153,39 @@ export function registerPrintTemplateRoutes(app: Express) {
   });
 }
 
-function chromiumExecutablePath(): string {
-  return process.env.PUPPETEER_EXECUTABLE_PATH ??
-    process.env.CHROME_BIN ??
-    process.env.CHROMIUM_PATH ??
-    "/usr/bin/chromium";
+function chromiumExecutablePath(): string | undefined {
+  const configured = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    process.env.CHROME_BIN,
+    process.env.CHROMIUM_PATH,
+  ].find((value) => value && existsSync(value));
+  if (configured) return configured;
+
+  const envCandidates = [
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe` : undefined,
+    process.env.PROGRAMFILES ? `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe` : undefined,
+    process.env["PROGRAMFILES(X86)"] ? `${process.env["PROGRAMFILES(X86)"]}\\Google\\Chrome\\Application\\chrome.exe` : undefined,
+    process.env.PROGRAMFILES ? `${process.env.PROGRAMFILES}\\Microsoft\\Edge\\Application\\msedge.exe` : undefined,
+    process.env["PROGRAMFILES(X86)"] ? `${process.env["PROGRAMFILES(X86)"]}\\Microsoft\\Edge\\Application\\msedge.exe` : undefined,
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
+    "/nix/var/nix/profiles/default/bin/chromium",
+  ];
+  const existingCandidate = envCandidates.find((value) => value && existsSync(value));
+  if (existingCandidate) return existingCandidate;
+
+  return findExecutableOnPath(["chromium", "chromium-browser", "google-chrome", "chrome", "msedge"]);
+}
+
+function findExecutableOnPath(names: string[]): string | undefined {
+  const command = process.platform === "win32" ? "where" : "which";
+  for (const name of names) {
+    const result = spawnSync(command, [name], { encoding: "utf8" });
+    const first = result.stdout?.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+    if (result.status === 0 && first && existsSync(first)) return first;
+  }
+  return undefined;
 }
 
 function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
