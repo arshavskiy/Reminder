@@ -104,54 +104,76 @@
     </div>
 
     <!-- ── Card list ───────────────────────────────────────────────────── -->
-    <n-spin :show="store.loading">
+    <n-spin :show="store.loading || draftsLoading">
       <n-virtual-list
-        v-if="filteredRows.length"
+        v-if="visibleItems.length"
         :item-size="220"
-        :items="pagedRows"
+        :items="pagedItems"
         :item-resizable="true"
         class="cards-vlist"
         item-class="cards-vlist__item"
       >
-        <template #default="{ item: row }">
+        <template #default="{ item }">
           <div class="cards-vlist__pad">
             <ContractCard
-              :key="row.id"
+              v-if="item.__type === 'contract'"
+              :key="item.row.id"
               :bulk-mode="bulkMode"
               :kind="kind"
               :inspector-number="engineerProfile?.inspector_number"
-              :reminders="remindersFor(String(row.id))"
-              :row="row"
-              :selected="selectedIds.has(String(row.id))"
+              :reminders="remindersFor(String(item.row.id))"
+              :row="item.row"
+              :selected="selectedIds.has(String(item.row.id))"
+              :creating-reminder="creatingReminderFor"
               :sending-reminder="sendingReminder"
               @delete="confirmDelete"
               @edit="openEdit"
               @add-reminder="openAddReminder"
+              @create-reminder="createContractReminder"
               @dismiss-reminder="dismissReminder"
               @open-template="openContractInTemplate"
               @open-document="openDoc"
               @send-reminder="sendReminderNow"
               @toggle-select="toggleSelect"
             />
+            <article v-else class="draft-card" @click="openDraftInTemplate(item.draft)">
+              <div class="draft-card__row">
+                <div>
+                  <div class="draft-card__title">{{ item.draft.contract_number || item.draft.template_name }}</div>
+                  <div class="draft-card__sub">{{ item.draft.contract_type || "טיוטת תסקיר" }}</div>
+                </div>
+                <span class="tag tag--info">טיוטה</span>
+              </div>
+              <div class="draft-card__body">
+                <span class="kv"><strong>לקוח:</strong> {{ item.draft.client_name || draftField(item.draft, ["client_company", "client_name"]) || "-" }}</span>
+                <span class="kv"><strong>תבנית:</strong> {{ item.draft.template_name }}</span>
+                <span class="kv"><strong>עודכן:</strong> {{ formatDraftDate(item.draft.updated_at) }}</span>
+              </div>
+              <div class="card__secondary-actions">
+                <button class="btn btn--xs btn--ghost" @click.stop="openDraftInTemplate(item.draft)">
+                  פתח בתבנית
+                </button>
+              </div>
+            </article>
           </div>
         </template>
       </n-virtual-list>
 
-      <div v-if="filteredRows.length" class="pagination-bar">
+      <div v-if="visibleItems.length" class="pagination-bar">
         <span class="pagination-summary">
-          מציג {{ pageStart + 1 }}-{{ pageEnd }} מתוך {{ filteredRows.length }}
+          מציג {{ pageStart + 1 }}-{{ pageEnd }} מתוך {{ visibleItems.length }}
         </span>
         <n-pagination
           v-model:page="page"
           v-model:page-size="pageSize"
-          :item-count="filteredRows.length"
+          :item-count="visibleItems.length"
           :page-sizes="[5, 10, 20, 50]"
           show-size-picker
         />
       </div>
 
-      <div v-if="!filteredRows.length" class="empty">
-        <p>אין {{ kind === "inspection" ? "תסקירים" : "חוזים" }} להצגה</p>
+      <div v-if="!visibleItems.length" class="empty">
+        <p>אין {{ activeFilterKey === "drafts" ? "טיוטות שמורות" : kind === "inspection" ? "תסקירים" : "חוזים" }} להצגה</p>
         <button class="btn btn--primary" style="margin-top:12px" @click="openCreate">
           + {{ kind === "inspection" ? "הוסף תסקיר ראשון" : "הוסף חוזה ראשון" }}
         </button>
@@ -707,7 +729,7 @@ import {useContractsStore} from "../stores/contracts.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {useHydraulicCheckDraftStore} from "../stores/hydraulicCheckDraft.js";
 import {api} from "../services/apiService.js";
-import type {HydraulicCheckRequest} from "../services/apiService.js";
+import type {HydraulicCheckRequest, PrintTemplateDraftSummary} from "../services/apiService.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import {FEATURES} from "../shared/features.js";
@@ -726,6 +748,7 @@ const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
 type DueFilter = "all" | "overdue" | "month" | "sent" | "no_email" | "has_reminder";
 const dueFilter = ref<DueFilter>("all");
+const showDraftsOnly = ref(false);
 const search = ref("");
 const filterClientId = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
@@ -735,6 +758,11 @@ const pageSize = ref(10);
 const formGridCols = computed(() => isMobile.value ? 1 : 2);
 const hydraulicGridCols = computed(() => isMobile.value ? 1 : 4);
 const exportGridCols = computed(() => isMobile.value ? 1 : 3);
+const templateDrafts = ref<PrintTemplateDraftSummary[]>([]);
+const draftsLoading = ref(false);
+type ContractListItem = { __type: "contract"; row: ContractWithClient };
+type DraftListItem = { __type: "draft"; draft: PrintTemplateDraftSummary };
+type ListItem = ContractListItem | DraftListItem;
 
 function updateViewport() {
   isMobile.value = window.innerWidth <= 720;
@@ -886,6 +914,7 @@ const emailTemplateOptions = computed(() =>
 // ── Add reminder modal ────────────────────────────────────────────────────────
 const showAddReminder = ref(false);
 const savingReminder = ref(false);
+const creatingReminderFor = ref<string | null>(null);
 const reminderTargetRow = ref<ContractWithClient | null>(null);
 const reminderForm = ref<{
   title: string;
@@ -1340,6 +1369,27 @@ function disablePastHydraulicDates(ts: number): boolean {
   return startOfLocalDay(ts) < startOfLocalDay(Date.now());
 }
 
+async function createContractReminder(row: ContractWithClient) {
+  if (!row.expiry_date) {
+    message2.warning("חסר תאריך תוקף לתזכורת");
+    return;
+  }
+  creatingReminderFor.value = row.id;
+  try {
+    const result = await api.contracts.createReminder(row.id);
+    if (result.reminders.length) {
+      message2.success("התזכורת נוצרה");
+    } else {
+      message2.warning("לא נוצרה תזכורת. בדוק שיש אימייל ללקוח ותאריך עתידי.");
+    }
+    await loadReminders();
+  } catch (e) {
+    message2.error(e instanceof Error ? e.message : String(e));
+  } finally {
+    creatingReminderFor.value = null;
+  }
+}
+
 function defaultHydraulicCheckForm(): HydraulicCheckRequest {
   return {
     contract_number: suggestedHydraulicContractNumber.value || "",
@@ -1588,13 +1638,14 @@ async function doCreateHydraulicCheck() {
       contract_number: contractNumber || undefined,
       client_id: hydraulicClientId.value ?? undefined,
       interval_months: hydraulicIntervalMonths.value,
+      skip_reminders: true,
       next_inspection_date: hydraulicReminderMode.value === "date"
         ? formatLocalDate(hydraulicReminderDateMs.value!)
         : undefined,
 
     };
     const result = await api.reminders.createHydraulicCheck(payload);
-    message.success(`נוצרו ${result.reminders.length} תזכורות עבור ${result.client.display_name}`);
+    message.success(`התסקיר נשמר עבור ${result.client.display_name}. ניתן ליצור תזכורת מהכרטיס.`);
     clearHydraulicDraftOnClose.value = true;
     showHydraulicCheck.value = false;
     loadClients(true);
@@ -1662,6 +1713,26 @@ async function openContractInTemplate(row: ContractWithClient) {
   } catch (e) {
     message.error(e instanceof Error ? e.message : String(e));
   }
+}
+
+function openDraftInTemplate(draft: PrintTemplateDraftSummary) {
+  router.push(`/print-templates/${draft.template_id}/draft`);
+}
+
+function draftField(draft: PrintTemplateDraftSummary, names: string[]): string {
+  for (const name of names) {
+    const value = draft.data?.[name]?.trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function formatDraftDate(value: string | null): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
 }
 
 async function resolveContractTemplateId(): Promise<string | null> {
@@ -1870,7 +1941,7 @@ type CombinedFilter = {
   key: string;
   label: string;
   count: number;
-  type: "status" | "due";
+  type: "status" | "due" | "drafts";
   statusValue?: string | null;
   dueValue?: DueFilter;
 };
@@ -1885,6 +1956,7 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
     { key: "sent",     label: "נשלחו",     count: rows.filter((r) => contractMatchesDueFilter(r, "sent")).length,            type: "due",    dueValue: "sent" },
     { key: "no_email", label: "חסר אימייל", count: rows.filter((r) => contractMatchesDueFilter(r, "no_email")).length,       type: "due",    dueValue: "no_email" },
     { key: "has_reminder", label: "יש תזכורת", count: rows.filter((r) => remindersFor(String(r.id)).length > 0).length,    type: "due",    dueValue: "has_reminder" },
+    { key: "drafts",   label: "טיוטות",     count: templateDrafts.value.length,                                             type: "drafts" },
     { key: "cancelled", label: "בוטל",     count: rows.filter((r) => r.status === "cancelled").length,                      type: "status", statusValue: "cancelled" },
   ];
 });
@@ -1893,14 +1965,18 @@ const activeFilterKey = ref("all");
 
 function applyFilter(f: CombinedFilter) {
   activeFilterKey.value = f.key;
+  showDraftsOnly.value = f.type === "drafts";
   if (f.type === "status") {
     statusFilter.value = f.statusValue ?? null;
     dueFilter.value = "all";
     load();
-  } else {
+  } else if (f.type === "due") {
     statusFilter.value = null;
     dueFilter.value = f.dueValue!;
     load();
+  } else {
+    statusFilter.value = null;
+    dueFilter.value = "all";
   }
 }
 
@@ -1943,7 +2019,25 @@ function load() {
 }
 
 async function refresh() {
-  await store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value }, true);
+  await Promise.all([
+    store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value }, true),
+    loadTemplateDrafts(),
+  ]);
+}
+
+async function loadTemplateDrafts() {
+  if (!canOpenPrintTemplates.value) {
+    templateDrafts.value = [];
+    return;
+  }
+  draftsLoading.value = true;
+  try {
+    templateDrafts.value = await api.printTemplates.listDrafts();
+  } catch {
+    templateDrafts.value = [];
+  } finally {
+    draftsLoading.value = false;
+  }
 }
 
 onMounted(async () => {
@@ -1996,12 +2090,43 @@ const filteredRows = computed(() => {
   return [...rows].sort(compareBySerialLastFirst);
 });
 
-const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)));
-const pageStart = computed(() => (page.value - 1) * pageSize.value);
-const pageEnd = computed(() => Math.min(filteredRows.value.length, pageStart.value + pageSize.value));
-const pagedRows = computed(() => filteredRows.value.slice(pageStart.value, pageEnd.value));
+const visibleItems = computed<ListItem[]>(() => {
+  if (showDraftsOnly.value) {
+    return filteredDrafts.value.map((draft) => ({ __type: "draft", draft }));
+  }
+  return filteredRows.value.map((row) => ({ __type: "contract", row }));
+});
 
-watch([search, filterClientId, filterDateRange, statusFilter, dueFilter, kind, pageSize], () => {
+const filteredDrafts = computed(() => {
+  let rows = templateDrafts.value;
+  const q = search.value.trim().toLowerCase();
+  if (q) {
+    rows = rows.filter((draft) =>
+      (draft.contract_number ?? "").toLowerCase().includes(q) ||
+      (draft.client_name ?? "").toLowerCase().includes(q) ||
+      (draft.contract_type ?? "").toLowerCase().includes(q) ||
+      draft.template_name.toLowerCase().includes(q)
+    );
+  }
+  if (filterClientId.value) {
+    rows = rows.filter((draft) => String(draft.client_id) === filterClientId.value);
+  }
+  if (filterDateRange.value) {
+    const [from, to] = filterDateRange.value;
+    rows = rows.filter((draft) => {
+      const ms = draft.updated_at ? new Date(draft.updated_at).getTime() : null;
+      return Boolean(ms && ms >= from && ms <= to);
+    });
+  }
+  return [...rows].sort((a,b) => Date.parse(b.updated_at ?? "") - Date.parse(a.updated_at ?? ""));
+});
+
+const pageCount = computed(() => Math.max(1, Math.ceil(visibleItems.value.length / pageSize.value)));
+const pageStart = computed(() => (page.value - 1) * pageSize.value);
+const pageEnd = computed(() => Math.min(visibleItems.value.length, pageStart.value + pageSize.value));
+const pagedItems = computed(() => visibleItems.value.slice(pageStart.value, pageEnd.value));
+
+watch([search, filterClientId, filterDateRange, statusFilter, dueFilter, kind, pageSize, showDraftsOnly], () => {
   page.value = 1;
 });
 
@@ -2009,19 +2134,18 @@ watch(pageCount, (count) => {
   if (page.value > count) page.value = count;
 });
 
-function serialSortValue(row: ContractWithClient): string {
-  const equipment = Array.isArray((row as any)._equipment) ? (row as any)._equipment : [];
-  const firstSerial = equipment
-    .map((item: any) => String(item?.serial_number ?? "").trim())
-    .find(Boolean);
-  return firstSerial || String(row.contract_number ?? "");
+function contractNumberSortValue(row: ContractWithClient): number {
+  const raw = String(row.contract_number ?? "").trim();
+  const parts = raw.match(/\d+/g);
+  if (!parts?.length) return Number.NEGATIVE_INFINITY;
+  return Number(parts[parts.length - 1]);
 }
 
 function compareBySerialLastFirst(a: ContractWithClient, b: ContractWithClient): number {
-  const aSerial = serialSortValue(a);
-  const bSerial = serialSortValue(b);
-  const result = aSerial.localeCompare(bSerial, undefined, { numeric: true, sensitivity: "base" });
-  if (result !== 0) return -result;
+  const numberDiff = contractNumberSortValue(b) - contractNumberSortValue(a);
+  if (numberDiff) return numberDiff;
+  const textDiff = String(b.contract_number ?? "").localeCompare(String(a.contract_number ?? ""), undefined, { numeric: true, sensitivity: "base" });
+  if (textDiff) return textDiff;
   return String(b.id).localeCompare(String(a.id), undefined, { numeric: true, sensitivity: "base" });
 }
 
@@ -2087,7 +2211,7 @@ async function saveForm() {
   try {
     const eq = form.value.equipment;
     const hasEquipment = !!(eq.category || eq.manufacturer?.trim() || eq.model?.trim() || eq.serial_number?.trim());
-    const payload = { ...form.value, equipment: hasEquipment ? eq : undefined };
+    const payload = { ...form.value, equipment: hasEquipment ? eq : undefined, skip_reminders: true };
     if (editingId.value) {
       await store.update(editingId.value, payload as any);
       message.success("הרשומה עודכנה בהצלחה");
@@ -2372,6 +2496,64 @@ function exportToExcel() {
 /* ── Cards virtual list ──────────────────────────────────────────────── */
 .cards-vlist { height: calc(100vh - 260px); }
 .cards-vlist__pad { padding-bottom: 14px; }
+.draft-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 18px 22px;
+  cursor: pointer;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.draft-card:hover { border-color: var(--brand-color); box-shadow: var(--shadow-sm); }
+.draft-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.draft-card__title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.draft-card__sub {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.draft-card__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  margin-bottom: 12px;
+}
+.card__secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.kv {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.kv strong { color: var(--text-muted); font-weight: 500; }
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.tag--info { background: rgba(32,128,240,0.10); color: #1560bd; border-color: rgba(32,128,240,0.2); }
+html[data-theme="dark"] .tag--info { color: #63b3ed; }
 .pagination-bar {
   display: flex;
   align-items: center;

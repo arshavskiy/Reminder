@@ -21,6 +21,45 @@ export function registerPrintTemplateRoutes(app: Express) {
     res.json(templates.map(t => ({ ...t, _id: t._id.toString() })));
   });
 
+  app.get("/api/print-templates/drafts", async (req, res) => {
+    let auth: Awaited<ReturnType<typeof requireAuth>>;
+    try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
+    const drafts = await col("print_template_drafts")
+      .find({ user_id: auth.userId })
+      .sort({ updated_at: -1 })
+      .limit(200)
+      .toArray();
+    const templateIds = drafts.map((draft: any) => tryObjectId(String(draft.template_id)));
+    const clientIds = drafts.map((draft: any) => draft.client_id).filter(Boolean).map((id: string) => tryObjectId(String(id)));
+    const contractIds = drafts.map((draft: any) => draft.contract_id).filter(Boolean).map((id: string) => tryObjectId(String(id)));
+    const [templates, clients, contracts] = await Promise.all([
+      templateIds.length ? col("print_templates").find({ _id: { $in: templateIds }, user_id: auth.userId } as any).toArray() : [],
+      clientIds.length ? col("clients").find({ _id: { $in: clientIds }, user_id: auth.userId } as any).toArray() : [],
+      contractIds.length ? col("contracts").find({ _id: { $in: contractIds }, user_id: auth.userId } as any).toArray() : [],
+    ]);
+    const templateMap = new Map((templates as any[]).map((template) => [String(template._id), template]));
+    const clientMap = new Map((clients as any[]).map((client) => [String(client._id), client]));
+    const contractMap = new Map((contracts as any[]).map((contract) => [String(contract._id), contract]));
+    res.json(drafts.map((draft: any) => {
+      const template = templateMap.get(String(draft.template_id));
+      const client = draft.client_id ? clientMap.get(String(draft.client_id)) : null;
+      const contract = draft.contract_id ? contractMap.get(String(draft.contract_id)) : null;
+      return {
+        _id: draft._id.toString(),
+        template_id: draft.template_id,
+        template_name: template?.name ?? "תבנית",
+        client_id: draft.client_id ?? null,
+        client_name: client?.display_name ?? client?.name ?? client?.company ?? null,
+        contract_id: draft.contract_id ?? null,
+        contract_number: contract?.contract_number ?? draft.data?.document_number ?? draft.data?.contract_number ?? draft.data?.report_number ?? null,
+        contract_type: contract?.contract_type ?? draft.data?.inspection_type ?? "טיוטת תסקיר",
+        updated_at: draft.updated_at ?? draft.created_at ?? null,
+        data: draft.data ?? {},
+        meta: draft.meta ?? {},
+      };
+    }));
+  });
+
   // Get single print template
   app.get("/api/print-templates/:id", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;

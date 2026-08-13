@@ -277,6 +277,7 @@ export function registerReminderRoutes(app: express.Application) {
       check_date?: string;
       next_inspection_date?: string;
       interval_months?: number;
+      skip_reminders?: boolean;
     };
 
     const category = body.equipment?.category as EquipmentCategory | undefined;
@@ -506,21 +507,23 @@ export function registerReminderRoutes(app: express.Application) {
     const contractResult = await col("contracts").insertOne(contractDoc as any);
     const contractId = contractResult.insertedId.toString();
 
-    await generateContractReminders(contractId, clientId, null, expiryDate, userId);
+    if (body.skip_reminders !== true) {
+      await generateContractReminders(contractId, clientId, null, expiryDate, userId);
 
-    await col("reminders").updateMany(
-      { source_type: "contract_expiry", source_id: contractId },
-      {
-        $set: {
-          ...(contactEmail && { email_to: JSON.stringify([contactEmail]) }),
-          equipment_type: category,
-          manufacturer: body.equipment?.manufacturer?.trim() || null,
-          model: body.equipment?.model?.trim() || null,
-          serial_number: serialNumber ?? null,
-          updated_at: now,
-        },
-      }
-    );
+      await col("reminders").updateMany(
+        { source_type: "contract_expiry", source_id: contractId },
+        {
+          $set: {
+            ...(contactEmail && { email_to: JSON.stringify([contactEmail]) }),
+            equipment_type: category,
+            manufacturer: body.equipment?.manufacturer?.trim() || null,
+            model: body.equipment?.model?.trim() || null,
+            serial_number: serialNumber ?? null,
+            updated_at: now,
+          },
+        }
+      );
+    }
 
     const reminders = await col("reminders")
       .find({ source_type: "contract_expiry", source_id: contractId })

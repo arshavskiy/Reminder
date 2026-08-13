@@ -74,8 +74,13 @@
     <div class="card__reminders">
       <div class="reminders-header">
         <span class="reminders-title">🔔 תזכורות</span>
-        <button v-if="showReminderActions" class="btn btn--xs btn--ghost" @click.stop="emit('add-reminder', row)">
-          + תזכורת חדשה
+        <button
+          v-if="showReminderActions"
+          :disabled="creatingReminder === row.id"
+          class="btn btn--xs btn--ghost"
+          @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"
+        >
+          {{ creatingReminder === row.id ? "..." : reminders.length ? "+ תזכורת חדשה" : "צור תזכורת" }}
         </button>
       </div>
       <div v-if="reminders.length" class="reminders-list">
@@ -135,6 +140,7 @@ const props = defineProps<{
   selected: boolean;
   reminders: ReminderWithContext[];
   sendingReminder: number | null;
+  creatingReminder?: string | null;
   showActions?: boolean;
   showReminderActions?: boolean;
 }>();
@@ -153,6 +159,7 @@ const emit = defineEmits<{
   "open-template": [row: ContractWithClient];
   delete: [row: ContractWithClient, options?: { deleteRelatedReminders?: boolean }];
   "add-reminder": [row: ContractWithClient];
+  "create-reminder": [row: ContractWithClient];
   "send-reminder": [reminder: ReminderWithContext];
   "dismiss-reminder": [reminder: ReminderWithContext];
 }>();

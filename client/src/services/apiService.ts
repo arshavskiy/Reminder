@@ -80,6 +80,7 @@ export interface HydraulicCheckRequest {
   check_date?: string;
   next_inspection_date?: string;
   interval_months?: 4 | 6 | 12 | 14;
+  skip_reminders?: boolean;
 }
 
 export interface HydraulicCheckResult {
@@ -102,6 +103,20 @@ export interface ExpiryCalendarItem {
   equipment_name: string | null;
   days_until: number;
   urgency: "overdue" | "critical" | "warning" | "ok";
+}
+
+export interface PrintTemplateDraftSummary {
+  _id: string;
+  template_id: string;
+  template_name: string;
+  client_id: string | null;
+  client_name: string | null;
+  contract_id: string | null;
+  contract_number: string | null;
+  contract_type: string | null;
+  updated_at: string | null;
+  data: Record<string, string>;
+  meta: Record<string, unknown>;
 }
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -286,6 +301,7 @@ export const api = {
     byDocument: (documentId: string, force = false) => get<ContractWithClient[]>(`/contracts/by-document/${documentId}`, force),
     create: (body: Partial<Contract>) => post<Contract>("/contracts", body),
     update: (id: string, body: Partial<Contract>) => put<Contract>(`/contracts/${id}`, body),
+    createReminder: (id: string) => post<{ ok: boolean; replaced: number; reminders: Reminder[] }>(`/contracts/${id}/reminder`),
     delete: (id: string, params?: { deleteRelatedReminders?: boolean }) => del(`/contracts/${id}${qs(params)}`),
     deleteAll: () => del("/contracts"),
   },
@@ -583,6 +599,7 @@ export const api = {
 
   printTemplates: {
     list: () => get<PrintTemplate[]>("/print-templates"),
+    listDrafts: () => get<PrintTemplateDraftSummary[]>("/print-templates/drafts"),
     get: (id: string) => get<PrintTemplate>(`/print-templates/${id}`),
     create: (body: Partial<PrintTemplate>) => post<PrintTemplate>("/print-templates", body),
     update: (id: string, body: Partial<PrintTemplate>) => put<PrintTemplate>(`/print-templates/${id}`, body),

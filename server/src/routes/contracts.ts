@@ -68,7 +68,7 @@ export function registerContractRoutes(app: express.Application) {
         );
       }
 
-      if (doc.expiry_date && !isPast) {
+      if (doc.expiry_date && !isPast && body.skip_reminders !== true) {
         await generateContractReminders(contractId, doc.client_id, doc.document_id ?? null, String(doc.expiry_date), userId);
       }
       const inserted = await col("contracts").findOne({ _id: r.insertedId });
@@ -402,6 +402,70 @@ export function registerContractRoutes(app: express.Application) {
     });
   });
 
+  app.post("/api/contracts/:id/reminder", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    try {
+      const filter = { ...idFilter(req.params.id), user_id: userId };
+      const contract = await col("contracts").findOne(filter) as any;
+      if (!contract) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      if (!contract.expiry_date) {
+        res.status(400).json({ error: "Contract has no expiry_date" });
+        return;
+      }
+      const contractId = contract._id?.toString() ?? req.params.id;
+      const before = await col("reminders").countDocuments({
+        user_id: userId,
+        source_type: "contract_expiry",
+        source_id: contractId,
+        status: { $in: ["pending", "snoozed", "error"] },
+      });
+      await generateContractReminders(
+        contractId,
+        contract.client_id ?? null,
+        contract.document_id ?? null,
+        String(contract.expiry_date),
+        userId
+      );
+      const manualFields = contract.manual_fields && typeof contract.manual_fields === "object" ? contract.manual_fields : {};
+      const equipment = Array.isArray(manualFields._equipment) ? manualFields._equipment[0] : null;
+      await col("reminders").updateMany(
+        { user_id: userId, source_type: "contract_expiry", source_id: contractId },
+        {
+          $set: {
+            ...(manualFields.contact_email && { email_to: JSON.stringify([manualFields.contact_email]) }),
+            equipment_type: equipment?.category ?? null,
+            manufacturer: equipment?.manufacturer ?? null,
+            model: equipment?.model ?? null,
+            serial_number: equipment?.serial_number ?? null,
+            updated_at: new Date(),
+          },
+        }
+      );
+      const reminders = await col("reminders")
+        .find({ user_id: userId, source_type: "contract_expiry", source_id: contractId })
+        .sort({ trigger_date: 1 })
+        .toArray();
+      res.json({ ok: true, replaced: before, reminders: reminders.map(flatDoc) });
+    } catch (err) {
+      console.error("[contracts] create reminder failed:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+      }
+    }
+  });
+
   // PUT /api/contracts/:id
   app.put("/api/contracts/:id", async (req, res) => {
     let userId: string;
@@ -452,7 +516,7 @@ export function registerContractRoutes(app: express.Application) {
         }
       }
 
-      if (body.expiry_date) {
+      if (body.expiry_date && body.skip_reminders !== true) {
         const contract = await col("contracts").findOne(filter) as any;
         if (contract) {
           await generateContractReminders(

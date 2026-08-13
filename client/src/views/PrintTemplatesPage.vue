@@ -42,7 +42,7 @@
         </button>
         <button :disabled="creatingContract" :class="{ 'xl-btn--loading': creatingContract }" class="xl-btn" @click="createContractFromCompose">
           <span v-if="creatingContract" class="xl-loader" aria-hidden="true"></span>
-          <span>צור חוזה + תזכורת</span>
+          <span>צור חוזה</span>
         </button>
         <button :disabled="printing" :class="{ 'xl-btn--loading': printing }" class="xl-btn xl-btn--primary" @click="printPdf">
           <span v-if="printing" class="xl-loader" aria-hidden="true"></span>
@@ -524,6 +524,18 @@ const SEED_CELLS: PrintTemplateCell[] = [
 ];
 
 function newTemplate() {
+  const source = defaultNewTemplateSource();
+  if (source) {
+    const clone = cloneTemplateForCreate(source);
+    editing.value = {
+      ...clone,
+      name: clone.name || "תסקיר",
+    };
+    sel.value = { r1:0, c1:0, r2:0, c2:0 };
+    mode.value = "design";
+    return;
+  }
+
   editing.value = {
     _id:"", name:"תבנית תסקיר חדשה", page:"A4", dir:"rtl",
     cols:[{w:150},{w:110},{w:80},{w:90},{w:90},{w:90},{w:120}],
@@ -533,6 +545,28 @@ function newTemplate() {
   };
   sel.value = { r1:0, c1:0, r2:0, c2:0 };
   mode.value = "design";
+}
+
+function defaultNewTemplateSource(): PrintTemplate | null {
+  const inspectionTemplates = templates.value.filter((template) => template.name.trim().includes("תסקיר"));
+  if (!inspectionTemplates.length) return null;
+  return [...inspectionTemplates].sort((a,b) => {
+    const exactDiff = Number(b.name.trim() === "תסקיר") - Number(a.name.trim() === "תסקיר");
+    if (exactDiff) return exactDiff;
+    return Date.parse(b.updated_at || b.created_at || "") - Date.parse(a.updated_at || a.created_at || "");
+  })[0] ?? null;
+}
+
+function cloneTemplateForCreate(template: PrintTemplate): PrintTemplate {
+  return {
+    ...normalizeLegacyTemplateBindings(template),
+    _id: "",
+    cols: template.cols.map((col) => ({...col})),
+    rows: template.rows.map((row) => ({...row})),
+    cells: template.cells.map((cell) => ({...cell})),
+    created_at: "",
+    updated_at: "",
+  };
 }
 
 function editTemplate(t: PrintTemplate) {
@@ -936,7 +970,7 @@ function formatDraftTime(value: string): string {
 
 async function createContractFromCompose() {
   if(!composing.value?._id) return;
-  if(!validateComposeBeforeAction("ליצור חוזה ותזכורת")) return;
+  if(!validateComposeBeforeAction("ליצור חוזה")) return;
   const fields = {...composeData.value};
   const expiryDate = normalizeDateForContract(
     pickField(fields, ["expiry_date", "next_inspection_date", "valid_until", "בתוקף עד"])
@@ -961,6 +995,7 @@ async function createContractFromCompose() {
       manual_fields: fields,
       confidence: "manual",
       status: "active",
+      skip_reminders: true,
     } as any);
     draftMeta.value = {
       ...draftMeta.value,
@@ -968,7 +1003,7 @@ async function createContractFromCompose() {
       contract_id: String(contract.id ?? ""),
     };
     await api.printTemplates.saveDraft(composing.value._id, stringRecord(composeData.value), draftMeta.value);
-    message.success(`נוצר חוזה ותזכורת עבור ${contract.contract_number ?? composing.value.name}`);
+    message.success(`נוצר חוזה עבור ${contract.contract_number ?? composing.value.name}. ניתן ליצור תזכורת מכרטיס החוזה.`);
   } catch(e:any) {
     message.error(e.message ?? String(e));
   } finally {
