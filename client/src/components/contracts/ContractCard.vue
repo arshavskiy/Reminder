@@ -79,7 +79,6 @@
         <span class="kv">
           <strong>{{ kind === "inspection" ? "בתוקף עד:" : "תפוגה:" }}</strong>
           <span :class="expiryClass(row.expiry_date)">{{ formatDate(row.expiry_date) }}</span>
-          <ExpiryBadge :date="row.expiry_date" />
         </span>
         <span v-if="row.amount" class="kv">
           <strong>סכום:</strong> {{ row.amount?.toLocaleString() }} {{ row.currency }}
@@ -143,7 +142,6 @@
 import {computed} from "vue";
 import {NCheckbox, NIcon} from "naive-ui";
 import {CreateOutline, DocumentTextOutline, EyeOutline, TrashOutline} from "@vicons/ionicons5";
-import ExpiryBadge from "../ExpiryBadge.vue";
 import {useRouter} from "vue-router";
 import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
 

@@ -29,6 +29,15 @@
         </button>
         <button
           v-if="bulkMode && selectedIds.size > 0"
+          :disabled="bulkGeneratingReminders"
+          class="btn btn--primary"
+          title="צור תזכורת לכל התסקירים הנבחרים"
+          @click="bulkCreateRemindersForSelected"
+        >
+          {{ bulkGeneratingReminders ? '...' : `🔔 צור תזכורת לנבחרים (${selectedIds.size})` }}
+        </button>
+        <button
+          v-if="bulkMode && selectedIds.size > 0"
           :disabled="bulkDeleting"
           class="btn btn--danger"
           @click="bulkDelete"
@@ -61,7 +70,7 @@
         >
           {{ bulkGeneratingReminders ? '...' : `🔔 צור תזכורות חסרות (${contractsMissingReminder.length})` }}
         </button>
-        <button v-if="store.rows.length > 0" class="btn btn--danger-ghost" @click="showDeleteAllConfirm = true">
+        <button v-if="isAdmin && store.rows.length > 0" class="btn btn--danger-ghost" @click="showDeleteAllConfirm = true">
           🗑 מחק הכל
         </button>
 
@@ -780,6 +789,7 @@ import {
 } from "naive-ui";
 import {useContractsStore} from "../stores/contracts.js";
 import {useFeaturesStore} from "../stores/features.js";
+import {useAuthStore} from "../stores/auth.js";
 import {useHydraulicCheckDraftStore} from "../stores/hydraulicCheckDraft.js";
 import type {HydraulicCheckRequest, PrintTemplateDraftSummary} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
@@ -798,6 +808,8 @@ import type {
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
 const featuresStore = useFeaturesStore();
+const authStore = useAuthStore();
+const isAdmin = computed(() => authStore.isAdmin);
 const hydraulicDraftStore = useHydraulicCheckDraftStore();
 const route = useRoute();
 const router = useRouter();
@@ -1386,11 +1398,42 @@ const hydraulicUpdateReturnTo = ref("");
 const hydraulicModalTitle = computed(() => updatingHydraulicContractId.value ? "עדכון תסקיר" : "תסקיר חדש");
 
 
-const hydraulicCategoryOptions: { label: string; value: EquipmentCategory }[] = [
+const hydraulicCategoryDefaults: { label: string; value: string }[] = [
   { label: "מכונות הרמה", value: "lift" },
   { label: "פיגומים", value: "scaffold" },
   { label: "מעליות", value: "ladder" },
 ];
+
+// Categories already used across the user's equipment, so the dropdown grows as
+// new types are added instead of being stuck on the three defaults.
+const hydraulicKnownCategories = ref<string[]>([]);
+
+const hydraulicCategoryOptions = computed(() => {
+  const seen = new Set<string>();
+  const options: { label: string; value: string }[] = [];
+  for (const opt of hydraulicCategoryDefaults) {
+    if (seen.has(opt.value)) continue;
+    seen.add(opt.value);
+    options.push(opt);
+  }
+  for (const cat of hydraulicKnownCategories.value) {
+    const value = cat.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    options.push({ label: value, value });
+  }
+  return options;
+});
+
+async function loadHydraulicCategories() {
+  try {
+    const stats = await api.equipment.stats();
+    // "all" is an aggregate bucket in the stats response, not a real category.
+    hydraulicKnownCategories.value = Object.keys(stats ?? {}).filter((c) => c && c !== "all");
+  } catch {
+    hydraulicKnownCategories.value = [];
+  }
+}
 
 const hydraulicReminderMode = ref<"months" | "date">("months");
 const hydraulicReminderDateMs = ref<number | null>(null);
@@ -1529,6 +1572,37 @@ const contractsMissingReminder = computed(() =>
   )
 );
 
+async function bulkCreateRemindersForSelected() {
+  if (bulkGeneratingReminders.value) return;
+  const ids = [...selectedIds.value];
+  const targets = store.rows.filter((row) => ids.includes(String(row.id)) && row.expiry_date);
+  const skipped = ids.length - targets.length;
+  if (!targets.length) {
+    message2.warning("אין תסקירים נבחרים עם תאריך תוקף ליצירת תזכורת");
+    return;
+  }
+  bulkGeneratingReminders.value = true;
+  let created = 0, failed = 0;
+  try {
+    for (const row of targets) {
+      try {
+        const result = await api.contracts.createReminder(row.id);
+        if (result.reminders.length) created += 1;
+        else failed += 1;
+      } catch { failed += 1; }
+    }
+    await loadReminders();
+    const parts: string[] = [];
+    if (created) parts.push(`נוצרו ל-${created}`);
+    if (failed) parts.push(`נכשלו ${failed}`);
+    if (skipped) parts.push(`דולגו ${skipped} (ללא תוקף)`);
+    if (created && !failed) message2.success(parts.join(", "));
+    else message2.warning(parts.join(", ") || "לא נוצרו תזכורות");
+  } finally {
+    bulkGeneratingReminders.value = false;
+  }
+}
+
 async function generateMissingReminders() {
   const targets = contractsMissingReminder.value;
   if (!targets.length || bulkGeneratingReminders.value) return;
@@ -1617,6 +1691,7 @@ async function openHydraulicCheck() {
   }
   showHydraulicCheck.value = true;
   void loadClients();
+  void loadHydraulicCategories();
 }
 
 async function openHydraulicContractUpdate(contractId: string) {
@@ -2742,6 +2817,9 @@ function exportToExcel() {
 
 :global(.hydraulic-modal .n-dialog__title) {
   color: var(--text-primary);
+  font-size: 19px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.2px;
 }
 
 :global(.hydraulic-modal .n-dialog__close) {
@@ -2778,11 +2856,12 @@ function exportToExcel() {
 }
 
 .hydraulic-compact-form :deep(.n-form-item-label) {
-  min-height: 14px;
-  padding: 0 0 1px;
+  min-height: 16px;
+  padding: 0 0 2px;
   color: var(--text-secondary);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.1px;
 }
 
 .hydraulic-compact-form :deep(.n-form-item-label__asterisk) {
@@ -2848,8 +2927,9 @@ function exportToExcel() {
 .hydraulic-section-head :deep(.n-h) {
   margin: 0 !important;
   color: var(--text-primary);
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
 }
 
 .hydraulic-equipment-card {
@@ -2869,8 +2949,10 @@ function exportToExcel() {
 }
 
 .hydraulic-equipment-card__head strong {
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.2px;
 }
 .refresh-icon { display: inline-block; transition: transform 0.4s; }
 .refresh-icon--spin { animation: spin 0.8s linear infinite; }

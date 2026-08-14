@@ -13,16 +13,18 @@
         "
         class="dash__intake"
       >
-        <DocumentDropStrip class="dash__drop" @uploaded="store.fetch(true)" />
         <button
           v-if="hasFeature(FEATURES.pages.contracts)"
           class="dash__new-contract"
           @click="router.push('/contracts?new=1')"
         >
-          <span class="dash__new-contract__icon">＋</span>
-          <span class="dash__new-contract__label">תסקיר חדש</span>
+          <span class="dash__new-contract__top">
+            <span class="dash__new-contract__icon">＋</span>
+            <span class="dash__new-contract__label">תסקיר חדש</span>
+          </span>
           <span class="dash__new-contract__hint">צור תסקיר או חוזה ידני</span>
         </button>
+        <DocumentDropStrip class="dash__drop" @uploaded="store.fetch(true)" />
       </div>
 
       <!-- Quick stats — small chips line, easy to scan -->
@@ -178,9 +180,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import { NIcon, NSpin, NSwitch, useMessage } from "naive-ui";
+import {computed, onMounted, ref} from "vue";
+import {useRouter} from "vue-router";
+import {NIcon, NSpin, NSwitch, useMessage} from "naive-ui";
 import {
   AlarmOutline,
   ClipboardOutline,
@@ -190,14 +192,14 @@ import {
   PeopleOutline,
   SettingsOutline,
 } from "@vicons/ionicons5";
-import { useDashboardStore } from "../stores/dashboard.js";
-import { useRemindersStore } from "../stores/reminders.js";
-import { useAuthStore } from "../stores/auth.js";
-import { useFeaturesStore } from "../stores/features.js";
-import { useUserSettingsStore } from "../stores/userSettings.js";
-import type { ExpiryCalendarItem } from "../services/apiService.js";
-import { api } from "../services/apiService.js";
-import { FEATURES, type FeatureKey } from "../shared/features.js";
+import {useDashboardStore} from "../stores/dashboard.js";
+import {useRemindersStore} from "../stores/reminders.js";
+import {useAuthStore} from "../stores/auth.js";
+import {useFeaturesStore} from "../stores/features.js";
+import {useUserSettingsStore} from "../stores/userSettings.js";
+import type {ExpiryCalendarItem} from "../services/apiService.js";
+import {api} from "../services/apiService.js";
+import {type FeatureKey, FEATURES} from "../shared/features.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
@@ -468,9 +470,12 @@ const data_cards = computed(() =>
 .dash__drop {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
 }
-/* Drop the strip's own bottom margin here so it matches the button's height
-   exactly (the row already provides spacing below). */
+/* The strip component wraps its .drop-strip in an extra div; make both fill the
+   row so the dropzone height matches the new-contract button exactly. */
+.dash__drop :deep(> div),
+.dash__drop :deep(.drop-strip) { width: 100%; height: 100%; }
 .dash__intake :deep(.drop-strip) { margin-bottom: 0; }
 .dash__new-contract {
   flex: 0 0 240px;
@@ -489,8 +494,13 @@ const data_cards = computed(() =>
 }
 .dash__new-contract:hover { background: var(--bg-hover); box-shadow: var(--shadow-sm); }
 .dash__new-contract:active { transform: scale(0.98); }
+.dash__new-contract__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .dash__new-contract__icon {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--brand-color);
   line-height: 1;
