@@ -99,8 +99,114 @@
 
       <!-- ── Right column: data ─────────────────────────────────────── -->
       <section class="doc-detail__right">
+        <div v-if="showContractSidePanel" class="data-card contract-side-card">
+          <div class="data-card__head">
+            <div>
+              <span class="data-card__title">תסקיר חדש</span>
+              <div class="contract-side-card__sub">
+                {{ activeLinkedContract?.client_name || activeLinkedContract?.counterparty || 'ללא לקוח' }}
+              </div>
+            </div>
+            <div class="data-card__head-actions">
+              <n-button :loading="savingContractSide" size="small" type="primary" @click="saveContractSidePanel">
+                שמור
+              </n-button>
+              <n-button size="small" @click="openLinkedContract">
+                פתח תסקיר
+              </n-button>
+            </div>
+          </div>
+          <div class="data-card__body">
+            <n-form class="contract-side-form" label-placement="top" size="small">
+              <n-grid :cols="2" :x-gap="10" :y-gap="2" responsive="screen">
+                <n-gi>
+                  <n-form-item label="מספר תסקיר">
+                    <n-input v-model:value="contractSideForm.contract_number" placeholder="מספר תסקיר"/>
+                  </n-form-item>
+                </n-gi>
+                <n-gi>
+                  <n-form-item label="לקוח">
+                    <n-input v-model:value="contractSideForm.client_name" placeholder="שם לקוח"/>
+                  </n-form-item>
+                </n-gi>
+                <n-gi>
+                  <n-form-item label="תאריך בדיקה">
+                    <n-input v-model:value="contractSideForm.start_date" placeholder="YYYY-MM-DD"/>
+                  </n-form-item>
+                </n-gi>
+                <n-gi>
+                  <n-form-item label="בתוקף עד">
+                    <n-input v-model:value="contractSideForm.expiry_date" placeholder="YYYY-MM-DD"/>
+                  </n-form-item>
+                </n-gi>
+                <n-gi>
+                  <n-form-item label="איש קשר">
+                    <n-input v-model:value="contractSideForm.contact_person"/>
+                  </n-form-item>
+                </n-gi>
+                <n-gi>
+                  <n-form-item label="טלפון">
+                    <n-input v-model:value="contractSideForm.contact_phone"/>
+                  </n-form-item>
+                </n-gi>
+                <n-gi>
+                  <n-form-item label="אימייל">
+                    <n-input v-model:value="contractSideForm.contact_email"/>
+                  </n-form-item>
+                </n-gi>
+                <n-gi>
+                  <n-form-item label="כתובת">
+                    <n-input v-model:value="contractSideForm.client_address"/>
+                  </n-form-item>
+                </n-gi>
+              </n-grid>
+
+              <div class="contract-side-section">
+                <div class="contract-side-section__title">ציוד שנבדק</div>
+                <n-grid :cols="2" :x-gap="10" :y-gap="2" responsive="screen">
+                  <n-gi>
+                    <n-form-item label="סוג ציוד">
+                      <n-input v-model:value="contractSideForm.checked_equipment"/>
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi>
+                    <n-form-item label="מספר רישוי">
+                      <n-input v-model:value="contractSideForm.license_number"/>
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi>
+                    <n-form-item label="יצרן">
+                      <n-input v-model:value="contractSideForm.manufacturer"/>
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi>
+                    <n-form-item label="דגם">
+                      <n-input v-model:value="contractSideForm.model"/>
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi>
+                    <n-form-item label="מספר סידורי">
+                      <n-input v-model:value="contractSideForm.serial_number"/>
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi>
+                    <n-form-item label="כושר עבודה">
+                      <n-input v-model:value="contractSideForm.load_capacity_work"/>
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="2">
+                    <n-form-item label="תיאור ציוד">
+                      <n-input v-model:value="contractSideForm.equipment_description" :rows="2" type="textarea"/>
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+              </div>
+            </n-form>
+          </div>
+        </div>
+
         <!-- Extracted fields -->
-        <div class="data-card">
+        <div v-else class="data-card">
           <div class="data-card__head">
             <span class="data-card__title">נתונים שחולצו</span>
             <div class="data-card__head-actions">
@@ -152,7 +258,7 @@
         </div>
 
         <!-- Equipment table -->
-        <div v-if="equipment.length" class="data-card">
+        <div v-if="!showContractSidePanel && equipment.length" class="data-card">
           <div class="data-card__head">
             <span class="data-card__title">ציוד שנבדק</span>
             <n-tag :bordered="false" size="small">{{ equipment.length }} פריטים</n-tag>
@@ -188,9 +294,23 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from "vue";
+import {computed, onMounted, reactive, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NAlert, NButton, NDataTable, NScrollbar, NSpin, NTag, useDialog, useMessage,} from "naive-ui";
+import {
+  NAlert,
+  NButton,
+  NDataTable,
+  NForm,
+  NFormItem,
+  NGi,
+  NGrid,
+  NInput,
+  NScrollbar,
+  NSpin,
+  NTag,
+  useDialog,
+  useMessage,
+} from "naive-ui";
 import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
@@ -223,6 +343,25 @@ const editingFields = ref(false);
 const savingFields = ref(false);
 const fieldEdits = ref<Record<string, string>>({});
 const showEmptyFields = ref(false);
+const savingContractSide = ref(false);
+
+const contractSideForm = reactive({
+  contract_number: "",
+  client_name: "",
+  start_date: "",
+  expiry_date: "",
+  contact_person: "",
+  contact_phone: "",
+  contact_email: "",
+  client_address: "",
+  checked_equipment: "",
+  license_number: "",
+  manufacturer: "",
+  model: "",
+  serial_number: "",
+  load_capacity_work: "",
+  equipment_description: "",
+});
 
 const isPdf = computed(() => doc.value?.mime_type === "application/pdf");
 const isImage = computed(() => doc.value?.mime_type?.startsWith("image/") ?? false);
@@ -232,6 +371,12 @@ const isSpreadsheet = computed(() =>
   doc.value?.file_name?.toLowerCase().endsWith(".xls")
 );
 const canExtractDocument = computed(() => doc.value?.document_source !== "generated");
+const activeLinkedContract = computed(() => linkedContracts.value[0] ?? null);
+const showContractSidePanel = computed(() =>
+    route.query.from === "contracts" &&
+    doc.value?.document_source === "generated" &&
+    Boolean(activeLinkedContract.value)
+);
 const xlsxPreviewSheets = computed(() => {
   if (!isSpreadsheet.value || !displayText.value) return [];
   const sheets: Array<{ name: string; rows: string[][] }> = [];
@@ -462,12 +607,130 @@ async function loadLinkedContracts(documentId: string) {
     // extraction/linking completes, so a cached (often empty) response would
     // leave the header showing dashes.
     linkedContracts.value = await api.contracts.byDocument(documentId, true);
+    hydrateContractSidePanel();
     if (linkedContracts.value.length) {
       await loadLinkedReminders();
     }
   } catch {
     linkedContracts.value = [];
   }
+}
+
+function hydrateContractSidePanel() {
+  const contract = activeLinkedContract.value;
+  if (!contract) return;
+  const manual = plainRecord(contract.manual_fields);
+  const firstEquipment = Array.isArray((contract as any)._equipment)
+      ? ((contract as any)._equipment[0] ?? null)
+      : Array.isArray(manual._equipment)
+          ? (manual._equipment[0] ?? null)
+          : null;
+
+  contractSideForm.contract_number = textValue(contract.contract_number ?? manual.report_number ?? manual.document_number);
+  contractSideForm.client_name = textValue(contract.client_name ?? contract.counterparty ?? manual.client_company ?? manual.client_name);
+  contractSideForm.start_date = dateOnly(contract.start_date ?? manual.inspection_date ?? manual.start_date);
+  contractSideForm.expiry_date = dateOnly(contract.expiry_date ?? manual.next_inspection_date ?? manual.expiry_date);
+  contractSideForm.contact_person = textValue((contract as any).contact_person ?? manual.contact_person);
+  contractSideForm.contact_phone = textValue((contract as any).contact_phone ?? manual.contact_phone);
+  contractSideForm.contact_email = textValue((contract as any).contact_email ?? manual.contact_email ?? manual.client_email);
+  contractSideForm.client_address = textValue((contract as any).client_address ?? manual.client_address);
+  contractSideForm.checked_equipment = textValue(firstEquipment?.name ?? manual.checked_equipment ?? manual.name);
+  contractSideForm.license_number = textValue(firstEquipment?.license_number ?? manual.license_number ?? manual.lisence_number);
+  contractSideForm.manufacturer = textValue(firstEquipment?.manufacturer ?? manual.manufacturer);
+  contractSideForm.model = textValue(firstEquipment?.model ?? manual.model);
+  contractSideForm.serial_number = textValue(firstEquipment?.serial_number ?? manual.serial_number);
+  contractSideForm.load_capacity_work = textValue(firstArrayValue(firstEquipment?.load_capacity_work) ?? manual.load_capacity_work);
+  contractSideForm.equipment_description = textValue((contract as any).equipment_description ?? manual.equipment_description ?? firstEquipment?.description);
+}
+
+function plainRecord(value: unknown): Record<string, any> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, any>;
+}
+
+function textValue(value: unknown): string {
+  if (Array.isArray(value)) return value.filter(Boolean).join(" / ");
+  return value == null ? "" : String(value);
+}
+
+function firstArrayValue(value: unknown): string {
+  return Array.isArray(value) ? textValue(value[0]) : textValue(value);
+}
+
+function dateOnly(value: unknown): string {
+  const text = textValue(value);
+  return text.includes("T") ? text.slice(0, 10) : text;
+}
+
+async function saveContractSidePanel() {
+  const contract = activeLinkedContract.value;
+  if (!contract) return;
+  savingContractSide.value = true;
+  try {
+    const existingManual = plainRecord(contract.manual_fields);
+    const equipmentRow = {
+      ...(Array.isArray(existingManual._equipment) ? existingManual._equipment[0] : {}),
+      name: contractSideForm.checked_equipment,
+      manufacturer: contractSideForm.manufacturer,
+      model: contractSideForm.model,
+      serial_number: contractSideForm.serial_number,
+      license_number: contractSideForm.license_number,
+      lisence_number: contractSideForm.license_number,
+      load_capacity_work: contractSideForm.load_capacity_work ? [contractSideForm.load_capacity_work] : [],
+      description: contractSideForm.equipment_description,
+      category: (Array.isArray(existingManual._equipment) ? existingManual._equipment[0]?.category : null) ?? "lift",
+    };
+    const manual_fields = {
+      ...existingManual,
+      document_number: contractSideForm.contract_number,
+      contract_number: contractSideForm.contract_number,
+      report_number: contractSideForm.contract_number,
+      client_company: contractSideForm.client_name,
+      client_name: contractSideForm.client_name,
+      contact_person: contractSideForm.contact_person,
+      contact_phone: contractSideForm.contact_phone,
+      contact_email: contractSideForm.contact_email,
+      client_email: contractSideForm.contact_email,
+      client_address: contractSideForm.client_address,
+      start_date: contractSideForm.start_date,
+      inspection_date: contractSideForm.start_date,
+      check_date: contractSideForm.start_date,
+      expiry_date: contractSideForm.expiry_date,
+      next_inspection_date: contractSideForm.expiry_date,
+      checked_equipment: contractSideForm.checked_equipment,
+      name: contractSideForm.checked_equipment,
+      license_number: contractSideForm.license_number,
+      lisence_number: contractSideForm.license_number,
+      manufacturer: contractSideForm.manufacturer,
+      model: contractSideForm.model,
+      serial_number: contractSideForm.serial_number,
+      load_capacity_work: contractSideForm.load_capacity_work,
+      equipment_description: contractSideForm.equipment_description,
+      _equipment: [equipmentRow],
+    };
+
+    await api.contracts.update(String(contract.id), {
+      contract_number: contractSideForm.contract_number || undefined,
+      start_date: contractSideForm.start_date || undefined,
+      expiry_date: contractSideForm.expiry_date || undefined,
+      counterparty: contractSideForm.client_name || undefined,
+      summary: contractSideForm.equipment_description || contractSideForm.checked_equipment || undefined,
+      manual_fields,
+      skip_reminders: true,
+    } as any);
+    message.success("התסקיר עודכן");
+    await loadLinkedContracts(String(doc.value?.id ?? resolvedId()));
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    savingContractSide.value = false;
+  }
+}
+
+function openLinkedContract() {
+  const contract = activeLinkedContract.value;
+  if (!contract) return;
+  router.push(`/contracts?edit=${encodeURIComponent(String(contract.id))}&returnTo=${encodeURIComponent(route.fullPath)}`);
 }
 
 async function loadLinkedReminders() {
@@ -689,6 +952,55 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.contract-side-card {
+  direction: rtl;
+}
+
+.contract-side-card__sub {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.contract-side-form :deep(.n-form-item) {
+  margin-bottom: 0;
+}
+
+.contract-side-form :deep(.n-form-item-label) {
+  min-height: 18px;
+  padding-bottom: 3px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.contract-side-form :deep(.n-input),
+.contract-side-form :deep(.n-input .n-input-wrapper) {
+  --n-border-radius: 6px;
+  min-height: 32px;
+  background: var(--bg-card);
+}
+
+.contract-side-form :deep(.n-input__input-el),
+.contract-side-form :deep(.n-input__textarea-el) {
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.contract-side-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.contract-side-section__title {
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 /* ── Fields table ────────────────────────────────────────────────────────── */

@@ -130,7 +130,7 @@
         :row-key="(r: any) => r.id"
         :row-props="rowProps"
         :checked-row-keys="selectedReminderKeys"
-        :scroll-x="1420"
+        :scroll-x="900"
         class="reminders-table"
         size="small"
         @update:checked-row-keys="onSelectedReminderKeys"
@@ -260,24 +260,8 @@
 <script setup lang="ts">
 import {computed, h, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
-import {
-  NAlert,
-  NDataTable,
-  NDatePicker,
-  NForm,
-  NFormItem,
-  NIcon,
-  NInput,
-  NModal,
-  NSelect,
-  NSpace,
-  useMessage,
-} from "naive-ui";
-import {
-  CloseCircleOutline,
-  PaperPlaneOutline,
-  TrashOutline,
-} from "@vicons/ionicons5";
+import {NAlert, NDataTable, NDatePicker, NForm, NFormItem, NIcon, NInput, NModal, NSelect, useMessage,} from "naive-ui";
+import {CloseCircleOutline, PaperPlaneOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";
@@ -287,7 +271,7 @@ import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import {FEATURES} from "../shared/features.js";
-import type {Client, EmailTemplate, EquipmentCategory, ReminderWithContext, ContractWithClient} from "@shared/types.js";
+import type {Client, ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
 // Date-only strings (YYYY-MM-DD) must round-trip through the date picker using
 // local calendar days, not UTC — new Date("2026-08-01").getTime() parses as
@@ -971,33 +955,6 @@ function dueTone(row: ReminderWithContext): string {
   return "future";
 }
 
-function dueLabel(row: ReminderWithContext): string {
-  const days = daysUntil(row.trigger_date);
-  if (days == null) return "ללא תאריך";
-  if (days < 0) return `${Math.abs(days)} ימים באיחור`;
-  if (days === 0) return "היום";
-  return `בעוד ${days} ימים`;
-}
-
-function cleanReminderTitle(row: ReminderWithContext): string {
-  let title = (row.title ?? "").trim() || "תזכורת ללא כותרת";
-  const emails = displayEmailTo(effectiveEmailTo(row))
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  for (const email of emails) {
-    title = title.replace(email, "");
-  }
-  title = title
-    .replace(/[^\s<>]+@[^\s<>]+/g, "")
-    .replace(/\d{4}-\d{2}-\d{2}/g, "")
-    .replace(/\s+/g, " ")
-    .replace(/[-–—:·|]+$/g, "")
-    .replace(/(?:^|\s)ב-$/g, "")
-    .trim();
-  return title || "תזכורת ללא כותרת";
-}
-
 function rowProps(row: ReminderWithContext) {
   return {
     class: `reminder-row reminder-row--${dueTone(row)}${bulkMode.value ? " reminder-row--selectable" : ""}`,
@@ -1011,16 +968,6 @@ function rowProps(row: ReminderWithContext) {
 }
 
 const baseColumns = [
-  {
-    title: "תזכורת",
-    key: "title",
-    width: 260,
-    minWidth: 260,
-    render: (row: ReminderWithContext) =>
-      h("div", { class: "reminder-main-cell" }, [
-        h("strong", cleanReminderTitle(row)),
-      ]),
-  },
   {
     title: "אימייל",
     key: "email_to",
@@ -1064,20 +1011,6 @@ const baseColumns = [
       h("div", { class: "reminder-date-cell" }, [
         h("span", { class: "reminder-date-cell__date" }, formatReminderDate(row.trigger_date)),
       ]),
-  },
-  {
-    title: "נותרו",
-    key: "due_in",
-    width: 150,
-    minWidth: 150,
-    render: (row: ReminderWithContext) =>
-      h("span", { class: `due-chip due-chip--${dueTone(row)}` }, dueLabel(row)),
-  },
-  {
-    title: "ימים מראש",
-    key: "advance_days",
-    width: 110,
-    render: (row: ReminderWithContext) => h("span", { class: "advance-pill" }, row.advance_days ?? 0),
   },
   {
     title: "סטטוס",
@@ -1481,24 +1414,12 @@ const columns = computed(() =>
   background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
 }
 
-.reminder-main-cell,
 .reminder-client-cell,
 .reminder-date-cell {
   display: grid;
   gap: 6px;
   min-width: 0;
   max-width: 100%;
-}
-
-.reminder-main-cell strong {
-  display: block;
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .reminder-email-cell,
@@ -1549,57 +1470,6 @@ const columns = computed(() =>
   font-weight: 700;
   line-height: 1.45;
   white-space: nowrap;
-}
-
-.due-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  width: fit-content;
-  max-width: 100%;
-  padding: 3px 8px;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.3;
-  white-space: nowrap;
-}
-
-.due-chip :deep(.n-icon) {
-  flex: 0 0 auto;
-}
-
-.due-chip--overdue {
-  border-color: rgba(208, 48, 80, 0.3);
-  background: rgba(208, 48, 80, 0.08);
-  color: #d03050;
-}
-
-.due-chip--soon {
-  border-color: rgba(240, 160, 32, 0.3);
-  background: rgba(240, 160, 32, 0.1);
-  color: #b7791f;
-}
-
-.due-chip--future,
-.due-chip--sent {
-  border-color: rgba(24, 160, 88, 0.25);
-  background: rgba(24, 160, 88, 0.08);
-  color: #16824a;
-}
-
-.advance-pill {
-  display: inline-flex;
-  justify-content: center;
-  min-width: 32px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 @media (max-width: 720px) {

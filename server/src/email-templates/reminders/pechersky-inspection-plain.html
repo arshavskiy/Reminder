@@ -1,4 +1,5 @@
-<html lang="he" dir="rtl" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"><head>
+<html dir="rtl" lang="he">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -149,9 +150,12 @@
                       <div class="stack-gap" style="font-size:1px; line-height:1px;">&nbsp;</div>
                       <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:11px; color:#8b9794; margin-bottom:3px;">מהנדס בודק</div>
                       <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:16px; font-weight:700; color:#24312f; line-height:1.4;">{{engineer_name|מיכאל פצ׳רסקי}}</div>
-                      {{#if license_number}}
+                      {{#if inspector_number}}
                       <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:11px; color:#8b9794; margin-top:10px; margin-bottom:3px;">מספר רישיון</div>
-                      <div dir="ltr" style="direction:ltr; text-align:right; font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:15px; font-weight:700; color:#24312f; letter-spacing:0.05em;">{{license_number|484590}}</div>
+                      <div dir="ltr"
+                           style="direction:ltr; text-align:right; font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:15px; font-weight:700; color:#24312f; letter-spacing:0.05em;">
+                        {{inspector_number|484590}}
+                      </div>
                       {{/if}}
                     </td>
                   </tr>

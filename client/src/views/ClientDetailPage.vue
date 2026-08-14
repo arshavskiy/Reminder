@@ -1,20 +1,26 @@
 <template>
   <n-spin :show="store.loading && !store.active">
     <n-space v-if="store.active" vertical size="large" class="client-detail" dir="rtl">
-      <n-space justify="space-between" align="center" class="client-detail__header">
-        <n-space align="center">
-          <n-button text @click="router.back()">
+      <PageHeader :title="store.active.display_name">
+        <template #breadcrumb>
+          <router-link to="/clients">לקוחות</router-link>
+          <span class="sep">/</span>
+          <span>{{ store.active.display_name }}</span>
+        </template>
+        <template #actions>
+          <n-tag type="info">{{ store.active.entity_type === "company" ? "חברה" : "אדם פרטי" }}</n-tag>
+          <n-button size="small" @click="router.back()">
             <template #icon><n-icon :component="ArrowBackOutline" /></template>
             חזרה
           </n-button>
-          <n-h2 class="client-detail__title">{{ store.active.display_name }}</n-h2>
-          <n-tag type="info">{{ store.active.entity_type === "company" ? "חברה" : "אדם פרטי" }}</n-tag>
-        </n-space>
-        <n-button size="small" @click="showEdit = true">
-          <template #icon><n-icon :component="CreateOutline" /></template>
-          עריכה
-        </n-button>
-      </n-space>
+          <n-button size="small" @click="showEdit = true">
+            <template #icon>
+              <n-icon :component="CreateOutline"/>
+            </template>
+            עריכה
+          </n-button>
+        </template>
+      </PageHeader>
 
       <n-grid :cols="3" :x-gap="16" responsive="screen">
         <n-gi v-for="stat in clientStats" :key="stat.key">
@@ -101,24 +107,40 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import {computed, h, onMounted, ref, watch} from "vue";
+import {useRoute, useRouter} from "vue-router";
 import {
-  NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NEmpty, NForm,
-  NFormItem, NGi, NGrid, NH2, NIcon, NInput, NModal, NSpace, NSpin, NStatistic,
-  NTabPane, NTabs, NTag, NText, NTimeline, NTimelineItem, useMessage,
   type DataTableColumns,
+  NButton,
+  NCard,
+  NDataTable,
+  NDescriptions,
+  NDescriptionsItem,
+  NEmpty,
+  NForm,
+  NFormItem,
+  NGi,
+  NGrid,
+  NIcon,
+  NInput,
+  NModal,
+  NSpace,
+  NSpin,
+  NStatistic,
+  NTabPane,
+  NTabs,
+  NTag,
+  NText,
+  NTimeline,
+  NTimelineItem,
+  useMessage,
 } from "naive-ui";
-import {
-  ArrowBackOutline,
-  CreateOutline,
-  DocumentTextOutline,
-  OpenOutline,
-} from "@vicons/ionicons5";
-import { useClientsStore } from "../stores/clients.js";
-import { api } from "../services/apiService.js";
+import {ArrowBackOutline, CreateOutline, DocumentTextOutline, OpenOutline,} from "@vicons/ionicons5";
+import {useClientsStore} from "../stores/clients.js";
+import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
-import type { Document, Equipment, EventType } from "@shared/types.js";
+import PageHeader from "../components/PageHeader.vue";
+import type {Document, Equipment, EventType} from "@shared/types.js";
 
 type ClientDocumentRow = Document & {
   inspection_date?: string | null;
@@ -372,14 +394,6 @@ onMounted(() => {
 <style scoped>
 .client-detail {
   direction: rtl;
-}
-
-.client-detail__header {
-  margin-bottom: 4px;
-}
-
-.client-detail__title {
-  margin: 0;
 }
 
 .client-details-table {

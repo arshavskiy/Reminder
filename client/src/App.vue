@@ -332,7 +332,7 @@ watch(isDark, (dark) => {
 const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
 
 const allNav = [
-  {label: "יומן", key: "dashboard", minRole: "user", feature: FEATURES.pages.dashboard},
+  {label: "ראשי", key: "dashboard", minRole: "user", feature: FEATURES.pages.dashboard},
   {label: "מסמכים", key: "documents", minRole: "user", feature: FEATURES.pages.documents},
   {label: "תסקירים", key: "contracts", minRole: "user", feature: FEATURES.pages.contracts},
   {label: "תזכורות", key: "reminders", minRole: "user", feature: FEATURES.pages.reminders},

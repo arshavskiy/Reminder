@@ -1,43 +1,45 @@
 <template>
   <div class="page2">
-    <!-- ── Header ──────────────────────────────────────────────────────── -->
-    <header class="page__head">
-      <div class="page__head-title">
-        <h1 class="page__title">הלקוחות שלי</h1>
-        <span class="count-badge">{{ store.total }}</span>
-      </div>
-      <div class="page__actions">
-        <n-button :loading="store.loading" @click="refresh">
-          <template #icon><n-icon :component="RefreshOutline" /></template>
-          רענן
-        </n-button>
-        <n-button v-if="store.rows.length" type="error" quaternary @click="doDeleteAll">
-          <template #icon><n-icon :component="TrashOutline" /></template>
-          מחק הכל
-        </n-button>
-        <div v-if="store.rows.length" class="bulk-action-anchor">
-          <n-button
-            :type="bulkMode ? 'primary' : 'default'"
-            secondary
-            @click="toggleBulkMode"
-          >
-            בחירה מרובה
-            <span v-if="selectedClientKeys.length">({{ selectedClientKeys.length }})</span>
-          </n-button>
-          <div v-if="bulkMode && selectedClientKeys.length > 0" class="bulk-action-anchor__actions">
-            <button class="bulk-action-item bulk-action-item--danger" type="button" @click="bulkDeleteSelected">
-              <n-icon class="bulk-action-item__icon" :component="TrashOutline" />
-              <span class="bulk-action-item__text">מחק נבחרים</span>
-              <span class="bulk-action-item__count">{{ selectedClientKeys.length }}</span>
+    <PageHeader :count="store.total" title="הלקוחות שלי">
+      <template #breadcrumb>
+        <router-link to="/">לוח שנה</router-link>
+        <span class="sep">/</span>
+        <span>לקוחות</span>
+      </template>
+      <template #actions>
+        <div class="clients-actions">
+          <button :disabled="store.loading" class="rbtn rbtn--ghost" @click="refresh">
+            <span :class="{ 'refresh-icon--spin': store.loading }" class="refresh-icon">↻</span>
+            רענן
+          </button>
+          <button class="rbtn rbtn--primary" type="button" @click="showCreate = true">
+            + צור לקוח
+          </button>
+          <button v-if="store.rows.length" class="rbtn rbtn--danger" type="button" @click="doDeleteAll">
+            מחק הכל
+          </button>
+          <div v-if="store.rows.length" class="bulk-action-anchor">
+            <button
+                :class="{ 'rbtn--ghost-active': bulkMode }"
+                class="rbtn rbtn--ghost"
+                title="בחירה מרובה"
+                type="button"
+                @click="toggleBulkMode"
+            >
+              ☑ בחירה מרובה
+              <span v-if="selectedClientKeys.length">({{ selectedClientKeys.length }})</span>
             </button>
+            <div v-if="bulkMode && selectedClientKeys.length > 0" class="bulk-action-anchor__actions">
+              <button class="bulk-action-item bulk-action-item--danger" type="button" @click="bulkDeleteSelected">
+                <n-icon :component="TrashOutline" class="bulk-action-item__icon"/>
+                <span class="bulk-action-item__text">מחק נבחרים</span>
+                <span class="bulk-action-item__count">{{ selectedClientKeys.length }}</span>
+              </button>
+            </div>
           </div>
         </div>
-        <n-button type="primary" @click="showCreate = true">
-          <template #icon><n-icon :component="AddOutline" /></template>
-          צור לקוח
-        </n-button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- ── Search ───────────────────────────────────────────────────────── -->
     <n-input
@@ -142,14 +144,10 @@ import {
   NRadioGroup,
   useMessage
 } from "naive-ui";
-import {
-  AddOutline,
-  RefreshOutline,
-  SearchOutline,
-  TrashOutline,
-} from "@vicons/ionicons5";
+import {AddOutline, SearchOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useClientsStore} from "../stores/clients.js";
 import {useConfirm} from "../composables/useConfirm.js";
+import PageHeader from "../components/PageHeader.vue";
 import type {Client} from "@shared/types.js";
 
 const store = useClientsStore();
@@ -185,7 +183,6 @@ const baseColumns: DataTableColumns<Client> = [
       return h("div", { class: "client-main-cell" }, [
         h("div", { class: "client-main-cell__copy" }, [
           h("strong", displayClientName(row.display_name)),
-          h("small", entityTypeLabel(row.entity_type)),
         ]),
       ]);
     },
@@ -297,10 +294,6 @@ function displayClientName(value: string) {
   return numericPrefix ? `${numericPrefix[2].trim()} ${numericPrefix[1]}` : spaced;
 }
 
-function entityTypeLabel(value: Client["entity_type"]) {
-  return value === "company" ? "חברה" : "אדם פרטי";
-}
-
 // ── Create / Edit ─────────────────────────────────────────────────────────────
 const showCreate = ref(false);
 const showForm = computed({
@@ -409,42 +402,74 @@ function bulkDeleteSelected() {
 </script>
 
 <style scoped>
-/* ── Page header ─────────────────────────────────────────────────────────── */
-.page__head {
+.clients-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  gap: 12px;
-}
-.page__head-title {
-  display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10px;
 }
-.page__title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-  letter-spacing: -0.3px;
-}
-.count-badge {
-  background: var(--bg-elevated);
+
+.rbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
   border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 2px 10px;
   border-radius: 999px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
 }
-.page__actions { display: flex; gap: 8px; }
+
+.rbtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.rbtn:active {
+  transform: scale(0.97);
+}
+
+.rbtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.rbtn--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--text-inverse, #fff);
+  font-weight: 600;
+}
+
+.rbtn--danger {
+  background: transparent;
+  border-color: rgba(208, 48, 80, 0.35);
+  color: #d03050;
+}
+
+.rbtn--ghost-active {
+  background: var(--bg-elevated);
+  border-color: var(--brand-color);
+  color: var(--brand-color);
+}
 
 .bulk-action-anchor {
   display: inline-flex;
   flex-direction: column;
   align-items: stretch;
   position: relative;
+}
+
+.bulk-action-anchor > .rbtn {
+  width: 100%;
 }
 
 .bulk-action-anchor__actions {
@@ -527,6 +552,21 @@ function bulkDeleteSelected() {
   text-align: center;
 }
 
+.refresh-icon {
+  display: inline-flex;
+  line-height: 1;
+}
+
+.refresh-icon--spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── Search ──────────────────────────────────────────────────────────────── */
 .client-search {
   width: 100%;
@@ -605,12 +645,6 @@ function bulkDeleteSelected() {
   font-weight: 700;
 }
 
-.client-main-cell__copy small {
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.3;
-}
-
 .client-text-cell {
   color: var(--text-primary);
   font-weight: 600;
@@ -645,22 +679,9 @@ function bulkDeleteSelected() {
 }
 
 @media (max-width: 720px) {
-  .page__head {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .page__title {
-    font-size: 22px;
-  }
-
-  .page__actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .page__actions :deep(.n-button) {
-    justify-content: center;
+  .clients-actions,
+  .rbtn {
+    width: 100%;
   }
 
   .bulk-action-anchor {
@@ -689,10 +710,4 @@ function bulkDeleteSelected() {
   }
 }
 
-@media (max-width: 420px) {
-  .page__actions {
-    grid-template-columns: 1fr;
-  }
-
-}
 </style>

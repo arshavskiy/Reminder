@@ -1722,6 +1722,7 @@ function defaultHydraulicCheckForm(): HydraulicCheckRequest {
 }
 
 async function openHydraulicCheck() {
+  showHydraulicCheck.value = true;
   updatingHydraulicContractId.value = null;
   hydraulicUpdateReturnTo.value = "";
   if (!engineerProfile.value) {
@@ -1756,12 +1757,12 @@ async function openHydraulicCheck() {
     selectHydraulicTemplate(draft.templateId);
     hydraulicTemplateValues.value = {...(draft.templateValues ?? {})};
   }
-  showHydraulicCheck.value = true;
   void loadClients();
   void loadHydraulicCategories();
 }
 
 async function openHydraulicContractUpdate(contractId: string) {
+  showHydraulicCheck.value = true;
   if (!engineerProfile.value) {
     await loadEngineerProfile().catch(() => {
     });
@@ -1818,7 +1819,6 @@ async function openHydraulicContractUpdate(contractId: string) {
   }];
   hydraulicTemplateValues.value = {};
   hydratingHydraulicDraft.value = false;
-  showHydraulicCheck.value = true;
   void loadClients();
   void loadHydraulicPrintTemplates().then(() => {
     selectHydraulicTemplate(hydraulicTemplateId.value ?? defaultHydraulicTemplateId());
