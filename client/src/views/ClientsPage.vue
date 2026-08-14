@@ -44,6 +44,7 @@
         :pagination="false"
         :row-key="(row: Client) => row.id"
         :row-props="rowProps"
+        :scroll-x="1190"
         class="clients-data-table"
         dir="rtl"
       />
@@ -106,15 +107,27 @@
 </template>
 
 <script setup lang="ts">
-import {computed, h, onMounted, ref, type Component} from "vue";
+import {computed, h, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
-import {NButton, NDataTable, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NRadio, NRadioGroup, NSpace, useMessage, type DataTableColumns} from "naive-ui";
+import {
+  type DataTableColumns,
+  NButton,
+  NDataTable,
+  NEmpty,
+  NForm,
+  NFormItem,
+  NIcon,
+  NInput,
+  NModal,
+  NRadio,
+  NRadioGroup,
+  NSpace,
+  useMessage
+} from "naive-ui";
 import {
   AddOutline,
   BusinessOutline,
-  CallOutline,
   CreateOutline,
-  MailOutline,
   PersonOutline,
   RefreshOutline,
   SearchOutline,
@@ -148,13 +161,18 @@ const columns: DataTableColumns<Client> = [
     key: "display_name",
     align: "right",
     titleAlign: "right",
+    width: 300,
+    minWidth: 300,
     render(row) {
-      return h(NSpace, { class: "td-name", align: "center", size: 8, wrapItem: false }, {
-        default: () => [
-          h(NIcon, { component: BusinessOutline, class: "client-icon" }),
-          h("span", { class: "client-name", dir: "ltr" }, displayClientName(row.display_name)),
-        ],
-      });
+      return h("div", { class: "client-main-cell" }, [
+        h("span", { class: "client-avatar" }, [
+          h(NIcon, { component: row.entity_type === "company" ? BusinessOutline : PersonOutline }),
+        ]),
+        h("div", { class: "client-main-cell__copy" }, [
+          h("strong", displayClientName(row.display_name)),
+          h("small", entityTypeLabel(row.entity_type)),
+        ]),
+      ]);
     },
   },
   {
@@ -162,28 +180,51 @@ const columns: DataTableColumns<Client> = [
     key: "contact_person",
     align: "right",
     titleAlign: "right",
+    width: 190,
+    minWidth: 190,
     render(row) {
       return row.contact_person
-        ? h(NSpace, { class: "contact-person", align: "center", size: 5, wrapItem: false }, {
-            default: () => [
-              h(NIcon, { component: PersonOutline, class: "person-icon" }),
-              h("span", row.contact_person),
-            ],
-          })
+        ? h("span", { class: "client-text-cell" }, row.contact_person)
         : h("span", { class: "muted" }, "—");
     },
   },
   {
-    title: "פרטי התקשרות",
-    key: "contact_info",
+    title: "אימייל",
+    key: "email",
     align: "right",
     titleAlign: "right",
+    width: 260,
+    minWidth: 260,
     render(row) {
-      if (!row.email && !row.phone) return h("span", { class: "muted" }, "—");
-      return h("div", { class: "td-contact-info" }, [
-        row.email ? contactLine(MailOutline, row.email) : null,
-        row.phone ? contactLine(CallOutline, row.phone) : null,
-      ]);
+      return row.email
+        ? h("span", { class: "client-email-cell" }, row.email)
+        : h("span", { class: "muted" }, "—");
+    },
+  },
+  {
+    title: "טלפון",
+    key: "phone",
+    align: "right",
+    titleAlign: "right",
+    width: 160,
+    minWidth: 160,
+    render(row) {
+      return row.phone
+        ? h("span", { class: "client-phone-cell" }, row.phone)
+        : h("span", { class: "muted" }, "—");
+    },
+  },
+  {
+    title: "מספר מזהה",
+    key: "id_number",
+    align: "right",
+    titleAlign: "right",
+    width: 160,
+    minWidth: 160,
+    render(row) {
+      return row.id_number
+        ? h("span", { class: "client-id-cell" }, row.id_number)
+        : h("span", { class: "muted" }, "—");
     },
   },
   {
@@ -220,15 +261,6 @@ function rowProps(row: Client) {
   };
 }
 
-function contactLine(icon: Component, value: string) {
-  return h(NSpace, { class: "contact-line", align: "center", size: 5, wrapItem: false, dir: "ltr" }, {
-    default: () => [
-      h(NIcon, { component: icon, class: "contact-icon" }),
-      h("span", value),
-    ],
-  });
-}
-
 function displayClientName(value: string) {
   const spaced = value
     .replace(/([א-ת])(\d{2,})/g, "$1 $2")
@@ -237,6 +269,10 @@ function displayClientName(value: string) {
     .trim();
   const numericPrefix = spaced.match(/^(\d{3,4})\s+(.+[\u0590-\u05FF].*)$/);
   return numericPrefix ? `${numericPrefix[2].trim()} ${numericPrefix[1]}` : spaced;
+}
+
+function entityTypeLabel(value: Client["entity_type"]) {
+  return value === "company" ? "חברה" : "אדם פרטי";
 }
 
 // ── Create / Edit ─────────────────────────────────────────────────────────────
@@ -404,28 +440,75 @@ function doDeleteAll() {
 }
 .clients-data-table :deep(.client-row:hover td) { background: var(--bg-hover); }
 
-.td-name {
-  display: flex;
+.client-main-cell {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: var(--text-primary);
+  gap: 10px;
+  min-width: 0;
 }
-.client-icon { font-size: 14px; color: var(--text-muted); }
-.client-name {
-  direction: ltr;
+
+.client-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--brand-color);
+  font-size: 18px;
+}
+
+.client-main-cell__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.client-main-cell__copy strong,
+.client-text-cell,
+.client-email-cell,
+.client-phone-cell,
+.client-id-cell {
+  display: block;
+  overflow: hidden;
+  min-width: 0;
   font-size: 13px;
-  unicode-bidi: isolate;
-  white-space: pre;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.td-contact { color: var(--text-secondary); }
-.contact-person { display: flex; align-items: center; gap: 5px; }
-.person-icon { font-size: 12px; }
+.client-main-cell__copy strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
 
-.td-contact-info { color: var(--text-secondary); }
-.contact-line { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; font-size: 12px; }
-.contact-icon { font-size: 11px; }
+.client-main-cell__copy small {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.client-text-cell {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.client-email-cell {
+  direction: ltr;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.client-phone-cell,
+.client-id-cell {
+  direction: ltr;
+  color: var(--text-secondary);
+  text-align: right;
+  font-weight: 600;
+}
 
 .muted { color: var(--text-muted); font-size: 12px; }
 
@@ -458,11 +541,6 @@ function doDeleteAll() {
 
   .page__actions :deep(.n-button) {
     justify-content: center;
-  }
-
-  .contact-person,
-  .contact-line {
-    justify-content: flex-end;
   }
 
   .pagination-info {
