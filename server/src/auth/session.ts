@@ -70,6 +70,7 @@ function shouldUseSecureCookie(): boolean {
   const configured = process.env.COOKIE_SECURE?.trim().toLowerCase();
   if (configured === "true") return true;
   if (configured === "false") return false;
+  if (isLocalAppEnv()) return false;
   return process.env.NODE_ENV === "production" ||
     Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT_NAME) ||
     isHttpsUrl(process.env.SERVER_URL) ||
@@ -89,12 +90,21 @@ function cookieDomain(): string | null {
   const configured = process.env.COOKIE_DOMAIN?.trim();
   if (configured) return configured;
   if (process.env.COOKIE_DOMAIN_AUTO?.trim().toLowerCase() === "false") return null;
+  if (isLocalAppEnv()) return null;
   const urls = [process.env.FRONTEND_URL, process.env.DEV_FRONTEND_URL, process.env.SERVER_URL];
   for (const url of urls) {
     const host = hostname(url);
     if (host === "handcoded.tech" || host?.endsWith(".handcoded.tech")) return ".handcoded.tech";
   }
   return null;
+}
+
+function isLocalAppEnv(): boolean {
+  const appEnv = process.env.APP_ENV?.trim().toLowerCase();
+  if (appEnv && appEnv !== "production") return true;
+  return process.env.NODE_ENV !== "production" &&
+    !process.env.RAILWAY_ENVIRONMENT &&
+    !process.env.RAILWAY_ENVIRONMENT_NAME;
 }
 
 function isHttpsUrl(value: string | undefined): boolean {

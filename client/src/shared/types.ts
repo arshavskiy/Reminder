@@ -208,6 +208,8 @@ export interface ContractManualFields {
     manufacturer: string | null;
     model: string | null;
     serial_number: string | null;
+    license_number?: string | null;
+    lisence_number?: string | null;
     load_capacity_work: string[];
     load_capacity_test: string[];
     load_radius: string[];
@@ -234,6 +236,7 @@ export interface Reminder {
   manufacturer: string | null;
   model: string | null;
   serial_number: string | null;
+  license_number: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -302,6 +305,8 @@ export interface ContractWithClient extends Contract {
     manufacturer: string | null;
     model: string | null;
     serial_number: string | null;
+    license_number?: string | null;
+    lisence_number?: string | null;
     load_capacity_work: string[];
     load_capacity_test: string[];
     load_radius: string[];

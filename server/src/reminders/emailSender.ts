@@ -45,6 +45,7 @@ const FALLBACK_TEST_HTML = `<!DOCTYPE html>
       {{#if contact_person}}<div class="field"><span class="label">  איש קשר</span><span class="value"> {{contact_person}} </span></div>{{/if}}
       {{#if contact_phone}}<div class="field"><span class="label"> טלפון </span><span class="value"> {{contact_phone}} </span></div>{{/if}}
       {{#if document_number}}<div class="field"><span class="label"> </span><span class="value"> {{document_number}} </span></div>{{/if}}
+      {{#if license_number}}<div class="field"><span class="label"> מספר רישוי </span><span class="value"> {{license_number}} </span></div>{{/if}}
       {{#if expiry_date}}<div class="field"><span class="label"> תאריך יעד </span><span class="value"> {{expiry_date}} </span></div>{{/if}}
       {{#if trigger_date}}<div class="field"><span class="label"> תאריך התזכורת </span><span class="value"> {{trigger_date}} </span></div>{{/if}}
     </div>
@@ -323,6 +324,10 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
   if (r.manufacturer) vars.manufacturer = r.manufacturer;
   if (r.model) vars.model = r.model;
   if (r.serial_number) vars.serial_number = r.serial_number;
+  if (r.license_number || r.lisence_number) {
+    vars.license_number = firstNonEmpty(r.license_number, r.lisence_number);
+    vars.lisence_number = firstNonEmpty(r.lisence_number, r.license_number);
+  }
 
   applyContractVars(vars, linkedContract);
 

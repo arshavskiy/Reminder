@@ -15,6 +15,23 @@
           <template #icon><n-icon :component="TrashOutline" /></template>
           מחק הכל
         </n-button>
+        <div v-if="store.rows.length" class="bulk-action-anchor">
+          <n-button
+            :type="bulkMode ? 'primary' : 'default'"
+            secondary
+            @click="toggleBulkMode"
+          >
+            בחירה מרובה
+            <span v-if="selectedClientKeys.length">({{ selectedClientKeys.length }})</span>
+          </n-button>
+          <div v-if="bulkMode && selectedClientKeys.length > 0" class="bulk-action-anchor__actions">
+            <button class="bulk-action-item bulk-action-item--danger" type="button" @click="bulkDeleteSelected">
+              <n-icon class="bulk-action-item__icon" :component="TrashOutline" />
+              <span class="bulk-action-item__text">מחק נבחרים</span>
+              <span class="bulk-action-item__count">{{ selectedClientKeys.length }}</span>
+            </button>
+          </div>
+        </div>
         <n-button type="primary" @click="showCreate = true">
           <template #icon><n-icon :component="AddOutline" /></template>
           צור לקוח
@@ -44,9 +61,11 @@
         :pagination="false"
         :row-key="(row: Client) => row.id"
         :row-props="rowProps"
-        :scroll-x="1190"
+        :checked-row-keys="selectedClientKeys"
+        :scroll-x="bulkMode ? 1116 : 1070"
         class="clients-data-table"
         dir="rtl"
+        @update:checked-row-keys="onSelectedClientKeys"
       />
 
       <n-empty v-else-if="store.loading" description="טוען..." class="empty-state" />
@@ -121,14 +140,10 @@ import {
   NModal,
   NRadio,
   NRadioGroup,
-  NSpace,
   useMessage
 } from "naive-ui";
 import {
   AddOutline,
-  BusinessOutline,
-  CreateOutline,
-  PersonOutline,
   RefreshOutline,
   SearchOutline,
   TrashOutline,
@@ -155,7 +170,10 @@ function refresh() {
 
 onMounted(() => { store.fetch({ limit: 200 }, true); });
 
-const columns: DataTableColumns<Client> = [
+const bulkMode = ref(false);
+const selectedClientKeys = ref<Array<string | number>>([]);
+
+const baseColumns: DataTableColumns<Client> = [
   {
     title: "שם הלקוח",
     key: "display_name",
@@ -165,9 +183,6 @@ const columns: DataTableColumns<Client> = [
     minWidth: 300,
     render(row) {
       return h("div", { class: "client-main-cell" }, [
-        h("span", { class: "client-avatar" }, [
-          h(NIcon, { component: row.entity_type === "company" ? BusinessOutline : PersonOutline }),
-        ]),
         h("div", { class: "client-main-cell__copy" }, [
           h("strong", displayClientName(row.display_name)),
           h("small", entityTypeLabel(row.entity_type)),
@@ -227,38 +242,49 @@ const columns: DataTableColumns<Client> = [
         : h("span", { class: "muted" }, "—");
     },
   },
-  {
-    title: "",
-    key: "actions",
-    align: "left",
-    titleAlign: "left",
-    width: 132,
-    render(row) {
-      return h(
-        NSpace,
-        { justify: "end", size: 8, onClick: (event: MouseEvent) => event.stopPropagation() },
-        {
-          default: () => [
-            h(NButton, { size: "small", quaternary: true, onClick: () => openEdit(row) }, {
-              icon: () => h(NIcon, { component: CreateOutline }),
-              default: () => "ערוך",
-            }),
-            h(NButton, { size: "small", quaternary: true, type: "error", onClick: () => doDelete(row) }, {
-              icon: () => h(NIcon, { component: TrashOutline }),
-              default: () => "מחק",
-            }),
-          ],
-        },
-      );
-    },
-  },
 ];
+
+const columns = computed<DataTableColumns<Client>>(() =>
+  bulkMode.value
+    ? [{ type: "selection", width: 46, fixed: "right" }, ...baseColumns]
+    : baseColumns
+);
 
 function rowProps(row: Client) {
   return {
-    class: "client-row",
-    onClick: () => router.push(`/clients/${row.id}`),
+    class: `client-row${bulkMode.value ? " client-row--selectable" : ""}`,
+    onClick: (event: MouseEvent) => {
+      if (!bulkMode.value) {
+        router.push(`/clients/${row.id}`);
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("button, a, .n-checkbox")) return;
+      toggleClientSelection(row);
+    },
   };
+}
+
+function toggleBulkMode() {
+  bulkMode.value = !bulkMode.value;
+  if (!bulkMode.value) selectedClientKeys.value = [];
+}
+
+function onSelectedClientKeys(keys: Array<string | number>) {
+  selectedClientKeys.value = keys;
+}
+
+function toggleClientSelection(row: Client) {
+  const id = row.id;
+  const selected = new Set(selectedClientKeys.value);
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  selectedClientKeys.value = [...selected];
+}
+
+function selectedClients() {
+  const selected = new Set(selectedClientKeys.value.map(String));
+  return store.rows.filter((row) => selected.has(String(row.id)));
 }
 
 function displayClientName(value: string) {
@@ -359,6 +385,27 @@ function doDeleteAll() {
     },
   });
 }
+
+function bulkDeleteSelected() {
+  const rows = selectedClients();
+  const count = rows.length;
+  if (!count) return;
+  confirm({
+    title: "מחיקת לקוחות",
+    content: `למחוק ${count} לקוחות נבחרים? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await Promise.all(rows.map((row) => store.remove(String(row.id))));
+        message.success(`${count} לקוחות נמחקו`);
+        selectedClientKeys.value = [];
+        refresh();
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
+}
 </script>
 
 <style scoped>
@@ -392,6 +439,93 @@ function doDeleteAll() {
   border-radius: 999px;
 }
 .page__actions { display: flex; gap: 8px; }
+
+.bulk-action-anchor {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  position: relative;
+}
+
+.bulk-action-anchor__actions {
+  display: grid;
+  gap: 8px;
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 210px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg, 0 14px 32px rgba(15, 23, 42, 0.14));
+}
+
+.bulk-action-anchor__actions::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 24px;
+  width: 10px;
+  height: 10px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  transform: rotate(-45deg);
+}
+
+.bulk-action-item {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: start;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.bulk-action-item:hover {
+  background: var(--bg-hover);
+}
+
+.bulk-action-item--danger {
+  color: #d03050;
+}
+
+.bulk-action-item__icon {
+  display: inline-flex;
+  justify-content: center;
+  width: 26px;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.bulk-action-item__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bulk-action-item__count {
+  min-width: 24px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
 
 /* ── Search ──────────────────────────────────────────────────────────────── */
 .client-search {
@@ -431,33 +565,19 @@ function doDeleteAll() {
   text-align: right;
   vertical-align: middle;
 }
-.clients-data-table :deep(td:last-child) {
-  text-align: left;
-}
 .clients-data-table :deep(.client-row) {
   cursor: pointer;
   transition: background 0.12s;
 }
 .clients-data-table :deep(.client-row:hover td) { background: var(--bg-hover); }
-
-.client-main-cell {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+.clients-data-table :deep(.client-row--selectable:hover td) {
+  background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
 }
 
-.client-avatar {
-  display: inline-flex;
+.client-main-cell {
+  display: block;
   align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--bg-elevated);
-  color: var(--brand-color);
-  font-size: 18px;
+  min-width: 0;
 }
 
 .client-main-cell__copy {
@@ -541,6 +661,16 @@ function doDeleteAll() {
 
   .page__actions :deep(.n-button) {
     justify-content: center;
+  }
+
+  .bulk-action-anchor {
+    width: 100%;
+  }
+
+  .bulk-action-anchor__actions {
+    right: auto;
+    left: 0;
+    min-width: 100%;
   }
 
   .pagination-info {

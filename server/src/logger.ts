@@ -56,11 +56,80 @@ function write(level: LogLevel, event: string, meta?: LogMeta) {
     return;
   }
 
-  const details = normalized && Object.keys(normalized).length > 0 ? ` ${JSON.stringify(normalized)}` : "";
-  const line = `[${level}] ${event}${details}`;
+  const line = formatDevLogLine(level, event, normalized);
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.log(line);
+}
+
+function formatDevLogLine(level: LogLevel, event: string, meta?: LogMeta): string {
+  if (event === "http_request" && meta) {
+    const method = String(meta.method ?? "-");
+    const path = String(meta.path ?? "-");
+    const status = String(meta.status ?? "-");
+    const duration = typeof meta.duration_ms === "number" ? `${meta.duration_ms}ms` : "-";
+    const ip = formatIp(meta.ip);
+    const browser = formatUserAgent(meta.user_agent);
+    const suffix = [
+      ip ? `ip=${ip}` : null,
+      browser ? `ua="${browser}"` : null,
+    ].filter(Boolean).join(" ");
+
+    return `[${level}] ${method.padEnd(6)} ${path} ${status} ${duration}${suffix ? ` ${suffix}` : ""}`;
+  }
+
+  const details = meta && Object.keys(meta).length > 0 ? ` ${formatMeta(meta)}` : "";
+  return `[${level}] ${event}${details}`;
+}
+
+function formatMeta(meta: LogMeta): string {
+  return Object.entries(meta)
+    .map(([key, value]) => `${key}=${formatValue(value)}`)
+    .join(" ");
+}
+
+function formatValue(value: unknown): string {
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
+  return safeJson(value);
+}
+
+function formatIp(value: unknown): string | null {
+  if (typeof value !== "string" || !value) return null;
+  return value.startsWith("::ffff:") ? value.slice("::ffff:".length) : value;
+}
+
+function formatUserAgent(value: unknown): string | null {
+  if (typeof value !== "string" || !value) return null;
+
+  const chrome = value.match(/(?:Chrome|CriOS)\/([\d.]+)/);
+  const firefox = value.match(/Firefox\/([\d.]+)/);
+  const safari = !chrome ? value.match(/Version\/([\d.]+).*Safari\//) : null;
+  const edge = value.match(/Edg\/([\d.]+)/);
+  const browser = edge
+    ? `Edge ${majorVersion(edge[1])}`
+    : chrome
+      ? `Chrome ${majorVersion(chrome[1])}`
+      : firefox
+        ? `Firefox ${majorVersion(firefox[1])}`
+        : safari
+          ? `Safari ${majorVersion(safari[1])}`
+          : "browser";
+
+  const platform = value.includes("Windows") ? "Windows"
+    : value.includes("Mac OS X") ? "macOS"
+      : value.includes("Android") ? "Android"
+        : value.includes("iPhone") || value.includes("iPad") ? "iOS"
+          : value.includes("Linux") ? "Linux"
+            : null;
+
+  return platform ? `${browser} ${platform}` : browser;
+}
+
+function majorVersion(version: string): string {
+  return version.split(".")[0] ?? version;
 }
 
 function safeJson(value: unknown): string {

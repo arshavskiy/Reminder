@@ -209,6 +209,7 @@ export function registerReminderRoutes(app: express.Application) {
       manufacturer: body.manufacturer ?? null,
       model: body.model ?? null,
       serial_number: body.serial_number ?? null,
+      license_number: body.license_number ?? null,
       created_at: now,
       updated_at: now,
     };
@@ -268,6 +269,7 @@ export function registerReminderRoutes(app: express.Application) {
         manufacturer?: string;
         model?: string;
         serial_number?: string;
+        license_number?: string;
         load_capacity_work?: string;
         load_capacity_test?: string;
         load_radius?: string;
@@ -385,6 +387,7 @@ export function registerReminderRoutes(app: express.Application) {
 
     const equipmentName = body.equipment?.name?.trim() || clientDisplayName;
     const requestedSerial = body.equipment?.serial_number?.trim() || undefined;
+    const licenseNumber = body.equipment?.license_number?.trim() || null;
     const contactPerson = body.business?.contact_person?.trim() || selectedClient?.contact_person || null;
     const contactEmail = body.business?.email?.trim() || selectedClient?.email || null;
     const contactPhone = body.business?.phone?.trim() || selectedClient?.phone || null;
@@ -407,7 +410,7 @@ export function registerReminderRoutes(app: express.Application) {
       if (existingEquipment && existingEquipment.user_id === userId) {
         await col("equipment").updateOne(
           { _id: existingEquipment._id },
-          { $set: { client_id: clientId, updated_at: now } }
+          { $set: { client_id: clientId, ...(licenseNumber && { license_number: licenseNumber }), updated_at: now } }
         );
         reusedEquipmentId = existingEquipment._id;
       } else if (existingEquipment) {
@@ -426,6 +429,7 @@ export function registerReminderRoutes(app: express.Application) {
         manufacturer: body.equipment?.manufacturer?.trim() || null,
         model: body.equipment?.model?.trim() || null,
         ...(serialNumber && { serial_number: serialNumber }),
+        license_number: licenseNumber,
         capacity: null,
         load_capacity_test: body.equipment?.load_capacity_test?.trim() || null,
         load_radius: body.equipment?.load_radius?.trim() || null,
@@ -492,6 +496,8 @@ export function registerReminderRoutes(app: express.Application) {
           manufacturer: body.equipment?.manufacturer?.trim() || null,
           model: body.equipment?.model?.trim() || null,
           serial_number: serialNumber ?? null,
+          license_number: licenseNumber,
+          lisence_number: licenseNumber,
           load_capacity_work: body.equipment?.load_capacity_work?.trim()
             ? [body.equipment.load_capacity_work.trim()]
             : [],
@@ -523,6 +529,7 @@ export function registerReminderRoutes(app: express.Application) {
             manufacturer: body.equipment?.manufacturer?.trim() || null,
             model: body.equipment?.model?.trim() || null,
             serial_number: serialNumber ?? null,
+            license_number: licenseNumber,
             updated_at: now,
           },
         }
@@ -560,7 +567,7 @@ export function registerReminderRoutes(app: express.Application) {
     const updates: Record<string, any> = { updated_at: new Date() };
     const fields = [
       "title", "body", "trigger_date", "email_to", "status", "email_template_id",
-      "equipment_type", "manufacturer", "model", "serial_number",
+      "equipment_type", "manufacturer", "model", "serial_number", "license_number",
     ];
     for (const f of fields) {
       if (body[f] !== undefined) updates[f] = body[f];

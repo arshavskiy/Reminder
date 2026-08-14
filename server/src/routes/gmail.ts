@@ -62,6 +62,7 @@ export function registerGmailRoutes(app: express.Application) {
       res.redirect(frontendUrl("/gmail-inbox?error=google_client_not_configured"));
       return;
     }
+    const redirectUri = gmailRedirectUri(settings);
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -69,9 +70,9 @@ export function registerGmailRoutes(app: express.Application) {
         code,
         client_id: googleClientId,
         client_secret: googleClientSecret,
-        redirect_uri: gmailRedirectUri(settings),
+        redirect_uri: redirectUri,
         grant_type: "authorization_code",
-        code_verifier: pkce.code_verifier,
+        code_verifier: String(pkce.code_verifier),
       }),
     });
 
@@ -214,13 +215,14 @@ async function refreshGmailToken(user: any, userId: string): Promise<string | nu
   const googleClientId = settings.googleClientId;
   const googleClientSecret = settings.googleClientSecret;
   if (!googleClientId || !googleClientSecret) return null;
+  const refreshToken = String(user.gmail_refresh_token);
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: googleClientId,
       client_secret: googleClientSecret,
-      refresh_token: user.gmail_refresh_token,
+      refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
   });
@@ -243,7 +245,7 @@ function gmailFetch(accessToken: string, path: string) {
   });
 }
 
-function gmailRedirectUri(settings: ReturnType<typeof getSettings>) {
+function gmailRedirectUri(settings: ReturnType<typeof getSettings>): string {
   const googleRedirectUri = settings.googleRedirectUri ?? "http://localhost:3737/auth/google/callback";
   return process.env.GMAIL_REDIRECT_URI ?? googleRedirectUri.replace("/auth/google/callback", "/auth/gmail/callback");
 }

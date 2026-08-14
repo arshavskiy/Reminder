@@ -8,6 +8,7 @@ export interface EquipmentInput {
   manufacturer?: string | null;
   model?: string | null;
   serial_number?: string | null;
+  license_number?: string | null;
 }
 
 /**
@@ -34,10 +35,11 @@ export async function upsertEquipmentForClient(
   const manufacturer = eq.manufacturer?.trim() || null;
   const model = eq.model?.trim() || null;
   const requestedSerial = eq.serial_number?.trim() || undefined;
+  const licenseNumber = eq.license_number?.trim() || null;
   const name = eq.name?.trim() || clientDisplayName;
 
   // Nothing worth persisting.
-  if (!manufacturer && !model && !requestedSerial && (!eq.category || eq.category === "other")) {
+  if (!manufacturer && !model && !requestedSerial && !licenseNumber && (!eq.category || eq.category === "other")) {
     return undefined;
   }
 
@@ -52,6 +54,7 @@ export async function upsertEquipmentForClient(
             client_id: clientId,
             ...(manufacturer && { manufacturer }),
             ...(model && { model }),
+            ...(licenseNumber && { license_number: licenseNumber }),
             updated_at: now,
           },
         }
@@ -69,6 +72,7 @@ export async function upsertEquipmentForClient(
     manufacturer,
     model,
     ...(serialNumber && { serial_number: serialNumber }),
+    license_number: licenseNumber,
     capacity: null,
     load_capacity_test: null,
     load_radius: null,

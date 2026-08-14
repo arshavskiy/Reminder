@@ -72,6 +72,7 @@ export interface HydraulicCheckRequest {
     manufacturer?: string;
     model?: string;
     serial_number?: string;
+    license_number?: string;
     load_capacity_work?: string;
     load_capacity_test?: string;
     load_radius?: string;

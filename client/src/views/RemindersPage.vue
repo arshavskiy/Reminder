@@ -729,6 +729,7 @@ async function doCreate() {
       manufacturer: equipment?.manufacturer ?? null,
       model: equipment?.model ?? null,
       serial_number: equipment?.serial_number ?? null,
+      license_number: equipment?.license_number ?? equipment?.lisence_number ?? null,
     });
     message.success("תזכורת נוצרה");
     showCreate.value = false;
