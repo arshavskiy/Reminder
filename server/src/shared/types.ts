@@ -454,9 +454,22 @@ export interface PrintTemplateCell {
   color?: string;
   align?: "right" | "center" | "left";
   valign?: "top" | "middle" | "bottom";
+  border?: PrintCellBorder;
+  fontSize?: number; // px; falls back to template default when unset
   colSpan?: number;
   rowSpan?: number;
 }
+
+export type PrintCellBorderStyle = "thin" | "medium" | "thick" | "double";
+// Per-side borders (Excel-like). Legacy values: a bare style string or "none"
+// mean "all four sides that style / cleared" and are still accepted.
+export interface PrintCellBorderSides {
+  top?: PrintCellBorderStyle;
+  right?: PrintCellBorderStyle;
+  bottom?: PrintCellBorderStyle;
+  left?: PrintCellBorderStyle;
+}
+export type PrintCellBorder = PrintCellBorderStyle | "none" | PrintCellBorderSides;
 
 export interface PrintTemplate {
   _id: string;

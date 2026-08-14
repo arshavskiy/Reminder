@@ -427,16 +427,42 @@ function composeCellHtml(r: number, c: number) {
     : escHtml(cell.bind ? composeDisplayValue(cell.bind) : "");
 }
 
+const DEFAULT_CELL_FONT_SIZE = 12;
+
+type BorderStyleToken = "thin" | "medium" | "thick" | "double";
+
+function borderSideCss(style: BorderStyleToken | undefined): string {
+  switch (style) {
+    case "medium": return "2px solid #000";
+    case "thick":  return "3px solid #000";
+    case "double": return "3px double #000";
+    case "thin":   return "1px solid #000";
+    default:       return "none";
+  }
+}
+
+function resolveBorderSides(border: PrintTemplateCell["border"]) {
+  if (border === undefined) return { top: "thin", right: "thin", bottom: "thin", left: "thin" } as const;
+  if (border === "none") return { top: undefined, right: undefined, bottom: undefined, left: undefined };
+  if (typeof border === "string") return { top: border, right: border, bottom: border, left: border };
+  return { top: border.top, right: border.right, bottom: border.bottom, left: border.left };
+}
+
 function composeCellStyle(r: number, c: number) {
   const cell = getComposeCell(r, c);
+  const size = cell?.fontSize;
+  const sides = resolveBorderSides(cell?.border);
   return {
     textAlign: cell?.align ?? "right",
     fontWeight: cell?.bold ? "700" : "400",
     color: cell?.color ?? "inherit",
     padding: "2px 4px",
-    border: "1px solid #000",
+    borderTop: borderSideCss(sides.top as BorderStyleToken | undefined),
+    borderRight: borderSideCss(sides.right as BorderStyleToken | undefined),
+    borderBottom: borderSideCss(sides.bottom as BorderStyleToken | undefined),
+    borderLeft: borderSideCss(sides.left as BorderStyleToken | undefined),
     verticalAlign: cell?.valign ?? "middle",
-    fontSize: "12px",
+    fontSize: `${typeof size === "number" && size > 0 ? size : DEFAULT_CELL_FONT_SIZE}px`,
   };
 }
 

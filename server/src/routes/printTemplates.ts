@@ -489,7 +489,9 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
       const valign = cell?.valign ?? "middle";
       const bold = cell?.bold ? "font-weight:700;" : "";
       const color = cell?.color ? `color:${cssColor(cell.color)};` : "";
-      const style = `text-align:${align};vertical-align:${valign};${bold}${color}padding:2px 4px;`;
+      const border = cellBorderCss(cell?.border);
+      const fontSize = typeof cell?.fontSize === "number" && cell.fontSize > 0 ? `font-size:${cell.fontSize}px;` : "";
+      const style = `text-align:${align};vertical-align:${valign};${bold}${color}${border}${fontSize}padding:2px 4px;`;
       let content = "";
       if (cell?.type === "label") {
         content = cell.html ? sanitizeRichHtml(cell.html) : escHtml(cell.text ?? "");
@@ -511,7 +513,7 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 12px; direction: ${dir}; padding: 16px; }
   table.render { border-collapse: collapse; width: 100%; table-layout: fixed; }
-  table.render td { border: 1px solid #000; vertical-align: middle; overflow: hidden; }
+  table.render td { vertical-align: middle; overflow: hidden; }
   table.render img.cell-img { display: block; max-width: 100%; max-height: 100%; margin: 0 auto; object-fit: contain; }
 </style>
 </head>
@@ -522,6 +524,31 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
 </table>
 </body>
 </html>`;
+}
+
+function borderSideCss(style: unknown): string {
+  switch (style) {
+    case "medium": return "2px solid #000";
+    case "thick":  return "3px solid #000";
+    case "double": return "3px double #000";
+    case "thin":   return "1px solid #000";
+    default:       return "none";
+  }
+}
+
+function resolveBorderSides(border: unknown): { top: unknown; right: unknown; bottom: unknown; left: unknown } {
+  if (border === undefined) return { top: "thin", right: "thin", bottom: "thin", left: "thin" };
+  if (border === "none") return { top: undefined, right: undefined, bottom: undefined, left: undefined };
+  if (typeof border === "string") return { top: border, right: border, bottom: border, left: border };
+  const b = border as Record<string, unknown>;
+  return { top: b.top, right: b.right, bottom: b.bottom, left: b.left };
+}
+
+// Emit explicit per-side border declarations (the table CSS no longer sets a
+// default td border, so "none" sides truly clear).
+function cellBorderCss(border: unknown): string {
+  const s = resolveBorderSides(border);
+  return `border-top:${borderSideCss(s.top)};border-right:${borderSideCss(s.right)};border-bottom:${borderSideCss(s.bottom)};border-left:${borderSideCss(s.left)};`;
 }
 
 function escHtml(s: string): string {

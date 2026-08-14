@@ -232,6 +232,59 @@
             <button :class="{ active: selValign==='bottom' }" class="xl-rbtn" @click="setValign('bottom')">⬇</button>
           </div>
           <div class="xl-ribbon-sep"/>
+          <!-- Borders (Excel-style dropdown) -->
+          <div class="xl-ribbon-group xl-border-group">
+            <button
+              :class="{ active: showBorderMenu }"
+              class="xl-rbtn xl-border-btn"
+              title="מסגרות"
+              @click.stop="showBorderMenu = !showBorderMenu"
+            >⊞ מסגרות ▾</button>
+            <div v-if="showBorderMenu" class="xl-border-menu" @click.stop>
+              <div class="xl-border-menu__label">סוג קו</div>
+              <div class="xl-border-pens">
+                <button
+                  v-for="pen in borderPens"
+                  :key="pen.value"
+                  :class="{ active: borderPen === pen.value }"
+                  class="xl-border-pen"
+                  :title="pen.label"
+                  @click="borderPen = pen.value"
+                >
+                  <span class="xl-border-pen__preview" :data-pen="pen.value"></span>
+                  <span>{{ pen.label }}</span>
+                </button>
+              </div>
+              <div class="xl-border-menu__label">החל על</div>
+              <div class="xl-border-actions">
+                <button class="xl-border-act" title="כל הגבולות" @click="applyBorder('all')">
+                  <span class="xl-bico xl-bico--all"></span>הכל
+                </button>
+                <button class="xl-border-act" title="מסגרת חיצונית" @click="applyBorder('outer')">
+                  <span class="xl-bico xl-bico--outer"></span>חיצוני
+                </button>
+                <button class="xl-border-act" title="קווים פנימיים" @click="applyBorder('inner')">
+                  <span class="xl-bico xl-bico--inner"></span>פנימי
+                </button>
+                <button class="xl-border-act" title="ללא מסגרת" @click="applyBorder('none')">
+                  <span class="xl-bico xl-bico--none"></span>ללא
+                </button>
+                <button class="xl-border-act" title="גבול עליון" @click="applyBorder('top')">
+                  <span class="xl-bico xl-bico--top"></span>עליון
+                </button>
+                <button class="xl-border-act" title="גבול תחתון" @click="applyBorder('bottom')">
+                  <span class="xl-bico xl-bico--bottom"></span>תחתון
+                </button>
+                <button class="xl-border-act" title="גבול ימני" @click="applyBorder('right')">
+                  <span class="xl-bico xl-bico--right"></span>ימין
+                </button>
+                <button class="xl-border-act" title="גבול שמאלי" @click="applyBorder('left')">
+                  <span class="xl-bico xl-bico--left"></span>שמאל
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="xl-ribbon-sep"/>
           <!-- Type toggle -->
           <div class="xl-ribbon-group">
             <button class="xl-rbtn xl-rbtn--field" @click="toggleType">תווית ⇄ שדה</button>
@@ -386,6 +439,24 @@
                 <b>B</b>
               </button>
 
+              <div class="xl-inspector-section">מסגרת</div>
+              <div class="xl-inspector-hint">בחר צד וסגנון מסרגל ה⊞ מסגרות למעלה</div>
+
+              <div class="xl-inspector-section">גודל טקסט</div>
+              <div class="xl-fontsize-row">
+                <button class="xl-type-btn" title="הקטן" @click="nudgeCellFontSize(-1)">−</button>
+                <input
+                  :value="activeCellData.fontSize ?? DEFAULT_CELL_FONT_SIZE"
+                  class="xl-inspector-input xl-fontsize-input"
+                  type="number"
+                  min="6"
+                  max="48"
+                  @change="setCellFontSize(Number(($event.target as HTMLInputElement).value))"
+                />
+                <span class="xl-fontsize-unit">px</span>
+                <button class="xl-type-btn" title="הגדל" @click="nudgeCellFontSize(1)">+</button>
+              </div>
+
               <div class="xl-inspector-section" style="margin-top:16px">גודל</div>
               <div class="xl-inspector-hint">
                 גובה שורה: {{ editing.rows[selRange.r1]?.h ?? '—' }}px<br/>
@@ -416,12 +487,44 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, nextTick, ref} from "vue";
+import {computed, nextTick, onBeforeUnmount, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {NAlert, NButton, NCard, NEmpty, NGi, NGrid, NSpace, NSpin, NTag, useDialog, useMessage,} from "naive-ui";
 import {api} from "../services/apiService.js";
 import PageHeader from "../components/PageHeader.vue";
-import type {PrintTemplate, PrintTemplateCell} from "@shared/types.js";
+import type {PrintTemplate, PrintTemplateCell, PrintCellBorderStyle, PrintCellBorderSides} from "@shared/types.js";
+
+type BorderSide = "top" | "right" | "bottom" | "left";
+
+function borderSideCss(style: PrintCellBorderStyle | undefined): string {
+  switch (style) {
+    case "medium": return "2px solid #000";
+    case "thick":  return "3px solid #000";
+    case "double": return "3px double #000";
+    case "thin":   return "1px solid #000";
+    default:       return "none";
+  }
+}
+
+// Normalize any border value (legacy string / "none" / per-side object) into
+// an explicit 4-side map. Unset (undefined) => classic thin box on all sides.
+function resolveBorderSides(border: PrintTemplateCell["border"]): Required<PrintCellBorderSides> {
+  if (border === undefined) {
+    return { top: "thin", right: "thin", bottom: "thin", left: "thin" };
+  }
+  if (border === "none") {
+    return { top: undefined, right: undefined, bottom: undefined, left: undefined } as Required<PrintCellBorderSides>;
+  }
+  if (typeof border === "string") {
+    return { top: border, right: border, bottom: border, left: border };
+  }
+  return {
+    top: border.top,
+    right: border.right,
+    bottom: border.bottom,
+    left: border.left,
+  } as Required<PrintCellBorderSides>;
+}
 
 const message = useMessage();
 const dialog  = useDialog();
@@ -943,9 +1046,27 @@ function composeCellHtml(r:number,c:number){
     ? richCellHtml(cell)
     : escHtml(cell.bind ? composeDisplayValue(cell.bind) : "");
 }
+const DEFAULT_CELL_FONT_SIZE = 12;
+
+function cellFontSizeCss(cell: PrintTemplateCell | undefined): string {
+  const size = cell?.fontSize;
+  return `${typeof size === "number" && size > 0 ? size : DEFAULT_CELL_FONT_SIZE}px`;
+}
+
+// Per-side border styles applied to a cell style object.
+function cellBorderStyle(border: PrintTemplateCell["border"]): Record<string,string> {
+  const sides = resolveBorderSides(border);
+  return {
+    borderTop: borderSideCss(sides.top),
+    borderRight: borderSideCss(sides.right),
+    borderBottom: borderSideCss(sides.bottom),
+    borderLeft: borderSideCss(sides.left),
+  };
+}
+
 function composeCellStyle(r:number,c:number){
   const cell=getComposeCell(r,c);
-  return { textAlign:cell?.align??"right", fontWeight:cell?.bold?"700":"400", color:cell?.color??"inherit", padding:"2px 4px", border:"1px solid #000", verticalAlign:cell?.valign??"middle", fontSize:"12px" };
+  return { textAlign:cell?.align??"right", fontWeight:cell?.bold?"700":"400", color:cell?.color??"inherit", padding:"2px 4px", ...cellBorderStyle(cell?.border), verticalAlign:cell?.valign??"middle", fontSize:cellFontSizeCss(cell) };
 }
 
 async function printPdf() {
@@ -1262,7 +1383,11 @@ function cellHtml(r:number,c:number){
 function cellStyle(r:number,c:number){
   const cell=getCell(r,c);
   if(!cell) return {};
-  return { textAlign:cell.align??"right", fontWeight:cell.bold?"700":"400", color:cell.color??"inherit", verticalAlign:cell.valign??"middle" };
+  // Show the chosen print border/size in the editor grid too (WYSIWYG). Only
+  // override the default grid border when the user set an explicit border.
+  const style: Record<string,string> = { textAlign:cell.align??"right", fontWeight:cell.bold?"700":"400", color:cell.color??"inherit", verticalAlign:cell.valign??"middle", fontSize:cellFontSizeCss(cell) };
+  if (cell.border !== undefined) Object.assign(style, cellBorderStyle(cell.border));
+  return style;
 }
 
 // ── Selection ─────────────────────────────────────────────────────────────────
@@ -1367,6 +1492,85 @@ function setRichColor(color:string){
 }
 function setAlign(a:"right"|"center"|"left"){ forEachSel(()=>({align:a})); }
 function setValign(v:"top"|"middle"|"bottom"){ forEachSel(()=>({valign:v})); }
+// Excel-style border application. `borderPen` is the active width/style.
+const borderPen = ref<PrintCellBorderStyle>("thin");
+const showBorderMenu = ref(false);
+const borderPens: { value: PrintCellBorderStyle; label: string }[] = [
+  { value: "thin",   label: "דק" },
+  { value: "medium", label: "בינוני" },
+  { value: "thick",  label: "עבה" },
+  { value: "double", label: "כפול" },
+];
+
+function closeBorderMenuOnOutside(){ showBorderMenu.value = false; }
+watch(showBorderMenu, (open) => {
+  if (open) document.addEventListener("click", closeBorderMenuOnOutside);
+  else document.removeEventListener("click", closeBorderMenuOnOutside);
+});
+onBeforeUnmount(() => document.removeEventListener("click", closeBorderMenuOnOutside));
+
+type BorderAction = "all" | "outer" | "inner" | "none" | BorderSide;
+
+// Read a cell's current per-side map as a mutable object, normalizing legacy
+// string/none forms so we can edit individual sides.
+function cellBorderObject(cell: PrintTemplateCell): PrintCellBorderSides {
+  const sides = resolveBorderSides(cell.border);
+  const obj: PrintCellBorderSides = {};
+  for (const side of ["top","right","bottom","left"] as BorderSide[]) {
+    if (sides[side]) obj[side] = sides[side];
+  }
+  return obj;
+}
+
+function normalizeBorderValue(obj: PrintCellBorderSides): PrintTemplateCell["border"] {
+  const sides = ["top","right","bottom","left"] as BorderSide[];
+  const active = sides.filter((s) => obj[s]);
+  if (active.length === 0) return "none";
+  // Collapse to a shorthand string when all four sides share one style.
+  if (active.length === 4) {
+    const first = obj.top;
+    if (first && sides.every((s) => obj[s] === first)) return first;
+  }
+  return { ...obj };
+}
+
+function applyBorder(action: BorderAction){
+  if(!editing.value) return;
+  const s = selRange.value;
+  if (s.r1 < 0 || s.c1 < 0) return;
+  const pen = borderPen.value;
+  for(let r=s.r1;r<=s.r2;r++){
+    for(let c=s.c1;c<=s.c2;c++){
+      let cell=getCell(r,c);
+      if(!cell){ cell={r,c,type:"label",text:"",align:"right"}; editing.value.cells.push(cell); }
+      const b = cellBorderObject(cell);
+      const isTop = r===s.r1, isBottom = r===s.r2, isLeft = c===s.c1, isRight = c===s.c2;
+      switch(action){
+        case "none": b.top=b.right=b.bottom=b.left=undefined; break;
+        case "all": b.top=b.right=b.bottom=b.left=pen; break;
+        case "outer":
+          if(isTop) b.top=pen; if(isBottom) b.bottom=pen;
+          if(isLeft) b.left=pen; if(isRight) b.right=pen;
+          break;
+        case "inner":
+          if(!isBottom) b.bottom=pen; if(!isTop) b.top=pen;
+          if(!isRight) b.right=pen; if(!isLeft) b.left=pen;
+          break;
+        case "top": b.top=pen; break;
+        case "bottom": b.bottom=pen; break;
+        case "left": b.left=pen; break;
+        case "right": b.right=pen; break;
+      }
+      cell.border = normalizeBorderValue(b);
+    }
+  }
+}
+
+function nudgeCellFontSize(delta:number){
+  forEachSel(c=>({ fontSize: clampFontSize((c.fontSize ?? DEFAULT_CELL_FONT_SIZE) + delta) }));
+}
+function setCellFontSize(size:number){ forEachSel(()=>({ fontSize: clampFontSize(size) })); }
+function clampFontSize(size:number):number{ return Math.min(48, Math.max(6, Math.round(size))); }
 function toggleType(){ forEachSel(c=>({type:c.type==="field"?"label":"field"})); }
 
 function setCellType(type:"label"|"field"|"image"){
@@ -1989,6 +2193,50 @@ function stopRowResize(){ resizeRow.value=null; window.removeEventListener("mous
 .xl-inspector-hint { font-size: 11px; color: #999; margin-top: 3px; line-height: 1.4; }
 
 .xl-type-btns { display: flex; gap: 4px; margin-top: 4px; }
+.xl-type-btns--wrap { flex-wrap: wrap; }
+
+/* ── Excel-style border dropdown ─────────────────────────────── */
+.xl-border-group { position: relative; }
+.xl-border-btn { white-space: nowrap; }
+.xl-border-menu {
+  position: absolute; top: calc(100% + 4px); inset-inline-start: 0;
+  z-index: 50; width: 230px; padding: 10px;
+  background: #fff; border: 1px solid #b0b0b0; border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18); direction: rtl;
+}
+.xl-border-menu__label { font-size: 11px; color: #777; margin: 4px 2px 6px; font-weight: 600; }
+.xl-border-pens { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px; }
+.xl-border-pen {
+  display: flex; align-items: center; gap: 6px; padding: 5px 7px;
+  border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer;
+  font-size: 12px; color: #333;
+}
+.xl-border-pen:hover { background: #eef6ef; border-color: #217346; }
+.xl-border-pen.active { background: #217346; color: #fff; border-color: #217346; }
+.xl-border-pen__preview { width: 34px; height: 0; flex: 0 0 auto; }
+.xl-border-pen__preview[data-pen="thin"]   { border-top: 1px solid currentColor; }
+.xl-border-pen__preview[data-pen="medium"] { border-top: 2px solid currentColor; }
+.xl-border-pen__preview[data-pen="thick"]  { border-top: 3px solid currentColor; }
+.xl-border-pen__preview[data-pen="double"] { border-top: 3px double currentColor; }
+.xl-border-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.xl-border-act {
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+  border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer;
+  font-size: 12px; color: #333;
+}
+.xl-border-act:hover { background: #eef6ef; border-color: #217346; }
+.xl-bico { width: 18px; height: 18px; flex: 0 0 auto; border: 1px dashed #bbb; box-sizing: border-box; }
+.xl-bico--all    { border: 1px solid #333; box-shadow: inset 0 0 0 1px #333; }
+.xl-bico--outer  { border: 2px solid #333; }
+.xl-bico--inner  { border: 1px dashed #ccc; box-shadow: inset 0 0 0 6px #fff, inset 0 0 0 7px #333; }
+.xl-bico--none   { border: 1px dashed #ddd; }
+.xl-bico--top    { border: 1px dashed #ddd; border-top: 2px solid #333; }
+.xl-bico--bottom { border: 1px dashed #ddd; border-bottom: 2px solid #333; }
+.xl-bico--right  { border: 1px dashed #ddd; border-right: 2px solid #333; }
+.xl-bico--left   { border: 1px dashed #ddd; border-left: 2px solid #333; }
+.xl-fontsize-row { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.xl-fontsize-input { width: 56px; text-align: center; }
+.xl-fontsize-unit { font-size: 12px; color: #666; }
 .xl-type-btn {
   flex: 1; padding: 5px 8px; font-size: 12px; border-radius: 3px;
   border: 1px solid #ccc; background: #fff; cursor: pointer; color: #444;
