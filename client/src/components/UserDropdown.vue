@@ -99,7 +99,7 @@ const dropdownItems = computed(() => [
     label: "הגדרת תבניות וציוד",
     key: "templatesGroup",
     children: [
-      { label: "תבניות דפוס", key: "printTemplates" },
+      { label: "תבניות מסקר", key: "printTemplates" },
       { label: "תבניות אימייל", key: "emailTemplates" },
       { label: "הגדרת ציוד", key: "equipment" },
     ],

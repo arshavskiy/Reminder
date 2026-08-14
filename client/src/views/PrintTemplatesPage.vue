@@ -42,7 +42,7 @@
     <template v-else-if="mode === 'compose' && composing">
       <PageHeader :title="`${composing.name} — מילוי שדות`">
         <template #breadcrumb>
-          <a href="#" @click.prevent="goBackFromCompose">{{ routeContractId ? "תסקירים" : "תבניות הדפסה" }}</a>
+          <a href="#" @click.prevent="goBackFromCompose">{{ routeContractId ? "תסקירים" : "תבניות מסקר" }}</a>
           <span class="sep">/</span>
           <span>{{ composing.name }}</span>
         </template>

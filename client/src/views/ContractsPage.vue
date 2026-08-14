@@ -1893,7 +1893,7 @@ async function saveHydraulicDraftAndPreview() {
 
 async function openContractInTemplate(row: ContractWithClient) {
   if (!canOpenPrintTemplates.value) {
-    message.warning("תבניות הדפסה כבויות בהגדרות");
+    message.warning("תבניות מסקר כבויות בהגדרות");
     return;
   }
   try {
