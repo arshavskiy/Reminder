@@ -6,13 +6,24 @@
     </header>
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
-      <DocumentDropStrip
+      <div
         v-if="
           hasFeature(FEATURES.dashboard.dropStrip) &&
           hasFeature(FEATURES.pages.documents)
         "
-        @uploaded="store.fetch(true)"
-      />
+        class="dash__intake"
+      >
+        <DocumentDropStrip class="dash__drop" @uploaded="store.fetch(true)" />
+        <button
+          v-if="hasFeature(FEATURES.pages.contracts)"
+          class="dash__new-contract"
+          @click="router.push('/contracts?new=1')"
+        >
+          <span class="dash__new-contract__icon">＋</span>
+          <span class="dash__new-contract__label">תסקיר חדש</span>
+          <span class="dash__new-contract__hint">צור תסקיר או חוזה ידני</span>
+        </button>
+      </div>
 
       <!-- Quick stats — small chips line, easy to scan -->
       <div class="dash__stats">
@@ -448,6 +459,50 @@ const data_cards = computed(() =>
 }
 
 /* ── Stats chips ──────────────────────────────────────────────────────── */
+.dash__intake {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.dash__drop {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Drop the strip's own bottom margin here so it matches the button's height
+   exactly (the row already provides spacing below). */
+.dash__intake :deep(.drop-strip) { margin-bottom: 0; }
+.dash__new-contract {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--brand-color);
+  border-radius: 14px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+.dash__new-contract:hover { background: var(--bg-hover); box-shadow: var(--shadow-sm); }
+.dash__new-contract:active { transform: scale(0.98); }
+.dash__new-contract__icon {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--brand-color);
+  line-height: 1;
+}
+.dash__new-contract__label { font-size: 15px; font-weight: 700; }
+.dash__new-contract__hint { font-size: 12px; color: var(--text-secondary); }
+
+@media (max-width: 720px) {
+  .dash__intake { flex-direction: column; }
+  .dash__new-contract { flex: 1 1 auto; }
+}
+
 .dash__stats {
   display: flex;
   flex-wrap: wrap;

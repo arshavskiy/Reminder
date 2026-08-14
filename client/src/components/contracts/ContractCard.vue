@@ -163,10 +163,12 @@ const props = defineProps<{
 }>();
 
 const hasEmail = computed(() => Boolean((props.row.contact_email ?? "").trim()));
-const canCreateReminder = computed(() => hasEmail.value && Boolean(props.row.expiry_date));
+// A reminder only needs an expiry date to be generated; email just decides
+// whether it can actually be sent later. Don't block creation on missing email.
+const canCreateReminder = computed(() => Boolean(props.row.expiry_date));
 const reminderButtonTitle = computed(() => {
-  if (!hasEmail.value) return "חסר אימייל ללקוח — לא ניתן ליצור תזכורת";
   if (!props.row.expiry_date) return "חסר תאריך תוקף — לא ניתן ליצור תזכורת";
+  if (!hasEmail.value) return "צור תזכורת (חסר אימייל — לא תישלח עד שיתווסף)";
   return "צור תזכורת לתסקיר זה";
 });
 

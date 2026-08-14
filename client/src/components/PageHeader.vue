@@ -32,7 +32,7 @@ defineProps<Props>();
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
-.page-header__title-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-direction: column; align-items: flex-start; }
+.page-header__title-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .page-header__breadcrumb {
   display: flex;
   align-items: center;

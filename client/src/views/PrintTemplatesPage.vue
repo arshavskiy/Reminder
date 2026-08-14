@@ -11,30 +11,49 @@
 
     <!-- ── LIST ──────────────────────────────────────────────────────────────── -->
     <template v-else-if="mode === 'list'">
-      <div class="ptp-header">
-        <span class="ptp-title">תבניות הדפסה</span>
-        <button class="xl-btn xl-btn--primary" @click="newTemplate">+ תבנית חדשה</button>
-      </div>
+      <PageHeader
+        title="תבניות הדפסה"
+        subtitle="עיצוב ומילוי תבניות הדפסה בסגנון Excel"
+        :count="templates.length"
+      >
+        <template #actions>
+          <button class="btn btn--primary" @click="newTemplate">+ תבנית חדשה</button>
+        </template>
+      </PageHeader>
+
       <n-alert v-if="loadError" style="margin-bottom:16px" type="error">{{ loadError }}</n-alert>
+
       <n-spin :show="loading">
-        <n-grid v-if="templates.length" :cols="3" :x-gap="16" :y-gap="16">
-          <n-gi v-for="t in templates" :key="t._id">
-            <n-card :title="t.name" hoverable style="cursor:pointer">
-              <template #header-extra><n-tag size="small">{{ t.page }}</n-tag></template>
-              <p style="font-size:13px;color:var(--text-secondary);margin:0">
-                {{ t.cols.length }} עמודות · {{ t.rows.length }} שורות · {{ t.cells.filter(c => c.type==='field').length }} שדות
-              </p>
-              <template #footer>
-                <n-space size="small">
-                  <n-button size="small" type="primary" @click.stop="openCompose(t)">✏️ מלא ושלח</n-button>
-                  <n-button size="small" text @click.stop="editTemplate(t)">עצב</n-button>
-                  <n-button size="small" text type="error" @click.stop="deleteTemplate(t._id)">מחק</n-button>
-                </n-space>
-              </template>
-            </n-card>
-          </n-gi>
-        </n-grid>
-        <n-empty v-else-if="!loading && !loadError" description="אין תבניות. צור תבנית חדשה." style="margin-top:60px" />
+        <div v-if="templates.length" class="pt-grid">
+          <article
+            v-for="t in templates"
+            :key="t._id"
+            class="pt-card"
+            @click="openCompose(t)"
+          >
+            <div class="pt-card__head">
+              <h3 class="pt-card__name">{{ t.name }}</h3>
+              <span class="tag tag--neutral">{{ t.page }}</span>
+            </div>
+
+            <div class="pt-card__stats">
+              <span class="pt-stat"><strong>{{ t.cols.length }}</strong> עמודות</span>
+              <span class="pt-stat"><strong>{{ t.rows.length }}</strong> שורות</span>
+              <span class="pt-stat"><strong>{{ t.cells.filter(c => c.type==='field').length }}</strong> שדות</span>
+            </div>
+
+            <div class="pt-card__actions">
+              <button class="btn btn--xs btn--primary" @click.stop="openCompose(t)">✏️ מלא ושלח</button>
+              <button class="btn btn--xs btn--ghost" @click.stop="editTemplate(t)">🎨 עצב</button>
+              <button class="btn btn--xs btn--danger" @click.stop="deleteTemplate(t._id)">🗑 מחק</button>
+            </div>
+          </article>
+        </div>
+        <n-empty v-else-if="!loading && !loadError" description="אין תבניות. צור תבנית חדשה." style="margin-top:60px">
+          <template #extra>
+            <button class="btn btn--primary" @click="newTemplate">+ תבנית חדשה</button>
+          </template>
+        </n-empty>
       </n-spin>
     </template>
 
@@ -90,6 +109,7 @@
                   <tr v-for="(row,ri) in composing.rows" :key="ri" :style="{ height: row.h+'px' }">
                     <template v-for="ci in composing.cols.length" :key="ci-1">
                       <td v-if="!isComposeMasked(ri,ci-1)"
+                          dir="auto"
                           :colspan="getComposeCell(ri,ci-1)?.colSpan??1"
                           :rowspan="getComposeCell(ri,ci-1)?.rowSpan??1"
                           :style="composeCellStyle(ri,ci-1)">
@@ -361,17 +381,16 @@
                           ref="inlineEl"
                           class="xl-inline"
                           contenteditable="true"
-                          :dir="editing.dir"
-                          v-html="inlineVal"
-                          @input="onInlineInput"
+                          dir="auto"
                           @mousedown.stop
                           @blur="commitInline"
-                          @keydown.enter.exact.prevent="commitInline"
+                          @keydown.enter="onInlineEnter"
                           @keydown.escape="inlineEdit=null"
                         />
                       </template>
                       <template v-else>
                         <span
+                          dir="auto"
                           :style="{ color: getCell(ri,ci-1)?.type==='field' && !getCell(ri,ci-1)?.bind ? '#bbb' : 'inherit' }"
                           v-html="cellHtml(ri,ci-1)"
                         />
@@ -487,7 +506,7 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, nextTick, onBeforeUnmount, ref, watch} from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {NAlert, NButton, NCard, NEmpty, NGi, NGrid, NSpace, NSpin, NTag, useDialog, useMessage,} from "naive-ui";
 import {api} from "../services/apiService.js";
@@ -1482,6 +1501,101 @@ function forEachSel(fn:(cell:PrintTemplateCell)=>Partial<PrintTemplateCell>){
   }
 }
 
+// Clear the content of every selected cell (text/html/bind/image src) while
+// keeping the cell's type, borders, alignment, and merge intact.
+function clearSelectedCells(){
+  if(!editing.value) return;
+  const s=selRange.value;
+  if(s.r1<0||s.c1<0) return;
+  for(let r=s.r1;r<=s.r2;r++){
+    for(let c=s.c1;c<=s.c2;c++){
+      const cell=getCell(r,c);
+      if(!cell) continue;
+      delete cell.text; delete cell.html; delete cell.bind; delete cell.src; delete cell.alt;
+      if(cell.type==="label") cell.text="";
+    }
+  }
+}
+
+function isEditableTarget(el: EventTarget | null): boolean {
+  if(!(el instanceof HTMLElement)) return false;
+  const tag=el.tagName;
+  return tag==="INPUT" || tag==="TEXTAREA" || el.isContentEditable;
+}
+
+// ── Copy / paste selected cells ───────────────────────────────
+// Clipboard holds a rectangular block of cell snapshots (r/c stripped). null =
+// an empty/masked source slot, pasted as a cleared cell.
+type CellSnapshot = Omit<PrintTemplateCell, "r" | "c"> | null;
+const cellClipboard = ref<{ rows: number; cols: number; cells: CellSnapshot[][] } | null>(null);
+
+function copySelectedCells(){
+  if(!editing.value) return;
+  const s=selRange.value;
+  if(s.r1<0||s.c1<0) return;
+  const rows=s.r2-s.r1+1, cols=s.c2-s.c1+1;
+  const cells: CellSnapshot[][]=[];
+  for(let r=s.r1;r<=s.r2;r++){
+    const rowArr: CellSnapshot[]=[];
+    for(let c=s.c1;c<=s.c2;c++){
+      const cell=getCell(r,c);
+      if(!cell || isMasked(r,c)){ rowArr.push(null); continue; }
+      const {r:_r,c:_c,...rest}=cell;
+      rowArr.push(JSON.parse(JSON.stringify(rest)));
+    }
+    cells.push(rowArr);
+  }
+  cellClipboard.value={rows,cols,cells};
+}
+
+function pasteCells(){
+  if(!editing.value || !cellClipboard.value) return;
+  const clip=cellClipboard.value;
+  const startR=selRange.value.r1<0?0:selRange.value.r1;
+  const startC=selRange.value.c1<0?0:selRange.value.c1;
+  const maxR=editing.value.rows.length-1;
+  const maxC=editing.value.cols.length-1;
+  for(let dr=0;dr<clip.rows;dr++){
+    for(let dc=0;dc<clip.cols;dc++){
+      const tr=startR+dr, tc=startC+dc;
+      if(tr>maxR||tc>maxC) continue; // don't grow the sheet; clip at edges
+      const snap=clip.cells[dr][dc];
+      // Remove any existing cell at the target (and unmask if it was merged).
+      editing.value.cells=editing.value.cells.filter(x=>!(x.r===tr&&x.c===tc));
+      if(snap===null) continue; // empty source => leave target empty
+      const cloned=JSON.parse(JSON.stringify(snap)) as Omit<PrintTemplateCell,"r"|"c">;
+      // Clamp spans so a pasted merge can't overflow the grid.
+      if(cloned.colSpan && tc+cloned.colSpan-1>maxC) cloned.colSpan=maxC-tc+1;
+      if(cloned.rowSpan && tr+cloned.rowSpan-1>maxR) cloned.rowSpan=maxR-tr+1;
+      editing.value.cells.push({r:tr,c:tc,...cloned});
+    }
+  }
+  // Select the pasted block.
+  sel.value={r1:startR,c1:startC,r2:Math.min(startR+clip.rows-1,maxR),c2:Math.min(startC+clip.cols-1,maxC)};
+}
+
+function onGridKeydown(e: KeyboardEvent){
+  if(inlineEdit.value) return;            // typing inside a cell
+  if(isEditableTarget(e.target)) return;  // formula bar / inspector inputs
+  const mod = e.ctrlKey || e.metaKey;
+  if(mod && (e.key==="c"||e.key==="C")){
+    if(selRange.value.r1<0) return;
+    e.preventDefault(); copySelectedCells(); return;
+  }
+  if(mod && (e.key==="v"||e.key==="V")){
+    if(!cellClipboard.value) return;
+    e.preventDefault(); pasteCells(); return;
+  }
+  if(mod && (e.key==="x"||e.key==="X")){
+    if(selRange.value.r1<0) return;
+    e.preventDefault(); copySelectedCells(); clearSelectedCells(); return;
+  }
+  if(e.key==="Delete" || e.key==="Backspace"){
+    if(selRange.value.r1<0) return;
+    e.preventDefault(); clearSelectedCells();
+  }
+}
+
 function toggleBold(){
   if(applyInlineCommand("bold")) return;
   forEachSel(c=>({bold:!c.bold}));
@@ -1508,6 +1622,9 @@ watch(showBorderMenu, (open) => {
   else document.removeEventListener("click", closeBorderMenuOnOutside);
 });
 onBeforeUnmount(() => document.removeEventListener("click", closeBorderMenuOnOutside));
+
+onMounted(() => window.addEventListener("keydown", onGridKeydown));
+onBeforeUnmount(() => window.removeEventListener("keydown", onGridKeydown));
 
 type BorderAction = "all" | "outer" | "inner" | "none" | BorderSide;
 
@@ -1719,12 +1836,33 @@ function startInlineEdit(r:number,c:number){
   if(!cell){ cell={r,c,type:"label",text:"",align:"right"}; editing.value.cells.push(cell); }
   if(cell.type==="image") return;
   inlineEdit.value={r,c};
-  inlineVal.value=cell.type==="label"?richCellHtml(cell):escHtml(cell.bind??"");
-  nextTick(()=>inlineEl.value[0]?.focus());
+  const initialHtml = cell.type==="label"?richCellHtml(cell):escHtml(cell.bind??"");
+  inlineVal.value = initialHtml;
+  // Set the content imperatively (uncontrolled). Binding v-html to a live
+  // contenteditable fights the browser's caret and corrupts bidi/RTL order.
+  nextTick(()=>{
+    const el = inlineEl.value[0];
+    if(!el) return;
+    el.innerHTML = initialHtml;
+    el.focus();
+    // Put the caret at the end of the existing text.
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
 }
 
-function onInlineInput(event: Event){
-  inlineVal.value = (event.target as HTMLElement).innerHTML;
+function onInlineEnter(e: KeyboardEvent){
+  if(!inlineEdit.value) return;
+  const cell=getCell(inlineEdit.value.r, inlineEdit.value.c);
+  // Ctrl/Cmd/Shift+Enter always commits. Plain Enter commits for non-label
+  // cells; for label cells it inserts a newline (multi-line labels).
+  if(e.ctrlKey || e.metaKey || e.shiftKey){ e.preventDefault(); commitInline(); return; }
+  if(cell?.type !== "label"){ e.preventDefault(); commitInline(); }
+  // else: let the browser insert a line break inside the label.
 }
 
 function commitInline(){
@@ -1854,10 +1992,93 @@ function stopRowResize(){ resizeRow.value=null; window.removeEventListener("mous
 /* ── Page shell ───────────────────────────────────────────────────────────── */
 .ptp { padding: 24px; height: 100%; display: flex; flex-direction: column; }
 
-.ptp-header {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+/* ── Template list (app-themed cards) ─────────────────────────── */
+.pt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
 }
-.ptp-title { font-size: 16px; font-weight: 600; flex: 1; }
+.pt-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 18px 20px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.pt-card:hover { border-color: var(--brand-color); box-shadow: var(--shadow-sm); }
+.pt-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.pt-card__name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.pt-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+.pt-stat { font-size: 13px; color: var(--text-secondary); }
+.pt-stat strong { color: var(--text-primary); font-weight: 700; font-size: 15px; margin-inline-end: 3px; }
+.pt-card__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Buttons + tags mirrored from the app card style */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
+}
+.btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn--xs { padding: 4px 10px; font-size: 12px; }
+.btn--ghost { background: transparent; font-weight: 600; }
+.btn--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--text-inverse, #fff);
+  font-weight: 700;
+}
+.btn--primary:hover { background: var(--brand-color-hover); border-color: var(--brand-color-hover); }
+.btn--danger {
+  background: transparent;
+  border-color: var(--error-color, #d03050);
+  color: var(--error-color, #d03050);
+}
+.btn--danger:hover { background: rgba(208, 48, 80, 0.08); }
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.tag--neutral { background: var(--bg-elevated); color: var(--text-secondary); border-color: var(--border-color); }
 .route-draft-loading {
   flex: 1;
   display: flex;

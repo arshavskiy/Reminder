@@ -500,7 +500,7 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
       } else if (cell?.type === "image") {
         content = imageHtml(cell);
       }
-      return `<td${colspan}${rowspan} style="${style}">${content}</td>`;
+      return `<td${colspan}${rowspan} dir="auto" style="${style}">${content}</td>`;
     }).join("");
     return `<tr style="height:${row.h}px">${tds}</tr>`;
   }).join("");

@@ -2366,11 +2366,22 @@ onMounted(async () => {
     emailTemplates.value = [];
   }
   await openHydraulicUpdateFromRoute();
+  openCreateFromRoute();
 });
 
 watch(() => route.query.edit, () => {
   void openHydraulicUpdateFromRoute();
 });
+
+watch(() => route.query.new, () => openCreateFromRoute());
+
+function openCreateFromRoute() {
+  if (route.query.new === undefined) return;
+  openCreate();
+  const nextQuery = { ...route.query };
+  delete nextQuery.new;
+  void router.replace({ path: "/contracts", query: nextQuery });
+}
 
 async function openHydraulicUpdateFromRoute() {
   const editId = typeof route.query.edit === "string" ? route.query.edit : "";
