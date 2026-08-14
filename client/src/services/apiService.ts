@@ -659,6 +659,8 @@ export const api = {
         contract_id: string | null;
         updated_at: string;
       }>(`/print-templates/${id}/draft`, { data, meta }),
+    deleteDraft: (id: string, contractId?: string | null) =>
+      del(`/print-templates/${id}/draft${contractId ? `?contractId=${encodeURIComponent(contractId)}` : ""}`),
     renderPdf: async (id: string, data: Record<string, unknown>) => {
       const res = await fetch(`${BASE}/print-templates/${id}/pdf`, {
         method: "POST",

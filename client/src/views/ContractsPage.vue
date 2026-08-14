@@ -162,6 +162,21 @@
                 <button class="btn btn--xs btn--ghost" @click.stop="openDraftInTemplate(item.draft)">
                   פתח בתבנית
                 </button>
+                <button
+                  v-if="item.draft.contract_id && draftContractHasNoReminder(item.draft)"
+                  :disabled="creatingReminderFor === item.draft.contract_id"
+                  class="btn btn--xs btn--primary"
+                  @click.stop="createDraftReminder(item.draft)"
+                >
+                  {{ creatingReminderFor === item.draft.contract_id ? "..." : "🔔 צור תזכורת" }}
+                </button>
+                <button
+                  :disabled="deletingDraftId === item.draft._id"
+                  class="btn btn--xs btn--danger"
+                  @click.stop="deleteDraft(item.draft)"
+                >
+                  {{ deletingDraftId === item.draft._id ? "..." : "🗑 מחק" }}
+                </button>
               </div>
             </article>
           </div>
@@ -1460,6 +1475,47 @@ async function createContractReminder(row: ContractWithClient) {
     message2.error(e instanceof Error ? e.message : String(e));
   } finally {
     creatingReminderFor.value = null;
+  }
+}
+
+const deletingDraftId = ref<string | null>(null);
+
+function draftContractHasNoReminder(draft: PrintTemplateDraftSummary): boolean {
+  if (!draft.contract_id) return false;
+  return remindersFor(String(draft.contract_id)).length === 0;
+}
+
+async function createDraftReminder(draft: PrintTemplateDraftSummary) {
+  if (!draft.contract_id) return;
+  const row = store.rows.find((r) => String(r.id) === String(draft.contract_id));
+  if (row) {
+    await createContractReminder(row);
+    return;
+  }
+  // Contract not in the loaded list — call the API directly.
+  creatingReminderFor.value = draft.contract_id;
+  try {
+    const result = await api.contracts.createReminder(draft.contract_id);
+    if (result.reminders.length) message2.success("התזכורת נוצרה");
+    else message2.warning("לא נוצרה תזכורת. בדוק אימייל ותאריך תוקף עתידי.");
+    await loadReminders();
+  } catch (e) {
+    message2.error(e instanceof Error ? e.message : String(e));
+  } finally {
+    creatingReminderFor.value = null;
+  }
+}
+
+async function deleteDraft(draft: PrintTemplateDraftSummary) {
+  deletingDraftId.value = draft._id;
+  try {
+    await api.printTemplates.deleteDraft(draft.template_id, draft.contract_id);
+    templateDrafts.value = templateDrafts.value.filter((d) => d._id !== draft._id);
+    message2.success("הטיוטה נמחקה");
+  } catch (e) {
+    message2.error(e instanceof Error ? e.message : String(e));
+  } finally {
+    deletingDraftId.value = null;
   }
 }
 

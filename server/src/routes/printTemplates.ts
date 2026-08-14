@@ -202,6 +202,9 @@ export function registerPrintTemplateRoutes(app: Express) {
         meta,
         pdf,
       });
+      // The document now exists, so the compose draft has served its purpose —
+      // remove it so it stops showing as a stale טיוטה alongside the contract.
+      await deleteMatchingDraft(auth.userId, String(t._id), meta);
       res.set("Content-Type", "application/pdf");
       res.set("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(generatedPdfFileName(t, data))}`);
       res.set("X-Document-Id", savedDocument.documentId);
@@ -211,6 +214,31 @@ export function registerPrintTemplateRoutes(app: Express) {
       res.status(500).json({ error: String(err) });
     }
   });
+
+  // Delete a saved compose draft. Scoped by contract when provided (a draft is
+  // keyed by (user, contract) once linked, else by (user, template)).
+  app.delete("/api/print-templates/:id/draft", async (req, res) => {
+    let auth: Awaited<ReturnType<typeof requireAuth>>;
+    try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
+    const contractId = typeof req.query.contractId === "string" && req.query.contractId.trim() ? req.query.contractId.trim() : null;
+    const filter = contractId
+      ? { user_id: auth.userId, contract_id: contractId }
+      : { user_id: auth.userId, template_id: req.params.id, contract_id: { $in: [null, undefined] } };
+    const result = await col("print_template_drafts").deleteOne(filter);
+    res.json({ ok: true, deleted: result.deletedCount });
+  });
+}
+
+async function deleteMatchingDraft(userId: string, templateId: string, meta: Record<string, unknown>): Promise<void> {
+  const contractId = typeof meta.contract_id === "string" && meta.contract_id.trim() ? meta.contract_id.trim() : null;
+  const filter = contractId
+    ? { user_id: userId, contract_id: contractId }
+    : { user_id: userId, template_id: templateId, contract_id: { $in: [null, undefined] } };
+  try {
+    await col("print_template_drafts").deleteOne(filter);
+  } catch (err) {
+    console.error("[print-templates] failed to delete draft after PDF save:", err);
+  }
 }
 
 async function renderTemplatePdf(t: any, data: Record<string, unknown>): Promise<Uint8Array> {
