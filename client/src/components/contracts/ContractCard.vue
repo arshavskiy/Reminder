@@ -29,17 +29,19 @@
           :disabled="creatingReminder === row.id || !canCreateReminder"
           :title="reminderButtonTitle"
           class="btn btn--xs btn--primary"
+          :class="{ 'btn--loading': creatingReminder === row.id }"
           @click.stop="emit('create-reminder', row)"
         >
-          {{ creatingReminder === row.id ? "..." : "🔔 צור תזכורת" }}
+          🔔 צור תזכורת
         </button>
         <button
           v-else
           :disabled="creatingReminder === row.id"
           class="btn btn--xs btn--ghost"
+          :class="{ 'btn--loading': creatingReminder === row.id }"
           @click.stop="emit('add-reminder', row)"
         >
-          {{ creatingReminder === row.id ? "..." : "+ תזכורת" }}
+          + תזכורת
         </button>
       </div>
     </div>
@@ -94,9 +96,10 @@
           :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"
           :title="reminders.length ? 'הוסף תזכורת נוספת' : reminderButtonTitle"
           class="btn btn--xs btn--primary"
+          :class="{ 'btn--loading': creatingReminder === row.id }"
           @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"
         >
-          {{ creatingReminder === row.id ? "..." : reminders.length ? "+ תזכורת חדשה" : "צור תזכורת" }}
+          {{ reminders.length ? "+ תזכורת חדשה" : "צור תזכורת" }}
         </button>
       </div>
       <div v-if="reminders.length" class="reminders-list">
@@ -114,13 +117,14 @@
           </span>
           <div v-if="showReminderActions" class="reminder-actions">
             <button
-              v-if="reminder.status === 'pending'"
+              v-if="reminder.status !== 'dismissed'"
               :disabled="sendingReminder === reminder.id"
               class="btn btn--xs btn--ghost"
-              title="שלח עכשיו"
+              :class="{ 'btn--loading': sendingReminder === reminder.id }"
+              :title="reminder.status === 'sent' ? 'שלח שוב' : 'שלח עכשיו'"
               @click.stop="emit('send-reminder', reminder)"
             >
-              {{ sendingReminder === reminder.id ? "..." : "📤 שלח" }}
+              {{ reminder.status === "sent" ? "📤 שלח שוב" : "📤 שלח" }}
             </button>
             <button
               v-if="reminder.status === 'pending'"
@@ -350,6 +354,20 @@ function reminderStatusClass(status: string): string {
 .btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn--loading {
+  opacity: 0.75;
+}
+.btn--loading::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-inline-start-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.75s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
 .btn--ghost { background: transparent; font-weight: 600}
 .btn--primary {
   background: var(--brand-color);

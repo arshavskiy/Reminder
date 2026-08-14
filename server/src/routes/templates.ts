@@ -489,6 +489,7 @@ export function registerTemplateRoutes(app: express.Application) {
   // ── Logo upload ────────────────────────────────────────────────────────────
   app.post("/api/assets/logo", upload.single("logo"), async (req, res) => {
     try {
+      const userId = await currentUserId(req);
       const file = req.file;
       if (!file) {
         res.status(400).json({ error: "logo file required" });
@@ -499,14 +500,28 @@ export function registerTemplateRoutes(app: express.Application) {
         res.status(400).json({ error: "only png/jpg/svg/gif allowed" });
         return;
       }
-      const assetsDir = join(getDataDir(), "assets");
-      mkdirSync(assetsDir, { recursive: true });
-      const fileName = `logo_${Date.now()}${ext}`;
-      const dest = join(assetsDir, fileName);
-      writeFileSync(dest, file.buffer);
-      res.json({ logo_path: fileName });
+      const {
+        publicBucketEnabled,
+        uploadBufferToPublicSpaces,
+        spacesEnabled,
+        uploadBufferToSpaces,
+      } = await import("../storage/spaces.js");
+
+      const key = `images/${userId}/logos/template_logo_${Date.now()}${ext}`;
+      let url: string;
+      if (publicBucketEnabled()) {
+        url = await uploadBufferToPublicSpaces(file.buffer, key, file.mimetype);
+      } else if (spacesEnabled()) {
+        url = await uploadBufferToSpaces(file.buffer, key, file.mimetype);
+      } else {
+        res.status(500).json({ error: "object_storage_not_configured" });
+        return;
+      }
+
+      res.json({ logo_path: url, url, key });
     } catch (err) {
-      res.status(500).json({ error: String(err) });
+      const message = String(err);
+      res.status(message.includes("Unauthorized") ? 401 : 500).json({ error: message });
     }
   });
 
@@ -547,15 +562,12 @@ export function registerTemplateRoutes(app: express.Application) {
     try {
       let url: string;
       if (publicBucketEnabled()) {
-        await uploadBufferToPublicSpaces(file.buffer, key, file.mimetype);
-        const publicBase = (process.env.BUCKET_PUBLIC_URL ?? "").replace(/\/$/, "");
-        url = publicBase
-          ? `${publicBase}/${key}`
-          : `https://${process.env.BUCKET_PUBLIC_NAME}.${new URL(process.env.BUCKET_PUBLIC_ENDPOINT!).host}/${key}`;
+        url = await uploadBufferToPublicSpaces(file.buffer, key, file.mimetype);
       } else if (spacesEnabled()) {
         url = await uploadBufferToSpaces(file.buffer, key, file.mimetype);
       } else if (isImage) {
-        url = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+        res.status(500).json({ error: "object_storage_not_configured" });
+        return;
       } else {
         res.status(500).json({ error: "object storage not configured for document upload" });
         return;

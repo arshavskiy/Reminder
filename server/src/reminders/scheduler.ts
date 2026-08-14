@@ -146,34 +146,6 @@ function formatIsoDateOnly(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function addMonths(date: Date, months: number): Date {
-  const result = new Date(date);
-  const day = result.getDate();
-  result.setDate(1);
-  result.setMonth(result.getMonth() + months);
-  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
-  result.setDate(Math.min(day, lastDay));
-  return result;
-}
-
-function resolveInspectionIntervalMonths(contract: any): number {
-  const explicit = Number(
-    contract.inspection_interval_months ??
-    contract.manual_fields?.inspection_interval_months ??
-    contract.manual_fields?.interval_months
-  );
-  if (Number.isFinite(explicit) && explicit > 0) return explicit;
-
-  const start = parseIsoDateOnly(String(contract.start_date ?? ""));
-  const expiry = parseIsoDateOnly(String(contract.expiry_date ?? ""));
-  if (start && expiry && expiry.getTime() > start.getTime()) {
-    const months = (expiry.getFullYear() - start.getFullYear()) * 12 + expiry.getMonth() - start.getMonth();
-    return Math.max(1, months);
-  }
-
-  return 12;
-}
-
 function uniqueEmails(values: Array<unknown>) {
   return [...new Set(values.filter((value): value is string => typeof value === "string" && value.trim() !== "").map((value) => value.trim().toLowerCase()))];
 }
@@ -375,83 +347,13 @@ async function markSent(reminder: ReminderWithContext) {
     } as any);
   }
 
-  await advanceContractAfterSentReminder(reminder);
 }
 
 export async function advanceContractAfterSentReminder(reminder: ReminderWithContext): Promise<void> {
-  const r = reminder as any;
-  if (r.source_type !== "contract_expiry" || !r.source_id || !r.user_id) return;
-
-  const remainingPending = await col("reminders").countDocuments({
-    user_id: r.user_id,
-    source_type: "contract_expiry",
-    source_id: r.source_id,
-    status: "pending",
-  });
-  if (remainingPending > 0) return;
-
-  const contract = await resolveReminderContract(r);
-  if (!contract?.expiry_date) return;
-
-  const currentExpiry = parseIsoDateOnly(String(contract.expiry_date));
-  if (!currentExpiry) return;
-
-  const intervalMonths = resolveInspectionIntervalMonths(contract);
-  const nextExpiry = addMonths(currentExpiry, intervalMonths);
-  const currentExpiryIso = formatIsoDateOnly(currentExpiry);
-  const nextExpiryIso = formatIsoDateOnly(nextExpiry);
-  const contractId = contract._id?.toString() ?? String(r.source_id);
-
-  await col("contracts").updateOne(
-    { _id: contract._id, user_id: r.user_id },
-    {
-      $set: {
-        start_date: currentExpiryIso,
-        expiry_date: nextExpiryIso,
-        status: "active",
-        updated_at: new Date(),
-      },
-    } as any
-  );
-
-  await col<Record<string, any>>("contract_advances").insertOne({
-    user_id: r.user_id,
-    contract_id: contractId,
-    client_id: contract.client_id ?? r.client_id ?? null,
-    previous_expiry: currentExpiryIso,
-    new_expiry: nextExpiryIso,
-    interval_months: intervalMonths,
-    advanced_at: new Date(),
-  });
-
-  await generateContractReminders(
-    contractId,
-    contract.client_id ?? r.client_id ?? null,
-    contract.document_id ?? r.document_id ?? null,
-    nextExpiryIso,
-    r.user_id
-  );
-
-  const reminderPatch: Record<string, unknown> = { updated_at: new Date() };
-  for (const key of ["email_to", "equipment_type", "manufacturer", "model", "serial_number"]) {
-    if (r[key] != null) reminderPatch[key] = r[key];
-  }
-  await col("reminders").updateMany(
-    {
-      user_id: r.user_id,
-      source_type: "contract_expiry",
-      source_id: contractId,
-      status: "pending",
-    },
-    { $set: reminderPatch } as any
-  );
-
-  logger.info("contract_cycle_advanced", {
+  logger.info("contract_cycle_advance_skipped", {
     reminder_id: reminder.id,
-    contract_id: contractId,
-    previous_expiry_date: currentExpiryIso,
-    next_expiry_date: nextExpiryIso,
-    interval_months: intervalMonths,
+    source_type: (reminder as any).source_type ?? null,
+    reason: "sending reminders must not mutate contract expiry dates",
   });
 }
 

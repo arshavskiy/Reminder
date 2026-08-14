@@ -171,6 +171,26 @@ export function publicBucketEnabled(): boolean {
   return getPublicStorageConfig() !== null;
 }
 
+export function publicUrlForKey(key: string): string {
+  const publicBase = process.env.BUCKET_PUBLIC_URL?.trim();
+  if (publicBase) return `${normaliseEndpoint(publicBase).replace(/\/$/, "")}/${key}`;
+
+  const config = getPublicStorageConfig();
+  if (config) {
+    const endpointUrl = new URL(config.endpoint);
+    return `${endpointUrl.protocol}//${config.bucket}.${endpointUrl.host}/${key}`;
+  }
+
+  const storageConfig = getStorageConfig();
+  if (storageConfig?.cdnUrl) return `${storageConfig.cdnUrl.replace(/\/$/, "")}/${key}`;
+  if (storageConfig) {
+    const endpointUrl = new URL(storageConfig.endpoint);
+    return `${endpointUrl.protocol}//${storageConfig.bucket}.${endpointUrl.host}/${key}`;
+  }
+
+  throw new Error("Object storage not configured");
+}
+
 export async function uploadBufferToPublicSpaces(
   buffer: Buffer,
   key: string,
@@ -195,8 +215,7 @@ export async function uploadBufferToPublicSpaces(
     })
   );
 
-  const endpointUrl = new URL(config.endpoint);
-  return `${endpointUrl.protocol}//${config.bucket}.${endpointUrl.host}/${key}`;
+  return publicUrlForKey(key);
 }
 
 export async function fileExistsInSpaces(key: string): Promise<boolean> {

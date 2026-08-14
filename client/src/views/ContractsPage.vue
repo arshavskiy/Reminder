@@ -23,23 +23,26 @@
           v-if="bulkMode && selectedIds.size > 0"
           :disabled="bulkSending"
           class="btn btn--primary"
+          :class="{ 'btn--loading': bulkSending }"
           @click="bulkSendReminders"
         >
-          {{ bulkSending ? '...' : `📤 שלח התראות (${selectedIds.size})` }}
+          📤 שלח התראות ({{ selectedIds.size }})
         </button>
         <button
           v-if="bulkMode && selectedIds.size > 0"
           :disabled="bulkGeneratingReminders"
           class="btn btn--primary"
+          :class="{ 'btn--loading': bulkGeneratingReminders }"
           title="צור תזכורת לכל התסקירים הנבחרים"
           @click="bulkCreateRemindersForSelected"
         >
-          {{ bulkGeneratingReminders ? '...' : `🔔 צור תזכורת לנבחרים (${selectedIds.size})` }}
+          🔔 צור תזכורת לנבחרים ({{ selectedIds.size }})
         </button>
         <button
           v-if="bulkMode && selectedIds.size > 0"
           :disabled="bulkDeleting"
           class="btn btn--danger"
+          :class="{ 'btn--loading': bulkDeleting }"
           @click="bulkDelete"
         >
           🗑 מחק נבחרים ({{ selectedIds.size }})
@@ -65,10 +68,11 @@
           v-if="contractsMissingReminder.length > 0"
           :disabled="bulkGeneratingReminders"
           class="btn btn--primary"
+          :class="{ 'btn--loading': bulkGeneratingReminders }"
           title="יצירת תזכורת לכל התסקירים עם אימייל שאין להם תזכורת"
           @click="generateMissingReminders"
         >
-          {{ bulkGeneratingReminders ? '...' : `🔔 צור תזכורות חסרות (${contractsMissingReminder.length})` }}
+          🔔 צור תזכורות חסרות ({{ contractsMissingReminder.length }})
         </button>
         <button v-if="isAdmin && store.rows.length > 0" class="btn btn--danger-ghost" @click="showDeleteAllConfirm = true">
           🗑 מחק הכל
@@ -175,16 +179,18 @@
                   v-if="item.draft.contract_id && draftContractHasNoReminder(item.draft)"
                   :disabled="creatingReminderFor === item.draft.contract_id"
                   class="btn btn--xs btn--primary"
+                  :class="{ 'btn--loading': creatingReminderFor === item.draft.contract_id }"
                   @click.stop="createDraftReminder(item.draft)"
                 >
-                  {{ creatingReminderFor === item.draft.contract_id ? "..." : "🔔 צור תזכורת" }}
+                  🔔 צור תזכורת
                 </button>
                 <button
                   :disabled="deletingDraftId === item.draft._id"
                   class="btn btn--xs btn--danger"
+                  :class="{ 'btn--loading': deletingDraftId === item.draft._id }"
                   @click.stop="deleteDraft(item.draft)"
                 >
-                  {{ deletingDraftId === item.draft._id ? "..." : "🗑 מחק" }}
+                  🗑 מחק
                 </button>
               </div>
             </article>
@@ -766,7 +772,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
   NButton,
@@ -900,15 +906,15 @@ async function bulkSendReminders() {
   if (!selectedIds.value.size) return;
   bulkSending.value = true;
   try {
-    const pendingReminders = [...selectedIds.value].flatMap((id) =>
-      remindersFor(id).filter((r) => r.status === "pending")
-    );
-    if (!pendingReminders.length) {
-      message.warning("אין תזכורות ממתינות לתסקירים הנבחרים");
+    const sendableReminders = [...selectedIds.value]
+      .map((id) => reminderToSendForContract(id))
+      .filter((r): r is ReminderWithContext => Boolean(r));
+    if (!sendableReminders.length) {
+      message.warning("אין תזכורות לתסקירים הנבחרים");
       return;
     }
     const results = await Promise.allSettled(
-      pendingReminders.map((r) => api.reminders.sendNow(r.id))
+      sendableReminders.map((r) => api.reminders.sendNow(r.id))
     );
     const sent = results.filter((r) => r.status === "fulfilled" && (r.value as any).success).length;
     const failed = results.length - sent;
@@ -939,6 +945,15 @@ const remindersByContract = computed(() => {
 
 function remindersFor(contractId: string): ReminderWithContext[] {
   return remindersByContract.value.get(String(contractId)) ?? [];
+}
+
+function reminderToSendForContract(contractId: string): ReminderWithContext | null {
+  const rows = remindersFor(contractId).filter((r) => r.status !== "dismissed");
+  return rows.find((r) => r.status === "pending")
+    ?? rows.find((r) => r.status === "sent")
+    ?? rows.find((r) => r.status === "snoozed")
+    ?? rows[0]
+    ?? null;
 }
 
 async function loadReminders() {
@@ -1028,7 +1043,7 @@ async function saveReminder() {
       : null;
     await api.reminders.create({
       source_type: "manual",
-      source_id: Number(reminderTargetRow.value.id),
+      source_id: String(reminderTargetRow.value.id),
       client_id: reminderTargetRow.value.client_id ?? undefined,
       document_id: reminderTargetRow.value.document_id ?? undefined, // Pass document_id
       trigger_date: triggerDate,
@@ -1386,6 +1401,7 @@ const hydraulicPrevReportNumber = ref("");
 const hydraulicEquipmentRows = ref<HydraulicEquipmentRow[]>([]);
 const hydraulicClientEquipment = ref<Equipment[]>([]);
 const loadingHydraulicEquipment = ref(false);
+let hydraulicEquipmentLoadSeq = 0;
 const hydraulicTemplates = ref<PrintTemplate[]>([]);
 const hydraulicTemplateId = ref<string | null>(null);
 const hydraulicTemplate = ref<PrintTemplate | null>(null);
@@ -1686,9 +1702,6 @@ async function openHydraulicCheck() {
     selectHydraulicTemplate(draft.templateId);
     hydraulicTemplateValues.value = { ...(draft.templateValues ?? {}) };
   }
-  if (hydraulicClientId.value) {
-    void loadHydraulicClientEquipment(hydraulicClientId.value);
-  }
   showHydraulicCheck.value = true;
   void loadClients();
   void loadHydraulicCategories();
@@ -1755,7 +1768,6 @@ async function openHydraulicContractUpdate(contractId: string) {
   void loadHydraulicPrintTemplates().then(() => {
     selectHydraulicTemplate(hydraulicTemplateId.value ?? defaultHydraulicTemplateId());
   });
-  if (hydraulicClientId.value) void loadHydraulicClientEquipment(hydraulicClientId.value);
 }
 
 async function editSavedHydraulicDraft() {
@@ -1793,16 +1805,27 @@ function removeHydraulicEquipment(index: number) {
 }
 
 async function loadHydraulicClientEquipment(clientId: string | null) {
+  const seq = ++hydraulicEquipmentLoadSeq;
   hydraulicClientEquipment.value = [];
   if (!clientId) return;
   loadingHydraulicEquipment.value = true;
   try {
-    hydraulicClientEquipment.value = await api.equipment.list({ client_id: clientId }, true);
+    const rows = await api.equipment.list({ client_id: clientId }, true);
+    if (seq === hydraulicEquipmentLoadSeq) hydraulicClientEquipment.value = rows;
   } catch {
-    hydraulicClientEquipment.value = [];
+    if (seq === hydraulicEquipmentLoadSeq) hydraulicClientEquipment.value = [];
   } finally {
-    loadingHydraulicEquipment.value = false;
+    if (seq === hydraulicEquipmentLoadSeq) loadingHydraulicEquipment.value = false;
   }
+}
+
+async function queueHydraulicClientEquipmentLoad() {
+  const clientId = hydraulicClientId.value;
+  hydraulicClientEquipment.value = [];
+  if (!clientId) return;
+  if (!showHydraulicCheck.value) return;
+  await nextTick();
+  void loadHydraulicClientEquipment(clientId);
 }
 
 function selectHydraulicEquipment(index: number, id: string | null) {
@@ -1903,10 +1926,13 @@ async function applyHydraulicClient(clientId: string | null) {
     po_box: (client as any).po_box ?? "",
     client_zipcode: (client as any).client_zipcode ?? "",
   };
-  void loadHydraulicClientEquipment(clientId);
+  void queueHydraulicClientEquipmentLoad();
 }
 
 watch(hydraulicClientId, applyHydraulicClient);
+watch(showHydraulicCheck, (isOpen) => {
+  if (isOpen) void queueHydraulicClientEquipmentLoad();
+});
 watch(showHydraulicCheck, (isOpen, wasOpen) => {
   if (isOpen || !wasOpen) return;
   if (clearHydraulicDraftOnClose.value) {
@@ -2774,6 +2800,20 @@ function exportToExcel() {
 .btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn--loading {
+  opacity: 0.75;
+}
+.btn--loading::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-inline-start-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.75s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
 .btn--primary {
   background: var(--brand-color);
   border-color: var(--brand-color);

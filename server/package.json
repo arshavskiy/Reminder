@@ -28,7 +28,9 @@
     "clients:merge-duplicates": "tsx src/scripts/mergeDuplicateClients.ts",
     "storage:test": "tsx src/scripts/testObjectStorage.ts",
     "storage:migrate-documents": "tsx src/scripts/migrateDocumentsToStorage.ts",
-    "storage:migrate-documents:dry": "tsx src/scripts/migrateDocumentsToStorage.ts --dry"
+    "storage:migrate-documents:dry": "tsx src/scripts/migrateDocumentsToStorage.ts --dry",
+    "contracts:revert-reminder-advances": "tsx src/scripts/revertContractReminderAdvances.ts --apply",
+    "contracts:revert-reminder-advances:dry": "tsx src/scripts/revertContractReminderAdvances.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1053.0",

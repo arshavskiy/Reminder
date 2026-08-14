@@ -694,9 +694,9 @@ export const api = {
       fd.append("logo", file);
       const res = await fetch("/api/assets/logo", { method: "POST", body: fd });
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      return res.json() as Promise<{ logo_path: string }>;
+      return res.json() as Promise<{ logo_path: string; url?: string; key?: string }>;
     },
-    url: (name: string) => `${BASE}/assets/${name}`,
+    url: (name: string) => /^https?:\/\//i.test(name) ? name : `${BASE}/assets/${name}`,
   },
 };
 

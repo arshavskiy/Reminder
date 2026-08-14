@@ -1,11 +1,10 @@
 import nodemailer from "nodemailer";
-import {existsSync, readFileSync} from "fs";
-import {extname, join} from "path";
 import {ObjectId} from "mongodb";
-import {getDataDir, getSettings} from "../settings";
+import {getSettings} from "../settings";
 import {col} from "../db/db";
 import {type EmailVars, renderTemplate} from "../templates/renderEmail";
 import {loadEmailTemplate, loadEmailTemplateByName, pickEmailTemplate} from "../templates/seedEmailTemplates";
+import {loadReminderTemplate} from "../email-templates/loader";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
 
@@ -58,6 +57,9 @@ const FALLBACK_TEST_HTML = `<!DOCTYPE html>
   </div>
 </body>
 </html>`;
+
+const GMAIL_SAFE_HTML_BYTES = 90 * 1024;
+const DATA_IMAGE_RE = /data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s-]+/i;
 
 function buildTransport() {
   const s = getSettings();
@@ -134,6 +136,35 @@ function formatAddress(fromName: string, fromEmail: string): string {
   return fromEmail ? `"${fromName.replace(/"/g, "'")}" <${fromEmail}>` : fromEmail;
 }
 
+function absoluteServerUrl(path: string): string | null {
+  const base = firstNonEmpty(process.env.SERVER_URL, process.env.API_PUBLIC_URL);
+  if (!base) return null;
+  try {
+    return new URL(path, base.endsWith("/") ? base : `${base}/`).toString();
+  } catch {
+    return null;
+  }
+}
+
+function templateAssetUrl(logoPath: string | null | undefined): string | null {
+  if (!logoPath) return null;
+  const hosted = hostedImageUrl(logoPath);
+  if (hosted) return hosted;
+  if (DATA_IMAGE_RE.test(logoPath)) return null;
+  return absoluteServerUrl(`/api/assets/${encodeURIComponent(logoPath)}`);
+}
+
+function hostedImageUrl(value: unknown): string | null {
+  const url = firstNonEmpty(value);
+  if (!url || DATA_IMAGE_RE.test(url)) return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveSenderName(userId: string | number | null | undefined): Promise<string> {
   const settings = getSettings();
   if (!userId) return firstNonEmpty(settings.emailFromName, "ReminderOCR") ?? "ReminderOCR";
@@ -169,14 +200,101 @@ function applyEquipmentVars(vars: EmailVars, eq: any): void {
   vars.manufacturer ??= eq.manufacturer;
   vars.model ??= eq.model;
   vars.serial_number ??= eq.serial_number;
+  vars.license_number ??= firstNonEmpty(eq.license_number, eq.lisence_number);
+  vars.lisence_number ??= firstNonEmpty(eq.lisence_number, eq.license_number);
+  vars.checked_equipment ??= firstNonEmpty(
+    eq.checked_equipment,
+    eq.description,
+    eq.name,
+    [
+      EQUIPMENT_CATEGORY_LABELS[eq.category] ?? eq.category,
+      eq.manufacturer,
+      eq.model,
+      eq.serial_number ? `מס׳ ${eq.serial_number}` : null,
+      firstNonEmpty(eq.license_number, eq.lisence_number) ? `רישוי ${firstNonEmpty(eq.license_number, eq.lisence_number)}` : null,
+    ].filter(Boolean).join(" ")
+  );
+}
+
+function applyFieldMap(vars: EmailVars, fields: unknown): void {
+  const data = parseFieldMap(fields);
+  for (const [key, value] of Object.entries(data)) {
+    if (vars[key] == null && (typeof value === "string" || typeof value === "number")) {
+      vars[key] = value;
+    }
+  }
+}
+
+function parseFieldMap(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function applyContractVars(vars: EmailVars, contract: any): void {
+  if (!contract) return;
+  applyFieldMap(vars, contract.manual_fields);
+  vars.contract_number = contract.contract_number ?? vars.contract_number;
+  vars.contract_type = contract.contract_type ?? vars.contract_type;
+  vars.start_date = contract.start_date ?? vars.start_date;
+  vars.expiry_date = contract.expiry_date ?? vars.expiry_date;
+  vars.amount ??= contract.amount;
+  vars.currency ??= contract.currency;
+  vars.client_company ??= contract.counterparty;
+  vars.equipment_description ??= contract.equipment_description ?? contract.summary;
+  vars.checked_equipment ??= firstNonEmpty(
+    contract.checked_equipment,
+    contract.equipment_description,
+    contract.summary,
+  );
+  const manualFields = parseFieldMap(contract.manual_fields);
+  const equipment = Array.isArray(manualFields._equipment) ? manualFields._equipment[0] : null;
+  if (equipment) applyEquipmentVars(vars, equipment);
+}
+
+async function resolveContractForReminder(reminder: ReminderWithContext): Promise<any | null> {
+  const r = reminder as any;
+  const userFilter = r.user_id ? { user_id: String(r.user_id) } : {};
+  const sourceId = r.source_id == null ? "" : String(r.source_id);
+  if (sourceId && sourceId !== "NaN") {
+    const direct = await col("contracts").findOne({
+      ...userFilter,
+      $or: [
+        { _id: tryObjectId(sourceId) },
+        { id: sourceId },
+      ],
+    } as any) as any;
+    if (direct) return direct;
+  }
+  if (reminder.document_id) {
+    const byDocument = await col("contracts").findOne(
+      {...userFilter, document_id: reminder.document_id} as any,
+      { sort: { _id: -1 } }
+    ) as any;
+    if (byDocument) return byDocument;
+  }
+  if (reminder.client_id) {
+    return col("contracts").findOne(
+      {...userFilter, client_id: reminder.client_id} as any,
+      { sort: { _id: -1 } }
+    ) as Promise<any>;
+  }
+  return null;
 }
 
 async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars> {
   const userId = String((reminder as any).user_id ?? "");
-  const [senderName, engineerProfile, user] = await Promise.all([
+  const [senderName, engineerProfile, user, linkedContract] = await Promise.all([
     resolveSenderName(userId),
     userId ? col("engineer_profiles").findOne({ user_id: userId }) as Promise<any> : Promise.resolve(null),
     userId ? col("users").findOne({ _id: tryObjectId(userId) } as any) as Promise<any> : Promise.resolve(null),
+    resolveContractForReminder(reminder),
   ]);
   const vars: EmailVars = {
     title: reminder.title,
@@ -189,12 +307,12 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
     contract_type: (reminder as any).contract_type ?? null,
     from_name: senderName,
     engineer_name: firstNonEmpty(engineerProfile?.full_name, user?.name, senderName) ?? senderName,
-    license_number: firstNonEmpty(engineerProfile?.inspector_number) ?? null,
+    inspector_number: firstNonEmpty(engineerProfile?.inspector_number) ?? null,
     engineer_phone: firstNonEmpty(engineerProfile?.company_phone, user?.phone) ?? null,
     engineer_company: firstNonEmpty(engineerProfile?.company_name, user?.company_name) ?? null,
     engineer_subtitle: firstNonEmpty(engineerProfile?.company_subtitle) ?? null,
     company_exp: firstNonEmpty(engineerProfile?.company_subtitle) ?? null,
-    comp_logo: firstNonEmpty(engineerProfile?.company_logo_url, user?.picture_url) ?? null,
+    comp_logo: hostedImageUrl(firstNonEmpty(engineerProfile?.company_logo_url, user?.picture_url)),
   };
 
   // Equipment fields stored directly on the reminder take precedence over the
@@ -205,6 +323,8 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
   if (r.manufacturer) vars.manufacturer = r.manufacturer;
   if (r.model) vars.model = r.model;
   if (r.serial_number) vars.serial_number = r.serial_number;
+
+  applyContractVars(vars, linkedContract);
 
   if (reminder.client_id) {
     const c = await col("clients").findOne({ _id: tryObjectId(reminder.client_id) } as any) as any;
@@ -227,14 +347,7 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
           : { client_id: reminder.client_id },
         { sort: { _id: -1 } }
       ) as any;
-      if (ct) {
-        vars.contract_number = ct.contract_number ?? vars.contract_number;
-        vars.contract_type = ct.contract_type ?? vars.contract_type;
-        vars.start_date = ct.start_date ?? vars.start_date;
-        vars.expiry_date = ct.expiry_date ?? vars.expiry_date;
-        vars.amount ??= ct.amount;
-        vars.currency ??= ct.currency;
-      }
+      if (ct) applyContractVars(vars, ct);
 
       const eq = await col("equipment").findOne(
         { client_id: reminder.client_id },
@@ -255,29 +368,13 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
           vars.document_url = await getSpacesSignedUrl(d.spaces_key, 7 * 24 * 3600, d.file_name ?? undefined);
         } catch { /* non-critical — omit var if storage not configured */ }
       }
-      if (d.extracted_fields) {
-        try {
-          const fields = JSON.parse(d.extracted_fields) as Record<string, unknown>;
-          for (const [k, v] of Object.entries(fields)) {
-            if (vars[k] == null && (typeof v === "string" || typeof v === "number")) {
-              vars[k] = v as string | number;
-            }
-          }
-        } catch { /* ignore */ }
-      }
+      applyFieldMap(vars, d.extracted_fields);
 
       const ct = await col("contracts").findOne(
         { document_id: reminder.document_id },
         { sort: { _id: -1 } }
       ) as any;
-      if (ct) {
-        vars.contract_number = ct.contract_number ?? vars.contract_number;
-        vars.contract_type = ct.contract_type ?? vars.contract_type;
-        vars.start_date = ct.start_date ?? vars.start_date;
-        vars.expiry_date = ct.expiry_date ?? vars.expiry_date;
-        vars.amount ??= ct.amount;
-        vars.currency ??= ct.currency;
-      }
+      if (ct) applyContractVars(vars, ct);
 
       const eq = await col("equipment").findOne(
         { document_id: reminder.document_id },
@@ -290,23 +387,51 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
   return vars;
 }
 
-function logoToDataUrl(logoPath: string | null | undefined): string | null {
-  if (!logoPath) return null;
-  const abs = join(getDataDir(), "assets", logoPath);
-  if (!existsSync(abs)) return null;
-  try {
-    const buf = readFileSync(abs);
-    const ext = extname(abs).toLowerCase();
-    const mime =
-      ext === ".png" ? "image/png" :
-      ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" :
-      ext === ".svg" ? "image/svg+xml" :
-      ext === ".gif" ? "image/gif" :
-      "application/octet-stream";
-    return `data:${mime};base64,${buf.toString("base64")}`;
-  } catch {
-    return null;
-  }
+function stripEmailHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&#160;/g, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasRenderedBusinessData(html: string, vars: EmailVars): boolean {
+  const visible = stripEmailHtml(html);
+  return [
+    vars.client_company,
+    vars.contract_number,
+    vars.expiry_date,
+    vars.checked_equipment,
+    vars.equipment_description,
+    vars.contact_person,
+  ].some((value) => {
+    const text = value == null ? "" : String(value).trim();
+    return text.length >= 2 && visible.includes(text);
+  });
+}
+
+function needsInspectionTemplateFallback(tpl: any, renderedHtml: string, vars: EmailVars): boolean {
+  const templateHtml = String(tpl?.html ?? "");
+  const usesPoster = /\{\{\s*poster_url\s*\}\}/.test(templateHtml);
+  if (usesPoster && !vars.poster_url) return true;
+  if (DATA_IMAGE_RE.test(renderedHtml)) return true;
+  if (Buffer.byteLength(renderedHtml, "utf8") > GMAIL_SAFE_HTML_BYTES) return true;
+  const visible = stripEmailHtml(renderedHtml);
+  return visible.length < 80 && !hasRenderedBusinessData(renderedHtml, vars);
+}
+
+function renderFallbackInspectionEmail(vars: EmailVars, reminder: ReminderWithContext) {
+  const html = loadReminderTemplate("inspection");
+  const subject =
+    "[תזכורת בדיקה] {{client_company|הלקוח}} — {{advance_days}} ימים לבדיקה";
+  return {
+    subject: renderTemplate(subject, vars, { escape: false }) || `תזכורת בדיקה תקופתית ${reminder.title}`,
+    html: ensureRtl(renderTemplate(html, vars, { escape: false })),
+  };
 }
 
 async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ subject: string; html: string }> {
@@ -337,7 +462,7 @@ async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ sub
   }
 
   const vars = await buildEmailVars(reminder);
-  vars.logo_url = logoToDataUrl(tpl?.logo_path);
+  vars.logo_url = templateAssetUrl(tpl?.logo_path);
   // Poster is already a hosted public URL — pass through as-is.
   vars.poster_url = (tpl as any)?.poster_url ?? null;
   // Fall back to the template's example document when the reminder has no
@@ -363,6 +488,20 @@ async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ sub
   }
 
   const renderedHtml = renderTemplate(tpl.html, vars, { escape: false });
+  if (needsInspectionTemplateFallback(tpl, renderedHtml, vars)) {
+    logger.warn("reminder_email_template_fallback", {
+      reminder_id: reminder.id,
+      template_id: (tpl as any)?.id ?? null,
+      template_name: tpl?.name ?? null,
+      has_poster_url: !!vars.poster_url,
+      html_bytes: Buffer.byteLength(renderedHtml, "utf8"),
+      has_data_image: DATA_IMAGE_RE.test(renderedHtml),
+      visible_text_length: stripEmailHtml(renderedHtml).length,
+      has_business_data: hasRenderedBusinessData(renderedHtml, vars),
+    });
+    return renderFallbackInspectionEmail(vars, reminder);
+  }
+
   return {
     subject: renderTemplate(tpl.subject, vars, { escape: false }),
     html: ensureRtl(renderedHtml),
@@ -569,12 +708,13 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
       contact_person: " איש קשר לדוגמה",
       expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
       engineer_name: firstNonEmpty((engineerProfile as any)?.full_name, user?.name) ?? null,
-      license_number: firstNonEmpty((engineerProfile as any)?.inspector_number) ?? null,
+      inspector_number: firstNonEmpty((engineerProfile as any)?.inspector_number) ?? null,
+      license_number: "233017",
       engineer_phone: firstNonEmpty((engineerProfile as any)?.company_phone, user?.phone) ?? null,
       engineer_company: firstNonEmpty((engineerProfile as any)?.company_name, user?.company_name) ?? null,
       engineer_subtitle: firstNonEmpty((engineerProfile as any)?.company_subtitle) ?? null,
       company_exp: firstNonEmpty((engineerProfile as any)?.company_subtitle) ?? null,
-      comp_logo: firstNonEmpty((engineerProfile as any)?.company_logo_url) ?? null,
+      comp_logo: hostedImageUrl((engineerProfile as any)?.company_logo_url),
     };
 
     const tpl = emailTemplateId

@@ -2,7 +2,7 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {sendReminderEmail} from "../reminders/emailSender";
-import {advanceContractAfterSentReminder, generateContractReminders} from "../reminders/scheduler";
+import {generateContractReminders} from "../reminders/scheduler";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSettings} from "../settings";
@@ -697,7 +697,6 @@ export function registerReminderRoutes(app: express.Application) {
       await col("reminders").updateOne(filter, {
         $set: { status: "sent", updated_at: new Date() },
       });
-      await advanceContractAfterSentReminder(reminder);
       await col("email_log").insertOne({
         reminder_id: req.params.id,
         to_address: recipients.join(", "),
@@ -757,7 +756,8 @@ function tryObjectId(id: string): any {
 }
 
 async function resolveReminderContract(reminder: any, userId: string): Promise<any | null> {
-  if (reminder.source_type !== "contract_expiry" || !reminder.source_id) return null;
+  if (!reminder.source_id) return null;
+  if (!["contract_expiry", "manual"].includes(String(reminder.source_type))) return null;
   const sourceId = String(reminder.source_id);
   return col("contracts").findOne({
     user_id: userId,
