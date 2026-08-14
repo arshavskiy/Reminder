@@ -195,7 +195,7 @@ export function registerPrintTemplateRoutes(app: Express) {
     const meta = sanitizeDraftMeta(req.body?.meta ?? {});
     try {
       const pdf = Buffer.from(await renderTemplatePdf(t, data));
-      const documentId = await saveGeneratedPdfDocument({
+      const savedDocument = await saveGeneratedPdfDocument({
         userId: auth.userId,
         template: t,
         data,
@@ -204,7 +204,8 @@ export function registerPrintTemplateRoutes(app: Express) {
       });
       res.set("Content-Type", "application/pdf");
       res.set("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(generatedPdfFileName(t, data))}`);
-      res.set("X-Document-Id", documentId);
+      res.set("X-Document-Id", savedDocument.documentId);
+      res.set("X-Saved-To-S3", savedDocument.savedToS3 ? "true" : "false");
       res.send(pdf);
     } catch (err) {
       res.status(500).json({ error: String(err) });
@@ -215,16 +216,8 @@ export function registerPrintTemplateRoutes(app: Express) {
 async function renderTemplatePdf(t: any, data: Record<string, unknown>): Promise<Uint8Array> {
   const html = renderTemplateHtml(t, data);
   const { default: puppeteer } = await import("puppeteer-core");
-  const executablePath = chromiumExecutablePath();
-  if (!executablePath) {
-    throw new Error(
-      "Chromium/Chrome executable was not found. Set PUPPETEER_EXECUTABLE_PATH, CHROME_BIN, or CHROMIUM_PATH."
-    );
-  }
-  const browser = await puppeteer.launch({
-    executablePath,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  const launch = await resolveBrowserLaunch();
+  const browser = await puppeteer.launch(launch);
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load" });
@@ -234,13 +227,65 @@ async function renderTemplatePdf(t: any, data: Record<string, unknown>): Promise
   }
 }
 
+type BrowserLaunchOptions = {
+  executablePath: string;
+  args: string[];
+  headless?: boolean | "shell";
+};
+
+// Prefer a real system browser (fast, no download). Fall back to the bundled
+// @sparticuz/chromium so hosts without a working Chromium (e.g. a snap stub at
+// /usr/bin/chromium-browser that only errors) can still render PDFs.
+async function resolveBrowserLaunch(): Promise<BrowserLaunchOptions> {
+  // chromiumExecutablePath() already filters out broken snap stubs, so a
+  // non-null result here is a launchable browser.
+  const systemPath = chromiumExecutablePath();
+  if (systemPath) {
+    return {
+      executablePath: systemPath,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    };
+  }
+  try {
+    const { default: chromium } = await import("@sparticuz/chromium");
+    const executablePath = await chromium.executablePath();
+    if (executablePath) {
+      return {
+        executablePath,
+        args: chromium.args,
+        headless: chromium.headless as boolean | "shell",
+      };
+    }
+  } catch (err) {
+    console.error("[print-templates] @sparticuz/chromium fallback failed:", err);
+  }
+  throw new Error(
+    "No usable Chromium found. Set PUPPETEER_EXECUTABLE_PATH/CHROME_BIN/CHROMIUM_PATH or ensure @sparticuz/chromium is installed."
+  );
+}
+
+// Ubuntu snap ships /usr/bin/chromium-browser as a wrapper that fails to launch
+// unless the chromium snap is installed. The file exists, so existsSync passes,
+// but puppeteer.launch() errors with "requires the chromium snap".
+function isBrokenSnapStub(path: string): boolean {
+  if (!/chromium(-browser)?$/.test(path)) return false;
+  try {
+    const probe = spawnSync(path, ["--version"], { encoding: "utf8", timeout: 5000 });
+    const output = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;
+    if (probe.status !== 0) return true;
+    return /requires the chromium snap|snap install chromium/i.test(output);
+  } catch {
+    return true;
+  }
+}
+
 async function saveGeneratedPdfDocument(args: {
   userId: string;
   template: any;
   data: Record<string, unknown>;
   meta: Record<string, unknown>;
   pdf: Buffer;
-}): Promise<string> {
+}): Promise<{ documentId: string; savedToS3: boolean }> {
   const {userId, template, data, meta, pdf} = args;
   const fileHash = createHash("sha256").update(pdf).digest("hex");
   const fileName = generatedPdfFileName(template, data);
@@ -259,7 +304,8 @@ async function saveGeneratedPdfDocument(args: {
       spacesKey = `documents/${userId}/${fileHash}.pdf`;
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, "application/pdf");
       downloadUrl = await getSpacesSignedUrl(spacesKey, SIGNED_URL_TTL, fileName);
-    } catch {
+    } catch (err) {
+      console.warn("[warn] generated_pdf_s3_upload_failed", err);
       spacesKey = null;
       spacesUrl = null;
       downloadUrl = null;
@@ -319,7 +365,7 @@ async function saveGeneratedPdfDocument(args: {
       { $set: { document_id: documentId, updated_at: now } }
     );
   }
-  return documentId;
+  return {documentId, savedToS3: Boolean(spacesKey)};
 }
 
 function generatedPdfFileName(template: any, data: Record<string, unknown>): string {
@@ -358,15 +404,20 @@ function chromiumExecutablePath(): string | undefined {
     process.env["PROGRAMFILES(X86)"] ? `${process.env["PROGRAMFILES(X86)"]}\\Google\\Chrome\\Application\\chrome.exe` : undefined,
     process.env.PROGRAMFILES ? `${process.env.PROGRAMFILES}\\Microsoft\\Edge\\Application\\msedge.exe` : undefined,
     process.env["PROGRAMFILES(X86)"] ? `${process.env["PROGRAMFILES(X86)"]}\\Microsoft\\Edge\\Application\\msedge.exe` : undefined,
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/google-chrome",
+    // Nix-provided Chromium (Railway/Nixpacks) — real binary, prefer over the
+    // Ubuntu snap stub at /usr/bin/chromium-browser which only errors.
     "/nix/var/nix/profiles/default/bin/chromium",
+    "/usr/bin/chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
   ];
-  const existingCandidate = envCandidates.find((value) => value && existsSync(value));
+  const existingCandidate = envCandidates.find(
+    (value) => value && existsSync(value) && !isBrokenSnapStub(value)
+  );
   if (existingCandidate) return existingCandidate;
 
-  return findExecutableOnPath(["chromium", "chromium-browser", "google-chrome", "chrome", "msedge"]);
+  const onPath = findExecutableOnPath(["chromium", "google-chrome", "chrome", "msedge", "chromium-browser"]);
+  return onPath && !isBrokenSnapStub(onPath) ? onPath : undefined;
 }
 
 function findExecutableOnPath(names: string[]): string | undefined {

@@ -418,7 +418,7 @@ Draft/client/contract linkage:
 - `meta.equipment_ids` stores selected machine ids.
 - When `צור חוזה + תזכורת` is clicked, the created contract uses the draft `client_id`; the resulting `contract_id` is saved back to the draft.
 
-Full technical reference: [INSPECTION_TEMPLATE_FLOW.md](./INSPECTION_TEMPLATE_FLOW.md).
+Full technical reference: [INSPECTION_TEMPLATE_FLOW.md](./INSPECTION_TEMPLATE_FLOW.md) and [CONTRACT_DOCUMENT_REMINDER_FLOW.md](./CONTRACT_DOCUMENT_REMINDER_FLOW.md) (draft → generated document → reminder linkage, `/contracts/:contractId/draft` route).
 
 Settings include:
 

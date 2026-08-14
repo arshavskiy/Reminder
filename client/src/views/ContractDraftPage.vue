@@ -20,6 +20,10 @@
           <span v-if="savingPdf" class="xl-loader" aria-hidden="true"></span>
           <span>הורד</span>
         </button>
+        <button :class="{ 'xl-btn--loading': creatingReminder }" :disabled="creatingReminder" class="xl-btn xl-btn--primary" @click="createReminder">
+          <span v-if="creatingReminder" aria-hidden="true" class="xl-loader"></span>
+          <span>צור תזכורת</span>
+        </button>
       </template>
     </PageHeader>
 
@@ -168,6 +172,7 @@ const engineerProfile = ref<{ inspector_number?: string | null } | null>(null);
 const printing = ref(false);
 const savingPdf = ref(false);
 const draftSaving = ref(false);
+const creatingReminder = ref(false);
 
 const routeContractId = computed(() => typeof route.params.contractId === "string" ? route.params.contractId : "");
 const draftTitle = computed(() => `${template.value?.name ?? "תסקיר"} — מילוי שדות`);
@@ -529,17 +534,36 @@ async function savePdf() {
   savingPdf.value = true;
   try {
     const data = collectComposeData();
-    const blob = await api.printTemplates.savePdf(template.value._id, data, {
+    const saved = await api.printTemplates.savePdf(template.value._id, data, {
       ...draftMeta.value,
       client_id: draftClientId(),
       contract_id: routeContractId.value,
     });
-    downloadBlob(blob, generatedPdfFileName(data, template.value.name));
-    message.success("PDF נשמר במסמכים והורד");
+    if (saved.documentId) {
+      draftMeta.value = {...draftMeta.value, document_id: saved.documentId};
+    }
+    downloadBlob(saved.blob, generatedPdfFileName(data, template.value.name));
+    message.success(saved.savedToS3 ? "PDF נשמר ב-S3, קושר למסמכים והורד" : "PDF נשמר במסמכים והורד. S3 לא זמין או לא הוגדר");
   } catch (error: any) {
     message.error(error.message ?? String(error));
   } finally {
     savingPdf.value = false;
+  }
+}
+
+async function createReminder() {
+  if (!routeContractId.value) return;
+  if (!validateComposeBeforeAction("ליצור תזכורת")) return;
+  creatingReminder.value = true;
+  try {
+    await saveComposeDraft();
+    const result = await api.contracts.createReminder(routeContractId.value);
+    const count = result.reminders?.length ?? 0;
+    message.success(count ? `נוצרו ${count} תזכורות לחוזה` : "לא נוצרו תזכורות (בדוק תאריך תוקף)");
+  } catch (error: any) {
+    message.error(error?.message ?? String(error));
+  } finally {
+    creatingReminder.value = false;
   }
 }
 

@@ -2,7 +2,7 @@
   <article
     :class="{ 'card--selected': selected, 'card--selectable': bulkMode }"
     class="card"
-    @click="bulkMode ? emit('toggle-select', String(row.id)) : emit('open-template', row)"
+    @click="openDefault"
   >
     <div class="card__row">
       <div class="card__meta">
@@ -22,6 +22,25 @@
           <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
           <span v-if="!row.contact_email" class="tag tag--warn">⚠ חסר אימייל</span>
         </div>
+      </div>
+      <div v-if="showReminderActions" class="card__quick-actions">
+        <button
+          v-if="!reminders.length"
+          :disabled="creatingReminder === row.id || !canCreateReminder"
+          :title="reminderButtonTitle"
+          class="btn btn--xs btn--primary"
+          @click.stop="emit('create-reminder', row)"
+        >
+          {{ creatingReminder === row.id ? "..." : "🔔 צור תזכורת" }}
+        </button>
+        <button
+          v-else
+          :disabled="creatingReminder === row.id"
+          class="btn btn--xs btn--ghost"
+          @click.stop="emit('add-reminder', row)"
+        >
+          {{ creatingReminder === row.id ? "..." : "+ תזכורת" }}
+        </button>
       </div>
     </div>
 
@@ -58,7 +77,7 @@
       </div>
       <div class="card__foot-col card__foot-col--end">
         <span class="kv">
-          <strong>{{ kind === "inspection" ? "בדיקה הבאה:" : "תפוגה:" }}</strong>
+          <strong>{{ kind === "inspection" ? "בתוקף עד:" : "תפוגה:" }}</strong>
           <span :class="expiryClass(row.expiry_date)">{{ formatDate(row.expiry_date) }}</span>
           <ExpiryBadge :date="row.expiry_date" />
         </span>
@@ -73,8 +92,9 @@
         <span class="reminders-title">🔔 תזכורות</span>
         <button
           v-if="showReminderActions"
-          :disabled="creatingReminder === row.id"
-          class="btn btn--xs btn--ghost"
+          :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"
+          :title="reminders.length ? 'הוסף תזכורת נוספת' : reminderButtonTitle"
+          class="btn btn--xs btn--primary"
           @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"
         >
           {{ creatingReminder === row.id ? "..." : reminders.length ? "+ תזכורת חדשה" : "צור תזכורת" }}
@@ -141,6 +161,14 @@ const props = defineProps<{
   showActions?: boolean;
   showReminderActions?: boolean;
 }>();
+
+const hasEmail = computed(() => Boolean((props.row.contact_email ?? "").trim()));
+const canCreateReminder = computed(() => hasEmail.value && Boolean(props.row.expiry_date));
+const reminderButtonTitle = computed(() => {
+  if (!hasEmail.value) return "חסר אימייל ללקוח — לא ניתן ליצור תזכורת";
+  if (!props.row.expiry_date) return "חסר תאריך תוקף — לא ניתן ליצור תזכורת";
+  return "צור תזכורת לתסקיר זה";
+});
 
 const displayContractNumber = computed(() => {
   const number = props.row.contract_number?.trim();
@@ -220,6 +248,18 @@ function expiryClass(d: string | null): string {
   return "expiry expiry--ok";
 }
 
+function openDefault() {
+  if (props.bulkMode) {
+    emit("toggle-select", String(props.row.id));
+    return;
+  }
+  if (props.row.document_id) {
+    emit("open-document", props.row);
+    return;
+  }
+  emit("open-template", props.row);
+}
+
 function reminderStatusLabel(status: string): string {
   const map: Record<string, string> = {
     pending: "ממתין",
@@ -262,6 +302,11 @@ function reminderStatusClass(status: string): string {
   align-items: flex-start;
   gap: 14px;
   margin-bottom: 14px;
+}
+.card__quick-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 .card__meta {
   display: flex;
@@ -306,6 +351,16 @@ function reminderStatusClass(status: string): string {
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn--ghost { background: transparent; font-weight: 600}
+.btn--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--text-inverse, #fff);
+  font-weight: 700;
+}
+.btn--primary:hover {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+}
 .btn--danger {
   background: transparent;
   border-color: var(--error-color, #d03050);
@@ -460,6 +515,15 @@ html[data-theme="dark"] .rbadge--error { color: #ff7875; }
     align-items: flex-start;
     flex-direction: column;
     gap: 10px;
+  }
+
+  .card__quick-actions {
+    width: 100%;
+  }
+
+  .card__quick-actions .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .card__num {

@@ -221,7 +221,7 @@
                 <div class="preview-card__meta">
                   <span class="preview-card__badge preview-card__badge--date">📅 שלח: {{ p.trigger_date }}</span>
                   <span v-if="p.next_check_date" class="preview-card__badge preview-card__badge--next">בדיקה הבאה: {{ p.next_check_date }}</span>
-                  <span v-if="p.expiry_date" class="preview-card__badge preview-card__badge--expiry">⏰ יעד: {{ p.expiry_date }}</span>
+                  <span v-if="p.expiry_date" class="preview-card__badge preview-card__badge--expiry">⏰ בתוקף: {{ p.expiry_date }}</span>
                   <span v-if="p.document_type" class="preview-card__badge">{{ p.document_type }}</span>
                   <span :class="`preview-card__badge--conf-${p.confidence}`" class="preview-card__badge preview-card__badge--conf">{{ confidenceLabel(p.confidence) }}</span>
                 </div>

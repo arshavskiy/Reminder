@@ -52,6 +52,15 @@
         <button class="btn btn--ghost" :disabled="store.loading" @click="refresh" title="רענן">
           <span class="refresh-icon" :class="{ 'refresh-icon--spin': store.loading }">↻</span> רענן
         </button>
+        <button
+          v-if="contractsMissingReminder.length > 0"
+          :disabled="bulkGeneratingReminders"
+          class="btn btn--primary"
+          title="יצירת תזכורת לכל התסקירים עם אימייל שאין להם תזכורת"
+          @click="generateMissingReminders"
+        >
+          {{ bulkGeneratingReminders ? '...' : `🔔 צור תזכורות חסרות (${contractsMissingReminder.length})` }}
+        </button>
         <button v-if="store.rows.length > 0" class="btn btn--danger-ghost" @click="showDeleteAllConfirm = true">
           🗑 מחק הכל
         </button>
@@ -464,7 +473,7 @@
       :show-icon="false"
       class="hydraulic-modal"
       preset="dialog"
-      style="width: 1080px; max-width: 96vw"
+      style="width: 860px; max-width: 92vw"
     >
       <n-form v-if="hydraulicForm" class="hydraulic-compact-form" label-placement="top" size="small">
         <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
@@ -721,8 +730,12 @@
           ערוך טיוטה שמורה{{ hydraulicDraftSavedAtLabel ? ` (${hydraulicDraftSavedAtLabel})` : "" }}
         </n-button>
         <n-button @click="showHydraulicCheck = false">ביטול</n-button>
-        <n-button :loading="savingHydraulicDraft" @click="saveHydraulicDraftAndPreview">שמור טיוטה ופתח תצוגה</n-button>
-        <n-button type="primary" :loading="creatingHydraulicCheck" @click="doCreateHydraulicCheck">{{ updatingHydraulicContractId ? "עדכן" : "צור" }}</n-button>
+        <n-button
+          v-if="updatingHydraulicContractId"
+          :loading="creatingHydraulicCheck"
+          @click="doCreateHydraulicCheck"
+        >עדכן</n-button>
+        <n-button :loading="savingHydraulicDraft" type="primary" @click="saveHydraulicDraftAndPreview">שמור טיוטה ופתח תצוגה</n-button>
       </template>
     </n-modal>
   </div>
@@ -732,7 +745,6 @@
 import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
-  NAlert,
   NButton,
   NCheckbox,
   NDatePicker,
@@ -754,12 +766,19 @@ import {
 import {useContractsStore} from "../stores/contracts.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {useHydraulicCheckDraftStore} from "../stores/hydraulicCheckDraft.js";
-import {api} from "../services/apiService.js";
 import type {HydraulicCheckRequest, PrintTemplateDraftSummary} from "../services/apiService.js";
+import {api} from "../services/apiService.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import {FEATURES} from "../shared/features.js";
-import type {ContractWithClient, EmailTemplate, Equipment, EquipmentCategory, PrintTemplate, ReminderWithContext} from "@shared/types.js";
+import type {
+  ContractWithClient,
+  EmailTemplate,
+  Equipment,
+  EquipmentCategory,
+  PrintTemplate,
+  ReminderWithContext
+} from "@shared/types.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
@@ -1441,6 +1460,41 @@ async function createContractReminder(row: ContractWithClient) {
     message2.error(e instanceof Error ? e.message : String(e));
   } finally {
     creatingReminderFor.value = null;
+  }
+}
+
+const bulkGeneratingReminders = ref(false);
+
+const contractsMissingReminder = computed(() =>
+  filteredRows.value.filter((row) =>
+    contractHasEmail(row) &&
+    Boolean(row.expiry_date) &&
+    remindersFor(String(row.id)).length === 0
+  )
+);
+
+async function generateMissingReminders() {
+  const targets = contractsMissingReminder.value;
+  if (!targets.length || bulkGeneratingReminders.value) return;
+  bulkGeneratingReminders.value = true;
+  let created = 0;
+  let failed = 0;
+  try {
+    for (const row of targets) {
+      try {
+        const result = await api.contracts.createReminder(row.id);
+        if (result.reminders.length) created += 1;
+        else failed += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    await loadReminders();
+    if (created && !failed) message2.success(`נוצרו תזכורות ל-${created} תסקירים`);
+    else if (created && failed) message2.warning(`נוצרו ל-${created}, נכשלו ${failed}`);
+    else message2.warning("לא נוצרו תזכורות. בדוק אימייל ותאריך תוקף עתידי.");
+  } finally {
+    bulkGeneratingReminders.value = false;
   }
 }
 
@@ -2603,17 +2657,20 @@ function exportToExcel() {
 :global(.hydraulic-modal.n-dialog) {
   direction: rtl;
   border-radius: 8px;
-  font-family: var(--font-sans, Inter, "Segoe UI", Arial, sans-serif);
-  padding: 8px 10px 10px;
+  font-family: var(--font-base) !important;
+  padding: 16px 20px 14px;
 }
 
 :global(.hydraulic-modal.n-dialog *),
 :global(.hydraulic-modal .n-dialog__title),
+:global(.hydraulic-modal .n-h),
 :global(.hydraulic-modal .n-button),
 :global(.hydraulic-modal .n-input),
+:global(.hydraulic-modal .n-input__input-el),
 :global(.hydraulic-modal .n-base-selection),
+:global(.hydraulic-modal .n-base-selection-label),
 :global(.hydraulic-modal .n-date-picker) {
-  font-family: var(--font-sans, Inter, "Segoe UI", Arial, sans-serif) !important;
+  font-family: var(--font-base) !important;
 }
 
 :global(.hydraulic-modal .n-dialog__title) {
@@ -2628,7 +2685,7 @@ function exportToExcel() {
 
 :global(.hydraulic-modal .n-dialog__content) {
   margin-top: 6px;
-  padding: 8px 4px 2px;
+  padding: 8px 16px 12px;
   max-height: min(72vh, 760px);
   overflow: auto;
   scrollbar-gutter: stable;

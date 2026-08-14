@@ -78,6 +78,7 @@ app.use(
       cb(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
+    exposedHeaders: ["X-Document-Id", "X-Saved-To-S3"],
   }),
 );
 

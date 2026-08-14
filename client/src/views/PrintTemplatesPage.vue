@@ -966,13 +966,14 @@ async function savePdf() {
   if(!validateComposeBeforeAction("לשמור PDF")) return;
   savingPdf.value=true;
   try {
-    const blob=await api.printTemplates.savePdf(composing.value._id, collectComposeData(), {
+    const saved=await api.printTemplates.savePdf(composing.value._id, collectComposeData(), {
       ...draftMeta.value,
       client_id: draftClientId(),
       contract_id: routeContractId.value || draftContractId(),
     });
-    downloadBlob(blob, generatedPdfFileName(collectComposeData(), composing.value.name));
-    message.success("PDF נשמר במסמכים והורד");
+    if(saved.documentId) draftMeta.value = {...draftMeta.value, document_id: saved.documentId};
+    downloadBlob(saved.blob, generatedPdfFileName(collectComposeData(), composing.value.name));
+    message.success(saved.savedToS3 ? "PDF נשמר ב-S3, קושר למסמכים והורד" : "PDF נשמר במסמכים והורד. S3 לא זמין או לא הוגדר");
   } catch(e:any){ message.error(e.message); }
   finally { savingPdf.value=false; }
 }

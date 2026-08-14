@@ -677,7 +677,12 @@ export const api = {
         body: JSON.stringify({ data, meta }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
-      return res.blob();
+      const blob = await res.blob();
+      return {
+        blob,
+        documentId: res.headers.get("X-Document-Id"),
+        savedToS3: res.headers.get("X-Saved-To-S3") === "true",
+      };
     },
   },
 
