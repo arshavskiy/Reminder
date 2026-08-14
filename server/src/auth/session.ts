@@ -42,14 +42,72 @@ export async function createSession(
     ip: ip ?? null,
   });
 
-  const secure = process.env.NODE_ENV === "production";
-  // SameSite=None required for cross-origin (Vercel client → Railway server)
-  const sameSite = secure ? "None" : "Lax";
-  const setCookieHeader = `session=${sessionId}; Path=/; HttpOnly; ${
-    secure ? "Secure; " : ""
-  }SameSite=${sameSite}; Max-Age=604800`;
+  const setCookieHeader = buildSessionCookie(sessionId, 604800);
 
   return { sessionId, cookies: setCookieHeader };
+}
+
+export function clearSessionCookie(): string {
+  return buildSessionCookie("", 0);
+}
+
+function buildSessionCookie(value: string, maxAge: number): string {
+  const secure = shouldUseSecureCookie();
+  const sameSite = cookieSameSite(secure);
+  const domain = cookieDomain();
+  return [
+    `session=${value}`,
+    "Path=/",
+    "HttpOnly",
+    secure ? "Secure" : null,
+    `SameSite=${sameSite}`,
+    domain ? `Domain=${domain}` : null,
+    `Max-Age=${maxAge}`,
+  ].filter(Boolean).join("; ");
+}
+
+function shouldUseSecureCookie(): boolean {
+  const configured = process.env.COOKIE_SECURE?.trim().toLowerCase();
+  if (configured === "true") return true;
+  if (configured === "false") return false;
+  return process.env.NODE_ENV === "production" ||
+    Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT_NAME) ||
+    isHttpsUrl(process.env.SERVER_URL) ||
+    isHttpsUrl(process.env.FRONTEND_URL) ||
+    isHttpsUrl(process.env.DEV_FRONTEND_URL);
+}
+
+function cookieSameSite(secure: boolean): "Lax" | "None" | "Strict" {
+  const configured = process.env.COOKIE_SAMESITE?.trim();
+  if (configured === "Lax" || configured === "None" || configured === "Strict") return configured;
+  // SameSite=None is required when the deployed client/API are cross-origin.
+  // Browsers require Secure together with SameSite=None, so local HTTP stays Lax.
+  return secure ? "None" : "Lax";
+}
+
+function cookieDomain(): string | null {
+  const configured = process.env.COOKIE_DOMAIN?.trim();
+  if (configured) return configured;
+  if (process.env.COOKIE_DOMAIN_AUTO?.trim().toLowerCase() === "false") return null;
+  const urls = [process.env.FRONTEND_URL, process.env.DEV_FRONTEND_URL, process.env.SERVER_URL];
+  for (const url of urls) {
+    const host = hostname(url);
+    if (host === "handcoded.tech" || host?.endsWith(".handcoded.tech")) return ".handcoded.tech";
+  }
+  return null;
+}
+
+function isHttpsUrl(value: string | undefined): boolean {
+  return value?.trim().toLowerCase().startsWith("https://") ?? false;
+}
+
+function hostname(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
 }
 
 function toUser(doc: any): User {

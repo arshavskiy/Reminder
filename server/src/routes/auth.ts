@@ -12,6 +12,7 @@ import {
 import {
     consumeMagicLinkToken,
     createSession,
+    clearSessionCookie,
     extractSessionFromCookie,
     revokeSession,
     setActingAsUser,
@@ -253,7 +254,7 @@ export function registerAuthRoutes(app: express.Application) {
         });
       }
     }
-    res.setHeader("Set-Cookie", "session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+    res.setHeader("Set-Cookie", clearSessionCookie());
     res.json({ ok: true });
   });
 
