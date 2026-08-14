@@ -12,7 +12,7 @@
         <StatusBadge :status="doc.processing_status" />
         <n-button v-if="!props.docId" size="small" @click="$router.back()">   חזרה</n-button>
         <n-button :loading="downloading" size="small" @click="openDownload"> הורד</n-button>
-        <n-button :loading="extracting" size="small" type="primary" @click="rerunExtract">✨ חלץ AI</n-button>
+        <n-button v-if="canExtractDocument" :loading="extracting" size="small" type="primary" @click="rerunExtract">✨ חלץ AI</n-button>
         <n-button :loading="deleting" size="small" type="error" @click="deleteDoc">🗑 מחק</n-button>
       </template>
     </PageHeader>
@@ -73,7 +73,7 @@
             </div>
             <div v-else-if="isSpreadsheet" class="preview-empty">
               <span>אין עדיין טקסט טבלאי להצגה</span>
-              <n-button :loading="extracting" class="mt-3" size="small" type="primary" @click="rerunExtract">
+              <n-button v-if="canExtractDocument" :loading="extracting" class="mt-3" size="small" type="primary" @click="rerunExtract">
                 עבד את הקובץ מחדש
               </n-button>
             </div>
@@ -122,7 +122,7 @@
           <div class="data-card__body">
             <div v-if="!extractionRaw" class="data-empty">
               <span>עדיין לא חולצו נתונים מהמסמך</span>
-              <n-button :loading="extracting" class="mt-3" size="small" type="primary" @click="rerunExtract">
+              <n-button v-if="canExtractDocument" :loading="extracting" class="mt-3" size="small" type="primary" @click="rerunExtract">
                 ✨ הרץ חילוץ AI
               </n-button>
             </div>
@@ -190,7 +190,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NAlert, NButton, NDataTable, NScrollbar, NSpin, NTag, useMessage,} from "naive-ui";
+import {NAlert, NButton, NDataTable, NScrollbar, NSpin, NTag, useDialog, useMessage,} from "naive-ui";
 import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
@@ -202,6 +202,7 @@ const props = defineProps<{ docId?: string }>();
 
 const authStore = useAuthStore();
 const message = useMessage();
+const dialog = useDialog();
 const router = useRouter();
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -230,6 +231,7 @@ const isSpreadsheet = computed(() =>
   doc.value?.file_name?.toLowerCase().endsWith(".xlsx") ||
   doc.value?.file_name?.toLowerCase().endsWith(".xls")
 );
+const canExtractDocument = computed(() => doc.value?.document_source !== "generated");
 const xlsxPreviewSheets = computed(() => {
   if (!isSpreadsheet.value || !displayText.value) return [];
   const sheets: Array<{ name: string; rows: string[][] }> = [];
@@ -292,17 +294,25 @@ function openExternal() {
 
 async function deleteDoc() {
   if (!doc.value) return;
-  if (!confirm(`למחוק את המסמך "${doc.value.file_name}"? פעולה זו אינה ניתנת לביטול.`)) return;
-  deleting.value = true;
-  try {
-    await api.documents.delete(String(doc.value.id));
-    message.success("המסמך נמחק");
-    router.push("/documents");
-  } catch (e) {
-    message.error(String(e));
-  } finally {
-    deleting.value = false;
-  }
+  const currentDoc = doc.value;
+  dialog.warning({
+    title: "מחיקת מסמך",
+    content: `למחוק את המסמך "${currentDoc.file_name}"? פעולה זו אינה ניתנת לביטול.`,
+    positiveText: "מחק",
+    negativeText: "ביטול",
+    onPositiveClick: async () => {
+      deleting.value = true;
+      try {
+        await api.documents.delete(String(currentDoc.id));
+        message.success("המסמך נמחק");
+        router.push("/documents");
+      } catch (e) {
+        message.error(String(e));
+      } finally {
+        deleting.value = false;
+      }
+    },
+  });
 }
 
 async function rerunExtract() {

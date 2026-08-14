@@ -177,7 +177,7 @@
           </div>
           <div class="tile__actions" @click.stop>
             <n-dropdown
-              :options="rowActions()"
+              :options="rowActionsFor(row)"
               placement="bottom-end"
               trigger="click"
               @select="(k: string) => handleRowAction(k, row)"
@@ -206,7 +206,7 @@
           </template>
           <template #actions>
             <n-button size="tiny" @click.stop="openDownload(row)">⬇</n-button>
-            <n-button size="tiny" @click.stop="openExtractModal(String(row.id))">✨</n-button>
+            <n-button v-if="canExtractDocument(row)" size="tiny" @click.stop="openExtractModal(String(row.id))">✨</n-button>
             <n-button size="tiny" type="error" @click.stop="store.deleteDoc(row.id)">🗑</n-button>
           </template>
           <template #pills>
@@ -409,7 +409,7 @@ function onCreateTemplate(file: File) {
   sessionStorage.setItem("doc_templates_pending_file_size", String(file.size));
   // Store the actual file in a module-level variable (same session)
   (window as any).__pendingTemplateFile = file;
-  router.push("/doc-templates");
+  router.push("/settings/doc-templates");
 }
 
 async function openRescanModal() {
@@ -564,11 +564,18 @@ function rowActions() {
     { label: "🗑 מחק", key: "delete", props: { style: "color: var(--color-error, #d03050)" } },
   ];
 }
+function rowActionsFor(row: Document) {
+  return rowActions().filter((action) => action.key !== "extract" || canExtractDocument(row));
+}
 function handleRowAction(key: string, row: Document) {
   if (key === "view") router.push(`/documents/${row.id}`);
   if (key === "download") openDownload(row);
   if (key === "extract") openExtractModal(String(row.id));
   if (key === "delete") store.deleteDoc(row.id);
+}
+
+function canExtractDocument(row: Document): boolean {
+  return row.document_source !== "generated";
 }
 
 // ── Re-extract existing doc (row action ✨) ────────────────────────────────────

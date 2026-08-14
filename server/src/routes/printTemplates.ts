@@ -1,9 +1,13 @@
 import type {Express} from "express";
-import {existsSync} from "node:fs";
+import {existsSync, mkdirSync, statSync, writeFileSync} from "node:fs";
 import {spawnSync} from "node:child_process";
 import {col} from "../db/db.js";
 import {requireAuth} from "../auth/middleware.js";
 import {ObjectId} from "mongodb";
+import {createHash} from "node:crypto";
+import {join} from "node:path";
+import {getDataDir} from "../settings.js";
+import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces.js";
 
 function tryObjectId(id: string) {
   try { return new ObjectId(id); } catch { return id as any; }
@@ -110,7 +114,10 @@ export function registerPrintTemplateRoutes(app: Express) {
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
     const template = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId });
     if (!template) { res.status(404).json({ error: "Not found" }); return; }
-    const draft = await col("print_template_drafts").findOne({ user_id: auth.userId, template_id: req.params.id }) as any;
+    const contractId = typeof req.query.contractId === "string" && req.query.contractId.trim() ? req.query.contractId.trim() : null;
+    const draft = contractId
+      ? await col("print_template_drafts").findOne({ user_id: auth.userId, template_id: req.params.id, contract_id: contractId }) as any
+      : await col("print_template_drafts").findOne({ user_id: auth.userId, template_id: req.params.id, contract_id: { $in: [null, undefined] } }) as any;
     res.json({
       data: draft?.data ?? {},
       meta: draft?.meta ?? {},
@@ -131,8 +138,11 @@ export function registerPrintTemplateRoutes(app: Express) {
     const clientId = typeof meta.client_id === "string" && meta.client_id.trim() ? meta.client_id.trim() : null;
     const contractId = typeof meta.contract_id === "string" && meta.contract_id.trim() ? meta.contract_id.trim() : null;
     const now = new Date().toISOString();
+    const filter: Record<string, unknown> = contractId
+      ? { user_id: auth.userId, contract_id: contractId }
+      : { user_id: auth.userId, template_id: req.params.id, contract_id: { $in: [null, undefined] } };
     await col("print_template_drafts").updateOne(
-      { user_id: auth.userId, template_id: req.params.id },
+      filter,
       {
         $set: {
           user_id: auth.userId,
@@ -167,22 +177,7 @@ export function registerPrintTemplateRoutes(app: Express) {
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
     const data: Record<string, unknown> = req.body.data ?? {};
     try {
-      const html = renderTemplateHtml(t, data);
-      const { default: puppeteer } = await import("puppeteer-core");
-      const executablePath = chromiumExecutablePath();
-      if (!executablePath) {
-        throw new Error(
-          "Chromium/Chrome executable was not found. Set PUPPETEER_EXECUTABLE_PATH, CHROME_BIN, or CHROMIUM_PATH."
-        );
-      }
-      const browser = await puppeteer.launch({
-        executablePath,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      });
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "load" });
-      const pdf = await page.pdf({ format: t.page ?? "A4", printBackground: true });
-      await browser.close();
+      const pdf = await renderTemplatePdf(t, data);
       res.set("Content-Type", "application/pdf");
       res.set("Content-Disposition", `inline; filename="template-${t._id}.pdf"`);
       res.send(Buffer.from(pdf));
@@ -190,6 +185,163 @@ export function registerPrintTemplateRoutes(app: Express) {
       res.status(500).json({ error: String(err) });
     }
   });
+
+  app.post("/api/print-templates/:id/pdf/save", async (req, res) => {
+    let auth: Awaited<ReturnType<typeof requireAuth>>;
+    try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
+    const t = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId }) as any;
+    if (!t) { res.status(404).json({ error: "Not found" }); return; }
+    const data: Record<string, unknown> = req.body.data ?? {};
+    const meta = sanitizeDraftMeta(req.body?.meta ?? {});
+    try {
+      const pdf = Buffer.from(await renderTemplatePdf(t, data));
+      const documentId = await saveGeneratedPdfDocument({
+        userId: auth.userId,
+        template: t,
+        data,
+        meta,
+        pdf,
+      });
+      res.set("Content-Type", "application/pdf");
+      res.set("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(generatedPdfFileName(t, data))}`);
+      res.set("X-Document-Id", documentId);
+      res.send(pdf);
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+}
+
+async function renderTemplatePdf(t: any, data: Record<string, unknown>): Promise<Uint8Array> {
+  const html = renderTemplateHtml(t, data);
+  const { default: puppeteer } = await import("puppeteer-core");
+  const executablePath = chromiumExecutablePath();
+  if (!executablePath) {
+    throw new Error(
+      "Chromium/Chrome executable was not found. Set PUPPETEER_EXECUTABLE_PATH, CHROME_BIN, or CHROMIUM_PATH."
+    );
+  }
+  const browser = await puppeteer.launch({
+    executablePath,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "load" });
+    return await page.pdf({ format: t.page ?? "A4", printBackground: true });
+  } finally {
+    await browser.close();
+  }
+}
+
+async function saveGeneratedPdfDocument(args: {
+  userId: string;
+  template: any;
+  data: Record<string, unknown>;
+  meta: Record<string, unknown>;
+  pdf: Buffer;
+}): Promise<string> {
+  const {userId, template, data, meta, pdf} = args;
+  const fileHash = createHash("sha256").update(pdf).digest("hex");
+  const fileName = generatedPdfFileName(template, data);
+  const now = new Date();
+  const docsDir = join(getDataDir(), "documents");
+  mkdirSync(docsDir, { recursive: true });
+  const managedPath = join(docsDir, `${fileHash}.pdf`);
+  if (!existsSync(managedPath)) writeFileSync(managedPath, pdf);
+
+  let spacesKey: string | null = null;
+  let spacesUrl: string | null = null;
+  let downloadUrl: string | null = null;
+  const SIGNED_URL_TTL = 7 * 24 * 3600;
+  if (spacesEnabled()) {
+    try {
+      spacesKey = `documents/${userId}/${fileHash}.pdf`;
+      spacesUrl = await uploadToSpaces(managedPath, spacesKey, "application/pdf");
+      downloadUrl = await getSpacesSignedUrl(spacesKey, SIGNED_URL_TTL, fileName);
+    } catch {
+      spacesKey = null;
+      spacesUrl = null;
+      downloadUrl = null;
+    }
+  }
+
+  const signedUrlExpiresAt = downloadUrl ? new Date(Date.now() + SIGNED_URL_TTL * 1000) : null;
+  const contractId = typeof meta.contract_id === "string" && meta.contract_id.trim() ? meta.contract_id.trim() : null;
+  const clientId = typeof meta.client_id === "string" && meta.client_id.trim() ? meta.client_id.trim() : null;
+  const docRecord: Record<string, any> = {
+    user_id: userId,
+    file_name: fileName,
+    file_path: managedPath,
+    original_path: managedPath,
+    file_hash: fileHash,
+    mime_type: "application/pdf",
+    file_size_bytes: statSync(managedPath).size,
+    import_date: now,
+    processing_status: "done",
+    document_source: "generated",
+    document_kind: "generated_print_template_pdf",
+    template_id: String(template._id),
+    client_id: clientId,
+    contract_id: contractId,
+    extracted_fields: data,
+    ai_extracted: false,
+    created_at: now,
+    updated_at: now,
+    spaces_key: spacesKey,
+    spaces_url: spacesUrl,
+    download_url: downloadUrl,
+    signed_url_expires_at: signedUrlExpiresAt,
+  };
+
+  const existing = await col("documents").findOne({ user_id: userId, file_hash: fileHash });
+  let documentId: string;
+  if (existing) {
+    documentId = existing._id.toString();
+    await col("documents").updateOne(
+      { _id: existing._id },
+      { $set: {...docRecord, updated_at: now} }
+    );
+  } else {
+    documentId = (await col("documents").insertOne(docRecord)).insertedId.toString();
+  }
+
+  if (clientId) {
+    await col("document_clients").updateOne(
+      { document_id: documentId, client_id: clientId },
+      { $setOnInsert: { document_id: documentId, client_id: clientId, user_id: userId, created_at: now } },
+      { upsert: true }
+    );
+  }
+  if (contractId) {
+    await col("contracts").updateOne(
+      { _id: tryObjectId(contractId), user_id: userId },
+      { $set: { document_id: documentId, updated_at: now } }
+    );
+  }
+  return documentId;
+}
+
+function generatedPdfFileName(template: any, data: Record<string, unknown>): string {
+  const stem = [
+    pickFirstString(data, ["equipment_type", "inspection_type", "contract_type", "type", "checked_equipment"]),
+    pickFirstString(data, ["license_number", "lisence_number"]),
+    pickFirstString(data, ["client_company", "client_name", "company", "counterparty"]),
+    pickFirstString(data, ["contract_number", "document_number", "report_number"]),
+  ].filter(Boolean).join(" ");
+  return `${safeFileStem(stem || "template")}.pdf`;
+}
+
+function pickFirstString(data: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function safeFileStem(value: string): string {
+  return value.trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ") || "template";
 }
 
 function chromiumExecutablePath(): string | undefined {

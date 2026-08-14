@@ -19,7 +19,7 @@
                 v-for="item in primaryNav"
                 :key="item.key"
                 class="navlink"
-                :class="{ 'navlink--active': activeKey === item.key }"
+                :class="{ 'navlink--active': isActiveNav(item.key) }"
                 @click="navigate(item.key)"
               >{{ item.label }}</a>
             </nav>
@@ -106,7 +106,7 @@
                 <button
                   v-for="item in primaryNav"
                   :key="item.key"
-                  :class="{ 'mobile-nav-list__item--active': activeKey === item.key }"
+                  :class="{ 'mobile-nav-list__item--active': isActiveNav(item.key) }"
                   class="mobile-nav-list__item"
                   type="button"
                   @click="navigate(item.key)"
@@ -338,14 +338,12 @@ const allNav = [
   {label: "תזכורות", key: "reminders", minRole: "user", feature: FEATURES.pages.reminders},
   {label: "דוחות", key: "reports", minRole: "user", feature: FEATURES.pages.reports},
   {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
-  {label: "הגדרת ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
   // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
   // Print templates are reached from the contracts page, next to "תסקיר חדש".
   // {label: "הדפסת תסקיר", key: "compose", minRole: "user", feature: FEATURES.pages.printTemplates},
   // {label: "Gmail", key: "gmail-inbox", minRole: "user" ,feature: FEATURES.pages.gmail},
-  {label: "סוגי מסמכים", key: "doc-templates", minRole: "user", feature: FEATURES.pages.docTemplates},
-  {label: "תבניות", key: "email-templates", minRole: "user", feature: FEATURES.pages.emailTemplates},
+  // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];
 
@@ -361,6 +359,11 @@ const activeKey = computed(() => {
   const seg = route.path.split("/")[1] || "dashboard";
   return seg;
 });
+
+function isActiveNav(key: string): boolean {
+  if (key.includes("/")) return route.path === `/${key}` || route.path.startsWith(`/${key}/`);
+  return activeKey.value === key;
+}
 
 function navigate(key: string) {
   mobileNavOpen.value = false;

@@ -590,6 +590,10 @@ export function registerDocumentRoutes(app: express.Application) {
       res.status(404).json({ error: "Not found" });
       return;
     }
+    if ((doc as any).document_source === "generated") {
+      res.status(422).json({ error: "Generated documents do not support AI extraction" });
+      return;
+    }
 
     const rawText: string = doc.raw_text ?? "";
     if (!rawText) {
@@ -706,6 +710,10 @@ export function registerDocumentRoutes(app: express.Application) {
     const doc = (await col("documents").findOne(filter)) as any;
     if (!doc) {
       res.status(404).json({ error: "Not found" });
+      return;
+    }
+    if ((doc as any).document_source === "generated") {
+      res.status(422).json({ error: "Generated documents do not support AI reprocessing" });
       return;
     }
 

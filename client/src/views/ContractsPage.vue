@@ -15,7 +15,7 @@
         <button
           v-if="kind === 'inspection' && canOpenPrintTemplates"
           class="btn btn--ghost"
-          @click="router.push('/print-templates')"
+          @click="router.push('/settings/print-templates')"
         >
           תבניות הדפסה
         </button>
@@ -458,16 +458,28 @@
     </n-modal>
 
     <!-- Manual hydraulic-check modal: business + equipment + interval -->
-    <n-modal v-model:show="showHydraulicCheck" title="תסקיר חדש" :show-icon="false" preset="dialog" style="width: 920px; max-width: 96vw">
+    <n-modal
+      v-model:show="showHydraulicCheck"
+      :title="hydraulicModalTitle"
+      :show-icon="false"
+      class="hydraulic-modal"
+      preset="dialog"
+      style="width: 1080px; max-width: 96vw"
+    >
       <n-form v-if="hydraulicForm" class="hydraulic-compact-form" label-placement="top" size="small">
         <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
           <n-gi>
             <n-form-item label="מספר תסקיר">
               <n-input
-                v-model:value="hydraulicForm.contract_number"
-                placeholder="אוטומטי לפי מספר מפקח והמספר הבא"
-                @blur="normalizeHydraulicContractNumberInput"
-              />
+                :value="hydraulicForm.contract_number"
+                inputmode="numeric"
+                placeholder="הזן מספר"
+                @update:value="setHydraulicContractNumberInput"
+              >
+                <template v-if="currentHydraulicInspectorNumber()" #prefix>
+                  {{ currentHydraulicInspectorNumber() }}/
+                </template>
+              </n-input>
             </n-form-item>
           </n-gi>
           <n-gi>
@@ -605,7 +617,14 @@
             </n-gi>
             <n-gi>
               <n-form-item label="סוג ציוד" required>
-                <n-select v-model:value="equipment.category" :options="hydraulicCategoryOptions" />
+                <n-select
+                  v-model:value="equipment.category"
+                  :options="hydraulicCategoryOptions"
+                  :virtual-scroll="false"
+                  filterable
+                  tag
+                  placeholder="בחר או הקלד סוג ציוד"
+                />
               </n-form-item>
             </n-gi>
             <n-gi>
@@ -694,9 +713,16 @@
         </template>
       </n-form>
       <template #action>
+        <n-button
+          v-if="hydraulicDraftStore.hasDraft"
+          secondary
+          @click="editSavedHydraulicDraft"
+        >
+          ערוך טיוטה שמורה{{ hydraulicDraftSavedAtLabel ? ` (${hydraulicDraftSavedAtLabel})` : "" }}
+        </n-button>
         <n-button @click="showHydraulicCheck = false">ביטול</n-button>
         <n-button :loading="savingHydraulicDraft" @click="saveHydraulicDraftAndPreview">שמור טיוטה ופתח תצוגה</n-button>
-        <n-button type="primary" :loading="creatingHydraulicCheck" @click="doCreateHydraulicCheck">צור</n-button>
+        <n-button type="primary" :loading="creatingHydraulicCheck" @click="doCreateHydraulicCheck">{{ updatingHydraulicContractId ? "עדכן" : "צור" }}</n-button>
       </template>
     </n-modal>
   </div>
@@ -704,7 +730,7 @@
 
 <script setup lang="ts">
 import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
-import {useRouter} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {
   NAlert,
   NButton,
@@ -739,6 +765,7 @@ const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
 const featuresStore = useFeaturesStore();
 const hydraulicDraftStore = useHydraulicCheckDraftStore();
+const route = useRoute();
 const router = useRouter();
 const message = useMessage();
 const canSelectEmailTemplates = computed(() => featuresStore.hasFeature(FEATURES.pages.emailTemplates));
@@ -1244,14 +1271,29 @@ function currentHydraulicInspectorNumber(): string {
 
 function formatHydraulicContractNumber(value: string | null | undefined): string {
   const raw = String(value ?? "").trim();
-  if (!raw || raw.includes("/")) return raw;
+  if (!raw) return "";
   const inspectorNumber = currentHydraulicInspectorNumber();
-  return inspectorNumber ? `${inspectorNumber}/${raw}` : raw;
+  if (!inspectorNumber) return raw.replace(/\D/g, "");
+  const parts = raw.split("/").map((part) => part.trim()).filter(Boolean);
+  const sequence = parts.length > 1
+    ? (parts[0] === inspectorNumber ? parts[1] : parts[parts.length - 1])
+    : parts[0];
+  const digits = String(sequence ?? "").replace(/\D/g, "");
+  return digits ? `${inspectorNumber}/${digits}` : "";
 }
 
-function normalizeHydraulicContractNumberInput() {
+function hydraulicContractNumberInputValue(value: string | null | undefined): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const inspectorNumber = currentHydraulicInspectorNumber();
+  const parts = raw.split("/").map((part) => part.trim()).filter(Boolean);
+  if (parts.length > 1 && parts[0] === inspectorNumber) return parts[1]?.replace(/\D/g, "") ?? "";
+  return parts.at(-1)?.replace(/\D/g, "") ?? "";
+}
+
+function setHydraulicContractNumberInput(value: string) {
   if (!hydraulicForm.value) return;
-  hydraulicForm.value.contract_number = formatHydraulicContractNumber(hydraulicForm.value.contract_number);
+  hydraulicForm.value.contract_number = digitsOnly(value);
 }
 
 const suggestedHydraulicContractNumber = computed(() => {
@@ -1277,7 +1319,7 @@ const HYDRAULIC_PRINT_TEMPLATE_ID = "6a7cfbee5e95a7b2e1e4b606";
 type HydraulicEquipmentRow = {
   id: string;
   selected_equipment_id: string | null;
-  category: EquipmentCategory;
+  category: string;
   name: string;
   manufacturer: string;
   model: string;
@@ -1305,6 +1347,9 @@ const hydraulicTemplateValues = ref<Record<string, string>>({});
 const loadingHydraulicTemplates = ref(false);
 const hydratingHydraulicDraft = ref(false);
 const clearHydraulicDraftOnClose = ref(false);
+const updatingHydraulicContractId = ref<string | null>(null);
+const hydraulicUpdateReturnTo = ref("");
+const hydraulicModalTitle = computed(() => updatingHydraulicContractId.value ? "עדכון תסקיר" : "תסקיר חדש");
 
 
 const hydraulicCategoryOptions: { label: string; value: EquipmentCategory }[] = [
@@ -1365,6 +1410,15 @@ const hydraulicTemplateExtraFields = computed(() => {
     .filter((bind) => !hydraulicTemplateKnownFields.has(bind) && !bind.match(/_\d+$/));
 });
 
+const hydraulicDraftSavedAtLabel = computed(() => {
+  const savedAt = hydraulicDraftStore.draft?.savedAt;
+  if (!savedAt) return "";
+  const date = new Date(savedAt);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
+});
+
 function disablePastHydraulicDates(ts: number): boolean {
   return startOfLocalDay(ts) < startOfLocalDay(Date.now());
 }
@@ -1392,7 +1446,7 @@ async function createContractReminder(row: ContractWithClient) {
 
 function defaultHydraulicCheckForm(): HydraulicCheckRequest {
   return {
-    contract_number: suggestedHydraulicContractNumber.value || "",
+    contract_number: hydraulicContractNumberInputValue(suggestedHydraulicContractNumber.value),
     business: {
       display_name: "",
       id_number: "",
@@ -1419,6 +1473,8 @@ function defaultHydraulicCheckForm(): HydraulicCheckRequest {
 }
 
 async function openHydraulicCheck() {
+  updatingHydraulicContractId.value = null;
+  hydraulicUpdateReturnTo.value = "";
   if (!engineerProfile.value) {
     await loadEngineerProfile().catch(() => {});
   }
@@ -1436,16 +1492,93 @@ async function openHydraulicCheck() {
   hydraulicTemplateValues.value = { ...(draft?.templateValues ?? {}) };
   hydraulicForm.value = draft?.form ? { ...draft.form, business: { ...draft.form.business }, equipment: { ...draft.form.equipment } } : defaultHydraulicCheckForm();
   hydratingHydraulicDraft.value = false;
-  await loadHydraulicPrintTemplates();
+  void loadHydraulicPrintTemplates().then(() => {
+    if (draft?.templateId) {
+      selectHydraulicTemplate(draft.templateId);
+      hydraulicTemplateValues.value = { ...(draft.templateValues ?? {}) };
+    }
+  });
   if (draft?.templateId) {
     selectHydraulicTemplate(draft.templateId);
     hydraulicTemplateValues.value = { ...(draft.templateValues ?? {}) };
   }
   if (hydraulicClientId.value) {
-    await loadHydraulicClientEquipment(hydraulicClientId.value);
+    void loadHydraulicClientEquipment(hydraulicClientId.value);
   }
-  loadClients();
   showHydraulicCheck.value = true;
+  void loadClients();
+}
+
+async function openHydraulicContractUpdate(contractId: string) {
+  if (!engineerProfile.value) {
+    await loadEngineerProfile().catch(() => {});
+  }
+  const row = await api.contracts.get(contractId);
+  const manual = plainStringMap(row.manual_fields);
+  const firstEquipment = row._equipment?.[0] ?? null;
+
+  updatingHydraulicContractId.value = String(row.id);
+  hydratingHydraulicDraft.value = true;
+  hydraulicClientId.value = row.client_id ? String(row.client_id) : null;
+  hydraulicPrevReportNumber.value = manual.prev_report_number ?? "";
+  hydraulicReminderMode.value = "date";
+  hydraulicReminderDateMs.value = row.expiry_date ? new Date(dateOnly(row.expiry_date)).getTime() : null;
+  hydraulicIntervalMonths.value = Number((row as any).inspection_interval_months ?? manual.inspection_interval_months ?? 4) as 4 | 6 | 12 | 14;
+  hydraulicForm.value = {
+    contract_number: hydraulicContractNumberInputValue(row.contract_number),
+    business: {
+      display_name: String(row.client_name ?? row.counterparty ?? manual.client_company ?? ""),
+      id_number: manual.client_id ?? "",
+      contact_person: String(row.contact_person ?? manual.contact_person ?? manual.client_name ?? ""),
+      email: String(row.contact_email ?? manual.contact_email ?? manual.client_email ?? ""),
+      phone: String(row.contact_phone ?? manual.contact_phone ?? manual.client_phone ?? ""),
+      address: String(row.client_address ?? manual.client_address ?? ""),
+      po_box: String(row.po_box ?? manual.po_box ?? ""),
+      client_zipcode: String(row.client_zipcode ?? manual.zip_code ?? ""),
+    },
+    equipment: {
+      category: (firstEquipment?.category ?? "lift") as HydraulicCheckRequest["equipment"]["category"],
+      name: String(firstEquipment?.name ?? manual.name ?? manual.checked_equipment ?? ""),
+      manufacturer: String(firstEquipment?.manufacturer ?? manual.manufacturer ?? ""),
+      model: String(firstEquipment?.model ?? manual.model ?? ""),
+      serial_number: String(firstEquipment?.serial_number ?? manual.serial_number ?? ""),
+      load_capacity_work: manual.load_capacity_work ?? firstArrayValue(firstEquipment?.load_capacity_work),
+      load_capacity_test: manual.load_capacity_test ?? firstArrayValue(firstEquipment?.load_capacity_test),
+      load_radius: manual.load_radius ?? firstArrayValue(firstEquipment?.load_radius),
+      description: String(row.equipment_description ?? manual.equipment_description ?? ""),
+    },
+    interval_months: hydraulicIntervalMonths.value,
+  };
+  hydraulicEquipmentRows.value = [{
+    id: crypto.randomUUID(),
+    selected_equipment_id: null,
+    category: firstEquipment?.category ?? "lift",
+    name: String(firstEquipment?.name ?? manual.name ?? manual.checked_equipment ?? ""),
+    manufacturer: String(firstEquipment?.manufacturer ?? manual.manufacturer ?? ""),
+    model: String(firstEquipment?.model ?? manual.model ?? ""),
+    serial_number: String(firstEquipment?.serial_number ?? manual.serial_number ?? ""),
+    license_number: manual.license_number ?? manual.lisence_number ?? "",
+    load_capacity_work: manual.load_capacity_work ?? firstArrayValue(firstEquipment?.load_capacity_work),
+    load_capacity_test: manual.load_capacity_test ?? firstArrayValue(firstEquipment?.load_capacity_test),
+    load_radius: manual.load_radius ?? firstArrayValue(firstEquipment?.load_radius),
+    description: String(row.equipment_description ?? manual.equipment_description ?? ""),
+  }];
+  hydraulicTemplateValues.value = {};
+  hydratingHydraulicDraft.value = false;
+  showHydraulicCheck.value = true;
+  void loadClients();
+  void loadHydraulicPrintTemplates().then(() => {
+    selectHydraulicTemplate(hydraulicTemplateId.value ?? defaultHydraulicTemplateId());
+  });
+  if (hydraulicClientId.value) void loadHydraulicClientEquipment(hydraulicClientId.value);
+}
+
+async function editSavedHydraulicDraft() {
+  if (!hydraulicDraftStore.draft) {
+    message.info("אין טיוטה שמורה לעריכה");
+    return;
+  }
+  await openHydraulicCheck();
 }
 
 function emptyHydraulicEquipmentRow(): HydraulicEquipmentRow {
@@ -1585,7 +1718,7 @@ async function applyHydraulicClient(clientId: string | null) {
     po_box: (client as any).po_box ?? "",
     client_zipcode: (client as any).client_zipcode ?? "",
   };
-  await loadHydraulicClientEquipment(clientId);
+  void loadHydraulicClientEquipment(clientId);
 }
 
 watch(hydraulicClientId, applyHydraulicClient);
@@ -1615,45 +1748,94 @@ function saveCurrentHydraulicDraft() {
 }
 
 async function doCreateHydraulicCheck() {
-  if (!hydraulicForm.value) return;
-  if (!hydraulicClientId.value && !hydraulicForm.value.business.display_name.trim()) {
-    message.warning("יש לבחור לקוח קיים או להזין שם עסק");
-    return;
-  }
-  if (hydraulicReminderMode.value === "date" && !hydraulicReminderDateMs.value) {
-    message.warning("יש לבחור תאריך תזכורת");
-    return;
-  }
   creatingHydraulicCheck.value = true;
   try {
-    const contractNumber = formatHydraulicContractNumber(
-      hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value,
-    );
-    if (contractNumber) {
-      hydraulicForm.value.contract_number = contractNumber;
+    const returnTo = hydraulicEditReturnTo();
+    if (updatingHydraulicContractId.value) {
+      await updateHydraulicContract(updatingHydraulicContractId.value);
+      message.success("התסקיר עודכן");
+    } else {
+      const result = await createHydraulicContract();
+      message.success(`התסקיר נשמר עבור ${result.client.display_name}. ניתן ליצור תזכורת מהכרטיס.`);
     }
-    syncPrimaryHydraulicEquipment();
-    const payload: HydraulicCheckRequest = {
-      ...hydraulicForm.value,
-      contract_number: contractNumber || undefined,
-      client_id: hydraulicClientId.value ?? undefined,
-      interval_months: hydraulicIntervalMonths.value,
-      skip_reminders: true,
-      next_inspection_date: hydraulicReminderMode.value === "date"
-        ? formatLocalDate(hydraulicReminderDateMs.value!)
-        : undefined,
-
-    };
-    const result = await api.reminders.createHydraulicCheck(payload);
-    message.success(`התסקיר נשמר עבור ${result.client.display_name}. ניתן ליצור תזכורת מהכרטיס.`);
     clearHydraulicDraftOnClose.value = true;
     showHydraulicCheck.value = false;
     loadClients(true);
     await Promise.all([refresh(), loadReminders()]);
+    if (returnTo) await router.push(returnTo);
   } catch (e) {
     message.error(String(e));
   } finally {
     creatingHydraulicCheck.value = false;
+  }
+}
+
+async function createHydraulicContract() {
+  if (!hydraulicForm.value) throw new Error("הטופס לא מוכן");
+  if (!hydraulicClientId.value && !hydraulicForm.value.business.display_name.trim()) {
+    message.warning("יש לבחור לקוח קיים או להזין שם עסק");
+    throw new Error("חסר לקוח");
+  }
+  if (hydraulicReminderMode.value === "date" && !hydraulicReminderDateMs.value) {
+    message.warning("יש לבחור תאריך תזכורת");
+    throw new Error("חסר תאריך תזכורת");
+  }
+  const contractNumber = formatHydraulicContractNumber(
+    hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value,
+  );
+  syncPrimaryHydraulicEquipment();
+  const payload: HydraulicCheckRequest = {
+    ...hydraulicForm.value,
+    contract_number: contractNumber || undefined,
+    client_id: hydraulicClientId.value ?? undefined,
+    interval_months: hydraulicIntervalMonths.value,
+    skip_reminders: true,
+    next_inspection_date: hydraulicReminderMode.value === "date"
+      ? formatLocalDate(hydraulicReminderDateMs.value!)
+      : undefined,
+  };
+  return api.reminders.createHydraulicCheck(payload);
+}
+
+async function updateHydraulicContract(contractId: string) {
+  if (!hydraulicForm.value) throw new Error("הטופס לא מוכן");
+  const contractNumber = formatHydraulicContractNumber(
+    hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value,
+  );
+  syncPrimaryHydraulicEquipment();
+  const nextDate = hydraulicReminderMode.value === "date" && hydraulicReminderDateMs.value
+    ? formatLocalDate(hydraulicReminderDateMs.value)
+    : addMonthsToLocalDate(Date.now(), hydraulicIntervalMonths.value);
+  const data = buildHydraulicTemplateDraft();
+  await api.contracts.update(contractId, {
+    client_id: hydraulicClientId.value ?? undefined,
+    contract_number: contractNumber || undefined,
+    contract_type: "בדיקה הידראולית",
+    start_date: data.start_date,
+    expiry_date: nextDate,
+    summary: data.equipment_description || data.checked_equipment || data.name || undefined,
+    manual_fields: {
+      ...data,
+      inspection_interval_months: hydraulicIntervalMonths.value,
+      _equipment: hydraulicEquipmentRows.value.map((equipment) => ({
+        name: equipment.name,
+        manufacturer: equipment.manufacturer,
+        model: equipment.model,
+        serial_number: equipment.serial_number,
+        load_capacity_work: equipment.load_capacity_work ? [equipment.load_capacity_work] : [],
+        load_capacity_test: equipment.load_capacity_test ? [equipment.load_capacity_test] : [],
+        load_radius: equipment.load_radius ? [equipment.load_radius] : [],
+        category: equipment.category,
+      })),
+    },
+    skip_reminders: true,
+  } as any);
+  if (hydraulicTemplateId.value) {
+    await api.printTemplates.saveDraft(
+      hydraulicTemplateId.value,
+      data,
+      { ...buildHydraulicTemplateDraftMeta(), contract_id: contractId },
+    );
   }
 }
 
@@ -1683,9 +1865,25 @@ async function saveHydraulicDraftAndPreview() {
   try {
     syncPrimaryHydraulicEquipment();
     const data = buildHydraulicTemplateDraft();
-    await api.printTemplates.saveDraft(hydraulicTemplateId.value, data, buildHydraulicTemplateDraftMeta());
+    let contractId = updatingHydraulicContractId.value ?? "";
+    let clientId = hydraulicClientId.value ?? "";
+    if (contractId) {
+      await updateHydraulicContract(contractId);
+    } else {
+      const result = await createHydraulicContract();
+      contractId = String(result.contract.id ?? "");
+      clientId = String(result.client.id ?? clientId);
+    }
+    await api.printTemplates.saveDraft(
+      hydraulicTemplateId.value,
+      data,
+      { ...buildHydraulicTemplateDraftMeta(), contract_id: contractId, client_id: clientId },
+    );
+    clearHydraulicDraftOnClose.value = true;
     showHydraulicCheck.value = false;
-    await router.push(`/print-templates/${hydraulicTemplateId.value}/draft`);
+    loadClients(true);
+    await refresh();
+    await router.push(`/contracts/${contractId}/draft`);
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -1709,14 +1907,15 @@ async function openContractInTemplate(row: ContractWithClient) {
       buildContractTemplateDraft(row),
       buildContractTemplateDraftMeta(row, templateId),
     );
-    await router.push(`/print-templates/${templateId}/draft`);
+    await router.push(`/contracts/${row.id}/draft`);
   } catch (e) {
     message.error(e instanceof Error ? e.message : String(e));
   }
 }
 
 function openDraftInTemplate(draft: PrintTemplateDraftSummary) {
-  router.push(`/print-templates/${draft.template_id}/draft`);
+  if (draft.contract_id) router.push(`/contracts/${draft.contract_id}/draft`);
+  else router.push(`/print-templates/${draft.template_id}/draft`);
 }
 
 function draftField(draft: PrintTemplateDraftSummary, names: string[]): string {
@@ -2044,7 +2243,7 @@ onMounted(async () => {
   await featuresStore.fetchFeatures().catch(() => {});
   updateViewport();
   window.addEventListener("resize", updateViewport);
-  refresh();
+  await refresh();
   store.fetchExpiring(30);
   loadClients();
   loadReminders();
@@ -2056,7 +2255,29 @@ onMounted(async () => {
   } else {
     emailTemplates.value = [];
   }
+  await openHydraulicUpdateFromRoute();
 });
+
+watch(() => route.query.edit, () => {
+  void openHydraulicUpdateFromRoute();
+});
+
+async function openHydraulicUpdateFromRoute() {
+  const editId = typeof route.query.edit === "string" ? route.query.edit : "";
+  if (!editId) return;
+  hydraulicUpdateReturnTo.value = typeof route.query.returnTo === "string" && route.query.returnTo.startsWith("/")
+    ? route.query.returnTo
+    : "";
+  await openHydraulicContractUpdate(editId);
+  const nextQuery = { ...route.query };
+  delete nextQuery.edit;
+  delete nextQuery.returnTo;
+  await router.replace({ path: "/contracts", query: nextQuery });
+}
+
+function hydraulicEditReturnTo(): string {
+  return hydraulicUpdateReturnTo.value;
+}
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", updateViewport);
@@ -2211,7 +2432,7 @@ async function saveForm() {
   try {
     const eq = form.value.equipment;
     const hasEquipment = !!(eq.category || eq.manufacturer?.trim() || eq.model?.trim() || eq.serial_number?.trim());
-    const payload = { ...form.value, equipment: hasEquipment ? eq : undefined, skip_reminders: true };
+    const payload = { ...form.value, status: form.value.status === "draft" ? "active" : form.value.status, equipment: hasEquipment ? eq : undefined, skip_reminders: true };
     if (editingId.value) {
       await store.update(editingId.value, payload as any);
       message.success("הרשומה עודכנה בהצלחה");
@@ -2379,19 +2600,115 @@ function exportToExcel() {
 .btn--danger-ghost:hover { background: rgba(208, 48, 80, 0.08); }
 .btn--xs { padding: 4px 10px; font-size: 12px; }
 
+:global(.hydraulic-modal.n-dialog) {
+  direction: rtl;
+  border-radius: 8px;
+  font-family: var(--font-sans, Inter, "Segoe UI", Arial, sans-serif);
+  padding: 8px 10px 10px;
+}
+
+:global(.hydraulic-modal.n-dialog *),
+:global(.hydraulic-modal .n-dialog__title),
+:global(.hydraulic-modal .n-button),
+:global(.hydraulic-modal .n-input),
+:global(.hydraulic-modal .n-base-selection),
+:global(.hydraulic-modal .n-date-picker) {
+  font-family: var(--font-sans, Inter, "Segoe UI", Arial, sans-serif) !important;
+}
+
+:global(.hydraulic-modal .n-dialog__title) {
+  color: var(--text-primary);
+}
+
+:global(.hydraulic-modal .n-dialog__close) {
+  top: 10px;
+  left: 10px;
+  right: auto;
+}
+
+:global(.hydraulic-modal .n-dialog__content) {
+  margin-top: 6px;
+  padding: 8px 4px 2px;
+  max-height: min(72vh, 760px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+:global(.hydraulic-modal .n-dialog__action) {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+  gap: 6px;
+}
+
+.hydraulic-compact-form {
+  padding: 0;
+}
+
+.hydraulic-compact-form :deep(.n-grid) {
+  align-items: start;
+}
+
 .hydraulic-compact-form :deep(.n-form-item) {
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 
 .hydraulic-compact-form :deep(.n-form-item-label) {
-  min-height: 20px;
-  padding-bottom: 2px;
+  min-height: 14px;
+  padding: 0 0 1px;
+  color: var(--text-secondary);
   font-size: 12px;
+  font-weight: 500;
+}
+
+.hydraulic-compact-form :deep(.n-form-item-label__asterisk) {
+  color: var(--error-color, #d03050);
+  font-weight: 800;
 }
 
 .hydraulic-compact-form :deep(.n-input),
-.hydraulic-compact-form :deep(.n-base-selection) {
-  min-height: 34px;
+.hydraulic-compact-form :deep(.n-base-selection),
+.hydraulic-compact-form :deep(.n-date-picker) {
+  --n-border-radius: 6px;
+  min-height: 32px;
+  font-family: inherit;
+}
+
+.hydraulic-compact-form :deep(.n-input .n-input-wrapper),
+.hydraulic-compact-form :deep(.n-base-selection .n-base-selection-label) {
+  min-height: 32px;
+  background: var(--bg-card);
+}
+
+.hydraulic-compact-form :deep(.n-input:hover),
+.hydraulic-compact-form :deep(.n-base-selection:hover) {
+  box-shadow: 0 0 0 3px rgba(24, 160, 88, 0.08);
+}
+
+.hydraulic-compact-form :deep(.n-input--focus),
+.hydraulic-compact-form :deep(.n-base-selection--active) {
+  box-shadow: 0 0 0 3px rgba(24, 160, 88, 0.14);
+}
+
+.hydraulic-compact-form :deep(.n-input__input-el),
+.hydraulic-compact-form :deep(.n-base-selection-input),
+.hydraulic-compact-form :deep(.n-base-selection-placeholder),
+.hydraulic-compact-form :deep(.n-base-selection-input__content) {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.hydraulic-compact-form :deep(.n-input__placeholder),
+.hydraulic-compact-form :deep(.n-base-selection-placeholder) {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.hydraulic-compact-form :deep(.n-input__prefix) {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .hydraulic-section-head {
@@ -2399,15 +2716,24 @@ function exportToExcel() {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 4px;
+  margin: 6px 0 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color);
+}
+
+.hydraulic-section-head :deep(.n-h) {
+  margin: 0 !important;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 800;
 }
 
 .hydraulic-equipment-card {
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 10px;
-  margin-top: 8px;
-  background: var(--bg-card);
+  padding: 8px;
+  margin-top: 6px;
+  background: var(--bg-elevated);
 }
 
 .hydraulic-equipment-card__head {
@@ -2415,6 +2741,12 @@ function exportToExcel() {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+.hydraulic-equipment-card__head strong {
+  font-size: 15px;
+  font-weight: 800;
 }
 .refresh-icon { display: inline-block; transition: transform 0.4s; }
 .refresh-icon--spin { animation: spin 0.8s linear infinite; }

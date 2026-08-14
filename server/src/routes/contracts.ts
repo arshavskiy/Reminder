@@ -27,10 +27,18 @@ export function registerContractRoutes(app: express.Application) {
     try {
       const body = req.body as Record<string, unknown>;
       const now = new Date();
+      const contractNumber = typeof body.contract_number === "string" ? body.contract_number.trim() : "";
+      if (contractNumber) {
+        const existing = await col("contracts").findOne({ user_id: userId, contract_number: contractNumber });
+        if (existing) {
+          res.status(409).json({ error: `Contract number already exists: ${contractNumber}` });
+          return;
+        }
+      }
       const doc: Record<string, any> = {
         user_id: userId,
         client_id: body.client_id ?? null,
-        contract_number: body.contract_number ?? null,
+        contract_number: contractNumber || null,
         contract_type: body.contract_type ?? null,
         start_date: body.start_date ?? null,
         expiry_date: body.expiry_date ?? null,
@@ -45,7 +53,7 @@ export function registerContractRoutes(app: express.Application) {
       };
       const today = now.toISOString().slice(0, 10);
       const isPast = doc.expiry_date && String(doc.expiry_date) < today;
-      doc.status = body.status ?? (isPast ? "expired" : "active");
+      doc.status = body.status === "draft" ? "active" : body.status ?? (isPast ? "expired" : "active");
 
       // Only set document_id when it's a real id — a stored null collides under
       // the unique index, so leave the field absent for manual contracts.
@@ -358,6 +366,39 @@ export function registerContractRoutes(app: express.Application) {
     res.json(rows);
   });
 
+  app.get("/api/contracts/:contractId/print-draft", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const contract = await col("contracts").findOne({ ...idFilter(req.params.contractId), user_id: userId }) as any;
+    if (!contract) {
+      res.status(404).json({ error: "Contract not found" });
+      return;
+    }
+    const draft = await col("print_template_drafts").findOne({ user_id: userId, contract_id: req.params.contractId }) as any;
+    if (!draft) {
+      res.status(404).json({ error: "Draft not found" });
+      return;
+    }
+    const template = await col("print_templates").findOne({ _id: tryObjectId(String(draft.template_id)), user_id: userId }) as any;
+    res.json({
+      template_id: draft.template_id,
+      template_name: template?.name ?? "תבנית",
+      data: draft.data ?? {},
+      meta: draft.meta ?? {},
+      client_id: draft.client_id ?? draft.meta?.client_id ?? contract.client_id ?? null,
+      contract_id: draft.contract_id ?? req.params.contractId,
+      updated_at: draft.updated_at ?? null,
+    });
+  });
+
   // GET /api/contracts/:id
   app.get("/api/contracts/:id", async (req, res) => {
     let userId: string;
@@ -481,6 +522,18 @@ export function registerContractRoutes(app: express.Application) {
     try {
       const filter = { ...idFilter(req.params.id), user_id: userId };
       const body = req.body as Record<string, unknown>;
+      const requestedContractNumber = typeof body.contract_number === "string" ? body.contract_number.trim() : "";
+      if (requestedContractNumber) {
+        const existing = await col("contracts").findOne({
+          user_id: userId,
+          contract_number: requestedContractNumber,
+          _id: { $ne: tryObjectId(req.params.id) },
+        });
+        if (existing) {
+          res.status(409).json({ error: `Contract number already exists: ${requestedContractNumber}` });
+          return;
+        }
+      }
 
       const updates: Record<string, any> = { updated_at: new Date() };
       const fields = [
@@ -490,6 +543,8 @@ export function registerContractRoutes(app: express.Application) {
       for (const f of fields) {
         if (body[f] !== undefined) updates[f] = body[f];
       }
+      if (requestedContractNumber) updates.contract_number = requestedContractNumber;
+      if (updates.status === "draft") updates.status = "active";
 
       // Auto-set overdue when expiry_date is changed to a past date (unless caller explicitly sets status)
       if (body.expiry_date && !body.status) {
@@ -601,7 +656,11 @@ export function registerContractRoutes(app: express.Application) {
       return;
     }
     const result = await col("contracts").deleteMany({ user_id: userId });
-    res.json({ ok: true, deleted: result.deletedCount });
+    const draftResult = await col("print_template_drafts").deleteMany({
+      user_id: userId,
+      contract_id: { $exists: true, $ne: null },
+    });
+    res.json({ ok: true, deleted: result.deletedCount, drafts_deleted: draftResult.deletedCount ?? 0 });
   });
 
   // DELETE /api/contracts/:id
@@ -646,7 +705,17 @@ export function registerContractRoutes(app: express.Application) {
     }
 
     await col("contracts").deleteOne(contractFilter);
-    res.json({ ok: true, reminders_deleted: remindersDeleted, email_logs_deleted: emailLogsDeleted });
+    const sourceIds = [req.params.id, contract._id?.toString()].filter(Boolean);
+    const draftResult = await col("print_template_drafts").deleteMany({
+      user_id: userId,
+      contract_id: { $in: sourceIds },
+    });
+    res.json({
+      ok: true,
+      reminders_deleted: remindersDeleted,
+      email_logs_deleted: emailLogsDeleted,
+      drafts_deleted: draftResult.deletedCount ?? 0,
+    });
   });
 }
 

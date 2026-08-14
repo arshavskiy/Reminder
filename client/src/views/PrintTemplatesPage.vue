@@ -1,8 +1,16 @@
 <template>
   <div class="ptp">
 
+    <template v-if="routeDraftLoading">
+      <div class="route-draft-loading">
+        <n-spin :show="true" size="large">
+          <div class="route-draft-loading__text">טוען טיוטת תסקיר...</div>
+        </n-spin>
+      </div>
+    </template>
+
     <!-- ── LIST ──────────────────────────────────────────────────────────────── -->
-    <template v-if="mode === 'list'">
+    <template v-else-if="mode === 'list'">
       <div class="ptp-header">
         <span class="ptp-title">תבניות הדפסה</span>
         <button class="xl-btn xl-btn--primary" @click="newTemplate">+ תבנית חדשה</button>
@@ -32,30 +40,46 @@
 
     <!-- ── COMPOSE ───────────────────────────────────────────────────────────── -->
     <template v-else-if="mode === 'compose' && composing">
-      <div class="ptp-header">
-        <button class="xl-btn" @click="goList">← חזור</button>
-        <span class="ptp-title">{{ composing.name }} — מילוי שדות</span>
-        <span v-if="draftSavedAt" class="compose-draft-status">טיוטה נשמרה {{ formatDraftTime(draftSavedAt) }}</span>
-        <button :disabled="draftSaving" :class="{ 'xl-btn--loading': draftSaving }" class="xl-btn" @click="saveComposeDraft">
-          <span v-if="draftSaving" class="xl-loader" aria-hidden="true"></span>
-          <span>שמור טיוטה</span>
-        </button>
-        <button :disabled="creatingContract" :class="{ 'xl-btn--loading': creatingContract }" class="xl-btn" @click="createContractFromCompose">
-          <span v-if="creatingContract" class="xl-loader" aria-hidden="true"></span>
-          <span>צור חוזה</span>
-        </button>
-        <button :disabled="printing" :class="{ 'xl-btn--loading': printing }" class="xl-btn xl-btn--primary" @click="printPdf">
-          <span v-if="printing" class="xl-loader" aria-hidden="true"></span>
-          <span>🖨 הדפס PDF</span>
-        </button>
-        <button :disabled="savingPdf" :class="{ 'xl-btn--loading': savingPdf }" class="xl-btn xl-btn--primary" @click="savePdf">
-          <span v-if="savingPdf" class="xl-loader" aria-hidden="true"></span>
-          <span>שמור PDF</span>
-        </button>
-      </div>
+      <PageHeader :title="`${composing.name} — מילוי שדות`">
+        <template #breadcrumb>
+          <a href="#" @click.prevent="goBackFromCompose">{{ routeContractId ? "תסקירים" : "תבניות הדפסה" }}</a>
+          <span class="sep">/</span>
+          <span>{{ composing.name }}</span>
+        </template>
+        <template #actions>
+          <button v-if="routeContractId" class="xl-btn" @click="editContractFromDraft">
+            ערוך
+          </button>
+          <button :disabled="draftSaving" :class="{ 'xl-btn--loading': draftSaving }" class="xl-btn" @click="saveComposeDraft">
+            <span v-if="draftSaving" class="xl-loader" aria-hidden="true"></span>
+            <span>שמור טיוטה</span>
+          </button>
+          <button
+            v-if="!routeContractId"
+            :disabled="creatingContract"
+            :class="{ 'xl-btn--loading': creatingContract }"
+            class="xl-btn"
+            @click="createContractFromCompose"
+          >
+            <span v-if="creatingContract" class="xl-loader" aria-hidden="true"></span>
+            <span>צור חוזה</span>
+          </button>
+          <button :disabled="printing" :class="{ 'xl-btn--loading': printing }" class="xl-btn xl-btn--primary" @click="printPdf">
+            <span v-if="printing" class="xl-loader" aria-hidden="true"></span>
+            <span>🖨 הדפס</span>
+          </button>
+          <button :disabled="savingPdf" :class="{ 'xl-btn--loading': savingPdf }" class="xl-btn xl-btn--primary" @click="savePdf">
+            <span v-if="savingPdf" class="xl-loader" aria-hidden="true"></span>
+            <span>הורד</span>
+          </button>
+        </template>
+      </PageHeader>
       <div class="compose-wrap">
         <div class="compose-preview">
-          <div class="pane-label">תצוגה מקדימה</div>
+          <div class="pane-label pane-label--with-status">
+            <span>תצוגה מקדימה</span>
+            <span v-if="draftSavedAt" class="compose-draft-status">טיוטה נשמרה {{ formatDraftTime(draftSavedAt) }}</span>
+          </div>
           <div class="compose-scroll">
             <div :style="{ width: Math.max(composeTotalWidth,780)+'px' }" class="doc-paper">
               <table :style="{ direction: composing.dir, width: composeTotalWidth + 'px' }" class="render-table">
@@ -115,7 +139,7 @@
             >
               <label class="compose-field-label">
                 <span>{{ f.label }}<b v-if="f.required" class="compose-required">*</b></span>
-                <span v-if="f.value" class="compose-field-current">{{ f.value }}</span>
+                <span v-if="f.value" class="compose-field-current">{{ composeDisplayValue(f.bind) }}</span>
               </label>
               <textarea
                 v-if="f.multiline"
@@ -393,25 +417,41 @@
 
 <script lang="ts" setup>
 import {computed, nextTick, ref} from "vue";
-import {useRoute} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {NAlert, NButton, NCard, NEmpty, NGi, NGrid, NSpace, NSpin, NTag, useDialog, useMessage,} from "naive-ui";
 import {api} from "../services/apiService.js";
+import PageHeader from "../components/PageHeader.vue";
 import type {PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
 const message = useMessage();
 const dialog  = useDialog();
 const route = useRoute();
+const router = useRouter();
+const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+const engineerProfile = ref<{ inspector_number?: string | null } | null>(null);
+const routeDraftLoading = ref(isDraftRoute());
 
 // ── Mode ──────────────────────────────────────────────────────────────────────
 type Mode = "list" | "compose" | "design";
 const mode = ref<Mode>("list");
 function goList() { mode.value="list"; editing.value=null; composing.value=null; sel.value={r1:-1,c1:-1,r2:-1,c2:-1}; }
+async function goBackFromCompose() {
+  if (routeContractId.value) {
+    await router.push("/contracts");
+    return;
+  }
+  goList();
+}
 
 // ── List ──────────────────────────────────────────────────────────────────────
 const loading   = ref(false);
 const loadError = ref<string|null>(null);
 const templates = ref<PrintTemplate[]>([]);
 loadTemplates();
+
+function isDraftRoute(): boolean {
+  return typeof route.params.contractId === "string" || typeof route.params.templateId === "string";
+}
 
 async function loadTemplates() {
   loading.value = true; loadError.value = null;
@@ -420,14 +460,41 @@ async function loadTemplates() {
     if (!templates.value.length) newTemplate();
     else await openRouteDraftIfRequested();
   } catch(e:any) { loadError.value = e.message; }
-  finally { loading.value = false; }
+  finally {
+    loading.value = false;
+    routeDraftLoading.value = false;
+  }
 }
 
 async function openRouteDraftIfRequested() {
+  const contractId = route.params.contractId;
+  if (typeof contractId === "string") {
+    await loadEngineerProfile().catch(() => {});
+    try {
+      const draft = await api.printTemplates.getContractDraft(contractId);
+      const template = templates.value.find((t) => t._id === draft.template_id);
+      if (!template) {
+        message.error("תבנית הטיוטה לא נמצאה");
+        return;
+      }
+      await openCompose(template, draft);
+    } catch(e:any) {
+      if(e?.status !== 404) message.error(e.message ?? String(e));
+    }
+    return;
+  }
   const templateId = route.params.templateId;
   if (typeof templateId !== "string") return;
+  await loadEngineerProfile().catch(() => {});
   const template = templates.value.find((t) => t._id === templateId);
   if (template) await openCompose(template);
+}
+
+async function loadEngineerProfile() {
+  if (engineerProfile.value) return;
+  const res = await fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" });
+  if (!res.ok) throw new Error(`Failed to load engineer profile: ${res.status}`);
+  engineerProfile.value = await res.json();
 }
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -627,6 +694,7 @@ const draftSaving = ref(false);
 const draftSavedAt = ref<string|null>(null);
 const draftMeta = ref<Record<string, unknown>>({});
 const creatingContract = ref(false);
+const routeContractId = computed(() => typeof route.params.contractId === "string" ? route.params.contractId : "");
 
 const composeFields = computed(()=>{
   if (!composing.value) return [];
@@ -644,7 +712,7 @@ const composeFields = computed(()=>{
 });
 const composeTotalWidth = computed(()=>composing.value?.cols.reduce((s,c)=>s+c.w,0)??0);
 
-type ComposeFieldKind = "text" | "multiline" | "date" | "email" | "phone" | "number" | "integer";
+type ComposeFieldKind = "text" | "multiline" | "date" | "email" | "phone" | "number" | "integer" | "report_number";
 
 type ComposeFieldMeta = {
   label: string;
@@ -735,7 +803,8 @@ function composeFieldKind(bind: string): ComposeFieldKind {
   if (bind.includes("email")) return "email";
   if (bind.includes("phone") || bind === "contact_phone") return "phone";
   if (bind.includes("date") || bind === "expiry_date" || bind === "valid_until" || bind === "start_date" || bind === "check_date") return "date";
-  if (["zip_code", "client_id", "license_number", "lisence_number", "serial_number", "document_number", "report_number", "prev_report_number", "contract_number"].includes(bind)) return "integer";
+  if (["document_number", "report_number", "prev_report_number", "contract_number"].includes(bind)) return "report_number";
+  if (["zip_code", "client_id", "license_number", "lisence_number", "serial_number"].includes(bind)) return "integer";
   if (bind.includes("amount") || bind.includes("load_capacity") || bind.includes("load_radius")) return "number";
   if (bind.startsWith("findings_") || bind.includes("description") || bind === "checked_equipment") return "multiline";
   return "text";
@@ -745,7 +814,7 @@ function composeFieldInputType(bind: string): string {
   const kind = composeFieldKind(baseComposeBind(bind));
   if (kind === "email") return "email";
   if (kind === "phone") return "tel";
-  if (kind === "number" || kind === "integer") return "text";
+  if (kind === "number" || kind === "integer" || kind === "report_number") return "text";
   return "text";
 }
 
@@ -753,7 +822,7 @@ function composeFieldInputMode(bind: string): "text" | "email" | "tel" | "numeri
   const kind = composeFieldKind(baseComposeBind(bind));
   if (kind === "email") return "email";
   if (kind === "phone") return "tel";
-  if (kind === "integer") return "numeric";
+  if (kind === "integer" || kind === "report_number") return "numeric";
   if (kind === "number") return "decimal";
   return "text";
 }
@@ -762,6 +831,7 @@ function composeFieldHint(kind: ComposeFieldKind): string {
   if (kind === "date") return "DD/MM/YYYY";
   if (kind === "email") return "name@example.com";
   if (kind === "phone") return "ספרות, רווחים, + או -";
+  if (kind === "report_number") return "ספרות או מספר מפקח/מספר";
   if (kind === "integer") return "ספרות בלבד";
   if (kind === "number") return "מספר, אפשר עם יחידה";
   return "";
@@ -779,6 +849,7 @@ function validateComposeField(bind: string, value: string): string {
   if (meta.kind === "date" && !isValidComposeDate(raw)) return "תאריך לא תקין";
   if (meta.kind === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return "אימייל לא תקין";
   if (meta.kind === "phone" && !/^\+?[\d\s().-]{7,}$/.test(raw)) return "טלפון לא תקין";
+  if (meta.kind === "report_number" && !/^\d+(?:\/\d+)?$/.test(raw)) return "יש להזין ספרות או מספר מפקח/מספר";
   if (meta.kind === "integer" && !/^\d+$/.test(raw)) return "יש להזין ספרות בלבד";
   if (meta.kind === "number" && !/^\d+(?:[.,]\d+)?(?:\s*\S+)?$/.test(raw)) return "מספר לא תקין";
   return "";
@@ -796,14 +867,23 @@ function validateComposeBeforeAction(actionLabel: string): boolean {
   return false;
 }
 
-async function openCompose(t: PrintTemplate) {
+type ComposeDraftPayload = {
+  data: Record<string, string>;
+  meta?: Record<string, unknown>;
+  client_id?: string | null;
+  contract_id?: string | null;
+  updated_at: string | null;
+};
+
+async function openCompose(t: PrintTemplate, draft?: ComposeDraftPayload) {
   composing.value = normalizeLegacyTemplateBindings(t);
   composeData.value = {};
   for (const f of composeFields.value) composeData.value[f.bind]="";
   draftSavedAt.value = null;
   draftMeta.value = {};
   mode.value = "compose";
-  await loadComposeDraft();
+  if (draft) applyComposeDraft(draft);
+  else await loadComposeDraft();
 }
 
 function normalizeLegacyTemplateBindings(template: PrintTemplate): PrintTemplate {
@@ -826,9 +906,11 @@ function legacyCellText(cell: PrintTemplateCell): string {
 }
 
 function setComposeValue(bind: string, value: string) {
-  const kind = composeFieldKind(baseComposeBind(bind));
+  const base = baseComposeBind(bind);
+  const kind = composeFieldKind(base);
   let next = value;
   if (kind === "integer") next = value.replace(/\D/g, "");
+  if (kind === "report_number") next = sanitizeComposeReportNumber(value);
   composeData.value = {...composeData.value, [bind]: next};
 }
 
@@ -859,7 +941,7 @@ function composeCellHtml(r:number,c:number){
   if(cell.type==="image") return imageHtml(cell);
   return cell.type==="label"
     ? richCellHtml(cell)
-    : escHtml(cell.bind?(composeData.value[cell.bind]??""):"");
+    : escHtml(cell.bind ? composeDisplayValue(cell.bind) : "");
 }
 function composeCellStyle(r:number,c:number){
   const cell=getComposeCell(r,c);
@@ -884,9 +966,13 @@ async function savePdf() {
   if(!validateComposeBeforeAction("לשמור PDF")) return;
   savingPdf.value=true;
   try {
-    const blob=await api.printTemplates.renderPdf(composing.value._id,collectComposeData());
-    downloadBlob(blob, `${safeFileName(composing.value.name)}.pdf`);
-    message.success("PDF נשמר");
+    const blob=await api.printTemplates.savePdf(composing.value._id, collectComposeData(), {
+      ...draftMeta.value,
+      client_id: draftClientId(),
+      contract_id: routeContractId.value || draftContractId(),
+    });
+    downloadBlob(blob, generatedPdfFileName(collectComposeData(), composing.value.name));
+    message.success("PDF נשמר במסמכים והורד");
   } catch(e:any){ message.error(e.message); }
   finally { savingPdf.value=false; }
 }
@@ -894,25 +980,32 @@ async function savePdf() {
 async function loadComposeDraft() {
   if(!composing.value?._id) return;
   try {
-    const draft = await api.printTemplates.getDraft(composing.value._id);
-    composeData.value = normalizeComposeData({...composeData.value, ...stringRecord(draft.data)});
-    draftMeta.value = {
-      ...(draft.meta && typeof draft.meta === "object" && !Array.isArray(draft.meta) ? draft.meta : {}),
-      ...(draft.client_id ? {client_id: draft.client_id} : {}),
-      ...(draft.contract_id ? {contract_id: draft.contract_id} : {}),
-    };
-    draftSavedAt.value = draft.updated_at;
+    const contractId = route.params.contractId;
+    const draft = typeof contractId === "string"
+      ? await api.printTemplates.getDraftForContract(composing.value._id, contractId)
+      : await api.printTemplates.getDraft(composing.value._id);
+    applyComposeDraft(draft);
     if(draft.updated_at) message.success("נטענה טיוטה שמורה");
   } catch(e:any) {
     if(e?.status !== 404) message.error(e.message ?? String(e));
   }
 }
 
+function applyComposeDraft(draft: ComposeDraftPayload) {
+  composeData.value = normalizeComposeData({...composeData.value, ...stringRecord(draft.data)});
+  draftMeta.value = {
+    ...(draft.meta && typeof draft.meta === "object" && !Array.isArray(draft.meta) ? draft.meta : {}),
+    ...(draft.client_id ? {client_id: draft.client_id} : {}),
+    ...(draft.contract_id ? {contract_id: draft.contract_id} : {}),
+  };
+  draftSavedAt.value = draft.updated_at;
+}
+
 async function saveComposeDraft() {
   if(!composing.value?._id) return;
   draftSaving.value=true;
   try {
-    const saved = await api.printTemplates.saveDraft(composing.value._id, stringRecord(composeData.value), draftMeta.value);
+    const saved = await api.printTemplates.saveDraft(composing.value._id, stringRecord(collectComposeData()), draftMeta.value);
     draftMeta.value = saved.meta ?? draftMeta.value;
     draftSavedAt.value = saved.updated_at;
     message.success("הטיוטה נשמרה");
@@ -926,7 +1019,11 @@ async function saveComposeDraft() {
 function collectComposeData(): Record<string, unknown> {
   const data:Record<string,unknown>={};
   for(const [k,v] of Object.entries(composeData.value)) {
-    data[k]=composeFieldKind(baseComposeBind(k)) === "date" ? normalizeDateForDisplay(v) : v;
+    const base = baseComposeBind(k);
+    const kind = composeFieldKind(base);
+    if (kind === "date") data[k] = normalizeDateForDisplay(v);
+    else if (kind === "report_number") data[k] = formatComposeReportNumber(v, base);
+    else data[k] = v;
   }
   return data;
 }
@@ -940,12 +1037,40 @@ function stringRecord(raw: Record<string, unknown>): Record<string,string> {
 function normalizeComposeData(data: Record<string,string>): Record<string,string> {
   const normalized: Record<string,string> = {};
   for (const [key, value] of Object.entries(data)) {
-    const kind = composeFieldKind(baseComposeBind(key));
+    const base = baseComposeBind(key);
+    const kind = composeFieldKind(base);
     if (kind === "integer") normalized[key] = value.replace(/\D/g, "");
+    else if (kind === "report_number") normalized[key] = sanitizeComposeReportNumber(value);
     else if (kind === "date") normalized[key] = normalizeDateForDisplay(value);
     else normalized[key] = value;
   }
   return normalized;
+}
+
+function composeDisplayValue(bind: string): string {
+  const base = baseComposeBind(bind);
+  const value = composeData.value[bind] ?? "";
+  return composeFieldKind(base) === "report_number" ? formatComposeReportNumber(value, base) : value;
+}
+
+function sanitizeComposeReportNumber(value: string): string {
+  return value.trim().replace(/[^\d/]/g, "").replace(/\/{2,}/g, "/");
+}
+
+function formatComposeReportNumber(value: string, base: string): string {
+  const raw = sanitizeComposeReportNumber(value);
+  if (!raw || base === "prev_report_number") return raw;
+  const inspectorNumber = engineerProfile.value?.inspector_number?.trim();
+  if (!inspectorNumber) return raw;
+  const parts = raw.split("/").map((part) => part.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    if (parts[0] === inspectorNumber) {
+      const suffix = parts.slice(1).join("").replace(/\D/g, "");
+      return suffix ? `${inspectorNumber}/${suffix}` : inspectorNumber;
+    }
+    return raw;
+  }
+  return `${inspectorNumber}/${parts[0]}`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -963,15 +1088,51 @@ function safeFileName(name: string): string {
   return name.trim().replace(/[\\/:*?"<>|]+/g,"-") || "template";
 }
 
+function generatedPdfFileName(data: Record<string, unknown>, fallback: string): string {
+  const parts = [
+    pickFirstString(data, ["equipment_type", "inspection_type", "contract_type", "type", "checked_equipment"]),
+    pickFirstString(data, ["license_number", "lisence_number"]),
+    pickFirstString(data, ["client_company", "client_name", "company", "counterparty"]),
+    pickFirstString(data, ["contract_number", "document_number", "report_number"]),
+  ].filter(Boolean);
+  return `${safeFileName(parts.join(" ") || fallback)}.pdf`;
+}
+
+function pickFirstString(data: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
 function formatDraftTime(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
 }
 
+async function editContractFromDraft() {
+  const contractId = routeContractId.value || draftContractId();
+  if (!contractId) return;
+  await router.push({
+    path: "/contracts",
+    query: {
+      edit: contractId,
+      returnTo: route.fullPath,
+    },
+  });
+}
+
 async function createContractFromCompose() {
   if(!composing.value?._id) return;
   if(!validateComposeBeforeAction("ליצור חוזה")) return;
-  const fields = {...composeData.value};
+  const existingContractId = routeContractId.value || draftContractId();
+  if(existingContractId) {
+    message.info("הטיוטה כבר מקושרת לחוזה קיים. אפשר לערוך אותה מכרטיס החוזה.");
+    await router.replace(`/contracts/${existingContractId}/draft`);
+    return;
+  }
+  const fields = stringRecord(collectComposeData());
   const expiryDate = normalizeDateForContract(
     pickField(fields, ["expiry_date", "next_inspection_date", "valid_until", "בתוקף עד"])
   );
@@ -1002,8 +1163,9 @@ async function createContractFromCompose() {
       client_id: draftClientId(),
       contract_id: String(contract.id ?? ""),
     };
-    await api.printTemplates.saveDraft(composing.value._id, stringRecord(composeData.value), draftMeta.value);
+    await api.printTemplates.saveDraft(composing.value._id, stringRecord(collectComposeData()), draftMeta.value);
     message.success(`נוצר חוזה עבור ${contract.contract_number ?? composing.value.name}. ניתן ליצור תזכורת מכרטיס החוזה.`);
+    if (contract.id) await router.replace(`/contracts/${contract.id}/draft`);
   } catch(e:any) {
     message.error(e.message ?? String(e));
   } finally {
@@ -1013,6 +1175,11 @@ async function createContractFromCompose() {
 
 function draftClientId(): string | null {
   const value = draftMeta.value.client_id;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function draftContractId(): string | null {
+  const value = draftMeta.value.contract_id;
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
@@ -1486,9 +1653,22 @@ function stopRowResize(){ resizeRow.value=null; window.removeEventListener("mous
   display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
 }
 .ptp-title { font-size: 16px; font-weight: 600; flex: 1; }
+.route-draft-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+}
+.route-draft-loading__text {
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
 .compose-draft-status {
   color: #64748b;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -1515,6 +1695,7 @@ function stopRowResize(){ resizeRow.value=null; window.removeEventListener("mous
 .compose-wrap { display: flex; gap: 0; flex: 1; overflow: hidden; border: 1px solid #ccc; border-radius: 6px; }
 .compose-preview { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-left: 1px solid #ccc; }
 .pane-label { padding: 6px 12px; font-size: 12px; font-weight: 600; color: #555; background: #f3f3f3; border-bottom: 1px solid #ccc; }
+.pane-label--with-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .compose-scroll { flex: 1; overflow: auto; background: #eee; padding: 20px; }
 .render-table { border-collapse: collapse; table-layout: fixed; font-family: Arial, sans-serif; }
 .compose-form { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; background: #fafafa; }

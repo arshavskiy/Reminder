@@ -113,6 +113,7 @@ export interface FeatureDefinition {
 }
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
+export type DocumentSource = "scanned" | "generated";
 export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error";
 export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
@@ -135,6 +136,7 @@ export interface Document {
   file_size_bytes: number;
   import_date: string;
   processing_status: ProcessingStatus;
+  document_source?: DocumentSource | null;
   error_message: string | null;
   raw_text: string | null;
   extracted_fields?: string | null;

@@ -205,6 +205,7 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
     file_size_bytes: fileSize,
     import_date: now,
     processing_status: "queued",
+    document_source: "scanned",
     created_at: now,
     updated_at: now,
     spaces_key: spacesKey,

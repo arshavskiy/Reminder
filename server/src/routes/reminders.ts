@@ -3,14 +3,13 @@ import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {sendReminderEmail} from "../reminders/emailSender";
 import {advanceContractAfterSentReminder, generateContractReminders} from "../reminders/scheduler";
-import type {EquipmentCategory, ReminderWithContext} from "../../src/shared/types.js";
+import type {ReminderWithContext} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSettings} from "../settings";
 import {pickEmailTemplate} from "../templates/seedEmailTemplates";
 import {clientDisplayName as normalizeClientNameForDisplay, normalizeClientDisplayName, normalizePhoneIdentityKey} from "../utils/clientNames";
 import {logger} from "../logger";
 
-const HYDRAULIC_CATEGORIES: EquipmentCategory[] = ["lift", "scaffold", "ladder"];
 const HYDRAULIC_INTERVAL_MONTHS = [4, 6, 12, 14] as const;
 
 function parseIsoDateOnly(value: string): Date | null {
@@ -280,9 +279,9 @@ export function registerReminderRoutes(app: express.Application) {
       skip_reminders?: boolean;
     };
 
-    const category = body.equipment?.category as EquipmentCategory | undefined;
-    if (!category || !HYDRAULIC_CATEGORIES.includes(category)) {
-      res.status(400).json({ error: `equipment.category must be one of: ${HYDRAULIC_CATEGORIES.join(", ")}` });
+    const category = body.equipment?.category?.trim();
+    if (!category) {
+      res.status(400).json({ error: "equipment.category is required" });
       return;
     }
 
@@ -462,6 +461,11 @@ export function registerReminderRoutes(app: express.Application) {
       return;
     }
     if (reportNumber) {
+      const existingContract = await col("contracts").findOne({ user_id: userId, contract_number: reportNumber });
+      if (existingContract) {
+        res.status(409).json({ error: `Contract number already exists: ${reportNumber}` });
+        return;
+      }
       await syncInspectionSequenceFromReportNumber(userId, reportNumber);
     }
 

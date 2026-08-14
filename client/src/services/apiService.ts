@@ -67,7 +67,7 @@ export interface HydraulicCheckRequest {
     notes?: string;
   };
   equipment: {
-    category: "lift" | "scaffold" | "ladder";
+    category: string;
     name?: string;
     manufacturer?: string;
     model?: string;
@@ -147,7 +147,11 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     credentials: "include",
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(await responseErrorMessage(res, `POST ${path} failed: ${res.status}`)) as any;
+    err.status = res.status;
+    throw err;
+  }
   return res.json() as Promise<T>;
 }
 
@@ -158,13 +162,32 @@ async function put<T>(path: string, body: unknown): Promise<T> {
     credentials: "include",
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(await responseErrorMessage(res, `PUT ${path} failed: ${res.status}`)) as any;
+    err.status = res.status;
+    throw err;
+  }
   return res.json() as Promise<T>;
 }
 
 async function del(path: string): Promise<void> {
   const res = await fetch(BASE + path, { method: "DELETE", credentials: "include" });
-  if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(await responseErrorMessage(res, `DELETE ${path} failed: ${res.status}`)) as any;
+    err.status = res.status;
+    throw err;
+  }
+}
+
+async function responseErrorMessage(res: Response, fallback: string): Promise<string> {
+  const contentType = res.headers.get("Content-Type") ?? "";
+  if (contentType.includes("application/json")) {
+    const body = await res.json().catch(() => null) as { error?: unknown; message?: unknown } | null;
+    const message = body?.error ?? body?.message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  const text = await res.text().catch(() => "");
+  return text.trim() || fallback;
 }
 
 async function adminGet<T>(path: string): Promise<T> {
@@ -611,6 +634,22 @@ export const api = {
       contract_id?: string | null;
       updated_at: string | null;
     }>(`/print-templates/${id}/draft`),
+    getContractDraft: (contractId: string) => get<{
+      template_id: string;
+      template_name: string;
+      data: Record<string, string>;
+      meta?: Record<string, unknown>;
+      client_id?: string | null;
+      contract_id?: string | null;
+      updated_at: string | null;
+    }>(`/contracts/${contractId}/print-draft`),
+    getDraftForContract: (id: string, contractId: string) => get<{
+      data: Record<string, string>;
+      meta?: Record<string, unknown>;
+      client_id?: string | null;
+      contract_id?: string | null;
+      updated_at: string | null;
+    }>(`/print-templates/${id}/draft?contractId=${encodeURIComponent(contractId)}`),
     saveDraft: (id: string, data: Record<string, string>, meta?: Record<string, unknown>) =>
       put<{
         ok: boolean;
@@ -626,6 +665,16 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ data }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+      return res.blob();
+    },
+    savePdf: async (id: string, data: Record<string, unknown>, meta?: Record<string, unknown>) => {
+      const res = await fetch(`${BASE}/print-templates/${id}/pdf/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ data, meta }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
       return res.blob();

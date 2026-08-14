@@ -81,6 +81,10 @@ const dropdownThemeOverrides = {
 
 const menuIcons: Record<string, string> = {
   profile: "👤",
+  templatesGroup: "▤",
+  printTemplates: "▤",
+  emailTemplates: "✉",
+  equipment: "▣",
   settings: "⚙",
   admin: "♡",
   logout: "▦",
@@ -90,6 +94,15 @@ const dropdownItems = computed(() => [
   {
     label: "הפרופיל שלי",
     key: "profile",
+  },
+  {
+    label: "הגדרת תבניות וציוד",
+    key: "templatesGroup",
+    children: [
+      { label: "תבניות דפוס", key: "printTemplates" },
+      { label: "תבניות אימייל", key: "emailTemplates" },
+      { label: "הגדרת ציוד", key: "equipment" },
+    ],
   },
   ...(props.userRole === "admin"
     ? [
@@ -116,6 +129,12 @@ function renderDropdownLabel(option: any) {
 async function handleSelect(key: string) {
   if (key === "profile") {
     router.push("/profile");
+  } else if (key === "printTemplates") {
+    router.push("/settings/print-templates");
+  } else if (key === "emailTemplates") {
+    router.push("/settings/email-templates");
+  } else if (key === "equipment") {
+    router.push("/equipment");
   } else if (key === "settings") {
     router.push("/settings");
   } else if (key === "admin") {

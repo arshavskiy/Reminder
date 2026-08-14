@@ -365,7 +365,7 @@ const modules = [
     desc: "הגדר אילו שדות לחלץ מכל סוג מסמך. יצירה אוטומטית מ-AI.",
     count: () => stats.value?.total_email_templates ?? 0,
     icon: ExtensionPuzzleOutline,
-    to: "/email-templates",
+    to: "/settings/doc-templates",
     show: true,
   },
   {
@@ -375,7 +375,7 @@ const modules = [
     desc: "עצב את תוכן התזכורות עם משתנים דינמיים ולוגו של החברה.",
     count: () => stats.value?.total_email_templates ?? 0,
     icon: MailOutline,
-    to: "/email-templates",
+    to: "/settings/email-templates",
     show: authStore.user?.role === "admin", // Only show to admins
   },
   {

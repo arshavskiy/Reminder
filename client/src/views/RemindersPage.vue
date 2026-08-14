@@ -8,7 +8,7 @@
 <!--          🧪 תזכורת בדיקה-->
 <!--        </n-button>-->
         <n-button type="primary" :loading="loadingEmailTemplates" @click="openCreate">+ תזכורת חדשה</n-button>
-        <n-button v-if="store.rows.length > 0" type="error" quaternary @click="doDeleteAll">מחק הכל</n-button>
+        <n-button v-if="filteredRows.length > 0" type="error" quaternary @click="doDeleteFiltered">מחק</n-button>
       </n-space>
     </n-space>
 
@@ -667,15 +667,17 @@ function confirmDelete(row: ReminderWithContext) {
   });
 }
 
-function doDeleteAll() {
-  const count = store.rows.length;
+function doDeleteFiltered() {
+  const rowsToDelete = [...filteredRows.value];
+  const count = rowsToDelete.length;
+  if (!count) return;
   confirm({
-    title: "מחיקת כל התזכורות",
-    content: `למחוק את כל ${count} התזכורות? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק הכל",
+    title: "מחיקת תזכורות",
+    content: `למחוק ${count} תזכורות מתוך הסינון הנוכחי? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק",
     onConfirm: async () => {
       try {
-        await store.removeAll();
+        await Promise.all(rowsToDelete.map((row) => store.remove(row.id)));
         message.success(`${count} תזכורות נמחקו`);
       } catch (e) {
         message.error(String(e));

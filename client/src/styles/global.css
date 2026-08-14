@@ -322,3 +322,10 @@ html[dir="rtl"] .n-base-clear {
   direction: ltr !important;
 }
 
+/* ── Naive UI dialog defaults ─────────────────────────────────────────────── */
+.n-dialog .n-dialog__title {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+

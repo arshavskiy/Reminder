@@ -2,7 +2,7 @@
   <article
     :class="{ 'card--selected': selected, 'card--selectable': bulkMode }"
     class="card"
-    @click="bulkMode ? emit('toggle-select', String(row.id)) : emit('open-document', row)"
+    @click="bulkMode ? emit('toggle-select', String(row.id)) : emit('open-template', row)"
   >
     <div class="card__row">
       <div class="card__meta">
@@ -22,12 +22,6 @@
           <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
           <span v-if="!row.contact_email" class="tag tag--warn">⚠ חסר אימייל</span>
         </div>
-      </div>
-
-      <div v-if="showActions" class="card__actions">
-        <button class="btn btn--xs btn--danger" @click.stop="emit('delete', row)">
-          <n-icon :component="TrashOutline" /> מחק
-        </button>
       </div>
     </div>
 
@@ -49,6 +43,9 @@
       </button>
       <button class="btn btn--xs btn--ghost" @click.stop="emit('open-template', row)">
         <n-icon :component="DocumentTextOutline" /> פתח בתבנית
+      </button>
+      <button class="btn btn--xs btn--danger" @click.stop="emit('delete', row)">
+        <n-icon :component="TrashOutline" /> מחק חוזה
       </button>
     </div>
 
@@ -282,14 +279,6 @@ function reminderStatusClass(status: string): string {
   color: var(--text-primary);
   min-height: 28px;
 }
-.card__actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-inline-start: auto;
-}
 .card__sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 12px; }
 .card__secondary-actions {
   display: flex;
@@ -482,18 +471,10 @@ html[data-theme="dark"] .rbadge--error { color: #ff7875; }
     overflow-wrap: anywhere;
   }
 
-  .card__actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin-inline-start: 0;
-    width: 100%;
-  }
-
   .card__meta {
     width: 100%;
   }
 
-  .card__actions .btn,
   .card__secondary-actions .btn,
   .reminder-actions .btn {
     justify-content: center;

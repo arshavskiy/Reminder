@@ -54,7 +54,6 @@
           clearable
           filterable
           placeholder="סינון לפי יצרן"
-          style="width:200px"
         />
         <n-select
           v-model:value="filterClientId"
@@ -62,7 +61,6 @@
           clearable
           filterable
           placeholder="סינון לפי לקוח"
-          style="width:200px"
           @update:value="load(true)"
         />
       </div>
@@ -689,6 +687,13 @@ function del(r: Equipment) {
 }
 
 /* ── Search + category chips ────────────────────────────────────────────── */
+.equipment-filters {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 220px) minmax(180px, 220px);
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
 .search {
   width: 100%;
   padding: 10px 16px;
@@ -699,9 +704,11 @@ function del(r: Equipment) {
   color: var(--text-primary);
   font-family: inherit;
   direction: rtl;
-  margin-bottom: 14px;
 }
 .search:focus { border-color: var(--brand-color); outline: none; }
+.equipment-filters :deep(.n-select) {
+  width: 100%;
+}
 
 .catchips {
   display: flex;
