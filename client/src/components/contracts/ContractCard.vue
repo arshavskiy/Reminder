@@ -1,17 +1,17 @@
 <template>
   <article
-    :class="{ 'card--selected': selected, 'card--selectable': bulkMode }"
-    class="card"
-    @click="openDefault"
+      :class="{ 'card--selected': selected, 'card--selectable': bulkMode }"
+      class="card"
+      @click="openDefault"
   >
     <div class="card__row">
       <div class="card__meta">
         <div v-if="bulkMode || row.contract_number" class="card__num">
           <n-checkbox
-            v-if="bulkMode"
-            :checked="selected"
-            @click.stop
-            @update:checked="emit('toggle-select', String(row.id))"
+              v-if="bulkMode"
+              :checked="selected"
+              @click.stop
+              @update:checked="emit('toggle-select', String(row.id))"
           />
           <span v-if="row.contract_number" class="card__num-main">{{ displayContractNumber }}</span>
         </div>
@@ -25,21 +25,21 @@
       </div>
       <div v-if="showReminderActions" class="card__quick-actions">
         <button
-          v-if="!reminders.length"
-          :disabled="creatingReminder === row.id || !canCreateReminder"
-          :title="reminderButtonTitle"
-          class="btn btn--xs btn--primary"
-          :class="{ 'btn--loading': creatingReminder === row.id }"
-          @click.stop="emit('create-reminder', row)"
+            v-if="!reminders.length"
+            :disabled="creatingReminder === row.id || !canCreateReminder"
+            :title="reminderButtonTitle"
+            class="btn btn--xs btn--primary"
+            :class="{ 'btn--loading': creatingReminder === row.id }"
+            @click.stop="emit('create-reminder', row)"
         >
           🔔 צור תזכורת
         </button>
         <button
-          v-else
-          :disabled="creatingReminder === row.id"
-          class="btn btn--xs btn--ghost"
-          :class="{ 'btn--loading': creatingReminder === row.id }"
-          @click.stop="emit('add-reminder', row)"
+            v-else
+            :disabled="creatingReminder === row.id"
+            class="btn btn--xs btn--ghost"
+            :class="{ 'btn--loading': creatingReminder === row.id }"
+            @click.stop="emit('add-reminder', row)"
         >
           + תזכורת
         </button>
@@ -52,21 +52,25 @@
 
     <div v-if="showActions" class="card__secondary-actions">
       <button
-        :disabled="!row.document_id"
-        :title="row.document_id ? 'צפה במסמך' : 'אין מסמך מקושר'"
-        class="btn btn--xs btn--ghost"
-        @click.stop="emit('open-document', row)"
+          :disabled="!row.document_id"
+          :title="row.document_id ? 'צפה במסמך' : 'אין מסמך מקושר'"
+          class="btn btn--xs btn--ghost"
+          @click.stop="emit('open-document', row)"
       >
-        <n-icon :component="EyeOutline" /> צפה
+        <n-icon :component="EyeOutline"/>
+        צפה
       </button>
       <button class="btn btn--xs btn--ghost" @click.stop="emit('edit', row)">
-        <n-icon :component="CreateOutline" /> ערוך
+        <n-icon :component="CreateOutline"/>
+        ערוך
       </button>
       <button class="btn btn--xs btn--ghost" @click.stop="emit('open-template', row)">
-        <n-icon :component="DocumentTextOutline" /> פתח בתבנית
+        <n-icon :component="DocumentTextOutline"/>
+        פתח בתבנית
       </button>
       <button class="btn btn--xs btn--danger" @click.stop="emit('delete', row)">
-        <n-icon :component="TrashOutline" /> מחק חוזה
+        <n-icon :component="TrashOutline"/>
+        מחק חוזה
       </button>
     </div>
 
@@ -92,23 +96,23 @@
       <div class="reminders-header">
         <span class="reminders-title">🔔 תזכורות</span>
         <button
-          v-if="showReminderActions"
-          :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"
-          :title="reminders.length ? 'הוסף תזכורת נוספת' : reminderButtonTitle"
-          class="btn btn--xs btn--primary"
-          :class="{ 'btn--loading': creatingReminder === row.id }"
-          @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"
+            v-if="showReminderActions"
+            :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"
+            :title="reminders.length ? 'הוסף תזכורת נוספת' : reminderButtonTitle"
+            class="btn btn--xs btn--primary"
+            :class="{ 'btn--loading': creatingReminder === row.id }"
+            @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"
         >
           {{ reminders.length ? "+ תזכורת חדשה" : "צור תזכורת" }}
         </button>
       </div>
       <div v-if="reminders.length" class="reminders-list">
         <div
-          v-for="reminder in reminders"
-          :key="reminder.id"
-          class="reminder-row reminder-row--clickable"
-          title="פתח בעמוד התזכורות"
-          @click.stop="router.push('/reminders')"
+            v-for="reminder in reminders"
+            :key="reminder.id"
+            class="reminder-row reminder-row--clickable"
+            title="פתח בעמוד התזכורות"
+            @click.stop="router.push('/reminders')"
         >
           <span class="reminder-date">{{ reminder.trigger_date }}</span>
           <span class="reminder-title">{{ reminder.title }}</span>
@@ -117,20 +121,20 @@
           </span>
           <div v-if="showReminderActions" class="reminder-actions">
             <button
-              v-if="reminder.status !== 'dismissed'"
-              :disabled="sendingReminder === reminder.id"
-              class="btn btn--xs btn--ghost"
-              :class="{ 'btn--loading': sendingReminder === reminder.id }"
-              :title="reminder.status === 'sent' ? 'שלח שוב' : 'שלח עכשיו'"
-              @click.stop="emit('send-reminder', reminder)"
+                v-if="reminder.status !== 'dismissed'"
+                :disabled="sendingReminder === reminder.id"
+                class="btn btn--xs btn--ghost"
+                :class="{ 'btn--loading': sendingReminder === reminder.id }"
+                :title="reminder.status === 'sent' ? 'שלח שוב' : 'שלח עכשיו'"
+                @click.stop="emit('send-reminder', reminder)"
             >
               {{ reminder.status === "sent" ? "📤 שלח שוב" : "📤 שלח" }}
             </button>
             <button
-              v-if="reminder.status === 'pending'"
-              class="btn btn--xs btn--ghost"
-              title="בטל תזכורת"
-              @click.stop="emit('dismiss-reminder', reminder)"
+                v-if="reminder.status === 'pending'"
+                class="btn btn--xs btn--ghost"
+                title="בטל תזכורת"
+                @click.stop="emit('dismiss-reminder', reminder)"
             >
               ✕
             </button>
@@ -197,8 +201,8 @@ const showActions = computed(() => props.showActions ?? true);
 const showReminderActions = computed(() => props.showReminderActions ?? true);
 
 const subtitle = computed(() =>
-  props.row.summary ??
-  `${props.row.contract_type ?? (props.kind === "inspection" ? "תסקיר" : "חוזה")} - ${props.row.client_name ?? "-"}`
+    props.row.summary ??
+    `${props.row.contract_type ?? (props.kind === "inspection" ? "תסקיר" : "חוזה")} - ${props.row.client_name ?? "-"}`
 );
 
 // Short label for the tested equipment: prefer the structured _equipment rows
@@ -207,8 +211,8 @@ const equipmentLabel = computed<string | null>(() => {
   const items = props.row._equipment ?? [];
   if (items.length) {
     const parts = items
-      .map((eq) => [eq.name, eq.manufacturer, eq.model, eq.serial_number].filter(Boolean).join(" · "))
-      .filter(Boolean);
+        .map((eq) => [eq.name, eq.manufacturer, eq.model, eq.serial_number].filter(Boolean).join(" · "))
+        .filter(Boolean);
     if (parts.length) return parts.join(" | ");
   }
   return props.row.equipment_description || null;
@@ -296,10 +300,25 @@ function reminderStatusClass(status: string): string {
   cursor: pointer;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
-.card:hover { border-color: var(--brand-color); box-shadow: var(--shadow-sm); }
-.card--selected { border-color: var(--brand-color); background: rgba(99,226,183,0.06); }
-.card--selectable { cursor: pointer; }
-.card--selectable:hover { border-color: var(--brand-color); }
+
+.card:hover {
+  border-color: var(--brand-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.card--selected {
+  border-color: var(--brand-color);
+  background: rgba(99, 226, 183, 0.06);
+}
+
+.card--selectable {
+  cursor: pointer;
+}
+
+.card--selectable:hover {
+  border-color: var(--brand-color);
+}
+
 .card__row {
   display: flex;
   justify-content: space-between;
@@ -307,11 +326,13 @@ function reminderStatusClass(status: string): string {
   gap: 14px;
   margin-bottom: 14px;
 }
+
 .card__quick-actions {
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
+
 .card__meta {
   display: flex;
   align-items: center;
@@ -319,6 +340,7 @@ function reminderStatusClass(status: string): string {
   gap: 10px;
   min-width: 0;
 }
+
 .card__num {
   display: flex;
   align-items: center;
@@ -328,14 +350,26 @@ function reminderStatusClass(status: string): string {
   color: var(--text-primary);
   min-height: 28px;
 }
-.card__sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 12px; }
+
+.card__sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+
 .card__secondary-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin: -4px 0 12px;
 }
-.card__pills { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.card__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -351,12 +385,25 @@ function reminderStatusClass(status: string): string {
   transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
   white-space: nowrap;
 }
-.btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
-.btn:active { transform: scale(0.97); }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .btn--loading {
   opacity: 0.75;
 }
+
 .btn--loading::before {
   content: "";
   width: 12px;
@@ -367,25 +414,43 @@ function reminderStatusClass(status: string): string {
   animation: btn-spin 0.75s linear infinite;
   flex: 0 0 auto;
 }
-@keyframes btn-spin { to { transform: rotate(360deg); } }
-.btn--ghost { background: transparent; font-weight: 600}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.btn--ghost {
+  background: transparent;
+}
+
 .btn--primary {
   background: var(--brand-color);
   border-color: var(--brand-color);
   color: var(--text-inverse, #fff);
   font-weight: 700;
 }
+
 .btn--primary:hover {
   background: var(--brand-color-hover);
   border-color: var(--brand-color-hover);
 }
+
 .btn--danger {
   background: transparent;
   border-color: var(--error-color, #d03050);
   color: var(--error-color, #d03050);
 }
-.btn--danger:hover { background: rgba(208, 48, 80, 0.08); }
-.btn--xs { padding: 4px 10px; font-size: 12px; }
+
+.btn--danger:hover {
+  background: rgba(208, 48, 80, 0.08);
+}
+
+.btn--xs {
+  padding: 4px 10px;
+  font-size: 12px;
+}
 
 .tag {
   display: inline-flex;
@@ -396,16 +461,58 @@ function reminderStatusClass(status: string): string {
   border-radius: 999px;
   border: 1px solid transparent;
 }
-.tag--ok { background: rgba(99,226,183,0.15); color: #1a7951; border-color: rgba(99,226,183,0.3); }
-.tag--bad { background: rgba(208,48,80,0.10); color: #b22e2e; border-color: rgba(208,48,80,0.2); }
-.tag--info { background: rgba(32,128,240,0.10); color: #1560bd; border-color: rgba(32,128,240,0.2); }
-.tag--neutral { background: var(--bg-elevated); color: var(--text-secondary); border-color: var(--border-color); }
-.tag--muted { background: transparent; color: var(--text-muted); border-color: var(--border-color); }
-.tag--warn { background: rgba(240,160,32,0.12); color: #b27a02; border-color: rgba(240,160,32,0.3); }
-html[data-theme="dark"] .tag--warn { color: #f0a020; }
-html[data-theme="dark"] .tag--ok { color: #63e2b7; }
-html[data-theme="dark"] .tag--bad { color: #ff7875; }
-html[data-theme="dark"] .tag--info { color: #63b3ed; }
+
+.tag--ok {
+  background: rgba(99, 226, 183, 0.15);
+  color: #1a7951;
+  border-color: rgba(99, 226, 183, 0.3);
+}
+
+.tag--bad {
+  background: rgba(208, 48, 80, 0.10);
+  color: #b22e2e;
+  border-color: rgba(208, 48, 80, 0.2);
+}
+
+.tag--info {
+  background: rgba(32, 128, 240, 0.10);
+  color: #1560bd;
+  border-color: rgba(32, 128, 240, 0.2);
+}
+
+.tag--neutral {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+.tag--muted {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+.tag--warn {
+  background: rgba(240, 160, 32, 0.12);
+  color: #b27a02;
+  border-color: rgba(240, 160, 32, 0.3);
+}
+
+html[data-theme="dark"] .tag--warn {
+  color: #f0a020;
+}
+
+html[data-theme="dark"] .tag--ok {
+  color: #63e2b7;
+}
+
+html[data-theme="dark"] .tag--bad {
+  color: #ff7875;
+}
+
+html[data-theme="dark"] .tag--info {
+  color: #63b3ed;
+}
 
 .card__foot {
   display: flex;
@@ -414,8 +521,17 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
   padding-top: 12px;
   border-top: 1px solid var(--border-color);
 }
-.card__foot-col { display: flex; flex-direction: column; gap: 4px; }
-.card__foot-col--end { text-align: left; }
+
+.card__foot-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card__foot-col--end {
+  text-align: left;
+}
+
 .kv {
   font-size: 13px;
   color: var(--text-secondary);
@@ -423,29 +539,61 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
   align-items: center;
   gap: 6px;
 }
-.kv strong { color: var(--text-muted); font-weight: 500; }
-.kv--equipment { align-items: flex-start; }
-.kv--equipment strong { white-space: nowrap; }
 
-.expiry { font-weight: 600; }
-.expiry--ok { color: #1a7951; }
-.expiry--warn { color: #b27a02; }
-.expiry--bad { color: #b22e2e; }
-html[data-theme="dark"] .expiry--ok { color: #63e2b7; }
-html[data-theme="dark"] .expiry--warn { color: #f0a020; }
-html[data-theme="dark"] .expiry--bad { color: #ff7875; }
+.kv strong {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.kv--equipment {
+  align-items: flex-start;
+}
+
+.kv--equipment strong {
+  white-space: nowrap;
+}
+
+.expiry {
+  font-weight: 600;
+}
+
+.expiry--ok {
+  color: #1a7951;
+}
+
+.expiry--warn {
+  color: #b27a02;
+}
+
+.expiry--bad {
+  color: #b22e2e;
+}
+
+html[data-theme="dark"] .expiry--ok {
+  color: #63e2b7;
+}
+
+html[data-theme="dark"] .expiry--warn {
+  color: #f0a020;
+}
+
+html[data-theme="dark"] .expiry--bad {
+  color: #ff7875;
+}
 
 .card__reminders {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--border-color);
 }
+
 .reminders-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
 }
+
 .reminders-title {
   font-size: 12px;
   font-weight: 600;
@@ -453,11 +601,13 @@ html[data-theme="dark"] .expiry--bad { color: #ff7875; }
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
+
 .reminders-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+
 .reminder-row {
   display: flex;
   align-items: center;
@@ -468,12 +618,15 @@ html[data-theme="dark"] .expiry--bad { color: #ff7875; }
   padding: 7px 12px;
   font-size: 13px;
 }
+
 .reminder-row--clickable {
   cursor: pointer;
 }
+
 .reminder-row--clickable:hover {
   border-color: var(--brand-color);
 }
+
 .reminder-date {
   font-size: 12px;
   font-weight: 600;
@@ -481,6 +634,7 @@ html[data-theme="dark"] .expiry--bad { color: #ff7875; }
   white-space: nowrap;
   min-width: 80px;
 }
+
 .reminder-title {
   flex: 1;
   color: var(--text-primary);
@@ -488,11 +642,13 @@ html[data-theme="dark"] .expiry--bad { color: #ff7875; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .reminder-actions {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
 }
+
 .rbadge {
   font-size: 11px;
   font-weight: 600;
@@ -501,15 +657,52 @@ html[data-theme="dark"] .expiry--bad { color: #ff7875; }
   white-space: nowrap;
   flex-shrink: 0;
 }
-.rbadge--pending { background: rgba(240,160,32,0.15); color: #b27a02; border: 1px solid rgba(240,160,32,0.3); }
-.rbadge--sent { background: rgba(99,226,183,0.15); color: #1a7951; border: 1px solid rgba(99,226,183,0.3); }
-.rbadge--snoozed { background: rgba(32,128,240,0.12); color: #1560bd; border: 1px solid rgba(32,128,240,0.2); }
-.rbadge--dismissed { background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border-color); }
-.rbadge--error { background: rgba(208,48,80,0.12); color: #b22e2e; border: 1px solid rgba(208,48,80,0.2); }
-html[data-theme="dark"] .rbadge--pending { color: #f0a020; }
-html[data-theme="dark"] .rbadge--sent { color: #63e2b7; }
-html[data-theme="dark"] .rbadge--snoozed { color: #63b3ed; }
-html[data-theme="dark"] .rbadge--error { color: #ff7875; }
+
+.rbadge--pending {
+  background: rgba(240, 160, 32, 0.15);
+  color: #b27a02;
+  border: 1px solid rgba(240, 160, 32, 0.3);
+}
+
+.rbadge--sent {
+  background: rgba(99, 226, 183, 0.15);
+  color: #1a7951;
+  border: 1px solid rgba(99, 226, 183, 0.3);
+}
+
+.rbadge--snoozed {
+  background: rgba(32, 128, 240, 0.12);
+  color: #1560bd;
+  border: 1px solid rgba(32, 128, 240, 0.2);
+}
+
+.rbadge--dismissed {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.rbadge--error {
+  background: rgba(208, 48, 80, 0.12);
+  color: #b22e2e;
+  border: 1px solid rgba(208, 48, 80, 0.2);
+}
+
+html[data-theme="dark"] .rbadge--pending {
+  color: #f0a020;
+}
+
+html[data-theme="dark"] .rbadge--sent {
+  color: #63e2b7;
+}
+
+html[data-theme="dark"] .rbadge--snoozed {
+  color: #63b3ed;
+}
+
+html[data-theme="dark"] .rbadge--error {
+  color: #ff7875;
+}
 
 .reminders-empty {
   font-size: 12px;

@@ -9,86 +9,95 @@
         </p>
       </div>
       <div class="page__actions">
-        <button class="btn btn--primary" @click="openCreate">
-          {{ kind === "inspection" ? "תסקיר חדש" : "חוזה חדש" }}
-        </button>
-        <button
-          v-if="kind === 'inspection' && canOpenPrintTemplates"
-          class="btn btn--ghost"
-          @click="router.push('/settings/print-templates')"
-        >
-          תבניות הדפסה
-        </button>
-        <button
-          v-if="bulkMode && selectedIds.size > 0"
-          :disabled="bulkSending"
-          class="btn btn--primary"
-          :class="{ 'btn--loading': bulkSending }"
-          @click="bulkSendReminders"
-        >
-          📤 שלח התראות ({{ selectedIds.size }})
-        </button>
-        <button
-          v-if="bulkMode && selectedIds.size > 0"
-          :disabled="bulkGeneratingReminders"
-          class="btn btn--primary"
-          :class="{ 'btn--loading': bulkGeneratingReminders }"
-          title="צור תזכורת לכל התסקירים הנבחרים"
-          @click="bulkCreateRemindersForSelected"
-        >
-          🔔 צור תזכורת לנבחרים ({{ selectedIds.size }})
-        </button>
-        <button
-          v-if="bulkMode && selectedIds.size > 0"
-          :disabled="bulkDeleting"
-          class="btn btn--danger"
-          :class="{ 'btn--loading': bulkDeleting }"
-          @click="bulkDelete"
-        >
-          🗑 מחק נבחרים ({{ selectedIds.size }})
-        </button>
-        <button
-          :class="{ 'btn--ghost-active': bulkMode }"
-          class="btn btn--ghost"
-          title="בחירה מרובה"
-          @click="toggleBulkMode"
-        >
-          ☑ בחירה מרובה
-        </button>
-        <button class="btn btn--ghost" @click="openMonthlyReport" title="הורדת דוח חודשי">
-          📄 דוח חודשי
-        </button>
-        <button class="btn btn--ghost" @click="router.push('/documents')">
-          📁 ארכיון
-        </button>
-        <button class="btn btn--ghost" :disabled="store.loading" @click="refresh" title="רענן">
-          <span class="refresh-icon" :class="{ 'refresh-icon--spin': store.loading }">↻</span> רענן
-        </button>
-        <button
-          v-if="contractsMissingReminder.length > 0"
-          :disabled="bulkGeneratingReminders"
-          class="btn btn--primary"
-          :class="{ 'btn--loading': bulkGeneratingReminders }"
-          title="יצירת תזכורת לכל התסקירים עם אימייל שאין להם תזכורת"
-          @click="generateMissingReminders"
-        >
-          🔔 צור תזכורות חסרות ({{ contractsMissingReminder.length }})
-        </button>
-        <button v-if="isAdmin && store.rows.length > 0" class="btn btn--danger-ghost" @click="showDeleteAllConfirm = true">
-          🗑 מחק הכל
-        </button>
-
+        <div class="page__actions-row page__actions-row--main">
+          <button class="btn btn--primary" @click="openCreate">
+            {{ kind === "inspection" ? "תסקיר חדש" : "חוזה חדש" }}
+          </button>
+          <button
+              v-if="kind === 'inspection' && canOpenPrintTemplates"
+              class="btn btn--ghost"
+              @click="router.push('/settings/print-templates')"
+          >
+            תבניות הדפסה
+          </button>
+          <div class="bulk-action-anchor">
+            <button
+                :class="{ 'btn--ghost-active': bulkMode }"
+                class="btn btn--ghost"
+                title="בחירה מרובה"
+                @click="toggleBulkMode"
+            >
+              ☑ בחירה מרובה
+            </button>
+            <div v-if="bulkMode && selectedIds.size > 0" class="bulk-action-anchor__actions">
+              <button
+                  :disabled="bulkSending"
+                  class="bulk-action-item bulk-action-item--primary"
+                  :class="{ 'bulk-action-item--loading': bulkSending }"
+                  @click="bulkSendReminders"
+              >
+                <n-icon class="bulk-action-item__icon" :component="PaperPlaneOutline"/>
+                <span class="bulk-action-item__text">שלח התראות</span>
+                <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
+              </button>
+              <button
+                  :disabled="bulkGeneratingReminders"
+                  class="bulk-action-item bulk-action-item--primary"
+                  :class="{ 'bulk-action-item--loading': bulkGeneratingReminders }"
+                  title="צור תזכורת לכל התסקירים הנבחרים"
+                  @click="bulkCreateRemindersForSelected"
+              >
+                <n-icon class="bulk-action-item__icon" :component="NotificationsOutline"/>
+                <span class="bulk-action-item__text">צור תזכורת לנבחרים</span>
+                <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
+              </button>
+              <button
+                  :disabled="bulkDeleting"
+                  class="bulk-action-item bulk-action-item--danger"
+                  :class="{ 'bulk-action-item--loading': bulkDeleting }"
+                  @click="bulkDelete"
+              >
+                <n-icon class="bulk-action-item__icon" :component="TrashOutline"/>
+                <span class="bulk-action-item__text">מחק נבחרים</span>
+                <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
+              </button>
+            </div>
+          </div>
+          <button class="btn btn--ghost" @click="openMonthlyReport" title="הורדת דוח חודשי">
+            📄 דוח חודשי
+          </button>
+          <button class="btn btn--ghost" @click="router.push('/documents')">
+            📁 ארכיון
+          </button>
+          <button class="btn btn--ghost" :disabled="store.loading" @click="refresh" title="רענן">
+            <span class="refresh-icon" :class="{ 'refresh-icon--spin': store.loading }">↻</span> רענן
+          </button>
+          <button
+              v-if="contractsMissingReminder.length > 0"
+              :disabled="bulkGeneratingReminders"
+              class="btn btn--primary"
+              :class="{ 'btn--loading': bulkGeneratingReminders }"
+              title="יצירת תזכורת לכל התסקירים עם אימייל שאין להם תזכורת"
+              @click="generateMissingReminders"
+          >
+            🔔 צור תזכורות חסרות ({{ contractsMissingReminder.length }})
+          </button>
+          <button v-if="isAdmin && store.rows.length > 0" class="btn btn--danger-ghost"
+                  @click="showDeleteAllConfirm = true">
+            🗑 מחק הכל
+          </button>
+        </div>
       </div>
     </header>
 
     <!-- ── Unified filter bar ─────────────────────────────────────────── -->
     <div class="filterbar filterbar--compact">
       <button
-        v-for="f in combinedFilters"
-        :key="f.key"
-        class="pill pill--compact"
-        :class="{ 'pill--active': activeFilterKey === f.key }"
-        @click="applyFilter(f)"
+          v-for="f in combinedFilters"
+          :key="f.key"
+          class="pill pill--compact"
+          :class="{ 'pill--active': activeFilterKey === f.key }"
+          @click="applyFilter(f)"
       >
         {{ f.label }}
         <span class="pill__badge">{{ f.count }}</span>
@@ -98,29 +107,29 @@
     <!-- ── Secondary controls row ──────────────────────────────────────── -->
     <div class="toolbar">
       <input
-        v-model="search"
-        class="search"
-        type="search"
-        :placeholder="kind === 'inspection' ? 'חיפוש לפי לקוח, מספר תסקיר, ציוד...' : 'חיפוש לפי לקוח, מספר חוזה...'"
+          v-model="search"
+          class="search"
+          type="search"
+          :placeholder="kind === 'inspection' ? 'חיפוש לפי לקוח, מספר תסקיר, ציוד...' : 'חיפוש לפי לקוח, מספר חוזה...'"
       />
       <div class="toolbar__right">
         <n-select
-          v-model:value="filterClientId"
-          :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]"
-          :virtual-scroll="false"
-          clearable
-          filterable
-          placeholder="סינון לפי לקוח"
-          style="width: 200px"
-          @update:value="() => {}"
+            v-model:value="filterClientId"
+            :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]"
+            :virtual-scroll="false"
+            clearable
+            filterable
+            placeholder="סינון לפי לקוח"
+            style="width: 200px"
+            @update:value="() => {}"
         />
         <n-date-picker
-          v-model:value="filterDateRange"
-          clearable
-          placeholder="סינון לפי תאריך תפוגה"
-          style="width: 260px"
-          type="daterange"
-          @update:value="() => {}"
+            v-model:value="filterDateRange"
+            clearable
+            placeholder="סינון לפי תאריך תפוגה"
+            style="width: 260px"
+            type="daterange"
+            @update:value="() => {}"
         />
       </div>
     </div>
@@ -128,35 +137,35 @@
     <!-- ── Card list ───────────────────────────────────────────────────── -->
     <n-spin :show="store.loading || draftsLoading">
       <n-virtual-list
-        v-if="visibleItems.length"
-        :item-size="220"
-        :items="pagedItems"
-        :item-resizable="true"
-        class="cards-vlist"
-        item-class="cards-vlist__item"
+          v-if="visibleItems.length"
+          :item-size="220"
+          :items="pagedItems"
+          :item-resizable="true"
+          class="cards-vlist"
+          item-class="cards-vlist__item"
       >
         <template #default="{ item }">
           <div class="cards-vlist__pad">
             <ContractCard
-              v-if="item.__type === 'contract'"
-              :key="item.row.id"
-              :bulk-mode="bulkMode"
-              :kind="kind"
-              :inspector-number="engineerProfile?.inspector_number"
-              :reminders="remindersFor(String(item.row.id))"
-              :row="item.row"
-              :selected="selectedIds.has(String(item.row.id))"
-              :creating-reminder="creatingReminderFor"
-              :sending-reminder="sendingReminder"
-              @delete="confirmDelete"
-              @edit="openEdit"
-              @add-reminder="openAddReminder"
-              @create-reminder="createContractReminder"
-              @dismiss-reminder="dismissReminder"
-              @open-template="openContractInTemplate"
-              @open-document="openDoc"
-              @send-reminder="sendReminderNow"
-              @toggle-select="toggleSelect"
+                v-if="item.__type === 'contract'"
+                :key="item.row.id"
+                :bulk-mode="bulkMode"
+                :kind="kind"
+                :inspector-number="engineerProfile?.inspector_number"
+                :reminders="remindersFor(String(item.row.id))"
+                :row="item.row"
+                :selected="selectedIds.has(String(item.row.id))"
+                :creating-reminder="creatingReminderFor"
+                :sending-reminder="sendingReminder"
+                @delete="confirmDelete"
+                @edit="openEdit"
+                @add-reminder="openAddReminder"
+                @create-reminder="createContractReminder"
+                @dismiss-reminder="dismissReminder"
+                @open-template="openContractInTemplate"
+                @open-document="openDoc"
+                @send-reminder="sendReminderNow"
+                @toggle-select="toggleSelect"
             />
             <article v-else class="draft-card" @click="openDraftInTemplate(item.draft)">
               <div class="draft-card__row">
@@ -167,7 +176,9 @@
                 <span class="tag tag--info">טיוטה</span>
               </div>
               <div class="draft-card__body">
-                <span class="kv"><strong>לקוח:</strong> {{ item.draft.client_name || draftField(item.draft, ["client_company", "client_name"]) || "-" }}</span>
+                <span class="kv"><strong>לקוח:</strong> {{
+                    item.draft.client_name || draftField(item.draft, ["client_company", "client_name"]) || "-"
+                  }}</span>
                 <span class="kv"><strong>תבנית:</strong> {{ item.draft.template_name }}</span>
                 <span class="kv"><strong>עודכן:</strong> {{ formatDraftDate(item.draft.updated_at) }}</span>
               </div>
@@ -176,19 +187,19 @@
                   פתח בתבנית
                 </button>
                 <button
-                  v-if="item.draft.contract_id && draftContractHasNoReminder(item.draft)"
-                  :disabled="creatingReminderFor === item.draft.contract_id"
-                  class="btn btn--xs btn--primary"
-                  :class="{ 'btn--loading': creatingReminderFor === item.draft.contract_id }"
-                  @click.stop="createDraftReminder(item.draft)"
+                    v-if="item.draft.contract_id && draftContractHasNoReminder(item.draft)"
+                    :disabled="creatingReminderFor === item.draft.contract_id"
+                    class="btn btn--xs btn--primary"
+                    :class="{ 'btn--loading': creatingReminderFor === item.draft.contract_id }"
+                    @click.stop="createDraftReminder(item.draft)"
                 >
                   🔔 צור תזכורת
                 </button>
                 <button
-                  :disabled="deletingDraftId === item.draft._id"
-                  class="btn btn--xs btn--danger"
-                  :class="{ 'btn--loading': deletingDraftId === item.draft._id }"
-                  @click.stop="deleteDraft(item.draft)"
+                    :disabled="deletingDraftId === item.draft._id"
+                    class="btn btn--xs btn--danger"
+                    :class="{ 'btn--loading': deletingDraftId === item.draft._id }"
+                    @click.stop="deleteDraft(item.draft)"
                 >
                   🗑 מחק
                 </button>
@@ -203,33 +214,35 @@
           מציג {{ pageStart + 1 }}-{{ pageEnd }} מתוך {{ visibleItems.length }}
         </span>
         <n-pagination
-          v-model:page="page"
-          v-model:page-size="pageSize"
-          :item-count="visibleItems.length"
-          :page-sizes="[5, 10, 20, 50]"
-          show-size-picker
+            v-model:page="page"
+            v-model:page-size="pageSize"
+            :item-count="visibleItems.length"
+            :page-sizes="[5, 10, 20, 50]"
+            show-size-picker
         />
       </div>
 
       <div v-if="!visibleItems.length" class="empty">
-        <p>אין {{ activeFilterKey === "drafts" ? "טיוטות שמורות" : kind === "inspection" ? "תסקירים" : "חוזים" }} להצגה</p>
+        <p>אין {{ activeFilterKey === "drafts" ? "טיוטות שמורות" : kind === "inspection" ? "תסקירים" : "חוזים" }}
+          להצגה</p>
         <button class="btn btn--primary" style="margin-top:12px" @click="openCreate">
           + {{ kind === "inspection" ? "הוסף תסקיר ראשון" : "הוסף חוזה ראשון" }}
         </button>
       </div>
     </n-spin>
 
-    <MonthlyReportModal v-model:show="showMonthlyReport" @open-export="openExportFromMonthlyReport" />
+    <MonthlyReportModal v-model:show="showMonthlyReport" @open-export="openExportFromMonthlyReport"/>
     <!-- ── Export wizard modal ──────────────────────────────────────────── -->
     <n-modal v-model:show="showExport" preset="card" style="width:640px; max-width:95vw" :mask-closable="false">
       <template #header>
         <div class="export-header">
           <span>ייצוא חוזים ותסקירים</span>
           <div class="export-steps">
-            <div v-for="(s, i) in exportSteps" :key="s.key" class="export-step" :class="{ 'export-step--active': exportStep === i, 'export-step--done': exportStep > i }">
+            <div v-for="(s, i) in exportSteps" :key="s.key" class="export-step"
+                 :class="{ 'export-step--active': exportStep === i, 'export-step--done': exportStep > i }">
               <div class="export-step__dot">{{ exportStep > i ? '✓' : i + 1 }}</div>
               <span class="export-step__label">{{ s.label }}</span>
-              <div v-if="i < exportSteps.length - 1" class="export-step__line" />
+              <div v-if="i < exportSteps.length - 1" class="export-step__line"/>
             </div>
           </div>
         </div>
@@ -241,22 +254,28 @@
         <n-grid :cols="exportGridCols" :x-gap="16" :y-gap="12">
           <n-gi>
             <n-form-item label="לקוח">
-              <n-select v-model:value="exportFilter.client_id" :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]" :virtual-scroll="false" clearable />
+              <n-select v-model:value="exportFilter.client_id"
+                        :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]" :virtual-scroll="false"
+                        clearable/>
             </n-form-item>
           </n-gi>
           <n-gi>
             <n-form-item label="סטטוס">
-              <n-select v-model:value="exportFilter.status" :options="[{ label: 'כל הסטטוסים', value: null }, ...statusOptions]" :virtual-scroll="false" clearable />
+              <n-select v-model:value="exportFilter.status"
+                        :options="[{ label: 'כל הסטטוסים', value: null }, ...statusOptions]" :virtual-scroll="false"
+                        clearable/>
             </n-form-item>
           </n-gi>
           <n-gi>
             <n-form-item label="סוג בדיקה">
-              <n-select v-model:value="exportFilter.contract_type" :options="[{ label: 'כל הסוגים', value: null }, ...contractTypeOptions]" :virtual-scroll="false" clearable />
+              <n-select v-model:value="exportFilter.contract_type"
+                        :options="[{ label: 'כל הסוגים', value: null }, ...contractTypeOptions]" :virtual-scroll="false"
+                        clearable/>
             </n-form-item>
           </n-gi>
           <n-gi :span="exportGridCols">
             <n-form-item label="טווח תאריכים">
-              <n-date-picker v-model:value="exportFilter.dateRange" type="daterange" clearable style="width:100%" />
+              <n-date-picker v-model:value="exportFilter.dateRange" type="daterange" clearable style="width:100%"/>
             </n-form-item>
           </n-gi>
         </n-grid>
@@ -267,7 +286,7 @@
         <h3 class="export-section-title">בחר עמודות לייצוא</h3>
         <div class="col-grid">
           <label v-for="col in exportColumns" :key="col.key" class="col-check">
-            <n-checkbox v-model:checked="col.selected" />
+            <n-checkbox v-model:checked="col.selected"/>
             <span>{{ col.label }}</span>
           </label>
         </div>
@@ -277,17 +296,20 @@
       <div v-if="exportStep === 2" class="export-body">
         <h3 class="export-section-title">בחר פורמט ייצוא</h3>
         <div class="format-cards">
-          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'csv' }" @click="exportFormat = 'csv'">
+          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'csv' }"
+               @click="exportFormat = 'csv'">
             <div class="format-card__icon">🧾</div>
             <div class="format-card__name">CSV</div>
             <div class="format-card__desc">קובץ נתונים פשוט לפתיחה בכל מערכת</div>
           </div>
-          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'xlsx' }" @click="exportFormat = 'xlsx'">
+          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'xlsx' }"
+               @click="exportFormat = 'xlsx'">
             <div class="format-card__icon">📊</div>
             <div class="format-card__name">Excel (.xlsx)</div>
             <div class="format-card__desc">גיליון Excel עם כיוון מימין לשמאל</div>
           </div>
-          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'pdf' }" @click="exportFormat = 'pdf'">
+          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'pdf' }"
+               @click="exportFormat = 'pdf'">
             <div class="format-card__icon">📄</div>
             <div class="format-card__name">PDF</div>
             <div class="format-card__desc">דף מודפס בעברית</div>
@@ -322,23 +344,24 @@
     </n-modal>
 
     <!-- ── Create / Edit modal ─────────────────────────────────────────── -->
-    <n-modal v-model:show="showForm" :title="editingId ? 'עריכת תסקיר / חוזה' : 'תסקיר / חוזה חדש'" preset="card" style="width: 600px; max-width: 95vw" :mask-closable="false">
+    <n-modal v-model:show="showForm" :title="editingId ? 'עריכת תסקיר / חוזה' : 'תסקיר / חוזה חדש'" preset="card"
+             style="width: 600px; max-width: 95vw" :mask-closable="false">
       <n-form label-placement="top" :model="form">
         <n-grid :cols="formGridCols" :x-gap="16">
           <n-gi>
             <n-form-item label="מספר תסקיר / חוזה">
-              <n-input v-model:value="form.contract_number" placeholder="לדוגמה: 15935" />
+              <n-input v-model:value="form.contract_number" placeholder="לדוגמה: 15935"/>
             </n-form-item>
           </n-gi>
           <n-gi>
             <n-form-item label="סוג">
               <n-select
-                v-model:value="form.contract_type"
-                :options="contractTypeOptions"
-                clearable
-                filterable
-                tag
-                placeholder="בחר או הקלד"
+                  v-model:value="form.contract_type"
+                  :options="contractTypeOptions"
+                  clearable
+                  filterable
+                  tag
+                  placeholder="בחר או הקלד"
               />
             </n-form-item>
           </n-gi>
@@ -346,52 +369,52 @@
           <n-gi :span="formGridCols">
             <n-form-item label="לקוח">
               <n-select
-                v-model:value="form.client_id"
-                :options="clientOptions"
-                clearable
-                filterable
-                placeholder="חיפוש לקוח..."
-                :loading="loadingClients"
+                  v-model:value="form.client_id"
+                  :options="clientOptions"
+                  clearable
+                  filterable
+                  placeholder="חיפוש לקוח..."
+                  :loading="loadingClients"
               />
             </n-form-item>
           </n-gi>
 
           <n-gi>
             <n-form-item label="תאריך תסקיר">
-              <n-input v-model:value="form.start_date" type="text" placeholder="YYYY-MM-DD" />
+              <n-input v-model:value="form.start_date" type="text" placeholder="YYYY-MM-DD"/>
             </n-form-item>
           </n-gi>
           <n-gi>
             <n-form-item label="תאריך תפוגה / בדיקה הבאה">
-              <n-input v-model:value="form.expiry_date" type="text" placeholder="YYYY-MM-DD" />
+              <n-input v-model:value="form.expiry_date" type="text" placeholder="YYYY-MM-DD"/>
             </n-form-item>
           </n-gi>
 
-<!--          <n-gi>-->
-<!--            <n-form-item label="סכום">-->
-<!--              <n-input-number v-model:value="form.amount" placeholder="0" style="width:100%" :show-button="false" />-->
-<!--            </n-form-item>-->
-<!--          </n-gi>-->
-<!--          <n-gi>-->
-<!--            <n-form-item label="מטבע">-->
-<!--              <n-select v-model:value="form.currency" :options="currencyOptions" />-->
-<!--            </n-form-item>-->
-<!--          </n-gi>-->
+          <!--          <n-gi>-->
+          <!--            <n-form-item label="סכום">-->
+          <!--              <n-input-number v-model:value="form.amount" placeholder="0" style="width:100%" :show-button="false" />-->
+          <!--            </n-form-item>-->
+          <!--          </n-gi>-->
+          <!--          <n-gi>-->
+          <!--            <n-form-item label="מטבע">-->
+          <!--              <n-select v-model:value="form.currency" :options="currencyOptions" />-->
+          <!--            </n-form-item>-->
+          <!--          </n-gi>-->
 
           <n-gi>
             <n-form-item label="סטטוס">
-              <n-select v-model:value="form.status" :options="statusOptions" />
+              <n-select v-model:value="form.status" :options="statusOptions"/>
             </n-form-item>
           </n-gi>
-<!--          <n-gi>-->
-<!--            <n-form-item label="צד שכנגד">-->
-<!--              <n-input v-model:value="form.counterparty" placeholder="שם החברה / איש קשר" />-->
-<!--            </n-form-item>-->
-<!--          </n-gi>-->
+          <!--          <n-gi>-->
+          <!--            <n-form-item label="צד שכנגד">-->
+          <!--              <n-input v-model:value="form.counterparty" placeholder="שם החברה / איש קשר" />-->
+          <!--            </n-form-item>-->
+          <!--          </n-gi>-->
 
           <n-gi :span="formGridCols">
             <n-form-item label="סיכום / הערות">
-              <n-input v-model:value="form.summary" type="textarea" :rows="3" placeholder="תיאור קצר..." />
+              <n-input v-model:value="form.summary" type="textarea" :rows="3" placeholder="תיאור קצר..."/>
             </n-form-item>
           </n-gi>
 
@@ -401,26 +424,26 @@
           <n-gi>
             <n-form-item label="קטגוריה">
               <n-select
-                v-model:value="form.equipment.category"
-                :options="equipmentCategoryOptions"
-                clearable
-                placeholder="בחר קטגוריה"
+                  v-model:value="form.equipment.category"
+                  :options="equipmentCategoryOptions"
+                  clearable
+                  placeholder="בחר קטגוריה"
               />
             </n-form-item>
           </n-gi>
           <n-gi>
             <n-form-item label="יצרן">
-              <n-input v-model:value="form.equipment.manufacturer" placeholder="יצרן" />
+              <n-input v-model:value="form.equipment.manufacturer" placeholder="יצרן"/>
             </n-form-item>
           </n-gi>
           <n-gi>
             <n-form-item label="דגם">
-              <n-input v-model:value="form.equipment.model" placeholder="דגם" />
+              <n-input v-model:value="form.equipment.model" placeholder="דגם"/>
             </n-form-item>
           </n-gi>
           <n-gi>
             <n-form-item label='מס"ד סידורי'>
-              <n-input v-model:value="form.equipment.serial_number" placeholder='מס"ד סידורי' />
+              <n-input v-model:value="form.equipment.serial_number" placeholder='מס"ד סידורי'/>
             </n-form-item>
           </n-gi>
         </n-grid>
@@ -437,28 +460,38 @@
     </n-modal>
 
     <!-- ── Delete confirm modal ────────────────────────────────────────── -->
-    <n-modal v-model:show="showDeleteConfirm" title="מחיקת רשומה" preset="dialog" type="error" :positive-text="'מחק'" :negative-text="'ביטול'" @positive-click="doDelete" @negative-click="showDeleteConfirm = false">
-      <p>האם למחוק את הרשומה <strong>{{ deletingRow?.contract_number ?? deletingRow?.contract_type ?? "זו" }}</strong>?</p>
+    <n-modal v-model:show="showDeleteConfirm" title="מחיקת רשומה" preset="dialog" type="error" :positive-text="'מחק'"
+             :negative-text="'ביטול'" @positive-click="doDelete" @negative-click="showDeleteConfirm = false">
+      <p>האם למחוק את הרשומה <strong>{{ deletingRow?.contract_number ?? deletingRow?.contract_type ?? "זו" }}</strong>?
+      </p>
       <n-checkbox v-model:checked="deleteRelatedReminders" style="margin: 8px 0 4px">
         מחק גם תזכורות ואימיילים קשורים
       </n-checkbox>
       <p style="font-size:13px; color:var(--text-secondary)">
-        פעולה זו אינה הפיכה. {{ deleteRelatedReminders ? "התזכורות ורישומי האימייל הקשורים יימחקו גם כן." : "התזכורות ורישומי האימייל הקשורים יישארו במערכת." }}
+        פעולה זו אינה הפיכה. {{
+          deleteRelatedReminders ? "התזכורות ורישומי האימייל הקשורים יימחקו גם כן." : "התזכורות ורישומי האימייל הקשורים יישארו במערכת."
+        }}
       </p>
     </n-modal>
 
-    <n-modal v-model:show="showBulkDeleteConfirm" title="מחיקת רשומות" preset="dialog" type="error" :positive-text="'מחק'" :negative-text="'ביטול'" @positive-click="doBulkDelete" @negative-click="showBulkDeleteConfirm = false">
+    <n-modal v-model:show="showBulkDeleteConfirm" title="מחיקת רשומות" preset="dialog" type="error"
+             :positive-text="'מחק'" :negative-text="'ביטול'" @positive-click="doBulkDelete"
+             @negative-click="showBulkDeleteConfirm = false">
       <p>למחוק {{ selectedIds.size }} רשומות?</p>
       <n-checkbox v-model:checked="bulkDeleteRelatedReminders" style="margin: 8px 0 4px">
         מחק גם תזכורות ואימיילים קשורים
       </n-checkbox>
       <p style="font-size:13px; color:var(--text-secondary)">
-        פעולה זו אינה הפיכה. {{ bulkDeleteRelatedReminders ? "התזכורות ורישומי האימייל הקשורים יימחקו גם כן." : "התזכורות ורישומי האימייל הקשורים יישארו במערכת." }}
+        פעולה זו אינה הפיכה. {{
+          bulkDeleteRelatedReminders ? "התזכורות ורישומי האימייל הקשורים יימחקו גם כן." : "התזכורות ורישומי האימייל הקשורים יישארו במערכת."
+        }}
       </p>
     </n-modal>
 
     <!-- ── Delete all confirm modal ──────────────────────────────────── -->
-    <n-modal v-model:show="showDeleteAllConfirm" title="מחיקת כל הרשומות" preset="dialog" type="error" :positive-text="'מחק הכל'" :negative-text="'ביטול'" @positive-click="doDeleteAll" @negative-click="showDeleteAllConfirm = false">
+    <n-modal v-model:show="showDeleteAllConfirm" title="מחיקת כל הרשומות" preset="dialog" type="error"
+             :positive-text="'מחק הכל'" :negative-text="'ביטול'" @positive-click="doDeleteAll"
+             @negative-click="showDeleteAllConfirm = false">
       <p>למחוק את כל <strong>{{ store.rows.length }}</strong> הרשומות? פעולה זו אינה הפיכה.</p>
       <n-checkbox v-model:checked="deleteAllRelatedReminders" style="margin: 8px 0 4px">
         מחק גם את כל התזכורות הקשורות
@@ -466,28 +499,29 @@
     </n-modal>
 
     <!-- ── Add reminder modal ─────────────────────────────────────────── -->
-    <n-modal v-model:show="showAddReminder" preset="dialog" :show-icon="false" style="width:480px" title="הוסף תזכורת לתסקיר">
+    <n-modal v-model:show="showAddReminder" preset="dialog" :show-icon="false" style="width:480px"
+             title="הוסף תזכורת לתסקיר">
       <n-form v-if="reminderForm" label-placement="top">
         <n-form-item label="כותרת" required>
-          <n-input v-model:value="reminderForm.title" placeholder="לדוגמה: תזכורת בדיקה הבאה" />
+          <n-input v-model:value="reminderForm.title" placeholder="לדוגמה: תזכורת בדיקה הבאה"/>
         </n-form-item>
         <n-form-item label="תאריך שליחה" required>
-          <n-date-picker v-model:value="reminderForm.triggerDateMs" style="width:100%" type="date" />
+          <n-date-picker v-model:value="reminderForm.triggerDateMs" style="width:100%" type="date"/>
         </n-form-item>
         <n-form-item label="אימייל נמען">
-          <n-input v-model:value="reminderForm.emailTo" placeholder="email@example.com" />
+          <n-input v-model:value="reminderForm.emailTo" placeholder="email@example.com"/>
         </n-form-item>
         <n-form-item v-if="canSelectEmailTemplates" label="תבנית אימייל">
           <n-select
-            v-model:value="reminderForm.email_template_id"
-            :options="emailTemplateOptions"
-            :virtual-scroll="false"
-            clearable
-            placeholder="ברירת מחדל"
+              v-model:value="reminderForm.email_template_id"
+              :options="emailTemplateOptions"
+              :virtual-scroll="false"
+              clearable
+              placeholder="ברירת מחדל"
           />
         </n-form-item>
         <n-form-item label="הערה">
-          <n-input v-model:value="reminderForm.body" :rows="2" type="textarea" />
+          <n-input v-model:value="reminderForm.body" :rows="2" type="textarea"/>
         </n-form-item>
       </n-form>
       <template #action>
@@ -498,22 +532,22 @@
 
     <!-- Manual hydraulic-check modal: business + equipment + interval -->
     <n-modal
-      v-model:show="showHydraulicCheck"
-      :title="hydraulicModalTitle"
-      :show-icon="false"
-      class="hydraulic-modal"
-      preset="dialog"
-      style="width: 860px; max-width: 92vw"
+        v-model:show="showHydraulicCheck"
+        :title="hydraulicModalTitle"
+        :show-icon="false"
+        class="hydraulic-modal"
+        preset="dialog"
+        style="width: 860px; max-width: 92vw"
     >
       <n-form v-if="hydraulicForm" class="hydraulic-compact-form" label-placement="top" size="small">
         <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
           <n-gi>
             <n-form-item label="מספר תסקיר">
               <n-input
-                :value="hydraulicForm.contract_number"
-                inputmode="numeric"
-                placeholder="הזן מספר"
-                @update:value="setHydraulicContractNumberInput"
+                  :value="hydraulicForm.contract_number"
+                  inputmode="numeric"
+                  placeholder="הזן מספר"
+                  @update:value="setHydraulicContractNumberInput"
               >
                 <template v-if="currentHydraulicInspectorNumber()" #prefix>
                   {{ currentHydraulicInspectorNumber() }}/
@@ -523,73 +557,73 @@
           </n-gi>
           <n-gi>
             <n-form-item label="מספר תסקיר קודם">
-              <n-input v-model:value="hydraulicPrevReportNumber" placeholder="אופציונלי" />
+              <n-input v-model:value="hydraulicPrevReportNumber" placeholder="אופציונלי"/>
             </n-form-item>
           </n-gi>
           <n-gi>
             <n-form-item label="תבנית הדפסה">
               <n-select
-                v-model:value="hydraulicTemplateId"
-                :loading="loadingHydraulicTemplates"
-                :options="hydraulicTemplateOptions"
-                :virtual-scroll="false"
-                filterable
-                placeholder="בחר תבנית לפתיחה עם הנתונים"
-                @update:value="selectHydraulicTemplate"
+                  v-model:value="hydraulicTemplateId"
+                  :loading="loadingHydraulicTemplates"
+                  :options="hydraulicTemplateOptions"
+                  :virtual-scroll="false"
+                  filterable
+                  placeholder="בחר תבנית לפתיחה עם הנתונים"
+                  @update:value="selectHydraulicTemplate"
               />
             </n-form-item>
           </n-gi>
           <n-gi>
             <n-form-item label="לקוח קיים">
               <n-select
-                v-model:value="hydraulicClientId"
-                :options="clientOptions"
-                clearable
-                filterable
-                placeholder="בחר לקוח קיים, או השאר ריק ליצירת עסק חדש"
-                :loading="loadingClients"
+                  v-model:value="hydraulicClientId"
+                  :options="clientOptions"
+                  clearable
+                  filterable
+                  placeholder="בחר לקוח קיים, או השאר ריק ליצירת עסק חדש"
+                  :loading="loadingClients"
               />
             </n-form-item>
           </n-gi>
         </n-grid>
         <template v-if="!hydraulicClientId">
           <n-form-item label="שם העסק" required>
-            <n-input v-model:value="hydraulicForm.business.display_name" placeholder="לדוגמה: מפעל דן בע&quot;מ" />
+            <n-input v-model:value="hydraulicForm.business.display_name" placeholder="לדוגמה: מפעל דן בע&quot;מ"/>
           </n-form-item>
           <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
             <n-gi>
               <n-form-item label="ח.פ / ת.ז">
-                <n-input v-model:value="hydraulicForm.business.id_number" />
+                <n-input v-model:value="hydraulicForm.business.id_number"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="איש קשר">
-                <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="שם איש קשר" />
+                <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="שם איש קשר"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="טלפון">
-                <n-input v-model:value="hydraulicForm.business.phone" />
+                <n-input v-model:value="hydraulicForm.business.phone"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="אימייל">
-                <n-input v-model:value="hydraulicForm.business.email" placeholder="office@example.com" />
+                <n-input v-model:value="hydraulicForm.business.email" placeholder="office@example.com"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="כתובת">
-                <n-input v-model:value="hydraulicForm.business.address" />
+                <n-input v-model:value="hydraulicForm.business.address"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="ת.ד">
-                <n-input v-model:value="hydraulicForm.business.po_box" />
+                <n-input v-model:value="hydraulicForm.business.po_box"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="מיקוד">
-                <n-input v-model:value="hydraulicForm.business.client_zipcode" />
+                <n-input v-model:value="hydraulicForm.business.client_zipcode"/>
               </n-form-item>
             </n-gi>
           </n-grid>
@@ -598,32 +632,32 @@
           <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
             <n-gi>
               <n-form-item label="איש קשר">
-                <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="אם שונה מפרטי הלקוח" />
+                <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="אם שונה מפרטי הלקוח"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="אימייל לתזכורות">
-                <n-input v-model:value="hydraulicForm.business.email" placeholder="אם שונה מפרטי הלקוח" />
+                <n-input v-model:value="hydraulicForm.business.email" placeholder="אם שונה מפרטי הלקוח"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="טלפון">
-                <n-input v-model:value="hydraulicForm.business.phone" placeholder="אם שונה מפרטי הלקוח" />
+                <n-input v-model:value="hydraulicForm.business.phone" placeholder="אם שונה מפרטי הלקוח"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="כתובת">
-                <n-input v-model:value="hydraulicForm.business.address" placeholder="אם שונה מפרטי הלקוח" />
+                <n-input v-model:value="hydraulicForm.business.address" placeholder="אם שונה מפרטי הלקוח"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="ת.ד">
-                <n-input v-model:value="hydraulicForm.business.po_box" />
+                <n-input v-model:value="hydraulicForm.business.po_box"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="מיקוד">
-                <n-input v-model:value="hydraulicForm.business.client_zipcode" />
+                <n-input v-model:value="hydraulicForm.business.client_zipcode"/>
               </n-form-item>
             </n-gi>
           </n-grid>
@@ -636,116 +670,117 @@
         <div v-for="(equipment, index) in hydraulicEquipmentRows" :key="equipment.id" class="hydraulic-equipment-card">
           <div class="hydraulic-equipment-card__head">
             <strong>מכונה {{ index + 1 }}</strong>
-            <n-button v-if="hydraulicEquipmentRows.length > 1" size="tiny" text type="error" @click="removeHydraulicEquipment(index)">מחק</n-button>
+            <n-button v-if="hydraulicEquipmentRows.length > 1" size="tiny" text type="error"
+                      @click="removeHydraulicEquipment(index)">מחק
+            </n-button>
           </div>
           <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
             <n-gi :span="2">
               <n-form-item label="ציוד קיים ללקוח">
                 <n-select
-                  v-model:value="equipment.selected_equipment_id"
-                  :disabled="!hydraulicClientId"
-                  :loading="loadingHydraulicEquipment"
-                  :options="hydraulicEquipmentOptions"
-                  :virtual-scroll="false"
-                  clearable
-                  filterable
-                  placeholder="חפש לפי שם / יצרן / דגם / מספר סידורי"
-                  @update:value="(id) => selectHydraulicEquipment(index, id)"
+                    v-model:value="equipment.selected_equipment_id"
+                    :disabled="!hydraulicClientId"
+                    :loading="loadingHydraulicEquipment"
+                    :options="hydraulicEquipmentOptions"
+                    :virtual-scroll="false"
+                    clearable
+                    filterable
+                    placeholder="חפש לפי שם / יצרן / דגם / מספר סידורי"
+                    @update:value="(id) => selectHydraulicEquipment(index, id)"
                 />
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="סוג ציוד" required>
                 <n-select
-                  v-model:value="equipment.category"
-                  :options="hydraulicCategoryOptions"
-                  :virtual-scroll="false"
-                  filterable
-                  tag
-                  placeholder="בחר או הקלד סוג ציוד"
+                    v-model:value="equipment.category"
+                    :options="hydraulicCategoryOptions"
+                    :virtual-scroll="false"
+                    filterable
+                    tag
+                    placeholder="בחר או הקלד סוג ציוד"
                 />
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="שם הציוד">
-                <n-input v-model:value="equipment.name" placeholder="לדוגמה: מלגזה חשמלית / במת הרמה / עגורן" />
+                <n-input v-model:value="equipment.name" placeholder="לדוגמה: מלגזה חשמלית / במת הרמה / עגורן"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="יצרן">
-                <n-input v-model:value="equipment.manufacturer" />
+                <n-input v-model:value="equipment.manufacturer"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="דגם">
-                <n-input v-model:value="equipment.model" />
+                <n-input v-model:value="equipment.model"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="מספר סידורי">
                 <n-input
-                  :value="equipment.serial_number"
-                  inputmode="numeric"
-                  @update:value="(value) => setNumericEquipmentField(equipment, 'serial_number', value)"
+                    :value="equipment.serial_number"
+                    inputmode="numeric"
+                    @update:value="(value) => setNumericEquipmentField(equipment, 'serial_number', value)"
                 />
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="מספר רישוי">
                 <n-input
-                  :value="equipment.license_number"
-                  inputmode="numeric"
-                  @update:value="(value) => setNumericEquipmentField(equipment, 'license_number', value)"
+                    :value="equipment.license_number"
+                    inputmode="numeric"
+                    @update:value="(value) => setNumericEquipmentField(equipment, 'license_number', value)"
                 />
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="עומס עבודה">
-                <n-input v-model:value="equipment.load_capacity_work" placeholder="לדוגמה: 3 טון" />
+                <n-input v-model:value="equipment.load_capacity_work" placeholder="לדוגמה: 3 טון"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="עומס בדיקה">
-                <n-input v-model:value="equipment.load_capacity_test" placeholder="לדוגמה: 3.75 טון" />
+                <n-input v-model:value="equipment.load_capacity_test" placeholder="לדוגמה: 3.75 טון"/>
               </n-form-item>
             </n-gi>
             <n-gi>
               <n-form-item label="רדיוס / טווח">
-                <n-input v-model:value="equipment.load_radius" />
+                <n-input v-model:value="equipment.load_radius"/>
               </n-form-item>
             </n-gi>
             <n-gi :span="hydraulicGridCols">
               <n-form-item label="תיאור ציוד">
-                <n-input v-model:value="equipment.description" type="textarea" :rows="1" />
+                <n-input v-model:value="equipment.description" type="textarea" :rows="1"/>
               </n-form-item>
             </n-gi>
           </n-grid>
         </div>
 
 
-
-        <n-divider />
+        <n-divider/>
         <n-form-item label="מועד התזכורת הבאה">
-          <n-select v-model:value="hydraulicReminderMode" :options="hydraulicReminderModeOptions" />
+          <n-select v-model:value="hydraulicReminderMode" :options="hydraulicReminderModeOptions"/>
         </n-form-item>
         <n-form-item v-if="hydraulicReminderMode === 'months'" label="בעוד כמה חודשים">
-          <n-select v-model:value="hydraulicIntervalMonths" :options="hydraulicIntervalOptions" />
+          <n-select v-model:value="hydraulicIntervalMonths" :options="hydraulicIntervalOptions"/>
         </n-form-item>
         <n-form-item v-else label="תאריך תזכורת מותאם אישית" required>
           <n-date-picker
-            v-model:value="hydraulicReminderDateMs"
-            :is-date-disabled="disablePastHydraulicDates"
-            type="date"
-            style="width: 100%"
+              v-model:value="hydraulicReminderDateMs"
+              :is-date-disabled="disablePastHydraulicDates"
+              type="date"
+              style="width: 100%"
           />
         </n-form-item>
         <template v-if="hydraulicTemplateExtraFields.length">
-          <n-divider />
+          <n-divider/>
           <n-h4 style="margin: 0 0 4px">שדות נוספים מהתבנית</n-h4>
           <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
             <n-gi v-for="field in hydraulicTemplateExtraFields" :key="field">
               <n-form-item :label="field">
-                <n-input v-model:value="hydraulicTemplateValues[field]" :placeholder="field" />
+                <n-input v-model:value="hydraulicTemplateValues[field]" :placeholder="field"/>
               </n-form-item>
             </n-gi>
           </n-grid>
@@ -753,19 +788,22 @@
       </n-form>
       <template #action>
         <n-button
-          v-if="hydraulicDraftStore.hasDraft"
-          secondary
-          @click="editSavedHydraulicDraft"
+            v-if="hydraulicDraftStore.hasDraft"
+            secondary
+            @click="editSavedHydraulicDraft"
         >
           ערוך טיוטה שמורה{{ hydraulicDraftSavedAtLabel ? ` (${hydraulicDraftSavedAtLabel})` : "" }}
         </n-button>
         <n-button @click="showHydraulicCheck = false">ביטול</n-button>
         <n-button
-          v-if="updatingHydraulicContractId"
-          :loading="creatingHydraulicCheck"
-          @click="doCreateHydraulicCheck"
-        >עדכן</n-button>
-        <n-button :loading="savingHydraulicDraft" type="primary" @click="saveHydraulicDraftAndPreview">שמור טיוטה ופתח תצוגה</n-button>
+            v-if="updatingHydraulicContractId"
+            :loading="creatingHydraulicCheck"
+            @click="doCreateHydraulicCheck"
+        >עדכן
+        </n-button>
+        <n-button :loading="savingHydraulicDraft" type="primary" @click="saveHydraulicDraftAndPreview">שמור טיוטה ופתח
+          תצוגה
+        </n-button>
       </template>
     </n-modal>
   </div>
@@ -784,6 +822,7 @@ import {
   NGi,
   NGrid,
   NH4,
+  NIcon,
   NInput,
   NModal,
   NPagination,
@@ -793,6 +832,7 @@ import {
   NVirtualList,
   useMessage,
 } from "naive-ui";
+import {NotificationsOutline, PaperPlaneOutline, TrashOutline} from "@vicons/ionicons5";
 import {useContractsStore} from "../stores/contracts.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {useAuthStore} from "../stores/auth.js";
@@ -870,12 +910,14 @@ function toggleBulkMode() {
   bulkMode.value = !bulkMode.value;
   if (!bulkMode.value) selectedIds.value = new Set();
 }
+
 function toggleSelect(id: string) {
   const s = new Set(selectedIds.value);
   if (s.has(id)) s.delete(id);
   else s.add(id);
   selectedIds.value = s;
 }
+
 function bulkDelete() {
   if (!selectedIds.value.size) return;
   bulkDeleteRelatedReminders.value = false;
@@ -888,7 +930,7 @@ async function doBulkDelete() {
   bulkDeleting.value = true;
   try {
     await Promise.all([...selectedIds.value].map((id) =>
-      store.remove(id, { deleteRelatedReminders: bulkDeleteRelatedReminders.value })
+        store.remove(id, {deleteRelatedReminders: bulkDeleteRelatedReminders.value})
     ));
     message.success(`${count} רשומות נמחקו`);
     selectedIds.value = new Set();
@@ -907,14 +949,14 @@ async function bulkSendReminders() {
   bulkSending.value = true;
   try {
     const sendableReminders = [...selectedIds.value]
-      .map((id) => reminderToSendForContract(id))
-      .filter((r): r is ReminderWithContext => Boolean(r));
+        .map((id) => reminderToSendForContract(id))
+        .filter((r): r is ReminderWithContext => Boolean(r));
     if (!sendableReminders.length) {
       message.warning("אין תזכורות לתסקירים הנבחרים");
       return;
     }
     const results = await Promise.allSettled(
-      sendableReminders.map((r) => api.reminders.sendNow(r.id))
+        sendableReminders.map((r) => api.reminders.sendNow(r.id))
     );
     const sent = results.filter((r) => r.status === "fulfilled" && (r.value as any).success).length;
     const failed = results.length - sent;
@@ -950,17 +992,18 @@ function remindersFor(contractId: string): ReminderWithContext[] {
 function reminderToSendForContract(contractId: string): ReminderWithContext | null {
   const rows = remindersFor(contractId).filter((r) => r.status !== "dismissed");
   return rows.find((r) => r.status === "pending")
-    ?? rows.find((r) => r.status === "sent")
-    ?? rows.find((r) => r.status === "snoozed")
-    ?? rows[0]
-    ?? null;
+      ?? rows.find((r) => r.status === "sent")
+      ?? rows.find((r) => r.status === "snoozed")
+      ?? rows[0]
+      ?? null;
 }
 
 async function loadReminders() {
   try {
-    const { rows } = await api.reminders.list({ limit: 1000 });
+    const {rows} = await api.reminders.list({limit: 1000});
     allReminders.value = rows;
-  } catch { /* non-fatal */ }
+  } catch { /* non-fatal */
+  }
 }
 
 const sendingReminder = ref<number | null>(null);
@@ -993,10 +1036,10 @@ async function dismissReminder(r: ReminderWithContext) {
 // ── Email templates ───────────────────────────────────────────────────────────
 const emailTemplates = ref<EmailTemplate[]>([]);
 const emailTemplateOptions = computed(() =>
-  emailTemplates.value.map((t) => ({
-    label: t.is_default ? `${t.name}  (ברירת מחדל)` : t.name,
-    value: t.id,
-  }))
+    emailTemplates.value.map((t) => ({
+      label: t.is_default ? `${t.name}  (ברירת מחדל)` : t.name,
+      value: t.id,
+    }))
 );
 
 // ── Add reminder modal ────────────────────────────────────────────────────────
@@ -1016,9 +1059,9 @@ function openAddReminder(row: ContractWithClient) {
   reminderTargetRow.value = row;
   const client = clientsMap.value.get(String(row.client_id));
   const tpl =
-    emailTemplates.value.find((t) => t.name.includes("תסקיר בדיקה תקופתית")) ??
-    emailTemplates.value.find((t) => !!t.is_default) ??
-    null;
+      emailTemplates.value.find((t) => t.name.includes("תסקיר בדיקה תקופתית")) ??
+      emailTemplates.value.find((t) => !!t.is_default) ??
+      null;
   reminderForm.value = {
     title: `תזכורת בדיקה — ${row.contract_number ?? row.contract_type ?? "תסקיר"}`,
     triggerDateMs: row.expiry_date ? new Date(row.expiry_date).getTime() : Date.now(),
@@ -1039,8 +1082,8 @@ async function saveReminder() {
   try {
     const triggerDate = new Date(reminderForm.value.triggerDateMs).toISOString().slice(0, 10);
     const emailTo = reminderForm.value.emailTo.trim()
-      ? JSON.stringify([reminderForm.value.emailTo.trim()])
-      : null;
+        ? JSON.stringify([reminderForm.value.emailTo.trim()])
+        : null;
     await api.reminders.create({
       source_type: "manual",
       source_id: String(reminderTargetRow.value.id),
@@ -1081,10 +1124,10 @@ function openExportFromMonthlyReport() {
 const exportStep = ref(0);
 const exportFormat = ref<"csv" | "xlsx" | "pdf">("csv");
 const exportSteps = [
-  { key: "filter", label: "סינון" },
-  { key: "columns", label: "עמודות" },
-  { key: "format", label: "פורמט" },
-  { key: "export", label: "ייצוא" },
+  {key: "filter", label: "סינון"},
+  {key: "columns", label: "עמודות"},
+  {key: "format", label: "פורמט"},
+  {key: "export", label: "ייצוא"},
 ];
 const exportFilter = ref({
   client_id: null as string | null,
@@ -1093,20 +1136,20 @@ const exportFilter = ref({
   dateRange: null as [number, number] | null,
 });
 const exportColumns = ref([
-  { key: "contract_number",       label: "מספר תסקיר",         selected: true },
-  { key: "client_name",           label: "פרטי הלקוח/תופש",    selected: true },
-  { key: "contact_person",        label: "איש קשר",            selected: true },
-  { key: "contact_phone",         label: "נייד",               selected: true },
-  { key: "contact_email",         label: "מייל",               selected: true },
-  { key: "client_address",        label: "ישוב / רחוב",        selected: true },
-  { key: "po_box",                label: "ת.ד",                selected: true },
-  { key: "client_zipcode",        label: "מיקוד",              selected: true },
-  { key: "start_date",            label: "תאריך תסקיר",        selected: true },
-  { key: "expiry_date",           label: "בתוקף עד",           selected: true },
-  { key: "equipment_description", label: "תיאור",              selected: true },
-  { key: "status",                label: "סטטוס",              selected: false },
-  { key: "contract_type",         label: "סוג",                selected: false },
-  { key: "summary",               label: "הערות",              selected: false },
+  {key: "contract_number", label: "מספר תסקיר", selected: true},
+  {key: "client_name", label: "פרטי הלקוח/תופש", selected: true},
+  {key: "contact_person", label: "איש קשר", selected: true},
+  {key: "contact_phone", label: "נייד", selected: true},
+  {key: "contact_email", label: "מייל", selected: true},
+  {key: "client_address", label: "ישוב / רחוב", selected: true},
+  {key: "po_box", label: "ת.ד", selected: true},
+  {key: "client_zipcode", label: "מיקוד", selected: true},
+  {key: "start_date", label: "תאריך תסקיר", selected: true},
+  {key: "expiry_date", label: "בתוקף עד", selected: true},
+  {key: "equipment_description", label: "תיאור", selected: true},
+  {key: "status", label: "סטטוס", selected: false},
+  {key: "contract_type", label: "סוג", selected: false},
+  {key: "summary", label: "הערות", selected: false},
 ]);
 const selectedExportColumns = computed(() => exportColumns.value.filter((c) => c.selected));
 const exportedRows = computed(() => filteredRows.value.filter((r) => {
@@ -1124,19 +1167,19 @@ const exportedRows = computed(() => filteredRows.value.filter((r) => {
 function openExport() {
   exportStep.value = 0;
   exportFormat.value = "csv";
-  exportFilter.value = { client_id: null, status: null, contract_type: null, dateRange: null };
+  exportFilter.value = {client_id: null, status: null, contract_type: null, dateRange: null};
   showExport.value = true;
 }
 
 // Equipment columns appended after main columns
 const EQUIPMENT_COLS = [
-  { key: "eq_name",               label: "תיאור ציוד" },
-  { key: "eq_manufacturer",       label: "יצרן" },
-  { key: "eq_model",              label: "דגם" },
-  { key: "eq_serial_number",      label: 'מ"ס סידורי' },
-  { key: "eq_load_capacity_work", label: "עומס עבודה" },
-  { key: "eq_load_capacity_test", label: "עומס מבחן" },
-  { key: "eq_load_radius",        label: "רדיוס" },
+  {key: "eq_name", label: "תיאור ציוד"},
+  {key: "eq_manufacturer", label: "יצרן"},
+  {key: "eq_model", label: "דגם"},
+  {key: "eq_serial_number", label: 'מ"ס סידורי'},
+  {key: "eq_load_capacity_work", label: "עומס עבודה"},
+  {key: "eq_load_capacity_test", label: "עומס מבחן"},
+  {key: "eq_load_radius", label: "רדיוס"},
 ];
 
 function cellValue(r: any, key: string): string {
@@ -1159,7 +1202,7 @@ function expandRows(rows: any[], mainCols: typeof exportColumns.value) {
   for (const r of rows) {
     const equipment: any[] = Array.isArray(r._equipment) && r._equipment.length ? r._equipment : [null];
     for (const eq of equipment) {
-      result.push({ main: r, eq });
+      result.push({main: r, eq});
     }
   }
   return result;
@@ -1185,18 +1228,18 @@ function doExport() {
   }
 
   if (exportFormat.value === "xlsx") {
-    Promise.all([import("xlsx"), import("jszip")]).then(async ([{ utils, write }, { default: JSZip }]) => {
+    Promise.all([import("xlsx"), import("jszip")]).then(async ([{utils, write}, {default: JSZip}]) => {
       const wsData = [
         allCols.map((c) => c.label),
-        ...expanded.map(({ main, eq }) => allCols.map((c) => getCell(main, eq, c.key))),
+        ...expanded.map(({main, eq}) => allCols.map((c) => getCell(main, eq, c.key))),
       ];
       const ws = utils.aoa_to_sheet(wsData);
-      ws["!cols"] = allCols.map(() => ({ wch: 20 }));
+      ws["!cols"] = allCols.map(() => ({wch: 20}));
       const wb = utils.book_new();
       utils.book_append_sheet(wb, ws, "תסקירים");
 
       // SheetJS 0.18 ignores rightToLeft and cell styles — patch the zip XML directly
-      const buf: ArrayBuffer = write(wb, { type: "array", bookType: "xlsx" });
+      const buf: ArrayBuffer = write(wb, {type: "array", bookType: "xlsx"});
       const zip = await JSZip.loadAsync(buf);
 
       // 1. Patch styles.xml — add a bold font + xf style at index 1
@@ -1221,15 +1264,15 @@ function doExport() {
         xml = xml.replace(/<sheetView /g, '<sheetView rightToLeft="1" ');
         // Add s="1" to every cell in row 1 (cells look like <c r="A1" t="str">)
         xml = xml.replace(
-          /(<row r="1"[^>]*>)([\s\S]*?)(<\/row>)/,
-          (_m, open, cells, close) =>
-            open + cells.replace(/<c (r="[A-Z]+1"[^>]*)>/g, '<c $1 s="1">') + close
+            /(<row r="1"[^>]*>)([\s\S]*?)(<\/row>)/,
+            (_m, open, cells, close) =>
+                open + cells.replace(/<c (r="[A-Z]+1"[^>]*)>/g, '<c $1 s="1">') + close
         );
         zip.file("xl/worksheets/sheet1.xml", xml);
       }
-      const outBuf = await zip.generateAsync({ type: "arraybuffer" });
+      const outBuf = await zip.generateAsync({type: "arraybuffer"});
 
-      const blob = new Blob([outBuf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const blob = new Blob([outBuf], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = `contracts-${dateStr}.xlsx`;
@@ -1239,9 +1282,9 @@ function doExport() {
   } else if (exportFormat.value === "csv") {
     const lines = [
       allCols.map((c) => csvQuote(c.label)).join(","),
-      ...expanded.map(({ main, eq }) => allCols.map((c) => csvQuote(getCell(main, eq, c.key))).join(",")),
+      ...expanded.map(({main, eq}) => allCols.map((c) => csvQuote(getCell(main, eq, c.key))).join(",")),
     ];
-    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob(["\uFEFF" + lines.join("\n")], {type: "text/csv;charset=utf-8"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -1250,8 +1293,8 @@ function doExport() {
     URL.revokeObjectURL(url);
   } else {
     const thead = allCols.map((c) => `<th>${c.label}</th>`).join("");
-    const tbody = expanded.map(({ main, eq }) =>
-      `<tr>${allCols.map((c) => `<td>${getCell(main, eq, c.key) || "—"}</td>`).join("")}</tr>`
+    const tbody = expanded.map(({main, eq}) =>
+        `<tr>${allCols.map((c) => `<td>${getCell(main, eq, c.key) || "—"}</td>`).join("")}</tr>`
     ).join("");
     const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8">
       <style>body{font-family:Arial;padding:32px;direction:rtl}h1{font-size:20px}
@@ -1261,7 +1304,11 @@ function doExport() {
       <body><h1>ייצוא תסקירים — ${new Date().toLocaleDateString("he-IL")}</h1>
       <table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></body></html>`;
     const win = window.open("", "_blank");
-    if (win) { win.document.write(html); win.document.close(); setTimeout(() => win.print(), 400); }
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      setTimeout(() => win.print(), 400);
+    }
   }
   exportStep.value = 3;
 }
@@ -1273,14 +1320,14 @@ const saving = ref(false);
 const form = ref(emptyForm());
 
 const equipmentCategoryOptions: { label: string; value: EquipmentCategory }[] = [
-  { label: "מכונות הרמה", value: "lift" },
-  { label: "אביזרי הרמה", value: "accessory" },
-  { label: "פיגומים", value: "scaffold" },
-  { label: "מעליות", value: "ladder" },
-  { label: "מעלונים", value: "balloon" },
-  { label: "קולטי אוויר", value: "intake" },
-  { label: "קולטי קיטור", value: "extractor" },
-  { label: "אחר", value: "other" },
+  {label: "מכונות הרמה", value: "lift"},
+  {label: "אביזרי הרמה", value: "accessory"},
+  {label: "פיגומים", value: "scaffold"},
+  {label: "מעליות", value: "ladder"},
+  {label: "מעלונים", value: "balloon"},
+  {label: "קולטי אוויר", value: "intake"},
+  {label: "קולטי קיטור", value: "extractor"},
+  {label: "אחר", value: "other"},
 ];
 
 const showDeleteConfirm = ref(false);
@@ -1303,8 +1350,8 @@ async function loadClients(force = false) {
   if (clientOptions.value.length && !force) return;
   loadingClients.value = true;
   try {
-    const r = await api.clients.list({ limit: 500 });
-    clientOptions.value = r.rows.map((c) => ({ label: c.display_name, value: String(c.id) }));
+    const r = await api.clients.list({limit: 500});
+    clientOptions.value = r.rows.map((c) => ({label: c.display_name, value: String(c.id)}));
     clientsMap.value = new Map(r.rows.map((c) => [String(c.id), c]));
   } finally {
     loadingClients.value = false;
@@ -1312,7 +1359,7 @@ async function loadClients(force = false) {
 }
 
 async function loadEngineerProfile() {
-  const res = await fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" });
+  const res = await fetch(`${SERVER}/api/profile/engineer`, {credentials: "include"});
   if (!res.ok) throw new Error(`Failed to load engineer profile: ${res.status}`);
   engineerProfile.value = await res.json();
 }
@@ -1337,8 +1384,8 @@ function formatHydraulicContractNumber(value: string | null | undefined): string
   if (!inspectorNumber) return raw.replace(/\D/g, "");
   const parts = raw.split("/").map((part) => part.trim()).filter(Boolean);
   const sequence = parts.length > 1
-    ? (parts[0] === inspectorNumber ? parts[1] : parts[parts.length - 1])
-    : parts[0];
+      ? (parts[0] === inspectorNumber ? parts[1] : parts[parts.length - 1])
+      : parts[0];
   const digits = String(sequence ?? "").replace(/\D/g, "");
   return digits ? `${inspectorNumber}/${digits}` : "";
 }
@@ -1367,8 +1414,8 @@ const suggestedHydraulicContractNumber = computed(() => {
     return seq && seq > max ? seq : max;
   }, seed ? seed - 1 : 0);
   const storedSeq = Number.isFinite(Number(engineerProfile.value?.next_inspection_seq))
-    ? Number(engineerProfile.value?.next_inspection_seq)
-    : seed ? seed - 1 : 0;
+      ? Number(engineerProfile.value?.next_inspection_seq)
+      : seed ? seed - 1 : 0;
   if (!seed && maxFromRows <= 0 && storedSeq <= 0) return "";
   const nextSeq = Math.max(seed ?? 1, maxFromRows + 1, storedSeq + 1);
   return `${inspectorNumber}/${nextSeq}`;
@@ -1415,9 +1462,9 @@ const hydraulicModalTitle = computed(() => updatingHydraulicContractId.value ? "
 
 
 const hydraulicCategoryDefaults: { label: string; value: string }[] = [
-  { label: "מכונות הרמה", value: "lift" },
-  { label: "פיגומים", value: "scaffold" },
-  { label: "מעליות", value: "ladder" },
+  {label: "מכונות הרמה", value: "lift"},
+  {label: "פיגומים", value: "scaffold"},
+  {label: "מעליות", value: "ladder"},
 ];
 
 // Categories already used across the user's equipment, so the dropdown grows as
@@ -1436,7 +1483,7 @@ const hydraulicCategoryOptions = computed(() => {
     const value = cat.trim();
     if (!value || seen.has(value)) continue;
     seen.add(value);
-    options.push({ label: value, value });
+    options.push({label: value, value});
   }
   return options;
 });
@@ -1455,33 +1502,33 @@ const hydraulicReminderMode = ref<"months" | "date">("months");
 const hydraulicReminderDateMs = ref<number | null>(null);
 const hydraulicIntervalMonths = ref<4 | 6 | 12 | 14>(4);
 const hydraulicReminderModeOptions = [
-  { label: "בעוד מספר חודשים מהיום", value: "months" },
-  { label: "בתאריך מותאם אישית", value: "date" },
+  {label: "בעוד מספר חודשים מהיום", value: "months"},
+  {label: "בתאריך מותאם אישית", value: "date"},
 ];
 const hydraulicIntervalOptions = [
-  { label: "4 חודשים", value: 4 },
-  { label: "6 חודשים", value: 6 },
-  { label: "12 חודשים", value: 12 },
-  { label: "14 חודשים", value: 14 },
+  {label: "4 חודשים", value: 4},
+  {label: "6 חודשים", value: 6},
+  {label: "12 חודשים", value: 12},
+  {label: "14 חודשים", value: 14},
 ];
 
 const hydraulicTemplateOptions = computed(() =>
-  hydraulicTemplates.value.map((template) => ({
-    label: `${template.name} (${template.cells.filter((cell) => cell.type === "field").length} שדות)`,
-    value: template._id,
-  }))
+    hydraulicTemplates.value.map((template) => ({
+      label: `${template.name} (${template.cells.filter((cell) => cell.type === "field").length} שדות)`,
+      value: template._id,
+    }))
 );
 
 const hydraulicEquipmentOptions = computed(() =>
-  hydraulicClientEquipment.value.map((equipment) => ({
-    label: [
-      equipment.name,
-      equipment.manufacturer,
-      equipment.model,
-      equipment.serial_number ? `מס׳ ${equipment.serial_number}` : null,
-    ].filter(Boolean).join(" · "),
-    value: String(equipment.id),
-  }))
+    hydraulicClientEquipment.value.map((equipment) => ({
+      label: [
+        equipment.name,
+        equipment.manufacturer,
+        equipment.model,
+        equipment.serial_number ? `מס׳ ${equipment.serial_number}` : null,
+      ].filter(Boolean).join(" · "),
+      value: String(equipment.id),
+    }))
 );
 
 const hydraulicTemplateKnownFields = new Set([
@@ -1498,9 +1545,9 @@ const hydraulicTemplateExtraFields = computed(() => {
   if (!hydraulicTemplate.value) return [];
   const seen = new Set<string>();
   return hydraulicTemplate.value.cells
-    .filter((cell) => cell.type === "field" && cell.bind && !seen.has(cell.bind) && seen.add(cell.bind))
-    .map((cell) => cell.bind!)
-    .filter((bind) => !hydraulicTemplateKnownFields.has(bind) && !bind.match(/_\d+$/));
+      .filter((cell) => cell.type === "field" && cell.bind && !seen.has(cell.bind) && seen.add(cell.bind))
+      .map((cell) => cell.bind!)
+      .filter((bind) => !hydraulicTemplateKnownFields.has(bind) && !bind.match(/_\d+$/));
 });
 
 const hydraulicDraftSavedAtLabel = computed(() => {
@@ -1508,8 +1555,8 @@ const hydraulicDraftSavedAtLabel = computed(() => {
   if (!savedAt) return "";
   const date = new Date(savedAt);
   return Number.isNaN(date.getTime())
-    ? ""
-    : date.toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
+      ? ""
+      : date.toLocaleString("he-IL", {dateStyle: "short", timeStyle: "short"});
 });
 
 function disablePastHydraulicDates(ts: number): boolean {
@@ -1581,11 +1628,11 @@ async function deleteDraft(draft: PrintTemplateDraftSummary) {
 const bulkGeneratingReminders = ref(false);
 
 const contractsMissingReminder = computed(() =>
-  filteredRows.value.filter((row) =>
-    contractHasEmail(row) &&
-    Boolean(row.expiry_date) &&
-    remindersFor(String(row.id)).length === 0
-  )
+    filteredRows.value.filter((row) =>
+        contractHasEmail(row) &&
+        Boolean(row.expiry_date) &&
+        remindersFor(String(row.id)).length === 0
+    )
 );
 
 async function bulkCreateRemindersForSelected() {
@@ -1605,7 +1652,9 @@ async function bulkCreateRemindersForSelected() {
         const result = await api.contracts.createReminder(row.id);
         if (result.reminders.length) created += 1;
         else failed += 1;
-      } catch { failed += 1; }
+      } catch {
+        failed += 1;
+      }
     }
     await loadReminders();
     const parts: string[] = [];
@@ -1676,7 +1725,8 @@ async function openHydraulicCheck() {
   updatingHydraulicContractId.value = null;
   hydraulicUpdateReturnTo.value = "";
   if (!engineerProfile.value) {
-    await loadEngineerProfile().catch(() => {});
+    await loadEngineerProfile().catch(() => {
+    });
   }
   const draft = hydraulicDraftStore.draft;
   hydratingHydraulicDraft.value = true;
@@ -1686,21 +1736,25 @@ async function openHydraulicCheck() {
   hydraulicIntervalMonths.value = draft?.intervalMonths ?? 4;
   hydraulicPrevReportNumber.value = draft?.prevReportNumber ?? "";
   hydraulicEquipmentRows.value = draft?.equipmentRows?.length
-    ? draft.equipmentRows.map((row) => ({ ...row, id: row.id || crypto.randomUUID() }))
-    : [emptyHydraulicEquipmentRow()];
+      ? draft.equipmentRows.map((row) => ({...row, id: row.id || crypto.randomUUID()}))
+      : [emptyHydraulicEquipmentRow()];
   hydraulicClientEquipment.value = [];
-  hydraulicTemplateValues.value = { ...(draft?.templateValues ?? {}) };
-  hydraulicForm.value = draft?.form ? { ...draft.form, business: { ...draft.form.business }, equipment: { ...draft.form.equipment } } : defaultHydraulicCheckForm();
+  hydraulicTemplateValues.value = {...(draft?.templateValues ?? {})};
+  hydraulicForm.value = draft?.form ? {
+    ...draft.form,
+    business: {...draft.form.business},
+    equipment: {...draft.form.equipment}
+  } : defaultHydraulicCheckForm();
   hydratingHydraulicDraft.value = false;
   void loadHydraulicPrintTemplates().then(() => {
     if (draft?.templateId) {
       selectHydraulicTemplate(draft.templateId);
-      hydraulicTemplateValues.value = { ...(draft.templateValues ?? {}) };
+      hydraulicTemplateValues.value = {...(draft.templateValues ?? {})};
     }
   });
   if (draft?.templateId) {
     selectHydraulicTemplate(draft.templateId);
-    hydraulicTemplateValues.value = { ...(draft.templateValues ?? {}) };
+    hydraulicTemplateValues.value = {...(draft.templateValues ?? {})};
   }
   showHydraulicCheck.value = true;
   void loadClients();
@@ -1709,7 +1763,8 @@ async function openHydraulicCheck() {
 
 async function openHydraulicContractUpdate(contractId: string) {
   if (!engineerProfile.value) {
-    await loadEngineerProfile().catch(() => {});
+    await loadEngineerProfile().catch(() => {
+    });
   }
   const row = await api.contracts.get(contractId);
   const manual = plainStringMap(row.manual_fields);
@@ -1810,7 +1865,7 @@ async function loadHydraulicClientEquipment(clientId: string | null) {
   if (!clientId) return;
   loadingHydraulicEquipment.value = true;
   try {
-    const rows = await api.equipment.list({ client_id: clientId }, true);
+    const rows = await api.equipment.list({client_id: clientId}, true);
     if (seq === hydraulicEquipmentLoadSeq) hydraulicClientEquipment.value = rows;
   } catch {
     if (seq === hydraulicEquipmentLoadSeq) hydraulicClientEquipment.value = [];
@@ -1875,8 +1930,8 @@ async function loadHydraulicPrintTemplates() {
 
 function defaultHydraulicTemplateId(): string | null {
   return hydraulicTemplates.value.some((template) => template._id === HYDRAULIC_PRINT_TEMPLATE_ID)
-    ? HYDRAULIC_PRINT_TEMPLATE_ID
-    : hydraulicTemplates.value[0]?._id ?? null;
+      ? HYDRAULIC_PRINT_TEMPLATE_ID
+      : hydraulicTemplates.value[0]?._id ?? null;
 }
 
 function selectHydraulicTemplate(id: string | null) {
@@ -1896,7 +1951,7 @@ function selectHydraulicTemplate(id: string | null) {
 async function applyHydraulicClient(clientId: string | null) {
   if (!hydraulicForm.value) return;
   if (hydratingHydraulicDraft.value) return;
-  hydraulicEquipmentRows.value = hydraulicEquipmentRows.value.map((row) => ({ ...row, selected_equipment_id: null }));
+  hydraulicEquipmentRows.value = hydraulicEquipmentRows.value.map((row) => ({...row, selected_equipment_id: null}));
 
   if (!clientId) {
     hydraulicForm.value.business = {
@@ -1992,7 +2047,7 @@ async function createHydraulicContract() {
     throw new Error("חסר תאריך תזכורת");
   }
   const contractNumber = formatHydraulicContractNumber(
-    hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value,
+      hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value,
   );
   syncPrimaryHydraulicEquipment();
   const payload: HydraulicCheckRequest = {
@@ -2002,8 +2057,8 @@ async function createHydraulicContract() {
     interval_months: hydraulicIntervalMonths.value,
     skip_reminders: true,
     next_inspection_date: hydraulicReminderMode.value === "date"
-      ? formatLocalDate(hydraulicReminderDateMs.value!)
-      : undefined,
+        ? formatLocalDate(hydraulicReminderDateMs.value!)
+        : undefined,
   };
   return api.reminders.createHydraulicCheck(payload);
 }
@@ -2011,12 +2066,12 @@ async function createHydraulicContract() {
 async function updateHydraulicContract(contractId: string) {
   if (!hydraulicForm.value) throw new Error("הטופס לא מוכן");
   const contractNumber = formatHydraulicContractNumber(
-    hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value,
+      hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value,
   );
   syncPrimaryHydraulicEquipment();
   const nextDate = hydraulicReminderMode.value === "date" && hydraulicReminderDateMs.value
-    ? formatLocalDate(hydraulicReminderDateMs.value)
-    : addMonthsToLocalDate(Date.now(), hydraulicIntervalMonths.value);
+      ? formatLocalDate(hydraulicReminderDateMs.value)
+      : addMonthsToLocalDate(Date.now(), hydraulicIntervalMonths.value);
   const data = buildHydraulicTemplateDraft();
   await api.contracts.update(contractId, {
     client_id: hydraulicClientId.value ?? undefined,
@@ -2043,9 +2098,9 @@ async function updateHydraulicContract(contractId: string) {
   } as any);
   if (hydraulicTemplateId.value) {
     await api.printTemplates.saveDraft(
-      hydraulicTemplateId.value,
-      data,
-      { ...buildHydraulicTemplateDraftMeta(), contract_id: contractId },
+        hydraulicTemplateId.value,
+        data,
+        {...buildHydraulicTemplateDraftMeta(), contract_id: contractId},
     );
   }
 }
@@ -2086,9 +2141,9 @@ async function saveHydraulicDraftAndPreview() {
       clientId = String(result.client.id ?? clientId);
     }
     await api.printTemplates.saveDraft(
-      hydraulicTemplateId.value,
-      data,
-      { ...buildHydraulicTemplateDraftMeta(), contract_id: contractId, client_id: clientId },
+        hydraulicTemplateId.value,
+        data,
+        {...buildHydraulicTemplateDraftMeta(), contract_id: contractId, client_id: clientId},
     );
     clearHydraulicDraftOnClose.value = true;
     showHydraulicCheck.value = false;
@@ -2114,9 +2169,9 @@ async function openContractInTemplate(row: ContractWithClient) {
       return;
     }
     await api.printTemplates.saveDraft(
-      templateId,
-      buildContractTemplateDraft(row),
-      buildContractTemplateDraftMeta(row, templateId),
+        templateId,
+        buildContractTemplateDraft(row),
+        buildContractTemplateDraftMeta(row, templateId),
     );
     await router.push(`/contracts/${row.id}/draft`);
   } catch (e) {
@@ -2141,8 +2196,8 @@ function formatDraftDate(value: string | null): string {
   if (!value) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
+      ? value
+      : date.toLocaleString("he-IL", {dateStyle: "short", timeStyle: "short"});
 }
 
 async function resolveContractTemplateId(): Promise<string | null> {
@@ -2245,8 +2300,8 @@ function buildHydraulicTemplateDraft(): Record<string, string> {
   const form = hydraulicForm.value!;
   const contractNumber = formatHydraulicContractNumber(form.contract_number?.trim() || suggestedHydraulicContractNumber.value);
   const nextDate = hydraulicReminderMode.value === "date" && hydraulicReminderDateMs.value
-    ? formatLocalDate(hydraulicReminderDateMs.value)
-    : addMonthsToLocalDate(Date.now(), hydraulicIntervalMonths.value);
+      ? formatLocalDate(hydraulicReminderDateMs.value)
+      : addMonthsToLocalDate(Date.now(), hydraulicIntervalMonths.value);
   const today = todayIso();
   const business = form.business;
   const firstEquipment = hydraulicEquipmentRows.value[0] ?? emptyHydraulicEquipmentRow();
@@ -2306,8 +2361,8 @@ function buildHydraulicTemplateDraftMeta(): Record<string, unknown> {
     client_id: hydraulicClientId.value,
     template_id: hydraulicTemplateId.value,
     equipment_ids: hydraulicEquipmentRows.value
-      .map((equipment) => equipment.selected_equipment_id)
-      .filter(Boolean),
+        .map((equipment) => equipment.selected_equipment_id)
+        .filter(Boolean),
     equipment_count: hydraulicEquipmentRows.value.length,
   };
 }
@@ -2319,32 +2374,32 @@ function addMonthsToLocalDate(ms: number, months: number): string {
 }
 
 const kindOptions = [
-  { label: "תסקירים", value: "inspection" },
-  { label: "חוזים",   value: "contract" },
-  { label: "הכל",     value: "all" },
+  {label: "תסקירים", value: "inspection"},
+  {label: "חוזים", value: "contract"},
+  {label: "הכל", value: "all"},
 ];
 
 const contractTypeOptions = [
-  { label: "תסקיר בדיקה תקופתית", value: "תסקיר בדיקה תקופתית" },
-  { label: "תסקיר בדיקה", value: "תסקיר בדיקה" },
-  { label: "חוזה שירות", value: "חוזה שירות" },
-  { label: "חוזה תחזוקה", value: "חוזה תחזוקה" },
-  { label: "חשבונית", value: "חשבונית" },
-  { label: "ביטוח", value: "ביטוח" },
-  { label: "אישור", value: "אישור" },
+  {label: "תסקיר בדיקה תקופתית", value: "תסקיר בדיקה תקופתית"},
+  {label: "תסקיר בדיקה", value: "תסקיר בדיקה"},
+  {label: "חוזה שירות", value: "חוזה שירות"},
+  {label: "חוזה תחזוקה", value: "חוזה תחזוקה"},
+  {label: "חשבונית", value: "חשבונית"},
+  {label: "ביטוח", value: "ביטוח"},
+  {label: "אישור", value: "אישור"},
 ];
 
 const currencyOptions = [
-  { label: "₪ שקל", value: "ILS" },
-  { label: "$ דולר", value: "USD" },
-  { label: "€ אירו", value: "EUR" },
+  {label: "₪ שקל", value: "ILS"},
+  {label: "$ דולר", value: "USD"},
+  {label: "€ אירו", value: "EUR"},
 ];
 
 const statusOptions = [
-  { label: "פעיל", value: "active" },
-  { label: "פג תוקף", value: "expired" },
-  { label: "בוטל", value: "cancelled" },
-  { label: "חודש", value: "renewed" },
+  {label: "פעיל", value: "active"},
+  {label: "פג תוקף", value: "expired"},
+  {label: "בוטל", value: "cancelled"},
+  {label: "חודש", value: "renewed"},
 ];
 
 type CombinedFilter = {
@@ -2359,15 +2414,57 @@ type CombinedFilter = {
 const combinedFilters = computed<CombinedFilter[]>(() => {
   const rows = store.rows ?? [];
   return [
-    { key: "all",      label: "הכל",       count: rows.length,                                                              type: "status", statusValue: null },
-    { key: "active",   label: "פעיל",      count: rows.filter((r) => r.status === "active").length,                         type: "status", statusValue: "active" },
-    { key: "expired",  label: "פג תוקף",   count: rows.filter((r) => r.status === "expired" || contractMatchesDueFilter(r, "overdue")).length, type: "status", statusValue: "expired" },
-    { key: "month",    label: "החודש",     count: rows.filter((r) => contractMatchesDueFilter(r, "month")).length,           type: "due",    dueValue: "month" },
-    { key: "sent",     label: "נשלחו",     count: rows.filter((r) => contractMatchesDueFilter(r, "sent")).length,            type: "due",    dueValue: "sent" },
-    { key: "no_email", label: "חסר אימייל", count: rows.filter((r) => contractMatchesDueFilter(r, "no_email")).length,       type: "due",    dueValue: "no_email" },
-    { key: "has_reminder", label: "יש תזכורת", count: rows.filter((r) => remindersFor(String(r.id)).length > 0).length,    type: "due",    dueValue: "has_reminder" },
-    { key: "drafts",   label: "טיוטות",     count: templateDrafts.value.length,                                             type: "drafts" },
-    { key: "cancelled", label: "בוטל",     count: rows.filter((r) => r.status === "cancelled").length,                      type: "status", statusValue: "cancelled" },
+    {key: "all", label: "הכל", count: rows.length, type: "status", statusValue: null},
+    {
+      key: "active",
+      label: "פעיל",
+      count: rows.filter((r) => r.status === "active").length,
+      type: "status",
+      statusValue: "active"
+    },
+    {
+      key: "expired",
+      label: "פג תוקף",
+      count: rows.filter((r) => r.status === "expired" || contractMatchesDueFilter(r, "overdue")).length,
+      type: "status",
+      statusValue: "expired"
+    },
+    {
+      key: "month",
+      label: "החודש",
+      count: rows.filter((r) => contractMatchesDueFilter(r, "month")).length,
+      type: "due",
+      dueValue: "month"
+    },
+    {
+      key: "sent",
+      label: "נשלחו",
+      count: rows.filter((r) => contractMatchesDueFilter(r, "sent")).length,
+      type: "due",
+      dueValue: "sent"
+    },
+    {
+      key: "no_email",
+      label: "חסר אימייל",
+      count: rows.filter((r) => contractMatchesDueFilter(r, "no_email")).length,
+      type: "due",
+      dueValue: "no_email"
+    },
+    {
+      key: "has_reminder",
+      label: "יש תזכורת",
+      count: rows.filter((r) => remindersFor(String(r.id)).length > 0).length,
+      type: "due",
+      dueValue: "has_reminder"
+    },
+    {key: "drafts", label: "טיוטות", count: templateDrafts.value.length, type: "drafts"},
+    {
+      key: "cancelled",
+      label: "בוטל",
+      count: rows.filter((r) => r.status === "cancelled").length,
+      type: "status",
+      statusValue: "cancelled"
+    },
   ];
 });
 
@@ -2425,12 +2522,12 @@ function contractMatchesDueFilter(row: ContractWithClient, filter: DueFilter): b
 
 
 function load() {
-  store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value });
+  store.fetch({status: statusFilter.value ?? undefined, limit: 200, kind: kind.value});
 }
 
 async function refresh() {
   await Promise.all([
-    store.fetch({ status: statusFilter.value ?? undefined, limit: 200, kind: kind.value }, true),
+    store.fetch({status: statusFilter.value ?? undefined, limit: 200, kind: kind.value}, true),
     loadTemplateDrafts(),
   ]);
 }
@@ -2451,18 +2548,21 @@ async function loadTemplateDrafts() {
 }
 
 onMounted(async () => {
-  await featuresStore.fetchFeatures().catch(() => {});
+  await featuresStore.fetchFeatures().catch(() => {
+  });
   updateViewport();
   window.addEventListener("resize", updateViewport);
   await refresh();
   store.fetchExpiring(30);
   loadClients();
   loadReminders();
-  loadEngineerProfile().catch(() => {});
+  loadEngineerProfile().catch(() => {
+  });
   if (canSelectEmailTemplates.value) {
     try {
       emailTemplates.value = await api.emailTemplates.list();
-    } catch { /* non-fatal */ }
+    } catch { /* non-fatal */
+    }
   } else {
     emailTemplates.value = [];
   }
@@ -2479,22 +2579,22 @@ watch(() => route.query.new, () => openCreateFromRoute());
 function openCreateFromRoute() {
   if (route.query.new === undefined) return;
   openCreate();
-  const nextQuery = { ...route.query };
+  const nextQuery = {...route.query};
   delete nextQuery.new;
-  void router.replace({ path: "/contracts", query: nextQuery });
+  void router.replace({path: "/contracts", query: nextQuery});
 }
 
 async function openHydraulicUpdateFromRoute() {
   const editId = typeof route.query.edit === "string" ? route.query.edit : "";
   if (!editId) return;
   hydraulicUpdateReturnTo.value = typeof route.query.returnTo === "string" && route.query.returnTo.startsWith("/")
-    ? route.query.returnTo
-    : "";
+      ? route.query.returnTo
+      : "";
   await openHydraulicContractUpdate(editId);
-  const nextQuery = { ...route.query };
+  const nextQuery = {...route.query};
   delete nextQuery.edit;
   delete nextQuery.returnTo;
-  await router.replace({ path: "/contracts", query: nextQuery });
+  await router.replace({path: "/contracts", query: nextQuery});
 }
 
 function hydraulicEditReturnTo(): string {
@@ -2510,10 +2610,10 @@ const filteredRows = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (q) {
     rows = rows.filter((r) =>
-      (r.contract_number ?? "").toLowerCase().includes(q) ||
-      (r.client_name ?? "").toLowerCase().includes(q) ||
-      (r.contract_type ?? "").toLowerCase().includes(q) ||
-      (r.summary ?? "").toLowerCase().includes(q)
+        (r.contract_number ?? "").toLowerCase().includes(q) ||
+        (r.client_name ?? "").toLowerCase().includes(q) ||
+        (r.contract_type ?? "").toLowerCase().includes(q) ||
+        (r.summary ?? "").toLowerCase().includes(q)
     );
   }
   if (filterClientId.value) {
@@ -2535,9 +2635,9 @@ const filteredRows = computed(() => {
 
 const visibleItems = computed<ListItem[]>(() => {
   if (showDraftsOnly.value) {
-    return filteredDrafts.value.map((draft) => ({ __type: "draft", draft }));
+    return filteredDrafts.value.map((draft) => ({__type: "draft", draft}));
   }
-  return filteredRows.value.map((row) => ({ __type: "contract", row }));
+  return filteredRows.value.map((row) => ({__type: "contract", row}));
 });
 
 const filteredDrafts = computed(() => {
@@ -2545,10 +2645,10 @@ const filteredDrafts = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (q) {
     rows = rows.filter((draft) =>
-      (draft.contract_number ?? "").toLowerCase().includes(q) ||
-      (draft.client_name ?? "").toLowerCase().includes(q) ||
-      (draft.contract_type ?? "").toLowerCase().includes(q) ||
-      draft.template_name.toLowerCase().includes(q)
+        (draft.contract_number ?? "").toLowerCase().includes(q) ||
+        (draft.client_name ?? "").toLowerCase().includes(q) ||
+        (draft.contract_type ?? "").toLowerCase().includes(q) ||
+        draft.template_name.toLowerCase().includes(q)
     );
   }
   if (filterClientId.value) {
@@ -2561,7 +2661,7 @@ const filteredDrafts = computed(() => {
       return Boolean(ms && ms >= from && ms <= to);
     });
   }
-  return [...rows].sort((a,b) => Date.parse(b.updated_at ?? "") - Date.parse(a.updated_at ?? ""));
+  return [...rows].sort((a, b) => Date.parse(b.updated_at ?? "") - Date.parse(a.updated_at ?? ""));
 });
 
 const pageCount = computed(() => Math.max(1, Math.ceil(visibleItems.value.length / pageSize.value)));
@@ -2587,9 +2687,12 @@ function contractNumberSortValue(row: ContractWithClient): number {
 function compareBySerialLastFirst(a: ContractWithClient, b: ContractWithClient): number {
   const numberDiff = contractNumberSortValue(b) - contractNumberSortValue(a);
   if (numberDiff) return numberDiff;
-  const textDiff = String(b.contract_number ?? "").localeCompare(String(a.contract_number ?? ""), undefined, { numeric: true, sensitivity: "base" });
+  const textDiff = String(b.contract_number ?? "").localeCompare(String(a.contract_number ?? ""), undefined, {
+    numeric: true,
+    sensitivity: "base"
+  });
   if (textDiff) return textDiff;
-  return String(b.id).localeCompare(String(a.id), undefined, { numeric: true, sensitivity: "base" });
+  return String(b.id).localeCompare(String(a.id), undefined, {numeric: true, sensitivity: "base"});
 }
 
 
@@ -2654,7 +2757,12 @@ async function saveForm() {
   try {
     const eq = form.value.equipment;
     const hasEquipment = !!(eq.category || eq.manufacturer?.trim() || eq.model?.trim() || eq.serial_number?.trim());
-    const payload = { ...form.value, status: form.value.status === "draft" ? "active" : form.value.status, equipment: hasEquipment ? eq : undefined, skip_reminders: true };
+    const payload = {
+      ...form.value,
+      status: form.value.status === "draft" ? "active" : form.value.status,
+      equipment: hasEquipment ? eq : undefined,
+      skip_reminders: true
+    };
     if (editingId.value) {
       await store.update(editingId.value, payload as any);
       message.success("הרשומה עודכנה בהצלחה");
@@ -2680,7 +2788,7 @@ function confirmDelete(row: ContractWithClient, options?: { deleteRelatedReminde
 async function doDelete() {
   if (!deletingRow.value) return;
   try {
-    await store.remove(deletingRow.value.id, { deleteRelatedReminders: deleteRelatedReminders.value });
+    await store.remove(deletingRow.value.id, {deleteRelatedReminders: deleteRelatedReminders.value});
     message.success("הרשומה נמחקה");
     await Promise.all([refresh(), loadReminders()]);
   } catch (e) {
@@ -2744,7 +2852,7 @@ function exportToExcel() {
     ].join(","));
   }
   const csv = "﻿" + lines.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob([csv], {type: "text/csv;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -2763,6 +2871,7 @@ function exportToExcel() {
   gap: 16px;
   margin-bottom: 24px;
 }
+
 .page__title {
   font-size: 28px;
   font-weight: 700;
@@ -2770,15 +2879,149 @@ function exportToExcel() {
   margin: 0 0 4px;
   letter-spacing: -0.4px;
 }
+
 .page__sub {
   font-size: 14px;
   color: var(--text-secondary);
   margin: 0;
 }
+
 .page__actions {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  min-width: min(100%, 720px);
+}
+
+.page__actions-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
   gap: 10px;
   flex-wrap: wrap;
+  width: 100%;
+}
+
+.bulk-action-anchor {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  position: relative;
+}
+
+.bulk-action-anchor > .btn {
+  width: 100%;
+}
+
+.bulk-action-anchor__actions {
+  display: grid;
+  gap: 8px;
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg, 0 14px 32px rgba(15, 23, 42, 0.14));
+}
+
+.bulk-action-anchor__actions::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 24px;
+  width: 10px;
+  height: 10px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  transform: rotate(-45deg);
+}
+
+.bulk-action-item {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: start;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.bulk-action-item + .bulk-action-item {
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
+}
+
+.bulk-action-item:hover {
+  background: var(--bg-hover);
+}
+
+.bulk-action-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.bulk-action-item--primary {
+  color: var(--brand-color);
+}
+
+.bulk-action-item--danger {
+  color: #d03050;
+}
+
+.bulk-action-item__icon {
+  display: inline-flex;
+  justify-content: center;
+  width: 26px;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.bulk-action-item__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bulk-action-item__count {
+  min-width: 24px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.bulk-action-item--loading .bulk-action-item__icon {
+  width: 14px;
+  height: 14px;
+  margin-inline: 4px;
+  border: 2px solid currentColor;
+  border-inline-start-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.75s linear infinite;
+  color: inherit;
+  font-size: 0;
+}
+
+.bulk-action-item--loading .bulk-action-item__icon :deep(svg) {
+  display: none;
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
@@ -2797,12 +3040,25 @@ function exportToExcel() {
   transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
   white-space: nowrap;
 }
-.btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
-.btn:active { transform: scale(0.97); }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .btn--loading {
   opacity: 0.75;
 }
+
 .btn--loading::before {
   content: "";
   width: 12px;
@@ -2813,28 +3069,53 @@ function exportToExcel() {
   animation: btn-spin 0.75s linear infinite;
   flex: 0 0 auto;
 }
-@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .btn--primary {
   background: var(--brand-color);
   border-color: var(--brand-color);
   color: var(--text-inverse, #fff);
   font-weight: 600;
 }
-.btn--primary:hover { background: var(--brand-color-hover); border-color: var(--brand-color-hover); }
-.btn--ghost { background: transparent;font-weight: 600 }
+
+.btn--primary:hover {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+}
+
+.btn--ghost {
+  background: transparent;
+}
+
 .btn--danger {
   background: transparent;
   border-color: var(--error-color, #d03050);
   color: var(--error-color, #d03050);
 }
-.btn--danger:hover { background: rgba(208, 48, 80, 0.08); }
+
+.btn--danger:hover {
+  background: rgba(208, 48, 80, 0.08);
+}
+
 .btn--danger-ghost {
   background: transparent;
   border-color: var(--error-color, #d03050);
   color: var(--error-color, #d03050);
 }
-.btn--danger-ghost:hover { background: rgba(208, 48, 80, 0.08); }
-.btn--xs { padding: 4px 10px; font-size: 12px; }
+
+.btn--danger-ghost:hover {
+  background: rgba(208, 48, 80, 0.08);
+}
+
+.btn--xs {
+  padding: 4px 10px;
+  font-size: 12px;
+}
 
 :global(.hydraulic-modal.n-dialog) {
   direction: rtl;
@@ -2994,9 +3275,21 @@ function exportToExcel() {
   color: var(--text-secondary);
   letter-spacing: 0.2px;
 }
-.refresh-icon { display: inline-block; transition: transform 0.4s; }
-.refresh-icon--spin { animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+
+.refresh-icon {
+  display: inline-block;
+  transition: transform 0.4s;
+}
+
+.refresh-icon--spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* ── Pill filter bar ────────────────────────────────────────────────────── */
 .filterbar {
@@ -3009,11 +3302,13 @@ function exportToExcel() {
   border-radius: 14px;
   border: 1px solid var(--border-color);
 }
+
 .filterbar--compact {
   margin-top: -8px;
   padding: 5px;
   background: transparent;
 }
+
 .pill {
   padding: 8px 18px;
   border-radius: 10px;
@@ -3028,17 +3323,24 @@ function exportToExcel() {
   gap: 6px;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
+
 .pill--compact {
   padding: 6px 13px;
   font-size: 12px;
 }
-.pill:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.pill:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .pill--active {
   background: var(--bg-card);
   color: var(--text-primary);
   font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
+
 .pill__badge {
   font-size: 11px;
   color: var(--text-muted);
@@ -3055,7 +3357,14 @@ function exportToExcel() {
   gap: 12px;
   margin-bottom: 18px;
 }
-.toolbar__right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .search {
   width: 360px;
   max-width: 100%;
@@ -3069,11 +3378,21 @@ function exportToExcel() {
   font-family: inherit;
   direction: rtl;
 }
-.search:focus { border-color: var(--brand-color); outline: none; }
+
+.search:focus {
+  border-color: var(--brand-color);
+  outline: none;
+}
 
 /* ── Cards virtual list ──────────────────────────────────────────────── */
-.cards-vlist { height: calc(100vh - 260px); }
-.cards-vlist__pad { padding-bottom: 14px; }
+.cards-vlist {
+  height: calc(100vh - 260px);
+}
+
+.cards-vlist__pad {
+  padding-bottom: 14px;
+}
+
 .draft-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -3082,7 +3401,12 @@ function exportToExcel() {
   cursor: pointer;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
-.draft-card:hover { border-color: var(--brand-color); box-shadow: var(--shadow-sm); }
+
+.draft-card:hover {
+  border-color: var(--brand-color);
+  box-shadow: var(--shadow-sm);
+}
+
 .draft-card__row {
   display: flex;
   justify-content: space-between;
@@ -3090,16 +3414,19 @@ function exportToExcel() {
   gap: 14px;
   margin-bottom: 12px;
 }
+
 .draft-card__title {
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
 }
+
 .draft-card__sub {
   margin-top: 3px;
   font-size: 13px;
   color: var(--text-secondary);
 }
+
 .draft-card__body {
   display: flex;
   flex-wrap: wrap;
@@ -3108,11 +3435,13 @@ function exportToExcel() {
   border-top: 1px solid var(--border-color);
   margin-bottom: 12px;
 }
+
 .card__secondary-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
+
 .kv {
   font-size: 13px;
   color: var(--text-secondary);
@@ -3120,7 +3449,12 @@ function exportToExcel() {
   align-items: center;
   gap: 6px;
 }
-.kv strong { color: var(--text-muted); font-weight: 500; }
+
+.kv strong {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 .tag {
   display: inline-flex;
   align-items: center;
@@ -3130,8 +3464,17 @@ function exportToExcel() {
   border-radius: 999px;
   border: 1px solid transparent;
 }
-.tag--info { background: rgba(32,128,240,0.10); color: #1560bd; border-color: rgba(32,128,240,0.2); }
-html[data-theme="dark"] .tag--info { color: #63b3ed; }
+
+.tag--info {
+  background: rgba(32, 128, 240, 0.10);
+  color: #1560bd;
+  border-color: rgba(32, 128, 240, 0.2);
+}
+
+html[data-theme="dark"] .tag--info {
+  color: #63b3ed;
+}
+
 .pagination-bar {
   display: flex;
   align-items: center;
@@ -3143,12 +3486,18 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
   border: 1px solid var(--border-color);
   border-radius: 14px;
 }
+
 .pagination-summary {
   color: var(--text-secondary);
   font-size: 13px;
   white-space: nowrap;
 }
-.btn--ghost-active { background: var(--bg-elevated); border-color: var(--brand-color); color: var(--brand-color); }
+
+.btn--ghost-active {
+  background: var(--bg-elevated);
+  border-color: var(--brand-color);
+  color: var(--brand-color);
+}
 
 /* ── Empty state ────────────────────────────────────────────────────── */
 .empty {
@@ -3161,8 +3510,17 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
 }
 
 /* ── Export wizard ──────────────────────────────────────────────────────── */
-.export-header { display: flex; flex-direction: column; gap: 16px; }
-.export-steps { display: flex; align-items: center; }
+.export-header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.export-steps {
+  display: flex;
+  align-items: center;
+}
+
 .export-step {
   display: flex;
   align-items: center;
@@ -3170,7 +3528,12 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
   font-size: 12px;
   color: var(--text-secondary);
 }
-.export-step--active { color: var(--brand-color, #18a058); font-weight: 600; }
+
+.export-step--active {
+  color: var(--brand-color, #18a058);
+  font-weight: 600;
+}
+
 .export-step__dot {
   width: 24px;
   height: 24px;
@@ -3184,18 +3547,59 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
   font-weight: 700;
   flex-shrink: 0;
 }
-.export-step--active .export-step__dot { border-color: var(--brand-color, #18a058); color: var(--brand-color, #18a058); }
-.export-step--done .export-step__dot { background: var(--brand-color, #18a058); border-color: var(--brand-color, #18a058); color: #fff; }
-.export-step__label { white-space: nowrap; }
-.export-step__line { width: 32px; height: 2px; background: var(--border-color); margin: 0 4px; }
 
-.export-body { min-height: 180px; }
-.export-section-title { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 16px; }
+.export-step--active .export-step__dot {
+  border-color: var(--brand-color, #18a058);
+  color: var(--brand-color, #18a058);
+}
 
-.col-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.col-check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.export-step--done .export-step__dot {
+  background: var(--brand-color, #18a058);
+  border-color: var(--brand-color, #18a058);
+  color: #fff;
+}
 
-.format-cards { display: flex; gap: 16px; }
+.export-step__label {
+  white-space: nowrap;
+}
+
+.export-step__line {
+  width: 32px;
+  height: 2px;
+  background: var(--border-color);
+  margin: 0 4px;
+}
+
+.export-body {
+  min-height: 180px;
+}
+
+.export-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+}
+
+.col-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.col-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.format-cards {
+  display: flex;
+  gap: 16px;
+}
+
 .format-card {
   flex: 1;
   border: 2px solid var(--border-color);
@@ -3205,16 +3609,54 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
   cursor: pointer;
   transition: border-color 0.15s;
 }
-.format-card--active { border-color: var(--brand-color, #18a058); }
-.format-card__icon { font-size: 32px; margin-bottom: 8px; }
-.format-card__name { font-weight: 600; font-size: 14px; color: var(--text-primary); }
-.format-card__desc { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 
-.export-body--summary { display: flex; align-items: center; justify-content: center; }
-.export-summary { text-align: center; }
-.export-summary__icon { font-size: 48px; margin-bottom: 12px; }
-.export-summary__text { font-size: 18px; font-weight: 600; color: var(--text-primary); }
-.export-summary__sub { font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
+.format-card--active {
+  border-color: var(--brand-color, #18a058);
+}
+
+.format-card__icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.format-card__name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.format-card__desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.export-body--summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.export-summary {
+  text-align: center;
+}
+
+.export-summary__icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.export-summary__text {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.export-summary__sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
 
 @media (max-width: 720px) {
   .page__head {
@@ -3229,9 +3671,20 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
   }
 
   .page__actions {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .page__actions-row {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .bulk-action-anchor__actions {
+    min-width: 0;
+    width: 100%;
+    right: 0;
   }
 
   .btn {
@@ -3318,7 +3771,7 @@ html[data-theme="dark"] .tag--info { color: #63b3ed; }
 }
 
 @media (max-width: 460px) {
-  .page__actions {
+  .page__actions-row {
     grid-template-columns: 1fr;
   }
 
