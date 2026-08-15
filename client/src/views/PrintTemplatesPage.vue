@@ -2493,13 +2493,13 @@ function stopCellResize() {
 
 .xl-cell-resize {
   position: absolute;
-  left: -3px;
+  left: 0;
   top: 0;
   bottom: 0;
-  width: 6px;
+  width: 5px;
   cursor: col-resize;
   background: transparent;
-  z-index: 5;
+  z-index: 6;
 }
 
 .xl-cell-resize:hover {
