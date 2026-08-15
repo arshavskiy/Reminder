@@ -729,9 +729,7 @@
             <n-gi>
               <n-form-item label="מספר רישוי">
                 <n-input
-                    :value="equipment.license_number"
-                    inputmode="numeric"
-                    @update:value="(value) => setNumericEquipmentField(equipment, 'license_number', value)"
+                    v-model:value="equipment.license_number" placeholder="לדוגמה: פנימי 123"
                 />
               </n-form-item>
             </n-gi>
@@ -1536,7 +1534,7 @@ const hydraulicTemplateKnownFields = new Set([
   "start_date", "inspection_date", "check_date", "expiry_date", "next_inspection_date",
   "valid_until", "inspection_type", "client_name", "client_company", "client_phone",
   "client_email", "client_address", "client_id", "zip_code", "contact_person",
-  "po_box", "chassis", "name", "manufacturer", "model", "serial_number", "license_number", "lisence_number",
+  "po_box", "chassis", "name", "manufacturer", "model", "serial_number", "license_number",
   "load_radius", "load_capacity_test", "load_capacity_work", "equipment_description",
   "checked_equipment",
 ]);
@@ -1811,7 +1809,7 @@ async function openHydraulicContractUpdate(contractId: string) {
     manufacturer: String(firstEquipment?.manufacturer ?? manual.manufacturer ?? ""),
     model: String(firstEquipment?.model ?? manual.model ?? ""),
     serial_number: String(firstEquipment?.serial_number ?? manual.serial_number ?? ""),
-    license_number: manual.license_number ?? manual.lisence_number ?? "",
+    license_number: manual.license_number ?? "",
     load_capacity_work: manual.load_capacity_work ?? firstArrayValue(firstEquipment?.load_capacity_work),
     load_capacity_test: manual.load_capacity_test ?? firstArrayValue(firstEquipment?.load_capacity_test),
     load_radius: manual.load_radius ?? firstArrayValue(firstEquipment?.load_radius),
@@ -2243,7 +2241,6 @@ function buildContractTemplateDraft(row: ContractWithClient): Record<string, str
     serial_number: manual.serial_number ?? String(firstEquipment?.serial_number ?? ""),
     chassis: manual.chassis ?? String(firstEquipment?.serial_number ?? ""),
     license_number: manual.license_number ?? "",
-    lisence_number: manual.lisence_number ?? manual.license_number ?? "",
     load_capacity_work: manual.load_capacity_work ?? firstArrayValue(firstEquipment?.load_capacity_work),
     load_capacity_test: manual.load_capacity_test ?? firstArrayValue(firstEquipment?.load_capacity_test),
     load_radius: manual.load_radius ?? firstArrayValue(firstEquipment?.load_radius),
@@ -2325,7 +2322,6 @@ function buildHydraulicTemplateDraft(): Record<string, string> {
     zip_code: business.client_zipcode ?? "",
     po_box: business.po_box ?? "",
     license_number: firstEquipment.license_number,
-    lisence_number: firstEquipment.license_number,
   };
 
   hydraulicEquipmentRows.value.forEach((equipment, index) => {

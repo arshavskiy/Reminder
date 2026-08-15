@@ -291,9 +291,7 @@ const composeFieldLabels: Record<string, string> = {
   client_email: "מייל",
   client_address: "יישוב",
   zip_code: "מיקוד",
-  client_id: "מספר רישוי",
   license_number: "מספר רישוי",
-  lisence_number: "מספר רישוי",
   serial_number: "מס׳ סידורי",
 };
 
@@ -320,7 +318,7 @@ function composeFieldKind(bind: string): ComposeFieldKind {
   if (bind.includes("phone") || bind === "contact_phone") return "phone";
   if (bind.includes("date") || bind === "expiry_date" || bind === "valid_until" || bind === "start_date" || bind === "check_date") return "date";
   if (["document_number", "report_number", "prev_report_number", "contract_number"].includes(bind)) return "report_number";
-  if (["zip_code", "client_id", "license_number", "lisence_number", "serial_number"].includes(bind)) return "integer";
+  if (["zip_code", "client_id", "serial_number"].includes(bind)) return "integer";
   if (bind.includes("amount") || bind.includes("load_capacity") || bind.includes("load_radius")) return "number";
   return "text";
 }
@@ -651,7 +649,7 @@ function normalizeDateForDisplay(value: string): string {
 function generatedPdfFileName(data: Record<string, unknown>, fallback: string): string {
   const parts = [
     pickFirstString(data, ["equipment_type", "inspection_type", "contract_type", "type", "checked_equipment"]),
-    pickFirstString(data, ["license_number", "lisence_number"]),
+    pickFirstString(data, ["license_number"]),
     pickFirstString(data, ["client_company", "client_name", "company", "counterparty"]),
     pickFirstString(data, ["contract_number", "document_number", "report_number"]),
   ].filter(Boolean);

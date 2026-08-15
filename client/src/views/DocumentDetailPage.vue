@@ -635,7 +635,7 @@ function hydrateContractSidePanel() {
   contractSideForm.contact_email = textValue((contract as any).contact_email ?? manual.contact_email ?? manual.client_email);
   contractSideForm.client_address = textValue((contract as any).client_address ?? manual.client_address);
   contractSideForm.checked_equipment = textValue(firstEquipment?.name ?? manual.checked_equipment ?? manual.name);
-  contractSideForm.license_number = textValue(firstEquipment?.license_number ?? manual.license_number ?? manual.lisence_number);
+  contractSideForm.license_number = textValue(firstEquipment?.license_number ?? manual.license_number);
   contractSideForm.manufacturer = textValue(firstEquipment?.manufacturer ?? manual.manufacturer);
   contractSideForm.model = textValue(firstEquipment?.model ?? manual.model);
   contractSideForm.serial_number = textValue(firstEquipment?.serial_number ?? manual.serial_number);
@@ -675,7 +675,6 @@ async function saveContractSidePanel() {
       model: contractSideForm.model,
       serial_number: contractSideForm.serial_number,
       license_number: contractSideForm.license_number,
-      lisence_number: contractSideForm.license_number,
       load_capacity_work: contractSideForm.load_capacity_work ? [contractSideForm.load_capacity_work] : [],
       description: contractSideForm.equipment_description,
       category: (Array.isArray(existingManual._equipment) ? existingManual._equipment[0]?.category : null) ?? "lift",
@@ -700,7 +699,6 @@ async function saveContractSidePanel() {
       checked_equipment: contractSideForm.checked_equipment,
       name: contractSideForm.checked_equipment,
       license_number: contractSideForm.license_number,
-      lisence_number: contractSideForm.license_number,
       manufacturer: contractSideForm.manufacturer,
       model: contractSideForm.model,
       serial_number: contractSideForm.serial_number,

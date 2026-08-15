@@ -199,9 +199,7 @@
               <n-gi>
                 <n-form-item label="מספר רישוי">
                   <n-input
-                      :value="equipment.license_number"
-                      inputmode="numeric"
-                      @update:value="(value) => setNumericField(equipment, 'license_number', value)"
+                      v-model:value="equipment.license_number" placeholder="לדוגמה: פנימי 123"
                   />
                 </n-form-item>
               </n-gi>
@@ -433,7 +431,7 @@ const templateKnownFields = new Set([
   "start_date", "inspection_date", "check_date", "expiry_date", "next_inspection_date",
   "valid_until", "inspection_type", "client_name", "client_company", "client_phone",
   "client_email", "client_address", "client_id", "zip_code", "contact_person",
-  "po_box", "chassis", "name", "manufacturer", "model", "serial_number", "license_number", "lisence_number",
+  "po_box", "chassis", "name", "manufacturer", "model", "serial_number", "license_number",
   "load_radius", "load_capacity_test", "load_capacity_work", "equipment_description",
   "checked_equipment",
 ]);
@@ -882,7 +880,6 @@ function buildTemplateDraft(): Record<string, string> {
     zip_code: business.client_zipcode ?? "",
     po_box: business.po_box ?? "",
     license_number: firstEquipment.license_number,
-    lisence_number: firstEquipment.license_number,
   };
 
   equipmentRows.value.forEach((eq, index) => {
