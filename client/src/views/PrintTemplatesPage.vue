@@ -13,10 +13,16 @@
     <template v-else-if="mode === 'list'">
       <PageHeader
         title="תבניות הדפסה"
-        subtitle="עיצוב ומילוי תבניות הדפסה בסגנון Excel"
+        subtitle="עיצוב ומילוי תבניות בסגנון Excel"
         :count="templates.length"
       >
+        <template #breadcrumb>
+          <a href="#" @click.prevent="router.push('/settings/print-templates')">תבניות הדפסה</a>
+          <span class="sep">/</span>
+          <span>עורך Excel</span>
+        </template>
         <template #actions>
+          <button class="btn btn--ghost" @click="router.push('/settings/print-templates/layout')">עורך פריסה</button>
           <button class="btn btn--primary" @click="newTemplate">+ תבנית חדשה</button>
         </template>
       </PageHeader>
@@ -593,8 +599,10 @@ function isDraftRoute(): boolean {
 async function loadTemplates() {
   loading.value = true; loadError.value = null;
   try {
-    templates.value = (await api.printTemplates.list()).map(normalizeLegacyTemplateBindings);
-    if (!templates.value.length) newTemplate();
+    templates.value = (await api.printTemplates.list())
+      .filter((t) => t.editorType !== "sections")
+      .map(normalizeLegacyTemplateBindings);
+    if (!templates.value.length && !isDraftRoute()) newTemplate();
     else await openRouteDraftIfRequested();
   } catch(e:any) { loadError.value = e.message; }
   finally {
@@ -623,7 +631,16 @@ async function openRouteDraftIfRequested() {
   const templateId = route.params.templateId;
   if (typeof templateId !== "string") return;
   await loadEngineerProfile().catch(() => {});
-  const template = templates.value.find((t) => t._id === templateId);
+  let template = templates.value.find((t) => t._id === templateId);
+  if (!template) {
+    try {
+      template = await api.printTemplates.get(templateId);
+    } catch { /* handled below */ }
+  }
+  if (template?.editorType === "sections") {
+    await router.replace(`/settings/print-templates/layout/${templateId}/compose`);
+    return;
+  }
   if (template) await openCompose(template);
 }
 

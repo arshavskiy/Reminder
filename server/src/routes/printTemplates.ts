@@ -8,6 +8,7 @@ import {createHash} from "node:crypto";
 import {join} from "node:path";
 import {getDataDir} from "../settings.js";
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces.js";
+import {renderSectionTemplateHtml} from "./printTemplateLayoutRender.js";
 
 function tryObjectId(id: string) {
   try { return new ObjectId(id); } catch { return id as any; }
@@ -77,10 +78,24 @@ export function registerPrintTemplateRoutes(app: Express) {
   app.post("/api/print-templates", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const { name, page, dir, cols, rows, cells, hasFixedFrame } = req.body;
+    const { name, page, dir, cols, rows, cells, hasFixedFrame, editorType, layout } = req.body;
     if (!name) { res.status(400).json({ error: "name is required" }); return; }
     const now = new Date().toISOString();
-    const doc = { user_id: auth.userId, name, page: page ?? "A4", dir: dir ?? "rtl", cols: cols ?? [], rows: rows ?? [], cells: cells ?? [], hasFixedFrame: !!hasFixedFrame, created_at: now, updated_at: now };
+    const isSections = editorType === "sections";
+    const doc = {
+      user_id: auth.userId,
+      name,
+      page: page ?? "A4",
+      dir: dir ?? "rtl",
+      cols: cols ?? [],
+      rows: rows ?? [],
+      cells: cells ?? [],
+      hasFixedFrame: !!hasFixedFrame,
+      editorType: isSections ? "sections" : "grid",
+      layout: isSections ? layout ?? null : null,
+      created_at: now,
+      updated_at: now,
+    };
     const result = await col("print_templates").insertOne(doc as any);
     res.status(201).json({ ...doc, _id: result.insertedId.toString() });
   });
@@ -89,7 +104,7 @@ export function registerPrintTemplateRoutes(app: Express) {
   app.put("/api/print-templates/:id", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const { name, page, dir, cols, rows, cells, hasFixedFrame } = req.body;
+    const { name, page, dir, cols, rows, cells, hasFixedFrame, editorType, layout } = req.body;
     const now = new Date().toISOString();
     const update: Record<string, unknown> = { updated_at: now };
     if (name !== undefined) update.name = name;
@@ -99,6 +114,8 @@ export function registerPrintTemplateRoutes(app: Express) {
     if (rows !== undefined) update.rows = rows;
     if (cells !== undefined) update.cells = cells;
     if (hasFixedFrame !== undefined) update.hasFixedFrame = hasFixedFrame;
+    if (editorType !== undefined) update.editorType = editorType === "sections" ? "sections" : "grid";
+    if (layout !== undefined) update.layout = layout;
     const result = await col("print_templates").findOneAndUpdate(
       { _id: tryObjectId(req.params.id), user_id: auth.userId },
       { $set: update },
@@ -242,7 +259,9 @@ async function deleteMatchingDraft(userId: string, templateId: string, meta: Rec
 }
 
 async function renderTemplatePdf(t: any, data: Record<string, unknown>): Promise<Uint8Array> {
-  const html = renderTemplateHtml(t, data);
+  const html = t.editorType === "sections" && t.layout
+    ? renderSectionTemplateHtml(t.layout, data, t.dir ?? "rtl")
+    : renderTemplateHtml(t, data);
   const { default: puppeteer } = await import("puppeteer-core");
   const launch = await resolveBrowserLaunch();
   const browser = await puppeteer.launch(launch);

@@ -209,6 +209,10 @@ async function loadDraft() {
       api.printTemplates.get(draft.template_id),
       loadEngineerProfile().catch(() => {}),
     ]);
+    if (loadedTemplate.editorType === "sections") {
+      await router.replace(`/settings/print-templates/layout/${loadedTemplate._id}/compose?contractId=${routeContractId.value}`);
+      return;
+    }
     template.value = normalizeLegacyTemplateBindings(loadedTemplate);
     composeData.value = {};
     for (const field of composeFields.value) composeData.value[field.bind] = "";

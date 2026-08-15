@@ -168,3 +168,33 @@ export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
 export function clonePrintTemplateLayout(layout: PrintTemplateLayout): PrintTemplateLayout {
     return JSON.parse(JSON.stringify(layout)) as PrintTemplateLayout;
 }
+
+/** Collect unique field binds from a layout (for compose forms). */
+export function extractLayoutFieldBinds(layout: PrintTemplateLayout): PrintTemplateSectionField[] {
+    const seen = new Set<string>();
+    const out: PrintTemplateSectionField[] = [];
+    function add(label: string, bind: string) {
+        if (!bind || seen.has(bind)) return;
+        seen.add(bind);
+        out.push({ label, bind });
+    }
+    for (const section of layout.sections) {
+        if (section.type === "header" || section.type === "fields") {
+            for (const f of section.fields) add(f.label, f.bind);
+        } else if (section.type === "equipment_table") {
+            for (const c of section.columns) add(c.label, c.bind);
+        } else if (section.type === "findings") {
+            for (const r of section.rows) add(r.subjectLabel.replace(/:$/, ""), r.bind);
+            if (section.deadlineBind) add(section.deadlineLabel ?? "תוך", section.deadlineBind);
+        }
+    }
+    return out;
+}
+
+export const LAYOUT_BORDER_COLORS = [
+    { label: "שחור", value: "#111111" },
+    { label: "כחול", value: "#1d4ed8" },
+    { label: "ירוק", value: "#15803d" },
+    { label: "סגול", value: "#7c3aed" },
+    { label: "כתום", value: "#c2410c" },
+];
