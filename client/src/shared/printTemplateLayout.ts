@@ -14,17 +14,27 @@ export interface PrintTemplateSectionStyles {
     borderWidth: PrintTemplateBorderWidth;
 }
 
+/** Per-section style overrides */
+export interface PrintTemplateSectionStyleOverride {
+    /** Hide border for this section */
+    noBorder?: boolean;
+}
+
 export interface PrintTemplateLayoutHeaderSection {
     type: "header";
     title: string;
     subtitle?: string;
     fields: PrintTemplateSectionField[];
+    style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutFieldsSection {
     type: "fields";
     title: string;
     fields: PrintTemplateSectionField[];
+    /** Number of columns for field grid (default 3) */
+    columns?: number;
+    style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutEquipmentColumn {
@@ -36,6 +46,7 @@ export interface PrintTemplateLayoutEquipmentSection {
     type: "equipment_table";
     title: string;
     columns: PrintTemplateLayoutEquipmentColumn[];
+    style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutFindingRow {
@@ -51,12 +62,14 @@ export interface PrintTemplateLayoutFindingsSection {
     deadlineLabel?: string;
     deadlineBind?: string;
     deadlineSuffix?: string;
+    style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutStaticSection {
     type: "static_text";
     title: string;
     text: string;
+    style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutSignatureSection {
@@ -68,6 +81,7 @@ export interface PrintTemplateLayoutSignatureSection {
     inspectorText?: string;
     /** Company name */
     companyName?: string;
+    style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutImageSection {
@@ -79,6 +93,7 @@ export interface PrintTemplateLayoutImageSection {
     width?: number;
     height?: number;
     align?: "right" | "center" | "left";
+    style?: PrintTemplateSectionStyleOverride;
 }
 
 export type PrintTemplateSection =

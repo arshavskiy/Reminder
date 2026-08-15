@@ -10,21 +10,28 @@ export interface PrintTemplateSectionField {
 }
 
 export interface PrintTemplateSectionStyles {
-    borderColor: string;
-    borderWidth: PrintTemplateBorderWidth;
+  borderColor: string;
+  borderWidth: PrintTemplateBorderWidth;
+}
+
+export interface PrintTemplateSectionStyleOverride {
+  noBorder?: boolean;
 }
 
 export interface PrintTemplateLayoutHeaderSection {
-    type: "header";
-    title: string;
-    subtitle?: string;
-    fields: PrintTemplateSectionField[];
+  type: "header";
+  title: string;
+  subtitle?: string;
+  fields: PrintTemplateSectionField[];
+  style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutFieldsSection {
-    type: "fields";
-    title: string;
-    fields: PrintTemplateSectionField[];
+  type: "fields";
+  title: string;
+  fields: PrintTemplateSectionField[];
+  columns?: number;
+  style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutEquipmentColumn {
@@ -33,9 +40,10 @@ export interface PrintTemplateLayoutEquipmentColumn {
 }
 
 export interface PrintTemplateLayoutEquipmentSection {
-    type: "equipment_table";
-    title: string;
-    columns: PrintTemplateLayoutEquipmentColumn[];
+  type: "equipment_table";
+  title: string;
+  columns: PrintTemplateLayoutEquipmentColumn[];
+  style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutFindingRow {
@@ -45,40 +53,40 @@ export interface PrintTemplateLayoutFindingRow {
 }
 
 export interface PrintTemplateLayoutFindingsSection {
-    type: "findings";
-    title: string;
-    rows: PrintTemplateLayoutFindingRow[];
-    deadlineLabel?: string;
-    deadlineBind?: string;
-    deadlineSuffix?: string;
+  type: "findings";
+  title: string;
+  rows: PrintTemplateLayoutFindingRow[];
+  deadlineLabel?: string;
+  deadlineBind?: string;
+  deadlineSuffix?: string;
+  style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutStaticSection {
-    type: "static_text";
-    title: string;
-    text: string;
+  type: "static_text";
+  title: string;
+  text: string;
+  style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutSignatureSection {
   type: "signature";
   enabled: boolean;
-  /** Signature/stamp image URL or base64 data URI */
   imageSrc?: string;
-  /** Inspector details text (name, license, phone, etc.) */
   inspectorText?: string;
-  /** Company name */
   companyName?: string;
+  style?: PrintTemplateSectionStyleOverride;
 }
 
 export interface PrintTemplateLayoutImageSection {
   type: "image";
   title?: string;
-  /** Image URL or base64 data URI */
   src: string;
   alt?: string;
   width?: number;
   height?: number;
   align?: "right" | "center" | "left";
+  style?: PrintTemplateSectionStyleOverride;
 }
 
 export type PrintTemplateSection =

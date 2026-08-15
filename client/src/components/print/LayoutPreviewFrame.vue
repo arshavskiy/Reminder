@@ -3,7 +3,7 @@
     <section
         v-for="(section, si) in layout.sections"
         :key="si"
-        class="block"
+        :class="['block', { 'no-border': section.style?.noBorder }]"
         :style="blockStyle"
     >
       <!-- Header -->
@@ -37,7 +37,7 @@
         <div class="sec-title">{{ section.title }}</div>
         <table class="fields-grid">
           <tbody>
-            <tr v-for="(row, ri) in fieldsRows(section.fields)" :key="ri">
+            <tr v-for="(row, ri) in fieldsRows(section.fields, section.columns ?? 3)" :key="ri">
               <template v-for="(f, fi) in row" :key="fi">
                 <td class="lbl">{{ f?.label }}:</td>
                 <td class="val">{{ f ? val(f.bind) : '' }}</td>
@@ -143,8 +143,7 @@ const blockStyle = computed(() => ({
   borderColor: props.layout.styles.borderColor || "#111",
 }));
 
-function fieldsRows(fields: PrintTemplateSectionField[]): (PrintTemplateSectionField | null)[][] {
-  const cols = 3;
+function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (PrintTemplateSectionField | null)[][] {
   const rows: (PrintTemplateSectionField | null)[][] = [];
   for (let i = 0; i < fields.length; i += cols) {
     const row: (PrintTemplateSectionField | null)[] = [];
@@ -171,6 +170,7 @@ function fieldsRows(fields: PrintTemplateSectionField[]): (PrintTemplateSectionF
   margin-bottom: 5px;
   padding: 6px 8px;
 }
+.block.no-border { border: none; }
 .sec-title { font-size: 10px; font-weight: 700; margin-bottom: 4px; }
 
 /* Header */

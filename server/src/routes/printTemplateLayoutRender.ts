@@ -72,6 +72,11 @@ function renderFindings(section: Extract<PrintTemplateSection, { type: "findings
   return `<table class="data findings" style="border-color:${color}"><thead>${head}</thead><tbody>${bodyRows}${deadline}</tbody></table>`;
 }
 
+function sectionClass(section: PrintTemplateSection, base: string): string {
+  const noBorder = "style" in section && section.style?.noBorder;
+  return noBorder ? `${base} no-border` : base;
+}
+
 function renderSection(section: PrintTemplateSection, data: Record<string, unknown>, color: string): string {
   switch (section.type) {
     case "header": {
@@ -83,7 +88,7 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
       const rightMeta = rightFields.map((f) =>
         `<div class="hdr-field"><span class="hdr-lbl">${escHtml(f.label)}:</span><span class="hdr-val">${fieldValue(data, f.bind)}</span></div>`,
       ).join("");
-      return `<section class="block header-block">
+      return `<section class="${sectionClass(section, "block header-block")}">
         <table class="header-table"><tbody>
           <tr>
             <td class="hdr-side hdr-right">${rightMeta}</td>
@@ -96,20 +101,22 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
         </tbody></table>
       </section>`;
     }
-    case "fields":
-      return `<section class="block"><div class="sec-title">${escHtml(section.title)}</div>${renderFieldsGrid(section.fields, data, 3)}</section>`;
+    case "fields": {
+      const cols = section.columns ?? 3;
+      return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div>${renderFieldsGrid(section.fields, data, cols)}</section>`;
+    }
     case "equipment_table":
-      return `<section class="block"><div class="sec-title">${escHtml(section.title)}</div>${renderEquipmentTable(section.columns, data)}</section>`;
+      return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div>${renderEquipmentTable(section.columns, data)}</section>`;
     case "findings":
-      return `<section class="block"><div class="sec-title">${escHtml(section.title)}</div>${renderFindings(section, data, color)}</section>`;
+      return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div>${renderFindings(section, data, color)}</section>`;
     case "static_text":
-      return `<section class="block"><div class="sec-title">${escHtml(section.title)}</div><p class="static">${escHtml(section.text)}</p></section>`;
+      return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div><p class="static">${escHtml(section.text)}</p></section>`;
     case "signature": {
       if (!section.enabled) return "";
       const sigImg = section.imageSrc ? renderImage(section.imageSrc, "חתימה", 120) : "";
       const inspector = section.inspectorText ? `<div class="sig-inspector">${escHtml(section.inspectorText)}</div>` : "";
       const company = section.companyName ? `<div class="sig-company">${escHtml(section.companyName)}</div>` : "";
-      return `<section class="block sig-block">
+      return `<section class="${sectionClass(section, "block sig-block")}">
         <div class="sig-label">חתימת הבודק:</div>
         <div class="sig-content">
           <div class="sig-image">${sigImg}</div>
@@ -121,7 +128,7 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
       const img = renderImage(section.src, section.alt ?? "", section.width, section.height);
       const align = section.align ?? "center";
       const title = section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : "";
-      return `<section class="block img-block" style="text-align:${align}">${title}${img}</section>`;
+      return `<section class="${sectionClass(section, "block img-block")}" style="text-align:${align}">${title}${img}</section>`;
     }
     default:
       return "";
@@ -147,6 +154,7 @@ export function renderSectionTemplateHtml(
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 11px; direction: ${dir}; padding: 12px; color: #111; }
   .block { border: ${bw}px solid ${color}; margin-bottom: 6px; padding: 6px 8px; }
+  .block.no-border { border: none; }
   .sec-title { font-size: 11px; font-weight: 700; margin-bottom: 4px; }
 
   /* Header */
