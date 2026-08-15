@@ -4,6 +4,27 @@ function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function escAttr(s: string): string {
+  return escHtml(s).replace(/"/g, "&quot;");
+}
+
+function safeImageSrc(src: string | undefined): string {
+  if (!src) return "";
+  const value = src.trim();
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,/i.test(value)) return value;
+  if (value.startsWith("/")) return value;
+  return "";
+}
+
+function renderImage(src: string | undefined, alt: string = "", width?: number, height?: number): string {
+  const safeSrc = safeImageSrc(src);
+  if (!safeSrc) return "";
+  const w = width ? ` width="${width}"` : "";
+  const h = height ? ` height="${height}"` : "";
+  return `<img src="${escAttr(safeSrc)}" alt="${escAttr(alt)}"${w}${h} class="section-img">`;
+}
+
 function borderWidthPx(width: string | undefined): number {
   switch (width) {
     case "thick": return 3;
@@ -83,9 +104,25 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
       return `<section class="block"><div class="sec-title">${escHtml(section.title)}</div>${renderFindings(section, data, color)}</section>`;
     case "static_text":
       return `<section class="block"><div class="sec-title">${escHtml(section.title)}</div><p class="static">${escHtml(section.text)}</p></section>`;
-    case "signature":
+    case "signature": {
       if (!section.enabled) return "";
-      return `<section class="block sig-block"><div class="sig-line">חתימת הבודק:</div><div class="sig-area"></div></section>`;
+      const sigImg = section.imageSrc ? renderImage(section.imageSrc, "חתימה", 120) : "";
+      const inspector = section.inspectorText ? `<div class="sig-inspector">${escHtml(section.inspectorText)}</div>` : "";
+      const company = section.companyName ? `<div class="sig-company">${escHtml(section.companyName)}</div>` : "";
+      return `<section class="block sig-block">
+        <div class="sig-label">חתימת הבודק:</div>
+        <div class="sig-content">
+          <div class="sig-image">${sigImg}</div>
+          <div class="sig-details">${inspector}${company}</div>
+        </div>
+      </section>`;
+    }
+    case "image": {
+      const img = renderImage(section.src, section.alt ?? "", section.width, section.height);
+      const align = section.align ?? "center";
+      const title = section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : "";
+      return `<section class="block img-block" style="text-align:${align}">${title}${img}</section>`;
+    }
     default:
       return "";
   }
@@ -146,8 +183,16 @@ export function renderSectionTemplateHtml(
 
   /* Signature */
   .sig-block { min-height: 70px; }
-  .sig-line { font-weight: 600; margin-bottom: 8px; }
-  .sig-area { height: 50px; }
+  .sig-label { font-weight: 600; margin-bottom: 8px; }
+  .sig-content { display: flex; gap: 16px; align-items: flex-start; }
+  .sig-image img { max-width: 120px; max-height: 80px; }
+  .sig-details { font-size: 10px; line-height: 1.4; }
+  .sig-inspector { font-weight: 600; }
+  .sig-company { margin-top: 4px; }
+
+  /* Image section */
+  .img-block { padding: 8px; }
+  .section-img { max-width: 100%; height: auto; }
 
   @media print {
     body { padding: 0; }

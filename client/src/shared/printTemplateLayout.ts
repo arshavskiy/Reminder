@@ -62,6 +62,23 @@ export interface PrintTemplateLayoutStaticSection {
 export interface PrintTemplateLayoutSignatureSection {
     type: "signature";
     enabled: boolean;
+    /** Signature/stamp image URL or base64 data URI */
+    imageSrc?: string;
+    /** Inspector details text (name, license, phone, etc.) */
+    inspectorText?: string;
+    /** Company name */
+    companyName?: string;
+}
+
+export interface PrintTemplateLayoutImageSection {
+    type: "image";
+    title?: string;
+    /** Image URL or base64 data URI */
+    src: string;
+    alt?: string;
+    width?: number;
+    height?: number;
+    align?: "right" | "center" | "left";
 }
 
 export type PrintTemplateSection =
@@ -70,7 +87,8 @@ export type PrintTemplateSection =
     | PrintTemplateLayoutEquipmentSection
     | PrintTemplateLayoutFindingsSection
     | PrintTemplateLayoutStaticSection
-    | PrintTemplateLayoutSignatureSection;
+    | PrintTemplateLayoutSignatureSection
+    | PrintTemplateLayoutImageSection;
 
 export interface PrintTemplateLayout {
     styles: PrintTemplateSectionStyles;

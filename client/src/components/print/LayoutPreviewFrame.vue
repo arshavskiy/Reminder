@@ -90,8 +90,30 @@
 
       <!-- Signature -->
       <template v-else-if="section.type === 'signature' && section.enabled">
-        <div class="sig-line">חתימת הבודק:</div>
-        <div class="sig-area"></div>
+        <div class="sig-label">חתימת הבודק:</div>
+        <div class="sig-content">
+          <div v-if="section.imageSrc" class="sig-image">
+            <img :src="section.imageSrc" alt="חתימה">
+          </div>
+          <div class="sig-details">
+            <div v-if="section.inspectorText" class="sig-inspector">{{ section.inspectorText }}</div>
+            <div v-if="section.companyName" class="sig-company">{{ section.companyName }}</div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Image -->
+      <template v-else-if="section.type === 'image'">
+        <div v-if="section.title" class="sec-title">{{ section.title }}</div>
+        <div :style="{ textAlign: section.align ?? 'center' }">
+          <img
+              :src="section.src"
+              :alt="section.alt ?? ''"
+              :width="section.width"
+              :height="section.height"
+              class="section-img"
+          >
+        </div>
       </template>
     </section>
   </div>
@@ -183,6 +205,13 @@ table.findings td.detail { text-align: right; }
 .static { line-height: 1.35; font-size: 9px; text-align: justify; margin: 0; white-space: pre-wrap; }
 
 /* Signature */
-.sig-line { font-weight: 600; margin-bottom: 6px; }
-.sig-area { height: 40px; }
+.sig-label { font-weight: 600; margin-bottom: 6px; }
+.sig-content { display: flex; gap: 12px; align-items: flex-start; }
+.sig-image img { max-width: 100px; max-height: 60px; }
+.sig-details { font-size: 8px; line-height: 1.3; }
+.sig-inspector { font-weight: 600; }
+.sig-company { margin-top: 2px; }
+
+/* Image section */
+.section-img { max-width: 100%; height: auto; }
 </style>

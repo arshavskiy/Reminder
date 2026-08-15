@@ -110,6 +110,60 @@
 
           <template v-else-if="section.type === 'signature'">
             <n-checkbox v-model:checked="section.enabled">הצג אזור חתימה</n-checkbox>
+            <template v-if="section.enabled">
+              <n-form-item label="תמונת חתימה/חותמת (URL)" :show-feedback="false" style="margin-top:8px">
+                <n-input
+                    :value="section.imageSrc ?? ''"
+                    placeholder="https://... או data:image/..."
+                    size="small"
+                    @update:value="updateSignatureField(si, 'imageSrc', $event)"
+                />
+              </n-form-item>
+              <n-form-item label="פרטי בודק" :show-feedback="false">
+                <n-input
+                    :value="section.inspectorText ?? ''"
+                    placeholder="שם, מס׳ תעודה, טלפון"
+                    size="small"
+                    @update:value="updateSignatureField(si, 'inspectorText', $event)"
+                />
+              </n-form-item>
+              <n-form-item label="שם חברה" :show-feedback="false">
+                <n-input
+                    :value="section.companyName ?? ''"
+                    placeholder="הנדסה וניהול בע״מ"
+                    size="small"
+                    @update:value="updateSignatureField(si, 'companyName', $event)"
+                />
+              </n-form-item>
+            </template>
+          </template>
+
+          <template v-else-if="section.type === 'image'">
+            <n-input v-model:value="section.title" placeholder="כותרת (אופציונלי)" size="small" />
+            <n-form-item label="כתובת תמונה" :show-feedback="false" style="margin-top:6px">
+              <n-input
+                  :value="section.src"
+                  placeholder="https://... או data:image/..."
+                  size="small"
+                  @update:value="updateImageField(si, 'src', $event)"
+              />
+            </n-form-item>
+            <div class="field-row" style="margin-top:6px">
+              <n-form-item label="רוחב" :show-feedback="false">
+                <n-input-number :value="section.width" size="small" :min="0" @update:value="updateImageField(si, 'width', $event)" />
+              </n-form-item>
+              <n-form-item label="גובה" :show-feedback="false">
+                <n-input-number :value="section.height" size="small" :min="0" @update:value="updateImageField(si, 'height', $event)" />
+              </n-form-item>
+              <n-form-item label="יישור" :show-feedback="false">
+                <n-select
+                    :value="section.align ?? 'center'"
+                    :options="[{ label: 'ימין', value: 'right' }, { label: 'מרכז', value: 'center' }, { label: 'שמאל', value: 'left' }]"
+                    size="small"
+                    @update:value="updateImageField(si, 'align', $event)"
+                />
+              </n-form-item>
+            </div>
           </template>
         </article>
       </div>
@@ -124,7 +178,7 @@
 
 <script lang="ts" setup>
 import {computed} from "vue";
-import {NCheckbox, NFormItem, NInput, NSelect} from "naive-ui";
+import {NCheckbox, NFormItem, NInput, NInputNumber, NSelect} from "naive-ui";
 import LayoutPreviewFrame from "./LayoutPreviewFrame.vue";
 import {
   clonePrintTemplateLayout,
@@ -188,8 +242,27 @@ function sectionTypeLabel(section: PrintTemplateSection): string {
     findings: "ליקויים",
     static_text: "טקסט קבוע",
     signature: "חתימה",
+    image: "תמונה",
   };
   return map[section.type] ?? section.type;
+}
+
+function updateSignatureField(sectionIndex: number, field: "imageSrc" | "inspectorText" | "companyName", value: string) {
+  patchLayout((l) => {
+    const target = l.sections[sectionIndex];
+    if (target?.type === "signature") {
+      target[field] = value || undefined;
+    }
+  });
+}
+
+function updateImageField(sectionIndex: number, field: string, value: unknown) {
+  patchLayout((l) => {
+    const target = l.sections[sectionIndex];
+    if (target?.type === "image") {
+      (target as Record<string, unknown>)[field] = value;
+    }
+  });
 }
 
 function addField(sectionIndex: number) {
