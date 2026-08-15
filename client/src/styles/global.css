@@ -317,6 +317,220 @@ html[dir="rtl"] .n-base-clear {
 
 .page { max-width: 1200px; margin: 0 auto; }
 
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
+}
+.btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn--loading {
+  opacity: 0.75;
+}
+.btn--loading::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-inline-start-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.75s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+.btn--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--text-inverse, #fff);
+  font-weight: 600;
+}
+.btn--primary:hover {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+}
+.btn--ghost {
+  background: transparent;
+}
+.btn--danger {
+  background: transparent;
+  border-color: var(--error-color, #d03050);
+  color: var(--error-color, #d03050);
+}
+.btn--danger:hover {
+  background: rgba(208, 48, 80, 0.08);
+}
+.btn--danger-ghost {
+  background: transparent;
+  border-color: var(--error-color, #d03050);
+  color: var(--error-color, #d03050);
+}
+.btn--danger-ghost:hover {
+  background: rgba(208, 48, 80, 0.08);
+}
+.btn--xs {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.btn--ghost-active {
+  background: var(--bg-hover);
+  border-color: var(--brand-color);
+}
+
+/* ── Tags ────────────────────────────────────────────────────────────────── */
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.tag--neutral {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+.tag--success {
+  background: rgba(24, 160, 88, 0.15);
+  color: var(--color-success);
+}
+.tag--warning {
+  background: rgba(240, 160, 32, 0.15);
+  color: var(--color-warning);
+}
+.tag--error {
+  background: rgba(208, 48, 80, 0.15);
+  color: var(--color-error);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
+}
+.btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn--loading {
+  opacity: 0.75;
+}
+.btn--loading::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-inline-start-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.75s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+.btn--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--text-inverse, #fff);
+  font-weight: 600;
+}
+.btn--primary:hover {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+}
+.btn--ghost {
+  background: transparent;
+}
+.btn--danger {
+  background: transparent;
+  border-color: var(--error-color, #d03050);
+  color: var(--error-color, #d03050);
+}
+.btn--danger:hover {
+  background: rgba(208, 48, 80, 0.08);
+}
+.btn--danger-ghost {
+  background: transparent;
+  border-color: var(--error-color, #d03050);
+  color: var(--error-color, #d03050);
+}
+.btn--danger-ghost:hover {
+  background: rgba(208, 48, 80, 0.08);
+}
+.btn--xs {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.btn--ghost-active {
+  background: var(--bg-hover);
+  border-color: var(--brand-color);
+}
+
+/* ── Tags ────────────────────────────────────────────────────────────────── */
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.tag--neutral {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+.tag--success {
+  background: rgba(24, 160, 88, 0.15);
+  color: var(--color-success);
+}
+.tag--warning {
+  background: rgba(240, 160, 32, 0.15);
+  color: var(--color-warning);
+}
+.tag--error {
+  background: rgba(208, 48, 80, 0.15);
+  color: var(--color-error);
+}
+
 /* ── Force LTR data tables ─────────────────────────────────────────────────── */
 .n-data-table.n-data-table--rtl {
   direction: ltr !important;
