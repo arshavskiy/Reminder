@@ -477,7 +477,8 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
     }
   }
 
-  const colgroupCols = colWidths.map(w => `<col style="width:${w}px">`).join("");
+    const totalW = colWidths.reduce((s, w) => s + w, 0) || 1;
+    const colgroupCols = colWidths.map(w => `<col style="width:${((w / totalW) * 100).toFixed(4)}%">`).join("");
 
   const bodyRows = rows.map((row, ri) => {
     const tds = colWidths.map((_, ci) => {
@@ -491,7 +492,8 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
       const color = cell?.color ? `color:${cssColor(cell.color)};` : "";
       const border = cellBorderCss(cell?.border);
       const fontSize = typeof cell?.fontSize === "number" && cell.fontSize > 0 ? `font-size:${cell.fontSize}px;` : "";
-      const style = `text-align:${align};vertical-align:${valign};${bold}${color}${border}${fontSize}padding:2px 4px;`;
+        const cellW = typeof cell?.cellWidth === "number" && cell.cellWidth > 0 ? `width:${cell.cellWidth}px;` : "";
+        const style = `text-align:${align};vertical-align:${valign};${bold}${color}${border}${fontSize}${cellW}`;
       let content = "";
       if (cell?.type === "label") {
         content = cell.html ? sanitizeRichHtml(cell.html) : escHtml(cell.text ?? "");
@@ -512,8 +514,8 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 12px; direction: ${dir}; padding: 16px; }
-  table.render { border-collapse: collapse; width: 100%; table-layout: fixed; }
-  table.render td { vertical-align: middle; overflow: hidden; }
+  table.render { border-collapse: collapse; width: 100%; table-layout: auto; }
+  table.render td { vertical-align: middle; padding: 2px 4px; }
   table.render img.cell-img { display: block; max-width: 100%; max-height: 100%; margin: 0 auto; object-fit: contain; }
 </style>
 </head>

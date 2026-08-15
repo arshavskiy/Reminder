@@ -16,7 +16,7 @@
         <button
           v-if="hasFeature(FEATURES.pages.contracts)"
           class="dash__new-contract"
-          @click="router.push('/contracts?new=1')"
+          @click="hydraulicModalRef?.open()"
         >
           <span class="dash__new-contract__top">
             <span class="dash__new-contract__icon">＋</span>
@@ -86,6 +86,13 @@
         v-model:show="showMonthlyReport"
         :initial-month-ms="monthlyReportMonthMs"
         @open-export="openMonthlyReportExport"
+      />
+
+      <HydraulicCheckModal
+          ref="hydraulicModalRef"
+          v-model:show="showHydraulicModal"
+          @created="store.fetch(true)"
+          @updated="store.fetch(true)"
       />
 
       <!-- ── Module cards ──────────────────────────────────────────────── -->
@@ -204,7 +211,10 @@ import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
+import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 
+const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
+const showHydraulicModal = ref(false);
 const store = useDashboardStore();
 const remindersStore = useRemindersStore();
 const authStore = useAuthStore();
@@ -475,7 +485,6 @@ const data_cards = computed(() =>
 /* The strip component wraps its .drop-strip in an extra div; make both fill the
    row so the dropzone height matches the new-contract button exactly. */
 .dash__drop :deep(> div),
-.dash__drop :deep(.drop-strip) { width: 100%; height: 100%; }
 .dash__intake :deep(.drop-strip) { margin-bottom: 0; }
 .dash__new-contract {
   flex: 0 0 240px;

@@ -395,6 +395,7 @@
                           v-html="cellHtml(ri,ci-1)"
                         />
                       </template>
+                      <span class="xl-cell-resize" @mousedown.prevent.stop="startCellResize($event,ri,ci-1)"/>
                     </td>
                   </template>
                 </tr>
@@ -481,6 +482,20 @@
                 גובה שורה: {{ editing.rows[selRange.r1]?.h ?? '—' }}px<br/>
                 רוחב עמ׳: {{ editing.cols[selRange.c1]?.w ?? '—' }}px
               </div>
+
+              <div class="xl-inspector-section" style="margin-top:8px">רוחב תא</div>
+              <div class="xl-fontsize-row">
+                <input
+                    :value="activeCellData.cellWidth ?? ''"
+                    class="xl-inspector-input xl-fontsize-input"
+                    min="40"
+                    placeholder="אוטו׳"
+                    type="number"
+                    @change="setCellWidth(Number(($event.target as HTMLInputElement).value) || undefined)"
+                />
+                <span class="xl-fontsize-unit">px</span>
+                <button class="xl-type-btn" title="אפס" @click="setCellWidth(undefined)">✕</button>
+              </div>
             </template>
             <template v-else-if="!singleSel">
               <div class="xl-inspector-hint">
@@ -508,10 +523,10 @@
 <script lang="ts" setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NAlert, NButton, NCard, NEmpty, NGi, NGrid, NSpace, NSpin, NTag, useDialog, useMessage,} from "naive-ui";
+import {NAlert, NEmpty, NSpin, useDialog, useMessage,} from "naive-ui";
 import {api} from "../services/apiService.js";
 import PageHeader from "../components/PageHeader.vue";
-import type {PrintTemplate, PrintTemplateCell, PrintCellBorderStyle, PrintCellBorderSides} from "@shared/types.js";
+import type {PrintCellBorderSides, PrintCellBorderStyle, PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
 type BorderSide = "top" | "right" | "bottom" | "left";
 
@@ -1402,10 +1417,12 @@ function cellHtml(r:number,c:number){
 function cellStyle(r:number,c:number){
   const cell=getCell(r,c);
   if(!cell) return {};
-  // Show the chosen print border/size in the editor grid too (WYSIWYG). Only
-  // override the default grid border when the user set an explicit border.
   const style: Record<string,string> = { textAlign:cell.align??"right", fontWeight:cell.bold?"700":"400", color:cell.color??"inherit", verticalAlign:cell.valign??"middle", fontSize:cellFontSizeCss(cell) };
   if (cell.border !== undefined) Object.assign(style, cellBorderStyle(cell.border));
+  if (cell.cellWidth) {
+    style.width = cell.cellWidth + 'px';
+    style.minWidth = cell.cellWidth + 'px';
+  }
   return style;
 }
 
@@ -1651,24 +1668,53 @@ function normalizeBorderValue(obj: PrintCellBorderSides): PrintTemplateCell["bor
   return { ...obj };
 }
 
+function findAnchorCell(r: number, c: number): PrintTemplateCell | undefined {
+  if (!editing.value) return undefined;
+  return editing.value.cells.find(cell =>
+      r >= cell.r && r < cell.r + (cell.rowSpan ?? 1) &&
+      c >= cell.c && c < cell.c + (cell.colSpan ?? 1)
+  );
+}
+
+function resolveCell(r: number, c: number): PrintTemplateCell {
+  if (isMasked(r, c)) {
+    const anchor = findAnchorCell(r, c);
+    if (anchor) return anchor;
+  }
+  let cell = getCell(r, c);
+  if (!cell) {
+    cell = {r, c, type: "label", text: "", align: "right"};
+    editing.value!.cells.push(cell);
+  }
+  return cell;
+}
+
 function applyBorder(action: BorderAction){
   if(!editing.value) return;
   const s = selRange.value;
   if (s.r1 < 0 || s.c1 < 0) return;
   const pen = borderPen.value;
+
+  if (action === "outer") {
+    applyOuterBorder(s, pen);
+    return;
+  }
+
+  const touched = new Set<PrintTemplateCell>();
   for(let r=s.r1;r<=s.r2;r++){
     for(let c=s.c1;c<=s.c2;c++){
-      let cell=getCell(r,c);
-      if(!cell){ cell={r,c,type:"label",text:"",align:"right"}; editing.value.cells.push(cell); }
+      const cell = resolveCell(r, c);
+      if (touched.has(cell)) continue;
+      touched.add(cell);
+      const cellR2 = cell.r + (cell.rowSpan ?? 1) - 1;
+      const cellC2 = cell.c + (cell.colSpan ?? 1) - 1;
+      const isTop = cell.r <= s.r1, isBottom = cellR2 >= s.r2;
+      const isLeft = cell.c <= s.c1, isRight = cellC2 >= s.c2;
+
       const b = cellBorderObject(cell);
-      const isTop = r===s.r1, isBottom = r===s.r2, isLeft = c===s.c1, isRight = c===s.c2;
       switch(action){
         case "none": b.top=b.right=b.bottom=b.left=undefined; break;
         case "all": b.top=b.right=b.bottom=b.left=pen; break;
-        case "outer":
-          if(isTop) b.top=pen; if(isBottom) b.bottom=pen;
-          if(isLeft) b.left=pen; if(isRight) b.right=pen;
-          break;
         case "inner":
           if(!isBottom) b.bottom=pen; if(!isTop) b.top=pen;
           if(!isRight) b.right=pen; if(!isLeft) b.left=pen;
@@ -1683,10 +1729,60 @@ function applyBorder(action: BorderAction){
   }
 }
 
+function applyOuterBorder(s: { r1: number; r2: number; c1: number; c2: number }, pen: PrintCellBorderStyle) {
+  const touched = new Set<PrintTemplateCell>();
+  const isRtl = editing.value?.dir === "rtl";
+  const startSide: BorderSide = isRtl ? "right" : "left";
+  const endSide: BorderSide = isRtl ? "left" : "right";
+
+  function apply(cell: PrintTemplateCell, side: BorderSide) {
+    if (!touched.has(cell)) {
+      touched.add(cell);
+      (cell as any).__borderPatch = cellBorderObject(cell);
+    }
+    (cell as any).__borderPatch[side] = pen;
+  }
+
+  // Top edge: every column in the top row
+  for (let c = s.c1; c <= s.c2; c++) {
+    const cell = resolveCell(s.r1, c);
+    apply(cell, "top");
+    c = cell.c + (cell.colSpan ?? 1) - 1;
+  }
+  // Bottom edge: every column in the bottom row
+  for (let c = s.c1; c <= s.c2; c++) {
+    const cell = resolveCell(s.r2, c);
+    apply(cell, "bottom");
+    c = cell.c + (cell.colSpan ?? 1) - 1;
+  }
+  // Start edge (c1): rightmost column in RTL, leftmost in LTR
+  for (let r = s.r1; r <= s.r2; r++) {
+    const cell = resolveCell(r, s.c1);
+    apply(cell, startSide);
+    r = cell.r + (cell.rowSpan ?? 1) - 1;
+  }
+  // End edge (c2): leftmost column in RTL, rightmost in LTR
+  for (let r = s.r1; r <= s.r2; r++) {
+    const cell = resolveCell(r, s.c2);
+    apply(cell, endSide);
+    r = cell.r + (cell.rowSpan ?? 1) - 1;
+  }
+
+  // Write back
+  for (const cell of touched) {
+    cell.border = normalizeBorderValue((cell as any).__borderPatch);
+    delete (cell as any).__borderPatch;
+  }
+}
+
 function nudgeCellFontSize(delta:number){
   forEachSel(c=>({ fontSize: clampFontSize((c.fontSize ?? DEFAULT_CELL_FONT_SIZE) + delta) }));
 }
 function setCellFontSize(size:number){ forEachSel(()=>({ fontSize: clampFontSize(size) })); }
+
+function setCellWidth(w: number | undefined) {
+  forEachSel(() => ({cellWidth: w && w >= 40 ? w : undefined} as any));
+}
 function clampFontSize(size:number):number{ return Math.min(48, Math.max(6, Math.round(size))); }
 function toggleType(){ forEachSel(c=>({type:c.type==="field"?"label":"field"})); }
 
@@ -1986,6 +2082,37 @@ function onRowMove(e:MouseEvent){
   editing.value.rows[resizeRow.value.ri].h=Math.max(22,resizeRow.value.h+(e.clientY-resizeRow.value.y));
 }
 function stopRowResize(){ resizeRow.value=null; window.removeEventListener("mousemove",onRowMove); window.removeEventListener("mouseup",stopRowResize); }
+
+// ── Resize individual cell width ─────────────────────────────────────────────
+const resizeCell = ref<{ r: number, c: number, x: number, w: number } | null>(null);
+
+function startCellResize(e: MouseEvent, r: number, c: number) {
+  if (!editing.value) return;
+  const cell = getCell(r, c);
+  const colSpan = cell?.colSpan ?? 1;
+  const baseW = cell?.cellWidth || editing.value.cols.slice(c, c + colSpan).reduce((s, col) => s + col.w, 0);
+  resizeCell.value = {r, c, x: e.clientX, w: baseW};
+  window.addEventListener("mousemove", onCellResizeMove);
+  window.addEventListener("mouseup", stopCellResize);
+}
+
+function onCellResizeMove(e: MouseEvent) {
+  if (!resizeCell.value || !editing.value) return;
+  const dx = resizeCell.value.x - e.clientX; // RTL: drag left = wider
+  const newW = Math.max(40, resizeCell.value.w + dx);
+  let cell = getCell(resizeCell.value.r, resizeCell.value.c);
+  if (!cell) {
+    cell = {r: resizeCell.value.r, c: resizeCell.value.c, type: "label", text: "", align: "right"};
+    editing.value!.cells.push(cell);
+  }
+  cell.cellWidth = newW;
+}
+
+function stopCellResize() {
+  resizeCell.value = null;
+  window.removeEventListener("mousemove", onCellResizeMove);
+  window.removeEventListener("mouseup", stopCellResize);
+}
 </script>
 
 <style scoped>
@@ -2353,6 +2480,7 @@ function stopRowResize(){ resizeRow.value=null; window.removeEventListener("mous
   overflow: hidden;
   vertical-align: middle;
   font-size: 12px;
+  position: relative;
   background: #fff;
 }
 .xl-cell:hover:not(.xl-cell--active) { background: #f5f5f5; }
@@ -2362,6 +2490,21 @@ function stopRowResize(){ resizeRow.value=null; window.removeEventListener("mous
 .xl-cell--image  { background: #eef6ff; }
 .xl-cell--sel.xl-cell--field { background: #c6efce !important; }
 .xl-cell--sel.xl-cell--image { background: #c6efce !important; }
+
+.xl-cell-resize {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 5;
+}
+
+.xl-cell-resize:hover {
+  background: #21734688;
+}
 
 .xl-hidden-input { display: none; }
 

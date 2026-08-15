@@ -780,7 +780,7 @@
           <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
             <n-gi v-for="field in hydraulicTemplateExtraFields" :key="field">
               <n-form-item :label="field">
-                <n-input v-model:value="hydraulicTemplateValues[field]" :placeholder="field"/>
+                <n-input v-model:value="hydraulicTemplateValues[field]"/>
               </n-form-item>
             </n-gi>
           </n-grid>

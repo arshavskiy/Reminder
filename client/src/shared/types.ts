@@ -485,6 +485,7 @@ export interface PrintTemplateCell {
   fontSize?: number; // px; falls back to template default when unset
   colSpan?: number;
   rowSpan?: number;
+    cellWidth?: number;
 }
 
 export type PrintCellBorderStyle = "thin" | "medium" | "thick" | "double";
