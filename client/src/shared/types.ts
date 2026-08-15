@@ -506,6 +506,9 @@ export interface PrintTemplate {
   rows: Array<{ h: number }>;
   cells: PrintTemplateCell[];
   hasFixedFrame?: boolean; // wrap section-2 grid with תסקיר header/footer
+    /** "grid" = Excel designer (default); "sections" = simple layout editor */
+    editorType?: import("./printTemplateLayout.js").PrintTemplateEditorType;
+    layout?: import("./printTemplateLayout.js").PrintTemplateLayout;
   created_at: string;
   updated_at: string;
 }
