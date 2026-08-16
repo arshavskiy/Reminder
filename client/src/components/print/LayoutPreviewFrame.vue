@@ -34,7 +34,7 @@
 
       <!-- Fields (multi-column grid) -->
       <template v-else-if="section.type === 'fields'">
-        <div class="sec-title">{{ section.title }}</div>
+        <div v-if="section.title" class="sec-title">{{ section.title }}</div>
         <table class="fields-grid">
           <tbody>
             <tr v-for="(row, ri) in fieldsRows(section.fields, section.columns ?? 3)" :key="ri">
@@ -49,7 +49,7 @@
 
       <!-- Equipment table -->
       <template v-else-if="section.type === 'equipment_table'">
-        <div class="sec-title">{{ section.title }}</div>
+        <div v-if="section.title" class="sec-title">{{ section.title }}</div>
         <table class="data equip">
           <thead>
             <tr><th v-for="c in section.columns" :key="c.bind">{{ c.label }}</th></tr>
@@ -84,7 +84,7 @@
 
       <!-- Static text -->
       <template v-else-if="section.type === 'static_text'">
-        <div class="sec-title">{{ section.title }}</div>
+        <div v-if="section.title" class="sec-title">{{ section.title }}</div>
         <p class="static">{{ section.text }}</p>
       </template>
 
@@ -203,6 +203,7 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
 }
 .block.no-border { border: none; }
 .sec-title { font-size: 10px; font-weight: 700; margin-bottom: 4px; }
+.sec-title:empty { display: none; margin: 0; }
 
 /* Header */
 .header-table { width: 100%; border-collapse: collapse; }

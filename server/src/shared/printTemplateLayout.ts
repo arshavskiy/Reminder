@@ -120,7 +120,7 @@ export interface PrintTemplateLayout {
 }
 
 export const DEFAULT_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
-    {label: "תיאור", bind: "name"},
+    {label: "תיאור", bind: "description"},
     {label: "יצרן", bind: "manufacturer"},
     {label: "דגם", bind: "model"},
     {label: "מס׳ סידורי", bind: "serial_number"},
@@ -156,22 +156,41 @@ export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
             {
                 type: "fields",
                 title: "1. פרטי הלקוח/תופש",
+                columns: 3,
                 fields: [
-                    {bind: "client_name", label: "איש קשר"},
-                    {bind: "client_company", label: "שם הלקוח"},
-                    {bind: "inspection_type", label: "סוג בדיקה"},
-                    {bind: "client_phone", label: "טלפון"},
-                    {bind: "client_email", label: "מייל"},
+                    {bind: "client_company", label: "שם הלקוח/תופש"},
+                    {bind: "client_address", label: "כתובת"},
+                    {bind: "client_city", label: "יישוב"},
                     {bind: "zip_code", label: "מיקוד"},
-                    {bind: "client_address", label: "יישוב"},
+                    {bind: "client_name", label: "איש קשר"},
+                    {bind: "client_phone", label: "טלפון"},
+                    {bind: "client_mobile", label: "נייד"},
+                    {bind: "client_fax", label: "פקס"},
+                    {bind: "client_email", label: "מייל"},
+                    {bind: "inspection_type", label: "סוג בדיקה"},
                     {bind: "license_number", label: "מספר רישוי"},
-                    {bind: "chassis", label: "שלדה"},
+                    {bind: "inspection_location", label: "מקום הבדיקה"},
+                ],
+            },
+            {
+                type: "fields",
+                title: "2. תיאור מכונת הרמה",
+                columns: 2,
+                fields: [
+                    {bind: "name", label: "שם הציוד"},
+                    {bind: "inspection_location", label: "מקום הבדיקה"},
                 ],
             },
             {
                 type: "equipment_table",
-                title: "2. תיאור מכונת הרמה",
+                title: "",
                 columns: DEFAULT_EQUIPMENT_COLUMNS.map((c) => ({...c})),
+            },
+            {
+                type: "static_text",
+                title: "",
+                text: "יש לשמור תסקיר זה לביקורת מפקח העבודה",
+                style: {noBorder: true},
             },
             {
                 type: "findings",

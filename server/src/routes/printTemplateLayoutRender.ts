@@ -117,14 +117,14 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
     }
     case "fields": {
       const cols = section.columns ?? 3;
-      return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div>${renderFieldsGrid(section.fields, data, cols)}</section>`;
+      return `<section class="${sectionClass(section, "block")}">${section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : ""}${renderFieldsGrid(section.fields, data, cols)}</section>`;
     }
     case "equipment_table":
-      return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div>${renderEquipmentTable(section.columns, data)}</section>`;
+      return `<section class="${sectionClass(section, "block")}">${section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : ""}${renderEquipmentTable(section.columns, data)}</section>`;
     case "findings":
       return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div>${renderFindings(section, data, color)}</section>`;
     case "static_text":
-      return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div><p class="static">${escHtml(section.text)}</p></section>`;
+      return `<section class="${sectionClass(section, "block")}">${section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : ""}<p class="static">${escHtml(section.text)}</p></section>`;
     case "signature": {
       if (!section.enabled) return "";
         const certTemplate = section.certificationText === ""

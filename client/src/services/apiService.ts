@@ -61,7 +61,10 @@ export interface HydraulicCheckRequest {
     contact_person?: string;
     email?: string;
     phone?: string;
+    mobile?: string;
+    fax?: string;
     address?: string;
+    city?: string;
     po_box?: string;
     client_zipcode?: string;
     notes?: string;
@@ -78,6 +81,8 @@ export interface HydraulicCheckRequest {
     load_radius?: string;
     description?: string;
   };
+  inspection_type?: string;
+  inspection_location?: string;
   check_date?: string;
   next_inspection_date?: string;
   interval_months?: number;

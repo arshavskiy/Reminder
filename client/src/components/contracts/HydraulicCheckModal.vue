@@ -113,6 +113,21 @@
                         type="date"
                     />
                   </div>
+                  <div class="hm-field">
+                    <label>סוג בדיקה</label>
+                    <n-select
+                        v-model:value="hydraulicForm.inspection_type"
+                        :options="inspectionTypeOptions"
+                        :virtual-scroll="false"
+                        filterable
+                        tag
+                        placeholder="תקופתית"
+                    />
+                  </div>
+                  <div class="hm-field">
+                    <label>מקום הבדיקה</label>
+                    <n-input v-model:value="hydraulicForm.inspection_location" placeholder="יישוב / אתר"/>
+                  </div>
                 </div>
               </section>
 
@@ -141,12 +156,24 @@
                       <n-input v-model:value="hydraulicForm.business.phone" dir="ltr"/>
                     </div>
                     <div class="hm-field">
+                      <label>נייד</label>
+                      <n-input v-model:value="hydraulicForm.business.mobile" dir="ltr"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>פקס</label>
+                      <n-input v-model:value="hydraulicForm.business.fax" dir="ltr"/>
+                    </div>
+                    <div class="hm-field">
                       <label>אימייל</label>
                       <n-input v-model:value="hydraulicForm.business.email" dir="ltr" placeholder="office@example.com"/>
                     </div>
                     <div class="hm-field">
                       <label>כתובת</label>
                   <n-input v-model:value="hydraulicForm.business.address"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>יישוב</label>
+                      <n-input v-model:value="hydraulicForm.business.city"/>
                     </div>
                     <div class="hm-field">
                       <label>ת.ד</label>
@@ -500,6 +527,12 @@ const reminderDaysOptions = [
   {label: "60 ימים לפני", value: 60},
   {label: "90 ימים לפני", value: 90},
 ];
+const inspectionTypeOptions = [
+  {label: "תקופתית", value: "תקופתית"},
+  {label: "ראשונית", value: "ראשונית"},
+  {label: "חוזרת", value: "חוזרת"},
+  {label: "לאחר תיקון", value: "לאחר תיקון"},
+];
 const intervalOptions = Array.from({length: 24}, (_, i) => {
   const months = i + 1;
   return {
@@ -553,11 +586,11 @@ const equipmentOptions = computed(() =>
 const templateKnownFields = new Set([
   "document_number", "contract_number", "report_number", "prev_report_number",
   "start_date", "inspection_date", "check_date", "expiry_date", "next_inspection_date",
-  "valid_until", "inspection_type", "client_name", "client_company", "client_phone",
-  "client_email", "client_address", "client_id", "zip_code", "contact_person",
+  "valid_until", "inspection_type", "inspection_location", "client_name", "client_company", "client_phone",
+  "client_mobile", "client_fax", "client_email", "client_address", "client_city", "client_id", "zip_code", "contact_person",
   "po_box", "chassis", "name", "manufacturer", "model", "serial_number", "license_number",
   "lisence_number", "load_radius", "load_capacity_test", "load_capacity_work",
-  "equipment_description", "checked_equipment",
+  "description", "equipment_description", "checked_equipment",
   "inspector_number", "company_name", "company_registration",
   "engineer_company", "engineer_email", "engineer_phone", "engineer_name", "engineer_address",
 ]);
@@ -706,10 +739,15 @@ function defaultForm(): HydraulicCheckRequest {
       contact_person: "",
       email: "",
       phone: "",
+      mobile: "",
+      fax: "",
       address: "",
+      city: "",
       po_box: "",
       client_zipcode: "",
     },
+    inspection_type: "תקופתית",
+    inspection_location: "",
     equipment: {
       category: "lift",
       name: "",
@@ -881,7 +919,10 @@ async function applyClient(cid: string | null) {
       contact_person: "",
       email: "",
       phone: "",
+      mobile: "",
+      fax: "",
       address: "",
+      city: "",
       po_box: "",
       client_zipcode: "",
     };
@@ -898,7 +939,10 @@ async function applyClient(cid: string | null) {
     contact_person: client.contact_person ?? "",
     email: client.email ?? "",
     phone: client.phone ?? "",
+    mobile: (client as any).mobile ?? (client as any).phone_mobile ?? "",
+    fax: (client as any).fax ?? "",
     address: client.address ?? "",
+    city: (client as any).city ?? "",
     po_box: (client as any).po_box ?? "",
     client_zipcode: (client as any).client_zipcode ?? "",
   };
@@ -1031,13 +1075,17 @@ function buildTemplateDraft(): Record<string, string> {
     expiry_date: expiryDate,
     next_inspection_date: expiryDate,
     valid_until: expiryDate,
-    inspection_type: "בדיקה תקופתית",
+    inspection_type: form.inspection_type || "תקופתית",
+    inspection_location: form.inspection_location ?? "",
     client_name: business.contact_person ?? "",
     contact_person: business.contact_person ?? "",
     client_company: business.display_name ?? "",
     client_phone: business.phone ?? "",
+    client_mobile: business.mobile ?? "",
+    client_fax: business.fax ?? "",
     client_email: business.email ?? "",
     client_address: business.address ?? "",
+    client_city: business.city ?? "",
     client_id: business.id_number ?? "",
     zip_code: business.client_zipcode ?? "",
     po_box: business.po_box ?? "",
@@ -1063,6 +1111,7 @@ function buildTemplateDraft(): Record<string, string> {
     data[`load_radius${suffix}`] = eq.load_radius;
     data[`load_capacity_test${suffix}`] = eq.load_capacity_test;
     data[`load_capacity_work${suffix}`] = eq.load_capacity_work;
+    data[`description${suffix}`] = eq.description;
     data[`equipment_description${suffix}`] = eq.description;
     data[`checked_equipment${suffix}`] = eq.name;
     data[`chassis${suffix}`] = eq.serial_number;
@@ -1290,10 +1339,15 @@ async function openForUpdate(contractId: string, returnTo?: string) {
       contact_person: String(row.contact_person ?? manual.contact_person ?? manual.client_name ?? ""),
       email: String(row.contact_email ?? manual.contact_email ?? manual.client_email ?? ""),
       phone: String(row.contact_phone ?? manual.contact_phone ?? manual.client_phone ?? ""),
+      mobile: String(manual.client_mobile ?? manual.mobile ?? ""),
+      fax: String(manual.client_fax ?? manual.fax ?? ""),
       address: String(row.client_address ?? manual.client_address ?? ""),
+      city: String(manual.client_city ?? manual.city ?? ""),
       po_box: String(row.po_box ?? manual.po_box ?? ""),
       client_zipcode: String(row.client_zipcode ?? manual.zip_code ?? ""),
     },
+    inspection_type: manual.inspection_type || "תקופתית",
+    inspection_location: manual.inspection_location ?? "",
     equipment: {
       category: (firstEquipment?.category ?? "lift") as HydraulicCheckRequest["equipment"]["category"],
       name: String(firstEquipment?.name ?? manual.name ?? manual.checked_equipment ?? ""),
