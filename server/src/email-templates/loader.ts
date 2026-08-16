@@ -8,6 +8,6 @@ export function loadAuthTemplate(name: "verify-email" | "reset-password"): strin
   return readFileSync(join(__dirname, "auth", `${name}.html`), "utf-8");
 }
 
-export function loadReminderTemplate(name: "default" | "inspection" | "contract" | "invoice"): string {
+export function loadReminderTemplate(name: "default" | "inspection" | "contract" | "invoice" | "grouped"): string {
   return readFileSync(join(__dirname, "reminders", `${name}.html`), "utf-8");
 }

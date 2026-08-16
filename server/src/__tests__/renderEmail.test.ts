@@ -167,7 +167,7 @@ describe("reminder email templates — full data fill", () => {
     advance_days: 30,
   };
 
-  const TEMPLATES = ["default", "inspection", "contract", "invoice"] as const;
+  const TEMPLATES = ["default", "inspection", "contract", "invoice", "grouped"] as const;
   const VAR_SETS = [
     ["full", FULL_VARS],
     ["minimal (contract-only reminder)", MINIMAL_VARS],

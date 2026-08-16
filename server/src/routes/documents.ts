@@ -5,6 +5,7 @@ import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {
   importFile,
+  normalizeEmail,
   normalizeExtractionFieldsForTemplate,
   processDocument,
   saveTemplateEntitiesForDoc
@@ -16,6 +17,7 @@ import {extractWithTemplate} from "../pipeline/extractor";
 import {loadAllTemplates, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import multer from "multer";
 import {logger} from "../logger";
+import {firstTrimmedEmail} from "../contracts/contractEmail.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -867,6 +869,26 @@ export function registerDocumentRoutes(app: express.Application) {
       });
     }
 
+    const today = new Date().toISOString().slice(0, 10);
+    const fieldEmail = firstTrimmedEmail(merged.client_email, merged.contact_email, merged.email);
+    const normalizedEmail = fieldEmail ? normalizeEmail(fieldEmail) : null;
+    const fieldExpiry = String(merged.next_inspection_date ?? merged.expiry_date ?? "").slice(0, 10);
+    const expiryDate = /^\d{4}-\d{2}-\d{2}$/.test(fieldExpiry) ? fieldExpiry : null;
+
+    if (normalizedEmail) {
+      const clientLinks = await col("document_clients").find({ document_id: id }).toArray();
+      for (const link of clientLinks) {
+        const clientId = (link as any).client_id;
+        if (!clientId) continue;
+        let clientOid: any = clientId;
+        try { clientOid = new ObjectId(String(clientId)); } catch { /* keep as stored */ }
+        await col("clients").updateOne(
+          { _id: clientOid },
+          { $set: { email: normalizedEmail, updated_at: new Date() } },
+        );
+      }
+    }
+
     // Refresh pending reminders from the rebuilt contract so client/date/title
     // changes made in the document fields are reflected without a full rescan.
     let oid: ObjectId | null = null;
@@ -882,9 +904,33 @@ export function registerDocumentRoutes(app: express.Application) {
       const { generateContractReminders } = await import("../reminders/scheduler.js");
       for (const c of contracts) {
         const cid = (c._id as ObjectId).toString();
-        const expiryDate = String((c as any).expiry_date ?? "");
+        const patch: Record<string, unknown> = { updated_at: new Date() };
+        if (normalizedEmail) patch.contact_email = normalizedEmail;
         if (expiryDate) {
-          await generateContractReminders(cid, (c as any).client_id ?? null, id, expiryDate, userId);
+          patch.expiry_date = expiryDate;
+          patch.status = expiryDate < today ? "expired" : "active";
+        }
+        if (Object.keys(patch).length > 1) {
+          await col("contracts").updateOne({ _id: c._id }, { $set: patch });
+        }
+        if (normalizedEmail && (c as any).client_id) {
+          let clientOid: any = (c as any).client_id;
+          try { clientOid = new ObjectId(String((c as any).client_id)); } catch { /* keep as stored */ }
+          await col("clients").updateOne(
+            { _id: clientOid },
+            { $set: { email: normalizedEmail, updated_at: new Date() } },
+          );
+        }
+        const reminderExpiry = expiryDate ?? String((c as any).expiry_date ?? "");
+        if (reminderExpiry) {
+          await generateContractReminders(
+            cid,
+            (c as any).client_id ?? null,
+            id,
+            reminderExpiry,
+            userId,
+            normalizedEmail,
+          );
         }
       }
     }

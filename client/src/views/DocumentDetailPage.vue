@@ -320,7 +320,10 @@
                   </template>
                   <template v-else-if="Array.isArray(f.value)">{{ f.value.join(', ') || '—' }}</template>
                   <template v-else-if="f.value && typeof f.value === 'object'">{{ JSON.stringify(f.value) }}</template>
-                  <template v-else>{{ f.value ?? '—' }}</template>
+                  <template v-else>
+                    {{ displayExtractedValue(f) }}
+                    <span v-if="isExpiredExtractedField(f)" class="fields-expired"> · לא בתוקף</span>
+                  </template>
                 </span>
               </div>
             </div>
@@ -566,7 +569,13 @@ async function rerunExtract() {
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("he-IL");
+  const iso = parseDateOnly(d);
+  if (iso) {
+    const [year, month, day] = iso.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString("he-IL");
+  }
+  const parsed = new Date(d);
+  return Number.isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString("he-IL");
 }
 function formatSize(bytes: number | null | undefined) {
   if (!bytes) return "—";
@@ -622,6 +631,34 @@ const extractedFields = computed(() => {
 
 function isEmailField(key: string) {
   return key === "client_email" || key === "contact_email" || key === "email";
+}
+
+function parseDateOnly(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const text = value.trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(text);
+  if (!dmy) return null;
+  return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+}
+
+function todayDateOnly(today = new Date()): string {
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
+
+function isExpiredExtractedField(field: { key: string; value: unknown }): boolean {
+  if (field.key !== "next_inspection_date" && field.key !== "expiry_date") return false;
+  const iso = parseDateOnly(field.value);
+  return Boolean(iso && iso < todayDateOnly());
+}
+
+function displayExtractedValue(field: { key: string; value: unknown }): string {
+  if (field.value == null || field.value === "") return "—";
+  if (field.key === "next_inspection_date" || field.key === "expiry_date" || field.key === "inspection_date") {
+    return formatDate(String(field.value));
+  }
+  return String(field.value);
 }
 
 function shouldShowExtractedField(field: { key: string; value: unknown }) {
@@ -1200,6 +1237,10 @@ onMounted(async () => {
   direction: ltr;
   unicode-bidi: isolate;
   text-align: left;
+}
+.fields-expired {
+  color: var(--danger, #d03050);
+  font-weight: 600;
 }
 .fields-input:focus {
   box-shadow: 0 0 0 2px rgba(99, 226, 183, 0.2);

@@ -300,3 +300,11 @@ describe("PUT /documents/:id/fields — reminder regeneration flow", () => {
     expect(generateReminders).toHaveBeenCalledWith("ctr-2", "cli-2", "doc-2", "2028-03-15", "user-1");
   });
 });
+
+describe("PUT /documents/:id/fields — email overlay", () => {
+  it("reads the edited email for reminder generation", async () => {
+    const {firstTrimmedEmail} = await import("../contracts/contractEmail.js");
+    const merged = { client_email: "anous_adnan@yahoo.com", contact_email: "", email: null };
+    expect(firstTrimmedEmail(merged.client_email, merged.contact_email, merged.email)).toBe("anous_adnan@yahoo.com");
+  });
+});

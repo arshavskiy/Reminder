@@ -3,7 +3,10 @@ export function parseObjectRecord(value: unknown): Record<string, unknown> {
     if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
     if (typeof value !== "string") return {};
     try {
-        const parsed = JSON.parse(value);
+        let parsed: unknown = JSON.parse(value);
+        if (typeof parsed === "string") {
+            try { parsed = JSON.parse(parsed); } catch { /* keep the inner string */ }
+        }
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
             return parsed as Record<string, unknown>;
         }
@@ -11,6 +14,23 @@ export function parseObjectRecord(value: unknown): Record<string, unknown> {
         // stored as a non-JSON string
     }
     return {};
+}
+
+export function parseReminderEmailTo(value: unknown): string[] {
+    if (Array.isArray(value)) {
+        return value.filter((item): item is string => typeof item === "string" && item.includes("@")).map((item) => item.trim());
+    }
+    if (typeof value !== "string" || !value.trim()) return [];
+    try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+            return parsed.filter((item): item is string => typeof item === "string" && item.includes("@")).map((item) => item.trim());
+        }
+        if (typeof parsed === "string" && parsed.includes("@")) return [parsed.trim()];
+    } catch {
+        // Manual reminders may still contain a plain email string.
+    }
+    return value.includes("@") ? [value.trim()] : [];
 }
 
 export function firstTrimmedEmail(...values: unknown[]): string | null {

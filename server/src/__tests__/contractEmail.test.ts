@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {parseObjectRecord, pickContractEmail} from "../contracts/contractEmail.js";
+import {parseObjectRecord, parseReminderEmailTo, pickContractEmail} from "../contracts/contractEmail.js";
 
 describe("parseObjectRecord", () => {
     it("returns objects as-is so generated PDF fields are readable", () => {
@@ -8,6 +8,10 @@ describe("parseObjectRecord", () => {
 
     it("parses JSON strings", () => {
         expect(parseObjectRecord('{"contact_email":"b@x.com"}')).toEqual({contact_email: "b@x.com"});
+    });
+
+    it("parses double-encoded JSON strings", () => {
+        expect(parseObjectRecord(JSON.stringify('{"client_email":"a@x.com"}'))).toEqual({client_email: "a@x.com"});
     });
 
     it("returns empty for invalid JSON", () => {
@@ -46,5 +50,28 @@ describe("pickContractEmail", () => {
             {},
             {email: null},
         )).toBe("sadad@asdsada.com");
+    });
+
+    it("uses document extracted email when the client record has none", () => {
+        expect(pickContractEmail(
+            {manual_fields: {}},
+            {contact_email: "anous_adnan@yahoo.com"},
+            {email: null},
+        )).toBe("anous_adnan@yahoo.com");
+    });
+});
+
+describe("parseReminderEmailTo", () => {
+    it("reads a JSON array", () => {
+        expect(parseReminderEmailTo(JSON.stringify(["a@x.com"]))).toEqual(["a@x.com"]);
+    });
+
+    it("reads a plain email string", () => {
+        expect(parseReminderEmailTo("anous_adnan@yahoo.com")).toEqual(["anous_adnan@yahoo.com"]);
+    });
+
+    it("returns empty when missing", () => {
+        expect(parseReminderEmailTo(null)).toEqual([]);
+        expect(parseReminderEmailTo("")).toEqual([]);
     });
 });

@@ -615,6 +615,57 @@ export async function sendReminderEmailTo(
   return sendReminderEmail(reminder, [to], opts);
 }
 
+export async function sendGroupedReminderEmail(opts: {
+  reminders: ReminderWithContext[];
+  recipients: string[];
+  clientName: string;
+  triggerDate: string;
+  itemsHtml: string;
+}): Promise<{ success: boolean; error?: string; subject: string }> {
+  const settings = getSettings();
+  const subject = `[תזכורת בדיקה] ${opts.clientName} — ${opts.reminders.length} פריטים`;
+  if (!settings.smtpHost && !useResend()) {
+    return { success: false, error: "SMTP not configured", subject };
+  }
+  if (!opts.recipients.length) {
+    return { success: false, error: "No recipients configured", subject };
+  }
+  try {
+    const userId = String((opts.reminders[0] as any)?.user_id ?? "");
+    const senderName = await resolveSenderName(userId);
+    const from = formatAddress(senderName, settings.emailFrom);
+    const html = ensureRtl(renderTemplate(loadReminderTemplate("grouped"), {
+      client_company: opts.clientName,
+      trigger_date: opts.triggerDate,
+      item_count: opts.reminders.length,
+      items_table: opts.itemsHtml,
+      from_name: senderName,
+    }, { escape: false }));
+    const text = `תזכורת בדיקה עבור ${opts.clientName}: ${opts.reminders.length} פריטים למועד ${opts.triggerDate}`;
+    const ccEmail: string[] = [];
+    if (userId && process.env.SKIP_CC !== "true") {
+      const u = await col("users").findOne({ _id: tryObjectId(userId) } as any) as any;
+      const userEmail = u?.email ?? null;
+      if (userEmail && !opts.recipients.includes(userEmail)) ccEmail.push(userEmail);
+    }
+    if (useResend()) {
+      await sendViaResend({ from, to: opts.recipients, cc: ccEmail, subject, html, text });
+    } else {
+      await buildTransport().sendMail({ from, to: opts.recipients.join(", "), cc: ccEmail.join(", ") || undefined, subject, html, text });
+    }
+    logger.info("grouped_reminder_email_sent", {
+      reminder_ids: opts.reminders.map((row) => row.id),
+      recipient_count: opts.recipients.length,
+      item_count: opts.reminders.length,
+    });
+    return { success: true, subject };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    logger.warn("grouped_reminder_email_failed", { error, item_count: opts.reminders.length });
+    return { success: false, error, subject };
+  }
+}
+
 export async function sendEmailWithAttachments(
   recipients: string[],
   subject: string,

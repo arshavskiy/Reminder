@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; background: #f0f4f8; padding: 24px; color: #2c3e50; margin: 0; }
+    .card { background: #ffffff; border-radius: 14px; padding: 36px 32px; max-width: 720px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    h1 { color: #e65c00; margin: 0 0 8px; font-size: 20px; text-align: center; }
+    .lead { color: #5a6c7d; margin: 0 0 20px; font-size: 14px; text-align: center; line-height: 1.6; }
+    .badge { display: inline-block; background: #fff3cd; color: #7c4a00; border: 1px solid #f9a825; border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 700; margin-bottom: 20px; }
+    .items { width: 100%; border-collapse: collapse; background: #fafbfc; border: 1px solid #e5e9ef; border-radius: 10px; overflow: hidden; }
+    .items th { background: #fff8e1; color: #7c4a00; font-size: 12px; font-weight: 700; padding: 10px 12px; text-align: right; border-bottom: 1px solid #f3e8c8; }
+    .items td { padding: 10px 12px; border-bottom: 1px solid #e5e9ef; font-size: 13px; color: #111827; text-align: right; }
+    .items tr:last-child td { border-bottom: none; }
+    .cta-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 16px 20px; margin: 20px 0; text-align: center; }
+    .cta-box p { margin: 0; color: #991b1b; font-size: 14px; font-weight: 600; }
+    .footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e5e9ef; font-size: 12px; color: #9ca3af; text-align: center; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>תזכורת לבדיקה תקופתית</h1>
+    <p class="lead">{{client_company|לקוח}} — {{item_count}} פריטים למועד {{trigger_date}}</p>
+    <div class="badge">{{item_count}} תסקירים באותו יום</div>
+    {{items_table}}
+    <div class="cta-box">
+      <p>יש לתאם את הבדיקות התקופתיות לפני המועד האחרון!</p>
+    </div>
+    <div class="footer">
+      {{from_name|ReminderOCR}} — תזכורת אוטומטית לבדיקות תקופתיות<br>
+      אין צורך להשיב על הודעה זו
+    </div>
+  </div>
+</body>
+</html>

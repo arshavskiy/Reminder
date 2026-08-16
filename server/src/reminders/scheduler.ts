@@ -1,13 +1,14 @@
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {getSettings} from "../settings";
-import {sendReminderEmail} from "./emailSender";
+import {sendGroupedReminderEmail, sendReminderEmail} from "./emailSender";
 import {sendMonthlyReportToRecipients} from "../reports/monthlyReports";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {clientDisplayName} from "../utils/clientNames";
 import {notifyEmailSendFailed, notifyReminderSkipped} from "../push/adminNotify";
-import {parseObjectRecord, pickContractEmail} from "../contracts/contractEmail.js";
+import {parseObjectRecord, parseReminderEmailTo, pickContractEmail} from "../contracts/contractEmail.js";
+import {buildGroupedItemsTable, expiryFromReminderTitle, groupedReminderKey} from "./groupedReminderEmail";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
@@ -122,16 +123,26 @@ function toObjectId(id: unknown): any {
   try { return new ObjectId(String(id)); } catch { return id; }
 }
 
+function idLookup(id: unknown): Record<string, unknown> {
+  const raw = String(id);
+  const clauses: Array<Record<string, unknown>> = [{ _id: raw }];
+  try { clauses.unshift({ _id: new ObjectId(raw) }); } catch { /* keep string id */ }
+  return { $or: clauses };
+}
+
+async function findById(collection: string, id: unknown): Promise<any | null> {
+  if (id == null || id === "") return null;
+  return col(collection).findOne(idLookup(id) as any);
+}
+
 async function resolveReminderContract(reminder: any): Promise<any | null> {
-  if (reminder.source_type !== "contract_expiry" || !reminder.source_id || !reminder.user_id) return null;
+  if (!reminder.source_id) return null;
+  const sourceType = String(reminder.source_type ?? "");
+  if (sourceType && sourceType !== "contract_expiry" && sourceType !== "manual") return null;
   const sourceId = String(reminder.source_id);
-  return col("contracts").findOne({
-    user_id: reminder.user_id,
-    $or: [
-      { _id: toObjectId(sourceId) },
-      { id: sourceId },
-    ],
-  });
+  const or: Array<Record<string, unknown>> = [{ _id: sourceId }, { id: sourceId }];
+  try { or.unshift({ _id: new ObjectId(sourceId) }); } catch { /* keep string id */ }
+  return col("contracts").findOne({ $or: or });
 }
 
 function parseIsoDateOnly(value: string): Date | null {
@@ -174,66 +185,207 @@ async function checkReminders() {
 
   const due = await col("reminders")
     .find({
-      status: "pending",
       trigger_date: { $lte: today },
+      $or: [
+        { status: "pending" },
+        {
+          status: "error",
+          $or: [
+            { email_to: null },
+            { email_to: "" },
+            { email_to: { $exists: false } },
+          ],
+        },
+      ],
     })
     .toArray();
 
   logger.debug("reminder_check_completed", { due_count: due.length });
+
+  type Prepared = {
+    reminder: ReminderWithContext;
+    recipients: string[];
+    recipientSource: string;
+    contract: any;
+    document: any;
+    client: any;
+  };
+  const prepared: Prepared[] = [];
 
   for (const reminder of due) {
     const remId = reminder._id?.toString();
     if (sentIds.has(remId)) continue;
 
     const r = reminder as any;
-    const [client, document, contract] = await Promise.all([
-      r.client_id
-        ? col("clients").findOne({ _id: toObjectId(r.client_id) } as any)
-        : null,
-      r.document_id
-        ? col("documents").findOne({ _id: toObjectId(r.document_id) } as any)
-        : null,
-      resolveReminderContract(r),
+    const contract = await resolveReminderContract(r);
+    const clientId = r.client_id ?? contract?.client_id ?? null;
+    const documentId = r.document_id ?? contract?.document_id ?? null;
+    const [client, document] = await Promise.all([
+      clientId ? findById("clients", clientId) : null,
+      documentId ? findById("documents", documentId) : null,
     ]);
 
     const enriched: ReminderWithContext = {
       ...r,
       id: remId,
+      client_id: clientId,
+      document_id: documentId,
       client_name: clientDisplayName((client as any)?.display_name),
       document_name: (document as any)?.file_name ?? null,
       contract_number: (contract as any)?.contract_number ?? null,
       contract_type: (contract as any)?.contract_type ?? null,
     } as any;
 
-    await processReminder(enriched);
+    const parsedTo = parseReminderEmailTo(r.email_to);
+    const fallbackEmail = pickContractEmail(
+      contract,
+      parseObjectRecord((document as any)?.extracted_fields),
+      client as { email?: unknown } | null,
+    );
+    const recipients = parsedTo.length ? parsedTo : (fallbackEmail ? [fallbackEmail] : []);
+    prepared.push({
+      reminder: enriched,
+      recipients,
+      recipientSource: parsedTo.length ? "reminder.email_to" : fallbackEmail ? "contract_document_or_client" : "none",
+      contract,
+      document,
+      client,
+    });
+  }
+
+  const groups = new Map<string, Prepared[]>();
+  const ungrouped: Prepared[] = [];
+  for (const row of prepared) {
+    const email = row.recipients[0]?.trim();
+    if (!email) {
+      ungrouped.push(row);
+      continue;
+    }
+    const key = groupedReminderKey(row.reminder.client_id, row.reminder.trigger_date, email);
+    const list = groups.get(key) ?? [];
+    list.push(row);
+    groups.set(key, list);
+  }
+
+  for (const row of ungrouped) {
+    await processReminder(row.reminder);
+  }
+
+  for (const [, items] of groups) {
+    if (items.length === 1) {
+      await processReminder(items[0].reminder);
+      continue;
+    }
+    await processGroupedReminders(items);
+  }
+}
+
+function groupedTableItem(row: {
+  reminder: ReminderWithContext;
+  contract: any;
+  document: any;
+}) {
+  const extracted = parseObjectRecord((row.document as any)?.extracted_fields);
+  const contract = row.contract ?? {};
+  return {
+    contract_number: String(contract.contract_number ?? row.reminder.contract_number ?? ""),
+    equipment: String(
+      extracted.checked_equipment
+      ?? extracted.equipment_description
+      ?? contract.checked_equipment
+      ?? contract.equipment_description
+      ?? "",
+    ),
+    license_number: String(extracted.license_number ?? contract.license_number ?? ""),
+    expiry_date: String(
+      contract.expiry_date
+      ?? expiryFromReminderTitle(row.reminder.title)
+      ?? "",
+    ),
+  };
+}
+
+async function processGroupedReminders(items: Array<{
+  reminder: ReminderWithContext;
+  recipients: string[];
+  recipientSource: string;
+  contract: any;
+  document: any;
+  client: any;
+}>) {
+  const settings = getSettings();
+  const first = items[0];
+  const recipients = first.recipients;
+  const clientName = first.reminder.client_name || "לקוח";
+  const result = await sendGroupedReminderEmail({
+    reminders: items.map((row) => row.reminder),
+    recipients,
+    clientName,
+    triggerDate: first.reminder.trigger_date,
+    itemsHtml: buildGroupedItemsTable(items.map(groupedTableItem)),
+  });
+
+  for (const row of items) {
+    const remId = row.reminder.id;
+    if (row.recipientSource === "contract_document_or_client" && !row.reminder.email_to) {
+      await col("reminders").updateOne(
+        { _id: toObjectId(remId) } as any,
+        { $set: { email_to: JSON.stringify(recipients), updated_at: new Date() } },
+      );
+    }
+    await col("email_log").insertOne({
+      reminder_id: remId,
+      user_id: (row.reminder as any).user_id ?? null,
+      log_type: "send",
+      to_address: recipients.join(", "),
+      recipient: recipients.join(", "),
+      subject: result.subject,
+      sent_at: new Date(),
+      success: result.success ? 1 : 0,
+      error: result.error ?? null,
+      smtp_host: settings.smtpHost || "in-app-only",
+      via: (process.env.RESEND_API_KEY ? "resend" : "smtp"),
+      grouped: 1,
+    } as any);
+    if (result.success) {
+      await markSent(row.reminder);
+    }
+  }
+
+  if (result.success) {
+    logger.info("grouped_reminders_sent", {
+      client_id: first.reminder.client_id ?? null,
+      trigger_date: first.reminder.trigger_date,
+      item_count: items.length,
+      recipient: recipients[0],
+    });
+  } else {
+    logger.warn("grouped_reminders_failed", {
+      client_id: first.reminder.client_id ?? null,
+      item_count: items.length,
+      error: result.error,
+    });
+    notifyEmailSendFailed({
+      recipient: recipients.join(", "),
+      error: result.error,
+      title: `${clientName} (${items.length} פריטים)`,
+    });
   }
 }
 
 async function processReminder(reminder: ReminderWithContext) {
   const settings = getSettings();
   const remId = reminder.id;
-  let recipients: string[] = [];
-  let recipientSource = "none";
-
-  try {
-    const parsed = reminder.email_to ? JSON.parse(reminder.email_to) : [];
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      recipients = parsed.filter(Boolean);
-      recipientSource = "reminder.email_to";
-    }
-  } catch {
-    logger.warn("reminder_email_to_malformed", { reminder_id: remId });
-  }
+  let recipients: string[] = parseReminderEmailTo(reminder.email_to);
+  let recipientSource = recipients.length ? "reminder.email_to" : "none";
 
   if (recipients.length === 0) {
-    const [client, contract, document] = await Promise.all([
-      reminder.client_id
-        ? col("clients").findOne({ _id: toObjectId(reminder.client_id) } as any)
-        : null,
-      resolveReminderContract(reminder),
-      reminder.document_id
-        ? col("documents").findOne({ _id: toObjectId(reminder.document_id) } as any)
-        : null,
+    const contract = await resolveReminderContract(reminder);
+    const clientId = reminder.client_id ?? (contract as any)?.client_id ?? null;
+    const documentId = reminder.document_id ?? (contract as any)?.document_id ?? null;
+    const [client, document] = await Promise.all([
+      clientId ? findById("clients", clientId) : null,
+      documentId ? findById("documents", documentId) : null,
     ]);
     const fallbackEmail = pickContractEmail(
       contract,
@@ -243,15 +395,24 @@ async function processReminder(reminder: ReminderWithContext) {
     if (fallbackEmail) {
       recipients = [fallbackEmail];
       recipientSource = "contract_document_or_client";
-    } else if (reminder.client_id) {
+    } else {
       logger.warn("reminder_client_email_missing", {
         reminder_id: remId,
-        client_id: reminder.client_id,
+        client_id: clientId,
+        client_found: Boolean(client),
+        client_has_email: Boolean((client as any)?.email),
+        document_id: documentId,
+        document_found: Boolean(document),
+        contract_found: Boolean(contract),
       });
     }
   }
 
   if (recipients.length === 0) {
+    if ((reminder as any).status === "error") {
+      logger.debug("reminder_send_still_no_recipients", { reminder_id: remId });
+      return;
+    }
     logger.warn("reminder_send_skipped", {
       reminder_id: remId,
       title: reminder.title,
@@ -291,6 +452,13 @@ async function processReminder(reminder: ReminderWithContext) {
     recipient_count: recipients.length,
     recipient_source: recipientSource,
   });
+
+  if (recipientSource === "contract_document_or_client" && !reminder.email_to) {
+    await col("reminders").updateOne(
+      { _id: toObjectId(remId) } as any,
+      { $set: { email_to: JSON.stringify(recipients), updated_at: new Date() } },
+    );
+  }
 
   const result = await sendReminderEmail(reminder, recipients);
 
