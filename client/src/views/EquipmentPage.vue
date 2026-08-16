@@ -28,14 +28,21 @@
           <p class="subhead__sub">נהל את רשימת הציוד שלך והצהרות הבטיחות המשויכות</p>
         </div>
         <div class="equipment-actions">
-          <button class="btn btn--ghost btn--danger" @click="deleteAll">מחק הכל</button>
+          <button class="btn btn--ghost btn--danger" @click="deleteAll">
+            <n-icon :component="TrashOutline" class="btn-icon"/>
+            מחק הכל
+          </button>
           <button class="btn btn--ghost" :disabled="backfilling" @click="backfill">
             {{ backfilling ? 'מקשר...' : 'קשר לתיקים' }}
           </button>
           <button class="btn btn--ghost" :disabled="loading" @click="load(true)">
-            <span class="refresh-icon" :class="{ 'refresh-icon--spin': loading }">↻</span> רענן
+            <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon"/>
+            רענן
           </button>
-          <button class="btn btn--ghost" @click="showImport = true">⬆ ייבוא מ-Excel</button>
+          <button class="btn btn--ghost" @click="showImport = true">
+            <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+            ייבוא מ-Excel
+          </button>
           <button class="btn btn--primary" @click="openCreate">+ הוספת ציוד חדש</button>
         </div>
       </div>
@@ -314,10 +321,13 @@ import {
   AirplaneOutline,
   BuildOutline,
   BusinessOutline,
+  CloudUploadOutline,
   ConstructOutline,
   CubeOutline,
   GitBranchOutline,
   LayersOutline,
+  RefreshOutline,
+  TrashOutline,
 } from "@vicons/ionicons5";
 import {RouterLink} from "vue-router";
 import type {EquipmentHistoryEvent} from "../services/apiService.js";

@@ -7,7 +7,7 @@
       </div>
       <div class="reminders-actions">
         <button class="rbtn rbtn--ghost" :disabled="store.loading" @click="load">
-          <span class="refresh-icon" :class="{ 'refresh-icon--spin': store.loading }">↻</span>
+          <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
           רענן
         </button>
         <button class="rbtn rbtn--primary" :disabled="loadingEmailTemplates" @click="openCreate">
@@ -20,7 +20,8 @@
             title="בחירה מרובה"
             @click="toggleBulkMode"
           >
-            ☑ בחירה מרובה
+            <n-icon :component="CheckboxOutline" class="btn-icon"/>
+            בחירה מרובה
           </button>
           <div v-if="bulkMode && selectedReminderKeys.length > 0" class="bulk-action-anchor__actions">
             <button
@@ -261,7 +262,7 @@
 import {computed, h, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NAlert, NDataTable, NDatePicker, NForm, NFormItem, NIcon, NInput, NModal, NSelect, useMessage,} from "naive-ui";
-import {CloseCircleOutline, PaperPlaneOutline, TrashOutline,} from "@vicons/ionicons5";
+import {CheckboxOutline, CloseCircleOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";

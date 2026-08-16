@@ -2,17 +2,54 @@
   <n-modal
       v-model:show="visible"
       :show-icon="false"
-      :title="modalTitle"
       class="hydraulic-modal"
-      preset="dialog"
-      style="width: 860px; max-width: 92vw"
+      :style="{ width: showLayoutPreview ? 'min(1340px, 96vw)' : 'min(900px, 96vw)', maxWidth: '96vw' }"
+      preset="card"
   >
-    <n-spin :show="loading" style="min-height: 200px">
-      <transition name="hydraulic-fade">
-        <n-form v-if="hydraulicForm && !loading" class="hydraulic-compact-form" label-placement="top" size="small">
-          <n-grid :cols="gridCols" :x-gap="10" :y-gap="2">
-            <n-gi>
-              <n-form-item label="מספר תסקיר">
+    <template #header>
+      <div class="hm-header">
+        <button class="hm-header__close" title="סגור" @click="visible = false">
+          <n-icon :component="CloseOutline" :size="18"/>
+        </button>
+        <div class="hm-header__title">
+          <n-icon :component="DocumentTextOutline" :size="22"/>
+          <span>{{ modalTitle }}</span>
+        </div>
+        <div v-if="draftStore.hasDraft" class="hm-header__draft">
+          <div class="hm-draft-pill" @click="editSavedDraft">
+            <n-icon :component="TimeOutline" :size="14"/>
+            <span>טיוטה שמורה{{ draftSavedAtLabel ? ` (${draftSavedAtLabel})` : "" }}</span>
+            <button class="hm-draft-pill__close" title="מחק טיוטה" @click.stop="clearDraft">
+              <n-icon :component="CloseOutline" :size="12"/>
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div :class="{ 'hm-shell--preview': showLayoutPreview }" class="hm-shell">
+      <div class="hm-main">
+        <n-spin :show="loading" style="min-height: 200px">
+          <transition name="hydraulic-fade">
+            <div v-if="hydraulicForm && !loading">
+              <!-- Step indicators -->
+              <div class="hm-steps">
+                <button
+                    v-for="(step, i) in steps"
+                    :key="step.key"
+                    :class="['hm-step', { 'hm-step--active': activeStep === step.key, 'hm-step--done': i < stepIndex }]"
+                    @click="activeStep = step.key"
+                >
+                  <span class="hm-step__num">{{ i + 1 }}</span>
+                  <span class="hm-step__label">{{ step.label }}</span>
+                </button>
+              </div>
+
+              <!-- Step: Basic -->
+              <section v-show="activeStep === 'basic'" class="hm-section">
+                <div class="hm-section__grid hm-section__grid--4">
+                  <div class="hm-field">
+                    <label>מספר תסקיר</label>
                 <n-input
                     :value="hydraulicForm.contract_number"
                     inputmode="numeric"
@@ -23,130 +60,128 @@
                     {{ currentInspectorNumber() }}/
                   </template>
                 </n-input>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="מספר תסקיר קודם">
+                  </div>
+                  <div class="hm-field">
+                    <label>תסקיר קודם</label>
                 <n-input v-model:value="prevReportNumber" placeholder="אופציונלי"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="תבנית הדפסה">
+                  </div>
+                  <div class="hm-field">
+                    <label>תבנית הדפסה</label>
                 <n-select
                     v-model:value="templateId"
                     :loading="loadingTemplates"
                     :options="templateOptions"
                     :virtual-scroll="false"
                     filterable
-                    placeholder="בחר תבנית לפתיחה עם הנתונים"
+                    placeholder="בחר תבנית"
                     @update:value="selectTemplate"
                 />
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="לקוח קיים">
+                  </div>
+                  <div class="hm-field">
+                    <label>לקוח קיים</label>
                 <n-select
                     v-model:value="clientId"
                     :loading="loadingClients"
                     :options="clientOptions"
                     clearable
                     filterable
-                    placeholder="בחר לקוח קיים, או השאר ריק ליצירת עסק חדש"
+                    placeholder="בחר או צור חדש"
                 />
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-          <template v-if="!clientId">
-            <n-form-item label="שם העסק" required>
-              <n-input v-model:value="hydraulicForm.business.display_name" placeholder="לדוגמה: מפעל דן בע&quot;מ"/>
-            </n-form-item>
-            <n-grid :cols="gridCols" :x-gap="10" :y-gap="2">
-              <n-gi>
-                <n-form-item label="ח.פ / ת.ז">
-                  <n-input v-model:value="hydraulicForm.business.id_number"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="איש קשר">
-                  <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="שם איש קשר"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="טלפון">
-                  <n-input v-model:value="hydraulicForm.business.phone"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="אימייל">
-                  <n-input v-model:value="hydraulicForm.business.email" placeholder="office@example.com"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="כתובת">
-                  <n-input v-model:value="hydraulicForm.business.address"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="ת.ד">
-                  <n-input v-model:value="hydraulicForm.business.po_box"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="מיקוד">
-                  <n-input v-model:value="hydraulicForm.business.client_zipcode"/>
-                </n-form-item>
-              </n-gi>
-            </n-grid>
-          </template>
-          <template v-else>
-            <n-grid :cols="gridCols" :x-gap="10" :y-gap="2">
-              <n-gi>
-                <n-form-item label="איש קשר">
-                  <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="אם שונה מפרטי הלקוח"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="אימייל לתזכורות">
-                  <n-input v-model:value="hydraulicForm.business.email" placeholder="אם שונה מפרטי הלקוח"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="טלפון">
-                  <n-input v-model:value="hydraulicForm.business.phone" placeholder="אם שונה מפרטי הלקוח"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="כתובת">
-                  <n-input v-model:value="hydraulicForm.business.address" placeholder="אם שונה מפרטי הלקוח"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="ת.ד">
-                  <n-input v-model:value="hydraulicForm.business.po_box"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="מיקוד">
-                  <n-input v-model:value="hydraulicForm.business.client_zipcode"/>
-                </n-form-item>
-              </n-gi>
-            </n-grid>
-          </template>
+                  </div>
+                  <div class="hm-field">
+                    <label class="required">תאריך בדיקה</label>
+                    <n-date-picker
+                        v-model:value="checkDateMs"
+                        style="width: 100%"
+                        type="date"
+                        @update:value="calculateExpiryFromCheckDate"
+                />
+                  </div>
+                  <div class="hm-field">
+                    <label>מרווח בדיקות</label>
+                    <n-select
+                        v-model:value="intervalMonths"
+                        :options="intervalOptions"
+                        @update:value="calculateExpiryFromCheckDate"
+                    />
+                  </div>
+                  <div class="hm-field">
+                    <label class="required">בתוקף עד</label>
+                    <n-date-picker
+                        v-model:value="expiryDateMs"
+                        style="width: 100%"
+                        type="date"
+                    />
+                  </div>
+                </div>
+              </section>
 
-          <div class="hydraulic-section-head">
-            <n-h4 style="margin: 16px 0 4px">ציוד נבדק</n-h4>
-            <n-button size="small" @click="addEquipment">+ מכונה נוספת</n-button>
-          </div>
-          <div v-for="(equipment, index) in equipmentRows" :key="equipment.id" class="hydraulic-equipment-card">
-            <div class="hydraulic-equipment-card__head">
-              <strong>מכונה {{ index + 1 }}</strong>
-              <n-button v-if="equipmentRows.length > 1" size="tiny" text type="error"
-                        @click="removeEquipment(index)">מחק
-              </n-button>
+              <!-- Step: Business -->
+              <section v-show="activeStep === 'business'" class="hm-section">
+                <div class="hm-section__card">
+                  <div class="hm-section__card-head">
+                    <n-icon :component="BusinessOutline" :size="18"/>
+                    <span>{{ clientId ? 'פרטי קשר (לתסקיר זה)' : 'פרטי עסק חדש' }}</span>
+                  </div>
+                  <div class="hm-section__grid hm-section__grid--3">
+                    <div v-if="!clientId" class="hm-field hm-field--full">
+                      <label class="required">שם העסק</label>
+                      <n-input v-model:value="hydraulicForm.business.display_name" placeholder="לדוגמה: מפעל דן בע״מ"/>
+                    </div>
+                    <div v-if="!clientId" class="hm-field">
+                      <label>ח.פ / ת.ז</label>
+                  <n-input v-model:value="hydraulicForm.business.id_number"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>איש קשר</label>
+                      <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="שם מלא"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>טלפון</label>
+                      <n-input v-model:value="hydraulicForm.business.phone" dir="ltr"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>אימייל</label>
+                      <n-input v-model:value="hydraulicForm.business.email" dir="ltr" placeholder="office@example.com"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>כתובת</label>
+                  <n-input v-model:value="hydraulicForm.business.address"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>ת.ד</label>
+                  <n-input v-model:value="hydraulicForm.business.po_box"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>מיקוד</label>
+                  <n-input v-model:value="hydraulicForm.business.client_zipcode"/>
+                    </div>
+                  </div>
             </div>
-            <n-grid :cols="gridCols" :x-gap="10" :y-gap="2">
-              <n-gi :span="2">
-                <n-form-item label="ציוד קיים ללקוח">
+              </section>
+
+              <!-- Step: Equipment -->
+              <section v-show="activeStep === 'equipment'" class="hm-section">
+                <div class="hm-section__actions">
+                  <button class="btn btn--primary btn--xs" @click="addEquipment">
+                    <n-icon :component="AddCircleOutline" :size="16"/>
+                    הוסף מכונה
+                  </button>
+                </div>
+                <div v-for="(equipment, index) in equipmentRows" :key="equipment.id" class="hm-equipment">
+                  <div class="hm-equipment__head">
+                    <div class="hm-equipment__title">
+                      <n-icon :component="ConstructOutline" :size="18"/>
+                      <span>מכונה {{ index + 1 }}</span>
+                    </div>
+                    <button v-if="equipmentRows.length > 1" class="btn btn--xs btn--danger"
+                            @click="removeEquipment(index)">
+                      <n-icon :component="TrashOutline" :size="14"/>
+                    </button>
+                  </div>
+                  <div class="hm-section__grid hm-section__grid--4">
+                    <div class="hm-field hm-field--span2">
+                      <label>ציוד קיים ללקוח</label>
                   <n-select
                       v-model:value="equipment.selected_equipment_id"
                       :disabled="!clientId"
@@ -155,124 +190,147 @@
                       :virtual-scroll="false"
                       clearable
                       filterable
-                      placeholder="חפש לפי שם / יצרן / דגם / מספר סידורי"
+                      placeholder="חפש לפי שם / יצרן / דגם"
                       @update:value="(id) => selectEquipment(index, id)"
                   />
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="סוג ציוד" required>
+                    </div>
+                    <div class="hm-field">
+                      <label class="required">סוג ציוד</label>
                   <n-select
                       v-model:value="equipment.category"
                       :options="categoryOptions"
                       :virtual-scroll="false"
                       filterable
-                      placeholder="בחר או הקלד סוג ציוד"
+                      placeholder="בחר או הקלידו סוג חדש"
                       tag
+                      @create="(label) => handleCategoryCreate(label, index)"
                   />
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="שם הציוד">
-                  <n-input v-model:value="equipment.name" placeholder="לדוגמה: מלגזה חשמלית / במת הרמה / עגורן"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="יצרן">
+                      <span class="hm-field__hint">הקלידו שם חדש ולחצו Enter כדי להוסיף סוג</span>
+                    </div>
+                    <div class="hm-field">
+                      <label>שם הציוד</label>
+                      <n-input v-model:value="equipment.name" placeholder="מלגזה / במה / עגורן"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>יצרן</label>
                   <n-input v-model:value="equipment.manufacturer"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="דגם">
+                    </div>
+                    <div class="hm-field">
+                      <label>דגם</label>
                   <n-input v-model:value="equipment.model"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="מספר סידורי">
+                    </div>
+                    <div class="hm-field">
+                      <label>מספר סידורי</label>
                   <n-input
                       :value="equipment.serial_number"
                       inputmode="numeric"
                       @update:value="(value) => setNumericField(equipment, 'serial_number', value)"
                   />
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="מספר רישוי">
-                  <n-input
-                      v-model:value="equipment.license_number" placeholder="לדוגמה: פנימי 123"
-                  />
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="עומס עבודה">
-                  <n-input v-model:value="equipment.load_capacity_work" placeholder="לדוגמה: 3 טון"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="עומס בדיקה">
-                  <n-input v-model:value="equipment.load_capacity_test" placeholder="לדוגמה: 3.75 טון"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="רדיוס / טווח">
+                    </div>
+                    <div class="hm-field">
+                      <label>מספר רישוי</label>
+                      <n-input v-model:value="equipment.license_number" placeholder="פנימי 123"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>עומס עבודה</label>
+                      <n-input v-model:value="equipment.load_capacity_work" placeholder="3 טון"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>עומס בדיקה</label>
+                      <n-input v-model:value="equipment.load_capacity_test" placeholder="3.75 טון"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>רדיוס / טווח</label>
                   <n-input v-model:value="equipment.load_radius"/>
-                </n-form-item>
-              </n-gi>
-              <n-gi :span="gridCols">
-                <n-form-item label="תיאור ציוד">
+                    </div>
+                    <div class="hm-field hm-field--full">
+                      <label>תיאור ציוד</label>
                   <n-input v-model:value="equipment.description" :rows="1" type="textarea"/>
-                </n-form-item>
-              </n-gi>
-            </n-grid>
-          </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
 
-          <n-divider/>
-          <n-form-item label="מועד התזכורת הבאה">
-            <n-select v-model:value="reminderMode" :options="reminderModeOptions"/>
-          </n-form-item>
-          <n-form-item v-if="reminderMode === 'months'" label="בעוד כמה חודשים">
-            <n-select v-model:value="intervalMonths" :options="intervalOptions"/>
-          </n-form-item>
-          <n-form-item v-else label="תאריך תזכורת מותאם אישית" required>
-            <n-date-picker
-                v-model:value="reminderDateMs"
-                :is-date-disabled="disablePastDates"
-                style="width: 100%"
-                type="date"
-            />
-          </n-form-item>
-          <template v-if="templateExtraFields.length">
-            <n-divider/>
-            <n-h4 style="margin: 0 0 4px">שדות נוספים מהתבנית</n-h4>
-            <n-grid :cols="gridCols" :x-gap="10" :y-gap="2">
-              <n-gi v-for="field in templateExtraFields" :key="field">
-                <n-form-item :label="field">
+              <!-- Step: Reminder -->
+              <section v-show="activeStep === 'reminder'" class="hm-section">
+                <div class="hm-section__card">
+                  <div class="hm-section__card-head">
+                    <n-icon :component="CalendarOutline" :size="18"/>
+                    <span>מועד התזכורת הבאה</span>
+                  </div>
+                  <div class="hm-section__grid hm-section__grid--2">
+                    <div class="hm-field">
+                      <label>תזכורת לפני תוקף</label>
+                      <n-select v-model:value="reminderDaysBefore" :options="reminderDaysOptions"/>
+                    </div>
+                    <div class="hm-field">
+                      <label>תאריך תזכורת</label>
+                      <div class="hm-reminder-preview">
+                        {{ computedReminderDate }}
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="!expiryDateMs" class="hm-warning">
+                    יש להזין תאריך תוקף בשלב הראשון
+                  </div>
+                </div>
+                <div v-if="templateExtraFields.length" class="hm-section__card" style="margin-top: 12px">
+                  <div class="hm-section__card-head">
+                    <n-icon :component="ListOutline" :size="18"/>
+                    <span>שדות נוספים מהתבנית</span>
+                  </div>
+                  <div class="hm-section__grid hm-section__grid--3">
+                    <div v-for="field in templateExtraFields" :key="field" class="hm-field">
+                      <label>{{ field }}</label>
                   <n-input v-model:value="templateValues[field]" :placeholder="field"/>
-                </n-form-item>
-              </n-gi>
-            </n-grid>
-          </template>
-        </n-form>
-      </transition>
-    </n-spin>
-    <template #action>
-      <n-button
-          v-if="draftStore.hasDraft"
-          secondary
-          @click="editSavedDraft"
-      >
-        ערוך טיוטה שמורה{{ draftSavedAtLabel ? ` (${draftSavedAtLabel})` : "" }}
-      </n-button>
-      <n-button @click="visible = false">ביטול</n-button>
-      <n-button
-          v-if="updatingContractId"
-          :loading="creating"
-          @click="doCreate"
-      >עדכן
-      </n-button>
-      <n-button :loading="savingDraft" type="primary" @click="saveDraftAndPreview">שמור טיוטה ופתח
-        תצוגה
-      </n-button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </transition>
+        </n-spin>
+      </div>
+      <aside v-if="previewLayout" class="compose-preview hm-preview">
+        <div class="compose-preview__label">תצוגה מקדימה</div>
+        <LayoutPreviewFrame
+            :data="previewData"
+            :layout="previewLayout"
+        />
+      </aside>
+    </div>
+
+    <template #footer>
+      <div class="hm-footer">
+        <div class="hm-footer__actions">
+          <button class="btn btn--ghost" @click="visible = false">ביטול</button>
+          <button
+              v-if="updatingContractId"
+              :class="['btn', 'btn--primary', { 'btn--loading': creating }]"
+              :disabled="creating"
+              @click="doCreate"
+          >עדכן תסקיר
+          </button>
+          <button
+              :class="['btn', 'btn--primary', { 'btn--loading': savingDraft }]"
+              :disabled="savingDraft"
+              @click="saveDraftAndPreview"
+          >
+            <n-icon :component="SaveOutline" :size="16"/>
+            שמור ופתח תצוגה
+          </button>
+        </div>
+        <div class="hm-footer__nav">
+          <button v-if="stepIndex > 0" class="btn btn--ghost" @click="prevStep">
+            הקודם
+            <n-icon :component="ChevronForwardOutline" :size="16"/>
+          </button>
+          <button v-if="stepIndex < steps.length - 1" class="btn btn--primary" @click="nextStep">
+            <n-icon :component="ChevronBackOutline" :size="16"/>
+            הבא
+          </button>
+        </div>
+      </div>
     </template>
   </n-modal>
 </template>
@@ -280,26 +338,28 @@
 <script lang="ts" setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
+import {NDatePicker, NIcon, NInput, NModal, NSelect, NSpin, useMessage} from "naive-ui";
 import {
-  NButton,
-  NDatePicker,
-  NDivider,
-  NForm,
-  NFormItem,
-  NGi,
-  NGrid,
-  NH4,
-  NInput,
-  NModal,
-  NSelect,
-  NSpin,
-  useMessage,
-} from "naive-ui";
+  AddCircleOutline,
+  BusinessOutline,
+  CalendarOutline,
+  ChevronBackOutline,
+  ChevronForwardOutline,
+  CloseOutline,
+  ConstructOutline,
+  DocumentTextOutline,
+  ListOutline,
+  SaveOutline,
+  TimeOutline,
+  TrashOutline,
+} from "@vicons/ionicons5";
 import {useContractsStore} from "../../stores/contracts.js";
 import {useHydraulicCheckDraftStore} from "../../stores/hydraulicCheckDraft.js";
 import type {HydraulicCheckRequest} from "../../services/apiService.js";
 import {api} from "../../services/apiService.js";
 import type {Equipment, PrintTemplate} from "@shared/types.js";
+import LayoutPreviewFrame from "../print/LayoutPreviewFrame.vue";
+import {extractLayoutFieldBinds, type PrintTemplateLayout} from "@shared/printTemplateLayout.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -316,6 +376,27 @@ const router = useRouter();
 const message = useMessage();
 
 const isMobile = ref(window.innerWidth <= 720);
+
+// Step navigation
+type StepKey = "basic" | "business" | "equipment" | "reminder";
+const steps: { key: StepKey; label: string }[] = [
+  {key: "basic", label: "פרטים"},
+  {key: "business", label: "עסק"},
+  {key: "equipment", label: "ציוד"},
+  {key: "reminder", label: "תזכורת"},
+];
+const activeStep = ref<StepKey>("basic");
+const stepIndex = computed(() => steps.findIndex((s) => s.key === activeStep.value));
+
+function nextStep() {
+  const idx = stepIndex.value;
+  if (idx < steps.length - 1) activeStep.value = steps[idx + 1].key;
+}
+
+function prevStep() {
+  const idx = stepIndex.value;
+  if (idx > 0) activeStep.value = steps[idx - 1].key;
+}
 
 function updateViewport() {
   isMobile.value = window.innerWidth <= 720;
@@ -371,13 +452,24 @@ const engineerProfile = ref<{
   inspector_number?: string;
   inspector_id_start?: string;
   next_inspection_seq?: number | null;
+  company_name?: string;
+  company_registration?: string;
+  company_email?: string;
+  company_phone?: string;
+  full_name?: string;
+  address?: string;
 } | null>(null);
 
-const knownCategories = ref<string[]>([]);
+const knownCategories = ref<{ id?: string; value: string; label: string }[]>([]);
 const categoryDefaults: { label: string; value: string }[] = [
   {label: "מכונות הרמה", value: "lift"},
+  {label: "אביזרי הרמה", value: "accessory"},
   {label: "פיגומים", value: "scaffold"},
   {label: "מעליות", value: "ladder"},
+  {label: "מעלונים", value: "balloon"},
+  {label: "קולטי אוויר", value: "intake"},
+  {label: "קולטי קיטור", value: "extractor"},
+  {label: "אחר", value: "other"},
 ];
 const categoryOptions = computed(() => {
   const seen = new Set<string>();
@@ -388,33 +480,65 @@ const categoryOptions = computed(() => {
     options.push(opt);
   }
   for (const cat of knownCategories.value) {
-    const value = cat.trim();
+    const value = cat.value.trim();
     if (!value || seen.has(value)) continue;
     seen.add(value);
-    options.push({label: value, value});
+    options.push({label: cat.label, value});
   }
   return options;
 });
 
-const reminderMode = ref<"months" | "date">("months");
+const checkDateMs = ref<number>(Date.now());
+const expiryDateMs = ref<number | null>(null);
+const reminderDaysBefore = ref<number>(30);
 const reminderDateMs = ref<number | null>(null);
-const intervalMonths = ref<4 | 6 | 12 | 14>(4);
-const reminderModeOptions = [
-  {label: "בעוד מספר חודשים מהיום", value: "months"},
-  {label: "בתאריך מותאם אישית", value: "date"},
+const intervalMonths = ref<number>(4);
+const reminderDaysOptions = [
+  {label: "7 ימים לפני", value: 7},
+  {label: "14 ימים לפני", value: 14},
+  {label: "30 ימים לפני (ברירת מחדל)", value: 30},
+  {label: "60 ימים לפני", value: 60},
+  {label: "90 ימים לפני", value: 90},
 ];
-const intervalOptions = [
-  {label: "4 חודשים", value: 4},
-  {label: "6 חודשים", value: 6},
-  {label: "12 חודשים", value: 12},
-  {label: "14 חודשים", value: 14},
-];
+const intervalOptions = Array.from({length: 24}, (_, i) => {
+  const months = i + 1;
+  return {
+    label: months === 1 ? "חודש אחד" : `${months} חודשים`,
+    value: months,
+  };
+});
+
+function clampIntervalMonths(value: unknown): number {
+  const months = Math.round(Number(value));
+  if (!Number.isFinite(months) || months < 1) return 4;
+  return Math.min(24, months);
+}
+
+function calculateExpiryFromCheckDate() {
+  if (!checkDateMs.value) return;
+  const checkDate = new Date(checkDateMs.value);
+  checkDate.setMonth(checkDate.getMonth() + intervalMonths.value);
+  expiryDateMs.value = checkDate.getTime();
+}
+
+watch([checkDateMs, intervalMonths], () => {
+  if (checkDateMs.value && !expiryDateMs.value) {
+    calculateExpiryFromCheckDate();
+  }
+});
+
+const computedReminderDate = computed(() => {
+  if (!expiryDateMs.value) return "—";
+  const expiry = new Date(expiryDateMs.value);
+  expiry.setDate(expiry.getDate() - reminderDaysBefore.value);
+  return expiry.toLocaleDateString("he-IL");
+});
 
 const HYDRAULIC_PRINT_TEMPLATE_ID = "6a7cfbee5e95a7b2e1e4b606";
 
 const templateOptions = computed(() =>
     templates.value.map((t) => ({
-      label: `${t.name} (${t.cells.filter((cell) => cell.type === "field").length} שדות)`,
+      label: `${t.name} (${t.editorType === "sections" ? "פריסה" : "Excel"})`,
       value: t._id,
     }))
 );
@@ -432,17 +556,31 @@ const templateKnownFields = new Set([
   "valid_until", "inspection_type", "client_name", "client_company", "client_phone",
   "client_email", "client_address", "client_id", "zip_code", "contact_person",
   "po_box", "chassis", "name", "manufacturer", "model", "serial_number", "license_number",
-  "load_radius", "load_capacity_test", "load_capacity_work", "equipment_description",
-  "checked_equipment",
+  "lisence_number", "load_radius", "load_capacity_test", "load_capacity_work",
+  "equipment_description", "checked_equipment",
+  "inspector_number", "company_name", "company_registration",
+  "engineer_company", "engineer_email", "engineer_phone", "engineer_name", "engineer_address",
 ]);
 
 const templateExtraFields = computed(() => {
   if (!template.value) return [];
   const seen = new Set<string>();
-  return template.value.cells
-      .filter((cell) => cell.type === "field" && cell.bind && !seen.has(cell.bind) && seen.add(cell.bind))
-      .map((cell) => cell.bind!)
-      .filter((bind) => !templateKnownFields.has(bind) && !bind.match(/_\d+$/));
+  const binds: string[] = [];
+  for (const cell of template.value.cells) {
+    if (cell.type === "field" && cell.bind && !seen.has(cell.bind)) {
+      seen.add(cell.bind);
+      binds.push(cell.bind);
+    }
+  }
+  if (template.value.layout) {
+    for (const field of extractLayoutFieldBinds(template.value.layout)) {
+      if (!seen.has(field.bind)) {
+        seen.add(field.bind);
+        binds.push(field.bind);
+      }
+    }
+  }
+  return binds.filter((bind) => !templateKnownFields.has(bind) && !bind.match(/_\d+$/));
 });
 
 const draftSavedAtLabel = computed(() => {
@@ -609,10 +747,27 @@ async function loadEngineerProfile() {
 
 async function loadCategories() {
   try {
-    const stats = await api.equipment.stats();
-    knownCategories.value = Object.keys(stats ?? {}).filter((c) => c && c !== "all");
+    const categories = await api.equipment.categories();
+    knownCategories.value = categories ?? [];
   } catch {
     knownCategories.value = [];
+  }
+}
+
+async function handleCategoryCreate(value: string, index: number) {
+  const label = value.trim();
+  if (!label) return;
+  try {
+    const created = await api.equipment.createCategory(label, label);
+    await loadCategories();
+    const row = equipmentRows.value[index];
+    if (row) row.category = created.value || label;
+  } catch (e) {
+    if (!knownCategories.value.some((cat) => cat.value === label || cat.label === label)) {
+      knownCategories.value = [...knownCategories.value, {value: label, label}];
+    }
+    const row = equipmentRows.value[index];
+    if (row) row.category = label;
   }
 }
 
@@ -773,8 +928,9 @@ function saveCurrentDraft() {
     clientId: clientId.value,
     prevReportNumber: prevReportNumber.value,
     equipmentRows: equipmentRows.value,
-    reminderMode: reminderMode.value,
-    reminderDateMs: reminderDateMs.value,
+    checkDateMs: checkDateMs.value,
+    expiryDateMs: expiryDateMs.value,
+    reminderDaysBefore: reminderDaysBefore.value,
     intervalMonths: intervalMonths.value,
     templateId: templateId.value,
     templateValues: templateValues.value,
@@ -787,6 +943,11 @@ async function editSavedDraft() {
     return;
   }
   await open();
+}
+
+function clearDraft() {
+  draftStore.clear();
+  message.success("הטיוטה נמחקה");
 }
 
 // ── Open ─────────────────────────────────────────────────────────────────────
@@ -803,9 +964,10 @@ async function open() {
   const draft = draftStore.draft;
   hydratingDraft.value = true;
   clientId.value = draft?.clientId ?? null;
-  reminderMode.value = draft?.reminderMode ?? "months";
-  reminderDateMs.value = draft?.reminderDateMs ?? null;
-  intervalMonths.value = draft?.intervalMonths ?? 4;
+  checkDateMs.value = draft?.checkDateMs ?? Date.now();
+  expiryDateMs.value = draft?.expiryDateMs ?? null;
+  reminderDaysBefore.value = draft?.reminderDaysBefore ?? 30;
+  intervalMonths.value = clampIntervalMonths(draft?.intervalMonths ?? 4);
   prevReportNumber.value = draft?.prevReportNumber ?? "";
   equipmentRows.value = draft?.equipmentRows?.length
       ? draft.equipmentRows.map((row) => ({...row, id: row.id || crypto.randomUUID()}))
@@ -854,10 +1016,8 @@ function syncPrimaryEquipment() {
 function buildTemplateDraft(): Record<string, string> {
   const form = hydraulicForm.value!;
   const contractNumber = formatContractNumber(form.contract_number?.trim() || suggestedContractNumber.value);
-  const nextDate = reminderMode.value === "date" && reminderDateMs.value
-      ? formatLocalDate(reminderDateMs.value)
-      : addMonthsToLocalDate(Date.now(), intervalMonths.value);
-  const today = todayIso();
+  const checkDate = checkDateMs.value ? formatLocalDate(checkDateMs.value) : todayIso();
+  const expiryDate = expiryDateMs.value ? formatLocalDate(expiryDateMs.value) : addMonthsToLocalDate(checkDateMs.value ?? Date.now(), intervalMonths.value);
   const business = form.business;
   const firstEquipment = equipmentRows.value[0] ?? emptyEquipmentRow();
   const data: Record<string, string> = {
@@ -865,13 +1025,15 @@ function buildTemplateDraft(): Record<string, string> {
     contract_number: contractNumber,
     report_number: contractNumber,
     prev_report_number: prevReportNumber.value,
-    start_date: today,
-    inspection_date: today,
-    check_date: today,
-    expiry_date: nextDate,
-    next_inspection_date: nextDate,
+    start_date: checkDate,
+    inspection_date: checkDate,
+    check_date: checkDate,
+    expiry_date: expiryDate,
+    next_inspection_date: expiryDate,
+    valid_until: expiryDate,
     inspection_type: "בדיקה תקופתית",
     client_name: business.contact_person ?? "",
+    contact_person: business.contact_person ?? "",
     client_company: business.display_name ?? "",
     client_phone: business.phone ?? "",
     client_email: business.email ?? "",
@@ -880,6 +1042,14 @@ function buildTemplateDraft(): Record<string, string> {
     zip_code: business.client_zipcode ?? "",
     po_box: business.po_box ?? "",
     license_number: firstEquipment.license_number,
+    inspector_number: engineerProfile.value?.inspector_number ?? "",
+    company_name: engineerProfile.value?.company_name ?? "",
+    company_registration: engineerProfile.value?.company_registration ?? "",
+    engineer_company: engineerProfile.value?.company_name ?? "",
+    engineer_email: engineerProfile.value?.company_email ?? "",
+    engineer_phone: engineerProfile.value?.company_phone ?? "",
+    engineer_name: engineerProfile.value?.full_name ?? "",
+    engineer_address: engineerProfile.value?.address ?? "",
   };
 
   equipmentRows.value.forEach((eq, index) => {
@@ -909,6 +1079,17 @@ function buildTemplateDraft(): Record<string, string> {
   return data;
 }
 
+const previewLayout = computed<PrintTemplateLayout | null>(() =>
+    template.value?.editorType === "sections" ? template.value.layout ?? null : null,
+);
+
+const showLayoutPreview = computed(() => Boolean(previewLayout.value));
+
+const previewData = computed<Record<string, string>>(() => {
+  if (!hydraulicForm.value) return {};
+  return buildTemplateDraft();
+});
+
 function buildTemplateDraftMeta(): Record<string, unknown> {
   return {
     source: "hydraulic_check",
@@ -929,44 +1110,53 @@ async function createContract() {
     message.warning("יש לבחור לקוח קיים או להזין שם עסק");
     throw new Error("חסר לקוח");
   }
-  if (reminderMode.value === "date" && !reminderDateMs.value) {
-    message.warning("יש לבחור תאריך תזכורת");
-    throw new Error("חסר תאריך תזכורת");
+  if (!expiryDateMs.value) {
+    message.warning("יש להזין תאריך תוקף");
+    throw new Error("חסר תאריך תוקף");
   }
   const contractNumber = formatContractNumber(
       hydraulicForm.value.contract_number?.trim() || suggestedContractNumber.value,
   );
   syncPrimaryEquipment();
+  const expiryDate = formatLocalDate(expiryDateMs.value);
+  const reminderDate = new Date(expiryDateMs.value);
+  reminderDate.setDate(reminderDate.getDate() - reminderDaysBefore.value);
+  const editorType = template.value?.editorType === "sections" ? "sections" : "grid";
   const payload: HydraulicCheckRequest = {
     ...hydraulicForm.value,
     contract_number: contractNumber || undefined,
     client_id: clientId.value ?? undefined,
     interval_months: intervalMonths.value,
-    skip_reminders: true,
-    next_inspection_date: reminderMode.value === "date"
-        ? formatLocalDate(reminderDateMs.value!)
-        : undefined,
+    skip_reminders: false,
+    check_date: checkDateMs.value ? formatLocalDate(checkDateMs.value) : undefined,
+    next_inspection_date: expiryDate,
+    editor_type: editorType,
   };
   return api.reminders.createHydraulicCheck(payload);
 }
 
 async function updateContract(contractId: string) {
   if (!hydraulicForm.value) throw new Error("הטופס לא מוכן");
+  if (!expiryDateMs.value) {
+    message.warning("יש להזין תאריך תוקף");
+    throw new Error("חסר תאריך תוקף");
+  }
   const contractNumber = formatContractNumber(
       hydraulicForm.value.contract_number?.trim() || suggestedContractNumber.value,
   );
   syncPrimaryEquipment();
-  const nextDate = reminderMode.value === "date" && reminderDateMs.value
-      ? formatLocalDate(reminderDateMs.value)
-      : addMonthsToLocalDate(Date.now(), intervalMonths.value);
+  const checkDate = checkDateMs.value ? formatLocalDate(checkDateMs.value) : todayIso();
+  const expiryDate = formatLocalDate(expiryDateMs.value);
+  const editorType = template.value?.editorType === "sections" ? "sections" : "grid";
   const data = buildTemplateDraft();
   await api.contracts.update(contractId, {
     client_id: clientId.value ?? undefined,
     contract_number: contractNumber || undefined,
     contract_type: "בדיקה הידראולית",
-    start_date: data.start_date,
-    expiry_date: nextDate,
+    start_date: checkDate,
+    expiry_date: expiryDate,
     summary: data.equipment_description || data.checked_equipment || data.name || undefined,
+    editor_type: editorType,
     manual_fields: {
       ...data,
       inspection_interval_months: intervalMonths.value,
@@ -1051,184 +1241,574 @@ async function saveDraftAndPreview() {
   }
 }
 
+// ── Helpers for openForUpdate ─────────────────────────────────────────────────
+function plainStringMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object") return {};
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === "string") result[k] = v;
+  }
+  return result;
+}
+
+function dateOnly(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.slice(0, 10);
+}
+
+function firstArrayValue(value: string[] | null | undefined): string {
+  if (!value || !Array.isArray(value)) return "";
+  return value[0] ?? "";
+}
+
+// ── Open for editing existing contract ────────────────────────────────────────
+async function openForUpdate(contractId: string, returnTo?: string) {
+  visible.value = true;
+  loading.value = true;
+  updateReturnTo.value = returnTo ?? "";
+  if (!engineerProfile.value) {
+    await loadEngineerProfile().catch(() => {
+    });
+  }
+  const row = await api.contracts.get(contractId);
+  const manual = plainStringMap(row.manual_fields);
+  const firstEquipment = row._equipment?.[0] ?? null;
+
+  updatingContractId.value = String(row.id);
+  hydratingDraft.value = true;
+  clientId.value = row.client_id ? String(row.client_id) : null;
+  prevReportNumber.value = manual.prev_report_number ?? "";
+  checkDateMs.value = row.start_date ? new Date(dateOnly(row.start_date)).getTime() : Date.now();
+  expiryDateMs.value = row.expiry_date ? new Date(dateOnly(row.expiry_date)).getTime() : null;
+  reminderDaysBefore.value = 30;
+  intervalMonths.value = clampIntervalMonths((row as any).inspection_interval_months ?? manual.inspection_interval_months ?? 4);
+  hydraulicForm.value = {
+    contract_number: contractNumberInputValue(row.contract_number),
+    business: {
+      display_name: String(row.client_name ?? row.counterparty ?? manual.client_company ?? ""),
+      id_number: manual.client_id ?? "",
+      contact_person: String(row.contact_person ?? manual.contact_person ?? manual.client_name ?? ""),
+      email: String(row.contact_email ?? manual.contact_email ?? manual.client_email ?? ""),
+      phone: String(row.contact_phone ?? manual.contact_phone ?? manual.client_phone ?? ""),
+      address: String(row.client_address ?? manual.client_address ?? ""),
+      po_box: String(row.po_box ?? manual.po_box ?? ""),
+      client_zipcode: String(row.client_zipcode ?? manual.zip_code ?? ""),
+    },
+    equipment: {
+      category: (firstEquipment?.category ?? "lift") as HydraulicCheckRequest["equipment"]["category"],
+      name: String(firstEquipment?.name ?? manual.name ?? manual.checked_equipment ?? ""),
+      manufacturer: String(firstEquipment?.manufacturer ?? manual.manufacturer ?? ""),
+      model: String(firstEquipment?.model ?? manual.model ?? ""),
+      serial_number: String(firstEquipment?.serial_number ?? manual.serial_number ?? ""),
+      load_capacity_work: manual.load_capacity_work ?? firstArrayValue(firstEquipment?.load_capacity_work),
+      load_capacity_test: manual.load_capacity_test ?? firstArrayValue(firstEquipment?.load_capacity_test),
+      load_radius: manual.load_radius ?? firstArrayValue(firstEquipment?.load_radius),
+      description: String(row.equipment_description ?? manual.equipment_description ?? ""),
+    },
+    interval_months: intervalMonths.value,
+  };
+  equipmentRows.value = [{
+    id: crypto.randomUUID(),
+    selected_equipment_id: null,
+    category: firstEquipment?.category ?? "lift",
+    name: String(firstEquipment?.name ?? manual.name ?? manual.checked_equipment ?? ""),
+    manufacturer: String(firstEquipment?.manufacturer ?? manual.manufacturer ?? ""),
+    model: String(firstEquipment?.model ?? manual.model ?? ""),
+    serial_number: String(firstEquipment?.serial_number ?? manual.serial_number ?? ""),
+    license_number: manual.license_number ?? "",
+    load_capacity_work: manual.load_capacity_work ?? firstArrayValue(firstEquipment?.load_capacity_work),
+    load_capacity_test: manual.load_capacity_test ?? firstArrayValue(firstEquipment?.load_capacity_test),
+    load_radius: manual.load_radius ?? firstArrayValue(firstEquipment?.load_radius),
+    description: String(row.equipment_description ?? manual.equipment_description ?? ""),
+  }];
+  templateValues.value = {};
+  hydratingDraft.value = false;
+  loading.value = false;
+  void loadClients();
+  void loadPrintTemplates().then(() => {
+    selectTemplate(templateId.value ?? defaultTemplateId());
+  });
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
-defineExpose({open});
+defineExpose({open, openForUpdate});
 </script>
 
 <style scoped>
-:global(.hydraulic-modal.n-dialog) {
+/* Modal overrides */
+:global(.hydraulic-modal.n-card),
+:global(.n-modal.hydraulic-modal) {
   direction: rtl;
-  border-radius: 8px;
+  width: min(1260px, 96vw) !important;
+  max-width: 96vw !important;
+  min-height: 800px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
   font-family: var(--font-base) !important;
-  padding: 16px 20px 14px;
+  border: none;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
-:global(.hydraulic-modal.n-dialog *),
-:global(.hydraulic-modal .n-dialog__title),
-:global(.hydraulic-modal .n-h),
-:global(.hydraulic-modal .n-button),
-:global(.hydraulic-modal .n-input),
-:global(.hydraulic-modal .n-input__input-el),
-:global(.hydraulic-modal .n-base-selection),
-:global(.hydraulic-modal .n-base-selection-label),
-:global(.hydraulic-modal .n-date-picker) {
-  font-family: var(--font-base) !important;
+:global(.hydraulic-modal .n-card-header) {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-:global(.hydraulic-modal .n-dialog__title) {
-  color: var(--text-primary);
-  font-size: 19px !important;
-  font-weight: 700 !important;
-  letter-spacing: -0.2px;
+:global(.hydraulic-modal .n-card-header__main) {
+  flex: 1;
 }
 
-:global(.hydraulic-modal .n-dialog__close) {
-  top: 10px;
-  left: 10px;
-  right: auto;
-}
-
-:global(.hydraulic-modal .n-dialog__content) {
-  margin-top: 6px;
-  padding: 8px 16px 12px;
-  max-height: min(72vh, 760px);
-  overflow: auto;
-  scrollbar-gutter: stable;
-}
-
-:global(.hydraulic-modal .n-dialog__action) {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border-color);
-  gap: 6px;
-}
-
-.hydraulic-compact-form {
+:global(.hydraulic-modal .n-card__content) {
   padding: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
-.hydraulic-compact-form :deep(.n-grid) {
-  align-items: start;
+:global(.hydraulic-modal .n-card__footer) {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
 }
 
-.hydraulic-compact-form :deep(.n-form-item) {
-  margin-bottom: 0;
+:global(.hydraulic-modal .n-card-header__close) {
+  display: none;
 }
 
-.hydraulic-compact-form :deep(.n-form-item-label) {
-  min-height: 16px;
-  padding: 0 0 2px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.1px;
-}
-
-.hydraulic-compact-form :deep(.n-form-item-label__asterisk) {
-  color: var(--error-color, #d03050);
-  font-weight: 800;
-}
-
-.hydraulic-compact-form :deep(.n-input),
-.hydraulic-compact-form :deep(.n-base-selection),
-.hydraulic-compact-form :deep(.n-date-picker) {
-  --n-border-radius: 6px;
-  min-height: 32px;
-  font-family: inherit;
-}
-
-.hydraulic-compact-form :deep(.n-input .n-input-wrapper),
-.hydraulic-compact-form :deep(.n-base-selection .n-base-selection-label) {
-  min-height: 32px;
-  background: var(--bg-card);
-}
-
-.hydraulic-compact-form :deep(.n-input:hover),
-.hydraulic-compact-form :deep(.n-base-selection:hover) {
-  box-shadow: 0 0 0 3px rgba(24, 160, 88, 0.08);
-}
-
-.hydraulic-compact-form :deep(.n-input--focus),
-.hydraulic-compact-form :deep(.n-base-selection--active) {
-  box-shadow: 0 0 0 3px rgba(24, 160, 88, 0.14);
-}
-
-.hydraulic-compact-form :deep(.n-input__input-el),
-.hydraulic-compact-form :deep(.n-base-selection-input),
-.hydraulic-compact-form :deep(.n-base-selection-placeholder),
-.hydraulic-compact-form :deep(.n-base-selection-input__content) {
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 400;
-}
-
-.hydraulic-compact-form :deep(.n-input__placeholder),
-.hydraulic-compact-form :deep(.n-base-selection-placeholder) {
-  color: var(--text-muted);
-  font-weight: 400;
-}
-
-.hydraulic-compact-form :deep(.n-input__prefix) {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 400;
-}
-
-.hydraulic-section-head {
+/* Header */
+.hm-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 6px 0 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border-color);
 }
 
-.hydraulic-section-head :deep(.n-h) {
-  margin: 0 !important;
-  color: var(--text-primary);
-  font-size: 15px;
+.hm-header__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.1px;
+  color: var(--text-primary);
+  flex: 1;
 }
 
-.hydraulic-equipment-card {
-  border: 1px solid var(--border-color);
+.hm-header__title .n-icon {
+  color: var(--brand-color);
+}
+
+.hm-header__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
   border-radius: 8px;
-  padding: 8px;
-  margin-top: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.hm-header__close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Draft pill */
+.hm-draft-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 20px;
+  background: var(--bg-hover);
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.hm-draft-pill:hover {
+  background: var(--border-color);
+}
+
+.hm-draft-pill .n-icon {
+  color: var(--color-warning);
+}
+
+.hm-draft-pill__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.hm-draft-pill__close:hover {
+  background: var(--color-error);
+  color: #fff;
+}
+
+/* RTL: first column is visual-right (form). Preview is the second column = visual left. */
+.hm-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.hm-shell--preview {
+  grid-template-columns: minmax(0, 1fr) 440px;
+}
+
+.hm-preview,
+.compose-preview {
+  width: 440px;
+  flex: none;
+  position: sticky;
+  top: 0;
+  max-height: 70vh;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.compose-preview {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.hm-main {
+  min-width: 0;
+}
+
+.compose-preview__label {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.hm-preview-empty {
+  padding: 24px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* Steps */
+.hm-steps {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 12px 20px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.hm-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 0 auto;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hm-step__label {
+  white-space: nowrap;
+}
+
+.hm-step:hover {
+  background: var(--bg-hover);
+}
+
+.hm-step--active {
+  background: var(--brand-color);
+  color: var(--text-inverse, #fff);
+}
+
+.hm-step--done .hm-step__num {
+  background: var(--color-success);
+  color: #fff;
+}
+
+.hm-step__num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hm-step--active .hm-step__num {
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
+}
+
+/* Section */
+.hm-section {
+  padding: 16px 20px;
+}
+
+.hm-section__actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+
+.hm-section__card {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 14px;
   background: var(--bg-elevated);
 }
 
-.hydraulic-equipment-card__head {
+.hm-section__card-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
-.hydraulic-equipment-card__head strong {
-  font-size: 13px;
-  font-weight: 700;
+.hm-section__card-head .n-icon {
+  color: var(--brand-color);
+}
+
+.hm-section__grid {
+  display: grid;
+  gap: 10px;
+}
+
+.hm-section__grid--2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.hm-section__grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.hm-section__grid--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Field */
+.hm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hm-field--full {
+  grid-column: 1 / -1;
+}
+
+.hm-field--span2 {
+  grid-column: span 2;
+}
+
+.hm-field label {
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-secondary);
-  letter-spacing: 0.2px;
 }
 
+.hm-field__hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.hm-field label.required::after {
+  content: " *";
+  color: var(--color-error);
+}
+
+.hm-field :deep(.n-input),
+.hm-field :deep(.n-base-selection),
+.hm-field :deep(.n-date-picker) {
+  --n-border-radius: 8px;
+  min-height: 36px;
+}
+
+.hm-field :deep(.n-input .n-input-wrapper),
+.hm-field :deep(.n-base-selection .n-base-selection-label) {
+  min-height: 36px;
+  background: var(--bg-card);
+}
+
+.hm-field :deep(.n-input:hover),
+.hm-field :deep(.n-base-selection:hover) {
+  box-shadow: 0 0 0 3px rgba(99, 226, 183, 0.1);
+}
+
+.hm-field :deep(.n-input--focus),
+.hm-field :deep(.n-base-selection--active) {
+  box-shadow: 0 0 0 3px rgba(99, 226, 183, 0.2);
+}
+
+.hm-field :deep(.n-input__input-el),
+.hm-field :deep(.n-base-selection-input),
+.hm-field :deep(.n-base-selection-label) {
+  font-size: 13px;
+}
+
+/* Equipment card */
+.hm-equipment {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: var(--bg-elevated);
+}
+
+.hm-equipment__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.hm-equipment__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.hm-equipment__title .n-icon {
+  color: var(--brand-color);
+}
+
+/* Footer */
+.hm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hm-footer__nav {
+  display: flex;
+  gap: 8px;
+}
+
+.hm-footer__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Transition */
 .hydraulic-fade-enter-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
-
 .hydraulic-fade-leave-active {
-  transition: opacity 0.15s ease;
+  transition: opacity 0.1s ease;
 }
-
 .hydraulic-fade-enter-from {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(6px);
 }
-
 .hydraulic-fade-leave-to {
   opacity: 0;
+}
+
+/* Interval & Reminder preview */
+.hm-interval-display,
+.hm-reminder-preview {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.hm-warning {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(250, 173, 20, 0.1);
+  color: #d4811a;
+  font-size: 13px;
+}
+
+@media (max-width: 920px) {
+  .hm-shell,
+  .hm-shell--preview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hm-preview,
+  .compose-preview {
+    width: min(440px, 100%);
+    max-height: 40vh;
+    justify-self: center;
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .hm-steps {
+    flex-wrap: wrap;
+  }
+
+  .hm-section__grid--2,
+  .hm-section__grid--3,
+  .hm-section__grid--4 {
+    grid-template-columns: 1fr;
+  }
+
+  .hm-field--span2 {
+    grid-column: span 1;
+  }
+
+  .hm-footer {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .hm-footer__nav,
+  .hm-footer__actions {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

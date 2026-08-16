@@ -16,7 +16,7 @@
           <button
               v-if="kind === 'inspection' && canOpenPrintTemplates"
               class="btn btn--ghost"
-              @click="router.push('/settings/print-templates')"
+              @click="router.push('/print-templates')"
           >
             תבניות הדפסה
           </button>
@@ -64,13 +64,16 @@
             </div>
           </div>
           <button class="btn btn--ghost" @click="openMonthlyReport" title="הורדת דוח חודשי">
-            📄 דוח חודשי
+            <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+            דוח חודשי
           </button>
           <button class="btn btn--ghost" @click="router.push('/documents')">
-            📁 ארכיון
+            <n-icon :component="ArchiveOutline" class="btn-icon"/>
+            ארכיון
           </button>
           <button class="btn btn--ghost" :disabled="store.loading" @click="refresh" title="רענן">
-            <span class="refresh-icon" :class="{ 'refresh-icon--spin': store.loading }">↻</span> רענן
+            <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
+            רענן
           </button>
           <button
               v-if="contractsMissingReminder.length > 0"
@@ -80,11 +83,13 @@
               title="יצירת תזכורת לכל התסקירים עם אימייל שאין להם תזכורת"
               @click="generateMissingReminders"
           >
-            🔔 צור תזכורות חסרות ({{ contractsMissingReminder.length }})
+            <n-icon :component="NotificationsOutline" class="btn-icon"/>
+            צור תזכורות חסרות ({{ contractsMissingReminder.length }})
           </button>
           <button v-if="isAdmin && store.rows.length > 0" class="btn btn--danger-ghost"
                   @click="showDeleteAllConfirm = true">
-            🗑 מחק הכל
+            <n-icon :component="TrashOutline" class="btn-icon"/>
+            מחק הכל
           </button>
         </div>
       </div>
@@ -193,7 +198,8 @@
                     :class="{ 'btn--loading': creatingReminderFor === item.draft.contract_id }"
                     @click.stop="createDraftReminder(item.draft)"
                 >
-                  🔔 צור תזכורת
+                  <n-icon :component="NotificationsOutline" class="btn-icon"/>
+                  צור תזכורת
                 </button>
                 <button
                     :disabled="deletingDraftId === item.draft._id"
@@ -201,7 +207,8 @@
                     :class="{ 'btn--loading': deletingDraftId === item.draft._id }"
                     @click.stop="deleteDraft(item.draft)"
                 >
-                  🗑 מחק
+                  <n-icon :component="TrashOutline" class="btn-icon"/>
+                  מחק
                 </button>
               </div>
             </article>
@@ -530,280 +537,13 @@
       </template>
     </n-modal>
 
-    <!-- Manual hydraulic-check modal: business + equipment + interval -->
-    <n-modal
+    <!-- Hydraulic check modal (shared component) -->
+    <HydraulicCheckModal
+        ref="hydraulicModalRef"
         v-model:show="showHydraulicCheck"
-        :title="hydraulicModalTitle"
-        :show-icon="false"
-        class="hydraulic-modal"
-        preset="dialog"
-        style="width: 860px; max-width: 92vw"
-    >
-      <n-form v-if="hydraulicForm" class="hydraulic-compact-form" label-placement="top" size="small">
-        <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
-          <n-gi>
-            <n-form-item label="מספר תסקיר">
-              <n-input
-                  :value="hydraulicForm.contract_number"
-                  inputmode="numeric"
-                  placeholder="הזן מספר"
-                  @update:value="setHydraulicContractNumberInput"
-              >
-                <template v-if="currentHydraulicInspectorNumber()" #prefix>
-                  {{ currentHydraulicInspectorNumber() }}/
-                </template>
-              </n-input>
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="מספר תסקיר קודם">
-              <n-input v-model:value="hydraulicPrevReportNumber" placeholder="אופציונלי"/>
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="תבנית הדפסה">
-              <n-select
-                  v-model:value="hydraulicTemplateId"
-                  :loading="loadingHydraulicTemplates"
-                  :options="hydraulicTemplateOptions"
-                  :virtual-scroll="false"
-                  filterable
-                  placeholder="בחר תבנית לפתיחה עם הנתונים"
-                  @update:value="selectHydraulicTemplate"
-              />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="לקוח קיים">
-              <n-select
-                  v-model:value="hydraulicClientId"
-                  :options="clientOptions"
-                  clearable
-                  filterable
-                  placeholder="בחר לקוח קיים, או השאר ריק ליצירת עסק חדש"
-                  :loading="loadingClients"
-              />
-            </n-form-item>
-          </n-gi>
-        </n-grid>
-        <template v-if="!hydraulicClientId">
-          <n-form-item label="שם העסק" required>
-            <n-input v-model:value="hydraulicForm.business.display_name" placeholder="לדוגמה: מפעל דן בע&quot;מ"/>
-          </n-form-item>
-          <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
-            <n-gi>
-              <n-form-item label="ח.פ / ת.ז">
-                <n-input v-model:value="hydraulicForm.business.id_number"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="איש קשר">
-                <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="שם איש קשר"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="טלפון">
-                <n-input v-model:value="hydraulicForm.business.phone"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="אימייל">
-                <n-input v-model:value="hydraulicForm.business.email" placeholder="office@example.com"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="כתובת">
-                <n-input v-model:value="hydraulicForm.business.address"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="ת.ד">
-                <n-input v-model:value="hydraulicForm.business.po_box"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="מיקוד">
-                <n-input v-model:value="hydraulicForm.business.client_zipcode"/>
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-        </template>
-        <template v-else>
-          <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
-            <n-gi>
-              <n-form-item label="איש קשר">
-                <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="אם שונה מפרטי הלקוח"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="אימייל לתזכורות">
-                <n-input v-model:value="hydraulicForm.business.email" placeholder="אם שונה מפרטי הלקוח"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="טלפון">
-                <n-input v-model:value="hydraulicForm.business.phone" placeholder="אם שונה מפרטי הלקוח"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="כתובת">
-                <n-input v-model:value="hydraulicForm.business.address" placeholder="אם שונה מפרטי הלקוח"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="ת.ד">
-                <n-input v-model:value="hydraulicForm.business.po_box"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="מיקוד">
-                <n-input v-model:value="hydraulicForm.business.client_zipcode"/>
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-        </template>
-
-        <div class="hydraulic-section-head">
-          <n-h4 style="margin: 16px 0 4px">ציוד נבדק</n-h4>
-          <n-button size="small" @click="addHydraulicEquipment">+ מכונה נוספת</n-button>
-        </div>
-        <div v-for="(equipment, index) in hydraulicEquipmentRows" :key="equipment.id" class="hydraulic-equipment-card">
-          <div class="hydraulic-equipment-card__head">
-            <strong>מכונה {{ index + 1 }}</strong>
-            <n-button v-if="hydraulicEquipmentRows.length > 1" size="tiny" text type="error"
-                      @click="removeHydraulicEquipment(index)">מחק
-            </n-button>
-          </div>
-          <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
-            <n-gi :span="2">
-              <n-form-item label="ציוד קיים ללקוח">
-                <n-select
-                    v-model:value="equipment.selected_equipment_id"
-                    :disabled="!hydraulicClientId"
-                    :loading="loadingHydraulicEquipment"
-                    :options="hydraulicEquipmentOptions"
-                    :virtual-scroll="false"
-                    clearable
-                    filterable
-                    placeholder="חפש לפי שם / יצרן / דגם / מספר סידורי"
-                    @update:value="(id) => selectHydraulicEquipment(index, id)"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="סוג ציוד" required>
-                <n-select
-                    v-model:value="equipment.category"
-                    :options="hydraulicCategoryOptions"
-                    :virtual-scroll="false"
-                    filterable
-                    tag
-                    placeholder="בחר או הקלד סוג ציוד"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="שם הציוד">
-                <n-input v-model:value="equipment.name" placeholder="לדוגמה: מלגזה חשמלית / במת הרמה / עגורן"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="יצרן">
-                <n-input v-model:value="equipment.manufacturer"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="דגם">
-                <n-input v-model:value="equipment.model"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="מספר סידורי">
-                <n-input
-                    :value="equipment.serial_number"
-                    inputmode="numeric"
-                    @update:value="(value) => setNumericEquipmentField(equipment, 'serial_number', value)"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="מספר רישוי">
-                <n-input
-                    v-model:value="equipment.license_number" placeholder="לדוגמה: פנימי 123"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="עומס עבודה">
-                <n-input v-model:value="equipment.load_capacity_work" placeholder="לדוגמה: 3 טון"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="עומס בדיקה">
-                <n-input v-model:value="equipment.load_capacity_test" placeholder="לדוגמה: 3.75 טון"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="רדיוס / טווח">
-                <n-input v-model:value="equipment.load_radius"/>
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="hydraulicGridCols">
-              <n-form-item label="תיאור ציוד">
-                <n-input v-model:value="equipment.description" type="textarea" :rows="1"/>
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-        </div>
-
-
-        <n-divider/>
-        <n-form-item label="מועד התזכורת הבאה">
-          <n-select v-model:value="hydraulicReminderMode" :options="hydraulicReminderModeOptions"/>
-        </n-form-item>
-        <n-form-item v-if="hydraulicReminderMode === 'months'" label="בעוד כמה חודשים">
-          <n-select v-model:value="hydraulicIntervalMonths" :options="hydraulicIntervalOptions"/>
-        </n-form-item>
-        <n-form-item v-else label="תאריך תזכורת מותאם אישית" required>
-          <n-date-picker
-              v-model:value="hydraulicReminderDateMs"
-              :is-date-disabled="disablePastHydraulicDates"
-              type="date"
-              style="width: 100%"
-          />
-        </n-form-item>
-        <template v-if="hydraulicTemplateExtraFields.length">
-          <n-divider/>
-          <n-h4 style="margin: 0 0 4px">שדות נוספים מהתבנית</n-h4>
-          <n-grid :cols="hydraulicGridCols" :x-gap="10" :y-gap="2">
-            <n-gi v-for="field in hydraulicTemplateExtraFields" :key="field">
-              <n-form-item :label="field">
-                <n-input v-model:value="hydraulicTemplateValues[field]"/>
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-        </template>
-      </n-form>
-      <template #action>
-        <n-button
-            v-if="hydraulicDraftStore.hasDraft"
-            secondary
-            @click="editSavedHydraulicDraft"
-        >
-          ערוך טיוטה שמורה{{ hydraulicDraftSavedAtLabel ? ` (${hydraulicDraftSavedAtLabel})` : "" }}
-        </n-button>
-        <n-button @click="showHydraulicCheck = false">ביטול</n-button>
-        <n-button
-            v-if="updatingHydraulicContractId"
-            :loading="creatingHydraulicCheck"
-            @click="doCreateHydraulicCheck"
-        >עדכן
-        </n-button>
-        <n-button :loading="savingHydraulicDraft" type="primary" @click="saveHydraulicDraftAndPreview">שמור טיוטה ופתח
-          תצוגה
-        </n-button>
-      </template>
-    </n-modal>
+        @created="store.fetch(true)"
+        @updated="store.fetch(true)"
+    />
   </div>
 </template>
 
@@ -819,7 +559,6 @@ import {
   NFormItem,
   NGi,
   NGrid,
-  NH4,
   NIcon,
   NInput,
   NModal,
@@ -830,7 +569,14 @@ import {
   NVirtualList,
   useMessage,
 } from "naive-ui";
-import {NotificationsOutline, PaperPlaneOutline, TrashOutline} from "@vicons/ionicons5";
+import {
+  ArchiveOutline,
+  DocumentTextOutline,
+  NotificationsOutline,
+  PaperPlaneOutline,
+  RefreshOutline,
+  TrashOutline,
+} from "@vicons/ionicons5";
 import {useContractsStore} from "../stores/contracts.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {useAuthStore} from "../stores/auth.js";
@@ -839,6 +585,7 @@ import type {HydraulicCheckRequest, PrintTemplateDraftSummary} from "../services
 import {api} from "../services/apiService.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
+import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import {FEATURES} from "../shared/features.js";
 import type {
   ContractWithClient,
@@ -1438,8 +1185,7 @@ type HydraulicEquipmentRow = {
 };
 
 const showHydraulicCheck = ref(false);
-const creatingHydraulicCheck = ref(false);
-const savingHydraulicDraft = ref(false);
+const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
 const hydraulicForm = ref<HydraulicCheckRequest | null>(null);
 const hydraulicClientId = ref<string | null>(null);
 const hydraulicPrevReportNumber = ref("");
@@ -1498,7 +1244,7 @@ async function loadHydraulicCategories() {
 
 const hydraulicReminderMode = ref<"months" | "date">("months");
 const hydraulicReminderDateMs = ref<number | null>(null);
-const hydraulicIntervalMonths = ref<4 | 6 | 12 | 14>(4);
+const hydraulicIntervalMonths = ref<number>(4);
 const hydraulicReminderModeOptions = [
   {label: "בעוד מספר חודשים מהיום", value: "months"},
   {label: "בתאריך מותאם אישית", value: "date"},
@@ -1759,68 +1505,8 @@ async function openHydraulicCheck() {
   void loadHydraulicCategories();
 }
 
-async function openHydraulicContractUpdate(contractId: string) {
-  showHydraulicCheck.value = true;
-  if (!engineerProfile.value) {
-    await loadEngineerProfile().catch(() => {
-    });
-  }
-  const row = await api.contracts.get(contractId);
-  const manual = plainStringMap(row.manual_fields);
-  const firstEquipment = row._equipment?.[0] ?? null;
-
-  updatingHydraulicContractId.value = String(row.id);
-  hydratingHydraulicDraft.value = true;
-  hydraulicClientId.value = row.client_id ? String(row.client_id) : null;
-  hydraulicPrevReportNumber.value = manual.prev_report_number ?? "";
-  hydraulicReminderMode.value = "date";
-  hydraulicReminderDateMs.value = row.expiry_date ? new Date(dateOnly(row.expiry_date)).getTime() : null;
-  hydraulicIntervalMonths.value = Number((row as any).inspection_interval_months ?? manual.inspection_interval_months ?? 4) as 4 | 6 | 12 | 14;
-  hydraulicForm.value = {
-    contract_number: hydraulicContractNumberInputValue(row.contract_number),
-    business: {
-      display_name: String(row.client_name ?? row.counterparty ?? manual.client_company ?? ""),
-      id_number: manual.client_id ?? "",
-      contact_person: String(row.contact_person ?? manual.contact_person ?? manual.client_name ?? ""),
-      email: String(row.contact_email ?? manual.contact_email ?? manual.client_email ?? ""),
-      phone: String(row.contact_phone ?? manual.contact_phone ?? manual.client_phone ?? ""),
-      address: String(row.client_address ?? manual.client_address ?? ""),
-      po_box: String(row.po_box ?? manual.po_box ?? ""),
-      client_zipcode: String(row.client_zipcode ?? manual.zip_code ?? ""),
-    },
-    equipment: {
-      category: (firstEquipment?.category ?? "lift") as HydraulicCheckRequest["equipment"]["category"],
-      name: String(firstEquipment?.name ?? manual.name ?? manual.checked_equipment ?? ""),
-      manufacturer: String(firstEquipment?.manufacturer ?? manual.manufacturer ?? ""),
-      model: String(firstEquipment?.model ?? manual.model ?? ""),
-      serial_number: String(firstEquipment?.serial_number ?? manual.serial_number ?? ""),
-      load_capacity_work: manual.load_capacity_work ?? firstArrayValue(firstEquipment?.load_capacity_work),
-      load_capacity_test: manual.load_capacity_test ?? firstArrayValue(firstEquipment?.load_capacity_test),
-      load_radius: manual.load_radius ?? firstArrayValue(firstEquipment?.load_radius),
-      description: String(row.equipment_description ?? manual.equipment_description ?? ""),
-    },
-    interval_months: hydraulicIntervalMonths.value,
-  };
-  hydraulicEquipmentRows.value = [{
-    id: crypto.randomUUID(),
-    selected_equipment_id: null,
-    category: firstEquipment?.category ?? "lift",
-    name: String(firstEquipment?.name ?? manual.name ?? manual.checked_equipment ?? ""),
-    manufacturer: String(firstEquipment?.manufacturer ?? manual.manufacturer ?? ""),
-    model: String(firstEquipment?.model ?? manual.model ?? ""),
-    serial_number: String(firstEquipment?.serial_number ?? manual.serial_number ?? ""),
-    license_number: manual.license_number ?? "",
-    load_capacity_work: manual.load_capacity_work ?? firstArrayValue(firstEquipment?.load_capacity_work),
-    load_capacity_test: manual.load_capacity_test ?? firstArrayValue(firstEquipment?.load_capacity_test),
-    load_radius: manual.load_radius ?? firstArrayValue(firstEquipment?.load_radius),
-    description: String(row.equipment_description ?? manual.equipment_description ?? ""),
-  }];
-  hydraulicTemplateValues.value = {};
-  hydratingHydraulicDraft.value = false;
-  void loadClients();
-  void loadHydraulicPrintTemplates().then(() => {
-    selectHydraulicTemplate(hydraulicTemplateId.value ?? defaultHydraulicTemplateId());
-  });
+async function openHydraulicContractUpdate(contractId: string, returnTo?: string) {
+  await hydraulicModalRef.value?.openForUpdate(contractId, returnTo);
 }
 
 async function editSavedHydraulicDraft() {
@@ -2157,7 +1843,7 @@ async function saveHydraulicDraftAndPreview() {
 
 async function openContractInTemplate(row: ContractWithClient) {
   if (!canOpenPrintTemplates.value) {
-    message.warning("תבניות מסקר כבויות בהגדרות");
+    message.warning("תבניות הדפסה כבויות בהגדרות");
     return;
   }
   try {
@@ -2716,7 +2402,7 @@ function emptyForm() {
 
 function openCreate() {
   if (kind.value === "inspection") {
-    openHydraulicCheck();
+    hydraulicModalRef.value?.open();
     return;
   }
   editingId.value = null;

@@ -7,10 +7,29 @@ import type {ReminderWithContext} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSettings} from "../settings";
 import {pickEmailTemplate} from "../templates/seedEmailTemplates";
-import {clientDisplayName as normalizeClientNameForDisplay, normalizeClientDisplayName, normalizePhoneIdentityKey} from "../utils/clientNames";
+import {
+  clientDisplayName as normalizeClientNameForDisplay,
+  normalizeClientDisplayName,
+  normalizePhoneIdentityKey
+} from "../utils/clientNames";
 import {logger} from "../logger";
 
-const HYDRAULIC_INTERVAL_MONTHS = [4, 6, 12, 14] as const;
+const MIN_INSPECTION_INTERVAL_MONTHS = 1;
+const MAX_INSPECTION_INTERVAL_MONTHS = 24;
+
+function clampInspectionIntervalMonths(value: number): number {
+    if (!Number.isFinite(value)) return 4;
+    const months = Math.round(value);
+    if (months < MIN_INSPECTION_INTERVAL_MONTHS) return MIN_INSPECTION_INTERVAL_MONTHS;
+    if (months > MAX_INSPECTION_INTERVAL_MONTHS) return MAX_INSPECTION_INTERVAL_MONTHS;
+    return months;
+}
+
+function isValidInspectionIntervalMonths(value: number): boolean {
+    return Number.isInteger(value)
+        && value >= MIN_INSPECTION_INTERVAL_MONTHS
+        && value <= MAX_INSPECTION_INTERVAL_MONTHS;
+}
 
 function parseIsoDateOnly(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -279,17 +298,12 @@ export function registerReminderRoutes(app: express.Application) {
       next_inspection_date?: string;
       interval_months?: number;
       skip_reminders?: boolean;
+        editor_type?: "grid" | "sections";
     };
 
     const category = body.equipment?.category?.trim();
     if (!category) {
       res.status(400).json({ error: "equipment.category is required" });
-      return;
-    }
-
-    const intervalMonths = body.interval_months ?? 4;
-    if (!intervalMonths || !HYDRAULIC_INTERVAL_MONTHS.includes(intervalMonths as any)) {
-      res.status(400).json({ error: `interval_months must be one of: ${HYDRAULIC_INTERVAL_MONTHS.join(", ")}` });
       return;
     }
 
@@ -304,6 +318,29 @@ export function registerReminderRoutes(app: express.Application) {
     } else {
       checkDate = todayDateOnly();
     }
+
+      // Prefer the selected interval; otherwise derive it from the two dates.
+      let intervalMonths: number;
+      if (typeof body.interval_months === "number") {
+          intervalMonths = body.interval_months;
+          if (!isValidInspectionIntervalMonths(intervalMonths)) {
+              res.status(400).json({
+                  error: `interval_months must be an integer between ${MIN_INSPECTION_INTERVAL_MONTHS} and ${MAX_INSPECTION_INTERVAL_MONTHS}`,
+              });
+              return;
+          }
+      } else if (body.next_inspection_date) {
+          const nextDate = parseIsoDateOnly(body.next_inspection_date);
+          if (nextDate) {
+              const diffMs = nextDate.getTime() - checkDate.getTime();
+              const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+              intervalMonths = clampInspectionIntervalMonths(Math.round(diffDays / 30));
+          } else {
+              intervalMonths = 4;
+          }
+      } else {
+          intervalMonths = 4;
+      }
 
     const now = new Date();
     let clientId: string;
@@ -511,6 +548,7 @@ export function registerReminderRoutes(app: express.Application) {
         }],
       },
       status: "active",
+        editor_type: body.editor_type ?? "sections",
       created_at: now,
       updated_at: now,
     };

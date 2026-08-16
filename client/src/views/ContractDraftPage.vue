@@ -209,8 +209,9 @@ async function loadDraft() {
       api.printTemplates.get(draft.template_id),
       loadEngineerProfile().catch(() => {}),
     ]);
-    if (loadedTemplate.editorType === "sections") {
-      await router.replace(`/settings/print-templates/layout/${loadedTemplate._id}/compose?contractId=${routeContractId.value}`);
+    const editorType = draft.editor_type ?? loadedTemplate.editorType ?? "grid";
+    if (editorType === "sections") {
+      await router.replace(`/print-templates/layout/${loadedTemplate._id}/compose?contractId=${routeContractId.value}`);
       return;
     }
     template.value = normalizeLegacyTemplateBindings(loadedTemplate);

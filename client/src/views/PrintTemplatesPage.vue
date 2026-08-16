@@ -17,12 +17,12 @@
         :count="templates.length"
       >
         <template #breadcrumb>
-          <a href="#" @click.prevent="router.push('/settings/print-templates')">תבניות הדפסה</a>
+          <router-link to="/print-templates">תבניות הדפסה</router-link>
           <span class="sep">/</span>
           <span>עורך Excel</span>
         </template>
         <template #actions>
-          <button class="btn btn--ghost" @click="router.push('/settings/print-templates/layout')">עורך פריסה</button>
+          <button class="btn btn--ghost" @click="router.push('/print-templates/layout')">עורך פריסה</button>
           <button class="btn btn--primary" @click="newTemplate">+ תבנית חדשה</button>
         </template>
       </PageHeader>
@@ -49,9 +49,18 @@
             </div>
 
             <div class="pt-card__actions">
-              <button class="btn btn--xs btn--primary" @click.stop="openCompose(t)">✏️ מלא ושלח</button>
-              <button class="btn btn--xs btn--ghost" @click.stop="editTemplate(t)">🎨 עצב</button>
-              <button class="btn btn--xs btn--danger" @click.stop="deleteTemplate(t._id)">🗑 מחק</button>
+              <button class="btn btn--xs btn--primary" @click.stop="openCompose(t)">
+                <n-icon :component="CreateOutline"/>
+                מלא ושלח
+              </button>
+              <button class="btn btn--xs btn--ghost" @click.stop="editTemplate(t)">
+                <n-icon :component="BrushOutline"/>
+                עצב
+              </button>
+              <button class="btn btn--xs btn--danger" @click.stop="deleteTemplate(t._id)">
+                <n-icon :component="TrashOutline"/>
+                מחק
+              </button>
             </div>
           </article>
         </div>
@@ -67,9 +76,18 @@
     <template v-else-if="mode === 'compose' && composing">
       <PageHeader :title="`${composing.name} — מילוי שדות`">
         <template #breadcrumb>
-          <a href="#" @click.prevent="goBackFromCompose">{{ routeContractId ? "תסקירים" : "תבניות מסקר" }}</a>
-          <span class="sep">/</span>
-          <span>{{ composing.name }}</span>
+          <template v-if="routeContractId">
+            <a href="#" @click.prevent="goBackFromCompose">תסקירים</a>
+            <span class="sep">/</span>
+            <span>{{ composing.name }}</span>
+          </template>
+          <template v-else>
+            <router-link to="/print-templates">תבניות הדפסה</router-link>
+            <span class="sep">/</span>
+            <a href="#" @click.prevent="goList">עורך Excel</a>
+            <span class="sep">/</span>
+            <span>{{ composing.name }}</span>
+          </template>
         </template>
         <template #actions>
           <button v-if="routeContractId" class="xl-btn" @click="editContractFromDraft">
@@ -91,7 +109,8 @@
           </button>
           <button :disabled="printing" :class="{ 'xl-btn--loading': printing }" class="xl-btn xl-btn--primary" @click="printPdf">
             <span v-if="printing" class="xl-loader" aria-hidden="true"></span>
-            <span>🖨 הדפס</span>
+            <n-icon :component="PrintOutline"/>
+            <span>הדפס</span>
           </button>
           <button :disabled="savingPdf" :class="{ 'xl-btn--loading': savingPdf }" class="xl-btn xl-btn--primary" @click="savePdf">
             <span v-if="savingPdf" class="xl-loader" aria-hidden="true"></span>
@@ -201,6 +220,13 @@
 
     <!-- ── DESIGN ────────────────────────────────────────────────────────────── -->
     <template v-else-if="mode === 'design' && editing">
+      <nav aria-label="breadcrumb" class="pt-breadcrumb">
+        <router-link to="/print-templates">תבניות הדפסה</router-link>
+        <span class="sep">/</span>
+        <a href="#" @click.prevent="goList">עורך Excel</a>
+        <span class="sep">/</span>
+        <span>{{ editing.name || "תבנית חדשה" }}</span>
+      </nav>
       <div class="xl-shell">
 
         <!-- Excel green title bar -->
@@ -529,7 +555,8 @@
 <script lang="ts" setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NAlert, NEmpty, NSpin, useDialog, useMessage,} from "naive-ui";
+import {NAlert, NEmpty, NIcon, NSpin, useDialog, useMessage,} from "naive-ui";
+import {BrushOutline, CreateOutline, PrintOutline, TrashOutline} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import PageHeader from "../components/PageHeader.vue";
 import type {PrintCellBorderSides, PrintCellBorderStyle, PrintTemplate, PrintTemplateCell} from "@shared/types.js";
@@ -638,7 +665,7 @@ async function openRouteDraftIfRequested() {
     } catch { /* handled below */ }
   }
   if (template?.editorType === "sections") {
-    await router.replace(`/settings/print-templates/layout/${templateId}/compose`);
+    await router.replace(`/print-templates/layout/${templateId}/compose`);
     return;
   }
   if (template) await openCompose(template);
@@ -2134,6 +2161,34 @@ function stopCellResize() {
 <style scoped>
 /* ── Page shell ───────────────────────────────────────────────────────────── */
 .ptp { padding: 24px; height: 100%; display: flex; flex-direction: column; }
+
+.pt-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.pt-breadcrumb a {
+  color: var(--brand-color);
+  text-decoration: none;
+}
+
+.pt-breadcrumb a:hover {
+  opacity: 0.75;
+}
+
+.pt-breadcrumb .sep {
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+.pt-breadcrumb span:last-child {
+  color: var(--text-secondary);
+}
 
 /* ── Template list (app-themed cards) ─────────────────────────── */
 .pt-grid {

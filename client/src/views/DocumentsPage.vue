@@ -2,32 +2,64 @@
   <div class="page2">
     <PageHeader :count="store.total" title="מסמכים">
       <template #actions>
-        <n-button v-if="authStore.isAdmin" :disabled="limitReached" :loading="uploading" type="primary" @click="openUploadModal()">
-          📂 העלה קבצים
-        </n-button>
-        <n-button :loading="store.loading" size="small" @click="store.fetch(undefined, true)">↻ רענן</n-button>
-        <n-button v-if="rescanStore.hasSession" size="small" secondary @click="openRescanModal">
-          {{ rescanStore.kind === "upload" ? "הצג העלאה אחרונה" : "הצג סריקה אחרונה" }}
-        </n-button>
-        <n-button :disabled="rescanningAll" :loading="rescanning" size="small" @click="doRescan">↻ סריקה מחדש</n-button>
-        <n-button
-          v-if="authStore.isAdmin"
-          :disabled="rescanning"
-          :loading="rescanningAll"
-          secondary
-          size="small"
-          type="warning"
-          @click="showRescanAllConfirm = true"
-        >
-          ↻ סרוק הכל מחדש
-        </n-button>
-        <n-button :loading="deletingAll" size="small" type="error" @click="confirmDeleteAll">🗑 מחק הכל</n-button>
+        <div class="documents-actions">
+          <button
+              v-if="authStore.isAdmin"
+              :class="{ 'rbtn--loading': uploading }"
+              :disabled="limitReached || uploading"
+              class="rbtn rbtn--primary"
+              type="button"
+              @click="openUploadModal()"
+          >
+            <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+            העלה קבצים
+          </button>
+          <button :disabled="store.loading" class="rbtn rbtn--ghost" type="button"
+                  @click="store.fetch(undefined, true)">
+            <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
+            רענן
+          </button>
+          <button v-if="rescanStore.hasSession" class="rbtn rbtn--ghost" type="button" @click="openRescanModal">
+            {{ rescanStore.kind === "upload" ? "הצג העלאה אחרונה" : "הצג סריקה אחרונה" }}
+          </button>
+          <button
+              :disabled="rescanningAll || rescanning"
+              class="rbtn rbtn--ghost"
+              type="button"
+              @click="doRescan"
+          >
+            <n-icon :class="{ 'refresh-icon--spin': rescanning }" :component="RefreshOutline" class="btn-icon"/>
+            סריקה מחדש
+          </button>
+          <button
+              v-if="authStore.isAdmin"
+              :disabled="rescanning || rescanningAll"
+              class="rbtn rbtn--ghost rbtn--warning"
+              type="button"
+              @click="showRescanAllConfirm = true"
+          >
+            <n-icon :class="{ 'refresh-icon--spin': rescanningAll }" :component="RefreshOutline" class="btn-icon"/>
+            סרוק הכל מחדש
+          </button>
+          <button
+              :class="{ 'rbtn--loading': deletingAll }"
+              :disabled="deletingAll"
+              class="rbtn rbtn--danger"
+              type="button"
+              @click="confirmDeleteAll"
+          >
+            <n-icon :component="TrashOutline" class="btn-icon"/>
+            מחק הכל
+          </button>
 
-        <!-- Pipeline settings popover -->
-        <n-popover :width="320" placement="bottom-end" trigger="click">
-          <template #trigger>
-            <n-button size="small" title="הגדרות עיבוד">⚙ הגדרות</n-button>
-          </template>
+          <!-- Pipeline settings popover -->
+          <n-popover :width="320" placement="bottom-end" trigger="click">
+            <template #trigger>
+              <button class="rbtn rbtn--ghost" title="הגדרות עיבוד" type="button">
+                <n-icon :component="SettingsOutline" class="btn-icon"/>
+                הגדרות
+              </button>
+            </template>
           <div class="settings-pop">
             <div class="settings-pop__title">שירותי עיבוד</div>
             <n-space size="small" vertical>
@@ -50,6 +82,7 @@
             </n-space>
           </div>
         </n-popover>
+        </div>
       </template>
     </PageHeader>
 
@@ -126,16 +159,24 @@
         @update:value="currentPage = 1"
       />
       <div class="toolbar__view-toggle">
-        <n-button
-          :type="viewMode === 'grid' ? 'primary' : 'default'"
-          size="small"
+        <button
+            :class="{ 'rbtn--ghost-active': viewMode === 'grid' }"
+            class="rbtn rbtn--ghost"
+            type="button"
           @click="viewMode = 'grid'"
-        >▦ אריחים</n-button>
-        <n-button
-          :type="viewMode === 'list' ? 'primary' : 'default'"
-          size="small"
+        >
+          <n-icon :component="GridOutline" class="btn-icon"/>
+          אריחים
+        </button>
+        <button
+            :class="{ 'rbtn--ghost-active': viewMode === 'list' }"
+            class="rbtn rbtn--ghost"
+            type="button"
           @click="viewMode = 'list'"
-        >☰ רשימה</n-button>
+        >
+          <n-icon :component="ListOutline" class="btn-icon"/>
+          רשימה
+        </button>
       </div>
     </div>
 
@@ -182,7 +223,9 @@
               trigger="click"
               @select="(k: string) => handleRowAction(k, row)"
             >
-              <n-button circle quaternary size="small">⋮</n-button>
+              <button class="btn btn--ghost btn--xs icon-btn" title="פעולות" type="button">
+                <n-icon :component="EllipsisVerticalOutline" class="btn-icon"/>
+              </button>
             </n-dropdown>
           </div>
         </article>
@@ -205,9 +248,26 @@
             <span class="truncate font-semibold">{{ row.file_name }}</span>
           </template>
           <template #actions>
-            <n-button size="tiny" @click.stop="openDownload(row)">⬇</n-button>
-            <n-button v-if="canExtractDocument(row)" size="tiny" @click.stop="openExtractModal(String(row.id))">✨</n-button>
-            <n-button size="tiny" type="error" @click.stop="store.deleteDoc(row.id)">🗑</n-button>
+            <button class="btn btn--ghost btn--xs icon-btn" title="הורד" type="button" @click.stop="openDownload(row)">
+              <n-icon :component="DownloadOutline" class="btn-icon"/>
+            </button>
+            <button
+                v-if="canExtractDocument(row)"
+                class="btn btn--ghost btn--xs icon-btn"
+                title="חלץ AI"
+                type="button"
+                @click.stop="openExtractModal(String(row.id))"
+            >
+              <n-icon :component="FlashOutline" class="btn-icon"/>
+            </button>
+            <button
+                class="btn btn--danger-ghost btn--xs icon-btn"
+                title="מחק"
+                type="button"
+                @click.stop="store.deleteDoc(row.id)"
+            >
+              <n-icon :component="TrashOutline" class="btn-icon"/>
+            </button>
           </template>
           <template #pills>
             <StatusBadge :status="row.processing_status" />
@@ -238,9 +298,10 @@
 
       <div v-else-if="!store.loading" class="empty">
         <p>אין מסמכים להצגה</p>
-        <n-button :disabled="limitReached" class="mt-3" type="primary" @click="openUploadModal()">
-          📂 העלה מסמך ראשון
-        </n-button>
+        <button :disabled="limitReached" class="rbtn rbtn--primary mt-3" type="button" @click="openUploadModal()">
+          <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+          העלה מסמך ראשון
+        </button>
       </div>
     </n-spin>
 
@@ -317,14 +378,14 @@
 </template>
 
 <script setup lang="ts">
-import {computed, nextTick, onMounted, onUnmounted, ref, watch} from "vue";
+import {computed, h, nextTick, onMounted, onUnmounted, ref, watch, type Component} from "vue";
 import {useRouter} from "vue-router";
 import {
   NAlert,
-  NButton,
   NCheckbox,
   NDatePicker,
   NDropdown,
+  NIcon,
   NInput,
   NModal,
   NPopover,
@@ -336,6 +397,18 @@ import {
   NTooltip,
   useMessage,
 } from "naive-ui";
+import {
+  CloudUploadOutline,
+  DownloadOutline,
+  EllipsisVerticalOutline,
+  EyeOutline,
+  FlashOutline,
+  GridOutline,
+  ListOutline,
+  RefreshOutline,
+  SettingsOutline,
+  TrashOutline,
+} from "@vicons/ionicons5";
 import {useDocumentsStore} from "../stores/documents.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useRescanModalStore} from "../stores/rescanModal.js";
@@ -555,13 +628,21 @@ function fileKind(mime: string | null | undefined) {
   return "other";
 }
 
+function renderActionIcon(icon: Component) {
+  return () => h(NIcon, {component: icon});
+}
 function rowActions() {
   return [
-    { label: "📄 צפה", key: "view" },
-    { label: " הורד", key: "download" },
-    { label: "✨ חלץ AI", key: "extract" },
+    {label: "צפה", key: "view", icon: renderActionIcon(EyeOutline)},
+    {label: "הורד", key: "download", icon: renderActionIcon(DownloadOutline)},
+    {label: "חלץ AI", key: "extract", icon: renderActionIcon(FlashOutline)},
     { type: "divider", key: "d1" },
-    { label: "🗑 מחק", key: "delete", props: { style: "color: var(--color-error, #d03050)" } },
+    {
+      label: "מחק",
+      key: "delete",
+      icon: renderActionIcon(TrashOutline),
+      props: {style: "color: var(--color-error, #d03050)"},
+    },
   ];
 }
 function rowActionsFor(row: Document) {
@@ -791,6 +872,112 @@ async function openDownload(row: Document) {
 <style scoped>
 .hidden { display: none; }
 
+.documents-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.rbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
+}
+
+.rbtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.rbtn:active {
+  transform: scale(0.97);
+}
+
+.rbtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.rbtn--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--text-inverse, #fff);
+  font-weight: 600;
+}
+
+.rbtn--danger {
+  background: transparent;
+  border-color: rgba(208, 48, 80, 0.35);
+  color: #d03050;
+}
+
+.rbtn--warning {
+  background: transparent;
+  border-color: rgba(240, 160, 32, 0.45);
+  color: #f0a020;
+}
+
+.rbtn--warning:hover {
+  background: rgba(240, 160, 32, 0.1);
+  border-color: #f0a020;
+}
+
+.rbtn--ghost-active {
+  background: var(--bg-elevated);
+  border-color: var(--brand-color);
+  color: var(--brand-color);
+}
+
+.rbtn--loading {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.rbtn--loading::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-inline-start-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex: 0 0 auto;
+}
+
+.refresh-icon--spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.icon-btn {
+  padding: 4px 6px;
+  min-width: 32px;
+  justify-content: center;
+}
+
+.icon-btn .btn-icon {
+  margin: 0;
+}
+
 /* ── Filter bar ──────────────────────────────────────────────────────────── */
 .filterbar {
   display: flex;
@@ -917,11 +1104,6 @@ async function openDownload(row: Document) {
   flex-wrap: wrap;
   gap: 8px;
   margin: -6px 0 16px;
-}
-.status-filter :deep(.n-button__content) {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 .status-filter__count {
   min-width: 24px;
@@ -1119,18 +1301,21 @@ async function openDownload(row: Document) {
   }
 
   :deep(.page-header__actions) {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  :deep(.page-header__actions > .n-button),
-  :deep(.page-header__actions > .n-popover) {
     width: 100%;
   }
 
-  :deep(.page-header__actions .n-button) {
-    justify-content: center;
+  .documents-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .documents-actions > .rbtn,
+  .documents-actions :deep(.n-popover),
+  .documents-actions :deep(.n-popover-trigger),
+  .documents-actions :deep(.n-popover-trigger) > .rbtn {
+    width: 100%;
   }
 
   .quota-bar__text {
@@ -1166,16 +1351,12 @@ async function openDownload(row: Document) {
     margin-right: 0;
   }
 
-  .toolbar__view-toggle :deep(.n-button) {
+  .toolbar__view-toggle .rbtn {
     flex: 1;
   }
 
   .status-filter {
     gap: 6px;
-  }
-
-  .status-filter :deep(.n-button) {
-    flex: 1 1 calc(50% - 6px);
   }
 
   :deep(.list-card) {
@@ -1215,7 +1396,7 @@ async function openDownload(row: Document) {
 }
 
 @media (max-width: 420px) {
-  :deep(.page-header__actions) {
+  .documents-actions {
     grid-template-columns: 1fr;
   }
 
@@ -1229,7 +1410,7 @@ async function openDownload(row: Document) {
     grid-template-columns: repeat(3, 34px);
   }
 
-  :deep(.list-card__actions .n-button) {
+  :deep(.list-card__actions .btn) {
     width: 34px;
   }
 }

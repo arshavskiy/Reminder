@@ -25,7 +25,7 @@ export interface HydraulicCheckDraftState {
   equipmentRows: HydraulicDraftEquipmentRow[];
   reminderMode: "months" | "date";
   reminderDateMs: number | null;
-  intervalMonths: 4 | 6 | 12 | 14;
+    intervalMonths: number;
   templateId: string | null;
   templateValues: Record<string, string>;
   savedAt: string;

@@ -90,14 +90,15 @@
 
       <!-- Signature -->
       <template v-else-if="section.type === 'signature' && section.enabled">
-        <div class="sig-label">חתימת הבודק:</div>
-        <div class="sig-content">
-          <div v-if="section.imageSrc" class="sig-image">
-            <img :src="section.imageSrc" alt="חתימה">
-          </div>
-          <div class="sig-details">
-            <div v-if="section.inspectorText" class="sig-inspector">{{ section.inspectorText }}</div>
-            <div v-if="section.companyName" class="sig-company">{{ section.companyName }}</div>
+        <div v-if="certLines(section).length" class="sig-cert">
+          <div v-for="(line, li) in certLines(section)" :key="li" class="sig-cert-line">{{ line }}</div>
+        </div>
+        <div :class="['sig-mark', `sig-align-${section.align ?? 'right'}`]">
+          <div class="sig-label">חתימת הבודק:</div>
+          <div class="sig-content">
+            <div v-if="section.imageSrc" class="sig-image">
+              <img :src="section.imageSrc" alt="חתימה">
+            </div>
           </div>
         </div>
       </template>
@@ -115,13 +116,35 @@
           >
         </div>
       </template>
+
+      <!-- Footer -->
+      <template v-else-if="section.type === 'footer' && section.enabled">
+        <div class="ftr-row">
+          <div v-if="section.leftBind" class="ftr-col">
+            <span v-if="section.leftLabel" class="ftr-lbl">{{ section.leftLabel }}</span>
+            <span class="ftr-val">{{ val(section.leftBind) }}</span>
+          </div>
+          <div v-if="section.centerBind" class="ftr-col ftr-center">
+            <span class="ftr-val">{{ val(section.centerBind) }}</span>
+          </div>
+          <div v-if="section.rightBind" class="ftr-col">
+            <span v-if="section.rightLabel" class="ftr-lbl">{{ section.rightLabel }}</span>
+            <span class="ftr-val">{{ val(section.rightBind) }}</span>
+          </div>
+        </div>
+      </template>
     </section>
   </div>
 </template>
 
 <script lang="ts" setup>
 import {computed} from "vue";
-import type {PrintTemplateLayout, PrintTemplateSectionField} from "@shared/printTemplateLayout.js";
+import type {
+  PrintTemplateLayout,
+  PrintTemplateLayoutSignatureSection,
+  PrintTemplateSectionField
+} from "@shared/printTemplateLayout.js";
+import {fillLayoutPlaceholders, signatureCertificationText} from "@shared/printTemplateLayout.js";
 
 const props = defineProps<{
   layout: PrintTemplateLayout;
@@ -130,6 +153,13 @@ const props = defineProps<{
 
 function val(bind: string): string {
   return props.data?.[bind] ?? "";
+}
+
+function certLines(section: PrintTemplateLayoutSignatureSection): string[] {
+  const template = signatureCertificationText(section);
+  if (!template) return [];
+  const filled = fillLayoutPlaceholders(template, props.data ?? {});
+  return filled.split(/\r?\n/).filter((line) => line.length > 0);
 }
 
 function borderWidthPx(width: string): number {
@@ -158,6 +188,7 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
 
 <style scoped>
 .layout-preview {
+  width: 100%;
   padding: 10px;
   font-size: 10px;
   color: #111;
@@ -205,8 +236,52 @@ table.findings td.detail { text-align: right; }
 .static { line-height: 1.35; font-size: 9px; text-align: justify; margin: 0; white-space: pre-wrap; }
 
 /* Signature */
-.sig-label { font-weight: 600; margin-bottom: 6px; }
-.sig-content { display: flex; gap: 12px; align-items: flex-start; }
+.sig-mark {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sig-label {
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.sig-cert {
+  font-size: 9px;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  text-align: right;
+}
+
+.sig-cert-line {
+  margin-bottom: 1px;
+}
+
+.sig-cert-line:last-child {
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.sig-content {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.sig-align-right {
+  justify-content: right;
+}
+
+.sig-align-center {
+  justify-content: center;
+}
+
+.sig-align-left {
+  justify-content: left;
+}
 .sig-image img { max-width: 100px; max-height: 60px; }
 .sig-details { font-size: 8px; line-height: 1.3; }
 .sig-inspector { font-weight: 600; }
@@ -214,4 +289,25 @@ table.findings td.detail { text-align: right; }
 
 /* Image section */
 .section-img { max-width: 100%; height: auto; }
+
+/* Footer */
+.ftr-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.ftr-col {
+  font-size: 9px;
+}
+
+.ftr-center {
+  text-align: center;
+  font-weight: 600;
+}
+
+.ftr-lbl {
+  margin-left: 3px;
+}
 </style>

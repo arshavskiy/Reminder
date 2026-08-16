@@ -8,12 +8,12 @@
           :count="templates.length"
       >
         <template #breadcrumb>
-          <a href="#" @click.prevent="router.push('/settings/print-templates')">תבניות הדפסה</a>
+          <router-link to="/print-templates">תבניות הדפסה</router-link>
           <span class="sep">/</span>
           <span>עורך פריסה</span>
         </template>
         <template #actions>
-          <button class="btn btn--ghost" @click="router.push('/settings/print-templates/excel')">עורך Excel</button>
+          <button class="btn btn--ghost" @click="router.push('/print-templates/excel')">עורך Excel</button>
           <button class="btn btn--primary" @click="createTemplate">+ תבנית חדשה</button>
         </template>
       </PageHeader>
@@ -30,9 +30,17 @@
               מסגרת: {{ borderLabel(t) }} · {{ sectionCount(t) }} סעיפים
             </p>
             <div class="pt-card__actions">
-              <button class="btn btn--xs btn--primary" @click="openCompose(t)">✏️ מלא ושלח</button>
-              <button class="btn btn--xs btn--ghost" @click="editTemplate(t)">🎨 ערוך</button>
-              <button class="btn btn--xs btn--danger" @click="deleteTemplate(t._id)">🗑</button>
+              <button class="btn btn--xs btn--primary" @click="openCompose(t)">
+                <n-icon :component="CreateOutline"/>
+                מלא ושלח
+              </button>
+              <button class="btn btn--xs btn--ghost" @click="editTemplate(t)">
+                <n-icon :component="BrushOutline"/>
+                ערוך
+              </button>
+              <button class="btn btn--xs btn--danger" @click="deleteTemplate(t._id)">
+                <n-icon :component="TrashOutline"/>
+              </button>
             </div>
           </article>
         </div>
@@ -48,9 +56,11 @@
     <template v-else-if="mode === 'edit' && editing">
       <PageHeader :title="editing.name || 'עריכת תבנית'">
         <template #breadcrumb>
+          <router-link to="/print-templates">תבניות הדפסה</router-link>
+          <span class="sep">/</span>
           <a href="#" @click.prevent="goList">עורך פריסה</a>
           <span class="sep">/</span>
-          <span>{{ editing.name }}</span>
+          <span>{{ editing.name || "עריכת תבנית" }}</span>
         </template>
         <template #actions>
           <button class="btn btn--ghost" @click="goList">ביטול</button>
@@ -68,13 +78,18 @@
     <template v-else-if="mode === 'compose' && composing">
       <PageHeader :title="`${composing.name} — מילוי`">
         <template #breadcrumb>
+          <router-link to="/print-templates">תבניות הדפסה</router-link>
+          <span class="sep">/</span>
           <a href="#" @click.prevent="goList">עורך פריסה</a>
           <span class="sep">/</span>
           <span>{{ composing.name }}</span>
         </template>
         <template #actions>
           <button class="btn btn--ghost" :disabled="draftSaving" @click="saveDraft">שמור טיוטה</button>
-          <button class="btn btn--primary" :disabled="printing" @click="printPdf">🖨 הדפס PDF</button>
+          <button :disabled="printing" class="btn btn--primary" @click="printPdf">
+            <n-icon :component="PrintOutline"/>
+            הדפס PDF
+          </button>
           <button class="btn btn--primary" :disabled="savingPdf" @click="savePdf">הורד PDF</button>
         </template>
       </PageHeader>
@@ -87,13 +102,15 @@
             </n-form-item>
           </n-form>
         </div>
-        <div class="compose-preview">
-          <div class="compose-preview__label">תצוגה מקדימה</div>
-          <LayoutPreviewFrame
-              v-if="composing.layout"
-              :layout="composing.layout"
-              :data="composeData"
-          />
+        <div class="compose-preview-area">
+          <div class="compose-preview">
+            <div class="compose-preview__label">תצוגה מקדימה</div>
+            <LayoutPreviewFrame
+                v-if="composing.layout"
+                :data="composeData"
+                :layout="composing.layout"
+            />
+          </div>
         </div>
       </div>
     </template>
@@ -103,7 +120,8 @@
 <script lang="ts" setup>
 import {computed, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NAlert, NEmpty, NForm, NFormItem, NInput, NSpin, useDialog, useMessage} from "naive-ui";
+import {NAlert, NEmpty, NForm, NFormItem, NIcon, NInput, NSpin, useDialog, useMessage} from "naive-ui";
+import {BrushOutline, CreateOutline, PrintOutline, TrashOutline} from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 import SimpleLayoutEditor from "../components/print/SimpleLayoutEditor.vue";
 import LayoutPreviewFrame from "../components/print/LayoutPreviewFrame.vue";
@@ -111,11 +129,14 @@ import {api} from "../services/apiService.js";
 import type {PrintTemplate} from "@shared/types.js";
 import {
   clonePrintTemplateLayout,
+  createDefaultFooterSection,
   createDefaultPrintTemplateLayout,
   extractLayoutFieldBinds,
   LAYOUT_BORDER_COLORS,
   type PrintTemplateLayout,
 } from "@shared/printTemplateLayout.js";
+
+const SERVER = import.meta.env.VITE_API_URL || "";
 
 type Mode = "list" | "edit" | "compose";
 
@@ -142,6 +163,54 @@ const composeFields = computed(() => {
   if (!composing.value?.layout) return [];
   return extractLayoutFieldBinds(composing.value.layout);
 });
+
+interface EngineerProfile {
+  full_name?: string;
+  company_name?: string;
+  company_phone?: string;
+  company_email?: string;
+  inspector_number?: string;
+  company_registration?: string;
+  address?: string;
+}
+
+async function fetchEngineerProfile(): Promise<EngineerProfile | null> {
+  try {
+    const res = await fetch(`${SERVER}/api/profile/engineer`, {credentials: "include"});
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchUserProfile(): Promise<{ name?: string; email?: string; phone?: string } | null> {
+  try {
+    const res = await fetch(`${SERVER}/api/profile`, {credentials: "include"});
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function ensureFooterSection(layout: PrintTemplateLayout): PrintTemplateLayout {
+  const footerIndex = layout.sections.findIndex((s) => s.type === "footer");
+  const nextFooter = createDefaultFooterSection();
+  if (footerIndex < 0) {
+    return {...layout, sections: [...layout.sections, nextFooter]};
+  }
+  const current = layout.sections[footerIndex];
+  if (current.type !== "footer") return layout;
+  const isLegacyFooter =
+      current.leftBind === "engineer_email" &&
+      current.centerBind === "engineer_company" &&
+      current.rightBind === "engineer_phone";
+  if (!isLegacyFooter) return layout;
+  const sections = layout.sections.slice();
+  sections[footerIndex] = {...current, ...nextFooter};
+  return {...layout, sections};
+}
 
 function sectionTemplates(all: PrintTemplate[]): PrintTemplate[] {
   return all.filter((t) => t.editorType === "sections" && t.layout);
@@ -173,7 +242,7 @@ function goList() {
   mode.value = "list";
   editing.value = null;
   composing.value = null;
-  void router.replace("/settings/print-templates/layout");
+  void router.replace("/print-templates/layout");
 }
 
 function createTemplate() {
@@ -196,7 +265,8 @@ function createTemplate() {
 
 function editTemplate(t: PrintTemplate) {
   editing.value = { ...t };
-  editingLayout.value = clonePrintTemplateLayout(t.layout ?? createDefaultPrintTemplateLayout());
+  const baseLayout = clonePrintTemplateLayout(t.layout ?? createDefaultPrintTemplateLayout());
+  editingLayout.value = ensureFooterSection(baseLayout);
   mode.value = "edit";
 }
 
@@ -239,6 +309,24 @@ async function openCompose(t: PrintTemplate, contractId?: string | null) {
   for (const f of extractLayoutFieldBinds(t.layout ?? createDefaultPrintTemplateLayout())) {
     composeData.value[f.bind] = "";
   }
+
+  // Fetch engineer profile data and populate engineer fields
+  const [engineerProfile, userProfile] = await Promise.all([
+    fetchEngineerProfile(),
+    fetchUserProfile(),
+  ]);
+  if (engineerProfile || userProfile) {
+    const companyName = engineerProfile?.company_name || "";
+    composeData.value.engineer_name = engineerProfile?.full_name || userProfile?.name || "";
+    composeData.value.engineer_email = engineerProfile?.company_email || userProfile?.email || "";
+    composeData.value.engineer_phone = engineerProfile?.company_phone || userProfile?.phone || "";
+    composeData.value.engineer_company = companyName;
+    composeData.value.inspector_number = engineerProfile?.inspector_number || "";
+    composeData.value.company_name = companyName;
+    composeData.value.company_registration = engineerProfile?.company_registration || "";
+    composeData.value.engineer_address = engineerProfile?.address || "";
+  }
+
   try {
     const draft = contractId
       ? await api.printTemplates.getDraftForContract(t._id, contractId)
@@ -248,8 +336,8 @@ async function openCompose(t: PrintTemplate, contractId?: string | null) {
     }
   } catch { /* no draft yet */ }
   const url = contractId
-    ? `/settings/print-templates/layout/${t._id}/compose?contractId=${contractId}`
-    : `/settings/print-templates/layout/${t._id}/compose`;
+      ? `/print-templates/layout/${t._id}/compose?contractId=${contractId}`
+      : `/print-templates/layout/${t._id}/compose`;
   void router.replace(url);
 }
 
@@ -334,7 +422,7 @@ watch(
   () => route.path,
   () => {
     if (route.name === "print-templates-layout-compose") void openRouteCompose();
-    else if (route.path === "/settings/print-templates/layout") {
+    else if (route.name === "print-templates-layout") {
       mode.value = "list";
       void loadTemplates();
     }
@@ -343,7 +431,7 @@ watch(
 );
 
 onMounted(() => {
-  if (route.path === "/settings/print-templates/layout") void loadTemplates();
+  if (route.name === "print-templates-layout") void loadTemplates();
 });
 </script>
 
@@ -371,7 +459,7 @@ onMounted(() => {
 .pt-card__actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .compose-grid {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 320px 1fr;
   gap: 16px;
   align-items: start;
 }
@@ -384,7 +472,15 @@ onMounted(() => {
   overflow: auto;
 }
 .compose-form__title { margin: 0 0 10px; font-size: 14px; }
+
+.compose-preview-area {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
 .compose-preview {
+  width: 500px;
+  max-width: 100%;
   border: 1px solid var(--border-color);
   border-radius: 10px;
   overflow: hidden;

@@ -81,6 +81,10 @@ export interface PrintTemplateLayoutSignatureSection {
     inspectorText?: string;
     /** Company name */
     companyName?: string;
+    /** Certification paragraph above the signature. Empty string hides it. */
+    certificationText?: string;
+    /** Horizontal alignment of the inspector label and signature. */
+    align?: "right" | "center" | "left";
     style?: PrintTemplateSectionStyleOverride;
 }
 
@@ -96,6 +100,21 @@ export interface PrintTemplateLayoutImageSection {
     style?: PrintTemplateSectionStyleOverride;
 }
 
+export interface PrintTemplateLayoutFooterSection {
+    type: "footer";
+    enabled: boolean;
+    /** Left column (e.g., email) */
+    leftLabel?: string;
+    leftBind?: string;
+    /** Center column (e.g., company name) */
+    centerLabel?: string;
+    centerBind?: string;
+    /** Right column (e.g., phone) */
+    rightLabel?: string;
+    rightBind?: string;
+    style?: PrintTemplateSectionStyleOverride;
+}
+
 export type PrintTemplateSection =
     | PrintTemplateLayoutHeaderSection
     | PrintTemplateLayoutFieldsSection
@@ -103,7 +122,8 @@ export type PrintTemplateSection =
     | PrintTemplateLayoutFindingsSection
     | PrintTemplateLayoutStaticSection
     | PrintTemplateLayoutSignatureSection
-    | PrintTemplateLayoutImageSection;
+    | PrintTemplateLayoutImageSection
+    | PrintTemplateLayoutFooterSection;
 
 export interface PrintTemplateLayout {
     styles: PrintTemplateSectionStyles;
@@ -127,6 +147,14 @@ export const LAYOUT_FIELD_PRESETS: PrintTemplateSectionField[] = [
     {bind: "findings_general", label: "כללי"},
     {bind: "findings_remedy", label: "ליקוי"},
     {bind: "findings_deadline", label: "תוך (ימים)"},
+    {bind: "engineer_name", label: "שם הבודק"},
+    {bind: "engineer_phone", label: "טלפון בודק"},
+    {bind: "engineer_email", label: "מייל בודק"},
+    {bind: "engineer_company", label: "חברת הבודק"},
+    {bind: "inspector_number", label: "מספר בודק"},
+    {bind: "company_name", label: "שם חברה"},
+    {bind: "company_registration", label: "ח.פ / רישיון"},
+    {bind: "engineer_address", label: "כתובת בודק"},
 ];
 
 export const DEFAULT_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
@@ -141,6 +169,21 @@ export const DEFAULT_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
 
 const SECTION4_STATIC_TEXT =
     'אישור זה מותנה בתנאי שמבצעים שימוש ותחזוקה במכונת הרמה על פי חוקים ותקנות, תקנים רשמיים והוראות יצרן, תסקיר זה מייצג מצב מכונת הרמה ביום הבדיקה. שימוש בציוד אסור במידה ואירע בו ליקוי או פג תוקפו של תסקיר זה. תסקיר זה אינו מהווה תעודת אחריות או ביטוח. יש לעבוד לפי טבלת העומסים של המנוף. לעבודה על קרקע יציבה בלבד. חובה לפתוח מייצבים מקסימאלי בכל עבודה. הפעלת המנוף מותרת למנופאי מוסמך בלבד.';
+
+export const DEFAULT_SIGNATURE_CERTIFICATION =
+    "אני: {{engineer_name}} בעל תעודה מס': {{inspector_number}}\n" +
+    'שהוסמכתי ע"י מפקח עבודה ראשי על פי סימן ז\' לפרק ג\' לפקודת הבטיחות בעבודה (נוסח חדש) תש"ל 1970,\n' +
+    "לעשות ניסויים ובדיקות, מאשר כי בדקתי את הציוד המתואר בתסקיר לעיל בהתאם לתקנות\n" +
+    "פרטים מלאים: {{engineer_address}} טלפון: {{engineer_phone}}";
+
+export function signatureCertificationText(section: { certificationText?: string }): string | null {
+    if (section.certificationText === "") return null;
+    return section.certificationText ?? DEFAULT_SIGNATURE_CERTIFICATION;
+}
+
+export function fillLayoutPlaceholders(template: string, data: Record<string, string | undefined>): string {
+    return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => data[key] ?? "");
+}
 
 export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
     return {
@@ -194,7 +237,21 @@ export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
                 text: SECTION4_STATIC_TEXT,
             },
             {type: "signature", enabled: true},
+            createDefaultFooterSection(),
         ],
+    };
+}
+
+export function createDefaultFooterSection(): PrintTemplateLayoutFooterSection {
+    return {
+        type: "footer",
+        enabled: true,
+        leftLabel: "מספר בודק:",
+        leftBind: "inspector_number",
+        centerLabel: "",
+        centerBind: "company_name",
+        rightLabel: "ח.פ:",
+        rightBind: "company_registration",
     };
 }
 
@@ -219,6 +276,10 @@ export function extractLayoutFieldBinds(layout: PrintTemplateLayout): PrintTempl
         } else if (section.type === "findings") {
             for (const r of section.rows) add(r.subjectLabel.replace(/:$/, ""), r.bind);
             if (section.deadlineBind) add(section.deadlineLabel ?? "תוך", section.deadlineBind);
+        } else if (section.type === "footer") {
+            if (section.leftBind) add(section.leftLabel || section.leftBind, section.leftBind);
+            if (section.centerBind) add(section.centerLabel || section.centerBind, section.centerBind);
+            if (section.rightBind) add(section.rightLabel || section.rightBind, section.rightBind);
         }
     }
     return out;

@@ -3,21 +3,35 @@
     <PageHeader
         title="תבניות הדפסה"
         subtitle="בחרו את סוג העורך המתאים לכם"
-    />
+    >
+      <template #breadcrumb>
+        <span>תבניות הדפסה</span>
+      </template>
+    </PageHeader>
 
     <div class="pt-hub__grid">
-      <article class="pt-hub__card" @click="router.push('/settings/print-templates/layout')">
-        <div class="pt-hub__icon">📋</div>
+      <article class="pt-hub__card" @click="router.push('/print-templates/layout')">
+        <div class="pt-hub__icon">
+          <n-icon :component="DocumentTextOutline" :size="36"/>
+        </div>
         <h2>עורך פריסה פשוט</h2>
-        <p>סעיפים, שדות דינמיים וצבע מסגרת — מומלץ לתסקירים סטandardיים</p>
-        <button class="btn btn--primary" type="button">פתח עורך פריסה</button>
+        <p>סעיפים, שדות דינמיים וצבע מסגרת — מומלץ לתסקירים סטנדרטיים</p>
+        <button class="btn btn--primary" type="button">
+          <n-icon :component="CreateOutline"/>
+          פתח עורך פריסה
+        </button>
       </article>
 
-      <article class="pt-hub__card" @click="router.push('/settings/print-templates/excel')">
-        <div class="pt-hub__icon">📊</div>
+      <article class="pt-hub__card" @click="router.push('/print-templates/excel')">
+        <div class="pt-hub__icon">
+          <n-icon :component="GridOutline" :size="36"/>
+        </div>
         <h2>עורך Excel</h2>
         <p>טבלה מלאה עם תאים, מיזוג, גבולות לכל צד ועיצוב מתקדם</p>
-        <button class="btn btn--ghost" type="button">פתח עורך Excel</button>
+        <button class="btn btn--ghost" type="button">
+          <n-icon :component="AppsOutline"/>
+          פתח עורך Excel
+        </button>
       </article>
     </div>
   </div>
@@ -25,6 +39,8 @@
 
 <script lang="ts" setup>
 import {useRouter} from "vue-router";
+import {NIcon} from "naive-ui";
+import {AppsOutline, CreateOutline, DocumentTextOutline, GridOutline} from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 
 const router = useRouter();
@@ -49,7 +65,11 @@ const router = useRouter();
   border-color: var(--brand-color);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
-.pt-hub__icon { font-size: 32px; margin-bottom: 12px; }
+
+.pt-hub__icon {
+  margin-bottom: 12px;
+  color: var(--brand-color);
+}
 .pt-hub__card h2 {
   margin: 0 0 8px;
   font-size: 18px;

@@ -99,7 +99,7 @@ const dropdownItems = computed(() => [
     label: "הגדרת תבניות וציוד",
     key: "templatesGroup",
     children: [
-      { label: "תבניות מסקר", key: "printTemplates" },
+      {label: "תבניות הדפסה", key: "printTemplates"},
       { label: "תבניות אימייל", key: "emailTemplates" },
       { label: "הגדרת ציוד", key: "equipment" },
     ],
@@ -130,7 +130,7 @@ async function handleSelect(key: string) {
   if (key === "profile") {
     router.push("/profile");
   } else if (key === "printTemplates") {
-    router.push("/settings/print-templates");
+    router.push("/print-templates");
   } else if (key === "emailTemplates") {
     router.push("/settings/email-templates");
   } else if (key === "equipment") {

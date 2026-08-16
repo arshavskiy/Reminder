@@ -520,6 +520,49 @@ export function registerTemplateRoutes(app: express.Application) {
 
       res.json({ logo_path: url, url, key });
     } catch (err) {
+        const message = String(err);
+        res.status(message.includes("Unauthorized") ? 401 : 500).json({error: message});
+    }
+  });
+
+    // Upload a user asset (signature / stamp) to S3 images/{userId}/assets/
+    app.post("/api/assets/user", upload.single("file"), async (req, res) => {
+        try {
+            const userId = await currentUserId(req);
+            const file = req.file;
+            if (!file) {
+                res.status(400).json({error: "file required"});
+                return;
+            }
+            if (!file.mimetype.startsWith("image/")) {
+                res.status(400).json({error: "only images allowed"});
+                return;
+            }
+            const ext = extname(file.originalname).toLowerCase() || ".png";
+            if (![".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp"].includes(ext)) {
+                res.status(400).json({error: "only png/jpg/svg/gif/webp allowed"});
+                return;
+            }
+            const kind = String(req.body?.kind ?? "signature").replace(/[^a-z0-9_-]/gi, "") || "signature";
+            const {
+                publicBucketEnabled,
+                uploadBufferToPublicSpaces,
+                spacesEnabled,
+                uploadBufferToSpaces,
+            } = await import("../storage/spaces.js");
+
+            const key = `images/${userId}/assets/${kind}_${Date.now()}${ext}`;
+            let url: string;
+            if (publicBucketEnabled()) {
+                url = await uploadBufferToPublicSpaces(file.buffer, key, file.mimetype);
+            } else if (spacesEnabled()) {
+                url = await uploadBufferToSpaces(file.buffer, key, file.mimetype);
+            } else {
+                res.status(500).json({error: "object_storage_not_configured"});
+                return;
+            }
+            res.json({url, key});
+        } catch (err) {
       const message = String(err);
       res.status(message.includes("Unauthorized") ? 401 : 500).json({ error: message });
     }

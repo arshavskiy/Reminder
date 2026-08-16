@@ -10,6 +10,28 @@ import {getDataDir} from "../settings.js";
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces.js";
 import {renderSectionTemplateHtml} from "./printTemplateLayoutRender.js";
 
+async function getEngineerData(userId: string): Promise<Record<string, string>> {
+    try {
+        const [engineerProfile, user] = await Promise.all([
+            col("engineer_profiles").findOne({user_id: userId}),
+            col("users").findOne({_id: tryObjectId(userId)}),
+        ]) as [any, any];
+        const companyName = engineerProfile?.company_name || user?.company_name || "";
+        return {
+            engineer_name: engineerProfile?.full_name || user?.name || "",
+            engineer_email: engineerProfile?.company_email || user?.email || "",
+            engineer_phone: engineerProfile?.company_phone || user?.phone || "",
+            engineer_company: companyName,
+            inspector_number: engineerProfile?.inspector_number || "",
+            company_name: companyName,
+            company_registration: engineerProfile?.company_registration || "",
+            engineer_address: engineerProfile?.address || "",
+        };
+    } catch {
+        return {};
+    }
+}
+
 function tryObjectId(id: string) {
   try { return new ObjectId(id); } catch { return id as any; }
 }
@@ -192,7 +214,9 @@ export function registerPrintTemplateRoutes(app: Express) {
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
     const t = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId }) as any;
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
-    const data: Record<string, unknown> = req.body.data ?? {};
+      const clientData: Record<string, unknown> = req.body.data ?? {};
+      const engineerDefaults = await getEngineerData(auth.userId);
+      const data: Record<string, unknown> = {...engineerDefaults, ...clientData};
     try {
       const pdf = await renderTemplatePdf(t, data);
       res.set("Content-Type", "application/pdf");
@@ -208,7 +232,9 @@ export function registerPrintTemplateRoutes(app: Express) {
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
     const t = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId }) as any;
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
-    const data: Record<string, unknown> = req.body.data ?? {};
+      const clientData: Record<string, unknown> = req.body.data ?? {};
+      const engineerDefaults = await getEngineerData(auth.userId);
+      const data: Record<string, unknown> = {...engineerDefaults, ...clientData};
     const meta = sanitizeDraftMeta(req.body?.meta ?? {});
     try {
       const pdf = Buffer.from(await renderTemplatePdf(t, data));

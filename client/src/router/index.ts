@@ -42,15 +42,42 @@ export const router = createRouter({
     { path: "/equipment", component: EquipmentPage, meta: { feature: FEATURES.pages.equipment } },
     { path: "/reports", component: ReportsPage, meta: { feature: FEATURES.pages.reports } },
     { path: "/field", component: () => import("../views/FieldPage.vue"), meta: { feature: FEATURES.pages.field } },
-    { path: "/settings/print-templates", component: () => import("../views/PrintTemplatesHubPage.vue"), meta: { feature: FEATURES.pages.printTemplates } },
-    { path: "/settings/print-templates/excel", component: () => import("../views/PrintTemplatesPage.vue"), meta: { feature: FEATURES.pages.printTemplates } },
-    { path: "/settings/print-templates/layout", name: "print-templates-layout", component: () => import("../views/SimplePrintTemplatesPage.vue"), meta: { feature: FEATURES.pages.printTemplates } },
-    { path: "/settings/print-templates/layout/:templateId/compose", name: "print-templates-layout-compose", component: () => import("../views/SimplePrintTemplatesPage.vue"), meta: { feature: FEATURES.pages.printTemplates } },
+      {
+          path: "/print-templates",
+          component: () => import("../views/PrintTemplatesHubPage.vue"),
+          meta: {feature: FEATURES.pages.printTemplates}
+      },
+      {
+          path: "/print-templates/excel",
+          component: () => import("../views/PrintTemplatesPage.vue"),
+          meta: {feature: FEATURES.pages.printTemplates}
+      },
+      {
+          path: "/print-templates/layout",
+          name: "print-templates-layout",
+          component: () => import("../views/SimplePrintTemplatesPage.vue"),
+          meta: {feature: FEATURES.pages.printTemplates}
+      },
+      {
+          path: "/print-templates/layout/:templateId/compose",
+          name: "print-templates-layout-compose",
+          component: () => import("../views/SimplePrintTemplatesPage.vue"),
+          meta: {feature: FEATURES.pages.printTemplates}
+      },
     { path: "/print-templates/:templateId/draft", component: () => import("../views/PrintTemplatesPage.vue"), meta: { feature: FEATURES.pages.printTemplates } },
+      {path: "/settings/print-templates", redirect: "/print-templates"},
+      {path: "/settings/print-templates/excel", redirect: "/print-templates/excel"},
+      {path: "/settings/print-templates/layout", redirect: "/print-templates/layout"},
+      {
+          path: "/settings/print-templates/layout/:templateId/compose",
+          redirect: (to) => ({
+              path: `/print-templates/layout/${to.params.templateId}/compose`,
+              query: to.query,
+          }),
+      },
     { path: "/doc-templates", redirect: "/settings/doc-templates", meta: { feature: FEATURES.pages.docTemplates } },
     { path: "/email-templates", redirect: "/settings/email-templates", meta: { feature: FEATURES.pages.emailTemplates } },
-    { path: "/print-templates", redirect: "/settings/print-templates", meta: { feature: FEATURES.pages.printTemplates } },
-    { path: "/compose", redirect: "/settings/print-templates", meta: { feature: FEATURES.pages.printTemplates } },
+      {path: "/compose", redirect: "/print-templates", meta: {feature: FEATURES.pages.printTemplates}},
     { path: "/gmail-inbox", component: GmailInboxPage },
     { path: "/admin", component: AdminPage, meta: { requireRole: "admin" } },
     { path: "/403", component: () => import("../views/ForbiddenPage.vue") },

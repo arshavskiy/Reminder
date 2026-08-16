@@ -80,8 +80,9 @@ export interface HydraulicCheckRequest {
   };
   check_date?: string;
   next_inspection_date?: string;
-  interval_months?: 4 | 6 | 12 | 14;
+  interval_months?: number;
   skip_reminders?: boolean;
+  editor_type?: "grid" | "sections";
 }
 
 export interface HydraulicCheckResult {
@@ -619,6 +620,10 @@ export const api = {
     },
     getSignedPhotos: (id: string) =>
       get<{ photos: { url: string; key: string; taken_at: string }[] }>(`/equipment/${id}/photos/signed`),
+    categories: () => get<{ id: string; value: string; label: string }[]>("/equipment/categories"),
+    createCategory: (value: string, label: string) =>
+        post<{ id: string; value: string; label: string; exists?: boolean }>("/equipment/categories", {value, label}),
+    deleteCategory: (id: string) => del(`/equipment/categories/${id}`),
   },
 
   printTemplates: {
@@ -638,6 +643,7 @@ export const api = {
     getContractDraft: (contractId: string) => get<{
       template_id: string;
       template_name: string;
+      editor_type?: "grid" | "sections";
       data: Record<string, string>;
       meta?: Record<string, unknown>;
       client_id?: string | null;
@@ -693,9 +699,17 @@ export const api = {
     uploadLogo: async (file: File) => {
       const fd = new FormData();
       fd.append("logo", file);
-      const res = await fetch("/api/assets/logo", { method: "POST", body: fd });
+      const res = await fetch(`${BASE}/assets/logo`, {method: "POST", body: fd, credentials: "include"});
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       return res.json() as Promise<{ logo_path: string; url?: string; key?: string }>;
+    },
+    uploadUserAsset: async (file: File, kind = "signature") => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("kind", kind);
+      const res = await fetch(`${BASE}/assets/user`, {method: "POST", body: fd, credentials: "include"});
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `Upload failed: ${res.status}`);
+      return res.json() as Promise<{ url: string; key: string }>;
     },
     url: (name: string) => /^https?:\/\//i.test(name) ? name : `${BASE}/assets/${name}`,
   },

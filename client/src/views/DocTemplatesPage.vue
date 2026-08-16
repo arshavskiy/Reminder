@@ -4,7 +4,12 @@
 <!--      <h2 style="margin: 0">תבניות מסמכים</h2>-->
       <span></span>
       <n-space>
-        <n-button @click="showGenerate = true">✨ צור תבנית מ-AI</n-button>
+        <n-button @click="showGenerate = true">
+          <template #icon>
+            <n-icon :component="FlashOutline"/>
+          </template>
+          צור תבנית מ-AI
+        </n-button>
         <n-button type="primary" @click="newTemplate">+ תבנית חדשה</n-button>
       </n-space>
     </n-space>
@@ -107,7 +112,11 @@
                   />
                   <n-tooltip placement="bottom">
                     <template #trigger>
-                      <n-button :loading="suggestingKind" secondary @click="suggestKind">✨</n-button>
+                      <n-button :loading="suggestingKind" secondary @click="suggestKind">
+                        <template #icon>
+                          <n-icon :component="FlashOutline"/>
+                        </template>
+                      </n-button>
                     </template>
                     AI יציע סוג מסמך לפי שם, תיאור ושדות
                   </n-tooltip>
@@ -199,7 +208,10 @@
             accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg,.txt"
           >
             <n-button :loading="testing" secondary size="small" style="width: 100%">
-              {{ testFile ? `📄 ${testFile.name}` : '📂 העלה קובץ לבדיקה' }}
+              <template #icon>
+                <n-icon :component="testFile ? DocumentOutline : CloudUploadOutline"/>
+              </template>
+              {{ testFile ? testFile.name : 'העלה קובץ לבדיקה' }}
             </n-button>
           </n-upload>
 
@@ -257,6 +269,7 @@ import {
   NFormItem,
   NGi,
   NGrid,
+  NIcon,
   NInput,
   NInputGroup,
   NModal,
@@ -271,6 +284,7 @@ import {
   NUploadDragger,
   useMessage,
 } from "naive-ui";
+import {CloudUploadOutline, DocumentOutline, FlashOutline,} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import type {DocTemplate, DocumentKind, FieldType, TemplateField} from "@shared/types.js";
 

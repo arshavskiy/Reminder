@@ -20,6 +20,15 @@
             @update:value="setBorderWidth"
         />
       </n-form-item>
+      <n-form-item :show-feedback="false" label="הוסף סעיף" label-placement="left">
+        <n-select
+            v-model:value="newSectionType"
+            :options="sectionTypeOptions"
+            placeholder="בחר סוג"
+            style="width: 140px"
+            @update:value="addNewSection"
+        />
+      </n-form-item>
     </div>
 
     <div class="layout-editor__body">
@@ -157,28 +166,26 @@
           <template v-else-if="section.type === 'signature'">
             <n-checkbox v-model:checked="section.enabled">הצג אזור חתימה</n-checkbox>
             <template v-if="section.enabled">
-              <n-form-item label="תמונת חתימה/חותמת (URL)" :show-feedback="false" style="margin-top:8px">
-                <n-input
-                    :value="section.imageSrc ?? ''"
-                    placeholder="https://... או data:image/..."
-                    size="small"
-                    @update:value="updateSignatureField(si, 'imageSrc', $event)"
-                />
+              <n-form-item :show-feedback="false" label="תמונת חתימה/חותמת" style="margin-top:8px">
+                <div class="sig-upload">
+                  <img v-if="section.imageSrc" :src="section.imageSrc" alt="חתימה" class="sig-upload__preview">
+                  <button
+                      :disabled="uploadingSignature"
+                      class="btn btn--xs btn--ghost"
+                      type="button"
+                      @click="triggerSignatureUpload(si)"
+                  >
+                    {{ uploadingSignature ? "מעלה..." : (section.imageSrc ? "החלף חתימה" : "העלה חתימה") }}
+                  </button>
+                </div>
               </n-form-item>
-              <n-form-item label="פרטי בודק" :show-feedback="false">
+              <n-form-item :show-feedback="false" label="פסקת אישור">
                 <n-input
-                    :value="section.inspectorText ?? ''"
-                    placeholder="שם, מס׳ תעודה, טלפון"
+                    :rows="4"
+                    :value="section.certificationText ?? defaultCertification"
+                    type="textarea"
                     size="small"
-                    @update:value="updateSignatureField(si, 'inspectorText', $event)"
-                />
-              </n-form-item>
-              <n-form-item label="שם חברה" :show-feedback="false">
-                <n-input
-                    :value="section.companyName ?? ''"
-                    placeholder="הנדסה וניהול בע״מ"
-                    size="small"
-                    @update:value="updateSignatureField(si, 'companyName', $event)"
+                    @update:value="updateSignatureField(si, 'certificationText', $event)"
                 />
               </n-form-item>
             </template>
@@ -204,12 +211,78 @@
               <n-form-item label="יישור" :show-feedback="false">
                 <n-select
                     :value="section.align ?? 'center'"
-                    :options="[{ label: 'ימין', value: 'right' }, { label: 'מרכז', value: 'center' }, { label: 'שמאל', value: 'left' }]"
+                    :options="alignOptions"
                     size="small"
                     @update:value="updateImageField(si, 'align', $event)"
                 />
               </n-form-item>
             </div>
+          </template>
+
+          <template v-else-if="section.type === 'footer'">
+            <n-checkbox v-model:checked="section.enabled">הצג כותרת תחתונה</n-checkbox>
+            <template v-if="section.enabled">
+              <div class="field-row" style="margin-top:8px">
+                <n-form-item :show-feedback="false" label="עמודה שמאלית">
+                  <n-input
+                      :value="section.leftLabel ?? ''"
+                      placeholder="תווית (למשל: דואר אלקטרוני:)"
+                      size="small"
+                      @update:value="updateFooterField(si, 'leftLabel', $event)"
+                  />
+                </n-form-item>
+                <n-select
+                    :options="bindOptions"
+                    :value="section.leftBind ?? ''"
+                    clearable
+                    filterable
+                    placeholder="bind"
+                    size="small"
+                    tag
+                    @update:value="updateFooterField(si, 'leftBind', $event)"
+                />
+              </div>
+              <div class="field-row">
+                <n-form-item :show-feedback="false" label="עמודה מרכזית">
+                  <n-input
+                      :value="section.centerLabel ?? ''"
+                      placeholder="תווית (אופציונלי)"
+                      size="small"
+                      @update:value="updateFooterField(si, 'centerLabel', $event)"
+                  />
+                </n-form-item>
+                <n-select
+                    :options="bindOptions"
+                    :value="section.centerBind ?? ''"
+                    clearable
+                    filterable
+                    placeholder="bind"
+                    size="small"
+                    tag
+                    @update:value="updateFooterField(si, 'centerBind', $event)"
+                />
+              </div>
+              <div class="field-row">
+                <n-form-item :show-feedback="false" label="עמודה ימנית">
+                  <n-input
+                      :value="section.rightLabel ?? ''"
+                      placeholder="תווית (למשל: נייד:)"
+                      size="small"
+                      @update:value="updateFooterField(si, 'rightLabel', $event)"
+                  />
+                </n-form-item>
+                <n-select
+                    :options="bindOptions"
+                    :value="section.rightBind ?? ''"
+                    clearable
+                    filterable
+                    placeholder="bind"
+                    size="small"
+                    tag
+                    @update:value="updateFooterField(si, 'rightBind', $event)"
+                />
+              </div>
+            </template>
           </template>
         </article>
       </div>
@@ -219,15 +292,25 @@
         <LayoutPreviewFrame :layout="layout" :data="previewData" />
       </aside>
     </div>
+    <input
+        ref="signatureFileInput"
+        accept="image/*"
+        class="sig-upload__input"
+        type="file"
+        @change="onSignatureFileChange"
+    />
   </div>
 </template>
 
 <script lang="ts" setup>
-import {computed} from "vue";
-import {NCheckbox, NFormItem, NInput, NInputNumber, NSelect} from "naive-ui";
+import {computed, onMounted, ref} from "vue";
+import {NCheckbox, NFormItem, NInput, NInputNumber, NSelect, useMessage} from "naive-ui";
 import LayoutPreviewFrame from "./LayoutPreviewFrame.vue";
+import {api} from "../../services/apiService.js";
 import {
   clonePrintTemplateLayout,
+  createDefaultFooterSection,
+  DEFAULT_SIGNATURE_CERTIFICATION,
   LAYOUT_BORDER_COLORS,
   LAYOUT_FIELD_PRESETS,
   type PrintTemplateLayout,
@@ -256,8 +339,31 @@ const columnsOptions = [
   { label: "3", value: 3 },
   { label: "4", value: 4 },
 ];
+const alignOptions = [
+  {label: "ימין", value: "right"},
+  {label: "מרכז", value: "center"},
+  {label: "שמאל", value: "left"},
+];
+
+const newSectionType = ref<string | null>(null);
+const sectionTypeOptions = [
+  {label: "כותרת", value: "header"},
+  {label: "שדות", value: "fields"},
+  {label: "טבלת ציוד", value: "equipment_table"},
+  {label: "ליקויים", value: "findings"},
+  {label: "טקסט קבוע", value: "static_text"},
+  {label: "חתימה", value: "signature"},
+  {label: "תמונה", value: "image"},
+  {label: "כותרת תחתונה", value: "footer"},
+];
 
 const bindOptions = LAYOUT_FIELD_PRESETS.map((f) => ({ label: `${f.label} (${f.bind})`, value: f.bind }));
+const message = useMessage();
+const signatureFileInput = ref<HTMLInputElement | null>(null);
+const signatureUploadIndex = ref<number | null>(null);
+const uploadingSignature = ref(false);
+const engineerPreview = ref<Record<string, string>>({});
+const defaultCertification = DEFAULT_SIGNATURE_CERTIFICATION;
 
 const previewData = computed(() => {
   const sample: Record<string, string> = {};
@@ -269,7 +375,40 @@ const previewData = computed(() => {
   sample.load_radius = "2.5";
   sample.load_capacity_test = "2500";
   sample.load_capacity_work = "2000";
-  return sample;
+  sample.engineer_name = "ישראל ישראלי";
+  sample.engineer_phone = "050-1234567";
+  sample.engineer_email = "engineer@example.com";
+  sample.engineer_company = "הנדסה ובדיקות בע״מ";
+  sample.inspector_number = "12345";
+  sample.company_name = "הנדסה ובדיקות בע״מ";
+  sample.company_registration = "514123456";
+  sample.engineer_address = "רח׳ העצמאות 36 אשדוד";
+  const filled = Object.fromEntries(
+      Object.entries(engineerPreview.value).filter(([, value]) => value),
+  );
+  return {...sample, ...filled};
+});
+
+onMounted(async () => {
+  try {
+    const server = import.meta.env.VITE_API_URL || "";
+    const res = await fetch(`${server}/api/profile/engineer`, {credentials: "include"});
+    if (!res.ok) return;
+    const profile = await res.json();
+    const companyName = profile?.company_name ?? "";
+    engineerPreview.value = {
+      inspector_number: profile?.inspector_number ?? "",
+      company_name: companyName,
+      company_registration: profile?.company_registration ?? "",
+      engineer_company: companyName,
+      engineer_email: profile?.company_email ?? "",
+      engineer_phone: profile?.company_phone ?? "",
+      engineer_name: profile?.full_name ?? "",
+      engineer_address: profile?.address ?? "",
+    };
+  } catch {
+    /* preview keeps sample values */
+  }
 });
 
 function patchLayout(mutator: (layout: PrintTemplateLayout) => void) {
@@ -286,6 +425,45 @@ function setBorderWidth(value: "thin" | "medium" | "thick") {
   patchLayout((l) => { l.styles.borderWidth = value; });
 }
 
+function addNewSection(type: string | null) {
+  if (!type) return;
+  newSectionType.value = null;
+
+  let newSection: PrintTemplateSection;
+  switch (type) {
+    case "header":
+      newSection = {type: "header", title: "", subtitle: "", fields: []};
+      break;
+    case "fields":
+      newSection = {type: "fields", title: "", fields: [], columns: 3};
+      break;
+    case "equipment_table":
+      newSection = {type: "equipment_table", title: "", columns: []};
+      break;
+    case "findings":
+      newSection = {type: "findings", title: "", rows: []};
+      break;
+    case "static_text":
+      newSection = {type: "static_text", title: "", text: ""};
+      break;
+    case "signature":
+      newSection = {type: "signature", enabled: true};
+      break;
+    case "image":
+      newSection = {type: "image", src: ""};
+      break;
+    case "footer":
+      newSection = createDefaultFooterSection();
+      break;
+    default:
+      return;
+  }
+
+  patchLayout((l) => {
+    l.sections.push(newSection);
+  });
+}
+
 function sectionTypeLabel(section: PrintTemplateSection): string {
   const map: Record<string, string> = {
     header: "כותרת",
@@ -295,11 +473,16 @@ function sectionTypeLabel(section: PrintTemplateSection): string {
     static_text: "טקסט קבוע",
     signature: "חתימה",
     image: "תמונה",
+    footer: "כותרת תחתונה",
   };
   return map[section.type] ?? section.type;
 }
 
-function updateSignatureField(sectionIndex: number, field: "imageSrc" | "inspectorText" | "companyName", value: string) {
+function updateSignatureField(
+    sectionIndex: number,
+    field: "imageSrc" | "inspectorText" | "companyName" | "certificationText" | "align",
+    value: string,
+) {
   patchLayout((l) => {
     const target = l.sections[sectionIndex];
     if (target?.type === "signature") {
@@ -308,10 +491,43 @@ function updateSignatureField(sectionIndex: number, field: "imageSrc" | "inspect
   });
 }
 
+function triggerSignatureUpload(sectionIndex: number) {
+  signatureUploadIndex.value = sectionIndex;
+  signatureFileInput.value?.click();
+}
+
+async function onSignatureFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  const sectionIndex = signatureUploadIndex.value;
+  input.value = "";
+  if (!file || sectionIndex == null) return;
+  uploadingSignature.value = true;
+  try {
+    const uploaded = await api.assets.uploadUserAsset(file, "signature");
+    updateSignatureField(sectionIndex, "imageSrc", uploaded.url);
+    message.success("החתימה הועלתה");
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "העלאת החתימה נכשלה");
+  } finally {
+    uploadingSignature.value = false;
+    signatureUploadIndex.value = null;
+  }
+}
+
 function updateImageField(sectionIndex: number, field: string, value: unknown) {
   patchLayout((l) => {
     const target = l.sections[sectionIndex];
     if (target?.type === "image") {
+      (target as Record<string, unknown>)[field] = value;
+    }
+  });
+}
+
+function updateFooterField(sectionIndex: number, field: string, value: unknown) {
+  patchLayout((l) => {
+    const target = l.sections[sectionIndex];
+    if (target?.type === "footer") {
       (target as Record<string, unknown>)[field] = value;
     }
   });
@@ -413,7 +629,7 @@ function removeFindingRow(sectionIndex: number, rowIndex: number) {
 .layout-editor__name { min-width: 260px; }
 .layout-editor__body {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: 1fr 500px;
   gap: 16px;
   align-items: start;
 }
@@ -466,6 +682,25 @@ function removeFindingRow(sectionIndex: number, rowIndex: number) {
   font-weight: 600;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-color);
+}
+
+.sig-upload {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sig-upload__preview {
+  max-height: 56px;
+  max-width: 140px;
+  object-fit: contain;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.sig-upload__input {
+  display: none;
 }
 @media (max-width: 960px) {
   .layout-editor__body { grid-template-columns: 1fr; }

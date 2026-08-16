@@ -9,11 +9,44 @@
         <span>{{ doc.file_name }}</span>
       </template>
       <template #actions>
-        <StatusBadge :status="doc.processing_status" />
-        <n-button v-if="!props.docId" size="small" @click="$router.back()">   חזרה</n-button>
-        <n-button :loading="downloading" size="small" @click="openDownload"> הורד</n-button>
-        <n-button v-if="canExtractDocument" :loading="extracting" size="small" type="primary" @click="rerunExtract">✨ חלץ AI</n-button>
-        <n-button :loading="deleting" size="small" type="error" @click="deleteDoc">🗑 מחק</n-button>
+        <div class="doc-detail-actions">
+          <StatusBadge :status="doc.processing_status"/>
+          <button v-if="!props.docId" class="rbtn rbtn--ghost" type="button" @click="$router.back()">
+            <n-icon :component="ArrowBackOutline" class="btn-icon"/>
+            חזרה
+          </button>
+          <button
+              :class="{ 'rbtn--loading': downloading }"
+              :disabled="downloading"
+              class="rbtn rbtn--ghost"
+              type="button"
+              @click="openDownload"
+          >
+            <n-icon :component="DownloadOutline" class="btn-icon"/>
+            הורד
+          </button>
+          <button
+              v-if="canExtractDocument"
+              :class="{ 'rbtn--loading': extracting }"
+              :disabled="extracting"
+              class="rbtn rbtn--primary"
+              type="button"
+              @click="rerunExtract"
+          >
+            <n-icon :component="FlashOutline" class="btn-icon"/>
+            חלץ AI
+          </button>
+          <button
+              :class="{ 'rbtn--loading': deleting }"
+              :disabled="deleting"
+              class="rbtn rbtn--danger"
+              type="button"
+              @click="deleteDoc"
+          >
+            <n-icon :component="TrashOutline" class="btn-icon"/>
+            מחק
+          </button>
+        </div>
       </template>
     </PageHeader>
 
@@ -73,13 +106,24 @@
             </div>
             <div v-else-if="isSpreadsheet" class="preview-empty">
               <span>אין עדיין טקסט טבלאי להצגה</span>
-              <n-button v-if="canExtractDocument" :loading="extracting" class="mt-3" size="small" type="primary" @click="rerunExtract">
+              <button
+                  v-if="canExtractDocument"
+                  :class="{ 'rbtn--loading': extracting }"
+                  :disabled="extracting"
+                  class="rbtn rbtn--primary mt-3"
+                  type="button"
+                  @click="rerunExtract"
+              >
+                <n-icon :component="FlashOutline" class="btn-icon"/>
                 עבד את הקובץ מחדש
-              </n-button>
+              </button>
             </div>
             <div v-else class="preview-empty">
               <span>אין תצוגה מקדימה זמינה לסוג קובץ זה</span>
-              <n-button class="mt-3" size="small" @click="openExternal">פתח בחלון חיצוני ↗</n-button>
+              <button class="rbtn rbtn--ghost mt-3" type="button" @click="openExternal">
+                <n-icon :component="OpenOutline" class="btn-icon"/>
+                פתח בחלון חיצוני
+              </button>
             </div>
           </div>
         </div>
@@ -108,12 +152,18 @@
               </div>
             </div>
             <div class="data-card__head-actions">
-              <n-button :loading="savingContractSide" size="small" type="primary" @click="saveContractSidePanel">
+              <button
+                  :class="{ 'btn--loading': savingContractSide }"
+                  :disabled="savingContractSide"
+                  class="btn btn--primary btn--xs"
+                  type="button"
+                  @click="saveContractSidePanel"
+              >
                 שמור
-              </n-button>
-              <n-button size="small" @click="openLinkedContract">
+              </button>
+              <button class="btn btn--ghost btn--xs" type="button" @click="openLinkedContract">
                 פתח תסקיר
-              </n-button>
+              </button>
             </div>
           </div>
           <div class="data-card__body">
@@ -214,23 +264,42 @@
                 {{ extractedFields.filter(f => f.value !== null && f.value !== '').length }} שדות
               </n-tag>
               <template v-if="editingFields">
-                <n-button size="small" @click="cancelEdit">ביטול</n-button>
-                <n-button :loading="savingFields" size="small" type="primary" @click="saveFields">שמור</n-button>
+                <button class="btn btn--ghost btn--xs" type="button" @click="cancelEdit">ביטול</button>
+                <button
+                    :class="{ 'btn--loading': savingFields }"
+                    :disabled="savingFields"
+                    class="btn btn--primary btn--xs"
+                    type="button"
+                    @click="saveFields"
+                >
+                  שמור
+                </button>
               </template>
               <template v-else-if="extractionRaw">
-                <n-button size="small" @click="showEmptyFields = !showEmptyFields">
+                <button class="btn btn--ghost btn--xs" type="button" @click="showEmptyFields = !showEmptyFields">
                   {{ showEmptyFields ? 'הסתר ריקים' : 'הצג הכל' }}
-                </n-button>
-                <n-button size="small" @click="startEdit">✎ ערוך</n-button>
+                </button>
+                <button class="btn btn--ghost btn--xs" type="button" @click="startEdit">
+                  <n-icon :component="CreateOutline" class="btn-icon"/>
+                  ערוך
+                </button>
               </template>
             </div>
           </div>
           <div class="data-card__body">
             <div v-if="!extractionRaw" class="data-empty">
               <span>עדיין לא חולצו נתונים מהמסמך</span>
-              <n-button v-if="canExtractDocument" :loading="extracting" class="mt-3" size="small" type="primary" @click="rerunExtract">
-                ✨ הרץ חילוץ AI
-              </n-button>
+              <button
+                  v-if="canExtractDocument"
+                  :class="{ 'rbtn--loading': extracting }"
+                  :disabled="extracting"
+                  class="rbtn rbtn--primary mt-3"
+                  type="button"
+                  @click="rerunExtract"
+              >
+                <n-icon :component="FlashOutline" class="btn-icon"/>
+                הרץ חילוץ AI
+              </button>
             </div>
             <div v-else class="fields-table">
               <div
@@ -298,12 +367,12 @@ import {computed, onMounted, reactive, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
   NAlert,
-  NButton,
   NDataTable,
   NForm,
   NFormItem,
   NGi,
   NGrid,
+  NIcon,
   NInput,
   NScrollbar,
   NSpin,
@@ -311,6 +380,14 @@ import {
   useDialog,
   useMessage,
 } from "naive-ui";
+import {
+  ArrowBackOutline,
+  CreateOutline,
+  DownloadOutline,
+  FlashOutline,
+  OpenOutline,
+  TrashOutline
+} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
@@ -793,6 +870,82 @@ onMounted(async () => {
 <style scoped>
 .doc-detail { padding-bottom: 24px; }
 
+.doc-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.rbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
+}
+
+.rbtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.rbtn:active {
+  transform: scale(0.97);
+}
+
+.rbtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.rbtn--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--text-inverse, #fff);
+  font-weight: 600;
+}
+
+.rbtn--danger {
+  background: transparent;
+  border-color: rgba(208, 48, 80, 0.35);
+  color: #d03050;
+}
+
+.rbtn--loading {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.rbtn--loading::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-inline-start-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex: 0 0 auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .linked-contracts {
   display: flex;
   flex-direction: column;
@@ -1056,4 +1209,11 @@ onMounted(async () => {
 
 /* ── Loading ─────────────────────────────────────────────────────────────── */
 .loading-center { padding: 80px; display: flex; justify-content: center; }
+
+@media (max-width: 720px) {
+  .doc-detail-actions,
+  .rbtn {
+    width: 100%;
+  }
+}
 </style>

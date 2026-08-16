@@ -301,10 +301,16 @@ html[dir="rtl"] .n-base-selection .n-base-suffix {
   right: auto;
 }
 html[dir="rtl"] .n-base-selection .n-base-selection-tag-wrapper,
-html[dir="rtl"] .n-base-selection-label,
-html[dir="rtl"] .n-base-selection-input {
+html[dir="rtl"] .n-base-selection .n-base-selection-label,
+html[dir="rtl"] .n-base-selection .n-base-selection-input {
   padding-right: 12px;
   padding-left: 30px;
+}
+
+/* Ensure the selected value text is visible and properly aligned in RTL */
+html[dir="rtl"] .n-base-selection .n-base-selection-label {
+    direction: rtl;
+    text-align: right;
 }
 /* The clear-x lives inside .n-base-clear and only appears on hover; its
    absolute positioning needs the same flip. */
@@ -503,6 +509,12 @@ html[dir="rtl"] .n-base-clear {
 .btn--ghost-active {
   background: var(--bg-hover);
   border-color: var(--brand-color);
+}
+
+.btn-icon {
+    margin-left: 4px;
+    vertical-align: middle;
+    font-size: 1em;
 }
 
 /* ── Tags ────────────────────────────────────────────────────────────────── */

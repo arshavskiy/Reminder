@@ -9,13 +9,15 @@
       <template #actions>
         <div class="clients-actions">
           <button :disabled="store.loading" class="rbtn rbtn--ghost" @click="refresh">
-            <span :class="{ 'refresh-icon--spin': store.loading }" class="refresh-icon">↻</span>
+            <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
             רענן
           </button>
           <button class="rbtn rbtn--primary" type="button" @click="showCreate = true">
-            + צור לקוח
+            <n-icon :component="AddOutline" class="btn-icon"/>
+            צור לקוח
           </button>
           <button v-if="store.rows.length" class="rbtn rbtn--danger" type="button" @click="doDeleteAll">
+            <n-icon :component="TrashOutline" class="btn-icon"/>
             מחק הכל
           </button>
           <div v-if="store.rows.length" class="bulk-action-anchor">
@@ -26,7 +28,8 @@
                 type="button"
                 @click="toggleBulkMode"
             >
-              ☑ בחירה מרובה
+              <n-icon :component="CheckboxOutline" class="btn-icon"/>
+              בחירה מרובה
               <span v-if="selectedClientKeys.length">({{ selectedClientKeys.length }})</span>
             </button>
             <div v-if="bulkMode && selectedClientKeys.length > 0" class="bulk-action-anchor__actions">
@@ -144,7 +147,7 @@ import {
   NRadioGroup,
   useMessage
 } from "naive-ui";
-import {AddOutline, SearchOutline, TrashOutline,} from "@vicons/ionicons5";
+import {AddOutline, CheckboxOutline, RefreshOutline, SearchOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useClientsStore} from "../stores/clients.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import PageHeader from "../components/PageHeader.vue";

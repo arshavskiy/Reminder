@@ -175,6 +175,8 @@ export interface DocumentClient {
   role: string | null;
 }
 
+export type PrintEditorType = "grid" | "sections";
+
 export interface Contract {
   id: number;
   document_id: number;
@@ -190,6 +192,7 @@ export interface Contract {
   manual_fields?: ContractManualFields | null;
   confidence: "high" | "medium" | "low";
   status: ContractStatus;
+    editor_type?: PrintEditorType | null;
   created_at: string;
   updated_at: string;
 }

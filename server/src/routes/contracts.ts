@@ -391,6 +391,7 @@ export function registerContractRoutes(app: express.Application) {
     res.json({
       template_id: draft.template_id,
       template_name: template?.name ?? "תבנית",
+        editor_type: contract.editor_type ?? template?.editorType ?? "grid",
       data: draft.data ?? {},
       meta: draft.meta ?? {},
       client_id: draft.client_id ?? draft.meta?.client_id ?? contract.client_id ?? null,

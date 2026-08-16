@@ -75,6 +75,9 @@ export interface PrintTemplateLayoutSignatureSection {
   imageSrc?: string;
   inspectorText?: string;
   companyName?: string;
+    certificationText?: string;
+    /** Horizontal alignment of the inspector label and signature. */
+    align?: "right" | "center" | "left";
   style?: PrintTemplateSectionStyleOverride;
 }
 
@@ -89,6 +92,18 @@ export interface PrintTemplateLayoutImageSection {
   style?: PrintTemplateSectionStyleOverride;
 }
 
+export interface PrintTemplateLayoutFooterSection {
+    type: "footer";
+    enabled: boolean;
+    leftLabel?: string;
+    leftBind?: string;
+    centerLabel?: string;
+    centerBind?: string;
+    rightLabel?: string;
+    rightBind?: string;
+    style?: PrintTemplateSectionStyleOverride;
+}
+
 export type PrintTemplateSection =
   | PrintTemplateLayoutHeaderSection
   | PrintTemplateLayoutFieldsSection
@@ -96,7 +111,8 @@ export type PrintTemplateSection =
   | PrintTemplateLayoutFindingsSection
   | PrintTemplateLayoutStaticSection
   | PrintTemplateLayoutSignatureSection
-  | PrintTemplateLayoutImageSection;
+    | PrintTemplateLayoutImageSection
+    | PrintTemplateLayoutFooterSection;
 
 export interface PrintTemplateLayout {
     styles: PrintTemplateSectionStyles;
@@ -115,6 +131,12 @@ export const DEFAULT_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
 
 const SECTION4_STATIC_TEXT =
     'אישור זה מותנה בתנאי שמבצעים שימוש ותחזוקה במכונת הרמה על פי חוקים ותקנות, תקנים רשמיים והוראות יצרן, תסקיר זה מייצג מצב מכונת הרמה ביום הבדיקה. שימוש בציוד אסור במידה ואירע בו ליקוי או פג תוקפו של תסקיר זה. תסקיר זה אינו מהווה תעודת אחריות או ביטוח. יש לעבוד לפי טבלת העומסים של המנוף. לעבודה על קרקע יציבה בלבד. חובה לפתוח מייצבים מקסימאלי בכל עבודה. הפעלת המנוף מותרת למנופאי מוסמך בלבד.';
+
+export const DEFAULT_SIGNATURE_CERTIFICATION =
+    "אני: {{engineer_name}} בעל תעודה מס': {{inspector_number}}\n" +
+    'שהוסמכתי ע"י מפקח עבודה ראשי על פי סימן ז\' לפרק ג\' לפקודת הבטיחות בעבודה (נוסח חדש) תש"ל 1970,\n' +
+    "לעשות ניסויים ובדיקות, מאשר כי בדקתי את הציוד המתואר בתסקיר לעיל בהתאם לתקנות\n" +
+    "פרטים מלאים: {{engineer_address}} טלפון: {{engineer_phone}}";
 
 export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
     return {
@@ -168,6 +190,20 @@ export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
                 text: SECTION4_STATIC_TEXT,
             },
             {type: "signature", enabled: true},
+            createDefaultFooterSection(),
         ],
+    };
+}
+
+export function createDefaultFooterSection(): PrintTemplateLayoutFooterSection {
+    return {
+        type: "footer",
+        enabled: true,
+        leftLabel: "מספר בודק:",
+        leftBind: "inspector_number",
+        centerLabel: "",
+        centerBind: "company_name",
+        rightLabel: "ח.פ:",
+        rightBind: "company_registration",
     };
 }

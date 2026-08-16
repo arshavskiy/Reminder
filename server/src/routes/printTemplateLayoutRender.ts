@@ -1,4 +1,5 @@
 import type {PrintTemplateLayout, PrintTemplateSection} from "../shared/printTemplateLayout.js";
+import {DEFAULT_SIGNATURE_CERTIFICATION} from "../shared/printTemplateLayout.js";
 
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -35,6 +36,19 @@ function borderWidthPx(width: string | undefined): number {
 
 function fieldValue(data: Record<string, unknown>, bind: string): string {
   return escHtml(String(data[bind] ?? ""));
+}
+
+function renderCertificationHtml(template: string, data: Record<string, unknown>): string {
+    const lines = template.split(/\r?\n/).filter((line) => line.length > 0);
+    const htmlLines = lines.map((line, index) => {
+        const filled = line.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+            const value = fieldValue(data, key);
+            return key === "inspector_number" ? `<span class="sig-cert-num">${value}</span>` : value;
+        });
+        const cls = index === lines.length - 1 ? "sig-cert-details" : "sig-cert-line";
+        return `<div class="${cls}">${filled}</div>`;
+    });
+    return `<div class="sig-cert">${htmlLines.join("")}</div>`;
 }
 
 function renderFieldsGrid(fields: { label: string; bind: string }[], data: Record<string, unknown>, cols: number = 2): string {
@@ -113,14 +127,19 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
       return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div><p class="static">${escHtml(section.text)}</p></section>`;
     case "signature": {
       if (!section.enabled) return "";
+        const certTemplate = section.certificationText === ""
+            ? ""
+            : (section.certificationText ?? DEFAULT_SIGNATURE_CERTIFICATION);
+        const cert = certTemplate ? renderCertificationHtml(certTemplate, data) : "";
       const sigImg = section.imageSrc ? renderImage(section.imageSrc, "חתימה", 120) : "";
-      const inspector = section.inspectorText ? `<div class="sig-inspector">${escHtml(section.inspectorText)}</div>` : "";
-      const company = section.companyName ? `<div class="sig-company">${escHtml(section.companyName)}</div>` : "";
+        const align = section.align ?? "right";
       return `<section class="${sectionClass(section, "block sig-block")}">
-        <div class="sig-label">חתימת הבודק:</div>
-        <div class="sig-content">
-          <div class="sig-image">${sigImg}</div>
-          <div class="sig-details">${inspector}${company}</div>
+        ${cert}
+        <div class="sig-mark sig-align-${align}">
+          <div class="sig-label">חתימת הבודק:</div>
+          <div class="sig-content">
+            <div class="sig-image">${sigImg}</div>
+          </div>
         </div>
       </section>`;
     }
@@ -130,6 +149,21 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
       const title = section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : "";
       return `<section class="${sectionClass(section, "block img-block")}" style="text-align:${align}">${title}${img}</section>`;
     }
+      case "footer": {
+          if (!section.enabled) return "";
+          const left = section.leftBind
+              ? `<div class="ftr-col"><span class="ftr-lbl">${escHtml(section.leftLabel ?? "")}</span><span class="ftr-val">${fieldValue(data, section.leftBind)}</span></div>`
+              : "";
+          const center = section.centerBind
+              ? `<div class="ftr-col ftr-center"><span class="ftr-val">${fieldValue(data, section.centerBind)}</span></div>`
+              : "";
+          const right = section.rightBind
+              ? `<div class="ftr-col"><span class="ftr-lbl">${escHtml(section.rightLabel ?? "")}</span><span class="ftr-val">${fieldValue(data, section.rightBind)}</span></div>`
+              : "";
+          return `<section class="${sectionClass(section, "block ftr-block")}">
+        <div class="ftr-row">${left}${center}${right}</div>
+      </section>`;
+      }
     default:
       return "";
   }
@@ -191,8 +225,16 @@ export function renderSectionTemplateHtml(
 
   /* Signature */
   .sig-block { min-height: 70px; }
-  .sig-label { font-weight: 600; margin-bottom: 8px; }
-  .sig-content { display: flex; gap: 16px; align-items: flex-start; }
+  .sig-cert { font-size: 10px; line-height: 1.45; margin-bottom: 8px; text-align: right; }
+  .sig-cert-line { margin-bottom: 2px; }
+  .sig-cert-num { text-decoration: underline; }
+  .sig-cert-details { font-weight: 700; margin-top: 2px; }
+  .sig-mark { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; }
+  .sig-label { font-weight: 600; margin: 0; white-space: nowrap; }
+  .sig-content { display: flex; gap: 16px; align-items: center; }
+  .sig-align-right { justify-content: right; }
+  .sig-align-center { justify-content: center; }
+  .sig-align-left { justify-content: left; }
   .sig-image img { max-width: 120px; max-height: 80px; }
   .sig-details { font-size: 10px; line-height: 1.4; }
   .sig-inspector { font-weight: 600; }
@@ -201,6 +243,14 @@ export function renderSectionTemplateHtml(
   /* Image section */
   .img-block { padding: 8px; }
   .section-img { max-width: 100%; height: auto; }
+
+  /* Footer */
+  .ftr-block { padding: 8px; }
+  .ftr-row { display: flex; justify-content: space-between; align-items: center; }
+  .ftr-col { font-size: 10px; }
+  .ftr-center { text-align: center; font-weight: 600; }
+  .ftr-lbl { margin-left: 4px; }
+  .ftr-val { }
 
   @media print {
     body { padding: 0; }

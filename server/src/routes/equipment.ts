@@ -166,6 +166,92 @@ export function registerEquipmentRoutes(app: express.Application) {
     res.json(enriched);
   });
 
+    // GET /api/equipment/categories — list all equipment categories
+    app.get("/api/equipment/categories", async (req, res) => {
+        let userId: string;
+        try {
+            const ctx = await requireAuth(req.headers.cookie);
+            userId = ctx.userId;
+        } catch (e) {
+            const err = e as HTTPException;
+            res.status(err.status ?? 401).json({error: err.message});
+            return;
+        }
+
+        const categories = await col("equipment_categories")
+            .find({user_id: userId})
+            .sort({label: 1})
+            .toArray();
+
+        res.json(categories.map((c: any) => ({
+            id: c._id?.toString(),
+            value: c.value,
+            label: c.label,
+        })));
+    });
+
+    // POST /api/equipment/categories — add a new equipment category
+    app.post("/api/equipment/categories", async (req, res) => {
+        let userId: string;
+        try {
+            const ctx = await requireAuth(req.headers.cookie);
+            userId = ctx.userId;
+        } catch (e) {
+            const err = e as HTTPException;
+            res.status(err.status ?? 401).json({error: err.message});
+            return;
+        }
+
+        const {value, label} = req.body as { value?: string; label?: string };
+        if (!value || !label) {
+            res.status(400).json({error: "value and label required"});
+            return;
+        }
+
+        // Check if already exists
+        const existing = await col("equipment_categories").findOne({
+            user_id: userId,
+            value: value.trim(),
+        });
+        if (existing) {
+            res.json({id: (existing as any)._id?.toString(), value, label, exists: true});
+            return;
+        }
+
+        const now = new Date();
+        const result = await col("equipment_categories").insertOne({
+            user_id: userId,
+            value: value.trim(),
+            label: label.trim(),
+            created_at: now,
+        } as any);
+
+        res.status(201).json({
+            id: result.insertedId.toString(),
+            value: value.trim(),
+            label: label.trim(),
+        });
+    });
+
+    // DELETE /api/equipment/categories/:id — delete an equipment category
+    app.delete("/api/equipment/categories/:id", async (req, res) => {
+        let userId: string;
+        try {
+            const ctx = await requireAuth(req.headers.cookie);
+            userId = ctx.userId;
+        } catch (e) {
+            const err = e as HTTPException;
+            res.status(err.status ?? 401).json({error: err.message});
+            return;
+        }
+
+        await col("equipment_categories").deleteOne({
+            ...idFilter(req.params.id),
+            user_id: userId,
+        });
+        res.json({ok: true});
+    });
+
   // GET /api/equipment/stats — count per category for the UI chips
   app.get("/api/equipment/stats", async (req, res) => {
     let userId: string;
