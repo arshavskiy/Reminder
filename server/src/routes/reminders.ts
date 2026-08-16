@@ -299,6 +299,7 @@ export function registerReminderRoutes(app: express.Application) {
       interval_months?: number;
       skip_reminders?: boolean;
         editor_type?: "grid" | "sections";
+        print_template_id?: string;
     };
 
     const category = body.equipment?.category?.trim();
@@ -549,6 +550,9 @@ export function registerReminderRoutes(app: express.Application) {
       },
       status: "active",
         editor_type: body.editor_type ?? "sections",
+        print_template_id: typeof body.print_template_id === "string" && body.print_template_id.trim()
+          ? body.print_template_id.trim()
+          : null,
       created_at: now,
       updated_at: now,
     };

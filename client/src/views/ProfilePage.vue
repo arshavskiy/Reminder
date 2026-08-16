@@ -567,13 +567,17 @@ import {
   NSpin,
   useMessage,
 } from "naive-ui";
+import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
 import { useUserSettingsStore } from "../stores/userSettings.js";
+import { useEngineerStore } from "../stores/engineer.js";
 import type { User, UserSettings } from "@shared/types.js";
 
 const message = useMessage();
 const authStore = useAuthStore();
 const userSettingsStore = useUserSettingsStore();
+const engineerStore = useEngineerStore();
+const { profile: engineerProfile } = storeToRefs(engineerStore);
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -672,17 +676,6 @@ async function savePersonal() {
 }
 
 // ── Engineer profile ─────────────────────────────────────────────────────────
-const engineerProfile = ref<{
-  inspector_number?: string;
-  address?: string;
-  title?: string;
-  expertise?: string;
-  mr_number?: string;
-  mg_number?: string;
-  membership_start_date?: string;
-  inspector_id_start?: string;
-} | null>(null);
-
 const nextInspectionId = computed(() => {
   const start = parseInt(engineerProfile.value?.inspector_id_start ?? "0", 10);
   const total = inspectionStats.value.total;
@@ -735,22 +728,14 @@ function cancelEditEngineer() {
 async function saveEngineer() {
   savingEngineer.value = true;
   try {
-    const payload = {
-      ...engineerForm.value,
-      membership_start_date: engineerForm.value.membership_start_ms
-        ? new Date(engineerForm.value.membership_start_ms)
-            .toISOString()
-            .slice(0, 10)
+    const {membership_start_ms, ...formFields} = engineerForm.value;
+    await engineerStore.save({
+      ...formFields,
+      membership_start_date: membership_start_ms
+        ? new Date(membership_start_ms).toISOString().slice(0, 10)
         : null,
       inspector_id_start: engineerForm.value.inspector_id_start || null,
-    };
-    const res = await fetch(`${SERVER}/api/profile/engineer`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(payload),
     });
-    if (res.ok) engineerProfile.value = await res.json();
     editingEngineer.value = false;
     message.success("הפרופיל עודכן");
   } catch {
@@ -773,8 +758,7 @@ async function uploadCompanyLogo(e: Event) {
     });
     if (res.ok) {
       const data = await res.json();
-      if (engineerProfile.value) (engineerProfile.value as any).company_logo_url = data.company_logo_url;
-      else engineerProfile.value = { company_logo_url: data.company_logo_url } as any;
+      engineerStore.patch({ company_logo_url: data.company_logo_url });
       message.success("הלוגו הועלה");
     } else {
       message.error("שגיאה בהעלאת הלוגו");
@@ -786,13 +770,6 @@ async function uploadCompanyLogo(e: Event) {
 }
 
 const companyLogoInput = ref<HTMLInputElement | null>(null);
-
-async function loadEngineerProfile() {
-  const res = await fetch(`${SERVER}/api/profile/engineer`, {
-    credentials: "include",
-  });
-  if (res.ok) engineerProfile.value = await res.json();
-}
 
 // ── Statistics ───────────────────────────────────────────────────────────────
 const inspectionStats = ref({ total: 0, completed: 0, pending: 0, monthly: 0 });
@@ -1030,7 +1007,7 @@ onMounted(async () => {
       await Promise.allSettled([
         userSettingsStore.load(),
         fetch(`${SERVER}/api/profile/stats`, { credentials: "include" }),
-        fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" }),
+        engineerStore.load(),
         fetch(`${SERVER}/api/profile/notifications`, {
           credentials: "include",
         }),
@@ -1050,9 +1027,6 @@ onMounted(async () => {
           monthly: data.monthly ?? 0,
         };
       }
-    }
-    if (engineerRes.status === "fulfilled" && engineerRes.value.ok) {
-      engineerProfile.value = await engineerRes.value.json();
     }
     if (notifsRes.status === "fulfilled" && notifsRes.value.ok) {
       notifications.value = await notifsRes.value.json();

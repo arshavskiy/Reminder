@@ -75,6 +75,7 @@ export function registerPrintTemplateRoutes(app: Express) {
         _id: draft._id.toString(),
         template_id: draft.template_id,
         template_name: template?.name ?? "תבנית",
+        editor_type: draft.editor_type ?? template?.editorType ?? contract?.editor_type ?? "grid",
         client_id: draft.client_id ?? null,
         client_name: client?.display_name ?? client?.name ?? client?.company ?? null,
         contract_id: draft.contract_id ?? null,
@@ -186,6 +187,7 @@ export function registerPrintTemplateRoutes(app: Express) {
         $set: {
           user_id: auth.userId,
           template_id: req.params.id,
+          editor_type: (template as any).editorType === "sections" ? "sections" : "grid",
           data,
           meta,
           client_id: clientId,

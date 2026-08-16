@@ -80,6 +80,25 @@ export interface PipelineFlags {
   pipeline_entities: boolean;
 }
 
+export interface EngineerProfile {
+  inspector_number?: string | null;
+  address?: string | null;
+  title?: string | null;
+  expertise?: string | null;
+  mr_number?: string | null;
+  mg_number?: string | null;
+  membership_start_date?: string | null;
+  inspector_id_start?: string | null;
+  next_inspection_seq?: number | null;
+  company_name?: string | null;
+  company_registration?: string | null;
+  company_subtitle?: string | null;
+  company_phone?: string | null;
+  company_email?: string | null;
+  company_logo_url?: string | null;
+  full_name?: string | null;
+}
+
 export interface UserSettings extends PipelineFlags {
   user_id: number;
   theme: "dark" | "light";
@@ -193,6 +212,7 @@ export interface Contract {
   confidence: "high" | "medium" | "low";
   status: ContractStatus;
     editor_type?: PrintEditorType | null;
+    print_template_id?: string | null;
   created_at: string;
   updated_at: string;
 }

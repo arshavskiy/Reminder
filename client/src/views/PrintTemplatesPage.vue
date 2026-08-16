@@ -557,7 +557,9 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {NAlert, NEmpty, NIcon, NSpin, useDialog, useMessage,} from "naive-ui";
 import {BrushOutline, CreateOutline, PrintOutline, TrashOutline} from "@vicons/ionicons5";
+import {storeToRefs} from "pinia";
 import {api} from "../services/apiService.js";
+import {useEngineerStore} from "../stores/engineer.js";
 import PageHeader from "../components/PageHeader.vue";
 import type {PrintCellBorderSides, PrintCellBorderStyle, PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
@@ -598,7 +600,8 @@ const dialog  = useDialog();
 const route = useRoute();
 const router = useRouter();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
-const engineerProfile = ref<{ inspector_number?: string | null } | null>(null);
+const engineerStore = useEngineerStore();
+const {profile: engineerProfile} = storeToRefs(engineerStore);
 const routeDraftLoading = ref(isDraftRoute());
 
 // ── Mode ──────────────────────────────────────────────────────────────────────
@@ -672,10 +675,7 @@ async function openRouteDraftIfRequested() {
 }
 
 async function loadEngineerProfile() {
-  if (engineerProfile.value) return;
-  const res = await fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" });
-  if (!res.ok) throw new Error(`Failed to load engineer profile: ${res.status}`);
-  engineerProfile.value = await res.json();
+  await engineerStore.load();
 }
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────

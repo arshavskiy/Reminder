@@ -187,6 +187,7 @@ export interface Contract {
   confidence: "high" | "medium" | "low";
   status: ContractStatus;
     editor_type?: PrintEditorType | null;
+    print_template_id?: string | null;
   created_at: string;
   updated_at: string;
 }

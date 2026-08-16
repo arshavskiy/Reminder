@@ -5,6 +5,7 @@ interface AuthUser {
   id: string;
   email: string;
   name: string | null;
+  phone?: string | null;
   picture_url: string | null;
   role: "admin" | "pro" | "user";
 }

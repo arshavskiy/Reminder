@@ -143,7 +143,9 @@ import {computed, onMounted, ref} from "vue";
 import {RouterLink, useRoute, useRouter} from "vue-router";
 import {NAlert, NSpin, useMessage} from "naive-ui";
 import PageHeader from "../components/PageHeader.vue";
+import {storeToRefs} from "pinia";
 import {api} from "../services/apiService.js";
+import {useEngineerStore} from "../stores/engineer.js";
 import type {PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
 type ComposeFieldKind = "text" | "multiline" | "date" | "email" | "phone" | "number" | "integer" | "report_number";
@@ -160,7 +162,6 @@ type ComposeFieldMeta = {
 const route = useRoute();
 const router = useRouter();
 const message = useMessage();
-const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 const loading = ref(true);
 const loadError = ref<string | null>(null);
@@ -168,7 +169,8 @@ const template = ref<PrintTemplate | null>(null);
 const composeData = ref<Record<string, string>>({});
 const draftMeta = ref<Record<string, unknown>>({});
 const draftSavedAt = ref<string | null>(null);
-const engineerProfile = ref<{ inspector_number?: string | null } | null>(null);
+const engineerStore = useEngineerStore();
+const {profile: engineerProfile} = storeToRefs(engineerStore);
 const printing = ref(false);
 const savingPdf = ref(false);
 const draftSaving = ref(false);
@@ -226,10 +228,7 @@ async function loadDraft() {
 }
 
 async function loadEngineerProfile() {
-  if (engineerProfile.value) return;
-  const res = await fetch(`${SERVER}/api/profile/engineer`, { credentials: "include" });
-  if (!res.ok) throw new Error(`Failed to load engineer profile: ${res.status}`);
-  engineerProfile.value = await res.json();
+  await engineerStore.load();
 }
 
 function applyComposeDraft(draft: {

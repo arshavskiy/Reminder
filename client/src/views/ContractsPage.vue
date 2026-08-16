@@ -481,18 +481,87 @@
       </p>
     </n-modal>
 
-    <n-modal v-model:show="showBulkDeleteConfirm" title="מחיקת רשומות" preset="dialog" type="error"
-             :positive-text="'מחק'" :negative-text="'ביטול'" @positive-click="doBulkDelete"
-             @negative-click="showBulkDeleteConfirm = false">
-      <p>למחוק {{ selectedIds.size }} רשומות?</p>
-      <n-checkbox v-model:checked="bulkDeleteRelatedReminders" style="margin: 8px 0 4px">
-        מחק גם תזכורות ואימיילים קשורים
-      </n-checkbox>
-      <p style="font-size:13px; color:var(--text-secondary)">
-        פעולה זו אינה הפיכה. {{
-          bulkDeleteRelatedReminders ? "התזכורות ורישומי האימייל הקשורים יימחקו גם כן." : "התזכורות ורישומי האימייל הקשורים יישארו במערכת."
-        }}
-      </p>
+    <n-modal
+        v-model:show="showBulkDeleteConfirm"
+        :closable="!bulkDeleting"
+        :mask-closable="!bulkDeleting"
+        aria-describedby="bulk-delete-desc"
+        aria-labelledby="bulk-delete-title"
+        class="delete-records-modal"
+        preset="card"
+        role="alertdialog"
+        style="width: 460px; max-width: 95vw"
+    >
+      <template #header>
+        <div class="del-modal__head">
+          <span aria-hidden="true" class="del-modal__icon">
+            <n-icon :component="WarningOutline" :size="22"/>
+          </span>
+          <div class="del-modal__head-text">
+            <h2 id="bulk-delete-title" class="del-modal__title">מחיקת רשומות</h2>
+            <p class="del-modal__sub">פעולה סופית · לא ניתן לשחזר</p>
+          </div>
+        </div>
+      </template>
+
+      <div class="del-modal" dir="rtl">
+        <p id="bulk-delete-desc" class="del-modal__lead">{{ bulkDeleteLead }}</p>
+
+        <div class="del-modal__count" aria-hidden="true">
+          <strong>{{ selectedIds.size }}</strong>
+          <span>{{ bulkDeleteNoun }}</span>
+        </div>
+
+        <ul v-if="selectedDeletePreview.length" class="del-modal__list">
+          <li v-for="row in selectedDeletePreview" :key="row.id" class="del-modal__item">
+            <span class="del-modal__item-num">{{ row.contract_number || "ללא מספר" }}</span>
+            <span class="del-modal__item-name">{{ row.client_name || "ללא לקוח" }}</span>
+            <span v-if="row.contract_type" class="tag tag--neutral">{{ row.contract_type }}</span>
+          </li>
+        </ul>
+        <p v-if="selectedDeleteOverflow > 0" class="del-modal__more">
+          ועוד {{ selectedDeleteOverflow }} {{ bulkDeleteNoun }}
+        </p>
+
+        <n-checkbox
+            v-model:checked="bulkDeleteRelatedReminders"
+            :class="{ 'del-modal__option--on': bulkDeleteRelatedReminders }"
+            :disabled="bulkDeleting"
+            class="del-modal__option"
+        >
+          <span class="del-modal__option-text">
+            <strong>מחק גם תזכורות ואימיילים קשורים</strong>
+            <small>{{ bulkDeleteRelatedHint }}</small>
+          </span>
+        </n-checkbox>
+
+        <p class="del-modal__warn" role="note">
+          <n-icon :component="TrashOutline" :size="16"/>
+          <span>המחיקה סופית. לא ניתן לשחזר את הרשומות לאחר האישור.</span>
+        </p>
+      </div>
+
+      <template #footer>
+        <div class="del-modal__actions">
+          <button
+              class="btn del-modal__btn"
+              type="button"
+              :disabled="bulkDeleting"
+              @click="showBulkDeleteConfirm = false"
+          >
+            ביטול
+          </button>
+          <button
+              class="btn btn--danger-solid del-modal__btn"
+              type="button"
+              :class="{ 'btn--loading': bulkDeleting }"
+              :disabled="bulkDeleting || !selectedIds.size"
+              @click="doBulkDelete"
+          >
+            מחק {{ selectedIds.size }} {{ bulkDeleteNoun }}
+          </button>
+        </div>
+      </template>
     </n-modal>
 
     <!-- ── Delete all confirm modal ──────────────────────────────────── -->
@@ -576,11 +645,14 @@ import {
   PaperPlaneOutline,
   RefreshOutline,
   TrashOutline,
+  WarningOutline,
 } from "@vicons/ionicons5";
 import {useContractsStore} from "../stores/contracts.js";
 import {useFeaturesStore} from "../stores/features.js";
+import {storeToRefs} from "pinia";
 import {useAuthStore} from "../stores/auth.js";
 import {useHydraulicCheckDraftStore} from "../stores/hydraulicCheckDraft.js";
+import {useEngineerStore} from "../stores/engineer.js";
 import type {HydraulicCheckRequest, PrintTemplateDraftSummary} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
@@ -600,6 +672,8 @@ const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
 const featuresStore = useFeaturesStore();
 const authStore = useAuthStore();
+const engineerStore = useEngineerStore();
+const {profile: engineerProfile} = storeToRefs(engineerStore);
 const isAdmin = computed(() => authStore.isAdmin);
 const hydraulicDraftStore = useHydraulicCheckDraftStore();
 const route = useRoute();
@@ -663,6 +737,52 @@ function toggleSelect(id: string) {
   selectedIds.value = s;
 }
 
+const BULK_DELETE_PREVIEW_LIMIT = 5;
+
+const selectedDeleteRows = computed(() =>
+    (store.rows ?? []).filter((row) => selectedIds.value.has(String(row.id)))
+);
+
+const selectedDeletePreview = computed(() =>
+    selectedDeleteRows.value.slice(0, BULK_DELETE_PREVIEW_LIMIT)
+);
+
+const selectedDeleteOverflow = computed(() =>
+    Math.max(0, selectedIds.value.size - selectedDeletePreview.value.length)
+);
+
+const bulkDeleteNoun = computed(() => {
+  const count = selectedIds.value.size;
+  if (kind.value === "inspection") return count === 1 ? "תסקיר" : "תסקירים";
+  if (kind.value === "contract") return count === 1 ? "חוזה" : "חוזים";
+  return count === 1 ? "רשומה" : "רשומות";
+});
+
+const bulkDeleteLead = computed(() => {
+  const count = selectedIds.value.size;
+  const noun = bulkDeleteNoun.value;
+  if (count === 1) return `האם למחוק את ה${noun} שנבחר?`;
+  return `האם למחוק את ${count} ה${noun} שנבחרו?`;
+});
+
+const selectedRelatedReminderCount = computed(() => {
+  let total = 0;
+  for (const id of selectedIds.value) {
+    total += remindersFor(id).length;
+  }
+  return total;
+});
+
+const bulkDeleteRelatedHint = computed(() => {
+  if (!bulkDeleteRelatedReminders.value) {
+    return "התזכורות ורישומי האימייל הקשורים יישארו במערכת.";
+  }
+  if (selectedRelatedReminderCount.value > 0) {
+    return `${selectedRelatedReminderCount.value} תזכורות ורישומי האימייל הקשורים יימחקו גם כן.`;
+  }
+  return "התזכורות ורישומי האימייל הקשורים יימחקו גם כן.";
+});
+
 function bulkDelete() {
   if (!selectedIds.value.size) return;
   bulkDeleteRelatedReminders.value = false;
@@ -670,7 +790,7 @@ function bulkDelete() {
 }
 
 async function doBulkDelete() {
-  if (!selectedIds.value.size) return;
+  if (!selectedIds.value.size || bulkDeleting.value) return;
   const count = selectedIds.value.size;
   bulkDeleting.value = true;
   try {
@@ -680,6 +800,7 @@ async function doBulkDelete() {
     message.success(`${count} רשומות נמחקו`);
     selectedIds.value = new Set();
     bulkMode.value = false;
+    showBulkDeleteConfirm.value = false;
     await Promise.all([refresh(), loadReminders()]);
   } catch (e) {
     message.error(String(e));
@@ -1085,12 +1206,6 @@ const deleteAllRelatedReminders = ref(false);
 const clientOptions = ref<{ label: string; value: string }[]>([]);
 const clientsMap = ref<Map<string, import("@shared/types.js").Client>>(new Map());
 const loadingClients = ref(false);
-const engineerProfile = ref<{
-  inspector_number?: string;
-  inspector_id_start?: string;
-  next_inspection_seq?: number | null;
-} | null>(null);
-
 async function loadClients(force = false) {
   if (clientOptions.value.length && !force) return;
   loadingClients.value = true;
@@ -1104,9 +1219,7 @@ async function loadClients(force = false) {
 }
 
 async function loadEngineerProfile() {
-  const res = await fetch(`${SERVER}/api/profile/engineer`, {credentials: "include"});
-  if (!res.ok) throw new Error(`Failed to load engineer profile: ${res.status}`);
-  engineerProfile.value = await res.json();
+  await engineerStore.load();
 }
 
 function extractInspectionSequence(contractNumber: string | null | undefined, inspectorNumber: string): number | null {
@@ -1613,9 +1726,10 @@ async function loadHydraulicPrintTemplates() {
 }
 
 function defaultHydraulicTemplateId(): string | null {
-  return hydraulicTemplates.value.some((template) => template._id === HYDRAULIC_PRINT_TEMPLATE_ID)
-      ? HYDRAULIC_PRINT_TEMPLATE_ID
-      : hydraulicTemplates.value[0]?._id ?? null;
+  return firstSectionsTemplateId()
+      ?? (hydraulicTemplates.value.some((template) => template._id === HYDRAULIC_PRINT_TEMPLATE_ID)
+        ? HYDRAULIC_PRINT_TEMPLATE_ID
+        : hydraulicTemplates.value[0]?._id ?? null);
 }
 
 function selectHydraulicTemplate(id: string | null) {
@@ -1734,6 +1848,7 @@ async function createHydraulicContract() {
       hydraulicForm.value.contract_number?.trim() || suggestedHydraulicContractNumber.value,
   );
   syncPrimaryHydraulicEquipment();
+  const editorType = hydraulicTemplate.value?.editorType === "sections" ? "sections" : "grid";
   const payload: HydraulicCheckRequest = {
     ...hydraulicForm.value,
     contract_number: contractNumber || undefined,
@@ -1743,6 +1858,8 @@ async function createHydraulicContract() {
     next_inspection_date: hydraulicReminderMode.value === "date"
         ? formatLocalDate(hydraulicReminderDateMs.value!)
         : undefined,
+    editor_type: editorType,
+    print_template_id: hydraulicTemplateId.value ?? undefined,
   };
   return api.reminders.createHydraulicCheck(payload);
 }
@@ -1764,6 +1881,8 @@ async function updateHydraulicContract(contractId: string) {
     start_date: data.start_date,
     expiry_date: nextDate,
     summary: data.equipment_description || data.checked_equipment || data.name || undefined,
+    editor_type: hydraulicTemplate.value?.editorType === "sections" ? "sections" : "grid",
+    print_template_id: hydraulicTemplateId.value ?? null,
     manual_fields: {
       ...data,
       inspection_interval_months: hydraulicIntervalMonths.value,
@@ -1833,7 +1952,7 @@ async function saveHydraulicDraftAndPreview() {
     showHydraulicCheck.value = false;
     loadClients(true);
     await refresh();
-    await router.push(`/contracts/${contractId}/draft`);
+    await router.push(contractPrintPath(contractId, hydraulicTemplateId.value, hydraulicTemplate.value?.editorType));
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -1847,25 +1966,41 @@ async function openContractInTemplate(row: ContractWithClient) {
     return;
   }
   try {
-    const templateId = await resolveContractTemplateId();
-    if (!templateId) {
+    const target = await resolveContractPrintTarget(row);
+    if (!target) {
       message.warning("לא נמצאה תבנית הדפסה");
       return;
     }
     await api.printTemplates.saveDraft(
-        templateId,
+        target.templateId,
         buildContractTemplateDraft(row),
-        buildContractTemplateDraftMeta(row, templateId),
+        buildContractTemplateDraftMeta(row, target.templateId),
     );
-    await router.push(`/contracts/${row.id}/draft`);
+    await router.push(contractPrintPath(String(row.id), target.templateId, target.editorType));
   } catch (e) {
     message.error(e instanceof Error ? e.message : String(e));
   }
 }
 
 function openDraftInTemplate(draft: PrintTemplateDraftSummary) {
+  if (draft.editor_type === "sections") {
+    const query = draft.contract_id ? `?contractId=${encodeURIComponent(draft.contract_id)}` : "";
+    router.push(`/print-templates/layout/${draft.template_id}/compose${query}`);
+    return;
+  }
   if (draft.contract_id) router.push(`/contracts/${draft.contract_id}/draft`);
   else router.push(`/print-templates/${draft.template_id}/draft`);
+}
+
+function contractPrintPath(
+  contractId: string,
+  templateId: string | null | undefined,
+  editorType?: string | null,
+): string {
+  if (editorType === "sections" && templateId) {
+    return `/print-templates/layout/${templateId}/compose?contractId=${encodeURIComponent(contractId)}`;
+  }
+  return `/contracts/${contractId}/draft`;
 }
 
 function draftField(draft: PrintTemplateDraftSummary, names: string[]): string {
@@ -1884,7 +2019,7 @@ function formatDraftDate(value: string | null): string {
       : date.toLocaleString("he-IL", {dateStyle: "short", timeStyle: "short"});
 }
 
-async function resolveContractTemplateId(): Promise<string | null> {
+async function ensureHydraulicTemplates(): Promise<PrintTemplate[]> {
   if (!hydraulicTemplates.value.length) {
     try {
       hydraulicTemplates.value = await api.printTemplates.list();
@@ -1892,7 +2027,58 @@ async function resolveContractTemplateId(): Promise<string | null> {
       hydraulicTemplates.value = [];
     }
   }
-  return defaultHydraulicTemplateId();
+  return hydraulicTemplates.value;
+}
+
+function firstSectionsTemplateId(): string | null {
+  return hydraulicTemplates.value.find((template) => template.editorType === "sections")?._id ?? null;
+}
+
+async function resolveContractPrintTarget(row: ContractWithClient): Promise<{
+  templateId: string;
+  editorType: "grid" | "sections";
+} | null> {
+  const templates = await ensureHydraulicTemplates();
+  let draft: Awaited<ReturnType<typeof api.printTemplates.getContractDraft>> | null = null;
+  try {
+    draft = await api.printTemplates.getContractDraft(String(row.id));
+  } catch {
+    draft = null;
+  }
+
+  const storedId =
+    (typeof row.print_template_id === "string" && row.print_template_id) ||
+    (typeof draft?.meta?.template_id === "string" && draft.meta.template_id) ||
+    draft?.template_id ||
+    null;
+  const wantsSections = row.editor_type === "sections" || draft?.editor_type === "sections";
+
+  const findTemplate = async (id: string | null): Promise<PrintTemplate | null> => {
+    if (!id) return null;
+    return templates.find((template) => template._id === id)
+      ?? await api.printTemplates.get(id).catch(() => null);
+  };
+
+  const stored = await findTemplate(storedId);
+  if (stored && (stored.editorType === "sections" || !wantsSections)) {
+    return {
+      templateId: stored._id,
+      editorType: stored.editorType === "sections" ? "sections" : "grid",
+    };
+  }
+
+  if (wantsSections) {
+    const sectionsId = firstSectionsTemplateId();
+    if (sectionsId) return {templateId: sectionsId, editorType: "sections"};
+  }
+
+  const fallbackId = defaultHydraulicTemplateId();
+  if (!fallbackId) return null;
+  const fallback = await findTemplate(fallbackId);
+  return {
+    templateId: fallbackId,
+    editorType: fallback?.editorType === "sections" ? "sections" : "grid",
+  };
 }
 
 function buildContractTemplateDraft(row: ContractWithClient): Record<string, string> {
@@ -2139,7 +2325,7 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
       type: "due",
       dueValue: "has_reminder"
     },
-    {key: "drafts", label: "טיוטות", count: templateDrafts.value.length, type: "drafts"},
+    {key: "drafts", label: "טיוטות", count: orphanDrafts.value.length, type: "drafts"},
     {
       key: "cancelled",
       label: "בוטל",
@@ -2322,8 +2508,12 @@ const visibleItems = computed<ListItem[]>(() => {
   return filteredRows.value.map((row) => ({__type: "contract", row}));
 });
 
+const orphanDrafts = computed(() =>
+  templateDrafts.value.filter((draft) => !draft.contract_id),
+);
+
 const filteredDrafts = computed(() => {
-  let rows = templateDrafts.value;
+  let rows = orphanDrafts.value;
   const q = search.value.trim().toLowerCase();
   if (q) {
     rows = rows.filter((draft) =>
@@ -2704,6 +2894,268 @@ function exportToExcel() {
 
 .bulk-action-item--loading .bulk-action-item__icon :deep(svg) {
   display: none;
+}
+
+/* ── Bulk delete confirmation ───────────────────────────────────────────── */
+:global(.delete-records-modal.n-card) {
+  direction: rtl;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+}
+
+:global(.delete-records-modal .n-card-header) {
+  padding: 18px 20px 12px;
+}
+
+:global(.delete-records-modal .n-card__content) {
+  padding: 4px 20px 8px;
+}
+
+:global(.delete-records-modal .n-card__footer) {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+:global(.delete-records-modal .n-base-close) {
+  top: 14px;
+  left: 14px;
+  right: auto;
+}
+
+.del-modal__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.del-modal__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(208, 48, 80, 0.12);
+  color: var(--color-error);
+}
+
+.del-modal__head-text {
+  min-width: 0;
+}
+
+.del-modal__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.2px;
+}
+
+.del-modal__sub {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.del-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.del-modal__lead {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.del-modal__count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(208, 48, 80, 0.10);
+  color: var(--color-error);
+}
+
+.del-modal__count strong {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.del-modal__count span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.del-modal__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.del-modal__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.del-modal__item + .del-modal__item {
+  border-top: 1px solid var(--border-color);
+}
+
+.del-modal__item-num {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.del-modal__item-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.del-modal__more {
+  margin: -4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.del-modal__option {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.del-modal__option:hover {
+  background: var(--bg-hover);
+}
+
+.del-modal__option--on {
+  border-color: rgba(208, 48, 80, 0.35);
+  background: rgba(208, 48, 80, 0.06);
+}
+
+.del-modal__option :deep(.n-checkbox__label) {
+  padding: 0;
+  white-space: normal;
+}
+
+.del-modal__option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.del-modal__option-text strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.del-modal__option-text small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.del-modal__warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-inline-start: 3px solid var(--color-error);
+  background: rgba(208, 48, 80, 0.08);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.del-modal__warn .n-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--color-error);
+}
+
+.del-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+
+.del-modal__btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: 16px;
+  touch-action: manipulation;
+}
+
+.btn--danger-solid {
+  background: var(--color-error);
+  border-color: var(--color-error);
+  color: #fff;
+  font-weight: 700;
+}
+
+.btn--danger-solid:hover:not(:disabled) {
+  background: #b82a47;
+  border-color: #b82a47;
+}
+
+.btn--danger-solid:focus-visible,
+.del-modal__btn:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .del-modal__option,
+  .btn--danger-solid {
+    transition: none;
+  }
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
@@ -3449,6 +3901,15 @@ html[data-theme="dark"] .tag--info {
   :deep(.n-dialog__action),
   :deep(.n-card__footer) {
     align-items: stretch;
+  }
+
+  .del-modal__actions {
+    flex-direction: column;
+  }
+
+  .del-modal__btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 

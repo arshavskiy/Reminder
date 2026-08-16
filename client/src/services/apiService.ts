@@ -9,6 +9,7 @@ import type {
     Document,
     EmailLogEntry,
     EmailTemplate,
+    EngineerProfile,
     Equipment,
     FeatureDefinition,
     GlobalSearchResult,
@@ -88,6 +89,7 @@ export interface HydraulicCheckRequest {
   interval_months?: number;
   skip_reminders?: boolean;
   editor_type?: "grid" | "sections";
+  print_template_id?: string;
 }
 
 export interface HydraulicCheckResult {
@@ -116,6 +118,7 @@ export interface PrintTemplateDraftSummary {
   _id: string;
   template_id: string;
   template_name: string;
+  editor_type?: "grid" | "sections";
   client_id: string | null;
   client_name: string | null;
   contract_id: string | null;
@@ -399,6 +402,11 @@ export const api = {
       deliveryMode?: "combined" | "client";
     }) =>
       post<{ success: boolean; count?: number; reportsSent?: number; error?: string }>("/reports/monthly/send", body ?? {}),
+  },
+
+  profile: {
+    getEngineer: () => get<EngineerProfile>("/profile/engineer"),
+    saveEngineer: (body: Partial<EngineerProfile>) => put<EngineerProfile>("/profile/engineer", body),
   },
 
   userSettings: {

@@ -126,6 +126,8 @@ import PageHeader from "../components/PageHeader.vue";
 import SimpleLayoutEditor from "../components/print/SimpleLayoutEditor.vue";
 import LayoutPreviewFrame from "../components/print/LayoutPreviewFrame.vue";
 import {api} from "../services/apiService.js";
+import {useAuthStore} from "../stores/auth.js";
+import {useEngineerStore} from "../stores/engineer.js";
 import type {PrintTemplate} from "@shared/types.js";
 import {
   clonePrintTemplateLayout,
@@ -136,7 +138,8 @@ import {
   type PrintTemplateLayout,
 } from "@shared/printTemplateLayout.js";
 
-const SERVER = import.meta.env.VITE_API_URL || "";
+const authStore = useAuthStore();
+const engineerStore = useEngineerStore();
 
 type Mode = "list" | "edit" | "compose";
 
@@ -164,34 +167,17 @@ const composeFields = computed(() => {
   return extractLayoutFieldBinds(composing.value.layout);
 });
 
-interface EngineerProfile {
-  full_name?: string;
-  company_name?: string;
-  company_phone?: string;
-  company_email?: string;
-  inspector_number?: string;
-  company_registration?: string;
-  address?: string;
-}
-
-async function fetchEngineerProfile(): Promise<EngineerProfile | null> {
-  try {
-    const res = await fetch(`${SERVER}/api/profile/engineer`, {credentials: "include"});
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
 async function fetchUserProfile(): Promise<{ name?: string; email?: string; phone?: string } | null> {
-  try {
-    const res = await fetch(`${SERVER}/api/profile`, {credentials: "include"});
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+  if (!authStore.user && !authStore.initialized) {
+    await authStore.fetchMe();
   }
+  const user = authStore.actingAs ?? authStore.user;
+  if (!user) return null;
+  return {
+    name: user.name ?? undefined,
+    email: user.email,
+    phone: user.phone ?? undefined,
+  };
 }
 
 function ensureFooterSection(layout: PrintTemplateLayout): PrintTemplateLayout {
@@ -312,7 +298,7 @@ async function openCompose(t: PrintTemplate, contractId?: string | null) {
 
   // Fetch engineer profile data and populate engineer fields
   const [engineerProfile, userProfile] = await Promise.all([
-    fetchEngineerProfile(),
+    engineerStore.load(),
     fetchUserProfile(),
   ]);
   if (engineerProfile || userProfile) {

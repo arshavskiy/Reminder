@@ -381,6 +381,7 @@ import {computed, onMounted, ref} from "vue";
 import {NCheckbox, NFormItem, NInput, NInputNumber, NSelect, useMessage} from "naive-ui";
 import LayoutPreviewFrame from "./LayoutPreviewFrame.vue";
 import {api} from "../../services/apiService.js";
+import {useEngineerStore} from "../../stores/engineer.js";
 import {
   clonePrintTemplateLayout,
   createDefaultFooterSection,
@@ -439,6 +440,7 @@ const sectionTypeOptions = [
 
 const bindOptions = LAYOUT_FIELD_PRESETS.map((f) => ({ label: `${f.label} (${f.bind})`, value: f.bind }));
 const message = useMessage();
+const engineerStore = useEngineerStore();
 const signatureFileInput = ref<HTMLInputElement | null>(null);
 const signatureUploadIndex = ref<number | null>(null);
 const uploadingSignature = ref(false);
@@ -470,25 +472,19 @@ const previewData = computed(() => {
 });
 
 onMounted(async () => {
-  try {
-    const server = import.meta.env.VITE_API_URL || "";
-    const res = await fetch(`${server}/api/profile/engineer`, {credentials: "include"});
-    if (!res.ok) return;
-    const profile = await res.json();
-    const companyName = profile?.company_name ?? "";
-    engineerPreview.value = {
-      inspector_number: profile?.inspector_number ?? "",
-      company_name: companyName,
-      company_registration: profile?.company_registration ?? "",
-      engineer_company: companyName,
-      engineer_email: profile?.company_email ?? "",
-      engineer_phone: profile?.company_phone ?? "",
-      engineer_name: profile?.full_name ?? "",
-      engineer_address: profile?.address ?? "",
-    };
-  } catch {
-    /* preview keeps sample values */
-  }
+  const profile = await engineerStore.load();
+  if (!profile) return;
+  const companyName = profile.company_name ?? "";
+  engineerPreview.value = {
+    inspector_number: profile.inspector_number ?? "",
+    company_name: companyName,
+    company_registration: profile.company_registration ?? "",
+    engineer_company: companyName,
+    engineer_email: profile.company_email ?? "",
+    engineer_phone: profile.company_phone ?? "",
+    engineer_name: profile.full_name ?? "",
+    engineer_address: profile.address ?? "",
+  };
 });
 
 function patchLayout(mutator: (layout: PrintTemplateLayout) => void) {

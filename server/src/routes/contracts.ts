@@ -48,6 +48,10 @@ export function registerContractRoutes(app: express.Application) {
         summary: body.summary ?? null,
         manual_fields: body.manual_fields ?? null,
         confidence: body.confidence ?? "medium",
+        editor_type: body.editor_type === "grid" ? "grid" : "sections",
+        print_template_id: typeof body.print_template_id === "string" && body.print_template_id.trim()
+          ? body.print_template_id.trim()
+          : null,
         created_at: now,
         updated_at: now,
       };
@@ -391,7 +395,7 @@ export function registerContractRoutes(app: express.Application) {
     res.json({
       template_id: draft.template_id,
       template_name: template?.name ?? "תבנית",
-        editor_type: contract.editor_type ?? template?.editorType ?? "grid",
+        editor_type: draft.editor_type ?? template?.editorType ?? contract.editor_type ?? "grid",
       data: draft.data ?? {},
       meta: draft.meta ?? {},
       client_id: draft.client_id ?? draft.meta?.client_id ?? contract.client_id ?? null,
@@ -541,6 +545,7 @@ export function registerContractRoutes(app: express.Application) {
       const fields = [
         "contract_number", "contract_type", "start_date", "expiry_date",
         "amount", "currency", "counterparty", "summary", "status", "manual_fields",
+        "editor_type", "print_template_id",
       ];
       for (const f of fields) {
         if (body[f] !== undefined) updates[f] = body[f];

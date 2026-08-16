@@ -380,8 +380,10 @@ import {
   TimeOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
+import {storeToRefs} from "pinia";
 import {useContractsStore} from "../../stores/contracts.js";
 import {useHydraulicCheckDraftStore} from "../../stores/hydraulicCheckDraft.js";
+import {useEngineerStore} from "../../stores/engineer.js";
 import type {HydraulicCheckRequest} from "../../services/apiService.js";
 import {api} from "../../services/apiService.js";
 import type {Equipment, PrintTemplate} from "@shared/types.js";
@@ -399,6 +401,8 @@ const visible = defineModel<boolean>("show", {default: false});
 
 const store = useContractsStore();
 const draftStore = useHydraulicCheckDraftStore();
+const engineerStore = useEngineerStore();
+const {profile: engineerProfile} = storeToRefs(engineerStore);
 const router = useRouter();
 const message = useMessage();
 
@@ -475,18 +479,6 @@ const modalTitle = computed(() => updatingContractId.value ? "עדכון תסק�
 const clientOptions = ref<{ label: string; value: string }[]>([]);
 const clientsMap = ref<Map<string, import("@shared/types.js").Client>>(new Map());
 const loadingClients = ref(false);
-const engineerProfile = ref<{
-  inspector_number?: string;
-  inspector_id_start?: string;
-  next_inspection_seq?: number | null;
-  company_name?: string;
-  company_registration?: string;
-  company_email?: string;
-  company_phone?: string;
-  full_name?: string;
-  address?: string;
-} | null>(null);
-
 const knownCategories = ref<{ id?: string; value: string; label: string }[]>([]);
 const categoryDefaults: { label: string; value: string }[] = [
   {label: "מכונות הרמה", value: "lift"},
@@ -778,9 +770,7 @@ async function loadClients(force = false) {
 }
 
 async function loadEngineerProfile() {
-  const res = await fetch(`${SERVER}/api/profile/engineer`, {credentials: "include"});
-  if (!res.ok) throw new Error(`Failed to load engineer profile: ${res.status}`);
-  engineerProfile.value = await res.json();
+  await engineerStore.load();
 }
 
 async function loadCategories() {
@@ -852,9 +842,10 @@ async function loadPrintTemplates() {
 }
 
 function defaultTemplateId(): string | null {
-  return templates.value.some((t) => t._id === HYDRAULIC_PRINT_TEMPLATE_ID)
-      ? HYDRAULIC_PRINT_TEMPLATE_ID
-      : templates.value[0]?._id ?? null;
+  return templates.value.find((t) => t.editorType === "sections")?._id
+      ?? (templates.value.some((t) => t._id === HYDRAULIC_PRINT_TEMPLATE_ID)
+        ? HYDRAULIC_PRINT_TEMPLATE_ID
+        : templates.value[0]?._id ?? null);
 }
 
 function selectTemplate(id: string | null) {
@@ -1180,6 +1171,7 @@ async function createContract() {
     check_date: checkDateMs.value ? formatLocalDate(checkDateMs.value) : undefined,
     next_inspection_date: expiryDate,
     editor_type: editorType,
+    print_template_id: templateId.value ?? undefined,
   };
   return api.reminders.createHydraulicCheck(payload);
 }
@@ -1206,6 +1198,7 @@ async function updateContract(contractId: string) {
     expiry_date: expiryDate,
     summary: data.equipment_description || data.checked_equipment || data.name || undefined,
     editor_type: editorType,
+    print_template_id: templateId.value ?? null,
     manual_fields: {
       ...data,
       inspection_interval_months: intervalMonths.value,
@@ -1282,7 +1275,11 @@ async function saveDraftAndPreview() {
     visible.value = false;
     loadClients(true);
     emit("created");
-    await router.push(`/contracts/${contractIdValue}/draft`);
+    if (template.value?.editorType === "sections" && templateId.value) {
+      await router.push(`/print-templates/layout/${templateId.value}/compose?contractId=${encodeURIComponent(contractIdValue)}`);
+    } else {
+      await router.push(`/contracts/${contractIdValue}/draft`);
+    }
   } catch (e) {
     message.error(String(e));
   } finally {
