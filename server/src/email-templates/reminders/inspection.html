@@ -24,6 +24,10 @@
     .equipment-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 14px 18px; margin: 16px 0; }
     .equipment-box .eq-title { font-size: 13px; font-weight: 700; color: #0369a1; margin-bottom: 8px; }
     .equipment-box .eq-item { font-size: 14px; color: #1e3a5f; padding: 3px 0; }
+    .items { width: 100%; border-collapse: collapse; background: #fafbfc; border: 1px solid #e5e9ef; border-radius: 10px; margin: 8px 0 16px; }
+    .items th { background: #fff8e1; color: #7c4a00; font-size: 12px; font-weight: 700; padding: 10px 12px; text-align: right; border-bottom: 1px solid #f3e8c8; }
+    .items td { padding: 10px 12px; border-bottom: 1px solid #e5e9ef; font-size: 13px; color: #111827; text-align: right; }
+    .items tr:last-child td { border-bottom: none; }
     .cta-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 16px 20px; margin: 20px 0; text-align: center; }
     .cta-box p { margin: 0; color: #991b1b; font-size: 14px; font-weight: 600; }
     .footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e5e9ef; font-size: 12px; color: #9ca3af; text-align: center; line-height: 1.6; }
@@ -55,6 +59,11 @@
       {{#if expiry_date}}<tr class="field highlight-field"><td class="label">תאריך בדיקה הבא</td><td class="value">{{expiry_date}}</td></tr>{{/if}}
       {{#if trigger_date}}<tr class="field"><td class="label">תאריך שליחת התזכורת</td><td class="value">{{trigger_date}}</td></tr>{{/if}}
     </table>
+
+    {{#if items_table}}
+    <div class="section-title">פריטים לבדיקה</div>
+    {{items_table}}
+    {{/if}}
 
     {{#if equipment_type}}
     <div class="equipment-box">

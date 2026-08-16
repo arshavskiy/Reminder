@@ -195,3 +195,63 @@ describe("reminder email templates — full data fill", () => {
     }
   }
 });
+
+describe("grouped items_table injection in built-in templates", () => {
+  const TABLE_VARS: EmailVars = {
+    title: "בדיקה הבאה ב-2026-11-22",
+    trigger_date: "2026-10-22",
+    advance_days: 30,
+    body: "הערה לבדיקה",
+    from_name: "ReminderOCR",
+    client_company: "מן הנדסת חשמל",
+    contact_person: "יוסי כהן",
+    contact_phone: "052-1234567",
+    document_type: "תסקיר בדיקה",
+    document_number: "484590/18163",
+    expiry_date: "2026-11-22",
+    equipment_type: "lift",
+    manufacturer: "Ferrari",
+    model: "AGLY2",
+    serial_number: "2305001938",
+  };
+  const SAMPLE_TABLE = `<table class="items"><thead><tr><th>תסקיר</th><th>ציוד</th><th>רישוי</th><th>בתוקף עד</th></tr></thead><tbody><tr><td>484590/12100</td><td>מלגזה</td><td>180375</td><td>2026-08-18</td></tr></tbody></table>`;
+
+  it("inspection.html without items_table still shows the single equipment box", () => {
+    const rendered = renderTemplate(loadReminderTemplate("inspection"), TABLE_VARS, { escape: false });
+    expect(rendered).toContain("פרטי הבדיקה");
+    expect(rendered).toContain("פרטי הציוד");
+    expect(rendered).toContain("cta-box");
+    expect(rendered).not.toContain("פריטים לבדיקה");
+    expect(rendered).not.toContain("בתוקף עד");
+  });
+
+  it("inspection.html with items_table injects after פרטי הבדיקה and keeps the layout", () => {
+    const rendered = renderTemplate(loadReminderTemplate("inspection"), {
+      ...TABLE_VARS,
+      items_table: SAMPLE_TABLE,
+    }, { escape: false });
+    expect(rendered.indexOf("פריטים לבדיקה")).toBeGreaterThan(rendered.indexOf("פרטי הבדיקה"));
+    expect(rendered.indexOf("בתוקף עד")).toBeGreaterThan(rendered.indexOf("פריטים לבדיקה"));
+    expect(rendered.indexOf("בתוקף עד")).toBeLessThan(rendered.indexOf("class=\"equipment-box\""));
+    expect(rendered).toContain("cta-box");
+    expect(rendered).toContain("תזכורת לבדיקה תקופתית");
+  });
+
+  it("default.html without items_table omits the grouped table", () => {
+    const rendered = renderTemplate(loadReminderTemplate("default"), TABLE_VARS, { escape: false });
+    expect(rendered).toContain("תזכורת:");
+    expect(rendered).toContain("מן הנדסת חשמל");
+    expect(rendered).not.toContain("פריטים לבדיקה");
+    expect(rendered).not.toContain("בתוקף עד");
+  });
+
+  it("default.html with items_table injects after the fields table", () => {
+    const rendered = renderTemplate(loadReminderTemplate("default"), {
+      ...TABLE_VARS,
+      items_table: SAMPLE_TABLE,
+    }, { escape: false });
+    expect(rendered.indexOf("פריטים לבדיקה")).toBeGreaterThan(rendered.indexOf("class=\"fields\""));
+    expect(rendered.indexOf("בתוקף עד")).toBeLessThan(rendered.indexOf("class=\"footer\""));
+    expect(rendered).toContain("484590/12100");
+  });
+});

@@ -5,6 +5,20 @@ export type GroupedReminderItem = {
   expiry_date: string;
 };
 
+const TH_STYLE = "background:#fff8e1;color:#7c4a00;font-size:12px;font-weight:700;padding:10px 12px;text-align:right;border-bottom:1px solid #f3e8c8;font-family:'Segoe UI',Arial,sans-serif";
+const TD_STYLE = "padding:10px 12px;border-bottom:1px solid #e5e9ef;font-size:13px;color:#111827;text-align:right;font-family:'Segoe UI',Arial,sans-serif";
+const TABLE_STYLE = "width:100%;border-collapse:collapse;background:#fafbfc;border:1px solid #e5e9ef;border-radius:10px;margin:8px 0 16px;font-family:'Segoe UI',Arial,sans-serif";
+const WRAP_STYLE = "margin:16px 0;width:100%;direction:rtl;text-align:right";
+const TITLE_STYLE = "font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin:20px 0 8px;font-family:'Segoe UI',Arial,sans-serif";
+
+const LANDMARKS = [
+  /<div[^>]*class=["'][^"']*\bcta-box\b[^"']*["'][^>]*>/i,
+  /<div[^>]*class=["'][^"']*\bwarning-box\b[^"']*["'][^>]*>/i,
+  /<div[^>]*class=["'][^"']*\brenewal-box\b[^"']*["'][^>]*>/i,
+  /<div[^>]*class=["'][^"']*\bfooter\b[^"']*["'][^>]*>/i,
+  /<\/body>/i,
+];
+
 export function groupedReminderKey(clientId: string | null | undefined, triggerDate: string, email: string): string {
   return `${clientId ?? "no-client"}|${triggerDate}|${email.trim().toLowerCase()}`;
 }
@@ -24,22 +38,55 @@ function cell(value: string | null | undefined): string {
 
 export function buildGroupedItemsTable(items: GroupedReminderItem[]): string {
   const rows = items.map((item) => `<tr>
-      <td>${cell(item.contract_number)}</td>
-      <td>${cell(item.equipment)}</td>
-      <td>${cell(item.license_number)}</td>
-      <td>${cell(item.expiry_date)}</td>
+      <td style="${TD_STYLE}">${cell(item.contract_number)}</td>
+      <td style="${TD_STYLE}">${cell(item.equipment)}</td>
+      <td style="${TD_STYLE}">${cell(item.license_number)}</td>
+      <td style="${TD_STYLE}">${cell(item.expiry_date)}</td>
     </tr>`).join("");
-  return `<table class="items" cellpadding="0" cellspacing="0" role="presentation">
+  return `<table class="items" cellpadding="0" cellspacing="0" role="presentation" dir="rtl" style="${TABLE_STYLE}">
     <thead>
       <tr>
-        <th>תסקיר</th>
-        <th>ציוד</th>
-        <th>רישוי</th>
-        <th>בתוקף עד</th>
+        <th style="${TH_STYLE}">תסקיר</th>
+        <th style="${TH_STYLE}">ציוד</th>
+        <th style="${TH_STYLE}">רישוי</th>
+        <th style="${TH_STYLE}">בתוקף עד</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
   </table>`;
+}
+
+export function hasItemsTablePlaceholder(html: string): boolean {
+  return /\{\{\{\s*items_table\s*\}\}\}|\{\{\s*items_table\s*(?:\|[^}]*)?\}\}/.test(html);
+}
+
+export function normalizeItemsTableTokens(html: string): string {
+  return html.replace(/\{\{\{\s*items_table\s*\}\}\}/g, "{{items_table}}");
+}
+
+function wrapInjectedTable(tableHtml: string): string {
+  return `<div class="grouped-items-wrap" dir="rtl" style="${WRAP_STYLE}"><div class="section-title" style="${TITLE_STYLE}">פריטים לבדיקה</div>${tableHtml}</div>`;
+}
+
+export function injectItemsTable(html: string, tableHtml: string): string {
+  if (!tableHtml.trim() || hasItemsTablePlaceholder(html)) return html;
+  const block = wrapInjectedTable(tableHtml);
+  const bodyStart = html.search(/<body[\s>]/i);
+  const searchFrom = bodyStart >= 0 ? bodyStart : 0;
+  const region = html.slice(searchFrom);
+  for (const re of LANDMARKS) {
+    const match = re.exec(region);
+    if (!match) continue;
+    const idx = searchFrom + match.index;
+    return `${html.slice(0, idx)}${block}\n    ${html.slice(idx)}`;
+  }
+  return `${html}\n${block}`;
+}
+
+export function prepareGroupedTemplateHtml(html: string, tableHtml: string): string {
+  const normalized = normalizeItemsTableTokens(html);
+  if (hasItemsTablePlaceholder(normalized)) return normalized;
+  return injectItemsTable(normalized, tableHtml);
 }
 
 export function expiryFromReminderTitle(title: string | null | undefined): string | null {

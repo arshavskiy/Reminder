@@ -7,6 +7,7 @@ import {loadEmailTemplate, loadEmailTemplateByName, pickEmailTemplate} from "../
 import {loadReminderTemplate} from "../email-templates/loader";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
+import {prepareGroupedTemplateHtml} from "./groupedReminderEmail.js";
 
 const FALLBACK_TEST_HTML = `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -439,7 +440,7 @@ function renderFallbackInspectionEmail(vars: EmailVars, reminder: ReminderWithCo
   };
 }
 
-async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ subject: string; html: string }> {
+async function resolveReminderTemplate(reminder: ReminderWithContext) {
   let tpl = null as Awaited<ReturnType<typeof loadEmailTemplate>>;
 
   if (reminder.email_template_id) {
@@ -465,6 +466,12 @@ async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ sub
     }
     tpl = await pickEmailTemplate(docTemplateId);
   }
+
+  return tpl;
+}
+
+async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ subject: string; html: string }> {
+  const tpl = await resolveReminderTemplate(reminder);
 
   const vars = await buildEmailVars(reminder);
   vars.logo_url = templateAssetUrl(tpl?.logo_path);
@@ -615,6 +622,65 @@ export async function sendReminderEmailTo(
   return sendReminderEmail(reminder, [to], opts);
 }
 
+function renderGroupedFallbackHtml(vars: EmailVars, itemsHtml: string): string {
+  return ensureRtl(renderTemplate(loadReminderTemplate("grouped"), {
+    ...vars,
+    items_table: itemsHtml,
+  }, { escape: false }));
+}
+
+async function renderGroupedReminderEmail(opts: {
+  reminders: ReminderWithContext[];
+  clientName: string;
+  triggerDate: string;
+  itemsHtml: string;
+}): Promise<{ subject: string; html: string }> {
+  const first = opts.reminders[0];
+  const subject = `[תזכורת בדיקה] ${opts.clientName} — ${opts.reminders.length} פריטים`;
+  const vars = first ? await buildEmailVars(first) : {};
+  vars.client_company = opts.clientName || vars.client_company;
+  vars.trigger_date = opts.triggerDate;
+  vars.item_count = opts.reminders.length;
+  vars.items_table = opts.itemsHtml;
+  // Hide the single-item equipment box so grouped mail is not duplicated.
+  vars.equipment_type = "";
+  vars.manufacturer = "";
+  vars.model = "";
+  vars.serial_number = "";
+
+  let tpl = null as Awaited<ReturnType<typeof loadEmailTemplate>>;
+  try {
+    if (first) tpl = await resolveReminderTemplate(first);
+  } catch (err) {
+    logger.warn("grouped_reminder_template_load_failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  if (!tpl) {
+    vars.from_name = vars.from_name ?? "ReminderOCR";
+    return { subject, html: renderGroupedFallbackHtml(vars, opts.itemsHtml) };
+  }
+
+  vars.logo_url = templateAssetUrl(tpl?.logo_path);
+  vars.poster_url = (tpl as any)?.poster_url ?? null;
+  if (vars.document_url == null && (tpl as any)?.example_document_url) {
+    vars.document_url = (tpl as any).example_document_url;
+  }
+
+  try {
+    const source = prepareGroupedTemplateHtml(tpl.html, opts.itemsHtml);
+    const renderedHtml = renderTemplate(source, vars, { escape: false });
+    return { subject, html: ensureRtl(renderedHtml) };
+  } catch (err) {
+    logger.warn("grouped_reminder_template_render_failed", {
+      template_id: (tpl as any)?.id ?? null,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { subject, html: renderGroupedFallbackHtml(vars, opts.itemsHtml) };
+  }
+}
+
 export async function sendGroupedReminderEmail(opts: {
   reminders: ReminderWithContext[];
   recipients: string[];
@@ -634,13 +700,8 @@ export async function sendGroupedReminderEmail(opts: {
     const userId = String((opts.reminders[0] as any)?.user_id ?? "");
     const senderName = await resolveSenderName(userId);
     const from = formatAddress(senderName, settings.emailFrom);
-    const html = ensureRtl(renderTemplate(loadReminderTemplate("grouped"), {
-      client_company: opts.clientName,
-      trigger_date: opts.triggerDate,
-      item_count: opts.reminders.length,
-      items_table: opts.itemsHtml,
-      from_name: senderName,
-    }, { escape: false }));
+    const rendered = await renderGroupedReminderEmail(opts);
+    const html = rendered.html;
     const text = `תזכורת בדיקה עבור ${opts.clientName}: ${opts.reminders.length} פריטים למועד ${opts.triggerDate}`;
     const ccEmail: string[] = [];
     if (userId && process.env.SKIP_CC !== "true") {
@@ -649,16 +710,16 @@ export async function sendGroupedReminderEmail(opts: {
       if (userEmail && !opts.recipients.includes(userEmail)) ccEmail.push(userEmail);
     }
     if (useResend()) {
-      await sendViaResend({ from, to: opts.recipients, cc: ccEmail, subject, html, text });
+      await sendViaResend({ from, to: opts.recipients, cc: ccEmail, subject: rendered.subject, html, text });
     } else {
-      await buildTransport().sendMail({ from, to: opts.recipients.join(", "), cc: ccEmail.join(", ") || undefined, subject, html, text });
+      await buildTransport().sendMail({ from, to: opts.recipients.join(", "), cc: ccEmail.join(", ") || undefined, subject: rendered.subject, html, text });
     }
     logger.info("grouped_reminder_email_sent", {
       reminder_ids: opts.reminders.map((row) => row.id),
       recipient_count: opts.recipients.length,
       item_count: opts.reminders.length,
     });
-    return { success: true, subject };
+    return { success: true, subject: rendered.subject };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     logger.warn("grouped_reminder_email_failed", { error, item_count: opts.reminders.length });
