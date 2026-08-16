@@ -4,9 +4,13 @@ export type PrintTemplateEditorType = "grid" | "sections";
 
 export type PrintTemplateBorderWidth = "thin" | "medium" | "thick";
 
+export type PrintTemplateFieldSize = "normal" | "small";
+
 export interface PrintTemplateSectionField {
     label: string;
     bind: string;
+    bold?: boolean;
+    size?: PrintTemplateFieldSize;
 }
 
 export interface PrintTemplateSectionStyles {
@@ -208,7 +212,7 @@ export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
                 title: "4. הערות נוספות",
                 text: SECTION4_STATIC_TEXT,
             },
-            {type: "signature", enabled: true},
+            {type: "signature", enabled: true, align: "left"},
             createDefaultFooterSection(),
         ],
     };

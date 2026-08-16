@@ -198,7 +198,7 @@ function ensureFooterSection(layout: PrintTemplateLayout): PrintTemplateLayout {
   const footerIndex = layout.sections.findIndex((s) => s.type === "footer");
   const nextFooter = createDefaultFooterSection();
   if (footerIndex < 0) {
-    return {...layout, sections: [...layout.sections, nextFooter]};
+    return layout;
   }
   const current = layout.sections[footerIndex];
   if (current.type !== "footer") return layout;

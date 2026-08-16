@@ -12,7 +12,7 @@
           <tbody>
             <tr>
               <td class="hdr-side hdr-right">
-                <div v-for="f in section.fields.slice(2, 4)" :key="f.bind" class="hdr-field">
+                <div v-for="f in section.fields.slice(2, 4)" :key="f.bind" :class="fieldTextClass(f)" class="hdr-field">
                   <span class="hdr-lbl">{{ f.label }}:</span>
                   <span class="hdr-val">{{ val(f.bind) }}</span>
                 </div>
@@ -22,7 +22,7 @@
                 <div v-if="section.subtitle" class="hdr-sub">{{ section.subtitle }}</div>
               </td>
               <td class="hdr-side hdr-left">
-                <div v-for="f in section.fields.slice(0, 2)" :key="f.bind" class="hdr-field">
+                <div v-for="f in section.fields.slice(0, 2)" :key="f.bind" :class="fieldTextClass(f)" class="hdr-field">
                   <span class="hdr-lbl">{{ f.label }}:</span>
                   <span class="hdr-val">{{ val(f.bind) }}</span>
                 </div>
@@ -39,8 +39,8 @@
           <tbody>
             <tr v-for="(row, ri) in fieldsRows(section.fields, section.columns ?? 3)" :key="ri">
               <template v-for="(f, fi) in row" :key="fi">
-                <td class="lbl">{{ f?.label }}:</td>
-                <td class="val">{{ f ? val(f.bind) : '' }}</td>
+                <td :class="['lbl', ...fieldTextClass(f)]">{{ f?.label }}:</td>
+                <td :class="['val', ...fieldTextClass(f)]">{{ f ? val(f.bind) : '' }}</td>
               </template>
             </tr>
           </tbody>
@@ -93,7 +93,7 @@
         <div v-if="certLines(section).length" class="sig-cert">
           <div v-for="(line, li) in certLines(section)" :key="li" class="sig-cert-line">{{ line }}</div>
         </div>
-        <div :class="['sig-mark', `sig-align-${section.align ?? 'right'}`]">
+        <div :class="['sig-mark', `sig-align-${section.align ?? 'left'}`]">
           <div class="sig-label">חתימת הבודק:</div>
           <div class="sig-content">
             <div v-if="section.imageSrc" class="sig-image">
@@ -155,6 +155,14 @@ function val(bind: string): string {
   return props.data?.[bind] ?? "";
 }
 
+function fieldTextClass(field: PrintTemplateSectionField | null | undefined): string[] {
+  if (!field) return [];
+  return [
+    field.size === "small" ? "field-text--small" : "",
+    field.bold ? "field-text--bold" : "",
+  ].filter(Boolean);
+}
+
 function certLines(section: PrintTemplateLayoutSignatureSection): string[] {
   const template = signatureCertificationText(section);
   if (!template) return [];
@@ -213,15 +221,17 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
 .hdr-title { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
 .hdr-sub { font-size: 8px; line-height: 1.3; }
 .hdr-field { margin-bottom: 2px; font-size: 9px; }
-.hdr-lbl { font-weight: 600; }
+.hdr-lbl { font-weight: inherit; }
 .hdr-val { margin-right: 3px; }
+.field-text--small { font-size: 7px; }
+.field-text--bold { font-weight: 700; }
 .hdr-right { text-align: right; }
 .hdr-left { text-align: left; }
 
 /* Fields grid */
 .fields-grid { width: 100%; border-collapse: collapse; }
 .fields-grid td { padding: 2px 3px; vertical-align: top; font-size: 9px; }
-.fields-grid td.lbl { font-weight: 600; white-space: nowrap; width: 55px; text-align: right; }
+.fields-grid td.lbl { font-weight: inherit; white-space: nowrap; width: 55px; text-align: right; }
 .fields-grid td.val { border-bottom: 1px solid #ccc; min-width: 50px; }
 
 /* Data tables */

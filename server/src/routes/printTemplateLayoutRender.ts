@@ -51,14 +51,23 @@ function renderCertificationHtml(template: string, data: Record<string, unknown>
     return `<div class="sig-cert">${htmlLines.join("")}</div>`;
 }
 
-function renderFieldsGrid(fields: { label: string; bind: string }[], data: Record<string, unknown>, cols: number = 2): string {
+function fieldTextClass(field: { bold?: boolean; size?: string } | undefined): string {
+  const classes: string[] = [];
+  if (field?.size === "small") classes.push("field-text--small");
+  if (field?.bold) classes.push("field-text--bold");
+  return classes.join(" ");
+}
+
+function renderFieldsGrid(fields: { label: string; bind: string; bold?: boolean; size?: string }[], data: Record<string, unknown>, cols: number = 2): string {
   const rows: string[] = [];
   for (let i = 0; i < fields.length; i += cols) {
     const rowCells = [];
     for (let j = 0; j < cols; j++) {
       const f = fields[i + j];
       if (f) {
-        rowCells.push(`<td class="lbl">${escHtml(f.label)}:</td><td class="val">${fieldValue(data, f.bind)}</td>`);
+        const cls = fieldTextClass(f);
+        const extra = cls ? ` ${cls}` : "";
+        rowCells.push(`<td class="lbl${extra}">${escHtml(f.label)}:</td><td class="val${extra}">${fieldValue(data, f.bind)}</td>`);
       } else {
         rowCells.push(`<td></td><td></td>`);
       }
@@ -96,12 +105,14 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
     case "header": {
       const leftFields = section.fields.slice(0, 2);
       const rightFields = section.fields.slice(2, 4);
-      const leftMeta = leftFields.map((f) =>
-        `<div class="hdr-field"><span class="hdr-lbl">${escHtml(f.label)}:</span><span class="hdr-val">${fieldValue(data, f.bind)}</span></div>`,
-      ).join("");
-      const rightMeta = rightFields.map((f) =>
-        `<div class="hdr-field"><span class="hdr-lbl">${escHtml(f.label)}:</span><span class="hdr-val">${fieldValue(data, f.bind)}</span></div>`,
-      ).join("");
+      const leftMeta = leftFields.map((f) => {
+        const cls = fieldTextClass(f);
+        return `<div class="hdr-field${cls ? ` ${cls}` : ""}"><span class="hdr-lbl">${escHtml(f.label)}:</span><span class="hdr-val">${fieldValue(data, f.bind)}</span></div>`;
+      }).join("");
+      const rightMeta = rightFields.map((f) => {
+        const cls = fieldTextClass(f);
+        return `<div class="hdr-field${cls ? ` ${cls}` : ""}"><span class="hdr-lbl">${escHtml(f.label)}:</span><span class="hdr-val">${fieldValue(data, f.bind)}</span></div>`;
+      }).join("");
       return `<section class="${sectionClass(section, "block header-block")}">
         <table class="header-table"><tbody>
           <tr>
@@ -132,7 +143,7 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
             : (section.certificationText ?? DEFAULT_SIGNATURE_CERTIFICATION);
         const cert = certTemplate ? renderCertificationHtml(certTemplate, data) : "";
       const sigImg = section.imageSrc ? renderImage(section.imageSrc, "חתימה", 120) : "";
-        const align = section.align ?? "right";
+        const align = section.align ?? "left";
       return `<section class="${sectionClass(section, "block sig-block")}">
         ${cert}
         <div class="sig-mark sig-align-${align}">
@@ -200,15 +211,17 @@ export function renderSectionTemplateHtml(
   .hdr-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
   .hdr-sub { font-size: 9px; line-height: 1.3; }
   .hdr-field { margin-bottom: 3px; font-size: 10px; }
-  .hdr-lbl { font-weight: 600; }
+  .hdr-lbl { font-weight: inherit; }
   .hdr-val { margin-right: 4px; }
+  .field-text--small { font-size: 8px; }
+  .field-text--bold { font-weight: 700; }
   .hdr-right { text-align: right; }
   .hdr-left { text-align: left; }
 
   /* Fields grid (multi-column) */
   .fields-grid { width: 100%; border-collapse: collapse; }
   .fields-grid td { padding: 2px 4px; vertical-align: top; font-size: 10px; }
-  .fields-grid td.lbl { font-weight: 600; white-space: nowrap; width: 70px; text-align: right; }
+  .fields-grid td.lbl { font-weight: inherit; white-space: nowrap; width: 70px; text-align: right; }
   .fields-grid td.val { border-bottom: 1px solid #ccc; min-width: 80px; }
 
   /* Data tables */

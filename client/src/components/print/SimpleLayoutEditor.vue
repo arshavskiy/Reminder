@@ -69,6 +69,12 @@
                   type="button"
                   @click="addFindingRow(si)"
               >+ שורה</button>
+              <button
+                  class="btn btn--xs btn--danger"
+                  type="button"
+                  title="הסר סעיף"
+                  @click="removeSection(si)"
+              >הסר</button>
             </div>
           </header>
           <div class="section-card__opts">
@@ -82,7 +88,7 @@
             <n-input v-model:value="section.title" placeholder="כותרת" size="small" />
             <n-input v-model:value="section.subtitle" placeholder="כותרת משנה" size="small" style="margin-top:6px" />
             <div class="field-list">
-              <div v-for="(field, fi) in section.fields" :key="fi" class="field-row">
+              <div v-for="(field, fi) in section.fields" :key="fi" class="field-row field-row--style">
                 <n-input v-model:value="field.label" placeholder="תווית" size="small" />
                 <n-select
                     v-model:value="field.bind"
@@ -92,6 +98,20 @@
                     placeholder="bind"
                     size="small"
                 />
+                <button
+                    :class="{ 'btn--ghost-active': field.size === 'small' }"
+                    class="btn btn--xs btn--ghost"
+                    type="button"
+                    title="טקסט קטן"
+                    @click="toggleFieldSize(si, fi)"
+                >קטן</button>
+                <button
+                    :class="{ 'btn--ghost-active': field.bold }"
+                    class="btn btn--xs btn--ghost"
+                    type="button"
+                    title="מודגש"
+                    @click="toggleFieldBold(si, fi)"
+                >B</button>
                 <button class="btn btn--xs btn--danger" type="button" @click="removeField(si, fi)">×</button>
               </div>
             </div>
@@ -111,7 +131,7 @@
               </n-form-item>
             </div>
             <div class="field-list">
-              <div v-for="(field, fi) in section.fields" :key="fi" class="field-row">
+              <div v-for="(field, fi) in section.fields" :key="fi" class="field-row field-row--style">
                 <n-input v-model:value="field.label" placeholder="תווית" size="small" />
                 <n-select
                     v-model:value="field.bind"
@@ -121,6 +141,20 @@
                     placeholder="bind"
                     size="small"
                 />
+                <button
+                    :class="{ 'btn--ghost-active': field.size === 'small' }"
+                    class="btn btn--xs btn--ghost"
+                    type="button"
+                    title="טקסט קטן"
+                    @click="toggleFieldSize(si, fi)"
+                >קטן</button>
+                <button
+                    :class="{ 'btn--ghost-active': field.bold }"
+                    class="btn btn--xs btn--ghost"
+                    type="button"
+                    title="מודגש"
+                    @click="toggleFieldBold(si, fi)"
+                >B</button>
                 <button class="btn btn--xs btn--danger" type="button" @click="removeField(si, fi)">×</button>
               </div>
             </div>
@@ -186,6 +220,14 @@
                     type="textarea"
                     size="small"
                     @update:value="updateSignatureField(si, 'certificationText', $event)"
+                />
+              </n-form-item>
+              <n-form-item :show-feedback="false" label="יישור חתימה">
+                <n-select
+                    :options="alignOptions"
+                    :value="section.align ?? 'left'"
+                    size="small"
+                    @update:value="updateSignatureField(si, 'align', $event)"
                 />
               </n-form-item>
             </template>
@@ -447,7 +489,7 @@ function addNewSection(type: string | null) {
       newSection = {type: "static_text", title: "", text: ""};
       break;
     case "signature":
-      newSection = {type: "signature", enabled: true};
+      newSection = {type: "signature", enabled: true, align: "left"};
       break;
     case "image":
       newSection = {type: "image", src: ""};
@@ -461,6 +503,12 @@ function addNewSection(type: string | null) {
 
   patchLayout((l) => {
     l.sections.push(newSection);
+  });
+}
+
+function removeSection(sectionIndex: number) {
+  patchLayout((l) => {
+    l.sections.splice(sectionIndex, 1);
   });
 }
 
@@ -547,6 +595,26 @@ function removeField(sectionIndex: number, fieldIndex: number) {
     const target = l.sections[sectionIndex];
     if (target && (target.type === "header" || target.type === "fields")) {
       target.fields.splice(fieldIndex, 1);
+    }
+  });
+}
+
+function toggleFieldBold(sectionIndex: number, fieldIndex: number) {
+  patchLayout((l) => {
+    const target = l.sections[sectionIndex];
+    if (target && (target.type === "header" || target.type === "fields")) {
+      const field = target.fields[fieldIndex];
+      if (field) field.bold = !field.bold;
+    }
+  });
+}
+
+function toggleFieldSize(sectionIndex: number, fieldIndex: number) {
+  patchLayout((l) => {
+    const target = l.sections[sectionIndex];
+    if (target && (target.type === "header" || target.type === "fields")) {
+      const field = target.fields[fieldIndex];
+      if (field) field.size = field.size === "small" ? "normal" : "small";
     }
   });
 }
@@ -665,6 +733,14 @@ function removeFindingRow(sectionIndex: number, rowIndex: number) {
   grid-template-columns: 1fr 1fr auto;
   gap: 6px;
   align-items: center;
+}
+.field-row--style {
+  grid-template-columns: 1fr 1fr auto auto auto;
+}
+.btn--ghost-active {
+  background: var(--bg-elevated);
+  border-color: var(--brand-color);
+  color: var(--brand-color);
 }
 .field-row--3 { grid-template-columns: 60px 1fr 1fr; }
 .field-row--4 { grid-template-columns: 60px 1fr 1fr auto; }
