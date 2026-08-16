@@ -18,8 +18,8 @@
                 </div>
               </td>
               <td class="hdr-center">
-                <div class="hdr-title">{{ section.title }}</div>
-                <div v-if="section.subtitle" class="hdr-sub">{{ section.subtitle }}</div>
+                <div :class="['hdr-title', headingTextClass(section, 'title')]">{{ section.title }}</div>
+                <div v-if="section.subtitle" :class="['hdr-sub', headingTextClass(section, 'subtitle')]">{{ section.subtitle }}</div>
               </td>
               <td class="hdr-side hdr-left">
                 <div v-for="f in section.fields.slice(0, 2)" :key="f.bind" :class="fieldTextClass(f)" class="hdr-field">
@@ -141,6 +141,7 @@
 import {computed} from "vue";
 import type {
   PrintTemplateLayout,
+  PrintTemplateLayoutHeaderSection,
   PrintTemplateLayoutSignatureSection,
   PrintTemplateSectionField
 } from "@shared/printTemplateLayout.js";
@@ -160,6 +161,17 @@ function fieldTextClass(field: PrintTemplateSectionField | null | undefined): st
   return [
     field.size === "small" ? "field-text--small" : "",
     field.bold ? "field-text--bold" : "",
+  ].filter(Boolean);
+}
+
+function headingTextClass(section: PrintTemplateLayoutHeaderSection, which: "title" | "subtitle"): string[] {
+  const size = which === "title" ? section.titleSize : section.subtitleSize;
+  const bold = which === "title" ? section.titleBold !== false : !!section.subtitleBold;
+  return [
+    size === "small" ? `hdr-${which}--small` : "",
+    size === "large" ? `hdr-${which}--large` : "",
+    which === "title" && !bold ? "hdr-title--regular" : "",
+    which === "subtitle" && bold ? "hdr-sub--bold" : "",
   ].filter(Boolean);
 }
 
@@ -219,7 +231,13 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
 .hdr-side { width: 28%; }
 .hdr-center { width: 44%; text-align: center; vertical-align: middle; }
 .hdr-title { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
+.hdr-title--small { font-size: 10px; }
+.hdr-title--large { font-size: 16px; }
+.hdr-title--regular { font-weight: 400; }
 .hdr-sub { font-size: 8px; line-height: 1.3; }
+.hdr-sub--small { font-size: 7px; }
+.hdr-sub--large { font-size: 10px; }
+.hdr-sub--bold { font-weight: 700; }
 .hdr-field { margin-bottom: 2px; font-size: 9px; }
 .hdr-lbl { font-weight: inherit; }
 .hdr-val { margin-right: 3px; }

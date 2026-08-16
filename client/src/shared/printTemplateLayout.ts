@@ -6,6 +6,8 @@ export type PrintTemplateBorderWidth = "thin" | "medium" | "thick";
 
 export type PrintTemplateFieldSize = "normal" | "small";
 
+export type PrintTemplateTextSize = "small" | "normal" | "large";
+
 export interface PrintTemplateSectionField {
     label: string;
     bind: string;
@@ -28,6 +30,10 @@ export interface PrintTemplateLayoutHeaderSection {
     type: "header";
     title: string;
     subtitle?: string;
+    titleSize?: PrintTemplateTextSize;
+    titleBold?: boolean;
+    subtitleSize?: PrintTemplateTextSize;
+    subtitleBold?: boolean;
     fields: PrintTemplateSectionField[];
     style?: PrintTemplateSectionStyleOverride;
 }

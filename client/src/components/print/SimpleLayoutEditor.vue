@@ -85,8 +85,40 @@
           </div>
 
           <template v-if="section.type === 'header'">
-            <n-input v-model:value="section.title" placeholder="כותרת" size="small" />
-            <n-input v-model:value="section.subtitle" placeholder="כותרת משנה" size="small" style="margin-top:6px" />
+            <div class="heading-row">
+              <n-input v-model:value="section.title" placeholder="כותרת" size="small" />
+              <n-select
+                  :value="section.titleSize ?? 'normal'"
+                  :options="headingSizeOptions"
+                  size="small"
+                  style="width: 88px"
+                  @update:value="setHeaderTextStyle(si, 'titleSize', $event)"
+              />
+              <button
+                  :class="{ 'btn--ghost-active': section.titleBold !== false }"
+                  class="btn btn--xs btn--ghost"
+                  type="button"
+                  title="מודגש"
+                  @click="toggleHeaderBold(si, 'title')"
+              >B</button>
+            </div>
+            <div class="heading-row" style="margin-top:6px">
+              <n-input v-model:value="section.subtitle" placeholder="כותרת משנה" size="small" />
+              <n-select
+                  :value="section.subtitleSize ?? 'normal'"
+                  :options="headingSizeOptions"
+                  size="small"
+                  style="width: 88px"
+                  @update:value="setHeaderTextStyle(si, 'subtitleSize', $event)"
+              />
+              <button
+                  :class="{ 'btn--ghost-active': !!section.subtitleBold }"
+                  class="btn btn--xs btn--ghost"
+                  type="button"
+                  title="מודגש"
+                  @click="toggleHeaderBold(si, 'subtitle')"
+              >B</button>
+            </div>
             <div class="field-list">
               <div v-for="(field, fi) in section.fields" :key="fi" class="field-row field-row--style">
                 <n-input v-model:value="field.label" placeholder="תווית" size="small" />
@@ -357,6 +389,7 @@ import {
   LAYOUT_FIELD_PRESETS,
   type PrintTemplateLayout,
   type PrintTemplateSection,
+  type PrintTemplateTextSize,
 } from "@shared/printTemplateLayout.js";
 
 const props = defineProps<{
@@ -380,6 +413,11 @@ const columnsOptions = [
   { label: "2", value: 2 },
   { label: "3", value: 3 },
   { label: "4", value: 4 },
+];
+const headingSizeOptions = [
+  { label: "קטן", value: "small" },
+  { label: "רגיל", value: "normal" },
+  { label: "גדול", value: "large" },
 ];
 const alignOptions = [
   {label: "ימין", value: "right"},
@@ -619,6 +657,22 @@ function toggleFieldSize(sectionIndex: number, fieldIndex: number) {
   });
 }
 
+function setHeaderTextStyle(sectionIndex: number, key: "titleSize" | "subtitleSize", value: PrintTemplateTextSize) {
+  patchLayout((l) => {
+    const target = l.sections[sectionIndex];
+    if (target?.type === "header") target[key] = value;
+  });
+}
+
+function toggleHeaderBold(sectionIndex: number, which: "title" | "subtitle") {
+  patchLayout((l) => {
+    const target = l.sections[sectionIndex];
+    if (target?.type !== "header") return;
+    if (which === "title") target.titleBold = target.titleBold === false;
+    else target.subtitleBold = !target.subtitleBold;
+  });
+}
+
 function moveSection(sectionIndex: number, direction: -1 | 1) {
   patchLayout((l) => {
     const newIndex = sectionIndex + direction;
@@ -736,6 +790,12 @@ function removeFindingRow(sectionIndex: number, rowIndex: number) {
 }
 .field-row--style {
   grid-template-columns: 1fr 1fr auto auto auto;
+}
+.heading-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+  align-items: center;
 }
 .btn--ghost-active {
   background: var(--bg-elevated);

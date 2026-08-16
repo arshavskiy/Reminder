@@ -51,6 +51,17 @@ function renderCertificationHtml(template: string, data: Record<string, unknown>
     return `<div class="sig-cert">${htmlLines.join("")}</div>`;
 }
 
+function headingTextClass(section: { titleSize?: string; titleBold?: boolean; subtitleSize?: string; subtitleBold?: boolean }, which: "title" | "subtitle"): string {
+  const size = which === "title" ? section.titleSize : section.subtitleSize;
+  const bold = which === "title" ? section.titleBold !== false : !!section.subtitleBold;
+  const classes: string[] = [];
+  if (size === "small") classes.push(`hdr-${which}--small`);
+  if (size === "large") classes.push(`hdr-${which}--large`);
+  if (which === "title" && !bold) classes.push("hdr-title--regular");
+  if (which === "subtitle" && bold) classes.push("hdr-sub--bold");
+  return classes.length ? ` ${classes.join(" ")}` : "";
+}
+
 function fieldTextClass(field: { bold?: boolean; size?: string } | undefined): string {
   const classes: string[] = [];
   if (field?.size === "small") classes.push("field-text--small");
@@ -118,8 +129,8 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
           <tr>
             <td class="hdr-side hdr-right">${rightMeta}</td>
             <td class="hdr-center">
-              <div class="hdr-title">${escHtml(section.title)}</div>
-              ${section.subtitle ? `<div class="hdr-sub">${escHtml(section.subtitle)}</div>` : ""}
+              <div class="hdr-title${headingTextClass(section, "title")}">${escHtml(section.title)}</div>
+              ${section.subtitle ? `<div class="hdr-sub${headingTextClass(section, "subtitle")}">${escHtml(section.subtitle)}</div>` : ""}
             </td>
             <td class="hdr-side hdr-left">${leftMeta}</td>
           </tr>
@@ -209,7 +220,13 @@ export function renderSectionTemplateHtml(
   .hdr-side { width: 28%; }
   .hdr-center { width: 44%; text-align: center; vertical-align: middle; }
   .hdr-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .hdr-title--small { font-size: 11px; }
+  .hdr-title--large { font-size: 18px; }
+  .hdr-title--regular { font-weight: 400; }
   .hdr-sub { font-size: 9px; line-height: 1.3; }
+  .hdr-sub--small { font-size: 8px; }
+  .hdr-sub--large { font-size: 12px; }
+  .hdr-sub--bold { font-weight: 700; }
   .hdr-field { margin-bottom: 3px; font-size: 10px; }
   .hdr-lbl { font-weight: inherit; }
   .hdr-val { margin-right: 4px; }
