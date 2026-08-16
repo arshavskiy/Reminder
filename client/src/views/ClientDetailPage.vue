@@ -93,7 +93,7 @@
         <n-form v-if="editForm" label-placement="top">
           <n-form-item label="שם"><n-input v-model:value="editForm.display_name" /></n-form-item>
           <n-form-item label="איש קשר"><n-input v-model:value="editForm.contact_person" /></n-form-item>
-          <n-form-item label="אימייל"><n-input v-model:value="editForm.email" /></n-form-item>
+          <n-form-item label="אימייל"><n-input v-model:value="editForm.email" class="email-ltr" dir="ltr" /></n-form-item>
           <n-form-item label="טלפון"><n-input v-model:value="editForm.phone" /></n-form-item>
           <n-form-item label="הערות"><n-input v-model:value="editForm.notes" type="textarea" :rows="3" /></n-form-item>
         </n-form>

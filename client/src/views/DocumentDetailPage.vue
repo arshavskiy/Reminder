@@ -201,7 +201,7 @@
                 </n-gi>
                 <n-gi>
                   <n-form-item label="אימייל">
-                    <n-input v-model:value="contractSideForm.contact_email"/>
+                    <n-input v-model:value="contractSideForm.contact_email" dir="ltr" class="email-ltr"/>
                   </n-form-item>
                 </n-gi>
                 <n-gi>
@@ -309,12 +309,13 @@
                 class="fields-row"
               >
                 <span class="fields-label">{{ f.label }}</span>
-                <span class="fields-value">
+                <span :class="['fields-value', isEmailField(f.key) ? 'email-ltr' : '']">
                   <template v-if="editingFields && !Array.isArray(f.value) && (f.value === null || typeof f.value !== 'object')">
                     <input
                       v-model="fieldEdits[f.key]"
+                      :dir="isEmailField(f.key) ? 'ltr' : undefined"
                       :placeholder="f.label"
-                      class="fields-input"
+                      :class="['fields-input', isEmailField(f.key) ? 'email-ltr' : '']"
                     />
                   </template>
                   <template v-else-if="Array.isArray(f.value)">{{ f.value.join(', ') || '—' }}</template>
@@ -618,6 +619,10 @@ const extractedFields = computed(() => {
       : raw[f.key] ?? null,
   }));
 });
+
+function isEmailField(key: string) {
+  return key === "client_email" || key === "contact_email" || key === "email";
+}
 
 function shouldShowExtractedField(field: { key: string; value: unknown }) {
   if (editingFields.value || showEmptyFields.value || ALWAYS_VISIBLE_FIELD_KEYS.has(field.key)) return true;
@@ -1187,8 +1192,14 @@ onMounted(async () => {
   border-radius: 6px;
   padding: 4px 8px;
   outline: none;
-  direction: rtl;
+  unicode-bidi: plaintext;
   box-sizing: border-box;
+}
+.fields-input.email-ltr,
+.fields-value.email-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
 }
 .fields-input:focus {
   box-shadow: 0 0 0 2px rgba(99, 226, 183, 0.2);

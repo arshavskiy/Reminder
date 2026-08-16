@@ -93,17 +93,20 @@ describe("generateContractReminders — reminder title format", () => {
   });
 });
 
-describe("generateContractReminders — skip past trigger dates", () => {
-  it("skips reminder whose trigger date has already passed", () => {
+describe("generateContractReminders — past advance trigger", () => {
+  it("clamps a past trigger to today when expiry is still future", () => {
     const today = "2026-06-01";
     const trigger = triggerDate("2026-06-15", 30); // 2026-05-16 — already past
-    expect(trigger <= today).toBe(true); // would be skipped
+    expect(trigger < today).toBe(true);
+    const clamped = trigger < today ? today : trigger;
+    expect(clamped).toBe(today);
   });
 
-  it("includes reminder whose trigger date is in the future", () => {
+  it("keeps a future trigger date unchanged", () => {
     const today = "2026-06-01";
     const trigger = triggerDate("2026-12-01", 30); // 2026-11-01 — future
-    expect(trigger <= today).toBe(false); // would be included
+    const clamped = trigger < today ? today : trigger;
+    expect(clamped).toBe(trigger);
   });
 });
 

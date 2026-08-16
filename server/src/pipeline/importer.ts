@@ -1020,7 +1020,7 @@ function isReversedEmail(local: string, domain: string): boolean {
   return KNOWN_TLDS.has(reversedLocalTld) && !KNOWN_TLDS.has(domainLast);
 }
 
-function normalizeEmail(value: string): string {
+export function normalizeEmail(value: string): string {
   const cleaned = value.trim().replace(/[.,;:]+$/g, "").toLowerCase();
   const atIdx = cleaned.indexOf("@");
   if (atIdx === -1) return cleaned;
@@ -1710,13 +1710,14 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   const normalizedDisplayName = normalizeClientName(displayName);
   const normalizedPhone = normalizePhoneIdentityKey(phone);
   const normalizedNameKey = normalizeClientIdentityKey(normalizedDisplayName);
+  const normalizedEmail = email?.trim() ? normalizeEmail(email) : null;
   const userScope = userId ? { user_id: userId } : {};
   const logMeta = {
     user_id: userId ?? null,
     display_name: normalizedDisplayName,
     entity_type: entityType,
     id_number: idNumber ?? null,
-    email: email ?? null,
+    email: normalizedEmail,
     phone: phone ?? null,
     phone_key: normalizedPhone,
     name_key: normalizedNameKey,
@@ -1779,11 +1780,17 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   }
 
   // 2b. Email
-  if (!existing && email) {
+  if (!existing && normalizedEmail) {
     existing = await col("clients").findOne({
       ...userScope,
-      email: { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, "i") },
+      email: { $regex: new RegExp(`^${escapeRegex(normalizedEmail)}$`, "i") },
     }) as any;
+    if (!existing && email && email.trim().toLowerCase() !== normalizedEmail) {
+      existing = await col("clients").findOne({
+        ...userScope,
+        email: { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, "i") },
+      }) as any;
+    }
     if (existing) {
       matchStrategy = "email";
       logger.info("client_matched", { ...logMeta, strategy: matchStrategy, client_id: existing._id?.toString(), matched_display_name: existing.display_name ?? null });
@@ -1842,7 +1849,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
       {
         $set: {
           ...(shouldPromoteName && { display_name: normalizedDisplayName, entity_type: entityType }),
-          ...(email && existing.email !== email && { email }),
+          ...(normalizedEmail && existing.email !== normalizedEmail && { email: normalizedEmail }),
           ...(phone && !existing.phone && { phone }),
           ...(contactPerson && !existing.contact_person && { contact_person: contactPerson }),
           ...(idNumber && !existing.id_number && { id_number: idNumber }),
@@ -1867,7 +1874,7 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
     entity_type: entityType,
     contact_person: contactPerson ?? null,
     id_number: idNumber ?? null,
-    email: email ?? null,
+    email: normalizedEmail,
     phone: phone ?? null,
     notes: notes ?? null,
     created_at: new Date(),

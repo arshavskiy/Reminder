@@ -7,6 +7,7 @@ import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {clientDisplayName} from "../utils/clientNames";
 import {notifyEmailSendFailed, notifyReminderSkipped} from "../push/adminNotify";
+import {parseObjectRecord, pickContractEmail} from "../contracts/contractEmail.js";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
@@ -187,10 +188,10 @@ async function checkReminders() {
     const r = reminder as any;
     const [client, document, contract] = await Promise.all([
       r.client_id
-        ? col("clients").findOne({ _id: r.client_id } as any)
+        ? col("clients").findOne({ _id: toObjectId(r.client_id) } as any)
         : null,
       r.document_id
-        ? col("documents").findOne({ _id: r.document_id } as any)
+        ? col("documents").findOne({ _id: toObjectId(r.document_id) } as any)
         : null,
       resolveReminderContract(r),
     ]);
@@ -224,12 +225,25 @@ async function processReminder(reminder: ReminderWithContext) {
     logger.warn("reminder_email_to_malformed", { reminder_id: remId });
   }
 
-  if (recipients.length === 0 && reminder.client_id) {
-    const client = await col("clients").findOne({ _id: reminder.client_id } as any) as any;
-    if (client?.email) {
-      recipients = [client.email];
-      recipientSource = `client (${client.display_name ?? reminder.client_id})`;
-    } else {
+  if (recipients.length === 0) {
+    const [client, contract, document] = await Promise.all([
+      reminder.client_id
+        ? col("clients").findOne({ _id: toObjectId(reminder.client_id) } as any)
+        : null,
+      resolveReminderContract(reminder),
+      reminder.document_id
+        ? col("documents").findOne({ _id: toObjectId(reminder.document_id) } as any)
+        : null,
+    ]);
+    const fallbackEmail = pickContractEmail(
+      contract,
+      parseObjectRecord((document as any)?.extracted_fields),
+      client as { email?: unknown } | null,
+    );
+    if (fallbackEmail) {
+      recipients = [fallbackEmail];
+      recipientSource = "contract_document_or_client";
+    } else if (reminder.client_id) {
       logger.warn("reminder_client_email_missing", {
         reminder_id: remId,
         client_id: reminder.client_id,
@@ -256,8 +270,17 @@ async function processReminder(reminder: ReminderWithContext) {
       error: "no recipients resolved",
       smtp_host: settings.smtpHost || "in-app-only",
     } as any);
-    notifyReminderSkipped({ title: reminder.title });
-    await markSent(reminder);
+    notifyReminderSkipped({
+      title: reminder.title,
+      reminderId: remId,
+      clientId: reminder.client_id,
+      userId: (reminder as any).user_id ?? null,
+      reason: "no_recipients",
+    });
+    await col("reminders").updateOne(
+      { _id: toObjectId(remId) } as any,
+      { $set: { status: "error", updated_at: new Date() } },
+    );
     return;
   }
 
@@ -301,7 +324,7 @@ async function processReminder(reminder: ReminderWithContext) {
     await markSent(reminder);
   } else if (failCount + 1 >= 3) {
     await col("reminders").updateOne(
-      { _id: remId } as any,
+      { _id: toObjectId(remId) } as any,
       { $set: { status: "error", updated_at: new Date() } }
     );
     logger.error("reminder_send_failed_final", {
@@ -325,7 +348,7 @@ async function processReminder(reminder: ReminderWithContext) {
 
 async function markSent(reminder: ReminderWithContext) {
   await col("reminders").updateOne(
-    { _id: reminder.id } as any,
+    { _id: toObjectId(reminder.id) } as any,
     { $set: { status: "sent", updated_at: new Date() } }
   );
 
@@ -524,6 +547,19 @@ export async function generateContractReminders(
   const emailResolved = resolveContractReminderEmail(contactEmail, contract, client);
   if (!emailResolved) {
     logger.info("contract_reminder_skipped_no_email", { contract_id: contractId, user_id: userId ?? null });
+    const cleared = await col("reminders").deleteMany({
+      ...(userId && { user_id: userId }),
+      source_type: "contract_expiry",
+      source_id: contractId,
+      status: { $in: ["pending", "snoozed"] },
+    });
+    if (cleared.deletedCount) {
+      logger.info("contract_reminders_removed_no_email", {
+        user_id: userId ?? null,
+        contract_id: contractId,
+        deleted_count: cleared.deletedCount,
+      });
+    }
     return;
   }
 
@@ -583,7 +619,15 @@ export async function generateContractReminders(
       trigger_date: triggerDate,
       status: { $ne: "dismissed" },
     });
-    if (existing) continue;
+    if (existing) {
+      if (!existing.email_to) {
+        await col("reminders").updateOne(
+          { _id: existing._id },
+          { $set: { email_to: JSON.stringify([emailResolved]), updated_at: new Date() } },
+        );
+      }
+      continue;
+    }
 
     const title = `${baseLabel} ב-${expiryDate}`;
 
@@ -597,6 +641,7 @@ export async function generateContractReminders(
       document_id: documentId,
       trigger_date: triggerDate,
       advance_days: days,
+      email_to: JSON.stringify([emailResolved]),
       title: equipment ? `${title} | ${equipment}` : title,
       status: "pending",
       created_at: new Date(),

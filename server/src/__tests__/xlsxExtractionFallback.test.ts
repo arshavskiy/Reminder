@@ -348,6 +348,24 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(fields?.client_email).toBe("david155@012.net.il");
   });
 
+  it("keeps a local part that already ends with digits", () => {
+    const fields = normalizeExtractionFieldsForTemplate("", inspectionTemplate, {
+      contact_email: "yosishitrit1234@gmail.com",
+    });
+
+    expect(fields?.contact_email).toBe("yosishitrit1234@gmail.com");
+    expect(fields?.client_email).toBe("yosishitrit1234@gmail.com");
+  });
+
+  it("repairs a digit-prefixed local part glued by RTL", () => {
+    const fields = normalizeExtractionFieldsForTemplate("", inspectionTemplate, {
+      contact_email: "1234yosishitrit@gmail.com",
+    });
+
+    expect(fields?.contact_email).toBe("yosishitrit1234@gmail.com");
+    expect(fields?.client_email).toBe("yosishitrit1234@gmail.com");
+  });
+
   it("fills license_number from inspection text", () => {
     const fields = normalizeExtractionFieldsForTemplate("מספר רישוי: 201207", inspectionTemplate, {
       client_company: "מ.הנסון בע\"מ",

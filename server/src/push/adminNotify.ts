@@ -21,8 +21,31 @@ export function notifyDocumentUploaded(opts: { fileName?: string | null; userEma
   fire("מסמך חדש הועלה", `${opts.fileName ?? "מסמך"}${opts.userEmail ? ` · ${opts.userEmail}` : ""}`, "/admin");
 }
 
-export function notifyReminderSkipped(opts: { title?: string | null }): void {
-  fire("תזכורת נשלחה ללא נמען", `${opts.title ?? "תזכורת"} — אין נמען מוגדר`);
+export function buildReminderSkipAdminAlert(opts: {
+  title?: string | null;
+  reminderId?: string | null;
+  reason?: string | null;
+}): { pushTitle: string; pushBody: string } {
+  const title = opts.title?.trim() || "תזכורת";
+  const reason = opts.reason === "no_recipients" || !opts.reason
+    ? "אין נמען מוגדר / חסר אימייל ללקוח"
+    : opts.reason;
+  const reminderId = opts.reminderId?.trim() || "";
+  return {
+    pushTitle: "תזכורת לא נשלחה",
+    pushBody: `${title} — ${reason}${reminderId ? ` (${reminderId})` : ""}`,
+  };
+}
+
+export function notifyReminderSkipped(opts: {
+  title?: string | null;
+  reminderId?: string | null;
+  clientId?: string | null;
+  userId?: string | null;
+  reason?: string | null;
+}): void {
+  const alert = buildReminderSkipAdminAlert(opts);
+  fire(alert.pushTitle, alert.pushBody);
 }
 
 export function notifyPasswordResetRequested(opts: { email?: string | null }): void {

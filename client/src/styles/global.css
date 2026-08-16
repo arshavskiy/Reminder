@@ -147,12 +147,31 @@ pre {
 [lang="he"] {
   direction: rtl;
   text-align: right;
-  unicode-bidi: embed;
+  unicode-bidi: isolate;
+}
+
+.hebrew-text input,
+.hebrew-text textarea,
+[lang="he"] input,
+[lang="he"] textarea {
+  unicode-bidi: plaintext;
 }
 
 .ltr {
   direction: ltr;
-  unicode-bidi: embed;
+  unicode-bidi: isolate;
+}
+
+input[type="email"] {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+
+.email-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
 }
 
 /* ── Scrollbar (subtle, theme-aware) ──────────────────────── */

@@ -111,7 +111,7 @@
           <n-input v-model:value="form.contact_person" placeholder="שם איש הקשר" />
         </n-form-item>
         <n-form-item label="אימייל">
-          <n-input v-model:value="form.email" placeholder="israel@example.com" />
+          <n-input v-model:value="form.email" class="email-ltr" dir="ltr" placeholder="israel@example.com" />
         </n-form-item>
         <n-form-item label="טלפון">
           <n-input v-model:value="form.phone" placeholder="050-0000000" />
@@ -655,6 +655,7 @@ function bulkDeleteSelected() {
 
 .client-email-cell {
   direction: ltr;
+  unicode-bidi: isolate;
   color: var(--text-secondary);
   text-align: right;
 }

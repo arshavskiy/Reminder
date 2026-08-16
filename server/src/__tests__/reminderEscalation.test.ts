@@ -1,4 +1,5 @@
 import {describe, expect, it} from "vitest";
+import {buildReminderSkipAdminAlert} from "../push/adminNotify.js";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -80,5 +81,26 @@ describe("Reminder Escalation — cutoff date calculation", () => {
     const cutoff = cutoffIso(3, "2026-06-10"); // 2026-06-07
     expect("2026-06-06" <= cutoff).toBe(true);
     expect("2026-06-08" <= cutoff).toBe(false);
+  });
+});
+
+describe("buildReminderSkipAdminAlert", () => {
+  it("includes title, missing-email reason, and reminder id in the push body", () => {
+    const alert = buildReminderSkipAdminAlert({
+      title: "בדיקה הבאה ב-2026-09-14",
+      reminderId: "6a81d414d10324ebbf6588de",
+      reason: "no_recipients",
+    });
+
+    expect(alert.pushTitle).toBe("תזכורת לא נשלחה");
+    expect(alert.pushBody).toContain("בדיקה הבאה ב-2026-09-14");
+    expect(alert.pushBody).toContain("אין נמען מוגדר / חסר אימייל ללקוח");
+    expect(alert.pushBody).toContain("6a81d414d10324ebbf6588de");
+  });
+
+  it("falls back to a generic title when none is provided", () => {
+    const alert = buildReminderSkipAdminAlert({ reason: "no_recipients" });
+    expect(alert.pushBody.startsWith("תזכורת — ")).toBe(true);
+    expect(alert.pushBody).not.toContain("()");
   });
 });

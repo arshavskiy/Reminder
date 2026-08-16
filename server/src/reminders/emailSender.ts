@@ -460,7 +460,7 @@ async function renderReminderEmail(reminder: ReminderWithContext): Promise<{ sub
   if (!tpl) {
     let docTemplateId: string | null = null;
     if (reminder.document_id) {
-      const row = await col("documents").findOne({ _id: reminder.document_id } as any) as any;
+      const row = await col("documents").findOne({ _id: tryObjectId(reminder.document_id) } as any) as any;
       docTemplateId = row?.template_id ?? null;
     }
     tpl = await pickEmailTemplate(docTemplateId);
@@ -627,10 +627,11 @@ export async function sendEmailWithAttachments(
   if (!recipients.length) return { success: false, error: "No recipients configured" };
   try {
     const from = formatFrom(settings);
+    const attachmentList = attachments.length ? attachments : undefined;
     if (useResend()) {
-      await sendViaResend({ from, to: recipients, subject, html: html ?? `<pre>${text}</pre>`, text, attachments });
+      await sendViaResend({ from, to: recipients, subject, html: html ?? `<pre>${text}</pre>`, text, attachments: attachmentList });
     } else {
-      await buildTransport().sendMail({ from, to: recipients.join(", "), subject, text, html, attachments });
+      await buildTransport().sendMail({ from, to: recipients.join(", "), subject, text, html, attachments: attachmentList });
     }
     logger.info("email_with_attachments_sent", {
       recipient_count: recipients.length,
