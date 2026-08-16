@@ -196,6 +196,7 @@ export interface ContractManualFields {
   contact_person?: string | null;
   contact_phone?: string | null;
   contact_email?: string | null;
+  client_email?: string | null;
   client_address?: string | null;
   po_box?: string | null;
   client_zipcode?: string | null;
@@ -490,6 +491,8 @@ export interface PrintTemplate {
   /** "grid" = Excel designer (default); "sections" = simple layout editor */
   editorType?: import("./printTemplateLayout.js").PrintTemplateEditorType;
   layout?: import("./printTemplateLayout.js").PrintTemplateLayout;
+  user_id?: string;
+  is_shared?: boolean;
   created_at: string;
   updated_at: string;
 }

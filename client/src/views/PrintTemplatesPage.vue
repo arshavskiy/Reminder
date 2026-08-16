@@ -40,6 +40,7 @@
             <div class="pt-card__head">
               <h3 class="pt-card__name">{{ t.name }}</h3>
               <span class="tag tag--neutral">{{ t.page }}</span>
+              <span v-if="t.is_shared" class="tag tag--neutral">משותף</span>
             </div>
 
             <div class="pt-card__stats">
@@ -53,11 +54,11 @@
                 <n-icon :component="CreateOutline"/>
                 מלא ושלח
               </button>
-              <button class="btn btn--xs btn--ghost" @click.stop="editTemplate(t)">
+              <button v-if="canMutateTemplate(t)" class="btn btn--xs btn--ghost" @click.stop="editTemplate(t)">
                 <n-icon :component="BrushOutline"/>
                 עצב
               </button>
-              <button class="btn btn--xs btn--danger" @click.stop="deleteTemplate(t._id)">
+              <button v-if="canMutateTemplate(t)" class="btn btn--xs btn--danger" @click.stop="deleteTemplate(t._id)">
                 <n-icon :component="TrashOutline"/>
                 מחק
               </button>
@@ -234,7 +235,8 @@
           <span class="xl-titlebar-logo">M.A.D</span>
           <input v-model="editing.name" class="xl-titlebar-name" />
           <div style="flex:1"/>
-          <button :disabled="saving" :class="{ 'xl-tbtn--loading': saving }" class="xl-tbtn xl-tbtn--save" @click="saveTemplate">
+          <button :class="{ 'xl-tbtn--loading': saving }" :disabled="saving || !canMutateEditing"
+                  class="xl-tbtn xl-tbtn--save" @click="saveTemplate">
             <span v-if="saving" class="xl-loader" aria-hidden="true"></span>
             <span>שמור</span>
           </button>
@@ -560,6 +562,7 @@ import {BrushOutline, CreateOutline, PrintOutline, TrashOutline} from "@vicons/i
 import {storeToRefs} from "pinia";
 import {api} from "../services/apiService.js";
 import {useEngineerStore} from "../stores/engineer.js";
+import {useAuthStore} from "../stores/auth.js";
 import PageHeader from "../components/PageHeader.vue";
 import type {PrintCellBorderSides, PrintCellBorderStyle, PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
@@ -601,7 +604,12 @@ const route = useRoute();
 const router = useRouter();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const engineerStore = useEngineerStore();
+const authStore = useAuthStore();
 const {profile: engineerProfile} = storeToRefs(engineerStore);
+
+function canMutateTemplate(t: PrintTemplate) {
+  return authStore.isAdmin || (!t.is_shared && t.user_id === authStore.user?.id);
+}
 const routeDraftLoading = ref(isDraftRoute());
 
 // ── Mode ──────────────────────────────────────────────────────────────────────
@@ -682,6 +690,7 @@ async function loadEngineerProfile() {
 const saving    = ref(false);
 const previewing = ref(false);
 const editing   = ref<PrintTemplate|null>(null);
+const canMutateEditing = computed(() => !editing.value?._id || canMutateTemplate(editing.value));
 const richTextColors = ["#111111", "#c2410c", "#1d4ed8", "#15803d", "#7c3aed"];
 const imageInputEl = ref<HTMLInputElement | null>(null);
 
@@ -1170,6 +1179,7 @@ async function savePdf() {
       contract_id: routeContractId.value || draftContractId(),
     });
     if(saved.documentId) draftMeta.value = {...draftMeta.value, document_id: saved.documentId};
+    if (!(saved.blob instanceof Blob)) throw new Error("PDF save did not return a file");
     downloadBlob(saved.blob, generatedPdfFileName(collectComposeData(), composing.value.name));
     message.success(saved.savedToS3 ? "PDF נשמר ב-S3, קושר למסמכים והורד" : "PDF נשמר במסמכים והורד. S3 לא זמין או לא הוגדר");
   } catch(e:any){ message.error(e.message); }
@@ -1273,6 +1283,7 @@ function formatComposeReportNumber(value: string, base: string): string {
 }
 
 function downloadBlob(blob: Blob, filename: string) {
+  if (!(blob instanceof Blob)) throw new Error("PDF save did not return a file");
   const url=URL.createObjectURL(blob);
   const anchor=document.createElement("a");
   anchor.href=url;
@@ -1355,7 +1366,7 @@ async function createContractFromCompose() {
       manual_fields: fields,
       confidence: "manual",
       status: "active",
-      skip_reminders: true,
+      skip_reminders: false,
     } as any);
     draftMeta.value = {
       ...draftMeta.value,

@@ -186,6 +186,7 @@ async function applyIndexes(db: Db): Promise<void> {
   // print_templates
   await db.collection("print_templates").createIndex({ user_id: 1 });
   await db.collection("print_templates").createIndex({ user_id: 1, name: 1 });
+    await db.collection("print_templates").createIndex({is_shared: 1}, {sparse: true});
 
   // print_template_drafts — legacy template drafts plus one saved fill-state per contract
   try { await db.collection("print_template_drafts").dropIndex("user_id_1_template_id_1"); } catch { /* didn't exist */ }

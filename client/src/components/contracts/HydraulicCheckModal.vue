@@ -1392,7 +1392,6 @@ defineExpose({open, openForUpdate});
   direction: rtl;
   width: min(1260px, 96vw) !important;
   max-width: 96vw !important;
-  min-height: 800px;
   display: flex;
   flex-direction: column;
   border-radius: 16px;

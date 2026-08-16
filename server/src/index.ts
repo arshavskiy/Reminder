@@ -11,6 +11,8 @@ import {getSettings, validateEnv} from "./settings";
 import {startScheduler} from "./reminders/scheduler";
 import {seedBuiltinTemplates} from "./templates/seedTemplates";
 import {seedDefaultEmailTemplate} from "./templates/seedEmailTemplates";
+import {promoteSharedPrintTemplates} from "./templates/seedPrintTemplates";
+import {collapseDuplicateGeneratedPdfs} from "./documents/collapseGeneratedPdfs";
 import {seedFeatureDefinitions} from "./features";
 import {registerDocumentRoutes} from "./routes/documents";
 import {registerClientRoutes} from "./routes/clients";
@@ -205,6 +207,8 @@ async function main() {
   await seedFeatureDefinitions();
   await seedBuiltinTemplates();
   await seedDefaultEmailTemplate();
+  await promoteSharedPrintTemplates();
+  await collapseDuplicateGeneratedPdfs();
 
   app.listen(settings.port, () => {
     logger.info("server_started", {

@@ -1,4 +1,23 @@
 import {describe, expect, it, vi} from "vitest";
+import {resolveContractReminderEmail} from "../reminders/scheduler.js";
+
+describe("resolveContractReminderEmail", () => {
+    it("uses the explicit contact email first", () => {
+        expect(resolveContractReminderEmail("a@x.com", {manual_fields: {contact_email: "b@x.com"}}, {email: "c@x.com"})).toBe("a@x.com");
+    });
+
+    it("falls back to contract form email when the client record has none", () => {
+        expect(resolveContractReminderEmail(null, {manual_fields: {contact_email: "form@x.com"}}, {email: null})).toBe("form@x.com");
+    });
+
+    it("falls back to client_email from the print template fields", () => {
+        expect(resolveContractReminderEmail(null, {manual_fields: {client_email: "layout@x.com"}}, null)).toBe("layout@x.com");
+    });
+
+    it("returns null when no email exists anywhere", () => {
+        expect(resolveContractReminderEmail(null, {manual_fields: {}}, {email: "  "})).toBeNull();
+    });
+});
 
 // ── reminder label derivation (mirrors generateContractReminders logic) ────────
 

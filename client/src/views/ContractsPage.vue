@@ -667,6 +667,7 @@ import type {
   PrintTemplate,
   ReminderWithContext
 } from "@shared/types.js";
+import {contractRowHasEmail} from "@shared/contractEmail.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
@@ -1854,7 +1855,7 @@ async function createHydraulicContract() {
     contract_number: contractNumber || undefined,
     client_id: hydraulicClientId.value ?? undefined,
     interval_months: hydraulicIntervalMonths.value,
-    skip_reminders: true,
+    skip_reminders: false,
     next_inspection_date: hydraulicReminderMode.value === "date"
         ? formatLocalDate(hydraulicReminderDateMs.value!)
         : undefined,
@@ -2368,7 +2369,7 @@ function monthRangeIso() {
 }
 
 function contractHasEmail(row: ContractWithClient): boolean {
-  return Boolean((row.contact_email ?? "").trim());
+  return contractRowHasEmail(row);
 }
 
 function contractHasSentReminder(row: ContractWithClient): boolean {

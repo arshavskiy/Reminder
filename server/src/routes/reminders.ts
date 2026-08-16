@@ -359,6 +359,14 @@ export function registerReminderRoutes(app: express.Application) {
       selectedClient = existing;
       clientId = existing._id.toString();
       clientDisplayName = normalizeClientNameForDisplay(existing.display_name) ?? existing.display_name;
+      const formEmail = body.business?.email?.trim();
+      if (formEmail && !String(existing.email ?? "").trim()) {
+        await col("clients").updateOne(
+            {_id: existing._id},
+            {$set: {email: formEmail, updated_at: now}},
+        );
+        selectedClient = {...existing, email: formEmail};
+      }
     } else {
       const requestedName = normalizeClientNameForDisplay(body.business?.display_name);
       const requestedPhoneKey = normalizePhoneIdentityKey(body.business?.phone);
@@ -377,6 +385,14 @@ export function registerReminderRoutes(app: express.Application) {
         selectedClient = existingByPhone;
         clientId = existingByPhone._id.toString();
         clientDisplayName = normalizeClientNameForDisplay(existingByPhone.display_name) ?? existingByPhone.display_name;
+        const formEmail = body.business?.email?.trim();
+        if (formEmail && !String(existingByPhone.email ?? "").trim()) {
+          await col("clients").updateOne(
+              {_id: existingByPhone._id},
+              {$set: {email: formEmail, updated_at: now}},
+          );
+          selectedClient = {...existingByPhone, email: formEmail};
+        }
         logger.info("reminder_client_reused_existing", {
           user_id: userId,
           strategy: "phone",
@@ -560,7 +576,7 @@ export function registerReminderRoutes(app: express.Application) {
     const contractId = contractResult.insertedId.toString();
 
     if (body.skip_reminders !== true) {
-      await generateContractReminders(contractId, clientId, null, expiryDate, userId);
+      await generateContractReminders(contractId, clientId, null, expiryDate, userId, contactEmail);
 
       await col("reminders").updateMany(
         { source_type: "contract_expiry", source_id: contractId },

@@ -24,7 +24,7 @@
           >☰ רשימה</n-button>
         </div>
         <n-button size="small" secondary @click="emit('open-monthly-report', cursor.getTime())">דוח חודשי</n-button>
-        <n-button size="small" secondary @click="printCalendar">הדפסה</n-button>
+        <!--        <n-button size="small" secondary @click="printCalendar">הדפסה</n-button>-->
         <n-button
           v-if="!testsOnly"
           :disabled="sendableVisibleReminders.length === 0 || sendingVisible"

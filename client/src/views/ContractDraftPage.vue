@@ -570,6 +570,7 @@ async function savePdf() {
     if (saved.documentId) {
       draftMeta.value = {...draftMeta.value, document_id: saved.documentId};
     }
+    if (!(saved.blob instanceof Blob)) throw new Error("PDF save did not return a file");
     downloadBlob(saved.blob, generatedPdfFileName(data, template.value.name));
     message.success(saved.savedToS3 ? "PDF נשמר ב-S3, קושר למסמכים והורד" : "PDF נשמר במסמכים והורד. S3 לא זמין או לא הוגדר");
   } catch (error: any) {
@@ -669,6 +670,7 @@ function pickFirstString(data: Record<string, unknown>, keys: string[]): string 
 }
 
 function downloadBlob(blob: Blob, filename: string) {
+  if (!(blob instanceof Blob)) throw new Error("PDF save did not return a file");
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

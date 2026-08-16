@@ -479,6 +479,27 @@ export async function generateTaskReminders(
   }
 }
 
+export function resolveContractReminderEmail(
+    contactEmail?: string | null,
+    contract?: { manual_fields?: Record<string, unknown> | null } | null,
+    client?: { email?: string | null } | null,
+): string | null {
+  const manual = contract?.manual_fields && typeof contract.manual_fields === "object"
+      ? contract.manual_fields
+      : {};
+  const candidates = [
+    contactEmail,
+    typeof manual.contact_email === "string" ? manual.contact_email : null,
+    typeof manual.client_email === "string" ? manual.client_email : null,
+    client?.email,
+  ];
+  for (const value of candidates) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
 export async function generateContractReminders(
   contractId: string,
   clientId: string | null,
@@ -494,14 +515,13 @@ export async function generateContractReminders(
   try { const { ObjectId } = await import("mongodb"); contractOid = new ObjectId(contractId); } catch { contractOid = contractId; }
   const contract = await col("contracts").findOne({ _id: contractOid }) as any;
 
-  // Resolve email: extracted email > client DB email. Skip if none.
-  let emailResolved = Boolean(contactEmail?.trim());
-  if (!emailResolved && clientId) {
+  let client: any = null;
+  if (clientId) {
     let clientOid: any = clientId;
     try { const { ObjectId } = await import("mongodb"); clientOid = new ObjectId(clientId); } catch {}
-    const client = await col("clients").findOne({ _id: clientOid }) as any;
-    emailResolved = Boolean(client?.email?.trim());
+    client = await col("clients").findOne({_id: clientOid}) as any;
   }
+  const emailResolved = resolveContractReminderEmail(contactEmail, contract, client);
   if (!emailResolved) {
     logger.info("contract_reminder_skipped_no_email", { contract_id: contractId, user_id: userId ?? null });
     return;

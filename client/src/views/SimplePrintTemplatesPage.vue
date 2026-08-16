@@ -25,6 +25,7 @@
             <div class="pt-card__head">
               <h3>{{ t.name }}</h3>
               <span class="tag tag--neutral">פריסה</span>
+              <span v-if="t.is_shared" class="tag tag--neutral">משותף</span>
             </div>
             <p class="pt-card__meta">
               מסגרת: {{ borderLabel(t) }} · {{ sectionCount(t) }} סעיפים
@@ -34,11 +35,11 @@
                 <n-icon :component="CreateOutline"/>
                 מלא ושלח
               </button>
-              <button class="btn btn--xs btn--ghost" @click="editTemplate(t)">
+              <button v-if="canMutateTemplate(t)" class="btn btn--xs btn--ghost" @click="editTemplate(t)">
                 <n-icon :component="BrushOutline"/>
                 ערוך
               </button>
-              <button class="btn btn--xs btn--danger" @click="deleteTemplate(t._id)">
+              <button v-if="canMutateTemplate(t)" class="btn btn--xs btn--danger" @click="deleteTemplate(t._id)">
                 <n-icon :component="TrashOutline"/>
               </button>
             </div>
@@ -64,7 +65,8 @@
         </template>
         <template #actions>
           <button class="btn btn--ghost" @click="goList">ביטול</button>
-          <button class="btn btn--primary" :disabled="saving" @click="saveTemplate">שמור</button>
+          <button v-if="canMutateEditing" :disabled="saving" class="btn btn--primary" @click="saveTemplate">שמור
+          </button>
         </template>
       </PageHeader>
       <SimpleLayoutEditor
@@ -141,6 +143,10 @@ import {
 const authStore = useAuthStore();
 const engineerStore = useEngineerStore();
 
+function canMutateTemplate(t: PrintTemplate) {
+  return authStore.isAdmin || (!t.is_shared && t.user_id === authStore.user?.id);
+}
+
 type Mode = "list" | "edit" | "compose";
 
 const router = useRouter();
@@ -154,6 +160,7 @@ const loadError = ref<string | null>(null);
 const templates = ref<PrintTemplate[]>([]);
 const saving = ref(false);
 const editing = ref<PrintTemplate | null>(null);
+const canMutateEditing = computed(() => !editing.value?._id || canMutateTemplate(editing.value));
 const editingLayout = ref<PrintTemplateLayout>(createDefaultPrintTemplateLayout());
 const composing = ref<PrintTemplate | null>(null);
 const composeContractId = ref<string | null>(null);
@@ -361,8 +368,9 @@ async function savePdf() {
   savingPdf.value = true;
   try {
     const meta = composeContractId.value ? { contract_id: composeContractId.value } : {};
-    const blob = await api.printTemplates.savePdf(composing.value._id, composeData.value, meta);
-    const url = URL.createObjectURL(blob);
+    const saved = await api.printTemplates.savePdf(composing.value._id, composeData.value, meta);
+    if (!(saved.blob instanceof Blob)) throw new Error("PDF save did not return a file");
+    const url = URL.createObjectURL(saved.blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `${composing.value.name}.pdf`;

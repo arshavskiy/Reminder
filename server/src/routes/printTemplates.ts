@@ -4,11 +4,24 @@ import {spawnSync} from "node:child_process";
 import {col} from "../db/db.js";
 import {requireAuth} from "../auth/middleware.js";
 import {ObjectId} from "mongodb";
+import {
+  canMutatePrintTemplate,
+  presentPrintTemplate,
+  printTemplateVisibleFilter,
+  shouldShareNewPrintTemplate,
+} from "../templates/printTemplateAccess.js";
 import {createHash} from "node:crypto";
 import {join} from "node:path";
 import {getDataDir} from "../settings.js";
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces.js";
 import {renderSectionTemplateHtml} from "./printTemplateLayoutRender.js";
+import {firstTrimmedEmail, parseObjectRecord} from "../contracts/contractEmail.js";
+import {
+  generatedPdfReplaceQuery,
+  pickGeneratedPdfToKeep,
+  reportNumberFromFields,
+  reportNumberFromFileName,
+} from "../documents/generatedPdfReplace.js";
 
 async function getEngineerData(userId: string): Promise<Record<string, string>> {
     try {
@@ -36,16 +49,20 @@ function tryObjectId(id: string) {
   try { return new ObjectId(id); } catch { return id as any; }
 }
 
+function visibleTemplateQuery(id: string, userId: string) {
+    return {_id: tryObjectId(id), ...printTemplateVisibleFilter(userId)};
+}
+
 export function registerPrintTemplateRoutes(app: Express) {
   // List all print templates for the authenticated user
   app.get("/api/print-templates", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
     const templates = await col("print_templates")
-      .find({ user_id: auth.userId })
+        .find(printTemplateVisibleFilter(auth.userId))
       .sort({ created_at: -1 })
       .toArray();
-    res.json(templates.map(t => ({ ...t, _id: t._id.toString() })));
+      res.json(templates.map(t => presentPrintTemplate(t, auth.userId)));
   });
 
   app.get("/api/print-templates/drafts", async (req, res) => {
@@ -60,7 +77,7 @@ export function registerPrintTemplateRoutes(app: Express) {
     const clientIds = drafts.map((draft: any) => draft.client_id).filter(Boolean).map((id: string) => tryObjectId(String(id)));
     const contractIds = drafts.map((draft: any) => draft.contract_id).filter(Boolean).map((id: string) => tryObjectId(String(id)));
     const [templates, clients, contracts] = await Promise.all([
-      templateIds.length ? col("print_templates").find({ _id: { $in: templateIds }, user_id: auth.userId } as any).toArray() : [],
+        templateIds.length ? col("print_templates").find({_id: {$in: templateIds}, ...printTemplateVisibleFilter(auth.userId)} as any).toArray() : [],
       clientIds.length ? col("clients").find({ _id: { $in: clientIds }, user_id: auth.userId } as any).toArray() : [],
       contractIds.length ? col("contracts").find({ _id: { $in: contractIds }, user_id: auth.userId } as any).toArray() : [],
     ]);
@@ -92,9 +109,9 @@ export function registerPrintTemplateRoutes(app: Express) {
   app.get("/api/print-templates/:id", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const t = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId });
+      const t = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId));
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
-    res.json({ ...t, _id: t._id.toString() });
+      res.json(presentPrintTemplate(t, auth.userId));
   });
 
   // Create print template
@@ -116,17 +133,27 @@ export function registerPrintTemplateRoutes(app: Express) {
       hasFixedFrame: !!hasFixedFrame,
       editorType: isSections ? "sections" : "grid",
       layout: isSections ? layout ?? null : null,
+        is_shared: shouldShareNewPrintTemplate(auth),
       created_at: now,
       updated_at: now,
     };
     const result = await col("print_templates").insertOne(doc as any);
-    res.status(201).json({ ...doc, _id: result.insertedId.toString() });
+      res.status(201).json(presentPrintTemplate({...doc, _id: result.insertedId}, auth.userId));
   });
 
   // Update print template
   app.put("/api/print-templates/:id", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
+      const existing = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId));
+      if (!existing) {
+          res.status(404).json({error: "Not found"});
+          return;
+      }
+      if (!canMutatePrintTemplate(auth, existing as any)) {
+          res.status(403).json({error: "Shared templates can only be edited by an admin"});
+          return;
+      }
     const { name, page, dir, cols, rows, cells, hasFixedFrame, editorType, layout } = req.body;
     const now = new Date().toISOString();
     const update: Record<string, unknown> = { updated_at: now };
@@ -140,19 +167,19 @@ export function registerPrintTemplateRoutes(app: Express) {
     if (editorType !== undefined) update.editorType = editorType === "sections" ? "sections" : "grid";
     if (layout !== undefined) update.layout = layout;
     const result = await col("print_templates").findOneAndUpdate(
-      { _id: tryObjectId(req.params.id), user_id: auth.userId },
+        {_id: tryObjectId(req.params.id)},
       { $set: update },
       { returnDocument: "after" }
     );
     if (!result) { res.status(404).json({ error: "Not found" }); return; }
-    res.json({ ...result, _id: result._id.toString() });
+      res.json(presentPrintTemplate(result, auth.userId));
   });
 
   // Get saved fill draft for a template
   app.get("/api/print-templates/:id/draft", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const template = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId });
+      const template = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId));
     if (!template) { res.status(404).json({ error: "Not found" }); return; }
     const contractId = typeof req.query.contractId === "string" && req.query.contractId.trim() ? req.query.contractId.trim() : null;
     const draft = contractId
@@ -171,7 +198,7 @@ export function registerPrintTemplateRoutes(app: Express) {
   app.put("/api/print-templates/:id/draft", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const template = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId });
+      const template = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId));
     if (!template) { res.status(404).json({ error: "Not found" }); return; }
     const data = sanitizeDraftData(req.body?.data ?? {});
     const meta = sanitizeDraftMeta(req.body?.meta ?? {});
@@ -205,7 +232,16 @@ export function registerPrintTemplateRoutes(app: Express) {
   app.delete("/api/print-templates/:id", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const result = await col("print_templates").deleteOne({ _id: tryObjectId(req.params.id), user_id: auth.userId });
+      const existing = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId));
+      if (!existing) {
+          res.status(404).json({error: "Not found"});
+          return;
+      }
+      if (!canMutatePrintTemplate(auth, existing as any)) {
+          res.status(403).json({error: "Shared templates can only be deleted by an admin"});
+          return;
+      }
+      const result = await col("print_templates").deleteOne({_id: tryObjectId(req.params.id)});
     if (result.deletedCount === 0) { res.status(404).json({ error: "Not found" }); return; }
     res.json({ ok: true });
   });
@@ -214,13 +250,13 @@ export function registerPrintTemplateRoutes(app: Express) {
   app.post("/api/print-templates/:id/pdf", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const t = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId }) as any;
+      const t = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId)) as any;
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
       const clientData: Record<string, unknown> = req.body.data ?? {};
       const engineerDefaults = await getEngineerData(auth.userId);
       const data: Record<string, unknown> = {...engineerDefaults, ...clientData};
     try {
-      const pdf = await renderTemplatePdf(t, data);
+        const pdf = await renderTemplatePdf(presentPrintTemplate(t, auth.userId), data);
       res.set("Content-Type", "application/pdf");
       res.set("Content-Disposition", `inline; filename="template-${t._id}.pdf"`);
       res.send(Buffer.from(pdf));
@@ -232,14 +268,14 @@ export function registerPrintTemplateRoutes(app: Express) {
   app.post("/api/print-templates/:id/pdf/save", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const t = await col("print_templates").findOne({ _id: tryObjectId(req.params.id), user_id: auth.userId }) as any;
+      const t = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId)) as any;
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
       const clientData: Record<string, unknown> = req.body.data ?? {};
       const engineerDefaults = await getEngineerData(auth.userId);
       const data: Record<string, unknown> = {...engineerDefaults, ...clientData};
     const meta = sanitizeDraftMeta(req.body?.meta ?? {});
     try {
-      const pdf = Buffer.from(await renderTemplatePdf(t, data));
+        const pdf = Buffer.from(await renderTemplatePdf(presentPrintTemplate(t, auth.userId), data));
       const savedDocument = await saveGeneratedPdfDocument({
         userId: auth.userId,
         template: t,
@@ -256,7 +292,8 @@ export function registerPrintTemplateRoutes(app: Express) {
       res.set("X-Saved-To-S3", savedDocument.savedToS3 ? "true" : "false");
       res.send(pdf);
     } catch (err) {
-      res.status(500).json({ error: String(err) });
+        console.error("[print-templates] pdf/save failed:", err);
+        res.status(500).json({error: err instanceof Error ? err.message : String(err)});
     }
   });
 
@@ -390,6 +427,8 @@ async function saveGeneratedPdfDocument(args: {
   const signedUrlExpiresAt = downloadUrl ? new Date(Date.now() + SIGNED_URL_TTL * 1000) : null;
   const contractId = typeof meta.contract_id === "string" && meta.contract_id.trim() ? meta.contract_id.trim() : null;
   const clientId = typeof meta.client_id === "string" && meta.client_id.trim() ? meta.client_id.trim() : null;
+    const reportNumber = reportNumberFromFields(data) ?? reportNumberFromFileName(fileName);
+    const composeEmail = firstTrimmedEmail(data.client_email, data.contact_email, data.email);
   const docRecord: Record<string, any> = {
     user_id: userId,
     file_name: fileName,
@@ -405,9 +444,8 @@ async function saveGeneratedPdfDocument(args: {
     template_id: String(template._id),
     client_id: clientId,
     contract_id: contractId,
-    extracted_fields: data,
+      extracted_fields: JSON.parse(JSON.stringify(data)),
     ai_extracted: false,
-    created_at: now,
     updated_at: now,
     spaces_key: spacesKey,
     spaces_url: spacesUrl,
@@ -415,16 +453,44 @@ async function saveGeneratedPdfDocument(args: {
     signed_url_expires_at: signedUrlExpiresAt,
   };
 
-  const existing = await col("documents").findOne({ user_id: userId, file_hash: fileHash });
+    const replaceQuery = generatedPdfReplaceQuery(userId, {contractId, reportNumber});
+    const [matches, contract, hashDoc] = await Promise.all([
+        replaceQuery ? col("documents").find(replaceQuery).toArray() : Promise.resolve([]),
+        contractId
+            ? col("contracts").findOne({_id: tryObjectId(contractId), user_id: userId})
+            : Promise.resolve(null),
+        col("documents").findOne({user_id: userId, file_hash: fileHash}),
+    ]);
+    const byId = new Map<string, any>();
+    for (const doc of matches) byId.set(String(doc._id), doc);
+    if (hashDoc) byId.set(String(hashDoc._id), hashDoc);
+
+    const preferredId = hashDoc
+        ? String(hashDoc._id)
+        : String((contract as any)?.document_id ?? "");
+    const picked = pickGeneratedPdfToKeep(
+        [...byId.values()].map((doc: any) => ({
+            id: String(doc._id),
+            created_at: doc.created_at,
+            updated_at: doc.updated_at,
+        })),
+        preferredId,
+    );
+
   let documentId: string;
-  if (existing) {
-    documentId = existing._id.toString();
+    if (picked) {
+        documentId = picked.keepId;
+        if (picked.deleteIds.length) {
+            await col("documents").deleteMany({
+                _id: {$in: picked.deleteIds.map((id) => tryObjectId(id))},
+            });
+        }
     await col("documents").updateOne(
-      { _id: existing._id },
-      { $set: {...docRecord, updated_at: now} }
+        {_id: tryObjectId(documentId)},
+        {$set: docRecord},
     );
   } else {
-    documentId = (await col("documents").insertOne(docRecord)).insertedId.toString();
+        documentId = (await col("documents").insertOne({...docRecord, created_at: now} as any)).insertedId.toString();
   }
 
   if (clientId) {
@@ -433,11 +499,30 @@ async function saveGeneratedPdfDocument(args: {
       { $setOnInsert: { document_id: documentId, client_id: clientId, user_id: userId, created_at: now } },
       { upsert: true }
     );
+      if (composeEmail) {
+          await col("clients").updateOne(
+              {
+                  _id: tryObjectId(clientId),
+                  user_id: userId,
+                  $or: [{email: null}, {email: ""}, {email: {$exists: false}}]
+              },
+              {$set: {email: composeEmail, updated_at: now}},
+          );
+      }
   }
   if (contractId) {
+      const contractSet: Record<string, unknown> = {document_id: documentId, updated_at: now};
+      if (composeEmail) {
+          const manual = parseObjectRecord((contract as any)?.manual_fields);
+          contractSet.manual_fields = {
+              ...manual,
+              contact_email: composeEmail,
+              client_email: composeEmail,
+          };
+      }
     await col("contracts").updateOne(
       { _id: tryObjectId(contractId), user_id: userId },
-      { $set: { document_id: documentId, updated_at: now } }
+        {$set: contractSet}
     );
   }
   return {documentId, savedToS3: Boolean(spacesKey)};

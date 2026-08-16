@@ -7,6 +7,8 @@ import {ObjectId} from "mongodb";
 import {generateContractReminders} from "../reminders/scheduler";
 import {type EquipmentInput, upsertEquipmentForClient} from "../reminders/equipmentUpsert";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {printTemplateVisibleFilter} from "../templates/printTemplateAccess.js";
+import {parseObjectRecord, pickContractEmail} from "../contracts/contractEmail.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HEBREW_FONT = join(__dirname, "../../../scripts/NotoSansHebrew.ttf");
@@ -150,26 +152,7 @@ export function registerContractRoutes(app: express.Application) {
           c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
           c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
         ]);
-        const docAny = document as any;
-        let extractedFields: Record<string, any> = {};
-        if (docAny?.extracted_fields) {
-          try { extractedFields = JSON.parse(docAny.extracted_fields); } catch {}
-        }
-        const mergedFields = mergeContractFields(c, extractedFields);
-        return {
-          ...flatDoc(c),
-          client_name: (client as any)?.display_name ?? null,
-          document_name: docAny?.file_name ?? null,
-          contact_person: mergedFields.contact_person ?? null,
-          contact_phone: mergedFields.contact_phone ?? null,
-          contact_email: mergedFields.contact_email ?? null,
-          client_address: mergedFields.client_address ?? null,
-          po_box: mergedFields.po_box ?? null,
-          client_zipcode: mergedFields.client_zipcode ?? null,
-          equipment_description: mergedFields.equipment_description ?? null,
-          _confidence: mergedFields._confidence ?? null,
-          _equipment: Array.isArray(mergedFields._equipment) ? mergedFields._equipment : [],
-        };
+        return presentContractRow(c, client, document);
       })
     );
 
@@ -217,11 +200,7 @@ export function registerContractRoutes(app: express.Application) {
           contract.document_id ? col("documents").findOne({ _id: tryObjectId(String(contract.document_id)) }) : null,
           col("reminders").find({ user_id: userId, source_id: String(contract._id) }).sort({ trigger_date: 1 }).toArray(),
         ]);
-        let extracted: Record<string, any> = {};
-        if ((document as any)?.extracted_fields) {
-          try { extracted = JSON.parse((document as any).extracted_fields); } catch {}
-        }
-        const fields = mergeContractFields(contract, extracted);
+        const fields = mergeContractFields(contract, parseObjectRecord((document as any)?.extracted_fields));
         return { contract, client: client as any, document: document as any, fields, reminders };
       }));
 
@@ -283,7 +262,7 @@ export function registerContractRoutes(app: express.Application) {
           label("מספר מזהה לקוח", row.client?.id_number);
           label("איש קשר", f.contact_person);
           label("טלפון", f.contact_phone);
-          label("אימייל", f.contact_email);
+          label("אימייל", pickContractEmail(c, f, row.client));
           label("כתובת", f.client_address);
           label("תאריך התחלה / בדיקה", c.start_date);
           label("בתוקף עד / בדיקה הבאה", c.expiry_date);
@@ -391,7 +370,7 @@ export function registerContractRoutes(app: express.Application) {
       res.status(404).json({ error: "Draft not found" });
       return;
     }
-    const template = await col("print_templates").findOne({ _id: tryObjectId(String(draft.template_id)), user_id: userId }) as any;
+    const template = await col("print_templates").findOne({_id: tryObjectId(String(draft.template_id)), ...printTemplateVisibleFilter(userId)}) as any;
     res.json({
       template_id: draft.template_id,
       template_name: template?.name ?? "תבנית",
@@ -426,26 +405,7 @@ export function registerContractRoutes(app: express.Application) {
       c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
       c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
     ]);
-    const docAny = document as any;
-    let extractedFields: Record<string, any> = {};
-    if (docAny?.extracted_fields) {
-      try { extractedFields = JSON.parse(docAny.extracted_fields); } catch {}
-    }
-    const mergedFields = mergeContractFields(c, extractedFields);
-    res.json({
-      ...flatDoc(c),
-      client_name: (client as any)?.display_name ?? null,
-      document_name: docAny?.file_name ?? null,
-      contact_person: mergedFields.contact_person ?? null,
-      contact_phone: mergedFields.contact_phone ?? null,
-      contact_email: mergedFields.contact_email ?? null,
-      client_address: mergedFields.client_address ?? null,
-      po_box: mergedFields.po_box ?? null,
-      client_zipcode: mergedFields.client_zipcode ?? null,
-      equipment_description: mergedFields.equipment_description ?? null,
-      _confidence: mergedFields._confidence ?? null,
-      _equipment: Array.isArray(mergedFields._equipment) ? mergedFields._equipment : [],
-    });
+    res.json(presentContractRow(c, client, document));
   });
 
   app.post("/api/contracts/:id/reminder", async (req, res) => {
@@ -477,20 +437,22 @@ export function registerContractRoutes(app: express.Application) {
         source_id: contractId,
         status: { $in: ["pending", "snoozed", "error"] },
       });
+      const manualFields = parseObjectRecord(contract.manual_fields);
+      const reminderEmail = pickContractEmail(contract, null, null);
       await generateContractReminders(
         contractId,
         contract.client_id ?? null,
         contract.document_id ?? null,
         String(contract.expiry_date),
-        userId
+          userId,
+          reminderEmail,
       );
-      const manualFields = contract.manual_fields && typeof contract.manual_fields === "object" ? contract.manual_fields : {};
       const equipment = Array.isArray(manualFields._equipment) ? manualFields._equipment[0] : null;
       await col("reminders").updateMany(
         { user_id: userId, source_type: "contract_expiry", source_id: contractId },
         {
           $set: {
-            ...(manualFields.contact_email && { email_to: JSON.stringify([manualFields.contact_email]) }),
+            ...(reminderEmail && {email_to: JSON.stringify([reminderEmail])}),
             equipment_type: equipment?.category ?? null,
             manufacturer: equipment?.manufacturer ?? null,
             model: equipment?.model ?? null,
@@ -625,26 +587,7 @@ export function registerContractRoutes(app: express.Application) {
           c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
           c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
         ]);
-        const docAny = document as any;
-        let extractedFields: Record<string, any> = {};
-        if (docAny?.extracted_fields) {
-          try { extractedFields = JSON.parse(docAny.extracted_fields); } catch {}
-        }
-        const mergedFields = mergeContractFields(c, extractedFields);
-        return {
-          ...flatDoc(c),
-          client_name: (client as any)?.display_name ?? null,
-          document_name: docAny?.file_name ?? null,
-          contact_person: mergedFields.contact_person ?? null,
-          contact_phone: mergedFields.contact_phone ?? null,
-          contact_email: mergedFields.contact_email ?? null,
-          client_address: mergedFields.client_address ?? null,
-          po_box: mergedFields.po_box ?? null,
-          client_zipcode: mergedFields.client_zipcode ?? null,
-          equipment_description: mergedFields.equipment_description ?? null,
-          _confidence: mergedFields._confidence ?? null,
-          _equipment: Array.isArray(mergedFields._equipment) ? mergedFields._equipment : [],
-        };
+        return presentContractRow(c, client, document);
       })
     );
 
@@ -742,10 +685,27 @@ function tryObjectId(id: string): any {
   }
 }
 
+function presentContractRow(contract: any, client: any, document: any) {
+  const extractedFields = parseObjectRecord(document?.extracted_fields);
+  const mergedFields = mergeContractFields(contract, extractedFields);
+  return {
+    ...flatDoc(contract),
+    client_name: client?.display_name ?? null,
+    document_name: document?.file_name ?? null,
+    contact_person: mergedFields.contact_person ?? null,
+    contact_phone: mergedFields.contact_phone ?? null,
+    contact_email: pickContractEmail(contract, extractedFields, client),
+    client_address: mergedFields.client_address ?? null,
+    po_box: mergedFields.po_box ?? null,
+    client_zipcode: mergedFields.client_zipcode ?? null,
+    equipment_description: mergedFields.equipment_description ?? null,
+    _confidence: mergedFields._confidence ?? null,
+    _equipment: Array.isArray(mergedFields._equipment) ? mergedFields._equipment : [],
+  };
+}
+
 function mergeContractFields(contract: any, extractedFields: Record<string, any>) {
-  const manualFields = contract?.manual_fields && typeof contract.manual_fields === "object"
-    ? contract.manual_fields
-    : {};
+  const manualFields = parseObjectRecord(contract?.manual_fields);
   return {
     ...manualFields,
     ...Object.fromEntries(

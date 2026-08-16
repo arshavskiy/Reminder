@@ -1,24 +1,24 @@
 import type {
-    AppSettings,
-    Client,
-    ClientDetail,
-    Contract,
-    ContractWithClient,
-    DashboardStats,
-    DocTemplate,
-    Document,
-    EmailLogEntry,
-    EmailTemplate,
-    EngineerProfile,
-    Equipment,
-    FeatureDefinition,
-    GlobalSearchResult,
-    PipelineFlags,
-    PrintTemplate,
-    Reminder,
-    ReminderWithContext,
-    Task,
-    UserSettings,
+  AppSettings,
+  Client,
+  ClientDetail,
+  Contract,
+  ContractWithClient,
+  DashboardStats,
+  DocTemplate,
+  Document,
+  EmailLogEntry,
+  EmailTemplate,
+  EngineerProfile,
+  Equipment,
+  FeatureDefinition,
+  GlobalSearchResult,
+  PipelineFlags,
+  PrintTemplate,
+  Reminder,
+  ReminderWithContext,
+  Task,
+  UserSettings,
 } from "../../src/shared/types.js";
 
 export interface GmailAttachment {
@@ -698,8 +698,18 @@ export const api = {
         credentials: "include",
         body: JSON.stringify({ data, meta }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+      if (!res.ok) {
+        const text = await res.text();
+        let message = `HTTP ${res.status}`;
+        try {
+          const parsed = JSON.parse(text) as { error?: unknown };
+          if (parsed?.error) message = String(parsed.error);
+        } catch { /* body was not JSON */
+        }
+        throw new Error(message);
+      }
       const blob = await res.blob();
+      if (!(blob instanceof Blob)) throw new Error("PDF save did not return a file");
       return {
         blob,
         documentId: res.headers.get("X-Document-Id"),

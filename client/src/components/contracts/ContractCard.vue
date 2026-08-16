@@ -20,7 +20,7 @@
           <span :class="statusTagClass(row.status)">{{ statusLabel(row.status) }}</span>
           <span class="tag tag--neutral">{{ row.contract_type ?? "-" }}</span>
           <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
-          <span v-if="!row.contact_email" class="tag tag--warn">⚠ חסר אימייל</span>
+          <span v-if="!hasEmail" class="tag tag--warn">⚠ חסר אימייל</span>
         </div>
       </div>
       <div v-if="showReminderActions" class="card__quick-actions">
@@ -152,6 +152,7 @@ import {NCheckbox, NIcon} from "naive-ui";
 import {CreateOutline, DocumentTextOutline, EyeOutline, TrashOutline} from "@vicons/ionicons5";
 import {useRouter} from "vue-router";
 import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
+import {contractRowHasEmail} from "@shared/contractEmail.js";
 
 const router = useRouter();
 
@@ -168,7 +169,7 @@ const props = defineProps<{
   showReminderActions?: boolean;
 }>();
 
-const hasEmail = computed(() => Boolean((props.row.contact_email ?? "").trim()));
+const hasEmail = computed(() => contractRowHasEmail(props.row));
 // A reminder only needs an expiry date to be generated; email just decides
 // whether it can actually be sent later. Don't block creation on missing email.
 const canCreateReminder = computed(() => Boolean(props.row.expiry_date));
