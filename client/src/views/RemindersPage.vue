@@ -131,7 +131,7 @@
         :row-key="(r: any) => r.id"
         :row-props="rowProps"
         :checked-row-keys="selectedReminderKeys"
-        :scroll-x="900"
+        :scroll-x="1040"
         class="reminders-table"
         size="small"
         @update:checked-row-keys="onSelectedReminderKeys"
@@ -262,7 +262,7 @@
 import {computed, h, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NAlert, NDataTable, NDatePicker, NForm, NFormItem, NIcon, NInput, NModal, NSelect, useMessage,} from "naive-ui";
-import {CheckboxOutline, CloseCircleOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
+import {CheckboxOutline, CloseCircleOutline, CreateOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";
@@ -317,6 +317,7 @@ const selectedReminderKeys = ref<Array<string | number>>([]);
 const bulkSending = ref(false);
 const bulkDismissing = ref(false);
 const bulkDeleting = ref(false);
+const sendingReminderId = ref<number | null>(null);
 const showCreate = ref(false);
 const showQuickTest = ref(false);
 const quickTestTemplateId = ref<string | null>(null);
@@ -805,6 +806,44 @@ function confirmDelete(row: ReminderWithContext) {
   });
 }
 
+async function sendReminderRow(row: ReminderWithContext) {
+  if (!effectiveEmailTo(row)?.trim()) {
+    message.warning("חסר אימייל לשליחה");
+    return;
+  }
+  sendingReminderId.value = row.id;
+  try {
+    const res = await store.sendNow(row.id);
+    if (res.success) {
+      message.success(row.status === "sent" ? "התזכורת נשלחה שוב" : "תזכורת נשלחה");
+      await load();
+    } else {
+      message.error(res.error ?? "שגיאה בשליחה");
+    }
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    sendingReminderId.value = null;
+  }
+}
+
+function dismissReminderRow(row: ReminderWithContext) {
+  confirm({
+    title: "ביטול תזכורת",
+    content: `לבטל את התזכורת "${row.title}"?`,
+    confirmText: "בטל תזכורת",
+    onConfirm: async () => {
+      try {
+        await store.dismiss(row.id);
+        message.success("התזכורת בוטלה");
+        load();
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
+}
+
 function doDeleteFiltered() {
   const rowsToDelete = [...filteredRows.value];
   const count = rowsToDelete.length;
@@ -1018,6 +1057,58 @@ const baseColumns = [
     key: "status",
     width: 120,
     render: (row: ReminderWithContext) => h(StatusBadge, { status: row.status }),
+  },
+  {
+    title: "",
+    key: "actions",
+    width: 156,
+    render: (row: ReminderWithContext) => {
+      const sending = sendingReminderId.value === row.id;
+      const hasEmail = Boolean(effectiveEmailTo(row)?.trim());
+      const buttons = [];
+      if (row.status !== "dismissed") {
+        buttons.push(h("button", {
+          class: ["btn", "btn--ghost", "btn--xs", "icon-btn", sending ? "btn--loading" : ""].filter(Boolean).join(" "),
+          title: hasEmail ? (row.status === "sent" ? "שלח שוב" : "שלח תזכורת") : "חסר אימייל לשליחה",
+          type: "button",
+          disabled: sending || !hasEmail,
+          onClick: (event: MouseEvent) => {
+            event.stopPropagation();
+            sendReminderRow(row);
+          },
+        }, [h(NIcon, { component: PaperPlaneOutline, class: "btn-icon" })]));
+      }
+      buttons.push(h("button", {
+        class: "btn btn--ghost btn--xs icon-btn",
+        title: "ערוך תזכורת",
+        type: "button",
+        onClick: (event: MouseEvent) => {
+          event.stopPropagation();
+          openEditDate(row);
+        },
+      }, [h(NIcon, { component: CreateOutline, class: "btn-icon" })]));
+      if (row.status === "pending") {
+        buttons.push(h("button", {
+          class: "btn btn--ghost btn--xs icon-btn",
+          title: "בטל תזכורת",
+          type: "button",
+          onClick: (event: MouseEvent) => {
+            event.stopPropagation();
+            dismissReminderRow(row);
+          },
+        }, [h(NIcon, { component: CloseCircleOutline, class: "btn-icon" })]));
+      }
+      buttons.push(h("button", {
+        class: "btn btn--danger-ghost btn--xs icon-btn",
+        title: "מחק",
+        type: "button",
+        onClick: (event: MouseEvent) => {
+          event.stopPropagation();
+          confirmDelete(row);
+        },
+      }, [h(NIcon, { component: TrashOutline, class: "btn-icon" })]));
+      return h("div", { class: "reminder-row-actions" }, buttons);
+    },
   },
 ];
 
@@ -1405,6 +1496,22 @@ const columns = computed(() =>
   padding-top: 12px;
   padding-bottom: 12px;
   vertical-align: top;
+}
+
+.reminder-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.icon-btn {
+  padding: 4px 6px;
+  min-width: 32px;
+  justify-content: center;
+}
+
+.icon-btn .btn-icon {
+  margin: 0;
 }
 
 .reminders-table :deep(.reminder-row--selectable) {

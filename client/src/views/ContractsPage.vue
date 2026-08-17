@@ -168,9 +168,11 @@
                 @add-reminder="openAddReminder"
                 @create-reminder="createContractReminder"
                 @dismiss-reminder="dismissReminder"
+                @delete-reminder="deleteReminderFromCard"
                 @open-template="openContractInTemplate"
                 @open-document="openDoc"
                 @send-reminder="sendReminderNow"
+                @send-card="sendFromCard"
                 @toggle-select="toggleSelect"
             />
             <article v-else class="draft-card" @click="openDraftInTemplate(item.draft)">
@@ -676,6 +678,8 @@ import {
   isDuplicateReportNumber,
   listContractRowIssues,
 } from "@shared/rowIssues.js";
+import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.js";
+import {useConfirm} from "../composables/useConfirm.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
@@ -696,6 +700,47 @@ const kind = ref<"contract" | "inspection" | "all">("inspection");
 type DueFilter = "all" | "overdue" | "month" | "sent" | "no_email" | "has_reminder" | "duplicate_report_number";
 const dueFilter = ref<DueFilter>("all");
 const showDraftsOnly = ref(false);
+
+const CONTRACT_STATUS_FILTERS: Record<string, string | null> = {
+  all: null,
+  active: "active",
+  expired: "expired",
+  cancelled: "cancelled",
+};
+const CONTRACT_DUE_FILTERS: Record<string, DueFilter> = {
+  month: "month",
+  sent: "sent",
+  no_email: "no_email",
+  has_reminder: "has_reminder",
+  duplicate_report_number: "duplicate_report_number",
+};
+
+function hydrateContractFilter(key: string): string {
+  if (key in CONTRACT_STATUS_FILTERS) {
+    showDraftsOnly.value = false;
+    statusFilter.value = CONTRACT_STATUS_FILTERS[key];
+    dueFilter.value = "all";
+    return key;
+  }
+  if (key in CONTRACT_DUE_FILTERS) {
+    showDraftsOnly.value = false;
+    statusFilter.value = null;
+    dueFilter.value = CONTRACT_DUE_FILTERS[key];
+    return key;
+  }
+  if (key === "drafts") {
+    showDraftsOnly.value = true;
+    statusFilter.value = null;
+    dueFilter.value = "all";
+    return key;
+  }
+  showDraftsOnly.value = false;
+  statusFilter.value = null;
+  dueFilter.value = "all";
+  return "all";
+}
+
+const activeFilterKey = ref(hydrateContractFilter(readRememberedFilter("contracts")));
 const search = ref("");
 const filterClientId = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
@@ -883,6 +928,7 @@ async function loadReminders() {
 
 const sendingReminder = ref<number | null>(null);
 const message2 = useMessage();
+const {confirm} = useConfirm();
 
 async function sendReminderNow(r: ReminderWithContext) {
   sendingReminder.value = r.id;
@@ -906,6 +952,23 @@ async function dismissReminder(r: ReminderWithContext) {
   } catch (e) {
     message2.error(String(e));
   }
+}
+
+function deleteReminderFromCard(r: ReminderWithContext) {
+  confirm({
+    title: "מחיקת תזכורת",
+    content: `למחוק את התזכורת "${r.title}"? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await api.reminders.delete(r.id);
+        allReminders.value = allReminders.value.filter((x) => x.id !== r.id);
+        message2.success("התזכורת נמחקה");
+      } catch (e) {
+        message2.error(String(e));
+      }
+    },
+  });
 }
 
 // ── Email templates ───────────────────────────────────────────────────────────
@@ -1429,6 +1492,38 @@ function disablePastHydraulicDates(ts: number): boolean {
   return startOfLocalDay(ts) < startOfLocalDay(Date.now());
 }
 
+async function sendFromCard(row: ContractWithClient) {
+  const existing = reminderToSendForContract(String(row.id));
+  if (existing) {
+    await sendReminderNow(existing);
+    return;
+  }
+  if (!contractRowHasEmail(row)) {
+    message.warning("חסר אימייל לשליחה");
+    return;
+  }
+  if (!row.expiry_date) {
+    message.warning("חסר תאריך תוקף לתזכורת");
+    return;
+  }
+  creatingReminderFor.value = row.id;
+  try {
+    const result = await api.contracts.createReminder(row.id);
+    await loadReminders();
+    const created = reminderToSendForContract(String(row.id))
+      ?? result.reminders[0] as ReminderWithContext | undefined;
+    if (created) {
+      await sendReminderNow(created);
+    } else {
+      message.warning("לא נוצרה תזכורת. בדוק שיש אימייל ללקוח ותאריך עתידי.");
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e));
+  } finally {
+    creatingReminderFor.value = null;
+  }
+}
+
 async function createContractReminder(row: ContractWithClient) {
   if (!row.expiry_date) {
     message2.warning("חסר תאריך תוקף לתזכורת");
@@ -1493,13 +1588,16 @@ async function deleteDraft(draft: PrintTemplateDraftSummary) {
 
 const bulkGeneratingReminders = ref(false);
 
-const contractsMissingReminder = computed(() =>
-    filteredRows.value.filter((row) =>
-        contractHasEmail(row) &&
-        Boolean(row.expiry_date) &&
-        remindersFor(String(row.id)).length === 0
-    )
-);
+const contractsMissingReminder = computed(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return filteredRows.value.filter((row) => {
+        if (!contractHasEmail(row) || !row.expiry_date) return false;
+        if (remindersFor(String(row.id)).length > 0) return false;
+        const expiry = new Date(row.expiry_date);
+        return expiry >= today;
+    });
+});
 
 async function bulkCreateRemindersForSelected() {
   if (bulkGeneratingReminders.value) return;
@@ -2351,23 +2449,10 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
   ];
 });
 
-const activeFilterKey = ref("all");
-
 function applyFilter(f: CombinedFilter) {
-  activeFilterKey.value = f.key;
-  showDraftsOnly.value = f.type === "drafts";
-  if (f.type === "status") {
-    statusFilter.value = f.statusValue ?? null;
-    dueFilter.value = "all";
-    load();
-  } else if (f.type === "due") {
-    statusFilter.value = null;
-    dueFilter.value = f.dueValue!;
-    load();
-  } else {
-    statusFilter.value = null;
-    dueFilter.value = "all";
-  }
+  activeFilterKey.value = hydrateContractFilter(f.key);
+  writeRememberedFilter("contracts", activeFilterKey.value);
+  if (f.type !== "drafts") load();
 }
 
 function todayIso(): string {
@@ -3496,10 +3581,16 @@ function exportToExcel() {
 }
 
 .pill--active {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
+  background: #fff;
+  border: 2px solid var(--brand-color);
+  color: var(--brand-color);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-color) 55%, transparent);
+}
+
+.pill--active .pill__badge {
+  background: color-mix(in srgb, var(--brand-color) 22%, transparent);
+  color: inherit;
 }
 
 .pill__badge {

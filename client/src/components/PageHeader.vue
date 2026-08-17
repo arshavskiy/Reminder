@@ -1,11 +1,13 @@
 <template>
   <header class="page-header">
-    <div class="page-header__title-wrap">
+    <div class="page-header__copy">
       <nav v-if="$slots.breadcrumb" class="page-header__breadcrumb" aria-label="breadcrumb">
         <slot name="breadcrumb" />
       </nav>
-      <h1 class="page-header__title">{{ title }}</h1>
-      <span v-if="count !== undefined" class="page-header__count">{{ count }}</span>
+      <div class="page-header__title-row">
+        <h1 class="page-header__title">{{ title }}</h1>
+        <span v-if="count !== undefined" class="page-header__count">{{ count }}</span>
+      </div>
       <p v-if="subtitle" class="page-header__subtitle">{{ subtitle }}</p>
     </div>
     <div v-if="$slots.actions" class="page-header__actions">
@@ -27,12 +29,17 @@ defineProps<Props>();
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
-.page-header__title-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.page-header__copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 220px;
+}
 .page-header__breadcrumb {
   display: flex;
   align-items: center;
@@ -40,7 +47,6 @@ defineProps<Props>();
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
-  flex-basis: 100%;
 }
 .page-header__breadcrumb :deep(a) {
   color: var(--brand-color);
@@ -50,12 +56,19 @@ defineProps<Props>();
 .page-header__breadcrumb :deep(a:hover) { opacity: 0.75; }
 .page-header__breadcrumb :deep(.sep) { color: var(--text-secondary); font-size: 16px; }
 .page-header__breadcrumb :deep(span:last-child) { color: var(--text-secondary); }
+.page-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .page-header__title {
   margin: 0;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
+  line-height: 1.2;
 }
 .page-header__count {
   background: var(--bg-elevated);
@@ -68,15 +81,31 @@ defineProps<Props>();
 }
 .page-header__subtitle {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
-  flex-basis: 100%;
+  line-height: 1.45;
 }
-.page-header__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.page-header__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 280px;
+}
 
 @media (max-width: 640px) {
-  .page-header { flex-direction: column; align-items: flex-start; }
-  .page-header__title { font-size: 22px; }
-  .page-header__actions { width: 100%; }
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    margin-bottom: 18px;
+  }
+  .page-header__copy,
+  .page-header__actions {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  .page-header__title { font-size: 23px; }
+  .page-header__actions { justify-content: flex-start; }
 }
 </style>

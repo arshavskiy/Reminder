@@ -1,6 +1,10 @@
 <template>
   <div class="page2">
-    <PageHeader :count="store.total" title="מסמכים">
+    <PageHeader
+      :count="store.total"
+      title="מסמכים"
+      subtitle="צפייה, סינון וניהול של כל המסמכים במערכת"
+    >
       <template #actions>
         <div class="documents-actions">
           <button
@@ -42,6 +46,7 @@
             סרוק הכל מחדש
           </button>
           <button
+              v-if="authStore.isAdmin"
               :class="{ 'rbtn--loading': deletingAll }"
               :disabled="deletingAll"
               class="rbtn rbtn--danger"
@@ -51,6 +56,32 @@
             <n-icon :component="TrashOutline" class="btn-icon"/>
             מחק הכל
           </button>
+          <div v-if="store.rows.length" class="bulk-action-anchor">
+            <button
+                :class="{ 'rbtn--ghost-active': bulkMode }"
+                class="rbtn rbtn--ghost"
+                title="בחירה מרובה"
+                type="button"
+                @click="toggleBulkMode"
+            >
+              <n-icon :component="CheckboxOutline" class="btn-icon"/>
+              בחירה מרובה
+              <span v-if="selectedIds.size">({{ selectedIds.size }})</span>
+            </button>
+            <div v-if="bulkMode && selectedIds.size > 0" class="bulk-action-anchor__actions">
+              <button
+                  :class="{ 'bulk-action-item--loading': bulkDeleting }"
+                  :disabled="bulkDeleting"
+                  class="bulk-action-item bulk-action-item--danger"
+                  type="button"
+                  @click="confirmBulkDelete"
+              >
+                <n-icon :component="TrashOutline" class="bulk-action-item__icon"/>
+                <span class="bulk-action-item__text">מחק נבחרים</span>
+                <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
+              </button>
+            </div>
+          </div>
 
           <!-- Pipeline settings popover -->
           <n-popover :width="320" placement="bottom-end" trigger="click">
@@ -187,11 +218,22 @@
         <article
           v-for="row in pagedRows"
           :key="row.id"
-          :class="{ [`tile--${fileKind(row.mime_type)}`]: true }"
+          :class="{
+            [`tile--${fileKind(row.mime_type)}`]: true,
+            'tile--selected': selectedIds.has(String(row.id)),
+            'tile--selectable': bulkMode,
+          }"
           class="tile"
-          @click="router.push(`/documents/${row.id}`)"
+          @click="onDocumentClick(row)"
         >
           <div class="tile__thumb">
+            <n-checkbox
+              v-if="bulkMode"
+              :checked="selectedIds.has(String(row.id))"
+              class="tile__check"
+              @click.stop
+              @update:checked="toggleSelect(String(row.id))"
+            />
             <div v-if="fileKind(row.mime_type) === 'pdf'" class="tile__pdf-icon">
               <div class="pdf-doc">
                 <div class="pdf-label">PDF</div>
@@ -249,9 +291,16 @@
         <ListCard
           v-for="row in pagedRows"
           :key="row.id"
-          @click="router.push(`/documents/${row.id}`)"
+          :selected="selectedIds.has(String(row.id))"
+          @click="onDocumentClick(row)"
         >
           <template #title>
+            <n-checkbox
+              v-if="bulkMode"
+              :checked="selectedIds.has(String(row.id))"
+              @click.stop
+              @update:checked="toggleSelect(String(row.id))"
+            />
             <div v-if="fileKind(row.mime_type) === 'pdf'" class="list-pdf-icon">
               <div class="pdf-doc-small">
                 <div class="pdf-label-small">PDF</div>
@@ -347,6 +396,21 @@
       <p class="text-sm text-[var(--text-secondary)]">שדרג לחשבון Pro להעלאה בלתי מוגבלת.</p>
     </n-modal>
 
+    <!-- ── Bulk delete confirm ─────────────────────────────────────────── -->
+    <n-modal
+      v-model:show="showBulkDeleteConfirm"
+      negative-text="ביטול"
+      positive-text="מחק נבחרים"
+      preset="dialog"
+      title="מחיקת מסמכים נבחרים"
+      type="error"
+      @positive-click="doBulkDelete"
+      @negative-click="showBulkDeleteConfirm = false"
+    >
+      <p>האם למחוק <strong>{{ selectedIds.size }}</strong> מסמכים נבחרים?</p>
+      <p class="text-sm text-[var(--text-secondary)]">פעולה זו אינה הפיכה.</p>
+    </n-modal>
+
     <!-- ── Delete all confirm ──────────────────────────────────────────── -->
     <n-modal
       v-model:show="showDeleteAllConfirm"
@@ -426,6 +490,7 @@ import {
   GridOutline,
   ListOutline,
   RefreshOutline,
+  CheckboxOutline,
   SettingsOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
@@ -448,6 +513,7 @@ import {
   isDuplicateReportNumber,
   listDocumentRowIssues,
 } from "@shared/rowIssues.js";
+import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -467,6 +533,10 @@ const rescanning = ref(false);
 const rescanningAll = ref(false);
 const deletingAll = ref(false);
 const showDeleteAllConfirm = ref(false);
+const showBulkDeleteConfirm = ref(false);
+const bulkMode = ref(false);
+const selectedIds = ref(new Set<string>());
+const bulkDeleting = ref(false);
 const showRescanAllConfirm = ref(false);
 const showLimitModal = ref(false);
 const viewMode = ref<"grid" | "list">("list");
@@ -531,10 +601,18 @@ async function onModalUpload(
 // ── Filters ───────────────────────────────────────────────────────────────────
 type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder" | "contract_expired" | "duplicate_report_number";
 
+const DOCUMENT_FILTER_KEYS = new Set<DocumentStatusFilter>([
+  "all", "done", "in_progress", "error", "no_reminder", "contract_expired", "duplicate_report_number",
+]);
+function initialDocumentFilter(): DocumentStatusFilter {
+  const stored = readRememberedFilter("documents");
+  return DOCUMENT_FILTER_KEYS.has(stored as DocumentStatusFilter) ? stored as DocumentStatusFilter : "all";
+}
+
 const search = ref("");
 const filterClientId = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
-const statusFilter = ref<DocumentStatusFilter>("all");
+const statusFilter = ref<DocumentStatusFilter>(initialDocumentFilter());
 
 type CombinedFilter = {
   key: string;
@@ -566,12 +644,13 @@ function documentIssues(row: Document) {
   return listDocumentRowIssues(row as Document & { reminder_status?: string; contract_status?: string }, duplicateDocumentNumbers.value);
 }
 
-const activeFilterKey = ref("all");
+const activeFilterKey = ref(statusFilter.value);
 
 function applyFilter(f: CombinedFilter) {
   activeFilterKey.value = f.key;
   statusFilter.value = f.statusValue ?? "all";
   currentPage.value = 1;
+  writeRememberedFilter("documents", f.key);
 }
 
 const clientOptions = ref<{ label: string; value: string }[]>([]);
@@ -890,6 +969,44 @@ function updateRescanRowsFromDocuments() {
   rescanStore.updateRows(rows);
 }
 function confirmDeleteAll() { showDeleteAllConfirm.value = true; }
+function toggleBulkMode() {
+  bulkMode.value = !bulkMode.value;
+  if (!bulkMode.value) selectedIds.value = new Set();
+}
+function toggleSelect(id: string) {
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selectedIds.value = next;
+}
+function onDocumentClick(row: Document) {
+  if (bulkMode.value) {
+    toggleSelect(String(row.id));
+    return;
+  }
+  router.push(`/documents/${row.id}`);
+}
+function confirmBulkDelete() {
+  if (!selectedIds.value.size) return;
+  showBulkDeleteConfirm.value = true;
+}
+async function doBulkDelete() {
+  const ids = [...selectedIds.value];
+  if (!ids.length || bulkDeleting.value) return;
+  bulkDeleting.value = true;
+  try {
+    await Promise.all(ids.map((id) => api.documents.delete(id)));
+    message.success(ids.length === 1 ? "המסמך נמחק" : `${ids.length} מסמכים נמחקו`);
+    selectedIds.value = new Set();
+    bulkMode.value = false;
+    await store.fetch(undefined, true);
+  } catch {
+    message.error("שגיאה במחיקת המסמכים");
+  } finally {
+    bulkDeleting.value = false;
+    showBulkDeleteConfirm.value = false;
+  }
+}
 async function doDeleteAll() {
   deletingAll.value = true;
   try {
@@ -923,6 +1040,7 @@ async function openDownload(row: Document) {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+  width: 100%;
 }
 
 .rbtn {
@@ -986,6 +1104,106 @@ async function openDownload(row: Document) {
   background: var(--bg-elevated);
   border-color: var(--brand-color);
   color: var(--brand-color);
+}
+
+.bulk-action-anchor {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  position: relative;
+}
+
+.bulk-action-anchor > .rbtn {
+  width: 100%;
+}
+
+.bulk-action-anchor__actions {
+  display: grid;
+  gap: 8px;
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 210px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg, 0 14px 32px rgba(15, 23, 42, 0.14));
+}
+
+.bulk-action-anchor__actions::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 24px;
+  width: 10px;
+  height: 10px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  transform: rotate(-45deg);
+}
+
+.bulk-action-item {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: start;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.bulk-action-item:hover {
+  background: var(--bg-hover);
+}
+
+.bulk-action-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.bulk-action-item--danger {
+  color: #d03050;
+}
+
+.bulk-action-item__icon {
+  display: inline-flex;
+  justify-content: center;
+  width: 26px;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.bulk-action-item__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bulk-action-item__count {
+  min-width: 24px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.bulk-action-item--loading .bulk-action-item__icon {
+  animation: spin 0.75s linear infinite;
 }
 
 .rbtn--loading {
@@ -1057,10 +1275,15 @@ async function openDownload(row: Document) {
 .pill--compact { padding: 6px 13px; font-size: 12px; }
 .pill:hover { background: var(--bg-hover); color: var(--text-primary); }
 .pill--active {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
+  color: var(--brand-color);
+  font-weight: 700;
+  background: #fff;
+  border: 2px solid var(--brand-color);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-color) 55%, transparent);
+}
+.pill--active .pill__badge {
+  background: color-mix(in srgb, var(--brand-color) 22%, transparent);
+  color: inherit;
 }
 .pill__badge {
   font-size: 11px;
@@ -1191,6 +1414,19 @@ async function openDownload(row: Document) {
   border-color: var(--brand-color);
   box-shadow: 0 4px 16px rgba(0,0,0,0.1);
   transform: translateY(-1px);
+}
+.tile--selected {
+  border-color: var(--brand-color);
+  box-shadow: 0 0 0 1px var(--brand-color);
+}
+.tile__check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+}
+.tile--selectable .tile__status {
+  top: 36px;
 }
 .tile__thumb {
   position: relative;
@@ -1350,6 +1586,10 @@ async function openDownload(row: Document) {
     overflow-x: hidden;
   }
 
+  :deep(.page-header) {
+    margin-bottom: 18px;
+  }
+
   :deep(.page-header__actions) {
     width: 100%;
   }
@@ -1362,6 +1602,7 @@ async function openDownload(row: Document) {
   }
 
   .documents-actions > .rbtn,
+  .documents-actions > .bulk-action-anchor,
   .documents-actions :deep(.n-popover),
   .documents-actions :deep(.n-popover-trigger),
   .documents-actions :deep(.n-popover-trigger) > .rbtn {

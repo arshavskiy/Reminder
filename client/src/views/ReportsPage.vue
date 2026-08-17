@@ -1,16 +1,16 @@
 <template>
   <div class="reports-page">
-    <header class="reports-hero">
-      <div>
-        <div class="reports-hero__eyebrow">מרכז הדוחות</div>
-        <h1>דוחות</h1>
-        <p>הפקה, הורדה ושליחה חודשית של נתוני חוזים ותסקירים.</p>
-      </div>
-      <div class="reports-hero__status" :class="{ 'is-active': form.enabled }">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span>{{ form.enabled ? "שליחה אוטומטית פעילה" : "שליחה אוטומטית כבויה" }}</span>
-      </div>
-    </header>
+    <PageHeader
+      title="דוחות"
+      subtitle="הפקה, הורדה ושליחה חודשית של נתוני חוזים ותסקירים"
+    >
+      <template #actions>
+        <div class="reports-status" :class="{ 'is-active': form.enabled }">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>{{ form.enabled ? "שליחה אוטומטית פעילה" : "שליחה אוטומטית כבויה" }}</span>
+        </div>
+      </template>
+    </PageHeader>
 
     <n-spin :show="loading">
       <div class="reports-layout">
@@ -133,6 +133,7 @@ import {
 } from "naive-ui";
 import {api} from "../services/apiService.js";
 import {useUserSettingsStore} from "../stores/userSettings.js";
+import PageHeader from "../components/PageHeader.vue";
 
 const message = useMessage();
 const userSettingsStore = useUserSettingsStore();
@@ -368,41 +369,9 @@ onMounted(loadSettings);
 .reports-page {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 32px 28px 56px;
 }
 
-.reports-hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 28px;
-  padding: 4px 2px;
-}
-
-.reports-hero__eyebrow {
-  color: var(--brand-color);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  margin-bottom: 8px;
-}
-
-.reports-hero h1 {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 30px;
-  font-weight: 750;
-  line-height: 1.15;
-}
-
-.reports-hero p {
-  margin: 8px 0 0;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-.reports-hero__status {
+.reports-status {
   display: inline-flex;
   align-items: center;
   gap: 9px;
@@ -415,20 +384,20 @@ onMounted(loadSettings);
   white-space: nowrap;
 }
 
-.reports-hero__status.is-active {
-  border-color: #9edfc7;
-  color: #08734e;
-  background: #effbf6;
+.reports-status.is-active {
+  border-color: color-mix(in srgb, var(--color-success) 45%, var(--border-color));
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, var(--bg-card));
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #a7afb8;
+  background: var(--text-muted);
 }
 
-.is-active .status-dot { background: #18a66a; }
+.is-active .status-dot { background: var(--color-success); }
 
 .reports-layout {
   display: grid;
@@ -552,17 +521,11 @@ onMounted(loadSettings);
 }
 
 @media (max-width: 820px) {
-  .reports-page { padding: 24px 16px 40px; }
-  .reports-hero { align-items: flex-start; flex-direction: column; gap: 16px; }
   .reports-layout { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 520px) {
-  .reports-page {
-    padding: 18px 10px 34px;
-  }
-
-  .reports-hero__status {
+  .reports-status {
     justify-content: center;
     width: 100%;
     white-space: normal;

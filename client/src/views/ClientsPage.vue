@@ -1,11 +1,10 @@
 <template>
   <div class="page2">
-    <PageHeader :count="store.total" title="הלקוחות שלי">
-      <template #breadcrumb>
-        <router-link to="/">לוח שנה</router-link>
-        <span class="sep">/</span>
-        <span>לקוחות</span>
-      </template>
+    <PageHeader
+      :count="store.total"
+      title="לקוחות"
+      subtitle="צפייה, סינון וניהול של כל הלקוחות במערכת"
+    >
       <template #actions>
         <div class="clients-actions">
           <button :disabled="store.loading" class="rbtn rbtn--ghost" @click="refresh">
@@ -410,6 +409,7 @@ function bulkDeleteSelected() {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+  width: 100%;
 }
 
 .rbtn {

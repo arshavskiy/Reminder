@@ -24,57 +24,11 @@
           <span v-for="issue in (issues ?? [])" :key="issue.kind" :class="['tag', issue.tagClass]">{{ issue.label }}</span>
         </div>
       </div>
-      <div v-if="showReminderActions" class="card__quick-actions">
-        <button
-            v-if="!reminders.length"
-            :disabled="creatingReminder === row.id || !canCreateReminder"
-            :title="reminderButtonTitle"
-            class="btn btn--xs btn--primary"
-            :class="{ 'btn--loading': creatingReminder === row.id }"
-            @click.stop="emit('create-reminder', row)"
-        >
-          🔔 צור תזכורת
-        </button>
-        <button
-            v-else
-            :disabled="creatingReminder === row.id"
-            class="btn btn--xs btn--ghost"
-            :class="{ 'btn--loading': creatingReminder === row.id }"
-            @click.stop="emit('add-reminder', row)"
-        >
-          + תזכורת
-        </button>
-      </div>
     </div>
 
     <p class="card__sub">
       {{ subtitle }}
     </p>
-
-    <div v-if="showActions" class="card__secondary-actions">
-      <button
-          :disabled="!row.document_id"
-          :title="row.document_id ? 'צפה במסמך' : 'אין מסמך מקושר'"
-          class="btn btn--xs btn--ghost"
-          @click.stop="emit('open-document', row)"
-      >
-        <n-icon :component="EyeOutline"/>
-        צפה
-      </button>
-      <button class="btn btn--xs btn--ghost" @click.stop="emit('edit', row)">
-        <n-icon :component="CreateOutline"/>
-        ערוך
-      </button>
-      <button class="btn btn--xs btn--ghost" @click.stop="emit('open-template', row)">
-        <n-icon :component="DocumentTextOutline"/>
-        פתח בתבנית
-      </button>
-      <button class="btn btn--xs btn--danger" @click.stop="emit('delete', row)">
-        <n-icon :component="TrashOutline"/>
-        מחק חוזה
-      </button>
-    </div>
-
 
     <div class="card__foot">
       <div class="card__foot-col">
@@ -83,6 +37,63 @@
         <span v-if="equipmentLabel" class="kv kv--equipment"><strong>ציוד נבדק:</strong> {{ equipmentLabel }}</span>
       </div>
       <div class="card__foot-col card__foot-col--end">
+        <div v-if="showActions" class="card__actions" @click.stop>
+          <button
+              :disabled="!row.document_id"
+              class="btn btn--ghost btn--xs icon-btn"
+              :title="row.document_id ? 'צפה במסמך' : 'אין מסמך מקושר'"
+              type="button"
+              @click.stop="emit('open-document', row)"
+          >
+            <n-icon :component="EyeOutline" class="btn-icon"/>
+          </button>
+          <button
+              class="btn btn--ghost btn--xs icon-btn"
+              title="ערוך"
+              type="button"
+              @click.stop="emit('edit', row)"
+          >
+            <n-icon :component="CreateOutline" class="btn-icon"/>
+          </button>
+          <button
+              class="btn btn--ghost btn--xs icon-btn"
+              title="פתח בתבנית"
+              type="button"
+              @click.stop="emit('open-template', row)"
+          >
+            <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+          </button>
+          <button
+              v-if="showReminderActions"
+              :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"
+              class="btn btn--ghost btn--xs icon-btn"
+              :class="{ 'btn--loading': creatingReminder === row.id }"
+              :title="reminders.length ? 'הוסף תזכורת' : reminderButtonTitle"
+              type="button"
+              @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"
+          >
+            <n-icon :component="NotificationsOutline" class="btn-icon"/>
+          </button>
+          <button
+              v-if="showReminderActions"
+              :disabled="!canSendReminder || sendingThisCard"
+              class="btn btn--ghost btn--xs icon-btn"
+              :class="{ 'btn--loading': sendingThisCard }"
+              :title="sendReminderTitle"
+              type="button"
+              @click.stop="emit('send-card', row)"
+          >
+            <n-icon :component="PaperPlaneOutline" class="btn-icon"/>
+          </button>
+          <button
+              class="btn btn--danger-ghost btn--xs icon-btn"
+              title="מחק"
+              type="button"
+              @click.stop="emit('delete', row)"
+          >
+            <n-icon :component="TrashOutline" class="btn-icon"/>
+          </button>
+        </div>
         <span class="kv">
           <strong>{{ kind === "inspection" ? "בתוקף עד:" : "תפוגה:" }}</strong>
           <span :class="expiryClass(row.expiry_date)">{{ formatDate(row.expiry_date) }}</span>
@@ -96,16 +107,16 @@
     <div class="card__reminders">
       <div class="reminders-header">
         <span class="reminders-title">🔔 תזכורות</span>
-        <button
-            v-if="showReminderActions"
-            :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"
-            :title="reminders.length ? 'הוסף תזכורת נוספת' : reminderButtonTitle"
-            class="btn btn--xs btn--primary"
-            :class="{ 'btn--loading': creatingReminder === row.id }"
-            @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"
-        >
-          {{ reminders.length ? "+ תזכורת חדשה" : "צור תזכורת" }}
-        </button>
+<!--        <button-->
+<!--            v-if="showReminderActions"-->
+<!--            :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"-->
+<!--            :title="reminders.length ? 'הוסף תזכורת נוספת' : reminderButtonTitle"-->
+<!--            class="btn btn&#45;&#45;xs btn&#45;&#45;primary"-->
+<!--            :class="{ 'btn&#45;&#45;loading': creatingReminder === row.id }"-->
+<!--            @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"-->
+<!--        >-->
+<!--          {{ reminders.length ? "+ תזכורת חדשה" : "צור תזכורת" }}-->
+<!--        </button>-->
       </div>
       <div v-if="reminders.length" class="reminders-list">
         <div
@@ -120,29 +131,63 @@
           <span :class="reminderStatusClass(reminder.status)" class="reminder-status-badge">
             {{ reminderStatusLabel(reminder.status) }}
           </span>
-          <div v-if="showReminderActions" class="reminder-actions">
+          <div v-if="showReminderActions" class="reminder-actions" @click.stop>
             <button
                 v-if="reminder.status !== 'dismissed'"
-                :disabled="sendingReminder === reminder.id"
-                class="btn btn--xs btn--ghost"
+                :disabled="sendingReminder === reminder.id || !reminderSendable(reminder)"
+                class="btn btn--ghost btn--xs icon-btn"
                 :class="{ 'btn--loading': sendingReminder === reminder.id }"
-                :title="reminder.status === 'sent' ? 'שלח שוב' : 'שלח עכשיו'"
+                :title="reminderSendTitle(reminder)"
+                type="button"
                 @click.stop="emit('send-reminder', reminder)"
             >
-              {{ reminder.status === "sent" ? "📤 שלח שוב" : "📤 שלח" }}
+              <n-icon :component="PaperPlaneOutline" class="btn-icon"/>
             </button>
             <button
                 v-if="reminder.status === 'pending'"
-                class="btn btn--xs btn--ghost"
+                class="btn btn--ghost btn--xs icon-btn"
                 title="בטל תזכורת"
+                type="button"
                 @click.stop="emit('dismiss-reminder', reminder)"
             >
-              ✕
+              <n-icon :component="CloseCircleOutline" class="btn-icon"/>
+            </button>
+            <button
+                class="btn btn--danger-ghost btn--xs icon-btn"
+                title="מחק תזכורת"
+                type="button"
+                @click.stop="emit('delete-reminder', reminder)"
+            >
+              <n-icon :component="TrashOutline" class="btn-icon"/>
             </button>
           </div>
         </div>
       </div>
-      <p v-else class="reminders-empty">אין תזכורות לתסקיר זה</p>
+      <p v-else class="reminders-empty">
+        אין תזכורות לתסקיר זה
+        <span v-if="showReminderActions" class="reminder-actions">
+          <button
+              :disabled="creatingReminder === row.id || !canCreateReminder"
+              class="btn btn--ghost btn--xs icon-btn"
+              :class="{ 'btn--loading': creatingReminder === row.id }"
+              :title="reminderButtonTitle"
+              type="button"
+              @click.stop="emit('create-reminder', row)"
+          >
+            <n-icon :component="NotificationsOutline" class="btn-icon"/>
+          </button>
+          <button
+              :disabled="!canSendReminder || sendingThisCard"
+              class="btn btn--ghost btn--xs icon-btn"
+              :class="{ 'btn--loading': sendingThisCard }"
+              :title="sendReminderTitle"
+              type="button"
+              @click.stop="emit('send-card', row)"
+          >
+            <n-icon :component="PaperPlaneOutline" class="btn-icon"/>
+          </button>
+        </span>
+      </p>
     </div>
   </article>
 </template>
@@ -150,7 +195,7 @@
 <script lang="ts" setup>
 import {computed} from "vue";
 import {NCheckbox, NIcon} from "naive-ui";
-import {CreateOutline, DocumentTextOutline, EyeOutline, TrashOutline} from "@vicons/ionicons5";
+import {CloseCircleOutline, CreateOutline, DocumentTextOutline, EyeOutline, NotificationsOutline, PaperPlaneOutline, TrashOutline} from "@vicons/ionicons5";
 import {useRouter} from "vue-router";
 import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
 import type {RowIssue} from "@shared/rowIssues.js";
@@ -173,14 +218,49 @@ const props = defineProps<{
 }>();
 
 const hasEmail = computed(() => contractRowHasEmail(props.row));
-// A reminder only needs an expiry date to be generated; email just decides
-// whether it can actually be sent later. Don't block creation on missing email.
+const sendableReminder = computed(() => {
+  const rows = (props.reminders ?? []).filter((r) => r.status !== "dismissed");
+  return rows.find((r) => r.status === "pending")
+      ?? rows.find((r) => r.status === "sent")
+      ?? rows.find((r) => r.status === "snoozed")
+      ?? null;
+});
+const canSendReminder = computed(() => {
+  if (sendableReminder.value) return reminderSendable(sendableReminder.value);
+  return hasEmail.value && Boolean(props.row.expiry_date);
+});
+const sendingThisCard = computed(() =>
+  props.creatingReminder === props.row.id
+  || (props.sendingReminder != null && (props.reminders ?? []).some((r) => r.id === props.sendingReminder)),
+);
+const sendReminderTitle = computed(() => {
+  if (sendableReminder.value) return reminderSendTitle(sendableReminder.value);
+  if (!hasEmail.value) return "חסר אימייל — לא ניתן לשלוח";
+  if (!props.row.expiry_date) return "חסר תאריך תוקף — לא ניתן לשלוח";
+  return "צור ושלח תזכורת";
+});
 const canCreateReminder = computed(() => Boolean(props.row.expiry_date));
 const reminderButtonTitle = computed(() => {
   if (!props.row.expiry_date) return "חסר תאריך תוקף — לא ניתן ליצור תזכורת";
   if (!hasEmail.value) return "צור תזכורת (חסר אימייל — לא תישלח עד שיתווסף)";
   return "צור תזכורת לתסקיר זה";
 });
+
+function reminderHasEmail(reminder: ReminderWithContext): boolean {
+  if (hasEmail.value) return true;
+  const to = reminder.email_to?.trim();
+  if (to && to !== "[]" && to !== "null") return true;
+  return Boolean(reminder.client_email?.trim());
+}
+
+function reminderSendable(reminder: ReminderWithContext): boolean {
+  return reminder.status !== "dismissed" && reminderHasEmail(reminder);
+}
+
+function reminderSendTitle(reminder: ReminderWithContext): string {
+  if (!reminderHasEmail(reminder)) return "חסר אימייל — לא ניתן לשלוח";
+  return reminder.status === "sent" ? "שלח שוב" : "שלח תזכורת";
+}
 
 const displayContractNumber = computed(() => {
   const number = props.row.contract_number?.trim();
@@ -198,11 +278,13 @@ const emit = defineEmits<{
   "add-reminder": [row: ContractWithClient];
   "create-reminder": [row: ContractWithClient];
   "send-reminder": [reminder: ReminderWithContext];
+  "send-card": [row: ContractWithClient];
   "dismiss-reminder": [reminder: ReminderWithContext];
+  "delete-reminder": [reminder: ReminderWithContext];
 }>();
 
 const showActions = computed(() => props.showActions ?? true);
-const showReminderActions = computed(() => props.showReminderActions ?? true);
+const showReminderActions = computed(() => true);
 
 const subtitle = computed(() =>
     props.row.summary ??
@@ -331,10 +413,11 @@ function reminderStatusClass(status: string): string {
   margin-bottom: 14px;
 }
 
-.card__quick-actions {
+.card__actions {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  gap: 4px;
 }
 
 .card__meta {
@@ -427,6 +510,16 @@ function reminderStatusClass(status: string): string {
 
 .btn--ghost {
   background: transparent;
+}
+
+.btn--danger-ghost {
+  background: transparent;
+  border-color: var(--error-color, #d03050);
+  color: var(--error-color, #d03050);
+}
+
+.btn--danger-ghost:hover {
+  background: rgba(208, 48, 80, 0.08);
 }
 
 .btn--primary {
@@ -534,6 +627,7 @@ html[data-theme="dark"] .tag--info {
 
 .card__foot-col--end {
   text-align: left;
+  align-items: flex-end;
 }
 
 .kv {
@@ -653,6 +747,16 @@ html[data-theme="dark"] .expiry--bad {
   flex-shrink: 0;
 }
 
+.icon-btn {
+  padding: 4px 6px;
+  min-width: 32px;
+  justify-content: center;
+}
+
+.icon-btn .btn-icon {
+  margin: 0;
+}
+
 .rbadge {
   font-size: 11px;
   font-weight: 600;
@@ -709,6 +813,10 @@ html[data-theme="dark"] .rbadge--error {
 }
 
 .reminders-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 12px;
   color: var(--text-muted);
   margin: 6px 0 0;
@@ -732,13 +840,10 @@ html[data-theme="dark"] .rbadge--error {
     gap: 10px;
   }
 
-  .card__quick-actions {
+  .card__actions {
     width: 100%;
-  }
-
-  .card__quick-actions .btn {
-    width: 100%;
-    justify-content: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .card__num {
@@ -751,19 +856,6 @@ html[data-theme="dark"] .rbadge--error {
   }
 
   .card__meta {
-    width: 100%;
-  }
-
-  .card__secondary-actions .btn,
-  .reminder-actions .btn {
-    justify-content: center;
-    min-width: 0;
-    padding-inline: 8px;
-  }
-
-  .card__secondary-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
 
@@ -793,6 +885,7 @@ html[data-theme="dark"] .rbadge--error {
 
   .reminder-actions {
     width: 100%;
+    justify-content: flex-start;
   }
 }
 </style>
