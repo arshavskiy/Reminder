@@ -80,6 +80,7 @@ export function registerDocumentRoutes(app: express.Application) {
     const [rows, total, totalAll, statusCounts] = await Promise.all([
       col("documents")
         .find(filter)
+        .project({ raw_text: 0 })
         .sort({ created_at: -1 })
         .skip(offset)
         .limit(limit)
@@ -470,6 +471,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     const candidateDocs = await col("documents")
       .find({ user_id: userId, processing_status: { $in: ["error", "done"] }, document_kind: { $ne: "certificate" } })
+      .project({ raw_text: 0 })
       .sort({ import_date: -1, _id: -1 } as any)
       .limit(limit ?? 0)
       .toArray();
@@ -994,6 +996,7 @@ function getDocumentReminderDate(doc: any, contract: any, reminders: any[]): str
   return String(
     contract?.expiry_date ??
     fields?.expiry_date ??
+    fields?.next_inspection_date ??
     fields?.next_action_date ??
     reminders[0]?.trigger_date ??
     ""
