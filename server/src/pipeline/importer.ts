@@ -120,8 +120,8 @@ export function forwardPastNextActionDate(value: string | null | undefined, toda
 }
 
 function normalizeNextActionDateFields(fields: Record<string, unknown>, expiryField?: string | null): void {
-  const keys = new Set(["expiry_date", "next_inspection_date"]);
-  if (expiryField) keys.add(expiryField);
+  const keys = new Set<string>(["expiry_date"]);
+  if (expiryField && expiryField !== "expiry_date") keys.add(expiryField);
   const cycleStart = ["start_date", "inspection_date", "issue_date", "check_date"]
     .map((key) => fields[key])
     .find((value): value is string => typeof value === "string" && Boolean(parseIsoDateOnly(value)));

@@ -923,7 +923,6 @@ const composeFieldLabels: Record<string, string> = {
   inspection_date: "תאריך בדיקה",
   check_date: "תאריך בדיקה",
   expiry_date: "בתוקף עד",
-  next_inspection_date: "בדיקה הבאה",
   valid_until: "בתוקף עד",
   client_name: "איש קשר",
   contact_person: "איש קשר",
@@ -961,7 +960,7 @@ const requiredComposeFieldBases = new Set([
   "inspection_date",
   "check_date",
   "expiry_date",
-  "next_inspection_date",
+  "expiry_date",
   "valid_until",
   "client_company",
   "client_name",
@@ -1344,10 +1343,10 @@ async function createContractFromCompose() {
   }
   const fields = stringRecord(collectComposeData());
   const expiryDate = normalizeDateForContract(
-    pickField(fields, ["expiry_date", "next_inspection_date", "valid_until", "בתוקף עד"])
+    pickField(fields, ["expiry_date", "valid_until", "בתוקף עד"])
   );
   if(!expiryDate) {
-    message.error("חסר תאריך תוקף / בדיקה הבאה. מלא שדה expiry_date או next_inspection_date.");
+    message.error("חסר תאריך תוקף. מלא שדה expiry_date.");
     return;
   }
   const startDate = normalizeDateForContract(

@@ -27,6 +27,17 @@
       @change="onFileInputChange"
     />
 
+    <!-- ── Missing fields after OCR ─────────────────────────────────── -->
+    <MissingFieldsModal
+      v-if="missingFieldsTarget"
+      v-model:show="showMissingFieldsModal"
+      :document-id="missingFieldsTarget.documentId"
+      :file-name="missingFieldsTarget.fileName"
+      :missing="missingFieldsTarget.missing"
+      :initial-values="missingFieldsTarget.initialValues"
+      @saved="onMissingFieldsSaved"
+    />
+
     <!-- ── Upload results modal ───────────────────────────────────────── -->
     <n-modal v-model:show="showUploadResults" :mask-closable="!uploadResultsLoading" style="width: min(780px, 96vw)">
       <n-card :title="`תוצאות העלאה — ${uploadResultRows.length} קבצים`" :bordered="false" size="medium" role="dialog" style="max-height:80vh;display:flex;flex-direction:column">
@@ -54,12 +65,19 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, h, ref } from "vue";
+import { computed, h, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { NButton, NCard, NDataTable, NIcon, NModal, NSpin, NTag, useMessage } from "naive-ui";
 import type { DataTableColumns } from "naive-ui";
 import { CloudUploadOutline } from "@vicons/ionicons5";
 import { api } from "../services/apiService";
+import MissingFieldsModal from "./MissingFieldsModal.vue";
+import {
+  listMissingDocumentFields,
+  missingFieldsBlockReminders,
+  type MissingFieldItem,
+} from "@shared/missingDocumentFields.js";
+import { resolveMissingFieldInitialValue } from "@shared/documentDates.js";
 
 interface UploadResultRow {
   id?: string;
@@ -85,6 +103,13 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const showUploadResults = ref(false);
 const uploadResultsLoading = ref(false);
 const uploadResultRows = ref<UploadResultRow[]>([]);
+const showMissingFieldsModal = ref(false);
+const missingFieldsTarget = ref<{
+  documentId: string;
+  fileName: string;
+  missing: MissingFieldItem[];
+  initialValues: Record<string, string>;
+} | null>(null);
 
 const isUploading = computed(() =>
   uploadResultRows.value.some((r) => r.status === "pending" || r.status === "uploading"),
@@ -243,7 +268,7 @@ async function uploadFiles(
               ...row,
               status: resolvedStatus,
               client: fields.client_company ?? fields.client_name ?? "",
-              date: fields.expiry_date ?? fields.next_inspection_date ?? fields.start_date ?? "",
+              date: fields.expiry_date ?? fields.start_date ?? "",
               docType: fields.document_type ?? fields.contract_type ?? (doc as any).document_type ?? "",
               contractNumber: fields.contract_number ?? fields.report_number ?? "",
               licenseNumber: fields.license_number ?? "",
@@ -265,6 +290,7 @@ async function uploadFiles(
   } else {
     uploadResultsLoading.value = false;
   }
+  await promptMissingFieldsForCompletedRows();
 }
 
 async function pollDocumentResults(pendingIds: string[]) {
@@ -298,7 +324,7 @@ async function pollDocumentResults(pendingIds: string[]) {
                       ...row,
                       status: doc.processing_status === "error" ? "error" : "done",
                       client: fields.client_company ?? fields.client_name ?? "",
-                      date: fields.expiry_date ?? fields.next_inspection_date ?? fields.start_date ?? "",
+                      date: fields.expiry_date ?? fields.start_date ?? "",
                       docType: fields.document_type ?? fields.contract_type ?? (doc as any).document_type ?? "",
                       contractNumber: fields.contract_number ?? fields.report_number ?? "",
                       licenseNumber: fields.license_number ?? "",
@@ -320,6 +346,79 @@ async function pollDocumentResults(pendingIds: string[]) {
     row.status === "processing" ? { ...row, status: "error" } : row,
   );
   uploadResultsLoading.value = false;
+  emit("uploaded");
+}
+
+function waitForModalClose(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!showMissingFieldsModal.value) {
+      resolve();
+      return;
+    }
+    const stop = watch(showMissingFieldsModal, (open) => {
+      if (!open) {
+        stop();
+        resolve();
+      }
+    });
+  });
+}
+
+async function promptMissingFieldsForCompletedRows() {
+  const candidates = uploadResultRows.value.filter(
+    (row) => row.id && row.status === "done" && row.remindersCreated === 0,
+  );
+  for (const row of candidates) {
+    try {
+      const doc = await api.documents.get(row.id!);
+      let fields: Record<string, unknown> = {};
+      try {
+        fields = doc.extracted_fields ? JSON.parse(doc.extracted_fields as string) : {};
+      } catch { /* ignore */ }
+      let template = null;
+      if (doc.template_id) {
+        try {
+          template = await api.docTemplates.get(String(doc.template_id));
+        } catch { /* ignore */ }
+      }
+      const missing = listMissingDocumentFields(template, fields);
+      if (!missingFieldsBlockReminders(missing)) continue;
+      missingFieldsTarget.value = {
+        documentId: row.id!,
+        fileName: row.fileName,
+        missing,
+        initialValues: Object.fromEntries(
+          missing.map((field) => [field.key, resolveMissingFieldInitialValue(field.key, fields, template)]),
+        ),
+      };
+      showMissingFieldsModal.value = true;
+      await waitForModalClose();
+    } catch { /* ignore */ }
+  }
+}
+
+async function onMissingFieldsSaved() {
+  const target = missingFieldsTarget.value;
+  if (!target) return;
+  try {
+    const doc = await api.documents.get(target.documentId);
+    let fields: Record<string, unknown> = {};
+    try {
+      fields = doc.extracted_fields ? JSON.parse(doc.extracted_fields as string) : {};
+    } catch { /* ignore */ }
+    const rems = await api.reminders.list({ documentId: target.documentId, limit: 100 });
+    const remindersCreated = rems.total ?? rems.rows?.length ?? 0;
+    uploadResultRows.value = uploadResultRows.value.map((row) =>
+      row.id === target.documentId
+        ? {
+            ...row,
+            date: String(fields.expiry_date ?? fields.start_date ?? row.date),
+            email: String(fields.client_email ?? fields.contact_email ?? row.email),
+            remindersCreated,
+          }
+        : row,
+    );
+  } catch { /* ignore */ }
   emit("uploaded");
 }
 </script>

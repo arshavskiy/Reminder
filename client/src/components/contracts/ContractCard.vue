@@ -21,6 +21,7 @@
           <span class="tag tag--neutral">{{ row.contract_type ?? "-" }}</span>
           <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
           <span v-if="!hasEmail" class="tag tag--warn">⚠ חסר אימייל</span>
+          <span v-for="issue in (issues ?? [])" :key="issue.kind" :class="['tag', issue.tagClass]">{{ issue.label }}</span>
         </div>
       </div>
       <div v-if="showReminderActions" class="card__quick-actions">
@@ -152,6 +153,7 @@ import {NCheckbox, NIcon} from "naive-ui";
 import {CreateOutline, DocumentTextOutline, EyeOutline, TrashOutline} from "@vicons/ionicons5";
 import {useRouter} from "vue-router";
 import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
+import type {RowIssue} from "@shared/rowIssues.js";
 import {contractRowHasEmail} from "@shared/contractEmail.js";
 
 const router = useRouter();
@@ -167,6 +169,7 @@ const props = defineProps<{
   creatingReminder?: string | null;
   showActions?: boolean;
   showReminderActions?: boolean;
+  issues?: RowIssue[];
 }>();
 
 const hasEmail = computed(() => contractRowHasEmail(props.row));

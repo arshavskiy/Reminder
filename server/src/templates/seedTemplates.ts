@@ -26,7 +26,7 @@ const SEEDS: SeedRow[] = [
     description: "תסקיר בדיקה תקופתית של ציוד הרמה, מעליות, מערכות בטיחות וכד׳",
     document_kind: "inspection_report",
     match_keywords: ["תסקיר", "בדיקה תקופתית", "פקודת הבטיחות"],
-    expiry_field: "next_inspection_date",
+    expiry_field: "expiry_date",
     is_default: 1,
     fields: [
       { key: "report_number",        label_he: "מספר תסקיר",          type: "text",  required: true,
@@ -40,7 +40,7 @@ const SEEDS: SeedRow[] = [
       { key: "contact_email",        label_he: "מייל",                type: "email", required: true,
         hint_he: "מייל של איש הקשר מתוך בלוק פרטי הלקוח העליון, למשל 'מייל: benitaliftingplat@gmail.com'. לא לקחת מייל מפוטר/חתימת הבודק" },
       { key: "inspection_date",      label_he: "תאריך בדיקה",         type: "date",  required: true },
-      { key: "next_inspection_date", label_he: "בתוקף עד",            type: "date",  required: true,
+      { key: "expiry_date",       label_he: "בתוקף עד",            type: "date",  required: true,
         hint_he: "שדה 'בתוקף עד' — זה מה שיפעיל את התזכורת" },
       { key: "equipment_description",label_he: "תיאור",               type: "text",  required: true,
         hint_he: "ערך שדה התיאור הכללי. אם מופיע בטקסט 'תיאור מכונת הרמה', הערך הוא 'מכונת הרמה' ולא תיאור הפריט שנבדק" },

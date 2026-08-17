@@ -106,7 +106,7 @@ const FIELDS = [
   { key: "capacity",            label: 'עומס עבודה בטוח (ק"ג)',     required: false },
   { key: "load_capacity_test",  label: 'עומס מבחן (ק"ג)',           required: false },
   { key: "load_radius",         label: "רדיוס עומס",                required: false },
-  { key: "next_inspection_date",label: "תאריך בדיקה הבאה (YYYY-MM-DD)", required: false },
+  { key: "expiry_date",label: "תאריך תוקף (YYYY-MM-DD)", required: false },
   { key: "description",         label: "תיאור",                     required: false },
   { key: "notes",               label: "הערות",                     required: false },
 ];

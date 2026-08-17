@@ -144,7 +144,7 @@ import type {Document, Equipment, EventType} from "@shared/types.js";
 
 type ClientDocumentRow = Document & {
   inspection_date?: string | null;
-  next_inspection_date?: string | null;
+  expiry_date?: string | null;
   document_type?: string | null;
 };
 
@@ -249,11 +249,11 @@ const documentColumns: DataTableColumns<ClientDocumentRow> = [
     render: (doc) => formatDate(doc.inspection_date),
   },
   {
-    title: "בדיקה הבאה",
-    key: "next_inspection_date",
+    title: "בתוקף עד",
+    key: "expiry_date",
     align: "right",
     titleAlign: "right",
-    render: (doc) => formatDate(doc.next_inspection_date),
+    render: (doc) => formatDate(doc.expiry_date),
   },
   {
     title: "ייבוא",

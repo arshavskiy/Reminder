@@ -653,7 +653,7 @@ export function registerAdminRoutes(app: express.Application) {
 
     function readReminderDate(extractedFields: unknown): string | null {
       const fields = parseExtractedFields(extractedFields);
-      return fields.expiry_date ?? fields.next_inspection_date ?? fields.next_action_date ?? null;
+      return fields.expiry_date ?? fields.next_action_date ?? null;
     }
 
     function readExtractedEmail(extractedFields: unknown): string | null {

@@ -9,7 +9,7 @@ function inspectionTemplate(): DocTemplate {
     description: null,
     document_kind: "inspection_report",
     match_keywords: ["תסקיר", "בדיקה תקופתית", "פקודת הבטיחות"],
-    expiry_field: "next_inspection_date",
+    expiry_field: "expiry_date",
     cached_system_prompt: null,
     is_default: 1,
     is_builtin: 1,

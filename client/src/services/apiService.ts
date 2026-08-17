@@ -85,7 +85,7 @@ export interface HydraulicCheckRequest {
   inspection_type?: string;
   inspection_location?: string;
   check_date?: string;
-  next_inspection_date?: string;
+  expiry_date?: string;
   interval_months?: number;
   skip_reminders?: boolean;
   editor_type?: "grid" | "sections";

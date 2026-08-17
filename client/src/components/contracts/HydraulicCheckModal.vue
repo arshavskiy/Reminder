@@ -577,7 +577,7 @@ const equipmentOptions = computed(() =>
 
 const templateKnownFields = new Set([
   "document_number", "contract_number", "report_number", "prev_report_number",
-  "start_date", "inspection_date", "check_date", "expiry_date", "next_inspection_date",
+  "start_date", "inspection_date", "check_date", "expiry_date",
   "valid_until", "inspection_type", "inspection_location", "client_name", "client_company", "client_phone",
   "client_mobile", "client_fax", "client_email", "client_address", "client_city", "client_id", "zip_code", "contact_person",
   "po_box", "chassis", "name", "manufacturer", "model", "serial_number", "license_number",
@@ -1064,7 +1064,6 @@ function buildTemplateDraft(): Record<string, string> {
     inspection_date: checkDate,
     check_date: checkDate,
     expiry_date: expiryDate,
-    next_inspection_date: expiryDate,
     valid_until: expiryDate,
     inspection_type: form.inspection_type || "תקופתית",
     inspection_location: form.inspection_location ?? "",
@@ -1169,7 +1168,7 @@ async function createContract() {
     interval_months: intervalMonths.value,
     skip_reminders: false,
     check_date: checkDateMs.value ? formatLocalDate(checkDateMs.value) : undefined,
-    next_inspection_date: expiryDate,
+    expiry_date: expiryDate,
     editor_type: editorType,
     print_template_id: templateId.value ?? undefined,
   };

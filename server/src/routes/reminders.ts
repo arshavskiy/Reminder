@@ -295,7 +295,7 @@ export function registerReminderRoutes(app: express.Application) {
         description?: string;
       };
       check_date?: string;
-      next_inspection_date?: string;
+      expiry_date?: string;
       interval_months?: number;
       skip_reminders?: boolean;
         editor_type?: "grid" | "sections";
@@ -330,8 +330,8 @@ export function registerReminderRoutes(app: express.Application) {
               });
               return;
           }
-      } else if (body.next_inspection_date) {
-          const nextDate = parseIsoDateOnly(body.next_inspection_date);
+      } else if (body.expiry_date) {
+          const nextDate = parseIsoDateOnly(body.expiry_date);
           if (nextDate) {
               const diffMs = nextDate.getTime() - checkDate.getTime();
               const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
@@ -498,14 +498,14 @@ export function registerReminderRoutes(app: express.Application) {
       equipmentId = (await col("equipment").insertOne(equipmentDoc as any)).insertedId;
     }
 
-    const dueDate = body.next_inspection_date ? parseIsoDateOnly(body.next_inspection_date) : new Date(checkDate);
-    if (body.next_inspection_date) {
+    const dueDate = body.expiry_date ? parseIsoDateOnly(body.expiry_date) : new Date(checkDate);
+    if (body.expiry_date) {
       if (!dueDate) {
-        res.status(400).json({ error: "next_inspection_date must be a valid date (YYYY-MM-DD)" });
+        res.status(400).json({ error: "expiry_date must be a valid date (YYYY-MM-DD)" });
         return;
       }
       if (dueDate.getTime() < todayDateOnly().getTime()) {
-        res.status(400).json({ error: "next_inspection_date cannot be in the past" });
+        res.status(400).json({ error: "expiry_date cannot be in the past" });
         return;
       }
     } else {

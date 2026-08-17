@@ -377,7 +377,7 @@ function toTrackingRow(row: MonthlyReportRow): TrackingRow {
   const contact = firstText(f.contact_person, row.client?.contact_person);
   const holderContact = [clientName, contact].filter(Boolean).join(" / ");
   return {
-    date: formatReportDate(firstText(row.contract.expiry_date, f.next_inspection_date, row.contract.start_date)),
+    date: formatReportDate(firstText(row.contract.expiry_date, f.expiry_date, row.contract.start_date)),
     checked: firstText(
       f.checked_equipment,
       f.equipment_description,

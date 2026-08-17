@@ -161,6 +161,7 @@
                 :row="item.row"
                 :selected="selectedIds.has(String(item.row.id))"
                 :creating-reminder="creatingReminderFor"
+                :issues="contractIssues(item.row)"
                 :sending-reminder="sendingReminder"
                 @delete="confirmDelete"
                 @edit="openEdit"
@@ -668,6 +669,13 @@ import type {
   ReminderWithContext
 } from "@shared/types.js";
 import {contractRowHasEmail} from "@shared/contractEmail.js";
+import {
+  contractReportNumber,
+  countDuplicateReportRows,
+  duplicateReportNumberSet,
+  isDuplicateReportNumber,
+  listContractRowIssues,
+} from "@shared/rowIssues.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
@@ -685,7 +693,7 @@ const canOpenPrintTemplates = computed(() => featuresStore.hasFeature(FEATURES.p
 
 const statusFilter = ref<string | null>(null);
 const kind = ref<"contract" | "inspection" | "all">("inspection");
-type DueFilter = "all" | "overdue" | "month" | "sent" | "no_email" | "has_reminder";
+type DueFilter = "all" | "overdue" | "month" | "sent" | "no_email" | "has_reminder" | "duplicate_report_number";
 const dueFilter = ref<DueFilter>("all");
 const showDraftsOnly = ref(false);
 const search = ref("");
@@ -1391,7 +1399,7 @@ const hydraulicEquipmentOptions = computed(() =>
 
 const hydraulicTemplateKnownFields = new Set([
   "document_number", "contract_number", "report_number", "prev_report_number",
-  "start_date", "inspection_date", "check_date", "expiry_date", "next_inspection_date",
+  "start_date", "inspection_date", "check_date", "expiry_date",
   "valid_until", "inspection_type", "client_name", "client_company", "client_phone",
   "client_email", "client_address", "client_id", "zip_code", "contact_person",
   "po_box", "chassis", "name", "manufacturer", "model", "serial_number", "license_number",
@@ -1856,7 +1864,7 @@ async function createHydraulicContract() {
     client_id: hydraulicClientId.value ?? undefined,
     interval_months: hydraulicIntervalMonths.value,
     skip_reminders: false,
-    next_inspection_date: hydraulicReminderMode.value === "date"
+    expiry_date: hydraulicReminderMode.value === "date"
         ? formatLocalDate(hydraulicReminderDateMs.value!)
         : undefined,
     editor_type: editorType,
@@ -2095,7 +2103,6 @@ function buildContractTemplateDraft(row: ContractWithClient): Record<string, str
     inspection_date: manual.inspection_date ?? dateOnly(row.start_date),
     check_date: manual.check_date ?? dateOnly(row.start_date),
     expiry_date: manual.expiry_date ?? dateOnly(row.expiry_date),
-    next_inspection_date: manual.next_inspection_date ?? dateOnly(row.expiry_date),
     valid_until: manual.valid_until ?? dateOnly(row.expiry_date),
     inspection_type: manual.inspection_type ?? String(row.contract_type ?? ""),
     client_name: manual.client_name ?? String(row.contact_person ?? ""),
@@ -2184,7 +2191,6 @@ function buildHydraulicTemplateDraft(): Record<string, string> {
     inspection_date: today,
     check_date: today,
     expiry_date: nextDate,
-    next_inspection_date: nextDate,
     inspection_type: "בדיקה תקופתית",
     client_name: business.contact_person ?? "",
     client_company: business.display_name ?? "",
@@ -2282,6 +2288,7 @@ type CombinedFilter = {
 
 const combinedFilters = computed<CombinedFilter[]>(() => {
   const rows = store.rows ?? [];
+  const duplicateCount = countDuplicateReportRows(rows, contractReportNumber);
   return [
     {key: "all", label: "הכל", count: rows.length, type: "status", statusValue: null},
     {
@@ -2325,6 +2332,13 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
       count: rows.filter((r) => remindersFor(String(r.id)).length > 0).length,
       type: "due",
       dueValue: "has_reminder"
+    },
+    {
+      key: "duplicate_report_number",
+      label: "כפילות מספר",
+      count: duplicateCount,
+      type: "due",
+      dueValue: "duplicate_report_number",
     },
     {key: "drafts", label: "טיוטות", count: orphanDrafts.value.length, type: "drafts"},
     {
@@ -2386,7 +2400,18 @@ function contractMatchesDueFilter(row: ContractWithClient, filter: DueFilter): b
   if (filter === "sent") return contractHasSentReminder(row);
   if (filter === "no_email") return !contractHasEmail(row);
   if (filter === "has_reminder") return remindersFor(String(row.id)).length > 0;
+  if (filter === "duplicate_report_number") {
+    return isDuplicateReportNumber(contractReportNumber(row), duplicateContractNumbers.value);
+  }
   return true;
+}
+
+const duplicateContractNumbers = computed(() =>
+  duplicateReportNumberSet(store.rows ?? [], contractReportNumber),
+);
+
+function contractIssues(row: ContractWithClient) {
+  return listContractRowIssues(row, duplicateContractNumbers.value, remindersFor(String(row.id)).length > 0);
 }
 
 
@@ -2480,6 +2505,7 @@ const filteredRows = computed(() => {
   if (q) {
     rows = rows.filter((r) =>
         (r.contract_number ?? "").toLowerCase().includes(q) ||
+        (contractReportNumber(r)?.includes(q) ?? false) ||
         (r.client_name ?? "").toLowerCase().includes(q) ||
         (r.contract_type ?? "").toLowerCase().includes(q) ||
         (r.summary ?? "").toLowerCase().includes(q)

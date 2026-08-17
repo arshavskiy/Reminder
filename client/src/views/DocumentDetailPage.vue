@@ -54,6 +54,28 @@
       {{ doc.error_message }}
     </n-alert>
 
+    <n-alert
+      v-if="showMissingFieldsBanner"
+      class="mb-4"
+      title="חסרים שדות ליצירת תזכורת"
+      type="warning"
+    >
+      <div>OCR לא מילא {{ missingExpiryLabel }}. מלא/י את השדות כדי ליצור תזכורות.</div>
+      <n-button size="small" type="primary" style="margin-top:10px" @click="showMissingFieldsModal = true">
+        מלא שדות חסרים
+      </n-button>
+    </n-alert>
+
+    <MissingFieldsModal
+      v-if="doc"
+      v-model:show="showMissingFieldsModal"
+      :document-id="String(doc.id)"
+      :file-name="doc.file_name"
+      :missing="missingFieldsList"
+      :initial-values="missingFieldInitials"
+      @saved="onMissingFieldsSaved"
+    />
+
     <section v-if="linkedContracts.length" class="linked-contracts">
       <ContractCard
         v-for="contract in linkedContracts"
@@ -306,10 +328,10 @@
                 v-for="f in extractedFields"
                 v-show="shouldShowExtractedField(f)"
                 :key="f.key"
-                class="fields-row"
+                :class="['fields-row', isMissingField(f) ? 'fields-row--missing' : '']"
               >
                 <span class="fields-label">{{ f.label }}</span>
-                <span :class="['fields-value', isEmailField(f.key) ? 'email-ltr' : '']">
+                <span :class="['fields-value', isEmailField(f.key) ? 'email-ltr' : '', isMissingField(f) ? 'fields-value--missing' : '']">
                   <template v-if="editingFields && !Array.isArray(f.value) && (f.value === null || typeof f.value !== 'object')">
                     <input
                       v-model="fieldEdits[f.key]"
@@ -321,7 +343,7 @@
                   <template v-else-if="Array.isArray(f.value)">{{ f.value.join(', ') || '—' }}</template>
                   <template v-else-if="f.value && typeof f.value === 'object'">{{ JSON.stringify(f.value) }}</template>
                   <template v-else>
-                    {{ displayExtractedValue(f) }}
+                    {{ isMissingField(f) ? 'חסר' : displayExtractedValue(f) }}
                     <span v-if="isExpiredExtractedField(f)" class="fields-expired"> · לא בתוקף</span>
                   </template>
                 </span>
@@ -371,6 +393,7 @@ import {computed, onMounted, reactive, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
   NAlert,
+  NButton,
   NDataTable,
   NForm,
   NFormItem,
@@ -396,7 +419,10 @@ import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
 import ContractCard from "../components/contracts/ContractCard.vue";
-import type {ContractWithClient, Document, ReminderWithContext} from "@shared/types.js";
+import MissingFieldsModal from "../components/MissingFieldsModal.vue";
+import type {ContractWithClient, DocTemplate, Document, ReminderWithContext} from "@shared/types.js";
+import {listMissingDocumentFields, missingFieldsBlockReminders, type MissingFieldItem} from "@shared/missingDocumentFields.js";
+import {resolveMissingFieldInitialValue, normalizeDateForContract} from "@shared/documentDates.js";
 import {useAuthStore} from "../stores/auth.js";
 
 const props = defineProps<{ docId?: string }>();
@@ -420,6 +446,16 @@ const extracting = ref(false);
 const deleting = ref(false);
 const linkedContracts = ref<ContractWithClient[]>([]);
 const linkedReminders = ref<ReminderWithContext[]>([]);
+const docTemplate = ref<DocTemplate | null>(null);
+const missingFieldsList = ref<MissingFieldItem[]>([]);
+const showMissingFieldsBanner = ref(false);
+const showMissingFieldsModal = ref(false);
+const missingFieldsPrompted = ref(false);
+const missingFieldInitials = ref<Record<string, string>>({});
+const missingExpiryLabel = computed(() =>
+  missingFieldsList.value.find((field) => field.critical)?.label ?? "תאריך בתוקף",
+);
+const missingFieldKeys = computed(() => new Set(missingFieldsList.value.map((f) => f.key)));
 const editingFields = ref(false);
 const savingFields = ref(false);
 const fieldEdits = ref<Record<string, string>>({});
@@ -591,7 +627,7 @@ const DEFAULT_FIELDS: { key: string; label: string }[] = [
   { key: "contact_phone",         label: "נייד" },
   { key: "client_email",          label: "מייל" },
   { key: "inspection_date",       label: "תאריך בדיקה" },
-  { key: "next_inspection_date",  label: "בתוקף עד" },
+  { key: "expiry_date",           label: "בתוקף עד" },
   { key: "date_diff_months",      label: "הפרש בחודשים לבדיקה" },
   { key: "equipment_description", label: "תיאור" },
   { key: "checked_equipment",     label: "ציוד שנבדק" },
@@ -608,7 +644,7 @@ const LABEL_MAP: Record<string, string> = Object.fromEntries(
   DEFAULT_FIELDS.map(f => [f.key, f.label])
 );
 
-const SKIP_KEYS = new Set(["parties", "tasks", "amount", "currency", "client_address", "po_box", "client_zipcode", "contact_email", "email", "inspection_interval_months"]);
+const SKIP_KEYS = new Set(["parties", "tasks", "amount", "currency", "client_address", "po_box", "client_zipcode", "contact_email", "email", "inspection_interval_months", "next_inspection_date"]);
 const ALWAYS_VISIBLE_FIELD_KEYS = new Set(["license_number"]);
 
 const extractedFields = computed(() => {
@@ -623,6 +659,8 @@ const extractedFields = computed(() => {
     label: f.label,
     value: f.key === "client_email"
       ? raw.client_email ?? raw.contact_email ?? raw.email ?? null
+      : f.key === "expiry_date"
+        ? raw.expiry_date ?? raw.next_inspection_date ?? null
       : f.key === "date_diff_months"
         ? raw.date_diff_months ?? raw.inspection_interval_months ?? null
       : raw[f.key] ?? null,
@@ -635,12 +673,7 @@ function isEmailField(key: string) {
 
 function parseDateOnly(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
-  const text = value.trim();
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const dmy = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(text);
-  if (!dmy) return null;
-  return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+  return normalizeDateForContract(value.trim());
 }
 
 function todayDateOnly(today = new Date()): string {
@@ -648,21 +681,34 @@ function todayDateOnly(today = new Date()): string {
 }
 
 function isExpiredExtractedField(field: { key: string; value: unknown }): boolean {
-  if (field.key !== "next_inspection_date" && field.key !== "expiry_date") return false;
+  if (field.key !== "expiry_date") return false;
   const iso = parseDateOnly(field.value);
   return Boolean(iso && iso < todayDateOnly());
 }
 
 function displayExtractedValue(field: { key: string; value: unknown }): string {
   if (field.value == null || field.value === "") return "—";
-  if (field.key === "next_inspection_date" || field.key === "expiry_date" || field.key === "inspection_date") {
+  if (field.key === "expiry_date" || field.key === "inspection_date") {
     return formatDate(String(field.value));
   }
   return String(field.value);
 }
 
+function isMissingField(field: { key: string; value: unknown }): boolean {
+  if (!missingFieldKeys.value.has(field.key)) return false;
+  if (field.key === "expiry_date") {
+    if (field.value == null || field.value === "") return true;
+    if (typeof field.value === "string" && !field.value.trim()) return true;
+    return false;
+  }
+  if (field.value == null || field.value === "") return true;
+  if (typeof field.value === "string" && !field.value.trim()) return true;
+  return false;
+}
+
 function shouldShowExtractedField(field: { key: string; value: unknown }) {
   if (editingFields.value || showEmptyFields.value || ALWAYS_VISIBLE_FIELD_KEYS.has(field.key)) return true;
+  if (missingFieldKeys.value.has(field.key)) return true;
   if (Array.isArray(field.value)) return field.value.length > 0;
   return field.value !== null && field.value !== "";
 }
@@ -718,6 +764,44 @@ async function reloadDoc() {
   } else if ((doc.value as any).extracted_fields) {
     try { extractionRaw.value = JSON.parse((doc.value as any).extracted_fields); } catch {}
   }
+  await evaluateMissingFields();
+}
+
+async function evaluateMissingFields() {
+  if (!doc.value || doc.value.processing_status !== "done") {
+    missingFieldsList.value = [];
+    showMissingFieldsBanner.value = false;
+    return;
+  }
+  const extracted = extractionRaw.value ?? {};
+  if (doc.value.template_id) {
+    try {
+      docTemplate.value = await api.docTemplates.get(String(doc.value.template_id));
+    } catch {
+      docTemplate.value = null;
+    }
+  } else {
+    docTemplate.value = null;
+  }
+  missingFieldsList.value = listMissingDocumentFields(docTemplate.value, extracted);
+  missingFieldInitials.value = Object.fromEntries(
+    missingFieldsList.value.map((field) => [
+      field.key,
+      resolveMissingFieldInitialValue(field.key, extracted, docTemplate.value),
+    ]),
+  );
+  showMissingFieldsBanner.value =
+    missingFieldsBlockReminders(missingFieldsList.value) && linkedReminders.value.length === 0;
+  if (showMissingFieldsBanner.value && !missingFieldsPrompted.value) {
+    missingFieldsPrompted.value = true;
+    showMissingFieldsModal.value = true;
+  }
+}
+
+async function onMissingFieldsSaved() {
+  await reloadDoc();
+  await loadLinkedReminders();
+  await evaluateMissingFields();
 }
 
 async function loadLinkedContracts(documentId: string) {
@@ -748,7 +832,7 @@ function hydrateContractSidePanel() {
   contractSideForm.contract_number = textValue(contract.contract_number ?? manual.report_number ?? manual.document_number);
   contractSideForm.client_name = textValue(contract.client_name ?? contract.counterparty ?? manual.client_company ?? manual.client_name);
   contractSideForm.start_date = dateOnly(contract.start_date ?? manual.inspection_date ?? manual.start_date);
-  contractSideForm.expiry_date = dateOnly(contract.expiry_date ?? manual.next_inspection_date ?? manual.expiry_date);
+  contractSideForm.expiry_date = dateOnly(contract.expiry_date ?? manual.expiry_date);
   contractSideForm.contact_person = textValue((contract as any).contact_person ?? manual.contact_person);
   contractSideForm.contact_phone = textValue((contract as any).contact_phone ?? manual.contact_phone);
   contractSideForm.contact_email = textValue((contract as any).contact_email ?? manual.contact_email ?? manual.client_email);
@@ -814,7 +898,6 @@ async function saveContractSidePanel() {
       inspection_date: contractSideForm.start_date,
       check_date: contractSideForm.start_date,
       expiry_date: contractSideForm.expiry_date,
-      next_inspection_date: contractSideForm.expiry_date,
       checked_equipment: contractSideForm.checked_equipment,
       name: contractSideForm.checked_equipment,
       license_number: contractSideForm.license_number,
@@ -1241,6 +1324,19 @@ onMounted(async () => {
 .fields-expired {
   color: var(--danger, #d03050);
   font-weight: 600;
+}
+.fields-row--missing {
+  background: rgba(208, 48, 80, 0.06);
+  border-radius: 4px;
+  padding-inline: 8px;
+  margin-inline: -8px;
+}
+.fields-row--missing .fields-label {
+  color: var(--color-error, #d03050);
+}
+.fields-value--missing {
+  color: var(--color-error, #d03050);
+  font-style: italic;
 }
 .fields-input:focus {
   box-shadow: 0 0 0 2px rgba(99, 226, 183, 0.2);

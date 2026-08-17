@@ -18,7 +18,7 @@ function mergeFields(
 }
 
 function expiryChanged(sanitized: Record<string, unknown>): boolean {
-  return sanitized.expiry_date !== undefined || sanitized.next_inspection_date !== undefined;
+  return sanitized.expiry_date !== undefined;
 }
 
 // ── sanitization ──────────────────────────────────────────────────────────────
@@ -78,16 +78,8 @@ describe("PUT /documents/:id/fields — reminder regeneration trigger", () => {
     expect(expiryChanged({ expiry_date: "2027-01-01" })).toBe(true);
   });
 
-  it("triggers when next_inspection_date changes", () => {
-    expect(expiryChanged({ next_inspection_date: "2027-06-01" })).toBe(true);
-  });
-
-  it("does not trigger for non-expiry fields", () => {
+  it("does not trigger for legacy-only alias fields", () => {
     expect(expiryChanged({ contract_number: "123", client_company: "חברה" })).toBe(false);
-  });
-
-  it("triggers when both expiry_date and next_inspection_date present", () => {
-    expect(expiryChanged({ expiry_date: "2027-01-01", next_inspection_date: "2028-01-01" })).toBe(true);
   });
 });
 
@@ -285,14 +277,14 @@ describe("PUT /documents/:id/fields — reminder regeneration flow", () => {
     expect(generateReminders).not.toHaveBeenCalled();
   });
 
-  it("uses next_inspection_date as expiry fallback for reminder date", async () => {
+  it("uses expiry_date for reminder date", async () => {
     const generateReminders = vi.fn(async (..._args: unknown[]) => {});
-    const sanitized = { next_inspection_date: "2028-03-15" };
+    const sanitized = { expiry_date: "2028-03-15" };
     const contract = { _id: { toString: () => "ctr-2" }, client_id: "cli-2", expiry_date: "2026-01-01" };
 
     if (expiryChanged(sanitized)) {
       const expiryDate = String(
-        (sanitized as any).expiry_date ?? sanitized.next_inspection_date ?? (contract as any).expiry_date ?? ""
+        (sanitized as any).expiry_date ?? (contract as any).expiry_date ?? ""
       );
       await generateReminders("ctr-2", contract.client_id, "doc-2", expiryDate, "user-1");
     }

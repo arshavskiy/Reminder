@@ -12,7 +12,7 @@ import {logger} from "../logger";
 
 const SYSTEM_PROMPT = `You are a Hebrew business-document analyst. The user will give you a sample document's raw text (in Hebrew, possibly with bidi/encoding artifacts from a PDF). Your job: design a reusable extraction template for documents of THIS KIND.
 
-Return ONLY JSON matching the schema below. All Hebrew labels must be in Hebrew. Field keys must be lowercase snake_case English (e.g. "client_company", "next_inspection_date") so they can be referenced from code.
+Return ONLY JSON matching the schema below. All Hebrew labels must be in Hebrew. Field keys must be lowercase snake_case English (e.g. "client_company", "expiry_date") so they can be referenced from code.
 
 Choose field types from: text, number, date, phone, email, currency, list.
 
@@ -24,7 +24,7 @@ CRITICAL — read carefully:
 5. Include a UNIQUE document number field if present (license_number / contract_number / report_number / invoice_number — pick what fits).
 6. "expiry_field" must point to the FUTURE DATE the user must act on — the date that should drive a reminder email. Examples by doc type:
    - Vehicle license / certificate → "expiry_date" / "valid_until"
-   - Inspection report → "next_inspection_date"
+   - Inspection report → "expiry_date"
    - Invoice → "payment_due_date"
    - Contract → "expiry_date"
    Never pick the issue date. If the sample has no future-action date, set "expiry_field" to null.

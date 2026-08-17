@@ -872,7 +872,7 @@ export function registerDocumentRoutes(app: express.Application) {
     const today = new Date().toISOString().slice(0, 10);
     const fieldEmail = firstTrimmedEmail(merged.client_email, merged.contact_email, merged.email);
     const normalizedEmail = fieldEmail ? normalizeEmail(fieldEmail) : null;
-    const fieldExpiry = String(merged.next_inspection_date ?? merged.expiry_date ?? "").slice(0, 10);
+    const fieldExpiry = String(merged.expiry_date ?? "").slice(0, 10);
     const expiryDate = /^\d{4}-\d{2}-\d{2}$/.test(fieldExpiry) ? fieldExpiry : null;
 
     if (normalizedEmail) {
@@ -994,7 +994,6 @@ function getDocumentReminderDate(doc: any, contract: any, reminders: any[]): str
   return String(
     contract?.expiry_date ??
     fields?.expiry_date ??
-    fields?.next_inspection_date ??
     fields?.next_action_date ??
     reminders[0]?.trigger_date ??
     ""

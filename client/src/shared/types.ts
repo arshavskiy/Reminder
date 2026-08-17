@@ -161,7 +161,7 @@ export interface Document {
   extracted_fields?: string | null;
   document_type?: string | null;
   inspection_date?: string | null;
-  next_inspection_date?: string | null;
+  expiry_date?: string | null;
   reminder_count?: number;
   reminder_status?: DocumentReminderAssignmentStatus;
   reminder_date?: string | null;

@@ -4,6 +4,7 @@ import {ObjectId} from "mongodb";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {normalizeClientDisplayName, normalizePhoneIdentityKey} from "../utils/clientNames";
 import {logger} from "../logger";
+import {readExpiryDateValue} from "../shared/expiryField.js";
 
 export function registerClientRoutes(app: express.Application) {
   // GET /api/clients
@@ -305,7 +306,7 @@ function flatClientDocument(doc: any) {
   return {
     ...flat,
     inspection_date: stringField(fields, "inspection_date"),
-    next_inspection_date: stringField(fields, "next_inspection_date") ?? stringField(fields, "expiry_date"),
+    expiry_date: readExpiryDateValue(fields),
   };
 }
 

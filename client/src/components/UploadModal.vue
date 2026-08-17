@@ -607,7 +607,7 @@ async function runExtract() {
 
     extractPreviews.value = (data.reminders ?? []).map((r: any) => ({
       ...r,
-      next_check_date: r.next_check_date ?? r.next_inspection_date ?? r.expiry_date ?? null,
+      next_check_date: r.next_check_date ?? r.expiry_date ?? null,
       selected: true,
     }));
     extractErrors.value = data.errors ?? [];

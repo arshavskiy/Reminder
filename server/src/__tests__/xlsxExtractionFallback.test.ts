@@ -15,7 +15,7 @@ const inspectionTemplate: DocTemplate = {
   description: null,
   document_kind: "inspection_report",
   match_keywords: ["תסקיר", "בדיקה תקופתית", "פקודת הבטיחות"],
-  expiry_field: "next_inspection_date",
+  expiry_field: "expiry_date",
   cached_system_prompt: null,
   is_default: 1,
   is_builtin: 1,
@@ -48,10 +48,10 @@ describe("normalizeExtractionFieldsForTemplate", () => {
   it("uses an 18-month start-to-expiry interval when the document dates show it", () => {
     const fields = normalizeExtractionFieldsForTemplate("תסקיר בדיקה", inspectionTemplate, {
       start_date: "2025-02-17",
-      next_inspection_date: "2026-08-16",
+      expiry_date: "2026-08-16",
     });
 
-    expect(fields?.next_inspection_date).toBe("2026-08-16");
+    expect(fields?.expiry_date).toBe("2026-08-16");
     expect(fields?.inspection_interval_months).toBe(18);
     expect(fields?.date_diff_months).toBe(18);
   });
@@ -62,19 +62,19 @@ describe("normalizeExtractionFieldsForTemplate", () => {
 
   it("normalizes template next inspection dates before saving extracted fields", () => {
     const fields = normalizeExtractionFieldsForTemplate("תסקיר בדיקה", inspectionTemplate, {
-      next_inspection_date: "2026-07-15",
+      expiry_date: "2026-07-15",
     });
 
-    expect(fields?.next_inspection_date).toBe(forwardPastNextActionDate("2026-07-15"));
+    expect(fields?.expiry_date).toBe(forwardPastNextActionDate("2026-07-15"));
   });
 
   it("normalizes template next inspection dates using the extracted inspection interval", () => {
     const fields = normalizeExtractionFieldsForTemplate("תסקיר בדיקה", inspectionTemplate, {
       start_date: "2025-02-17",
-      next_inspection_date: "2025-08-16",
+      expiry_date: "2025-08-16",
     });
 
-    expect(fields?.next_inspection_date).toBe("2026-08-16");
+    expect(fields?.expiry_date).toBe("2026-08-16");
     expect(fields?.inspection_interval_months).toBe(6);
     expect(fields?.date_diff_months).toBe(6);
   });

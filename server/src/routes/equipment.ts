@@ -916,8 +916,7 @@ export function registerEquipmentRoutes(app: express.Application) {
         await col("equipment").insertOne(doc as any);
         created++;
 
-        // If next_inspection_date is mapped and has a value, create a reminder
-        const nextInspection = get("next_inspection_date");
+        const nextInspection = get("expiry_date");
         if (nextInspection && nextInspection.match(/\d{4}-\d{2}-\d{2}/)) {
           const { generateContractReminders } = await import("../reminders/scheduler.js");
           // create a stub contract to hang the reminder on

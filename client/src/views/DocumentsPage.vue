@@ -136,7 +136,7 @@
       <n-input
         v-model:value="search"
         clearable
-        placeholder="חיפוש לפי שם קובץ..."
+        placeholder="חיפוש לפי שם קובץ או מספר תסקיר..."
         class="toolbar__search"
         @update:value="currentPage = 1"
       />
@@ -207,10 +207,23 @@
             >
               {{ reminderStatusLabel((row as any).reminder_status) }}
             </n-tag>
+            <n-tag
+              v-for="issue in documentIssues(row)"
+              :key="issue.kind"
+              class="tile__issue-tag"
+              round
+              size="small"
+              :type="issue.tagClass === 'tag--bad' ? 'error' : 'warning'"
+            >
+              {{ issue.label }}
+            </n-tag>
           </div>
           <div class="tile__body">
             <div :title="row.file_name" class="tile__name">{{ row.file_name }}</div>
             <div class="tile__meta">
+              <span v-if="documentReportNumberLabel(row)" class="tile__meta-item tile__meta-item--num">
+                {{ documentReportNumberLabel(row) }}
+              </span>
               <span v-if="(row as any).client_name" class="tile__meta-item">{{ (row as any).client_name }}</span>
               <span v-if="(row as any).document_type" class="tile__meta-item">{{ (row as any).document_type }}</span>
             </div>
@@ -274,6 +287,13 @@
             <n-tag :type="reminderTagType((row as any).reminder_status)" round size="small">
               {{ reminderStatusLabel((row as any).reminder_status) }}
             </n-tag>
+            <span
+              v-for="issue in documentIssues(row)"
+              :key="issue.kind"
+              :class="['tag', issue.tagClass]"
+            >
+              {{ issue.label }}
+            </span>
             <span class="tag tag--neutral">{{ row.mime_type }}</span>
           </template>
           <template #footer>
@@ -420,6 +440,14 @@ import PaginationBar from "../components/PaginationBar.vue";
 import UploadModal from "../components/UploadModal.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import type {Document} from "@shared/types.js";
+import {
+  countDuplicateReportRows,
+  documentReportNumber,
+  documentReportNumberLabel,
+  duplicateReportNumberSet,
+  isDuplicateReportNumber,
+  listDocumentRowIssues,
+} from "@shared/rowIssues.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -501,7 +529,7 @@ async function onModalUpload(
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────
-type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder" | "contract_expired";
+type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder" | "contract_expired" | "duplicate_report_number";
 
 const search = ref("");
 const filterClientId = ref<string | null>(null);
@@ -518,6 +546,7 @@ type CombinedFilter = {
 const combinedFilters = computed<CombinedFilter[]>(() => {
   const c = store.counts;
   const rows = store.rows ?? [];
+  const duplicateCount = countDuplicateReportRows(rows, documentReportNumber);
   return [
     { key: "all",         label: "הכל",         count: c.all,          statusValue: "all" },
     { key: "done",        label: "הושלם",       count: c.done,         statusValue: "done" },
@@ -525,8 +554,17 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
     { key: "error",       label: "שגיאה",       count: c.error,        statusValue: "error" },
     { key: "no_reminder",       label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length,                                                              statusValue: "no_reminder" },
     { key: "contract_expired",  label: "פג תוקף",   count: rows.filter((row) => (row as any).contract_status === "expired" || (row as any).contract_status === "overdue").length, statusValue: "contract_expired" },
+    { key: "duplicate_report_number", label: "כפילות מספר", count: duplicateCount, statusValue: "duplicate_report_number" },
   ];
 });
+
+const duplicateDocumentNumbers = computed(() =>
+  duplicateReportNumberSet(store.rows ?? [], documentReportNumber),
+);
+
+function documentIssues(row: Document) {
+  return listDocumentRowIssues(row as Document & { reminder_status?: string; contract_status?: string }, duplicateDocumentNumbers.value);
+}
 
 const activeFilterKey = ref("all");
 
@@ -561,7 +599,12 @@ const filteredRows = computed(() => {
     rows = rows.filter((row) => matchesStatusFilter(row, statusFilter.value));
   }
   const q = search.value.trim().toLowerCase();
-  if (q) rows = rows.filter((r) => (r.file_name ?? "").toLowerCase().includes(q));
+  if (q) {
+    rows = rows.filter((r) =>
+      (r.file_name ?? "").toLowerCase().includes(q) ||
+      (documentReportNumber(r)?.includes(q) ?? false),
+    );
+  }
   if (filterDateRange.value) {
     const [from, to] = filterDateRange.value;
     rows = rows.filter((r) => {
@@ -609,6 +652,9 @@ function matchesStatusFilter(row: Document, filter: DocumentStatusFilter) {
   if (filter === "error") return row.processing_status === "error";
   if (filter === "no_reminder") return (row as any).reminder_status === "missing";
   if (filter === "contract_expired") return (row as any).contract_status === "expired" || (row as any).contract_status === "overdue";
+  if (filter === "duplicate_report_number") {
+    return isDuplicateReportNumber(documentReportNumber(row), duplicateDocumentNumbers.value);
+  }
   return true;
 }
 function fileIcon(mime: string | null | undefined) {
@@ -1283,6 +1329,10 @@ async function openDownload(row: Document) {
   white-space: nowrap;
 }
 .tag--neutral { background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border-color); }
+.tag--warn { background: rgba(240, 160, 32, 0.14); color: #9a6700; border: 1px solid rgba(240, 160, 32, 0.35); }
+.tag--bad { background: rgba(208, 48, 80, 0.12); color: #b42318; border: 1px solid rgba(208, 48, 80, 0.28); }
+.tile__meta-item--num { font-family: ui-monospace, monospace; direction: ltr; }
+.tile__issue-tag { position: absolute; bottom: 8px; right: 8px; max-width: calc(100% - 16px); }
 .kv { font-size: 12px; color: var(--text-primary); display: inline-flex; align-items: center; gap: 6px; }
 .kv strong { color: var(--text-secondary); font-weight: 600; }
 .expiry { font-weight: 600; }

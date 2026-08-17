@@ -485,7 +485,7 @@ function load() {
   selectedReminderKeys.value = selectedReminderKeys.value.filter((id) =>
     filteredRows.value.some((row) => row.id === id)
   );
-  store.fetch({ status: statusFilter.value ?? undefined, limit: 100 }, true);
+  store.fetch({ status: statusFilter.value ?? undefined, limit: 5000 }, true);
 }
 
 function toggleBulkMode() {
