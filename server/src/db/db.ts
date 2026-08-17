@@ -158,6 +158,7 @@ async function applyIndexes(db: Db): Promise<void> {
   // email_log
   await db.collection("email_log").createIndex({ user_id: 1 });
   await db.collection("email_log").createIndex({ reminder_id: 1 });
+  await db.collection("email_log").createIndex({ provider_message_id: 1 });
   await db.collection("email_log").createIndex({ sent_at: -1 });
 
   // equipment — drop old unique(name,category) if present, replace with serial_number

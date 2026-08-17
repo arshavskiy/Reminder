@@ -89,7 +89,7 @@ async function sendViaResend(opts: {
   html: string;
   text?: string;
   attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
-}): Promise<void> {
+}): Promise<string | null> {
   const { Resend } = await import("resend");
   const client = new Resend(process.env.RESEND_API_KEY);
   const result = await client.emails.send({
@@ -105,6 +105,7 @@ async function sendViaResend(opts: {
     })),
   });
   if (result.error) throw new Error(result.error.message ?? JSON.stringify(result.error));
+  return result.data?.id ?? null;
 }
 
 function useResend(): boolean {
@@ -558,7 +559,7 @@ export async function sendReminderEmail(
   reminder: ReminderWithContext,
   recipients: string[],
   opts: { skipCc?: boolean } = {}
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; providerMessageId?: string | null }> {
   const settings = getSettings();
 
   if (!settings.smtpHost && !useResend()) {
@@ -590,8 +591,9 @@ export async function sendReminderEmail(
       subject,
       via: useResend() ? "resend" : "smtp",
     });
+    let providerMessageId: string | null = null;
     if (useResend()) {
-      await sendViaResend({ from, to: recipients, cc: ccEmail, subject, html, text });
+      providerMessageId = await sendViaResend({ from, to: recipients, cc: ccEmail, subject, html, text });
     } else {
       await buildTransport().sendMail({ from, to: recipients.join(", "), cc: ccEmail.join(", ") || undefined, subject, html, text });
     }
@@ -602,8 +604,9 @@ export async function sendReminderEmail(
       recipients,
       from,
       via: useResend() ? "resend" : "smtp",
+      provider_message_id: providerMessageId,
     });
-    return { success: true };
+    return { success: true, providerMessageId };
   } catch (err) {
     logger.warn("reminder_email_failed", {
       reminder_id: reminder.id,
@@ -618,7 +621,7 @@ export async function sendReminderEmailTo(
   to: string,
   reminder: ReminderWithContext,
   opts: { skipCc?: boolean } = {}
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; providerMessageId?: string | null }> {
   return sendReminderEmail(reminder, [to], opts);
 }
 
@@ -687,7 +690,7 @@ export async function sendGroupedReminderEmail(opts: {
   clientName: string;
   triggerDate: string;
   itemsHtml: string;
-}): Promise<{ success: boolean; error?: string; subject: string }> {
+}): Promise<{ success: boolean; error?: string; subject: string; providerMessageId?: string | null }> {
   const settings = getSettings();
   const subject = `[תזכורת בדיקה] ${opts.clientName} — ${opts.reminders.length} פריטים`;
   if (!settings.smtpHost && !useResend()) {
@@ -709,8 +712,9 @@ export async function sendGroupedReminderEmail(opts: {
       const userEmail = u?.email ?? null;
       if (userEmail && !opts.recipients.includes(userEmail)) ccEmail.push(userEmail);
     }
+    let providerMessageId: string | null = null;
     if (useResend()) {
-      await sendViaResend({ from, to: opts.recipients, cc: ccEmail, subject: rendered.subject, html, text });
+      providerMessageId = await sendViaResend({ from, to: opts.recipients, cc: ccEmail, subject: rendered.subject, html, text });
     } else {
       await buildTransport().sendMail({ from, to: opts.recipients.join(", "), cc: ccEmail.join(", ") || undefined, subject: rendered.subject, html, text });
     }
@@ -718,8 +722,9 @@ export async function sendGroupedReminderEmail(opts: {
       reminder_ids: opts.reminders.map((row) => row.id),
       recipient_count: opts.recipients.length,
       item_count: opts.reminders.length,
+      provider_message_id: providerMessageId,
     });
-    return { success: true, subject: rendered.subject };
+    return { success: true, subject: rendered.subject, providerMessageId };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     logger.warn("grouped_reminder_email_failed", { error, item_count: opts.reminders.length });
@@ -764,7 +769,7 @@ export async function sendMonthlyReportEmail(
   recipients: string[],
   details: {clientName: string; reportMonth: string; recordCount: number},
   attachments: Array<{ filename: string; content: Buffer; contentType: string }>,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; providerMessageId?: string | null }> {
   const settings = getSettings();
   const vars: EmailVars = {
     client_company: details.clientName,

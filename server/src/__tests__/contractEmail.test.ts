@@ -59,6 +59,27 @@ describe("pickContractEmail", () => {
             {email: null},
         )).toBe("anous_adnan@yahoo.com");
     });
+
+    it("normalizes RTL-reversed OCR emails before send", () => {
+        expect(pickContractEmail(
+            {manual_fields: {}},
+            {contact_email: "com.gmail@zibai.tal"},
+            {email: null},
+        )).toBe("tal.zibai@gmail.com");
+        expect(pickContractEmail(
+            {manual_fields: {}},
+            {contact_email: "biz.hanson@adir.reymond"},
+            {email: null},
+        )).toBe("reymond.adir@hanson.biz");
+    });
+
+    it("moves glued digits to the end of the gmail local part", () => {
+        expect(pickContractEmail(
+            {manual_fields: {}},
+            {contact_email: "1234yosishitrit@gmail.com"},
+            {email: null},
+        )).toBe("yosishitrit1234@gmail.com");
+    });
 });
 
 describe("parseReminderEmailTo", () => {
@@ -73,5 +94,10 @@ describe("parseReminderEmailTo", () => {
     it("returns empty when missing", () => {
         expect(parseReminderEmailTo(null)).toEqual([]);
         expect(parseReminderEmailTo("")).toEqual([]);
+    });
+
+    it("normalizes stored reminder email_to values", () => {
+        expect(parseReminderEmailTo(JSON.stringify(["1234yosishitrit@gmail.com"])))
+            .toEqual(["yosishitrit1234@gmail.com"]);
     });
 });

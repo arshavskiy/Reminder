@@ -39,6 +39,7 @@ import {registerLegalRoutes} from "./routes/legal";
 import {importFile} from "./pipeline/importer";
 import {applyScannedKeys, scanFileForKeys, shouldScanFile} from "./pipeline/keyScanner";
 import {logger, requestLogger} from "./logger";
+import {registerResendWebhook} from "./reminders/resendDelivery";
 import {requireAnyFeature} from "./auth/middleware";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -93,6 +94,8 @@ app.use(
     exposedHeaders: ["X-Document-Id", "X-Saved-To-S3"],
   }),
 );
+
+registerResendWebhook(app);
 
 app.use(express.json({ limit: "50mb" }));
 app.use((_req, res, next) => {

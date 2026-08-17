@@ -14,8 +14,9 @@ describe("resolveContractReminderEmail", () => {
         expect(resolveContractReminderEmail(null, {manual_fields: {client_email: "layout@x.com"}}, null)).toBe("layout@x.com");
     });
 
-    it("returns null when no email exists anywhere", () => {
-        expect(resolveContractReminderEmail(null, {manual_fields: {}}, {email: "  "})).toBeNull();
+    it("normalizes OCR emails when resolving contract reminder email", () => {
+        expect(resolveContractReminderEmail(null, {manual_fields: {contact_email: "com.gmail@zibai.tal"}}, null))
+            .toBe("tal.zibai@gmail.com");
     });
 });
 

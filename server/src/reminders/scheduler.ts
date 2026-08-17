@@ -7,7 +7,7 @@ import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {clientDisplayName} from "../utils/clientNames";
 import {notifyEmailSendFailed, notifyReminderSkipped} from "../push/adminNotify";
-import {parseObjectRecord, parseReminderEmailTo, pickContractEmail} from "../contracts/contractEmail.js";
+import {parseObjectRecord, parseReminderEmailTo, pickContractEmail, pickContractEmailWithMeta} from "../contracts/contractEmail.js";
 import {buildGroupedItemsTable, expiryFromReminderTitle, groupedReminderKey} from "./groupedReminderEmail";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
@@ -345,6 +345,7 @@ async function processGroupedReminders(items: Array<{
       error: result.error ?? null,
       smtp_host: settings.smtpHost || "in-app-only",
       via: (process.env.RESEND_API_KEY ? "resend" : "smtp"),
+      provider_message_id: result.providerMessageId ?? null,
       grouped: 1,
     } as any);
     if (result.success) {
@@ -480,6 +481,7 @@ async function processReminder(reminder: ReminderWithContext) {
     error: result.error ?? null,
     smtp_host: settings.smtpHost || "in-app-only",
     via: (process.env.RESEND_API_KEY ? "resend" : "smtp"),
+    provider_message_id: result.providerMessageId ?? null,
   } as any);
 
   if (result.success) {
@@ -672,23 +674,14 @@ export async function generateTaskReminders(
 
 export function resolveContractReminderEmail(
     contactEmail?: string | null,
-    contract?: { manual_fields?: Record<string, unknown> | null } | null,
+    contract?: { manual_fields?: Record<string, unknown> | null; contact_email?: unknown; client_email?: unknown } | null,
     client?: { email?: string | null } | null,
 ): string | null {
-  const manual = contract?.manual_fields && typeof contract.manual_fields === "object"
-      ? contract.manual_fields
-      : {};
-  const candidates = [
-    contactEmail,
-    typeof manual.contact_email === "string" ? manual.contact_email : null,
-    typeof manual.client_email === "string" ? manual.client_email : null,
-    client?.email,
-  ];
-  for (const value of candidates) {
-    const trimmed = value?.trim();
-    if (trimmed) return trimmed;
-  }
-  return null;
+  return pickContractEmail(
+    { ...contract, contact_email: contactEmail ?? contract?.contact_email },
+    null,
+    client,
+  );
 }
 
 export async function generateContractReminders(
@@ -712,7 +705,20 @@ export async function generateContractReminders(
     try { const { ObjectId } = await import("mongodb"); clientOid = new ObjectId(clientId); } catch {}
     client = await col("clients").findOne({_id: clientOid}) as any;
   }
-  const emailResolved = resolveContractReminderEmail(contactEmail, contract, client);
+  const emailMeta = pickContractEmailWithMeta(
+    { ...contract, contact_email: contactEmail ?? contract?.contact_email },
+    null,
+    client,
+  );
+  const emailResolved = emailMeta.email;
+  if (emailMeta.corrected) {
+    logger.info("contract_reminder_email_autocorrected", {
+      contract_id: contractId,
+      user_id: userId ?? null,
+      from: emailMeta.raw,
+      to: emailResolved,
+    });
+  }
   if (!emailResolved) {
     logger.info("contract_reminder_skipped_no_email", { contract_id: contractId, user_id: userId ?? null });
     const cleared = await col("reminders").deleteMany({
@@ -810,6 +816,7 @@ export async function generateContractReminders(
       trigger_date: triggerDate,
       advance_days: days,
       email_to: JSON.stringify([emailResolved]),
+      ...(emailMeta.corrected && emailMeta.raw ? { email_autocorrected_from: emailMeta.raw } : {}),
       title: equipment ? `${title} | ${equipment}` : title,
       status: "pending",
       created_at: new Date(),
