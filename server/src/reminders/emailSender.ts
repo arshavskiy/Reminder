@@ -7,7 +7,7 @@ import {loadEmailTemplate, loadEmailTemplateByName, pickEmailTemplate} from "../
 import {loadReminderTemplate} from "../email-templates/loader";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
-import {prepareGroupedTemplateHtml} from "./groupedReminderEmail.js";
+import {prepareGroupedTemplateHtml, sampleGroupedItemsTable} from "./groupedReminderEmail.js";
 
 const FALLBACK_TEST_HTML = `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -833,6 +833,8 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
       engineer_subtitle: firstNonEmpty((engineerProfile as any)?.company_subtitle) ?? null,
       company_exp: firstNonEmpty((engineerProfile as any)?.company_subtitle) ?? null,
       comp_logo: hostedImageUrl((engineerProfile as any)?.company_logo_url),
+      items_table: sampleGroupedItemsTable(),
+      item_count: 3,
     };
 
     const tpl = emailTemplateId

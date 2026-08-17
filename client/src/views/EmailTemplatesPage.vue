@@ -169,6 +169,7 @@
                 <div style="width:100%">
                   <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap">
                     <n-button size="tiny" @click="detectVars" :loading="detectingVars">זהה משתנים</n-button>
+                    <n-button size="tiny" @click="insertItemsTable">הוסף טבלת פריטים</n-button>
                     <n-button size="tiny" @click="insertSampleHtml" v-if="!editing.html">טען תבנית ברירת מחדל</n-button>
                     <n-button size="tiny" quaternary @click="resetToDefault" :loading="resettingDefault">אפס לברירת מחדל</n-button>
                     <n-tag
@@ -203,8 +204,12 @@
                 <code v-pre>{{license_number}}</code>,
                 <code v-pre>{{logo_url}}</code>,
                 <code v-pre>{{poster_url}}</code>,
-                <code v-pre>{{document_url}}</code>
+                <code v-pre>{{document_url}}</code>,
+                <code v-pre>{{items_table}}</code>,
+                <code v-pre>{{item_count}}</code>
                 וכל שדה מתבנית המסמך לפי ה-<code>key</code> שלו.
+                <br/>
+                <code v-pre>{{items_table}}</code> — טבלת תסקירים כשנשלחות כמה תזכורות לאותו לקוח באותו יום. ריקה במייל בודד.
                 <br/>
                 בלוקים מותנים: <code v-pre>{{#if var}}...{{/if}}</code> &nbsp;|&nbsp;
                 ערכי ברירת מחדל: <code v-pre>{{name|ברירת מחדל}}</code>
@@ -445,17 +450,24 @@ async function uploadExampleDoc({ file, onFinish, onError }: any) {
   }
 }
 
-function insertVar(varName: string) {
+function insertAtCursor(snippet: string) {
   if (!editing.value) return;
-  const tag = `{{${varName}}}`;
   const textarea = htmlInputRef.value?.$el?.querySelector("textarea");
   if (textarea) {
     const start = textarea.selectionStart ?? editing.value.html.length;
     const end = textarea.selectionEnd ?? start;
-    editing.value.html = editing.value.html.slice(0, start) + tag + editing.value.html.slice(end);
+    editing.value.html = editing.value.html.slice(0, start) + snippet + editing.value.html.slice(end);
   } else {
-    editing.value.html += tag;
+    editing.value.html += snippet;
   }
+}
+
+function insertVar(varName: string) {
+  insertAtCursor(`{{${varName}}}`);
+}
+
+function insertItemsTable() {
+  insertAtCursor(`{{#if items_table}}\n    {{items_table}}\n    {{/if}}\n`);
 }
 
 // Map the bound doc-template name → built-in reminder HTML file name

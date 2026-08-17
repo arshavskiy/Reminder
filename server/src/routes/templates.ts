@@ -8,6 +8,7 @@ import {loadAllTemplates, loadTemplate} from "../templates/seedTemplates";
 import {loadEmailTemplate} from "../templates/seedEmailTemplates";
 import {loadAuthTemplate, loadReminderTemplate} from "../email-templates/loader";
 import {listTemplateVars, renderTemplate} from "../templates/renderEmail";
+import {sampleGroupedItemsTable} from "../reminders/groupedReminderEmail.js";
 import {previewReminderEmail} from "../reminders/emailSender";
 import {generateTemplateFromText, toDraft} from "../templates/generateTemplate";
 import {requireAuth} from "../auth/middleware";
@@ -459,7 +460,11 @@ export function registerTemplateRoutes(app: express.Application) {
       subject: string;
       vars: Record<string, unknown>;
     };
-    const safeVars = vars as Record<string, string | number | null | undefined>;
+    const safeVars = { ...(vars as Record<string, string | number | null | undefined>) };
+    if (safeVars.items_table == null || safeVars.items_table === "") {
+      safeVars.items_table = sampleGroupedItemsTable();
+      safeVars.item_count ??= 3;
+    }
     res.json({
       subject: renderTemplate(subject ?? "", safeVars, { escape: false }),
       html: renderTemplate(html ?? "", safeVars, { escape: false }),

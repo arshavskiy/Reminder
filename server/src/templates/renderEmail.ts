@@ -4,6 +4,7 @@
 //   {{var_name}}          — straight lookup in the variables map
 //   {{var_name|fallback}} — value if present, else fallback literal
 //   {{#if var}}...{{/if}} — block shown only when `var` is non-empty
+//   {{items_table}}       — HTML table of grouped reminder rows (empty on a single send)
 //
 // Intentionally tiny — no dependencies. Good enough for email templates where
 // the data shape is well-known.

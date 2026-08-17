@@ -7,6 +7,7 @@ import {
   injectItemsTable,
   normalizeItemsTableTokens,
   prepareGroupedTemplateHtml,
+  sampleGroupedItemsTable,
 } from "../reminders/groupedReminderEmail.js";
 
 describe("groupedReminderKey", () => {
@@ -42,6 +43,13 @@ describe("buildGroupedItemsTable", () => {
     ]);
     expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
     expect(html).not.toContain("<b>x</b>");
+  });
+
+  it("sampleGroupedItemsTable fills the preview/test variable", () => {
+    const html = sampleGroupedItemsTable();
+    expect(html).toContain("תסקיר");
+    expect(html).toContain("484590/13110");
+    expect(html).toContain("מנוף הידראולי");
   });
 });
 

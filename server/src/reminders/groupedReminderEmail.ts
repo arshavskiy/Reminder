@@ -36,6 +36,16 @@ function cell(value: string | null | undefined): string {
   return escapeHtml(text);
 }
 
+export const SAMPLE_GROUPED_ITEMS: GroupedReminderItem[] = [
+  { contract_number: "484590/13110", equipment: "מנוף הידראולי", license_number: "233017", expiry_date: "2026-09-14" },
+  { contract_number: "484590/13111", equipment: "אביזר הרמה", license_number: "188402", expiry_date: "2026-09-20" },
+  { contract_number: "501102/22001", equipment: "פיגום נייד", license_number: "", expiry_date: "2026-10-01" },
+];
+
+export function sampleGroupedItemsTable(): string {
+  return buildGroupedItemsTable(SAMPLE_GROUPED_ITEMS);
+}
+
 export function buildGroupedItemsTable(items: GroupedReminderItem[]): string {
   const rows = items.map((item) => `<tr>
       <td style="${TD_STYLE}">${cell(item.contract_number)}</td>
