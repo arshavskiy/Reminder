@@ -45,7 +45,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     const status = req.query.status as string | undefined;
     const clientIdFilter = req.query.clientId as string | undefined;
-    const limit = parseInt((req.query.limit as string) ?? "50");
+    const limit = parseInt((req.query.limit as string) ?? "0");
     const offset = parseInt((req.query.offset as string) ?? "0");
 
     // Claim any legacy documents that were imported before auth existed

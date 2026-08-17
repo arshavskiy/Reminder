@@ -226,7 +226,7 @@
           class="tile"
           @click="onDocumentClick(row)"
         >
-          <div class="tile__thumb">
+          <div class="tile__head">
             <n-checkbox
               v-if="bulkMode"
               :checked="selectedIds.has(String(row.id))"
@@ -234,31 +234,26 @@
               @click.stop
               @update:checked="toggleSelect(String(row.id))"
             />
-            <div v-if="fileKind(row.mime_type) === 'pdf'" class="tile__pdf-icon">
-              <div class="pdf-doc">
-                <div class="pdf-label">PDF</div>
-              </div>
+            <StatusBadge :status="row.processing_status" />
+            <div class="tile__actions" @click.stop>
+              <n-dropdown
+                :options="rowActionsFor(row)"
+                placement="bottom-end"
+                trigger="click"
+                @select="(k: string) => handleRowAction(k, row)"
+              >
+                <button class="btn btn--ghost btn--xs icon-btn" title="פעולות" type="button">
+                  <n-icon :component="EllipsisVerticalOutline" class="btn-icon"/>
+                </button>
+              </n-dropdown>
             </div>
-            <span v-else class="tile__icon">{{ fileIcon(row.mime_type) }}</span>
-            <StatusBadge :status="row.processing_status" class="tile__status" />
-            <n-tag
-              :type="reminderTagType((row as any).reminder_status)"
-              class="tile__reminder-status"
-              round
-              size="small"
-            >
-              {{ reminderStatusLabel((row as any).reminder_status) }}
-            </n-tag>
-            <n-tag
-              v-for="issue in documentIssues(row)"
-              :key="issue.kind"
-              class="tile__issue-tag"
-              round
-              size="small"
-              :type="issue.tagClass === 'tag--bad' ? 'error' : 'warning'"
-            >
-              {{ issue.label }}
-            </n-tag>
+          </div>
+          <div class="tile__thumb">
+            <n-icon
+              :component="fileTypeIcon(row.mime_type)"
+              :size="40"
+              class="tile__file-icon"
+            />
           </div>
           <div class="tile__body">
             <div :title="row.file_name" class="tile__name">{{ row.file_name }}</div>
@@ -269,19 +264,25 @@
               <span v-if="(row as any).client_name" class="tile__meta-item">{{ (row as any).client_name }}</span>
               <span v-if="(row as any).document_type" class="tile__meta-item">{{ (row as any).document_type }}</span>
             </div>
+            <div class="tile__pills">
+              <n-tag
+                :type="reminderTagType((row as any).reminder_status)"
+                round
+                size="small"
+              >
+                {{ reminderStatusLabel((row as any).reminder_status) }}
+              </n-tag>
+              <n-tag
+                v-for="issue in documentIssues(row)"
+                :key="issue.kind"
+                round
+                size="small"
+                :type="issue.tagClass === 'tag--bad' ? 'error' : 'warning'"
+              >
+                {{ issue.label }}
+              </n-tag>
+            </div>
             <div class="tile__date">{{ formatDate(row.import_date) }}</div>
-          </div>
-          <div class="tile__actions" @click.stop>
-            <n-dropdown
-              :options="rowActionsFor(row)"
-              placement="bottom-end"
-              trigger="click"
-              @select="(k: string) => handleRowAction(k, row)"
-            >
-              <button class="btn btn--ghost btn--xs icon-btn" title="פעולות" type="button">
-                <n-icon :component="EllipsisVerticalOutline" class="btn-icon"/>
-              </button>
-            </n-dropdown>
           </div>
         </article>
       </div>
@@ -301,12 +302,11 @@
               @click.stop
               @update:checked="toggleSelect(String(row.id))"
             />
-            <div v-if="fileKind(row.mime_type) === 'pdf'" class="list-pdf-icon">
-              <div class="pdf-doc-small">
-                <div class="pdf-label-small">PDF</div>
-              </div>
-            </div>
-            <span v-else class="text-lg shrink-0">{{ fileIcon(row.mime_type) }}</span>
+            <n-icon
+              :component="fileTypeIcon(row.mime_type)"
+              :class="['list-file-icon', `file-type-icon--${fileKind(row.mime_type)}`]"
+              :size="22"
+            />
             <span class="truncate font-semibold">{{ row.file_name }}</span>
           </template>
           <template #actions>
@@ -375,10 +375,10 @@
     </n-spin>
 
     <PaginationBar
+      v-if="filteredRows.length"
       v-model:page="currentPage"
-      :page-size="pageSize"
-      :total-items="filteredRows.length"
-      label="מסמכים"
+      v-model:page-size="pageSize"
+      :item-count="filteredRows.length"
     />
 
     <!-- ── Document limit modal ────────────────────────────────────────── -->
@@ -483,11 +483,14 @@ import {
 } from "naive-ui";
 import {
   CloudUploadOutline,
+  DocumentOutline,
+  DocumentTextOutline,
   DownloadOutline,
   EllipsisVerticalOutline,
   EyeOutline,
   FlashOutline,
   GridOutline,
+  ImageOutline,
   ListOutline,
   RefreshOutline,
   CheckboxOutline,
@@ -599,10 +602,10 @@ async function onModalUpload(
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────
-type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder" | "contract_expired" | "duplicate_report_number";
+type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder" | "no_email" | "contract_expired" | "duplicate_report_number";
 
 const DOCUMENT_FILTER_KEYS = new Set<DocumentStatusFilter>([
-  "all", "done", "in_progress", "error", "no_reminder", "contract_expired", "duplicate_report_number",
+  "all", "done", "in_progress", "error", "no_reminder", "no_email", "contract_expired", "duplicate_report_number",
 ]);
 function initialDocumentFilter(): DocumentStatusFilter {
   const stored = readRememberedFilter("documents");
@@ -630,7 +633,8 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
     { key: "done",        label: "הושלם",       count: c.done,         statusValue: "done" },
     { key: "in_progress", label: "בעיבוד",      count: c.in_progress,  statusValue: "in_progress" },
     { key: "error",       label: "שגיאה",       count: c.error,        statusValue: "error" },
-    { key: "no_reminder",       label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length,                                                              statusValue: "no_reminder" },
+    { key: "no_reminder",       label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length, statusValue: "no_reminder" },
+    { key: "no_email",          label: "חסר אימייל", count: rows.filter((row) => !documentHasEmail(row)).length, statusValue: "no_email" },
     { key: "contract_expired",  label: "פג תוקף",   count: rows.filter((row) => (row as any).contract_status === "expired" || (row as any).contract_status === "overdue").length, statusValue: "contract_expired" },
     { key: "duplicate_report_number", label: "כפילות מספר", count: duplicateCount, statusValue: "duplicate_report_number" },
   ];
@@ -656,20 +660,20 @@ function applyFilter(f: CombinedFilter) {
 const clientOptions = ref<{ label: string; value: string }[]>([]);
 async function loadClients() {
   try {
-    const r = await api.clients.list({ limit: 500 });
+    const r = await api.clients.list({ limit: 0 });
     clientOptions.value = r.rows.map((c) => ({ label: c.display_name, value: String(c.id) }));
   } catch { /* non-fatal */ }
 }
 
 // ── Pagination ─────────────────────────────────────────────────────────────────
-const pageSize = 24;
+const pageSize = ref(20);
 const currentPage = ref(1);
-watch([search, filterClientId, filterDateRange, statusFilter], () => { currentPage.value = 1; });
+watch([search, filterClientId, filterDateRange, statusFilter, pageSize], () => { currentPage.value = 1; });
 
 // Refetch from server whenever the client filter changes (so we always get
 // the canonical client→document mapping rather than relying on cached rows).
 watch(filterClientId, (cid) => {
-  store.fetch({ clientId: cid ?? undefined, limit: 500 }, true);
+  store.fetch({ clientId: cid ?? undefined, limit: 0 }, true);
 });
 
 const filteredRows = computed(() => {
@@ -696,8 +700,13 @@ const filteredRows = computed(() => {
 });
 
 const pagedRows = computed(() => {
-  const start = (currentPage.value - 1) * pageSize;
-  return filteredRows.value.slice(start, start + pageSize);
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredRows.value.slice(start, start + pageSize.value);
+});
+
+watch(filteredRows, (rows) => {
+  const count = Math.max(1, Math.ceil(rows.length / pageSize.value));
+  if (currentPage.value > count) currentPage.value = count;
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -724,25 +733,27 @@ function reminderTagType(status: string | null | undefined): "success" | "warnin
   if (status === "error") return "error";
   return "info";
 }
+function documentHasEmail(row: Document): boolean {
+  try {
+    const fields = typeof (row as any).extracted_fields === "string"
+      ? JSON.parse((row as any).extracted_fields)
+      : (row as any).extracted_fields ?? {};
+    return !!(fields.client_email || fields.contact_email || fields.email);
+  } catch { return false; }
+}
+
 function matchesStatusFilter(row: Document, filter: DocumentStatusFilter) {
   if (filter === "all") return true;
   if (filter === "done") return row.processing_status === "done";
   if (filter === "in_progress") return row.processing_status === "queued" || row.processing_status === "processing";
   if (filter === "error") return row.processing_status === "error";
   if (filter === "no_reminder") return (row as any).reminder_status === "missing";
+  if (filter === "no_email") return !documentHasEmail(row);
   if (filter === "contract_expired") return (row as any).contract_status === "expired" || (row as any).contract_status === "overdue";
   if (filter === "duplicate_report_number") {
     return isDuplicateReportNumber(documentReportNumber(row), duplicateDocumentNumbers.value);
   }
   return true;
-}
-function fileIcon(mime: string | null | undefined) {
-  if (!mime) return "📄";
-  if (mime.includes("pdf")) return "📕";
-  if (mime.includes("word") || mime.includes("docx")) return "📝";
-  if (mime.includes("sheet") || mime.includes("xlsx")) return "📊";
-  if (mime.includes("image")) return "🖼";
-  return "📄";
 }
 function fileKind(mime: string | null | undefined) {
   if (!mime) return "other";
@@ -751,6 +762,14 @@ function fileKind(mime: string | null | undefined) {
   if (mime.includes("sheet") || mime.includes("xlsx")) return "xls";
   if (mime.includes("image")) return "img";
   return "other";
+}
+
+function fileTypeIcon(mime: string | null | undefined) {
+  const kind = fileKind(mime);
+  if (kind === "pdf") return DocumentTextOutline;
+  if (kind === "xls") return GridOutline;
+  if (kind === "img") return ImageOutline;
+  return DocumentOutline;
 }
 
 function renderActionIcon(icon: Component) {
@@ -830,7 +849,7 @@ function savePipelineFlags() {
 watch([flagOcr, flagAi, flagS3, flagEntities], savePipelineFlags);
 
 onMounted(() => {
-  store.fetch({ limit: 500 }, true);
+  store.fetch(undefined, true);
   loadPipelineFlags();
   loadClients();
 });
@@ -852,7 +871,7 @@ async function uploadFiles(
     if (newCount > 0) message.info(`${newCount} מסמכים נוספו לתור עיבוד`);
     if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);
     rescanStore.start({ queued: ids.length, ids, duplicates, kind: "upload" });
-    await store.fetch({ limit: 500 }, true);
+    await store.fetch(undefined, true);
     updateRescanRowsFromDocuments();
     await openRescanModal();
     startBatchPolling(ids);
@@ -897,7 +916,7 @@ async function runRescan(all: boolean) {
   } else {
     message.success(`${data.queued} מסמכים נשלחו לסריקה מחדש`);
     rescanStore.start({ queued: data.queued, ids: data.ids ?? [], mode: data.mode, kind: "rescan" });
-    await store.fetch({ limit: 500 }, true);
+    await store.fetch(undefined, true);
     updateRescanRowsFromDocuments();
     await openRescanModal();
     startBatchPolling(data.ids ?? []);
@@ -921,7 +940,7 @@ function startBatchPolling(ids: string[]) {
   rescanPollTimer = setInterval(async () => {
     attempts += 1;
     try {
-      await store.fetch({ limit: 500 }, true);
+      await store.fetch(undefined, true);
       const watchedRows = store.rows.filter((row) => watchIds.has(String(row.id)));
       updateRescanRowsFromDocuments();
       const running = watchedRows.filter((row) => row.processing_status === "queued" || row.processing_status === "processing");
@@ -1396,7 +1415,7 @@ async function openDownload(row: Document) {
 /* ── Tile grid ───────────────────────────────────────────────────────────── */
 .tile-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 14px;
 }
 .tile {
@@ -1405,9 +1424,9 @@ async function openDownload(row: Document) {
   border-radius: 14px;
   overflow: hidden;
   cursor: pointer;
-  position: relative;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   transition: box-shadow 0.15s, border-color 0.15s, transform 0.1s;
 }
 .tile:hover {
@@ -1419,117 +1438,54 @@ async function openDownload(row: Document) {
   border-color: var(--brand-color);
   box-shadow: 0 0 0 1px var(--brand-color);
 }
-.tile__check {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 3;
+.tile__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 0;
+  min-width: 0;
 }
-.tile--selectable .tile__status {
-  top: 36px;
+.tile__head :deep(.n-tag) {
+  min-width: 0;
+  max-width: 100%;
+}
+.tile__check {
+  flex-shrink: 0;
+}
+.tile__actions {
+  margin-inline-start: auto;
+  flex-shrink: 0;
 }
 .tile__thumb {
-  position: relative;
-  height: 110px;
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-color);
 }
-.tile__reminder-status {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  max-width: calc(100% - 16px);
-}
-.tile__icon { font-size: 44px; opacity: 0.85; }
-.tile__pdf-icon { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
-.pdf-doc {
-  width: 36px;
-  height: 45px;
-  background: linear-gradient(135deg, #d03050 0%, #e88080 100%);
-  border-radius: 3px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 4px;
-  box-shadow: 0 1px 4px rgba(208, 48, 80, 0.25);
-  position: relative;
-}
-.pdf-doc::before {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  right: 3px;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.4);
-  border-radius: 1px;
-}
-.pdf-doc::after {
-  content: '';
-  position: absolute;
-  top: 9px;
-  left: 3px;
-  right: 3px;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 1px;
-}
-.pdf-label {
-  font-size: 8px;
-  font-weight: 700;
-  color: white;
-  letter-spacing: 0.3px;
-  z-index: 1;
-}
-.list-pdf-icon { display: flex; align-items: center; shrink: 0; }
-.pdf-doc-small {
-  width: 32px;
-  height: 40px;
-  background: linear-gradient(135deg, #d03050 0%, #e88080 100%);
-  border-radius: 3px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 4px;
-  box-shadow: 0 1px 4px rgba(208, 48, 80, 0.25);
-  position: relative;
-}
-.pdf-doc-small::before {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  right: 3px;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.4);
-  border-radius: 1px;
-}
-.pdf-doc-small::after {
-  content: '';
-  position: absolute;
-  top: 8px;
-  left: 3px;
-  right: 3px;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 1px;
-}
-.pdf-label-small {
-  font-size: 7px;
-  font-weight: 700;
-  color: white;
-  letter-spacing: 0.3px;
-  z-index: 1;
-}
-.tile__status { position: absolute; top: 8px; right: 8px; }
+.tile__file-icon { color: var(--text-secondary); }
+.tile--pdf .tile__file-icon { color: #d03050; }
+.tile--doc .tile__file-icon { color: #2080f0; }
+.tile--xls .tile__file-icon { color: #1a7951; }
+.tile--img .tile__file-icon { color: #b27a02; }
+.list-file-icon { flex-shrink: 0; color: var(--text-secondary); }
+.file-type-icon--pdf { color: #d03050; }
+.file-type-icon--doc { color: #2080f0; }
+.file-type-icon--xls { color: #1a7951; }
+.file-type-icon--img { color: #b27a02; }
 .tile--pdf .tile__thumb { background: linear-gradient(135deg, rgba(208,48,80,0.08), rgba(208,48,80,0.02)); }
 .tile--doc .tile__thumb { background: linear-gradient(135deg, rgba(32,128,240,0.08), rgba(32,128,240,0.02)); }
 .tile--xls .tile__thumb { background: linear-gradient(135deg, rgba(99,226,183,0.08), rgba(99,226,183,0.02)); }
 .tile--img .tile__thumb { background: linear-gradient(135deg, rgba(240,160,32,0.08), rgba(240,160,32,0.02)); }
-.tile__body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.tile__body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
 .tile__name {
   font-size: 13px;
   font-weight: 600;
@@ -1538,10 +1494,15 @@ async function openDownload(row: Document) {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  line-height: 1.3;
-  min-height: 2.6em;
+  line-height: 1.35;
 }
-.tile__meta { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--text-primary); }
+.tile__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-primary);
+}
 .tile__meta-item {
   background: var(--bg-elevated);
   padding: 1px 6px;
@@ -1551,8 +1512,20 @@ async function openDownload(row: Document) {
   text-overflow: ellipsis;
   max-width: 100%;
 }
-.tile__date { font-size: 11px; color: var(--text-secondary); margin-top: auto; }
-.tile__actions { position: absolute; top: 6px; left: 6px; }
+.tile__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.tile__pills :deep(.n-tag) {
+  max-width: 100%;
+}
+.tile__date {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: auto;
+}
 
 /* ── List card extras ────────────────────────────────────────────────────── */
 .cards { display: flex; flex-direction: column; gap: 12px; }
@@ -1568,7 +1541,6 @@ async function openDownload(row: Document) {
 .tag--warn { background: rgba(240, 160, 32, 0.14); color: #9a6700; border: 1px solid rgba(240, 160, 32, 0.35); }
 .tag--bad { background: rgba(208, 48, 80, 0.12); color: #b42318; border: 1px solid rgba(208, 48, 80, 0.28); }
 .tile__meta-item--num { font-family: ui-monospace, monospace; direction: ltr; }
-.tile__issue-tag { position: absolute; bottom: 8px; right: 8px; max-width: calc(100% - 16px); }
 .kv { font-size: 12px; color: var(--text-primary); display: inline-flex; align-items: center; gap: 6px; }
 .kv strong { color: var(--text-secondary); font-weight: 600; }
 .expiry { font-weight: 600; }
@@ -1675,7 +1647,7 @@ async function openDownload(row: Document) {
     gap: 8px;
   }
 
-  .list-pdf-icon {
+  .list-file-icon {
     padding-top: 2px;
   }
 

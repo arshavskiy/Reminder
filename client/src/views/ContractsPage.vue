@@ -4,9 +4,9 @@
     <header class="page__head">
       <div>
         <h1 class="page__title">{{ kind === "inspection" ? "ניהול תסקירים" : "ניהול חוזים" }}</h1>
-        <p class="page__sub">
+<!--        <p class="page__sub">-->
           צפייה, סינון וניהול של כל ה{{ kind === "inspection" ? "תסקירים" : "חוזים" }} במערכת
-        </p>
+<!--        </p>-->
       </div>
       <div class="page__actions">
         <div class="page__actions-row page__actions-row--main">
@@ -2386,23 +2386,12 @@ type CombinedFilter = {
 
 const combinedFilters = computed<CombinedFilter[]>(() => {
   const rows = store.rows ?? [];
+  const c = store.counts;
   const duplicateCount = countDuplicateReportRows(rows, contractReportNumber);
   return [
-    {key: "all", label: "הכל", count: rows.length, type: "status", statusValue: null},
-    {
-      key: "active",
-      label: "פעיל",
-      count: rows.filter((r) => r.status === "active").length,
-      type: "status",
-      statusValue: "active"
-    },
-    {
-      key: "expired",
-      label: "פג תוקף",
-      count: rows.filter((r) => r.status === "expired" || contractMatchesDueFilter(r, "overdue")).length,
-      type: "status",
-      statusValue: "expired"
-    },
+    {key: "all", label: "הכל", count: c.all, type: "status", statusValue: null},
+    {key: "active", label: "פעיל", count: c.active, type: "status", statusValue: "active"},
+    {key: "expired", label: "פג תוקף", count: c.expired, type: "status", statusValue: "expired"},
     {
       key: "month",
       label: "החודש",
@@ -2439,13 +2428,7 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
       dueValue: "duplicate_report_number",
     },
     {key: "drafts", label: "טיוטות", count: orphanDrafts.value.length, type: "drafts"},
-    {
-      key: "cancelled",
-      label: "בוטל",
-      count: rows.filter((r) => r.status === "cancelled").length,
-      type: "status",
-      statusValue: "cancelled"
-    },
+    {key: "cancelled", label: "בוטל", count: c.cancelled, type: "status", statusValue: "cancelled"},
   ];
 });
 
@@ -2501,12 +2484,12 @@ function contractIssues(row: ContractWithClient) {
 
 
 function load() {
-  store.fetch({status: statusFilter.value ?? undefined, limit: 200, kind: kind.value});
+  store.fetch({status: statusFilter.value ?? undefined, kind: kind.value});
 }
 
 async function refresh() {
   await Promise.all([
-    store.fetch({status: statusFilter.value ?? undefined, limit: 200, kind: kind.value}, true),
+    store.fetch({status: statusFilter.value ?? undefined, kind: kind.value}, true),
     loadTemplateDrafts(),
   ]);
 }

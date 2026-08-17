@@ -110,21 +110,20 @@ export function registerContractRoutes(app: express.Application) {
     const clientId = req.query.clientId as string | undefined;
     const status = req.query.status as string | undefined;
     const kind = req.query.kind as string | undefined;
-    const limit = parseInt((req.query.limit as string) ?? "50");
+    const limit = parseInt((req.query.limit as string) ?? "0");
     const offset = parseInt((req.query.offset as string) ?? "0");
 
-    const filter: Record<string, any> = { user_id: userId };
+    const baseFilter: Record<string, any> = { user_id: userId };
     if (clientId) {
       const clientIds: any[] = [clientId];
       try {
         clientIds.push(new ObjectId(clientId));
       } catch { /* not an ObjectId-shaped client id */ }
-      filter.client_id = { $in: clientIds };
+      baseFilter.client_id = { $in: clientIds };
     }
-    if (status) filter.status = status;
     if (kind === "contract") {
-      filter.contract_number = { $ne: null, $exists: true };
-      filter.$and = [
+      baseFilter.contract_number = { $ne: null, $exists: true };
+      baseFilter.$and = [
         {
           $or: [
             { contract_type: null },
@@ -133,10 +132,13 @@ export function registerContractRoutes(app: express.Application) {
         },
       ];
     } else if (kind === "inspection") {
-      filter.contract_type = { $regex: /תסקיר|בדיקה/ };
+      baseFilter.contract_type = { $regex: /תסקיר|בדיקה/ };
     }
 
-    const [contractDocs, total] = await Promise.all([
+    const filter: Record<string, any> = { ...baseFilter };
+    if (status) filter.status = status;
+
+    const [contractDocs, total, totalAll, statusCounts] = await Promise.all([
       col("contracts")
         .find(filter)
         .sort({ expiry_date: 1 })
@@ -144,7 +146,18 @@ export function registerContractRoutes(app: express.Application) {
         .limit(limit)
         .toArray(),
       col("contracts").countDocuments(filter),
+      status ? col("contracts").countDocuments(baseFilter) : Promise.resolve(-1),
+      col("contracts").aggregate([
+        { $match: baseFilter },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]).toArray(),
     ]);
+
+    const countsByStatus: Record<string, number> = {};
+    for (const g of statusCounts as any[]) {
+      if (g._id) countsByStatus[g._id] = g.count;
+    }
+    const allCount = totalAll === -1 ? total : totalAll;
 
     const rows = await Promise.all(
       contractDocs.map(async (c: any) => {
@@ -156,7 +169,16 @@ export function registerContractRoutes(app: express.Application) {
       })
     );
 
-    res.json({ rows, total });
+    res.json({
+      rows,
+      total,
+      counts: {
+        all: allCount,
+        active: countsByStatus["active"] ?? 0,
+        expired: countsByStatus["expired"] ?? 0,
+        cancelled: countsByStatus["cancelled"] ?? 0,
+      },
+    });
   });
 
   // GET /api/contracts/monthly-report.pdf

@@ -6,15 +6,17 @@ import type { Contract, ContractWithClient } from "../../src/shared/types.js";
 export const useContractsStore = defineStore("contracts", () => {
   const rows = ref<ContractWithClient[]>([]);
   const total = ref(0);
+  const counts = ref<{ all: number; active: number; expired: number; cancelled: number }>({ all: 0, active: 0, expired: 0, cancelled: 0 });
   const loading = ref(false);
   const expiringSoon = ref<ContractWithClient[]>([]);
 
-  async function fetch(params?: { clientId?: string; status?: string; limit?: number; kind?: "contract" | "inspection" | "all" }, force = false) {
+  async function fetch(params?: { clientId?: string; status?: string; limit?: number; offset?: number; kind?: "contract" | "inspection" | "all" }, force = false) {
     loading.value = true;
     try {
       const r = await api.contracts.list(params, force);
       rows.value = r.rows;
       total.value = r.total;
+      if (r.counts) counts.value = r.counts;
     } finally {
       loading.value = false;
     }
@@ -28,6 +30,7 @@ export const useContractsStore = defineStore("contracts", () => {
     const created = await api.contracts.create(body);
     rows.value.unshift(created as ContractWithClient);
     total.value++;
+    counts.value = { ...counts.value, all: counts.value.all + 1 };
     return created;
   }
 
@@ -48,7 +51,8 @@ export const useContractsStore = defineStore("contracts", () => {
     await api.contracts.deleteAll();
     rows.value = [];
     total.value = 0;
+    counts.value = { all: 0, active: 0, expired: 0, cancelled: 0 };
   }
 
-  return { rows, total, loading, expiringSoon, fetch, fetchExpiring, create, update, remove, removeAll };
+  return { rows, total, counts, loading, expiringSoon, fetch, fetchExpiring, create, update, remove, removeAll };
 });

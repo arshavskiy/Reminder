@@ -1,13 +1,17 @@
 <template>
-  <div v-if="totalItems > pageSize" class="pagination-bar">
+  <div v-if="itemCount > 0" class="pagination-bar">
+    <span class="pagination-summary">
+      מציג {{ start }}-{{ end }} מתוך {{ itemCount }}
+    </span>
     <n-pagination
       :page="page"
-      :page-count="pageCount"
-      :page-slot="5"
-      show-quick-jumper
+      :page-size="pageSize"
+      :item-count="itemCount"
+      :page-sizes="pageSizes"
+      show-size-picker
       @update:page="$emit('update:page', $event)"
+      @update:page-size="$emit('update:pageSize', $event)"
     />
-    <span class="pagination-bar__info">{{ totalItems }} {{ label }}</span>
   </div>
 </template>
 
@@ -15,27 +19,61 @@
 import {computed} from "vue";
 import {NPagination} from "naive-ui";
 
-interface Props {
+const props = withDefaults(defineProps<{
   page: number;
   pageSize: number;
-  totalItems: number;
-  label?: string;
-}
-const props = withDefaults(defineProps<Props>(), { label: "פריטים" });
-defineEmits<{ (e: "update:page", v: number): void }>();
+  itemCount: number;
+  pageSizes?: number[];
+}>(), {
+  pageSizes: () => [5, 10, 20, 50],
+});
 
-const pageCount = computed(() => Math.max(1, Math.ceil(props.totalItems / props.pageSize)));
+defineEmits<{
+  (e: "update:page", value: number): void;
+  (e: "update:pageSize", value: number): void;
+}>();
+
+const start = computed(() => {
+  if (!props.itemCount) return 0;
+  return (props.page - 1) * props.pageSize + 1;
+});
+const end = computed(() => Math.min(props.itemCount, props.page * props.pageSize));
 </script>
 
 <style scoped>
 .pagination-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-color);
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
 }
-.pagination-bar__info { font-size: 13px; color: var(--text-secondary); }
+
+.pagination-summary {
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .pagination-bar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pagination-summary {
+    text-align: center;
+  }
+
+  .pagination-bar :deep(.n-pagination) {
+    justify-content: center;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+}
 </style>

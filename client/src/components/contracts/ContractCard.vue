@@ -32,7 +32,7 @@
 
     <div class="card__foot">
       <div class="card__foot-col">
-        <span class="kv"><strong>לקוח:</strong> {{ row.client_name ?? "-" }}</span>
+        <span class="kv"><strong>לקוח:</strong> <router-link v-if="row.client_id" class="client-link" :to="`/clients/${row.client_id}`" @click.stop>{{ row.client_name ?? "-" }}</router-link><template v-else>{{ row.client_name ?? "-" }}</template></span>
         <span class="kv"><strong>תאריך תסקיר:</strong> {{ formatDate(row.start_date) }}</span>
         <span v-if="equipmentLabel" class="kv kv--equipment"><strong>ציוד נבדק:</strong> {{ equipmentLabel }}</span>
       </div>
@@ -628,6 +628,7 @@ html[data-theme="dark"] .tag--info {
 .card__foot-col--end {
   text-align: left;
   align-items: flex-end;
+  min-width: 150px;
 }
 
 .kv {
@@ -649,6 +650,15 @@ html[data-theme="dark"] .tag--info {
 
 .kv--equipment strong {
   white-space: nowrap;
+}
+
+.client-link {
+  color: var(--brand-color, #63e2b7);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.client-link:hover {
+  opacity: 0.8;
 }
 
 .expiry {
