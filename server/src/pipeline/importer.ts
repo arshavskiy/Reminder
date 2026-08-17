@@ -647,6 +647,8 @@ async function saveExtractionEntities(
       userId,
     });
 
+    await backfillClientEmail(clientId, result as unknown as Record<string, unknown>, documentId);
+
     await col("document_clients").deleteMany({
       document_id: documentId,
       client_id: { $ne: clientId },
@@ -1467,6 +1469,8 @@ async function saveTemplateEntities(
       userId,
     });
 
+    await backfillClientEmail(clientId, fields, documentId);
+
     await col("document_clients").deleteMany({
       document_id: documentId,
       client_id: { $ne: clientId },
@@ -1698,6 +1702,33 @@ interface ClientInput {
   phone?: string | null;
   notes?: string | null;
   userId?: string;
+}
+
+/**
+/**
+ * If the document has no email but the matched client does, copy the client's
+ * email into extracted_fields so downstream contract/reminder creation can use it.
+ */
+async function backfillClientEmail(
+  clientId: string | null,
+  fields: Record<string, unknown>,
+  documentId: string,
+): Promise<void> {
+  if (!clientId) return;
+  const hasEmail = !!(fields.client_email || fields.contact_email || fields.email);
+  if (hasEmail) return;
+  try {
+    const client = await col("clients").findOne({ _id: new ObjectId(clientId) } as any) as any;
+    if (!client?.email) return;
+    fields.client_email = client.email;
+    await col("documents").updateOne(
+      { _id: new ObjectId(documentId) } as any,
+      { $set: { extracted_fields: JSON.stringify(fields), updated_at: new Date() } },
+    );
+    logger.info("backfilled_client_email_to_document", { document_id: documentId, client_id: clientId, email: client.email as string });
+  } catch (err) {
+    logger.warn("backfill_client_email_failed", { document_id: documentId, client_id: clientId, error: String(err) });
+  }
 }
 
 /**

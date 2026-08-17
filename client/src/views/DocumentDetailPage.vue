@@ -344,6 +344,7 @@
                   <template v-else-if="f.value && typeof f.value === 'object'">{{ JSON.stringify(f.value) }}</template>
                   <template v-else>
                     {{ isMissingField(f) ? 'חסר' : displayExtractedValue(f) }}
+                    <span v-if="(f as any).fromClient" class="fields-from-client"> (מהלקוח)</span>
                     <span v-if="isExpiredExtractedField(f)" class="fields-expired"> · לא בתוקף</span>
                   </template>
                 </span>
@@ -654,16 +655,18 @@ const extractedFields = computed(() => {
   const extraFields = Object.keys(raw)
     .filter(k => !k.startsWith("_") && !SKIP_KEYS.has(k) && !defaultKeys.has(k))
     .map(k => ({ key: k, label: LABEL_MAP[k] ?? k }));
+  const contractEmail = activeLinkedContract.value?.contact_email ?? null;
   return [...DEFAULT_FIELDS, ...extraFields].map(f => ({
     key: f.key,
     label: f.label,
     value: f.key === "client_email"
-      ? raw.client_email ?? raw.contact_email ?? raw.email ?? null
+      ? raw.client_email ?? raw.contact_email ?? raw.email ?? contractEmail ?? null
       : f.key === "expiry_date"
         ? raw.expiry_date ?? raw.next_inspection_date ?? null
       : f.key === "date_diff_months"
         ? raw.date_diff_months ?? raw.inspection_interval_months ?? null
       : raw[f.key] ?? null,
+    fromClient: f.key === "client_email" && !(raw.client_email ?? raw.contact_email ?? raw.email) && !!contractEmail,
   }));
 });
 
@@ -1324,6 +1327,11 @@ onMounted(async () => {
 .fields-expired {
   color: var(--danger, #d03050);
   font-weight: 600;
+}
+.fields-from-client {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
 }
 .fields-row--missing {
   background: rgba(208, 48, 80, 0.06);
