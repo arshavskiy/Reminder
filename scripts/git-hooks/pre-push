@@ -1,0 +1,14 @@
+#!/bin/sh
+# Block git push when the server TypeScript check fails.
+# Bypass once with: SKIP_TYPECHECK=1 git push
+
+if [ "$SKIP_TYPECHECK" = "1" ]; then
+  echo "pre-push: skipping tsc (SKIP_TYPECHECK=1)"
+  exit 0
+fi
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root" || exit 1
+
+echo "pre-push: npm --prefix server run build (tsc --noEmit)"
+npm --prefix server run build

@@ -299,6 +299,8 @@ export interface ReminderWithContext extends Reminder {
   client_email?: string | null;
   client_phone?: string | null;
   document_name: string | null;
+  contract_number?: string | null;
+  contract_type?: string | null;
 }
 
 export interface ClientDetail extends Client {

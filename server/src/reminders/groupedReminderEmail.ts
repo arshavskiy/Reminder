@@ -19,7 +19,7 @@ const LANDMARKS = [
   /<\/body>/i,
 ];
 
-export function groupedReminderKey(clientId: string | null | undefined, triggerDate: string, email: string): string {
+export function groupedReminderKey(clientId: string | number | null | undefined, triggerDate: string, email: string): string {
   return `${clientId ?? "no-client"}|${triggerDate}|${email.trim().toLowerCase()}`;
 }
 

@@ -433,9 +433,9 @@ async function processReminder(reminder: ReminderWithContext) {
     } as any);
     notifyReminderSkipped({
       title: reminder.title,
-      reminderId: remId,
-      clientId: reminder.client_id,
-      userId: (reminder as any).user_id ?? null,
+      reminderId: String(remId),
+      clientId: reminder.client_id != null ? String(reminder.client_id) : null,
+      userId: (reminder as any).user_id != null ? String((reminder as any).user_id) : null,
       reason: "no_recipients",
     });
     await col("reminders").updateOne(
@@ -788,7 +788,7 @@ export async function generateContractReminders(
       status: { $ne: "dismissed" },
     });
     if (existing) {
-      if (!existing.email_to) {
+      if (!(existing as { email_to?: unknown }).email_to) {
         await col("reminders").updateOne(
           { _id: existing._id },
           { $set: { email_to: JSON.stringify([emailResolved]), updated_at: new Date() } },
