@@ -179,7 +179,10 @@ export interface Client {
   id_number: string | null;
   email: string | null;
   phone: string | null;
+  mobile?: string | null;
+  fax?: string | null;
   address?: string | null;
+  city?: string | null;
   po_box?: string | null;
   client_zipcode?: string | null;
   notes: string | null;
