@@ -33,9 +33,5 @@ export function presentPrintTemplate(template: any, viewerUserId: string) {
         _id: template._id.toString(),
         is_shared: Boolean(template.is_shared),
     };
-    const foreignShared = doc.is_shared && String(template.user_id ?? "") !== viewerUserId;
-    if (foreignShared && template.layout) {
-        doc.layout = stripSignatureImages(template.layout);
-    }
     return doc;
 }
