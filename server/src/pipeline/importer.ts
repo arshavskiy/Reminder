@@ -1150,7 +1150,7 @@ function cleanInlineFieldValue(value: string | undefined): string | null {
 function isLikelyLicenseNumber(value: unknown): boolean {
   if (typeof value !== "string") return false;
   const v = value.trim();
-  if (!/^(?:\d{4,6}|\d{8})$/.test(v) && !/^פנימי\s*\d{3,5}$/i.test(v) && !/^\d{3,5}\s*פנימי$/i.test(v)) return false;
+  if (!/^\d{4,8}$/.test(v) && !/^פנימי\s*\d{3,5}$/i.test(v) && !/^\d{3,5}\s*פנימי$/i.test(v)) return false;
   // Round thousands (1000, 2000, 3000 …) are load-capacity values, never license numbers
   if (/^\d+$/.test(v) && Number(v) % 1000 === 0) return false;
   return true;

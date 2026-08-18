@@ -530,12 +530,12 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(fields?.license_number).toBeUndefined();
   });
 
-  it("does not extract a seven-digit postal-code-shaped value as license_number", () => {
+  it("extracts a seven-digit license_number", () => {
     const fields = normalizeExtractionFieldsForTemplate("מספר רישוי: 1234567", inspectionTemplate, {
       client_company: "מ.הנסון בע\"מ",
     });
 
-    expect(fields?.license_number).toBeUndefined();
+    expect(fields?.license_number).toBe("1234567");
   });
 
   it("separates the lifting-machine description from the checked equipment row", () => {

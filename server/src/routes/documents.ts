@@ -851,7 +851,7 @@ export function registerDocumentRoutes(app: express.Application) {
     // changes need to reach the equipment record matched by document_id.
     const EQUIPMENT_FLAT_FIELDS = [
       "equipment_description", "serial_number", "manufacturer", "model",
-      "load_capacity", "load_capacity_test", "load_radius",
+      "license_number", "load_capacity", "load_capacity_test", "load_radius",
     ] as const;
     const equipUpdate: Record<string, unknown> = {};
     for (const f of EQUIPMENT_FLAT_FIELDS) {
@@ -1003,23 +1003,8 @@ function getDocumentReminderDate(doc: any, contract: any, reminders: any[]): str
   ) || null;
 }
 
-async function resolveCurrentExtractionFields(doc: any, userId: string): Promise<Record<string, unknown> | null> {
-  const fields = parseObjectJson(doc?.extracted_fields);
-  if (!fields) return null;
-
-  const rawText = typeof doc?.raw_text === "string" ? doc.raw_text : "";
-  if (!rawText.trim()) return fields;
-
-  let template = null;
-  if (doc?.template_id) {
-    template = await loadTemplate(String(doc.template_id));
-  }
-  if (!template) {
-    template = await pickTemplate(rawText, userId);
-  }
-  if (!template) return fields;
-
-  return normalizeExtractionFieldsForTemplate(rawText, template, fields as any) ?? fields;
+async function resolveCurrentExtractionFields(doc: any, _userId: string): Promise<Record<string, unknown> | null> {
+  return parseObjectJson(doc?.extracted_fields);
 }
 
 function parseObjectJson(value: unknown): Record<string, unknown> | null {
