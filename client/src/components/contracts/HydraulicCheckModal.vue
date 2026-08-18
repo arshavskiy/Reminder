@@ -45,6 +45,10 @@
                 </button>
               </div>
 
+              <n-alert v-if="saveError" type="error" closable style="margin-bottom: 12px" @close="saveError = null">
+                {{ saveError }}
+              </n-alert>
+
               <!-- Step: Basic -->
               <section v-show="activeStep === 'basic'" class="hm-section">
                 <div class="hm-section__grid hm-section__grid--4">
@@ -384,7 +388,7 @@
 <script lang="ts" setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
-import {NDatePicker, NDynamicTags, NIcon, NInput, NModal, NSelect, NSpin, useMessage} from "naive-ui";
+import {NAlert, NDatePicker, NDynamicTags, NIcon, NInput, NModal, NSelect, NSpin, useMessage} from "naive-ui";
 import {
   AddCircleOutline,
   BusinessOutline,
@@ -463,6 +467,7 @@ const gridCols = computed(() => isMobile.value ? 1 : 4);
 const loading = ref(false);
 const creating = ref(false);
 const savingDraft = ref(false);
+const saveError = ref<string | null>(null);
 const hydraulicForm = ref<HydraulicCheckRequest | null>(null);
 const clientId = ref<string | null>(null);
 const prevReportNumber = ref("");
@@ -940,17 +945,24 @@ function selectEquipment(index: number, id: string | null) {
   row.category = eq.category ?? row.category;
   row.name = eq.name ?? "";
   row.manufacturer = eq.manufacturer ?? "";
-  row.models = eq.model ? [eq.model] : [];
-  row.serial_numbers = eq.serial_number ? [digitsOnly(eq.serial_number)] : [];
+  row.models = splitMultiValue(eq.model);
+  row.serial_numbers = splitMultiValue(eq.serial_number).map(digitsOnly);
   row.license_number = digitsOnly((eq as any).license_number ?? "");
-  row.load_capacity_work = eq.capacity ? [String(eq.capacity)] : [];
-  row.load_capacity_test = (eq as any).load_capacity_test ? [String((eq as any).load_capacity_test)] : [];
-  row.load_radius = (eq as any).load_radius ? [String((eq as any).load_radius)] : [];
+  row.load_capacity_work = splitMultiValue(eq.capacity);
+  row.load_capacity_test = splitMultiValue((eq as any).load_capacity_test);
+  row.load_radius = splitMultiValue((eq as any).load_radius);
   row.description = eq.description ?? "";
 }
 
 function setNumericField(row: EquipmentRow, field: "license_number", value: string) {
   row[field] = digitsOnly(value);
+}
+
+function splitMultiValue(value: unknown): string[] {
+  if (value == null || value === "") return [];
+  const s = String(value).trim();
+  if (!s) return [];
+  return s.split(/[\/,]/).map((v) => v.trim()).filter(Boolean);
 }
 
 // ── Client watcher ───────────────────────────────────────────────────────────
@@ -1300,6 +1312,7 @@ async function updateContract(contractId: string) {
 }
 
 async function doCreate() {
+  saveError.value = null;
   creating.value = true;
   try {
     if (updatingContractId.value) {
@@ -1315,8 +1328,8 @@ async function doCreate() {
     visible.value = false;
     loadClients(true);
     if (updateReturnTo.value) await router.push(updateReturnTo.value);
-  } catch (e) {
-    message.error(String(e));
+  } catch (e: any) {
+    saveError.value = e?.message ?? String(e);
   } finally {
     creating.value = false;
   }
@@ -1328,6 +1341,7 @@ async function saveDraftAndPreview() {
     message.warning("בחר תבנית הדפסה");
     return;
   }
+  saveError.value = null;
   savingDraft.value = true;
   try {
     syncPrimaryEquipment();
@@ -1355,8 +1369,8 @@ async function saveDraftAndPreview() {
     } else {
       await router.push(`/contracts/${contractIdValue}/draft`);
     }
-  } catch (e) {
-    message.error(String(e));
+  } catch (e: any) {
+    saveError.value = e?.message ?? String(e);
   } finally {
     savingDraft.value = false;
   }
