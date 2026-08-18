@@ -910,7 +910,8 @@ function selectTemplate(id: string | null) {
   }
   const nextValues: Record<string, string> = {};
   for (const field of templateExtraFields.value) {
-    nextValues[field.bind] = templateValues.value[field.bind] ?? "";
+    const defaultValue = field.bind === "findings_general" ? "אין" : "";
+    nextValues[field.bind] = templateValues.value[field.bind] || defaultValue;
   }
   templateValues.value = nextValues;
 }
@@ -962,7 +963,9 @@ function splitMultiValue(value: unknown): string[] {
   if (value == null || value === "") return [];
   const s = String(value).trim();
   if (!s) return [];
-  return s.split(/[\/,]/).map((v) => v.trim()).filter(Boolean);
+  return s.split(/\s*\/\s*/)
+    .map((v) => v.trim())
+    .filter((v) => v && !/^\d{1,2}$/.test(v));
 }
 
 // ── Client watcher ───────────────────────────────────────────────────────────
