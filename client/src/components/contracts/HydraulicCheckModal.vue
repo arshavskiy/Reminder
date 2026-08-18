@@ -45,9 +45,6 @@
                 </button>
               </div>
 
-              <n-modal v-model:show="showErrorModal" preset="dialog" type="error" title="שגיאה"
-                       :content="saveError ?? ''" positive-text="אישור" @positive-click="showErrorModal = false"/>
-
               <!-- Step: Basic -->
               <section v-show="activeStep === 'basic'" class="hm-section">
                 <div class="hm-section__grid hm-section__grid--4">
@@ -384,6 +381,30 @@
       </div>
     </template>
   </n-modal>
+
+  <n-modal
+      v-model:show="showErrorModal"
+      :class="confirmDialogClass"
+      :positive-button-props="confirmActionButtonProps('error')"
+      :show-icon="false"
+      :z-index="4000"
+      positive-text="אישור"
+      preset="dialog"
+      type="error"
+      @positive-click="showErrorModal = false"
+  >
+    <template #header>
+      <ConfirmDialogHead title="שגיאה"/>
+    </template>
+    <p class="hm-error-text" dir="rtl">
+      <template v-if="saveErrorDuplicateNumber">
+        מספר התסקיר
+        <bdi class="hm-error-text__id" dir="ltr">{{ saveErrorDuplicateNumber }}</bdi>
+        כבר קיים במערכת.
+      </template>
+      <template v-else>{{ formattedSaveError }}</template>
+    </p>
+  </n-modal>
 </template>
 
 <script lang="ts" setup>
@@ -410,7 +431,12 @@ import {useHydraulicCheckDraftStore} from "../../stores/hydraulicCheckDraft.js";
 import {useEngineerStore} from "../../stores/engineer.js";
 import type {HydraulicCheckRequest} from "../../services/apiService.js";
 import {api} from "../../services/apiService.js";
-import {useConfirm} from "../../composables/useConfirm.js";
+import {
+  confirmActionButtonProps,
+  CONFIRM_DIALOG_CLASS,
+  useConfirm,
+} from "../../composables/useConfirm.js";
+import ConfirmDialogHead from "../ConfirmDialogHead.vue";
 import type {Equipment, PrintTemplate} from "@shared/types.js";
 import LayoutPreviewFrame from "../print/LayoutPreviewFrame.vue";
 import {
@@ -436,6 +462,7 @@ const {profile: engineerProfile} = storeToRefs(engineerStore);
 const router = useRouter();
 const message = useMessage();
 const {confirm} = useConfirm();
+const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 
 const isMobile = ref(window.innerWidth <= 720);
 
@@ -479,6 +506,18 @@ const showErrorModal = computed({
   set: (v: boolean) => {
     if (!v) saveError.value = null;
   },
+});
+const saveErrorDuplicateNumber = computed(() => {
+  const match = saveError.value?.match(/Contract number already exists:\s*(.+)/i);
+  return match?.[1]?.trim() ?? null;
+});
+const formattedSaveError = computed(() => {
+  const raw = saveError.value?.trim() ?? "";
+  if (!raw) return "";
+  if (raw === "חסר לקוח") return "יש לבחור לקוח קיים או להזין שם עסק";
+  if (raw === "חסר תאריך תזכורת") return "יש לבחור תאריך תזכורת";
+  if (raw === "הטופס לא מוכן") return "יש למלא את פרטי התסקיר לפני השמירה";
+  return raw;
 });
 const hydraulicForm = ref<HydraulicCheckRequest | null>(null);
 const clientId = ref<string | null>(null);
@@ -606,12 +645,19 @@ const templateOptions = computed(() =>
     }))
 );
 
-const equipmentOptions = computed(() =>
-    clientEquipment.value.map((eq) => ({
-      label: [eq.name, eq.manufacturer, eq.model, eq.serial_number ? `מס׳ ${eq.serial_number}` : null].filter(Boolean).join(" · "),
-      value: String(eq.id),
-    }))
-);
+const equipmentOptions = computed(() => {
+    const seen = new Set<string>();
+    return clientEquipment.value
+        .map((eq) => ({
+          label: [eq.name, eq.manufacturer, eq.model, eq.serial_number ? `מס׳ ${eq.serial_number}` : null].filter(Boolean).join(" · "),
+          value: String(eq.id),
+        }))
+        .filter((opt) => {
+          if (seen.has(opt.label)) return false;
+          seen.add(opt.label);
+          return true;
+        });
+});
 
 const templateKnownFields = new Set([
   "document_number", "contract_number", "report_number", "prev_report_number",
@@ -1015,12 +1061,12 @@ async function applyClient(cid: string | null) {
     contact_person: client.contact_person ?? "",
     email: client.email ?? "",
     phone: client.phone ?? "",
-    mobile: (client as any).mobile ?? (client as any).phone_mobile ?? "",
-    fax: (client as any).fax ?? "",
+    mobile: client.mobile ?? "",
+    fax: client.fax ?? "",
     address: client.address ?? "",
-    city: (client as any).city ?? "",
-    po_box: (client as any).po_box ?? "",
-    client_zipcode: (client as any).client_zipcode ?? "",
+    city: client.city ?? "",
+    po_box: client.po_box ?? "",
+    client_zipcode: client.client_zipcode ?? "",
   };
   void queueClientEquipmentLoad();
 }
@@ -1247,12 +1293,10 @@ function buildTemplateDraftMeta(): Record<string, unknown> {
 async function createContract() {
   if (!hydraulicForm.value) throw new Error("הטופס לא מוכן");
   if (!clientId.value && !hydraulicForm.value.business.display_name.trim()) {
-    message.warning("יש לבחור לקוח קיים או להזין שם עסק");
-    throw new Error("חסר לקוח");
+    throw new Error("יש לבחור לקוח קיים או להזין שם עסק");
   }
   if (!expiryDateMs.value) {
-    message.warning("יש להזין תאריך תוקף");
-    throw new Error("חסר תאריך תוקף");
+    throw new Error("יש להזין תאריך תוקף");
   }
   const contractNumber = formatContractNumber(
       hydraulicForm.value.contract_number?.trim() || suggestedContractNumber.value,
@@ -1279,8 +1323,7 @@ async function createContract() {
 async function updateContract(contractId: string) {
   if (!hydraulicForm.value) throw new Error("הטופס לא מוכן");
   if (!expiryDateMs.value) {
-    message.warning("יש להזין תאריך תוקף");
-    throw new Error("חסר תאריך תוקף");
+    throw new Error("יש להזין תאריך תוקף");
   }
   const contractNumber = formatContractNumber(
       hydraulicForm.value.contract_number?.trim() || suggestedContractNumber.value,
@@ -1354,7 +1397,7 @@ async function doCreate() {
 async function saveDraftAndPreview() {
   if (!hydraulicForm.value) return;
   if (!templateId.value) {
-    message.warning("בחר תבנית הדפסה");
+    saveError.value = "בחר תבנית הדפסה";
     return;
   }
   saveError.value = null;
@@ -1540,6 +1583,20 @@ defineExpose({open, openForUpdate});
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.hm-error-text {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.hm-error-text__id {
+  font-weight: 700;
+  unicode-bidi: isolate;
 }
 
 .hm-header__title {

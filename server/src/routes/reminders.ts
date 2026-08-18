@@ -277,7 +277,10 @@ export function registerReminderRoutes(app: express.Application) {
         contact_person?: string;
         email?: string;
         phone?: string;
+        mobile?: string;
+        fax?: string;
         address?: string;
+        city?: string;
         po_box?: string;
         client_zipcode?: string;
         notes?: string;
@@ -417,7 +420,12 @@ export function registerReminderRoutes(app: express.Application) {
           contact_person: body.business?.contact_person?.trim() || null,
           email: body.business?.email?.trim() || null,
           phone: body.business?.phone?.trim() || null,
+          mobile: body.business?.mobile?.trim() || null,
+          fax: body.business?.fax?.trim() || null,
           address: body.business?.address?.trim() || null,
+          city: body.business?.city?.trim() || null,
+          po_box: body.business?.po_box?.trim() || null,
+          client_zipcode: body.business?.client_zipcode?.trim() || null,
           notes: body.business?.notes?.trim() || null,
           tags: null,
           created_at: now,

@@ -113,7 +113,10 @@
           <n-input v-model:value="form.email" class="email-ltr" dir="ltr" placeholder="israel@example.com" />
         </n-form-item>
         <n-form-item label="טלפון">
-          <n-input v-model:value="form.phone" placeholder="050-0000000" />
+          <n-input v-model:value="form.phone" placeholder="02-0000000" />
+        </n-form-item>
+        <n-form-item label="נייד">
+          <n-input v-model:value="form.mobile" placeholder="050-0000000" />
         </n-form-item>
         <n-form-item label="מספר ת.ז / ח.פ">
           <n-input v-model:value="form.id_number" />
@@ -220,11 +223,24 @@ const baseColumns: DataTableColumns<Client> = [
     key: "phone",
     align: "right",
     titleAlign: "right",
-    width: 160,
-    minWidth: 160,
+    width: 140,
+    minWidth: 130,
     render(row) {
       return row.phone
         ? h("span", { class: "client-phone-cell" }, row.phone)
+        : h("span", { class: "muted" }, "—");
+    },
+  },
+  {
+    title: "נייד",
+    key: "mobile",
+    align: "right",
+    titleAlign: "right",
+    width: 140,
+    minWidth: 130,
+    render(row) {
+      return row.mobile
+        ? h("span", { class: "client-phone-cell" }, row.mobile)
         : h("span", { class: "muted" }, "—");
     },
   },
@@ -306,12 +322,12 @@ const editingId = ref<string | null>(null);
 const saving = ref(false);
 const form = ref({
   display_name: "", entity_type: "person" as "person" | "company",
-  contact_person: "", email: "", phone: "", id_number: "",
+  contact_person: "", email: "", phone: "", mobile: "", id_number: "",
 });
 
 function resetForm() {
   editingId.value = null;
-  form.value = { display_name: "", entity_type: "person", contact_person: "", email: "", phone: "", id_number: "" };
+  form.value = { display_name: "", entity_type: "person", contact_person: "", email: "", phone: "", mobile: "", id_number: "" };
 }
 
 function openEdit(row: Client) {
@@ -322,6 +338,7 @@ function openEdit(row: Client) {
     contact_person: row.contact_person ?? "",
     email:        row.email ?? "",
     phone:        row.phone ?? "",
+    mobile:       row.mobile ?? "",
     id_number:    row.id_number ?? "",
   };
   showCreate.value = true;

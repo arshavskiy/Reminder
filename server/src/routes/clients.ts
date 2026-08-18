@@ -105,7 +105,10 @@ export function registerClientRoutes(app: express.Application) {
       if (body.contact_person !== undefined && !existingByPhone.contact_person) updates.contact_person = body.contact_person;
       if (body.id_number !== undefined && !existingByPhone.id_number) updates.id_number = body.id_number;
       if (body.email !== undefined && !existingByPhone.email) updates.email = body.email;
+      if (body.mobile !== undefined && !existingByPhone.mobile) updates.mobile = body.mobile;
+      if (body.fax !== undefined && !existingByPhone.fax) updates.fax = body.fax;
       if (body.address !== undefined && !existingByPhone.address) updates.address = body.address;
+      if (body.city !== undefined && !existingByPhone.city) updates.city = body.city;
       if (body.po_box !== undefined && !existingByPhone.po_box) updates.po_box = body.po_box;
       if (body.client_zipcode !== undefined && !existingByPhone.client_zipcode) updates.client_zipcode = body.client_zipcode;
       if (body.notes !== undefined && !existingByPhone.notes) updates.notes = body.notes;
@@ -132,7 +135,10 @@ export function registerClientRoutes(app: express.Application) {
       id_number: body.id_number ?? null,
       email: body.email ?? null,
       phone: body.phone ?? null,
+      mobile: body.mobile ?? null,
+      fax: body.fax ?? null,
       address: body.address ?? null,
+      city: body.city ?? null,
       po_box: body.po_box ?? null,
       client_zipcode: body.client_zipcode ?? null,
       notes: body.notes ?? null,
@@ -177,7 +183,10 @@ export function registerClientRoutes(app: express.Application) {
     if (body.id_number !== undefined) updates.id_number = body.id_number;
     if (body.email !== undefined) updates.email = body.email;
     if (body.phone !== undefined) updates.phone = body.phone;
+    if (body.mobile !== undefined) updates.mobile = body.mobile;
+    if (body.fax !== undefined) updates.fax = body.fax;
     if (body.address !== undefined) updates.address = body.address;
+    if (body.city !== undefined) updates.city = body.city;
     if (body.po_box !== undefined) updates.po_box = body.po_box;
     if (body.client_zipcode !== undefined) updates.client_zipcode = body.client_zipcode;
     if (body.notes !== undefined) updates.notes = body.notes;
