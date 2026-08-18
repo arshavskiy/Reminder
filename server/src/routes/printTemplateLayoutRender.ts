@@ -229,7 +229,7 @@ export function renderSectionTemplateHtml(
 <meta charset="utf-8">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; font-size: 11px; direction: ${dir}; padding: 12px; color: #111; }
+  body { font-family: Arial, sans-serif; font-size: 11px; direction: ${dir}; padding: 4px; color: #111; }
   .block { border: ${bw}px solid ${color}; margin-bottom: 6px; padding: 6px 8px; }
   .block.no-border { border: none; }
   .sec-title { font-size: 11px; font-weight: 700; margin-bottom: 4px; }

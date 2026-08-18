@@ -229,8 +229,8 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
 <style scoped>
 .layout-preview {
   width: 100%;
-  padding: 10px;
-  font-size: 10px;
+  padding: 8px;
+  font-size: 8px;
   color: #111;
   background: #fff;
   max-height: 70vh;
@@ -242,7 +242,7 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
   padding: 6px 8px;
 }
 .block.no-border { border: none; }
-.sec-title { font-size: 10px; font-weight: 700; margin-bottom: 4px; }
+.sec-title { font-size: 8px; font-weight: 700; margin-bottom: 3px; }
 .sec-title:empty { display: none; margin: 0; }
 
 /* Header */
@@ -250,31 +250,31 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
 .header-table td { vertical-align: top; }
 .hdr-side { width: 28%; }
 .hdr-center { width: 44%; text-align: center; vertical-align: middle; }
-.hdr-title { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
-.hdr-title--small { font-size: 10px; }
-.hdr-title--large { font-size: 16px; }
+.hdr-title { font-size: 10px; font-weight: 700; margin-bottom: 2px; }
+.hdr-title--small { font-size: 8px; }
+.hdr-title--large { font-size: 13px; }
 .hdr-title--regular { font-weight: 400; }
-.hdr-sub { font-size: 8px; line-height: 1.3; }
-.hdr-sub--small { font-size: 7px; }
-.hdr-sub--large { font-size: 10px; }
+.hdr-sub { font-size: 7px; line-height: 1.3; }
+.hdr-sub--small { font-size: 6px; }
+.hdr-sub--large { font-size: 8px; }
 .hdr-sub--bold { font-weight: 700; }
-.hdr-field { margin-bottom: 2px; font-size: 9px; }
+.hdr-field { margin-bottom: 2px; font-size: 7px; }
 .hdr-lbl { font-weight: inherit; }
 .hdr-val { margin-right: 3px; }
-.field-text--small { font-size: 7px; }
+.field-text--small { font-size: 6px; }
 .field-text--bold { font-weight: 700; }
 .hdr-right { text-align: right; }
 .hdr-left { text-align: left; }
 
 /* Fields grid */
 .fields-grid { width: 100%; border-collapse: collapse; }
-.fields-grid td { padding: 2px 3px; vertical-align: top; font-size: 9px; }
+.fields-grid td { padding: 2px 3px; vertical-align: top; font-size: 7px; }
 .fields-grid td.lbl { font-weight: inherit; white-space: nowrap; width: 55px; text-align: right; }
 .fields-grid td.val { border-bottom: 1px solid #ccc; min-width: 50px; }
 
 /* Data tables */
 table.data { width: 100%; border-collapse: collapse; }
-table.data th, table.data td { border: 1px solid currentColor; padding: 3px 4px; text-align: center; font-size: 9px; }
+table.data th, table.data td { border: 1px solid currentColor; padding: 2px 3px; text-align: center; font-size: 7px; }
 table.data th { font-weight: 700; background: #f5f5f5; }
 table.equip td { min-height: 30px; vertical-align: middle; }
 table.equip td.stack-td { padding: 0; vertical-align: stretch; }
@@ -297,7 +297,7 @@ table.findings td.subj { width: 60px; font-weight: 600; text-align: right; }
 table.findings td.detail { text-align: right; }
 
 /* Static */
-.static { line-height: 1.35; font-size: 9px; text-align: justify; margin: 0; white-space: pre-wrap; }
+.static { line-height: 1.35; font-size: 7px; text-align: justify; margin: 0; white-space: pre-wrap; }
 
 /* Signature */
 .sig-mark {
@@ -314,7 +314,7 @@ table.findings td.detail { text-align: right; }
 }
 
 .sig-cert {
-  font-size: 9px;
+  font-size: 7px;
   line-height: 1.4;
   margin-bottom: 6px;
   text-align: right;
@@ -347,7 +347,7 @@ table.findings td.detail { text-align: right; }
   justify-content: left;
 }
 .sig-image img { max-width: 100px; max-height: 60px; }
-.sig-details { font-size: 8px; line-height: 1.3; }
+.sig-details { font-size: 7px; line-height: 1.3; }
 .sig-inspector { font-weight: 600; }
 .sig-company { margin-top: 2px; }
 
@@ -363,7 +363,7 @@ table.findings td.detail { text-align: right; }
 }
 
 .ftr-col {
-  font-size: 9px;
+  font-size: 7px;
 }
 
 .ftr-center {

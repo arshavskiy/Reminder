@@ -361,7 +361,11 @@ async function renderTemplatePdf(t: any, data: Record<string, unknown>): Promise
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load" });
-    return await page.pdf({ format: t.page ?? "A4", printBackground: true });
+    return await page.pdf({
+      format: t.page ?? "A4",
+      printBackground: true,
+      margin: { top: "10mm", bottom: "10mm", left: "8mm", right: "8mm" },
+    });
   } finally {
     await browser.close();
   }
@@ -675,7 +679,7 @@ function renderTemplateHtml(t: any, data: Record<string, unknown>): string {
 <meta charset="utf-8">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; font-size: 12px; direction: ${dir}; padding: 16px; }
+  body { font-family: Arial, sans-serif; font-size: 12px; direction: ${dir}; padding: 4px; }
   table.render { border-collapse: collapse; width: 100%; table-layout: auto; }
   table.render td { vertical-align: middle; padding: 2px 4px; }
   table.render img.cell-img { display: block; max-width: 100%; max-height: 100%; margin: 0 auto; object-fit: contain; }

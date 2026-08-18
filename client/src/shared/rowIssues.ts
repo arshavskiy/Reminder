@@ -85,7 +85,7 @@ export function listDocumentRowIssues(doc: DocumentIssueRow, dupes: Set<string>)
   if (doc.processing_status === "error") {
     issues.push({ kind: "processing_error", label: "שגיאת עיבוד", tagClass: "tag--bad" });
   }
-  if (doc.reminder_status === "missing" && doc.processing_status === "done") {
+  if (doc.reminder_status === "missing" && doc.processing_status === "done" && !doc.contract_status) {
     const fields = parseDocumentExtractedFields(doc.extracted_fields);
     const expiry = fields.expiry_date;
     if (!normalizeReportNumber(expiry)) {

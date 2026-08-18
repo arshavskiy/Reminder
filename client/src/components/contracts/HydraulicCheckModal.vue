@@ -45,52 +45,51 @@
                 </button>
               </div>
 
-              <n-alert v-if="saveError" type="error" closable style="margin-bottom: 12px" @close="saveError = null">
-                {{ saveError }}
-              </n-alert>
+              <n-modal v-model:show="showErrorModal" preset="dialog" type="error" title="שגיאה"
+                       :content="saveError ?? ''" positive-text="אישור" @positive-click="showErrorModal = false"/>
 
               <!-- Step: Basic -->
               <section v-show="activeStep === 'basic'" class="hm-section">
                 <div class="hm-section__grid hm-section__grid--4">
                   <div class="hm-field">
                     <label>מספר תסקיר</label>
-                <n-input
-                    :value="hydraulicForm.contract_number"
-                    inputmode="numeric"
-                    placeholder="הזן מספר"
-                    @update:value="setContractNumberInput"
-                >
-                  <template v-if="currentInspectorNumber()" #prefix>
-                    {{ currentInspectorNumber() }}/
-                  </template>
-                </n-input>
+                    <n-input
+                        :value="hydraulicForm.contract_number"
+                        inputmode="numeric"
+                        placeholder="הזן מספר"
+                        @update:value="setContractNumberInput"
+                    >
+                      <template v-if="currentInspectorNumber()" #prefix>
+                        {{ currentInspectorNumber() }}/
+                      </template>
+                    </n-input>
                   </div>
                   <div class="hm-field">
                     <label>תסקיר קודם</label>
-                <n-input v-model:value="prevReportNumber" placeholder="אופציונלי"/>
+                    <n-input v-model:value="prevReportNumber" placeholder="אופציונלי"/>
                   </div>
                   <div class="hm-field">
                     <label>תבנית הדפסה</label>
-                <n-select
-                    v-model:value="templateId"
-                    :loading="loadingTemplates"
-                    :options="templateOptions"
-                    :virtual-scroll="false"
-                    filterable
-                    placeholder="בחר תבנית"
-                    @update:value="selectTemplate"
-                />
+                    <n-select
+                        v-model:value="templateId"
+                        :loading="loadingTemplates"
+                        :options="templateOptions"
+                        :virtual-scroll="false"
+                        filterable
+                        placeholder="בחר תבנית"
+                        @update:value="selectTemplate"
+                    />
                   </div>
                   <div class="hm-field">
                     <label>לקוח קיים</label>
-                <n-select
-                    v-model:value="clientId"
-                    :loading="loadingClients"
-                    :options="clientOptions"
-                    clearable
-                    filterable
-                    placeholder="בחר או צור חדש"
-                />
+                    <n-select
+                        v-model:value="clientId"
+                        :loading="loadingClients"
+                        :options="clientOptions"
+                        clearable
+                        filterable
+                        placeholder="בחר או צור חדש"
+                    />
                   </div>
                   <div class="hm-field">
                     <label class="required">תאריך בדיקה</label>
@@ -99,7 +98,7 @@
                         style="width: 100%"
                         type="date"
                         @update:value="calculateExpiryFromCheckDate"
-                />
+                    />
                   </div>
                   <div class="hm-field">
                     <label>מרווח בדיקות</label>
@@ -149,7 +148,7 @@
                     </div>
                     <div v-if="!clientId" class="hm-field">
                       <label>ח.פ / ת.ז</label>
-                  <n-input v-model:value="hydraulicForm.business.id_number"/>
+                      <n-input v-model:value="hydraulicForm.business.id_number"/>
                     </div>
                     <div class="hm-field">
                       <label>איש קשר</label>
@@ -173,7 +172,7 @@
                     </div>
                     <div class="hm-field">
                       <label>כתובת</label>
-                  <n-input v-model:value="hydraulicForm.business.address"/>
+                      <n-input v-model:value="hydraulicForm.business.address"/>
                     </div>
                     <div class="hm-field">
                       <label>יישוב</label>
@@ -181,14 +180,14 @@
                     </div>
                     <div class="hm-field">
                       <label>ת.ד</label>
-                  <n-input v-model:value="hydraulicForm.business.po_box"/>
+                      <n-input v-model:value="hydraulicForm.business.po_box"/>
                     </div>
                     <div class="hm-field">
                       <label>מיקוד</label>
-                  <n-input v-model:value="hydraulicForm.business.client_zipcode"/>
+                      <n-input v-model:value="hydraulicForm.business.client_zipcode"/>
                     </div>
                   </div>
-            </div>
+                </div>
               </section>
 
               <!-- Step: Equipment -->
@@ -244,7 +243,9 @@
                             placeholder="בחר סוג ציוד"
                             style="flex:1"
                         />
-                        <button class="btn btn--xs btn--outline" title="הוסף סוג חדש" @click="promptNewCategory(index)">+</button>
+                        <button class="btn btn--xs btn--outline" title="הוסף סוג חדש" @click="promptNewCategory(index)">
+                          +
+                        </button>
                       </div>
                     </div>
                     <div class="hm-field">
@@ -388,7 +389,7 @@
 <script lang="ts" setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
-import {NAlert, NDatePicker, NDynamicTags, NIcon, NInput, NModal, NSelect, NSpin, useMessage} from "naive-ui";
+import {NDatePicker, NDynamicTags, NIcon, NInput, NModal, NSelect, NSpin, useMessage} from "naive-ui";
 import {
   AddCircleOutline,
   BusinessOutline,
@@ -412,7 +413,12 @@ import {api} from "../../services/apiService.js";
 import {useConfirm} from "../../composables/useConfirm.js";
 import type {Equipment, PrintTemplate} from "@shared/types.js";
 import LayoutPreviewFrame from "../print/LayoutPreviewFrame.vue";
-import {extractLayoutFieldBinds, joinStackedValues, LAYOUT_FIELD_PRESETS, type PrintTemplateLayout} from "@shared/printTemplateLayout.js";
+import {
+  extractLayoutFieldBinds,
+  joinStackedValues,
+  LAYOUT_FIELD_PRESETS,
+  type PrintTemplateLayout
+} from "@shared/printTemplateLayout.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -468,6 +474,12 @@ const loading = ref(false);
 const creating = ref(false);
 const savingDraft = ref(false);
 const saveError = ref<string | null>(null);
+const showErrorModal = computed({
+  get: () => saveError.value !== null,
+  set: (v: boolean) => {
+    if (!v) saveError.value = null;
+  },
+});
 const hydraulicForm = ref<HydraulicCheckRequest | null>(null);
 const clientId = ref<string | null>(null);
 const prevReportNumber = ref("");
@@ -849,7 +861,8 @@ function promptNewCategory(index: number) {
   }
   const row = equipmentRows.value[index];
   if (row) row.category = label;
-  api.equipment.createCategory(label, label).then(() => loadCategories()).catch(() => {});
+  api.equipment.createCategory(label, label).then(() => loadCategories()).catch(() => {
+  });
 }
 
 async function loadClientEquipment(cid: string | null) {
@@ -897,8 +910,8 @@ async function loadPrintTemplates() {
 function defaultTemplateId(): string | null {
   return templates.value.find((t) => t.editorType === "sections")?._id
       ?? (templates.value.some((t) => t._id === HYDRAULIC_PRINT_TEMPLATE_ID)
-        ? HYDRAULIC_PRINT_TEMPLATE_ID
-        : templates.value[0]?._id ?? null);
+          ? HYDRAULIC_PRINT_TEMPLATE_ID
+          : templates.value[0]?._id ?? null);
 }
 
 function selectTemplate(id: string | null) {
@@ -964,8 +977,8 @@ function splitMultiValue(value: unknown): string[] {
   const s = String(value).trim();
   if (!s) return [];
   return s.split(/\s*\/\s*/)
-    .map((v) => v.trim())
-    .filter((v) => v && !/^\d{1,2}$/.test(v));
+      .map((v) => v.trim())
+      .filter((v) => v && !/^\d{1,2}$/.test(v));
 }
 
 // ── Client watcher ───────────────────────────────────────────────────────────
@@ -1919,24 +1932,29 @@ defineExpose({open, openForUpdate});
 .hm-footer__nav {
   display: flex;
   gap: 8px;
+  margin: 0 10px;
 }
 
 .hm-footer__actions {
   display: flex;
   gap: 8px;
+  flex: 1;
 }
 
 /* Transition */
 .hydraulic-fade-enter-active {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
+
 .hydraulic-fade-leave-active {
   transition: opacity 0.1s ease;
 }
+
 .hydraulic-fade-enter-from {
   opacity: 0;
   transform: translateY(6px);
 }
+
 .hydraulic-fade-leave-to {
   opacity: 0;
 }
