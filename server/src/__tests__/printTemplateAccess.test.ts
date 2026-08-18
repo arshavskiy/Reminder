@@ -49,7 +49,7 @@ describe("canMutatePrintTemplate", () => {
 });
 
 describe("presentPrintTemplate", () => {
-    it("strips the owner's signature image for other users", () => {
+    it("keeps the signature image for other users on shared templates", () => {
         const layout = createDefaultPrintTemplateLayout();
         const sig = layout.sections.find((s) => s.type === "signature");
         if (sig && sig.type === "signature") sig.imageSrc = "https://example.com/sig.jpg";
@@ -58,7 +58,7 @@ describe("presentPrintTemplate", () => {
             other.userId,
         );
         const presentedSig = presented.layout.sections.find((s: { type: string }) => s.type === "signature");
-        expect(presentedSig.imageSrc).toBeUndefined();
+        expect(presentedSig.imageSrc).toBe("https://example.com/sig.jpg");
     });
 
     it("keeps the signature image for the owner", () => {

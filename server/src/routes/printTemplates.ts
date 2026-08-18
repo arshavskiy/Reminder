@@ -58,10 +58,18 @@ export function registerPrintTemplateRoutes(app: Express) {
   app.get("/api/print-templates", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
-    const templates = await col("print_templates")
+    const all = await col("print_templates")
         .find(printTemplateVisibleFilter(auth.userId))
       .sort({ created_at: -1 })
       .toArray();
+    // Hide shared originals when user has a personal copy (copy-on-write)
+    const copiedSourceIds = new Set(
+      all.filter((t: any) => t.user_id === auth.userId && t.source_template_id)
+        .map((t: any) => String(t.source_template_id))
+    );
+    const templates = copiedSourceIds.size > 0
+      ? all.filter((t: any) => !copiedSourceIds.has(String(t._id)))
+      : all;
       res.json(templates.map(t => presentPrintTemplate(t, auth.userId)));
   });
 
@@ -150,12 +158,32 @@ export function registerPrintTemplateRoutes(app: Express) {
           res.status(404).json({error: "Not found"});
           return;
       }
-      if (!canMutatePrintTemplate(auth, existing as any)) {
-          res.status(403).json({error: "Shared templates can only be edited by an admin"});
-          return;
-      }
     const { name, page, dir, cols, rows, cells, hasFixedFrame, editorType, layout } = req.body;
     const now = new Date().toISOString();
+
+      // Copy-on-write: non-admin editing shared template gets a personal clone
+      if (!canMutatePrintTemplate(auth, existing as any)) {
+        const clone: Record<string, unknown> = {
+          user_id: auth.userId,
+          name: name ?? (existing as any).name,
+          page: page ?? (existing as any).page ?? "A4",
+          dir: dir ?? (existing as any).dir ?? "rtl",
+          cols: cols ?? (existing as any).cols ?? [],
+          rows: rows ?? (existing as any).rows ?? [],
+          cells: cells ?? (existing as any).cells ?? [],
+          hasFixedFrame: hasFixedFrame ?? (existing as any).hasFixedFrame ?? false,
+          editorType: editorType === "sections" ? "sections" : ((existing as any).editorType ?? "grid"),
+          layout: layout ?? (existing as any).layout ?? null,
+          is_shared: false,
+          source_template_id: String((existing as any)._id),
+          created_at: now,
+          updated_at: now,
+        };
+        const inserted = await col("print_templates").insertOne(clone as any);
+        res.status(201).json(presentPrintTemplate({...clone, _id: inserted.insertedId}, auth.userId));
+        return;
+      }
+
     const update: Record<string, unknown> = { updated_at: now };
     if (name !== undefined) update.name = name;
     if (page !== undefined) update.page = page;

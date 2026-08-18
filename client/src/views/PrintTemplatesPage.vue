@@ -58,7 +58,7 @@
                 <n-icon :component="BrushOutline"/>
                 עצב
               </button>
-              <button v-if="canMutateTemplate(t)" class="btn btn--xs btn--danger" @click.stop="deleteTemplate(t._id)">
+              <button v-if="canDeleteTemplate(t)" class="btn btn--xs btn--danger" @click.stop="deleteTemplate(t._id)">
                 <n-icon :component="TrashOutline"/>
                 מחק
               </button>
@@ -608,8 +608,12 @@ const engineerStore = useEngineerStore();
 const authStore = useAuthStore();
 const {profile: engineerProfile} = storeToRefs(engineerStore);
 
-function canMutateTemplate(t: PrintTemplate) {
-  return authStore.isAdmin || (!t.is_shared && t.user_id === authStore.user?.id);
+function canMutateTemplate(_t: PrintTemplate) {
+  return true;
+}
+
+function canDeleteTemplate(t: PrintTemplate) {
+  return authStore.isAdmin || t.user_id === authStore.user?.id;
 }
 const routeDraftLoading = ref(isDraftRoute());
 

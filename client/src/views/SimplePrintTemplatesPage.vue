@@ -39,7 +39,7 @@
                 <n-icon :component="BrushOutline"/>
                 ערוך
               </button>
-              <button v-if="canMutateTemplate(t)" class="btn btn--xs btn--danger" @click="deleteTemplate(t._id)">
+              <button v-if="canDeleteTemplate(t)" class="btn btn--xs btn--danger" @click="deleteTemplate(t._id)">
                 <n-icon :component="TrashOutline"/>
               </button>
             </div>
@@ -144,8 +144,12 @@ import {
 const authStore = useAuthStore();
 const engineerStore = useEngineerStore();
 
-function canMutateTemplate(t: PrintTemplate) {
-  return authStore.isAdmin || (!t.is_shared && t.user_id === authStore.user?.id);
+function canMutateTemplate(_t: PrintTemplate) {
+  return true;
+}
+
+function canDeleteTemplate(t: PrintTemplate) {
+  return authStore.isAdmin || t.user_id === authStore.user?.id;
 }
 
 type Mode = "list" | "edit" | "compose";
