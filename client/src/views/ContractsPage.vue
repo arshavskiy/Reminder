@@ -470,8 +470,22 @@
     </n-modal>
 
     <!-- ── Delete confirm modal ────────────────────────────────────────── -->
-    <n-modal v-model:show="showDeleteConfirm" title="מחיקת רשומה" preset="dialog" type="error" :positive-text="'מחק'"
-             :negative-text="'ביטול'" @positive-click="doDelete" @negative-click="showDeleteConfirm = false">
+    <n-modal
+        v-model:show="showDeleteConfirm"
+        :class="confirmDialogClass"
+        :negative-button-props="confirmCancelButtonProps"
+        :positive-button-props="confirmActionButtonProps('error')"
+        :show-icon="false"
+        preset="dialog"
+        type="error"
+        :positive-text="'מחק'"
+        :negative-text="'ביטול'"
+        @positive-click="doDelete"
+        @negative-click="showDeleteConfirm = false"
+    >
+      <template #header>
+        <ConfirmDialogHead title="מחיקת רשומה"/>
+      </template>
       <p>האם למחוק את הרשומה <strong>{{ deletingRow?.contract_number ?? deletingRow?.contract_type ?? "זו" }}</strong>?
       </p>
       <n-checkbox v-model:checked="deleteRelatedReminders" style="margin: 8px 0 4px">
@@ -568,9 +582,22 @@
     </n-modal>
 
     <!-- ── Delete all confirm modal ──────────────────────────────────── -->
-    <n-modal v-model:show="showDeleteAllConfirm" title="מחיקת כל הרשומות" preset="dialog" type="error"
-             :positive-text="'מחק הכל'" :negative-text="'ביטול'" @positive-click="doDeleteAll"
-             @negative-click="showDeleteAllConfirm = false">
+    <n-modal
+        v-model:show="showDeleteAllConfirm"
+        :class="confirmDialogClass"
+        :negative-button-props="confirmCancelButtonProps"
+        :positive-button-props="confirmActionButtonProps('error')"
+        :show-icon="false"
+        preset="dialog"
+        type="error"
+        :positive-text="'מחק הכל'"
+        :negative-text="'ביטול'"
+        @positive-click="doDeleteAll"
+        @negative-click="showDeleteAllConfirm = false"
+    >
+      <template #header>
+        <ConfirmDialogHead title="מחיקת כל הרשומות"/>
+      </template>
       <p>למחוק את כל <strong>{{ store.rows.length }}</strong> הרשומות? פעולה זו אינה הפיכה.</p>
       <n-checkbox v-model:checked="deleteAllRelatedReminders" style="margin: 8px 0 4px">
         מחק גם את כל התזכורות הקשורות
@@ -680,7 +707,8 @@ import {
 } from "@shared/rowIssues.js";
 import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.js";
 import {joinStackedValues} from "@shared/printTemplateLayout.js";
-import {useConfirm} from "../composables/useConfirm.js";
+import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS, useConfirm} from "../composables/useConfirm.js";
+import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
@@ -931,6 +959,7 @@ async function loadReminders() {
 const sendingReminder = ref<number | null>(null);
 const message2 = useMessage();
 const {confirm} = useConfirm();
+const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 
 async function sendReminderNow(r: ReminderWithContext) {
   sendingReminder.value = r.id;

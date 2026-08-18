@@ -2,7 +2,21 @@ import { h, type VNodeChild } from "vue";
 import { NIcon, useDialog } from "naive-ui";
 import { WarningOutline } from "@vicons/ionicons5";
 
-const DIALOG_CLASS = "app-confirm-dialog";
+export const CONFIRM_DIALOG_CLASS = "app-confirm-dialog";
+
+export const confirmCancelButtonProps = {
+  ghost: false,
+  type: "default" as const,
+  size: "medium" as const,
+};
+
+export function confirmActionButtonProps(type: "error" | "warning" | "primary" = "error") {
+  return {
+    ghost: false,
+    type,
+    size: "medium" as const,
+  };
+}
 
 function renderContent(text: string): () => VNodeChild {
   return () => {
@@ -39,11 +53,6 @@ function positiveButtonType(type: "error" | "warning" | "info") {
   return "primary" as const;
 }
 
-const buttonDefaults = {
-  ghost: false,
-  size: "medium" as const,
-};
-
 export function useConfirm() {
   const dialog = useDialog();
 
@@ -63,21 +72,15 @@ export function useConfirm() {
     onConfirm: () => void | Promise<void>;
   }) {
     dialog[type]({
-      class: DIALOG_CLASS,
+      class: CONFIRM_DIALOG_CLASS,
       title: renderTitle(title, type),
       content: renderContent(content),
       positiveText: confirmText,
       negativeText: cancelText,
       showIcon: false,
       actionClass: "confirm-dialog__footer",
-      positiveButtonProps: {
-        ...buttonDefaults,
-        type: positiveButtonType(type),
-      },
-      negativeButtonProps: {
-        ...buttonDefaults,
-        type: "default",
-      },
+      positiveButtonProps: confirmActionButtonProps(positiveButtonType(type)),
+      negativeButtonProps: confirmCancelButtonProps,
       onPositiveClick: onConfirm,
     });
   }

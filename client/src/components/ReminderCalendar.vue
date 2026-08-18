@@ -265,15 +265,19 @@
 
     <n-modal
       v-model:show="showSendVisibleConfirm"
+      :class="confirmDialogClass"
+      :negative-button-props="confirmCancelButtonProps"
+      :positive-button-props="{ ...confirmActionButtonProps('warning'), loading: sendingVisible, disabled: sendingVisible }"
+      :show-icon="false"
       preset="dialog"
       type="warning"
-      title="שליחת תזכורות גלויות"
       positive-text="שלח תזכורות"
       negative-text="ביטול"
-      :positive-button-props="{ loading: sendingVisible, disabled: sendingVisible }"
-      :negative-button-props="{ disabled: sendingVisible }"
       @positive-click="sendVisibleReminders"
     >
+      <template #header>
+        <ConfirmDialogHead title="שליחת תזכורות גלויות" type="warning"/>
+      </template>
       <div class="rcal__confirm" dir="rtl">
         <p>לשלוח {{ sendableVisibleReminders.length }} תזכורות גלויות?</p>
         <p>הפעולה תשלח רק תזכורות שמופיעות בחודש ובסינון הנוכחי, עם אימייל תקין ועדיין בסטטוס ממתין.</p>
@@ -291,8 +295,11 @@ import {api, type ExpiryCalendarItem} from "../services/apiService.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {FEATURES} from "../shared/features.js";
 import ReminderQuickView from "./ReminderQuickView.vue";
+import ConfirmDialogHead from "./ConfirmDialogHead.vue";
+import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS} from "../composables/useConfirm.js";
 
 const featuresStore = useFeaturesStore();
+const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 
 interface Props {
   rows: ReminderWithContext[];

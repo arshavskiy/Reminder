@@ -2,9 +2,6 @@
   <div class="login-page" dir="rtl">
     <nav class="landing-nav">
       <a class="nav-brand" href="#top" aria-label="ReminderOCR">
-        <span class="nav-brand__icon">
-          <n-icon :component="BriefcaseOutline" :size="22" color="#fff"/>
-        </span>
         <span class="nav-brand__text">ReminderOCR</span>
       </a>
       <div class="nav-links">
@@ -32,9 +29,6 @@
 
         <div id="login-card" class="login-card">
           <div class="login-brand">
-            <div class="login-brand__icon">
-              <n-icon :component="BriefcaseOutline" :size="32" color="#fff"/>
-            </div>
             <h2 class="login-brand__title">ReminderOCR</h2>
             <p class="login-brand__sub">מערכת ניהול תסקירים ותזכורות</p>
           </div>
@@ -261,8 +255,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NAlert, NButton, NForm, NFormItem, NIcon, NInput, NModal, NTabPane, NTabs} from "naive-ui";
-import {BriefcaseOutline} from "@vicons/ionicons5";
+import {NAlert, NButton, NForm, NFormItem, NInput, NModal, NTabPane, NTabs} from "naive-ui";
 import {useAuthStore} from "../stores/auth.js";
 import {useDashboardStore} from "../stores/dashboard.js";
 import {useDocumentsStore} from "../stores/documents.js";
@@ -469,16 +462,6 @@ onMounted(async () => {
   text-decoration: none;
 }
 
-.nav-brand__icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #18a058, #0c7a43);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .nav-brand__text {
   font-size: 17px;
   font-weight: 700;
@@ -622,18 +605,8 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 24px;
-}
-
-.login-brand__icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #18a058, #0c7a43);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .login-brand__title {

@@ -68,7 +68,7 @@ html[data-theme="dark"] {
 
 /* ── Light theme ──────────────────────────────────────────── */
 html[data-theme="light"] {
-  --bg-app: #f5f7fa;
+  --bg-app: #fefefe;
   --bg-card: #ffffff;
   --bg-elevated: #fafbfc;
   --bg-hover: rgba(0, 0, 0, 0.04);
@@ -584,27 +584,43 @@ html[dir="rtl"] .n-base-clear {
 }
 
 /* ── Naive UI confirm / delete dialogs ─────────────────────────────────────── */
-.n-dialog,
-.n-modal.n-dialog {
+.app-confirm-dialog.n-dialog,
+.n-modal.app-confirm-dialog .n-dialog {
   direction: rtl;
   text-align: right;
   border-radius: 12px;
-}
-
-.app-confirm-dialog.n-dialog {
   --n-padding: 20px 22px 18px;
 }
 
-.app-confirm-dialog.n-dialog--closable .n-dialog__title {
-  padding-inline-start: calc(var(--n-close-size, 28px) + 10px);
-  padding-inline-end: 0;
+.n-dialog.n-dialog--rtl .n-dialog__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.2px;
 }
 
-.app-confirm-dialog .n-dialog__close {
-  top: 16px;
-  left: 16px;
-  right: auto;
+/* Close stays on the visual left in RTL, never over the title/icon. */
+.n-dialog.n-dialog--rtl .n-dialog__close,
+.n-dialog .n-dialog__close.n-dialog--rtl {
+  position: absolute !important;
+  top: 14px !important;
+  left: 14px !important;
+  right: auto !important;
   margin: 0 !important;
+  z-index: 2;
+}
+
+.n-dialog.n-dialog--rtl.n-dialog--closable .n-dialog__title,
+.n-dialog.n-dialog--rtl.n-dialog--icon-left.n-dialog--closable .n-dialog__title {
+  padding-left: 36px !important;
+  padding-right: 0 !important;
+}
+
+.app-confirm-dialog .n-dialog__title > .n-dialog__icon {
+  display: none;
 }
 
 .app-confirm-dialog .confirm-dialog__head {
@@ -650,19 +666,6 @@ html[dir="rtl"] .n-base-clear {
   color: var(--text-primary);
 }
 
-.n-dialog .n-dialog__title {
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.3;
-  letter-spacing: -0.2px;
-}
-
-.n-dialog .n-dialog__close,
-.n-modal.n-dialog .n-dialog__close {
-  inset-inline-start: 14px;
-  inset-inline-end: auto;
-}
-
 .app-confirm-dialog .n-dialog__content,
 .n-modal.n-dialog .n-dialog__content {
   margin: 12px 0 0;
@@ -676,8 +679,7 @@ html[dir="rtl"] .n-base-clear {
 }
 
 .app-confirm-dialog .confirm-dialog__footer,
-.app-confirm-dialog .n-dialog__action,
-.n-modal.n-dialog .n-dialog__action {
+.app-confirm-dialog .n-dialog__action {
   justify-content: flex-start !important;
   gap: 8px !important;
   margin-top: 0;
@@ -685,17 +687,16 @@ html[dir="rtl"] .n-base-clear {
   border-top: 1px solid var(--border-color);
 }
 
-.n-dialog .n-dialog__action .n-button,
-.n-modal.n-dialog .n-dialog__action .n-button {
+.app-confirm-dialog .n-dialog__action .n-button {
   min-height: 40px;
   min-width: 72px;
   padding-inline: 16px;
   font-weight: 600;
-  margin-right: 0 !important;
+  margin: 0 !important;
 }
 
 .app-confirm-dialog .n-dialog__action .n-button.n-button--default-type,
-.n-modal.n-dialog .n-dialog__action .n-button.n-button--default-type {
+.app-confirm-dialog .n-dialog__action .n-button.n-button--ghost {
   color: var(--text-primary) !important;
   border: 1px solid var(--border-color) !important;
   background: var(--bg-card) !important;
@@ -710,19 +711,20 @@ html[dir="rtl"] .n-base-clear {
   --n-color-hover: var(--bg-hover) !important;
   --n-color-pressed: var(--bg-hover) !important;
   --n-color-focus: var(--bg-card) !important;
+  --n-ripple-color: transparent !important;
 }
 
 .app-confirm-dialog .n-dialog__action .n-button.n-button--default-type:hover,
-.n-modal.n-dialog .n-dialog__action .n-button.n-button--default-type:hover,
+.app-confirm-dialog .n-dialog__action .n-button.n-button--ghost:hover,
 .app-confirm-dialog .n-dialog__action .n-button.n-button--default-type:focus,
-.n-modal.n-dialog .n-dialog__action .n-button.n-button--default-type:focus {
+.app-confirm-dialog .n-dialog__action .n-button.n-button--ghost:focus {
   color: var(--text-primary) !important;
   border-color: var(--border-color) !important;
   background: var(--bg-hover) !important;
 }
 
 .app-confirm-dialog .n-dialog__action .n-button.n-button--error-type,
-.n-modal.n-dialog .n-dialog__action .n-button.n-button--error-type {
+.app-confirm-dialog .n-dialog__action .n-button.n-button--warning-type {
   font-weight: 700;
 }
 
@@ -747,15 +749,13 @@ html[dir="rtl"] .n-base-clear {
     padding-inline-start: 0;
   }
 
-  .n-dialog .n-dialog__action,
-  .n-modal.n-dialog .n-dialog__action,
+  .app-confirm-dialog .n-dialog__action,
   .app-confirm-dialog .confirm-dialog__footer {
     flex-direction: column-reverse;
     align-items: stretch;
   }
 
-  .n-dialog .n-dialog__action .n-button,
-  .n-modal.n-dialog .n-dialog__action .n-button {
+  .app-confirm-dialog .n-dialog__action .n-button {
     width: 100%;
   }
 }

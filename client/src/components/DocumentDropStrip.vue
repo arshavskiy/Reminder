@@ -39,37 +39,104 @@
     />
 
     <!-- ── Upload results modal ───────────────────────────────────────── -->
-    <n-modal v-model:show="showUploadResults" :mask-closable="!uploadResultsLoading" style="width: min(780px, 96vw)">
-      <n-card :title="`תוצאות העלאה — ${uploadResultRows.length} קבצים`" :bordered="false" size="medium" role="dialog" style="max-height:80vh;display:flex;flex-direction:column">
-        <n-spin :show="uploadResultsLoading" description="מעבד מסמכים..." style="flex:1;overflow:hidden">
-          <n-data-table
-            :columns="uploadResultColumns"
-            :data="uploadResultRows"
-            :bordered="false"
-            :pagination="false"
-            size="small"
-            :max-height="420"
-            virtual-scroll
-            style="min-height: 120px; direction: rtl"
-          />
-        </n-spin>
-        <template #footer>
-          <div style="display:flex; justify-content:flex-end; gap:8px">
-            <n-button :disabled="uploadResultsLoading" @click="showUploadResults = false">סגור</n-button>
-            <n-button type="primary" @click="goToDocuments">עבור למסמכים</n-button>
+    <n-modal
+      v-model:show="showUploadResults"
+      :mask-closable="!uploadResultsLoading"
+      class="upload-results-modal"
+      preset="card"
+      role="dialog"
+      style="width: min(920px, 96vw)"
+    >
+      <template #header>
+        <div class="ur-head">
+          <span class="ur-head__icon" aria-hidden="true">
+            <n-icon :component="CloudUploadOutline" :size="20"/>
+          </span>
+          <div class="ur-head__text">
+            <h2 class="ur-head__title">תוצאות העלאה</h2>
+            <p class="ur-head__sub">{{ uploadProgressLabel }}</p>
           </div>
-        </template>
-      </n-card>
+        </div>
+      </template>
+
+      <div class="ur" dir="rtl">
+        <div v-if="uploadResultsLoading" class="ur-progress" role="status">
+          <div class="ur-progress__bar">
+            <span class="ur-progress__fill" :style="{ width: `${uploadProgress.pct}%` }"/>
+          </div>
+          <p class="ur-progress__label">מעבד מסמכים… {{ uploadProgress.done }} מתוך {{ uploadProgress.total }}</p>
+        </div>
+
+        <div class="ur-table-wrap">
+          <table class="ur-table">
+            <thead>
+              <tr>
+                <th>קובץ</th>
+                <th>סטטוס</th>
+                <th>לקוח</th>
+                <th>אימייל</th>
+                <th>תזכורות</th>
+                <th>תאריך</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(row, i) in uploadResultRows"
+                :key="row.id ?? `${row.fileName}-${i}`"
+                :class="[`ur-row--${row.status}`, { 'ur-row--dup': row.duplicate }]"
+              >
+                <td class="ur-file">
+                  <span :class="['ur-file__icon', `ur-file__icon--${fileKind(row.fileName)}`]" aria-hidden="true">
+                    <n-icon :component="fileIcon(row.fileName)" :size="16"/>
+                  </span>
+                  <bdi class="ur-file__name" dir="ltr" :title="row.fileName">{{ row.fileName }}</bdi>
+                </td>
+                <td>
+                  <div class="ur-status">
+                    <span :class="['ur-badge', `ur-badge--${row.status}`]">{{ statusLabel(row.status) }}</span>
+                    <span v-if="row.duplicate" class="ur-badge ur-badge--dup">כפול</span>
+                  </div>
+                </td>
+                <td>
+                  <span :class="['ur-cell', { 'ur-cell--empty': !row.client }]">{{ row.client || "—" }}</span>
+                </td>
+                <td>
+                  <bdi v-if="row.email" class="ur-cell ur-cell--email" dir="ltr">{{ row.email }}</bdi>
+                  <span v-else class="ur-cell ur-cell--empty">—</span>
+                </td>
+                <td>
+                  <span v-if="row.status !== 'done' || row.remindersCreated === null" class="ur-cell ur-cell--empty">—</span>
+                  <span
+                    v-else
+                    :class="['ur-badge', row.remindersCreated > 0 ? 'ur-badge--done' : 'ur-badge--muted']"
+                  >
+                    {{ row.remindersCreated > 0 ? `${row.remindersCreated} תזכורות` : "אין" }}
+                  </span>
+                </td>
+                <td>
+                  <span :class="['ur-cell', 'ur-cell--date', { 'ur-cell--empty': !row.date }]">{{ row.date || "—" }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="ur-actions">
+          <n-button :disabled="uploadResultsLoading" @click="showUploadResults = false">סגור</n-button>
+          <n-button type="primary" @click="goToDocuments">עבור למסמכים</n-button>
+        </div>
+      </template>
     </n-modal>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, h, ref, watch } from "vue";
+import { computed, ref, watch, type Component } from "vue";
 import { useRouter } from "vue-router";
-import { NButton, NCard, NDataTable, NIcon, NModal, NSpin, NTag, useMessage } from "naive-ui";
-import type { DataTableColumns } from "naive-ui";
-import { CloudUploadOutline } from "@vicons/ionicons5";
+import { NButton, NIcon, NModal, useMessage } from "naive-ui";
+import { CloudUploadOutline, DocumentOutline, DocumentTextOutline, GridOutline, ImageOutline } from "@vicons/ionicons5";
 import { api } from "../services/apiService";
 import MissingFieldsModal from "./MissingFieldsModal.vue";
 import {
@@ -120,69 +187,51 @@ function goToDocuments() {
   router.push("/documents");
 }
 
-const uploadResultColumns: DataTableColumns<UploadResultRow> = [
-  {
-    title: "קובץ",
-    key: "fileName",
-    align: "right",
-    ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.fileName),
-  },
-  {
-    title: "סטטוס",
-    key: "status",
-    align: "right",
-    width: 130,
-    render: (row) => {
-      const map: Record<string, { type: "success"|"warning"|"error"|"info"|"default"; label: string }> = {
-        pending:    { type: "default", label: "ממתין" },
-        uploading:  { type: "info",    label: "מעלה..." },
-        done:       { type: "success", label: "הושלם" },
-        processing: { type: "warning", label: "מעבד..." },
-        error:      { type: "error",   label: "שגיאה" },
-      };
-      const { type, label } = map[row.status] ?? map.pending;
-      const tags = [h(NTag, { type, size: "small", round: true }, { default: () => label })];
-      if (row.duplicate) tags.push(h(NTag, { type: "default", size: "small", round: true, style: "margin-right:4px; opacity:0.7" }, { default: () => "כפול" }));
-      return h("div", { style: "display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap" }, tags);
-    },
-  },
-  {
-    title: "לקוח",
-    key: "client",
-    align: "right",
-    ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.client || "—"),
-  },
-  {
-    title: "אימייל",
-    key: "email",
-    align: "right",
-    ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.email || "—"),
-  },
-  {
-    title: "תזכורות",
-    key: "remindersCreated",
-    align: "right",
-    width: 90,
-    render: (row) => {
-      if (row.status !== "done") return h("span", { style: "font-size:12px;color:var(--n-text-color-3)" }, "—");
-      if (row.remindersCreated === null) return h("span", { style: "font-size:12px;color:var(--n-text-color-3)" }, "—");
-      return h(NTag, {
-        type: row.remindersCreated > 0 ? "success" : "default",
-        size: "small", round: true,
-      }, { default: () => row.remindersCreated! > 0 ? `✓ ${row.remindersCreated}` : "אין" });
-    },
-  },
-  {
-    title: "תאריך",
-    key: "date",
-    align: "right",
-    width: 100,
-    render: (row) => h("span", { style: "font-size:12px" }, row.date || "—"),
-  },
-];
+const uploadProgress = computed(() => {
+  const total = uploadResultRows.value.length;
+  const done = uploadResultRows.value.filter((r) => r.status === "done" || r.status === "error").length;
+  return {
+    total,
+    done,
+    pct: total ? Math.round((done / total) * 100) : 0,
+  };
+});
+
+const uploadProgressLabel = computed(() => {
+  const total = uploadResultRows.value.length;
+  if (!total) return "אין קבצים";
+  if (uploadResultsLoading.value) return `${total} קבצים · מעבד כעת`;
+  const errors = uploadResultRows.value.filter((r) => r.status === "error").length;
+  if (errors) return `${total} קבצים · ${errors} נכשלו`;
+  return `${total} קבצים · ההעלאה הושלמה`;
+});
+
+function statusLabel(status: UploadResultRow["status"]): string {
+  const map: Record<UploadResultRow["status"], string> = {
+    pending: "ממתין",
+    uploading: "מעלה",
+    processing: "מעבד",
+    done: "הושלם",
+    error: "שגיאה",
+  };
+  return map[status];
+}
+
+function fileKind(name: string): "pdf" | "image" | "sheet" | "doc" {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "pdf";
+  if (["png", "jpg", "jpeg", "tif", "tiff", "webp"].includes(ext)) return "image";
+  if (["xlsx", "xls", "csv"].includes(ext)) return "sheet";
+  return "doc";
+}
+
+function fileIcon(name: string): Component {
+  const kind = fileKind(name);
+  if (kind === "pdf") return DocumentTextOutline;
+  if (kind === "image") return ImageOutline;
+  if (kind === "sheet") return GridOutline;
+  return DocumentOutline;
+}
 
 function onFileInputChange(e: Event) {
   const input = e.target as HTMLInputElement;
@@ -497,5 +546,308 @@ async function onMissingFieldsSaved() {
 
 .hidden-file-input {
   display: none;
+}
+
+.ur-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ur-head__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(24, 160, 88, 0.12);
+  color: var(--brand-color);
+}
+
+.ur-head__text {
+  min-width: 0;
+}
+
+.ur-head__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+.ur-head__sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.ur {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.ur-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ur-progress__bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+}
+
+.ur-progress__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand-color);
+  transition: width 0.3s ease;
+}
+
+.ur-progress__label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-color);
+}
+
+.ur-table-wrap {
+  max-height: min(52vh, 480px);
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+
+.ur-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.ur-table th,
+.ur-table td {
+  padding: 11px 12px;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.ur-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ur-table td {
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.ur-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ur-table tbody tr:hover td {
+  background: var(--bg-hover, rgba(24, 160, 88, 0.04));
+}
+
+.ur-table th:nth-child(1),
+.ur-table td:nth-child(1) { width: 28%; }
+.ur-table th:nth-child(2),
+.ur-table td:nth-child(2) { width: 16%; }
+.ur-table th:nth-child(3),
+.ur-table td:nth-child(3) { width: 16%; }
+.ur-table th:nth-child(4),
+.ur-table td:nth-child(4) { width: 18%; }
+.ur-table th:nth-child(5),
+.ur-table td:nth-child(5) { width: 12%; }
+.ur-table th:nth-child(6),
+.ur-table td:nth-child(6) { width: 10%; }
+
+.ur-row--processing td,
+.ur-row--uploading td {
+  background: rgba(240, 160, 32, 0.04);
+}
+
+.ur-row--error td {
+  background: rgba(208, 48, 80, 0.05);
+}
+
+.ur-row--done td {
+  background: rgba(24, 160, 88, 0.03);
+}
+
+.ur-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ur-file__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.ur-file__icon--pdf { color: #d03050; background: rgba(208, 48, 80, 0.1); }
+.ur-file__icon--image { color: #2080f0; background: rgba(32, 128, 240, 0.1); }
+.ur-file__icon--sheet { color: #18a058; background: rgba(24, 160, 88, 0.12); }
+
+.ur-file__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  unicode-bidi: isolate;
+}
+
+.ur-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ur-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ur-badge--pending {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-secondary);
+}
+
+.ur-badge--uploading {
+  background: rgba(32, 128, 240, 0.12);
+  color: #2080f0;
+}
+
+.ur-badge--processing {
+  background: rgba(240, 160, 32, 0.16);
+  color: #b27a02;
+}
+
+.ur-badge--done {
+  background: rgba(24, 160, 88, 0.14);
+  color: #18a058;
+}
+
+.ur-badge--error {
+  background: rgba(208, 48, 80, 0.12);
+  color: var(--color-error, #d03050);
+}
+
+.ur-badge--dup,
+.ur-badge--muted {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.ur-cell {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ur-cell--empty {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.ur-cell--email {
+  unicode-bidi: isolate;
+  direction: ltr;
+  text-align: right;
+}
+
+.ur-cell--date {
+  font-variant-numeric: tabular-nums;
+}
+
+.ur-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .ur-table {
+    table-layout: auto;
+  }
+
+  .ur-table th:nth-child(3),
+  .ur-table td:nth-child(3),
+  .ur-table th:nth-child(4),
+  .ur-table td:nth-child(4) {
+    display: none;
+  }
+}
+</style>
+
+<style>
+.upload-results-modal.n-card,
+.n-modal.upload-results-modal .n-card {
+  direction: rtl;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.upload-results-modal .n-card-header,
+.n-modal.upload-results-modal .n-card-header {
+  padding: 18px 20px 12px;
+}
+
+.upload-results-modal .n-card__content,
+.n-modal.upload-results-modal .n-card__content {
+  padding: 4px 20px 12px;
+}
+
+.upload-results-modal .n-card__footer,
+.n-modal.upload-results-modal .n-card__footer {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.upload-results-modal .n-base-close,
+.n-modal.upload-results-modal .n-base-close {
+  top: 14px;
+  left: 14px;
+  right: auto;
 }
 </style>

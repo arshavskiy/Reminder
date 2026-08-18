@@ -384,58 +384,40 @@
     <!-- ── Document limit modal ────────────────────────────────────────── -->
     <n-modal
       v-model:show="showLimitModal"
+      :class="confirmDialogClass"
+      :negative-button-props="confirmCancelButtonProps"
+      :positive-button-props="confirmActionButtonProps('warning')"
+      :show-icon="false"
+      negative-text="סגור"
+      positive-text="שדרג ל-Pro"
       preset="dialog"
       type="warning"
-      title="הגעת למגבלת המסמכים"
-      positive-text="שדרג ל-Pro"
-      negative-text="סגור"
       @positive-click="showLimitModal = false"
       @negative-click="showLimitModal = false"
     >
+      <template #header>
+        <ConfirmDialogHead title="הגעת למגבלת המסמכים" type="warning"/>
+      </template>
       <p>הגעת למגבלת <strong>{{ store.documentLimit }}</strong> המסמכים בחשבון החינמי.</p>
       <p class="text-sm text-[var(--text-secondary)]">שדרג לחשבון Pro להעלאה בלתי מוגבלת.</p>
     </n-modal>
 
-    <!-- ── Bulk delete confirm ─────────────────────────────────────────── -->
-    <n-modal
-      v-model:show="showBulkDeleteConfirm"
-      negative-text="ביטול"
-      positive-text="מחק נבחרים"
-      preset="dialog"
-      title="מחיקת מסמכים נבחרים"
-      type="error"
-      @positive-click="doBulkDelete"
-      @negative-click="showBulkDeleteConfirm = false"
-    >
-      <p>האם למחוק <strong>{{ selectedIds.size }}</strong> מסמכים נבחרים?</p>
-      <p class="text-sm text-[var(--text-secondary)]">פעולה זו אינה הפיכה.</p>
-    </n-modal>
-
-    <!-- ── Delete all confirm ──────────────────────────────────────────── -->
-    <n-modal
-      v-model:show="showDeleteAllConfirm"
-      negative-text="ביטול"
-      positive-text="מחק הכל"
-      preset="dialog"
-      title="מחיקת כל המסמכים"
-      type="error"
-      @positive-click="doDeleteAll"
-      @negative-click="showDeleteAllConfirm = false"
-    >
-      <p>האם למחוק את כל <strong>{{ store.rows.length }}</strong> המסמכים?</p>
-      <p class="text-sm text-[var(--text-secondary)]">פעולה זו אינה הפיכה.</p>
-    </n-modal>
-
     <n-modal
       v-model:show="showRescanAllConfirm"
+      :class="confirmDialogClass"
+      :negative-button-props="confirmCancelButtonProps"
+      :positive-button-props="confirmActionButtonProps('warning')"
+      :show-icon="false"
       negative-text="ביטול"
       positive-text="סרוק הכל מחדש"
       preset="dialog"
-      title="סריקה מחדש לכל המסמכים"
       type="warning"
       @positive-click="doRescanAll"
       @negative-click="showRescanAllConfirm = false"
     >
+      <template #header>
+        <ConfirmDialogHead title="סריקה מחדש לכל המסמכים" type="warning"/>
+      </template>
       <div class="rescan-confirm" dir="rtl">
         <p>
           הפעולה תסרוק מחדש את כל המסמכים הזמינים ותיצור מחדש את הנתונים שנוצרו מהם.
@@ -517,7 +499,8 @@ import {
   listDocumentRowIssues,
 } from "@shared/rowIssues.js";
 import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.js";
-import {useConfirm} from "../composables/useConfirm.js";
+import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS, useConfirm} from "../composables/useConfirm.js";
+import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -527,6 +510,7 @@ const rescanStore = useRescanModalStore();
 const router = useRouter();
 const message = useMessage();
 const {confirm} = useConfirm();
+const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 
 const isRegularUser = computed(() => authStore.user?.role === "user");
 const quotaPercent = computed(() => Math.min(100, Math.round((store.totalAll / store.documentLimit) * 100)));
@@ -537,8 +521,6 @@ let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
 const rescanning = ref(false);
 const rescanningAll = ref(false);
 const deletingAll = ref(false);
-const showDeleteAllConfirm = ref(false);
-const showBulkDeleteConfirm = ref(false);
 const bulkMode = ref(false);
 const selectedIds = ref(new Set<string>());
 const bulkDeleting = ref(false);
@@ -989,7 +971,14 @@ function updateRescanRowsFromDocuments() {
   }));
   rescanStore.updateRows(rows);
 }
-function confirmDeleteAll() { showDeleteAllConfirm.value = true; }
+function confirmDeleteAll() {
+  confirm({
+    title: "מחיקת כל המסמכים",
+    content: `האם למחוק את כל ${store.rows.length} המסמכים? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק הכל",
+    onConfirm: doDeleteAll,
+  });
+}
 
 function confirmDeleteDocument(row: Document) {
   confirm({
@@ -1024,8 +1013,14 @@ function onDocumentClick(row: Document) {
   router.push(`/documents/${row.id}`);
 }
 function confirmBulkDelete() {
-  if (!selectedIds.value.size) return;
-  showBulkDeleteConfirm.value = true;
+  const count = selectedIds.value.size;
+  if (!count) return;
+  confirm({
+    title: "מחיקת מסמכים נבחרים",
+    content: `האם למחוק ${count} מסמכים נבחרים? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק נבחרים",
+    onConfirm: doBulkDelete,
+  });
 }
 async function doBulkDelete() {
   const ids = [...selectedIds.value];
@@ -1041,7 +1036,6 @@ async function doBulkDelete() {
     message.error("שגיאה במחיקת המסמכים");
   } finally {
     bulkDeleting.value = false;
-    showBulkDeleteConfirm.value = false;
   }
 }
 async function doDeleteAll() {
@@ -1054,7 +1048,6 @@ async function doDeleteAll() {
     message.error("שגיאה במחיקת המסמכים");
   } finally {
     deletingAll.value = false;
-    showDeleteAllConfirm.value = false;
   }
 }
 async function openDownload(row: Document) {
