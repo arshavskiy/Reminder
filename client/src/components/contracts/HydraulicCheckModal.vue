@@ -370,7 +370,7 @@
         </div>
         <button
             :class="['btn', 'btn--primary', 'hm-footer__save', { 'btn--loading': savingDraft }]"
-            :disabled="savingDraft"
+            :disabled="savingDraft || stepIndex < steps.length - 1"
             @click="saveDraftAndPreview"
         >
           <n-icon :component="SaveOutline" :size="16"/>
