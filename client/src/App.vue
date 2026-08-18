@@ -281,9 +281,18 @@ const theme = computed(() => (isDark.value ? darkTheme : null));
 
 const themeOverrides = computed(() => ({
   common: {
+    fontFamily: '"Segoe UI", Arial, Helvetica, sans-serif',
     primaryColor: isDark.value ? "#63e2b7" : "#18a058",
     primaryColorHover: isDark.value ? "#7fe7c4" : "#36ad6a",
     primaryColorPressed: isDark.value ? "#5acea7" : "#0c7a43",
+  },
+  Card: {
+    titleFontSize: "18px",
+    titleFontWeight: "700",
+  },
+  Dialog: {
+    titleFontSize: "18px",
+    titleFontWeight: "700",
   },
 }));
 

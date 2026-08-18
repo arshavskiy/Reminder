@@ -45,7 +45,7 @@
       class="upload-results-modal"
       preset="card"
       role="dialog"
-      style="width: min(920px, 96vw)"
+      style="width: min(1200px, 98vw)"
     >
       <template #header>
         <div class="ur-head">
@@ -85,23 +85,25 @@
                 :key="row.id ?? `${row.fileName}-${i}`"
                 :class="[`ur-row--${row.status}`, { 'ur-row--dup': row.duplicate }]"
               >
-                <td class="ur-file">
-                  <span :class="['ur-file__icon', `ur-file__icon--${fileKind(row.fileName)}`]" aria-hidden="true">
-                    <n-icon :component="fileIcon(row.fileName)" :size="16"/>
-                  </span>
-                  <bdi class="ur-file__name" dir="ltr" :title="row.fileName">{{ row.fileName }}</bdi>
+                <td>
+                  <div class="ur-file">
+                    <span :class="['ur-file__icon', `ur-file__icon--${fileKind(row.fileName)}`]" aria-hidden="true">
+                      <n-icon :component="fileIcon(row.fileName)" :size="16"/>
+                    </span>
+                    <span class="ur-file__name" :title="row.fileName">{{ row.fileName }}</span>
+                  </div>
                 </td>
                 <td>
                   <div class="ur-status">
-                    <span :class="['ur-badge', `ur-badge--${row.status}`]">{{ statusLabel(row.status) }}</span>
+                    <span v-if="!row.duplicate" :class="['ur-badge', `ur-badge--${row.status}`]">{{ statusLabel(row.status) }}</span>
                     <span v-if="row.duplicate" class="ur-badge ur-badge--dup">כפול</span>
                   </div>
                 </td>
                 <td>
-                  <span :class="['ur-cell', { 'ur-cell--empty': !row.client }]">{{ row.client || "—" }}</span>
+                  <span :class="['ur-cell', { 'ur-cell--empty': !row.client }]" :title="row.client || undefined">{{ row.client || "—" }}</span>
                 </td>
                 <td>
-                  <bdi v-if="row.email" class="ur-cell ur-cell--email" dir="ltr">{{ row.email }}</bdi>
+                  <span v-if="row.email" class="ur-cell ur-cell--email" dir="ltr" :title="row.email">{{ row.email }}</span>
                   <span v-else class="ur-cell ur-cell--empty">—</span>
                 </td>
                 <td>
@@ -114,7 +116,7 @@
                   </span>
                 </td>
                 <td>
-                  <span :class="['ur-cell', 'ur-cell--date', { 'ur-cell--empty': !row.date }]">{{ row.date || "—" }}</span>
+                  <span :class="['ur-cell', 'ur-cell--date', { 'ur-cell--empty': !row.date }]">{{ formatDate(row.date) }}</span>
                 </td>
               </tr>
             </tbody>
@@ -231,6 +233,19 @@ function fileIcon(name: string): Component {
   if (kind === "image") return ImageOutline;
   if (kind === "sheet") return GridOutline;
   return DocumentOutline;
+}
+
+function formatDate(value: string): string {
+  if (!value) return "—";
+  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const dt = new Date(value);
+  if (!Number.isNaN(dt.getTime())) {
+    const dd = String(dt.getDate()).padStart(2, "0");
+    const mm = String(dt.getMonth() + 1).padStart(2, "0");
+    return `${dd}/${mm}/${dt.getFullYear()}`;
+  }
+  return value;
 }
 
 function onFileInputChange(e: Event) {
@@ -573,14 +588,16 @@ async function onMissingFieldsSaved() {
 
 .ur-head__title {
   margin: 0;
+  font-family: var(--font-ui);
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.25;
   color: var(--text-primary);
 }
 
 .ur-head__sub {
   margin: 2px 0 0;
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -622,7 +639,7 @@ async function onMissingFieldsSaved() {
 }
 
 .ur-table-wrap {
-  max-height: min(52vh, 480px);
+  max-height: min(72vh, 760px);
   overflow: auto;
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -638,7 +655,7 @@ async function onMissingFieldsSaved() {
 
 .ur-table th,
 .ur-table td {
-  padding: 11px 12px;
+  padding: 14px 14px;
   text-align: right;
   vertical-align: middle;
 }
@@ -649,10 +666,11 @@ async function onMissingFieldsSaved() {
   z-index: 1;
   background: var(--bg-elevated);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -671,17 +689,17 @@ async function onMissingFieldsSaved() {
 }
 
 .ur-table th:nth-child(1),
-.ur-table td:nth-child(1) { width: 28%; }
+.ur-table td:nth-child(1) { width: 34%; }
 .ur-table th:nth-child(2),
-.ur-table td:nth-child(2) { width: 16%; }
+.ur-table td:nth-child(2) { width: 14%; }
 .ur-table th:nth-child(3),
-.ur-table td:nth-child(3) { width: 16%; }
+.ur-table td:nth-child(3) { width: 18%; }
 .ur-table th:nth-child(4),
-.ur-table td:nth-child(4) { width: 18%; }
+.ur-table td:nth-child(4) { width: 16%; }
 .ur-table th:nth-child(5),
-.ur-table td:nth-child(5) { width: 12%; }
+.ur-table td:nth-child(5) { width: 10%; }
 .ur-table th:nth-child(6),
-.ur-table td:nth-child(6) { width: 10%; }
+.ur-table td:nth-child(6) { width: 8%; white-space: nowrap; }
 
 .ur-row--processing td,
 .ur-row--uploading td {
@@ -699,8 +717,9 @@ async function onMissingFieldsSaved() {
 .ur-file {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .ur-file__icon {
@@ -715,17 +734,17 @@ async function onMissingFieldsSaved() {
   color: var(--text-secondary);
 }
 
-.ur-file__icon--pdf { color: #d03050; background: rgba(208, 48, 80, 0.1); }
+.ur-file__icon--pdf { color: #3d5a80; background: rgba(61, 90, 128, 0.1); }
 .ur-file__icon--image { color: #2080f0; background: rgba(32, 128, 240, 0.1); }
 .ur-file__icon--sheet { color: #18a058; background: rgba(24, 160, 88, 0.12); }
 
 .ur-file__name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 600;
-  unicode-bidi: isolate;
 }
 
 .ur-status {
@@ -791,13 +810,19 @@ async function onMissingFieldsSaved() {
 }
 
 .ur-cell--email {
-  unicode-bidi: isolate;
   direction: ltr;
-  text-align: right;
+  unicode-bidi: isolate;
+  text-align: left;
 }
 
 .ur-cell--date {
+  direction: ltr;
+  unicode-bidi: isolate;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .ur-actions {
@@ -826,11 +851,19 @@ async function onMissingFieldsSaved() {
   direction: rtl;
   overflow: hidden;
   border-radius: 12px;
+  font-family: var(--font-ui);
+  max-height: calc(100vh - 32px);
 }
 
 .upload-results-modal .n-card-header,
 .n-modal.upload-results-modal .n-card-header {
-  padding: 18px 20px 12px;
+  padding: 18px 20px 12px 48px;
+  font-family: var(--font-ui) !important;
+}
+
+.upload-results-modal .n-card-header__main,
+.n-modal.upload-results-modal .n-card-header__main {
+  font-family: var(--font-ui) !important;
 }
 
 .upload-results-modal .n-card__content,

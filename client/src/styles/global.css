@@ -35,7 +35,8 @@
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.12);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.16);
 
-  --font-base: 'Lato', Arial, sans-serif;
+  --font-base: "Segoe UI", "Lato", Arial, Helvetica, sans-serif;
+  --font-ui: "Segoe UI", Arial, Helvetica, sans-serif;
   --font-size-sm: 12px;
   --font-size-md: 14px;
   --font-size-lg: 16px;
@@ -583,6 +584,28 @@ html[dir="rtl"] .n-base-clear {
   direction: ltr !important;
 }
 
+/* ── Modal / dialog headers ───────────────────────────────────────────────── */
+.n-modal .n-card-header,
+.n-modal .n-card-header__main,
+.n-modal .n-card-header__main *,
+.n-dialog .n-dialog__title,
+.n-dialog .n-dialog__title * {
+  font-family: var(--font-ui) !important;
+}
+
+.n-modal .n-card-header__main {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+.n-dialog .n-dialog__title {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
 /* ── Naive UI confirm / delete dialogs ─────────────────────────────────────── */
 .app-confirm-dialog.n-dialog,
 .n-modal.app-confirm-dialog .n-dialog {
@@ -596,10 +619,11 @@ html[dir="rtl"] .n-base-clear {
   display: flex;
   align-items: center;
   gap: 10px;
+  font-family: var(--font-ui);
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.3;
-  letter-spacing: -0.2px;
+  letter-spacing: 0;
 }
 
 /* Close stays on the visual left in RTL, never over the title/icon. */
@@ -659,10 +683,11 @@ html[dir="rtl"] .n-base-clear {
 .app-confirm-dialog .confirm-dialog__title-text {
   flex: 1 1 auto;
   min-width: 0;
+  font-family: var(--font-ui);
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.25;
-  letter-spacing: -0.2px;
+  letter-spacing: 0;
   color: var(--text-primary);
 }
 
