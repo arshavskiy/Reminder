@@ -59,7 +59,7 @@ export function registerContractRoutes(app: express.Application) {
       };
       const today = now.toISOString().slice(0, 10);
       const isPast = doc.expiry_date && String(doc.expiry_date) < today;
-      doc.status = body.status === "draft" ? "active" : body.status ?? (isPast ? "expired" : "active");
+      doc.status = body.status ?? (isPast ? "expired" : "active");
 
       // Only set document_id when it's a real id — a stored null collides under
       // the unique index, so leave the field absent for manual contracts.
@@ -177,6 +177,7 @@ export function registerContractRoutes(app: express.Application) {
         active: countsByStatus["active"] ?? 0,
         expired: countsByStatus["expired"] ?? 0,
         cancelled: countsByStatus["cancelled"] ?? 0,
+        draft: countsByStatus["draft"] ?? 0,
       },
     });
   });
@@ -535,7 +536,6 @@ export function registerContractRoutes(app: express.Application) {
         if (body[f] !== undefined) updates[f] = body[f];
       }
       if (requestedContractNumber) updates.contract_number = requestedContractNumber;
-      if (updates.status === "draft") updates.status = "active";
 
       // Auto-set overdue when expiry_date is changed to a past date (unless caller explicitly sets status)
       if (body.expiry_date && !body.status) {

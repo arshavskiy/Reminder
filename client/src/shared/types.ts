@@ -231,7 +231,10 @@ export interface ContractManualFields {
     name: string;
     manufacturer: string | null;
     model: string | null;
+    models?: string[];
     serial_number: string | null;
+    serial_numbers?: string[];
+    quantity?: number;
     license_number?: string | null;
     load_capacity_work: string[];
     load_capacity_test: string[];

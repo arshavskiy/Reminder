@@ -9,12 +9,12 @@ export interface HydraulicDraftEquipmentRow {
   category: EquipmentCategory;
   name: string;
   manufacturer: string;
-  model: string;
-  serial_number: string;
+  models: string[];
+  serial_numbers: string[];
   license_number: string;
-  load_capacity_work: string;
-  load_capacity_test: string;
-  load_radius: string;
+  load_capacity_work: string[];
+  load_capacity_test: string[];
+  load_radius: string[];
   description: string;
 }
 

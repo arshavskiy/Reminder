@@ -326,7 +326,7 @@
                 class="btn btn--danger-ghost btn--xs icon-btn"
                 title="מחק"
                 type="button"
-                @click.stop="store.deleteDoc(row.id)"
+                @click.stop="confirmDeleteDocument(row)"
             >
               <n-icon :component="TrashOutline" class="btn-icon"/>
             </button>
@@ -517,6 +517,7 @@ import {
   listDocumentRowIssues,
 } from "@shared/rowIssues.js";
 import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.js";
+import {useConfirm} from "../composables/useConfirm.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -525,6 +526,7 @@ const authStore = useAuthStore();
 const rescanStore = useRescanModalStore();
 const router = useRouter();
 const message = useMessage();
+const {confirm} = useConfirm();
 
 const isRegularUser = computed(() => authStore.user?.role === "user");
 const quotaPercent = computed(() => Math.min(100, Math.round((store.totalAll / store.documentLimit) * 100)));
@@ -796,7 +798,7 @@ function handleRowAction(key: string, row: Document) {
   if (key === "view") router.push(`/documents/${row.id}`);
   if (key === "download") openDownload(row);
   if (key === "extract") openExtractModal(String(row.id));
-  if (key === "delete") store.deleteDoc(row.id);
+  if (key === "delete") confirmDeleteDocument(row);
 }
 
 function canExtractDocument(row: Document): boolean {
@@ -988,6 +990,22 @@ function updateRescanRowsFromDocuments() {
   rescanStore.updateRows(rows);
 }
 function confirmDeleteAll() { showDeleteAllConfirm.value = true; }
+
+function confirmDeleteDocument(row: Document) {
+  confirm({
+    title: "מחיקת מסמך",
+    content: `למחוק את המסמך "${row.file_name}"? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await store.deleteDoc(row.id);
+        message.success("המסמך נמחק");
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
+}
 function toggleBulkMode() {
   bulkMode.value = !bulkMode.value;
   if (!bulkMode.value) selectedIds.value = new Set();

@@ -189,8 +189,12 @@
 
               <!-- Step: Equipment -->
               <section v-show="activeStep === 'equipment'" class="hm-section">
-                <div class="hm-section__actions">
-                  <button class="btn btn--primary btn--xs" @click="addEquipment">
+                <div class="hm-section__toolbar">
+                  <div class="hm-section__card-head hm-section__card-head--plain">
+                    <n-icon :component="ConstructOutline" :size="18"/>
+                    <span>ציוד שנבדק</span>
+                  </div>
+                  <button class="btn btn--primary btn--xs" type="button" @click="addEquipment">
                     <n-icon :component="AddCircleOutline" :size="16"/>
                     הוסף מכונה
                   </button>
@@ -199,40 +203,45 @@
                   <div class="hm-equipment__head">
                     <div class="hm-equipment__title">
                       <n-icon :component="ConstructOutline" :size="18"/>
-                      <span>מכונה {{ index + 1 }}</span>
+                      <span>{{ equipment.name?.trim() || `מכונה ${index + 1}` }}</span>
                     </div>
-                    <button v-if="equipmentRows.length > 1" class="btn btn--xs btn--danger"
-                            @click="removeEquipment(index)">
+                    <button
+                        v-if="equipmentRows.length > 1"
+                        class="btn btn--xs btn--danger"
+                        type="button"
+                        @click="removeEquipment(index)"
+                    >
                       <n-icon :component="TrashOutline" :size="14"/>
                     </button>
                   </div>
                   <div class="hm-section__grid hm-section__grid--4">
                     <div class="hm-field hm-field--span2">
                       <label>ציוד קיים ללקוח</label>
-                  <n-select
-                      v-model:value="equipment.selected_equipment_id"
-                      :disabled="!clientId"
-                      :loading="loadingEquipment"
-                      :options="equipmentOptions"
-                      :virtual-scroll="false"
-                      clearable
-                      filterable
-                      placeholder="חפש לפי שם / יצרן / דגם"
-                      @update:value="(id) => selectEquipment(index, id)"
-                  />
+                      <n-select
+                          v-model:value="equipment.selected_equipment_id"
+                          :disabled="!clientId"
+                          :loading="loadingEquipment"
+                          :options="equipmentOptions"
+                          :virtual-scroll="false"
+                          clearable
+                          filterable
+                          placeholder="חפש לפי שם / יצרן / דגם"
+                          @update:value="(id) => selectEquipment(index, id)"
+                      />
                     </div>
                     <div class="hm-field">
                       <label class="required">סוג ציוד</label>
-                  <n-select
-                      v-model:value="equipment.category"
-                      :options="categoryOptions"
-                      :virtual-scroll="false"
-                      filterable
-                      placeholder="בחר או הקלידו סוג חדש"
-                      tag
-                      @create="(label) => handleCategoryCreate(label, index)"
-                  />
-                      <span class="hm-field__hint">הקלידו שם חדש ולחצו Enter כדי להוסיף סוג</span>
+                      <div class="hm-field__row">
+                        <n-select
+                            v-model:value="equipment.category"
+                            :options="categoryOptions"
+                            :virtual-scroll="false"
+                            filterable
+                            placeholder="בחר סוג ציוד"
+                            style="flex:1"
+                        />
+                        <button class="btn btn--xs btn--outline" title="הוסף סוג חדש" @click="promptNewCategory(index)">+</button>
+                      </div>
                     </div>
                     <div class="hm-field">
                       <label>שם הציוד</label>
@@ -240,39 +249,40 @@
                     </div>
                     <div class="hm-field">
                       <label>יצרן</label>
-                  <n-input v-model:value="equipment.manufacturer"/>
-                    </div>
-                    <div class="hm-field">
-                      <label>דגם</label>
-                  <n-input v-model:value="equipment.model"/>
-                    </div>
-                    <div class="hm-field">
-                      <label>מספר סידורי</label>
-                  <n-input
-                      :value="equipment.serial_number"
-                      inputmode="numeric"
-                      @update:value="(value) => setNumericField(equipment, 'serial_number', value)"
-                  />
+                      <n-input v-model:value="equipment.manufacturer" placeholder="יצרן"/>
                     </div>
                     <div class="hm-field">
                       <label>מספר רישוי</label>
                       <n-input v-model:value="equipment.license_number" placeholder="פנימי 123"/>
                     </div>
-                    <div class="hm-field">
-                      <label>עומס עבודה</label>
-                      <n-input v-model:value="equipment.load_capacity_work" placeholder="3 טון"/>
+                    <div class="hm-field hm-field--span2">
+                      <label>דגם</label>
+                      <n-dynamic-tags v-model:value="equipment.models" input-placeholder="הוסף דגם"/>
                     </div>
-                    <div class="hm-field">
-                      <label>עומס בדיקה</label>
-                      <n-input v-model:value="equipment.load_capacity_test" placeholder="3.75 טון"/>
+                    <div class="hm-field hm-field--span2">
+                      <label>מס׳ סידורי</label>
+                      <n-dynamic-tags v-model:value="equipment.serial_numbers" input-placeholder="הוסף מספר סידורי"/>
                     </div>
-                    <div class="hm-field">
-                      <label>רדיוס / טווח</label>
-                  <n-input v-model:value="equipment.load_radius"/>
+                    <div class="hm-field hm-field--span2">
+                      <label>עומס עבודה בטוח (ק״ג)</label>
+                      <n-dynamic-tags v-model:value="equipment.load_capacity_work" input-placeholder="הוסף עומס"/>
+                    </div>
+                    <div class="hm-field hm-field--span2">
+                      <label>עומס מבחן (ק״ג)</label>
+                      <n-dynamic-tags v-model:value="equipment.load_capacity_test" input-placeholder="הוסף עומס"/>
+                    </div>
+                    <div class="hm-field hm-field--span2">
+                      <label>רדיוס עומס (מטר)</label>
+                      <n-dynamic-tags v-model:value="equipment.load_radius" input-placeholder="הוסף רדיוס"/>
                     </div>
                     <div class="hm-field hm-field--full">
                       <label>תיאור ציוד</label>
-                  <n-input v-model:value="equipment.description" :rows="1" type="textarea"/>
+                      <n-input
+                          v-model:value="equipment.description"
+                          :rows="2"
+                          type="textarea"
+                          placeholder="תיאור הציוד שנבדק"
+                      />
                     </div>
                   </div>
                 </div>
@@ -301,15 +311,24 @@
                     יש להזין תאריך תוקף בשלב הראשון
                   </div>
                 </div>
-                <div v-if="templateExtraFields.length" class="hm-section__card" style="margin-top: 12px">
+                <div v-if="templateExtraFields.length" class="hm-section__card hm-findings">
                   <div class="hm-section__card-head">
                     <n-icon :component="ListOutline" :size="18"/>
-                    <span>שדות נוספים מהתבנית</span>
+                    <span>{{ extraFieldsTitle }}</span>
                   </div>
-                  <div class="hm-section__grid hm-section__grid--3">
-                    <div v-for="field in templateExtraFields" :key="field" class="hm-field">
-                      <label>{{ field }}</label>
-                  <n-input v-model:value="templateValues[field]" :placeholder="field"/>
+                  <div class="hm-findings__list">
+                    <div
+                        v-for="field in templateExtraFields"
+                        :key="field.bind"
+                        :class="['hm-field', { 'hm-field--deadline': field.bind === 'findings_deadline' }]"
+                    >
+                      <label>{{ field.label }}</label>
+                      <n-input
+                          v-model:value="templateValues[field.bind]"
+                          :placeholder="field.placeholder"
+                          :rows="field.multiline ? 3 : 1"
+                          :type="field.multiline ? 'textarea' : 'text'"
+                      />
                     </div>
                   </div>
                 </div>
@@ -338,14 +357,6 @@
               @click="doCreate"
           >עדכן תסקיר
           </button>
-          <button
-              :class="['btn', 'btn--primary', { 'btn--loading': savingDraft }]"
-              :disabled="savingDraft"
-              @click="saveDraftAndPreview"
-          >
-            <n-icon :component="SaveOutline" :size="16"/>
-            שמור ופתח תצוגה
-          </button>
         </div>
         <div class="hm-footer__nav">
           <button v-if="stepIndex > 0" class="btn btn--ghost" @click="prevStep">
@@ -357,6 +368,14 @@
             הבא
           </button>
         </div>
+        <button
+            :class="['btn', 'btn--primary', 'hm-footer__save', { 'btn--loading': savingDraft }]"
+            :disabled="savingDraft"
+            @click="saveDraftAndPreview"
+        >
+          <n-icon :component="SaveOutline" :size="16"/>
+          שמור ופתח תצוגה
+        </button>
       </div>
     </template>
   </n-modal>
@@ -365,7 +384,7 @@
 <script lang="ts" setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
-import {NDatePicker, NIcon, NInput, NModal, NSelect, NSpin, useMessage} from "naive-ui";
+import {NDatePicker, NDynamicTags, NIcon, NInput, NModal, NSelect, NSpin, useMessage} from "naive-ui";
 import {
   AddCircleOutline,
   BusinessOutline,
@@ -386,9 +405,10 @@ import {useHydraulicCheckDraftStore} from "../../stores/hydraulicCheckDraft.js";
 import {useEngineerStore} from "../../stores/engineer.js";
 import type {HydraulicCheckRequest} from "../../services/apiService.js";
 import {api} from "../../services/apiService.js";
+import {useConfirm} from "../../composables/useConfirm.js";
 import type {Equipment, PrintTemplate} from "@shared/types.js";
 import LayoutPreviewFrame from "../print/LayoutPreviewFrame.vue";
-import {extractLayoutFieldBinds, type PrintTemplateLayout} from "@shared/printTemplateLayout.js";
+import {extractLayoutFieldBinds, joinStackedValues, LAYOUT_FIELD_PRESETS, type PrintTemplateLayout} from "@shared/printTemplateLayout.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -405,6 +425,7 @@ const engineerStore = useEngineerStore();
 const {profile: engineerProfile} = storeToRefs(engineerStore);
 const router = useRouter();
 const message = useMessage();
+const {confirm} = useConfirm();
 
 const isMobile = ref(window.innerWidth <= 720);
 
@@ -452,12 +473,12 @@ type EquipmentRow = {
   category: string;
   name: string;
   manufacturer: string;
-  model: string;
-  serial_number: string;
+  models: string[];
+  serial_numbers: string[];
   license_number: string;
-  load_capacity_work: string;
-  load_capacity_test: string;
-  load_radius: string;
+  load_capacity_work: string[];
+  load_capacity_test: string[];
+  load_radius: string[];
   description: string;
 };
 
@@ -587,10 +608,28 @@ const templateKnownFields = new Set([
   "engineer_company", "engineer_email", "engineer_phone", "engineer_name", "engineer_address",
 ]);
 
+const EXTRA_FIELD_LABELS: Record<string, string> = {
+  findings_general: "כללי",
+  findings_remedy: "ליקוי",
+  findings_deadline: "תוך (ימים)",
+  findings_note: "הערה נוספת",
+};
+
+function extraFieldLabel(bind: string, layoutLabel?: string): string {
+  if (bind === "findings_deadline") return EXTRA_FIELD_LABELS.findings_deadline;
+  const cleaned = layoutLabel?.replace(/:$/, "").trim() ?? "";
+  if (cleaned && /[\u0590-\u05FF]/.test(cleaned)) return cleaned;
+  if (EXTRA_FIELD_LABELS[bind]) return EXTRA_FIELD_LABELS[bind];
+  const preset = LAYOUT_FIELD_PRESETS.find((field) => field.bind === bind);
+  if (preset?.label) return preset.label;
+  return bind;
+}
+
 const templateExtraFields = computed(() => {
   if (!template.value) return [];
   const seen = new Set<string>();
   const binds: string[] = [];
+  const layoutLabels = new Map<string, string>();
   for (const cell of template.value.cells) {
     if (cell.type === "field" && cell.bind && !seen.has(cell.bind)) {
       seen.add(cell.bind);
@@ -599,13 +638,28 @@ const templateExtraFields = computed(() => {
   }
   if (template.value.layout) {
     for (const field of extractLayoutFieldBinds(template.value.layout)) {
+      layoutLabels.set(field.bind, field.label);
       if (!seen.has(field.bind)) {
         seen.add(field.bind);
         binds.push(field.bind);
       }
     }
   }
-  return binds.filter((bind) => !templateKnownFields.has(bind) && !bind.match(/_\d+$/));
+  return binds
+      .filter((bind) => !templateKnownFields.has(bind) && !bind.match(/_\d+$/))
+      .map((bind) => {
+        const label = extraFieldLabel(bind, layoutLabels.get(bind));
+        const multiline = bind.startsWith("findings_") && bind !== "findings_deadline";
+        return {bind, label, multiline, placeholder: label};
+      });
+});
+
+const extraFieldsTitle = computed(() => {
+  const fields = templateExtraFields.value;
+  if (fields.length && fields.every((field) => field.bind.startsWith("findings_"))) {
+    return "תיאור ליקויים, השיפורים ואמצעים לתיקונים";
+  }
+  return "שדות נוספים מהתבנית";
 });
 
 const draftSavedAtLabel = computed(() => {
@@ -712,12 +766,12 @@ function emptyEquipmentRow(): EquipmentRow {
     category: "lift",
     name: "",
     manufacturer: "",
-    model: "",
-    serial_number: "",
+    models: [],
+    serial_numbers: [],
     license_number: "",
-    load_capacity_work: "",
-    load_capacity_test: "",
-    load_radius: "",
+    load_capacity_work: [],
+    load_capacity_test: [],
+    load_radius: [],
     description: "",
   };
 }
@@ -782,21 +836,15 @@ async function loadCategories() {
   }
 }
 
-async function handleCategoryCreate(value: string, index: number) {
-  const label = value.trim();
-  if (!label) return;
-  try {
-    const created = await api.equipment.createCategory(label, label);
-    await loadCategories();
-    const row = equipmentRows.value[index];
-    if (row) row.category = created.value || label;
-  } catch (e) {
-    if (!knownCategories.value.some((cat) => cat.value === label || cat.label === label)) {
-      knownCategories.value = [...knownCategories.value, {value: label, label}];
-    }
-    const row = equipmentRows.value[index];
-    if (row) row.category = label;
+function promptNewCategory(index: number) {
+  const label = window.prompt("שם סוג ציוד חדש:")?.trim();
+  if (!label || label.length < 2) return;
+  if (!knownCategories.value.some((cat) => cat.value === label || cat.label === label)) {
+    knownCategories.value = [...knownCategories.value, {value: label, label}];
   }
+  const row = equipmentRows.value[index];
+  if (row) row.category = label;
+  api.equipment.createCategory(label, label).then(() => loadCategories()).catch(() => {});
 }
 
 async function loadClientEquipment(cid: string | null) {
@@ -856,8 +904,8 @@ function selectTemplate(id: string | null) {
     return;
   }
   const nextValues: Record<string, string> = {};
-  for (const bind of templateExtraFields.value) {
-    nextValues[bind] = templateValues.value[bind] ?? "";
+  for (const field of templateExtraFields.value) {
+    nextValues[field.bind] = templateValues.value[field.bind] ?? "";
   }
   templateValues.value = nextValues;
 }
@@ -870,7 +918,16 @@ function addEquipment() {
 
 function removeEquipment(index: number) {
   if (equipmentRows.value.length <= 1) return;
-  equipmentRows.value.splice(index, 1);
+  const row = equipmentRows.value[index];
+  const label = row?.name?.trim() || `מכונה ${index + 1}`;
+  confirm({
+    title: "מחיקת מכונה",
+    content: `להסיר את "${label}" מהתסקיר?`,
+    confirmText: "מחק",
+    onConfirm: () => {
+      equipmentRows.value.splice(index, 1);
+    },
+  });
 }
 
 function selectEquipment(index: number, id: string | null) {
@@ -883,16 +940,16 @@ function selectEquipment(index: number, id: string | null) {
   row.category = eq.category ?? row.category;
   row.name = eq.name ?? "";
   row.manufacturer = eq.manufacturer ?? "";
-  row.model = eq.model ?? "";
-  row.serial_number = digitsOnly(eq.serial_number ?? "");
+  row.models = eq.model ? [eq.model] : [];
+  row.serial_numbers = eq.serial_number ? [digitsOnly(eq.serial_number)] : [];
   row.license_number = digitsOnly((eq as any).license_number ?? "");
-  row.load_capacity_work = String(eq.capacity ?? "");
-  row.load_capacity_test = String((eq as any).load_capacity_test ?? "");
-  row.load_radius = String((eq as any).load_radius ?? "");
+  row.load_capacity_work = eq.capacity ? [String(eq.capacity)] : [];
+  row.load_capacity_test = (eq as any).load_capacity_test ? [String((eq as any).load_capacity_test)] : [];
+  row.load_radius = (eq as any).load_radius ? [String((eq as any).load_radius)] : [];
   row.description = eq.description ?? "";
 }
 
-function setNumericField(row: EquipmentRow, field: "serial_number" | "license_number", value: string) {
+function setNumericField(row: EquipmentRow, field: "license_number", value: string) {
   row[field] = digitsOnly(value);
 }
 
@@ -981,8 +1038,15 @@ async function editSavedDraft() {
 }
 
 function clearDraft() {
-  draftStore.clear();
-  message.success("הטיוטה נמחקה");
+  confirm({
+    title: "מחיקת טיוטה",
+    content: "למחוק את הטיוטה השמורה? פעולה זו אינה הפיכה.",
+    confirmText: "מחק",
+    onConfirm: () => {
+      draftStore.clear();
+      message.success("הטיוטה נמחקה");
+    },
+  });
 }
 
 // ── Open ─────────────────────────────────────────────────────────────────────
@@ -1005,7 +1069,15 @@ async function open() {
   intervalMonths.value = clampIntervalMonths(draft?.intervalMonths ?? 4);
   prevReportNumber.value = draft?.prevReportNumber ?? "";
   equipmentRows.value = draft?.equipmentRows?.length
-      ? draft.equipmentRows.map((row) => ({...row, id: row.id || crypto.randomUUID()}))
+      ? draft.equipmentRows.map((row: any) => ({
+        ...row,
+        id: row.id || crypto.randomUUID(),
+        models: row.models ?? (row.model ? [row.model] : []),
+        serial_numbers: row.serial_numbers ?? (row.serial_number ? [row.serial_number] : []),
+        load_capacity_work: Array.isArray(row.load_capacity_work) ? row.load_capacity_work : row.load_capacity_work ? [row.load_capacity_work] : [],
+        load_capacity_test: Array.isArray(row.load_capacity_test) ? row.load_capacity_test : row.load_capacity_test ? [row.load_capacity_test] : [],
+        load_radius: Array.isArray(row.load_radius) ? row.load_radius : row.load_radius ? [row.load_radius] : [],
+      }))
       : [emptyEquipmentRow()];
   clientEquipment.value = [];
   templateValues.value = {...(draft?.templateValues ?? {})};
@@ -1039,11 +1111,11 @@ function syncPrimaryEquipment() {
     category: first.category as HydraulicCheckRequest["equipment"]["category"],
     name: first.name,
     manufacturer: first.manufacturer,
-    model: first.model,
-    serial_number: first.serial_number,
-    load_capacity_work: first.load_capacity_work,
-    load_capacity_test: first.load_capacity_test,
-    load_radius: first.load_radius,
+    model: first.models[0] ?? "",
+    serial_number: first.serial_numbers[0] ?? "",
+    load_capacity_work: first.load_capacity_work[0] ?? "",
+    load_capacity_test: first.load_capacity_test[0] ?? "",
+    load_radius: first.load_radius[0] ?? "",
     description: first.description,
   };
 }
@@ -1094,17 +1166,18 @@ function buildTemplateDraft(): Record<string, string> {
     const suffix = index === 0 ? "" : `_${index + 1}`;
     data[`name${suffix}`] = eq.name;
     data[`manufacturer${suffix}`] = eq.manufacturer;
-    data[`model${suffix}`] = eq.model;
-    data[`serial_number${suffix}`] = eq.serial_number;
+    data[`model${suffix}`] = joinStackedValues(eq.models);
+    data[`serial_number${suffix}`] = joinStackedValues(eq.serial_numbers);
     data[`license_number${suffix}`] = eq.license_number;
     data[`lisence_number${suffix}`] = eq.license_number;
-    data[`load_radius${suffix}`] = eq.load_radius;
-    data[`load_capacity_test${suffix}`] = eq.load_capacity_test;
-    data[`load_capacity_work${suffix}`] = eq.load_capacity_work;
+    data[`load_radius${suffix}`] = joinStackedValues(eq.load_radius);
+    data[`load_capacity_test${suffix}`] = joinStackedValues(eq.load_capacity_test);
+    data[`load_capacity_work${suffix}`] = joinStackedValues(eq.load_capacity_work);
     data[`description${suffix}`] = eq.description;
     data[`equipment_description${suffix}`] = eq.description;
     data[`checked_equipment${suffix}`] = eq.name;
-    data[`chassis${suffix}`] = eq.serial_number;
+    data[`chassis${suffix}`] = joinStackedValues(eq.serial_numbers);
+    data[`quantity${suffix}`] = String(Math.max(eq.serial_numbers.length, 1));
   });
 
   const templateBinds = new Set(template.value?.cells.map((cell) => cell.bind).filter(Boolean) ?? []);
@@ -1204,11 +1277,14 @@ async function updateContract(contractId: string) {
       _equipment: equipmentRows.value.map((eq) => ({
         name: eq.name,
         manufacturer: eq.manufacturer,
-        model: eq.model,
-        serial_number: eq.serial_number,
-        load_capacity_work: eq.load_capacity_work ? [eq.load_capacity_work] : [],
-        load_capacity_test: eq.load_capacity_test ? [eq.load_capacity_test] : [],
-        load_radius: eq.load_radius ? [eq.load_radius] : [],
+        models: eq.models,
+        model: eq.models[0] ?? null,
+        serial_numbers: eq.serial_numbers,
+        serial_number: eq.serial_numbers[0] ?? null,
+        quantity: Math.max(eq.serial_numbers.length, 1),
+        load_capacity_work: eq.load_capacity_work,
+        load_capacity_test: eq.load_capacity_test,
+        load_radius: eq.load_radius,
         category: eq.category,
       })),
     },
@@ -1357,20 +1433,21 @@ async function openForUpdate(contractId: string, returnTo?: string) {
     },
     interval_months: intervalMonths.value,
   };
-  equipmentRows.value = [{
+  equipmentRows.value = (row._equipment?.length ? row._equipment : [firstEquipment].filter(Boolean)).map((eq: any) => ({
     id: crypto.randomUUID(),
     selected_equipment_id: null,
-    category: firstEquipment?.category ?? "lift",
-    name: String(firstEquipment?.name ?? manual.name ?? manual.checked_equipment ?? ""),
-    manufacturer: String(firstEquipment?.manufacturer ?? manual.manufacturer ?? ""),
-    model: String(firstEquipment?.model ?? manual.model ?? ""),
-    serial_number: String(firstEquipment?.serial_number ?? manual.serial_number ?? ""),
-    license_number: manual.license_number ?? "",
-    load_capacity_work: manual.load_capacity_work ?? firstArrayValue(firstEquipment?.load_capacity_work),
-    load_capacity_test: manual.load_capacity_test ?? firstArrayValue(firstEquipment?.load_capacity_test),
-    load_radius: manual.load_radius ?? firstArrayValue(firstEquipment?.load_radius),
-    description: String(row.equipment_description ?? manual.equipment_description ?? ""),
-  }];
+    category: eq?.category ?? "lift",
+    name: String(eq?.name ?? manual.name ?? manual.checked_equipment ?? ""),
+    manufacturer: String(eq?.manufacturer ?? manual.manufacturer ?? ""),
+    models: eq?.models?.length ? eq.models : eq?.model ? [String(eq.model)] : [],
+    serial_numbers: eq?.serial_numbers?.length ? eq.serial_numbers : eq?.serial_number ? [String(eq.serial_number)] : [],
+    license_number: String(eq?.license_number ?? manual.license_number ?? ""),
+    load_capacity_work: Array.isArray(eq?.load_capacity_work) ? eq.load_capacity_work.map(String) : manual.load_capacity_work ? [manual.load_capacity_work] : [],
+    load_capacity_test: Array.isArray(eq?.load_capacity_test) ? eq.load_capacity_test.map(String) : manual.load_capacity_test ? [manual.load_capacity_test] : [],
+    load_radius: Array.isArray(eq?.load_radius) ? eq.load_radius.map(String) : manual.load_radius ? [manual.load_radius] : [],
+    description: String(eq?.description ?? row.equipment_description ?? manual.equipment_description ?? ""),
+  }));
+  if (!equipmentRows.value.length) equipmentRows.value = [emptyEquipmentRow()];
   templateValues.value = {};
   hydratingDraft.value = false;
   loading.value = false;
@@ -1633,6 +1710,20 @@ defineExpose({open, openForUpdate});
   margin-bottom: 12px;
 }
 
+.hm-section__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.hm-section__card-head--plain {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
 .hm-section__card {
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -1669,6 +1760,20 @@ defineExpose({open, openForUpdate});
   grid-template-columns: repeat(3, 1fr);
 }
 
+.hm-section__card + .hm-section__card {
+  margin-top: 12px;
+}
+
+.hm-findings__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hm-field--deadline {
+  max-width: 280px;
+}
+
 .hm-section__grid--4 {
   grid-template-columns: repeat(4, 1fr);
 }
@@ -1697,6 +1802,12 @@ defineExpose({open, openForUpdate});
 .hm-field__hint {
   font-size: 11px;
   color: var(--text-secondary);
+}
+
+.hm-field__row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .hm-field label.required::after {
@@ -1737,17 +1848,21 @@ defineExpose({open, openForUpdate});
 .hm-equipment {
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 10px;
+  padding: 14px;
   background: var(--bg-elevated);
+}
+
+.hm-equipment + .hm-equipment {
+  margin-top: 12px;
 }
 
 .hm-equipment__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -1755,13 +1870,26 @@ defineExpose({open, openForUpdate});
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
+.hm-equipment__title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hm-equipment__title .n-icon {
   color: var(--brand-color);
+  flex-shrink: 0;
+}
+
+.hm-field :deep(.n-dynamic-tags) {
+  min-height: 36px;
+  align-items: center;
 }
 
 /* Footer */
@@ -1855,7 +1983,8 @@ defineExpose({open, openForUpdate});
   }
 
   .hm-footer__nav,
-  .hm-footer__actions {
+  .hm-footer__actions,
+  .hm-footer__save {
     width: 100%;
     justify-content: center;
   }

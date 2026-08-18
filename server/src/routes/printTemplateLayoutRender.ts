@@ -90,8 +90,29 @@ function renderFieldsGrid(fields: { label: string; bind: string; bold?: boolean;
 
 function renderEquipmentTable(columns: { label: string; bind: string }[], data: Record<string, unknown>): string {
   const head = columns.map((c) => `<th>${escHtml(c.label)}</th>`).join("");
-  const cells = columns.map((c) => `<td>${fieldValue(data, c.bind)}</td>`).join("");
-  return `<table class="data equip"><thead><tr>${head}</tr></thead><tbody><tr>${cells}</tr></tbody></table>`;
+  const rowCount = (() => {
+    let max = 1;
+    for (const key of Object.keys(data)) {
+      for (const col of columns) {
+        const prefix = `${col.bind}_`;
+        if (!key.startsWith(prefix)) continue;
+        const n = Number(key.slice(prefix.length));
+        if (Number.isInteger(n) && n >= 2 && n <= 50) max = Math.max(max, n);
+      }
+    }
+    return max;
+  })();
+  const body = Array.from({length: rowCount}, (_, rowIndex) => {
+    const cells = columns.map((col) => {
+      const key = rowIndex === 0 ? col.bind : `${col.bind}_${rowIndex + 1}`;
+      const parts = String(data[key] ?? "").split(/\r?\n/).map((part) => part.trim()).filter(Boolean);
+      if (parts.length <= 1) return `<td>${escHtml(parts[0] ?? "")}</td>`;
+      const items = parts.map((part) => `<div class="stack__item">${escHtml(part)}</div>`).join("");
+      return `<td class="stack-td"><div class="stack">${items}</div></td>`;
+    }).join("");
+    return `<tr>${cells}</tr>`;
+  }).join("");
+  return `<table class="data equip"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
 function renderFindings(section: Extract<PrintTemplateSection, { type: "findings" }>, data: Record<string, unknown>, color: string): string {
@@ -245,7 +266,11 @@ export function renderSectionTemplateHtml(
   table.data { width: 100%; border-collapse: collapse; }
   table.data th, table.data td { border: 1px solid ${color}; padding: 4px 6px; text-align: center; vertical-align: middle; font-size: 10px; }
   table.data th { font-weight: 700; background: #f5f5f5; }
-  table.equip td { min-height: 40px; }
+  table.equip td { min-height: 40px; vertical-align: middle; }
+  table.equip td.stack-td { padding: 0; vertical-align: stretch; }
+  .stack { display: flex; flex-direction: column; height: 100%; }
+  .stack__item { flex: 1; display: flex; align-items: center; justify-content: center; padding: 4px 6px; border-bottom: 1px solid ${color}; }
+  .stack__item:last-child { border-bottom: none; }
   table.findings td.num { width: 40px; }
   table.findings td.subj { width: 80px; font-weight: 600; text-align: right; }
   table.findings td.detail { text-align: right; }

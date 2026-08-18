@@ -122,8 +122,10 @@ import {onMounted, onUnmounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
+import {useConfirm} from "../composables/useConfirm.js";
 import type {Equipment} from "../shared/types.js";
 
+const {confirm} = useConfirm();
 const router = useRouter();
 const query = ref("");
 const results = ref<Equipment[]>([]);
@@ -200,8 +202,15 @@ async function onPhoto(e: Event) {
 async function deletePhoto(index: number) {
   if (!selected.value) return;
   const { key } = savedPhotos.value[index];
-  await api.equipment.deletePhoto(String(selected.value.id), key);
-  savedPhotos.value.splice(index, 1);
+  confirm({
+    title: "מחיקת תמונה",
+    content: "למחוק את התמונה? פעולה זו אינה הפיכה.",
+    confirmText: "מחק",
+    onConfirm: async () => {
+      await api.equipment.deletePhoto(String(selected.value!.id), key);
+      savedPhotos.value.splice(index, 1);
+    },
+  });
 }
 
 function updateOnline() { online.value = navigator.onLine; }

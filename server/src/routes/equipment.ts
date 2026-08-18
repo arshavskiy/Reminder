@@ -203,8 +203,8 @@ export function registerEquipmentRoutes(app: express.Application) {
         }
 
         const {value, label} = req.body as { value?: string; label?: string };
-        if (!value || !label) {
-            res.status(400).json({error: "value and label required"});
+        if (!value || !label || value.trim().length < 2 || label.trim().length < 2) {
+            res.status(400).json({error: "value and label required (min 2 chars)"});
             return;
         }
 

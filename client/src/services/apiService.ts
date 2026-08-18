@@ -327,7 +327,7 @@ export const api = {
 
   contracts: {
     list: (params?: { clientId?: string; status?: string; limit?: number; offset?: number; kind?: "contract" | "inspection" | "all" }, force = false) => {
-      return get<{ rows: ContractWithClient[]; total: number; counts: { all: number; active: number; expired: number; cancelled: number } }>(`/contracts${qs(params)}`, force);
+      return get<{ rows: ContractWithClient[]; total: number; counts: { all: number; draft: number; active: number; expired: number; cancelled: number } }>(`/contracts${qs(params)}`, force);
     },
     expiring: (days = 30) => get<ContractWithClient[]>(`/contracts/expiring?days=${days}`),
     get: (id: string) => get<ContractWithClient>(`/contracts/${id}`),

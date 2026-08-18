@@ -264,6 +264,7 @@ import {
 import {api} from "../services/apiService.js";
 import type {DocTemplate, EmailTemplate} from "@shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
+import {useConfirm} from "../composables/useConfirm.js";
 
 const templates = ref<EmailTemplate[]>([]);
 const docTemplates = ref<DocTemplate[]>([]);
@@ -280,6 +281,7 @@ const detectedVars = ref<string[]>([]);
 const activeTab = ref("editor");
 const htmlInputRef = ref<any>(null);
 const message = useMessage();
+const {confirm: confirmDialog} = useConfirm();
 const authStore = useAuthStore();
 const isMobile = ref(false);
 const templateGridCols = computed(() => isMobile.value ? 1 : 3);
@@ -575,15 +577,23 @@ async function save() {
 
 async function deleteTpl() {
   if (!editing.value?.id) return;
-  if (!confirm(`למחוק את "${editing.value.name}"?`)) return;
-  try {
-    await api.emailTemplates.delete(editing.value.id);
-    message.success("התבנית נמחקה");
-    showEdit.value = false;
-    await load();
-  } catch (e) {
-    message.error(String(e));
-  }
+  const name = editing.value.name;
+  const id = editing.value.id;
+  confirmDialog({
+    title: "מחיקת תבנית",
+    content: `למחוק את "${name}"? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await api.emailTemplates.delete(id);
+        message.success("התבנית נמחקה");
+        showEdit.value = false;
+        await load();
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
 }
 </script>
 

@@ -122,13 +122,14 @@
 <script lang="ts" setup>
 import {computed, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NAlert, NEmpty, NForm, NFormItem, NIcon, NInput, NSpin, useDialog, useMessage} from "naive-ui";
+import {NAlert, NEmpty, NForm, NFormItem, NIcon, NInput, NSpin, useMessage} from "naive-ui";
 import {BrushOutline, CreateOutline, PrintOutline, TrashOutline} from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 import SimpleLayoutEditor from "../components/print/SimpleLayoutEditor.vue";
 import LayoutPreviewFrame from "../components/print/LayoutPreviewFrame.vue";
 import {api} from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
+import {useConfirm} from "../composables/useConfirm.js";
 import {useEngineerStore} from "../stores/engineer.js";
 import type {PrintTemplate} from "@shared/types.js";
 import {
@@ -152,7 +153,7 @@ type Mode = "list" | "edit" | "compose";
 const router = useRouter();
 const route = useRoute();
 const message = useMessage();
-const dialog = useDialog();
+const {confirm} = useConfirm();
 
 const mode = ref<Mode>("list");
 const loading = ref(false);
@@ -385,12 +386,11 @@ async function savePdf() {
 }
 
 function deleteTemplate(id: string) {
-  dialog.warning({
+  confirm({
     title: "מחיקת תבנית",
     content: "למחוק את התבנית?",
-    positiveText: "מחק",
-    negativeText: "ביטול",
-    onPositiveClick: async () => {
+    confirmText: "מחק",
+    onConfirm: async () => {
       await api.printTemplates.delete(id);
       templates.value = templates.value.filter((t) => t._id !== id);
       message.success("נמחק");

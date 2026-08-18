@@ -512,6 +512,8 @@ async function saveGeneratedPdfDocument(args: {
   }
   if (contractId) {
       const contractSet: Record<string, unknown> = {document_id: documentId, updated_at: now};
+      const currentContract = contract ?? await col("contracts").findOne({ _id: tryObjectId(contractId), user_id: userId });
+      if ((currentContract as any)?.status === "draft") contractSet.status = "active";
       if (composeEmail) {
           const manual = parseObjectRecord((contract as any)?.manual_fields);
           contractSet.manual_fields = {

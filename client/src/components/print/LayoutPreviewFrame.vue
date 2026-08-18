@@ -55,7 +55,18 @@
             <tr><th v-for="c in section.columns" :key="c.bind">{{ c.label }}</th></tr>
           </thead>
           <tbody>
-            <tr><td v-for="c in section.columns" :key="c.bind">{{ val(c.bind) }}</td></tr>
+            <tr v-for="ri in equipmentRowIndexes(section.columns)" :key="ri">
+              <td
+                  v-for="c in section.columns"
+                  :key="c.bind"
+                  :class="{ 'stack-td': stackedParts(c.bind, ri).length > 1 }"
+              >
+                <div v-if="stackedParts(c.bind, ri).length > 1" class="stack">
+                  <div v-for="(part, pi) in stackedParts(c.bind, ri)" :key="pi" class="stack__item">{{ part }}</div>
+                </div>
+                <template v-else>{{ stackedParts(c.bind, ri)[0] }}</template>
+              </td>
+            </tr>
           </tbody>
         </table>
       </template>
@@ -145,7 +156,7 @@ import type {
   PrintTemplateLayoutSignatureSection,
   PrintTemplateSectionField
 } from "@shared/printTemplateLayout.js";
-import {fillLayoutPlaceholders, signatureCertificationText} from "@shared/printTemplateLayout.js";
+import {fillLayoutPlaceholders, signatureCertificationText, splitStackedCellValue, equipmentTableRowCount, equipmentTableCellKey} from "@shared/printTemplateLayout.js";
 
 const props = defineProps<{
   layout: PrintTemplateLayout;
@@ -192,6 +203,15 @@ const blockStyle = computed(() => ({
   borderWidth: `${borderWidthPx(props.layout.styles.borderWidth)}px`,
   borderColor: props.layout.styles.borderColor || "#111",
 }));
+
+function equipmentRowIndexes(columns: {bind: string}[]): number[] {
+  const count = equipmentTableRowCount(columns, props.data);
+  return Array.from({length: count}, (_, index) => index);
+}
+
+function stackedParts(bind: string, rowIndex: number): string[] {
+  return splitStackedCellValue(val(equipmentTableCellKey(bind, rowIndex)));
+}
 
 function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (PrintTemplateSectionField | null)[][] {
   const rows: (PrintTemplateSectionField | null)[][] = [];
@@ -256,7 +276,22 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
 table.data { width: 100%; border-collapse: collapse; }
 table.data th, table.data td { border: 1px solid currentColor; padding: 3px 4px; text-align: center; font-size: 9px; }
 table.data th { font-weight: 700; background: #f5f5f5; }
-table.equip td { min-height: 30px; }
+table.equip td { min-height: 30px; vertical-align: middle; }
+table.equip td.stack-td { padding: 0; vertical-align: stretch; }
+.stack {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.stack__item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 4px;
+  border-bottom: 1px solid currentColor;
+}
+.stack__item:last-child { border-bottom: none; }
 table.findings td.num { width: 30px; }
 table.findings td.subj { width: 60px; font-weight: 600; text-align: right; }
 table.findings td.detail { text-align: right; }

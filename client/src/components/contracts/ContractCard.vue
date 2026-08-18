@@ -20,6 +20,7 @@
           <span :class="statusTagClass(row.status)">{{ statusLabel(row.status) }}</span>
           <span class="tag tag--neutral">{{ row.contract_type ?? "-" }}</span>
           <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
+          <span v-if="!row.document_id" class="tag tag--warn">⚠ חסר PDF</span>
           <span v-if="!hasEmail" class="tag tag--warn">⚠ חסר אימייל</span>
           <span v-for="issue in (issues ?? [])" :key="issue.kind" :class="['tag', issue.tagClass]">{{ issue.label }}</span>
         </div>
@@ -37,6 +38,19 @@
         <span v-if="equipmentLabel" class="kv kv--equipment"><strong>ציוד נבדק:</strong> {{ equipmentLabel }}</span>
       </div>
       <div class="card__foot-col card__foot-col--end">
+        <span class="kv">
+          <strong>{{ kind === "inspection" ? "בתוקף עד:" : "תפוגה:" }}</strong>
+          <span :class="expiryClass(row.expiry_date)">{{ formatDate(row.expiry_date) }}</span>
+        </span>
+        <span v-if="row.amount" class="kv">
+          <strong>סכום:</strong> {{ row.amount?.toLocaleString() }} {{ row.currency }}
+        </span>
+      </div>
+    </div>
+
+    <div class="card__reminders">
+      <div class="reminders-header">
+        <span class="reminders-title">🔔 תזכורות</span>
         <div v-if="showActions" class="card__actions" @click.stop>
           <button
               :disabled="!row.document_id"
@@ -62,6 +76,15 @@
               @click.stop="emit('open-template', row)"
           >
             <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+          </button>
+          <button
+              v-if="!row.document_id"
+              class="btn btn--warn-ghost btn--xs icon-btn"
+              title="הפק PDF"
+              type="button"
+              @click.stop="emit('open-template', row)"
+          >
+            <n-icon :component="DownloadOutline" class="btn-icon"/>
           </button>
           <button
               v-if="showReminderActions"
@@ -94,19 +117,6 @@
             <n-icon :component="TrashOutline" class="btn-icon"/>
           </button>
         </div>
-        <span class="kv">
-          <strong>{{ kind === "inspection" ? "בתוקף עד:" : "תפוגה:" }}</strong>
-          <span :class="expiryClass(row.expiry_date)">{{ formatDate(row.expiry_date) }}</span>
-        </span>
-        <span v-if="row.amount" class="kv">
-          <strong>סכום:</strong> {{ row.amount?.toLocaleString() }} {{ row.currency }}
-        </span>
-      </div>
-    </div>
-
-    <div class="card__reminders">
-      <div class="reminders-header">
-        <span class="reminders-title">🔔 תזכורות</span>
 <!--        <button-->
 <!--            v-if="showReminderActions"-->
 <!--            :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"-->
@@ -163,31 +173,7 @@
           </div>
         </div>
       </div>
-      <p v-else class="reminders-empty">
-        אין תזכורות לתסקיר זה
-        <span v-if="showReminderActions" class="reminder-actions">
-          <button
-              :disabled="creatingReminder === row.id || !canCreateReminder"
-              class="btn btn--ghost btn--xs icon-btn"
-              :class="{ 'btn--loading': creatingReminder === row.id }"
-              :title="reminderButtonTitle"
-              type="button"
-              @click.stop="emit('create-reminder', row)"
-          >
-            <n-icon :component="NotificationsOutline" class="btn-icon"/>
-          </button>
-          <button
-              :disabled="!canSendReminder || sendingThisCard"
-              class="btn btn--ghost btn--xs icon-btn"
-              :class="{ 'btn--loading': sendingThisCard }"
-              :title="sendReminderTitle"
-              type="button"
-              @click.stop="emit('send-card', row)"
-          >
-            <n-icon :component="PaperPlaneOutline" class="btn-icon"/>
-          </button>
-        </span>
-      </p>
+      <p v-else class="reminders-empty">אין תזכורות לתסקיר זה</p>
     </div>
   </article>
 </template>
@@ -195,7 +181,7 @@
 <script lang="ts" setup>
 import {computed} from "vue";
 import {NCheckbox, NIcon} from "naive-ui";
-import {CloseCircleOutline, CreateOutline, DocumentTextOutline, EyeOutline, NotificationsOutline, PaperPlaneOutline, TrashOutline} from "@vicons/ionicons5";
+import {CloseCircleOutline, CreateOutline, DocumentTextOutline, DownloadOutline, EyeOutline, NotificationsOutline, PaperPlaneOutline, TrashOutline} from "@vicons/ionicons5";
 import {useRouter} from "vue-router";
 import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
 import type {RowIssue} from "@shared/rowIssues.js";
@@ -297,7 +283,12 @@ const equipmentLabel = computed<string | null>(() => {
   const items = props.row._equipment ?? [];
   if (items.length) {
     const parts = items
-        .map((eq) => [eq.name, eq.manufacturer, eq.model, eq.serial_number].filter(Boolean).join(" · "))
+        .map((eq) => {
+          const model = (eq as any).models?.length ? (eq as any).models.join(", ") : eq.model;
+          const serial = (eq as any).serial_numbers?.length ? (eq as any).serial_numbers.join(", ") : eq.serial_number;
+          const qty = (eq as any).serial_numbers?.length > 1 ? ` (×${(eq as any).serial_numbers.length})` : "";
+          return [eq.name, eq.manufacturer, model, serial ? `מס׳ ${serial}` : null].filter(Boolean).join(" · ") + qty;
+        })
         .filter(Boolean);
     if (parts.length) return parts.join(" | ");
   }
@@ -315,6 +306,7 @@ function formatDate(d: string | null | undefined): string {
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
     active: "פעיל",
+    draft: "טיוטה",
     expired: "פג תוקף",
     cancelled: "בוטל",
     renewed: "חודש",
@@ -326,6 +318,7 @@ function statusLabel(status: string): string {
 function statusTagClass(status: string): string {
   const map: Record<string, string> = {
     active: "tag tag--ok",
+    draft: "tag tag--warn",
     expired: "tag tag--bad",
     overdue: "tag tag--bad",
     cancelled: "tag tag--muted",
@@ -417,6 +410,8 @@ function reminderStatusClass(status: string): string {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 4px;
 }
 
@@ -699,6 +694,7 @@ html[data-theme="dark"] .expiry--bad {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
 }
 

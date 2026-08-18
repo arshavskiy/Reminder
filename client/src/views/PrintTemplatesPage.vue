@@ -557,13 +557,14 @@
 <script lang="ts" setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NAlert, NEmpty, NIcon, NSpin, useDialog, useMessage,} from "naive-ui";
+import {NAlert, NEmpty, NIcon, NSpin, useMessage,} from "naive-ui";
 import {BrushOutline, CreateOutline, PrintOutline, TrashOutline} from "@vicons/ionicons5";
 import {storeToRefs} from "pinia";
 import {api} from "../services/apiService.js";
 import {useEngineerStore} from "../stores/engineer.js";
 import {useAuthStore} from "../stores/auth.js";
 import PageHeader from "../components/PageHeader.vue";
+import {useConfirm} from "../composables/useConfirm.js";
 import type {PrintCellBorderSides, PrintCellBorderStyle, PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
 type BorderSide = "top" | "right" | "bottom" | "left";
@@ -599,7 +600,7 @@ function resolveBorderSides(border: PrintTemplateCell["border"]): Required<Print
 }
 
 const message = useMessage();
-const dialog  = useDialog();
+const {confirm} = useConfirm();
 const route = useRoute();
 const router = useRouter();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -853,12 +854,18 @@ async function saveTemplate() {
 }
 
 async function deleteTemplate(id: string) {
-  dialog.warning({
-    title:"מחיקת תבנית", content:"האם למחוק? פעולה זו אינה הפיכה.",
-    positiveText:"מחק", negativeText:"ביטול",
-    onPositiveClick: async () => {
-      try { await api.printTemplates.delete(id); templates.value = templates.value.filter(t=>t._id!==id); message.success("נמחק"); }
-      catch(e:any) { message.error(e.message); }
+  confirm({
+    title: "מחיקת תבנית",
+    content: "האם למחוק? פעולה זו אינה הפיכה.",
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await api.printTemplates.delete(id);
+        templates.value = templates.value.filter(t => t._id !== id);
+        message.success("נמחק");
+      } catch (e: any) {
+        message.error(e.message);
+      }
     },
   });
 }

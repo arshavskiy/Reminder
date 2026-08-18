@@ -564,7 +564,7 @@ export function registerReminderRoutes(app: express.Application) {
           category,
         }],
       },
-      status: "active",
+      status: "draft",
         editor_type: body.editor_type ?? "sections",
         print_template_id: typeof body.print_template_id === "string" && body.print_template_id.trim()
           ? body.print_template_id.trim()

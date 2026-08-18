@@ -6,7 +6,7 @@ import type { Contract, ContractWithClient } from "../../src/shared/types.js";
 export const useContractsStore = defineStore("contracts", () => {
   const rows = ref<ContractWithClient[]>([]);
   const total = ref(0);
-  const counts = ref<{ all: number; active: number; expired: number; cancelled: number }>({ all: 0, active: 0, expired: 0, cancelled: 0 });
+  const counts = ref<{ all: number; draft: number; active: number; expired: number; cancelled: number }>({ all: 0, draft: 0, active: 0, expired: 0, cancelled: 0 });
   const loading = ref(false);
   const expiringSoon = ref<ContractWithClient[]>([]);
 
@@ -51,7 +51,7 @@ export const useContractsStore = defineStore("contracts", () => {
     await api.contracts.deleteAll();
     rows.value = [];
     total.value = 0;
-    counts.value = { all: 0, active: 0, expired: 0, cancelled: 0 };
+    counts.value = { all: 0, draft: 0, active: 0, expired: 0, cancelled: 0 };
   }
 
   return { rows, total, counts, loading, expiringSoon, fetch, fetchExpiring, create, update, remove, removeAll };

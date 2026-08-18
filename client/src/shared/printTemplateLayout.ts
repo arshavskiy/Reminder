@@ -293,6 +293,36 @@ export function clonePrintTemplateLayout(layout: PrintTemplateLayout): PrintTemp
     return JSON.parse(JSON.stringify(layout)) as PrintTemplateLayout;
 }
 
+export function joinStackedValues(values: Array<string | number | null | undefined> | null | undefined): string {
+    return (values ?? []).map((value) => String(value ?? "").trim()).filter(Boolean).join("\n");
+}
+
+export function splitStackedCellValue(value: string | null | undefined): string[] {
+    const parts = String(value ?? "").split(/\r?\n/).map((part) => part.trim()).filter(Boolean);
+    return parts.length ? parts : [""];
+}
+
+export function equipmentTableRowCount(
+    columns: {bind: string}[],
+    data: Record<string, unknown> | undefined,
+): number {
+    let max = 1;
+    if (!data) return max;
+    for (const key of Object.keys(data)) {
+        for (const col of columns) {
+            const prefix = `${col.bind}_`;
+            if (!key.startsWith(prefix)) continue;
+            const n = Number(key.slice(prefix.length));
+            if (Number.isInteger(n) && n >= 2 && n <= 50) max = Math.max(max, n);
+        }
+    }
+    return max;
+}
+
+export function equipmentTableCellKey(bind: string, rowIndex: number): string {
+    return rowIndex === 0 ? bind : `${bind}_${rowIndex + 1}`;
+}
+
 /** Collect unique field binds from a layout (for compose forms). */
 export function extractLayoutFieldBinds(layout: PrintTemplateLayout): PrintTemplateSectionField[] {
     const seen = new Set<string>();

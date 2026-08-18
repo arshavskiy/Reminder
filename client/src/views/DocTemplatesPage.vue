@@ -286,6 +286,7 @@ import {
 } from "naive-ui";
 import {CloudUploadOutline, DocumentOutline, FlashOutline,} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
+import {useConfirm} from "../composables/useConfirm.js";
 import type {DocTemplate, DocumentKind, FieldType, TemplateField} from "@shared/types.js";
 
 const templates = ref<DocTemplate[]>([]);
@@ -293,6 +294,7 @@ const showEdit = ref(false);
 const editing = ref<DocTemplate | null>(null);
 const saving = ref(false);
 const message = useMessage();
+const {confirm} = useConfirm();
 const isMobile = ref(false);
 const templateGridCols = computed(() => isMobile.value ? 1 : 3);
 const drawerWidth = computed(() => isMobile.value ? "100vw" : 960);
@@ -442,15 +444,23 @@ async function save() {
 
 async function deleteTpl() {
   if (!editing.value?.id) return;
-  if (!confirm(`למחוק את "${editing.value.name}"?`)) return;
-  try {
-    await api.docTemplates.delete(editing.value.id);
-    message.success("נמחקה");
-    showEdit.value = false;
-    await load();
-  } catch (e) {
-    message.error(String(e));
-  }
+  const name = editing.value.name;
+  const id = editing.value.id;
+  confirm({
+    title: "מחיקת תבנית",
+    content: `למחוק את "${name}"? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await api.docTemplates.delete(id);
+        message.success("נמחקה");
+        showEdit.value = false;
+        await load();
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
 }
 
 // ── Generator: AI builds a template from a sample document/text ─────────────

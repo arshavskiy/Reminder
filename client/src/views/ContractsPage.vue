@@ -143,7 +143,7 @@
     <n-spin :show="store.loading || draftsLoading">
       <n-virtual-list
           v-if="visibleItems.length"
-          :item-size="220"
+          :item-size="280"
           :items="pagedItems"
           :item-resizable="true"
           class="cards-vlist"
@@ -679,6 +679,7 @@ import {
   listContractRowIssues,
 } from "@shared/rowIssues.js";
 import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.js";
+import {joinStackedValues} from "@shared/printTemplateLayout.js";
 import {useConfirm} from "../composables/useConfirm.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -703,6 +704,7 @@ const showDraftsOnly = ref(false);
 
 const CONTRACT_STATUS_FILTERS: Record<string, string | null> = {
   all: null,
+  draft: "draft",
   active: "active",
   expired: "expired",
   cancelled: "cancelled",
@@ -1360,12 +1362,12 @@ type HydraulicEquipmentRow = {
   category: string;
   name: string;
   manufacturer: string;
-  model: string;
-  serial_number: string;
+  models: string[];
+  serial_numbers: string[];
   license_number: string;
-  load_capacity_work: string;
-  load_capacity_test: string;
-  load_radius: string;
+  load_capacity_work: string[];
+  load_capacity_test: string[];
+  load_radius: string[];
   description: string;
 };
 
@@ -1574,16 +1576,23 @@ async function createDraftReminder(draft: PrintTemplateDraftSummary) {
 }
 
 async function deleteDraft(draft: PrintTemplateDraftSummary) {
-  deletingDraftId.value = draft._id;
-  try {
-    await api.printTemplates.deleteDraft(draft.template_id, draft.contract_id);
-    templateDrafts.value = templateDrafts.value.filter((d) => d._id !== draft._id);
-    message2.success("הטיוטה נמחקה");
-  } catch (e) {
-    message2.error(e instanceof Error ? e.message : String(e));
-  } finally {
-    deletingDraftId.value = null;
-  }
+  confirm({
+    title: "מחיקת טיוטה",
+    content: `למחוק את הטיוטה "${draft.contract_number || draft.template_name}"? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      deletingDraftId.value = draft._id;
+      try {
+        await api.printTemplates.deleteDraft(draft.template_id, draft.contract_id);
+        templateDrafts.value = templateDrafts.value.filter((d) => d._id !== draft._id);
+        message2.success("הטיוטה נמחקה");
+      } catch (e) {
+        message2.error(e instanceof Error ? e.message : String(e));
+      } finally {
+        deletingDraftId.value = null;
+      }
+    },
+  });
 }
 
 const bulkGeneratingReminders = ref(false);
@@ -1701,7 +1710,15 @@ async function openHydraulicCheck() {
   hydraulicIntervalMonths.value = draft?.intervalMonths ?? 4;
   hydraulicPrevReportNumber.value = draft?.prevReportNumber ?? "";
   hydraulicEquipmentRows.value = draft?.equipmentRows?.length
-      ? draft.equipmentRows.map((row) => ({...row, id: row.id || crypto.randomUUID()}))
+      ? draft.equipmentRows.map((row: any) => ({
+        ...row,
+        id: row.id || crypto.randomUUID(),
+        models: row.models ?? (row.model ? [row.model] : []),
+        serial_numbers: row.serial_numbers ?? (row.serial_number ? [row.serial_number] : []),
+        load_capacity_work: Array.isArray(row.load_capacity_work) ? row.load_capacity_work : row.load_capacity_work ? [row.load_capacity_work] : [],
+        load_capacity_test: Array.isArray(row.load_capacity_test) ? row.load_capacity_test : row.load_capacity_test ? [row.load_capacity_test] : [],
+        load_radius: Array.isArray(row.load_radius) ? row.load_radius : row.load_radius ? [row.load_radius] : [],
+      }))
       : [emptyHydraulicEquipmentRow()];
   hydraulicClientEquipment.value = [];
   hydraulicTemplateValues.value = {...(draft?.templateValues ?? {})};
@@ -1744,12 +1761,12 @@ function emptyHydraulicEquipmentRow(): HydraulicEquipmentRow {
     category: "lift",
     name: "",
     manufacturer: "",
-    model: "",
-    serial_number: "",
+    models: [],
+    serial_numbers: [],
     license_number: "",
-    load_capacity_work: "",
-    load_capacity_test: "",
-    load_radius: "",
+    load_capacity_work: [],
+    load_capacity_test: [],
+    load_radius: [],
     description: "",
   };
 }
@@ -1797,16 +1814,16 @@ function selectHydraulicEquipment(index: number, id: string | null) {
   row.category = equipment.category ?? row.category;
   row.name = equipment.name ?? "";
   row.manufacturer = equipment.manufacturer ?? "";
-  row.model = equipment.model ?? "";
-  row.serial_number = digitsOnly(equipment.serial_number ?? "");
+  row.models = equipment.model ? [equipment.model] : [];
+  row.serial_numbers = equipment.serial_number ? [digitsOnly(equipment.serial_number)] : [];
   row.license_number = digitsOnly((equipment as any).license_number ?? "");
-  row.load_capacity_work = String(equipment.capacity ?? "");
-  row.load_capacity_test = String((equipment as any).load_capacity_test ?? "");
-  row.load_radius = String((equipment as any).load_radius ?? "");
+  row.load_capacity_work = equipment.capacity ? [String(equipment.capacity)] : [];
+  row.load_capacity_test = (equipment as any).load_capacity_test ? [String((equipment as any).load_capacity_test)] : [];
+  row.load_radius = (equipment as any).load_radius ? [String((equipment as any).load_radius)] : [];
   row.description = equipment.description ?? "";
 }
 
-function setNumericEquipmentField(row: HydraulicEquipmentRow, field: "serial_number" | "license_number", value: string) {
+function setNumericEquipmentField(row: HydraulicEquipmentRow, field: "license_number", value: string) {
   row[field] = digitsOnly(value);
 }
 
@@ -1996,11 +2013,14 @@ async function updateHydraulicContract(contractId: string) {
       _equipment: hydraulicEquipmentRows.value.map((equipment) => ({
         name: equipment.name,
         manufacturer: equipment.manufacturer,
-        model: equipment.model,
-        serial_number: equipment.serial_number,
-        load_capacity_work: equipment.load_capacity_work ? [equipment.load_capacity_work] : [],
-        load_capacity_test: equipment.load_capacity_test ? [equipment.load_capacity_test] : [],
-        load_radius: equipment.load_radius ? [equipment.load_radius] : [],
+        models: equipment.models,
+        model: equipment.models[0] ?? null,
+        serial_numbers: equipment.serial_numbers,
+        serial_number: equipment.serial_numbers[0] ?? null,
+        quantity: Math.max(equipment.serial_numbers.length, 1),
+        load_capacity_work: equipment.load_capacity_work,
+        load_capacity_test: equipment.load_capacity_test,
+        load_radius: equipment.load_radius,
         category: equipment.category,
       })),
     },
@@ -2022,11 +2042,11 @@ function syncPrimaryHydraulicEquipment() {
     category: first.category as HydraulicCheckRequest["equipment"]["category"],
     name: first.name,
     manufacturer: first.manufacturer,
-    model: first.model,
-    serial_number: first.serial_number,
-    load_capacity_work: first.load_capacity_work,
-    load_capacity_test: first.load_capacity_test,
-    load_radius: first.load_radius,
+    model: first.models[0] ?? "",
+    serial_number: first.serial_numbers[0] ?? "",
+    load_capacity_work: first.load_capacity_work[0] ?? "",
+    load_capacity_test: first.load_capacity_test[0] ?? "",
+    load_radius: first.load_radius[0] ?? "",
     description: first.description,
   };
 }
@@ -2230,12 +2250,25 @@ function buildContractTemplateDraft(row: ContractWithClient): Record<string, str
     data[`name${suffix}`] = data[`name${suffix}`] ?? String(equipment.name ?? "");
     data[`checked_equipment${suffix}`] = data[`checked_equipment${suffix}`] ?? String(equipment.name ?? "");
     data[`manufacturer${suffix}`] = data[`manufacturer${suffix}`] ?? String(equipment.manufacturer ?? "");
-    data[`model${suffix}`] = data[`model${suffix}`] ?? String(equipment.model ?? "");
-    data[`serial_number${suffix}`] = data[`serial_number${suffix}`] ?? String(equipment.serial_number ?? "");
-    data[`chassis${suffix}`] = data[`chassis${suffix}`] ?? String(equipment.serial_number ?? "");
-    data[`load_capacity_work${suffix}`] = data[`load_capacity_work${suffix}`] ?? firstArrayValue(equipment.load_capacity_work);
-    data[`load_capacity_test${suffix}`] = data[`load_capacity_test${suffix}`] ?? firstArrayValue(equipment.load_capacity_test);
-    data[`load_radius${suffix}`] = data[`load_radius${suffix}`] ?? firstArrayValue(equipment.load_radius);
+    const eqModels = (equipment as any).models?.length
+      ? joinStackedValues((equipment as any).models)
+      : String(equipment.model ?? "");
+    const eqSerials = (equipment as any).serial_numbers?.length
+      ? joinStackedValues((equipment as any).serial_numbers)
+      : String(equipment.serial_number ?? "");
+    data[`model${suffix}`] = data[`model${suffix}`] ?? eqModels;
+    data[`serial_number${suffix}`] = data[`serial_number${suffix}`] ?? eqSerials;
+    data[`chassis${suffix}`] = data[`chassis${suffix}`] ?? eqSerials;
+    data[`quantity${suffix}`] = data[`quantity${suffix}`] ?? String((equipment as any).quantity ?? (equipment as any).serial_numbers?.length ?? 1);
+    data[`load_capacity_work${suffix}`] = data[`load_capacity_work${suffix}`] ?? joinStackedValues(
+      Array.isArray(equipment.load_capacity_work) ? equipment.load_capacity_work : equipment.load_capacity_work ? [equipment.load_capacity_work] : [],
+    );
+    data[`load_capacity_test${suffix}`] = data[`load_capacity_test${suffix}`] ?? joinStackedValues(
+      Array.isArray(equipment.load_capacity_test) ? equipment.load_capacity_test : equipment.load_capacity_test ? [equipment.load_capacity_test] : [],
+    );
+    data[`load_radius${suffix}`] = data[`load_radius${suffix}`] ?? joinStackedValues(
+      Array.isArray(equipment.load_radius) ? equipment.load_radius : equipment.load_radius ? [equipment.load_radius] : [],
+    );
   });
 
   return data;
@@ -2305,16 +2338,17 @@ function buildHydraulicTemplateDraft(): Record<string, string> {
     const suffix = index === 0 ? "" : `_${index + 1}`;
     data[`name${suffix}`] = equipment.name;
     data[`manufacturer${suffix}`] = equipment.manufacturer;
-    data[`model${suffix}`] = equipment.model;
-    data[`serial_number${suffix}`] = equipment.serial_number;
+    data[`model${suffix}`] = joinStackedValues(equipment.models);
+    data[`serial_number${suffix}`] = joinStackedValues(equipment.serial_numbers);
     data[`license_number${suffix}`] = equipment.license_number;
     data[`lisence_number${suffix}`] = equipment.license_number;
-    data[`load_radius${suffix}`] = equipment.load_radius;
-    data[`load_capacity_test${suffix}`] = equipment.load_capacity_test;
-    data[`load_capacity_work${suffix}`] = equipment.load_capacity_work;
+    data[`load_radius${suffix}`] = joinStackedValues(equipment.load_radius);
+    data[`load_capacity_test${suffix}`] = joinStackedValues(equipment.load_capacity_test);
+    data[`load_capacity_work${suffix}`] = joinStackedValues(equipment.load_capacity_work);
     data[`equipment_description${suffix}`] = equipment.description;
     data[`checked_equipment${suffix}`] = equipment.name;
-    data[`chassis${suffix}`] = equipment.serial_number;
+    data[`chassis${suffix}`] = joinStackedValues(equipment.serial_numbers);
+    data[`quantity${suffix}`] = String(Math.max(equipment.serial_numbers.length, 1));
   });
 
   const templateBinds = new Set(hydraulicTemplate.value?.cells.map((cell) => cell.bind).filter(Boolean) ?? []);
@@ -2390,6 +2424,7 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
   const duplicateCount = countDuplicateReportRows(rows, contractReportNumber);
   return [
     {key: "all", label: "הכל", count: c.all, type: "status", statusValue: null},
+    {key: "draft", label: "טיוטה", count: c.draft, type: "status", statusValue: "draft"},
     {key: "active", label: "פעיל", count: c.active, type: "status", statusValue: "active"},
     {key: "expired", label: "פג תוקף", count: c.expired, type: "status", statusValue: "expired"},
     {

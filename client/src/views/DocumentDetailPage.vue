@@ -405,7 +405,6 @@ import {
   NScrollbar,
   NSpin,
   NTag,
-  useDialog,
   useMessage,
 } from "naive-ui";
 import {
@@ -425,12 +424,13 @@ import type {ContractWithClient, DocTemplate, Document, ReminderWithContext} fro
 import {listMissingDocumentFields, missingFieldsBlockReminders, type MissingFieldItem} from "@shared/missingDocumentFields.js";
 import {resolveMissingFieldInitialValue, normalizeDateForContract} from "@shared/documentDates.js";
 import {useAuthStore} from "../stores/auth.js";
+import {useConfirm} from "../composables/useConfirm.js";
 
 const props = defineProps<{ docId?: string }>();
 
 const authStore = useAuthStore();
 const message = useMessage();
-const dialog = useDialog();
+const {confirm} = useConfirm();
 const router = useRouter();
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -558,12 +558,11 @@ function openExternal() {
 async function deleteDoc() {
   if (!doc.value) return;
   const currentDoc = doc.value;
-  dialog.warning({
+  confirm({
     title: "מחיקת מסמך",
     content: `למחוק את המסמך "${currentDoc.file_name}"? פעולה זו אינה ניתנת לביטול.`,
-    positiveText: "מחק",
-    negativeText: "ביטול",
-    onPositiveClick: async () => {
+    confirmText: "מחק",
+    onConfirm: async () => {
       deleting.value = true;
       try {
         await api.documents.delete(String(currentDoc.id));
