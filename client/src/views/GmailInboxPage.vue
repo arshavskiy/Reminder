@@ -60,6 +60,7 @@
         placeholder="מספר רישוי / תסקיר"
         clearable
         style="width:220px"
+        :allow-input="(v: string) => /^\d*$/.test(v)"
         @keydown.enter="buildAndSearch"
       />
       <n-button type="primary" @click="buildAndSearch" :loading="loading">
@@ -81,11 +82,12 @@
     <!-- Inbox table -->
     <template v-else>
       <div v-if="!emails.length" class="empty-state">
-        <p>לא נמצאו מיילים עם קבצי PDF מצורפים</p>
+        <p>לא נמצאו מיילים עם קבצי {{ selectedTypeLabel }} מצורפים</p>
       </div>
 
-      <div v-else class="inbox-table-wrap">
-        <table class="inbox-table">
+      <div v-else class="inbox-table-block">
+        <div class="inbox-table-wrap">
+          <table class="inbox-table">
           <thead>
             <tr>
               <th class="col-from">מאת</th>
@@ -113,48 +115,59 @@
                 </td>
                 <td class="col-file">
                   <div class="inbox-file">
-                    <n-icon :component="DocumentOutline" :size="16" class="inbox-file__icon" />
-                    <div class="inbox-file__meta">
-                      <span class="inbox-file__name" :title="att.filename">{{ att.filename || "קובץ מצורף" }}</span>
-                      <span class="inbox-file__size">{{ formatSize(att.size) }}</span>
-                    </div>
+                    <n-icon :component="DocumentOutline" :size="14" class="inbox-file__icon" />
+                    <span class="inbox-file__name" :title="`${att.filename || 'קובץ מצורף'} · ${formatSize(att.size)}`">{{ att.filename || "קובץ מצורף" }}</span>
                   </div>
                 </td>
                 <td class="col-actions">
                   <div class="inbox-row-actions">
-                    <button
-                      class="btn btn--ghost btn--xs icon-btn"
-                      type="button"
-                      title="תצוגה מקדימה"
-                      @click="previewAttachment(row.id, att)"
-                    >
-                      <n-icon :component="EyeOutline" class="btn-icon" />
-                    </button>
-                    <button
-                      class="btn btn--ghost btn--xs icon-btn"
-                      type="button"
-                      title="הורד"
-                      @click="downloadAttachment(row.id, att)"
-                    >
-                      <n-icon :component="DownloadOutline" class="btn-icon" />
-                    </button>
-                    <button
-                      class="btn btn--primary btn--xs"
-                      type="button"
-                      title="ייבא למסמכים"
-                      :class="{ 'btn--loading': importing[att.attachmentId] }"
-                      :disabled="Boolean(importing[att.attachmentId])"
-                      @click="importAttachment(row.id, att)"
-                    >
-                      <n-icon :component="CloudDownloadOutline" class="btn-icon" />
-                      ייבא
-                    </button>
+                    <n-tooltip placement="top">
+                      <template #trigger>
+                        <button
+                          class="btn btn--ghost btn--xs icon-btn"
+                          type="button"
+                          @click="previewAttachment(row.id, att)"
+                        >
+                          <n-icon :component="EyeOutline" :size="14" class="btn-icon" />
+                        </button>
+                      </template>
+                      תצוגה מקדימה
+                    </n-tooltip>
+                    <n-tooltip placement="top">
+                      <template #trigger>
+                        <button
+                          class="btn btn--ghost btn--xs icon-btn"
+                          type="button"
+                          @click="downloadAttachment(row.id, att)"
+                        >
+                          <n-icon :component="DownloadOutline" :size="14" class="btn-icon" />
+                        </button>
+                      </template>
+                      הורד
+                    </n-tooltip>
+                    <n-tooltip placement="top">
+                      <template #trigger>
+                        <span class="inbox-row-actions__tip">
+                          <button
+                            class="btn btn--primary btn--xs icon-btn"
+                            type="button"
+                            :class="{ 'btn--loading': importing[att.attachmentId] }"
+                            :disabled="Boolean(importing[att.attachmentId])"
+                            @click="importAttachment(row.id, att)"
+                          >
+                            <n-icon :component="CloudDownloadOutline" :size="14" class="btn-icon" />
+                          </button>
+                        </span>
+                      </template>
+                      {{ importing[att.attachmentId] ? "מייבא…" : "ייבא למסמכים" }}
+                    </n-tooltip>
                   </div>
                 </td>
               </tr>
             </template>
           </tbody>
-        </table>
+          </table>
+        </div>
         <div v-if="nextPageToken" class="load-more-wrap">
           <n-button :loading="loadingMore" @click="loadMore">
             טען עוד
@@ -212,10 +225,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import {
-  NButton, NCheckbox, NDatePicker, NIcon, NInput, NModal, NSelect, NSpin,
+  NButton, NCheckbox, NDatePicker, NIcon, NInput, NModal, NSelect, NSpin, NTooltip,
   useMessage, type SelectOption,
 } from "naive-ui";
 import { CloudDownloadOutline, DocumentOutline, DownloadOutline, EyeOutline, LogoGoogle, RefreshOutline, SearchOutline } from "@vicons/ionicons5";
@@ -252,6 +265,12 @@ const historyOpen = ref(false);
 
 // File type checkboxes
 const fileTypes = ref({ pdf: true, doc: false, xls: false, img: false });
+
+const fileTypeLabels: Record<string, string> = { pdf: "PDF", doc: "DOC/DOCX", xls: "XLS/XLSX", img: "תמונות" };
+const selectedTypeLabel = computed(() => {
+  const active = Object.entries(fileTypes.value).filter(([, v]) => v).map(([k]) => fileTypeLabels[k]);
+  return active.length ? active.join(" / ") : "קבצים";
+});
 
 // Extra filters
 const filterType = ref<string>("none");
@@ -296,8 +315,10 @@ function buildSearchQuery() {
       exts.push(...extensions);
     }
   }
-  if (exts.length) {
-    for (const ext of exts) parts.push(`filename:${ext}`);
+  if (exts.length === 1) {
+    parts.push(`filename:${exts[0]}`);
+  } else if (exts.length > 1) {
+    parts.push(`{${exts.map(e => `filename:${e}`).join(" ")}}`);
   }
 
   if (filterType.value === "sender" && filterSender.value) {
@@ -495,7 +516,7 @@ onMounted(async () => {
 .load-more-wrap {
   display: flex;
   justify-content: center;
-  padding: 16px 0;
+  padding: 10px 0;
 }
 
 .connected-email {
@@ -520,6 +541,12 @@ onMounted(async () => {
   color: var(--n-text-color-3);
 }
 
+.inbox-table-block {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .inbox-table-wrap {
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -530,16 +557,19 @@ onMounted(async () => {
 
 .inbox-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
 }
 
 .inbox-table th,
 .inbox-table td {
-  padding: 12px 14px;
+  padding: 6px 8px;
   text-align: right;
   vertical-align: middle;
   border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .inbox-table th {
@@ -549,9 +579,10 @@ onMounted(async () => {
   background: var(--bg-elevated);
   color: var(--text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+  padding: 6px 8px;
 }
 
 .inbox-table tbody tr:last-child td {
@@ -563,25 +594,33 @@ onMounted(async () => {
 }
 
 .col-from {
-  width: 180px;
-  max-width: 200px;
+  width: 34%;
+}
+
+.col-subject {
+  width: 18%;
 }
 
 .col-date {
-  width: 110px;
+  width: 88px;
   white-space: nowrap;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .col-file {
-  width: 280px;
-  min-width: 200px;
+  width: 16%;
 }
 
 .col-actions {
-  width: 168px;
+  width: 108px;
   white-space: nowrap;
+}
+
+.col-from,
+.col-subject,
+.col-file {
+  overflow: hidden;
 }
 
 .inbox-from,
@@ -595,17 +634,19 @@ onMounted(async () => {
 
 .inbox-from {
   font-weight: 600;
+  font-size: 12px;
   color: var(--text-primary);
 }
 
 .inbox-subject {
   color: var(--text-primary);
+  font-size: 12px;
 }
 
 .inbox-file {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -614,46 +655,29 @@ onMounted(async () => {
   color: var(--brand-color);
 }
 
-.inbox-file__meta {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .inbox-file__name {
-  font-size: 13px;
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
   font-weight: 600;
-}
-
-.inbox-file__size {
-  font-size: 11px;
-  color: var(--text-secondary);
 }
 
 .inbox-row-actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .icon-btn {
-  padding: 4px 6px;
-  min-width: 32px;
-  min-height: 32px;
+  padding: 2px;
+  min-width: 26px;
+  min-height: 26px;
   justify-content: center;
 }
 
-.icon-btn .btn-icon,
-.inbox-row-actions .btn-icon {
-  margin: 0;
-}
-
-.inbox-row-actions .btn--primary {
-  gap: 4px;
-  padding: 4px 10px;
-  min-height: 32px;
+.inbox-row-actions__tip {
+  display: inline-flex;
 }
 
 .filter-bar {
