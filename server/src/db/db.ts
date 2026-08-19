@@ -14,7 +14,7 @@ export async function connectDb(): Promise<Db> {
   _db = _client.db(DB_NAME);
   await ensureCollections(_db);
   await applyIndexes(_db);
-  logger.info("db_connected", { db_name: DB_NAME });
+  logger.info("db_connected", { db_name: DB_NAME, uri: MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, "//***:***@") });
   return _db;
 }
 
@@ -54,6 +54,7 @@ const ALL_COLLECTIONS = [
   "engineer_profiles",
   "certificates",
   "notifications",
+  "gmail_imports",
 ];
 
 async function ensureCollections(db: Db): Promise<void> {
@@ -213,6 +214,12 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("notifications").createIndex({ user_id: 1 });
   await db.collection("notifications").createIndex({ created_at: -1 });
   await db.collection("notifications").createIndex({ read: 1 });
+
+  // gmail_imports
+  await db.collection("gmail_imports").createIndex({ user_id: 1 });
+  await db.collection("gmail_imports").createIndex({ message_id: 1 });
+  await db.collection("gmail_imports").createIndex({ user_id: 1, message_id: 1 }, { unique: true });
+  await db.collection("gmail_imports").createIndex({ imported_at: -1 });
 }
 
 // Typed collection helper
