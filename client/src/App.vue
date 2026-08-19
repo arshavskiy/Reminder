@@ -123,6 +123,15 @@
             <router-view />
             </div>
           </main>
+
+          <footer v-if="route.path !== '/login'" class="app-footer" dir="rtl">
+            <strong>ReminderOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
+            <div class="app-footer__legal">
+              © 2026 HandCoded. All rights reserved. |
+              <a href="https://handcoded.tech/privacy.html" target="_blank">Privacy Policy</a> |
+              <a href="https://handcoded.tech/terms.html" target="_blank">Terms of Service</a>
+            </div>
+          </footer>
         </div>
 
         <WsConnector />
@@ -754,5 +763,39 @@ html[data-theme="dark"] .install-banner {
   .content {
     padding: 14px 10px 24px;
   }
+
+  .app-footer {
+    padding: 14px;
+    font-size: 12px;
+  }
+}
+
+.app-footer {
+  background: #161616;
+  color: rgba(255, 255, 255, 0.65);
+  padding: 10px 48px;
+  text-align: center;
+  font-size: 13px;
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.app-footer strong {
+  color: var(--brand, #63e2b7);
+}
+
+.app-footer__legal {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+}
+
+.app-footer__legal a {
+  color: var(--brand, #63e2b7);
+  opacity: 0.7;
+  text-decoration: none;
+}
+
+.app-footer__legal a:hover {
+  opacity: 1;
 }
 </style>
