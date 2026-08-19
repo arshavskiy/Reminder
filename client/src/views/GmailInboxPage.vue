@@ -163,6 +163,51 @@
         </div>
       </div>
     </template>
+
+    <!-- Import results modal -->
+    <n-modal v-model:show="importResults.show" preset="card" title="תוצאות ייבוא" style="max-width:600px">
+      <div class="import-results">
+        <div class="import-results__summary">
+          <span class="import-results__stat import-results__stat--ok">{{ importResults.imported }} יובאו</span>
+          <span class="import-results__stat import-results__stat--skip">{{ importResults.skipped }} כבר קיימים</span>
+          <span v-if="importResults.errors > 0" class="import-results__stat import-results__stat--err">{{ importResults.errors }} שגיאות</span>
+        </div>
+        <table v-if="importResults.results.length" class="import-results__table">
+          <thead><tr><th>קובץ</th><th>סטטוס</th></tr></thead>
+          <tbody>
+            <tr v-for="r in importResults.results" :key="r.filename + r.messageId">
+              <td class="import-results__file">{{ r.filename }}</td>
+              <td>
+                <span v-if="r.documentId" class="tag tag--success">יובא</span>
+                <span v-else-if="r.error" class="tag tag--danger" :title="r.error">שגיאה</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </n-modal>
+
+    <!-- Import history -->
+    <div v-if="connected && historyItems.length" class="history-section">
+      <h3 class="history-title" @click="historyOpen = !historyOpen" style="cursor:pointer">
+        היסטוריית ייבוא ({{ historyItems.length }})
+        <span class="history-chevron" :class="{ open: historyOpen }">▸</span>
+      </h3>
+      <div v-if="historyOpen" class="history-list">
+        <div v-for="item in historyItems" :key="item.message_id" class="history-item">
+          <div class="history-item__header">
+            <span class="history-item__subject">{{ item.subject || "ללא נושא" }}</span>
+            <span class="history-item__date">{{ new Date(item.imported_at).toLocaleDateString("he-IL") }}</span>
+          </div>
+          <div v-if="item.files?.length" class="history-item__files">
+            <span v-for="f in item.files" :key="f.filename" class="history-file" :class="{ 'history-file--err': f.error }">
+              {{ f.filename }}
+              <span v-if="f.error" class="tag tag--danger tag--xs">שגיאה</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -170,7 +215,7 @@
 import { onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import {
-  NButton, NCheckbox, NDatePicker, NIcon, NInput, NSelect, NSpin,
+  NButton, NCheckbox, NDatePicker, NIcon, NInput, NModal, NSelect, NSpin,
   useMessage, type SelectOption,
 } from "naive-ui";
 import { CloudDownloadOutline, DocumentOutline, DownloadOutline, EyeOutline, LogoGoogle, RefreshOutline, SearchOutline } from "@vicons/ionicons5";
@@ -190,6 +235,20 @@ const searchQuery = ref("");
 const nextPageToken = ref<string | null>(null);
 const totalEstimate = ref<number | null>(null);
 const importing = ref<Record<string, boolean>>({});
+
+// Import results modal
+const importResults = ref<{
+  show: boolean;
+  imported: number;
+  skipped: number;
+  errors: number;
+  results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }>;
+}>({ show: false, imported: 0, skipped: 0, errors: 0, results: [] });
+
+// Import history
+type HistoryItem = { message_id: string; subject: string; imported_at: string; files?: Array<{ filename: string; document_id: string | null; error: string | null }> };
+const historyItems = ref<HistoryItem[]>([]);
+const historyOpen = ref(false);
 
 // File type checkboxes
 const fileTypes = ref({ pdf: true, doc: false, xls: false, img: false });
@@ -364,16 +423,27 @@ async function importAllNew() {
   importingAll.value = true;
   try {
     const result = await api.gmail.importAll(searchQuery.value || undefined);
-    if (result.imported > 0) {
-      message.success(`יובאו ${result.imported} קבצים חדשים (${result.skipped} כבר קיימים)`);
-    } else {
-      message.info(`אין קבצים חדשים לייבוא (${result.skipped} כבר יובאו)`);
-    }
+    const errors = result.results.filter(r => r.error).length;
+    importResults.value = {
+      show: true,
+      imported: result.imported,
+      skipped: result.skipped,
+      errors,
+      results: result.results,
+    };
+    loadHistory();
   } catch (err: any) {
     message.error(`שגיאה בייבוא: ${err.message}`);
   } finally {
     importingAll.value = false;
   }
+}
+
+async function loadHistory() {
+  try {
+    const { history } = await api.gmail.importHistory();
+    historyItems.value = history;
+  } catch {}
 }
 
 onMounted(async () => {
@@ -392,7 +462,7 @@ onMounted(async () => {
     connectedEmail.value = status.email ?? null;
     if (status.connected) {
       buildSearchQuery();
-      await loadInbox();
+      await Promise.all([loadInbox(), loadHistory()]);
     }
   } finally {
     loading.value = false;
@@ -605,5 +675,141 @@ onMounted(async () => {
   height: 24px;
   background: var(--n-border-color, #555);
   margin: 0 4px;
+}
+
+/* Import results modal */
+.import-results__summary {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.import-results__stat {
+  font-size: 15px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+}
+
+.import-results__stat--ok {
+  background: color-mix(in srgb, var(--brand-color) 15%, transparent);
+  color: var(--brand-color);
+}
+
+.import-results__stat--skip {
+  background: color-mix(in srgb, var(--text-secondary) 10%, transparent);
+  color: var(--text-secondary);
+}
+
+.import-results__stat--err {
+  background: color-mix(in srgb, #e74c3c 15%, transparent);
+  color: #e74c3c;
+}
+
+.import-results__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.import-results__table th,
+.import-results__table td {
+  padding: 8px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+}
+
+.import-results__table th {
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.import-results__file {
+  max-width: 350px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* History section */
+.history-section {
+  margin-top: 32px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
+}
+
+.history-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.history-chevron {
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 14px;
+}
+
+.history-chevron.open {
+  transform: rotate(90deg);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.history-item__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.history-item__subject {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.history-item__date {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.history-item__files {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.history-file {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--brand-color) 10%, transparent);
+  color: var(--text-primary);
+}
+
+.history-file--err {
+  background: color-mix(in srgb, #e74c3c 10%, transparent);
 }
 </style>

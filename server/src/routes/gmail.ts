@@ -209,6 +209,14 @@ export function registerGmailRoutes(app: express.Application) {
 
     try {
       const result = await downloadAndImportAttachment(accessToken, messageId, attachmentId, filename ?? "attachment.pdf", ctx.userId);
+      await col("gmail_imports").updateOne(
+        { user_id: ctx.userId, message_id: messageId },
+        {
+          $setOnInsert: { user_id: ctx.userId, message_id: messageId, imported_at: new Date() },
+          $push: { files: { filename: result.filename, document_id: result.documentId, error: null } } as any,
+        },
+        { upsert: true }
+      );
       res.json(result);
     } catch (err: any) {
       logger.error("gmail_import_attachment_failed", { user_id: ctx.userId, messageId, error: err.message });
@@ -275,9 +283,13 @@ export function registerGmailRoutes(app: express.Application) {
           }
         }
 
+        const fileResults = results.filter(r => r.messageId === id);
         await col("gmail_imports").updateOne(
           { user_id: ctx.userId, message_id: id },
-          { $setOnInsert: { user_id: ctx.userId, message_id: id, imported_at: new Date(), subject: meta.subject } },
+          {
+            $setOnInsert: { user_id: ctx.userId, message_id: id, imported_at: new Date(), subject: meta.subject },
+            $set: { files: fileResults.map(r => ({ filename: r.filename, document_id: r.documentId ?? null, error: r.error ?? null })) },
+          },
           { upsert: true }
         );
       }
@@ -298,7 +310,7 @@ export function registerGmailRoutes(app: express.Application) {
 
     const history = await col("gmail_imports").find(
       { user_id: ctx.userId },
-      { projection: { _id: 0, message_id: 1, subject: 1, imported_at: 1 } }
+      { projection: { _id: 0, message_id: 1, subject: 1, imported_at: 1, files: 1 } }
     ).sort({ imported_at: -1 }).limit(200).toArray();
 
     res.json({ history });
