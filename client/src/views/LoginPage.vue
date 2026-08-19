@@ -77,8 +77,8 @@
                 </div>
               </n-form>
 
-              <!--              <div class="divider"><span>או</span></div>-->
-              <!--              <GoogleSignIn @error="onGisError"/>-->
+              <div class="divider"><span>או</span></div>
+              <GoogleSignIn @error="onGisError"/>
             </n-tab-pane>
 
             Register tab
