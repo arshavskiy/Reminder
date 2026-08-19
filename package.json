@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "engines": {
-    "node": ">=23"
+    "node": ">=26"
   },
   "scripts": {
     "dev": "npm --prefix client run dev:all",
