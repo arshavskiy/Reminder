@@ -16,6 +16,8 @@
     { "source": "/sw.js", "destination": "/sw.js" },
     { "source": "/workbox-(.*)", "destination": "/workbox-$1" },
     { "source": "/registerSW.js", "destination": "/registerSW.js" },
+    { "source": "/api/:path*", "destination": "https://api.handcoded.tech/api/:path*" },
+    { "source": "/auth/:path*", "destination": "https://api.handcoded.tech/auth/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
