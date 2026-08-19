@@ -35,7 +35,7 @@ export function registerGmailRoutes(app: express.Application) {
 
     const params = new URLSearchParams({
       client_id: googleClientId,
-      redirect_uri: gmailRedirectUri(settings),
+      redirect_uri: gmailRedirectUri(req),
       response_type: "code",
       scope: GMAIL_SCOPE,
       access_type: "offline",
@@ -67,7 +67,7 @@ export function registerGmailRoutes(app: express.Application) {
       res.redirect(frontendUrl("/gmail-inbox?error=google_client_not_configured"));
       return;
     }
-    const redirectUri = gmailRedirectUri(settings);
+    const redirectUri = gmailRedirectUri(req);
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -502,9 +502,11 @@ async function retryWithRefresh(userId: string): Promise<string | null> {
   return null;
 }
 
-function gmailRedirectUri(settings: ReturnType<typeof getSettings>): string {
-  const googleRedirectUri = settings.googleRedirectUri ?? "http://localhost:3737/auth/google/callback";
-  return process.env.GMAIL_REDIRECT_URI ?? googleRedirectUri.replace("/auth/google/callback", "/auth/gmail/callback");
+function gmailRedirectUri(req: express.Request): string {
+  if (process.env.GMAIL_REDIRECT_URI) return process.env.GMAIL_REDIRECT_URI;
+  const proto = req.headers["x-forwarded-proto"] ?? req.protocol;
+  const host = req.headers["x-forwarded-host"] ?? req.headers.host;
+  return `${proto}://${host}/auth/gmail/callback`;
 }
 
 function frontendUrl(path: string) {

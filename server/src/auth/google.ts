@@ -4,11 +4,11 @@ import { getSettings } from "../settings";
 /**
  * Generate authorization URL to redirect user to Google
  */
-export async function getGoogleAuthUrl(state: string, codeVerifier: string): Promise<string> {
+export async function getGoogleAuthUrl(state: string, codeVerifier: string, redirectUri?: string): Promise<string> {
   const settings = getSettings();
   const params = new URLSearchParams({
     client_id: settings.googleClientId || "",
-    redirect_uri: settings.googleRedirectUri || "",
+    redirect_uri: redirectUri || settings.googleRedirectUri || "",
     response_type: "code",
     scope: "openid profile email https://www.googleapis.com/auth/gmail.readonly",
     access_type: "offline",
@@ -24,7 +24,7 @@ export async function getGoogleAuthUrl(state: string, codeVerifier: string): Pro
 /**
  * Exchange authorization code for user info
  */
-export async function exchangeCodeForIdToken(code: string, codeVerifier: string): Promise<{
+export async function exchangeCodeForIdToken(code: string, codeVerifier: string, redirectUri?: string): Promise<{
   id_token: string;
   access_token?: string;
   refresh_token?: string;
@@ -39,7 +39,7 @@ export async function exchangeCodeForIdToken(code: string, codeVerifier: string)
       code,
       client_id: settings.googleClientId || "",
       client_secret: settings.googleClientSecret || "",
-      redirect_uri: settings.googleRedirectUri || "",
+      redirect_uri: redirectUri || settings.googleRedirectUri || "",
       grant_type: "authorization_code",
       code_verifier: codeVerifier,
     }).toString(),

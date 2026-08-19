@@ -55,7 +55,8 @@ export function registerAuthRoutes(app: express.Application) {
     // Prune expired states
     await col("oauth_states").deleteMany({ expires_at: { $lt: new Date() } });
 
-    const url = await getGoogleAuthUrl(state, codeVerifier);
+    const redirectUri = googleCallbackUri(req);
+    const url = await getGoogleAuthUrl(state, codeVerifier, redirectUri);
     res.redirect(url);
   });
 
@@ -86,7 +87,7 @@ export function registerAuthRoutes(app: express.Application) {
     await col("oauth_states").deleteOne({ state });
 
     try {
-      const tokens = await exchangeCodeForIdToken(code, pkce.code_verifier);
+      const tokens = await exchangeCodeForIdToken(code, pkce.code_verifier, googleCallbackUri(req));
       const profile = await verifyIdToken(tokens.id_token);
       const settings = getSettings();
 
@@ -649,6 +650,11 @@ const DEV_FRONTEND =
 
 function frontendUrl(path: string): string {
   return `${DEV_FRONTEND}${path}`;
+}
+
+function googleCallbackUri(req: express.Request): string {
+  if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
+  return `${serverBaseUrl(req)}/auth/google/callback`;
 }
 
 function serverBaseUrl(req: express.Request): string {
