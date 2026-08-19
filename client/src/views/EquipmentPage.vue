@@ -116,7 +116,7 @@
             </div>
             <div class="row__actions">
               <button class="btn btn--xs btn--ghost" @click="openHistory(r)">היסטוריה</button>
-              <button class="btn btn--xs btn--ghost" @click="api.equipment.downloadReport(r.id)">PDF</button>
+<!--              <button class="btn btn&#45;&#45;xs btn&#45;&#45;ghost" @click="api.equipment.downloadReport(r.id)">PDF</button>-->
               <button class="btn btn--xs btn--ghost" @click="openEdit(r)">ערוך</button>
               <button class="btn btn--xs btn--ghost btn--danger" @click="del(r)">מחק</button>
             </div>

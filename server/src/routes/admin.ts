@@ -185,7 +185,7 @@ export function registerAdminRoutes(app: express.Application) {
       // Failed extractions with error messages
       col("documents").find(
         { processing_status: "error" },
-        { projection: { _id: 1, user_id: 1, original_filename: 1, error_message: 1, created_at: 1 } },
+        { projection: { _id: 1, user_id: 1, file_name: 1, error_message: 1, created_at: 1 } },
       ).sort({ created_at: -1 }).limit(50).toArray(),
 
       // Stuck in queued (older than 10 minutes)
@@ -194,7 +194,7 @@ export function registerAdminRoutes(app: express.Application) {
           processing_status: "queued",
           created_at: { $lt: new Date(Date.now() - 10 * 60 * 1000) },
         },
-        { projection: { _id: 1, user_id: 1, original_filename: 1, created_at: 1 } },
+        { projection: { _id: 1, user_id: 1, file_name: 1, created_at: 1 } },
       ).sort({ created_at: -1 }).limit(50).toArray(),
 
       // S3 storage per user
@@ -224,14 +224,14 @@ export function registerAdminRoutes(app: express.Application) {
       failed: failed.map((d: any) => ({
         id: d._id?.toString(),
         user_id: d.user_id,
-        filename: d.original_filename,
+        filename: d.file_name,
         error: d.error_message,
         created_at: d.created_at,
       })),
       stuck: stuck.map((d: any) => ({
         id: d._id?.toString(),
         user_id: d.user_id,
-        filename: d.original_filename,
+        filename: d.file_name,
         created_at: d.created_at,
       })),
       storage: storage.map((s: any) => ({
