@@ -17,7 +17,11 @@
           <template #icon><n-icon :component="RefreshOutline" /></template>
           רענן
         </n-button>
-        <n-button v-if="connected" quaternary type="error" @click="disconnect">
+        <n-button v-if="connected" type="success" :loading="importingAll" @click="importAllNew">
+          <template #icon><n-icon :component="CloudDownloadOutline" /></template>
+          ייבא הכל
+        </n-button>
+        <n-button v-if="connected && connectionSource === 'oauth'" quaternary type="error" @click="disconnect">
           נתק Gmail
         </n-button>
         <n-button v-if="!connected && !loading" type="primary" @click="connectGmail">
@@ -83,14 +87,16 @@ import {
   NButton, NDataTable, NDrawer, NDrawerContent, NIcon, NInput, NSpin,
   useMessage, type DataTableColumns,
 } from "naive-ui";
-import { DocumentOutline, LogoGoogle, RefreshOutline, SearchOutline } from "@vicons/ionicons5";
+import { CloudDownloadOutline, DocumentOutline, LogoGoogle, RefreshOutline, SearchOutline } from "@vicons/ionicons5";
 import { api, type GmailAttachment, type GmailEmail } from "../services/apiService.js";
 
 const route = useRoute();
 const message = useMessage();
 
 const connected = ref(false);
+const connectionSource = ref<string | null>(null);
 const loading = ref(false);
+const importingAll = ref(false);
 const emails = ref<GmailEmail[]>([]);
 const searchQuery = ref("has:attachment filename:pdf");
 const importing = ref<Record<string, boolean>>({});
@@ -193,22 +199,28 @@ async function disconnect() {
 async function importAttachment(messageId: string, att: GmailAttachment) {
   importing.value[att.attachmentId] = true;
   try {
-    const url = api.gmail.attachmentUrl(messageId, att.attachmentId, att.filename);
-    const res = await fetch(url, { credentials: "include" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    const file = new File([blob], att.filename, { type: "application/pdf" });
-
-    const fd = new FormData();
-    fd.append("files", file);
-    const uploadRes = await fetch("/api/documents/upload", { method: "POST", body: fd, credentials: "include" });
-    if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
-
+    await api.gmail.importAttachment(messageId, att.attachmentId, att.filename);
     message.success(`${att.filename} יובא בהצלחה`);
   } catch (err: any) {
     message.error(`שגיאה: ${err.message}`);
   } finally {
     importing.value[att.attachmentId] = false;
+  }
+}
+
+async function importAllNew() {
+  importingAll.value = true;
+  try {
+    const result = await api.gmail.importAll(searchQuery.value || undefined);
+    if (result.imported > 0) {
+      message.success(`יובאו ${result.imported} קבצים חדשים (${result.skipped} כבר קיימים)`);
+    } else {
+      message.info(`אין קבצים חדשים לייבוא (${result.skipped} כבר יובאו)`);
+    }
+  } catch (err: any) {
+    message.error(`שגיאה בייבוא: ${err.message}`);
+  } finally {
+    importingAll.value = false;
   }
 }
 
@@ -222,9 +234,10 @@ onMounted(async () => {
 
   loading.value = true;
   try {
-    const { connected: c } = await api.gmail.status();
-    connected.value = c;
-    if (c) await loadInbox();
+    const status = await api.gmail.status();
+    connected.value = status.connected;
+    connectionSource.value = status.source;
+    if (status.connected) await loadInbox();
   } finally {
     loading.value = false;
   }

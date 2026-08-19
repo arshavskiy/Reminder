@@ -1,8 +1,12 @@
 import express from "express";
+import { writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
 import { col } from "../db/db";
-import { getSettings } from "../settings";
+import { getSettings, getDataDir } from "../settings";
 import { requireAuth } from "../auth/middleware";
 import { generateState, generateCodeVerifier, generateCodeChallenge } from "../auth/google";
+import { importFile } from "../pipeline/importer";
+import { logger } from "../logger";
 
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
@@ -99,7 +103,9 @@ export function registerGmailRoutes(app: express.Application) {
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
     const user = await col<any>("users").findOne({ _id: ctx.userId } as any);
-    res.json({ connected: Boolean(user?.gmail_access_token) });
+    const userConnected = Boolean(user?.gmail_access_token);
+    const envConnected = Boolean(process.env.GMAIL_ACCESS_TOKEN);
+    res.json({ connected: userConnected || envConnected, source: userConnected ? "oauth" : envConnected ? "env" : null });
   });
 
   // GET /api/gmail/inbox — list emails with PDF attachments
@@ -108,16 +114,8 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    const user = await col<any>("users").findOne({ _id: ctx.userId } as any);
-    if (!user?.gmail_access_token) { res.status(403).json({ error: "gmail_not_connected" }); return; }
-
-    let accessToken = user.gmail_access_token;
-
-    // Refresh if expired
-    if (user.gmail_token_expires_at && new Date(user.gmail_token_expires_at) <= new Date()) {
-      accessToken = await refreshGmailToken(user, ctx.userId);
-      if (!accessToken) { res.status(403).json({ error: "gmail_token_expired" }); return; }
-    }
+    const accessToken = await resolveGmailToken(ctx.userId);
+    if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     try {
       const q = (req.query.q as string) || "has:attachment filename:pdf";
@@ -144,14 +142,8 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    const user = await col<any>("users").findOne({ _id: ctx.userId } as any);
-    if (!user?.gmail_access_token) { res.status(403).json({ error: "gmail_not_connected" }); return; }
-
-    let accessToken = user.gmail_access_token;
-    if (user.gmail_token_expires_at && new Date(user.gmail_token_expires_at) <= new Date()) {
-      accessToken = await refreshGmailToken(user, ctx.userId);
-      if (!accessToken) { res.status(403).json({ error: "gmail_token_expired" }); return; }
-    }
+    const accessToken = await resolveGmailToken(ctx.userId);
+    if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     const { messageId, attachmentId } = req.params;
     const attRes = await gmailFetch(accessToken, `messages/${messageId}/attachments/${attachmentId}`);
@@ -164,6 +156,98 @@ export function registerGmailRoutes(app: express.Application) {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(buf);
+  });
+
+  // POST /api/gmail/import-attachment — server-side download + pipeline import
+  app.post("/api/gmail/import-attachment", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    let ctx: Awaited<ReturnType<typeof requireAuth>>;
+    try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+
+    const { messageId, attachmentId, filename } = req.body;
+    if (!messageId || !attachmentId) { res.status(400).json({ error: "messageId and attachmentId required" }); return; }
+
+    const accessToken = await resolveGmailToken(ctx.userId);
+    if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
+
+    try {
+      const result = await downloadAndImportAttachment(accessToken, messageId, attachmentId, filename ?? "attachment.pdf", ctx.userId);
+      res.json(result);
+    } catch (err: any) {
+      logger.error("gmail_import_attachment_failed", { user_id: ctx.userId, messageId, error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/gmail/import-all — scan inbox, import all new PDF attachments
+  app.post("/api/gmail/import-all", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    let ctx: Awaited<ReturnType<typeof requireAuth>>;
+    try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+
+    const accessToken = await resolveGmailToken(ctx.userId);
+    if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
+
+    const q = (req.body.q as string) || "has:attachment filename:pdf";
+    const maxResults = Math.min(parseInt(req.body.limit ?? "50", 10), 100);
+
+    try {
+      const listRes = await gmailFetch(accessToken, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
+      if (!listRes.ok) { res.status(502).json({ error: "gmail_api_error" }); return; }
+      const listData = await listRes.json() as { messages?: { id: string }[] };
+      const messageIds = listData.messages ?? [];
+
+      const alreadyImported = await col("gmail_imports").find(
+        { user_id: ctx.userId, message_id: { $in: messageIds.map(m => m.id) } },
+        { projection: { message_id: 1 } }
+      ).toArray();
+      const importedSet = new Set(alreadyImported.map((r: any) => r.message_id));
+
+      const newMessages = messageIds.filter(m => !importedSet.has(m.id));
+      if (!newMessages.length) { res.json({ imported: 0, skipped: messageIds.length, results: [] }); return; }
+
+      const results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> = [];
+
+      for (const { id } of newMessages) {
+        const meta = await fetchEmailMeta(accessToken, id);
+        if (!meta) continue;
+
+        for (const att of meta.attachments) {
+          try {
+            const result = await downloadAndImportAttachment(accessToken, id, att.attachmentId, att.filename, ctx.userId);
+            results.push({ messageId: id, filename: att.filename, documentId: result.documentId });
+          } catch (err: any) {
+            results.push({ messageId: id, filename: att.filename, error: err.message });
+          }
+        }
+
+        await col("gmail_imports").updateOne(
+          { user_id: ctx.userId, message_id: id },
+          { $setOnInsert: { user_id: ctx.userId, message_id: id, imported_at: new Date(), subject: meta.subject } },
+          { upsert: true }
+        );
+      }
+
+      logger.info("gmail_bulk_import", { user_id: ctx.userId, total: messageIds.length, new: newMessages.length, imported: results.filter(r => r.documentId).length });
+      res.json({ imported: results.filter(r => r.documentId).length, skipped: importedSet.size, results });
+    } catch (err: any) {
+      logger.error("gmail_import_all_failed", { user_id: ctx.userId, error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/gmail/import-history — list previously imported messages
+  app.get("/api/gmail/import-history", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    let ctx: Awaited<ReturnType<typeof requireAuth>>;
+    try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+
+    const history = await col("gmail_imports").find(
+      { user_id: ctx.userId },
+      { projection: { _id: 0, message_id: 1, subject: 1, imported_at: 1 } }
+    ).sort({ imported_at: -1 }).limit(200).toArray();
+
+    res.json({ history });
   });
 
   // DELETE /api/gmail/disconnect
@@ -243,6 +327,85 @@ function gmailFetch(accessToken: string, path: string) {
   return fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+}
+
+async function resolveGmailToken(userId: string): Promise<string | null> {
+  // 1. Check user's OAuth token
+  const user = await col<any>("users").findOne({ _id: userId } as any);
+  if (user?.gmail_access_token) {
+    if (user.gmail_token_expires_at && new Date(user.gmail_token_expires_at) <= new Date()) {
+      const refreshed = await refreshGmailToken(user, userId);
+      if (refreshed) return refreshed;
+    } else {
+      return user.gmail_access_token;
+    }
+  }
+
+  // 2. Fall back to env tokens
+  const envToken = process.env.GMAIL_ACCESS_TOKEN;
+  const envRefresh = process.env.GMAIL_REFRESH_TOKEN;
+  if (!envToken) return null;
+
+  // Check if env token expired (stored in memory)
+  if (envTokenExpiry && envTokenExpiry <= new Date() && envRefresh) {
+    const refreshed = await refreshEnvGmailToken();
+    if (refreshed) return refreshed;
+  }
+
+  return cachedEnvToken ?? envToken;
+}
+
+let cachedEnvToken: string | null = null;
+let envTokenExpiry: Date | null = null;
+
+async function refreshEnvGmailToken(): Promise<string | null> {
+  const clientId = process.env.GOOGLE_CLIENT_ID ?? getSettings().googleClientId;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? getSettings().googleClientSecret;
+  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+  if (!clientId || !clientSecret || !refreshToken) return null;
+
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  if (!r.ok) {
+    logger.error("gmail_env_token_refresh_failed", { status: r.status });
+    return null;
+  }
+  const data = await r.json() as { access_token: string; expires_in: number };
+  cachedEnvToken = data.access_token;
+  envTokenExpiry = new Date(Date.now() + data.expires_in * 1000);
+  return cachedEnvToken;
+}
+
+async function downloadAndImportAttachment(
+  accessToken: string,
+  messageId: string,
+  attachmentId: string,
+  filename: string,
+  userId: string
+): Promise<{ documentId: string; filename: string }> {
+  const attRes = await gmailFetch(accessToken, `messages/${messageId}/attachments/${attachmentId}`);
+  if (!attRes.ok) throw new Error(`Gmail API error: ${attRes.status}`);
+
+  const attData = await attRes.json() as { data: string };
+  const buf = Buffer.from(attData.data.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+
+  const tmpDir = join(getDataDir(), "gmail-tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const safeName = filename.replace(/[^a-zA-Z0-9._֐-׿ -]/g, "_");
+  const tmpPath = join(tmpDir, `${Date.now()}-${safeName}`);
+  writeFileSync(tmpPath, buf);
+
+  const documentId = await importFile(tmpPath, undefined, userId, filename);
+  logger.info("gmail_attachment_imported", { user_id: userId, messageId, filename, documentId });
+  return { documentId, filename };
 }
 
 function gmailRedirectUri(settings: ReturnType<typeof getSettings>): string {

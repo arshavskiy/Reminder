@@ -34,7 +34,7 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
   {key: "pages.email_templates", scope: "pages", label_he: "תבניות אימייל", label_en: "Email templates", description_he: "עריכת תבניות אימייל לתזכורות.", default_enabled: true, sort_order: 110},
   {key: "pages.settings", scope: "pages", label_he: "הגדרות", label_en: "Settings", description_he: "הגדרות מערכת, SMTP ו-AI.", default_enabled: true, sort_order: 120},
   {key: "pages.search", scope: "pages", label_he: "חיפוש", label_en: "Search", description_he: "חיפוש גלובלי במסמכים, לקוחות ותסקירים.", default_enabled: true, sort_order: 130},
-  {key: "pages.gmail", scope: "pages", label_he: "Gmail", label_en: "Gmail Inbox", description_he: "תיבת דואר Gmail לייבוא מסמכים.", default_enabled: false, sort_order: 140},
+  {key: "pages.gmail", scope: "pages", label_he: "Gmail", label_en: "Gmail Inbox", description_he: "תיבת דואר Gmail לייבוא מסמכים.", default_enabled: true, sort_order: 140},
   {key: "dashboard.stat_documents", scope: "dashboard", label_he: "סטטיסטיקת מסמכים", label_en: "Documents stat", description_he: "הצגת מספר המסמכים בלוח הבקרה.", default_enabled: true, sort_order: 210},
   {key: "dashboard.stat_clients", scope: "dashboard", label_he: "סטטיסטיקת לקוחות", label_en: "Clients stat", description_he: "הצגת מספר הלקוחות בלוח הבקרה.", default_enabled: true, sort_order: 220},
   {key: "dashboard.stat_inspections", scope: "dashboard", label_he: "סטטיסטיקת תסקירים", label_en: "Inspections stat", description_he: "הצגת מספר התסקירים בלוח הבקרה.", default_enabled: true, sort_order: 230},

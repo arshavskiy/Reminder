@@ -563,11 +563,16 @@ export const api = {
   },
 
   gmail: {
-    status: () => get<{ connected: boolean }>("/gmail/status"),
+    status: () => get<{ connected: boolean; source: string | null }>("/gmail/status"),
     authUrl: () => get<{ url: string }>("/gmail/auth-url"),
     inbox: (q?: string, limit?: number) => get<{ emails: GmailEmail[] }>(`/gmail/inbox${qs({ q, limit })}`),
     attachmentUrl: (messageId: string, attachmentId: string, filename: string) =>
       `${BASE}/gmail/attachment/${messageId}/${attachmentId}?filename=${encodeURIComponent(filename)}`,
+    importAttachment: (messageId: string, attachmentId: string, filename: string) =>
+      post<{ documentId: string; filename: string }>("/gmail/import-attachment", { messageId, attachmentId, filename }),
+    importAll: (q?: string, limit?: number) =>
+      post<{ imported: number; skipped: number; results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> }>("/gmail/import-all", { q, limit }),
+    importHistory: () => get<{ history: Array<{ message_id: string; subject: string; imported_at: string }> }>("/gmail/import-history"),
     disconnect: () => del("/gmail/disconnect"),
   },
 
