@@ -135,6 +135,7 @@
         </div>
 
         <WsConnector />
+        <OnboardingWizard v-if="showOnboarding" v-model="showOnboarding" />
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>
@@ -190,6 +191,7 @@ import {BriefcaseOutline, DownloadOutline, MoonOutline, SunnyOutline} from "@vic
 import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
+import OnboardingWizard from "./components/OnboardingWizard.vue";
 import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
@@ -218,6 +220,19 @@ const userSettingsStore = useUserSettingsStore();
 const pwa = usePwa();
 
 const mobileNavOpen = ref(false);
+
+// ── Onboarding wizard ───────────────────────────────────────────────────────
+const showOnboarding = ref(false);
+
+watch(
+  () => authStore.user,
+  (user) => {
+    if (user && !(user as any).onboarding_completed && route.path !== "/login") {
+      showOnboarding.value = true;
+    }
+  },
+  { immediate: true },
+);
 
 // ── PWA install banner ───────────────────────────────────────────────────────
 const showInstallBanner = ref(false);

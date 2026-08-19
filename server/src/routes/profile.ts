@@ -413,4 +413,14 @@ export function registerProfileRoutes(app: express.Application) {
     );
     res.json({ ok: true });
   });
+
+  app.post("/api/profile/onboarding-complete", async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+    await col("users").updateOne(
+      { _id: new ObjectId(ctx.realUserId) },
+      { $set: { onboarding_completed: true } },
+    );
+    res.json({ ok: true });
+  });
 }

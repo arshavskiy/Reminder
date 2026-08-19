@@ -282,6 +282,7 @@ export function registerAuthRoutes(app: express.Application) {
     }
     const { user, actingAs } = identity;
 
+    const userDoc = await col("users").findOne({ _id: new ObjectId((user as any).id) }) as any;
     res.json({
       user: {
         id: (user as any).id,
@@ -291,6 +292,7 @@ export function registerAuthRoutes(app: express.Application) {
         company_name: (user as any).company_name ?? null,
         picture_url: user.picture_url,
         role: user.role,
+        onboarding_completed: userDoc?.onboarding_completed ?? false,
       },
       actingAs: actingAs
         ? {
@@ -486,6 +488,7 @@ export function registerAuthRoutes(app: express.Application) {
         name: user.name,
         picture_url: user.picture_url,
         role: user.role,
+        onboarding_completed: user.onboarding_completed ?? false,
       },
     });
   });
