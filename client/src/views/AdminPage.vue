@@ -262,22 +262,6 @@
             </div>
           </div>
 
-          <!-- Stuck in queued -->
-          <div class="monitor-block">
-            <div class="monitor-block__title">
-              Stuck in Queue (over 10 minutes)
-              <n-tag v-if="docMonitor.stuck.length" type="warning" size="small" round style="margin-right:8px">{{ docMonitor.stuck.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="stuckDocsColumns"
-              :data="docMonitor.stuck"
-              :bordered="false"
-              :pagination="{ pageSize: 10 }"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-
           <!-- Pipeline Gaps -->
           <div v-if="pipelineGaps" class="monitor-block" style="border-color:rgba(208,48,80,0.25)">
             <div class="monitor-block__title">Pipeline Gaps</div>
@@ -750,6 +734,47 @@
         </template>
       </section>
 
+      <!-- ── System Health ── -->
+      <section v-if="activeSection === 'system_health'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="systemHealth">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">
+            <AdminStatCard label="Uptime" :value="systemHealth.server.uptime_human" color="#63e2b7" />
+            <AdminStatCard label="Node.js" :value="systemHealth.server.node_version" color="#70c0e8" />
+            <AdminStatCard label="Memory (RSS)" :value="systemHealth.server.memory.rss_mb + ' MB'" color="#e8c870" />
+            <AdminStatCard label="Active Sessions" :value="systemHealth.active_sessions" color="#e88080" />
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">Server Process</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:8px;margin-top:10px;font-size:13px">
+              <div><span style="color:var(--text-secondary)">PID:</span> {{ systemHealth.server.pid }}</div>
+              <div><span style="color:var(--text-secondary)">Platform:</span> {{ systemHealth.server.platform }}</div>
+              <div><span style="color:var(--text-secondary)">Heap Used:</span> {{ systemHealth.server.memory.heap_used_mb }} MB</div>
+              <div><span style="color:var(--text-secondary)">Heap Total:</span> {{ systemHealth.server.memory.heap_total_mb }} MB</div>
+              <div><span style="color:var(--text-secondary)">External:</span> {{ systemHealth.server.memory.external_mb }} MB</div>
+            </div>
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              Database: {{ systemHealth.database.name }}
+              <span v-if="systemHealth.database.size_mb != null" style="font-weight:400;font-size:12px;color:var(--text-secondary);margin-right:8px">
+                ({{ systemHealth.database.size_mb }} MB data / {{ systemHealth.database.storage_mb }} MB storage)
+              </span>
+            </div>
+            <n-data-table
+              :columns="collectionStatsColumns"
+              :data="systemHealth.database.collections"
+              :bordered="false"
+              :pagination="false"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+        </template>
+      </section>
+
       <!-- ── Settings ── -->
       <section v-if="activeSection === 'settings'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
@@ -955,6 +980,34 @@
             </div>
           </template>
           <template v-else>
+          <!-- Entity counts -->
+          <div v-if="userDetailData.counts" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));gap:8px;margin-bottom:14px">
+            <div class="admin-user-stat">
+              <span class="admin-user-stat__value">{{ userDetailData.counts.documents }}</span>
+              <span class="admin-user-stat__label">Documents</span>
+            </div>
+            <div class="admin-user-stat">
+              <span class="admin-user-stat__value">{{ userDetailData.counts.clients }}</span>
+              <span class="admin-user-stat__label">Clients</span>
+            </div>
+            <div class="admin-user-stat">
+              <span class="admin-user-stat__value">{{ userDetailData.counts.contracts }}</span>
+              <span class="admin-user-stat__label">Contracts</span>
+            </div>
+            <div class="admin-user-stat">
+              <span class="admin-user-stat__value">{{ userDetailData.counts.equipment }}</span>
+              <span class="admin-user-stat__label">Equipment</span>
+            </div>
+            <div class="admin-user-stat">
+              <span class="admin-user-stat__value">{{ formatBytes(userDetailData.counts.total_storage_bytes) }}</span>
+              <span class="admin-user-stat__label">Storage</span>
+            </div>
+            <div class="admin-user-stat">
+              <span class="admin-user-stat__value" :style="userDetailData.active_sessions > 0 ? 'color:#63e2b7' : ''">{{ userDetailData.active_sessions }}</span>
+              <span class="admin-user-stat__label">Active Sessions</span>
+            </div>
+          </div>
+
           <!-- Reminder status summary -->
           <div class="admin-stat-pills">
             <n-tag v-for="(count, status) in userDetailData.reminderStatus" :key="status"
@@ -1162,6 +1215,7 @@ import {
   FlashOutline,
   MailOutline,
   MenuOutline,
+  PulseOutline,
   NotificationsOutline,
   PeopleOutline,
   SearchOutline,
@@ -1224,6 +1278,7 @@ const adminSections = [
   { key: "scheduler",          label: "Scheduler",              icon: TimerOutline },
   { key: "monthly",            label: "Monthly Reports",        icon: CalendarOutline },
   { key: "bad_emails",         label: "Bad Emails",             icon: MailOutline },
+  { key: "system_health",     label: "System Health",          icon: PulseOutline },
   { key: "settings",           label: "Settings",               icon: SettingsOutline },
 ];
 const sidebarItems = adminSections.filter((item) => item.key !== "settings");
@@ -2225,6 +2280,19 @@ const pipelineGaps = ref<any>(null);
 // ── Bad emails monitor ────────────────────────────────────────────────────
 const badEmailsData = ref<any>(null);
 
+// ── System health ─────────────────────────────────────────────────────────
+const systemHealth = ref<any>(null);
+
+const collectionStatsColumns: DataTableColumns<any> = [
+  { title: "Collection", key: "collection", minWidth: 180 },
+  {
+    title: "Documents", key: "count", width: 140, align: "right",
+    render: (row) => h("span", { style: "font-size:13px;font-variant-numeric:tabular-nums" },
+      row.count >= 0 ? row.count.toLocaleString() : "—"),
+    sorter: (a: any, b: any) => a.count - b.count,
+  },
+];
+
 const issueLabel: Record<string, string> = {
   consecutive_dots: "consecutive dots",
   trailing_punctuation: "trailing punctuation",
@@ -2314,8 +2382,6 @@ const adminSettings = ref<any>(null);
 // ── Action loading states ──────────────────────────────────────────────────
 const reprocessingIds = ref<Set<string>>(new Set());
 const retryingIds = ref<Set<string>>(new Set());
-const triggeringReportIds = ref<Set<string>>(new Set());
-
 // ── Report modal ───────────────────────────────────────────────────────────
 const showReportModal = ref(false);
 const reportModalUser = ref<{ id: string; name: string } | null>(null);
@@ -2403,21 +2469,6 @@ async function retryEscalation(reminderId: string) {
   }
 }
 
-async function triggerMonthlyReport(userId: string) {
-  triggeringReportIds.value = new Set([...triggeringReportIds.value, userId]);
-  try {
-    const res = await api.admin.triggerMonthlyReport(userId);
-    if (res.success) message.success(`Report sent (${res.count} contracts)`);
-    else message.warning(res.error ?? "Sent with issues");
-  } catch {
-    message.error("Trigger failed");
-  } finally {
-    const s = new Set(triggeringReportIds.value);
-    s.delete(userId);
-    triggeringReportIds.value = s;
-  }
-}
-
 // ── Helpers ────────────────────────────────────────────────────────────────
 function formatBytes(bytes: number): string {
   if (!bytes) return "0 B";
@@ -2480,6 +2531,8 @@ async function loadSectionData(key: string) {
       monthlyMonitor.value = await api.admin.monitorMonthlyReports();
     } else if (key === "bad_emails") {
       badEmailsData.value = await api.admin.monitorBadEmails();
+    } else if (key === "system_health") {
+      systemHealth.value = await api.admin.monitorSystemHealth();
     } else if (key === "settings") {
       adminSettings.value = await api.admin.getAdminSettings();
     }
@@ -3123,5 +3176,30 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.admin-user-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.admin-user-stat__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-user-stat__label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 </style>

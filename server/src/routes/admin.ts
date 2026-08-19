@@ -1047,7 +1047,7 @@ export function registerAdminRoutes(app: express.Application) {
     try {
     const userId = req.params.id;
 
-    const [documents, emailLogs, reminderCounts, extractions, schedulerErrors] = await Promise.all([
+    const [documents, emailLogs, reminderCounts, extractions, schedulerErrors, clientCount, contractCount, equipmentCount, activeSessions] = await Promise.all([
       // All documents for this user (with extracted_fields + template id for field coverage)
       col("documents").find(
         { user_id: userId },
@@ -1077,6 +1077,14 @@ export function registerAdminRoutes(app: express.Application) {
         { user_id: userId, success: 0 },
         { projection: { _id: 1, log_type: 1, error: 1, sent_at: 1, recipient: 1 } },
       ).sort({ sent_at: -1 }).limit(50).toArray(),
+
+      // Entity counts
+      col("clients").countDocuments({ user_id: userId }),
+      col("contracts").countDocuments({ user_id: userId }),
+      col("equipment").countDocuments({ user_id: userId }),
+
+      // Active sessions
+      col("sessions").countDocuments({ user_id: userId, expires_at: { $gt: new Date() } }),
     ]);
 
     const reminderStatusMap: Record<string, number> = {};
@@ -1183,6 +1191,14 @@ export function registerAdminRoutes(app: express.Application) {
         sent_at: e.sent_at,
         recipient: e.recipient,
       })),
+      counts: {
+        clients: clientCount,
+        contracts: contractCount,
+        equipment: equipmentCount,
+        documents: documents.length,
+        total_storage_bytes: documents.reduce((sum: number, d: any) => sum + (d.file_size_bytes ?? 0), 0),
+      },
+      active_sessions: activeSessions,
     });
     } catch (err: any) {
       console.error("user detail error:", err);
@@ -1310,6 +1326,67 @@ export function registerAdminRoutes(app: express.Application) {
       });
     } catch (err: any) {
       console.error("bad-emails monitor error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // ── System health ────────────────────────────────────────────────────────
+  // GET /api/admin/monitor/system-health
+  app.get("/api/admin/monitor/system-health", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const db = col("users").dbName ? col("users") : null;
+      const dbInstance = (await import("../db/db.js")).getDb();
+
+      const collectionNames = [
+        "users", "sessions", "documents", "clients", "contracts",
+        "reminders", "equipment", "email_log", "extractions",
+        "print_templates", "print_template_drafts", "email_templates",
+        "doc_templates", "timeline_events", "tasks",
+      ];
+
+      const countPromises = collectionNames.map(async (name) => {
+        try {
+          const count = await dbInstance.collection(name).estimatedDocumentCount();
+          return { collection: name, count };
+        } catch {
+          return { collection: name, count: -1 };
+        }
+      });
+
+      const [dbStats, collectionCounts, activeSessions] = await Promise.all([
+        dbInstance.stats().catch(() => null),
+        Promise.all(countPromises),
+        col("sessions").countDocuments({ expires_at: { $gt: new Date() } }),
+      ]);
+
+      const uptime = process.uptime();
+      const mem = process.memoryUsage();
+
+      res.json({
+        server: {
+          uptime_seconds: Math.floor(uptime),
+          uptime_human: `${Math.floor(uptime / 86400)}d ${Math.floor((uptime % 86400) / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`,
+          node_version: process.version,
+          platform: process.platform,
+          memory: {
+            rss_mb: Math.round(mem.rss / 1048576),
+            heap_used_mb: Math.round(mem.heapUsed / 1048576),
+            heap_total_mb: Math.round(mem.heapTotal / 1048576),
+            external_mb: Math.round(mem.external / 1048576),
+          },
+          pid: process.pid,
+        },
+        database: {
+          name: dbInstance.databaseName,
+          size_mb: dbStats ? Math.round((dbStats as any).dataSize / 1048576) : null,
+          storage_mb: dbStats ? Math.round((dbStats as any).storageSize / 1048576) : null,
+          collections: collectionCounts.sort((a, b) => b.count - a.count),
+        },
+        active_sessions: activeSessions,
+      });
+    } catch (err: any) {
+      console.error("system-health error:", err);
       res.status(500).json({ error: err.message ?? "Failed" });
     }
   });

@@ -440,6 +440,7 @@ export const api = {
     monitorPipelineGaps: () => adminGet<any>("/admin/monitor/pipeline-gaps"),
     monitorContractAdvances: () => adminGet<any>("/admin/monitor/contract-advances"),
     monitorBadEmails: () => adminGet<any>("/admin/monitor/bad-emails"),
+    monitorSystemHealth: () => adminGet<any>("/admin/monitor/system-health"),
     listFeatures: () => adminGet<{ rows: FeatureDefinition[] }>("/features"),
     getAdminSettings: () => adminGet<any>("/admin/settings"),
     getUserDetail: (id: string) => adminGet<any>(`/admin/users/${id}/detail`),
