@@ -572,7 +572,7 @@ export const api = {
       post<{ documentId: string; filename: string }>("/gmail/import-attachment", { messageId, attachmentId, filename }),
     importAll: (q?: string, limit?: number) =>
       post<{ imported: number; skipped: number; results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> }>("/gmail/import-all", { q, limit }),
-    importHistory: () => get<{ history: Array<{ message_id: string; subject: string; imported_at: string }> }>("/gmail/import-history"),
+    importHistory: () => get<{ history: Array<{ message_id: string; subject: string; imported_at: string; files?: Array<{ filename: string; document_id: string | null; error: string | null }> }> }>("/gmail/import-history"),
 
     disconnect: () => del("/gmail/disconnect"),
   },
