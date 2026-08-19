@@ -87,7 +87,7 @@ async function checkMonthlyReports() {
     const day = Math.min(28, Math.max(1, Number(row.monthly_report_day ?? 1)));
     const hour = Number(row.monthly_report_hour ?? 8);
     if (now.getDate() < day || (now.getDate() === day && now.getHours() < hour)) continue;
-    if (row.monthly_report_last_sent === monthKey) continue;
+    if (String(row.monthly_report_last_sent ?? "").startsWith(monthKey)) continue;
 
     const user = await col("users").findOne({_id: toObjectId(row.user_id)}) as any;
     const configuredRecipients = String(row.monthly_report_recipients ?? "").split(/[;,\s]+/).filter(Boolean);
@@ -105,7 +105,7 @@ async function checkMonthlyReports() {
       includeClientRecipient: false,
     });
     if (result.success) {
-      await col("user_settings").updateOne({_id: row._id}, {$set: {monthly_report_last_sent: monthKey, monthly_report_last_error: null}});
+      await col("user_settings").updateOne({_id: row._id}, {$set: {monthly_report_last_sent: `${monthKey} (${new Date().toISOString()})`, monthly_report_last_error: null}});
       logger.info("monthly_reports_sent", {
         user_id: row.user_id,
         month: monthKey,

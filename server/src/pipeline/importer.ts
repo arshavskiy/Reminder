@@ -474,6 +474,7 @@ export async function processDocument(
         await col("documents").updateOne(docFilter, {
           $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
         });
+        notifyExtractionFailed({ fileName: docRow?.file_name ?? documentId, error: msg });
         push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
         return;
       }
@@ -550,6 +551,7 @@ export async function processDocument(
           await col("documents").updateOne(docFilter, {
             $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
           });
+          notifyExtractionFailed({ fileName: docRow?.file_name ?? documentId, error: msg });
           push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
           logger.error("template_extraction_empty", {
             document_id: documentId,
@@ -593,6 +595,7 @@ export async function processDocument(
           await col("documents").updateOne(docFilter, {
             $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
           });
+          notifyExtractionFailed({ fileName: docRow?.file_name ?? documentId, error: msg });
           push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
           return;
         }

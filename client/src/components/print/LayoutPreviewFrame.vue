@@ -229,7 +229,7 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
 <style scoped>
 .layout-preview {
   width: 100%;
-  padding: 8px;
+  padding: 20px;
   font-size: 8px;
   color: #111;
   background: #fff;
@@ -250,9 +250,20 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
 .header-table td { vertical-align: top; }
 .hdr-side { width: 28%; }
 .hdr-center { width: 44%; text-align: center; vertical-align: middle; }
-.hdr-title { font-size: 10px; font-weight: 700; margin-bottom: 2px; }
-.hdr-title--small { font-size: 8px; }
-.hdr-title--large { font-size: 13px; }
+
+.hdr-title {
+  font-size: 7px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.hdr-title--small {
+  font-size: 6px;
+}
+
+.hdr-title--large {
+  font-size: 7px;
+}
 .hdr-title--regular { font-weight: 400; }
 .hdr-sub { font-size: 7px; line-height: 1.3; }
 .hdr-sub--small { font-size: 6px; }

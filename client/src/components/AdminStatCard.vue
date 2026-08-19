@@ -78,7 +78,8 @@ function formatBytes(bytes: number): string {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 20px 22px;
+  min-height: 128px;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -153,9 +154,10 @@ function formatBytes(bytes: number): string {
 }
 
 .stat-card__secondary {
-  text-align: center;
-  padding-right: 8px;
-  border-right: 1px solid var(--border-color);
+  text-align: left;
+  padding-left: 16px;
+  border-left: 1px solid var(--border-color);
+  flex: 0 0 auto;
 }
 
 .stat-card__num-small {

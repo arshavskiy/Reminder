@@ -1,7 +1,8 @@
 # Features
 
 Current feature inventory for ReminderOCR.  
-Stack: Node.js 23+ / Express · MongoDB · Vue 3 + Naive UI · Railway + Vercel
+Stack: Node.js 22 / Express · MongoDB · Vue 3 + Naive UI + Tailwind v4 · Railway + Vercel  
+**Updated**: 2026-08-19
 
 ---
 
@@ -75,6 +76,14 @@ Each upload can toggle four stages independently. Flags are saved in `user_setti
 | `pipeline_entities` | `true` | Client/contract/reminder saving |
 
 Flags are exposed as checkboxes in the Documents page upload area. Changes debounce-save to the server (600 ms).
+
+### Upload results table
+Redesigned document list with:
+- `PageHeader` with total count and action buttons (upload, refresh, rescan single/all, delete-all, bulk-select/delete)
+- `DocumentDropStrip` for drag-and-drop uploads
+- AI quota bar showing scan usage (e.g. "5 / 50") with color-coded progress: green normal, yellow at 80%, red at 100%
+- Pipeline settings popover with toggles for OCR, AI, S3, and entity creation
+- Duplicate upload detection with hidden redundant status badges
 
 ### Upload Modal (`UploadModal.vue`)
 
@@ -161,17 +170,20 @@ The `user` role is limited to `USER_DOCUMENT_LIMIT` (default: **25**) AI-extract
 
 - Full CRUD with search (`display_name`, `email`)
 - `entity_type`: `company` or `person`
-- Fields: `id_number`, `email`, `phone`, `address`, `notes`, `tags`
+- Fields: `id_number`, `email`, `phone`, `mobile`, `fax`, `address`, `city`, `po_box`, `client_zipcode`, `notes`, `tags`
 - Per-client counts: documents, contracts, open reminders
 - Timeline view — chronological event log (document added, email sent, etc.)
 - Linked documents list
 
 ### Client deduplication (on import)
-Four-level fuzzy match (all scoped to the importing user):
-1. `id_number` exact match
+Five-tier fuzzy match (all scoped to the importing user), checked in priority order:
+1. `id_number` exact match (government/company ID)
 2. Phone number (normalised — strip spaces and dashes)
-3. Case-insensitive exact name match
-4. Normalised name — strips `בע"מ`, `ltd`, `inc`, punctuation, collapses whitespace
+2b. Email match (case-insensitive)
+3. Normalised name — strips `בע"מ`, `ltd`, `inc`, punctuation, collapses whitespace
+4. Exact name fallback (case-insensitive)
+
+Promotion: when both a phone-only match and a named-company match exist, the named-company match wins.
 
 On match: existing record is enriched with any new fields; no duplicate is created.
 
@@ -180,10 +192,22 @@ On match: existing record is enriched with any new fields; no duplicate is creat
 ## Contract / Inspection Tracking
 
 - Fields: `contract_number`, `contract_type`, `start_date`, `expiry_date`, `amount`, `currency`, `counterparty`, `summary`
-- Status: `active` / `expired` / `cancelled` / `renewed`
+- Status: `active` / `expired` / `cancelled` / `renewed` / `draft`
 - Filter by `kind=contract` (has contract number, not an inspection) or `kind=inspection` (type matches `תסקיר|בדיקה`)
 - Expiring-soon endpoint: contracts expiring within N days
 - Linked to client and source document
+
+### Server-side status counts
+`GET /api/contracts` returns a `counts` object alongside results with `all`, `active`, `expired`, `cancelled`, and `draft` tallies computed via MongoDB `$group` aggregation in parallel with the main query.
+
+### Row issues and highlights
+`rowIssues.ts` detects problems per row:
+- Duplicate report numbers across contracts
+- Missing expiry dates on active contracts
+- Active contracts with no reminders
+- Documents with processing errors
+
+Issues render as color-coded tags: `tag--bad` (red) for errors, `tag--warn` (yellow) for warnings.
 
 ---
 
@@ -202,10 +226,18 @@ Dedup: existing non-dismissed reminder for the same `(source_id, advance_days)` 
 - Create manual reminders not tied to a contract
 
 ### Email delivery
-- Nodemailer SMTP (Gmail or any SMTP server)
+- Resend API (primary) or Nodemailer SMTP fallback
 - HTML email with `{{variable}}` template substitution
 - Multiple recipients (JSON array in `email_to`)
 - Falls back to client's `email` field if `email_to` is empty
+- Email normalization at reminder creation (lowercase, trim)
+- Bounce handling for Resend delivery errors
+
+### Same-day email grouping
+Reminders to the same client on the same trigger date are grouped into a single email. Grouped items produce an HTML `{{items_table}}` with all reminder details. Key: `clientId + triggerDate + email`.
+
+### Items table injection
+If the email template contains `{{items_table}}` or `{{{items_table}}}`, the grouped items table is placed there directly. Otherwise, `injectItemsTable` searches for landmark elements (`.cta-box`, `.warning-box`, `.renewal-box`, `.footer`, or `</body>`) and inserts before the first match found.
 
 ### Scheduler
 - Background interval (default 60 s, configurable)
@@ -234,7 +266,8 @@ If a reminder stays `pending` for more than N days past its `trigger_date`, an e
 
 ## Equipment Catalog
 
-- Fields: `name`, `category`, `manufacturer`, `model`, `serial_number`, `capacity`, `load_capacity_test`, `load_radius`, `description`, `notes`, `is_active`
+- Fields: `name`, `category`, `manufacturer`, `model`, `serial_number`, `capacity`, `description`, `notes`, `is_active`
+- Multi-value fields (string arrays): `load_capacity_work`, `load_capacity_test`, `load_radius` — support multiple values per equipment record, split on "/" during import
 - Serial number is a sparse unique index — dedup on import
 - Linked to source document and client
 - Filter by category, text search, or client
@@ -306,6 +339,34 @@ Color-coded view of certificate expiry dates overlaid on the existing reminder c
 - Built-in templates: inspection reminder, contract reminder, invoice reminder
 - CRUD via Settings page (admin)
 - Preview with sample data
+- `{{items_table}}` placeholder for grouped reminder items (auto-injected if missing)
+- `items_table` exposed in template editor for live preview
+
+---
+
+## Remembered UI Filters
+
+`sessionStorage`-backed filter persistence per page. `readRememberedFilter` / `writeRememberedFilter` helpers save the selected filter tab key, surviving in-session navigation without polluting permanent storage.
+
+---
+
+## Missing Fields Detection
+
+Documents and contracts with incomplete data are flagged with red highlights in the UI. `rowIssues.ts` checks for:
+- Missing expiry dates
+- Duplicate report numbers
+- Active contracts without reminders
+- Processing errors on documents
+
+Expiry date aliasing: `next_inspection_date` falls back to `expiry_date` when the primary field is missing.
+
+---
+
+## Admin Page
+
+Route: `/admin` — admin-only user management with:
+- User list with role selector and activate/deactivate toggle
+- Roomier nav, cards, and table column spacing for admin pages
 
 ---
 
@@ -384,50 +445,90 @@ The Contracts page includes an export generator for the currently filtered recor
 - PDF: print-ready Hebrew HTML that can be printed or saved as PDF from the browser.
 
 The page also provides a monthly PDF report. It asks for a month and downloads a server-generated PDF containing all contracts and inspections started in that month, including client details, dates, status, amount, source document, equipment, and related reminders.
-## Monthly Email Reports
-
-The Reports page (`/reports`) controls automatic monthly delivery of contract and inspection reports.
 
 ---
 
 ## Inspection Print Templates
 
-The Contracts page exposes `תבניות הדפסה` next to `תסקיר חדש`. This opens the Excel-style print-template designer and compose flow.
+### Pages and routes
 
-Supported flow:
+| Route | Page | Purpose |
+|-------|------|---------|
+| `/print-templates` | PrintTemplatesHubPage | Landing page — choose between layout editor and Excel editor |
+| `/print-templates/layout` | SimplePrintTemplatesPage | Section-based template editor (list, edit, compose modes) |
+| `/print-templates/excel` | PrintTemplatesPage | Grid/table-based editor (list, compose, design modes) |
+| `/contracts/:contractId/draft` | ContractDraftPage | Live table preview with inline fields, draft actions |
 
-1. `תסקיר חדש` collects client, equipment, interval, and template fields.
-2. Existing client selection fills business fields and loads equipment for that client.
-3. Equipment rows can be typed manually or selected from `GET /api/equipment?client_id=...`.
-4. `שמור טיוטה ופתח תצוגה` saves a `print_template_drafts` row and opens `/print-templates/:templateId/draft`.
-5. The compose page allows editing directly in table cells and in the side panel.
-6. The user can save a draft, save PDF, print PDF, or create a contract and reminders.
+### Two editor types
 
-Template designer features:
+**Excel editor** (`editorType: "grid"`): stores `cols`, `rows`, and `cells` arrays. Each cell has a type (label, field, image), optional spans, per-side borders, font size, color. Features: merge/unmerge, row clone, formula line editing, partial rich text (bold + color), copy/paste, images from uploads or URLs. Rendered server-side via `renderTemplateHtml` as an HTML table.
 
-- Excel-style grid with rows, columns, merge/unmerge, row clone, and formula line editing.
-- Field cells, label cells, and image cells.
-- Partial rich text in label cells: bold and color selected text.
-- Images from uploaded assets or safe image URLs.
-- Correct binding for `מספר רישוי` is `license_number`.
+**Section editor** (`editorType: "sections"`): stores a `layout` object with typed sections (header, fields, equipment_table, findings, static_text, signature, image, footer) plus global styles (borderColor, borderWidth). Rendered via `renderSectionTemplateHtml`. Includes field size and bold controls, title/subtitle size and weight controls, image support.
 
-Draft/client/contract linkage:
+### API endpoints
 
-- Drafts store `data` for rendered fields and `meta` for relationships.
-- `meta.client_id` and top-level `client_id` link the draft to the selected client.
-- `meta.equipment_ids` stores selected machine ids.
-- When `צור חוזה + תזכורת` is clicked, the created contract uses the draft `client_id`; the resulting `contract_id` is saved back to the draft.
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/print-templates` | List visible templates (owned + shared) |
+| GET | `/api/print-templates/:id` | Single template |
+| POST | `/api/print-templates` | Create |
+| PUT | `/api/print-templates/:id` | Update (or copy-on-write clone) |
+| DELETE | `/api/print-templates/:id` | Delete (admin-only for shared) |
+| GET | `/api/print-templates/:id/draft` | Load draft (optionally scoped by contractId) |
+| PUT | `/api/print-templates/:id/draft` | Save draft |
+| DELETE | `/api/print-templates/:id/draft` | Delete draft |
+| POST | `/api/print-templates/:id/pdf` | Render PDF inline (Puppeteer) |
+| POST | `/api/print-templates/:id/pdf/save` | Render PDF, persist as document, link to contract, delete draft |
+| GET | `/api/print-templates/drafts` | List all user drafts with enriched metadata |
 
-Full technical reference: [INSPECTION_TEMPLATE_FLOW.md](./INSPECTION_TEMPLATE_FLOW.md) and [CONTRACT_DOCUMENT_REMINDER_FLOW.md](./CONTRACT_DOCUMENT_REMINDER_FLOW.md) (draft → generated document → reminder linkage, `/contracts/:contractId/draft` route).
+### Copy-on-write shared templates
+When a non-admin user edits a shared template, the server creates a personal clone with `source_template_id` pointing to the original. Listing hides the original shared template when a personal copy exists (`copiedSourceIds` filter). Signature images are preserved during cloning.
 
-Settings include:
+### Access control
+- **Visibility**: users see own templates + all shared ones
+- **Mutation**: owners can always edit; admins can edit shared templates; non-admins get a copy-on-write clone
+- **Sharing**: admin-created templates are automatically `is_shared: true`
+- **Deletion**: shared templates can only be deleted by admins (403 otherwise)
+
+### Draft-to-contract flow
+
+1. `תסקיר חדש` (hydraulic check modal) collects client, equipment, interval, and template fields in a multi-step wizard with draft persistence
+2. Saves a `print_template_drafts` row and opens `/print-templates/:templateId/draft`
+3. Compose page allows inline cell editing and side panel editing
+4. `pdf/save` renders PDF, creates a `documents` record (local + S3), links it to the contract, promotes status from "draft" to "active", deletes the draft
+5. Also supports: save draft, print PDF, create contract + reminders, edit contract
+
+**Linkage**: drafts store `meta.client_id` and `meta.equipment_ids`. When a contract is created, `contract_id` is saved back to the draft. Correct binding for `מספר רישוי` is `license_number` (accepts 7-digit values).
+
+Full technical reference: [INSPECTION_TEMPLATE_FLOW.md](./INSPECTION_TEMPLATE_FLOW.md) and [CONTRACT_DOCUMENT_REMINDER_FLOW.md](./CONTRACT_DOCUMENT_REMINDER_FLOW.md).
+
+---
+
+## Monthly Email Reports
+
+The Reports page (`/reports`) controls automatic monthly delivery of contract and inspection reports.
+
+### Monthly report settings
 
 - Enable or disable automatic delivery
 - Recipients, or the account email when recipients are left empty
 - Day of month (`1`-`28`)
 - Hour of day (`00:00`-`23:00`)
-- PDF and/or CSV attachments
+- DOCX and/or XLSX attachments (configurable per report)
 
-The manual report generator lets users choose report fields with Hebrew labels. CSV attachments use Hebrew headers with UTF-8 BOM and RTL display markers for spreadsheet compatibility.
+### Automatic delivery
+The scheduler calls `checkMonthlyReports` on each tick. For each user with `monthly_report_enabled: true`, it checks whether the configured day/hour has passed and whether `monthly_report_last_sent` already covers the current month key (e.g. `2026-08`). Sends at most once per calendar month per user.
 
-The scheduler checks these settings during its normal interval. It creates one report per client and sends it to the client email plus the user recipients, at most once per calendar month per user. The page includes a report-month picker, client selector, and a manual generate-and-send action.
+### Manual send
+`POST /api/reports/monthly/send` supports two delivery modes:
+- **combined** — single report to all recipients
+- **client** — per-client reports via `sendMonthlyReportsPerClient`, including client-specific email recipients
+
+### Last-sent tracking
+On success: `user_settings.monthly_report_last_sent` is set to `"periodKey (ISO timestamp)"` (e.g. `"2026-08 (2026-08-15T10:30:00Z)"`). On failure: `monthly_report_last_error` is set. The Reports page displays the last-sent value in a success alert.
+
+### Report formats
+Download endpoint supports DOCX, XLSX, and CSV with configurable field selection. CSV uses Hebrew headers with UTF-8 BOM and RTL display markers. The manual report generator lets users choose report fields with Hebrew labels. Report-month picker and client selector available in the UI.
+
+### Expiry date display
+Expiry dates in reports and contracts are displayed as original date minus one day (adjusted for end-of-day semantics).

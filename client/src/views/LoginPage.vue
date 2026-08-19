@@ -77,8 +77,8 @@
                 </div>
               </n-form>
 
-<!--              <div class="divider"><span>או</span></div>-->
-<!--              <GoogleSignIn @error="onGisError"/>-->
+              <div class="divider"><span>או</span></div>
+              <GoogleSignIn @error="onGisError"/>
             </n-tab-pane>
 
             Register tab
@@ -262,7 +262,7 @@ import {useDocumentsStore} from "../stores/documents.js";
 import {useContractsStore} from "../stores/contracts.js";
 import {useClientsStore} from "../stores/clients.js";
 import {useRemindersStore} from "../stores/reminders.js";
-// import GoogleSignIn from "../components/GoogleSignIn.vue";
+import GoogleSignIn from "../components/GoogleSignIn.vue";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 

@@ -174,13 +174,24 @@ export function registerReportRoutes(app: express.Application) {
               includeClientRecipient: true,
             });
       const periodKey = reportPeriodKey(year, month);
+      const sentAt = new Date().toISOString();
       if (result.success) {
         await col("user_settings").updateOne(
           { user_id: userId },
           {
             $set: {
-              monthly_report_last_sent: periodKey,
+              monthly_report_last_sent: `${periodKey} (${sentAt})`,
               monthly_report_last_error: null,
+            },
+          },
+          { upsert: true },
+        );
+      } else {
+        await col("user_settings").updateOne(
+          { user_id: userId },
+          {
+            $set: {
+              monthly_report_last_error: result.error ?? "שליחה נכשלה",
             },
           },
           { upsert: true },

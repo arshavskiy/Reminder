@@ -95,6 +95,7 @@
           <n-form-item label="איש קשר"><n-input v-model:value="editForm.contact_person" /></n-form-item>
           <n-form-item label="אימייל"><n-input v-model:value="editForm.email" class="email-ltr" dir="ltr" /></n-form-item>
           <n-form-item label="טלפון"><n-input v-model:value="editForm.phone" /></n-form-item>
+          <n-form-item label="נייד"><n-input v-model:value="editForm.mobile" /></n-form-item>
           <n-form-item label="הערות"><n-input v-model:value="editForm.notes" type="textarea" :rows="3" /></n-form-item>
         </n-form>
         <template #action>
@@ -163,7 +164,7 @@ const message = useMessage();
 
 const showEdit = ref(false);
 const saving = ref(false);
-const editForm = ref<{ display_name: string; contact_person: string; email: string; phone: string; notes: string } | null>(null);
+const editForm = ref<{ display_name: string; contact_person: string; email: string; phone: string; mobile: string; notes: string } | null>(null);
 const equipment = ref<Equipment[]>([]);
 const loadingEquipment = ref(false);
 
@@ -348,6 +349,7 @@ watch(showEdit, (open) => {
       contact_person: store.active.contact_person ?? "",
       email: store.active.email ?? "",
       phone: store.active.phone ?? "",
+      mobile: store.active.mobile ?? "",
       notes: store.active.notes ?? "",
     };
   }

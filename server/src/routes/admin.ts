@@ -185,7 +185,7 @@ export function registerAdminRoutes(app: express.Application) {
       // Failed extractions with error messages
       col("documents").find(
         { processing_status: "error" },
-        { projection: { _id: 1, user_id: 1, original_filename: 1, error_message: 1, created_at: 1 } },
+        { projection: { _id: 1, user_id: 1, file_name: 1, error_message: 1, created_at: 1 } },
       ).sort({ created_at: -1 }).limit(50).toArray(),
 
       // Stuck in queued (older than 10 minutes)
@@ -194,7 +194,7 @@ export function registerAdminRoutes(app: express.Application) {
           processing_status: "queued",
           created_at: { $lt: new Date(Date.now() - 10 * 60 * 1000) },
         },
-        { projection: { _id: 1, user_id: 1, original_filename: 1, created_at: 1 } },
+        { projection: { _id: 1, user_id: 1, file_name: 1, created_at: 1 } },
       ).sort({ created_at: -1 }).limit(50).toArray(),
 
       // S3 storage per user
@@ -224,14 +224,14 @@ export function registerAdminRoutes(app: express.Application) {
       failed: failed.map((d: any) => ({
         id: d._id?.toString(),
         user_id: d.user_id,
-        filename: d.original_filename,
+        filename: d.file_name,
         error: d.error_message,
         created_at: d.created_at,
       })),
       stuck: stuck.map((d: any) => ({
         id: d._id?.toString(),
         user_id: d.user_id,
-        filename: d.original_filename,
+        filename: d.file_name,
         created_at: d.created_at,
       })),
       storage: storage.map((s: any) => ({
@@ -1047,7 +1047,7 @@ export function registerAdminRoutes(app: express.Application) {
     try {
     const userId = req.params.id;
 
-    const [documents, emailLogs, reminderCounts, extractions, schedulerErrors] = await Promise.all([
+    const [documents, emailLogs, reminderCounts, extractions, schedulerErrors, clientCount, contractCount, equipmentCount, documentCount, emailCount, extractionCount, activeSessions] = await Promise.all([
       // All documents for this user (with extracted_fields + template id for field coverage)
       col("documents").find(
         { user_id: userId },
@@ -1077,6 +1077,17 @@ export function registerAdminRoutes(app: express.Application) {
         { user_id: userId, success: 0 },
         { projection: { _id: 1, log_type: 1, error: 1, sent_at: 1, recipient: 1 } },
       ).sort({ sent_at: -1 }).limit(50).toArray(),
+
+      // Entity counts
+      col("clients").countDocuments({ user_id: userId }),
+      col("contracts").countDocuments({ user_id: userId }),
+      col("equipment").countDocuments({ user_id: userId }),
+      col("documents").countDocuments({ user_id: userId }),
+      col("email_log").countDocuments({ user_id: userId }),
+      col("extractions").countDocuments({ user_id: userId }),
+
+      // Active sessions
+      col("sessions").countDocuments({ user_id: userId, expires_at: { $gt: new Date() } }),
     ]);
 
     const reminderStatusMap: Record<string, number> = {};
@@ -1183,10 +1194,205 @@ export function registerAdminRoutes(app: express.Application) {
         sent_at: e.sent_at,
         recipient: e.recipient,
       })),
+      counts: {
+        clients: clientCount,
+        contracts: contractCount,
+        equipment: equipmentCount,
+        documents: documentCount,
+        emails: emailCount,
+        extractions: extractionCount,
+        total_storage_bytes: documents.reduce((sum: number, d: any) => sum + (d.file_size_bytes ?? 0), 0),
+      },
+      active_sessions: activeSessions,
     });
     } catch (err: any) {
       console.error("user detail error:", err);
       res.status(500).json({ error: err.message ?? "Failed to load user detail" });
+    }
+  });
+
+  // ── Bad email audit ──────────────────────────────────────────────────────
+  // GET /api/admin/monitor/bad-emails
+  app.get("/api/admin/monitor/bad-emails", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      function classifyEmail(email: string): string[] {
+        const issues: string[] = [];
+        if (!email || !email.trim()) return ["empty"];
+        const e = email.trim();
+        if (/\.{2,}/.test(e)) issues.push("consecutive_dots");
+        if (/[.,;:]+$/.test(e)) issues.push("trailing_punctuation");
+        if (!EMAIL_RE.test(e)) issues.push("invalid_format");
+        const domain = e.split("@")[1] ?? "";
+        if (domain && !/\./.test(domain)) issues.push("missing_tld");
+        if (/\s/.test(e)) issues.push("contains_spaces");
+        if (/[א-ת]/.test(e)) issues.push("hebrew_chars");
+        const tld = domain.split(".").pop() ?? "";
+        if (tld.length === 1) issues.push("short_tld");
+        return issues;
+      }
+
+      const [clients, reminders, bouncedLogs, documentsWithEmail] = await Promise.all([
+        col("clients").find(
+          { email: { $exists: true, $nin: [null, ""] } },
+          { projection: { _id: 1, user_id: 1, display_name: 1, email: 1, phone: 1 } },
+        ).toArray(),
+        col("reminders").find(
+          { email_to: { $exists: true, $nin: [null, ""] } },
+          { projection: { _id: 1, user_id: 1, email_to: 1, source_id: 1, status: 1, trigger_date: 1 } },
+        ).toArray(),
+        col("email_log").find(
+          { $or: [{ bounced: true }, { log_type: "bounce" }, { error: { $regex: /bounce|invalid.*recipient|rejected/i } }] },
+          { projection: { _id: 1, to_address: 1, error: 1, sent_at: 1, reminder_id: 1, user_id: 1 } },
+        ).sort({ sent_at: -1 }).limit(500).toArray(),
+        col("documents").find(
+          { "extracted_fields": { $exists: true } },
+          { projection: { _id: 1, user_id: 1, file_name: 1, original_filename: 1, extracted_fields: 1 } },
+        ).limit(2000).toArray(),
+      ]);
+
+      const badClients: any[] = [];
+      for (const c of clients as any[]) {
+        const email = String(c.email ?? "").trim();
+        const issues = classifyEmail(email);
+        if (issues.length > 0) {
+          badClients.push({
+            id: c._id?.toString(),
+            user_id: c.user_id,
+            display_name: c.display_name,
+            email,
+            phone: c.phone ?? null,
+            issues,
+          });
+        }
+      }
+
+      const badReminders: any[] = [];
+      for (const r of reminders as any[]) {
+        const emails = Array.isArray(r.email_to) ? r.email_to : [r.email_to];
+        for (const email of emails) {
+          const e = String(email ?? "").trim();
+          const issues = classifyEmail(e);
+          if (issues.length > 0) {
+            badReminders.push({
+              id: r._id?.toString(),
+              user_id: r.user_id,
+              email: e,
+              status: r.status,
+              trigger_date: r.trigger_date,
+              source_id: r.source_id?.toString?.() ?? r.source_id,
+              issues,
+            });
+          }
+        }
+      }
+
+      const badDocEmails: any[] = [];
+      for (const d of documentsWithEmail as any[]) {
+        let fields: Record<string, any> = {};
+        try {
+          fields = typeof d.extracted_fields === "string" ? JSON.parse(d.extracted_fields) : (d.extracted_fields ?? {});
+        } catch { continue; }
+        const email = String(fields.client_email ?? fields.contact_email ?? fields.email ?? "").trim();
+        if (!email) continue;
+        const issues = classifyEmail(email);
+        if (issues.length > 0) {
+          badDocEmails.push({
+            id: d._id?.toString(),
+            user_id: d.user_id,
+            filename: d.file_name ?? d.original_filename,
+            email,
+            issues,
+          });
+        }
+      }
+
+      const bouncedAddresses = bouncedLogs.map((l: any) => ({
+        email: l.to_address,
+        error: l.error ?? "bounced",
+        sent_at: l.sent_at,
+        reminder_id: l.reminder_id?.toString?.() ?? null,
+        user_id: l.user_id,
+      }));
+
+      res.json({
+        bad_clients: badClients,
+        bad_reminders: badReminders,
+        bad_doc_emails: badDocEmails,
+        bounced: bouncedAddresses,
+        summary: {
+          total_bad_clients: badClients.length,
+          total_bad_reminders: badReminders.length,
+          total_bad_doc_emails: badDocEmails.length,
+          total_bounced: bouncedAddresses.length,
+        },
+      });
+    } catch (err: any) {
+      console.error("bad-emails monitor error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // ── System health ────────────────────────────────────────────────────────
+  // GET /api/admin/monitor/system-health
+  app.get("/api/admin/monitor/system-health", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const db = col("users").dbName ? col("users") : null;
+      const dbInstance = (await import("../db/db.js")).getDb();
+
+      const collectionNames = [
+        "users", "sessions", "documents", "clients", "contracts",
+        "reminders", "equipment", "email_log", "extractions",
+        "print_templates", "print_template_drafts", "email_templates",
+        "doc_templates", "timeline_events", "tasks",
+      ];
+
+      const countPromises = collectionNames.map(async (name) => {
+        try {
+          const count = await dbInstance.collection(name).estimatedDocumentCount();
+          return { collection: name, count };
+        } catch {
+          return { collection: name, count: -1 };
+        }
+      });
+
+      const [dbStats, collectionCounts, activeSessions] = await Promise.all([
+        dbInstance.stats().catch(() => null),
+        Promise.all(countPromises),
+        col("sessions").countDocuments({ expires_at: { $gt: new Date() } }),
+      ]);
+
+      const uptime = process.uptime();
+      const mem = process.memoryUsage();
+
+      res.json({
+        server: {
+          uptime_seconds: Math.floor(uptime),
+          uptime_human: `${Math.floor(uptime / 86400)}d ${Math.floor((uptime % 86400) / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`,
+          node_version: process.version,
+          platform: process.platform,
+          memory: {
+            rss_mb: Math.round(mem.rss / 1048576),
+            heap_used_mb: Math.round(mem.heapUsed / 1048576),
+            heap_total_mb: Math.round(mem.heapTotal / 1048576),
+            external_mb: Math.round(mem.external / 1048576),
+          },
+          pid: process.pid,
+        },
+        database: {
+          name: dbInstance.databaseName,
+          size_mb: dbStats ? Math.round((dbStats as any).dataSize / 1048576) : null,
+          storage_mb: dbStats ? Math.round((dbStats as any).storageSize / 1048576) : null,
+          collections: collectionCounts.sort((a, b) => b.count - a.count),
+        },
+        active_sessions: activeSessions,
+      });
+    } catch (err: any) {
+      console.error("system-health error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
     }
   });
 }
