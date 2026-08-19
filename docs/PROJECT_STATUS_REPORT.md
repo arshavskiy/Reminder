@@ -1,7 +1,7 @@
 # Project Status Report
 
-**Updated**: 2026-05-22
-**Overall Status**: 🟢 **ON TRACK** — Phase 1 complete, Phase 2 auth complete, Vercel client deployment ready
+**Updated**: 2026-08-19
+**Overall Status**: 🟢 **PRODUCTION** — deployed on Railway (server) + Vercel (client)
 
 ---
 
@@ -13,8 +13,13 @@
 | **Google OAuth + Sessions (Phase 2)** | ✅ Complete | 100% |
 | **Route Scoping by user_id** | ✅ Complete | 100% |
 | **Frontend Auth UI** | ✅ Complete | 100% |
-| **Vercel Client Deployment** | ✅ Ready | 100% |
-| **Testing** | ⏳ Pending | 0% |
+| **Print Templates (Excel + Section editors)** | ✅ Complete | 100% |
+| **Monthly Reports** | ✅ Complete | 100% |
+| **Email Grouping + Items Table** | ✅ Complete | 100% |
+| **Copy-on-Write Shared Templates** | ✅ Complete | 100% |
+| **Hydraulic Check Modal** | ✅ Complete | 100% |
+| **Production Deployment** | ✅ Live | 100% |
+| **Testing** | ⏳ Partial | 20% |
 
 ---
 
@@ -22,40 +27,39 @@
 
 ```
 E:\Projects\Reminder\
-├── server/                    ← Bun backend (port 3737)
+├── server/                    ← Node.js 22 + Express backend (port 3737, Railway)
 │   ├── src/
-│   │   ├── index.ts           ← Bun.serve, route registration, WS, scheduler
+│   │   ├── index.ts           ← Express server, route registration, WS, scheduler
 │   │   ├── settings.ts        ← App settings loader
 │   │   ├── auth/
 │   │   │   ├── google.ts      ← OAuth 2.0 + PKCE flow
-│   │   │   ├── session.ts     ← Cookie-based session management
+│   │   │   ├── session.ts     ← Cookie-based session management (MongoDB)
 │   │   │   └── middleware.ts  ← requireAuth / requireAdmin
 │   │   ├── db/
-│   │   │   ├── db.ts          ← SQLite singleton
-│   │   │   ├── schema.ts      ← Full Phase 2 schema (users, sessions, user_settings + all tables)
-│   │   │   └── migrate.ts     ← One-time backfill migration
-│   │   ├── routes/            ← 13 REST route files (all scoped by user_id)
+│   │   │   └── db.ts          ← MongoDB connection
+│   │   ├── routes/            ← 22 REST route files (all scoped by user_id)
 │   │   ├── pipeline/          ← Document import, parsing, AI extraction
-│   │   ├── reminders/         ← Scheduler + email sender
-│   │   ├── templates/         ← Doc & email template generation
-│   │   ├── search/            ← FTS5 full-text search
+│   │   ├── reminders/         ← Scheduler + email sender (Resend + SMTP)
+│   │   ├── templates/         ← Doc, email, & print template generation
+│   │   ├── search/            ← Regex-based full-text search
+│   │   ├── scripts/           ← Migration and backfill scripts
 │   │   └── shared/types.ts    ← Shared TypeScript interfaces
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── .env.example
 │
-├── client/                    ← Vue 3 + Vite frontend (port 4173 dev)
+├── client/                    ← Vue 3 + Vite + Naive UI + Tailwind v4 (Vercel)
 │   ├── src/
 │   │   ├── App.vue            ← Root component, top bar, RTL Naive UI
 │   │   ├── main.ts
 │   │   ├── index.html
-│   │   ├── components/        ← 8 reusable components
-│   │   ├── views/             ← 14 page components
-│   │   ├── stores/            ← 8 Pinia stores (auth, documents, clients, ...)
-│   │   ├── router/index.ts    ← 14 routes + auth guard
+│   │   ├── components/        ← Reusable components (contracts, print, upload)
+│   │   ├── views/             ← 24 page components
+│   │   ├── stores/            ← Pinia stores (auth, documents, clients, ...)
+│   │   ├── router/index.ts    ← Routes + auth guard
 │   │   ├── services/
 │   │   │   └── apiService.ts  ← Centralized fetch wrappers + WS client
-│   │   ├── shared/types.ts    ← Copy of server types
+│   │   ├── shared/            ← types.ts, rowIssues.ts, rememberedUi.ts
 │   │   └── styles/global.css  ← CSS variables, RTL, dark/light theme
 │   ├── vite.config.ts         ← Dev proxy to :3737, build → dist/client
 │   └── package.json
@@ -170,26 +174,53 @@ E:\Projects\Reminder\
 | POST | `/api/assets/logo` | Upload logo |
 | GET | `/api/assets/:name` | Serve asset |
 
+### Print Templates
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/print-templates` | List visible templates (owned + shared) |
+| GET/POST | `/api/print-templates/:id` | Get / create template |
+| PUT | `/api/print-templates/:id` | Update (copy-on-write for shared) |
+| DELETE | `/api/print-templates/:id` | Delete (admin-only for shared) |
+| GET/PUT/DELETE | `/api/print-templates/:id/draft` | Draft CRUD |
+| GET | `/api/print-templates/drafts` | List all user drafts |
+| POST | `/api/print-templates/:id/pdf` | Render PDF inline |
+| POST | `/api/print-templates/:id/pdf/save` | Render + persist PDF as document |
+
+### Reports
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/reports/monthly/download` | Download report (docx/xlsx/csv) |
+| POST | `/api/reports/monthly/send` | Manual send (combined or per-client) |
+
 ---
 
 ## Client Pages & Routes
 
 | Route | Component | Description |
 |-------|-----------|-------------|
-| `/login` | LoginPage.vue | Google sign-in |
+| `/login` | LoginPage.vue | Google sign-in + email/password |
+| `/reset-password` | ResetPasswordPage.vue | Password reset flow |
 | `/` | DashboardPage.vue | Stats overview |
-| `/documents` | DocumentsPage.vue | Document list + upload |
+| `/documents` | DocumentsPage.vue | Document list + upload + quota bar |
 | `/documents/:id` | DocumentDetailPage.vue | Document detail + extraction |
 | `/clients` | ClientsPage.vue | Client list + create |
 | `/clients/:id` | ClientDetailPage.vue | Client profile + timeline |
-| `/contracts` | ContractsPage.vue | Contracts & inspections |
+| `/contracts` | ContractsPage.vue | Contracts & inspections + status counts |
 | `/reminders` | RemindersPage.vue | Reminder management |
+| `/reports` | ReportsPage.vue | Monthly report settings + manual send |
+| `/print-templates` | PrintTemplatesHubPage.vue | Template editor hub (layout vs Excel) |
+| `/print-templates/layout` | SimplePrintTemplatesPage.vue | Section-based template editor |
+| `/print-templates/excel` | PrintTemplatesPage.vue | Grid/table template editor |
+| `/contracts/:contractId/draft` | ContractDraftPage.vue | Draft preview + PDF + contract actions |
 | `/search` | SearchPage.vue | Global search |
 | `/profile` | ProfilePage.vue | User account |
 | `/settings` | SettingsPage.vue | App configuration |
+| `/admin` | AdminPage.vue | User management (admin-only) |
 | `/doc-templates` | DocTemplatesPage.vue | Extraction template editor |
 | `/email-templates` | EmailTemplatesPage.vue | Email HTML designer |
 | `/equipment` | EquipmentPage.vue | Equipment catalog |
+| `/field` | FieldPage.vue | Mobile field inspection mode |
+| `/403` | ForbiddenPage.vue | Access denied |
 
 ---
 
@@ -197,13 +228,16 @@ E:\Projects\Reminder\
 
 ```bash
 # Backend (from server/)
-bun run dev        # watch mode, port 3737
+npm run dev        # tsx watch mode, port 3737
 
 # Frontend dev server (from client/)
 npm run dev        # Vite + proxy to :3737, port 4173
 
 # Build client
 npm run build      # output → dist/client
+
+# Production (Railway)
+npm start          # node --import tsx/esm src/index.ts
 ```
 
 ### Environment Variables
@@ -211,12 +245,21 @@ npm run build      # output → dist/client
 **server/.env**
 ```
 PORT=3737
-DATA_DIR=./data
+MONGODB_URI=mongodb+srv://...
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=http://localhost:3737/auth/google/callback
 SESSION_SECRET=
 ALLOWED_EMAILS=
+RESEND_API_KEY=
+OPENAI_API_KEY=
+DO_SPACES_KEY=
+DO_SPACES_SECRET=
+DO_SPACES_BUCKET=
+DO_SPACES_REGION=
+DO_SPACES_ENDPOINT=
+FRONTEND_URL=
+ESCALATION_EMAIL=
 ```
 
 **client/.env** — not needed in dev (proxy handles API routing)
@@ -237,9 +280,8 @@ Separate repo at `E:\Projects\Reminder-client`:
 
 | Priority | Task | Notes |
 |----------|------|-------|
-| High | Deploy backend to VPS | Fly.io / Railway / Hetzner |
-| High | Push Reminder-client to GitHub + Vercel | Separate repo ready |
 | Medium | End-to-end multi-user testing | Two accounts, verify isolation |
 | Medium | Per-user WebSocket filtering | `broadcastTo(userId, event)` |
-| Low | Tests | No test suite yet |
-| Low | Admin UI | User management panel |
+| Medium | Expand test suite | Some tests exist, coverage still low |
+| Low | Per-user file storage isolation | Currently shared `data/documents/` |
+| Low | Teams / shared workspaces | Allow multiple users to see same data |

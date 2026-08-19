@@ -1189,4 +1189,128 @@ export function registerAdminRoutes(app: express.Application) {
       res.status(500).json({ error: err.message ?? "Failed to load user detail" });
     }
   });
+
+  // ── Bad email audit ──────────────────────────────────────────────────────
+  // GET /api/admin/monitor/bad-emails
+  app.get("/api/admin/monitor/bad-emails", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      function classifyEmail(email: string): string[] {
+        const issues: string[] = [];
+        if (!email || !email.trim()) return ["empty"];
+        const e = email.trim();
+        if (/\.{2,}/.test(e)) issues.push("consecutive_dots");
+        if (/[.,;:]+$/.test(e)) issues.push("trailing_punctuation");
+        if (!EMAIL_RE.test(e)) issues.push("invalid_format");
+        const domain = e.split("@")[1] ?? "";
+        if (domain && !/\./.test(domain)) issues.push("missing_tld");
+        if (/\s/.test(e)) issues.push("contains_spaces");
+        if (/[א-ת]/.test(e)) issues.push("hebrew_chars");
+        const tld = domain.split(".").pop() ?? "";
+        if (tld.length === 1) issues.push("short_tld");
+        return issues;
+      }
+
+      const [clients, reminders, bouncedLogs, documentsWithEmail] = await Promise.all([
+        col("clients").find(
+          { email: { $exists: true, $nin: [null, ""] } },
+          { projection: { _id: 1, user_id: 1, display_name: 1, email: 1, phone: 1 } },
+        ).toArray(),
+        col("reminders").find(
+          { email_to: { $exists: true, $nin: [null, ""] } },
+          { projection: { _id: 1, user_id: 1, email_to: 1, source_id: 1, status: 1, trigger_date: 1 } },
+        ).toArray(),
+        col("email_log").find(
+          { $or: [{ bounced: true }, { log_type: "bounce" }, { error: { $regex: /bounce|invalid.*recipient|rejected/i } }] },
+          { projection: { _id: 1, to_address: 1, error: 1, sent_at: 1, reminder_id: 1, user_id: 1 } },
+        ).sort({ sent_at: -1 }).limit(500).toArray(),
+        col("documents").find(
+          { "extracted_fields": { $exists: true } },
+          { projection: { _id: 1, user_id: 1, file_name: 1, original_filename: 1, extracted_fields: 1 } },
+        ).limit(2000).toArray(),
+      ]);
+
+      const badClients: any[] = [];
+      for (const c of clients as any[]) {
+        const email = String(c.email ?? "").trim();
+        const issues = classifyEmail(email);
+        if (issues.length > 0) {
+          badClients.push({
+            id: c._id?.toString(),
+            user_id: c.user_id,
+            display_name: c.display_name,
+            email,
+            phone: c.phone ?? null,
+            issues,
+          });
+        }
+      }
+
+      const badReminders: any[] = [];
+      for (const r of reminders as any[]) {
+        const emails = Array.isArray(r.email_to) ? r.email_to : [r.email_to];
+        for (const email of emails) {
+          const e = String(email ?? "").trim();
+          const issues = classifyEmail(e);
+          if (issues.length > 0) {
+            badReminders.push({
+              id: r._id?.toString(),
+              user_id: r.user_id,
+              email: e,
+              status: r.status,
+              trigger_date: r.trigger_date,
+              source_id: r.source_id?.toString?.() ?? r.source_id,
+              issues,
+            });
+          }
+        }
+      }
+
+      const badDocEmails: any[] = [];
+      for (const d of documentsWithEmail as any[]) {
+        let fields: Record<string, any> = {};
+        try {
+          fields = typeof d.extracted_fields === "string" ? JSON.parse(d.extracted_fields) : (d.extracted_fields ?? {});
+        } catch { continue; }
+        const email = String(fields.client_email ?? fields.contact_email ?? fields.email ?? "").trim();
+        if (!email) continue;
+        const issues = classifyEmail(email);
+        if (issues.length > 0) {
+          badDocEmails.push({
+            id: d._id?.toString(),
+            user_id: d.user_id,
+            filename: d.file_name ?? d.original_filename,
+            email,
+            issues,
+          });
+        }
+      }
+
+      const bouncedAddresses = bouncedLogs.map((l: any) => ({
+        email: l.to_address,
+        error: l.error ?? "bounced",
+        sent_at: l.sent_at,
+        reminder_id: l.reminder_id?.toString?.() ?? null,
+        user_id: l.user_id,
+      }));
+
+      res.json({
+        bad_clients: badClients,
+        bad_reminders: badReminders,
+        bad_doc_emails: badDocEmails,
+        bounced: bouncedAddresses,
+        summary: {
+          total_bad_clients: badClients.length,
+          total_bad_reminders: badReminders.length,
+          total_bad_doc_emails: badDocEmails.length,
+          total_bounced: bouncedAddresses.length,
+        },
+      });
+    } catch (err: any) {
+      console.error("bad-emails monitor error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
 }

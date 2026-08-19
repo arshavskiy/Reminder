@@ -439,6 +439,7 @@ export const api = {
     monitorExtractionQuality: () => adminGet<any>("/admin/monitor/extraction-quality"),
     monitorPipelineGaps: () => adminGet<any>("/admin/monitor/pipeline-gaps"),
     monitorContractAdvances: () => adminGet<any>("/admin/monitor/contract-advances"),
+    monitorBadEmails: () => adminGet<any>("/admin/monitor/bad-emails"),
     listFeatures: () => adminGet<{ rows: FeatureDefinition[] }>("/features"),
     getAdminSettings: () => adminGet<any>("/admin/settings"),
     getUserDetail: (id: string) => adminGet<any>(`/admin/users/${id}/detail`),

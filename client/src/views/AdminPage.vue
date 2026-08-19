@@ -665,6 +665,91 @@
           </div>
         </template>
       </section>
+      <!-- ── Bad Emails ── -->
+      <section v-if="activeSection === 'bad_emails'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="badEmailsData">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+            <n-tag :type="badEmailsData.summary.total_bad_clients ? 'error' : 'success'" round>
+              Bad client emails: {{ badEmailsData.summary.total_bad_clients }}
+            </n-tag>
+            <n-tag :type="badEmailsData.summary.total_bad_reminders ? 'warning' : 'success'" round>
+              Bad reminder emails: {{ badEmailsData.summary.total_bad_reminders }}
+            </n-tag>
+            <n-tag :type="badEmailsData.summary.total_bad_doc_emails ? 'warning' : 'success'" round>
+              Bad extracted emails: {{ badEmailsData.summary.total_bad_doc_emails }}
+            </n-tag>
+            <n-tag :type="badEmailsData.summary.total_bounced ? 'error' : 'success'" round>
+              Bounced: {{ badEmailsData.summary.total_bounced }}
+            </n-tag>
+          </div>
+
+          <div v-if="badEmailsData.bad_clients.length" class="monitor-block">
+            <div class="monitor-block__title">
+              Bad Client Emails
+              <n-tag type="error" size="small" round style="margin-right:8px">{{ badEmailsData.bad_clients.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="badClientEmailColumns"
+              :data="badEmailsData.bad_clients"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <div v-if="badEmailsData.bad_reminders.length" class="monitor-block">
+            <div class="monitor-block__title">
+              Bad Reminder Emails
+              <n-tag type="warning" size="small" round style="margin-right:8px">{{ badEmailsData.bad_reminders.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="badReminderEmailColumns"
+              :data="badEmailsData.bad_reminders"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <div v-if="badEmailsData.bad_doc_emails.length" class="monitor-block">
+            <div class="monitor-block__title">
+              Bad Extracted Emails (from documents)
+              <n-tag type="warning" size="small" round style="margin-right:8px">{{ badEmailsData.bad_doc_emails.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="badDocEmailColumns"
+              :data="badEmailsData.bad_doc_emails"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <div v-if="badEmailsData.bounced.length" class="monitor-block">
+            <div class="monitor-block__title">
+              Bounced Emails
+              <n-tag type="error" size="small" round style="margin-right:8px">{{ badEmailsData.bounced.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="bouncedEmailColumns"
+              :data="badEmailsData.bounced"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+
+          <div v-if="!badEmailsData.bad_clients.length && !badEmailsData.bad_reminders.length && !badEmailsData.bad_doc_emails.length && !badEmailsData.bounced.length" class="monitor-block">
+            <n-empty description="No bad emails found" />
+          </div>
+        </template>
+      </section>
+
       <!-- ── Settings ── -->
       <section v-if="activeSection === 'settings'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
@@ -1075,6 +1160,7 @@ import {
   CloudUploadOutline,
   DocumentOutline,
   FlashOutline,
+  MailOutline,
   MenuOutline,
   NotificationsOutline,
   PeopleOutline,
@@ -1137,6 +1223,7 @@ const adminSections = [
   { key: "reminders",          label: "Reminders",              icon: NotificationsOutline },
   { key: "scheduler",          label: "Scheduler",              icon: TimerOutline },
   { key: "monthly",            label: "Monthly Reports",        icon: CalendarOutline },
+  { key: "bad_emails",         label: "Bad Emails",             icon: MailOutline },
   { key: "settings",           label: "Settings",               icon: SettingsOutline },
 ];
 const sidebarItems = adminSections.filter((item) => item.key !== "settings");
@@ -2135,6 +2222,89 @@ const extractionQuality = ref<any>(null);
 // ── Pipeline gaps ──────────────────────────────────────────────────────────
 const pipelineGaps = ref<any>(null);
 
+// ── Bad emails monitor ────────────────────────────────────────────────────
+const badEmailsData = ref<any>(null);
+
+const issueLabel: Record<string, string> = {
+  consecutive_dots: "consecutive dots",
+  trailing_punctuation: "trailing punctuation",
+  invalid_format: "invalid format",
+  missing_tld: "missing TLD",
+  contains_spaces: "spaces",
+  hebrew_chars: "Hebrew chars",
+  short_tld: "short TLD",
+  empty: "empty",
+};
+
+const badClientEmailColumns: DataTableColumns<any> = [
+  {
+    title: "User", key: "user_id", width: 180, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  { title: "Client", key: "display_name", minWidth: 160, ellipsis: { tooltip: true } },
+  {
+    title: "Email", key: "email", minWidth: 220, ellipsis: { tooltip: true },
+    render: (row) => h("code", { style: "font-size:12px;color:var(--error-color, #e88080)" }, row.email),
+  },
+  { title: "Phone", key: "phone", width: 140, ellipsis: { tooltip: true } },
+  {
+    title: "Issues", key: "issues", minWidth: 180,
+    render: (row) => row.issues.map((i: string) => h(NTag, { size: "small", type: "error", round: true, style: "margin:2px" }, () => issueLabel[i] ?? i)),
+  },
+];
+
+const badReminderEmailColumns: DataTableColumns<any> = [
+  {
+    title: "User", key: "user_id", width: 180, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  {
+    title: "Email", key: "email", minWidth: 220, ellipsis: { tooltip: true },
+    render: (row) => h("code", { style: "font-size:12px;color:var(--error-color, #e88080)" }, row.email),
+  },
+  { title: "Status", key: "status", width: 100 },
+  {
+    title: "Trigger", key: "trigger_date", width: 120,
+    render: (row) => row.trigger_date ? new Date(row.trigger_date).toLocaleDateString() : "—",
+  },
+  {
+    title: "Issues", key: "issues", minWidth: 180,
+    render: (row) => row.issues.map((i: string) => h(NTag, { size: "small", type: "warning", round: true, style: "margin:2px" }, () => issueLabel[i] ?? i)),
+  },
+];
+
+const badDocEmailColumns: DataTableColumns<any> = [
+  {
+    title: "User", key: "user_id", width: 180, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  { title: "File", key: "filename", minWidth: 180, ellipsis: { tooltip: true } },
+  {
+    title: "Extracted Email", key: "email", minWidth: 220, ellipsis: { tooltip: true },
+    render: (row) => h("code", { style: "font-size:12px;color:var(--error-color, #e88080)" }, row.email),
+  },
+  {
+    title: "Issues", key: "issues", minWidth: 180,
+    render: (row) => row.issues.map((i: string) => h(NTag, { size: "small", type: "warning", round: true, style: "margin:2px" }, () => issueLabel[i] ?? i)),
+  },
+];
+
+const bouncedEmailColumns: DataTableColumns<any> = [
+  {
+    title: "User", key: "user_id", width: 180, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
+  },
+  {
+    title: "Email", key: "email", minWidth: 220, ellipsis: { tooltip: true },
+    render: (row) => h("code", { style: "font-size:12px;color:var(--error-color, #e88080)" }, row.email),
+  },
+  { title: "Error", key: "error", minWidth: 200, ellipsis: { tooltip: true } },
+  {
+    title: "Date", key: "sent_at", width: 140,
+    render: (row) => row.sent_at ? new Date(row.sent_at).toLocaleString() : "—",
+  },
+];
+
 // ── Contract advances ──────────────────────────────────────────────────────
 const contractAdvances = ref<any[]>([]);
 
@@ -2308,6 +2478,8 @@ async function loadSectionData(key: string) {
       schedulerMonitor.value = await api.admin.monitorScheduler();
     } else if (key === "monthly") {
       monthlyMonitor.value = await api.admin.monitorMonthlyReports();
+    } else if (key === "bad_emails") {
+      badEmailsData.value = await api.admin.monitorBadEmails();
     } else if (key === "settings") {
       adminSettings.value = await api.admin.getAdminSettings();
     }
