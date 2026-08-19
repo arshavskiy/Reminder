@@ -196,6 +196,11 @@ registerAdminRoutes(app);
 registerExtractRemindersRoutes(app);
 registerPrintTemplateRoutes(app);
 
+// Legal pages (public, no auth)
+const LEGAL_DIR = join(__dirname, "../src/legal");
+app.get("/privacy", (_req, res) => res.sendFile(join(LEGAL_DIR, "privacy.html")));
+app.get("/terms", (_req, res) => res.sendFile(join(LEGAL_DIR, "terms.html")));
+
 // Static file serving (production)
 const STATIC_DIR = join(__dirname, "../../dist/client");
 if (process.env.NODE_ENV === "production" && existsSync(STATIC_DIR)) {
