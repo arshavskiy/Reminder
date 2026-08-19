@@ -739,10 +739,10 @@
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="systemHealth">
           <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">
-            <AdminStatCard label="Uptime" :value="systemHealth.server.uptime_human" color="#63e2b7" />
-            <AdminStatCard label="Node.js" :value="systemHealth.server.node_version" color="#70c0e8" />
-            <AdminStatCard label="Memory (RSS)" :value="systemHealth.server.memory.rss_mb + ' MB'" color="#e8c870" />
-            <AdminStatCard label="Active Sessions" :value="systemHealth.active_sessions" color="#e88080" />
+            <AdminStatCard title="Uptime" :primary="systemHealth.server.uptime_human" primary-label="Server" format="custom" />
+            <AdminStatCard title="Node.js" :primary="systemHealth.server.node_version" primary-label="Runtime" format="custom" />
+            <AdminStatCard title="Memory (RSS)" :primary="systemHealth.server.memory.rss_mb + ' MB'" primary-label="Resident Set" format="custom" />
+            <AdminStatCard title="Active Sessions" :primary="systemHealth.active_sessions" primary-label="Open" />
           </div>
 
           <div class="monitor-block">
@@ -1020,7 +1020,7 @@
 
           <n-tabs type="line" size="small" animated>
             <!-- Documents tab -->
-            <n-tab-pane name="docs" :tab="`Documents (${userDetailData.documents.length})`">
+            <n-tab-pane name="docs" :tab="`Documents (${userDetailData.counts?.documents ?? userDetailData.documents.length})`">
               <n-data-table
                 :columns="userDetailDocColumns"
                 :data="userDetailData.documents"
@@ -1033,7 +1033,7 @@
             </n-tab-pane>
 
             <!-- Email log tab -->
-            <n-tab-pane name="email" :tab="`Emails (${userDetailData.emailLogs.length})`">
+            <n-tab-pane name="email" :tab="`Emails (${userDetailData.counts?.emails ?? userDetailData.emailLogs.length})`">
               <n-data-table
                 :columns="userDetailEmailColumns"
                 :data="userDetailData.emailLogs"
@@ -1047,7 +1047,7 @@
             </n-tab-pane>
 
             <!-- Extractions tab -->
-            <n-tab-pane name="extractions" :tab="`AI Runs (${userDetailData.extractions.length})`">
+            <n-tab-pane name="extractions" :tab="`AI Runs (${userDetailData.counts?.extractions ?? userDetailData.extractions.length})`">
               <n-data-table
                 :columns="userDetailExtractionColumns"
                 :data="userDetailData.extractions"

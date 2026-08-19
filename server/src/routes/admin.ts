@@ -1047,7 +1047,7 @@ export function registerAdminRoutes(app: express.Application) {
     try {
     const userId = req.params.id;
 
-    const [documents, emailLogs, reminderCounts, extractions, schedulerErrors, clientCount, contractCount, equipmentCount, activeSessions] = await Promise.all([
+    const [documents, emailLogs, reminderCounts, extractions, schedulerErrors, clientCount, contractCount, equipmentCount, documentCount, emailCount, extractionCount, activeSessions] = await Promise.all([
       // All documents for this user (with extracted_fields + template id for field coverage)
       col("documents").find(
         { user_id: userId },
@@ -1082,6 +1082,9 @@ export function registerAdminRoutes(app: express.Application) {
       col("clients").countDocuments({ user_id: userId }),
       col("contracts").countDocuments({ user_id: userId }),
       col("equipment").countDocuments({ user_id: userId }),
+      col("documents").countDocuments({ user_id: userId }),
+      col("email_log").countDocuments({ user_id: userId }),
+      col("extractions").countDocuments({ user_id: userId }),
 
       // Active sessions
       col("sessions").countDocuments({ user_id: userId, expires_at: { $gt: new Date() } }),
@@ -1195,7 +1198,9 @@ export function registerAdminRoutes(app: express.Application) {
         clients: clientCount,
         contracts: contractCount,
         equipment: equipmentCount,
-        documents: documents.length,
+        documents: documentCount,
+        emails: emailCount,
+        extractions: extractionCount,
         total_storage_bytes: documents.reduce((sum: number, d: any) => sum + (d.file_size_bytes ?? 0), 0),
       },
       active_sessions: activeSessions,
