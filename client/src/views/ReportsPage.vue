@@ -98,7 +98,7 @@
         </n-grid>
 
         <n-alert v-if="form.lastSent" type="success" :show-icon="false" class="report-status">
-          הדוח האחרון נשלח עבור {{ form.lastSent }}.
+          הדוח האחרון נשלח עבור {{ formatLastSent(form.lastSent) }}.
         </n-alert>
         <n-alert v-if="form.lastError" type="error" :show-icon="false" class="report-status">
           השליחה האחרונה נכשלה: {{ form.lastError }}
@@ -327,6 +327,18 @@ async function downloadReport(format: "docx" | "xlsx") {
   } finally {
     downloading.value = null;
   }
+}
+
+function formatLastSent(raw: string): string {
+  const match = raw.match(/\((.+)\)$/);
+  if (match) {
+    const d = new Date(match[1]);
+    if (!isNaN(d.getTime())) {
+      const period = raw.split(" ")[0];
+      return `${period} בתאריך ${d.toLocaleDateString("he-IL")} ${d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`;
+    }
+  }
+  return raw;
 }
 
 async function sendNow() {

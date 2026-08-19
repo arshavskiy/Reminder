@@ -620,6 +620,7 @@ function calculateExpiryFromCheckDate() {
   if (!checkDateMs.value) return;
   const checkDate = new Date(checkDateMs.value);
   checkDate.setMonth(checkDate.getMonth() + intervalMonths.value);
+  checkDate.setDate(checkDate.getDate() - 1);
   expiryDateMs.value = checkDate.getTime();
 }
 
@@ -775,6 +776,7 @@ function todayIso(): string {
 function addMonthsToLocalDate(ms: number, months: number): string {
   const d = new Date(ms);
   d.setMonth(d.getMonth() + months);
+  d.setDate(d.getDate() - 1);
   return formatLocalDate(d.getTime());
 }
 
@@ -1524,7 +1526,15 @@ async function openForUpdate(contractId: string, returnTo?: string) {
   templateValues.value = {};
   hydratingDraft.value = false;
   loading.value = false;
-  void loadClients();
+  await loadClients();
+  if (clientId.value) {
+    const freshClient = clientsMap.value.get(String(clientId.value));
+    if (freshClient) {
+      hydraulicForm.value.business.email = freshClient.email || hydraulicForm.value.business.email;
+      hydraulicForm.value.business.phone = freshClient.phone || hydraulicForm.value.business.phone;
+      hydraulicForm.value.business.mobile = freshClient.mobile || hydraulicForm.value.business.mobile;
+    }
+  }
   void loadPrintTemplates().then(() => {
     selectTemplate(templateId.value ?? defaultTemplateId());
   });
