@@ -499,6 +499,6 @@ function frontendUrl(path: string) {
   const base =
     process.env.NODE_ENV !== "production"
       ? (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173")
-      : (process.env.FRONTEND_URL ?? "http://localhost:4173");
+      : (process.env.FRONTEND_URL ?? "");
   return `${base}${path}`;
 }
