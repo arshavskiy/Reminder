@@ -104,14 +104,15 @@ export function registerGmailRoutes(app: express.Application) {
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
     const user = await col<any>("users").findOne({ _id: new ObjectId(ctx.userId) } as any);
+    const isAdmin = ctx.user.role === "admin";
     const userConnected = Boolean(user?.gmail_access_token);
-    const envConnected = Boolean(process.env.GMAIL_ACCESS_TOKEN || process.env.GMAIL_REFRESH_TOKEN);
+    const envConnected = isAdmin && Boolean(process.env.GMAIL_ACCESS_TOKEN || process.env.GMAIL_REFRESH_TOKEN);
     const connected = userConnected || envConnected;
     const source = userConnected ? "oauth" : envConnected ? "env" : null;
 
     let email: string | null = null;
     if (connected) {
-      const accessToken = await resolveGmailToken(ctx.userId);
+      const accessToken = await resolveGmailToken(ctx.userId, isAdmin);
       if (accessToken) {
         try {
           const profileRes = await gmailFetch(accessToken, "profile");
@@ -132,7 +133,7 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    const accessToken = await resolveGmailToken(ctx.userId);
+    const accessToken = await resolveGmailToken(ctx.userId, ctx.user.role === "admin");
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     try {
@@ -174,7 +175,7 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    const accessToken = await resolveGmailToken(ctx.userId);
+    const accessToken = await resolveGmailToken(ctx.userId, ctx.user.role === "admin");
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     const { messageId, attachmentId } = req.params;
@@ -204,7 +205,7 @@ export function registerGmailRoutes(app: express.Application) {
     const { messageId, attachmentId, filename } = req.body;
     if (!messageId || !attachmentId) { res.status(400).json({ error: "messageId and attachmentId required" }); return; }
 
-    const accessToken = await resolveGmailToken(ctx.userId);
+    const accessToken = await resolveGmailToken(ctx.userId, ctx.user.role === "admin");
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     try {
@@ -230,7 +231,7 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    const accessToken = await resolveGmailToken(ctx.userId);
+    const accessToken = await resolveGmailToken(ctx.userId, ctx.user.role === "admin");
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     let q = (req.body.q as string) || "has:attachment filename:pdf";
@@ -405,7 +406,7 @@ function gmailFetch(accessToken: string, path: string) {
   });
 }
 
-async function resolveGmailToken(userId: string): Promise<string | null> {
+async function resolveGmailToken(userId: string, isAdmin = false): Promise<string | null> {
   // 1. Check user's OAuth token
   const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
   if (user?.gmail_access_token) {
@@ -420,7 +421,8 @@ async function resolveGmailToken(userId: string): Promise<string | null> {
     }
   }
 
-  // 2. Fall back to env tokens
+  // 2. Fall back to env tokens (admin only)
+  if (!isAdmin) return null;
   const envToken = process.env.GMAIL_ACCESS_TOKEN;
   const envRefresh = process.env.GMAIL_REFRESH_TOKEN;
   logger.info("gmail_token_resolve", { source: "env", hasToken: !!envToken, hasRefresh: !!envRefresh, hasCached: !!cachedEnvToken, cacheExpiry: envTokenExpiry?.toISOString() ?? null });

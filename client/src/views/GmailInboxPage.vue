@@ -14,7 +14,7 @@
         <n-button v-if="connected && connectionSource === 'oauth'" quaternary type="error" @click="disconnect">
           נתק Gmail
         </n-button>
-        <n-button v-if="!connected && !loading" type="primary" @click="connectGmail">
+        <n-button v-if="(!connected || connectionSource !== 'oauth') && !loading" type="primary" @click="connectGmail">
           <template #icon><n-icon :component="LogoGoogle" /></template>
           חבר Gmail
         </n-button>
