@@ -1,18 +1,8 @@
 <template>
   <div class="page-wrap" dir="rtl">
     <div class="page-header">
-      <h1 class="page-title">Gmail — חשבוניות PDF</h1>
+      <h1 class="page-title">Gmail — קבצים מצורפים <span v-if="connectedEmail" class="connected-email">({{ connectedEmail }})</span></h1>
       <div class="header-actions">
-        <n-input
-          v-if="connected"
-          v-model:value="searchQuery"
-          placeholder="חיפוש (Gmail query)"
-          clearable
-          style="width:280px"
-          @keydown.enter="loadInbox"
-        >
-          <template #prefix><n-icon :component="SearchOutline" /></template>
-        </n-input>
         <n-button v-if="connected" :loading="loading" type="primary" @click="loadInbox">
           <template #icon><n-icon :component="RefreshOutline" /></template>
           רענן
@@ -29,6 +19,53 @@
           חבר Gmail
         </n-button>
       </div>
+    </div>
+
+    <!-- Filters -->
+    <div v-if="connected" class="filter-bar">
+      <div class="file-type-checks">
+        <n-checkbox v-model:checked="fileTypes.pdf">PDF</n-checkbox>
+        <n-checkbox v-model:checked="fileTypes.doc">DOC/DOCX</n-checkbox>
+        <n-checkbox v-model:checked="fileTypes.xls">XLS/XLSX</n-checkbox>
+        <n-checkbox v-model:checked="fileTypes.img">תמונות</n-checkbox>
+      </div>
+      <div class="filter-divider" />
+      <n-select
+        v-model:value="filterType"
+        :options="filterTypeOptions"
+        placeholder="סינון נוסף"
+        style="width:160px"
+        @update:value="onFilterChange"
+      />
+      <n-select
+        v-if="filterType === 'sender'"
+        v-model:value="filterSender"
+        :options="senderOptions"
+        placeholder="שולח"
+        filterable
+        clearable
+        tag
+        style="width:220px"
+      />
+      <n-date-picker
+        v-if="filterType === 'date'"
+        v-model:value="filterDateRange"
+        type="daterange"
+        clearable
+        style="width:280px"
+      />
+      <n-input
+        v-if="filterType === 'inspection'"
+        v-model:value="filterIdentifierText"
+        placeholder="מספר רישוי / תסקיר"
+        clearable
+        style="width:220px"
+        @keydown.enter="buildAndSearch"
+      />
+      <n-button type="primary" @click="buildAndSearch" :loading="loading">
+        <template #icon><n-icon :component="SearchOutline" /></template>
+        חפש
+      </n-button>
     </div>
 
     <!-- Not connected -->
@@ -56,6 +93,12 @@
           :max-height="600"
           virtual-scroll
         />
+        <div v-if="nextPageToken" class="load-more-wrap">
+          <n-button :loading="loadingMore" @click="loadMore">
+            טען עוד
+            <template v-if="totalEstimate"> ({{ emails.length }} מתוך ~{{ totalEstimate }})</template>
+          </n-button>
+        </div>
       </div>
     </template>
 
@@ -66,14 +109,22 @@
           <n-icon :component="DocumentOutline" />
           <span class="att-name">{{ att.filename }}</span>
           <span class="att-size">{{ formatSize(att.size) }}</span>
-          <n-button
-            size="small"
-            type="primary"
-            :loading="importing[att.attachmentId]"
-            @click="importAttachment(importDrawer.messageId, att)"
-          >
-            ייבא
-          </n-button>
+          <div class="att-actions">
+            <n-button size="small" quaternary @click="previewAttachment(importDrawer.messageId, att)">
+              <template #icon><n-icon :component="EyeOutline" /></template>
+            </n-button>
+            <n-button size="small" quaternary @click="downloadAttachment(importDrawer.messageId, att)">
+              <template #icon><n-icon :component="DownloadOutline" /></template>
+            </n-button>
+            <n-button
+              size="small"
+              type="primary"
+              :loading="importing[att.attachmentId]"
+              @click="importAttachment(importDrawer.messageId, att)"
+            >
+              ייבא
+            </n-button>
+          </div>
         </div>
       </n-drawer-content>
     </n-drawer>
@@ -84,10 +135,10 @@
 import { h, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import {
-  NButton, NDataTable, NDrawer, NDrawerContent, NIcon, NInput, NSpin,
-  useMessage, type DataTableColumns,
+  NButton, NCheckbox, NDataTable, NDatePicker, NDrawer, NDrawerContent, NIcon, NInput, NSelect, NSpin,
+  useMessage, type DataTableColumns, type SelectOption,
 } from "naive-ui";
-import { CloudDownloadOutline, DocumentOutline, LogoGoogle, RefreshOutline, SearchOutline } from "@vicons/ionicons5";
+import { CloudDownloadOutline, DocumentOutline, DownloadOutline, EyeOutline, LogoGoogle, RefreshOutline, SearchOutline } from "@vicons/ionicons5";
 import { api, type GmailAttachment, type GmailEmail } from "../services/apiService.js";
 
 const route = useRoute();
@@ -95,14 +146,107 @@ const message = useMessage();
 
 const connected = ref(false);
 const connectionSource = ref<string | null>(null);
+const connectedEmail = ref<string | null>(null);
 const loading = ref(false);
+const loadingMore = ref(false);
 const importingAll = ref(false);
 const emails = ref<GmailEmail[]>([]);
-const searchQuery = ref("has:attachment filename:pdf");
+const searchQuery = ref("");
+const nextPageToken = ref<string | null>(null);
+const totalEstimate = ref<number | null>(null);
 const importing = ref<Record<string, boolean>>({});
 const importDrawer = ref<{ show: boolean; messageId: string; subject: string; attachments: GmailAttachment[] }>({
   show: false, messageId: "", subject: "", attachments: [],
 });
+
+// File type checkboxes
+const fileTypes = ref({ pdf: true, doc: false, xls: false, img: false });
+
+// Extra filters
+const filterType = ref<string>("none");
+const filterSender = ref<string | null>(null);
+const filterDateRange = ref<[number, number] | null>(null);
+const filterIdentifierText = ref("");
+
+const filterTypeOptions: SelectOption[] = [
+  { label: "ללא", value: "none" },
+  { label: "לפי שולח", value: "sender" },
+  { label: "לפי תאריך", value: "date" },
+  { label: "תסקירים (מספר רישוי)", value: "inspection" },
+];
+
+const senderOptions: SelectOption[] = [
+  { label: "חברת חשמל", value: "iec.co.il" },
+  { label: "Morning (חשבונית ירוקה)", value: "morning.co" },
+  { label: "GitHub", value: "github.com" },
+  { label: "DigitalOcean", value: "digitalocean.com" },
+  { label: "Google", value: "google.com" },
+];
+
+function onFilterChange() {
+  filterSender.value = null;
+  filterDateRange.value = null;
+  filterIdentifierText.value = "";
+}
+
+const fileTypeMap: Record<string, string[]> = {
+  pdf: ["pdf"],
+  doc: ["doc", "docx"],
+  xls: ["xls", "xlsx"],
+  img: ["jpg", "jpeg", "png"],
+};
+
+function buildSearchQuery() {
+  const parts: string[] = ["has:attachment"];
+
+  const exts: string[] = [];
+  for (const [key, extensions] of Object.entries(fileTypeMap)) {
+    if (fileTypes.value[key as keyof typeof fileTypes.value]) {
+      exts.push(...extensions);
+    }
+  }
+  if (exts.length) {
+    for (const ext of exts) parts.push(`filename:${ext}`);
+  }
+
+  if (filterType.value === "sender" && filterSender.value) {
+    parts.push(`from:${filterSender.value}`);
+  }
+  if (filterType.value === "date" && filterDateRange.value) {
+    const [from, to] = filterDateRange.value;
+    parts.push(`after:${fmtDate(from)}`, `before:${fmtDate(to + 86400000)}`);
+  }
+  if (filterType.value === "inspection" && filterIdentifierText.value.trim()) {
+    parts.push(`filename:${filterIdentifierText.value.trim()}`);
+  }
+
+  searchQuery.value = parts.join(" ");
+}
+
+function buildAndSearch() {
+  buildSearchQuery();
+  loadInbox();
+}
+
+function fmtDate(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function previewAttachment(messageId: string, att: GmailAttachment) {
+  const url = api.gmail.attachmentUrl(messageId, att.attachmentId, att.filename) + "&preview=1";
+  window.open(url, "_blank");
+}
+
+function downloadAttachment(messageId: string, att: GmailAttachment) {
+  const url = api.gmail.attachmentUrl(messageId, att.attachmentId, att.filename);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = att.filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
 
 const columns: DataTableColumns<GmailEmail> = [
   {
@@ -175,9 +319,12 @@ async function connectGmail() {
 
 async function loadInbox() {
   loading.value = true;
+  nextPageToken.value = null;
   try {
-    const { emails: rows } = await api.gmail.inbox(searchQuery.value || undefined);
-    emails.value = rows;
+    const result = await api.gmail.inbox(searchQuery.value || undefined);
+    emails.value = result.emails;
+    nextPageToken.value = result.nextPageToken;
+    totalEstimate.value = result.resultSizeEstimate;
   } catch (err: any) {
     if (err?.message?.includes("gmail_not_connected")) {
       connected.value = false;
@@ -186,6 +333,20 @@ async function loadInbox() {
     }
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadMore() {
+  if (!nextPageToken.value) return;
+  loadingMore.value = true;
+  try {
+    const result = await api.gmail.inbox(searchQuery.value || undefined, undefined, nextPageToken.value);
+    emails.value = [...emails.value, ...result.emails];
+    nextPageToken.value = result.nextPageToken;
+  } catch {
+    message.error("שגיאה בטעינת עמוד נוסף");
+  } finally {
+    loadingMore.value = false;
   }
 }
 
@@ -237,7 +398,11 @@ onMounted(async () => {
     const status = await api.gmail.status();
     connected.value = status.connected;
     connectionSource.value = status.source;
-    if (status.connected) await loadInbox();
+    connectedEmail.value = status.email ?? null;
+    if (status.connected) {
+      buildSearchQuery();
+      await loadInbox();
+    }
   } finally {
     loading.value = false;
   }
@@ -264,6 +429,18 @@ onMounted(async () => {
   margin: 0;
   font-size: 22px;
   font-weight: 700;
+}
+
+.load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.connected-email {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-color-3, #999);
 }
 
 .header-actions {
@@ -307,5 +484,32 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--n-text-color-3);
   white-space: nowrap;
+}
+
+.att-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.file-type-checks {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--n-border-color, #555);
+  margin: 0 4px;
 }
 </style>

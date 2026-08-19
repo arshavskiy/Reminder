@@ -1,6 +1,7 @@
 import express from "express";
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
+import { ObjectId } from "mongodb";
 import { col } from "../db/db";
 import { getSettings, getDataDir } from "../settings";
 import { requireAuth } from "../auth/middleware";
@@ -102,10 +103,27 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    const user = await col<any>("users").findOne({ _id: ctx.userId } as any);
+    const user = await col<any>("users").findOne({ _id: new ObjectId(ctx.userId) } as any);
     const userConnected = Boolean(user?.gmail_access_token);
-    const envConnected = Boolean(process.env.GMAIL_ACCESS_TOKEN);
-    res.json({ connected: userConnected || envConnected, source: userConnected ? "oauth" : envConnected ? "env" : null });
+    const envConnected = Boolean(process.env.GMAIL_ACCESS_TOKEN || process.env.GMAIL_REFRESH_TOKEN);
+    const connected = userConnected || envConnected;
+    const source = userConnected ? "oauth" : envConnected ? "env" : null;
+
+    let email: string | null = null;
+    if (connected) {
+      const accessToken = await resolveGmailToken(ctx.userId);
+      if (accessToken) {
+        try {
+          const profileRes = await gmailFetch(accessToken, "profile");
+          if (profileRes.ok) {
+            const profile = await profileRes.json() as { emailAddress?: string };
+            email = profile.emailAddress ?? null;
+          }
+        } catch {}
+      }
+    }
+
+    res.json({ connected, source, email });
   });
 
   // GET /api/gmail/inbox — list emails with PDF attachments
@@ -120,17 +138,31 @@ export function registerGmailRoutes(app: express.Application) {
     try {
       const q = (req.query.q as string) || "has:attachment filename:pdf";
       const maxResults = Math.min(parseInt((req.query.limit as string) || "50", 10), 100);
+      const pageToken = (req.query.pageToken as string) || undefined;
 
-      const listRes = await gmailFetch(accessToken, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
-      if (!listRes.ok) { res.status(502).json({ error: "gmail_api_error" }); return; }
-      const listData = await listRes.json() as { messages?: { id: string }[] };
+      let url = `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`;
+      if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
+
+      let listRes = await gmailFetch(accessToken, url);
+      if (listRes.status === 401) {
+        const refreshed = await retryWithRefresh(ctx.userId);
+        if (refreshed) listRes = await gmailFetch(refreshed, url);
+      }
+      if (!listRes.ok) {
+        const body = await listRes.text().catch(() => "");
+        logger.error("gmail_inbox_api_error", { status: listRes.status, body: body.slice(0, 500) });
+        res.status(502).json({ error: "gmail_api_error", detail: `Gmail API returned ${listRes.status}` });
+        return;
+      }
+      const listData = await listRes.json() as { messages?: { id: string }[]; nextPageToken?: string; resultSizeEstimate?: number };
       const messageIds = listData.messages ?? [];
+      logger.info("gmail_inbox_list", { query: q, resultCount: messageIds.length, resultSizeEstimate: listData.resultSizeEstimate });
 
       const emails = await Promise.all(
         messageIds.map(({ id }) => fetchEmailMeta(accessToken, id))
       );
 
-      res.json({ emails: emails.filter(Boolean) });
+      res.json({ emails: emails.filter(Boolean), nextPageToken: listData.nextPageToken ?? null, resultSizeEstimate: listData.resultSizeEstimate ?? null });
     } catch (err) {
       res.status(500).json({ error: "internal_error" });
     }
@@ -146,15 +178,20 @@ export function registerGmailRoutes(app: express.Application) {
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     const { messageId, attachmentId } = req.params;
-    const attRes = await gmailFetch(accessToken, `messages/${messageId}/attachments/${attachmentId}`);
-    if (!attRes.ok) { res.status(502).json({ error: "gmail_api_error" }); return; }
+    let attRes = await gmailFetch(accessToken, `messages/${messageId}/attachments/${attachmentId}`);
+    if (attRes.status === 401) {
+      const refreshed = await retryWithRefresh(ctx.userId);
+      if (refreshed) attRes = await gmailFetch(refreshed, `messages/${messageId}/attachments/${attachmentId}`);
+    }
+    if (!attRes.ok) { res.status(502).json({ error: "gmail_api_error", detail: `Gmail API returned ${attRes.status}` }); return; }
 
     const attData = await attRes.json() as { data: string };
     const buf = Buffer.from(attData.data.replace(/-/g, "+").replace(/_/g, "/"), "base64");
     const filename = (req.query.filename as string) || "attachment.pdf";
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    const disposition = req.query.preview === "1" ? "inline" : "attachment";
+    res.setHeader("Content-Disposition", `${disposition}; filename="${filename}"`);
     res.send(buf);
   });
 
@@ -188,12 +225,29 @@ export function registerGmailRoutes(app: express.Application) {
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
-    const q = (req.body.q as string) || "has:attachment filename:pdf";
+    let q = (req.body.q as string) || "has:attachment filename:pdf";
     const maxResults = Math.min(parseInt(req.body.limit ?? "50", 10), 100);
 
+    if (ctx.user.role !== "admin") {
+      const profile = await col("engineer_profiles").findOne({ user_id: ctx.userId }) as any;
+      const inspectorNumber = String(profile?.inspector_number ?? "").trim();
+      if (inspectorNumber) {
+        q = `has:attachment filename:pdf filename:${inspectorNumber}`;
+      }
+    }
+
     try {
-      const listRes = await gmailFetch(accessToken, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
-      if (!listRes.ok) { res.status(502).json({ error: "gmail_api_error" }); return; }
+      let listRes = await gmailFetch(accessToken, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
+      if (listRes.status === 401) {
+        const refreshed = await retryWithRefresh(ctx.userId);
+        if (refreshed) listRes = await gmailFetch(refreshed, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
+      }
+      if (!listRes.ok) {
+        const body = await listRes.text().catch(() => "");
+        logger.error("gmail_import_all_api_error", { status: listRes.status, body: body.slice(0, 500) });
+        res.status(502).json({ error: "gmail_api_error", detail: `Gmail API returned ${listRes.status}` });
+        return;
+      }
       const listData = await listRes.json() as { messages?: { id: string }[] };
       const messageIds = listData.messages ?? [];
 
@@ -257,7 +311,7 @@ export function registerGmailRoutes(app: express.Application) {
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
     await col("users").updateOne(
-      { _id: ctx.userId } as any,
+      { _id: new ObjectId(ctx.userId) } as any,
       { $unset: { gmail_access_token: "", gmail_refresh_token: "", gmail_token_expires_at: "" } }
     );
     res.json({ ok: true });
@@ -265,21 +319,15 @@ export function registerGmailRoutes(app: express.Application) {
 }
 
 async function fetchEmailMeta(accessToken: string, id: string) {
-  const r = await gmailFetch(accessToken, `messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`);
+  const r = await gmailFetch(accessToken, `messages/${id}?format=full`);
   if (!r.ok) return null;
   const msg = await r.json() as any;
 
   const headers: { name: string; value: string }[] = msg.payload?.headers ?? [];
   const get = (name: string) => headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
 
-  const parts: any[] = msg.payload?.parts ?? [];
-  const attachments = parts
-    .filter((p) => p.mimeType === "application/pdf" && p.body?.attachmentId)
-    .map((p) => ({
-      attachmentId: p.body.attachmentId as string,
-      filename: p.filename as string,
-      size: p.body.size as number,
-    }));
+  const attachments: { attachmentId: string; filename: string; size: number }[] = [];
+  collectPdfAttachments(msg.payload, attachments);
 
   if (!attachments.length) return null;
 
@@ -291,6 +339,22 @@ async function fetchEmailMeta(accessToken: string, id: string) {
     internalDate: msg.internalDate as string,
     attachments,
   };
+}
+
+function collectPdfAttachments(part: any, out: { attachmentId: string; filename: string; size: number }[]) {
+  if (!part) return;
+  if (part.mimeType === "application/pdf" && part.body?.attachmentId) {
+    out.push({
+      attachmentId: part.body.attachmentId,
+      filename: part.filename || "attachment.pdf",
+      size: part.body.size || 0,
+    });
+  }
+  if (part.parts) {
+    for (const child of part.parts) {
+      collectPdfAttachments(child, out);
+    }
+  }
 }
 
 async function refreshGmailToken(user: any, userId: string): Promise<string | null> {
@@ -313,7 +377,7 @@ async function refreshGmailToken(user: any, userId: string): Promise<string | nu
   if (!r.ok) return null;
   const data = await r.json() as { access_token: string; expires_in: number };
   await col("users").updateOne(
-    { _id: userId } as any,
+    { _id: new ObjectId(userId) } as any,
     { $set: {
         gmail_access_token: data.access_token,
         gmail_token_expires_at: new Date(Date.now() + data.expires_in * 1000),
@@ -331,12 +395,15 @@ function gmailFetch(accessToken: string, path: string) {
 
 async function resolveGmailToken(userId: string): Promise<string | null> {
   // 1. Check user's OAuth token
-  const user = await col<any>("users").findOne({ _id: userId } as any);
+  const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
   if (user?.gmail_access_token) {
     if (user.gmail_token_expires_at && new Date(user.gmail_token_expires_at) <= new Date()) {
+      logger.info("gmail_token_resolve", { source: "user_oauth", action: "refreshing_expired" });
       const refreshed = await refreshGmailToken(user, userId);
       if (refreshed) return refreshed;
+      logger.warn("gmail_token_resolve", { source: "user_oauth", action: "refresh_failed_falling_to_env" });
     } else {
+      logger.info("gmail_token_resolve", { source: "user_oauth", action: "using_valid_token" });
       return user.gmail_access_token;
     }
   }
@@ -344,15 +411,18 @@ async function resolveGmailToken(userId: string): Promise<string | null> {
   // 2. Fall back to env tokens
   const envToken = process.env.GMAIL_ACCESS_TOKEN;
   const envRefresh = process.env.GMAIL_REFRESH_TOKEN;
-  if (!envToken) return null;
+  logger.info("gmail_token_resolve", { source: "env", hasToken: !!envToken, hasRefresh: !!envRefresh, hasCached: !!cachedEnvToken, cacheExpiry: envTokenExpiry?.toISOString() ?? null });
+  if (!envToken && !envRefresh) return null;
 
-  // Check if env token expired (stored in memory)
-  if (envTokenExpiry && envTokenExpiry <= new Date() && envRefresh) {
+  if (cachedEnvToken && envTokenExpiry && envTokenExpiry > new Date()) return cachedEnvToken;
+
+  if (envRefresh) {
     const refreshed = await refreshEnvGmailToken();
-    if (refreshed) return refreshed;
+    if (refreshed) { logger.info("gmail_token_resolve", { source: "env", action: "refreshed_ok" }); return refreshed; }
+    logger.warn("gmail_token_resolve", { source: "env", action: "refresh_failed" });
   }
 
-  return cachedEnvToken ?? envToken;
+  return cachedEnvToken ?? envToken ?? null;
 }
 
 let cachedEnvToken: string | null = null;
@@ -375,7 +445,8 @@ async function refreshEnvGmailToken(): Promise<string | null> {
     }),
   });
   if (!r.ok) {
-    logger.error("gmail_env_token_refresh_failed", { status: r.status });
+    const body = await r.text().catch(() => "");
+    logger.error("gmail_env_token_refresh_failed", { status: r.status, body: body.slice(0, 500), clientId: clientId?.slice(0, 20), hasSecret: !!clientSecret, refreshLen: refreshToken?.length });
     return null;
   }
   const data = await r.json() as { access_token: string; expires_in: number };
@@ -406,6 +477,17 @@ async function downloadAndImportAttachment(
   const documentId = await importFile(tmpPath, undefined, userId, filename);
   logger.info("gmail_attachment_imported", { user_id: userId, messageId, filename, documentId });
   return { documentId, filename };
+}
+
+async function retryWithRefresh(userId: string): Promise<string | null> {
+  const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
+  if (user?.gmail_refresh_token) {
+    return refreshGmailToken(user, userId);
+  }
+  if (process.env.GMAIL_REFRESH_TOKEN) {
+    return refreshEnvGmailToken();
+  }
+  return null;
 }
 
 function gmailRedirectUri(settings: ReturnType<typeof getSettings>): string {

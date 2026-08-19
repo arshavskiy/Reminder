@@ -563,9 +563,9 @@ export const api = {
   },
 
   gmail: {
-    status: () => get<{ connected: boolean; source: string | null }>("/gmail/status"),
+    status: () => get<{ connected: boolean; source: string | null; email: string | null }>("/gmail/status"),
     authUrl: () => get<{ url: string }>("/gmail/auth-url"),
-    inbox: (q?: string, limit?: number) => get<{ emails: GmailEmail[] }>(`/gmail/inbox${qs({ q, limit })}`),
+    inbox: (q?: string, limit?: number, pageToken?: string) => get<{ emails: GmailEmail[]; nextPageToken: string | null; resultSizeEstimate: number | null }>(`/gmail/inbox${qs({ q, limit, pageToken })}`),
     attachmentUrl: (messageId: string, attachmentId: string, filename: string) =>
       `${BASE}/gmail/attachment/${messageId}/${attachmentId}?filename=${encodeURIComponent(filename)}`,
     importAttachment: (messageId: string, attachmentId: string, filename: string) =>
@@ -573,6 +573,7 @@ export const api = {
     importAll: (q?: string, limit?: number) =>
       post<{ imported: number; skipped: number; results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> }>("/gmail/import-all", { q, limit }),
     importHistory: () => get<{ history: Array<{ message_id: string; subject: string; imported_at: string }> }>("/gmail/import-history"),
+
     disconnect: () => del("/gmail/disconnect"),
   },
 

@@ -99,6 +99,12 @@ export function registerAuthRoutes(app: express.Application) {
       }
 
       // Upsert user — match by google_sub OR email (handles existing email/password accounts)
+      const gmailFields: Record<string, any> = {};
+      if (tokens.access_token) gmailFields.gmail_access_token = tokens.access_token;
+      if (tokens.refresh_token) gmailFields.gmail_refresh_token = tokens.refresh_token;
+      if (tokens.expires_in) gmailFields.gmail_token_expires_at = new Date(Date.now() + tokens.expires_in * 1000);
+      logger.info("google_oauth_tokens", { hasAccessToken: !!tokens.access_token, hasRefreshToken: !!tokens.refresh_token, expiresIn: tokens.expires_in, email: profile.email });
+
       const upsert = await col("users").updateOne(
         { $or: [{ google_sub: profile.sub }, { email: profile.email }] },
         {
@@ -108,6 +114,7 @@ export function registerAuthRoutes(app: express.Application) {
             name: profile.name ?? null,
             picture_url: profile.picture ?? null,
             last_login_at: new Date(),
+            ...gmailFields,
           },
           $setOnInsert: {
             role: "user",

@@ -1,8 +1,6 @@
 <template>
   <div class="gsi-wrapper">
-    <div ref="btn"></div>
-    <!-- Shown while the GIS iframe hasn't rendered yet -->
-    <button v-if="!rendered" class="gsi-fallback" @click="fallbackRedirect">
+    <button class="gsi-button" @click="redirectToGoogle">
       <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" height="20" />
       <span>התחבר עם Google</span>
     </button>
@@ -10,87 +8,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useAuthStore } from '../stores/auth.js';
-import { useRouter } from 'vue-router';
+const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
-const btn = ref<HTMLElement | null>(null);
-const rendered = ref(false);
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
-
-function fallbackRedirect() {
-  window.location.href = '/auth/google';
+function redirectToGoogle() {
+  window.location.href = `${SERVER}/auth/google`;
 }
-
-const authStore = useAuthStore();
-const router = useRouter();
-
-const emit = defineEmits<{
-  (e: 'error', msg: string): void;
-}>();
-
-async function handleCredentialResponse(response: { credential: string }) {
-  const res = await fetch('/api/auth/google', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ credential: response.credential }),
-  });
-
-  const data = await res.json() as { user?: { id: number; email: string; name: string | null; picture_url: string | null; role: 'admin' | 'user' }; error?: string };
-
-  if (!res.ok || data.error) {
-    emit('error', data.error ?? 'auth_failed');
-    return;
-  }
-
-  if (data.user) {
-    authStore.user = data.user;
-    router.replace('/');
-  }
-}
-
-onMounted(() => {
-  if (!CLIENT_ID) {
-    console.error('[GoogleSignIn] VITE_GOOGLE_CLIENT_ID is not set');
-    return;
-  }
-
-  // Wait for GIS script to load
-  const init = () => {
-    (window as any).google.accounts.id.initialize({
-      client_id: CLIENT_ID,
-      callback: handleCredentialResponse,
-    });
-    if (btn.value) {
-      (window as any).google.accounts.id.renderButton(btn.value, {
-        theme: 'outline',
-        size: 'large',
-        text: 'signin_with',
-        locale: 'he',
-        width: 320,
-      });
-      rendered.value = true;
-    }
-  };
-
-  if ((window as any).google?.accounts?.id) {
-    init();
-  } else {
-    // GIS script still loading — poll until available (max 10s)
-    let attempts = 0;
-    const interval = setInterval(() => {
-      attempts++;
-      if ((window as any).google?.accounts?.id) {
-        clearInterval(interval);
-        init();
-      } else if (attempts >= 100) {
-        clearInterval(interval);
-        console.error('[GoogleSignIn] GIS script failed to load after 10s');
-      }
-    }, 100);
-  }
-});
 </script>
 
 <style scoped>
@@ -101,7 +23,7 @@ onMounted(() => {
   width: 100%;
 }
 
-.gsi-fallback {
+.gsi-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -121,7 +43,7 @@ onMounted(() => {
   box-shadow: 0 1px 2px rgba(60,64,67,.1);
 }
 
-.gsi-fallback:hover {
+.gsi-button:hover {
   box-shadow: 0 2px 6px rgba(60,64,67,.2);
   background: #f8f9fa;
 }

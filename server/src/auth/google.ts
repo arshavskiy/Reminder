@@ -10,7 +10,9 @@ export async function getGoogleAuthUrl(state: string, codeVerifier: string): Pro
     client_id: settings.googleClientId || "",
     redirect_uri: settings.googleRedirectUri || "",
     response_type: "code",
-    scope: "openid profile email",
+    scope: "openid profile email https://www.googleapis.com/auth/gmail.readonly",
+    access_type: "offline",
+    prompt: "consent",
     state,
     code_challenge: await generateCodeChallenge(codeVerifier),
     code_challenge_method: "S256",
@@ -25,6 +27,8 @@ export async function getGoogleAuthUrl(state: string, codeVerifier: string): Pro
 export async function exchangeCodeForIdToken(code: string, codeVerifier: string): Promise<{
   id_token: string;
   access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
 }> {
   const settings = getSettings();
 
