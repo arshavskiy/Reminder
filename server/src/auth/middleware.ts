@@ -2,7 +2,6 @@ import {extractSessionFromCookie, verifySessionIdentity} from "./session";
 import type {User, UserRole} from "../../src/shared/types.js";
 import {isAnyFeatureEnabledForUser} from "../features";
 import type {NextFunction, Request, Response} from "express";
-import {logger} from "../logger";
 
 export interface AuthContext {
   /**
@@ -31,14 +30,7 @@ export class HTTPException extends Error {
 
 export async function requireAuth(cookieHeader: string | undefined): Promise<AuthContext> {
   const sessionId = extractSessionFromCookie(cookieHeader);
-  if (!sessionId) {
-    logger.warn("auth_no_session_cookie", {
-      has_cookie_header: !!cookieHeader,
-      cookie_length: cookieHeader?.length ?? 0,
-      cookie_keys: cookieHeader?.split(";").map(c => c.trim().split("=")[0]).join(",") ?? "",
-    });
-    throw new HTTPException(401, "No session cookie");
-  }
+  if (!sessionId) throw new HTTPException(401, "No session cookie");
 
   const identity = await verifySessionIdentity(sessionId);
   if (!identity) throw new HTTPException(401, "Invalid or expired session");
