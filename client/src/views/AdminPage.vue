@@ -85,7 +85,7 @@
       <!-- ── Users ── -->
       <section v-if="activeSection === 'users'" class="admin-section">
         <!-- User stat pills -->
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <div class="admin-stat-pills">
           <div v-for="s in systemStats" :key="s.label" class="user-stat-pill">
             <span class="user-stat-pill__num">{{ s.value }}</span>
             <span class="user-stat-pill__label">{{ s.label }}</span>
@@ -754,7 +754,7 @@
     </n-modal>
 
     <!-- User Detail Drawer -->
-    <n-drawer v-model:show="showUserDrawer" :width="680" placement="right" dir="ltr">
+    <n-drawer v-model:show="showUserDrawer" :width="isMobileViewport ? '100vw' : 920" placement="right" dir="ltr">
       <n-drawer-content :title="userDetailUser ? (userDetailUser.email ?? userDetailUser.name ?? 'User Detail') : 'User Detail'" closable>
         <n-spin v-if="userDetailLoading" style="display:flex;justify-content:center;padding:60px" />
         <template v-else-if="userDetailData">
@@ -871,7 +871,7 @@
           </template>
           <template v-else>
           <!-- Reminder status summary -->
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+          <div class="admin-stat-pills">
             <n-tag v-for="(count, status) in userDetailData.reminderStatus" :key="status"
               :type="status === 'error' ? 'error' : status === 'pending' ? 'warning' : status === 'sent' ? 'success' : 'default'"
               size="small" round>
@@ -1513,14 +1513,14 @@ async function downloadDoc(docId: string) {
 }
 
 const userDetailDocColumns: DataTableColumns<any> = [
-  { title: "File", key: "filename", align: "left", ellipsis: { tooltip: true }, minWidth: 130,
+  { title: "File", key: "filename", align: "left", minWidth: 220, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
   { title: "Status", key: "status", align: "center", width: 90,
     render: (row) => h(NTag, {
       type: row.status === "done" ? "success" : row.status === "error" ? "error" : row.status === "processing" ? "warning" : "default",
       size: "small", round: true,
     }, { default: () => row.status }) },
-  { title: "Coverage", key: "field_coverage", align: "center", width: 90,
+  { title: "Coverage", key: "field_coverage", align: "center", width: 130,
     render: (row) => {
       const fc = row.field_coverage;
       if (!fc) return h("span", { style: "font-size:11px;color:var(--text-secondary)" }, "—");
@@ -1535,14 +1535,14 @@ const userDetailDocColumns: DataTableColumns<any> = [
         style: `font-size:11px;font-weight:600;color:${color};cursor:default`,
       }, `${fc.coverage_pct}% (${fc.present.length}/${fc.total_fields})`);
     }},
-  { title: "Missing", key: "missing_fields", align: "left", minWidth: 120, ellipsis: { tooltip: true },
+  { title: "Missing", key: "missing_fields", align: "left", minWidth: 160, ellipsis: { tooltip: true },
     render: (row) => {
       const fc = row.field_coverage;
       if (!fc || (!fc.missing.length && !fc.nulled.length)) return h("span", { style: "color:#18a058;font-size:11px" }, "✓ all present");
       const all = [...fc.missing, ...fc.nulled.map((k: string) => `${k}(null)`)];
       return h("span", { style: "font-size:11px;color:#d03050", title: all.join(", ") }, all.join(", "));
     }},
-  { title: "Date", key: "created_at", align: "left", width: 85,
+  { title: "Date", key: "created_at", align: "left", width: 110,
     render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
       row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
   { title: "↓", key: "download", align: "center", width: 50,
@@ -1556,9 +1556,9 @@ const userDetailEmailColumns: DataTableColumns<any> = [
     render: (row) => h(NTag, {
       type: row.success ? "success" : "error", size: "small", round: true,
     }, { default: () => (row.success ? "✓ " : "✗ ") + (row.log_type ?? "—") }) },
-  { title: "Recipient", key: "recipient", align: "left", minWidth: 120, ellipsis: { tooltip: true },
+  { title: "Recipient", key: "recipient", align: "left", minWidth: 200, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.recipient ?? "—") },
-  { title: "Error", key: "error", align: "left", minWidth: 140, ellipsis: { tooltip: true },
+  { title: "Error", key: "error", align: "left", minWidth: 180, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: `font-size:11px;color:${row.error ? "#d03050" : "var(--text-secondary)"}` }, row.error ?? "OK") },
   { title: "Date", key: "sent_at", align: "left", width: 90,
     render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
@@ -1576,7 +1576,7 @@ const userDetailExtractionColumns: DataTableColumns<any> = [
   { title: "Time", key: "exec_ms", align: "right", width: 70,
     render: (row) => h("span", { style: `font-size:11px;color:${(row.exec_ms ?? 0) > 30000 ? "#f0a020" : "var(--text-secondary)"}` },
       row.exec_ms ? (row.exec_ms / 1000).toFixed(1) + "s" : "—") },
-  { title: "Error", key: "error", align: "left", minWidth: 120, ellipsis: { tooltip: true },
+  { title: "Error", key: "error", align: "left", minWidth: 180, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:11px;color:#d03050" }, row.error ?? "") },
   { title: "Date", key: "created_at", align: "left", width: 90,
     render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
@@ -1585,11 +1585,11 @@ const userDetailExtractionColumns: DataTableColumns<any> = [
 
 const userColumns: DataTableColumns<any> = [
   {
-    title: "Email", key: "email", align: "left", minWidth: 160, ellipsis: { tooltip: true },
+    title: "Email", key: "email", align: "left", minWidth: 240, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:13px" }, row.email ?? "—"),
   },
   {
-    title: "Name", key: "name", align: "left", minWidth: 120, ellipsis: { tooltip: true },
+    title: "Name", key: "name", align: "left", minWidth: 160, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:13px" }, row.name ?? "—"),
   },
   {
@@ -1611,9 +1611,9 @@ const userColumns: DataTableColumns<any> = [
         row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "Actions", key: "actions", align: "center", width: 410,
+    title: "Actions", key: "actions", align: "center", width: 380,
     render: (row) =>
-      h("div", { style: "display:flex; gap:6px; justify-content:center; flex-wrap:wrap" }, [
+      h("div", { style: "display:flex; gap:6px; justify-content:center; flex-wrap:nowrap" }, [
         h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
           trigger: () => h(NButton, { size: "tiny", type: "primary", ghost: true, onClick: () => openUserDetail(row) }, { default: () => "Details" }),
           default: () => "View documents, emails, extractions and errors for this user",
@@ -1700,7 +1700,7 @@ const extractionTreeData = computed(() => {
 
 const extractionColumns: DataTableColumns<any> = [
   {
-    title: "File / User", key: "filename", align: "left", ellipsis: { tooltip: true },
+    title: "File / User", key: "filename", align: "left", minWidth: 260, ellipsis: { tooltip: true },
     render: (row) => row._isGroup
       ? h("span", { style: "font-size:12px;font-weight:600;color:var(--text-primary)" }, row.filename)
       : h("span", { style: "font-size:12px" }, row.filename ?? "—"),
@@ -1796,7 +1796,7 @@ const emailStats = computed(() => {
 });
 
 const docStatusColumns: DataTableColumns<any> = [
-  { title: "User", key: "user", align: "left", ellipsis: { tooltip: true } },
+  { title: "User", key: "user", align: "left", minWidth: 220, ellipsis: { tooltip: true } },
   ...DOC_STATUSES.map((s) => ({
     title: STATUS_HE[s] ?? s,
     key: s,
@@ -1808,15 +1808,15 @@ const docStatusColumns: DataTableColumns<any> = [
 
 const failedDocsColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left", width: 130,
+    title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "File", key: "filename", align: "left", ellipsis: { tooltip: true },
+    title: "File", key: "filename", align: "left", minWidth: 220, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—"),
   },
   {
-    title: "Error", key: "error", align: "left", ellipsis: { tooltip: true },
+    title: "Error", key: "error", align: "left", minWidth: 180, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.error ?? "—"),
   },
   {
@@ -1837,15 +1837,15 @@ const failedDocsColumns: DataTableColumns<any> = [
 
 const stuckDocsColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left", width: 130,
+    title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "File", key: "filename", align: "left", ellipsis: { tooltip: true },
+    title: "File", key: "filename", align: "left", minWidth: 220, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—"),
   },
   {
-    title: "Upload Date", key: "created_at", align: "left", width: 130,
+    title: "Upload Date", key: "created_at", align: "left", width: 160,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.created_at ? new Date(row.created_at).toLocaleString("en-US") : "—"),
   },
@@ -1866,10 +1866,10 @@ const backendQualityColumns: DataTableColumns<any> = [
 ];
 
 const parseFailureColumns: DataTableColumns<any> = [
-  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
   { title: "Backend", key: "backend", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px" }, row.backend ?? "—") },
   { title: "Model", key: "model", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px" }, row.model ?? "—") },
-  { title: "Error", key: "error", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;color:var(--error-color,#d03050)" }, row.error ?? "—") },
+  { title: "Error", key: "error", align: "left", minWidth: 180, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;color:var(--error-color,#d03050)" }, row.error ?? "—") },
   { title: "Date", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
   {
     title: "Action", key: "action", align: "center", width: 110,
@@ -1892,20 +1892,20 @@ const slowRunColumns: DataTableColumns<any> = [
 ];
 
 const noS3Columns: DataTableColumns<any> = [
-  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
-  { title: "File", key: "filename", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
+  { title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "File", key: "filename", align: "left", minWidth: 220, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
   { title: "Date", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
 ];
 
 const skippedReminderColumns: DataTableColumns<any> = [
-  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
-  { title: "Note", key: "note", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.note ?? "—") },
+  { title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "Note", key: "note", align: "left", minWidth: 220, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.note ?? "—") },
   { title: "Date", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
 ];
 
 const missingEmailColumns: DataTableColumns<any> = [
-  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
-  { title: "File", key: "filename", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
+  { title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "File", key: "filename", align: "left", minWidth: 220, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
   { title: "Doc ID", key: "id", align: "left", width: 90, render: (row) => h("span", { style: "font-size:11px;font-family:monospace;color:var(--text-secondary)" }, row.id ? row.id.slice(-8) : "—") },
   { title: "Type", key: "document_type", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px" }, row.document_type ?? "—") },
   { title: "Reminder Date", key: "reminder_date", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px;color:#f0a020;font-weight:600" }, row.reminder_date ?? "—") },
@@ -1926,8 +1926,8 @@ const missingEmailColumns: DataTableColumns<any> = [
 ];
 
 const scannedWithoutReminderColumns: DataTableColumns<any> = [
-  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
-  { title: "File", key: "filename", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
+  { title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "File", key: "filename", align: "left", minWidth: 220, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
   { title: "Type", key: "document_type", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, row.document_type ?? "—") },
   { title: "Reminder Date", key: "reminder_date", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.reminder_date ?? "—") },
   { title: "Uploaded", key: "created_at", align: "left", width: 110, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
@@ -1938,7 +1938,7 @@ const scannedWithoutReminderColumns: DataTableColumns<any> = [
 ];
 
 const contractAdvanceColumns: DataTableColumns<any> = [
-  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
   { title: "Previous Expiry", key: "previous_expiry", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, row.previous_expiry ?? "—") },
   { title: "New Expiry", key: "new_expiry", align: "left", width: 120, render: (row) => h("span", { style: "font-size:12px;font-weight:600;color:#18a058" }, row.new_expiry ?? "—") },
   { title: "Interval", key: "interval_months", align: "center", width: 90, render: (row) => h("span", { style: "font-size:12px" }, row.interval_months ? `${row.interval_months}mo` : "—") },
@@ -1946,10 +1946,10 @@ const contractAdvanceColumns: DataTableColumns<any> = [
 ];
 
 const failedEscalationColumns: DataTableColumns<any> = [
-  { title: "User", key: "user_id", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
-  { title: "Recipient", key: "recipient", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.recipient ?? "—") },
-  { title: "Error", key: "error", align: "left", ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;color:var(--error-color,#d03050)" }, row.error ?? "—") },
-  { title: "Date", key: "sent_at", align: "left", width: 130, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.sent_at ? new Date(row.sent_at).toLocaleString("en-US") : "—") },
+  { title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)) },
+  { title: "Recipient", key: "recipient", align: "left", minWidth: 200, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px" }, row.recipient ?? "—") },
+  { title: "Error", key: "error", align: "left", minWidth: 180, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;color:var(--error-color,#d03050)" }, row.error ?? "—") },
+  { title: "Date", key: "sent_at", align: "left", width: 160, render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, row.sent_at ? new Date(row.sent_at).toLocaleString("en-US") : "—") },
   {
     title: "Action", key: "action", align: "center", width: 90,
     render: (row) => h(NButton, {
@@ -1961,9 +1961,9 @@ const failedEscalationColumns: DataTableColumns<any> = [
 ];
 
 const monthlyTriggerColumns: DataTableColumns<any> = [
-  { title: "User", key: "user_id", align: "left", minWidth: 180, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;white-space:nowrap" }, resolveUserEmail(row.user_id)) },
+  { title: "User", key: "user_id", align: "left", minWidth: 220, ellipsis: { tooltip: true }, render: (row) => h("span", { style: "font-size:12px;white-space:nowrap" }, resolveUserEmail(row.user_id)) },
   { title: "Enabled", key: "enabled", align: "center", width: 90, render: (row) => h(NTag, { type: row.enabled ? "default" : "error", size: "small", round: true }, { default: () => row.enabled ? "Yes" : "No" }) },
-  { title: "Recipients", key: "recipients", align: "left", ellipsis: { tooltip: true }, render: (row) => {
+  { title: "Recipients", key: "recipients", align: "left", minWidth: 220, ellipsis: { tooltip: true }, render: (row) => {
     let r = row.recipients ?? [];
     if (typeof r === "string") { try { r = JSON.parse(r); } catch { r = []; } }
     return h("span", { style: "font-size:12px" }, Array.isArray(r) ? r.join(", ") || "—" : "—");
@@ -1998,7 +1998,7 @@ const reminderStatusRows = computed(() => {
 });
 
 const reminderStatusColumns: DataTableColumns<any> = [
-  { title: "User", key: "user", align: "left", ellipsis: { tooltip: true } },
+  { title: "User", key: "user", align: "left", minWidth: 220, ellipsis: { tooltip: true } },
   ...REMINDER_STATUSES.map((s) => ({
     title: REMINDER_STATUS_HE[s] ?? s,
     key: s,
@@ -2010,7 +2010,7 @@ const reminderStatusColumns: DataTableColumns<any> = [
 
 const pendingReminderColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left", width: 130,
+    title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
@@ -2018,7 +2018,7 @@ const pendingReminderColumns: DataTableColumns<any> = [
     render: (row) => h("span", { style: "font-size:12px" }, row.doc_type ?? "—"),
   },
   {
-    title: "Note", key: "note", align: "left", ellipsis: { tooltip: true },
+    title: "Note", key: "note", align: "left", minWidth: 220, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.note ?? "—"),
   },
   {
@@ -2030,19 +2030,19 @@ const pendingReminderColumns: DataTableColumns<any> = [
 
 const failedSendsColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left", width: 130,
+    title: "User", key: "user_id", align: "left", width: 220, minWidth: 200, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "Recipient", key: "recipient", align: "left", ellipsis: { tooltip: true },
+    title: "Recipient", key: "recipient", align: "left", minWidth: 200, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px" }, row.recipient ?? "—"),
   },
   {
-    title: "Error", key: "error", align: "left", ellipsis: { tooltip: true },
+    title: "Error", key: "error", align: "left", minWidth: 180, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.error ?? "—"),
   },
   {
-    title: "Date", key: "sent_at", align: "left", width: 130,
+    title: "Date", key: "sent_at", align: "left", width: 160,
     render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
       row.sent_at ? new Date(row.sent_at).toLocaleString("en-US") : "—"),
   },
@@ -2091,14 +2091,14 @@ const cronJobColumns: DataTableColumns<any> = [
       row.last_success_at ? new Date(row.last_success_at).toLocaleString("en-US") : "—"),
   },
   {
-    title: "Last Error", key: "last_error", align: "left", ellipsis: { tooltip: true },
+    title: "Last Error", key: "last_error", align: "left", minWidth: 180, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color:var(--error-color,#d03050)" }, row.last_error ?? "—"),
   },
 ];
 
 const monthlyScheduleColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left", minWidth: 180, ellipsis: { tooltip: true },
+    title: "User", key: "user_id", align: "left", minWidth: 220, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; white-space:nowrap" }, resolveUserEmail(row.user_id)),
   },
   {
@@ -2121,7 +2121,7 @@ const monthlyScheduleColumns: DataTableColumns<any> = [
       row.last_sent ? new Date(row.last_sent).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "Last Error", key: "last_error", align: "left", ellipsis: { tooltip: true },
+    title: "Last Error", key: "last_error", align: "left", minWidth: 180, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.last_error ?? "—"),
   },
 ];
@@ -2157,7 +2157,7 @@ function openReportModal(user: any) {
 
 const monthlyScheduleDetailColumns: DataTableColumns<any> = [
   {
-    title: "User", key: "user_id", align: "left", minWidth: 180, ellipsis: { tooltip: true },
+    title: "User", key: "user_id", align: "left", minWidth: 220, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; white-space:nowrap" }, resolveUserEmail(row.user_id)),
   },
   {
@@ -2183,7 +2183,7 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
     },
   },
   {
-    title: "Recipients", key: "recipients", align: "left", ellipsis: { tooltip: true },
+    title: "Recipients", key: "recipients", align: "left", minWidth: 220, ellipsis: { tooltip: true },
     render: (row) => {
       let recipients = row.recipients ?? [];
       if (typeof recipients === "string") { try { recipients = JSON.parse(recipients); } catch { recipients = []; } }
@@ -2196,7 +2196,7 @@ const monthlyScheduleDetailColumns: DataTableColumns<any> = [
       row.last_sent ? new Date(row.last_sent).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "Error", key: "last_error", align: "left", ellipsis: { tooltip: true },
+    title: "Error", key: "last_error", align: "left", minWidth: 180, ellipsis: { tooltip: true },
     render: (row) => h("span", { style: "font-size:12px; color: var(--error-color,#d03050)" }, row.last_error ?? "—"),
   },
 ];
@@ -2405,6 +2405,25 @@ onUnmounted(() => {
 .admin-shell :deep(.n-data-table-tr) {
   direction: ltr;
 }
+
+/* Keep columns at their natural width instead of squeezing until cells wrap
+   one character per line. Overflow scrolls horizontally. */
+.admin-shell :deep(.n-data-table-wrapper),
+.admin-shell :deep(.n-data-table-base-table-wrapper) {
+  overflow-x: auto;
+}
+.admin-shell :deep(.n-data-table-base-table-body .n-scrollbar-content),
+.admin-shell :deep(.n-data-table-base-table-header .n-scrollbar-content) {
+  min-width: max-content;
+}
+.admin-shell :deep(.n-data-table-th),
+.admin-shell :deep(.n-data-table-td) {
+  white-space: nowrap;
+}
+.admin-shell :deep(.n-data-table-th__title) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .admin-shell {
   position: relative;
   display: flex;
@@ -2417,8 +2436,8 @@ onUnmounted(() => {
 
 /* ── Sidebar ────────────────────────────────────────────────────────────── */
 .admin-sidebar {
-  width: 220px;
-  flex: 0 0 220px;
+  width: 268px;
+  flex: 0 0 268px;
   background: var(--bg-card);
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -2440,7 +2459,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 20px 18px 16px;
-  font-size: 15px;
+  font-family: var(--font-ui);
+  font-size: 16px;
   font-weight: 700;
   color: var(--brand-color);
   cursor: pointer;
@@ -2451,8 +2471,8 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 12px 10px;
-  gap: 4px;
+  padding: 14px 12px;
+  gap: 6px;
 }
 
 .admin-sidebar__item {
@@ -2464,11 +2484,22 @@ onUnmounted(() => {
   background: none;
   border: none;
   color: var(--text-secondary);
+  font-family: var(--font-ui);
   font-size: 14px;
+  line-height: 1.3;
   cursor: pointer;
   text-align: left;
   width: 100%;
   transition: background 0.15s, color 0.15s;
+}
+
+.admin-sidebar__item :deep(.n-icon) {
+  flex: 0 0 auto;
+}
+
+.admin-sidebar__item span {
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .admin-sidebar__item:hover {
@@ -2483,7 +2514,7 @@ onUnmounted(() => {
 }
 
 .admin-sidebar__footer {
-  padding: 10px;
+  padding: 12px;
   border-top: 1px solid var(--border-color);
 }
 
@@ -2503,7 +2534,7 @@ onUnmounted(() => {
 }
 
 .admin-main__header {
-  padding: 14px 20px 10px;
+  padding: 20px 24px 16px;
   border-bottom: 1px solid var(--border-color);
   flex: 0 0 auto;
 }
@@ -2516,7 +2547,8 @@ onUnmounted(() => {
 
 .admin-main__title {
   margin: 0 0 2px;
-  font-size: 16px;
+  font-family: var(--font-ui);
+  font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
   flex: 1;
@@ -2532,7 +2564,7 @@ onUnmounted(() => {
 .admin-section {
   flex: 1;
   overflow-y: auto;
-  padding: 14px 20px 24px;
+  padding: 20px 24px 32px;
   direction: ltr;
 }
 
@@ -2545,24 +2577,30 @@ onUnmounted(() => {
 /* ── Stats grid ──────────────────────────────────────────────────────────── */
 .admin-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .admin-stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 18px 20px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  min-height: 92px;
 }
 
 .admin-stat-card__icon {
   color: var(--brand-color);
   flex: 0 0 auto;
+}
+
+.admin-stat-card__body {
+  min-width: 0;
+  flex: 1;
 }
 
 .admin-stat-card__num {
@@ -2576,6 +2614,9 @@ onUnmounted(() => {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Monitor blocks ──────────────────────────────────────────────────────── */
@@ -2583,27 +2624,29 @@ onUnmounted(() => {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
 }
 
 .monitor-block__title {
-  font-size: 14px;
-  font-weight: 600;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* ── Env badge ───────────────────────────────────────────────────────────── */
 .admin-env-badge {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  margin: 0 10px 8px;
-  padding: 6px 10px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
   border-radius: 8px;
   font-size: 11px;
   font-weight: 700;
@@ -2641,7 +2684,7 @@ onUnmounted(() => {
   justify-content: center;
   position: absolute;
   top: 18px;
-  left: 204px;
+  left: 252px;
   z-index: 30;
   width: 34px;
   height: 34px;
@@ -2729,33 +2772,27 @@ onUnmounted(() => {
   }
 
   .admin-section {
-    padding: 8px 4px;
+    padding: 16px 12px 24px;
   }
 
   .admin-data-table {
     font-size: 12px;
   }
 
-  /* Naive UI clamps its scrollbar content to the container width, squeezing
-     columns until they wrap one char per line. Let the content grow to the
-     table's natural width so columns keep their size and the row scrolls
-     horizontally instead. */
-  .admin-shell :deep(.n-data-table-base-table-body .n-scrollbar-content),
-  .admin-shell :deep(.n-data-table-base-table-header .n-scrollbar-content) {
-    min-width: max-content;
-  }
-  .admin-shell :deep(.n-data-table-th),
-  .admin-shell :deep(.n-data-table-td) {
-    white-space: nowrap;
-  }
+}
 
+.admin-stat-pills {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
 }
 
 .user-stat-pill {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: 10px;
+  padding: 10px 16px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 20px;
@@ -2775,7 +2812,7 @@ onUnmounted(() => {
 .admin-user-settings {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   padding: 4px 0 12px;
 }
 
@@ -2798,8 +2835,8 @@ onUnmounted(() => {
 
 .admin-user-settings__section {
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 10px;
+  padding: 16px;
 }
 
 .admin-user-settings__title {
@@ -2818,7 +2855,7 @@ onUnmounted(() => {
 .admin-user-settings__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 14px;
 }
 
 .admin-setting-control {
@@ -2879,7 +2916,7 @@ onUnmounted(() => {
 .admin-settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 12px;
 }
 
 @media (max-width: 640px) {
@@ -2894,7 +2931,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 12px 14px;
   background: var(--bg-hover);
   border-radius: 8px;
   gap: 12px;
