@@ -643,10 +643,10 @@ export function registerAuthRoutes(app: express.Application) {
   });
 }
 
-const DEV_FRONTEND =
-  process.env.NODE_ENV !== "production"
-    ? (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173")
-    : (process.env.FRONTEND_URL ?? "");
+const isProd = process.env.NODE_ENV === "production" || process.env.APP_ENV === "production";
+const DEV_FRONTEND = !isProd
+  ? (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173")
+  : (process.env.FRONTEND_URL ?? "");
 
 function frontendUrl(path: string): string {
   return `${DEV_FRONTEND}${path}`;
