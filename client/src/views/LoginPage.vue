@@ -248,6 +248,11 @@
 
     <footer class="landing-footer">
       <strong>ReminderOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
+      <div class="landing-footer__legal">
+        © 2026 HandCoded. All rights reserved. |
+        <a href="https://handcoded.tech/privacy.html" target="_blank">Privacy Policy</a> |
+        <a href="https://handcoded.tech/terms.html" target="_blank">Terms of Service</a>
+      </div>
     </footer>
   </div>
 </template>
@@ -840,6 +845,21 @@ onMounted(async () => {
 
 .landing-footer strong {
   color: #fff;
+}
+
+.landing-footer__legal {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.landing-footer__legal a {
+  color: rgba(255, 255, 255, 0.45);
+  text-decoration: none;
+}
+
+.landing-footer__legal a:hover {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 :deep(.n-tabs) {
