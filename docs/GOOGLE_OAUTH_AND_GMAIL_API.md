@@ -271,6 +271,66 @@ const base = isProd
 
 ---
 
+## Cookie & Session Architecture
+
+### Cookie Settings
+
+Sessions use a single `session` cookie set by the server:
+
+```
+session=<64-char-hex>; Path=/; HttpOnly; Secure; SameSite=None; Domain=.handcoded.tech; Max-Age=604800
+```
+
+| Attribute | Production | Local dev |
+|---|---|---|
+| `Secure` | `true` (HTTPS) | `false` (HTTP) |
+| `SameSite` | `None` | `Lax` |
+| `Domain` | `.handcoded.tech` | not set (defaults to request host) |
+| `Max-Age` | 604800 (7 days) | 604800 (7 days) |
+
+These are auto-derived in `server/src/auth/session.ts` — functions `shouldUseSecureCookie()`, `cookieSameSite()`, `cookieDomain()`.
+
+### Vercel API Proxy (Critical)
+
+The client on Vercel (`reminder.handcoded.tech`) proxies all API requests to the server (`api.handcoded.tech`) via Vercel rewrites in `client/vercel.json`:
+
+```json
+{ "source": "/api/:path*", "destination": "https://api.handcoded.tech/api/:path*" },
+{ "source": "/auth/:path*", "destination": "https://api.handcoded.tech/auth/:path*" }
+```
+
+**Why this is required:** Chrome (especially Android, v127+) blocks third-party cookies with `SameSite=None`. Without the proxy, `reminder.handcoded.tech` makes cross-origin requests to `api.handcoded.tech` — the `Set-Cookie` from the server is treated as a third-party cookie and silently dropped by the browser. The Vercel rewrite makes all requests same-origin from the browser's perspective.
+
+**Symptoms when proxy is missing:** Login succeeds (200), `/api/auth/me` returns cached 304, but all other API calls return 401. Refreshing the page logs the user out. Desktop Chrome may still work (less aggressive cookie blocking), while Android Chrome fails.
+
+**`VITE_API_BASE` must be unset (empty)** on Vercel so the client makes relative requests (`/api/...`) that hit the Vercel rewrite. If `VITE_API_BASE` is set to `https://api.handcoded.tech`, requests bypass the proxy and third-party cookie issues return.
+
+### Local Development
+
+Vite dev server proxies `/api/*` and `/auth/*` to `http://127.0.0.1:3737` via `vite.config.ts` — same-origin by default, no cookie issues. `VITE_API_BASE` is not needed locally either.
+
+### Cookie Flow Diagram
+
+```
+Production (via Vercel proxy):
+  Browser → reminder.handcoded.tech/api/auth/login
+         → Vercel rewrite → api.handcoded.tech/api/auth/login
+         ← Set-Cookie: session=...; Domain=.handcoded.tech
+         ← Cookie stored as first-party on reminder.handcoded.tech ✓
+
+  Browser → reminder.handcoded.tech/api/dashboard/stats
+         → Vercel rewrite → api.handcoded.tech/api/dashboard/stats
+         → Cookie: session=... (sent as first-party) ✓
+
+Local dev (via Vite proxy):
+  Browser → localhost:4173/api/auth/login
+         → Vite proxy → 127.0.0.1:3737/api/auth/login
+         ← Set-Cookie: session=...; (no Domain, SameSite=Lax)
+         ← Cookie stored on localhost:4173 ✓
+```
+
+---
+
 ## Troubleshooting
 
 | Error | Cause | Fix |
@@ -283,6 +343,8 @@ const base = isProd
 | `gmail_not_connected` | No Gmail token on user doc and no env fallback | User needs to connect Gmail via `/api/gmail/auth-url` |
 | `token_exchange_failed` | Code exchange with Google failed | Check client secret, redirect URI match |
 | Gmail 401 after token refresh | Refresh token revoked or expired | User needs to re-authorize Gmail (disconnect + reconnect) |
+| Login 200 but all API 401 (Android) | Third-party cookies blocked by Chrome | Ensure Vercel proxy rewrites are in `vercel.json` and `VITE_API_BASE` is unset on Vercel |
+| Works on desktop, fails on mobile | Same cookie issue — mobile Chrome stricter | Same fix: Vercel proxy + unset `VITE_API_BASE` |
 
 ### Debugging Redirect URIs
 
