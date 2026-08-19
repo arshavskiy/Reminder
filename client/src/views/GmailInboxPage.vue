@@ -345,19 +345,36 @@ function fmtDate(ts: number): string {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function previewAttachment(messageId: string, att: GmailAttachment) {
+async function previewAttachment(messageId: string, att: GmailAttachment) {
   const url = api.gmail.attachmentUrl(messageId, att.attachmentId, att.filename) + "&preview=1";
-  window.open(url, "_blank");
+  try {
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    window.open(blobUrl, "_blank");
+  } catch {
+    window.$message?.error("שגיאה בטעינת הקובץ");
+  }
 }
 
-function downloadAttachment(messageId: string, att: GmailAttachment) {
+async function downloadAttachment(messageId: string, att: GmailAttachment) {
   const url = api.gmail.attachmentUrl(messageId, att.attachmentId, att.filename);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = att.filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  try {
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = att.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    window.$message?.error("שגיאה בהורדת הקובץ");
+  }
 }
 
 function formatFrom(from: string) {
@@ -552,7 +569,7 @@ onMounted(async () => {
   border-radius: 12px;
   background: var(--bg-card);
   overflow: auto;
-  max-height: min(72vh, 760px);
+  max-height: min(53vh, 760px);
 }
 
 .inbox-table {

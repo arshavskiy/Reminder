@@ -136,9 +136,19 @@ export function registerGmailRoutes(app: express.Application) {
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     try {
-      const q = (req.query.q as string) || "has:attachment filename:pdf";
+      let q = (req.query.q as string) || "has:attachment filename:pdf";
       const maxResults = Math.min(parseInt((req.query.limit as string) || "50", 10), 100);
       const pageToken = (req.query.pageToken as string) || undefined;
+
+      if (ctx.user.role !== "admin") {
+        const profile = await col("engineer_profiles").findOne({ user_id: ctx.userId }) as any;
+        const inspectorNumber = String(profile?.inspector_number ?? "").trim();
+        if (inspectorNumber) {
+          if (!q.includes(inspectorNumber)) {
+            q += ` filename:${inspectorNumber}`;
+          }
+        }
+      }
 
       let url = `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`;
       if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
