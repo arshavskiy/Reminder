@@ -1094,55 +1094,20 @@ async function doDeleteAll() {
     deletingAll.value = false;
   }
 }
-async function triggerFileDownload(signedUrl: string, fileName: string) {
-  const resp = await fetch(signedUrl);
-  const blob = await resp.blob();
-  const blobUrl = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = blobUrl;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(blobUrl);
-}
-
 async function openDownload(row: Document) {
-  try {
-    const res = await fetch(`${SERVER}/api/documents/${row.id}/download`, { credentials: "include" });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({})) as { error?: string };
-      message.error(body.error ?? `שגיאה בהורדה (${res.status})`);
-      return;
-    }
-    const { url } = await res.json() as { url: string };
-    await triggerFileDownload(url, row.file_name ?? "document.pdf");
-  } catch (e) {
-    message.error(`לא ניתן לפתוח את הקובץ: ${e}`);
-  }
+  window.open(`${SERVER}/api/documents/${row.id}/download?dl=1`, "_blank", "noopener");
 }
 
 async function bulkDownload() {
   const ids = [...selectedIds.value];
   if (!ids.length || bulkDownloading.value) return;
   bulkDownloading.value = true;
-  let failed = 0;
-  const allRows = filteredRows.value;
   try {
     for (const id of ids) {
-      try {
-        const res = await fetch(`${SERVER}/api/documents/${id}/download`, { credentials: "include" });
-        if (!res.ok) { failed++; continue; }
-        const { url } = await res.json() as { url: string };
-        const row = allRows.find((r) => String(r.id) === id);
-        await triggerFileDownload(url, row?.file_name ?? "document.pdf");
-        await new Promise((r) => setTimeout(r, 300));
-      } catch {
-        failed++;
-      }
+      window.open(`${SERVER}/api/documents/${id}/download?dl=1`, "_blank", "noopener");
+      await new Promise((r) => setTimeout(r, 400));
     }
-    if (failed) message.warning(`${ids.length - failed} קבצים הורדו, ${failed} נכשלו`);
-    else message.success(`${ids.length} קבצים הורדו`);
+    message.success(`${ids.length} קבצים הורדו`);
   } finally {
     bulkDownloading.value = false;
   }

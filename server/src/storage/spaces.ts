@@ -135,17 +135,21 @@ export async function deleteFromSpaces(key: string): Promise<void> {
   await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
 }
 
-export async function getSpacesSignedUrl(key: string, expiresIn = 3600, fileName?: string): Promise<string> {
+export async function getSpacesSignedUrl(key: string, expiresIn = 3600, fileName?: string, asAttachment = false): Promise<string> {
   const client = getClient();
   const config = getStorageConfig();
   if (!client || !config) throw new Error("Object storage not configured");
+
+  const disposition = fileName
+    ? `${asAttachment ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(fileName)}`
+    : undefined;
 
   return getSignedUrl(
     client,
     new GetObjectCommand({
       Bucket: config.bucket,
       Key: key,
-      ...(fileName && { ResponseContentDisposition: `inline; filename*=UTF-8''${encodeURIComponent(fileName)}` }),
+      ...(disposition && { ResponseContentDisposition: disposition }),
     }),
     { expiresIn }
   );

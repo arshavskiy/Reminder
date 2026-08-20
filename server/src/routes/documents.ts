@@ -322,6 +322,7 @@ export function registerDocumentRoutes(app: express.Application) {
     }
 
     // Prefer S3 signed URL — use cached one if still fresh, otherwise regenerate
+    const wantDownload = req.query.dl === "1";
     if (doc.spaces_key) {
       try {
         const { getSpacesSignedUrl, fileExistsInSpaces } = await import("../storage/spaces.js");
@@ -331,6 +332,13 @@ export function registerDocumentRoutes(app: express.Application) {
           return;
         }
         const SIGNED_URL_TTL = 7 * 24 * 3600;
+
+        if (wantDownload) {
+          const url = await getSpacesSignedUrl(doc.spaces_key, 300, doc.file_name ?? undefined, true);
+          res.redirect(url);
+          return;
+        }
+
         const expiresAt: Date | null = doc.signed_url_expires_at ? new Date(doc.signed_url_expires_at) : null;
         const needsRefresh = !doc.download_url || !expiresAt || expiresAt.getTime() - Date.now() < 3600_000;
         let url: string = doc.download_url ?? "";
