@@ -314,7 +314,7 @@ export function registerProfileRoutes(app: express.Application) {
         const profileFields: Array<keyof typeof result & string> = [
           "inspector_number", "title", "expertise",
           "mr_number", "mg_number", "membership_start_date",
-          "company_name", "company_phone", "company_email", "address", "city",
+          "company_name", "company_phone", "company_email", "address",
         ];
         for (const k of profileFields) {
           const newVal = result[k];
