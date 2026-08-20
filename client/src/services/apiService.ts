@@ -495,6 +495,14 @@ export const api = {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
       }).then(r => r.json()),
+    browseStorage: (params?: { user_id?: string; prefix?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.user_id) qs.set("user_id", params.user_id);
+      if (params?.prefix) qs.set("prefix", params.prefix);
+      const q = qs.toString();
+      return adminGet<any>(`/admin/storage/browse${q ? "?" + q : ""}`);
+    },
+    storageDownloadUrl: (key: string) => `${ADMIN_BASE}/admin/storage/download?key=${encodeURIComponent(key)}`,
   },
 
   config: {

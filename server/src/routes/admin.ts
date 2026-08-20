@@ -1395,4 +1395,77 @@ export function registerAdminRoutes(app: express.Application) {
       res.status(500).json({ error: err.message ?? "Failed" });
     }
   });
+
+  // ── S3 Storage Browser ──────────────────────────────────────────────────
+  // GET /api/admin/storage/browse?user_id=&prefix=
+  app.get("/api/admin/storage/browse", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const { listSpacesFiles, spacesEnabled, getSpacesSignedUrl } = await import("../storage/spaces.js");
+      if (!spacesEnabled()) {
+        res.status(400).json({ error: "Object storage not configured" });
+        return;
+      }
+
+      const userId = req.query.user_id as string | undefined;
+      const prefix = userId ? `documents/${userId}/` : (req.query.prefix as string ?? "documents/");
+
+      const { files, truncated } = await listSpacesFiles(prefix, 500);
+
+      // Cross-reference with DB to get filenames and doc IDs
+      const keys = files.map((f) => f.key);
+      const docs = keys.length
+        ? await col("documents")
+            .find({ spaces_key: { $in: keys } })
+            .project({ _id: 1, file_name: 1, spaces_key: 1, user_id: 1, processing_status: 1, created_at: 1 })
+            .toArray()
+        : [];
+
+      const docByKey: Record<string, any> = {};
+      for (const d of docs) {
+        docByKey[d.spaces_key as string] = d;
+      }
+
+      const enriched = files.map((f) => {
+        const doc = docByKey[f.key];
+        return {
+          key: f.key,
+          size: f.size,
+          last_modified: f.last_modified,
+          doc_id: doc?._id?.toString() ?? null,
+          file_name: doc?.file_name ?? f.key.split("/").pop() ?? f.key,
+          user_id: doc?.user_id ?? null,
+          status: doc?.processing_status ?? null,
+          in_db: !!doc,
+        };
+      });
+
+      res.json({ files: enriched, truncated, prefix });
+    } catch (err: any) {
+      console.error("storage-browse error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // GET /api/admin/storage/download?key= — signed download URL for any S3 key
+  app.get("/api/admin/storage/download", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const { getSpacesSignedUrl, spacesEnabled } = await import("../storage/spaces.js");
+      if (!spacesEnabled()) {
+        res.status(400).json({ error: "Object storage not configured" });
+        return;
+      }
+      const key = req.query.key as string;
+      if (!key) {
+        res.status(400).json({ error: "key is required" });
+        return;
+      }
+      const fileName = key.split("/").pop() ?? "file";
+      const url = await getSpacesSignedUrl(key, 300, fileName, true);
+      res.redirect(url);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
 }

@@ -44,12 +44,14 @@ function chooseCanonical(candidates: any[]): any {
       legalSuffixPenalty(aName) -
       (a.email ? 3 : 0) -
       (a.id_number ? 3 : 0) -
-      (a.phone ? 1 : 0);
+      (a.phone ? 1 : 0) -
+      (a.mobile ? 1 : 0);
     const bScore =
       legalSuffixPenalty(bName) -
       (b.email ? 3 : 0) -
       (b.id_number ? 3 : 0) -
-      (b.phone ? 1 : 0);
+      (b.phone ? 1 : 0) -
+      (b.mobile ? 1 : 0);
     if (aScore !== bScore) return aScore - bScore;
     return aName.length - bName.length;
   })[0];
@@ -127,6 +129,7 @@ async function mergeClient(duplicate: any, canonical: any) {
       $set: {
         ...(duplicate.email && !canonical.email && {email: duplicate.email}),
         ...(duplicate.phone && !canonical.phone && {phone: duplicate.phone}),
+        ...(duplicate.mobile && !canonical.mobile && {mobile: duplicate.mobile}),
         ...(duplicate.contact_person && !canonical.contact_person && {contact_person: duplicate.contact_person}),
         ...(duplicate.id_number && !canonical.id_number && {id_number: duplicate.id_number}),
         notes,
@@ -148,10 +151,12 @@ async function main() {
 
   for (const client of clients) {
     const phoneKey = normalizePhoneIdentityKey(client.phone);
+    const mobileKey = normalizePhoneIdentityKey(client.mobile);
     const nameKey = normalizeClientIdentityKey(String(client.display_name ?? ""));
-    const key = phoneKey ? `phone:${phoneKey}` : nameKey.length >= 3 ? `name:${nameKey}` : null;
+    const effectivePhoneKey = phoneKey || mobileKey;
+    const key = effectivePhoneKey ? `phone:${effectivePhoneKey}` : nameKey.length >= 3 ? `name:${nameKey}` : null;
     if (!key) continue;
-    const group = groups.get(key) ?? {label: phoneKey ? `טלפון ${phoneKey}` : nameKey, clients: []};
+    const group = groups.get(key) ?? {label: effectivePhoneKey ? `טלפון ${effectivePhoneKey}` : nameKey, clients: []};
     group.clients.push(client);
     groups.set(key, group);
   }

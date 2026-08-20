@@ -1774,10 +1774,21 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   // 2. Phone (normalised on both sides: 050-1234567, 050 1234567, +972501234567).
   // Phone is treated as the hard dedupe anchor because OCR often corrupts the
   // company name while keeping the phone number stable.
+  // Also checks the `mobile` field to prevent duplicates when the same number
+  // appears in either phone or mobile.
   if (!existing && phone) {
     if (normalizedPhone) {
-      const all = await col("clients").find({ ...userScope, phone: { $exists: true, $ne: null } }).toArray() as any[];
-      const matches = all.filter((c: any) => normalizePhoneIdentityKey(c.phone) === normalizedPhone);
+      const all = await col("clients").find({
+        ...userScope,
+        $or: [
+          { phone: { $exists: true, $ne: null } },
+          { mobile: { $exists: true, $ne: null } },
+        ],
+      }).toArray() as any[];
+      const matches = all.filter((c: any) =>
+        normalizePhoneIdentityKey(c.phone) === normalizedPhone ||
+        normalizePhoneIdentityKey(c.mobile) === normalizedPhone,
+      );
       existing = chooseCanonicalClient(matches);
       if (existing) {
         matchStrategy = "phone";

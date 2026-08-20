@@ -775,6 +775,66 @@
         </template>
       </section>
 
+      <!-- ── S3 Storage Browser ── -->
+      <section v-if="activeSection === 's3_storage'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else>
+          <div class="monitor-block">
+            <div class="monitor-block__title">S3 Storage Browser</div>
+            <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
+              <n-select
+                v-model:value="s3BrowseUserId"
+                :options="userSelectOptions"
+                placeholder="Select User"
+                clearable
+                filterable
+                style="width:280px"
+                @update:value="loadS3Files"
+              />
+              <span v-if="s3Files.length" style="font-size:12px;color:var(--text-secondary)">
+                {{ s3Files.length }} files{{ s3Truncated ? ' (truncated — more files exist)' : '' }}
+              </span>
+            </div>
+
+            <div v-if="s3Files.length" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
+              <n-input
+                v-model:value="s3FileSearch"
+                placeholder="Filter files by name..."
+                clearable
+                style="max-width:360px"
+              >
+                <template #prefix><n-icon :component="SearchOutline" /></template>
+              </n-input>
+              <n-select
+                v-model:value="s3StatusFilter"
+                :options="s3StatusOptions"
+                placeholder="DB Status"
+                clearable
+                style="width:160px"
+              />
+            </div>
+
+            <n-data-table
+              v-if="s3Files.length"
+              :columns="s3FileColumns"
+              :data="filteredS3Files"
+              :bordered="false"
+              :pagination="{ pageSize: 25 }"
+              :max-height="500"
+              size="small"
+              style="margin-top:12px"
+            />
+
+            <div v-else-if="s3BrowseUserId && !sectionLoading" style="padding:40px;text-align:center;color:var(--text-secondary)">
+              No files found for this user
+            </div>
+            <div v-else-if="!s3BrowseUserId" style="padding:40px;text-align:center;color:var(--text-secondary)">
+              Select a user to browse their S3 files
+            </div>
+          </div>
+        </template>
+      </section>
+
       <!-- ── Settings ── -->
       <section v-if="activeSection === 'settings'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
@@ -1279,6 +1339,7 @@ const adminSections = [
   { key: "monthly",            label: "Monthly Reports",        icon: CalendarOutline },
   { key: "bad_emails",         label: "Bad Emails",             icon: MailOutline },
   { key: "system_health",     label: "System Health",          icon: PulseOutline },
+  { key: "s3_storage",        label: "S3 Storage",             icon: CloudUploadOutline },
   { key: "settings",           label: "Settings",               icon: SettingsOutline },
 ];
 const sidebarItems = adminSections.filter((item) => item.key !== "settings");
@@ -2293,6 +2354,93 @@ const collectionStatsColumns: DataTableColumns<any> = [
   },
 ];
 
+// ── S3 Storage Browser ──────────────────────────────────────────────────
+const s3Files = ref<any[]>([]);
+const s3BrowseUserId = ref<string | null>(null);
+const s3Truncated = ref(false);
+const s3FileSearch = ref("");
+const s3StatusFilter = ref<string | null>(null);
+
+const s3StatusOptions = [
+  { label: "All", value: null },
+  { label: "In DB", value: "in_db" },
+  { label: "Not in DB", value: "not_in_db" },
+  { label: "Done", value: "done" },
+  { label: "Error", value: "error" },
+  { label: "Processing", value: "processing" },
+  { label: "Queued", value: "queued" },
+];
+
+const filteredS3Files = computed(() => {
+  let result = s3Files.value;
+  const q = s3FileSearch.value.trim().toLowerCase();
+  if (q) result = result.filter((f) => f.file_name?.toLowerCase().includes(q) || f.key?.toLowerCase().includes(q));
+  const status = s3StatusFilter.value;
+  if (status === "in_db") result = result.filter((f) => f.in_db);
+  else if (status === "not_in_db") result = result.filter((f) => !f.in_db);
+  else if (status) result = result.filter((f) => f.status === status);
+  return result;
+});
+
+async function loadS3Files() {
+  if (!s3BrowseUserId.value) { s3Files.value = []; return; }
+  sectionLoading.value = true;
+  try {
+    const res = await api.admin.browseStorage({ user_id: s3BrowseUserId.value });
+    s3Files.value = res.files;
+    s3Truncated.value = res.truncated;
+  } catch {
+    message.error("Error loading S3 files");
+    s3Files.value = [];
+  } finally {
+    sectionLoading.value = false;
+  }
+}
+
+const s3FileColumns: DataTableColumns<any> = [
+  {
+    title: "File", key: "file_name", align: "left", minWidth: 280, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px" }, row.file_name ?? "—"),
+  },
+  {
+    title: "Size", key: "size", align: "right", width: 100,
+    render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, formatBytes(row.size)),
+    sorter: (a: any, b: any) => a.size - b.size,
+  },
+  {
+    title: "Modified", key: "last_modified", align: "left", width: 150,
+    render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
+      row.last_modified ? new Date(row.last_modified).toLocaleString("en-US") : "—"),
+    sorter: (a: any, b: any) => new Date(a.last_modified ?? 0).getTime() - new Date(b.last_modified ?? 0).getTime(),
+  },
+  {
+    title: "In DB", key: "in_db", align: "center", width: 70,
+    render: (row) => h(NTag, {
+      type: row.in_db ? "success" : "error", size: "small", round: true,
+    }, { default: () => row.in_db ? "✓" : "✗" }),
+  },
+  {
+    title: "Status", key: "status", align: "center", width: 100,
+    render: (row) => row.status
+      ? h(NTag, {
+          type: row.status === "done" ? "success" : row.status === "error" ? "error" : "default",
+          size: "small", round: true,
+        }, { default: () => row.status })
+      : h("span", { style: "font-size:11px;color:var(--text-secondary)" }, "—"),
+  },
+  {
+    title: "S3 Key", key: "key", align: "left", minWidth: 200, ellipsis: { tooltip: true },
+    render: (row) => h("code", { style: "font-size:11px;color:var(--text-secondary)" }, row.key),
+  },
+  {
+    title: "", key: "actions", align: "center", width: 120,
+    render: (row) => h("div", { style: "display:flex;gap:4px;justify-content:center" }, [
+      h(NButton, { size: "tiny", onClick: () => window.open(api.admin.storageDownloadUrl(row.key), "_blank") }, { default: () => "↓" }),
+      row.doc_id ? h(NButton, { size: "tiny", type: "primary", ghost: true, onClick: () => openDocModal(row.doc_id) }, { default: () => "Open" }) : null,
+    ]),
+  },
+];
+
 const issueLabel: Record<string, string> = {
   consecutive_dots: "consecutive dots",
   trailing_punctuation: "trailing punctuation",
@@ -2533,6 +2681,9 @@ async function loadSectionData(key: string) {
       badEmailsData.value = await api.admin.monitorBadEmails();
     } else if (key === "system_health") {
       systemHealth.value = await api.admin.monitorSystemHealth();
+    } else if (key === "s3_storage") {
+      if (s3BrowseUserId.value) await loadS3Files();
+      else sectionLoading.value = false;
     } else if (key === "settings") {
       adminSettings.value = await api.admin.getAdminSettings();
     }

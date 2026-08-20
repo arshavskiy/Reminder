@@ -2,6 +2,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -133,6 +134,32 @@ export async function deleteFromSpaces(key: string): Promise<void> {
   if (!client || !config) return;
 
   await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+}
+
+export interface S3FileEntry {
+  key: string;
+  size: number;
+  last_modified: string | null;
+}
+
+export async function listSpacesFiles(prefix: string, maxKeys = 500): Promise<{ files: S3FileEntry[]; truncated: boolean }> {
+  const client = getClient();
+  const config = getStorageConfig();
+  if (!client || !config) throw new Error("Object storage not configured");
+
+  const result = await client.send(new ListObjectsV2Command({
+    Bucket: config.bucket,
+    Prefix: prefix,
+    MaxKeys: maxKeys,
+  }));
+
+  const files: S3FileEntry[] = (result.Contents ?? []).map((obj) => ({
+    key: obj.Key ?? "",
+    size: obj.Size ?? 0,
+    last_modified: obj.LastModified?.toISOString() ?? null,
+  }));
+
+  return { files, truncated: result.IsTruncated ?? false };
 }
 
 export async function getSpacesSignedUrl(key: string, expiresIn = 3600, fileName?: string, asAttachment = false): Promise<string> {
