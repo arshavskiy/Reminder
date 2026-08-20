@@ -51,20 +51,20 @@ export function registerGmailRoutes(app: express.Application) {
   // GET /auth/gmail/callback
   app.get("/auth/gmail/callback", async (req, res) => {
     const { code, state, error } = req.query as Record<string, string>;
-    const frontend = frontendUrl("/");
+    const frontend = frontendUrl("/", req);
 
-    if (error) { res.redirect(frontendUrl(`/gmail-inbox?error=${encodeURIComponent(error)}`)); return; }
-    if (!code || !state) { res.redirect(frontendUrl("/gmail-inbox?error=missing_params")); return; }
+    if (error) { res.redirect(frontendUrl(`/gmail-inbox?error=${encodeURIComponent(error)}`, req)); return; }
+    if (!code || !state) { res.redirect(frontendUrl("/gmail-inbox?error=missing_params", req)); return; }
 
     const pkce = await col<any>("oauth_states").findOne({ state, type: "gmail", expires_at: { $gt: new Date() } });
-    if (!pkce) { res.redirect(frontendUrl("/gmail-inbox?error=invalid_state")); return; }
+    if (!pkce) { res.redirect(frontendUrl("/gmail-inbox?error=invalid_state", req)); return; }
     await col("oauth_states").deleteOne({ state });
 
     const settings = getSettings();
     const googleClientId = settings.googleClientId;
     const googleClientSecret = settings.googleClientSecret;
     if (!googleClientId || !googleClientSecret) {
-      res.redirect(frontendUrl("/gmail-inbox?error=google_client_not_configured"));
+      res.redirect(frontendUrl("/gmail-inbox?error=google_client_not_configured", req));
       return;
     }
     const redirectUri = gmailRedirectUri(req);
@@ -81,7 +81,7 @@ export function registerGmailRoutes(app: express.Application) {
       }),
     });
 
-    if (!tokenRes.ok) { res.redirect(frontendUrl("/gmail-inbox?error=token_exchange_failed")); return; }
+    if (!tokenRes.ok) { res.redirect(frontendUrl("/gmail-inbox?error=token_exchange_failed", req)); return; }
     const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number };
 
     await col("users").updateOne(
@@ -94,7 +94,7 @@ export function registerGmailRoutes(app: express.Application) {
       }
     );
 
-    res.redirect(frontendUrl("/gmail-inbox"));
+    res.redirect(frontendUrl("/gmail-inbox", req));
   });
 
   // GET /api/gmail/status — check if Gmail connected
@@ -519,10 +519,20 @@ function gmailRedirectUri(req: express.Request): string {
   return `${proto}://${host}/auth/gmail/callback`;
 }
 
-function frontendUrl(path: string) {
+function frontendUrl(path: string, req?: express.Request) {
   const isProd = process.env.NODE_ENV === "production" || process.env.APP_ENV === "production";
   const base = !isProd
     ? (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173")
     : (process.env.FRONTEND_URL ?? "");
+  if (req) {
+    const origin = req.headers.origin ?? (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
+    if (origin) {
+      try {
+        const host = new URL(origin).hostname;
+        if (host.endsWith(".remindocr.com") || host === "remindocr.com") return `${origin}${path}`;
+        if (host.endsWith(".handcoded.tech") || host === "handcoded.tech") return `${origin}${path}`;
+      } catch {}
+    }
+  }
   return `${base}${path}`;
 }

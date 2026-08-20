@@ -67,12 +67,12 @@ export function registerAuthRoutes(app: express.Application) {
     const error = req.query.error as string | undefined;
 
     if (error) {
-      res.redirect(frontendUrl(`/login?error=${encodeURIComponent(error)}`));
+      res.redirect(frontendUrl(`/login?error=${encodeURIComponent(error)}`, req));
       return;
     }
 
     if (!code || !state) {
-      res.redirect(frontendUrl("/login?error=missing_params"));
+      res.redirect(frontendUrl("/login?error=missing_params", req));
       return;
     }
 
@@ -81,7 +81,7 @@ export function registerAuthRoutes(app: express.Application) {
     ).findOne({ state, expires_at: { $gt: new Date() } });
 
     if (!pkce) {
-      res.redirect(frontendUrl("/login?error=invalid_state"));
+      res.redirect(frontendUrl("/login?error=invalid_state", req));
       return;
     }
     await col("oauth_states").deleteOne({ state });
@@ -94,7 +94,7 @@ export function registerAuthRoutes(app: express.Application) {
       // Email whitelist check
       if (settings.allowedEmails && settings.allowedEmails.length > 0) {
         if (!settings.allowedEmails.includes(profile.email)) {
-          res.redirect(frontendUrl("/login?error=not_allowed"));
+          res.redirect(frontendUrl("/login?error=not_allowed", req));
           return;
         }
       }
@@ -147,7 +147,8 @@ export function registerAuthRoutes(app: express.Application) {
 
       const ua = req.headers["user-agent"] ?? undefined;
       const ip = clientIp(req);
-      const { cookies } = await createSession(user._id.toString(), ua, ip);
+      const origin = requestOrigin(req);
+      const { cookies } = await createSession(user._id.toString(), ua, ip, origin);
       logAuth("login_success", req, {
         user,
         method: "google_oauth",
@@ -155,10 +156,10 @@ export function registerAuthRoutes(app: express.Application) {
       });
 
       res.setHeader("Set-Cookie", cookies);
-      res.redirect(frontendUrl("/"));
+      res.redirect(frontendUrl("/", req));
     } catch (err) {
       logger.error("login_failed", { method: "google_oauth", reason: "callback_error", error: err, ip: clientIp(req) ?? null });
-      res.redirect(frontendUrl("/login?error=auth_failed"));
+      res.redirect(frontendUrl("/login?error=auth_failed", req));
     }
   });
 
@@ -223,7 +224,7 @@ export function registerAuthRoutes(app: express.Application) {
 
       const ua = req.headers["user-agent"] ?? undefined;
       const ip = clientIp(req);
-      const { cookies } = await createSession(user._id.toString(), ua, ip);
+      const { cookies } = await createSession(user._id.toString(), ua, ip, requestOrigin(req));
       logAuth("login_success", req, {
         user,
         method: "google_gis",
@@ -262,7 +263,7 @@ export function registerAuthRoutes(app: express.Application) {
         });
       }
     }
-    res.setHeader("Set-Cookie", clearSessionCookie());
+    res.setHeader("Set-Cookie", clearSessionCookie(requestOrigin(req)));
     res.json({ ok: true });
   });
 
@@ -477,7 +478,7 @@ export function registerAuthRoutes(app: express.Application) {
 
     const ua = req.headers["user-agent"] ?? undefined;
     const ip = clientIp(req);
-    const { cookies } = await createSession(user._id.toString(), ua, ip);
+    const { cookies } = await createSession(user._id.toString(), ua, ip, requestOrigin(req));
     logAuth("login_success", req, { user, method: "email_password", is_new_user: false });
 
     res.setHeader("Set-Cookie", cookies);
@@ -497,21 +498,21 @@ export function registerAuthRoutes(app: express.Application) {
   app.get("/auth/magic", async (req, res) => {
     const token = req.query.token as string | undefined;
     if (!token) {
-      res.redirect(frontendUrl("/login?error=invalid_token"));
+      res.redirect(frontendUrl("/login?error=invalid_token", req));
       return;
     }
 
     const userId = await consumeMagicLinkToken(token);
     if (!userId) {
       logger.warn("login_failed", { method: "magic_link", reason: "token_expired", ip: clientIp(req) ?? null });
-      res.redirect(frontendUrl("/login?error=token_expired"));
+      res.redirect(frontendUrl("/login?error=token_expired", req));
       return;
     }
 
     const user = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
     if (!user || !user.is_active) {
       logger.warn("login_failed", { method: "magic_link", reason: "account_disabled", user_id: userId, ip: clientIp(req) ?? null });
-      res.redirect(frontendUrl("/login?error=account_disabled"));
+      res.redirect(frontendUrl("/login?error=account_disabled", req));
       return;
     }
 
@@ -519,18 +520,18 @@ export function registerAuthRoutes(app: express.Application) {
 
     const ua = req.headers["user-agent"] ?? undefined;
     const ip = clientIp(req);
-    const { cookies } = await createSession(user._id.toString(), ua, ip);
+    const { cookies } = await createSession(user._id.toString(), ua, ip, requestOrigin(req));
     logAuth("login_success", req, { user, method: "magic_link", is_new_user: false });
 
     res.setHeader("Set-Cookie", cookies);
-    res.redirect(frontendUrl("/"));
+    res.redirect(frontendUrl("/", req));
   });
 
   // GET /auth/verify-email?token=...
   app.get("/auth/verify-email", async (req, res) => {
     const token = req.query.token as string | undefined;
     if (!token) {
-      res.redirect(frontendUrl("/login?error=invalid_token"));
+      res.redirect(frontendUrl("/login?error=invalid_token", req));
       return;
     }
 
@@ -540,7 +541,7 @@ export function registerAuthRoutes(app: express.Application) {
     }) as any;
 
     if (!user) {
-      res.redirect(frontendUrl("/login?error=token_expired"));
+      res.redirect(frontendUrl("/login?error=token_expired", req));
       return;
     }
 
@@ -560,10 +561,10 @@ export function registerAuthRoutes(app: express.Application) {
     // Auto sign-in after verification
     const ua = req.headers["user-agent"] ?? undefined;
     const ip = clientIp(req);
-    const { cookies } = await createSession(user._id.toString(), ua, ip);
+    const { cookies } = await createSession(user._id.toString(), ua, ip, requestOrigin(req));
     logAuth("login_success", req, { user, method: "email_verification", is_new_user: false });
     res.setHeader("Set-Cookie", cookies);
-    res.redirect(frontendUrl("/?verified=1"));
+    res.redirect(frontendUrl("/?verified=1", req));
   });
 
   // POST /api/auth/forgot-password
@@ -651,7 +652,27 @@ const DEV_FRONTEND = !isProd
   ? (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173")
   : (process.env.FRONTEND_URL ?? "");
 
-function frontendUrl(path: string): string {
+const FRONTEND_ORIGINS: Record<string, string> = {};
+for (const url of (process.env.FRONTEND_URLS ?? "").split(",").map((s) => s.trim()).filter(Boolean)) {
+  try { const u = new URL(url); FRONTEND_ORIGINS[u.hostname] = u.origin; } catch {}
+}
+
+function requestOrigin(req: express.Request): string | undefined {
+  return req.headers.origin ?? (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
+}
+
+function frontendUrl(path: string, req?: express.Request): string {
+  if (req) {
+    const origin = requestOrigin(req);
+    if (origin) {
+      try {
+        const host = new URL(origin).hostname;
+        if (FRONTEND_ORIGINS[host]) return `${FRONTEND_ORIGINS[host]}${path}`;
+        if (host.endsWith(".remindocr.com") || host === "remindocr.com") return `${origin}${path}`;
+        if (host.endsWith(".handcoded.tech") || host === "handcoded.tech") return `${origin}${path}`;
+      } catch {}
+    }
+  }
   return `${DEV_FRONTEND}${path}`;
 }
 

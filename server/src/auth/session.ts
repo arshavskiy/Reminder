@@ -28,7 +28,8 @@ export async function consumeMagicLinkToken(token: string): Promise<string | nul
 export async function createSession(
   userId: string,
   userAgent?: string,
-  ip?: string
+  ip?: string,
+  requestOrigin?: string,
 ): Promise<{ sessionId: string; cookies: string }> {
   const sessionId = generateSessionId();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -42,19 +43,19 @@ export async function createSession(
     ip: ip ?? null,
   });
 
-  const setCookieHeader = buildSessionCookie(sessionId, 604800);
+  const setCookieHeader = buildSessionCookie(sessionId, 604800, requestOrigin);
 
   return { sessionId, cookies: setCookieHeader };
 }
 
-export function clearSessionCookie(): string {
-  return buildSessionCookie("", 0);
+export function clearSessionCookie(requestOrigin?: string): string {
+  return buildSessionCookie("", 0, requestOrigin);
 }
 
-function buildSessionCookie(value: string, maxAge: number): string {
+function buildSessionCookie(value: string, maxAge: number, requestOrigin?: string): string {
   const secure = shouldUseSecureCookie();
   const sameSite = cookieSameSite(secure);
-  const domain = cookieDomain();
+  const domain = cookieDomainForOrigin(requestOrigin) ?? cookieDomain();
   return [
     `session=${value}`,
     "Path=/",
@@ -86,6 +87,14 @@ function cookieSameSite(secure: boolean): "Lax" | "None" | "Strict" {
   return secure ? "None" : "Lax";
 }
 
+function cookieDomainForOrigin(origin?: string): string | null {
+  if (!origin) return null;
+  const host = hostname(origin);
+  if (host === "handcoded.tech" || host?.endsWith(".handcoded.tech")) return ".handcoded.tech";
+  if (host === "remindocr.com" || host?.endsWith(".remindocr.com")) return ".remindocr.com";
+  return null;
+}
+
 function cookieDomain(): string | null {
   const configured = process.env.COOKIE_DOMAIN?.trim();
   if (configured) return configured;
@@ -95,6 +104,7 @@ function cookieDomain(): string | null {
   for (const url of urls) {
     const host = hostname(url);
     if (host === "handcoded.tech" || host?.endsWith(".handcoded.tech")) return ".handcoded.tech";
+    if (host === "remindocr.com" || host?.endsWith(".remindocr.com")) return ".remindocr.com";
   }
   return null;
 }
