@@ -83,6 +83,7 @@ export interface PipelineFlags {
 export interface EngineerProfile {
   inspector_number?: string | null;
   address?: string | null;
+  city?: string | null;
   title?: string | null;
   expertise?: string | null;
   mr_number?: string | null;

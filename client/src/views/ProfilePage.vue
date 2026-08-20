@@ -136,9 +136,22 @@
                 v-if="editingEngineer"
                 v-model:value="engineerForm.address"
                 class="info-input"
+                placeholder="רחוב ומספר"
               />
               <span v-else class="info-val">{{
                 engineerProfile?.address || "—"
+              }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">עיר</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.city"
+                class="info-input"
+                placeholder="תל אביב"
+              />
+              <span v-else class="info-val">{{
+                engineerProfile?.city || "—"
               }}</span>
             </div>
             <div class="info-row">
@@ -688,6 +701,7 @@ const savingEngineer = ref(false);
 const engineerForm = ref({
   inspector_number: "",
   address: "",
+  city: "",
   title: "",
   expertise: "",
   mr_number: "",
@@ -706,6 +720,7 @@ function startEditEngineer() {
   engineerForm.value = {
     inspector_number: p?.inspector_number ?? "",
     address: p?.address ?? "",
+    city: p?.city ?? "",
     title: p?.title ?? "",
     expertise: p?.expertise ?? "",
     mr_number: p?.mr_number ?? "",
@@ -960,6 +975,7 @@ function buildProfileHtml(): string {
   <table>${rows([
     ["מספר מפקח", ep.inspector_number],
     ["כתובת", ep.address],
+    ["עיר", ep.city],
     ["תואר מקצועי", ep.title],
     ["התמחות", ep.expertise],
     ["מספר מ.ר.", ep.mr_number],

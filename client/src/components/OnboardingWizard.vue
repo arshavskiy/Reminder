@@ -76,9 +76,14 @@
                 <n-input v-model:value="form.mg_number" placeholder="6789" dir="ltr" />
               </n-form-item>
             </div>
-            <n-form-item label="כתובת">
-              <n-input v-model:value="form.address" placeholder="רחוב, עיר" />
-            </n-form-item>
+            <div class="form-row">
+              <n-form-item label="כתובת">
+                <n-input v-model:value="form.address" placeholder="רחוב ומספר" />
+              </n-form-item>
+              <n-form-item label="עיר">
+                <n-input v-model:value="form.city" placeholder="תל אביב" />
+              </n-form-item>
+            </div>
             <n-form-item label="עוסק מורשה (ח.פ)">
               <n-input v-model:value="form.company_registration" placeholder="51646673" dir="ltr" />
             </n-form-item>
@@ -219,6 +224,7 @@ const form = ref({
   inspector_number: "",
   mg_number: "",
   address: "",
+  city: "",
   company_registration: "",
   inspector_id_start: "",
   eng_company_name: "",
@@ -248,6 +254,7 @@ onMounted(async () => {
     form.value.inspector_number = p.inspector_number ?? "";
     form.value.mg_number = p.mg_number ?? "";
     form.value.address = p.address ?? "";
+    form.value.city = p.city ?? "";
     form.value.company_registration = p.company_registration ?? "";
     form.value.inspector_id_start = p.inspector_id_start ?? "";
     form.value.eng_company_name = p.company_name ?? "";
@@ -292,6 +299,7 @@ async function finish() {
       inspector_number: form.value.inspector_number || null,
       mg_number: form.value.mg_number || null,
       address: form.value.address || null,
+      city: form.value.city || null,
       company_registration: form.value.company_registration || null,
       inspector_id_start: form.value.inspector_id_start || null,
       company_name: form.value.eng_company_name || null,

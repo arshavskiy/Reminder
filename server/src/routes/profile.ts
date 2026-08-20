@@ -71,7 +71,7 @@ export function registerProfileRoutes(app: express.Application) {
     const ctx = await auth(req, res);
     if (!ctx) return;
     const {
-      inspector_number, address, title, expertise,
+      inspector_number, address, city, title, expertise,
       mr_number, mg_number, membership_start_date,
       company_name, company_registration, company_subtitle, company_phone, company_email,
       company_logo_url, inspector_id_start,
@@ -84,6 +84,7 @@ export function registerProfileRoutes(app: express.Application) {
           user_id: ctx.userId,
           inspector_number: inspector_number ?? null,
           address: address ?? null,
+          city: city ?? null,
           title: title ?? null,
           expertise: expertise ?? null,
           mr_number: mr_number ?? null,
@@ -313,7 +314,7 @@ export function registerProfileRoutes(app: express.Application) {
         const profileFields: Array<keyof typeof result & string> = [
           "inspector_number", "title", "expertise",
           "mr_number", "mg_number", "membership_start_date",
-          "company_name", "company_phone", "company_email", "address",
+          "company_name", "company_phone", "company_email", "address", "city",
         ];
         for (const k of profileFields) {
           const newVal = result[k];
