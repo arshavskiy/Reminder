@@ -517,9 +517,17 @@ async function retryWithRefresh(userId: string): Promise<string | null> {
 
 function gmailRedirectUri(req: express.Request): string {
   if (process.env.GMAIL_REDIRECT_URI) return process.env.GMAIL_REDIRECT_URI;
+  const frontendBase = oauthCallbackBaseUrl();
+  if (frontendBase) return `${frontendBase}/auth/gmail/callback`;
   const proto = req.headers["x-forwarded-proto"] ?? req.protocol;
   const host = req.headers["x-forwarded-host"] ?? req.headers.host;
   return `${proto}://${host}/auth/gmail/callback`;
+}
+
+function oauthCallbackBaseUrl(): string | null {
+  const isProd = process.env.NODE_ENV === "production" || process.env.APP_ENV === "production";
+  if (isProd && process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
+  return null;
 }
 
 function frontendUrl(path: string) {

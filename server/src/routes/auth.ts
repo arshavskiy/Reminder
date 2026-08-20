@@ -657,7 +657,12 @@ function frontendUrl(path: string): string {
 
 function googleCallbackUri(req: express.Request): string {
   if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
-  return `${serverBaseUrl(req)}/auth/google/callback`;
+  return `${authCallbackBaseUrl(req)}/auth/google/callback`;
+}
+
+function authCallbackBaseUrl(req: express.Request): string {
+  if (isProd && process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
+  return serverBaseUrl(req);
 }
 
 function serverBaseUrl(req: express.Request): string {

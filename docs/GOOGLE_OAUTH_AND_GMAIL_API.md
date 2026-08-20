@@ -76,7 +76,7 @@ FRONTEND_URL=https://remindocr.com
 APP_ENV=production
 ```
 
-**Redirect URI auto-derivation:** If `GOOGLE_REDIRECT_URI` / `GMAIL_REDIRECT_URI` are **not set**, the server builds the redirect URI from the incoming request's `x-forwarded-host` and `x-forwarded-proto` headers (set by Railway/reverse proxy). This works when custom domains are configured correctly. Set the env var explicitly if auto-derivation produces wrong values.
+**Redirect URI auto-derivation:** In production, if `GOOGLE_REDIRECT_URI` / `GMAIL_REDIRECT_URI` are **not set**, the server uses `FRONTEND_URL` for OAuth callbacks so Vercel can proxy `/auth/*` as same-origin. In local development, it builds the redirect URI from the incoming request's `x-forwarded-host` and `x-forwarded-proto` headers. Set the env var explicitly if auto-derivation produces wrong values.
 
 ### Client (Vercel / `.env` for Vite)
 
@@ -231,25 +231,27 @@ Non-admin users' bulk import (`/api/gmail/import-all`) automatically scopes the 
 
 ## Redirect URI Resolution
 
-Both flows auto-derive redirect URIs from the request if env vars are unset:
+Both flows auto-derive redirect URIs if env vars are unset:
 
 ```typescript
 // Google Sign-In (auth.ts)
 function googleCallbackUri(req): string {
   if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
+  if (isProd && process.env.FRONTEND_URL) return `${process.env.FRONTEND_URL}/auth/google/callback`;
   return `${serverBaseUrl(req)}/auth/google/callback`;
 }
 
 // Gmail (gmail.ts)
 function gmailRedirectUri(req): string {
   if (process.env.GMAIL_REDIRECT_URI) return process.env.GMAIL_REDIRECT_URI;
+  if (isProd && process.env.FRONTEND_URL) return `${process.env.FRONTEND_URL}/auth/gmail/callback`;
   const proto = req.headers["x-forwarded-proto"] ?? req.protocol;
   const host = req.headers["x-forwarded-host"] ?? req.headers.host;
   return `${proto}://${host}/auth/gmail/callback`;
 }
 ```
 
-`serverBaseUrl` reads `x-forwarded-proto` and `x-forwarded-host` headers (set by Railway/reverse proxy).
+In production, this should produce `https://remindocr.com/auth/google/callback` and `https://remindocr.com/auth/gmail/callback`. `serverBaseUrl` reads `x-forwarded-proto` and `x-forwarded-host` headers for local/dev fallback.
 
 **If `SERVER_URL` env var is set**, `serverBaseUrl` returns that instead.
 
