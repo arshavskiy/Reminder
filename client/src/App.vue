@@ -194,6 +194,7 @@ import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
 import OnboardingWizard from "./components/OnboardingWizard.vue";
 import WalkthroughOverlay from "./components/WalkthroughOverlay.vue";
+import {useWalkthrough} from "./composables/useWalkthrough.js";
 import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
@@ -234,6 +235,17 @@ watch(
     }
   },
   { immediate: true },
+);
+
+// ── Walkthrough auto-trigger per page ────────────────────────────────────────
+const walkthrough = useWalkthrough();
+watch(
+  () => route.path,
+  (path) => {
+    if (authStore.user && !showOnboarding.value && path !== "/login") {
+      walkthrough.autoTriggerForPage(path);
+    }
+  },
 );
 
 // ── PWA install banner ───────────────────────────────────────────────────────
