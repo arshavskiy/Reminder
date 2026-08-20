@@ -89,7 +89,7 @@ const menuIcons: Record<string, string> = {
   documentsTemplates: "▤",
   emailTemplates: "✉",
   equipment: "▣",
-  settings: "⚙",
+  // settings: "⚙",
   admin: "♡",
   tour: "🗺",
   logout: "▦",
@@ -112,7 +112,7 @@ const dropdownItems = computed(() => [
   },
   ...(props.userRole === "admin"
       ? [
-        {label: "הגדרות אישיות", key: "settings"},
+        // {label: "הגדרות אישיות", key: "settings"},
         {label: "פאנל ניהול", key: "admin"},
       ]
       : []),
@@ -147,8 +147,8 @@ async function handleSelect(key: string) {
     router.push("/settings/email-templates");
   } else if (key === "equipment") {
     router.push("/equipment");
-  } else if (key === "settings") {
-    router.push("/settings");
+    // } else if (key === "settings") {
+    //   router.push("/settings");
   } else if (key === "admin") {
     router.push("/admin");
   } else if (key === "tour") {

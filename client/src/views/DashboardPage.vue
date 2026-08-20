@@ -411,15 +411,15 @@ const modules = [
     to: "/reminders",
     show: true,
   },
-  {
-    key: "settings",
-    feature: FEATURES.pages.settings,
-    title: "הגדרות",
-    desc: "AI, SMTP, מעקב תיקיות, ערכת נושא ועוד.",
-    icon: SettingsOutline,
-    to: "/settings",
-    show: authStore.user?.role === "admin", // Only show to admins
-  },
+  // {
+  //   key: "settings",
+  //   feature: FEATURES.pages.settings,
+  //   title: "הגדרות",
+  //   desc: "AI, SMTP, מעקב תיקיות, ערכת נושא ועוד.",
+  //   icon: SettingsOutline,
+  //   to: "/settings",
+  //   show: authStore.user?.role === "admin", // Only show to admins
+  // },
 ];
 
 const data_cards = computed(() =>
