@@ -676,8 +676,11 @@ const pageSize = ref(20);
 const currentPage = ref(1);
 watch([search, filterClientId, filterDateRange, statusFilter, pageSize], () => {
   currentPage.value = 1;
+});
+
+watch(filteredRows, (rows) => {
   if (bulkMode.value && selectedIds.value.size > 0) {
-    const visible = new Set(filteredRows.value.map((r) => String(r.id)));
+    const visible = new Set(rows.map((r) => String(r.id)));
     selectedIds.value = new Set([...selectedIds.value].filter((id) => visible.has(id)));
   }
 });
