@@ -68,6 +68,14 @@
               בחירה מרובה
               <span v-if="selectedIds.size">({{ selectedIds.size }})</span>
             </button>
+            <button
+                v-if="bulkMode && filteredRows.length"
+                class="rbtn rbtn--ghost"
+                type="button"
+                @click="selectAll"
+            >
+              {{ selectedIds.size === filteredRows.length ? 'בטל הכל' : 'בחר הכל' }}
+            </button>
             <div v-if="bulkMode && selectedIds.size > 0" class="bulk-action-anchor__actions">
               <button
                   :class="{ 'bulk-action-item--loading': bulkDeleting }"
@@ -998,6 +1006,13 @@ function confirmDeleteDocument(row: Document) {
 function toggleBulkMode() {
   bulkMode.value = !bulkMode.value;
   if (!bulkMode.value) selectedIds.value = new Set();
+}
+function selectAll() {
+  if (selectedIds.value.size === filteredRows.value.length) {
+    selectedIds.value = new Set();
+  } else {
+    selectedIds.value = new Set(filteredRows.value.map((r) => String(r.id)));
+  }
 }
 function toggleSelect(id: string) {
   const next = new Set(selectedIds.value);
