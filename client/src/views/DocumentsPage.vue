@@ -678,13 +678,6 @@ watch([search, filterClientId, filterDateRange, statusFilter, pageSize], () => {
   currentPage.value = 1;
 });
 
-watch(filteredRows, (rows) => {
-  if (bulkMode.value && selectedIds.value.size > 0) {
-    const visible = new Set(rows.map((r) => String(r.id)));
-    selectedIds.value = new Set([...selectedIds.value].filter((id) => visible.has(id)));
-  }
-});
-
 // Refetch from server whenever the client filter changes (so we always get
 // the canonical client→document mapping rather than relying on cached rows).
 watch(filterClientId, (cid) => {
@@ -722,6 +715,10 @@ const pagedRows = computed(() => {
 watch(filteredRows, (rows) => {
   const count = Math.max(1, Math.ceil(rows.length / pageSize.value));
   if (currentPage.value > count) currentPage.value = count;
+  if (bulkMode.value && selectedIds.value.size > 0) {
+    const visible = new Set(rows.map((r) => String(r.id)));
+    selectedIds.value = new Set([...selectedIds.value].filter((id) => visible.has(id)));
+  }
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
