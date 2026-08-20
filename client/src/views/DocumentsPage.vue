@@ -660,6 +660,7 @@ function applyFilter(f: CombinedFilter) {
   activeFilterKey.value = f.key;
   statusFilter.value = f.statusValue ?? "all";
   currentPage.value = 1;
+  if (bulkMode.value) selectedIds.value = new Set();
   writeRememberedFilter("documents", f.key);
 }
 
@@ -674,7 +675,10 @@ async function loadClients() {
 // ── Pagination ─────────────────────────────────────────────────────────────────
 const pageSize = ref(20);
 const currentPage = ref(1);
-watch([search, filterClientId, filterDateRange, statusFilter, pageSize], () => { currentPage.value = 1; });
+watch([search, filterClientId, filterDateRange, statusFilter, pageSize], () => {
+  currentPage.value = 1;
+  if (bulkMode.value) selectedIds.value = new Set();
+});
 
 // Refetch from server whenever the client filter changes (so we always get
 // the canonical client→document mapping rather than relying on cached rows).
