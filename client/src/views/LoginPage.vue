@@ -2,11 +2,25 @@
   <div class="login-page" dir="rtl">
     <nav class="landing-nav">
       <a class="nav-brand" href="#top" aria-label="RemindOCR">
+        <img class="nav-brand__logo" :src="logoSrc" alt="" />
         <span class="nav-brand__text">RemindOCR</span>
       </a>
       <div class="nav-links">
         <a href="#features">תכונות</a>
         <a href="#how">איך זה עובד</a>
+        <n-tooltip placement="bottom" :keep-alive-on-hover="false">
+          <template #trigger>
+            <button
+              class="iconbtn"
+              type="button"
+              :aria-label="isDark ? 'החלף למצב בהיר' : 'החלף למצב כהה'"
+              @click="toggleTheme"
+            >
+              <n-icon :component="isDark ? SunnyOutline : MoonOutline" :size="18" />
+            </button>
+          </template>
+          {{ isDark ? "מצב בהיר" : "מצב כהה" }}
+        </n-tooltip>
         <a class="nav-cta" href="#login-card">כניסה למערכת</a>
       </div>
     </nav>
@@ -19,7 +33,11 @@
           <!--          </div>-->
           <h1>ניהול תסקירים ותזכורות <span>בלי כאב ראש</span></h1>
           <p class="hero-desc">
-            ייבא מסמכים, חלץ נתונים אוטומטית עם AI, נהל לקוחות וקבל תזכורות לפני שכל חוזה או תסקיר פג תוקף.
+            RemindOCR היא מערכת לניהול תסקירי בדיקה, מסמכים, לקוחות וחוזים. המערכת מאפשרת להעלות או לייבא מסמכים,
+            לחלץ מהם תאריכים ופרטי לקוח בעזרת OCR ו-AI, ולעקוב אחרי תוקף מסמכים באמצעות תזכורות אוטומטיות.
+          </p>
+          <p class="hero-purpose">
+            חיבור Gmail הוא אופציונלי ומשמש רק להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר להכניס למערכת.
           </p>
           <!--          <div class="hero-actions">-->
           <!--            <a class="btn-primary" href="#login-card">כניסה למערכת</a>-->
@@ -29,6 +47,7 @@
 
         <div id="login-card" class="login-card">
           <div class="login-brand">
+            <img class="login-brand__logo" :src="logoSrc" alt="" />
             <h2 class="login-brand__title">RemindOCR</h2>
             <p class="login-brand__sub">מערכת ניהול תסקירים ותזכורות</p>
           </div>
@@ -114,7 +133,7 @@
                       :disabled="loading"
                   />
                 </n-form-item>
-                <p v-if="regPassword && regPassword.length < 8" style="color:#f0a020;font-size:12px;margin:4px 0 12px">
+                <p v-if="regPassword && regPassword.length < 8" style="color:var(--color-warning);font-size:12px;margin:4px 0 12px">
                   הסיסמה חייבת להכיל לפחות 8 תווים</p>
                 <div style="height:12px" v-else/>
                 <n-button
@@ -166,7 +185,12 @@
         <article class="feature-card">
           <!--          <div class="feature-icon">📄</div>-->
           <h3>ייבוא מסמכים חכם</h3>
-          <p>גרור ושחרר PDF, Word, Excel ועוד. AI יחלץ אוטומטית את שם הלקוח, תאריכים, סכומים ועוד.</p>
+          <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך.</p>
+        </article>
+        <article class="feature-card">
+          <!--          <div class="feature-icon">✉️</div>-->
+          <h3>ייבוא PDF מ-Gmail</h3>
+          <p>חיבור Gmail הוא אופציונלי, לקריאה בלבד, ומשמש להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר.</p>
         </article>
         <article class="feature-card">
           <!--          <div class="feature-icon">⏰</div>-->
@@ -260,7 +284,8 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NAlert, NButton, NForm, NFormItem, NInput, NModal, NTabPane, NTabs} from "naive-ui";
+import {NAlert, NButton, NForm, NFormItem, NIcon, NInput, NModal, NTabPane, NTabs, NTooltip} from "naive-ui";
+import {MoonOutline, SunnyOutline} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
 import {useDashboardStore} from "../stores/dashboard.js";
 import {useDocumentsStore} from "../stores/documents.js";
@@ -279,6 +304,9 @@ const clientsStore = useClientsStore();
 const remindersStore = useRemindersStore();
 const route = useRoute();
 const router = useRouter();
+const darkPref = ref(localStorage.getItem("theme") === "dark");
+const isDark = computed(() => darkPref.value);
+const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
 
 const activeTab = ref<"login" | "register">("login");
 const loading = ref(false);
@@ -328,6 +356,14 @@ function clearError() {
 
 function onGisError(msg: string) {
   gisError.value = msg;
+}
+
+function toggleTheme() {
+  const next = isDark.value ? "light" : "dark";
+  darkPref.value = next === "dark";
+  localStorage.setItem("theme", next);
+  document.documentElement.setAttribute("data-theme", next);
+  window.dispatchEvent(new CustomEvent("remindocr:theme-change", { detail: next }));
 }
 
 async function handleLogin() {
@@ -417,6 +453,8 @@ async function handleForgot() {
 }
 
 onMounted(async () => {
+  document.documentElement.setAttribute("data-theme", isDark.value ? "dark" : "light");
+
   const e = route.query.error as string | undefined;
   if (e) routeError.value = e;
 
@@ -433,10 +471,12 @@ onMounted(async () => {
 .login-page {
   --landing-nav-height: 64px;
   --login-font-family: "Rubik", "Lato", "Arial", "Helvetica Neue", sans-serif;
+  --login-brand-tint: color-mix(in srgb, var(--brand-color) 12%, transparent);
+  --login-brand-border: color-mix(in srgb, var(--brand-color) 22%, var(--border-color));
   min-height: 100vh;
   padding-top: var(--landing-nav-height);
-  background: #f8fafb;
-  color: #1a1a2e;
+  background: var(--bg-app);
+  color: var(--text-primary);
   font-family: var(--login-font-family);
   line-height: 1.6;
   overflow-x: hidden;
@@ -454,8 +494,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.92);
-  border-bottom: 1px solid #e2e8f0;
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  border-bottom: 1px solid var(--border-color);
   backdrop-filter: blur(12px);
 }
 
@@ -463,7 +503,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  color: #1a1a2e;
+  color: var(--text-primary);
   text-decoration: none;
 }
 
@@ -472,36 +512,64 @@ onMounted(async () => {
   font-weight: 700;
 }
 
+.nav-brand__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.14);
+}
+
 .nav-links {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
+.iconbtn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.iconbtn:hover {
+  background: var(--login-brand-tint);
+  border-color: var(--login-brand-border);
+  color: var(--brand-color);
+}
+
 .nav-links a {
   padding: 8px 16px;
   border-radius: 8px;
-  color: #4a5568;
+  color: var(--text-secondary);
   font-size: 14px;
   text-decoration: none;
   transition: background 0.15s, color 0.15s;
 }
 
 .nav-links a:hover {
-  background: rgba(24, 160, 88, 0.1);
-  color: #18a058;
+  background: var(--login-brand-tint);
+  color: var(--brand-color);
 }
 
 .nav-links .nav-cta {
   padding: 10px 20px;
-  background: #18a058;
-  color: #fff;
+  background: var(--brand-color);
+  color: var(--text-inverse);
   font-weight: 700;
 }
 
 .nav-links .nav-cta:hover {
-  background: #0c7a43;
-  color: #fff;
+  background: var(--brand-color-pressed);
+  color: var(--text-inverse);
 }
 
 
@@ -518,9 +586,9 @@ onMounted(async () => {
 .hero-badge {
   display: inline-flex;
   align-items: center;
-  background: rgba(24, 160, 88, 0.1);
-  color: #18a058;
-  border: 1px solid rgba(24, 160, 88, 0.2);
+  background: var(--login-brand-tint);
+  color: var(--brand-color);
+  border: 1px solid var(--login-brand-border);
   border-radius: 999px;
   padding: 6px 14px;
   font-size: 13px;
@@ -531,7 +599,7 @@ onMounted(async () => {
 .hero h1 {
   max-width: 640px;
   margin: 0 0 20px;
-  color: #1a1a2e;
+  color: var(--text-primary);
   font-size: clamp(32px, 4vw, 52px);
   font-weight: 800;
   line-height: 1.15;
@@ -539,15 +607,27 @@ onMounted(async () => {
 }
 
 .hero h1 span {
-  color: #18a058;
+  color: var(--brand-color);
 }
 
 .hero-desc {
   max-width: 620px;
-  margin: 0 0 36px;
-  color: #4a5568;
+  margin: 0 0 18px;
+  color: var(--text-secondary);
   font-size: 18px;
   line-height: 1.7;
+}
+
+.hero-purpose {
+  max-width: 620px;
+  margin: 0 0 36px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--login-brand-border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.65;
 }
 
 .hero-actions {
@@ -571,32 +651,32 @@ onMounted(async () => {
 
 .btn-primary {
   padding: 14px 28px;
-  background: #18a058;
-  color: #fff;
+  background: var(--brand-color);
+  color: var(--text-inverse);
 }
 
 .btn-primary:hover {
-  background: #0c7a43;
+  background: var(--brand-color-pressed);
   transform: translateY(-1px);
 }
 
 .btn-secondary {
   padding: 14px 28px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  color: #1a1a2e;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-  background: #f8fafb;
+  background: var(--bg-hover);
   transform: translateY(-1px);
 }
 
 .login-card {
   width: 100%;
   max-width: 420px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 36px 32px 28px;
   display: flex;
@@ -614,16 +694,24 @@ onMounted(async () => {
   margin-bottom: 24px;
 }
 
+.login-brand__logo {
+  width: 82px;
+  height: 82px;
+  border-radius: 18px;
+  object-fit: cover;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
 .login-brand__title {
   font-size: 24px;
   font-weight: 700;
   margin: 0;
-  color: #1a1a2e;
+  color: var(--text-primary);
 }
 
 .login-brand__sub {
   font-size: 14px;
-  color: #4a5568;
+  color: var(--text-secondary);
   margin: 0;
   text-align: center;
 }
@@ -633,7 +721,7 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   margin: 16px 0;
-  color: #4a5568;
+  color: var(--text-secondary);
   font-size: 13px;
   width: 100%;
 }
@@ -643,20 +731,20 @@ onMounted(async () => {
   content: "";
   flex: 1;
   height: 1px;
-  background: #e2e8f0;
+  background: var(--border-color);
 }
 
 .login-footer {
   margin-top: 20px;
   font-size: 12px;
-  color: #4a5568;
+  color: var(--text-secondary);
   text-align: center;
 }
 
 .stats {
-  background: #fff;
-  border-top: 1px solid #e2e8f0;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
   padding: 48px;
 }
 
@@ -671,14 +759,14 @@ onMounted(async () => {
 
 .stat-num {
   margin-bottom: 6px;
-  color: #18a058;
+  color: var(--brand-color);
   font-size: 42px;
   font-weight: 800;
   line-height: 1;
 }
 
 .stat-label {
-  color: #4a5568;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
 }
@@ -696,7 +784,7 @@ onMounted(async () => {
 
 .section-header h2 {
   margin: 0 0 12px;
-  color: #1a1a2e;
+  color: var(--text-primary);
   font-size: clamp(24px, 3vw, 36px);
   font-weight: 800;
   letter-spacing: 0;
@@ -705,7 +793,7 @@ onMounted(async () => {
 .section-header p {
   max-width: 540px;
   margin: 0 auto;
-  color: #4a5568;
+  color: var(--text-secondary);
   font-size: 17px;
 }
 
@@ -716,8 +804,8 @@ onMounted(async () => {
 }
 
 .feature-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 28px;
   transition: box-shadow 0.2s, transform 0.2s;
@@ -732,7 +820,7 @@ onMounted(async () => {
   width: 48px;
   height: 48px;
   margin-bottom: 16px;
-  background: rgba(24, 160, 88, 0.1);
+  background: var(--login-brand-tint);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -742,20 +830,20 @@ onMounted(async () => {
 
 .feature-card h3 {
   margin: 0 0 8px;
-  color: #1a1a2e;
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 700;
 }
 
 .feature-card p {
   margin: 0;
-  color: #4a5568;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.6;
 }
 
 .how-section {
-  background: #fff;
+  background: var(--bg-card);
 }
 
 .steps {
@@ -778,7 +866,7 @@ onMounted(async () => {
   left: 0;
   width: 100%;
   height: 2px;
-  background: #e2e8f0;
+  background: var(--border-color);
 }
 
 .step__num {
@@ -788,8 +876,8 @@ onMounted(async () => {
   height: 48px;
   margin: 0 auto 16px;
   border-radius: 50%;
-  background: #18a058;
-  color: #fff;
+  background: var(--brand-color);
+  color: var(--text-inverse);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -799,26 +887,26 @@ onMounted(async () => {
 
 .step h3 {
   margin: 0 0 8px;
-  color: #1a1a2e;
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 700;
 }
 
 .step p {
   margin: 0;
-  color: #4a5568;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
 .cta-section {
-  background: linear-gradient(135deg, #18a058, #0c7a43);
+  background: linear-gradient(135deg, var(--brand-color), var(--brand-color-pressed));
   padding: 80px 48px;
   text-align: center;
 }
 
 .cta-section h2 {
   margin: 0 0 28px;
-  color: #fff;
+  color: var(--text-inverse);
   font-size: clamp(24px, 3vw, 40px);
   font-weight: 800;
   letter-spacing: 0;
@@ -826,8 +914,8 @@ onMounted(async () => {
 
 .btn-white {
   padding: 14px 32px;
-  background: #fff;
-  color: #0c7a43;
+  background: var(--bg-card);
+  color: var(--brand-color-pressed);
 }
 
 .btn-white:hover {
@@ -836,30 +924,30 @@ onMounted(async () => {
 }
 
 .landing-footer {
-  background: #1a1a2e;
-  color: rgba(255, 255, 255, 0.72);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
   padding: 40px 48px;
   text-align: center;
   font-size: 14px;
 }
 
 .landing-footer strong {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .landing-footer__legal {
   margin-top: 8px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-muted);
 }
 
 .landing-footer__legal a {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-muted);
   text-decoration: none;
 }
 
 .landing-footer__legal a:hover {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
 }
 
 :deep(.n-tabs) {

@@ -8,7 +8,7 @@
             <!-- Brand on the right (RTL "start") -->
             <div class="appbar__brand" @click="router.push('/')">
               <div class="appbar__logo">
-                <n-icon :component="BriefcaseOutline" :size="22" />
+                <img class="appbar__logo-img" :src="logoSrc" alt="" />
               </div>
               <span class="appbar__brand-text"> RemindOCR </span>
             </div>
@@ -143,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref, watch, watchEffect} from "vue";
+import {computed, onBeforeUnmount, onMounted, ref, watch, watchEffect} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
   darkTheme,
@@ -188,7 +188,7 @@ import {
   unstableTreeSelectRtl,
   unstableUploadsRtl,
 } from "naive-ui";
-import {BriefcaseOutline, DownloadOutline, MoonOutline, SunnyOutline} from "@vicons/ionicons5";
+import {DownloadOutline, MoonOutline, SunnyOutline} from "@vicons/ionicons5";
 import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
@@ -330,6 +330,7 @@ async function onActAsChange(userId: string | null) {
 const darkPref = ref<boolean>(localStorage.getItem("theme") === "dark");
 const isDark = computed(() => darkPref.value);
 const theme = computed(() => (isDark.value ? darkTheme : null));
+const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
 
 const themeOverrides = computed(() => ({
   common: {
@@ -355,7 +356,16 @@ async function toggleTheme() {
   userSettingsStore.save({ theme: next }).catch(() => {});
 }
 
+function onThemeChanged(event: Event) {
+  const next = (event as CustomEvent<"dark" | "light">).detail;
+  if (next === "dark" || next === "light") {
+    darkPref.value = next === "dark";
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener("remindocr:theme-change", onThemeChanged);
+
   if (authStore.user) {
     // Sync theme from user-settings only after auth is known. The login page
     // should not call protected user-settings endpoints.
@@ -369,6 +379,10 @@ onMounted(async () => {
     featuresStore.fetchFeatures().catch(() => {});
     loadActAsUsers();
   }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("remindocr:theme-change", onThemeChanged);
 });
 
 watch(
@@ -465,12 +479,19 @@ function navigate(key: string) {
 .appbar__logo {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--brand-color), var(--brand-color-hover));
-  color: #fff;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: var(--shadow-sm);
+}
+.appbar__logo-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 .appbar__brand-text {
   font-weight: 700;
