@@ -35,6 +35,7 @@ import {useRouter} from "vue-router";
 import {NDropdown, NIcon} from "naive-ui";
 import {PersonOutline} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
+import {useWalkthrough} from "../composables/useWalkthrough.js";
 
 interface Props {
   userName?: string | null;
@@ -46,6 +47,7 @@ interface Props {
 const props = defineProps<Props>();
 const router = useRouter();
 const authStore = useAuthStore();
+const walkthrough = useWalkthrough();
 
 // Create avatar from email / name
 const avatarUrl = computed<string>(() => {
@@ -88,6 +90,7 @@ const menuIcons: Record<string, string> = {
   equipment: "▣",
   settings: "⚙",
   admin: "♡",
+  tour: "🗺",
   logout: "▦",
 };
 
@@ -115,6 +118,10 @@ const dropdownItems = computed(() => [
     type: "divider",
   },
   {
+    label: "סיור במערכת",
+    key: "tour",
+  },
+  {
     label: "התנתק",
     key: "logout",
   },
@@ -140,6 +147,8 @@ async function handleSelect(key: string) {
     router.push("/settings");
   } else if (key === "admin") {
     router.push("/admin");
+  } else if (key === "tour") {
+    walkthrough.startTour("main");
   } else if (key === "logout") {
     await authStore.logout();
   }

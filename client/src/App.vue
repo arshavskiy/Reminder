@@ -136,6 +136,7 @@
 
         <WsConnector />
         <OnboardingWizard v-if="showOnboarding" v-model="showOnboarding" />
+        <WalkthroughOverlay />
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>
@@ -192,6 +193,7 @@ import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
 import OnboardingWizard from "./components/OnboardingWizard.vue";
+import WalkthroughOverlay from "./components/WalkthroughOverlay.vue";
 import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
