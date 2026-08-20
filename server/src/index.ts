@@ -125,7 +125,7 @@ try {
         urls: [
           {
             url: "/api-docs.json",
-            name: "ReminderOCR API",
+            name: "RemindOCR API",
           },
         ],
       },

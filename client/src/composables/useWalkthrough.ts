@@ -52,7 +52,7 @@ const tours: Record<string, WalkthroughStep[]> = {
   main: [
     {
       selector: ".appbar__brand",
-      title: "ברוכים הבאים ל-ReminderOCR",
+      title: "ברוכים הבאים ל-RemindOCR",
       text: "המערכת לניהול תסקירים, תזכורות ולקוחות. בואו נכיר את הממשק.",
       placement: "bottom",
     },

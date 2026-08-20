@@ -41,7 +41,7 @@ function renderHtml(template: string, vars: Record<string, string>): string {
 
 async function sendAuthEmail(options: {to: string; subject: string; html: string; text: string}) {
   const s = getSettings();
-  const appName = s.emailFromName ?? "ReminderOCR";
+  const appName = s.emailFromName ?? "RemindOCR";
   if (!s.emailFrom) {
     console.warn("[emailAuth] EMAIL_FROM not configured — skipping auth email");
     return;
@@ -79,7 +79,7 @@ async function sendAuthEmail(options: {to: string; subject: string; html: string
 export async function sendVerificationEmail(email: string, token: string, baseUrl: string) {
   const s = getSettings();
   const verifyUrl = `${baseUrl}/auth/verify-email?token=${token}`;
-  const appName = s.emailFromName ?? "ReminderOCR";
+  const appName = s.emailFromName ?? "RemindOCR";
   const html = renderHtml(loadAuthTemplate("verify-email"), { verify_url: verifyUrl, app_name: appName });
 
   await sendAuthEmail({
@@ -93,7 +93,7 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
 export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string) {
   const s = getSettings();
   const resetUrl = `${baseUrl}/reset-password?token=${token}`;
-  const appName = s.emailFromName ?? "ReminderOCR";
+  const appName = s.emailFromName ?? "RemindOCR";
   const html = renderHtml(loadAuthTemplate("reset-password"), { reset_url: resetUrl, app_name: appName });
 
   await sendAuthEmail({

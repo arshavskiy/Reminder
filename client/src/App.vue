@@ -4,13 +4,13 @@
       <n-dialog-provider>
         <div class="app-shell">
           <!-- ── Top horizontal app bar ─────────────────────────────────── -->
-          <header v-if="route.path !== '/login' && !route.path.startsWith('/admin')" class="appbar">
+          <header v-if="!hideAppChrome" class="appbar">
             <!-- Brand on the right (RTL "start") -->
             <div class="appbar__brand" @click="router.push('/')">
               <div class="appbar__logo">
                 <n-icon :component="BriefcaseOutline" :size="22" />
               </div>
-              <span class="appbar__brand-text"> ReminderOCR </span>
+              <span class="appbar__brand-text"> RemindOCR </span>
             </div>
 
             <!-- Center nav -->
@@ -85,7 +85,7 @@
           </header>
 
           <!-- PWA install banner -->
-          <div v-if="showInstallBanner && route.path !== '/login'" class="install-banner">
+          <div v-if="showInstallBanner && !hideAppChrome" class="install-banner">
             <span class="install-banner__text">📲 התקן את האפליקציה למחשב לגישה מהירה</span>
             <div class="install-banner__actions">
               <button class="install-banner__btn install-banner__btn--primary" @click="installAndDismiss">התקן</button>
@@ -118,18 +118,18 @@
           </n-drawer>
 
           <!-- ── Main content ───────────────────────────────────────────── -->
-          <main :class="['content', { 'content--fullpage': route.path === '/login' || route.path.startsWith('/admin') }]">
-            <div :class="(route.path === '/login' || route.path.startsWith('/admin')) ? '' : 'page'">
+          <main :class="['content', { 'content--fullpage': isMinimalShell }]">
+            <div :class="isMinimalShell ? '' : 'page'">
             <router-view />
             </div>
           </main>
 
-          <footer v-if="route.path !== '/login'" class="app-footer" dir="rtl">
-            <strong>ReminderOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
+          <footer v-if="route.path !== '/login' && !isLegalRoute" class="app-footer" dir="rtl">
+            <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
             <div class="app-footer__legal">
               © 2026 HandCoded. All rights reserved. |
-              <a href="https://remindocr.com/privacy.html" target="_blank">Privacy Policy</a> |
-              <a href="https://remindocr.com/terms.html" target="_blank">Terms of Service</a>
+              <router-link to="/privacy">Privacy Policy</router-link> |
+              <router-link to="/terms">Terms of Service</router-link>
             </div>
           </footer>
         </div>
@@ -222,6 +222,20 @@ const featuresStore = useFeaturesStore();
 const userSettingsStore = useUserSettingsStore();
 const pwa = usePwa();
 
+const isLegalRoute = computed(() => Boolean(route.meta.legal));
+const isMinimalShell = computed(() =>
+  route.path === "/login" ||
+  route.path === "/reset-password" ||
+  isLegalRoute.value ||
+  route.path.startsWith("/admin"),
+);
+const hideAppChrome = computed(() =>
+  route.path === "/login" ||
+  route.path === "/reset-password" ||
+  isLegalRoute.value ||
+  route.path.startsWith("/admin"),
+);
+
 const mobileNavOpen = ref(false);
 
 // ── Onboarding wizard ───────────────────────────────────────────────────────
@@ -230,7 +244,7 @@ const showOnboarding = ref(false);
 watch(
   () => authStore.user,
   (user) => {
-    if (user && !(user as any).onboarding_completed && route.path !== "/login") {
+    if (user && !(user as any).onboarding_completed && !hideAppChrome.value) {
       showOnboarding.value = true;
     }
   },

@@ -33,8 +33,8 @@ Add one redirect URI per environment, per flow:
 | Environment | Google Sign-In | Gmail API |
 |---|---|---|
 | Local dev | `http://localhost:3737/auth/google/callback` | `http://localhost:3737/auth/gmail/callback` |
-| Production | `https://reminder.handcoded.tech/auth/google/callback` | `https://reminder.handcoded.tech/auth/gmail/callback` |
-| Dev server | `https://reminder.dev.handcoded.tech/auth/google/callback` | `https://reminder.dev.handcoded.tech/auth/gmail/callback` |
+| Production | `https://remindocr.com/auth/google/callback` | `https://remindocr.com/auth/gmail/callback` |
+| Dev server | `https://dev.remindocr.com/auth/google/callback` | `https://dev.remindocr.com/auth/gmail/callback` |
 | Railway (direct) | `https://reminder-production.up.railway.app/auth/google/callback` | `https://reminder-production.up.railway.app/auth/gmail/callback` |
 
 **Important:** Every redirect URI must match **exactly** — protocol, domain, port, path. Google returns `redirect_uri_mismatch` (400) on any discrepancy. Changes in Console can take up to 5 minutes to propagate.
@@ -70,7 +70,7 @@ SESSION_SECRET=<random-hex-string>
 ALLOWED_EMAILS=user1@gmail.com,user2@gmail.com
 
 # Frontend URL for post-auth redirects (production only)
-FRONTEND_URL=https://reminder.handcoded.tech
+FRONTEND_URL=https://remindocr.com
 
 # APP_ENV or NODE_ENV = "production" to activate production mode
 APP_ENV=production
@@ -262,7 +262,7 @@ After OAuth callback, server redirects user to the frontend:
 ```typescript
 const isProd = process.env.NODE_ENV === "production" || process.env.APP_ENV === "production";
 const base = isProd
-  ? (process.env.FRONTEND_URL ?? "")     // e.g. https://reminder.handcoded.tech
+  ? (process.env.FRONTEND_URL ?? "")     // e.g. https://remindocr.com
   : (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173");
 ```
 
@@ -278,32 +278,32 @@ const base = isProd
 Sessions use a single `session` cookie set by the server:
 
 ```
-session=<64-char-hex>; Path=/; HttpOnly; Secure; SameSite=None; Domain=.handcoded.tech; Max-Age=604800
+session=<64-char-hex>; Path=/; HttpOnly; Secure; SameSite=None; Domain=.remindocr.com; Max-Age=604800
 ```
 
 | Attribute | Production | Local dev |
 |---|---|---|
 | `Secure` | `true` (HTTPS) | `false` (HTTP) |
 | `SameSite` | `None` | `Lax` |
-| `Domain` | `.handcoded.tech` | not set (defaults to request host) |
+| `Domain` | `.remindocr.com` | not set (defaults to request host) |
 | `Max-Age` | 604800 (7 days) | 604800 (7 days) |
 
 These are auto-derived in `server/src/auth/session.ts` — functions `shouldUseSecureCookie()`, `cookieSameSite()`, `cookieDomain()`.
 
 ### Vercel API Proxy (Critical)
 
-The client on Vercel (`reminder.handcoded.tech`) proxies all API requests to the server (`api.handcoded.tech`) via Vercel rewrites in `client/vercel.json`:
+The client on Vercel (`remindocr.com`) proxies all API requests to the server (`api.remindocr.com`) via Vercel rewrites in `client/vercel.json`:
 
 ```json
-{ "source": "/api/:path*", "destination": "https://api.handcoded.tech/api/:path*" },
-{ "source": "/auth/:path*", "destination": "https://api.handcoded.tech/auth/:path*" }
+{ "source": "/api/:path*", "destination": "https://api.remindocr.com/api/:path*" },
+{ "source": "/auth/:path*", "destination": "https://api.remindocr.com/auth/:path*" }
 ```
 
-**Why this is required:** Chrome (especially Android, v127+) blocks third-party cookies with `SameSite=None`. Without the proxy, `reminder.handcoded.tech` makes cross-origin requests to `api.handcoded.tech` — the `Set-Cookie` from the server is treated as a third-party cookie and silently dropped by the browser. The Vercel rewrite makes all requests same-origin from the browser's perspective.
+**Why this is required:** Chrome (especially Android, v127+) blocks third-party cookies with `SameSite=None`. Without the proxy, `remindocr.com` makes cross-origin requests to `api.remindocr.com` — the `Set-Cookie` from the server is treated as a third-party cookie and silently dropped by the browser. The Vercel rewrite makes all requests same-origin from the browser's perspective.
 
 **Symptoms when proxy is missing:** Login succeeds (200), `/api/auth/me` returns cached 304, but all other API calls return 401. Refreshing the page logs the user out. Desktop Chrome may still work (less aggressive cookie blocking), while Android Chrome fails.
 
-**`VITE_API_BASE` must be unset (empty)** on Vercel so the client makes relative requests (`/api/...`) that hit the Vercel rewrite. If `VITE_API_BASE` is set to `https://api.handcoded.tech`, requests bypass the proxy and third-party cookie issues return.
+**`VITE_API_BASE` must be unset (empty)** on Vercel so the client makes relative requests (`/api/...`) that hit the Vercel rewrite. If `VITE_API_BASE` is set to `https://api.remindocr.com`, requests bypass the proxy and third-party cookie issues return.
 
 ### Local Development
 
@@ -313,13 +313,13 @@ Vite dev server proxies `/api/*` and `/auth/*` to `http://127.0.0.1:3737` via `v
 
 ```
 Production (via Vercel proxy):
-  Browser → reminder.handcoded.tech/api/auth/login
-         → Vercel rewrite → api.handcoded.tech/api/auth/login
-         ← Set-Cookie: session=...; Domain=.handcoded.tech
-         ← Cookie stored as first-party on reminder.handcoded.tech ✓
+  Browser → remindocr.com/api/auth/login
+         → Vercel rewrite → api.remindocr.com/api/auth/login
+         ← Set-Cookie: session=...; Domain=.remindocr.com
+         ← Cookie stored as first-party on remindocr.com ✓
 
-  Browser → reminder.handcoded.tech/api/dashboard/stats
-         → Vercel rewrite → api.handcoded.tech/api/dashboard/stats
+  Browser → remindocr.com/api/dashboard/stats
+         → Vercel rewrite → api.remindocr.com/api/dashboard/stats
          → Cookie: session=... (sent as first-party) ✓
 
 Local dev (via Vite proxy):

@@ -9,7 +9,7 @@ const { connectDb, col } = await import("../db/db.js");
 await connectDb();
 
 const name = "תזכורת בדיקה — פצ׳רסקי (תמונה)";
-const posterUrl = process.env.POSTER_URL || "https://app.handcoded.tech/pechersky-reminder-poster.png";
+const posterUrl = process.env.POSTER_URL || "https://remindocr.com/pechersky-reminder-poster.png";
 
 // Store the raw template HTML with the {{poster_url}} placeholder — the render
 // layer now substitutes poster_url from the template field, so no seed-time bake.

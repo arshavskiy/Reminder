@@ -535,7 +535,7 @@ async function refreshPreview() {
       inspector_number: "484590",
       license_number: "233017",
       document_type: "תסקיר בדיקה",
-      from_name: " ReminderOCR ",
+      from_name: " RemindOCR ",
       body: "טקסט גוף לדוגמה",
       logo_url: editing.value.logo_path ? api.assets.url(editing.value.logo_path) : null,
       poster_url: editing.value.poster_url ?? null,

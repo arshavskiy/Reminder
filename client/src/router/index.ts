@@ -16,6 +16,8 @@ import EquipmentPage from "../views/EquipmentPage.vue";
 import ReportsPage from "../views/ReportsPage.vue";
 import LoginPage from "../views/LoginPage.vue";
 import ResetPasswordPage from "../views/ResetPasswordPage.vue";
+import PrivacyPage from "../views/PrivacyPage.vue";
+import TermsPage from "../views/TermsPage.vue";
 import AdminPage from "../views/AdminPage.vue";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
@@ -26,6 +28,10 @@ export const router = createRouter({
   routes: [
     { path: "/login", component: LoginPage, meta: { public: true } },
     { path: "/reset-password", component: ResetPasswordPage, meta: { public: true } },
+    { path: "/privacy", component: PrivacyPage, meta: { public: true, legal: true } },
+    { path: "/terms", component: TermsPage, meta: { public: true, legal: true } },
+    { path: "/privacy.html", redirect: "/privacy" },
+    { path: "/terms.html", redirect: "/terms" },
     { path: "/", component: DashboardPage, meta: { feature: FEATURES.pages.dashboard } },
     { path: "/documents", component: DocumentsPage, meta: { feature: FEATURES.pages.documents } },
     { path: "/documents/:id", component: DocumentDetailPage, meta: { feature: FEATURES.pages.documents } },

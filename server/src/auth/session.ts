@@ -95,6 +95,7 @@ function cookieDomain(): string | null {
   for (const url of urls) {
     const host = hostname(url);
     if (host === "handcoded.tech" || host?.endsWith(".handcoded.tech")) return ".handcoded.tech";
+    if (host === "remindocr.com" || host?.endsWith(".remindocr.com")) return ".remindocr.com";
   }
   return null;
 }

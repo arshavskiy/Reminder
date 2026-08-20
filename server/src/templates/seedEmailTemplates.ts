@@ -21,7 +21,7 @@ const MONTHLY_REPORT_HTML = `<!DOCTYPE html>
       <tr><td style="padding:10px;color:#5a6c7d">מספר רשומות</td><td style="padding:10px;font-weight:600">{{report_count}}</td></tr>
     </table>
     <p style="margin:20px 0 0;line-height:1.6">קובצי הדוח מצורפים להודעה זו.</p>
-    <p style="margin:24px 0 0;padding-top:14px;border-top:1px solid #e4e8ed;color:#95a5a6;font-size:12px">{{from_name|ReminderOCR}}</p>
+    <p style="margin:24px 0 0;padding-top:14px;border-top:1px solid #e4e8ed;color:#95a5a6;font-size:12px">{{from_name|RemindOCR}}</p>
   </div>
 </body>
 </html>`;

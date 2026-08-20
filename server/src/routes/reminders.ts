@@ -122,8 +122,8 @@ export function registerReminderRoutes(app: express.Application) {
       engineerProfile?.company_name,
       user?.company_name,
       settings.emailFromName,
-      "ReminderOCR",
-    ].find((value) => typeof value === "string" && value.trim()) ?? "ReminderOCR";
+      "RemindOCR",
+    ].find((value) => typeof value === "string" && value.trim()) ?? "RemindOCR";
 
     res.json({
       email: settings.emailFrom || settings.smtpUser || null,

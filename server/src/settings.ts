@@ -48,7 +48,7 @@ function buildSettings(): AppSettings {
     smtpPass: process.env.SMTP_PASS ?? "",
     smtpRejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== "false",
     emailFrom: process.env.EMAIL_FROM ?? "",
-    emailFromName: process.env.EMAIL_FROM_NAME ?? "ReminderOCR",
+    emailFromName: process.env.EMAIL_FROM_NAME ?? "RemindOCR",
 
     reminderEnabled: process.env.REMINDER_ENABLED !== "false",
     reminderAdvanceDays: process.env.REMINDER_ADVANCE_DAYS

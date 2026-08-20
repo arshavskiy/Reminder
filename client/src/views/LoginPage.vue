@@ -1,8 +1,8 @@
 <template>
   <div class="login-page" dir="rtl">
     <nav class="landing-nav">
-      <a class="nav-brand" href="#top" aria-label="ReminderOCR">
-        <span class="nav-brand__text">ReminderOCR</span>
+      <a class="nav-brand" href="#top" aria-label="RemindOCR">
+        <span class="nav-brand__text">RemindOCR</span>
       </a>
       <div class="nav-links">
         <a href="#features">תכונות</a>
@@ -29,7 +29,7 @@
 
         <div id="login-card" class="login-card">
           <div class="login-brand">
-            <h2 class="login-brand__title">ReminderOCR</h2>
+            <h2 class="login-brand__title">RemindOCR</h2>
             <p class="login-brand__sub">מערכת ניהול תסקירים ותזכורות</p>
           </div>
 
@@ -247,11 +247,11 @@
     </n-modal>
 
     <footer class="landing-footer">
-      <strong>ReminderOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
+      <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
       <div class="landing-footer__legal">
         © 2026 HandCoded. All rights reserved. |
-        <a href="https://remindocr.com/privacy.html" target="_blank">Privacy Policy</a> |
-        <a href="https://remindocr.com/terms.html" target="_blank">Terms of Service</a>
+        <router-link to="/privacy">Privacy Policy</router-link> |
+        <router-link to="/terms">Terms of Service</router-link>
       </div>
     </footer>
   </div>

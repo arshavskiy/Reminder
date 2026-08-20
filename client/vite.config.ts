@@ -22,8 +22,8 @@ export default defineConfig({
       },
       includeAssets: ["favicon.svg", "favicon-32.png", "apple-touch-icon.png"],
       manifest: {
-        name: "ReminderOCR",
-        short_name: "ReminderOCR",
+        name: "RemindOCR",
+        short_name: "RemindOCR",
         description: "מערכת לניהול התראות תסקירים",
         theme_color: "#18181b",
         background_color: "#18181b",

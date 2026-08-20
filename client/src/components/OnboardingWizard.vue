@@ -15,7 +15,7 @@
         <div v-if="currentStep === 1" class="step-content">
           <div class="welcome-hero">
             <div class="welcome-icon">📋</div>
-            <h2 class="welcome-title">ברוכים הבאים ל-ReminderOCR</h2>
+            <h2 class="welcome-title">ברוכים הבאים ל-RemindOCR</h2>
             <p class="welcome-desc">
               מערכת חכמה לניהול תסקירים, חוזים ותזכורות.<br>
               בואו נגדיר כמה פרטים בסיסיים כדי להתחיל.
@@ -118,7 +118,7 @@
               </n-form-item>
             </div>
             <n-form-item label="שם שולח במיילים">
-              <n-input v-model:value="form.email_from_name" :placeholder="form.eng_company_name || form.company_name || 'ReminderOCR'" />
+              <n-input v-model:value="form.email_from_name" :placeholder="form.eng_company_name || form.company_name || 'RemindOCR'" />
             </n-form-item>
             <n-form-item label="לוגו חברה">
               <div class="logo-upload">

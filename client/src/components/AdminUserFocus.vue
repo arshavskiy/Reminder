@@ -393,7 +393,7 @@
                   <h3 class="uf-card__title">General</h3>
                   <div class="uf-settings__grid">
                     <label class="uf-control"><span>Theme</span><n-select v-model:value="settingsForm.theme" :options="themeOptions" size="small" /></label>
-                    <label class="uf-control"><span>Email sender name</span><n-input v-model:value="settingsForm.email_from_name" size="small" placeholder="ReminderOCR" /></label>
+                    <label class="uf-control"><span>Email sender name</span><n-input v-model:value="settingsForm.email_from_name" size="small" placeholder="RemindOCR" /></label>
                     <label class="uf-control"><span>Reminder advance days</span><n-input v-model:value="settingsForm.reminder_advance_days" size="small" placeholder="[90,60,30]" /></label>
                     <label class="uf-control"><span>OCR language</span><n-input v-model:value="settingsForm.ocr_language" size="small" placeholder="heb+eng" /></label>
                   </div>

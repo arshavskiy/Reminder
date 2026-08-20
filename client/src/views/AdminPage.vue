@@ -18,7 +18,7 @@
     >
       <div class="admin-sidebar__brand" @click="router.push('/')">
         <n-icon :component="BriefcaseOutline" :size="20" />
-        <span>ReminderOCR</span>
+        <span>RemindOCR</span>
       </div>
 
       <nav class="admin-sidebar__nav">
