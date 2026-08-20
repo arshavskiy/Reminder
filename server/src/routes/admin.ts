@@ -1468,4 +1468,30 @@ export function registerAdminRoutes(app: express.Application) {
       res.status(500).json({ error: err.message ?? "Failed" });
     }
   });
+
+  // DELETE /api/admin/storage/delete?key= — delete an S3 file (orphans only)
+  app.delete("/api/admin/storage/delete", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const { deleteFromSpaces, spacesEnabled } = await import("../storage/spaces.js");
+      if (!spacesEnabled()) {
+        res.status(400).json({ error: "Object storage not configured" });
+        return;
+      }
+      const key = req.query.key as string;
+      if (!key) {
+        res.status(400).json({ error: "key is required" });
+        return;
+      }
+      const dbDoc = await col("documents").findOne({ spaces_key: key });
+      if (dbDoc) {
+        res.status(400).json({ error: "File is linked to a document record — delete the document first" });
+        return;
+      }
+      await deleteFromSpaces(key);
+      res.json({ ok: true, deleted: key });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
 }

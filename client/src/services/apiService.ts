@@ -503,6 +503,10 @@ export const api = {
       return adminGet<any>(`/admin/storage/browse${q ? "?" + q : ""}`);
     },
     storageDownloadUrl: (key: string) => `${ADMIN_BASE}/admin/storage/download?key=${encodeURIComponent(key)}`,
+    deleteStorageFile: (key: string) =>
+      fetch(`${ADMIN_BASE}/admin/storage/delete?key=${encodeURIComponent(key)}`, {
+        method: "DELETE", credentials: "include",
+      }).then(r => r.json()),
   },
 
   config: {

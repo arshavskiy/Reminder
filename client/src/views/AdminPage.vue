@@ -83,35 +83,14 @@
       </header>
 
       <!-- ── Users ── -->
-      <section v-if="activeSection === 'users'" class="admin-section">
-        <!-- User stat pills -->
-        <div class="admin-stat-pills">
-          <div v-for="s in systemStats" :key="s.label" class="user-stat-pill">
-            <span class="user-stat-pill__num">{{ s.value }}</span>
-            <span class="user-stat-pill__label">{{ s.label }}</span>
-          </div>
-        </div>
-
-        <div class="admin-section__toolbar">
-          <n-input
-            v-model:value="userSearch"
-            placeholder="Search by name / email..."
-            clearable
-            style="max-width: 280px; direction: ltr"
-          >
-            <template #prefix><n-icon :component="SearchOutline" /></template>
-          </n-input>
-        </div>
-
-        <n-data-table
-          :columns="userColumns"
-          :data="filteredUsers"
+      <section v-if="activeSection === 'users'" class="admin-section admin-section--users">
+        <AdminUserFocus
+          :users="users"
           :loading="usersLoading"
-          :bordered="false"
-          :pagination="{ pageSize: 20 }"
-          :max-height="500"
-          size="small"
-          style="margin-top: 12px"
+          @refresh="loadUsers"
+          @open-doc="openDocModal"
+          @open-report="openReportModal"
+          @user-updated="onFocusedUserUpdated"
         />
       </section>
 
@@ -777,62 +756,176 @@
 
       <!-- ── S3 Storage Browser ── -->
       <section v-if="activeSection === 's3_storage'" class="admin-section">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else>
-          <div class="monitor-block">
-            <div class="monitor-block__title">S3 Storage Browser</div>
-            <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
+        <n-spin :show="sectionLoading">
+          <div class="s3-browser" dir="ltr">
+            <div class="s3-browser__toolbar">
               <n-select
                 v-model:value="s3BrowseUserId"
                 :options="userSelectOptions"
-                placeholder="Select User"
+                placeholder="Select user to browse"
                 clearable
                 filterable
-                style="width:280px"
+                class="s3-browser__user"
                 @update:value="loadS3Files"
               />
-              <span v-if="s3Files.length" style="font-size:12px;color:var(--text-secondary)">
-                {{ s3Files.length }} files{{ s3Truncated ? ' (truncated — more files exist)' : '' }}
-              </span>
-            </div>
-
-            <div v-if="s3Files.length" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
               <n-input
                 v-model:value="s3FileSearch"
-                placeholder="Filter files by name..."
+                placeholder="Filter by file name or key..."
                 clearable
-                style="max-width:360px"
+                class="s3-browser__search"
+                :disabled="!s3Files.length"
               >
-                <template #prefix><n-icon :component="SearchOutline" /></template>
+                <template #prefix><n-icon :component="SearchOutline" :size="16" /></template>
               </n-input>
               <n-select
                 v-model:value="s3StatusFilter"
                 :options="s3StatusOptions"
-                placeholder="DB Status"
+                placeholder="Status"
                 clearable
-                style="width:160px"
+                class="s3-browser__status"
+                :disabled="!s3Files.length"
               />
+              <button
+                class="btn btn--ghost"
+                type="button"
+                :disabled="!s3BrowseUserId || sectionLoading"
+                @click="loadS3Files"
+              >
+                <n-icon :component="RefreshOutline" :size="16" :class="{ 's3-spin': sectionLoading }" class="btn-icon" />
+                Refresh
+              </button>
             </div>
 
-            <n-data-table
-              v-if="s3Files.length"
-              :columns="s3FileColumns"
-              :data="filteredS3Files"
-              :bordered="false"
-              :pagination="{ pageSize: 25 }"
-              :max-height="500"
-              size="small"
-              style="margin-top:12px"
-            />
-
-            <div v-else-if="s3BrowseUserId && !sectionLoading" style="padding:40px;text-align:center;color:var(--text-secondary)">
-              No files found for this user
+            <div v-if="s3BrowseUserId && s3Files.length" class="s3-stats">
+              <div class="s3-stat">
+                <span class="s3-stat__num">{{ s3Stats.total }}</span>
+                <span class="s3-stat__label">Files</span>
+              </div>
+              <div class="s3-stat">
+                <span class="s3-stat__num">{{ formatBytes(s3Stats.bytes) }}</span>
+                <span class="s3-stat__label">Total size</span>
+              </div>
+              <div class="s3-stat s3-stat--ok">
+                <span class="s3-stat__num">{{ s3Stats.inDb }}</span>
+                <span class="s3-stat__label">In DB</span>
+              </div>
+              <div class="s3-stat" :class="{ 's3-stat--warn': s3Stats.orphan > 0 }">
+                <span class="s3-stat__num">{{ s3Stats.orphan }}</span>
+                <span class="s3-stat__label">Orphan</span>
+              </div>
+              <div class="s3-stat">
+                <span class="s3-stat__num">{{ filteredS3Files.length }}</span>
+                <span class="s3-stat__label">Showing</span>
+              </div>
+              <n-tag v-if="s3Truncated" type="warning" size="small" round>List truncated — more files exist</n-tag>
             </div>
-            <div v-else-if="!s3BrowseUserId" style="padding:40px;text-align:center;color:var(--text-secondary)">
-              Select a user to browse their S3 files
+
+            <div v-if="filteredS3Files.length" class="s3-table-wrap">
+              <table class="s3-table">
+                <thead>
+                  <tr>
+                    <th class="s3-col-file">File</th>
+                    <th class="s3-col-size">Size</th>
+                    <th class="s3-col-date">Modified</th>
+                    <th class="s3-col-db">DB</th>
+                    <th class="s3-col-status">Status</th>
+                    <th class="s3-col-key">S3 Key</th>
+                    <th class="s3-col-actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in pagedS3Files" :key="row.key" class="s3-row" :class="{ 's3-row--orphan': !row.in_db }">
+                    <td class="s3-col-file">
+                      <div class="s3-file">
+                        <n-icon :component="DocumentOutline" :size="14" class="s3-file__icon" />
+                        <span class="s3-file__name" :title="row.file_name">{{ row.file_name || "—" }}</span>
+                      </div>
+                    </td>
+                    <td class="s3-col-size">{{ formatBytes(row.size) }}</td>
+                    <td class="s3-col-date">{{ row.last_modified ? new Date(row.last_modified).toLocaleString("en-US") : "—" }}</td>
+                    <td class="s3-col-db">
+                      <span class="s3-badge" :class="row.in_db ? 's3-badge--ok' : 's3-badge--err'">
+                        {{ row.in_db ? "Linked" : "Orphan" }}
+                      </span>
+                    </td>
+                    <td class="s3-col-status">
+                      <span v-if="row.status" class="s3-badge" :class="`s3-badge--${row.status}`">{{ row.status }}</span>
+                      <span v-else class="s3-muted">—</span>
+                    </td>
+                    <td class="s3-col-key">
+                      <code class="s3-key" :title="row.key">{{ row.key }}</code>
+                    </td>
+                    <td class="s3-col-actions">
+                      <div class="s3-actions">
+                        <n-tooltip placement="top">
+                          <template #trigger>
+                            <button
+                              class="btn btn--ghost btn--xs icon-btn"
+                              type="button"
+                              @click="windowOpenStorage(row.key)"
+                            >
+                              <n-icon :component="DownloadOutline" :size="14" class="btn-icon" />
+                            </button>
+                          </template>
+                          Download
+                        </n-tooltip>
+                        <n-tooltip v-if="row.doc_id" placement="top">
+                          <template #trigger>
+                            <button
+                              class="btn btn--ghost btn--xs icon-btn"
+                              type="button"
+                              @click="openDocModal(row.doc_id)"
+                            >
+                              <n-icon :component="EyeOutline" :size="14" class="btn-icon" />
+                            </button>
+                          </template>
+                          Open document
+                        </n-tooltip>
+                        <n-tooltip v-if="!row.in_db" placement="top">
+                          <template #trigger>
+                            <button
+                              class="btn btn--ghost btn--xs icon-btn"
+                              type="button"
+                              style="color: var(--error-color)"
+                              @click="deleteOrphanFile(row.key)"
+                            >
+                              <n-icon :component="TrashOutline" :size="14" class="btn-icon" />
+                            </button>
+                          </template>
+                          Delete orphan
+                        </n-tooltip>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div v-if="filteredS3Files.length > s3PageSize" class="s3-pager">
+              <button class="btn btn--ghost btn--xs" type="button" :disabled="s3Page <= 1" @click="s3Page--">Prev</button>
+              <span class="s3-pager__label">Page {{ s3Page }} / {{ s3PageCount }}</span>
+              <button class="btn btn--ghost btn--xs" type="button" :disabled="s3Page >= s3PageCount" @click="s3Page++">Next</button>
+            </div>
+
+            <div v-else-if="s3BrowseUserId && !sectionLoading && !s3Files.length" class="s3-empty">
+              <n-icon :component="CloudUploadOutline" :size="36" class="s3-empty__icon" />
+              <h3 class="s3-empty__title">No files for this user</h3>
+              <p class="s3-empty__desc">Nothing under <code>documents/{{ s3BrowseUserId }}/</code></p>
+            </div>
+
+            <div v-else-if="s3BrowseUserId && s3Files.length && !filteredS3Files.length" class="s3-empty">
+              <n-icon :component="SearchOutline" :size="36" class="s3-empty__icon" />
+              <h3 class="s3-empty__title">No matches</h3>
+              <p class="s3-empty__desc">Try clearing the search or status filter</p>
+            </div>
+
+            <div v-else-if="!s3BrowseUserId && !sectionLoading" class="s3-empty">
+              <n-icon :component="CloudUploadOutline" :size="36" class="s3-empty__icon" />
+              <h3 class="s3-empty__title">Browse object storage</h3>
+              <p class="s3-empty__desc">Select a user to list files in their S3 prefix and cross-check DB links</p>
             </div>
           </div>
-        </template>
+        </n-spin>
       </section>
 
       <!-- ── Settings ── -->
@@ -923,264 +1016,6 @@
       </div>
     </n-modal>
 
-    <!-- User Detail Drawer -->
-    <n-drawer v-model:show="showUserDrawer" :width="isMobileViewport ? '100vw' : 920" placement="right" dir="ltr">
-      <n-drawer-content :title="userDetailUser ? (userDetailUser.email ?? userDetailUser.name ?? 'User Detail') : 'User Detail'" closable>
-        <n-spin v-if="userDetailLoading" style="display:flex;justify-content:center;padding:60px" />
-        <template v-else-if="userDetailData">
-          <template v-if="userDrawerView === 'settings'">
-            <div v-if="userSettingsForm" class="admin-user-settings">
-              <div class="admin-user-settings__actions">
-                <div class="admin-user-settings__role">
-                  <span>Role</span>
-                  <n-select v-model:value="editingRole" :options="roleOptions" size="small" style="width: 150px" />
-                  <n-button
-                    size="small"
-                    type="primary"
-                    ghost
-                    :loading="savingRole"
-                    :disabled="!editingRole || editingRole === userDetailUser?.role"
-                    @click="saveRole"
-                  >
-                    Save Role
-                  </n-button>
-                </div>
-                <n-button type="primary" size="small" :loading="savingUserSettings" @click="saveUserSettings">Save Settings</n-button>
-              </div>
-
-              <div class="admin-user-settings__section">
-                <div class="admin-user-settings__title">General</div>
-                <div class="admin-user-settings__grid">
-                  <label class="admin-setting-control">
-                    <span>Theme</span>
-                    <n-select v-model:value="userSettingsForm.theme" :options="themeOptions" size="small" />
-                  </label>
-                  <label class="admin-setting-control">
-                    <span>Email sender name</span>
-                    <n-input v-model:value="userSettingsForm.email_from_name" size="small" placeholder="ReminderOCR" />
-                  </label>
-                  <label class="admin-setting-control">
-                    <span>Reminder advance days</span>
-                    <n-input v-model:value="userSettingsForm.reminder_advance_days" size="small" placeholder="[90,60,30]" />
-                  </label>
-                  <label class="admin-setting-control">
-                    <span>OCR language</span>
-                    <n-input v-model:value="userSettingsForm.ocr_language" size="small" placeholder="heb+eng" />
-                  </label>
-                </div>
-                <div class="admin-user-settings__switches">
-                  <label><n-switch v-model:value="userSettingsForm.calendar_next_tests_only" size="small" /> Calendar next tests only</label>
-                  <label><n-switch v-model:value="userSettingsForm.pipeline_ocr" size="small" /> OCR</label>
-                  <label><n-switch v-model:value="userSettingsForm.pipeline_ai" size="small" /> AI extraction</label>
-                  <label><n-switch v-model:value="userSettingsForm.pipeline_s3" size="small" /> S3 upload</label>
-                  <label><n-switch v-model:value="userSettingsForm.pipeline_entities" size="small" /> Entity creation</label>
-                </div>
-              </div>
-
-              <div class="admin-user-settings__section">
-                <div class="admin-user-settings__title">Monthly reports</div>
-                <div class="admin-user-settings__switches">
-                  <label><n-switch v-model:value="userSettingsForm.monthly_report_enabled" size="small" /> Enabled</label>
-                </div>
-                <div class="admin-user-settings__grid">
-                  <label class="admin-setting-control">
-                    <span>Recipients</span>
-                    <n-input v-model:value="userSettingsForm.monthly_report_recipients" size="small" placeholder="email@example.com" />
-                  </label>
-                  <label class="admin-setting-control">
-                    <span>Day</span>
-                    <n-input-number v-model:value="userSettingsForm.monthly_report_day" size="small" :min="1" :max="28" />
-                  </label>
-                  <label class="admin-setting-control">
-                    <span>Hour</span>
-                    <n-input-number v-model:value="userSettingsForm.monthly_report_hour" size="small" :min="0" :max="23" />
-                  </label>
-                  <label class="admin-setting-control">
-                    <span>Formats</span>
-                    <n-checkbox-group v-model:value="userSettingsForm.monthly_report_formats">
-                      <n-space size="small">
-                        <n-checkbox v-for="format in formatOptions" :key="format.value" :value="format.value">{{ format.label }}</n-checkbox>
-                      </n-space>
-                    </n-checkbox-group>
-                  </label>
-                </div>
-              </div>
-
-              <div class="admin-user-settings__section">
-                <div class="admin-user-settings__title">Report fields</div>
-                <div class="admin-user-settings__subhead">All clients report</div>
-                <n-checkbox-group v-model:value="userSettingsForm.report_config.all_fields">
-                  <div class="admin-user-settings__checks">
-                    <n-checkbox v-for="field in allReportFieldOptions" :key="field.key" :value="field.key">{{ field.label }}</n-checkbox>
-                  </div>
-                </n-checkbox-group>
-                <div class="admin-user-settings__subhead">Client report</div>
-                <n-checkbox-group v-model:value="userSettingsForm.report_config.client_fields">
-                  <div class="admin-user-settings__checks">
-                    <n-checkbox v-for="field in clientReportFieldOptions" :key="field.key" :value="field.key">{{ field.label }}</n-checkbox>
-                  </div>
-                </n-checkbox-group>
-              </div>
-
-              <div class="admin-user-settings__section">
-                <div class="admin-user-settings__title">Client features</div>
-                <template v-for="[scope, features] in featuresByScope" :key="scope">
-                  <div class="admin-feature-scope-label">{{ scope }}</div>
-                  <div class="admin-user-settings__checks">
-                    <label v-for="feature in features" :key="feature.key" class="admin-feature-toggle">
-                      <n-switch v-model:value="userSettingsForm.features[feature.key]" size="small" />
-                      <span>
-                        <strong>{{ feature.label_he || feature.label_en }}</strong>
-                        <small>{{ feature.key }}</small>
-                      </span>
-                    </label>
-                  </div>
-                </template>
-              </div>
-            </div>
-          </template>
-          <template v-else>
-          <!-- Entity counts -->
-          <div v-if="userDetailData.counts" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));gap:8px;margin-bottom:14px">
-            <div class="admin-user-stat">
-              <span class="admin-user-stat__value">{{ userDetailData.counts.documents }}</span>
-              <span class="admin-user-stat__label">Documents</span>
-            </div>
-            <div class="admin-user-stat">
-              <span class="admin-user-stat__value">{{ userDetailData.counts.clients }}</span>
-              <span class="admin-user-stat__label">Clients</span>
-            </div>
-            <div class="admin-user-stat">
-              <span class="admin-user-stat__value">{{ userDetailData.counts.contracts }}</span>
-              <span class="admin-user-stat__label">Contracts</span>
-            </div>
-            <div class="admin-user-stat">
-              <span class="admin-user-stat__value">{{ userDetailData.counts.equipment }}</span>
-              <span class="admin-user-stat__label">Equipment</span>
-            </div>
-            <div class="admin-user-stat">
-              <span class="admin-user-stat__value">{{ formatBytes(userDetailData.counts.total_storage_bytes) }}</span>
-              <span class="admin-user-stat__label">Storage</span>
-            </div>
-            <div class="admin-user-stat">
-              <span class="admin-user-stat__value" :style="userDetailData.active_sessions > 0 ? 'color:#63e2b7' : ''">{{ userDetailData.active_sessions }}</span>
-              <span class="admin-user-stat__label">Active Sessions</span>
-            </div>
-          </div>
-
-          <!-- Reminder status summary -->
-          <div class="admin-stat-pills">
-            <n-tag v-for="(count, status) in userDetailData.reminderStatus" :key="status"
-              :type="status === 'error' ? 'error' : status === 'pending' ? 'warning' : status === 'sent' ? 'success' : 'default'"
-              size="small" round>
-              {{ status }}: {{ count }}
-            </n-tag>
-            <span v-if="!Object.keys(userDetailData.reminderStatus).length" style="font-size:12px;color:var(--text-secondary)">No reminders</span>
-          </div>
-
-          <n-tabs type="line" size="small" animated>
-            <!-- Documents tab -->
-            <n-tab-pane name="docs" :tab="`Documents (${userDetailData.counts?.documents ?? userDetailData.documents.length})`">
-              <n-data-table
-                :columns="userDetailDocColumns"
-                :data="userDetailData.documents"
-                :bordered="false"
-                :pagination="{ pageSize: 15 }"
-                :max-height="400"
-                size="small"
-                style="margin-top:10px"
-              />
-            </n-tab-pane>
-
-            <!-- Email log tab -->
-            <n-tab-pane name="email" :tab="`Emails (${userDetailData.counts?.emails ?? userDetailData.emailLogs.length})`">
-              <n-data-table
-                :columns="userDetailEmailColumns"
-                :data="userDetailData.emailLogs"
-                :bordered="false"
-                :pagination="{ pageSize: 15 }"
-                :max-height="400"
-                size="small"
-                style="margin-top:10px"
-                :row-class-name="(row: any) => row.success ? '' : 'row-error'"
-              />
-            </n-tab-pane>
-
-            <!-- Extractions tab -->
-            <n-tab-pane name="extractions" :tab="`AI Runs (${userDetailData.counts?.extractions ?? userDetailData.extractions.length})`">
-              <n-data-table
-                :columns="userDetailExtractionColumns"
-                :data="userDetailData.extractions"
-                :bordered="false"
-                :pagination="{ pageSize: 15 }"
-                :max-height="400"
-                size="small"
-                style="margin-top:10px"
-                :row-class-name="(row: any) => row.parsed_ok ? '' : 'row-error'"
-              />
-            </n-tab-pane>
-
-            <!-- Failed emails tab -->
-            <n-tab-pane name="errors" :tab="`Errors (${userDetailData.failedEmails.length})`">
-              <div v-if="userDetailData.failedEmails.length === 0" style="padding:40px;text-align:center;color:var(--text-secondary)">
-                ✅ No failed emails
-              </div>
-              <div v-else>
-                <div v-for="err in userDetailData.failedEmails" :key="err.id"
-                     style="padding:10px 12px;background:rgba(208,48,80,0.04);border-left:3px solid #d03050;border-radius:4px;margin-bottom:8px">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                    <n-tag type="error" size="small" round>{{ err.log_type }}</n-tag>
-                    <span style="font-size:11px;color:var(--text-secondary)">{{ err.sent_at ? new Date(err.sent_at).toLocaleString('en-US') : '—' }}</span>
-                  </div>
-                  <div style="font-size:12px;color:var(--text-secondary)">{{ err.recipient ?? '—' }}</div>
-                  <div style="font-size:12px;color:#d03050;margin-top:2px;font-family:monospace">{{ err.error ?? 'Unknown error' }}</div>
-                </div>
-              </div>
-            </n-tab-pane>
-
-            <!-- Email Templates tab -->
-            <n-tab-pane name="templates" tab="Templates">
-              <div style="margin-top:12px">
-                <div style="font-size:13px;font-weight:600;margin-bottom:8px">Default Email Template</div>
-                <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
-                  Template used when a reminder is created for this user. Overrides the system default.
-                </p>
-                <div style="display:flex;gap:10px;align-items:center">
-                  <n-select
-                    v-model:value="userDefaultTemplateId"
-                    :options="[{ label: '— System Default —', value: null }, ...emailTemplatesList.map(t => ({ label: t.name, value: t.id }))]"
-                    placeholder="System Default"
-                    clearable
-                    style="flex:1"
-                  />
-                  <n-button type="primary" size="small" :loading="savingTemplate" @click="saveUserDefaultTemplate">Save</n-button>
-                </div>
-
-                <n-divider style="margin:20px 0 14px" />
-                <div style="font-size:13px;font-weight:600;margin-bottom:10px">Available Templates ({{ emailTemplatesList.length }})</div>
-                <div v-for="tpl in emailTemplatesList" :key="tpl.id"
-                     style="padding:10px 12px;background:var(--bg-hover);border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-                  <div>
-                    <div style="font-size:13px;font-weight:500">{{ tpl.name }}</div>
-                    <div style="font-size:11px;color:var(--text-secondary);margin-top:2px">{{ tpl.subject ?? '—' }}</div>
-                  </div>
-                  <div style="display:flex;gap:6px;align-items:center">
-                    <n-tag v-if="tpl.is_default" type="success" size="small" round>Default</n-tag>
-                    <n-tag v-if="userDefaultTemplateId === tpl.id" type="primary" size="small" round>User Default</n-tag>
-                    <n-button size="tiny" @click="userDefaultTemplateId = tpl.id">Set</n-button>
-                  </div>
-                </div>
-                <div v-if="emailTemplatesList.length === 0" style="padding:30px;text-align:center;color:var(--text-secondary)">
-                  No email templates found
-                </div>
-              </div>
-            </n-tab-pane>
-          </n-tabs>
-          </template>
-        </template>
-      </n-drawer-content>
-    </n-drawer>
-
     <!-- Error Detail Modal -->
     <n-modal v-model:show="showErrorModal" preset="dialog" title="Error Details" style="width: 500px; max-width:90vw" dir="ltr">
       <div v-if="errorDetail" style="padding: 12px 0">
@@ -1237,27 +1072,18 @@
 </template>
 
 <script setup lang="ts">
-import {computed, h, onMounted, onUnmounted, ref} from "vue";
+import {computed, h, onMounted, onUnmounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import type {DataTableColumns} from "naive-ui";
 import {
   NButton,
-  NCheckbox,
-  NCheckboxGroup,
   NDataTable,
-  NDivider,
-  NDrawer,
-  NDrawerContent,
   NIcon,
   NInput,
-  NInputNumber,
   NModal,
   NSelect,
-  NSpace,
   NSpin,
   NSwitch,
-  NTabPane,
-  NTabs,
   NTag,
   NTooltip,
   useMessage,
@@ -1272,22 +1098,25 @@ import {
   CloseOutline,
   CloudUploadOutline,
   DocumentOutline,
+  DownloadOutline,
+  EyeOutline,
   FlashOutline,
   MailOutline,
   MenuOutline,
   PulseOutline,
   NotificationsOutline,
   PeopleOutline,
+  RefreshOutline,
   SearchOutline,
   SettingsOutline,
   TimerOutline,
+  TrashOutline,
 } from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import DocumentDetailPage from "./DocumentDetailPage.vue";
 import AdminStatCard from "../components/AdminStatCard.vue";
 import AdminReportModal from "../components/AdminReportModal.vue";
-import type {FeatureDefinition} from "@shared/types.js";
-import {normalizeFeatureFlags} from "../shared/features.js";
+import AdminUserFocus from "../components/AdminUserFocus.vue";
 
 const router = useRouter();
 const message = useMessage();
@@ -1350,15 +1179,6 @@ const sectionLoading = ref(false);
 // ── Users ──────────────────────────────────────────────────────────────────
 const users = ref<any[]>([]);
 const usersLoading = ref(false);
-const userSearch = ref("");
-
-const filteredUsers = computed(() => {
-  const q = userSearch.value.trim().toLowerCase();
-  if (!q) return users.value;
-  return users.value.filter(
-    (u) => u.email?.toLowerCase().includes(q) || u.name?.toLowerCase().includes(q),
-  );
-});
 
 async function loadUsers() {
   usersLoading.value = true;
@@ -1371,26 +1191,13 @@ async function loadUsers() {
   }
 }
 
+function onFocusedUserUpdated(updated: any) {
+  users.value = users.value.map((u) => (u.id === updated.id ? { ...u, ...updated } : u));
+}
+
 function resolveUserEmail(userId: string) {
   return users.value.find((u) => u.id === userId)?.email ?? userId?.slice(-6) ?? "—";
 }
-
-const roleOptions = [
-  { label: "Regular User", value: "user" },
-  { label: "Pro",          value: "pro"  },
-  { label: "Admin",        value: "admin"},
-];
-
-const roleTagType: Record<string, "default" | "warning" | "error"> = {
-  user:  "default",
-  pro:   "default",
-  admin: "warning",
-};
-const roleLabel: Record<string, string> = {
-  user:  "User",
-  pro:   "Pro",
-  admin: "Admin",
-};
 
 const showDocModal = ref(false);
 const docModalId = ref<string | null>(null);
@@ -1412,8 +1219,6 @@ const MOBILE_BREAKPOINT = 768;
 const showMobileNav = ref(false);
 const showDesktopSidebar = ref(true);
 const isMobileViewport = ref(false);
-const editingRole = ref<string>("");
-const savingRole = ref(false);
 
 const isSidebarVisible = computed(() => (
   isMobileViewport.value ? showMobileNav.value : showDesktopSidebar.value
@@ -1447,406 +1252,6 @@ function toggleSidebar() {
   }
   showDesktopSidebar.value = !showDesktopSidebar.value;
 }
-
-async function saveRole() {
-  if (!userDetailUser.value) return;
-  savingRole.value = true;
-  try {
-    const updated = await api.admin.updateUser(userDetailUser.value.id, { role: editingRole.value });
-    users.value = users.value.map((u) => (u.id === updated.id ? updated : u));
-    userDetailUser.value = { ...userDetailUser.value, ...updated };
-    editingRole.value = updated.role;
-    message.success("Role updated");
-  } catch {
-    message.error("Error updating role");
-  } finally {
-    savingRole.value = false;
-  }
-}
-
-async function toggleActive(user: any) {
-  const newActive = user.is_active === 0 ? 1 : 0;
-  try {
-    const updated = await api.admin.updateUser(user.id, { is_active: newActive });
-    users.value = users.value.map((u) => (u.id === updated.id ? updated : u));
-    message.success(newActive ? "User activated" : "User deactivated");
-  } catch {
-    message.error("Error updating status");
-  }
-}
-
-// ── User detail drawer ─────────────────────────────────────────────────────
-const showUserDrawer = ref(false);
-const userDrawerView = ref<"details" | "settings">("details");
-const userDetailData = ref<any>(null);
-const userDetailLoading = ref(false);
-const userDetailUser = ref<any>(null);
-const downloadingDocId = ref<string | null>(null);
-const emailTemplatesList = ref<any[]>([]);
-const featureDefinitions = ref<FeatureDefinition[]>([]);
-const featuresByScope = computed(() => {
-  const groups = new Map<string, FeatureDefinition[]>();
-  for (const f of featureDefinitions.value) {
-    const scope = f.key.includes(".") ? f.key.slice(0, f.key.indexOf(".")) : "other";
-    if (!groups.has(scope)) groups.set(scope, []);
-    groups.get(scope)!.push(f);
-  }
-  return groups;
-});
-const userDefaultTemplateId = ref<number | null>(null);
-const savingTemplate = ref(false);
-const savingUserSettings = ref(false);
-const userSettingsForm = ref<any>(null);
-
-const allReportFieldOptions = [
-  {key: "tracking_date", label: "תאריך"},
-  {key: "tracking_checked", label: "מה נבדק"},
-  {key: "client", label: "לקוח"},
-  {key: "contact_person", label: "איש קשר"},
-  {key: "tracking_phone", label: "טלפון"},
-  {key: "tracking_license_number", label: "מספר רישוי"},
-  {key: "tracking_relevant", label: "רלוונטי"},
-  {key: "tracking_notes", label: "הערות"},
-  {key: "contract_number", label: "מספר חוזה"},
-  {key: "contract_type", label: "סוג מסמך"},
-  {key: "contact_phone", label: "טלפון קשר"},
-  {key: "contact_email", label: "אימייל"},
-  {key: "client_address", label: "כתובת"},
-  {key: "start_date", label: "תאריך תסקיר"},
-  {key: "expiry_date", label: "תאריך סיום / בדיקה הבאה"},
-  {key: "status", label: "סטטוס"},
-  {key: "source_document", label: "מסמך מקור"},
-  {key: "equipment", label: "ציוד"},
-  {key: "reminders", label: "תזכורות"},
-];
-const clientReportFieldOptions = [
-  {key: "contract_number", label: "מספר חוזה"},
-  {key: "contract_type", label: "סוג מסמך"},
-  {key: "client", label: "לקוח"},
-  {key: "contact_person", label: "איש קשר"},
-  {key: "contact_phone", label: "טלפון"},
-  {key: "contact_email", label: "אימייל"},
-  {key: "client_address", label: "כתובת"},
-  {key: "start_date", label: "תאריך תסקיר"},
-  {key: "expiry_date", label: "תאריך סיום / בדיקה הבאה"},
-  {key: "status", label: "סטטוס"},
-  {key: "source_document", label: "מסמך מקור"},
-  {key: "equipment", label: "ציוד"},
-  {key: "reminders", label: "תזכורות"},
-];
-const defaultAllReportFields = [
-  "tracking_date",
-  "tracking_checked",
-  "client",
-  "contact_person",
-  "tracking_phone",
-  "tracking_license_number",
-  "tracking_relevant",
-  "tracking_notes",
-];
-const defaultClientReportFields = clientReportFieldOptions.map((field) => field.key);
-const formatOptions = [
-  {label: "DOCX", value: "docx"},
-  {label: "XLSX", value: "xlsx"},
-];
-const themeOptions = [
-  {label: "Light", value: "light"},
-  {label: "Dark", value: "dark"},
-];
-
-function parseMonthlyFormats(raw: unknown): string[] {
-  try {
-    const parsed = Array.isArray(raw) ? raw : JSON.parse(String(raw ?? "[]"));
-    const formats = Array.isArray(parsed) ? parsed.filter((format) => format === "docx" || format === "xlsx") : [];
-    return formats.length ? formats : ["docx", "xlsx"];
-  } catch {
-    return ["docx", "xlsx"];
-  }
-}
-
-function makeUserSettingsForm(settings: any) {
-  const reportConfig = settings?.report_config ?? {};
-  return {
-    theme: settings?.theme === "dark" ? "dark" : "light",
-    email_from_name: settings?.email_from_name ?? "",
-    reminder_advance_days: settings?.reminder_advance_days ?? "[90,60,30]",
-    ocr_language: settings?.ocr_language ?? "heb+eng",
-    pipeline_ocr: settings?.pipeline_ocr ?? true,
-    pipeline_ai: settings?.pipeline_ai ?? true,
-    pipeline_s3: settings?.pipeline_s3 ?? true,
-    pipeline_entities: settings?.pipeline_entities ?? true,
-    calendar_next_tests_only: Boolean(settings?.calendar_next_tests_only),
-    monthly_report_enabled: Boolean(settings?.monthly_report_enabled),
-    monthly_report_recipients: settings?.monthly_report_recipients ?? "",
-    monthly_report_day: Math.min(28, Math.max(1, Number(settings?.monthly_report_day ?? 1))),
-    monthly_report_hour: Math.min(23, Math.max(0, Number(settings?.monthly_report_hour ?? 8))),
-    monthly_report_formats: parseMonthlyFormats(settings?.monthly_report_formats),
-    report_config: {
-      all_fields: Array.isArray(reportConfig.all_fields) && reportConfig.all_fields.length ? [...reportConfig.all_fields] : [...defaultAllReportFields],
-      client_fields: Array.isArray(reportConfig.client_fields) && reportConfig.client_fields.length ? [...reportConfig.client_fields] : [...defaultClientReportFields],
-    },
-    features: settings?.features && typeof settings.features === "object" && !Array.isArray(settings.features)
-      ? {...settings.features}
-      : {},
-  };
-}
-
-function applyFeatureDefaultsToUserSettingsForm() {
-  if (!userSettingsForm.value || !featureDefinitions.value.length) return;
-  const flat = normalizeFeatureFlags(userSettingsForm.value.features);
-  userSettingsForm.value.features = {
-    ...Object.fromEntries(featureDefinitions.value.map((feature) => [feature.key, feature.default_enabled])),
-    ...flat,
-  };
-}
-
-async function openUserDetail(user: any, view: "details" | "settings" = "details") {
-  userDetailUser.value = user;
-  userDrawerView.value = view;
-  editingRole.value = user.role ?? "user";
-  showUserDrawer.value = true;
-  userDetailLoading.value = true;
-  userDetailData.value = null;
-  userDefaultTemplateId.value = null;
-  userSettingsForm.value = null;
-  const [detailResult, settingsResult] = await Promise.allSettled([
-    api.admin.getUserDetail(user.id),
-    api.admin.getUserSettings(user.id),
-  ]);
-
-  if (detailResult.status === "fulfilled") {
-    userDetailData.value = detailResult.value;
-  } else {
-    console.error("Failed to load admin user detail", detailResult.reason);
-    message.error("Failed to load user detail");
-  }
-
-  if (settingsResult.status === "fulfilled") {
-    userDefaultTemplateId.value = settingsResult.value.default_email_template_id ?? null;
-    userSettingsForm.value = makeUserSettingsForm(settingsResult.value);
-    applyFeatureDefaultsToUserSettingsForm();
-  } else {
-    console.error("Failed to load admin user settings", settingsResult.reason);
-    message.error("Failed to load user settings");
-  }
-
-  userDetailLoading.value = false;
-
-  if (!emailTemplatesList.value.length) {
-    try {
-      const templates = await api.emailTemplates.list();
-      emailTemplatesList.value = Array.isArray(templates) ? templates : [];
-    } catch (err) {
-      console.warn("Failed to load email templates for admin user detail", err);
-      emailTemplatesList.value = [];
-    }
-  }
-
-  if (!featureDefinitions.value.length) {
-    try {
-      const response = await api.admin.listFeatures();
-      featureDefinitions.value = [...(response.rows ?? [])].sort((a, b) => a.sort_order - b.sort_order);
-      applyFeatureDefaultsToUserSettingsForm();
-    } catch (err) {
-      console.warn("Failed to load feature definitions for admin user settings", err);
-      featureDefinitions.value = [];
-    }
-  }
-}
-
-async function saveUserDefaultTemplate() {
-  if (!userDetailUser.value) return;
-  savingTemplate.value = true;
-  try {
-    await api.admin.setUserDefaultTemplate(userDetailUser.value.id, userDefaultTemplateId.value);
-    message.success("Default template saved");
-  } catch {
-    message.error("Failed to save template");
-  } finally {
-    savingTemplate.value = false;
-  }
-}
-
-async function saveUserSettings() {
-  if (!userDetailUser.value || !userSettingsForm.value) return;
-  savingUserSettings.value = true;
-  try {
-    const form = userSettingsForm.value;
-    await api.admin.saveUserSettings(userDetailUser.value.id, {
-      theme: form.theme,
-      email_from_name: form.email_from_name || null,
-      reminder_advance_days: form.reminder_advance_days || "[90,60,30]",
-      ocr_language: form.ocr_language || "heb+eng",
-      pipeline_ocr: Boolean(form.pipeline_ocr),
-      pipeline_ai: Boolean(form.pipeline_ai),
-      pipeline_s3: Boolean(form.pipeline_s3),
-      pipeline_entities: Boolean(form.pipeline_entities),
-      calendar_next_tests_only: Boolean(form.calendar_next_tests_only),
-      monthly_report_enabled: Boolean(form.monthly_report_enabled),
-      monthly_report_recipients: form.monthly_report_recipients ?? "",
-      monthly_report_day: form.monthly_report_day,
-      monthly_report_hour: form.monthly_report_hour,
-      monthly_report_formats: JSON.stringify(form.monthly_report_formats?.length ? form.monthly_report_formats : ["docx"]),
-      report_config: {
-        all_fields: form.report_config?.all_fields ?? [],
-        client_fields: form.report_config?.client_fields ?? [],
-      },
-      features: form.features ?? {},
-      default_email_template_id: userDefaultTemplateId.value,
-    });
-    message.success("User settings saved");
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : "Failed to save user settings");
-  } finally {
-    savingUserSettings.value = false;
-  }
-}
-
-async function downloadDoc(docId: string) {
-  downloadingDocId.value = docId;
-  try {
-    const { url } = await api.admin.downloadDocument(docId);
-    if (url) window.open(url, "_blank");
-    else message.error("No S3 file for this document");
-  } catch {
-    message.error("Failed to get download URL");
-  } finally {
-    downloadingDocId.value = null;
-  }
-}
-
-const userDetailDocColumns: DataTableColumns<any> = [
-  { title: "File", key: "filename", align: "left", minWidth: 220, ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.filename ?? "—") },
-  { title: "Status", key: "status", align: "center", width: 90,
-    render: (row) => h(NTag, {
-      type: row.status === "done" ? "success" : row.status === "error" ? "error" : row.status === "processing" ? "warning" : "default",
-      size: "small", round: true,
-    }, { default: () => row.status }) },
-  { title: "Coverage", key: "field_coverage", align: "center", width: 130,
-    render: (row) => {
-      const fc = row.field_coverage;
-      if (!fc) return h("span", { style: "font-size:11px;color:var(--text-secondary)" }, "—");
-      const color = fc.coverage_pct >= 80 ? "#18a058" : fc.coverage_pct >= 50 ? "#f0a020" : "#d03050";
-      const tooltip = [
-        fc.missing.length ? `Missing: ${fc.missing.join(", ")}` : "",
-        fc.nulled.length ? `Empty: ${fc.nulled.join(", ")}` : "",
-        fc.present.length ? `OK: ${fc.present.join(", ")}` : "",
-      ].filter(Boolean).join("\n");
-      return h("span", {
-        title: tooltip,
-        style: `font-size:11px;font-weight:600;color:${color};cursor:default`,
-      }, `${fc.coverage_pct}% (${fc.present.length}/${fc.total_fields})`);
-    }},
-  { title: "Missing", key: "missing_fields", align: "left", minWidth: 160, ellipsis: { tooltip: true },
-    render: (row) => {
-      const fc = row.field_coverage;
-      if (!fc || (!fc.missing.length && !fc.nulled.length)) return h("span", { style: "color:#18a058;font-size:11px" }, "✓ all present");
-      const all = [...fc.missing, ...fc.nulled.map((k: string) => `${k}(null)`)];
-      return h("span", { style: "font-size:11px;color:#d03050", title: all.join(", ") }, all.join(", "));
-    }},
-  { title: "Date", key: "created_at", align: "left", width: 110,
-    render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
-      row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
-  { title: "↓", key: "download", align: "center", width: 50,
-    render: (row) => row.has_s3
-      ? h(NButton, { size: "tiny", loading: downloadingDocId.value === row.id, onClick: () => downloadDoc(row.id) }, { default: () => "↓" })
-      : h("span", { style: "font-size:11px;color:var(--text-secondary)" }, "—") },
-];
-
-const userDetailEmailColumns: DataTableColumns<any> = [
-  { title: "Type", key: "log_type", align: "center", width: 110,
-    render: (row) => h(NTag, {
-      type: row.success ? "success" : "error", size: "small", round: true,
-    }, { default: () => (row.success ? "✓ " : "✗ ") + (row.log_type ?? "—") }) },
-  { title: "Recipient", key: "recipient", align: "left", minWidth: 200, ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.recipient ?? "—") },
-  { title: "Error", key: "error", align: "left", minWidth: 180, ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: `font-size:11px;color:${row.error ? "#d03050" : "var(--text-secondary)"}` }, row.error ?? "OK") },
-  { title: "Date", key: "sent_at", align: "left", width: 90,
-    render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
-      row.sent_at ? new Date(row.sent_at).toLocaleDateString("en-US") : "—") },
-];
-
-const userDetailExtractionColumns: DataTableColumns<any> = [
-  { title: "Backend", key: "backend", align: "left", width: 90,
-    render: (row) => h("span", { style: "font-size:12px" }, row.backend ?? "—") },
-  { title: "Model", key: "model", align: "left", width: 110, ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" }, row.model ?? "—") },
-  { title: "OK", key: "parsed_ok", align: "center", width: 55,
-    render: (row) => h(NTag, { type: row.parsed_ok ? "success" : "error", size: "small", round: true },
-      { default: () => row.parsed_ok ? "✓" : "✗" }) },
-  { title: "Time", key: "exec_ms", align: "right", width: 70,
-    render: (row) => h("span", { style: `font-size:11px;color:${(row.exec_ms ?? 0) > 30000 ? "#f0a020" : "var(--text-secondary)"}` },
-      row.exec_ms ? (row.exec_ms / 1000).toFixed(1) + "s" : "—") },
-  { title: "Error", key: "error", align: "left", minWidth: 180, ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:11px;color:#d03050" }, row.error ?? "") },
-  { title: "Date", key: "created_at", align: "left", width: 90,
-    render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
-      row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—") },
-];
-
-const userColumns: DataTableColumns<any> = [
-  {
-    title: "Email", key: "email", align: "left", minWidth: 240, ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:13px" }, row.email ?? "—"),
-  },
-  {
-    title: "Name", key: "name", align: "left", minWidth: 160, ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:13px" }, row.name ?? "—"),
-  },
-  {
-    title: "Role", key: "role", align: "center", width: 100,
-    render: (row) =>
-      h(NTag, { type: roleTagType[row.role] ?? "default", size: "small", round: true },
-        { default: () => roleLabel[row.role] ?? row.role }),
-  },
-  {
-    title: "Status", key: "is_active", align: "center", width: 90,
-    render: (row) =>
-      h(NTag, { type: row.is_active === 0 ? "error" : "default", size: "small", round: true },
-        { default: () => row.is_active === 0 ? "Inactive" : "Active" }),
-  },
-  {
-    title: "Registered", key: "created_at", align: "left", width: 110,
-    render: (row) =>
-      h("span", { style: "font-size:12px; color: var(--text-secondary)" },
-        row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—"),
-  },
-  {
-    title: "Actions", key: "actions", align: "center", width: 380,
-    render: (row) =>
-      h("div", { style: "display:flex; gap:6px; justify-content:center; flex-wrap:nowrap" }, [
-        h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
-          trigger: () => h(NButton, { size: "tiny", type: "primary", ghost: true, onClick: () => openUserDetail(row) }, { default: () => "Details" }),
-          default: () => "View documents, emails, extractions and errors for this user",
-        }),
-        h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
-          trigger: () => h(NButton, { size: "tiny", type: "primary", ghost: true, onClick: () => openUserDetail(row, "settings") }, { default: () => "Settings" }),
-          default: () => "Edit role, reports, fields and user settings",
-        }),
-        h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
-          trigger: () => h(NButton, { size: "tiny", type: "default", onClick: () => openReportModal(row) }, { default: () => "📧 Report" }),
-          default: () => "Send a monthly report email on behalf of this user",
-        }),
-        h(NTooltip, { placement: "top", keepAliveOnHover: false }, {
-          trigger: () => h(NButton, {
-            size: "tiny", type: row.is_active === 0 ? "primary" : "error", ghost: true,
-            onClick: () => toggleActive(row),
-          }, { default: () => row.is_active === 0 ? "Activate" : "Deactivate" }),
-          default: () => row.is_active === 0 ? "Re-enable this user's access" : "Block this user from logging in",
-        }),
-      ]),
-  },
-];
-
-// ── Stats ──────────────────────────────────────────────────────────────────
-const systemStats = computed(() => [
-  { label: "Total Users",   value: users.value.length,                                  icon: PeopleOutline },
-  { label: "Admins",        value: users.value.filter((u) => u.role === "admin").length, icon: PeopleOutline },
-  { label: "Pro Users",     value: users.value.filter((u) => u.role === "pro").length,   icon: PeopleOutline },
-  { label: "Inactive",      value: users.value.filter((u) => u.is_active === 0).length,  icon: PeopleOutline },
-]);
 
 // ── Documents monitor ──────────────────────────────────────────────────────
 const docMonitor = ref<any>(null);
@@ -2360,11 +1765,13 @@ const s3BrowseUserId = ref<string | null>(null);
 const s3Truncated = ref(false);
 const s3FileSearch = ref("");
 const s3StatusFilter = ref<string | null>(null);
+const s3Page = ref(1);
+const s3PageSize = 25;
 
 const s3StatusOptions = [
   { label: "All", value: null },
   { label: "In DB", value: "in_db" },
-  { label: "Not in DB", value: "not_in_db" },
+  { label: "Orphan (not in DB)", value: "not_in_db" },
   { label: "Done", value: "done" },
   { label: "Error", value: "error" },
   { label: "Processing", value: "processing" },
@@ -2382,13 +1789,40 @@ const filteredS3Files = computed(() => {
   return result;
 });
 
+const s3Stats = computed(() => {
+  const files = s3Files.value;
+  return {
+    total: files.length,
+    bytes: files.reduce((sum, f) => sum + (f.size ?? 0), 0),
+    inDb: files.filter((f) => f.in_db).length,
+    orphan: files.filter((f) => !f.in_db).length,
+  };
+});
+
+const s3PageCount = computed(() => Math.max(1, Math.ceil(filteredS3Files.value.length / s3PageSize)));
+
+const pagedS3Files = computed(() => {
+  const start = (s3Page.value - 1) * s3PageSize;
+  return filteredS3Files.value.slice(start, start + s3PageSize);
+});
+
+watch([s3FileSearch, s3StatusFilter, s3BrowseUserId], () => {
+  s3Page.value = 1;
+});
+
 async function loadS3Files() {
-  if (!s3BrowseUserId.value) { s3Files.value = []; return; }
+  if (!s3BrowseUserId.value) {
+    s3Files.value = [];
+    s3Truncated.value = false;
+    s3Page.value = 1;
+    return;
+  }
   sectionLoading.value = true;
   try {
     const res = await api.admin.browseStorage({ user_id: s3BrowseUserId.value });
     s3Files.value = res.files;
     s3Truncated.value = res.truncated;
+    s3Page.value = 1;
   } catch {
     message.error("Error loading S3 files");
     s3Files.value = [];
@@ -2397,50 +1831,25 @@ async function loadS3Files() {
   }
 }
 
-const s3FileColumns: DataTableColumns<any> = [
-  {
-    title: "File", key: "file_name", align: "left", minWidth: 280, ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.file_name ?? "—"),
-  },
-  {
-    title: "Size", key: "size", align: "right", width: 100,
-    render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, formatBytes(row.size)),
-    sorter: (a: any, b: any) => a.size - b.size,
-  },
-  {
-    title: "Modified", key: "last_modified", align: "left", width: 150,
-    render: (row) => h("span", { style: "font-size:11px;color:var(--text-secondary)" },
-      row.last_modified ? new Date(row.last_modified).toLocaleString("en-US") : "—"),
-    sorter: (a: any, b: any) => new Date(a.last_modified ?? 0).getTime() - new Date(b.last_modified ?? 0).getTime(),
-  },
-  {
-    title: "In DB", key: "in_db", align: "center", width: 70,
-    render: (row) => h(NTag, {
-      type: row.in_db ? "success" : "error", size: "small", round: true,
-    }, { default: () => row.in_db ? "✓" : "✗" }),
-  },
-  {
-    title: "Status", key: "status", align: "center", width: 100,
-    render: (row) => row.status
-      ? h(NTag, {
-          type: row.status === "done" ? "success" : row.status === "error" ? "error" : "default",
-          size: "small", round: true,
-        }, { default: () => row.status })
-      : h("span", { style: "font-size:11px;color:var(--text-secondary)" }, "—"),
-  },
-  {
-    title: "S3 Key", key: "key", align: "left", minWidth: 200, ellipsis: { tooltip: true },
-    render: (row) => h("code", { style: "font-size:11px;color:var(--text-secondary)" }, row.key),
-  },
-  {
-    title: "", key: "actions", align: "center", width: 120,
-    render: (row) => h("div", { style: "display:flex;gap:4px;justify-content:center" }, [
-      h(NButton, { size: "tiny", onClick: () => window.open(api.admin.storageDownloadUrl(row.key), "_blank") }, { default: () => "↓" }),
-      row.doc_id ? h(NButton, { size: "tiny", type: "primary", ghost: true, onClick: () => openDocModal(row.doc_id) }, { default: () => "Open" }) : null,
-    ]),
-  },
-];
+function windowOpenStorage(key: string) {
+  window.open(api.admin.storageDownloadUrl(key), "_blank");
+}
 
+async function deleteOrphanFile(key: string) {
+  const confirmed = window.confirm(`Delete orphan S3 file?\n${key}`);
+  if (!confirmed) return;
+  try {
+    const res = await api.admin.deleteStorageFile(key);
+    if (res.ok) {
+      message.success("Deleted");
+      s3Files.value = s3Files.value.filter((f: any) => f.key !== key);
+    } else {
+      message.error(res.error ?? "Delete failed");
+    }
+  } catch {
+    message.error("Delete failed");
+  }
+}
 const issueLabel: Record<string, string> = {
   consecutive_dots: "consecutive dots",
   trailing_punctuation: "trailing punctuation",
@@ -2682,6 +2091,7 @@ async function loadSectionData(key: string) {
     } else if (key === "system_health") {
       systemHealth.value = await api.admin.monitorSystemHealth();
     } else if (key === "s3_storage") {
+      if (users.value.length === 0) await loadUsers();
       if (s3BrowseUserId.value) await loadS3Files();
       else sectionLoading.value = false;
     } else if (key === "settings") {
@@ -2944,6 +2354,14 @@ onUnmounted(() => {
   direction: ltr;
 }
 
+.admin-section--users {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 .admin-section__toolbar {
   display: flex;
   align-items: center;
@@ -3013,6 +2431,302 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ── S3 Storage Browser ──────────────────────────────────────────────────── */
+.s3-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  direction: ltr;
+  text-align: left;
+}
+
+.s3-browser__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+
+.s3-browser__user {
+  width: min(300px, 100%);
+}
+
+.s3-browser__search {
+  flex: 1 1 220px;
+  max-width: 380px;
+}
+
+.s3-browser__status {
+  width: 180px;
+}
+
+.s3-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.s3-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 88px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+
+.s3-stat--ok {
+  border-color: color-mix(in srgb, #18a058 35%, var(--border-color));
+  background: color-mix(in srgb, #18a058 8%, var(--bg-card));
+}
+
+.s3-stat--warn {
+  border-color: color-mix(in srgb, #f0a020 40%, var(--border-color));
+  background: color-mix(in srgb, #f0a020 10%, var(--bg-card));
+}
+
+.s3-stat__num {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.s3-stat__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.s3-table-wrap {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  overflow: auto;
+  max-height: min(62vh, 640px);
+  direction: ltr;
+}
+
+.s3-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  direction: ltr;
+}
+
+.s3-table thead,
+.s3-table tbody,
+.s3-table tr {
+  direction: ltr;
+}
+
+.s3-table th,
+.s3-table td {
+  padding: 7px 10px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  line-height: 1.35;
+  direction: ltr;
+}
+
+.s3-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.s3-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.s3-row:hover td {
+  background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
+}
+
+.s3-row--orphan td {
+  background: color-mix(in srgb, #d03050 4%, var(--bg-card));
+}
+
+.s3-col-file { width: 24%; }
+.s3-col-size { width: 88px; white-space: nowrap; color: var(--text-secondary); }
+.s3-col-date { width: 150px; white-space: nowrap; color: var(--text-secondary); font-size: 11px; }
+.s3-col-db { width: 84px; }
+.s3-col-status { width: 100px; }
+.s3-col-key { width: 28%; }
+.s3-col-actions { width: 88px; white-space: nowrap; text-align: left; }
+
+.s3-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.s3-file__icon {
+  flex: 0 0 auto;
+  color: var(--brand-color);
+}
+
+.s3-file__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.s3-key {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.s3-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.s3-badge--ok,
+.s3-badge--done {
+  background: color-mix(in srgb, #18a058 16%, transparent);
+  color: #18a058;
+}
+
+.s3-badge--err,
+.s3-badge--error {
+  background: color-mix(in srgb, #d03050 14%, transparent);
+  color: #d03050;
+}
+
+.s3-badge--processing,
+.s3-badge--queued {
+  background: color-mix(in srgb, #f0a020 16%, transparent);
+  color: #f0a020;
+}
+
+.s3-muted {
+  color: var(--text-muted);
+}
+
+.s3-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 2px;
+}
+
+.s3-actions .icon-btn {
+  padding: 2px;
+  min-width: 28px;
+  min-height: 28px;
+  justify-content: center;
+}
+
+.s3-actions .btn-icon {
+  margin: 0;
+}
+
+.s3-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.s3-pager__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.s3-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 56px 20px;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  text-align: center;
+}
+
+.s3-empty__icon {
+  color: var(--brand-color);
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+
+.s3-empty__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.s3-empty__desc {
+  margin: 0;
+  max-width: 420px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.s3-empty__desc code {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.s3-spin {
+  animation: s3-spin 0.8s linear infinite;
+}
+
+@keyframes s3-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .s3-col-key,
+  .s3-col-date {
+    display: none;
+  }
+
+  .s3-col-file {
+    width: 42%;
+  }
+
+  .s3-browser__user,
+  .s3-browser__search,
+  .s3-browser__status {
+    width: 100%;
+    max-width: none;
+  }
 }
 
 /* ── Env badge ───────────────────────────────────────────────────────────── */
