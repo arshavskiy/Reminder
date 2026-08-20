@@ -80,6 +80,17 @@
             </div>
             <div v-if="bulkMode && selectedIds.size > 0" class="bulk-action-anchor__actions">
               <button
+                  :class="{ 'bulk-action-item--loading': bulkDownloading }"
+                  :disabled="bulkDownloading"
+                  class="bulk-action-item bulk-action-item--primary"
+                  type="button"
+                  @click="bulkDownload"
+              >
+                <n-icon :component="DownloadOutline" class="bulk-action-item__icon"/>
+                <span class="bulk-action-item__text">הורד נבחרים</span>
+                <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
+              </button>
+              <button
                   :class="{ 'bulk-action-item--loading': bulkDeleting }"
                   :disabled="bulkDeleting"
                   class="bulk-action-item bulk-action-item--danger"
@@ -534,6 +545,7 @@ const deletingAll = ref(false);
 const bulkMode = ref(false);
 const selectedIds = ref(new Set<string>());
 const bulkDeleting = ref(false);
+const bulkDownloading = ref(false);
 const showRescanAllConfirm = ref(false);
 const showLimitModal = ref(false);
 const viewMode = ref<"grid" | "list">("list");
@@ -1075,6 +1087,30 @@ async function openDownload(row: Document) {
     window.open(url, "_blank", "noopener");
   } catch (e) {
     message.error(`לא ניתן לפתוח את הקובץ: ${e}`);
+  }
+}
+
+async function bulkDownload() {
+  const ids = [...selectedIds.value];
+  if (!ids.length || bulkDownloading.value) return;
+  bulkDownloading.value = true;
+  let failed = 0;
+  try {
+    for (const id of ids) {
+      try {
+        const res = await fetch(`${SERVER}/api/documents/${id}/download`, { credentials: "include" });
+        if (!res.ok) { failed++; continue; }
+        const { url } = await res.json() as { url: string };
+        window.open(url, "_blank", "noopener");
+        await new Promise((r) => setTimeout(r, 300));
+      } catch {
+        failed++;
+      }
+    }
+    if (failed) message.warning(`${ids.length - failed} קבצים הורדו, ${failed} נכשלו`);
+    else message.success(`${ids.length} קבצים הורדו`);
+  } finally {
+    bulkDownloading.value = false;
   }
 }
 </script>
