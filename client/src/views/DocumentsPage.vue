@@ -712,12 +712,21 @@ const pagedRows = computed(() => {
   return filteredRows.value.slice(start, start + pageSize.value);
 });
 
-watch(filteredRows, (rows) => {
+const allSelected = computed(() =>
+  bulkMode.value && selectedIds.value.size > 0 && selectedIds.value.size === filteredRows.value.length
+);
+
+watch(filteredRows, (rows, oldRows) => {
   const count = Math.max(1, Math.ceil(rows.length / pageSize.value));
   if (currentPage.value > count) currentPage.value = count;
   if (bulkMode.value && selectedIds.value.size > 0) {
-    const visible = new Set(rows.map((r) => String(r.id)));
-    selectedIds.value = new Set([...selectedIds.value].filter((id) => visible.has(id)));
+    const wasAllSelected = oldRows && selectedIds.value.size === oldRows.length;
+    if (wasAllSelected) {
+      selectedIds.value = new Set(rows.map((r) => String(r.id)));
+    } else {
+      const visible = new Set(rows.map((r) => String(r.id)));
+      selectedIds.value = new Set([...selectedIds.value].filter((id) => visible.has(id)));
+    }
   }
 });
 
