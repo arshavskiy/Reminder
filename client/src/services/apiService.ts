@@ -252,7 +252,7 @@ export const api = {
     upload: async (
       files: File[],
       options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean },
-      templateId?: number
+      templateId?: string | number
     ) => {
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
@@ -277,7 +277,7 @@ export const api = {
     uploadOne: async (
       file: File,
       options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean },
-      templateId?: number
+      templateId?: string | number
     ): Promise<{ id: string; duplicate: boolean }> => {
       const fd = new FormData();
       fd.append("files", file);

@@ -601,7 +601,7 @@ async function openRescanModal() {
 async function onModalUpload(
   files: File[],
   fields: { key: string; label_he: string; type: string }[],
-  options: { doAi: boolean; doEntities: boolean; doReminders: boolean }
+  options: { doAi: boolean; doEntities: boolean; doReminders: boolean; templateId?: string }
 ) {
   await uploadFiles(files, options);
   showUploadModal.value = false;
@@ -883,11 +883,11 @@ onUnmounted(() => {
 // ── File handling ─────────────────────────────────────────────────────────────
 async function uploadFiles(
   files: File[],
-  options?: { doAi: boolean; doEntities: boolean; doReminders: boolean }
+  options?: { doAi: boolean; doEntities: boolean; doReminders: boolean; templateId?: string }
 ) {
   uploading.value = true;
   try {
-    const { ids, duplicates } = await api.documents.upload(files, options);
+    const {ids, duplicates} = await api.documents.upload(files, options, options?.templateId);
     const newCount = ids.length - (duplicates?.length ?? 0);
     if (newCount > 0) message.info(`${newCount} מסמכים נוספו לתור עיבוד`);
     if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);

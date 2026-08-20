@@ -1,24 +1,141 @@
 <template>
-  <div class="doc-templates-page">
-    <n-space class="doc-templates-head" justify="space-between" align="center" style="margin-bottom: 16px">
-<!--      <h2 style="margin: 0">תבניות מסמכים</h2>-->
-      <span></span>
-      <n-space>
-        <n-button @click="showGenerate = true">
-          <template #icon>
-            <n-icon :component="FlashOutline"/>
-          </template>
-          צור תבנית מ-AI
-        </n-button>
-        <n-button type="primary" @click="newTemplate">+ תבנית חדשה</n-button>
-      </n-space>
-    </n-space>
+  <div class="dt-page" dir="rtl">
+    <PageHeader
+        :count="templates.length"
+        subtitle="הגדרת שדות לחילוץ לפי סוג מסמך, כולל מילות מפתח ותזכורות"
+        title="תבניות מסמכים"
+    >
+      <template #actions>
+        <div class="dt-actions">
+          <button :disabled="loading" class="btn btn--ghost" type="button" @click="refresh">
+            <n-icon :class="{ 'dt-spin': loading }" :component="RefreshOutline" :size="16" class="btn-icon"/>
+            רענן
+          </button>
+          <button class="btn btn--ghost" type="button" @click="showGenerate = true">
+            <n-icon :component="FlashOutline" :size="16" class="btn-icon"/>
+            צור מ-AI
+          </button>
+          <button class="btn btn--primary" type="button" @click="newTemplate">
+            <n-icon :component="AddOutline" :size="16" class="btn-icon"/>
+            תבנית חדשה
+          </button>
+        </div>
+      </template>
+    </PageHeader>
+
+    <div class="dt-toolbar">
+      <n-input
+          v-model:value="search"
+          class="dt-toolbar__search"
+          clearable
+          placeholder="חיפוש לפי שם, תיאור או מילת מפתח..."
+      >
+        <template #prefix>
+          <n-icon :component="SearchOutline" :size="16"/>
+        </template>
+      </n-input>
+      <div class="dt-filters">
+        <button
+            v-for="f in kindFilters"
+            :key="f.value"
+            :class="{ 'pill--active': kindFilter === f.value }"
+            class="pill"
+            type="button"
+            @click="kindFilter = f.value"
+        >
+          {{ f.label }}
+          <span class="pill__badge">{{ f.count }}</span>
+        </button>
+      </div>
+    </div>
+
+    <n-spin :show="loading">
+      <div v-if="filteredTemplates.length" class="dt-grid">
+        <article
+            v-for="t in filteredTemplates"
+            :key="t.id"
+            class="dt-card"
+            @click="select(t)"
+        >
+          <header class="dt-card__head">
+            <div class="dt-card__icon">
+              <n-icon :component="DocumentTextOutline" :size="18"/>
+            </div>
+            <div class="dt-card__titles">
+              <h3 class="dt-card__name">{{ t.name }}</h3>
+              <p class="dt-card__desc">{{ t.description || "ללא תיאור" }}</p>
+            </div>
+            <div class="dt-card__actions" @click.stop>
+              <n-tooltip placement="top">
+                <template #trigger>
+                  <button class="btn btn--ghost btn--xs icon-btn" type="button" @click="select(t)">
+                    <n-icon :component="CreateOutline" :size="14" class="btn-icon"/>
+                  </button>
+                </template>
+                עריכה
+              </n-tooltip>
+              <n-tooltip v-if="!t.is_builtin" placement="top">
+                <template #trigger>
+                  <button class="btn btn--ghost btn--xs icon-btn" type="button" @click="confirmDelete(t)">
+                    <n-icon :component="TrashOutline" :size="14" class="btn-icon"/>
+                  </button>
+                </template>
+                מחיקה
+              </n-tooltip>
+            </div>
+          </header>
+
+          <div class="dt-card__tags">
+            <span
+                v-if="t.document_kind && t.document_kind !== 'unknown'"
+                :class="`dt-chip--${kindTone(t.document_kind)}`"
+                class="dt-chip"
+            >
+              {{ kindLabel(t.document_kind) }}
+            </span>
+            <span v-if="t.is_builtin" class="dt-chip dt-chip--info">מובנה</span>
+            <span v-if="t.is_default" class="dt-chip dt-chip--success">ברירת מחדל</span>
+          </div>
+
+          <footer class="dt-card__meta">
+            <span>{{ t.fields.length }} שדות</span>
+            <span class="dt-card__dot">·</span>
+            <span :title="(t.match_keywords || []).join(', ')" class="dt-card__keywords">
+              {{ (t.match_keywords || []).join(", ") || "ללא מילות מפתח" }}
+            </span>
+          </footer>
+        </article>
+      </div>
+
+      <div v-else-if="!loading" class="dt-empty">
+        <n-icon :component="DocumentTextOutline" :size="40" class="dt-empty__icon"/>
+        <h3>{{ templates.length ? "אין תוצאות לחיפוש" : "אין עדיין תבניות" }}</h3>
+        <p>
+          {{
+            templates.length
+                ? "נסה לשנות את הסינון או החיפוש."
+                : "צור תבנית כדי להגדיר אילו שדות לחלץ מסוגי מסמכים שונים."
+          }}
+        </p>
+        <button v-if="!templates.length" class="btn btn--primary" type="button" @click="newTemplate">
+          <n-icon :component="AddOutline" :size="16" class="btn-icon"/>
+          תבנית חדשה
+        </button>
+      </div>
+    </n-spin>
 
     <!-- Generate-from-AI modal -->
-    <n-modal v-model:show="showGenerate" preset="card" title="צור תבנית באמצעות AI" style="width: 640px; max-width: 95vw">
-      <n-alert type="info" :show-icon="false" style="margin-bottom: 12px; font-size: 13px">
+    <n-modal
+        v-model:show="showGenerate"
+        :mask-closable="!generating"
+        class="dt-modal"
+        preset="card"
+        style="width: min(640px, 95vw)"
+        title="צור תבנית באמצעות AI"
+    >
+      <p class="dt-modal__lead">
         העלה דוגמה של מסמך, או הדבק את הטקסט שלו — ה-AI יציע תבנית עם שדות מתאימים בעברית. תוכל לערוך לפני שמירה.
-      </n-alert>
+      </p>
 
       <n-tabs v-model:value="genMode" type="line" animated>
         <n-tab-pane name="file" tab="העלאת קובץ">
@@ -26,13 +143,13 @@
             :show-file-list="false"
             :custom-request="onGenFile as any"
             accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg,.txt"
+            :disabled="generating"
           >
             <n-upload-dragger>
-              <div style="padding: 24px; text-align: center">
-                <p style="margin: 0; font-size: 15px">לחץ או גרור קובץ לכאן</p>
-                <p style="margin: 4px 0 0; color: var(--text-muted); font-size: 12px">
-                  PDF, DOCX, XLSX, תמונה או טקסט
-                </p>
+              <div class="dt-drop">
+                <n-icon :component="CloudUploadOutline" :size="28" class="dt-drop__icon"/>
+                <p class="dt-drop__title">לחץ או גרור קובץ לכאן</p>
+                <p class="dt-drop__hint">PDF, DOCX, XLSX, תמונה או טקסט</p>
               </div>
             </n-upload-dragger>
           </n-upload>
@@ -44,64 +161,44 @@
             type="textarea"
             :rows="10"
             placeholder="הדבק כאן את תוכן המסמך לדוגמה..."
+            :disabled="generating"
           />
-          <n-button
-            type="primary"
-            :loading="generating"
-            :disabled="genText.trim().length < 50"
+          <button
+              :disabled="generating || genText.trim().length < 50"
+              class="btn btn--primary"
             style="margin-top: 12px"
+              type="button"
             @click="onGenText"
-          >צור תבנית מהטקסט</n-button>
+          >
+            צור תבנית מהטקסט
+          </button>
         </n-tab-pane>
       </n-tabs>
 
-      <n-spin v-if="generating" :show="true">
-        <div style="height: 80px; display: flex; align-items: center; justify-content: center">
-          ה-AI מנתח את המסמך ובונה את התבנית...
-        </div>
-      </n-spin>
+      <div v-if="generating" class="dt-generating">
+        <n-spin size="small"/>
+        <span>ה-AI מנתח את המסמך ובונה את התבנית...</span>
+      </div>
     </n-modal>
 
-    <n-alert v-if="!templates.length" type="info" :show-icon="false">
-      אין עדיין תבניות. צור תבנית כדי להגדיר אילו שדות לחלץ מסוגי מסמכים שונים.
-    </n-alert>
-
-    <n-grid v-else :cols="templateGridCols" :x-gap="16" :y-gap="16">
-      <n-gi v-for="t in templates" :key="t.id">
-        <n-card hoverable :title="t.name" @click="select(t)" style="cursor:pointer">
-          <template #header-extra>
-            <n-space :size="4">
-              <n-tag v-if="t.document_kind && t.document_kind !== 'unknown'" :type="kindTagType(t.document_kind)" size="small">
-                {{ kindLabel(t.document_kind) }}
-              </n-tag>
-              <n-tag v-if="t.is_builtin" size="small" type="info">מובנה</n-tag>
-              <n-tag v-if="t.is_default" size="small" type="success">ברירת מחדל</n-tag>
-            </n-space>
-          </template>
-          <p style="font-size: 13px; color: var(--text-secondary); margin: 0 0 8px">
-            {{ t.description || "—" }}
-          </p>
-          <p style="font-size: 12px; color: var(--text-muted); margin: 0">
-            {{ t.fields.length }} שדות · מילות מפתח: {{ (t.match_keywords || []).join(", ") || "—" }}
-          </p>
-        </n-card>
-      </n-gi>
-    </n-grid>
-
-    <!-- Editor drawer -->
-    <n-drawer v-model:show="showEdit" :width="drawerWidth" placement="left">
-      <n-drawer-content :title="editing?.id ? 'עריכת תבנית' : 'תבנית חדשה'" closable>
-        <n-form v-if="editing" label-placement="top">
-          <n-grid :cols="2" :x-gap="16">
-            <n-gi>
-              <n-form-item label="שם" required>
-                <n-input v-model:value="editing.name" placeholder="למשל: תסקיר בדיקה" />
-              </n-form-item>
-            </n-gi>
-            <n-gi>
-              <n-form-item label="סוג מסמך">
-                <n-input-group>
-                  <n-select
+    <!-- Create / Edit modal -->
+    <n-modal
+        v-model:show="showEdit"
+        :mask-closable="!saving"
+        :title="editing?.id ? 'עריכת תבנית' : 'תבנית חדשה'"
+        class="dt-modal dt-edit-modal"
+        preset="card"
+        style="width: min(920px, 96vw)"
+    >
+      <div v-if="editing" class="dt-edit">
+        <n-form class="dt-edit__form" label-placement="top">
+          <div class="dt-edit__grid">
+            <n-form-item label="שם" required>
+              <n-input v-model:value="editing.name" placeholder="למשל: תסקיר בדיקה"/>
+            </n-form-item>
+            <n-form-item label="סוג מסמך">
+              <n-input-group>
+                <n-select
                     v-model:value="editing.document_kind"
                     :options="kindOptions"
                     :virtual-scroll="false"
@@ -109,21 +206,28 @@
                     tag
                     placeholder="בחר או הקלד סוג חדש..."
                     style="flex: 1"
-                  />
-                  <n-tooltip placement="bottom">
-                    <template #trigger>
-                      <n-button :loading="suggestingKind" secondary @click="suggestKind">
-                        <template #icon>
-                          <n-icon :component="FlashOutline"/>
-                        </template>
-                      </n-button>
-                    </template>
-                    AI יציע סוג מסמך לפי שם, תיאור ושדות
-                  </n-tooltip>
-                </n-input-group>
-              </n-form-item>
-            </n-gi>
-          </n-grid>
+                />
+                <n-tooltip placement="bottom">
+                  <template #trigger>
+                    <button
+                        :disabled="suggestingKind"
+                        class="btn btn--ghost"
+                        type="button"
+                        @click="suggestKind"
+                    >
+                      <n-icon
+                          :class="{ 'dt-spin': suggestingKind }"
+                          :component="FlashOutline"
+                          :size="16"
+                          class="btn-icon"
+                      />
+                    </button>
+                  </template>
+                  AI יציע סוג מסמך לפי שם, תיאור ושדות
+                </n-tooltip>
+              </n-input-group>
+            </n-form-item>
+          </div>
 
           <n-form-item label="תיאור">
             <n-input v-model:value="editing.description" type="textarea" :rows="2" />
@@ -131,56 +235,62 @@
           <n-form-item label="מילות מפתח לזיהוי אוטומטי (מופרדות בפסיק)">
             <n-input
               :value="(editing.match_keywords || []).join(', ')"
-              @update:value="v => editing!.match_keywords = v.split(',').map(s => s.trim()).filter(Boolean)"
               placeholder="תסקיר, בדיקה תקופתית"
+              @update:value="(v) => (editing!.match_keywords = v.split(',').map((s) => s.trim()).filter(Boolean))"
             />
           </n-form-item>
 
-          <n-divider style="margin: 16px 0 12px" />
-          <n-space align="center" justify="space-between" style="margin-bottom: 8px">
-            <span style="font-weight: 600">שדות לחילוץ</span>
-            <n-button ghost size="small" type="primary" @click="addField">+ הוסף שדה</n-button>
-          </n-space>
-          <n-alert type="info" :show-icon="false" style="margin-bottom: 12px; font-size: 12px">
-            כל שדה יחולץ מהמסמך באמצעות AI. שדה התאריך שמופיע למטה ב"שדה תזכורת" הוא זה שמפעיל את התזכורת.
-          </n-alert>
+          <div class="dt-fields-head">
+            <div>
+              <h4 class="dt-fields-head__title">שדות לחילוץ</h4>
+              <p class="dt-fields-head__hint">
+                כל שדה יחולץ מהמסמך באמצעות AI. שדה התאריך ב"שדה תזכורת" מפעיל את התזכורת.
+              </p>
+            </div>
+            <button class="btn btn--ghost btn--xs" type="button" @click="addField">
+              <n-icon :component="AddOutline" :size="14" class="btn-icon"/>
+              הוסף שדה
+            </button>
+          </div>
 
-          <div v-for="(f, i) in editing.fields" :key="i" class="field-row">
-            <n-grid :cols="12" :x-gap="8" align="center">
-              <n-gi :span="3">
-                <n-input v-model:value="f.key" placeholder="key" size="small" />
-              </n-gi>
-              <n-gi :span="4">
-                <n-input v-model:value="f.label_he" placeholder="תווית עברית" size="small" />
-              </n-gi>
-              <n-gi :span="3">
-                <n-select
+          <div v-for="(f, i) in editing.fields" :key="i" class="dt-field">
+            <div class="dt-field__row">
+              <n-input v-model:value="f.key" class="dt-field__key" dir="ltr" placeholder="key" size="small"/>
+              <n-input v-model:value="f.label_he" class="dt-field__label" placeholder="תווית עברית" size="small"/>
+              <n-select
                   v-model:value="f.type"
                   size="small"
                   :options="typeOptions"
                   :virtual-scroll="false"
-                />
-              </n-gi>
-              <n-gi :span="1">
-                <n-checkbox v-model:checked="f.required as any" size="small">חובה</n-checkbox>
-              </n-gi>
-              <n-gi :span="1" style="text-align: center">
-                <n-button circle quaternary size="small" @click="editing!.fields.splice(i, 1)">✕</n-button>
-              </n-gi>
-            </n-grid>
+                  class="dt-field__type"
+              />
+              <label class="dt-field__req">
+                <n-checkbox v-model:checked="f.required as any" size="small"/>
+                חובה
+              </label>
+              <n-tooltip placement="top">
+                <template #trigger>
+                  <button
+                      class="btn btn--ghost btn--xs icon-btn"
+                      type="button"
+                      @click="editing!.fields.splice(i, 1)"
+                  >
+                    <n-icon :component="TrashOutline" :size="14" class="btn-icon"/>
+                  </button>
+                </template>
+                הסר שדה
+              </n-tooltip>
+            </div>
             <n-input
               v-model:value="f.hint_he"
               placeholder="רמז ל-AI — מה לחפש, מה להתעלם (אופציונלי)"
               size="small"
-              style="margin-top: 4px"
             />
           </div>
 
-          <n-empty v-if="!editing.fields.length" description="אין שדות עדיין" size="small" style="margin: 12px 0" />
+          <div v-if="!editing.fields.length" class="dt-fields-empty">אין שדות עדיין</div>
 
-          <n-divider style="margin: 16px 0 12px" />
-
-          <n-form-item label="שדה תזכורת — איזה תאריך מפעיל את התזכורת">
+          <n-form-item label="שדה תזכורת — איזה תאריך מפעיל את התזכורת" style="margin-top: 8px">
             <n-select
               v-model:value="editing.expiry_field"
               :options="dateFieldOptions"
@@ -190,120 +300,129 @@
             />
           </n-form-item>
 
-          <n-form-item>
-            <n-checkbox v-model:checked="editing.is_default as any">תבנית ברירת מחדל</n-checkbox>
-          </n-form-item>
+          <label class="dt-default-check">
+            <n-checkbox v-model:checked="editing.is_default as any"/>
+            תבנית ברירת מחדל
+          </label>
         </n-form>
 
-        <!-- ── Test extraction panel ───────────────────────────────────── -->
-        <n-divider style="margin: 8px 0 12px" />
-        <div class="test-panel">
-          <n-space align="center" justify="space-between" style="margin-bottom: 10px">
-            <span style="font-weight: 600; font-size: 14px">בדוק חילוץ על מסמך לדוגמה</span>
-            <n-tag :bordered="false" size="small" type="warning">לא נשמר</n-tag>
-          </n-space>
+        <section class="dt-test">
+          <div class="dt-test__head">
+            <h4>בדוק חילוץ על מסמך לדוגמה</h4>
+            <span class="dt-chip dt-chip--warning">לא נשמר</span>
+          </div>
           <n-upload
             :show-file-list="false"
             :custom-request="onTestFile as any"
             accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg,.txt"
           >
-            <n-button :loading="testing" secondary size="small" style="width: 100%">
-              <template #icon>
-                <n-icon :component="testFile ? DocumentOutline : CloudUploadOutline"/>
-              </template>
-              {{ testFile ? testFile.name : 'העלה קובץ לבדיקה' }}
-            </n-button>
+            <button :disabled="testing" class="btn btn--ghost dt-test__upload" type="button">
+              <n-icon
+                  :class="{ 'dt-spin': testing }"
+                  :component="testFile ? DocumentOutline : CloudUploadOutline"
+                  :size="16"
+                  class="btn-icon"
+              />
+              {{ testFile ? testFile.name : "העלה קובץ לבדיקה" }}
+            </button>
           </n-upload>
 
-          <div v-if="testResult" class="test-result">
-            <div class="test-result__meta">
-              מודל: {{ testResult.model }} · {{ testResult.exec_ms }}ms
-            </div>
-            <div v-if="testResult.error" class="test-result__error">
-              שגיאה: {{ testResult.error }}
-            </div>
-            <div v-else-if="testResult.fields" class="test-result__fields">
+          <div v-if="testResult" class="dt-test__result">
+            <div class="dt-test__meta">מודל: {{ testResult.model }} · {{ testResult.exec_ms }}ms</div>
+            <div v-if="testResult.error" class="dt-test__error">שגיאה: {{ testResult.error }}</div>
+            <div v-else-if="testResult.fields" class="dt-test__fields">
               <div
-                v-for="[k, v] in Object.entries(testResult.fields).filter(([,v]) => v !== null && v !== '')"
+                  v-for="[k, v] in Object.entries(testResult.fields).filter(([, val]) => val !== null && val !== '')"
                 :key="k"
-                class="test-result__row"
+                  class="dt-test__row"
               >
-                <span class="test-result__key">{{ editing?.fields.find(f => f.key === k)?.label_he ?? k }}</span>
-                <span class="test-result__val">{{ Array.isArray(v) ? v.join(', ') : String(v) }}</span>
+                <span class="dt-test__key">{{ editing?.fields.find((f) => f.key === k)?.label_he ?? k }}</span>
+                <span class="dt-test__val">{{ Array.isArray(v) ? v.join(", ") : String(v) }}</span>
               </div>
-              <div v-if="!Object.values(testResult.fields).some(v => v !== null && v !== '')" class="test-result__empty">
+              <div
+                  v-if="!Object.values(testResult.fields).some((v) => v !== null && v !== '')"
+                  class="dt-test__empty"
+              >
                 לא חולצו שדות
               </div>
             </div>
           </div>
-        </div>
+        </section>
+      </div>
 
-        <template #footer>
-          <n-space>
-            <n-button @click="showEdit = false">ביטול</n-button>
-            <n-button
+      <template #footer>
+        <div class="dt-edit__footer">
+          <button
               v-if="editing?.id && !editing.is_builtin"
-              type="error"
+              :disabled="saving"
+              class="btn btn--danger-ghost"
+              type="button"
               @click="deleteTpl"
-            >מחק</n-button>
-            <n-button type="primary" :loading="saving" @click="save">שמור</n-button>
-          </n-space>
-        </template>
-      </n-drawer-content>
-    </n-drawer>
+          >
+            <n-icon :component="TrashOutline" :size="16" class="btn-icon"/>
+            מחק
+          </button>
+          <div class="dt-edit__footer-end">
+            <button :disabled="saving" class="btn btn--ghost" type="button" @click="showEdit = false">
+              ביטול
+            </button>
+            <button :disabled="saving" class="btn btn--primary" type="button" @click="save">
+              {{ saving ? "שומר..." : "שמור" }}
+            </button>
+          </div>
+        </div>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref} from "vue";
+import {computed, onMounted, ref} from "vue";
 import {
-  NAlert,
-  NButton,
-  NCard,
   NCheckbox,
-  NDivider,
-  NDrawer,
-  NDrawerContent,
-  NEmpty,
   NForm,
   NFormItem,
-  NGi,
-  NGrid,
   NIcon,
   NInput,
   NInputGroup,
   NModal,
   NSelect,
-  NSpace,
   NSpin,
   NTabPane,
   NTabs,
-  NTag,
   NTooltip,
   NUpload,
   NUploadDragger,
   useMessage,
 } from "naive-ui";
-import {CloudUploadOutline, DocumentOutline, FlashOutline,} from "@vicons/ionicons5";
+import {
+  AddOutline,
+  CloudUploadOutline,
+  CreateOutline,
+  DocumentOutline,
+  DocumentTextOutline,
+  FlashOutline,
+  RefreshOutline,
+  SearchOutline,
+  TrashOutline,
+} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
+import PageHeader from "../components/PageHeader.vue";
 import type {DocTemplate, DocumentKind, FieldType, TemplateField} from "@shared/types.js";
 
 const templates = ref<DocTemplate[]>([]);
+const loading = ref(false);
 const showEdit = ref(false);
 const editing = ref<DocTemplate | null>(null);
 const saving = ref(false);
 const message = useMessage();
 const {confirm} = useConfirm();
-const isMobile = ref(false);
-const templateGridCols = computed(() => isMobile.value ? 1 : 3);
-const drawerWidth = computed(() => isMobile.value ? "100vw" : 960);
 
-function updateViewport() {
-  isMobile.value = window.innerWidth <= 720;
-}
+const search = ref("");
+type KindFilter = "all" | string;
+const kindFilter = ref<KindFilter>("all");
 
-// Generator state
 const showGenerate = ref(false);
 const genMode = ref<"file" | "text">("file");
 const genText = ref("");
@@ -321,8 +440,8 @@ const typeOptions = [
 
 const BUILTIN_KIND_OPTIONS = [
   { label: "תסקיר בדיקה", value: "inspection_report" },
-  { label: "חוזה / הסכם",  value: "contract" },
-  { label: "חשבונית",      value: "invoice" },
+  {label: "חוזה / הסכם", value: "contract"},
+  {label: "חשבונית", value: "invoice"},
   { label: "תעודה / הסמכה", value: "certificate" },
   { label: "אחר / לא ידוע", value: "unknown" },
 ];
@@ -344,16 +463,60 @@ function kindLabel(kind: DocumentKind): string {
   return kindOptions.value.find((o) => o.value === kind)?.label ?? kind;
 }
 
-function kindTagType(kind: DocumentKind): "default" | "info" | "success" | "warning" | "error" {
-  const map: Record<string, "default" | "info" | "success" | "warning" | "error"> = {
+function kindTone(kind: DocumentKind): string {
+  const map: Record<string, string> = {
     inspection_report: "warning",
     contract: "info",
     invoice: "success",
     certificate: "error",
-    unknown: "default",
+    unknown: "muted",
   };
   return map[kind] ?? "info";
 }
+
+const filteredTemplates = computed(() => {
+  let rows = templates.value;
+  if (kindFilter.value !== "all") {
+    rows = rows.filter((t) => (t.document_kind || "unknown") === kindFilter.value);
+  }
+  const q = search.value.trim().toLowerCase();
+  if (!q) return rows;
+  return rows.filter((t) => {
+    const hay = [
+      t.name,
+      t.description,
+      t.document_kind,
+      ...(t.match_keywords || []),
+      ...t.fields.map((f) => f.label_he),
+    ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+    return hay.includes(q);
+  });
+});
+
+const kindFilters = computed(() => {
+  const counts = new Map<string, number>();
+  for (const t of templates.value) {
+    const k = t.document_kind || "unknown";
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const pills = [{value: "all", label: "הכל", count: templates.value.length}];
+  for (const opt of kindOptions.value) {
+    const count = counts.get(opt.value) ?? 0;
+    if (count || BUILTIN_KIND_OPTIONS.some((b) => b.value === opt.value)) {
+      pills.push({value: opt.value, label: opt.label, count});
+    }
+  }
+  // Include custom kinds present in data but not in options yet
+  for (const [k, count] of counts) {
+    if (!pills.some((p) => p.value === k)) {
+      pills.push({value: k, label: k, count});
+    }
+  }
+  return pills.filter((p) => p.value === "all" || p.count > 0 || BUILTIN_KIND_OPTIONS.some((b) => b.value === p.value));
+});
 
 const dateFieldOptions = computed(() => {
   if (!editing.value) return [];
@@ -363,15 +526,24 @@ const dateFieldOptions = computed(() => {
 });
 
 async function load() {
-  templates.value = await api.docTemplates.list();
+  loading.value = true;
+  try {
+    templates.value = await api.docTemplates.list();
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    loading.value = false;
+  }
 }
-onMounted(async () => {
-  updateViewport();
-  window.addEventListener("resize", updateViewport);
+
+function refresh() {
   load();
   loadKinds();
+}
 
-  // Auto-open generator if a file was passed from the documents page
+onMounted(async () => {
+  await Promise.all([load(), loadKinds()]);
+
   const pendingFile = (window as any).__pendingTemplateFile as File | undefined;
   if (pendingFile) {
     delete (window as any).__pendingTemplateFile;
@@ -381,19 +553,8 @@ onMounted(async () => {
   }
 });
 
-onBeforeUnmount(() => {
-  window.removeEventListener("resize", updateViewport);
-});
-
-function select(t: DocTemplate) {
-  editing.value = JSON.parse(JSON.stringify(t));
-  testFile.value = null;
-  testResult.value = null;
-  showEdit.value = true;
-}
-
-function newTemplate() {
-  editing.value = {
+function blankTemplate(): DocTemplate {
+  return {
     id: 0,
     name: "",
     description: "",
@@ -407,6 +568,17 @@ function newTemplate() {
     created_at: "",
     updated_at: "",
   };
+}
+
+function select(t: DocTemplate) {
+  editing.value = JSON.parse(JSON.stringify(t));
+  testFile.value = null;
+  testResult.value = null;
+  showEdit.value = true;
+}
+
+function newTemplate() {
+  editing.value = blankTemplate();
   testFile.value = null;
   testResult.value = null;
   showEdit.value = true;
@@ -442,19 +614,16 @@ async function save() {
   }
 }
 
-async function deleteTpl() {
-  if (!editing.value?.id) return;
-  const name = editing.value.name;
-  const id = editing.value.id;
+function confirmDelete(t: DocTemplate) {
   confirm({
     title: "מחיקת תבנית",
-    content: `למחוק את "${name}"? פעולה זו אינה הפיכה.`,
+    content: `למחוק את "${t.name}"? פעולה זו אינה הפיכה.`,
     confirmText: "מחק",
     onConfirm: async () => {
       try {
-        await api.docTemplates.delete(id);
+        await api.docTemplates.delete(t.id);
         message.success("נמחקה");
-        showEdit.value = false;
+        if (editing.value?.id === t.id) showEdit.value = false;
         await load();
       } catch (e) {
         message.error(String(e));
@@ -463,22 +632,23 @@ async function deleteTpl() {
   });
 }
 
-// ── Generator: AI builds a template from a sample document/text ─────────────
+async function deleteTpl() {
+  if (!editing.value?.id) return;
+  confirmDelete(editing.value);
+}
+
 function openDraft(draft: Partial<DocTemplate>) {
   editing.value = {
-    id: 0,
+    ...blankTemplate(),
     name: draft.name ?? "",
     description: draft.description ?? "",
     document_kind: draft.document_kind ?? "unknown",
     match_keywords: draft.match_keywords ?? [],
     fields: (draft.fields ?? []) as TemplateField[],
     expiry_field: draft.expiry_field ?? null,
-    cached_system_prompt: null,
-    is_default: 0,
-    is_builtin: 0,
-    created_at: "",
-    updated_at: "",
   };
+  testFile.value = null;
+  testResult.value = null;
   showGenerate.value = false;
   showEdit.value = true;
   message.success(`AI הציע תבנית "${editing.value.name}" עם ${editing.value.fields.length} שדות. ערוך לפני שמירה.`);
@@ -510,7 +680,6 @@ async function onGenFile({ file }: { file: { file: File } }) {
   }
 }
 
-// ── Suggest document kind ───────────────────────────────────────────────────
 const suggestingKind = ref(false);
 
 async function suggestKind() {
@@ -525,7 +694,6 @@ async function suggestKind() {
     });
     if (kind) {
       editing.value.document_kind = kind as DocumentKind;
-      // Add to dropdown if it's a new custom kind
       if (!kindOptions.value.find((o) => o.value === kind)) {
         kindOptions.value = [...kindOptions.value, { label: kind, value: kind }];
       }
@@ -538,10 +706,15 @@ async function suggestKind() {
   }
 }
 
-// ── Test extraction ─────────────────────────────────────────────────────────
 const testing = ref(false);
 const testFile = ref<File | null>(null);
-interface TestResult { fields: Record<string, unknown> | null; model: string; exec_ms: number; error: string | null }
+
+interface TestResult {
+  fields: Record<string, unknown> | null;
+  model: string;
+  exec_ms: number;
+  error: string | null;
+}
 const testResult = ref<TestResult | null>(null);
 
 async function onTestFile({ file }: { file: { file: File } }) {
@@ -559,7 +732,6 @@ async function onTestFile({ file }: { file: { file: File } }) {
   }
 }
 
-// Called externally (e.g. from upload modal) to generate a template from a specific file
 async function openGenerateWithFile(file: File) {
   showGenerate.value = true;
   genMode.value = "file";
@@ -579,104 +751,490 @@ defineExpose({ openGenerateWithFile });
 </script>
 
 <style scoped>
-.field-row {
-  padding: 8px;
+.dt-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.dt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.dt-toolbar__search {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.dt-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.pill:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pill--active {
+  border-color: color-mix(in srgb, var(--brand-color) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--brand-color) 12%, var(--bg-card));
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.pill__badge {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.dt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.dt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+
+.dt-card:hover {
+  border-color: color-mix(in srgb, var(--brand-color) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--brand-color) 4%, var(--bg-card));
+}
+
+.dt-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.dt-card__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--brand-color) 14%, var(--bg-elevated));
+  color: var(--brand-color);
+  flex: 0 0 auto;
+}
+
+.dt-card__titles {
+  min-width: 0;
+  flex: 1;
+}
+
+.dt-card__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.dt-card__desc {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dt-card__actions {
+  display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+.dt-card:hover .dt-card__actions {
+  opacity: 1;
+}
+
+.dt-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dt-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.dt-chip--info {
+  background: color-mix(in srgb, #63e2b7 18%, var(--bg-elevated));
+  color: var(--brand-color);
+}
+
+.dt-chip--success {
+  background: color-mix(in srgb, #18a058 16%, var(--bg-elevated));
+  color: #18a058;
+}
+
+.dt-chip--warning {
+  background: color-mix(in srgb, #f0a020 18%, var(--bg-elevated));
+  color: #f0a020;
+}
+
+.dt-chip--error {
+  background: color-mix(in srgb, #d03050 16%, var(--bg-elevated));
+  color: #d03050;
+}
+
+.dt-chip--muted {
+  color: var(--text-muted, var(--text-secondary));
+}
+
+.dt-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.dt-card__dot {
+  opacity: 0.5;
+}
+
+.dt-card__keywords {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.dt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 280px;
+  padding: 40px 20px;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  text-align: center;
+}
+
+.dt-empty__icon {
+  color: var(--brand-color);
+  opacity: 0.7;
+}
+
+.dt-empty h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.dt-empty p {
+  margin: 0 0 8px;
+  max-width: 420px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.dt-modal__lead {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.dt-drop {
+  padding: 28px 16px;
+  text-align: center;
+}
+
+.dt-drop__icon {
+  color: var(--brand-color);
+  margin-bottom: 8px;
+}
+
+.dt-drop__title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.dt-drop__hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dt-generating {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.dt-edit {
+  max-height: min(72vh, 780px);
+  overflow-y: auto;
+  padding-inline-end: 4px;
+}
+
+.dt-edit__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+.dt-fields-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 8px 0 12px;
+}
+
+.dt-fields-head__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dt-fields-head__hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 520px;
+}
+
+.dt-field {
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--bg-elevated);
+}
+
+.dt-field__row {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.9fr) minmax(120px, 1.2fr) 120px auto auto;
+  gap: 8px;
+  align-items: center;
   margin-bottom: 6px;
 }
 
-.test-panel {
-  padding: 12px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-color);
+.dt-field__req {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.dt-fields-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-color);
   border-radius: 8px;
   margin-bottom: 12px;
 }
 
-.test-result {
+.dt-default-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.dt-test {
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+}
+
+.dt-test__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.dt-test__head h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.dt-test__upload {
+  width: 100%;
+  justify-content: center;
+}
+
+.dt-test__result {
   margin-top: 12px;
   border-top: 1px solid var(--border-color);
   padding-top: 10px;
 }
 
-.test-result__meta {
+.dt-test__meta {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
-.test-result__error {
-  color: var(--error-color, #ef4444);
+.dt-test__error {
+  color: var(--error-color, #d03050);
   font-size: 13px;
 }
 
-.test-result__fields {
+.dt-test__fields {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.test-result__row {
+.dt-test__row {
   display: flex;
   gap: 8px;
   font-size: 13px;
 }
 
-.test-result__key {
-  color: var(--text-muted);
+.dt-test__key {
+  color: var(--text-secondary);
   min-width: 120px;
   flex-shrink: 0;
   font-weight: 500;
 }
 
-.test-result__val {
+.dt-test__val {
   color: var(--text-primary);
   word-break: break-word;
 }
 
-.test-result__empty {
+.dt-test__empty {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-style: italic;
 }
 
+.dt-edit__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dt-edit__footer-end {
+  display: flex;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.dt-spin {
+  animation: dt-spin 0.8s linear infinite;
+}
+
+@keyframes dt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 720px) {
-  .doc-templates-head,
-  .doc-templates-head :deep(.n-space) {
-    align-items: stretch !important;
-    flex-direction: column !important;
+  .dt-toolbar__search {
+    max-width: none;
     width: 100%;
   }
 
-  .doc-templates-head :deep(.n-button) {
+  .dt-actions {
     width: 100%;
   }
 
-  :deep(.n-drawer-body-content-wrapper) {
-    padding: 14px;
+  .dt-actions .btn {
+    flex: 1;
+    justify-content: center;
   }
 
-  :deep(.n-grid) {
-    grid-template-columns: 1fr !important;
+  .dt-edit__grid,
+  .dt-field__row {
+    grid-template-columns: 1fr;
   }
 
-  :deep(.n-gi) {
-    grid-column: span 1 / span 1 !important;
-  }
-
-  .field-row {
-    border-radius: 8px;
-  }
-
-  :deep(.n-drawer-footer .n-space) {
-    align-items: stretch;
+  .dt-edit__footer {
     flex-direction: column-reverse;
-    width: 100%;
+    align-items: stretch;
   }
 
-  :deep(.n-drawer-footer .n-button) {
+  .dt-edit__footer-end {
     width: 100%;
+    margin: 0;
   }
+
+  .dt-edit__footer-end .btn,
+  .dt-edit__footer > .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+:deep(.dt-edit-modal .n-card__content) {
+  padding-top: 12px;
 }
 </style>

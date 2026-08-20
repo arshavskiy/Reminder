@@ -261,7 +261,8 @@ export function registerDocumentRoutes(app: express.Application) {
       const skipAi       = req.query.skipAi       === "true";
       const skipEntities = req.query.skipEntities === "true";
       const skipReminders = req.query.skipReminders === "true";
-      const pipelineOptions = { skipAi, skipEntities, skipReminders };
+        const templateId = req.query.templateId as string | undefined;
+        const pipelineOptions = {skipAi, skipEntities, skipReminders, templateId: templateId || undefined};
 
       if (userRole === "user" && !skipAi) {
         const count = await col("documents").countDocuments({ user_id: userId, ai_extracted: true });

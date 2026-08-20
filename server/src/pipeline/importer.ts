@@ -11,7 +11,7 @@ import {parseXlsx} from "./xlsxParser";
 import {extractDocument, extractWithTemplate} from "./extractor";
 import {extractCertificate} from "./certificateExtractor";
 import {extractFromOcr} from "./ocrExtractor";
-import {classifyDocumentKind, getOrBuildSystemPrompt, pickTemplate} from "../templates/seedTemplates";
+import {classifyDocumentKind, getOrBuildSystemPrompt, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
@@ -25,6 +25,7 @@ export interface PipelineOptions {
   skipEntities?: boolean;  // skip client/contract/equipment creation
   skipReminders?: boolean; // skip reminder generation
   startDelayMs?: number;   // optional batch pacing before background processing starts
+  templateId?: string;     // force a specific doc_template instead of auto-detection
 }
 
 function parseJsonObject(raw: unknown, fallback: unknown = null): Record<string, unknown> {
@@ -480,7 +481,9 @@ export async function processDocument(
       }
     } else {
       // For all other kinds, pick the best matching template then extract.
-      const template = await pickTemplate(rawText, userId);
+      const template = pipeline?.templateId
+          ? await loadTemplate(pipeline.templateId)
+          : await pickTemplate(rawText, userId);
       logger.info("document_extractor_selected", {
         document_id: documentId,
         user_id: userId ?? null,

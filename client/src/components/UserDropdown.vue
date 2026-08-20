@@ -1,24 +1,24 @@
 <template>
   <div class="user-dropdown">
     <n-dropdown
-      trigger="click"
-      :options="dropdownItems"
-      :render-label="renderDropdownLabel"
-      :theme-overrides="dropdownThemeOverrides"
-      show-arrow
-      @select="handleSelect"
-      placement="bottom-end"
+        :options="dropdownItems"
+        :render-label="renderDropdownLabel"
+        :theme-overrides="dropdownThemeOverrides"
+        placement="bottom-end"
+        show-arrow
+        trigger="click"
+        @select="handleSelect"
     >
       <div class="user-dropdown__trigger">
         <div class="user-dropdown__avatar">
           <img
-            v-if="avatarSrc"
-            :src="avatarSrc"
-            :alt="userName"
-            class="user-dropdown__avatar-img"
-            referrerpolicy="no-referrer"
+              v-if="avatarSrc"
+              :alt="userName"
+              :src="avatarSrc"
+              class="user-dropdown__avatar-img"
+              referrerpolicy="no-referrer"
           />
-          <n-icon v-else :component="PersonOutline" :size="18" />
+          <n-icon v-else :component="PersonOutline" :size="18"/>
         </div>
         <div class="user-dropdown__meta">
           <span v-if="userName" class="user-dropdown__name">{{ userName }}</span>
@@ -54,13 +54,13 @@ const avatarUrl = computed<string>(() => {
   if (props.userPicture) return props.userPicture as string;
   const source = props.userName || props.userEmail || "";
   const initials =
-    source
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((s) => s[0])
-      .join("")
-      .toUpperCase() || source.substring(0, 2).toUpperCase();
+      source
+          .split(" ")
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((s) => s[0])
+          .join("")
+          .toUpperCase() || source.substring(0, 2).toUpperCase();
   return `https://ui-avatars.com/api/?name=${initials}&background=18a058&color=fff&size=40`;
 });
 
@@ -86,6 +86,7 @@ const menuIcons: Record<string, string> = {
   profile: "👤",
   templatesGroup: "▤",
   printTemplates: "▤",
+  documentsTemplates: "▤",
   emailTemplates: "✉",
   equipment: "▣",
   settings: "⚙",
@@ -104,16 +105,17 @@ const dropdownItems = computed(() => [
     key: "templatesGroup",
     children: [
       {label: "תבניות הדפסה", key: "printTemplates"},
-      { label: "תבניות אימייל", key: "emailTemplates" },
-      { label: "הגדרת ציוד", key: "equipment" },
+      {label: "תבניות אימייל", key: "emailTemplates"},
+      {label: "הגדרת ציוד", key: "equipment"},
+      {label: "הגדרת מסמכים", key: "documentsTemplates"},
     ],
   },
   ...(props.userRole === "admin"
-    ? [
-        { label: "הגדרות אישיות", key: "settings" },
-        { label: "פאנל ניהול", key: "admin" },
+      ? [
+        {label: "הגדרות אישיות", key: "settings"},
+        {label: "פאנל ניהול", key: "admin"},
       ]
-    : []),
+      : []),
   {
     type: "divider",
   },
@@ -128,9 +130,9 @@ const dropdownItems = computed(() => [
 ]);
 
 function renderDropdownLabel(option: any) {
-  return h("span", { class: "user-menu-label", dir: "rtl" }, [
-    h("span", { class: "user-menu-label__icon" }, menuIcons[String(option.key)] ?? ""),
-    h("span", { class: "user-menu-label__text" }, String(option.label ?? "")),
+  return h("span", {class: "user-menu-label", dir: "rtl"}, [
+    h("span", {class: "user-menu-label__icon"}, menuIcons[String(option.key)] ?? ""),
+    h("span", {class: "user-menu-label__text"}, String(option.label ?? "")),
   ]);
 }
 
@@ -139,6 +141,8 @@ async function handleSelect(key: string) {
     router.push("/profile");
   } else if (key === "printTemplates") {
     router.push("/print-templates");
+  } else if (key === "documentsTemplates") {
+    router.push("/settings/doc-templates");
   } else if (key === "emailTemplates") {
     router.push("/settings/email-templates");
   } else if (key === "equipment") {
@@ -170,10 +174,9 @@ async function handleSelect(key: string) {
   border: 1px solid transparent;
   border-radius: 999px;
   cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+  transition: background var(--transition-fast),
+  border-color var(--transition-fast),
+  box-shadow var(--transition-fast);
 }
 
 .user-dropdown__trigger:hover {
