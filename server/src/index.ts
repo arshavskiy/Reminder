@@ -77,9 +77,9 @@ const VERCEL_PREVIEW_RE = /^https:\/\/reminder[a-z0-9-]*\.vercel\.app$/;
 const LOCALHOST_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const isDevEnv = process.env.APP_ENV !== "production";
 
-// Production custom domains — any handcoded.tech subdomain (app, reminder, …)
-// so new front-end hostnames work without editing ALLOWED_ORIGINS.
+// Production custom domains — any subdomain under handcoded.tech or remindocr.com
 const HANDCODED_DOMAIN_RE = /^https:\/\/([a-z0-9-]+\.)*handcoded\.tech$/;
+const REMINDOCR_DOMAIN_RE = /^https:\/\/([a-z0-9-]+\.)*remindocr\.com$/;
 
 app.use(
   cors({
@@ -89,6 +89,7 @@ app.use(
       if (isDevEnv && LOCALHOST_RE.test(origin)) return cb(null, true);
       if (VERCEL_PREVIEW_RE.test(origin)) return cb(null, true);
       if (HANDCODED_DOMAIN_RE.test(origin)) return cb(null, true);
+      if (REMINDOCR_DOMAIN_RE.test(origin)) return cb(null, true);
       logger.warn("cors_origin_rejected", { origin });
       cb(new Error(`CORS: origin ${origin} not allowed`));
     },
