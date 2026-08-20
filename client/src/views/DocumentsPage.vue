@@ -57,25 +57,27 @@
             מחק הכל
           </button>
           <div v-if="store.rows.length" class="bulk-action-anchor">
-            <button
-                :class="{ 'rbtn--ghost-active': bulkMode }"
-                class="rbtn rbtn--ghost"
-                title="בחירה מרובה"
-                type="button"
-                @click="toggleBulkMode"
-            >
-              <n-icon :component="CheckboxOutline" class="btn-icon"/>
-              בחירה מרובה
-              <span v-if="selectedIds.size">({{ selectedIds.size }})</span>
-            </button>
-            <button
-                v-if="bulkMode && filteredRows.length"
-                class="rbtn rbtn--ghost"
-                type="button"
-                @click="selectAll"
-            >
-              {{ selectedIds.size === filteredRows.length ? 'בטל הכל' : 'בחר הכל' }}
-            </button>
+            <div class="bulk-action-anchor__row">
+              <button
+                  :class="{ 'rbtn--ghost-active': bulkMode }"
+                  class="rbtn rbtn--ghost"
+                  title="בחירה מרובה"
+                  type="button"
+                  @click="toggleBulkMode"
+              >
+                <n-icon :component="CheckboxOutline" class="btn-icon"/>
+                בחירה מרובה
+                <span v-if="selectedIds.size">({{ selectedIds.size }})</span>
+              </button>
+              <button
+                  v-if="bulkMode && filteredRows.length"
+                  class="rbtn rbtn--ghost"
+                  type="button"
+                  @click="selectAll"
+              >
+                {{ selectedIds.size === filteredRows.length ? 'בטל הכל' : 'בחר הכל' }}
+              </button>
+            </div>
             <div v-if="bulkMode && selectedIds.size > 0" class="bulk-action-anchor__actions">
               <button
                   :class="{ 'bulk-action-item--loading': bulkDeleting }"
@@ -1152,14 +1154,13 @@ async function openDownload(row: Document) {
 }
 
 .bulk-action-anchor {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: stretch;
   position: relative;
 }
 
-.bulk-action-anchor > .rbtn {
-  width: 100%;
+.bulk-action-anchor__row {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .bulk-action-anchor__actions {
