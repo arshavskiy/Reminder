@@ -92,7 +92,7 @@
               <th class="col-name">שם הלקוח</th>
               <th class="col-contact">איש קשר</th>
               <th class="col-email">אימייל</th>
-              <th class="col-phone">טלפון</th>
+              <th class="col-phone">נייד</th>
               <th class="col-id">מזהה</th>
               <th class="col-actions">פעולות</th>
             </tr>
@@ -140,11 +140,12 @@
                 >{{ row.email || "—" }}</span>
               </td>
               <td class="col-phone">
-                <div class="phone-stack">
-                  <span v-if="row.phone" class="ltr" :title="row.phone">{{ row.phone }}</span>
-                  <span v-if="row.mobile" class="ltr phone-stack__mobile" :title="row.mobile">{{ row.mobile }}</span>
-                  <span v-if="!row.phone && !row.mobile" class="muted">—</span>
-                </div>
+                <span
+                  v-if="row.mobile || row.phone"
+                  class="ltr"
+                  :title="row.mobile || row.phone || undefined"
+                >{{ row.mobile || row.phone }}</span>
+                <span v-else class="muted">—</span>
               </td>
               <td class="col-id">
                 <span class="ltr" :class="row.id_number ? '' : 'muted'">{{ row.id_number || "—" }}</span>

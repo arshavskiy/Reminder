@@ -6,7 +6,7 @@ import { col } from "../db/db";
 import { getSettings, getDataDir } from "../settings";
 import { requireAuth } from "../auth/middleware";
 import { generateState, generateCodeVerifier, generateCodeChallenge } from "../auth/google";
-import { importFile } from "../pipeline/importer";
+import { importFile, type PipelineOptions } from "../pipeline/importer";
 import { logger } from "../logger";
 
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
@@ -211,14 +211,14 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    const { messageId, attachmentId, filename } = req.body;
+    const { messageId, attachmentId, filename, templateId } = req.body;
     if (!messageId || !attachmentId) { res.status(400).json({ error: "messageId and attachmentId required" }); return; }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     try {
-      const result = await downloadAndImportAttachment(accessToken, messageId, attachmentId, filename ?? "attachment.pdf", ctx.userId);
+      const result = await downloadAndImportAttachment(accessToken, messageId, attachmentId, filename ?? "attachment.pdf", ctx.userId, templateId ? { templateId } : undefined);
       await col("gmail_imports").updateOne(
         { user_id: ctx.userId, message_id: messageId },
         {
@@ -245,6 +245,8 @@ export function registerGmailRoutes(app: express.Application) {
 
     let q = (req.body.q as string) || "has:attachment filename:pdf";
     const maxResults = Math.min(parseInt(req.body.limit ?? "50", 10), 100);
+    const templateId = req.body.templateId as string | undefined;
+    const pipelineOpts: PipelineOptions | undefined = templateId ? { templateId } : undefined;
 
     if (ctx.user.role !== "admin") {
       const profile = await col("engineer_profiles").findOne({ user_id: ctx.userId }) as any;
@@ -286,7 +288,7 @@ export function registerGmailRoutes(app: express.Application) {
 
         for (const att of meta.attachments) {
           try {
-            const result = await downloadAndImportAttachment(accessToken, id, att.attachmentId, att.filename, ctx.userId);
+            const result = await downloadAndImportAttachment(accessToken, id, att.attachmentId, att.filename, ctx.userId, pipelineOpts);
             results.push({ messageId: id, filename: att.filename, documentId: result.documentId });
           } catch (err: any) {
             results.push({ messageId: id, filename: att.filename, error: err.message });
@@ -482,7 +484,8 @@ async function downloadAndImportAttachment(
   messageId: string,
   attachmentId: string,
   filename: string,
-  userId: string
+  userId: string,
+  pipeline?: PipelineOptions
 ): Promise<{ documentId: string; filename: string }> {
   const attRes = await gmailFetch(accessToken, `messages/${messageId}/attachments/${attachmentId}`);
   if (!attRes.ok) throw new Error(`Gmail API error: ${attRes.status}`);
@@ -496,7 +499,7 @@ async function downloadAndImportAttachment(
   const tmpPath = join(tmpDir, `${Date.now()}-${safeName}`);
   writeFileSync(tmpPath, buf);
 
-  const documentId = await importFile(tmpPath, undefined, userId, filename);
+  const documentId = await importFile(tmpPath, undefined, userId, filename, pipeline);
   logger.info("gmail_attachment_imported", { user_id: userId, messageId, filename, documentId });
   return { documentId, filename };
 }

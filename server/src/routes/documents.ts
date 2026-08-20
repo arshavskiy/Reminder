@@ -14,7 +14,7 @@ import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {extractWithTemplate} from "../pipeline/extractor";
-import {loadAllTemplates, loadTemplate, pickTemplate} from "../templates/seedTemplates";
+import {loadAllTemplates, loadTemplate, pickTemplate, documentTypeFromTemplate} from "../templates/seedTemplates";
 import multer from "multer";
 import {logger} from "../logger";
 import {firstTrimmedEmail} from "../contracts/contractEmail.js";
@@ -662,11 +662,13 @@ export function registerDocumentRoutes(app: express.Application) {
     } as any);
 
     if (normalizedFields) {
+      const typeLabel = documentTypeFromTemplate(template);
       await col("documents").updateOne(idFilter(id), {
         $set: {
           extracted_fields: JSON.stringify(normalizedFields),
           template_id: template.id,
-          document_type: template.name,
+          document_type: typeLabel,
+          document_kind: typeLabel,
           updated_at: now,
         },
       });
@@ -998,11 +1000,25 @@ function flatDoc(doc: any) {
   return { id: _id?.toString(), ...rest };
 }
 
-function getDocumentReminderStatus(doc: any, reminders: any[]): "pending" | "assigned" | "missing" | "error" {
+function getDocumentReminderStatus(doc: any, reminders: any[]): "pending" | "assigned" | "missing" | "error" | "not_applicable" {
   if (doc.processing_status === "queued" || doc.processing_status === "processing") return "pending";
   if (doc.processing_status === "error") return "error";
   if (reminders.length > 0) return "assigned";
+  if (isNonReminderDocument(doc)) return "not_applicable";
   return "missing";
+}
+
+function isNonReminderDocument(doc: any): boolean {
+  const type = `${doc?.document_type ?? ""} ${doc?.document_kind ?? ""}`;
+  if (/תלוש/.test(type)) return true;
+  const fields = parseObjectJson(doc?.extracted_fields);
+  if (!fields) return false;
+  return Boolean(
+    fields.payroll_month ||
+    fields.employee_name ||
+    fields.net_payment ||
+    fields.base_salary,
+  );
 }
 
 function getDocumentReminderDate(doc: any, contract: any, reminders: any[]): string | null {

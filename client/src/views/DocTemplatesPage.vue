@@ -596,6 +596,10 @@ async function save() {
     message.warning("יש להזין שם");
     return;
   }
+  const kindRaw = String(editing.value.document_kind ?? "").trim();
+  if (!kindRaw || kindRaw === "unknown") {
+    editing.value.document_kind = editing.value.name.trim() as DocumentKind;
+  }
   saving.value = true;
   try {
     if (editing.value.id) {
@@ -638,11 +642,15 @@ async function deleteTpl() {
 }
 
 function openDraft(draft: Partial<DocTemplate>) {
+  const name = draft.name ?? "";
+  const kind = draft.document_kind && draft.document_kind !== "unknown"
+    ? draft.document_kind
+    : (name || "unknown");
   editing.value = {
     ...blankTemplate(),
-    name: draft.name ?? "",
+    name,
     description: draft.description ?? "",
-    document_kind: draft.document_kind ?? "unknown",
+    document_kind: kind as DocumentKind,
     match_keywords: draft.match_keywords ?? [],
     fields: (draft.fields ?? []) as TemplateField[],
     expiry_field: draft.expiry_field ?? null,

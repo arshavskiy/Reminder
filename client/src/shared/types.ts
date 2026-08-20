@@ -134,7 +134,7 @@ export interface FeatureDefinition {
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
 export type DocumentSource = "scanned" | "generated";
-export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error";
+export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error" | "not_applicable";
 export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
 export type EntityType = "person" | "company";
@@ -406,7 +406,8 @@ export type DocumentKind =
   | "contract"
   | "invoice"
   | "certificate"
-  | "unknown";
+  | "unknown"
+  | (string & {});
 
 // ── Document templates ──────────────────────────────────────────────────────
 export type FieldType =

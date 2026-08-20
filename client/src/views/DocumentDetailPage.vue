@@ -31,7 +31,7 @@
               :disabled="extracting"
               class="rbtn rbtn--primary"
               type="button"
-              @click="rerunExtract"
+              @click="openExtractModal"
           >
             <n-icon :component="FlashOutline" class="btn-icon"/>
             חלץ AI
@@ -158,7 +158,7 @@
             <div class="meta-row"><span class="meta-row__label">גודל</span><span class="meta-row__value">{{ formatSize(doc.file_size_bytes) }}</span></div>
             <div class="meta-row"><span class="meta-row__label">ייבוא</span><span class="meta-row__value">{{ formatDate(doc.import_date) }}</span></div>
             <div v-if="doc.page_count" class="meta-row"><span class="meta-row__label">עמודים</span><span class="meta-row__value">{{ doc.page_count }}</span></div>
-            <div v-if="(doc as any).document_type" class="meta-row"><span class="meta-row__label">סוג מסמך</span><span class="meta-row__value">{{ (doc as any).document_type }}</span></div>
+            <div v-if="documentTypeDisplay" class="meta-row"><span class="meta-row__label">סוג מסמך</span><span class="meta-row__value">{{ documentTypeDisplay }}</span></div>
           </div>
         </div>
       </aside>
@@ -282,6 +282,9 @@
           <div class="data-card__head">
             <span class="data-card__title">נתונים שחולצו</span>
             <div class="data-card__head-actions">
+              <n-tag v-if="docTemplate?.name" :bordered="false" size="small" type="info">
+                {{ docTemplate.name }}
+              </n-tag>
               <n-tag v-if="extractionRaw" :bordered="false" size="small" type="success">
                 {{ extractedFields.filter(f => f.value !== null && f.value !== '').length }} שדות
               </n-tag>
@@ -317,7 +320,7 @@
                   :disabled="extracting"
                   class="rbtn rbtn--primary mt-3"
                   type="button"
-                  @click="rerunExtract"
+                  @click="openExtractModal"
               >
                 <n-icon :component="FlashOutline" class="btn-icon"/>
                 הרץ חילוץ AI
@@ -386,6 +389,40 @@
     </div>
 
     <n-spin v-if="!doc" :show="loading" class="loading-center" />
+
+    <n-modal
+      v-model:show="showExtractModal"
+      preset="card"
+      title="חילוץ AI לפי תבנית"
+      style="width: min(480px, 94vw)"
+      :mask-closable="!extracting"
+    >
+      <p class="extract-modal__lead">
+        בחר את תבנית המסמך לחילוץ. השדות והתוויות מגיעים מהתבנית שנבחרה.
+      </p>
+      <n-select
+        v-model:value="extractTemplateId"
+        :options="templateSelectOptions"
+        filterable
+        placeholder="בחר תבנית..."
+        :disabled="extracting"
+      />
+      <template #footer>
+        <div class="extract-modal__footer">
+          <button class="btn btn--ghost" type="button" :disabled="extracting" @click="showExtractModal = false">
+            ביטול
+          </button>
+          <button
+            class="btn btn--primary"
+            type="button"
+            :disabled="extracting || !extractTemplateId"
+            @click="confirmExtract"
+          >
+            {{ extracting ? "מחלץ..." : "הפעל חילוץ" }}
+          </button>
+        </div>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -402,7 +439,9 @@ import {
   NGrid,
   NIcon,
   NInput,
+  NModal,
   NScrollbar,
+  NSelect,
   NSpin,
   NTag,
   useMessage,
@@ -421,7 +460,16 @@ import PageHeader from "../components/PageHeader.vue";
 import ContractCard from "../components/contracts/ContractCard.vue";
 import MissingFieldsModal from "../components/MissingFieldsModal.vue";
 import type {ContractWithClient, DocTemplate, Document, ReminderWithContext} from "@shared/types.js";
-import {listMissingDocumentFields, missingFieldsBlockReminders, type MissingFieldItem} from "@shared/missingDocumentFields.js";
+import {
+  listMissingDocumentFields,
+  missingFieldsBlockReminders,
+  templateUsesReminders,
+  isPayslipLikeTemplate,
+  isPayslipLikeExtraction,
+  pickBestTemplateForExtraction,
+  documentTypeFromTemplate,
+  type MissingFieldItem,
+} from "@shared/missingDocumentFields.js";
 import {resolveMissingFieldInitialValue, normalizeDateForContract} from "@shared/documentDates.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useConfirm} from "../composables/useConfirm.js";
@@ -448,6 +496,11 @@ const deleting = ref(false);
 const linkedContracts = ref<ContractWithClient[]>([]);
 const linkedReminders = ref<ReminderWithContext[]>([]);
 const docTemplate = ref<DocTemplate | null>(null);
+const documentTypeDisplay = computed(() => {
+  const fromTpl = documentTypeFromTemplate(docTemplate.value);
+  if (fromTpl) return fromTpl;
+  return String((doc.value as any)?.document_type ?? (doc.value as any)?.document_kind ?? "").trim();
+});
 const missingFieldsList = ref<MissingFieldItem[]>([]);
 const showMissingFieldsBanner = ref(false);
 const showMissingFieldsModal = ref(false);
@@ -577,7 +630,48 @@ async function deleteDoc() {
   });
 }
 
-async function rerunExtract() {
+const showExtractModal = ref(false);
+const extractTemplateId = ref<string | null>(null);
+const availableTemplates = ref<DocTemplate[]>([]);
+
+const templateSelectOptions = computed(() =>
+  availableTemplates.value.map((t) => ({
+    label: t.name + (t.is_default ? " · ברירת מחדל" : ""),
+    value: String(t.id),
+  })),
+);
+
+async function openExtractModal() {
+  if (!doc.value) return;
+  if (!doc.value.raw_text?.trim()) {
+    await rerunExtract();
+    return;
+  }
+  try {
+    availableTemplates.value = await api.docTemplates.list();
+  } catch {
+    availableTemplates.value = [];
+  }
+  extractTemplateId.value =
+    (docTemplate.value?.id != null ? String(docTemplate.value.id) : null) ||
+    (doc.value.template_id != null ? String(doc.value.template_id) : null) ||
+    (availableTemplates.value.find((t) => t.name === (doc.value as any).document_type)?.id != null
+      ? String(availableTemplates.value.find((t) => t.name === (doc.value as any).document_type)!.id)
+      : null) ||
+    (availableTemplates.value.find((t) => t.is_default)?.id != null
+      ? String(availableTemplates.value.find((t) => t.is_default)!.id)
+      : null) ||
+    (availableTemplates.value[0]?.id != null ? String(availableTemplates.value[0].id) : null);
+  showExtractModal.value = true;
+}
+
+async function confirmExtract() {
+  if (!extractTemplateId.value) return;
+  showExtractModal.value = false;
+  await rerunExtract(extractTemplateId.value);
+}
+
+async function rerunExtract(templateId?: string) {
   if (!doc.value) return;
   extracting.value = true;
   try {
@@ -590,11 +684,11 @@ async function rerunExtract() {
       await reloadDoc();
       return;
     }
-    const result = await api.documents.extract(String(doc.value.id));
+    const result = await api.documents.extract(String(doc.value.id), templateId);
     if (result.document) doc.value = result.document;
     extractionRaw.value = result.fields ?? null;
     extractionRawText.value = null;
-    message.success("חילוץ AI הושלם");
+    message.success(result.template ? `חילוץ AI הושלם · ${result.template}` : "חילוץ AI הושלם");
     await reloadDoc();
   } catch (e) {
     message.error(String(e));
@@ -641,31 +735,88 @@ const DEFAULT_FIELDS: { key: string; label: string }[] = [
 ];
 
 const LABEL_MAP: Record<string, string> = Object.fromEntries(
-  DEFAULT_FIELDS.map(f => [f.key, f.label])
+  DEFAULT_FIELDS.map((f) => [f.key, f.label]),
 );
 
-const SKIP_KEYS = new Set(["parties", "tasks", "amount", "currency", "client_address", "po_box", "client_zipcode", "contact_email", "email", "inspection_interval_months", "next_inspection_date"]);
+/** Hidden only when falling back to the default inspection schema (no template). */
+const FALLBACK_SKIP_KEYS = new Set([
+  "parties",
+  "tasks",
+  "amount",
+  "currency",
+  "client_address",
+  "po_box",
+  "client_zipcode",
+  "contact_email",
+  "email",
+  "inspection_interval_months",
+  "next_inspection_date",
+]);
+
 const ALWAYS_VISIBLE_FIELD_KEYS = new Set(["license_number"]);
+
+function resolveExtractedFieldValue(
+  key: string,
+  raw: Record<string, unknown>,
+  contractEmail: string | null,
+): unknown {
+  if (key === "client_email") {
+    return raw.client_email ?? raw.contact_email ?? raw.email ?? contractEmail ?? null;
+  }
+  if (key === "expiry_date") {
+    return raw.expiry_date ?? raw.next_inspection_date ?? null;
+  }
+  if (key === "date_diff_months") {
+    return raw.date_diff_months ?? raw.inspection_interval_months ?? null;
+  }
+  return raw[key] ?? null;
+}
 
 const extractedFields = computed(() => {
   const raw = extractionRaw.value ?? {};
-  const defaultKeys = new Set(DEFAULT_FIELDS.map(f => f.key));
-  // Extra keys in raw that aren't in the default list and aren't skipped
-  const extraFields = Object.keys(raw)
-    .filter(k => !k.startsWith("_") && !SKIP_KEYS.has(k) && !defaultKeys.has(k))
-    .map(k => ({ key: k, label: LABEL_MAP[k] ?? k }));
+  const template = docTemplate.value;
   const contractEmail = activeLinkedContract.value?.contact_email ?? null;
-  return [...DEFAULT_FIELDS, ...extraFields].map(f => ({
-    key: f.key,
-    label: f.label,
-    value: f.key === "client_email"
-      ? raw.client_email ?? raw.contact_email ?? raw.email ?? contractEmail ?? null
-      : f.key === "expiry_date"
-        ? raw.expiry_date ?? raw.next_inspection_date ?? null
-      : f.key === "date_diff_months"
-        ? raw.date_diff_months ?? raw.inspection_interval_months ?? null
-      : raw[f.key] ?? null,
-    fromClient: f.key === "client_email" && !(raw.client_email ?? raw.contact_email ?? raw.email) && !!contractEmail,
+  const schema: { key: string; label: string }[] = [];
+  const seen = new Set<string>();
+
+  if (template?.fields?.length) {
+    // Strict: show only fields defined on the linked doc-template.
+    for (const field of template.fields) {
+      const key = String(field.key ?? "").trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      schema.push({
+        key,
+        label: field.label_he?.trim() || LABEL_MAP[key] || key,
+      });
+    }
+  } else {
+    for (const field of DEFAULT_FIELDS) {
+      seen.add(field.key);
+      schema.push(field);
+    }
+    // Without a template, surface any other extracted keys (except known noise).
+    for (const key of Object.keys(raw)) {
+      if (!key || key.startsWith("_") || seen.has(key) || FALLBACK_SKIP_KEYS.has(key)) continue;
+      if (
+        (key === "contact_email" || key === "email") &&
+        (seen.has("client_email") || seen.has("contact_email"))
+      ) {
+        continue;
+      }
+      seen.add(key);
+      schema.push({ key, label: LABEL_MAP[key] ?? key });
+    }
+  }
+
+  return schema.map((field) => ({
+    key: field.key,
+    label: field.label,
+    value: resolveExtractedFieldValue(field.key, raw, contractEmail),
+    fromClient:
+      field.key === "client_email" &&
+      !(raw.client_email ?? raw.contact_email ?? raw.email) &&
+      !!contractEmail,
   }));
 });
 
@@ -682,34 +833,59 @@ function todayDateOnly(today = new Date()): string {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 }
 
+function isDateExtractedField(field: { key: string }): boolean {
+  const tplType = docTemplate.value?.fields?.find((f) => f.key === field.key)?.type;
+  if (tplType === "date") return true;
+  return (
+    field.key === "expiry_date" ||
+    field.key === "inspection_date" ||
+    field.key === "issue_date" ||
+    field.key === "payment_due_date" ||
+    field.key === "start_date" ||
+    field.key === "next_inspection_date" ||
+    field.key.endsWith("_date")
+  );
+}
+
 function isExpiredExtractedField(field: { key: string; value: unknown }): boolean {
-  if (field.key !== "expiry_date") return false;
+  if (field.key !== "expiry_date" && field.key !== docTemplate.value?.expiry_field) return false;
   const iso = parseDateOnly(field.value);
   return Boolean(iso && iso < todayDateOnly());
 }
 
 function displayExtractedValue(field: { key: string; value: unknown }): string {
   if (field.value == null || field.value === "") return "—";
-  if (field.key === "expiry_date" || field.key === "inspection_date") {
+  if (isDateExtractedField(field)) {
     return formatDate(String(field.value));
+  }
+  if (field.key === "amount" && typeof field.value === "number") {
+    return field.value.toLocaleString("he-IL");
   }
   return String(field.value);
 }
 
 function isMissingField(field: { key: string; value: unknown }): boolean {
   if (!missingFieldKeys.value.has(field.key)) return false;
-  if (field.key === "expiry_date") {
+  if (field.key === "expiry_date" || field.key === docTemplate.value?.expiry_field) {
     if (field.value == null || field.value === "") return true;
     if (typeof field.value === "string" && !field.value.trim()) return true;
     return false;
   }
   if (field.value == null || field.value === "") return true;
   if (typeof field.value === "string" && !field.value.trim()) return true;
+  if (Array.isArray(field.value) && field.value.length === 0) return true;
   return false;
 }
 
 function shouldShowExtractedField(field: { key: string; value: unknown }) {
-  if (editingFields.value || showEmptyFields.value || ALWAYS_VISIBLE_FIELD_KEYS.has(field.key)) return true;
+  if (editingFields.value || showEmptyFields.value) return true;
+  if (
+    ALWAYS_VISIBLE_FIELD_KEYS.has(field.key) &&
+    (!docTemplate.value?.fields?.length ||
+      docTemplate.value.fields.some((f) => f.key === field.key))
+  ) {
+    return true;
+  }
   if (missingFieldKeys.value.has(field.key)) return true;
   if (Array.isArray(field.value)) return field.value.length > 0;
   return field.value !== null && field.value !== "";
@@ -754,6 +930,7 @@ async function reloadDoc() {
   const id = resolvedId();
   extractionRaw.value = null;
   extractionRawText.value = null;
+  docTemplate.value = null;
   doc.value = props.docId
     ? await api.admin.getDocument(id)
     : await api.documents.get(id);
@@ -766,7 +943,43 @@ async function reloadDoc() {
   } else if ((doc.value as any).extracted_fields) {
     try { extractionRaw.value = JSON.parse((doc.value as any).extracted_fields); } catch {}
   }
+  await loadDocTemplate();
   await evaluateMissingFields();
+}
+
+async function loadDocTemplate() {
+  if (!doc.value) {
+    docTemplate.value = null;
+    return;
+  }
+  const extracted = extractionRaw.value ?? {};
+  const preferredId = (doc.value as any).template_id != null
+    ? String((doc.value as any).template_id)
+    : null;
+
+  try {
+    const all = await api.docTemplates.list();
+    const byOverlap = pickBestTemplateForExtraction(all, extracted, preferredId);
+    if (byOverlap) {
+      docTemplate.value = byOverlap;
+      return;
+    }
+    if (preferredId) {
+      const byId = all.find((t) => String(t.id) === preferredId);
+      if (byId) {
+        docTemplate.value = byId;
+        return;
+      }
+      try {
+        docTemplate.value = await api.docTemplates.get(preferredId);
+        return;
+      } catch { /* fall through */ }
+    }
+    const typeName = String((doc.value as any).document_type ?? "").trim();
+    docTemplate.value = (typeName ? all.find((t) => t.name === typeName) : null) ?? null;
+  } catch {
+    docTemplate.value = null;
+  }
 }
 
 async function evaluateMissingFields() {
@@ -775,16 +988,23 @@ async function evaluateMissingFields() {
     showMissingFieldsBanner.value = false;
     return;
   }
-  const extracted = extractionRaw.value ?? {};
-  if (doc.value.template_id) {
-    try {
-      docTemplate.value = await api.docTemplates.get(String(doc.value.template_id));
-    } catch {
-      docTemplate.value = null;
-    }
-  } else {
-    docTemplate.value = null;
+  if (!docTemplate.value) {
+    await loadDocTemplate();
   }
+  const extracted = extractionRaw.value ?? {};
+
+  // Payslip / templates without expiry: no missing-fields / reminder prompt.
+  if (
+    !templateUsesReminders(docTemplate.value) ||
+    isPayslipLikeTemplate(docTemplate.value) ||
+    isPayslipLikeExtraction(extracted)
+  ) {
+    missingFieldsList.value = [];
+    showMissingFieldsBanner.value = false;
+    showMissingFieldsModal.value = false;
+    return;
+  }
+
   missingFieldsList.value = listMissingDocumentFields(docTemplate.value, extracted);
   missingFieldInitials.value = Object.fromEntries(
     missingFieldsList.value.map((field) => [
@@ -996,6 +1216,19 @@ onMounted(async () => {
 
 <style scoped>
 .doc-detail { padding-bottom: 24px; }
+
+.extract-modal__lead {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.extract-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 
 .doc-detail-actions {
   display: flex;

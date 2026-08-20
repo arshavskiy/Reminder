@@ -7,6 +7,15 @@
           <template #icon><n-icon :component="RefreshOutline" /></template>
           רענן
         </n-button>
+        <n-select
+          v-if="connected"
+          v-model:value="selectedTemplateId"
+          :options="templateOptions"
+          clearable
+          placeholder="תבנית אוטומטית"
+          size="small"
+          style="width: 200px"
+        />
         <n-button v-if="connected" type="success" :loading="importingAll" @click="importAllNew">
           <template #icon><n-icon :component="CloudDownloadOutline" /></template>
           ייבא הכל
@@ -233,9 +242,13 @@ import {
 } from "naive-ui";
 import { CloudDownloadOutline, DocumentOutline, DownloadOutline, EyeOutline, LogoGoogle, RefreshOutline, SearchOutline } from "@vicons/ionicons5";
 import { api, type GmailAttachment, type GmailEmail } from "../services/apiService.js";
+import type { DocTemplate } from "../shared/types.js";
 
 const route = useRoute();
 const message = useMessage();
+
+const selectedTemplateId = ref<string | null>(null);
+const templateOptions = ref<{ label: string; value: string }[]>([]);
 
 const connected = ref(false);
 const connectionSource = ref<string | null>(null);
@@ -446,7 +459,7 @@ async function disconnect() {
 async function importAttachment(messageId: string, att: GmailAttachment) {
   importing.value = { ...importing.value, [att.attachmentId]: true };
   try {
-    await api.gmail.importAttachment(messageId, att.attachmentId, att.filename);
+    await api.gmail.importAttachment(messageId, att.attachmentId, att.filename, selectedTemplateId.value ?? undefined);
     message.success(`${att.filename} יובא בהצלחה`);
   } catch (err: any) {
     message.error(`שגיאה: ${err.message}`);
@@ -460,7 +473,7 @@ async function importAttachment(messageId: string, att: GmailAttachment) {
 async function importAllNew() {
   importingAll.value = true;
   try {
-    const result = await api.gmail.importAll(searchQuery.value || undefined);
+    const result = await api.gmail.importAll(searchQuery.value || undefined, undefined, selectedTemplateId.value ?? undefined);
     const errors = result.results.filter(r => r.error).length;
     importResults.value = {
       show: true,
@@ -485,6 +498,13 @@ async function loadHistory() {
 }
 
 onMounted(async () => {
+  api.docTemplates.list().then(templates => {
+    templateOptions.value = templates.map(t => ({
+      label: `${t.name} (${t.document_kind})`,
+      value: t.id,
+    }));
+  }).catch(() => {});
+
   // Handle OAuth callback with error
   const error = route.query.error as string | undefined;
   if (error) {

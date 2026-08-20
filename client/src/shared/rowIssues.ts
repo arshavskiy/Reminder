@@ -87,9 +87,14 @@ export function listDocumentRowIssues(doc: DocumentIssueRow, dupes: Set<string>)
   }
   if (doc.reminder_status === "missing" && doc.processing_status === "done" && !doc.contract_status) {
     const fields = parseDocumentExtractedFields(doc.extracted_fields);
-    const expiry = fields.expiry_date;
-    if (!normalizeReportNumber(expiry)) {
-      issues.push({ kind: "missing_expiry", label: "חסר תאריך תוקף", tagClass: "tag--warn" });
+    const isPayslip = Boolean(
+      fields.payroll_month || fields.employee_name || fields.net_payment || fields.base_salary,
+    );
+    if (!isPayslip) {
+      const expiry = fields.expiry_date;
+      if (!normalizeReportNumber(expiry)) {
+        issues.push({ kind: "missing_expiry", label: "חסר תאריך תוקף", tagClass: "tag--warn" });
+      }
     }
   }
   if (doc.contract_status === "expired" || doc.contract_status === "overdue") {

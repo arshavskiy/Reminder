@@ -11,7 +11,7 @@ import {parseXlsx} from "./xlsxParser";
 import {extractDocument, extractWithTemplate} from "./extractor";
 import {extractCertificate} from "./certificateExtractor";
 import {extractFromOcr} from "./ocrExtractor";
-import {classifyDocumentKind, getOrBuildSystemPrompt, loadTemplate, pickTemplate} from "../templates/seedTemplates";
+import {classifyDocumentKind, documentTypeFromTemplate, getOrBuildSystemPrompt, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
@@ -540,7 +540,8 @@ export async function processDocument(
             $set: {
               extracted_fields: JSON.stringify(normalizedFields),
               template_id: template.id,
-              document_type: template.name,
+              document_type: documentTypeFromTemplate(template),
+              document_kind: documentTypeFromTemplate(template),
               updated_at: new Date(),
             },
           });

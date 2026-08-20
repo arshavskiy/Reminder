@@ -107,7 +107,7 @@ export interface UserSettings {
 }
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
-export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error";
+export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error" | "not_applicable";
 export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
 export type EntityType = "person" | "company";
@@ -384,7 +384,7 @@ export interface TemplateField {
 }
 
 export interface DocTemplate {
-  id: number;
+  id: string;
   user_id?: string | null;
   name: string;                 // Hebrew, e.g. "תסקיר בדיקה"
   description: string | null;

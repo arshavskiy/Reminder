@@ -524,7 +524,7 @@ export const api = {
     kinds: () => get<{ kinds: string[] }>("/doc-templates/kinds"),
     suggestKind: (body: { name: string; description: string; fields: unknown[]; match_keywords: string[] }) =>
       post<{ kind: string | null }>("/doc-templates/suggest-kind", body),
-    get: (id: number) => get<DocTemplate>(`/doc-templates/${id}`),
+    get: (id: string | number) => get<DocTemplate>(`/doc-templates/${id}`),
     create: (body: Partial<DocTemplate>) => post<DocTemplate>("/doc-templates", body),
     update: (id: number, body: Partial<DocTemplate>) => put<DocTemplate>(`/doc-templates/${id}`, body),
     delete: (id: number) => del(`/doc-templates/${id}`),
@@ -580,10 +580,10 @@ export const api = {
     inbox: (q?: string, limit?: number, pageToken?: string) => get<{ emails: GmailEmail[]; nextPageToken: string | null; resultSizeEstimate: number | null }>(`/gmail/inbox${qs({ q, limit, pageToken })}`),
     attachmentUrl: (messageId: string, attachmentId: string, filename: string) =>
       `${BASE}/gmail/attachment/${messageId}/${attachmentId}?filename=${encodeURIComponent(filename)}`,
-    importAttachment: (messageId: string, attachmentId: string, filename: string) =>
-      post<{ documentId: string; filename: string }>("/gmail/import-attachment", { messageId, attachmentId, filename }),
-    importAll: (q?: string, limit?: number) =>
-      post<{ imported: number; skipped: number; results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> }>("/gmail/import-all", { q, limit }),
+    importAttachment: (messageId: string, attachmentId: string, filename: string, templateId?: string) =>
+      post<{ documentId: string; filename: string }>("/gmail/import-attachment", { messageId, attachmentId, filename, templateId }),
+    importAll: (q?: string, limit?: number, templateId?: string) =>
+      post<{ imported: number; skipped: number; results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> }>("/gmail/import-all", { q, limit, templateId }),
     importHistory: () => get<{ history: Array<{ message_id: string; subject: string; imported_at: string; files?: Array<{ filename: string; document_id: string | null; error: string | null }> }> }>("/gmail/import-history"),
 
     disconnect: () => del("/gmail/disconnect"),

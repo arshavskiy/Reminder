@@ -83,7 +83,7 @@ const SEEDS: SeedRow[] = [
     name: "חשבונית",
     description: "חשבונית מס / קבלה / דרישת תשלום",
     document_kind: "invoice",
-    match_keywords: ["חשבונית", "מספר חשבונית", "תשלום"],
+    match_keywords: ["חשבונית", "מספר חשבונית", "חשבונית מס"],
     expiry_field: "payment_due_date",
     is_default: 0,
     fields: [
@@ -183,27 +183,67 @@ function safeJson<T>(raw: unknown, fallback: T): T {
 }
 
 /**
- * Pick the best matching template for a given raw document text.
- * Returns the one whose match_keywords have the most hits, falling back to
- * is_default, then to the first row, then null.
+ * Display / storage type for a document extracted with this template.
+ * Prefer document_kind when set (including custom Hebrew kinds like "תלוש משכורת"),
+ * otherwise fall back to the template name.
  */
+export function documentTypeFromTemplate(template: DocTemplate): string {
+  const kind = String(template.document_kind ?? "").trim();
+  if (kind && kind !== "unknown") return kind;
+  return String(template.name ?? "").trim() || "unknown";
+}
 export async function pickTemplate(rawText: string, userId?: string): Promise<DocTemplate | null> {
   const all = await loadAllTemplates(userId);
   if (!all.length) return null;
 
   let best: { tpl: DocTemplate; score: number } | null = null;
   for (const tpl of all) {
-    let score = 0;
-    for (const kw of tpl.match_keywords) {
-      if (kw && rawText.includes(kw)) score++;
+    const score = scoreTemplateMatch(rawText, tpl);
+    if (!best || score > best.score || (score === best.score && preferTemplate(tpl, best.tpl, userId))) {
+      best = { tpl, score };
     }
-    if (!best || score > best.score) best = { tpl, score };
   }
   if (best && best.score > 0) return best.tpl;
 
   return all.find((t) => userId && t.user_id === userId && t.is_default) ??
     all.find((t) => t.is_default) ??
+    all.find((t) => userId && t.user_id === userId) ??
     all[0];
+}
+
+/** Exported for tests — higher = stronger match. */
+export function scoreTemplateMatch(rawText: string, tpl: DocTemplate): number {
+  if (!rawText) return 0;
+  let score = 0;
+  for (const kw of tpl.match_keywords ?? []) {
+    const needle = String(kw ?? "").trim();
+    if (!needle) continue;
+    // Skip ultra-generic 2–3 char tokens that collide across document types.
+    if (needle.length < 4) continue;
+    if (rawText.includes(needle)) {
+      score += Math.max(2, Math.min(needle.length, 28));
+    }
+  }
+  const name = String(tpl.name ?? "").trim();
+  if (name.length >= 4 && rawText.includes(name)) {
+    score += Math.max(10, Math.min(name.length, 28));
+  }
+  return score;
+}
+
+function preferTemplate(candidate: DocTemplate, current: DocTemplate, userId?: string): boolean {
+  const candBuiltin = Number(candidate.is_builtin) === 1;
+  const curBuiltin = Number(current.is_builtin) === 1;
+  if (candBuiltin !== curBuiltin) return !candBuiltin;
+  if (userId) {
+    const candUser = candidate.user_id === userId;
+    const curUser = current.user_id === userId;
+    if (candUser !== curUser) return candUser;
+  }
+  const candDefault = Boolean(candidate.is_default);
+  const curDefault = Boolean(current.is_default);
+  if (candDefault !== curDefault) return candDefault;
+  return false;
 }
 
 // ── Keyword tables for document-kind classification ─────────────────────────

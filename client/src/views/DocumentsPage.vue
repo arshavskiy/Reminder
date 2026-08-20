@@ -202,6 +202,16 @@
         placeholder="סינון לפי לקוח"
         @update:value="currentPage = 1"
       />
+      <n-select
+        v-model:value="filterDocumentType"
+        :options="[{ label: 'כל הסוגים', value: null }, ...documentTypeOptions]"
+        :virtual-scroll="false"
+        class="toolbar__type"
+        clearable
+        filterable
+        placeholder="סינון לפי סוג"
+        @update:value="currentPage = 1"
+      />
       <n-date-picker
         v-model:value="filterDateRange"
         class="toolbar__dates"
@@ -283,10 +293,11 @@
                 {{ documentReportNumberLabel(row) }}
               </span>
               <span v-if="(row as any).client_name" class="tile__meta-item">{{ (row as any).client_name }}</span>
-              <span v-if="(row as any).document_type" class="tile__meta-item">{{ (row as any).document_type }}</span>
+              <span v-if="documentTypeLabel(row)" class="tile__meta-item">{{ documentTypeLabel(row) }}</span>
             </div>
             <div class="tile__pills">
               <n-tag
+                v-if="shouldShowReminderBadge(row)"
                 :type="reminderTagType((row as any).reminder_status)"
                 round
                 size="small"
@@ -354,7 +365,12 @@
           </template>
           <template #pills>
             <StatusBadge :status="row.processing_status" />
-            <n-tag :type="reminderTagType((row as any).reminder_status)" round size="small">
+            <n-tag
+              v-if="shouldShowReminderBadge(row)"
+              :type="reminderTagType((row as any).reminder_status)"
+              round
+              size="small"
+            >
               {{ reminderStatusLabel((row as any).reminder_status) }}
             </n-tag>
             <span
@@ -368,11 +384,13 @@
           </template>
           <template #footer>
             <div class="flex flex-col gap-1">
-              <span v-if="(row as any).client_name" class="kv"><strong>לקוח:</strong> {{ (row as any).client_name }}</span>
+              <span v-if="(row as any).client_name" class="kv">
+                <strong>חברה:</strong> {{ (row as any).client_name }}
+              </span>
               <span class="kv"><strong>ייבוא:</strong> {{ formatDate(row.import_date) }}</span>
             </div>
             <div class="flex flex-col gap-1 items-end">
-              <span v-if="(row as any).document_type" class="kv"><strong>סוג:</strong> {{ (row as any).document_type }}</span>
+              <span v-if="documentTypeLabel(row)" class="kv"><strong>סוג:</strong> {{ documentTypeLabel(row) }}</span>
               <span v-if="(row as any).expiry_date" class="kv">
                 <strong>תפוגה:</strong>
                 <span :class="expiryClass((row as any).expiry_date)">{{ formatDate((row as any).expiry_date) }}</span>
@@ -510,7 +528,7 @@ import ListCard from "../components/ListCard.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import UploadModal from "../components/UploadModal.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
-import type {Document} from "@shared/types.js";
+import type {DocTemplate, Document} from "@shared/types.js";
 import {
   countDuplicateReportRows,
   documentReportNumber,
@@ -519,6 +537,10 @@ import {
   isDuplicateReportNumber,
   listDocumentRowIssues,
 } from "@shared/rowIssues.js";
+import {
+  documentTypeFromTemplate,
+  pickBestTemplateForExtraction,
+} from "@shared/missingDocumentFields.js";
 import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.js";
 import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS, useConfirm} from "../composables/useConfirm.js";
 import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
@@ -620,8 +642,39 @@ function initialDocumentFilter(): DocumentStatusFilter {
 
 const search = ref("");
 const filterClientId = ref<string | null>(null);
+const filterDocumentType = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
 const statusFilter = ref<DocumentStatusFilter>(initialDocumentFilter());
+
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  inspection_report: "תסקיר בדיקה",
+  contract: "חוזה / הסכם",
+  invoice: "חשבונית",
+  certificate: "תעודה / הסמכה",
+  unknown: "לא ידוע",
+  "חוזה שירות": "חוזה / הסכם",
+  חשבונית: "חשבונית",
+  "תסקיר בדיקה": "תסקיר בדיקה",
+};
+
+function formatDocumentTypeLabel(raw: string): string {
+  return DOCUMENT_TYPE_LABELS[raw] ?? raw;
+}
+
+const documentTypeOptions = computed(() => {
+  const seen = new Set<string>();
+  for (const row of store.rows ?? []) {
+    const label = documentTypeLabel(row);
+    if (label) seen.add(label);
+  }
+  for (const tpl of docTemplates.value) {
+    const label = formatDocumentTypeLabel(documentTypeFromTemplate(tpl));
+    if (label) seen.add(label);
+  }
+  return [...seen]
+    .sort((a, b) => a.localeCompare(b, "he"))
+    .map((value) => ({ label: value, value }));
+});
 
 type CombinedFilter = {
   key: string;
@@ -639,7 +692,7 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
     { key: "done",        label: "הושלם",       count: c.done,         statusValue: "done" },
     { key: "in_progress", label: "בעיבוד",      count: c.in_progress,  statusValue: "in_progress" },
     { key: "error",       label: "שגיאה",       count: c.error,        statusValue: "error" },
-    { key: "no_reminder",       label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing").length, statusValue: "no_reminder" },
+    { key: "no_reminder",       label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing" && !isPayslipDocument(row)).length, statusValue: "no_reminder" },
     { key: "no_email",          label: "חסר אימייל", count: rows.filter((row) => !documentHasEmail(row)).length, statusValue: "no_email" },
     { key: "contract_expired",  label: "פג תוקף",   count: rows.filter((row) => (row as any).contract_status === "expired" || (row as any).contract_status === "overdue").length, statusValue: "contract_expired" },
     { key: "duplicate_report_number", label: "כפילות מספר", count: duplicateCount, statusValue: "duplicate_report_number" },
@@ -674,7 +727,7 @@ async function loadClients() {
 // ── Pagination ─────────────────────────────────────────────────────────────────
 const pageSize = ref(20);
 const currentPage = ref(1);
-watch([search, filterClientId, filterDateRange, statusFilter, pageSize], () => {
+watch([search, filterClientId, filterDocumentType, filterDateRange, statusFilter, pageSize], () => {
   currentPage.value = 1;
 });
 
@@ -688,6 +741,9 @@ const filteredRows = computed(() => {
   let rows = store.rows ?? [];
   if (statusFilter.value !== "all") {
     rows = rows.filter((row) => matchesStatusFilter(row, statusFilter.value));
+  }
+  if (filterDocumentType.value) {
+    rows = rows.filter((row) => documentTypeLabel(row) === filterDocumentType.value);
   }
   const q = search.value.trim().toLowerCase();
   if (q) {
@@ -746,6 +802,7 @@ function reminderStatusLabel(status: string | null | undefined) {
   if (status === "assigned") return "תזכורת נקבעה";
   if (status === "missing") return "אין תזכורת";
   if (status === "error") return "שגיאת סריקה";
+  if (status === "not_applicable") return "";
   return "ממתין";
 }
 function reminderTagType(status: string | null | undefined): "success" | "warning" | "error" | "info" | "default" {
@@ -754,6 +811,70 @@ function reminderTagType(status: string | null | undefined): "success" | "warnin
   if (status === "error") return "error";
   return "info";
 }
+
+/** Salary / payslip docs — no reminder workflow. */
+function isPayslipDocument(row: Document | Record<string, unknown>): boolean {
+  const type = `${(row as any).document_type ?? ""} ${(row as any).document_kind ?? ""}`;
+  if (/תלוש/.test(type)) return true;
+  if ((row as any).reminder_status === "not_applicable") return true;
+  try {
+    const fields = typeof (row as any).extracted_fields === "string"
+      ? JSON.parse((row as any).extracted_fields)
+      : (row as any).extracted_fields ?? {};
+    return Boolean(
+      fields.payroll_month ||
+      fields.employee_name ||
+      fields.net_payment ||
+      fields.base_salary,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function shouldShowReminderBadge(row: Document): boolean {
+  if (isPayslipDocument(row)) return false;
+  const status = (row as any).reminder_status;
+  return status !== "not_applicable";
+}
+
+/** Prefer the linked/matched template's document_kind (e.g. תלוש משכורת). */
+function documentTypeLabel(row: Document | Record<string, unknown>): string {
+  let extracted: Record<string, unknown> = {};
+  try {
+    const raw = (row as any).extracted_fields;
+    extracted = typeof raw === "string" ? JSON.parse(raw || "{}") : (raw ?? {});
+  } catch {
+    extracted = {};
+  }
+  const preferredId = (row as any).template_id != null ? String((row as any).template_id) : null;
+  const matched =
+    pickBestTemplateForExtraction(docTemplates.value, extracted, preferredId) ||
+    (preferredId
+      ? docTemplates.value.find((t) => String(t.id) === preferredId) ?? null
+      : null);
+  const fromTemplate = documentTypeFromTemplate(matched);
+  if (fromTemplate) return formatDocumentTypeLabel(fromTemplate);
+
+  const kind = String((row as any).document_kind ?? "").trim();
+  const type = String((row as any).document_type ?? "").trim();
+  const builtins = new Set([
+    "inspection_report",
+    "contract",
+    "invoice",
+    "certificate",
+    "unknown",
+    "חשבונית",
+    "חוזה שירות",
+    "תסקיר בדיקה",
+  ]);
+  if (kind && !builtins.has(kind)) return formatDocumentTypeLabel(kind);
+  if (type && !builtins.has(type)) return formatDocumentTypeLabel(type);
+  if (type) return formatDocumentTypeLabel(type);
+  if (kind && kind !== "unknown") return formatDocumentTypeLabel(kind);
+  return "";
+}
+
 function documentHasEmail(row: Document): boolean {
   try {
     const fields = typeof (row as any).extracted_fields === "string"
@@ -768,7 +889,9 @@ function matchesStatusFilter(row: Document, filter: DocumentStatusFilter) {
   if (filter === "done") return row.processing_status === "done";
   if (filter === "in_progress") return row.processing_status === "queued" || row.processing_status === "processing";
   if (filter === "error") return row.processing_status === "error";
-  if (filter === "no_reminder") return (row as any).reminder_status === "missing";
+  if (filter === "no_reminder") {
+    return (row as any).reminder_status === "missing" && !isPayslipDocument(row);
+  }
   if (filter === "no_email") return !documentHasEmail(row);
   if (filter === "contract_expired") return (row as any).contract_status === "expired" || (row as any).contract_status === "overdue";
   if (filter === "duplicate_report_number") {
@@ -869,10 +992,21 @@ function savePipelineFlags() {
 }
 watch([flagOcr, flagAi, flagS3, flagEntities], savePipelineFlags);
 
+const docTemplates = ref<DocTemplate[]>([]);
+
+async function loadDocTemplates() {
+  try {
+    docTemplates.value = await api.docTemplates.list();
+  } catch {
+    docTemplates.value = [];
+  }
+}
+
 onMounted(() => {
   store.fetch(undefined, true);
   loadPipelineFlags();
   loadClients();
+  void loadDocTemplates();
 });
 onUnmounted(() => {
   if (saveFlagsTimer) clearTimeout(saveFlagsTimer);
@@ -1444,6 +1578,9 @@ async function bulkDownload() {
 .toolbar__client {
   width: 200px;
 }
+.toolbar__type {
+  width: 200px;
+}
 .toolbar__dates {
   width: 260px;
 }
@@ -1665,6 +1802,7 @@ async function bulkDownload() {
 
   .toolbar__search,
   .toolbar__client,
+  .toolbar__type,
   .toolbar__dates {
     width: 100%;
     min-width: 0;

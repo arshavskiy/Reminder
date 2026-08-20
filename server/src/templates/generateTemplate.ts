@@ -19,21 +19,24 @@ Choose field types from: text, number, date, phone, email, currency, list.
 CRITICAL — read carefully:
 1. Look ONLY at the actual sample text. Do not assume the document type from training data. If the sample is a vehicle license, name it "רישיון רכב" — do NOT call it "תסקיר בדיקה".
 2. The template "name" must precisely match the document type as it appears in the sample (or a natural Hebrew name for it).
-3. Include ONLY fields that actually appear in the sample. Don't add typical fields that aren't there. If the sample has no phone number, don't add "contact_phone".
-4. If the document has a buyer/customer/owner, include an identity field (call it client_company for companies or owner_name for individuals).
-5. Include a UNIQUE document number field if present (license_number / contract_number / report_number / invoice_number — pick what fits).
-6. "expiry_field" must point to the FUTURE DATE the user must act on — the date that should drive a reminder email. Examples by doc type:
+3. "document_kind" must be the same Hebrew type label as "name" for custom docs (e.g. "תלוש משכורת", "רישיון רכב"). Only use English builtins when they clearly fit: inspection_report, contract, invoice, certificate.
+4. Include ONLY fields that actually appear in the sample. Don't add typical fields that aren't there. If the sample has no phone number, don't add "contact_phone".
+5. If the document has a buyer/customer/owner, include an identity field (call it client_company for companies or owner_name for individuals).
+6. Include a UNIQUE document number field if present (license_number / contract_number / report_number / invoice_number — pick what fits).
+7. "expiry_field" must point to the FUTURE DATE the user must act on — the date that should drive a reminder email. Examples by doc type:
    - Vehicle license / certificate → "expiry_date" / "valid_until"
    - Inspection report → "expiry_date"
    - Invoice → "payment_due_date"
    - Contract → "expiry_date"
+   - Payslip / salary slip (תלוש משכורת) → null (no reminder)
    Never pick the issue date. If the sample has no future-action date, set "expiry_field" to null.
-7. match_keywords: 3–6 Hebrew strings copied DIRECTLY from the sample (or very close), that would only appear in this document type. Pick distinctive phrases (e.g. "רישיון רכב", "מספר רישיון"), NOT generic words like "תאריך" or "שם".
-8. Be conservative — small precise templates beat large speculative ones.
+8. match_keywords: 3–6 Hebrew strings copied DIRECTLY from the sample (or very close), that would only appear in this document type. Pick distinctive phrases (e.g. "רישיון רכב", "מספר רישיון", "תלוש משכורת"), NOT generic words like "תאריך" or "שם" or "תשלום".
+9. Be conservative — small precise templates beat large speculative ones.
 
 JSON schema:
 {
   "name": string,            // Hebrew template name matching the actual document type
+  "document_kind": string,   // same Hebrew type for custom docs, or a builtin kind key
   "description": string,     // Hebrew, 1–2 sentences
   "match_keywords": string[],
   "fields": [
@@ -50,6 +53,7 @@ JSON schema:
 
 export interface GeneratedTemplate {
   name: string;
+  document_kind?: string;
   description: string;
   match_keywords: string[];
   fields: TemplateField[];
@@ -144,10 +148,12 @@ export async function generateTemplateFromText(sampleText: string): Promise<Gene
  * tweak it before saving.
  */
 export function toDraft(g: GeneratedTemplate): Omit<DocTemplate, "id" | "created_at" | "updated_at"> {
+  const name = String(g.name ?? "").trim() || "תבנית חדשה";
+  const kind = String(g.document_kind ?? "").trim() || name;
   return {
-    name: g.name,
+    name,
     description: g.description,
-    document_kind: "unknown",
+    document_kind: kind,
     match_keywords: g.match_keywords,
     fields: g.fields,
     expiry_field: g.expiry_field,
