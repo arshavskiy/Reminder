@@ -1094,6 +1094,19 @@ async function doDeleteAll() {
     deletingAll.value = false;
   }
 }
+async function triggerFileDownload(signedUrl: string, fileName: string) {
+  const resp = await fetch(signedUrl);
+  const blob = await resp.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(blobUrl);
+}
+
 async function openDownload(row: Document) {
   try {
     const res = await fetch(`${SERVER}/api/documents/${row.id}/download`, { credentials: "include" });
@@ -1103,7 +1116,7 @@ async function openDownload(row: Document) {
       return;
     }
     const { url } = await res.json() as { url: string };
-    window.open(url, "_blank", "noopener");
+    await triggerFileDownload(url, row.file_name ?? "document.pdf");
   } catch (e) {
     message.error(`לא ניתן לפתוח את הקובץ: ${e}`);
   }
@@ -1114,13 +1127,15 @@ async function bulkDownload() {
   if (!ids.length || bulkDownloading.value) return;
   bulkDownloading.value = true;
   let failed = 0;
+  const allRows = filteredRows.value;
   try {
     for (const id of ids) {
       try {
         const res = await fetch(`${SERVER}/api/documents/${id}/download`, { credentials: "include" });
         if (!res.ok) { failed++; continue; }
         const { url } = await res.json() as { url: string };
-        window.open(url, "_blank", "noopener");
+        const row = allRows.find((r) => String(r.id) === id);
+        await triggerFileDownload(url, row?.file_name ?? "document.pdf");
         await new Promise((r) => setTimeout(r, 300));
       } catch {
         failed++;
