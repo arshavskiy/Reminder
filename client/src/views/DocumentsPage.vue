@@ -660,7 +660,6 @@ function applyFilter(f: CombinedFilter) {
   activeFilterKey.value = f.key;
   statusFilter.value = f.statusValue ?? "all";
   currentPage.value = 1;
-  if (bulkMode.value) selectedIds.value = new Set();
   writeRememberedFilter("documents", f.key);
 }
 
@@ -677,7 +676,10 @@ const pageSize = ref(20);
 const currentPage = ref(1);
 watch([search, filterClientId, filterDateRange, statusFilter, pageSize], () => {
   currentPage.value = 1;
-  if (bulkMode.value) selectedIds.value = new Set();
+  if (bulkMode.value && selectedIds.value.size > 0) {
+    const visible = new Set(filteredRows.value.map((r) => String(r.id)));
+    selectedIds.value = new Set([...selectedIds.value].filter((id) => visible.has(id)));
+  }
 });
 
 // Refetch from server whenever the client filter changes (so we always get
