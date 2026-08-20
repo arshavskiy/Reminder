@@ -324,7 +324,12 @@ export function registerDocumentRoutes(app: express.Application) {
     // Prefer S3 signed URL — use cached one if still fresh, otherwise regenerate
     if (doc.spaces_key) {
       try {
-        const { getSpacesSignedUrl } = await import("../storage/spaces.js");
+        const { getSpacesSignedUrl, fileExistsInSpaces } = await import("../storage/spaces.js");
+        const exists = await fileExistsInSpaces(doc.spaces_key);
+        if (!exists) {
+          res.status(404).json({ error: "הקובץ לא נמצא באחסון. ייתכן שהקובץ נמחק או שההעלאה נכשלה." });
+          return;
+        }
         const SIGNED_URL_TTL = 7 * 24 * 3600;
         const expiresAt: Date | null = doc.signed_url_expires_at ? new Date(doc.signed_url_expires_at) : null;
         const needsRefresh = !doc.download_url || !expiresAt || expiresAt.getTime() - Date.now() < 3600_000;

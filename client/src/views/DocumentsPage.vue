@@ -1097,7 +1097,11 @@ async function doDeleteAll() {
 async function openDownload(row: Document) {
   try {
     const res = await fetch(`${SERVER}/api/documents/${row.id}/download`, { credentials: "include" });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { error?: string };
+      message.error(body.error ?? `שגיאה בהורדה (${res.status})`);
+      return;
+    }
     const { url } = await res.json() as { url: string };
     window.open(url, "_blank", "noopener");
   } catch (e) {
