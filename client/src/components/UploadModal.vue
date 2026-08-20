@@ -472,8 +472,8 @@ const dragOver = ref(false);
 const files = ref<File[]>([]);
 const fields = ref<ExtractionField[]>([]);
 const doAi = ref(true);
-const doEntities = ref(true);
-const doReminders = ref(true);
+const doEntities = ref(false);
+const doReminders = ref(false);
 const selectedTemplateId = ref<string | null>(null);
 const templateOptions = ref<{ label: string; value: string }[]>([]);
 

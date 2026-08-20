@@ -250,8 +250,8 @@
       <strong>ReminderOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
       <div class="landing-footer__legal">
         © 2026 HandCoded. All rights reserved. |
-        <a href="https://handcoded.tech/privacy.html" target="_blank">Privacy Policy</a> |
-        <a href="https://handcoded.tech/terms.html" target="_blank">Terms of Service</a>
+        <a href="https://remindocr.com/privacy.html" target="_blank">Privacy Policy</a> |
+        <a href="https://remindocr.com/terms.html" target="_blank">Terms of Service</a>
       </div>
     </footer>
   </div>

@@ -8,7 +8,7 @@
       <template #actions>
         <div class="documents-actions">
           <button
-              v-if="authStore.isAdmin"
+              v-if="authStore.isAdmin || true"
               :class="{ 'rbtn--loading': uploading }"
               :disabled="limitReached || uploading"
               class="rbtn rbtn--primary"
