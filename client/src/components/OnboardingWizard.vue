@@ -4,9 +4,9 @@
       <!-- Steps indicator -->
       <n-steps :current="currentStep" size="small" class="onboarding-steps">
         <n-step title="ברוכים הבאים" />
-        <n-step title="פרטים אישיים" />
-        <n-step title="פרופיל מהנדס" />
-        <n-step title="חברה ולוגו" />
+        <n-step title="פרטים" />
+        <n-step title="מהנדס" />
+        <n-step title="חברה" />
         <n-step title="חתימה" />
       </n-steps>
 
@@ -362,6 +362,17 @@ async function skipAll() {
 
 .onboarding-steps {
   padding: 0 8px 16px;
+  overflow-x: auto;
+}
+
+.onboarding-steps :deep(.n-step-indicator) {
+  flex-shrink: 0;
+}
+
+@media (max-width: 520px) {
+  .onboarding-steps :deep(.n-step-content__title) {
+    font-size: 11px;
+  }
 }
 
 .onboarding-body {
