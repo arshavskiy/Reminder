@@ -40,6 +40,14 @@
       </div>
       <div class="filter-divider" />
       <n-select
+        v-model:value="searchTemplateId"
+        :options="templateOptions"
+        placeholder="סוג מסמך"
+        filterable
+        clearable
+        style="width:220px"
+      />
+      <n-select
         v-model:value="filterType"
         :options="filterTypeOptions"
         placeholder="סינון נוסף"
@@ -241,14 +249,16 @@ import {
   useMessage, type SelectOption,
 } from "naive-ui";
 import { CloudDownloadOutline, DocumentOutline, DownloadOutline, EyeOutline, LogoGoogle, RefreshOutline, SearchOutline } from "@vicons/ionicons5";
-import { api, type GmailAttachment, type GmailEmail } from "../services/apiService.js";
+import { api, type GmailAttachment, type GmailEmail, type GmailSearchProvider } from "../services/apiService.js";
 import type { DocTemplate } from "../shared/types.js";
 
 const route = useRoute();
 const message = useMessage();
 
 const selectedTemplateId = ref<string | null>(null);
+const searchTemplateId = ref<string | null>(null);
 const templateOptions = ref<{ label: string; value: string }[]>([]);
+const templates = ref<DocTemplate[]>([]);
 
 const connected = ref(false);
 const connectionSource = ref<string | null>(null);
@@ -290,6 +300,7 @@ const filterType = ref<string>("none");
 const filterSender = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
 const filterIdentifierText = ref("");
+const senderProviders = ref<GmailSearchProvider[]>([]);
 
 const filterTypeOptions: SelectOption[] = [
   { label: "ללא", value: "none" },
@@ -298,13 +309,11 @@ const filterTypeOptions: SelectOption[] = [
   { label: "תסקירים (מספר רישוי)", value: "inspection" },
 ];
 
-const senderOptions: SelectOption[] = [
-  { label: "חברת חשמל", value: "iec.co.il" },
-  { label: "Morning (חשבונית ירוקה)", value: "morning.co" },
-  { label: "GitHub", value: "github.com" },
-  { label: "DigitalOcean", value: "digitalocean.com" },
-  { label: "Google", value: "google.com" },
-];
+const senderOptions = computed<SelectOption[]>(() => senderProviders.value.map((option) => ({
+  label: option.label,
+  value: option.id,
+})));
+const senderQueryByValue = computed(() => new Map(senderProviders.value.map((option) => [option.id, option.terms])));
 
 function onFilterChange() {
   filterSender.value = null;
@@ -335,7 +344,7 @@ function buildSearchQuery() {
   }
 
   if (filterType.value === "sender" && filterSender.value) {
-    parts.push(`from:${filterSender.value}`);
+    parts.push(buildSenderQuery(filterSender.value));
   }
   if (filterType.value === "date" && filterDateRange.value) {
     const [from, to] = filterDateRange.value;
@@ -344,8 +353,54 @@ function buildSearchQuery() {
   if (filterType.value === "inspection" && filterIdentifierText.value.trim()) {
     parts.push(`filename:${filterIdentifierText.value.trim()}`);
   }
+  const templateTerms = selectedSearchTemplateTerms();
+  if (templateTerms.length === 1) {
+    parts.push(formatGmailSearchTerm(templateTerms[0]));
+  } else if (templateTerms.length > 1) {
+    parts.push(`{${templateTerms.map(formatGmailSearchTerm).join(" ")}}`);
+  }
 
   searchQuery.value = parts.join(" ");
+}
+
+function selectedSearchTemplateTerms(): string[] {
+  const template = templates.value.find((t) => String(t.id) === searchTemplateId.value);
+  if (!template) return [];
+  const candidates = [
+    template.name,
+    template.document_kind !== "unknown" ? template.document_kind : "",
+    ...(template.match_keywords ?? []),
+  ];
+  const seen = new Set<string>();
+  return candidates
+    .map((term) => String(term ?? "").trim())
+    .filter((term) => term.length >= 3)
+    .filter((term) => {
+      const key = term.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 8);
+}
+
+function formatGmailSearchTerm(term: string): string {
+  return `"${term.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
+}
+
+function buildSenderQuery(value: string): string {
+  const mappedTerms = senderQueryByValue.value.get(value);
+  if (mappedTerms?.length) {
+    return `{${mappedTerms.map((term) => looksLikeDomain(term) ? `from:${term}` : formatGmailSearchTerm(term)).join(" ")}}`;
+  }
+  const freeValue = value.trim();
+  return looksLikeDomain(freeValue) || freeValue.includes("@")
+    ? `from:${freeValue}`
+    : formatGmailSearchTerm(freeValue);
+}
+
+function looksLikeDomain(value: string): boolean {
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.trim());
 }
 
 function buildAndSearch() {
@@ -410,8 +465,12 @@ async function connectGmail() {
   try {
     const { url } = await api.gmail.authUrl();
     window.location.href = url;
-  } catch {
-    message.error("שגיאה בהתחברות ל-Gmail");
+  } catch (err: any) {
+    if (err?.status === 403 || err?.message === "forbidden") {
+      message.error("חיבור Gmail זמין למשתמשי Pro ומנהלים בלבד");
+    } else {
+      message.error("שגיאה בהתחברות ל-Gmail");
+    }
     loading.value = false;
   }
 }
@@ -427,6 +486,11 @@ async function loadInbox() {
   } catch (err: any) {
     if (err?.message?.includes("gmail_not_connected")) {
       connected.value = false;
+    } else if (err?.message?.includes("gmail_auth_invalid")) {
+      connected.value = false;
+      message.error("ההרשאה ל-Gmail פגה או לא תקינה. נתק וחבר Gmail מחדש.");
+    } else if (err?.status === 403 || err?.message === "forbidden") {
+      message.error("גישה ל-Gmail זמינה למשתמשי Pro ומנהלים בלבד");
     } else {
       message.error("שגיאה בטעינת תיבת הדואר");
     }
@@ -462,7 +526,7 @@ async function importAttachment(messageId: string, att: GmailAttachment) {
     await api.gmail.importAttachment(messageId, att.attachmentId, att.filename, selectedTemplateId.value ?? undefined);
     message.success(`${att.filename} יובא בהצלחה`);
   } catch (err: any) {
-    message.error(`שגיאה: ${err.message}`);
+    message.error(gmailErrorMessage(err));
   } finally {
     const next = { ...importing.value };
     delete next[att.attachmentId];
@@ -484,7 +548,7 @@ async function importAllNew() {
     };
     loadHistory();
   } catch (err: any) {
-    message.error(`שגיאה בייבוא: ${err.message}`);
+    message.error(`שגיאה בייבוא: ${gmailErrorMessage(err)}`);
   } finally {
     importingAll.value = false;
   }
@@ -498,11 +562,16 @@ async function loadHistory() {
 }
 
 onMounted(async () => {
-  api.docTemplates.list().then(templates => {
-    templateOptions.value = templates.map(t => ({
+  Promise.all([
+    api.docTemplates.list(),
+    api.gmail.searchProviders(),
+  ]).then(([rows, providerResult]) => {
+    templates.value = rows;
+    templateOptions.value = rows.map(t => ({
       label: `${t.name} (${t.document_kind})`,
       value: t.id,
     }));
+    senderProviders.value = providerResult.providers;
   }).catch(() => {});
 
   // Handle OAuth callback with error
@@ -522,10 +591,34 @@ onMounted(async () => {
       buildSearchQuery();
       await Promise.all([loadInbox(), loadHistory()]);
     }
+  } catch (err: any) {
+    if (err?.message?.includes("gmail_auth_invalid")) {
+      connected.value = false;
+      message.error("ההרשאה ל-Gmail פגה או לא תקינה. חבר Gmail מחדש.");
+    } else if (err?.status === 403 || err?.message === "forbidden") {
+      message.error("גישה ל-Gmail זמינה למשתמשי Pro ומנהלים בלבד");
+    }
   } finally {
     loading.value = false;
   }
 });
+
+function gmailErrorMessage(err: unknown): string {
+  const messageText = err instanceof Error ? err.message : String(err ?? "");
+  if (messageText.includes("gmail_auth_invalid")) {
+    return "ההרשאה ל-Gmail פגה או לא תקינה. חבר Gmail מחדש.";
+  }
+  if (messageText.includes("gmail_scope_missing")) {
+    return "חסרה הרשאת Gmail. חבר Gmail מחדש ואשר את ההרשאות.";
+  }
+  if (messageText.includes("gmail_permission_denied")) {
+    return "אין הרשאה לגשת ל-Gmail.";
+  }
+  if (messageText.includes("gmail_rate_limited")) {
+    return "Gmail מגביל כרגע את כמות הבקשות. נסה שוב בעוד רגע.";
+  }
+  return messageText || "שגיאת Gmail";
+}
 </script>
 
 <style scoped>

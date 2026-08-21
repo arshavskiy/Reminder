@@ -36,6 +36,15 @@ export interface GmailEmail {
   attachments: GmailAttachment[];
 }
 
+export interface GmailSearchProvider {
+  id: string;
+  category: "electricity" | "telecom" | "water" | "general";
+  label: string;
+  terms: string[];
+  sort_order: number;
+  enabled: boolean;
+}
+
 export interface EquipmentHistoryEvent {
   id: string;
   contract_type: string | null;
@@ -143,7 +152,7 @@ async function get<T>(path: string, force = false): Promise<T> {
     cache: force ? "reload" : "default",
   });
   if (!res.ok) {
-    const err = new Error(`GET ${path} failed: ${res.status}`) as any;
+    const err = new Error(await responseErrorMessage(res, `GET ${path} failed: ${res.status}`)) as any;
     err.status = res.status;
     throw err;
   }
@@ -577,6 +586,7 @@ export const api = {
   gmail: {
     status: () => get<{ connected: boolean; source: string | null; email: string | null }>("/gmail/status"),
     authUrl: () => get<{ url: string }>("/gmail/auth-url"),
+    searchProviders: () => get<{ providers: GmailSearchProvider[] }>("/gmail/search-providers"),
     inbox: (q?: string, limit?: number, pageToken?: string) => get<{ emails: GmailEmail[]; nextPageToken: string | null; resultSizeEstimate: number | null }>(`/gmail/inbox${qs({ q, limit, pageToken })}`),
     attachmentUrl: (messageId: string, attachmentId: string, filename: string) =>
       `${BASE}/gmail/attachment/${messageId}/${attachmentId}?filename=${encodeURIComponent(filename)}`,

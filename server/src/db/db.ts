@@ -55,6 +55,7 @@ const ALL_COLLECTIONS = [
   "certificates",
   "notifications",
   "gmail_imports",
+  "gmail_search_providers",
 ];
 
 async function ensureCollections(db: Db): Promise<void> {
@@ -220,6 +221,10 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("gmail_imports").createIndex({ message_id: 1 });
   await db.collection("gmail_imports").createIndex({ user_id: 1, message_id: 1 }, { unique: true });
   await db.collection("gmail_imports").createIndex({ imported_at: -1 });
+
+  // gmail_search_providers
+  await db.collection("gmail_search_providers").createIndex({ id: 1 }, { unique: true });
+  await db.collection("gmail_search_providers").createIndex({ enabled: 1, sort_order: 1 });
 }
 
 // Typed collection helper

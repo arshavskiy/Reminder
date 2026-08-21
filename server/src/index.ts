@@ -38,6 +38,7 @@ import {registerExtractRemindersRoutes} from "./routes/extractReminders";
 import {registerPrintTemplateRoutes} from "./routes/printTemplates";
 import {registerFeatureRoutes} from "./routes/features";
 import {registerLegalRoutes} from "./routes/legal";
+import {seedGmailSearchProviders} from "./gmail/searchProviders";
 import {importFile} from "./pipeline/importer";
 import {applyScannedKeys, scanFileForKeys, shouldScanFile} from "./pipeline/keyScanner";
 import {logger, requestLogger} from "./logger";
@@ -214,6 +215,7 @@ async function main() {
   await seedBuiltinTemplates();
   await seedDefaultEmailTemplate();
   await promoteSharedPrintTemplates();
+  await seedGmailSearchProviders();
   await collapseDuplicateGeneratedPdfs();
 
   app.listen(settings.port, () => {

@@ -8,15 +8,30 @@ import { requireAuth } from "../auth/middleware";
 import { generateState, generateCodeVerifier, generateCodeChallenge } from "../auth/google";
 import { importFile, type PipelineOptions } from "../pipeline/importer";
 import { logger } from "../logger";
+import { loadGmailSearchProviders } from "../gmail/searchProviders";
 
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+const GMAIL_FULL_ACCESS_ROLES = new Set(["pro", "admin"]);
+const GMAIL_DEFAULT_PAGE_SIZE = 500;
+const GMAIL_MAX_PAGE_SIZE = 500;
 
 export function registerGmailRoutes(app: express.Application) {
+  app.get("/api/gmail/search-providers", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    let ctx: Awaited<ReturnType<typeof requireAuth>>;
+    try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
+
+    const providers = await loadGmailSearchProviders();
+    res.json({ providers });
+  });
+
   // GET /api/gmail/auth-url — start Gmail OAuth
   app.get("/api/gmail/auth-url", async (req, res) => {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const settings = getSettings();
     const googleClientId = settings.googleClientId;
@@ -102,6 +117,7 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const user = await col<any>("users").findOne({ _id: new ObjectId(ctx.userId) } as any);
     const userConnected = Boolean(user?.gmail_access_token);
@@ -131,24 +147,15 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     try {
       let q = (req.query.q as string) || "has:attachment filename:pdf";
-      const maxResults = Math.min(parseInt((req.query.limit as string) || "50", 10), 100);
+      const maxResults = gmailPageSize(req.query.limit);
       const pageToken = (req.query.pageToken as string) || undefined;
-
-      if (ctx.user.role !== "admin") {
-        const profile = await col("engineer_profiles").findOne({ user_id: ctx.userId }) as any;
-        const inspectorNumber = String(profile?.inspector_number ?? "").trim();
-        if (inspectorNumber) {
-          if (!q.includes(inspectorNumber)) {
-            q += ` filename:${inspectorNumber}`;
-          }
-        }
-      }
 
       let url = `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`;
       if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
@@ -158,21 +165,24 @@ export function registerGmailRoutes(app: express.Application) {
         const refreshed = await retryWithRefresh(ctx.userId);
         if (refreshed) listRes = await gmailFetch(refreshed, url);
       }
-      if (!listRes.ok) {
-        const body = await listRes.text().catch(() => "");
-        logger.error("gmail_inbox_api_error", { status: listRes.status, body: body.slice(0, 500) });
-        res.status(502).json({ error: "gmail_api_error", detail: `Gmail API returned ${listRes.status}` });
+      const listError = await parseGmailError(listRes);
+      if (listError) {
+        logger.error("gmail_inbox_api_error", { status: listRes.status, code: listError.code, message: listError.message, body: listError.body.slice(0, 500) });
+        res.status(listError.httpStatus).json({ error: listError.code, detail: listError.message });
         return;
       }
       const listData = await listRes.json() as { messages?: { id: string }[]; nextPageToken?: string; resultSizeEstimate?: number };
       const messageIds = listData.messages ?? [];
       logger.info("gmail_inbox_list", { query: q, resultCount: messageIds.length, resultSizeEstimate: listData.resultSizeEstimate });
 
+      const diagnostics = createGmailDiagnostics(q, requestedExtensionsFromQuery(q), messageIds.length);
       const emails = await Promise.all(
-        messageIds.map(({ id }) => fetchEmailMeta(accessToken, id))
+        messageIds.map(({ id }) => fetchEmailMeta(accessToken, id, diagnostics.allowedExtensions, diagnostics))
       );
+      const visibleEmails = emails.filter(Boolean);
+      logGmailDiagnostics("gmail_inbox_parse", diagnostics, visibleEmails.length);
 
-      res.json({ emails: emails.filter(Boolean), nextPageToken: listData.nextPageToken ?? null, resultSizeEstimate: listData.resultSizeEstimate ?? null });
+      res.json({ emails: visibleEmails, nextPageToken: listData.nextPageToken ?? null, resultSizeEstimate: listData.resultSizeEstimate ?? null });
     } catch (err) {
       res.status(500).json({ error: "internal_error" });
     }
@@ -183,6 +193,7 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
@@ -193,7 +204,12 @@ export function registerGmailRoutes(app: express.Application) {
       const refreshed = await retryWithRefresh(ctx.userId);
       if (refreshed) attRes = await gmailFetch(refreshed, `messages/${messageId}/attachments/${attachmentId}`);
     }
-    if (!attRes.ok) { res.status(502).json({ error: "gmail_api_error", detail: `Gmail API returned ${attRes.status}` }); return; }
+    const attError = await parseGmailError(attRes);
+    if (attError) {
+      logger.error("gmail_attachment_api_error", { status: attRes.status, code: attError.code, message: attError.message, body: attError.body.slice(0, 500) });
+      res.status(attError.httpStatus).json({ error: attError.code, detail: attError.message });
+      return;
+    }
 
     const attData = await attRes.json() as { data: string };
     const buf = Buffer.from(attData.data.replace(/-/g, "+").replace(/_/g, "/"), "base64");
@@ -210,6 +226,7 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const { messageId, attachmentId, filename, templateId } = req.body;
     if (!messageId || !attachmentId) { res.status(400).json({ error: "messageId and attachmentId required" }); return; }
@@ -239,22 +256,15 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     let q = (req.body.q as string) || "has:attachment filename:pdf";
-    const maxResults = Math.min(parseInt(req.body.limit ?? "50", 10), 100);
+    const maxResults = gmailPageSize(req.body.limit);
     const templateId = req.body.templateId as string | undefined;
     const pipelineOpts: PipelineOptions | undefined = templateId ? { templateId } : undefined;
-
-    if (ctx.user.role !== "admin") {
-      const profile = await col("engineer_profiles").findOne({ user_id: ctx.userId }) as any;
-      const inspectorNumber = String(profile?.inspector_number ?? "").trim();
-      if (inspectorNumber) {
-        q = `has:attachment filename:pdf filename:${inspectorNumber}`;
-      }
-    }
 
     try {
       let listRes = await gmailFetch(accessToken, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
@@ -262,14 +272,15 @@ export function registerGmailRoutes(app: express.Application) {
         const refreshed = await retryWithRefresh(ctx.userId);
         if (refreshed) listRes = await gmailFetch(refreshed, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
       }
-      if (!listRes.ok) {
-        const body = await listRes.text().catch(() => "");
-        logger.error("gmail_import_all_api_error", { status: listRes.status, body: body.slice(0, 500) });
-        res.status(502).json({ error: "gmail_api_error", detail: `Gmail API returned ${listRes.status}` });
+      const listError = await parseGmailError(listRes);
+      if (listError) {
+        logger.error("gmail_import_all_api_error", { status: listRes.status, code: listError.code, message: listError.message, body: listError.body.slice(0, 500) });
+        res.status(listError.httpStatus).json({ error: listError.code, detail: listError.message });
         return;
       }
       const listData = await listRes.json() as { messages?: { id: string }[] };
       const messageIds = listData.messages ?? [];
+      const diagnostics = createGmailDiagnostics(q, requestedExtensionsFromQuery(q), messageIds.length);
 
       const alreadyImported = await col("gmail_imports").find(
         { user_id: ctx.userId, message_id: { $in: messageIds.map(m => m.id) } },
@@ -283,7 +294,7 @@ export function registerGmailRoutes(app: express.Application) {
       const results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> = [];
 
       for (const { id } of newMessages) {
-        const meta = await fetchEmailMeta(accessToken, id);
+        const meta = await fetchEmailMeta(accessToken, id, diagnostics.allowedExtensions, diagnostics);
         if (!meta) continue;
 
         for (const att of meta.attachments) {
@@ -306,6 +317,7 @@ export function registerGmailRoutes(app: express.Application) {
         );
       }
 
+      logGmailDiagnostics("gmail_import_all_parse", diagnostics, results.length ? new Set(results.map(r => r.messageId)).size : 0);
       logger.info("gmail_bulk_import", { user_id: ctx.userId, total: messageIds.length, new: newMessages.length, imported: results.filter(r => r.documentId).length });
       res.json({ imported: results.filter(r => r.documentId).length, skipped: importedSet.size, results });
     } catch (err: any) {
@@ -319,6 +331,7 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const history = await col("gmail_imports").find(
       { user_id: ctx.userId },
@@ -333,6 +346,7 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     await col("users").updateOne(
       { _id: new ObjectId(ctx.userId) } as any,
@@ -342,7 +356,81 @@ export function registerGmailRoutes(app: express.Application) {
   });
 }
 
-async function fetchEmailMeta(accessToken: string, id: string) {
+function hasFullGmailAccess(role: string | null | undefined): boolean {
+  return GMAIL_FULL_ACCESS_ROLES.has(role ?? "");
+}
+
+function gmailPageSize(value: unknown): number {
+  const parsed = parseInt(String(value ?? GMAIL_DEFAULT_PAGE_SIZE), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return GMAIL_DEFAULT_PAGE_SIZE;
+  return Math.min(parsed, GMAIL_MAX_PAGE_SIZE);
+}
+
+async function parseGmailError(res: Response): Promise<null | {
+  code: string;
+  message: string;
+  httpStatus: number;
+  body: string;
+}> {
+  if (res.ok) return null;
+  const body = await res.text().catch(() => "");
+  let googleCode = "";
+  let googleMessage = "";
+  let googleStatus = "";
+  let googleReason = "";
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: {
+        message?: string;
+        status?: string;
+        errors?: Array<{ reason?: string; message?: string }>;
+      };
+    };
+    googleMessage = parsed.error?.message ?? "";
+    googleStatus = parsed.error?.status ?? "";
+    googleReason = parsed.error?.errors?.[0]?.reason ?? "";
+  } catch {
+    googleMessage = body.trim();
+  }
+
+  if (res.status === 401 || googleStatus === "UNAUTHENTICATED" || googleReason === "authError") {
+    googleCode = "gmail_auth_invalid";
+    googleMessage = googleMessage || "Gmail authorization is invalid or expired. Reconnect Gmail.";
+    return { code: googleCode, message: googleMessage, httpStatus: 401, body };
+  }
+
+  if (res.status === 403) {
+    googleCode = googleReason === "insufficientPermissions" ? "gmail_scope_missing" : "gmail_permission_denied";
+    googleMessage = googleMessage || "Gmail permission denied.";
+    return { code: googleCode, message: googleMessage, httpStatus: 403, body };
+  }
+
+  if (res.status === 429) {
+    googleMessage = googleMessage || "Gmail rate limit exceeded.";
+    return { code: "gmail_rate_limited", message: googleMessage, httpStatus: 429, body };
+  }
+
+  googleMessage = googleMessage || `Gmail API returned ${res.status}`;
+  return { code: "gmail_api_error", message: googleMessage, httpStatus: 502, body };
+}
+
+type GmailAttachmentMeta = { attachmentId: string; filename: string; size: number; mimeType: string };
+type GmailSkippedAttachment = { filename: string; mimeType: string; size: number; reason: string };
+type GmailDiagnostics = {
+  query: string;
+  allowedExtensions: Set<string>;
+  messageCount: number;
+  attachmentCount: number;
+  skippedAttachmentCount: number;
+  skippedSamples: GmailSkippedAttachment[];
+};
+
+async function fetchEmailMeta(
+  accessToken: string,
+  id: string,
+  allowedExtensions = new Set(["pdf"]),
+  diagnostics?: GmailDiagnostics,
+) {
   const r = await gmailFetch(accessToken, `messages/${id}?format=full`);
   if (!r.ok) return null;
   const msg = await r.json() as any;
@@ -350,8 +438,8 @@ async function fetchEmailMeta(accessToken: string, id: string) {
   const headers: { name: string; value: string }[] = msg.payload?.headers ?? [];
   const get = (name: string) => headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
 
-  const attachments: { attachmentId: string; filename: string; size: number }[] = [];
-  collectPdfAttachments(msg.payload, attachments);
+  const attachments: GmailAttachmentMeta[] = [];
+  collectMatchingAttachments(msg.payload, allowedExtensions, attachments, diagnostics);
 
   if (!attachments.length) return null;
 
@@ -365,20 +453,89 @@ async function fetchEmailMeta(accessToken: string, id: string) {
   };
 }
 
-function collectPdfAttachments(part: any, out: { attachmentId: string; filename: string; size: number }[]) {
+function collectMatchingAttachments(
+  part: any,
+  allowedExtensions: Set<string>,
+  out: GmailAttachmentMeta[],
+  diagnostics?: GmailDiagnostics,
+) {
   if (!part) return;
-  if (part.mimeType === "application/pdf" && part.body?.attachmentId) {
-    out.push({
-      attachmentId: part.body.attachmentId,
-      filename: part.filename || "attachment.pdf",
-      size: part.body.size || 0,
-    });
+  if (part.body?.attachmentId) {
+    const filename = String(part.filename || "").trim();
+    const mimeType = String(part.mimeType || "").trim();
+    const size = Number(part.body.size || 0);
+    const ext = extensionFromFilename(filename);
+    if (matchesRequestedAttachment(filename, mimeType, allowedExtensions)) {
+      out.push({
+        attachmentId: part.body.attachmentId,
+        filename: filename || `attachment.${[...allowedExtensions][0] ?? "bin"}`,
+        size,
+        mimeType,
+      });
+      if (diagnostics) diagnostics.attachmentCount += 1;
+    } else if (diagnostics) {
+      diagnostics.skippedAttachmentCount += 1;
+      if (diagnostics.skippedSamples.length < 12) {
+        diagnostics.skippedSamples.push({
+          filename: filename || "(no filename)",
+          mimeType: mimeType || "(no mime)",
+          size,
+          reason: filename ? `extension_not_selected:${ext || "none"}` : "no_filename",
+        });
+      }
+    }
   }
   if (part.parts) {
     for (const child of part.parts) {
-      collectPdfAttachments(child, out);
+      collectMatchingAttachments(child, allowedExtensions, out, diagnostics);
     }
   }
+}
+
+function extensionFromFilename(filename: string): string {
+  const match = filename.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match?.[1] ?? "";
+}
+
+function matchesRequestedAttachment(filename: string, mimeType: string, allowedExtensions: Set<string>): boolean {
+  const ext = extensionFromFilename(filename);
+  if (ext && allowedExtensions.has(ext)) return true;
+  const mime = mimeType.toLowerCase();
+  if (allowedExtensions.has("pdf") && mime === "application/pdf") return true;
+  if ((allowedExtensions.has("doc") || allowedExtensions.has("docx")) && mime.includes("wordprocessingml")) return true;
+  if ((allowedExtensions.has("xls") || allowedExtensions.has("xlsx")) && mime.includes("spreadsheetml")) return true;
+  if ((allowedExtensions.has("jpg") || allowedExtensions.has("jpeg") || allowedExtensions.has("png")) && mime.startsWith("image/")) return true;
+  return false;
+}
+
+function requestedExtensionsFromQuery(query: string): Set<string> {
+  const matches = [...query.matchAll(/filename:([a-z0-9]+)/gi)].map((m) => m[1].toLowerCase());
+  const supported = new Set(["pdf", "doc", "docx", "xls", "xlsx", "jpg", "jpeg", "png"]);
+  const selected = matches.filter((ext) => supported.has(ext));
+  return new Set(selected.length ? selected : ["pdf"]);
+}
+
+function createGmailDiagnostics(query: string, allowedExtensions: Set<string>, messageCount: number): GmailDiagnostics {
+  return {
+    query,
+    allowedExtensions,
+    messageCount,
+    attachmentCount: 0,
+    skippedAttachmentCount: 0,
+    skippedSamples: [],
+  };
+}
+
+function logGmailDiagnostics(event: string, diagnostics: GmailDiagnostics, visibleEmailCount: number) {
+  logger.info(event, {
+    query: diagnostics.query,
+    requested_extensions: [...diagnostics.allowedExtensions],
+    gmail_messages: diagnostics.messageCount,
+    visible_emails: visibleEmailCount,
+    matched_attachments: diagnostics.attachmentCount,
+    skipped_attachments: diagnostics.skippedAttachmentCount,
+    skipped_samples: diagnostics.skippedSamples,
+  });
 }
 
 async function refreshGmailToken(user: any, userId: string): Promise<string | null> {
@@ -488,7 +645,8 @@ async function downloadAndImportAttachment(
   pipeline?: PipelineOptions
 ): Promise<{ documentId: string; filename: string }> {
   const attRes = await gmailFetch(accessToken, `messages/${messageId}/attachments/${attachmentId}`);
-  if (!attRes.ok) throw new Error(`Gmail API error: ${attRes.status}`);
+  const attError = await parseGmailError(attRes);
+  if (attError) throw new Error(attError.code);
 
   const attData = await attRes.json() as { data: string };
   const buf = Buffer.from(attData.data.replace(/-/g, "+").replace(/_/g, "/"), "base64");

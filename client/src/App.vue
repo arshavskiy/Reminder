@@ -418,7 +418,7 @@ const allNav = [
   // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
   // Print templates are reached from the contracts page, next to "תסקיר חדש".
   // {label: "הדפסת תסקיר", key: "compose", minRole: "user", feature: FEATURES.pages.printTemplates},
-  {label: "Gmail", key: "gmail-inbox", minRole: "user" ,feature: FEATURES.pages.gmail},
+  {label: "Gmail", key: "gmail-inbox", minRole: "pro"},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];
@@ -427,7 +427,7 @@ const primaryNav = computed(() => {
   const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
   return allNav.filter((item) =>
     userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
-    featuresStore.hasFeature(item.feature as FeatureKey)
+    (!item.feature || featuresStore.hasFeature(item.feature as FeatureKey))
   );
 });
 
