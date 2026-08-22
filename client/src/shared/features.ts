@@ -2,6 +2,7 @@ export const FEATURES = {
   pages: {
     dashboard: "pages.dashboard",
     documents: "pages.documents",
+    invoices: "pages.invoices",
     contracts: "pages.contracts",
     reminders: "pages.reminders",
     reports: "pages.reports",

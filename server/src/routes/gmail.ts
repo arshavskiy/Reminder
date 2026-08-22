@@ -8,10 +8,17 @@ import { requireAuth } from "../auth/middleware";
 import { generateState, generateCodeVerifier, generateCodeChallenge } from "../auth/google";
 import { importFile, type PipelineOptions } from "../pipeline/importer";
 import { logger } from "../logger";
-import { loadGmailSearchProviders } from "../gmail/searchProviders";
+import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
+import { loadTemplate } from "../templates/seedTemplates";
+import {
+  assertDocumentImportQuota,
+  DOCUMENT_MONTHLY_QUOTA_ERROR,
+  DocumentImportQuotaError,
+  documentImportQuotaErrorPayload,
+} from "../quotas/documentImportQuota";
 
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
-const GMAIL_FULL_ACCESS_ROLES = new Set(["pro", "admin"]);
+const GMAIL_FULL_ACCESS_ROLES = new Set(["user", "pro", "admin"]);
 const GMAIL_DEFAULT_PAGE_SIZE = 500;
 const GMAIL_MAX_PAGE_SIZE = 500;
 
@@ -235,7 +242,15 @@ export function registerGmailRoutes(app: express.Application) {
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     try {
-      const result = await downloadAndImportAttachment(accessToken, messageId, attachmentId, filename ?? "attachment.pdf", ctx.userId, templateId ? { templateId } : undefined);
+      const meta = await fetchGmailMessageHeaders(accessToken, messageId);
+      const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
+      if (isInspectionTemplate(template) && isMonthlyReportGmailItem(meta, filename)) {
+        res.status(422).json({ error: "monthly_report_not_imported" });
+        return;
+      }
+      await assertDocumentImportQuota(ctx.userId, ctx.user.role, 1);
+      const pipeline = await gmailImportPipelineOptions(templateId, meta, filename);
+      const result = await downloadAndImportAttachment(accessToken, messageId, attachmentId, filename ?? "attachment.pdf", ctx.userId, pipeline);
       await col("gmail_imports").updateOne(
         { user_id: ctx.userId, message_id: messageId },
         {
@@ -246,6 +261,10 @@ export function registerGmailRoutes(app: express.Application) {
       );
       res.json(result);
     } catch (err: any) {
+      if (err instanceof DocumentImportQuotaError) {
+        res.status(403).json(documentImportQuotaErrorPayload(err));
+        return;
+      }
       logger.error("gmail_import_attachment_failed", { user_id: ctx.userId, messageId, error: err.message });
       res.status(500).json({ error: err.message });
     }
@@ -264,7 +283,8 @@ export function registerGmailRoutes(app: express.Application) {
     let q = (req.body.q as string) || "has:attachment filename:pdf";
     const maxResults = gmailPageSize(req.body.limit);
     const templateId = req.body.templateId as string | undefined;
-    const pipelineOpts: PipelineOptions | undefined = templateId ? { templateId } : undefined;
+    const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
+    const skipMonthlyReports = isInspectionTemplate(template);
 
     try {
       let listRes = await gmailFetch(accessToken, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
@@ -292,16 +312,41 @@ export function registerGmailRoutes(app: express.Application) {
       if (!newMessages.length) { res.json({ imported: 0, skipped: messageIds.length, results: [] }); return; }
 
       const results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> = [];
+      let quotaLimitReached: DocumentImportQuotaError | null = null;
 
       for (const { id } of newMessages) {
         const meta = await fetchEmailMeta(accessToken, id, diagnostics.allowedExtensions, diagnostics);
         if (!meta) continue;
+        if (skipMonthlyReports && isMonthlyReportGmailItem(meta)) {
+          logger.info("gmail_import_monthly_report_skipped", {
+            user_id: ctx.userId,
+            message_id: id,
+            template_id: templateId ?? null,
+            subject: meta.subject,
+          });
+          continue;
+        }
 
         for (const att of meta.attachments) {
+          if (skipMonthlyReports && isMonthlyReportGmailItem(meta, att.filename)) {
+            logger.info("gmail_import_monthly_report_attachment_skipped", {
+              user_id: ctx.userId,
+              message_id: id,
+              filename: att.filename,
+            });
+            continue;
+          }
           try {
-            const result = await downloadAndImportAttachment(accessToken, id, att.attachmentId, att.filename, ctx.userId, pipelineOpts);
+            await assertDocumentImportQuota(ctx.userId, ctx.user.role, 1);
+            const pipeline = await gmailImportPipelineOptions(templateId, meta, att.filename);
+            const result = await downloadAndImportAttachment(accessToken, id, att.attachmentId, att.filename, ctx.userId, pipeline);
             results.push({ messageId: id, filename: att.filename, documentId: result.documentId });
           } catch (err: any) {
+            if (err instanceof DocumentImportQuotaError) {
+              quotaLimitReached = err;
+              results.push({ messageId: id, filename: att.filename, error: DOCUMENT_MONTHLY_QUOTA_ERROR });
+              break;
+            }
             results.push({ messageId: id, filename: att.filename, error: err.message });
           }
         }
@@ -315,11 +360,17 @@ export function registerGmailRoutes(app: express.Application) {
           },
           { upsert: true }
         );
+        if (quotaLimitReached) break;
       }
 
       logGmailDiagnostics("gmail_import_all_parse", diagnostics, results.length ? new Set(results.map(r => r.messageId)).size : 0);
-      logger.info("gmail_bulk_import", { user_id: ctx.userId, total: messageIds.length, new: newMessages.length, imported: results.filter(r => r.documentId).length });
-      res.json({ imported: results.filter(r => r.documentId).length, skipped: importedSet.size, results });
+      logger.info("gmail_bulk_import", { user_id: ctx.userId, total: messageIds.length, new: newMessages.length, imported: results.filter(r => r.documentId).length, quota_limit_reached: Boolean(quotaLimitReached) });
+      res.json({
+        imported: results.filter(r => r.documentId).length,
+        skipped: importedSet.size,
+        results,
+        quota: quotaLimitReached ? documentImportQuotaErrorPayload(quotaLimitReached) : null,
+      });
     } catch (err: any) {
       logger.error("gmail_import_all_failed", { user_id: ctx.userId, error: err.message });
       res.status(500).json({ error: err.message });
@@ -338,7 +389,34 @@ export function registerGmailRoutes(app: express.Application) {
       { projection: { _id: 0, message_id: 1, subject: 1, imported_at: 1, files: 1 } }
     ).sort({ imported_at: -1 }).limit(200).toArray();
 
-    res.json({ history });
+    const documentIds = [...new Set(
+      history.flatMap((item: any) => (item.files ?? [])
+        .map((file: any) => String(file.document_id ?? ""))
+        .filter((id: string) => ObjectId.isValid(id))
+      )
+    )];
+    const documents = documentIds.length
+      ? await col("documents")
+        .find({ _id: { $in: documentIds.map((id) => new ObjectId(id)) }, user_id: ctx.userId } as any, { projection: { raw_text: 0 } } as any)
+        .toArray()
+      : [];
+    const invoices = documentIds.length
+      ? await col("invoices")
+        .find({ document_id: { $in: documentIds }, user_id: ctx.userId } as any)
+        .toArray()
+      : [];
+    const invoiceMap = new Map(invoices.map((invoice: any) => [String(invoice.document_id), invoice]));
+    const docMap = new Map(documents.map((doc: any) => [doc._id.toString(), flatGmailImportedDocument(doc, invoiceMap.get(doc._id.toString()))]));
+
+    res.json({
+      history: history.map((item: any) => ({
+        ...item,
+        files: (item.files ?? []).map((file: any) => ({
+          ...file,
+          document: file.document_id ? docMap.get(String(file.document_id)) ?? null : null,
+        })),
+      })),
+    });
   });
 
   // DELETE /api/gmail/disconnect
@@ -364,6 +442,42 @@ function gmailPageSize(value: unknown): number {
   const parsed = parseInt(String(value ?? GMAIL_DEFAULT_PAGE_SIZE), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return GMAIL_DEFAULT_PAGE_SIZE;
   return Math.min(parsed, GMAIL_MAX_PAGE_SIZE);
+}
+
+function flatGmailImportedDocument(doc: any, invoice?: any) {
+  const id = doc._id?.toString?.() ?? String(doc._id);
+  return {
+    id,
+    file_name: doc.file_name ?? "",
+    mime_type: doc.mime_type ?? null,
+    processing_status: doc.processing_status ?? "queued",
+    invoice_id: invoice?._id?.toString?.() ?? null,
+    invoice_status: invoice?.status ?? null,
+    possible_not_invoice: Boolean(invoice?.possible_not_invoice),
+    invoice_validation_status: invoice?.invoice_validation_status ?? null,
+    missing_required_fields: Array.isArray(invoice?.missing_required_fields) ? invoice.missing_required_fields : [],
+    business: invoice?.business ?? invoice?.fields?.business ?? invoice?.fields?.business_name ?? null,
+    expense_category: invoice?.expense_category ?? invoice?.fields?.expense_category ?? null,
+    document_kind: doc.document_kind ?? null,
+    document_type: doc.document_type ?? null,
+    extracted_fields: parseJsonObject(doc.extracted_fields),
+    import_date: doc.import_date ?? doc.created_at ?? null,
+    created_at: doc.created_at ?? null,
+    preview_url: `/api/documents/${id}/download`,
+    thumbnail_url: doc.thumbnail_key || doc.thumbnail_path ? `/api/documents/${id}/thumbnail` : null,
+    download_url: `/api/documents/${id}/download?dl=1`,
+  };
+}
+
+function parseJsonObject(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
 }
 
 async function parseGmailError(res: Response): Promise<null | {
@@ -416,6 +530,7 @@ async function parseGmailError(res: Response): Promise<null | {
 
 type GmailAttachmentMeta = { attachmentId: string; filename: string; size: number; mimeType: string };
 type GmailSkippedAttachment = { filename: string; mimeType: string; size: number; reason: string };
+type GmailMessageHeaders = { subject: string; from: string; date: string };
 type GmailDiagnostics = {
   query: string;
   allowedExtensions: Set<string>;
@@ -424,6 +539,15 @@ type GmailDiagnostics = {
   skippedAttachmentCount: number;
   skippedSamples: GmailSkippedAttachment[];
 };
+
+async function fetchGmailMessageHeaders(accessToken: string, id: string): Promise<GmailMessageHeaders | null> {
+  const r = await gmailFetch(accessToken, `messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`);
+  if (!r.ok) return null;
+  const msg = await r.json() as any;
+  const headers: { name: string; value: string }[] = msg.payload?.headers ?? [];
+  const get = (name: string) => headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+  return { subject: get("Subject"), from: get("From"), date: get("Date") };
+}
 
 async function fetchEmailMeta(
   accessToken: string,
@@ -451,6 +575,56 @@ async function fetchEmailMeta(
     internalDate: msg.internalDate as string,
     attachments,
   };
+}
+
+async function gmailImportPipelineOptions(
+  templateId: string | undefined,
+  meta: GmailMessageHeaders | null,
+  filename: string | undefined,
+): Promise<PipelineOptions | undefined> {
+  const pipeline: PipelineOptions = templateId ? { templateId } : {};
+  if (!templateId) return Object.keys(pipeline).length ? pipeline : undefined;
+
+  const template = await loadTemplate(templateId).catch(() => null);
+  if (!isInvoiceTemplate(template)) return pipeline;
+
+  const provider = await matchGmailSearchProvider(`${meta?.from ?? ""} ${meta?.subject ?? ""} ${filename ?? ""}`);
+  const invoiceFolder = provider
+    ? `gmail/invoices/${provider.category}/${provider.id}`
+    : "gmail/invoices/other";
+  return { ...pipeline, storageKeyPrefix: invoiceFolder };
+}
+
+function isInvoiceTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): boolean {
+  if (!template) return false;
+  return template.document_kind === "invoice" || template.name.includes("חשבונית");
+}
+
+function isInspectionTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): boolean {
+  if (!template) return false;
+  return template.document_kind === "inspection_report" || /תסקיר|בדיקה/.test(template.name);
+}
+
+function isMonthlyReportGmailItem(meta: GmailMessageHeaders | null, filename = ""): boolean {
+  const text = normalizeSearchText(`${meta?.subject ?? ""} ${meta?.from ?? ""} ${filename}`);
+  return text.includes("דוח חודשי") || text.includes("דו ח חודשי") || text.includes("monthly report");
+}
+
+async function matchGmailSearchProvider(text: string): Promise<GmailSearchProvider | null> {
+  const haystack = normalizeSearchText(text);
+  if (!haystack) return null;
+  const providers = await loadGmailSearchProviders();
+  for (const provider of providers) {
+    for (const term of provider.terms) {
+      const needle = normalizeSearchText(term);
+      if (needle && haystack.includes(needle)) return provider;
+    }
+  }
+  return null;
+}
+
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function collectMatchingAttachments(

@@ -45,6 +45,79 @@ export interface GmailSearchProvider {
   enabled: boolean;
 }
 
+export interface GmailImportedDocument {
+  id: string;
+  file_name: string;
+  mime_type: string | null;
+  processing_status: string;
+  invoice_id: string | null;
+  invoice_status: string | null;
+  possible_not_invoice: boolean;
+  invoice_validation_status: string | null;
+  missing_required_fields: string[];
+  business: string | null;
+  expense_category: string | null;
+  document_kind: string | null;
+  document_type: string | null;
+  extracted_fields: Record<string, unknown>;
+  import_date: string | null;
+  created_at: string | null;
+  preview_url: string;
+  thumbnail_url: string | null;
+  download_url: string;
+}
+
+export interface GmailImportHistoryFile {
+  filename: string;
+  document_id: string | null;
+  error: string | null;
+  document?: GmailImportedDocument | null;
+}
+
+export interface GmailImportHistoryItem {
+  message_id: string;
+  subject: string;
+  imported_at: string;
+  files?: GmailImportHistoryFile[];
+}
+
+export interface ImportedInvoice {
+  id: string;
+  document_id: string | null;
+  supplier_name: string;
+  supplier_id: string | null;
+  invoice_number: string | null;
+  type: string;
+  customer_number: string | null;
+  account_number: string | null;
+  service_address: string | null;
+  issue_date: string | null;
+  payment_due_date: string | null;
+  billing_period: string | null;
+  amount: number | null;
+  amount_display: string;
+  currency: string;
+  client_name: string | null;
+  business: string | null;
+  expense_category: string | null;
+  payment_status: string | null;
+  note: string | null;
+  status: string;
+  possible_not_invoice: boolean;
+  invoice_validation_status: string | null;
+  missing_required_fields: string[];
+  file_name: string;
+  mime_type: string | null;
+  created_at: string | null;
+  import_date: string | null;
+  preview_url: string | null;
+  thumbnail_url: string | null;
+  download_url: string | null;
+  source_subject: string | null;
+  source_email: string | null;
+  fields: Record<string, unknown>;
+}
+
 export interface EquipmentHistoryEvent {
   id: string;
   contract_type: string | null;
@@ -250,6 +323,15 @@ function qs(params?: Record<string, unknown>): string {
 export const api = {
   dashboard: {
     stats: (force = false) => get<DashboardStats>("/dashboard/stats", force),
+  },
+
+  invoices: {
+    list: (params?: { q?: string; status?: string; type?: string; supplier?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
+      get<{ rows: ImportedInvoice[]; total: number; counts: Record<string, number>; types: string[]; suppliers: string[] }>(`/invoices${qs(params)}`, force),
+    get: (id: string, force = false) =>
+      get<ImportedInvoice>(`/invoices/${id}`, force),
+    update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
+      put<ImportedInvoice>(`/invoices/${id}`, body),
   },
 
   documents: {
@@ -594,7 +676,7 @@ export const api = {
       post<{ documentId: string; filename: string }>("/gmail/import-attachment", { messageId, attachmentId, filename, templateId }),
     importAll: (q?: string, limit?: number, templateId?: string) =>
       post<{ imported: number; skipped: number; results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> }>("/gmail/import-all", { q, limit, templateId }),
-    importHistory: () => get<{ history: Array<{ message_id: string; subject: string; imported_at: string; files?: Array<{ filename: string; document_id: string | null; error: string | null }> }> }>("/gmail/import-history"),
+    importHistory: () => get<{ history: GmailImportHistoryItem[] }>("/gmail/import-history"),
 
     disconnect: () => del("/gmail/disconnect"),
   },

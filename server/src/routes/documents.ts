@@ -1,10 +1,11 @@
 import express from "express";
 import {extname, join} from "path";
-import {mkdirSync, writeFileSync} from "fs";
+import {existsSync, mkdirSync, unlinkSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {
   importFile,
+  extractKnownInvoiceFields,
   normalizeEmail,
   normalizeExtractionFieldsForTemplate,
   processDocument,
@@ -13,11 +14,17 @@ import {
 import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
+import {resolveDocumentThumbnail} from "../documents/pdfThumbnail";
 import {extractWithTemplate} from "../pipeline/extractor";
 import {loadAllTemplates, loadTemplate, pickTemplate, documentTypeFromTemplate} from "../templates/seedTemplates";
 import multer from "multer";
 import {logger} from "../logger";
 import {firstTrimmedEmail} from "../contracts/contractEmail.js";
+import {
+  assertDocumentImportQuota,
+  DocumentImportQuotaError,
+  documentImportQuotaErrorPayload,
+} from "../quotas/documentImportQuota";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -216,23 +223,20 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
-    if (userRole === "user") {
-      const count = await col("documents").countDocuments({ user_id: userId, ai_extracted: true });
-      if (count >= getSettings().userDocumentLimit) {
-        res.status(403).json({ error: "document_limit_reached" });
-        return;
-      }
-    }
-
     const body = req.body as { filePath?: string };
     if (!body.filePath) {
       res.status(400).json({ error: "filePath required" });
       return;
     }
     try {
+      await assertDocumentImportQuota(userId, userRole, 1);
       const id = await importFile(body.filePath, undefined, userId);
       res.json({ id });
     } catch (err) {
+      if (err instanceof DocumentImportQuotaError) {
+        res.status(403).json(documentImportQuotaErrorPayload(err));
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
@@ -264,13 +268,7 @@ export function registerDocumentRoutes(app: express.Application) {
         const templateId = req.query.templateId as string | undefined;
         const pipelineOptions = {skipAi, skipEntities, skipReminders, templateId: templateId || undefined};
 
-      if (userRole === "user" && !skipAi) {
-        const count = await col("documents").countDocuments({ user_id: userId, ai_extracted: true });
-        if (count + files.length > getSettings().userDocumentLimit) {
-          res.status(403).json({ error: "document_limit_reached" });
-          return;
-        }
-      }
+      await assertDocumentImportQuota(userId, userRole, files.length);
 
       const uploadDir = join(getDataDir(), "uploads");
       mkdirSync(uploadDir, { recursive: true });
@@ -300,7 +298,48 @@ export function registerDocumentRoutes(app: express.Application) {
 
       res.json({ ids, duplicates });
     } catch (err) {
+      if (err instanceof DocumentImportQuotaError) {
+        res.status(403).json(documentImportQuotaErrorPayload(err));
+        return;
+      }
       res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // GET /api/documents/:id/thumbnail — streams a generated PNG preview.
+  app.get("/api/documents/:id/thumbnail", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const doc = await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
+    if (!doc) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    try {
+      const thumbnail = await resolveDocumentThumbnail(doc);
+      if (!thumbnail) {
+        res.status(404).json({ error: "thumbnail_not_found" });
+        return;
+      }
+      if (thumbnail.url) {
+        res.redirect(thumbnail.url);
+        return;
+      }
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.sendFile(thumbnail.path!, { root: "/" });
+    } catch (err) {
+      logger.warn("document_thumbnail_serve_failed", { document_id: req.params.id, user_id: userId, error: err });
+      res.status(503).json({ error: "thumbnail_not_accessible" });
     }
   });
 
@@ -324,6 +363,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     // Prefer S3 signed URL — use cached one if still fresh, otherwise regenerate
     const wantDownload = req.query.dl === "1";
+    const wantRaw = req.query.raw === "1";
     if (doc.spaces_key) {
       try {
         const { getSpacesSignedUrl, fileExistsInSpaces } = await import("../storage/spaces.js");
@@ -334,8 +374,8 @@ export function registerDocumentRoutes(app: express.Application) {
         }
         const SIGNED_URL_TTL = 7 * 24 * 3600;
 
-        if (wantDownload) {
-          const url = await getSpacesSignedUrl(doc.spaces_key, 300, doc.file_name ?? undefined, true);
+        if (wantDownload || wantRaw) {
+          const url = await getSpacesSignedUrl(doc.spaces_key, wantDownload ? 300 : 3600, doc.file_name ?? undefined, wantDownload);
           res.redirect(url);
           return;
         }
@@ -385,6 +425,7 @@ export function registerDocumentRoutes(app: express.Application) {
     const doc = await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
     if (!doc) { res.status(404).json({ error: "Not found" }); return; }
 
+    await clearDerivedDocumentData(req.params.id, userId);
     await col("documents").deleteOne({ _id: doc._id });
 
     if (doc.spaces_key) {
@@ -392,6 +433,17 @@ export function registerDocumentRoutes(app: express.Application) {
       deleteFromSpaces(doc.spaces_key).catch((err) =>
         logger.warn("document_s3_delete_failed", { document_id: req.params.id, spaces_key: doc.spaces_key, error: err })
       );
+    }
+    if (doc.thumbnail_key) {
+      const { deleteFromSpaces } = await import("../storage/spaces.js");
+      deleteFromSpaces(doc.thumbnail_key).catch((err) =>
+        logger.warn("document_thumbnail_s3_delete_failed", { document_id: req.params.id, thumbnail_key: doc.thumbnail_key, error: err })
+      );
+    }
+    if (doc.thumbnail_path && existsSync(doc.thumbnail_path)) {
+      try { unlinkSync(doc.thumbnail_path); } catch (err) {
+        logger.warn("document_thumbnail_local_delete_failed", { document_id: req.params.id, thumbnail_path: doc.thumbnail_path, error: err });
+      }
     }
 
     res.json({ ok: true });
@@ -411,7 +463,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     const errorDocs = await col("documents")
       .find({ user_id: userId, processing_status: "error" })
-      .project({ _id: 1, spaces_key: 1 })
+      .project({ _id: 1, spaces_key: 1, thumbnail_key: 1, thumbnail_path: 1 })
       .toArray();
 
     const ids = errorDocs.map((d: any) => d._id?.toString());
@@ -424,6 +476,7 @@ export function registerDocumentRoutes(app: express.Application) {
     for (const id of ids) {
       await col("extractions").deleteMany({ document_id: id });
       await col("tasks").deleteMany({ document_id: id });
+      await col("invoices").deleteMany({ document_id: id });
       await col("document_clients").deleteMany({ document_id: id });
       await col("timeline_events").deleteMany({ source_type: "document", source_id: id });
 
@@ -448,6 +501,16 @@ export function registerDocumentRoutes(app: express.Application) {
         deleteFromSpaces(d.spaces_key).catch((err) =>
           logger.warn("document_s3_delete_failed", { spaces_key: d.spaces_key, error: err })
         );
+      }
+      if (d.thumbnail_key) {
+        deleteFromSpaces(d.thumbnail_key).catch((err) =>
+          logger.warn("document_thumbnail_s3_delete_failed", { thumbnail_key: d.thumbnail_key, error: err })
+        );
+      }
+      if (d.thumbnail_path && existsSync(d.thumbnail_path)) {
+        try { unlinkSync(d.thumbnail_path); } catch (err) {
+          logger.warn("document_thumbnail_local_delete_failed", { thumbnail_path: d.thumbnail_path, error: err });
+        }
       }
     }
 
@@ -524,6 +587,7 @@ export function registerDocumentRoutes(app: express.Application) {
       // Wipe derived data for a clean re-process
       await col("extractions").deleteMany({ document_id: id });
       await col("tasks").deleteMany({ document_id: id });
+      await col("invoices").deleteMany({ document_id: id });
       await col("document_clients").deleteMany({ document_id: id });
       await col("timeline_events").deleteMany({ source_type: "document", source_id: id });
 
@@ -625,6 +689,52 @@ export function registerDocumentRoutes(app: express.Application) {
     if (body.templateId) {
       const { loadTemplate } = await import("../templates/seedTemplates.js");
       template = await loadTemplate(String(body.templateId));
+    }
+    const knownInvoiceFields = extractKnownInvoiceFields(rawText, doc.file_name);
+    if (knownInvoiceFields) {
+      const now = new Date();
+      const invoiceTemplate =
+        template ??
+        (await loadAllTemplates(userId)).find((tpl) => tpl.document_kind === "invoice" || tpl.name === "חשבונית") ??
+        null;
+      if (!invoiceTemplate) {
+        res.status(422).json({ error: "No invoice template found" });
+        return;
+      }
+
+      await col("extractions").insertOne({
+        document_id: id,
+        template_id: invoiceTemplate.id ?? null,
+        template_name: invoiceTemplate.name,
+        backend: "deterministic",
+        model: "known-invoice-parser",
+        fields: knownInvoiceFields,
+        raw_json: knownInvoiceFields,
+        error: null,
+        usage: null,
+        exec_ms: 0,
+        created_at: now,
+      } as any);
+      await col("documents").updateOne(idFilter(id), {
+        $set: {
+          extracted_fields: JSON.stringify(knownInvoiceFields),
+          template_id: invoiceTemplate.id,
+          document_type: documentTypeFromTemplate(invoiceTemplate),
+          document_kind: documentTypeFromTemplate(invoiceTemplate),
+          processing_status: "done",
+          error_message: null,
+          updated_at: now,
+        },
+      });
+      try {
+        await clearDerivedDocumentData(id, userId);
+        await saveTemplateEntitiesForDoc(id, invoiceTemplate, knownInvoiceFields as any, userId);
+      } catch (e) {
+        logger.error("document_known_invoice_entities_failed", { document_id: id, user_id: userId, error: e });
+      }
+      const updated = await col("documents").findOne(idFilter(id));
+      res.json({ ok: true, fields: knownInvoiceFields, template: invoiceTemplate.name, document: flatDoc(updated) });
+      return;
     }
     if (!template) template = await pickTemplate(rawText, userId);
     if (!template) {
@@ -740,6 +850,7 @@ export function registerDocumentRoutes(app: express.Application) {
     // Wipe all derived data for a clean re-process
     await col("extractions").deleteMany({ document_id: id });
     await col("tasks").deleteMany({ document_id: id });
+    await col("invoices").deleteMany({ document_id: id });
 
     // Find contracts linked to this document and delete related reminders
     const contracts = await col("contracts").find({ document_id: id }).toArray();
@@ -990,6 +1101,7 @@ async function clearDerivedDocumentData(id: string, userId: string): Promise<voi
     col("timeline_events").deleteMany({ source_type: "document", source_id: id } as any),
     col("reminders").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
     col("contracts").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
+    col("invoices").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
     col("equipment").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
   ]);
 }
@@ -997,7 +1109,12 @@ async function clearDerivedDocumentData(id: string, userId: string): Promise<voi
 function flatDoc(doc: any) {
   if (!doc) return doc;
   const { _id, ...rest } = doc;
-  return { id: _id?.toString(), ...rest };
+  const id = _id?.toString();
+  return {
+    id,
+    ...rest,
+    thumbnail_url: doc.thumbnail_key || doc.thumbnail_path ? `/api/documents/${id}/thumbnail` : null,
+  };
 }
 
 function getDocumentReminderStatus(doc: any, reminders: any[]): "pending" | "assigned" | "missing" | "error" | "not_applicable" {
@@ -1010,10 +1127,14 @@ function getDocumentReminderStatus(doc: any, reminders: any[]): "pending" | "ass
 
 function isNonReminderDocument(doc: any): boolean {
   const type = `${doc?.document_type ?? ""} ${doc?.document_kind ?? ""}`;
-  if (/תלוש/.test(type)) return true;
+  if (/תלוש|חשבונית|קבלה|invoice|receipt|bill/i.test(type)) return true;
   const fields = parseObjectJson(doc?.extracted_fields);
   if (!fields) return false;
   return Boolean(
+    fields.invoice_number ||
+    fields.receipt_number ||
+    fields.payment_due_date ||
+    fields.supplier_name ||
     fields.payroll_month ||
     fields.employee_name ||
     fields.net_payment ||

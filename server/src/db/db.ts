@@ -40,6 +40,7 @@ const ALL_COLLECTIONS = [
   "document_clients",
   "clients",
   "contracts",
+  "invoices",
   "reminders",
   "tasks",
   "extractions",
@@ -106,6 +107,7 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("documents").createIndex({ processing_status: 1 });
   await db.collection("documents").createIndex({ document_source: 1 });
   await db.collection("documents").createIndex({ user_id: 1 });
+  await db.collection("documents").createIndex({ user_id: 1, created_at: -1 });
   await db.collection("documents").createIndex({ created_at: -1 });
   await db.collection("documents").createIndex({ import_date: -1 });
 
@@ -136,6 +138,13 @@ async function applyIndexes(db: Db): Promise<void> {
     { unique: true, partialFilterExpression: { document_id: { $type: "string" } } }
   );
   await db.collection("contracts").createIndex({ client_id: 1 });
+
+  // invoices / bills — extracted from invoice templates; not part of reminder contract flow
+  await db.collection("invoices").createIndex({ user_id: 1 });
+  await db.collection("invoices").createIndex({ document_id: 1 }, { unique: true });
+  await db.collection("invoices").createIndex({ supplier_name: 1 });
+  await db.collection("invoices").createIndex({ payment_due_date: 1 });
+  await db.collection("invoices").createIndex({ created_at: -1 });
 
   // reminders
   await db.collection("reminders").createIndex({ user_id: 1 });

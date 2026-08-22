@@ -17,6 +17,7 @@ import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spac
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
+import {generatePdfThumbnailForDocument} from "../documents/pdfThumbnail";
 
 type PushFn = (event: Record<string, unknown>) => void;
 
@@ -26,6 +27,7 @@ export interface PipelineOptions {
   skipReminders?: boolean; // skip reminder generation
   startDelayMs?: number;   // optional batch pacing before background processing starts
   templateId?: string;     // force a specific doc_template instead of auto-detection
+  storageKeyPrefix?: string; // optional S3 prefix for source-specific organization
 }
 
 function parseJsonObject(raw: unknown, fallback: unknown = null): Record<string, unknown> {
@@ -183,7 +185,10 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   const SIGNED_URL_TTL = 7 * 24 * 3600; // 7 days
   if (spacesEnabled()) {
     try {
-      spacesKey = userId ? `documents/${userId}/${fileHash}${ext}` : `documents/${fileHash}${ext}`;
+      const prefix = normalizeStorageKeyPrefix(pipeline?.storageKeyPrefix);
+      spacesKey = prefix
+        ? `${prefix}/${userId ? `${userId}/` : ""}${fileHash}${ext}`
+        : userId ? `documents/${userId}/${fileHash}${ext}` : `documents/${fileHash}${ext}`;
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
       downloadUrl = await getSpacesSignedUrl(spacesKey, SIGNED_URL_TTL, fileName);
       logger.info("document_storage_uploaded", { user_id: userId ?? null, spaces_key: spacesKey });
@@ -251,6 +256,18 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   return documentId;
 }
 
+function normalizeStorageKeyPrefix(value: string | null | undefined): string | null {
+  const clean = String(value ?? "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .map((part) => part.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-"))
+    .filter(Boolean)
+    .join("/");
+  return clean || null;
+}
+
 export async function processDocument(
   documentId: string,
   filePath: string,
@@ -309,6 +326,49 @@ export async function processDocument(
   push?.({ type: "document:progress", documentId: documentId as any, stage: "ai_extraction", progress: 50 });
 
   const aiWillRun = settings.autoExtract && rawText.trim().length > 0 && !pipeline?.skipAi;
+  const docRowForKnownInvoice = await col("documents").findOne(docFilter) as any;
+  const knownInvoiceFields = extractKnownInvoiceFields(rawText, docRowForKnownInvoice?.file_name);
+  if (knownInvoiceFields) {
+    logger.info("known_invoice_extracted", {
+      document_id: documentId,
+      user_id: userId ?? null,
+      supplier_name: knownInvoiceFields.supplier_name ?? null,
+      document_subtype: knownInvoiceFields.document_subtype ?? null,
+    });
+    await col("extractions").insertOne({
+      document_id: documentId,
+      backend: "deterministic",
+      model: "known-invoice-parser",
+      result_json: knownInvoiceFields,
+      raw_text: rawText,
+      parsed_ok: 1,
+      error: null,
+      exec_ms: 0,
+      created_at: new Date(),
+    } as any);
+    await col("documents").updateOne(docFilter, {
+      $set: {
+        extracted_fields: JSON.stringify(knownInvoiceFields),
+        document_type: "invoice",
+        document_kind: "invoice",
+        updated_at: new Date(),
+      },
+    });
+    if (!pipeline?.skipEntities) {
+      push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
+      await saveInvoiceRecord(documentId, knownInvoiceFields, {
+        userId,
+        clientId: null,
+        documentType: "חשבונית",
+        templateId: pipeline?.templateId,
+        templateName: "חשבונית",
+        rawText,
+      });
+      await deleteContractReminderArtifacts(documentId, userId);
+    }
+    await finishDocumentProcessing(documentId, filePath, mimeType, push, userId);
+    return;
+  }
 
   // ── Stage A: OCR regex baseline — always runs when there is text ────────────
   // Runs regardless of AI setting. Persists a diagnostic extraction row and a
@@ -548,7 +608,7 @@ export async function processDocument(
 
           if (!pipeline?.skipEntities) {
             push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-            await saveTemplateEntities(documentId, template, normalizedFields, userId, pipeline?.skipReminders);
+            await saveTemplateEntities(documentId, template, normalizedFields, userId, pipeline?.skipReminders, rawText);
           }
         } else if (run.error) {
           const msg = `AI extraction failed: ${run.error}`;
@@ -592,7 +652,7 @@ export async function processDocument(
       extraction.result.expiry_date = forwardPastNextActionDate(extraction.result.expiry_date);
       if (!pipeline?.skipEntities) {
             push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-            await saveExtractionEntities(documentId, extraction.result, userId, pipeline?.skipReminders);
+            await saveExtractionEntities(documentId, extraction.result, userId, pipeline?.skipReminders, rawText);
           }
         } else if (extraction.error) {
           const msg = `AI extraction failed: ${extraction.error}`;
@@ -607,9 +667,25 @@ export async function processDocument(
     }
   }
 
-  await col("documents").updateOne(docFilter, {
-    $set: { processing_status: "done", updated_at: new Date() },
-  });
+  await finishDocumentProcessing(documentId, filePath, mimeType, push, userId);
+}
+
+async function finishDocumentProcessing(
+  documentId: string,
+  filePath: string,
+  mimeType: string,
+  push?: PushFn,
+  userId?: string,
+): Promise<void> {
+  await col("documents").updateOne(
+    { _id: new ObjectId(documentId) } as any,
+    { $set: { processing_status: "done", updated_at: new Date() } },
+  );
+  if (mimeType === "application/pdf") {
+    await generatePdfThumbnailForDocument(documentId, { filePath }).catch((err) => {
+      logger.warn("document_thumbnail_generation_failed", { document_id: documentId, user_id: userId ?? null, error: err });
+    });
+  }
   push?.({ type: "document:done", documentId: documentId as any, status: "done" });
   logger.info("document_processing_completed", { document_id: documentId, user_id: userId ?? null });
 }
@@ -618,7 +694,8 @@ async function saveExtractionEntities(
   documentId: string,
   result: import("../../src/shared/types.js").ExtractionResult,
   userId?: string,
-  skipReminders?: boolean
+  skipReminders?: boolean,
+  rawText?: string,
 ) {
   if (result.document_type || result.document_number) {
     await col("documents").updateOne(
@@ -676,6 +753,25 @@ async function saveExtractionEntities(
       source_type: "document",
       created_at: new Date(),
     } as any);
+  }
+
+  if (isInvoiceLikeDocument(result.document_type)) {
+    const invoiceSaved = await saveInvoiceRecord(documentId, result as unknown as Record<string, unknown>, {
+      userId,
+      clientId,
+      documentType: result.document_type ?? "invoice",
+      rawText,
+    });
+    await deleteContractReminderArtifacts(documentId, userId);
+    if (invoiceSaved) {
+      logger.info("invoice_entity_saved", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        source: "generic-extraction",
+        document_type: result.document_type ?? null,
+      });
+    }
+    return;
   }
 
   const resultFields = result as any;
@@ -1439,7 +1535,8 @@ async function saveTemplateEntities(
   template: DocTemplate,
   fields: DynamicExtraction,
   userId?: string,
-  skipReminders?: boolean
+  skipReminders?: boolean,
+  rawText?: string,
 ) {
   const f = fields;
 
@@ -1498,6 +1595,27 @@ async function saveTemplateEntities(
       source_type: "document",
       created_at: new Date(),
     } as any);
+  }
+
+  if (isInvoiceTemplate(template)) {
+    const invoiceSaved = await saveInvoiceRecord(documentId, fields, {
+      userId,
+      clientId,
+      documentType: template.name,
+      templateId: template.id,
+      templateName: template.name,
+      rawText,
+    });
+    await deleteContractReminderArtifacts(documentId, userId);
+    if (invoiceSaved) {
+      logger.info("invoice_entity_saved", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        template_id: template.id ?? null,
+        template_name: template.name,
+      });
+    }
+    return;
   }
 
   const docNumber =
@@ -1592,6 +1710,414 @@ async function saveTemplateEntities(
       model: eq.model ?? null,
     });
   }
+}
+
+function isInvoiceTemplate(template: DocTemplate): boolean {
+  return template.document_kind === "invoice" || isInvoiceLikeDocument(template.name);
+}
+
+function isInvoiceLikeDocument(value: unknown): boolean {
+  const text = String(value ?? "").toLowerCase();
+  return /invoice|receipt|bill|חשבונית|קבלה|דרישת\s*תשלום|חיוב/.test(text);
+}
+
+export function extractKnownInvoiceFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  return extractGitHubReceiptFields(rawText, fileName) ?? extractVercelReceiptFields(rawText, fileName);
+}
+
+function extractGitHubReceiptFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  const text = rawText.replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const lower = text.toLowerCase();
+  const nameLower = String(fileName ?? "").toLowerCase();
+  if (!lower.includes("github") || !(lower.includes("receipt") || nameLower.includes("receipt"))) return null;
+
+  const dateRaw =
+    matchValueAfterLabel(text, "Date") ??
+    matchFirst(text, /\b([A-Z][a-z]{2,9}\s+\d{1,2},\s+\d{4})\b/) ??
+    matchFirst(text, /\b(\d{4}-\d{2}-\d{2})\b/);
+  const issueDate = normalizeInvoiceDate(dateRaw);
+  const transactionId = matchValueAfterLabel(text, "Transaction ID");
+  const accountBilled = matchValueAfterLabel(text, "Account billed");
+  const amountRaw =
+    matchValueAfterLabel(text, "Total") ??
+    matchValueAfterLabel(text, "Amount") ??
+    matchFirst(text, /(?:Total|Amount)\s*([\d,]+(?:\.\d{1,2})?)\s*USD/i) ??
+    matchFirst(text, /\$[\s]*([\d,]+(?:\.\d{1,2})?)\s*USD/i);
+  const taxRaw = matchValueAfterLabel(text, "Tax");
+  const paymentMethod = matchValueAfterLabel(text, "Charged to");
+  const serviceDescription = matchFirst(text, /(GitHub\s+[^\n]+?)(?=\s+\$?\d|[\r\n])/i);
+  const amount = parseInvoiceAmount(amountRaw);
+  const invoiceNumber =
+    transactionId ??
+    matchFirst(fileName ?? "", /receipt[-_](\d{4}-\d{2}-\d{2})/i) ??
+    matchFirst(fileName ?? "", /github[-_\w]*receipt[-_]?([^.]+)/i);
+
+  if (!issueDate || amount === null || !invoiceNumber) return null;
+
+  return {
+    supplier_name: "GitHub, Inc.",
+    supplier_id: null,
+    invoice_number: invoiceNumber,
+    document_subtype: "קבלה",
+    client_company: accountBilled ?? null,
+    client_name: accountBilled ?? null,
+    customer_number: accountBilled ? accountBilled.replace(/\s*\([^)]*\)\s*$/, "") : null,
+    issue_date: issueDate,
+    payment_due_date: issueDate,
+    billing_period: matchFirst(text, /\b([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4}\s*-\s*[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})\b/),
+    amount,
+    amount_before_vat: amount,
+    vat_amount: parseInvoiceAmount(taxRaw) ?? 0,
+    currency: "USD",
+    payment_status: "paid",
+    payment_method: paymentMethod,
+    items: serviceDescription
+      ? [{ description: serviceDescription, amount, currency: "USD" }]
+      : [],
+    notes: "GitHub subscription receipt",
+  };
+}
+
+function extractVercelReceiptFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  const text = rawText.replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const lower = text.toLowerCase();
+  const nameLower = String(fileName ?? "").toLowerCase();
+  if (!lower.includes("vercel") || !(lower.includes("invoice") || lower.includes("receipt") || /invoice|receipt/.test(nameLower))) {
+    return null;
+  }
+
+  const isReceipt = lower.includes("receipt") || nameLower.includes("receipt");
+  const issueDate =
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date paid")) ??
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date of issue")) ??
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date due")) ??
+    normalizeInvoiceDate(matchFirst(text, /\b([A-Z][a-z]{2,9}\s+\d{1,2},\s+\d{4})\b/));
+  const dueDate =
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date due")) ??
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date paid")) ??
+    issueDate;
+  const invoiceNumber =
+    formatVercelDocumentNumber(matchValueAfterLabel(text, "Invoice number")) ??
+    matchFirst(fileName ?? "", /Invoice[-_]?([A-Z0-9-]+)/i);
+  const receiptNumber =
+    formatVercelDocumentNumber(matchValueAfterLabel(text, "Receipt number")) ??
+    matchFirst(fileName ?? "", /Receipt[-_]?([A-Z0-9-]+)/i);
+  const amountRaw =
+    matchValueAfterLabel(text, "Amount paid") ??
+    matchValueAfterLabel(text, "Amount due") ??
+    matchValueAfterLabel(text, "Total") ??
+    matchFirst(text, /\b([\d,]+(?:\.\d{1,2})?)\s+USD\s+(?:due|paid)\b/i);
+  const amount = parseInvoiceAmount(amountRaw);
+  const subtotal = parseInvoiceAmount(matchValueAfterLabel(text, "Subtotal"));
+  const clientCompany = extractVercelBillTo(text);
+  const paymentMethod = extractVercelPaymentMethod(text);
+  const itemDescription = matchFirst(text, /\n(?!Subtotal|Total|Amount)([^\n]*?(?:Domain purchase|subscription|seat|usage)[^\n]*?)(?=\d[\d.,]*\d[\d.,]*|\n|$)/i);
+
+  if (!issueDate || amount === null || !(invoiceNumber || receiptNumber) || !clientCompany) return null;
+
+  return {
+    supplier_name: "Vercel Inc.",
+    supplier_id: null,
+    invoice_number: invoiceNumber ?? receiptNumber,
+    receipt_number: receiptNumber ?? null,
+    document_subtype: isReceipt ? "קבלה" : "חשבונית",
+    client_company: clientCompany,
+    client_name: clientCompany,
+    service_address: extractVercelBillToAddress(text),
+    issue_date: issueDate,
+    payment_due_date: dueDate,
+    amount,
+    amount_before_vat: subtotal,
+    vat_amount: null,
+    currency: "USD",
+    payment_status: isReceipt ? "paid" : null,
+    payment_method: paymentMethod,
+    items: itemDescription
+      ? [{ description: itemDescription, amount, currency: "USD" }]
+      : [],
+    notes: isReceipt ? "Vercel receipt" : "Vercel invoice",
+  };
+}
+
+function formatVercelDocumentNumber(value: string | null): string | null {
+  if (!value) return null;
+  const clean = value.replace(/[^A-Za-z0-9-]/g, "");
+  const invoiceMatch = /^([A-Z0-9]{8})(\d{4})$/i.exec(clean);
+  if (invoiceMatch) return `${invoiceMatch[1]}-${invoiceMatch[2]}`;
+  const receiptMatch = /^(\d{4})(\d{4})$/.exec(clean);
+  if (receiptMatch) return `${receiptMatch[1]}-${receiptMatch[2]}`;
+  return clean || null;
+}
+
+function extractVercelBillTo(text: string): string | null {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const index = lines.findIndex((line) => /^Bill to$/i.test(line));
+  if (index < 0) return null;
+  const value = lines[index + 1];
+  return value ? cleanKnownInvoiceValue(value) : null;
+}
+
+function extractVercelBillToAddress(text: string): string | null {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const index = lines.findIndex((line) => /^Bill to$/i.test(line));
+  if (index < 0) return null;
+  const address: string[] = [];
+  for (const line of lines.slice(index + 2)) {
+    if (/@/.test(line)) continue;
+    if (/^\d+(?:\.\d{1,2})?\s+(?:USD\s+)?(?:due|paid)\b/i.test(line)) break;
+    if (/^VAT-?Code/i.test(line)) break;
+    address.push(line);
+  }
+  return address.join(", ") || null;
+}
+
+function extractVercelPaymentMethod(text: string): string | null {
+  return matchFirst(text, /\b((?:Mastercard|Visa|American Express|Amex|Discover|PayPal)\s*[-–]\s*\d{2,4})\b/i)
+    ?? matchValueAfterLabel(text, "Payment method");
+}
+
+function matchValueAfterLabel(text: string, label: string): string | null {
+  const escaped = escapeRegex(label);
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const inline = new RegExp(`^${escaped}\\s*[:：-]?\\s*(.+)$`, "i").exec(line);
+    if (inline?.[1] && inline[1].trim().toLowerCase() !== label.toLowerCase()) {
+      return cleanKnownInvoiceValue(inline[1]);
+    }
+    if (new RegExp(`^${escaped}$`, "i").test(line)) {
+      const next = lines[i + 1];
+      if (next) return cleanKnownInvoiceValue(next);
+    }
+  }
+  const loose = new RegExp(`${escaped}\\s+([^\\n]+)`, "i").exec(text);
+  return loose?.[1] ? cleanKnownInvoiceValue(loose[1]) : null;
+}
+
+function matchFirst(text: string, pattern: RegExp): string | null {
+  const match = pattern.exec(text);
+  return match?.[1] ? cleanKnownInvoiceValue(match[1]) : null;
+}
+
+function cleanKnownInvoiceValue(value: string): string | null {
+  const cleaned = value
+    .replace(/\s{2,}/g, " ")
+    .replace(/^\s*[:：-]\s*/, "")
+    .replace(/\s*[*•]\s*$/, "")
+    .trim();
+  return cleaned || null;
+}
+
+function normalizeInvoiceDate(value: string | null): string | null {
+  if (!value) return null;
+  const cleaned = value.replace(/\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\s*[A-Z]{2,4}\b/i, "").trim();
+  const parsed = Date.parse(cleaned);
+  if (!Number.isFinite(parsed)) return null;
+  return new Date(parsed).toISOString().slice(0, 10);
+}
+
+function firstInvoiceString(fields: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = fields[key];
+    if (value === undefined || value === null || value === "") continue;
+    return String(value).trim() || null;
+  }
+  return null;
+}
+
+function parseInvoiceAmount(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const normalized = String(value)
+    .replace(/[₪$€£,\s]/g, "")
+    .replace(/[^\d.-]/g, "");
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function deleteContractReminderArtifacts(documentId: string, userId?: string): Promise<void> {
+  const contractFilter: Record<string, unknown> = { document_id: documentId };
+  if (userId) contractFilter.user_id = userId;
+  const contracts = await col("contracts").find(contractFilter as any).project({ _id: 1 }).toArray();
+  const contractIds = contracts.map((contract: any) => contract._id?.toString()).filter(Boolean);
+  if (contractIds.length > 0) {
+    const reminderFilter: Record<string, unknown> = {
+      source_type: "contract_expiry",
+      source_id: { $in: contractIds },
+    };
+    if (userId) reminderFilter.user_id = userId;
+    await col("reminders").deleteMany(reminderFilter as any);
+  }
+  const directReminderFilter: Record<string, unknown> = { document_id: documentId };
+  if (userId) directReminderFilter.user_id = userId;
+  await Promise.all([
+    col("contracts").deleteMany(contractFilter as any),
+    col("reminders").deleteMany(directReminderFilter as any),
+    col("tasks").deleteMany(directReminderFilter as any),
+  ]);
+}
+
+async function saveInvoiceRecord(
+  documentId: string,
+  fields: Record<string, unknown>,
+  options: {
+    userId?: string;
+    clientId?: string | null;
+    documentType?: string | null;
+    templateId?: string | number;
+    templateName?: string | null;
+    rawText?: string;
+  },
+): Promise<boolean> {
+  const now = new Date();
+  const supplierName = firstInvoiceString(fields, ["supplier_name", "vendor_name", "counterparty", "issuer_name", "company_name"]);
+  const invoiceNumber = firstInvoiceString(fields, ["invoice_number", "receipt_number", "document_number", "reference_number"]);
+  const clientName = firstInvoiceString(fields, ["client_company", "client_name", "customer_name", "bill_to"])
+    ?? extractInvoiceRecipientFromRawText(options.rawText);
+  const issueDate = firstInvoiceString(fields, ["issue_date", "invoice_date", "receipt_date", "date"]);
+  const paymentDueDate = firstInvoiceString(fields, ["payment_due_date", "due_date", "expiry_date"]);
+  const amount = parseInvoiceAmount(
+    fields.amount ?? fields.total_amount ?? fields.amount_due ?? fields.total_to_pay ?? fields.total,
+  );
+  const missingRequired = invoiceMissingRequiredFields({
+    supplierName,
+    invoiceNumber,
+    clientName,
+    issueDate,
+    paymentDueDate,
+    amount,
+  });
+  if (missingRequired.length > 0) {
+    await col("invoices").deleteOne({ document_id: documentId } as any);
+    await col("documents").updateOne(
+      { _id: new ObjectId(documentId) } as any,
+      {
+        $set: {
+          invoice_saved: false,
+          invoice_rejected: true,
+          invoice_rejection_reason: "missing_required_fields",
+          invoice_missing_fields: missingRequired,
+          reminder_status: "not_applicable",
+          updated_at: now,
+        },
+      },
+    );
+    logger.info("invoice_entity_skipped_missing_fields", {
+      document_id: documentId,
+      user_id: options.userId ?? null,
+      missing_fields: missingRequired,
+    });
+    return false;
+  }
+  const invoiceFields: Record<string, unknown> = {
+    ...(options.userId && { user_id: options.userId }),
+    client_id: options.clientId ?? null,
+    template_id: options.templateId ?? null,
+    template_name: options.templateName ?? null,
+    supplier_name: supplierName,
+    supplier_id: firstInvoiceString(fields, ["supplier_id", "vendor_id", "business_id", "vat_id"]),
+    invoice_number: invoiceNumber,
+    document_subtype: firstInvoiceString(fields, ["document_subtype", "invoice_type", "receipt_type"]) ?? options.documentType ?? null,
+    customer_number: firstInvoiceString(fields, ["customer_number", "account_customer_number"]),
+    account_number: firstInvoiceString(fields, ["account_number", "contract_number"]),
+    service_address: firstInvoiceString(fields, ["service_address", "site_address", "address"]),
+    issue_date: issueDate,
+    billing_period: firstInvoiceString(fields, ["billing_period", "period"]),
+    billing_period_start: firstInvoiceString(fields, ["billing_period_start", "period_start"]),
+    billing_period_end: firstInvoiceString(fields, ["billing_period_end", "period_end"]),
+    payment_due_date: paymentDueDate,
+    amount,
+    amount_before_vat: parseInvoiceAmount(fields.amount_before_vat ?? fields.subtotal),
+    vat_amount: parseInvoiceAmount(fields.vat_amount ?? fields.vat),
+    currency: normalizeInvoiceCurrency(firstInvoiceString(fields, ["currency"])),
+    payment_status: firstInvoiceString(fields, ["payment_status", "status"]),
+    payment_method: firstInvoiceString(fields, ["payment_method"]),
+    meter_number: firstInvoiceString(fields, ["meter_number"]),
+    previous_reading: firstInvoiceString(fields, ["previous_reading"]),
+    current_reading: firstInvoiceString(fields, ["current_reading"]),
+    usage_quantity: firstInvoiceString(fields, ["usage_quantity", "consumption", "kwh"]),
+    tariff_plan: firstInvoiceString(fields, ["tariff_plan"]),
+    items: Array.isArray(fields.items) ? fields.items : [],
+    notes: firstInvoiceString(fields, ["notes", "summary_hebrew", "summary"]),
+    fields,
+    updated_at: now,
+  };
+  if (clientName) {
+    invoiceFields.client_company = clientName;
+    invoiceFields.fields = {
+      ...fields,
+      client_company: fields.client_company ?? clientName,
+      client_name: fields.client_name ?? clientName,
+    };
+  }
+
+  await col("invoices").updateOne(
+    { document_id: documentId } as any,
+    {
+      $set: invoiceFields,
+      $setOnInsert: { document_id: documentId, created_at: now, status: "new" },
+    } as any,
+    { upsert: true },
+  );
+
+  await col("documents").updateOne(
+    { _id: new ObjectId(documentId) } as any,
+    {
+      $set: {
+        invoice_saved: true,
+        invoice_rejected: false,
+        invoice_rejection_reason: null,
+        invoice_missing_fields: [],
+        reminder_status: "not_applicable",
+        updated_at: now,
+      },
+    },
+  );
+  return true;
+}
+
+function invoiceMissingRequiredFields(values: {
+  supplierName: string | null;
+  invoiceNumber: string | null;
+  clientName: string | null;
+  issueDate: string | null;
+  paymentDueDate: string | null;
+  amount: number | null;
+}): string[] {
+  const missing: string[] = [];
+  if (!values.supplierName) missing.push("supplier_name");
+  if (!values.invoiceNumber) missing.push("invoice_number");
+  if (!values.clientName) missing.push("client_company");
+  if (!values.issueDate) missing.push("issue_date");
+  if (!values.paymentDueDate) missing.push("payment_due_date");
+  if (values.amount === null) missing.push("amount");
+  return missing;
+}
+
+function extractInvoiceRecipientFromRawText(rawText: string | null | undefined): string | null {
+  if (!rawText) return null;
+  const match = rawText.match(/(?:^|\n|\r)\s*לכבוד\s*:?\s*([^\n\r\t|:]{2,100})/m);
+  const raw = match?.[1]?.trim();
+  if (!raw) return null;
+  const compact = raw
+    .replace(/\s{2,}/g, " ")
+    .replace(/[,:;|\-]+$/g, "")
+    .trim();
+  const company = compact.match(/^(.+?בע["״']?מ)\b/);
+  if (company?.[1]) return company[1].trim();
+  return compact
+    .replace(/\s+(?:לתשלום|תשלום|סה["״]?כ|עד|מספר|חשבון)\b.*$/, "")
+    .trim() || null;
+}
+
+function normalizeInvoiceCurrency(value: unknown): string {
+  const text = String(value ?? "").trim().toUpperCase();
+  if (!text || /₪|ש"?ח|שקל|NIS|ILS/.test(text)) return "ILS";
+  if (/\$|USD|DOLLAR/.test(text)) return "USD";
+  if (/€|EUR/.test(text)) return "EUR";
+  if (/£|GBP/.test(text)) return "GBP";
+  return /^[A-Z]{3}$/.test(text) ? text : "ILS";
 }
 
 function escapeRegex(s: string): string {

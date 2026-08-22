@@ -30,6 +30,7 @@ import {registerTemplateRoutes} from "./routes/templates";
 import {registerEquipmentRoutes} from "./routes/equipment";
 import {registerAuthRoutes} from "./routes/auth";
 import {registerGmailRoutes} from "./routes/gmail";
+import {registerInvoiceRoutes} from "./routes/invoices";
 import {registerUserSettingsRoutes} from "./routes/userSettings";
 import {registerProfileRoutes} from "./routes/profile";
 import {registerAdminRoutes} from "./routes/admin";
@@ -177,7 +178,9 @@ app.use("/api/equipment", (req, res, next) => {
 
 registerAuthRoutes(app);
 app.use("/api/gmail", requireAnyFeature(["pages.gmail"]));
+app.use("/api/invoices", requireAnyFeature(["pages.invoices", "pages.gmail"]));
 registerGmailRoutes(app);
+registerInvoiceRoutes(app);
 registerDocumentRoutes(app);
 registerClientRoutes(app);
 registerContractRoutes(app);

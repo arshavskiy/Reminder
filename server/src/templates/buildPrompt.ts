@@ -48,6 +48,9 @@ export function buildPromptForTemplate(tpl: DocTemplate, inspector?: InspectorPr
   const isInspectionTemplate = tpl.match_keywords.some((k) =>
     ["תסקיר", "בדיקה תקופתית", "בדיקה", "ציוד הרמה", "פקודת הבטיחות"].includes(k)
   );
+  const isInvoiceTemplate = tpl.document_kind === "invoice" || tpl.match_keywords.some((k) =>
+    /invoice|receipt|bill|חשבונית|קבלה|דרישת\s*תשלום|חיוב/i.test(k)
+  );
   const shouldExtractEquipment = isInspectionTemplate && (tpl as any).extract_equipment !== false;
   const equipmentSection = shouldExtractEquipment
     ? `\n  "_equipment": [   // Extract EVERY equipment row from the inspection table — one object per row.
@@ -85,6 +88,21 @@ export function buildPromptForTemplate(tpl: DocTemplate, inspector?: InspectorPr
     }
   ]  // IMPORTANT: extract ALL rows; empty array only if truly no equipment.`
     : "";
+  const invoiceSection = isInvoiceTemplate
+    ? `\n• Invoice / receipt English label handling:
+  - English invoice titles and labels are authoritative. Map them directly:
+    "Invoice number" → invoice_number, "Receipt number" → invoice_number or receipt_number,
+    "Date of issue" → issue_date, "Date paid" → issue_date and payment_status="paid",
+    "Date due" / "Amount due" due date → payment_due_date,
+    "Bill to" / "Account billed" → client_company/client_name,
+    "Total" / "Amount due" / "Amount paid" → amount,
+    "Subtotal" → amount_before_vat, "Tax" / "VAT" → vat_amount,
+    "Payment method" / "Charged to" → payment_method.
+  - Preserve English values exactly when they are real values, e.g. supplier "Vercel Inc.", client "Pavel Arshavsky's projects", payment method "Mastercard - 8021".
+  - Currency must be a 3-letter ISO code: USD, ILS, EUR, GBP. If the document says "$", "USD", or an amount line like "11.25 USD", return currency="USD". Never convert USD amounts to ILS and never return "ש\"ח" for a USD document.
+  - For amount, prefer the final paid/due value in this order: Amount paid, Amount due, Total, then Subtotal. Do not use Tax/VAT as amount.
+  - For receipts, use document_subtype="קבלה"; for invoices, use document_subtype="חשבונית".`
+    : "";
 
   const inspectorExclusionNote = buildInspectorExclusionNote(inspector);
 
@@ -109,6 +127,7 @@ GENERAL RULES:
 • If a field cannot be determined, use null (or [] for list types).
 • Do not invent data. Do not add fields not in the schema.
 • The text may have residual bidi/encoding artifacts from PDF extraction — use context.
+${invoiceSection}
 • BiDi table columns: Hebrew PDFs often reverse the order of column header words in equipment tables.
   Common reversed headers and their correct mapping:
     "ירודיס 'סמ" / "ירודיס רפסמ"  →  מספר סידורי  →  serial_number

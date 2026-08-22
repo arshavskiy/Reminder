@@ -11,6 +11,8 @@ import SettingsPage from "../views/SettingsPage.vue";
 import ProfilePage from "../views/ProfilePage.vue";
 import DocTemplatesPage from "../views/DocTemplatesPage.vue";
 import GmailInboxPage from "../views/GmailInboxPage.vue";
+import InvoicesPage from "../views/InvoicesPage.vue";
+import InvoiceDetailPage from "../views/InvoiceDetailPage.vue";
 import EmailTemplatesPage from "../views/EmailTemplatesPage.vue";
 import EquipmentPage from "../views/EquipmentPage.vue";
 import ReportsPage from "../views/ReportsPage.vue";
@@ -35,6 +37,8 @@ export const router = createRouter({
     { path: "/", component: DashboardPage, meta: { feature: FEATURES.pages.dashboard } },
     { path: "/documents", component: DocumentsPage, meta: { feature: FEATURES.pages.documents } },
     { path: "/documents/:id", component: DocumentDetailPage, meta: { feature: FEATURES.pages.documents } },
+    { path: "/invoices", component: InvoicesPage, meta: { feature: FEATURES.pages.invoices } },
+    { path: "/invoices/:id", component: InvoiceDetailPage, meta: { feature: FEATURES.pages.invoices } },
     { path: "/clients", component: ClientsPage, meta: { feature: FEATURES.pages.clients } },
     { path: "/clients/:id", component: ClientDetailPage, meta: { feature: FEATURES.pages.clients } },
     { path: "/contracts", component: ContractsPage, meta: { feature: FEATURES.pages.contracts } },
@@ -84,7 +88,7 @@ export const router = createRouter({
     { path: "/doc-templates", redirect: "/settings/doc-templates", meta: { feature: FEATURES.pages.docTemplates } },
     { path: "/email-templates", redirect: "/settings/email-templates", meta: { feature: FEATURES.pages.emailTemplates } },
       {path: "/compose", redirect: "/print-templates", meta: {feature: FEATURES.pages.printTemplates}},
-    { path: "/gmail-inbox", component: GmailInboxPage, meta: { requireRole: "pro" } },
+    { path: "/gmail-inbox", component: GmailInboxPage },
     { path: "/admin", component: AdminPage, meta: { requireRole: "admin" } },
     { path: "/403", component: () => import("../views/ForbiddenPage.vue") },
   ],
