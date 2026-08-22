@@ -6,13 +6,17 @@
         <p>{{ total }} מסמכים</p>
       </div>
       <div class="invoice-actions">
+        <n-button :loading="exporting" :disabled="loading || total === 0" @click="exportInvoicesToExcel">
+          <template #icon><n-icon :component="DownloadOutline" /></template>
+          ייצוא לאקסל
+        </n-button>
         <n-button @click="load(true)" :loading="loading">
           <template #icon><n-icon :component="RefreshOutline" /></template>
           רענן
         </n-button>
         <n-button type="primary" @click="router.push('/gmail-inbox')">
           <template #icon><n-icon :component="CloudUploadOutline" /></template>
-          ייבוא מ-Gmail
+          ייבא הכל
         </n-button>
       </div>
     </div>
@@ -43,14 +47,20 @@
         @update:value="load(true)"
       />
       <n-select
-        v-model:value="filters.supplier"
+        v-model:value="filters.suppliers"
         :options="supplierOptions"
         clearable
         filterable
-        placeholder="ספק"
-        class="invoice-toolbar__select"
+        multiple
+        max-tag-count="responsive"
+        placeholder="שם הספק"
+        class="invoice-toolbar__select invoice-toolbar__select--supplier"
         @update:value="load(true)"
       />
+      <n-button :disabled="filters.suppliers.length < 2" @click="openVendorMergeModal">
+        <template #icon><n-icon :component="BriefcaseOutline" /></template>
+        מזג ספקים
+      </n-button>
       <n-date-picker
         v-model:value="dateRange"
         type="daterange"
@@ -174,6 +184,18 @@
           </tbody>
         </table>
       </div>
+
+      <div v-if="total > pageSize" class="invoice-pagination">
+        <n-pagination
+          v-model:page="page"
+          v-model:page-size="pageSize"
+          :item-count="total"
+          :page-sizes="[10, 20, 50, 100]"
+          show-size-picker
+          @update:page="() => load(false)"
+          @update:page-size="() => load(true)"
+        />
+      </div>
     </n-spin>
 
     <n-modal
@@ -198,13 +220,61 @@
         </div>
       </div>
     </n-modal>
+
+    <n-modal
+      v-model:show="vendorMergeModal.show"
+      preset="card"
+      title="מיזוג ספקים"
+      class="invoice-vendor-merge-modal"
+      :style="{ width: '560px', maxWidth: 'calc(100vw - 32px)' }"
+    >
+      <div class="invoice-business-form" dir="rtl">
+        <label class="invoice-form-label">
+          שמות ספקים למיזוג
+          <n-select
+            v-model:value="vendorMergeModal.sourceNames"
+            :options="supplierOptions"
+            clearable
+            filterable
+            multiple
+            max-tag-count="responsive"
+            placeholder="בחר ספקים"
+          />
+        </label>
+        <label class="invoice-form-label">
+          שם ספק מאוחד
+          <n-select
+            v-model:value="vendorMergeModal.canonicalName"
+            :options="supplierOptions"
+            clearable
+            filterable
+            tag
+            placeholder="לדוגמה: גולן טלקום בע&quot;מ"
+          />
+        </label>
+        <p class="invoice-form-hint">
+          כל החשבוניות של הספקים שנבחרו יישמרו תחת שם הספק המאוחד.
+        </p>
+        <div class="invoice-business-form__actions">
+          <n-button @click="vendorMergeModal.show = false">ביטול</n-button>
+          <n-button
+            type="primary"
+            :loading="vendorMergeModal.saving"
+            :disabled="vendorMergeModal.sourceNames.length < 2 || !String(vendorMergeModal.canonicalName ?? '').trim()"
+            @click="saveVendorMerge"
+          >
+            מזג ושמור
+          </n-button>
+        </div>
+      </div>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref, watch, type Component } from "vue";
 import { useRouter } from "vue-router";
-import { NButton, NDatePicker, NDropdown, NIcon, NInput, NModal, NSelect, NSpin, useMessage, type SelectOption } from "naive-ui";
+import { NButton, NDatePicker, NDropdown, NIcon, NInput, NModal, NPagination, NSelect, NSpin, useMessage, type SelectOption } from "naive-ui";
 import {
   ArchiveOutline,
   BriefcaseOutline,
@@ -223,9 +293,14 @@ const message = useMessage();
 
 const rows = ref<ImportedInvoice[]>([]);
 const total = ref(0);
+const totalAll = ref(0);
+const visibleLimit = ref<number | null>(null);
 const loading = ref(false);
+const exporting = ref(false);
 const viewMode = ref<"cards" | "table">("table");
 const dateRange = ref<[number, number] | null>(null);
+const page = ref(1);
+const pageSize = ref(20);
 const counts = ref<Record<string, number>>({});
 const types = ref<string[]>([]);
 const suppliers = ref<string[]>([]);
@@ -233,12 +308,18 @@ const filters = reactive({
   q: "",
   status: null as string | null,
   type: null as string | null,
-  supplier: null as string | null,
+  suppliers: [] as string[],
 });
 const businessModal = reactive({
   show: false,
   row: null as ImportedInvoice | null,
   value: "",
+});
+const vendorMergeModal = reactive({
+  show: false,
+  sourceNames: [] as string[],
+  canonicalName: "" as string | null,
+  saving: false,
 });
 
 const statusOptions = computed<SelectOption[]>(() => statusStrip.value.slice(1).map((item) => ({
@@ -272,6 +353,7 @@ onMounted(() => {
 });
 
 async function load(force = false) {
+  if (force) page.value = 1;
   loading.value = true;
   try {
     const [dateFrom, dateTo] = dateRange.value ?? [];
@@ -279,13 +361,16 @@ async function load(force = false) {
       q: filters.q,
       status: filters.status ?? undefined,
       type: filters.type ?? undefined,
-      supplier: filters.supplier ?? undefined,
+      supplier: supplierFilterParam(),
       dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
       dateTo: dateTo ? new Date(dateTo).toISOString().slice(0, 10) : undefined,
-      limit: 200,
+      limit: pageSize.value,
+      offset: (page.value - 1) * pageSize.value,
     }, force);
     rows.value = result.rows;
     total.value = result.total;
+    totalAll.value = result.totalAll;
+    visibleLimit.value = result.visibleLimit;
     counts.value = result.counts;
     types.value = result.types;
     suppliers.value = result.suppliers;
@@ -322,6 +407,12 @@ function formatDate(value: string | null): string {
 
 function displayDate(row: ImportedInvoice): string {
   return formatDate(row.issue_date ?? row.import_date);
+}
+
+function isoDate(value: string | null): string {
+  if (!value) return "";
+  const ts = Date.parse(value);
+  return Number.isFinite(ts) ? new Date(ts).toISOString().slice(0, 10) : value;
 }
 
 function clientLabel(row: ImportedInvoice): string {
@@ -371,6 +462,63 @@ function openDocument(row: ImportedInvoice) {
 
 function download(row: ImportedInvoice) {
   if (row.download_url) window.open(row.download_url, "_blank");
+}
+
+async function exportInvoicesToExcel() {
+  exporting.value = true;
+  try {
+    const [dateFrom, dateTo] = dateRange.value ?? [];
+    const result = await api.invoices.list({
+      q: filters.q,
+      status: filters.status ?? undefined,
+      type: filters.type ?? undefined,
+      supplier: supplierFilterParam(),
+      dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
+      dateTo: dateTo ? new Date(dateTo).toISOString().slice(0, 10) : undefined,
+      limit: Math.max(total.value, 1),
+      offset: 0,
+    }, true);
+    const { utils, writeFile } = await import("xlsx");
+    const data = result.rows.map((row) => ({
+      "ספק": row.supplier_name,
+      "סטטוס": statusLabel(row.status),
+      "תאריך חשבונית": isoDate(row.issue_date),
+      "תאריך לתשלום": isoDate(row.payment_due_date),
+      "לקוח": clientLabel(row),
+      "סוג": invoiceTypeLabel(row),
+      "סכום": row.amount ?? "",
+      "מטבע": row.currency,
+      "מספר חשבונית": row.invoice_number ?? "",
+      "מספר לקוח": row.customer_number ?? "",
+      "תקופת חיוב": row.billing_period ?? "",
+      "קטגוריית הוצאה": row.expense_category ?? "",
+      "קובץ": row.file_name,
+    }));
+    const ws = utils.json_to_sheet(data);
+    ws["!cols"] = [
+      { wch: 28 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 24 },
+      { wch: 18 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 20 },
+      { wch: 16 },
+      { wch: 24 },
+      { wch: 22 },
+      { wch: 36 },
+    ];
+    const wb = utils.book_new();
+    wb.Workbook = { Views: [{ RTL: true }] };
+    utils.book_append_sheet(wb, ws, "חשבוניות");
+    writeFile(wb, `invoices-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  } catch {
+    message.error("שגיאה בייצוא לאקסל");
+  } finally {
+    exporting.value = false;
+  }
 }
 
 function renderActionIcon(icon: Component) {
@@ -436,6 +584,34 @@ async function saveBusinessModal() {
   if (!row || !value) return;
   await updateInvoiceMeta(row, { client_name: value });
   businessModal.show = false;
+}
+
+function supplierFilterParam(): string | undefined {
+  return filters.suppliers.length ? filters.suppliers.join("||") : undefined;
+}
+
+function openVendorMergeModal() {
+  vendorMergeModal.sourceNames = [...filters.suppliers];
+  vendorMergeModal.canonicalName = filters.suppliers[0] ?? "";
+  vendorMergeModal.show = true;
+}
+
+async function saveVendorMerge() {
+  const sourceNames = [...new Set(vendorMergeModal.sourceNames.map((name) => name.trim()).filter(Boolean))];
+  const canonicalName = String(vendorMergeModal.canonicalName ?? "").trim();
+  if (sourceNames.length < 2 || !canonicalName) return;
+  vendorMergeModal.saving = true;
+  try {
+    const result = await api.invoices.mergeVendors({ supplierNames: sourceNames, canonicalName });
+    vendorMergeModal.show = false;
+    filters.suppliers = [result.supplierName];
+    message.success(`${result.modified} חשבוניות מוזגו תחת ${result.supplierName}`);
+    await load(true);
+  } catch {
+    message.error("שגיאה במיזוג ספקים");
+  } finally {
+    vendorMergeModal.saving = false;
+  }
 }
 
 async function updateInvoiceStatus(row: ImportedInvoice, status: string) {
@@ -518,6 +694,10 @@ function replaceRow(updated: ImportedInvoice) {
 
 .invoice-toolbar__select {
   width: 180px;
+}
+
+.invoice-toolbar__select--supplier {
+  width: 260px;
 }
 
 .invoice-toolbar__dates {
@@ -701,6 +881,12 @@ function replaceRow(updated: ImportedInvoice) {
   box-shadow: inset 0 0 0 1px var(--brand-color);
 }
 
+.invoice-pagination {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 4px;
+}
+
 .cell-strong,
 .cell-amount {
   font-weight: 800;
@@ -734,15 +920,38 @@ function replaceRow(updated: ImportedInvoice) {
   max-width: calc(100vw - 32px);
 }
 
+:global(.invoice-business-modal.n-card),
+:global(.invoice-vendor-merge-modal.n-card) {
+  max-width: calc(100vw - 32px) !important;
+}
+
 :global(.invoice-business-modal.n-card) {
   width: 460px !important;
-  max-width: calc(100vw - 32px) !important;
+}
+
+:global(.invoice-vendor-merge-modal.n-card) {
+  width: 560px !important;
 }
 
 .invoice-business-form {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.invoice-form-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.invoice-form-hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .invoice-business-form__actions {

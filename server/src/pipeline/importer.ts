@@ -1989,6 +1989,9 @@ async function saveInvoiceRecord(
     amount,
   });
   if (missingRequired.length > 0) {
+    const rejectionReason = isProbablyContractOrNonInvoice(missingRequired)
+      ? "missing_invoice_number_and_amount"
+      : "missing_required_fields";
     await col("invoices").deleteOne({ document_id: documentId } as any);
     await col("documents").updateOne(
       { _id: new ObjectId(documentId) } as any,
@@ -1996,7 +1999,7 @@ async function saveInvoiceRecord(
         $set: {
           invoice_saved: false,
           invoice_rejected: true,
-          invoice_rejection_reason: "missing_required_fields",
+          invoice_rejection_reason: rejectionReason,
           invoice_missing_fields: missingRequired,
           reminder_status: "not_applicable",
           updated_at: now,
@@ -2093,6 +2096,10 @@ function invoiceMissingRequiredFields(values: {
   if (!values.paymentDueDate) missing.push("payment_due_date");
   if (values.amount === null) missing.push("amount");
   return missing;
+}
+
+function isProbablyContractOrNonInvoice(missing: string[]): boolean {
+  return missing.includes("invoice_number") && missing.includes("amount");
 }
 
 function extractInvoiceRecipientFromRawText(rawText: string | null | undefined): string | null {

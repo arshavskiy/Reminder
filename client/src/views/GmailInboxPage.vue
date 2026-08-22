@@ -67,28 +67,6 @@
       </button>
     </div>
 
-    <section v-if="connected && !isAdmin && !selectedGuidedFlow" class="guided-import">
-      <div class="guided-import__head">
-        <h2>מה לייבא מ-Gmail?</h2>
-      </div>
-      <div class="guided-import__actions">
-        <button class="guided-import-card" type="button" @click="startGuidedImport('invoice')">
-          <span class="guided-import-card__icon">
-            <n-icon :component="DocumentOutline" :size="28" />
-          </span>
-          <span class="guided-import-card__title">ייבוא חשבוניות</span>
-          <span class="guided-import-card__text">חיפוש חשבוניות וקבלות עם קבצים מצורפים</span>
-        </button>
-        <button class="guided-import-card" type="button" @click="startGuidedImport('inspection')">
-          <span class="guided-import-card__icon">
-            <n-icon :component="DocumentOutline" :size="28" />
-          </span>
-          <span class="guided-import-card__title">ייבוא תסקיר בדיקה</span>
-          <span class="guided-import-card__text">חיפוש תסקירי בדיקה ודוחות ציוד</span>
-        </button>
-      </div>
-    </section>
-
     <section v-if="connected && !isAdmin && selectedGuidedFlow" class="guided-flow-bar">
       <div>
         <span class="guided-flow-bar__label">מסלול ייבוא</span>
@@ -780,11 +758,6 @@ function configureGuidedFlow(flow: "invoice" | "inspection") {
   buildSearchQuery();
 }
 
-function startGuidedImport(flow: "invoice" | "inspection") {
-  configureGuidedFlow(flow);
-  loadInbox();
-}
-
 function selectGuidedFlow(flow: "invoice" | "inspection") {
   if (selectedGuidedFlow.value === flow && emails.value.length) return;
   configureGuidedFlow(flow);
@@ -1045,7 +1018,9 @@ onMounted(async () => {
         buildSearchQuery();
         await Promise.all([loadInbox(), loadHistory()]);
       } else {
-        await loadHistory();
+        configureGuidedFlow("invoice");
+        historyOpen.value = true;
+        await Promise.all([loadInbox(), loadHistory()]);
       }
     }
   } catch (err: any) {
@@ -1454,72 +1429,6 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   gap: 16px;
   padding: 80px 0;
   color: var(--n-text-color-3);
-}
-
-.guided-import {
-  margin: 28px auto 24px;
-  max-width: 760px;
-}
-
-.guided-import__head {
-  margin-bottom: 18px;
-  text-align: center;
-}
-
-.guided-import__head h2 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--text-primary);
-}
-
-.guided-import__actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.guided-import-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  min-height: 154px;
-  padding: 20px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-card);
-  color: var(--text-primary);
-  text-align: right;
-  cursor: pointer;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-}
-
-.guided-import-card:hover {
-  border-color: var(--brand-color);
-  box-shadow: 0 12px 30px color-mix(in srgb, var(--text-primary) 10%, transparent);
-  transform: translateY(-1px);
-}
-
-.guided-import-card__icon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--brand-color) 12%, var(--bg-card));
-  color: var(--brand-color);
-}
-
-.guided-import-card__title {
-  font-size: 17px;
-  font-weight: 800;
-}
-
-.guided-import-card__text {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.45;
 }
 
 .guided-flow-bar {
@@ -2044,10 +1953,6 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
 }
 
 @media (max-width: 720px) {
-  .guided-import__actions {
-    grid-template-columns: 1fr;
-  }
-
   .guided-flow-bar {
     align-items: stretch;
     flex-direction: column;

@@ -8,6 +8,7 @@
       <div class="nav-links">
         <a href="#features">תכונות</a>
         <a href="#how">איך זה עובד</a>
+        <router-link to="/pricing">מחירים</router-link>
         <n-tooltip placement="bottom" :keep-alive-on-hover="false">
           <template #trigger>
             <button
@@ -187,11 +188,15 @@
           <h3>ייבוא מסמכים חכם</h3>
           <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך.</p>
         </article>
-        <article class="feature-card">
-          <!--          <div class="feature-icon">✉️</div>-->
-          <h3>ייבוא PDF מ-Gmail</h3>
-          <p>חיבור Gmail הוא אופציונלי, לקריאה בלבד, ומשמש להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר.</p>
+        <article class="feature-card feature-card--accent">
+          <h3>ייבוא חשבוניות לפי מנוי</h3>
+          <p>מסלול בסיסי כולל עד 30 מסמכים בחודש, ומסלול עסקי כולל עד 100 מסמכים בחודש עם אכיפה בצד השרת.</p>
         </article>
+<!--        <article class="feature-card">-->
+<!--          &lt;!&ndash;          <div class="feature-icon">✉️</div>&ndash;&gt;-->
+<!--          <h3>ייבוא PDF מ-Gmail</h3>-->
+<!--          <p>חיבור Gmail הוא אופציונלי, לקריאה בלבד, ומשמש להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר.</p>-->
+<!--        </article>-->
         <article class="feature-card">
           <!--          <div class="feature-icon">⏰</div>-->
           <h3>תזכורות אוטומטיות</h3>
@@ -274,6 +279,7 @@
       <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
       <div class="landing-footer__legal">
         © 2026 HandCoded. All rights reserved. |
+        <router-link to="/pricing">Pricing</router-link> |
         <router-link to="/privacy">Privacy Policy</router-link> |
         <router-link to="/terms">Terms of Service</router-link>
       </div>
@@ -814,6 +820,11 @@ onMounted(async () => {
 .feature-card:hover {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.07);
   transform: translateY(-2px);
+}
+
+.feature-card--accent {
+  border-color: var(--login-brand-border);
+  background: color-mix(in srgb, var(--brand-color) 7%, var(--bg-card));
 }
 
 .feature-icon {

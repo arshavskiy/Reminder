@@ -2,6 +2,7 @@ import express from "express";
 import { ObjectId } from "mongodb";
 import { col } from "../db/db";
 import { HTTPException, requireAuth } from "../auth/middleware";
+import { documentImportMonthlyLimit } from "../quotas/documentImportQuota";
 
 type InvoiceRow = Record<string, any>;
 const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
@@ -9,8 +10,11 @@ const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
 export function registerInvoiceRoutes(app: express.Application) {
   app.get("/api/invoices", async (req, res) => {
     let userId: string;
+    let userRole: string | null | undefined;
     try {
-      userId = (await requireAuth(req.headers.cookie)).userId;
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+      userRole = ctx.user.role;
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -22,7 +26,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const q = normalize(String(req.query.q ?? ""));
     const status = String(req.query.status ?? "").trim();
     const type = String(req.query.type ?? "").trim();
-    const supplier = String(req.query.supplier ?? "").trim();
+    const suppliers = parseMultiQuery(req.query.supplier);
     const fromTs = parseDateTs(req.query.dateFrom);
     const toTs = parseDateTs(req.query.dateTo, true);
 
@@ -45,7 +49,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       .filter((row) => {
         if (status && row.status !== status) return false;
         if (type && row.type !== type) return false;
-        if (supplier && row.supplier_name !== supplier) return false;
+        if (suppliers.length && !suppliers.includes(row.supplier_name)) return false;
         const rowTs = invoiceDateTs(row);
         if (fromTs && (!rowTs || rowTs < fromTs)) return false;
         if (toTs && (!rowTs || rowTs > toTs)) return false;
@@ -61,15 +65,64 @@ export function registerInvoiceRoutes(app: express.Application) {
         ].join(" ")).includes(q);
       });
 
+    const visibleLimit = invoiceListVisibleLimit(userRole);
+    const visibleRows = visibleLimit === null ? rows : rows.slice(0, visibleLimit);
+    const safeOffset = visibleLimit === null ? offset : Math.min(offset, visibleLimit);
     const counts: Record<string, number> = {};
-    for (const row of rows) counts[row.status] = (counts[row.status] ?? 0) + 1;
+    for (const row of visibleRows) counts[row.status] = (counts[row.status] ?? 0) + 1;
 
     res.json({
-      rows: rows.slice(offset, offset + limit),
-      total: rows.length,
+      rows: visibleRows.slice(safeOffset, safeOffset + limit),
+      total: visibleRows.length,
+      totalAll: rows.length,
+      limit,
+      offset: safeOffset,
+      visibleLimit,
       counts,
-      types: uniqueSorted(rows.map((row) => row.type).filter(Boolean)),
-      suppliers: uniqueSorted(rows.map((row) => row.supplier_name).filter(Boolean)),
+      types: uniqueSorted(visibleRows.map((row) => row.type).filter(Boolean)),
+      suppliers: uniqueSorted(visibleRows.map((row) => row.supplier_name).filter(Boolean)),
+    });
+  });
+
+  app.post("/api/invoices/vendors/merge", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const supplierNames = uniqueSorted((Array.isArray(req.body?.supplierNames) ? req.body.supplierNames : [])
+      .map((value: unknown) => String(value ?? "").trim())
+      .filter(Boolean));
+    const canonicalName = String(req.body?.canonicalName ?? "").trim();
+    if (supplierNames.length < 2 || !canonicalName) {
+      res.status(400).json({ error: "Choose at least two supplier names and a merged supplier name" });
+      return;
+    }
+
+    const now = new Date();
+    const result = await col("invoices").updateMany(
+      { user_id: userId, supplier_name: { $in: supplierNames } } as any,
+      [
+        {
+          $set: {
+            supplier_name_raw: { $ifNull: ["$supplier_name_raw", "$supplier_name"] },
+            supplier_name: canonicalName,
+            "fields.supplier_name": canonicalName,
+            updated_at: now,
+          },
+        },
+      ] as any,
+    );
+
+    res.json({
+      ok: true,
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+      supplierName: canonicalName,
     });
   });
 
@@ -243,6 +296,28 @@ function parseDateTs(value: unknown, endOfDay = false): number | null {
   return date.getTime();
 }
 
+function parseMultiQuery(value: unknown): string[] {
+  const rawValues = Array.isArray(value) ? value : [value];
+  const parsed: string[] = [];
+  for (const raw of rawValues) {
+    const text = String(raw ?? "").trim();
+    if (!text) continue;
+    if (text.startsWith("[")) {
+      try {
+        const json = JSON.parse(text);
+        if (Array.isArray(json)) {
+          parsed.push(...json.map((item) => String(item ?? "")));
+          continue;
+        }
+      } catch {
+        // Fall through to delimiter parsing.
+      }
+    }
+    parsed.push(...text.split("||"));
+  }
+  return uniqueSorted(parsed);
+}
+
 function invoiceDateTs(row: ReturnType<typeof presentInvoice>): number | null {
   return parseDateTs(row.issue_date ?? row.import_date);
 }
@@ -252,6 +327,10 @@ function normalizeInvoiceStatus(value: unknown): string {
   if (INVOICE_STATUSES.has(raw)) return raw;
   if (!raw || raw === "done") return "new";
   return raw;
+}
+
+function invoiceListVisibleLimit(role: string | null | undefined): number | null {
+  return documentImportMonthlyLimit(role);
 }
 
 function stringOrNull(value: unknown): string | null | undefined {

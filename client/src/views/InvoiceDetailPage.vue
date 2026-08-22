@@ -69,6 +69,11 @@
         </section>
 
         <aside class="invoice-side">
+          <div v-if="probablyContractDocument" class="invoice-warning">
+            <strong>כנראה לא חשבונית</strong>
+            <span>חסרים גם מספר חשבונית וגם סכום לתשלום. המסמך כנראה חוזה או מסמך אחר.</span>
+          </div>
+
           <section class="side-card side-card--main">
             <h2>פיננסים</h2>
             <div class="finance-summary">
@@ -166,7 +171,12 @@
                 </n-button>
               </div>
               <div v-if="visibleExtractedFields.length" class="extracted-fields">
-                <div v-for="field in visibleExtractedFields" :key="field.key" class="extracted-field">
+                <div
+                  v-for="field in visibleExtractedFields"
+                  :key="field.key"
+                  class="extracted-field"
+                  :class="{ 'extracted-field--missing': field.missing }"
+                >
                   <span class="extracted-field__label">{{ field.label }}</span>
                   <span class="extracted-field__value" :dir="field.dir">{{ field.value }}</span>
                 </div>
@@ -268,21 +278,41 @@ const taxDisplay = computed(() => {
 });
 const extractedFields = computed(() => {
   const fields = invoice.value?.fields ?? {};
-  return Object.entries(fields)
+  const existingKeys = new Set(Object.keys(fields));
+  const rows = Object.entries(fields)
     .filter(([key]) => !key.startsWith("_"))
     .map(([key, value]) => ({
       key,
       label: extractedFieldLabel(key),
       value: formatExtractedValue(value),
       empty: isEmptyExtractedValue(value),
+      missing: isMissingExtractedField(key),
       dir: shouldUseLtrValue(key, value) ? "ltr" : "rtl",
-    }))
+    }));
+
+  for (const rawKey of invoice.value?.missing_required_fields ?? []) {
+    const key = normalizeMissingFieldKey(rawKey);
+    if (!key || existingKeys.has(key)) continue;
+    rows.push({
+      key,
+      label: extractedFieldLabel(key),
+      value: "חסר",
+      empty: true,
+      missing: true,
+      dir: "rtl",
+    });
+  }
+
+  return rows
     .sort((a, b) => fieldSortIndex(a.key) - fieldSortIndex(b.key) || a.label.localeCompare(b.label, "he"));
 });
 const visibleExtractedFields = computed(() =>
   showEmptyExtractedFields.value
     ? extractedFields.value
-    : extractedFields.value.filter((field) => !field.empty)
+    : extractedFields.value.filter((field) => !field.empty || field.missing)
+);
+const probablyContractDocument = computed(() =>
+  hasMissingField("invoice_number") && hasMissingField("amount")
 );
 
 watch(() => route.params.id, () => load(true));
@@ -443,6 +473,15 @@ const extractedFieldLabels: Record<string, string> = {
   notes: "הערות",
 };
 
+const missingFieldAliases: Record<string, string> = {
+  supplierName: "supplier_name",
+  invoiceNumber: "invoice_number",
+  clientName: "client_company",
+  issueDate: "issue_date",
+  paymentDueDate: "payment_due_date",
+  totalAmount: "amount",
+};
+
 const extractedFieldOrder = [
   "supplier_name",
   "supplier_id",
@@ -471,7 +510,21 @@ const extractedFieldOrder = [
 ];
 
 function extractedFieldLabel(key: string): string {
-  return extractedFieldLabels[key] ?? key.replace(/_/g, " ");
+  const normalized = normalizeMissingFieldKey(key);
+  return extractedFieldLabels[normalized] ?? normalized.replace(/_/g, " ");
+}
+
+function normalizeMissingFieldKey(key: unknown): string {
+  const value = String(key ?? "").trim();
+  return missingFieldAliases[value] ?? value;
+}
+
+function isMissingExtractedField(key: string): boolean {
+  return hasMissingField(key);
+}
+
+function hasMissingField(key: string): boolean {
+  return Boolean(invoice.value?.missing_required_fields?.some((field) => normalizeMissingFieldKey(field) === key));
 }
 
 function fieldSortIndex(key: string): number {
@@ -695,6 +748,27 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   gap: 16px;
 }
 
+.invoice-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  background: color-mix(in srgb, #f59e0b 12%, var(--bg-card));
+  color: var(--text-primary);
+}
+
+.invoice-warning strong {
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.invoice-warning span {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .side-card {
   padding: 18px;
   border-radius: 8px;
@@ -837,6 +911,19 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   padding: 9px 0;
   border-bottom: 1px solid var(--border-color);
   font-size: 13px;
+}
+
+.extracted-field--missing {
+  margin: 4px 0;
+  padding: 9px 10px;
+  border-bottom-color: color-mix(in srgb, #d03050 18%, var(--border-color));
+  border-radius: 6px;
+  background: color-mix(in srgb, #d03050 8%, var(--bg-card));
+}
+
+.extracted-field--missing .extracted-field__label,
+.extracted-field--missing .extracted-field__value {
+  color: #d03050;
 }
 
 .extracted-field__label {

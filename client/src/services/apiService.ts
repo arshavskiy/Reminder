@@ -327,11 +327,23 @@ export const api = {
 
   invoices: {
     list: (params?: { q?: string; status?: string; type?: string; supplier?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
-      get<{ rows: ImportedInvoice[]; total: number; counts: Record<string, number>; types: string[]; suppliers: string[] }>(`/invoices${qs(params)}`, force),
+      get<{
+        rows: ImportedInvoice[];
+        total: number;
+        totalAll: number;
+        limit: number;
+        offset: number;
+        visibleLimit: number | null;
+        counts: Record<string, number>;
+        types: string[];
+        suppliers: string[];
+      }>(`/invoices${qs(params)}`, force),
     get: (id: string, force = false) =>
       get<ImportedInvoice>(`/invoices/${id}`, force),
     update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
       put<ImportedInvoice>(`/invoices/${id}`, body),
+    mergeVendors: (body: { supplierNames: string[]; canonicalName: string }) =>
+      post<{ ok: true; matched: number; modified: number; supplierName: string }>("/invoices/vendors/merge", body),
   },
 
   documents: {

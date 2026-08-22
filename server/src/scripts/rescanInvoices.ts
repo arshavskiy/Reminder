@@ -53,12 +53,15 @@ function readArg(name: string): string | null {
 
 async function markPossibleNotInvoice(invoice: InvoiceRow, missing: string[]): Promise<void> {
   const now = new Date();
+  const rejectionReason = isProbablyContractOrNonInvoice(missing)
+    ? "missing_invoice_number_and_amount"
+    : "missing_required_fields";
   await col("invoices").updateOne(
     {_id: invoice._id} as any,
     {
       $set: {
         possible_not_invoice: true,
-        invoice_validation_status: "missing_required_fields",
+        invoice_validation_status: rejectionReason,
         missing_required_fields: missing,
         updated_at: now,
       },
@@ -73,7 +76,7 @@ async function markPossibleNotInvoice(invoice: InvoiceRow, missing: string[]): P
       $set: {
         invoice_saved: false,
         invoice_rejected: true,
-        invoice_rejection_reason: "missing_required_fields",
+        invoice_rejection_reason: rejectionReason,
         invoice_missing_fields: missing,
         reminder_status: "not_applicable",
         updated_at: now,
@@ -149,6 +152,10 @@ function missingInvoiceCoreFields(invoice: InvoiceRow, rawText?: string): string
   if (!values.paymentDueDate) missing.push("payment_due_date");
   if (values.amount === null) missing.push("amount");
   return missing;
+}
+
+function isProbablyContractOrNonInvoice(missing: string[]): boolean {
+  return missing.includes("invoice_number") && missing.includes("amount");
 }
 
 function invoiceClientName(invoice: InvoiceRow, rawText?: string): string | null {

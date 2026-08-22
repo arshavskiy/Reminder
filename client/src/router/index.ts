@@ -17,6 +17,7 @@ import EmailTemplatesPage from "../views/EmailTemplatesPage.vue";
 import EquipmentPage from "../views/EquipmentPage.vue";
 import ReportsPage from "../views/ReportsPage.vue";
 import LoginPage from "../views/LoginPage.vue";
+import PricingPage from "../views/PricingPage.vue";
 import ResetPasswordPage from "../views/ResetPasswordPage.vue";
 import PrivacyPage from "../views/PrivacyPage.vue";
 import TermsPage from "../views/TermsPage.vue";
@@ -29,6 +30,7 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/login", component: LoginPage, meta: { public: true } },
+    { path: "/pricing", component: PricingPage, meta: { public: true } },
     { path: "/reset-password", component: ResetPasswordPage, meta: { public: true } },
     { path: "/privacy", component: PrivacyPage, meta: { public: true, legal: true } },
     { path: "/terms", component: TermsPage, meta: { public: true, legal: true } },

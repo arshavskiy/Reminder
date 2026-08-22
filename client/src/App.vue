@@ -128,6 +128,7 @@
             <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
             <div class="app-footer__legal">
               © 2026 HandCoded. All rights reserved. |
+              <router-link to="/pricing">Pricing</router-link> |
               <router-link to="/privacy">Privacy Policy</router-link> |
               <router-link to="/terms">Terms of Service</router-link>
             </div>
@@ -225,12 +226,14 @@ const pwa = usePwa();
 const isLegalRoute = computed(() => Boolean(route.meta.legal));
 const isMinimalShell = computed(() =>
   route.path === "/login" ||
+  (route.path === "/pricing" && !authStore.user) ||
   route.path === "/reset-password" ||
   isLegalRoute.value ||
   route.path.startsWith("/admin"),
 );
 const hideAppChrome = computed(() =>
   route.path === "/login" ||
+  (route.path === "/pricing" && !authStore.user) ||
   route.path === "/reset-password" ||
   isLegalRoute.value ||
   route.path.startsWith("/admin"),
@@ -416,6 +419,7 @@ const allNav = [
   {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment },
+  {label: "מנוי", key: "pricing", minRole: "user"},
   // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
   // Print templates are reached from the contracts page, next to "תסקיר חדש".
   // {label: "הדפסת תסקיר", key: "compose", minRole: "user", feature: FEATURES.pages.printTemplates},
