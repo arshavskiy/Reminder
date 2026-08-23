@@ -18,6 +18,7 @@ import {
   ReminderQuotaError,
   reminderQuotaErrorPayload,
 } from "../quotas/reminderQuota";
+import {incrementReminderUsage} from "../quotas/userUsageCounters";
 
 const MIN_INSPECTION_INTERVAL_MONTHS = 1;
 const MAX_INSPECTION_INTERVAL_MONTHS = 24;
@@ -250,6 +251,7 @@ export function registerReminderRoutes(app: express.Application) {
       updated_at: now,
     };
     const result = await col("reminders").insertOne(doc as any);
+    await incrementReminderUsage(userId, 1);
     const inserted = await col("reminders").findOne({ _id: result.insertedId });
     res.status(201).json(flatDoc(inserted));
   });

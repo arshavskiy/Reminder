@@ -1,4 +1,5 @@
 import { col } from "../db/db";
+import { getStoredUserUsage } from "./userUsageCounters";
 
 export const DOCUMENT_MONTHLY_QUOTA_ERROR = "document_monthly_limit_reached";
 
@@ -67,12 +68,18 @@ export async function getDocumentImportQuota(
   const { periodStart, periodEnd } = scope === "monthly"
     ? currentUtcMonthWindow(now)
     : { periodStart: null, periodEnd: null };
-  const countFilter = plan === "free"
-      ? freeDocumentQuotaCountFilter(userId)
-      : documentQuotaCountFilter(userId, category, scope, periodStart, periodEnd);
-  const used = limit === null
-    ? 0
-    : await col("documents").countDocuments(countFilter as any);
+  let used = 0;
+  if (limit !== null) {
+    if (scope === "lifetime") {
+      // Lifetime free-tier usage is stored on the user and never decreases on delete.
+      used = (await getStoredUserUsage(userId)).documents;
+    } else {
+      const countFilter = plan === "free"
+        ? freeDocumentQuotaCountFilter(userId)
+        : documentQuotaCountFilter(userId, category, scope, periodStart, periodEnd);
+      used = await col("documents").countDocuments(countFilter as any);
+    }
+  }
 
   return {
     role: normalizedRole,

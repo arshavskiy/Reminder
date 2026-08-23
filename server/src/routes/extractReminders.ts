@@ -162,6 +162,11 @@ export function registerExtractRemindersRoutes(app: express.Application) {
       inserted.push(r.insertedId.toString());
     }
 
+    if (inserted.length) {
+      const { incrementReminderUsage } = await import("../quotas/userUsageCounters.js");
+      await incrementReminderUsage(userId, inserted.length);
+    }
+
     res.json({ saved: inserted.length, ids: inserted });
   });
 }

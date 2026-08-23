@@ -617,7 +617,11 @@ async function gmailImportPipelineOptions(
   meta: GmailMessageHeaders | null,
   filename: string | undefined,
 ): Promise<PipelineOptions | undefined> {
-  const pipeline: PipelineOptions = { gmailImport: true, ...(templateId ? { templateId } : {}) };
+  const pipeline: PipelineOptions = {
+    gmailImport: true,
+    usageKind: "gmail_document",
+    ...(templateId ? { templateId } : {}),
+  };
   if (!templateId) return pipeline;
 
   const template = await loadTemplate(templateId).catch(() => null);
@@ -627,7 +631,7 @@ async function gmailImportPipelineOptions(
   const invoiceFolder = provider
     ? `gmail/invoices/${provider.category}/${provider.id}`
     : "gmail/invoices/other";
-  return { ...pipeline, storageKeyPrefix: invoiceFolder };
+  return { ...pipeline, usageKind: "gmail_invoice", storageKeyPrefix: invoiceFolder };
 }
 
 function isInvoiceTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): boolean {

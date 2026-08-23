@@ -19,6 +19,7 @@ import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
 import {generatePdfThumbnailForDocument} from "../documents/pdfThumbnail";
+import {incrementDocumentUsage, type DocumentUsageKind} from "../quotas/userUsageCounters";
 
 type PushFn = (event: Record<string, unknown>) => void;
 
@@ -30,6 +31,7 @@ export interface PipelineOptions {
   templateId?: string;     // force a specific doc_template instead of auto-detection
   storageKeyPrefix?: string; // optional S3 prefix for source-specific organization
   gmailImport?: boolean;   // true when imported via Gmail — enables post-OCR inspection validation
+  usageKind?: DocumentUsageKind; // lifetime usage counter bucket (survives deletes)
 }
 
 function parseJsonObject(raw: unknown, fallback: unknown = null): Record<string, unknown> {
@@ -226,6 +228,14 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
 
   const insertResult = await col("documents").insertOne(docRecord);
   const documentId = insertResult.insertedId.toString();
+
+  if (userId) {
+    const kind: DocumentUsageKind = pipeline?.usageKind
+      ?? (pipeline?.gmailImport ? "gmail_document" : "scanned");
+    await incrementDocumentUsage(userId, kind, 1).catch((err) => {
+      logger.warn("document_usage_increment_failed", { user_id: userId, document_id: documentId, error: String(err) });
+    });
+  }
 
   push?.({ type: "document:queued", documentId: documentId as any, fileName });
   logger.info("document_import_queued", {
