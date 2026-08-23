@@ -18,7 +18,7 @@ import {
   documentImportQuotaErrorPayload,
 } from "../quotas/documentImportQuota";
 
-const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.file";
 const GMAIL_FULL_ACCESS_ROLES = new Set(["user", "pro", "admin"]);
 const GMAIL_DEFAULT_PAGE_SIZE = 500;
 const GMAIL_MAX_PAGE_SIZE = 500;
@@ -109,12 +109,39 @@ export function registerGmailRoutes(app: express.Application) {
     if (!tokenRes.ok) { res.redirect(frontendUrl(`${returnPath}?error=token_exchange_failed`)); return; }
     const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number };
 
+      let gmailEmail: string | null = null;
+      try {
+          const profileRes = await gmailFetch(tokens.access_token, "profile");
+          if (profileRes.ok) {
+              const profile = await profileRes.json() as { emailAddress?: string };
+              gmailEmail = profile.emailAddress ?? null;
+          }
+      } catch {
+      }
+
+      if (gmailEmail) {
+          const existing = await col("users").findOne({
+              gmail_email: gmailEmail,
+              _id: {$ne: pkce.user_id},
+          } as any);
+          if (existing) {
+              logger.warn("gmail_connect_duplicate_blocked", {
+                  user_id: pkce.user_id.toString(),
+                  gmail_email: gmailEmail,
+                  existing_user_id: existing._id!.toString(),
+              });
+              res.redirect(frontendUrl(`${returnPath}?error=gmail_already_connected`));
+              return;
+          }
+      }
+
     await col("users").updateOne(
       { _id: pkce.user_id } as any,
       { $set: {
           gmail_access_token: tokens.access_token,
           gmail_refresh_token: tokens.refresh_token ?? null,
           gmail_token_expires_at: new Date(Date.now() + tokens.expires_in * 1000),
+              gmail_email: gmailEmail,
         }
       }
     );
@@ -436,7 +463,7 @@ export function registerGmailRoutes(app: express.Application) {
 
     await col("users").updateOne(
       { _id: new ObjectId(ctx.userId) } as any,
-      { $unset: { gmail_access_token: "", gmail_refresh_token: "", gmail_token_expires_at: "" } }
+        {$unset: {gmail_access_token: "", gmail_refresh_token: "", gmail_token_expires_at: "", gmail_email: ""}}
     );
     res.json({ ok: true });
   });

@@ -7,7 +7,8 @@ export const useDocumentsStore = defineStore("documents", () => {
   const rows = ref<Document[]>([]);
   const total = ref(0);
   const totalAll = ref(0);
-  const documentLimit = ref(25);
+    const documentLimit = ref<number | null>(30);
+    const documentQuotaUsed = ref(0);
   const loading = ref(false);
   const counts = ref<{ all: number; done: number; in_progress: number; error: number }>({ all: 0, done: 0, in_progress: 0, error: 0 });
 
@@ -22,7 +23,8 @@ export const useDocumentsStore = defineStore("documents", () => {
       rows.value = r.rows;
       total.value = r.total;
       totalAll.value = r.totalAll ?? 0;
-      documentLimit.value = r.documentLimit ?? 25;
+        documentLimit.value = r.documentLimit ?? null;
+        documentQuotaUsed.value = r.documentQuotaUsed ?? 0;
       if (r.counts) counts.value = r.counts;
     } finally {
       loading.value = false;
@@ -38,5 +40,17 @@ export const useDocumentsStore = defineStore("documents", () => {
     await fetch({ limit: 500 }, true);
   }
 
-  return { rows, total, totalAll, documentLimit, loading, hasInProgress, counts, fetch, importFile, deleteDoc };
+    return {
+        rows,
+        total,
+        totalAll,
+        documentLimit,
+        documentQuotaUsed,
+        loading,
+        hasInProgress,
+        counts,
+        fetch,
+        importFile,
+        deleteDoc
+    };
 });

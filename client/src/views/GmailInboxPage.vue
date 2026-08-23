@@ -1122,7 +1122,11 @@ onMounted(async () => {
   // Handle OAuth callback with error
   const error = route.query.error as string | undefined;
   if (error) {
-    message.error(`שגיאת Gmail: ${error}`);
+    if (error === "gmail_already_connected") {
+      message.error("כתובת Gmail זו כבר מחוברת לחשבון אחר במערכת");
+    } else {
+      message.error(`שגיאת Gmail: ${error}`);
+    }
     return;
   }
 

@@ -13,6 +13,11 @@ import {
   normalizePhoneIdentityKey
 } from "../utils/clientNames";
 import {logger} from "../logger";
+import {
+  assertReminderQuota,
+  ReminderQuotaError,
+  reminderQuotaErrorPayload,
+} from "../quotas/reminderQuota";
 
 const MIN_INSPECTION_INTERVAL_MONTHS = 1;
 const MAX_INSPECTION_INTERVAL_MONTHS = 24;
@@ -199,13 +204,25 @@ export function registerReminderRoutes(app: express.Application) {
   // POST /api/reminders
   app.post("/api/reminders", async (req, res) => {
     let userId: string;
+    let userPlan: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
+      userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
       return;
+    }
+
+    try {
+      await assertReminderQuota(userId, userPlan, 1);
+    } catch (err) {
+      if (err instanceof ReminderQuotaError) {
+        res.status(403).json(reminderQuotaErrorPayload(err));
+        return;
+      }
+      throw err;
     }
 
     const body = req.body as Record<string, unknown>;

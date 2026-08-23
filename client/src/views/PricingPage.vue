@@ -121,84 +121,20 @@ import {
   ShieldCheckmarkOutline,
 } from "@vicons/ionicons5";
 import { useAuthStore } from "../stores/auth.js";
-
-type PlanId = "free" | "basic" | "business";
+import {
+  PLAN_LABELS,
+  PRICING_PLANS,
+  planFromRole,
+  resolveUserPlan,
+  type PlanId,
+} from "../shared/pricingPlans.js";
 
 const router = useRouter();
 const authStore = useAuthStore();
 const isDark = computed(() => document.documentElement.getAttribute("data-theme") === "dark");
 const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
 
-const PLAN_LABELS: Record<PlanId, string> = {
-  free: "חינמי",
-  basic: "בסיסי",
-  business: "עסקי",
-};
-
-const plans: Array<{
-  id: PlanId;
-  name: string;
-  price: number;
-  oldPrice?: number;
-  period: string;
-  blurb: string;
-  highlighted?: boolean;
-  features: string[];
-}> = [
-  {
-    id: "free",
-    name: "חינמי",
-    price: 0,
-    period: "חד פעמי",
-    blurb: "להתחלה מהירה ובדיקת התהליך עם כמות מסמכים מוגבלת.",
-    features: [
-      "משתמש אחד",
-      "25 מסמכי חשבוניות/קבלות חד פעמי",
-      "20 מסמכי תסקירים/חוזים חד פעמי",
-      "OCR מתקדם",
-      "תצוגה מקדימה וחילוץ נתונים",
-      "תזכורות אימייל בסיסיות",
-      "דוח חודשי ידני",
-    ],
-  },
-  {
-    id: "basic",
-    name: "בסיסי",
-    price: 69,
-    oldPrice: 86,
-    period: "/ חודש",
-    blurb: "מתאים לעסק קטן שמייבא מסמכים בכל חודש.",
-    features: [
-      "2 משתמשים",
-      'חיבור 2 חשבונות דוא"ל',
-      "50 מסמכי חשבוניות/קבלות בחודש",
-      "40 מסמכי תסקירים/חוזים בחודש",
-      "OCR מתקדם",
-      "המרת קבלות לקובץ אקסל",
-      "תזכורות אימייל אוטומטיות",
-      "דוחות חודשיים אוטומטיים",
-    ],
-  },
-  {
-    id: "business",
-    name: "עסקי",
-    price: 179,
-    oldPrice: 224,
-    period: "/ חודש",
-    blurb: "למי שמייבא מסמכים באופן שוטף ורוצה יותר נפח עבודה.",
-    highlighted: true,
-    features: [
-      "משתמשים ללא הגבלה",
-      "חשבונות אימייל ללא הגבלה",
-      "חשבוניות וקבלות ללא הגבלה",
-      "תסקירים וחוזים ללא הגבלה",
-      "סנכרון היסטורי של 4 שנים",
-      "מסמכים ללא הגבלה לניהול ידני",
-      "תזכורות אימייל ללא הגבלה",
-      "דוחות חודשיים אוטומטיים לכל הלקוחות",
-    ],
-  },
-];
+const plans = PRICING_PLANS;
 
 const faq = [
   {
@@ -215,16 +151,9 @@ const faq = [
   },
 ];
 
-function planFromRole(role: string | null | undefined): PlanId {
-  if (role === "admin") return "business";
-  if (role === "pro") return "basic";
-  return "free";
-}
-
 const currentPlanId = computed<PlanId | null>(() => {
   if (!authStore.user) return null;
-  const plan = authStore.user.plan ?? planFromRole(authStore.user.role);
-  return plan;
+  return resolveUserPlan(authStore.user);
 });
 
 const currentPlanLabel = computed(() =>
@@ -239,7 +168,7 @@ function ctaLabel(planId: PlanId): string {
 }
 
 function startPlan(_planId: PlanId) {
-  router.push(authStore.user ? "/profile" : "/login?tab=register");
+  router.push(authStore.user ? "/profile?section=subscription" : "/login?tab=register");
 }
 </script>
 

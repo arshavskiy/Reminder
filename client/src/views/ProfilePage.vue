@@ -474,13 +474,67 @@
             </div>
           </div>
 
-          <!--          <div class="settings-group">-->
-          <!--            <h3 class="settings-group__title">יצוא נתונים</h3>-->
-          <!--            <n-space>-->
-          <!--              <n-button size="small" @click="exportPdf">📄 יצוא PDF</n-button>-->
-          <!--              <n-button size="small" @click="exportWord">📝 יצוא Word</n-button>-->
-          <!--            </n-space>-->
-          <!--          </div>-->
+          <div class="settings-group">
+            <h3 class="settings-group__title">סנכרון Google Drive</h3>
+            <p class="settings-desc">
+              סנכרן מסמכים שהועלו אוטומטית לתיקיית RemindOCR ב-Google Drive שלך.
+            </p>
+            <div v-if="!driveAllowed" class="settings-desc" style="margin-top: 8px">
+              זמין במסלולים <strong>בסיסי</strong> ו<strong>עסקי</strong> בלבד.
+              <router-link style="margin-inline-start: 6px; color: var(--brand-color); font-weight: 700" to="/pricing">
+                שדרוג מנוי
+              </router-link>
+            </div>
+            <div v-else-if="driveStatus">
+              <n-tag v-if="driveStatus.syncEnabled" size="small" style="margin-bottom: 8px" type="success">מופעל</n-tag>
+              <n-tag v-else size="small" style="margin-bottom: 8px" type="default">כבוי</n-tag>
+              <div style="margin-top: 8px">
+                <n-button
+                    v-if="!driveStatus.syncEnabled"
+                    :disabled="!driveStatus.connected"
+                    :loading="driveToggling"
+                    size="small"
+                    type="primary"
+                    @click="enableDriveSync"
+                >הפעל סנכרון
+                </n-button>
+                <n-button
+                    v-else
+                    :loading="driveToggling"
+                    size="small"
+                    @click="disableDriveSync"
+                >כבה סנכרון
+                </n-button>
+                <span v-if="!driveStatus.connected" class="settings-desc" style="margin-inline-start: 8px">
+                  יש להתחבר עם Google כדי להפעיל
+                </span>
+              </div>
+              <div v-if="driveStatus.syncEnabled" style="margin-top: 12px">
+                <label class="settings-desc" style="display: block; margin-bottom: 4px">שם תיקייה ב-Drive</label>
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <n-input
+                      v-model:value="driveFolderName"
+                      placeholder="RemindOCR"
+                      size="small"
+                      style="max-width: 220px"
+                  />
+                  <n-button
+                      :disabled="!driveFolderName?.trim() || driveFolderName.trim() === driveStatus.folderName"
+                      :loading="renamingFolder"
+                      size="small"
+                      @click="renameDriveFolder"
+                  >שמור
+                  </n-button>
+                </div>
+              </div>
+              <div v-if="driveNeedsReauth" style="margin-top: 8px">
+                <n-alert :bordered="false" style="margin-bottom: 8px" type="warning">
+                  יש להתחבר מחדש ל-Gmail כדי לאשר הרשאות Drive.
+                </n-alert>
+                <n-button size="small" type="warning" @click="reconnectGmailForDrive">התחבר מחדש ל-Gmail</n-button>
+              </div>
+            </div>
+          </div>
 
           <div class="settings-group">
             <h3 class="settings-group__title">ניהול הפעלות</h3>
@@ -528,38 +582,88 @@
         <!-- מנוי ותשלומים -->
         <section v-if="activeSection === 'subscription'">
           <h2 class="section-title">מנוי ותשלומים</h2>
-          <div class="info-card" style="margin-bottom: 20px">
+
+          <article v-if="currentPricingPlan" class="sub-plan-card">
+            <div class="sub-plan-card__head">
+              <div>
+                <p class="sub-plan-card__eyebrow">המסלול שלכם</p>
+                <h3 class="sub-plan-card__title">{{ currentPricingPlan.name }}</h3>
+                <p class="sub-plan-card__blurb">{{ currentPricingPlan.blurb }}</p>
+              </div>
+              <div class="sub-plan-card__price">
+                <strong>{{ currentPricingPlan.price === 0 ? "חינם" : `₪${currentPricingPlan.price}` }}</strong>
+                <span v-if="currentPricingPlan.period">{{ currentPricingPlan.period }}</span>
+              </div>
+            </div>
+            <ul class="sub-plan-card__features">
+              <li v-for="feature in currentPricingPlan.features.slice(0, 4)" :key="feature">
+                {{ feature }}
+              </li>
+            </ul>
+            <router-link class="sub-plan-card__link" to="/pricing">צפייה בכל המסלולים והמחירים</router-link>
+          </article>
+
+          <div class="info-card sub-usage-card">
             <div class="info-row">
               <span class="info-label">תוכנית נוכחית</span>
               <span class="info-val">
-                <n-tag :type="roleTag.type" size="small">{{
-                  planTag.label
-                }}</n-tag>
+                <n-tag :type="planTag.type" size="small">{{ planTag.label }}</n-tag>
               </span>
             </div>
             <div class="info-row">
-              <span class="info-label">תוקף מנוי</span>
-              <span class="info-val">{{
-                subscription.validUntil || "חינמי"
-              }}</span>
+              <span class="info-label">מחיר</span>
+              <span class="info-val">{{ planPriceLabel }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">תסקירים החודש</span>
-              <span class="info-val">{{ subscription.monthlyCount }}</span>
+              <span class="info-label">סוג מכסה</span>
+              <span class="info-val">{{ quotaScopeLabel }}</span>
+            </div>
+            <div v-if="quotaPeriodLabel" class="info-row">
+              <span class="info-label">תקופת מכסה</span>
+              <span class="info-val">{{ quotaPeriodLabel }}</span>
+            </div>
+
+            <div v-for="item in quotaUsageRows" :key="item.key" class="sub-quota">
+              <div class="sub-quota__head">
+                <span class="sub-quota__label">{{ item.label }}</span>
+                <span class="sub-quota__value">{{ item.usageLabel }}</span>
+              </div>
+              <n-progress
+                  v-if="item.limit !== null"
+                  :color="item.percent >= 100 ? '#e88080' : item.percent >= 80 ? '#f0a020' : 'var(--brand-color)'"
+                  :height="8"
+                  :percentage="item.percent"
+                  :show-indicator="false"
+                  type="line"
+              />
+              <p v-else class="sub-quota__unlimited">ללא הגבלה</p>
             </div>
           </div>
+
+          <div v-if="importCounterRows.length" class="info-card sub-usage-card sub-counters-card">
+            <h3 class="settings-group__title sub-counters-card__title">פירוט שימוש</h3>
+            <div v-for="item in importCounterRows" :key="item.key" class="info-row">
+              <span class="info-label">{{ item.label }}</span>
+              <span class="info-val">{{ item.value }}</span>
+            </div>
+          </div>
+
           <div class="section-header" style="margin-bottom: 12px">
             <h3 class="settings-group__title" style="margin: 0">
               היסטוריית חיוב
             </h3>
           </div>
           <n-data-table
+              v-if="billingHistory.length"
             :columns="billingColumns"
             :data="billingHistory"
             :pagination="false"
             :scroll-x="620"
             size="small"
           />
+          <div v-else class="sub-billing-empty">
+            אין חיובים עדיין. תשלומים יופיעו כאן לאחר חיבור מערכת התשלומים.
+          </div>
         </section>
       </n-spin>
     </main>
@@ -567,8 +671,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import {computed, onMounted, ref, watch} from "vue";
+import {useRoute} from "vue-router";
 import {
+  NAlert,
   NButton,
   NDatePicker,
   NForm,
@@ -578,13 +684,28 @@ import {
   NSelect,
   NSpace,
   NSpin,
+  NTag,
   useMessage,
 } from "naive-ui";
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
 import { useUserSettingsStore } from "../stores/userSettings.js";
 import { useEngineerStore } from "../stores/engineer.js";
+import {api, type ProfileSubscription} from "../services/apiService.js";
 import type { User, UserSettings } from "@shared/types.js";
+import {
+  PLAN_LABELS,
+  formatPlanPrice,
+  formatQuotaScope,
+  formatQuotaUsage,
+  getPricingPlan,
+  quotaPercent,
+  resolveUserPlan,
+  planAllowsGoogleDrive,
+  type PlanId,
+} from "../shared/pricingPlans.js";
+
+const route = useRoute();
 
 const message = useMessage();
 const authStore = useAuthStore();
@@ -610,7 +731,7 @@ const navItems = computed(() => {
     ...(isAdmin ? [{ key: "notifications", icon: "🔔", label: "התראות ועדכונים" }] : []),
     { key: "settings", icon: "⚙️", label: "הגדרות" },
     ...(isAdmin ? [{ key: "theme", icon: "🎨", label: "נושא עיצוב" }] : []),
-    ...(isAdmin ? [{ key: "subscription", icon: "💳", label: "מנוי ותשלומים" }] : []),
+    {key: "subscription", icon: "💳", label: "מנוי ותשלומים"},
   ];
 });
 
@@ -640,24 +761,18 @@ const roleTag = computed(
   () => ROLE_META[user.value?.role ?? "user"] ?? ROLE_META.user,
 );
 
-const PLAN_META: Record<
-  string,
-  { label: string; type: "success" | "info" | "default" }
-> = {
-  free: { label: "Free", type: "default" },
-  basic: { label: "Basic", type: "info" },
-  business: { label: "Business", type: "success" },
+const PLAN_TAG_TYPES: Record<PlanId, "success" | "info" | "default"> = {
+  free: "default",
+  basic: "info",
+  business: "success",
 };
-const planTag = computed(() => {
-  const plan = (user.value as any)?.plan ?? planFromRole(user.value?.role);
-  return PLAN_META[plan] ?? PLAN_META.free;
-});
-
-function planFromRole(role: string | null | undefined) {
-  if (role === "admin") return "business";
-  if (role === "pro") return "basic";
-  return "free";
-}
+const currentPlanId = computed(() => resolveUserPlan(user.value));
+const currentPricingPlan = computed(() => getPricingPlan(currentPlanId.value));
+const planTag = computed(() => ({
+  label: PLAN_LABELS[currentPlanId.value],
+  type: PLAN_TAG_TYPES[currentPlanId.value],
+}));
+const planPriceLabel = computed(() => formatPlanPrice(currentPricingPlan.value));
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
@@ -896,6 +1011,93 @@ async function onAvatarChange(e: Event) {
 const pwForm = ref({ current: "", next: "", confirm: "" });
 const savingPw = ref(false);
 const disconnecting = ref(false);
+const driveStatus = ref<{
+  connected: boolean;
+  syncEnabled: boolean;
+  folderId: string | null;
+  folderName?: string;
+  allowed?: boolean
+} | null>(null);
+const driveToggling = ref(false);
+const driveNeedsReauth = ref(false);
+const driveFolderName = ref("RemindOCR");
+const renamingFolder = ref(false);
+const driveAllowed = computed(() => {
+  if (driveStatus.value?.allowed === false) return false;
+  return planAllowsGoogleDrive(currentPlanId.value);
+});
+
+async function loadDriveStatus() {
+  try {
+    driveStatus.value = await api.drive.status();
+    driveFolderName.value = driveStatus.value.folderName || "RemindOCR";
+  } catch {
+    driveStatus.value = null;
+  }
+}
+
+async function enableDriveSync() {
+  if (!driveAllowed.value) {
+    message.warning("סנכרון Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
+  driveToggling.value = true;
+  try {
+    await api.drive.enable();
+    message.success("סנכרון Google Drive הופעל");
+    await loadDriveStatus();
+  } catch (err: any) {
+    if (err?.message?.includes("drive_plan_required")) {
+      message.warning("סנכרון Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    } else if (err?.message?.includes("no_google_token")) {
+      message.warning("חבר את חשבון Google כדי להפעיל סנכרון Drive");
+    } else if (err?.message?.includes("drive_scope_missing")) {
+      driveNeedsReauth.value = true;
+      message.warning("יש להתחבר מחדש ל-Gmail כדי לאשר גישה ל-Drive");
+    } else {
+      message.error("שגיאה בהפעלת סנכרון Drive");
+    }
+  } finally {
+    driveToggling.value = false;
+  }
+}
+
+async function disableDriveSync() {
+  driveToggling.value = true;
+  try {
+    await api.drive.disable();
+    message.info("סנכרון Google Drive כובה");
+    await loadDriveStatus();
+  } catch {
+    message.error("שגיאה בכיבוי סנכרון Drive");
+  } finally {
+    driveToggling.value = false;
+  }
+}
+
+async function renameDriveFolder() {
+  const name = driveFolderName.value?.trim();
+  if (!name) return;
+  renamingFolder.value = true;
+  try {
+    await api.drive.renameFolder(name);
+    message.success("שם התיקייה עודכן");
+    await loadDriveStatus();
+  } catch {
+    message.error("שגיאה בשינוי שם התיקייה");
+  } finally {
+    renamingFolder.value = false;
+  }
+}
+
+async function reconnectGmailForDrive() {
+  try {
+    const {url} = await api.gmail.authUrl("/profile");
+    window.location.href = url;
+  } catch {
+    message.error("שגיאה בקבלת קישור חיבור Gmail");
+  }
+}
 
 async function changePassword() {
   if (!pwForm.value.next || pwForm.value.next !== pwForm.value.confirm) {
@@ -947,7 +1149,7 @@ async function setTheme(t: string) {
 }
 
 // ── Subscription ─────────────────────────────────────────────────────────────
-const subscription = ref({ validUntil: "", monthlyCount: 0 });
+const subscriptionData = ref<ProfileSubscription | null>(null);
 const billingHistory = ref<any[]>([]);
 const billingColumns = [
   { title: "תאריך", key: "date", render: (r: any) => formatDate(r.date) },
@@ -955,6 +1157,72 @@ const billingColumns = [
   { title: "סטטוס", key: "status" },
   { title: "תיאור", key: "description" },
 ];
+
+const quotaScopeLabel = computed(() => {
+  if (!subscriptionData.value) return "—";
+  const plan = subscriptionData.value.plan;
+  if (plan === "free") {
+    return formatQuotaScope(subscriptionData.value.quotas.documents?.scope ?? "lifetime");
+  }
+  const scope = subscriptionData.value.quotas.invoices?.scope
+      ?? subscriptionData.value.quotas.contracts?.scope;
+  return scope ? formatQuotaScope(scope) : "—";
+});
+
+const quotaPeriodLabel = computed(() => {
+  if (!subscriptionData.value) return "";
+  const plan = subscriptionData.value.plan;
+  const quota = plan === "free"
+      ? subscriptionData.value.quotas.documents
+      : subscriptionData.value.quotas.invoices ?? subscriptionData.value.quotas.contracts;
+  const periodStart = quota?.periodStart;
+  const periodEnd = quota?.periodEnd;
+  if (!periodStart || !periodEnd) return "";
+  return `${formatDate(periodStart)} – ${formatDate(periodEnd)}`;
+});
+
+const quotaUsageRows = computed(() => {
+  if (!subscriptionData.value) return [];
+  const plan = subscriptionData.value.plan;
+  const defs = plan === "free"
+      ? [
+        {key: "documents" as const, label: "מסמכים (סה״כ)"},
+        {key: "reminders" as const, label: "תזכורות אימייל"},
+      ]
+      : [
+        {key: "invoices" as const, label: "חשבוניות וקבלות (ייבוא)"},
+        {key: "contracts" as const, label: "תסקירים וחוזים (העלאה/ייבוא)"},
+        {key: "reminders" as const, label: "תזכורות אימייל"},
+      ];
+  return defs.map(({key, label}) => {
+    const quota = subscriptionData.value!.quotas[key];
+    return {
+      key,
+      label,
+      limit: quota?.limit ?? null,
+      usageLabel: formatQuotaUsage(quota?.used ?? 0, quota?.limit ?? null),
+      percent: quotaPercent(quota?.used ?? 0, quota?.limit ?? null),
+    };
+  });
+});
+
+const importCounterRows = computed(() => {
+  const counters = subscriptionData.value?.counters;
+  if (!counters) return [];
+  return [
+    {key: "scanned", label: "מסמכים שנסרקו (העלאה ידנית)", value: counters.scannedDocuments},
+    {key: "gmail-docs", label: "מסמכים שיובאו מ-Gmail", value: counters.gmailDocuments},
+    {key: "gmail-invoices", label: "חשבוניות שיובאו מ-Gmail", value: counters.gmailInvoices},
+  ];
+});
+
+async function loadSubscription() {
+  try {
+    subscriptionData.value = await api.profile.getSubscription();
+  } catch {
+    subscriptionData.value = null;
+  }
+}
 
 // ── Export helpers ───────────────────────────────────────────────────────────
 function buildProfileHtml(): string {
@@ -1037,6 +1305,9 @@ function exportWord() {
 
 // ── Mount ────────────────────────────────────────────────────────────────────
 onMounted(async () => {
+  if (route.query.section === "subscription") {
+    activeSection.value = "subscription";
+  }
   try {
     const [settingsRes, statsRes, engineerRes, notifsRes] =
       await Promise.allSettled([
@@ -1046,6 +1317,7 @@ onMounted(async () => {
         fetch(`${SERVER}/api/profile/notifications`, {
           credentials: "include",
         }),
+        loadSubscription(),
       ]);
 
     if (settingsRes.status === "fulfilled") {
@@ -1068,6 +1340,13 @@ onMounted(async () => {
     }
   } finally {
     loading.value = false;
+  }
+  loadDriveStatus();
+});
+
+watch(activeSection, (section) => {
+  if (section === "subscription" && !subscriptionData.value) {
+    void loadSubscription();
   }
 });
 </script>
@@ -1436,6 +1715,141 @@ html[data-theme="light"] .sidebar-nav__item--active {
 .drop-zone--active {
   border-color: #63e2b7;
   background: rgba(99, 226, 183, 0.06);
+}
+
+.sub-plan-card {
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--brand-color) 28%, var(--border-color));
+  border-radius: 16px;
+  background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--brand-color) 8%, var(--bg-card)) 0%,
+      var(--bg-card) 72%
+  );
+}
+
+.sub-plan-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.sub-plan-card__eyebrow {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-color);
+}
+
+.sub-plan-card__title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.sub-plan-card__blurb {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.sub-plan-card__price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.sub-plan-card__price strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.sub-plan-card__price span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sub-plan-card__features {
+  margin: 0 0 14px;
+  padding: 0 18px 0 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.sub-plan-card__link {
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-color);
+  text-decoration: none;
+}
+
+.sub-plan-card__link:hover {
+  text-decoration: underline;
+}
+
+.sub-usage-card {
+  margin-bottom: 24px;
+}
+
+.sub-quota {
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.sub-quota__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.sub-quota__label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.sub-quota__value {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.sub-quota__unlimited {
+  margin: 0;
+  font-size: 12px;
+  color: var(--brand-color);
+  font-weight: 600;
+}
+
+.sub-counters-card {
+  margin-top: 12px;
+}
+
+.sub-counters-card__title {
+  margin: 0 0 8px;
+}
+
+.sub-billing-empty {
+  padding: 24px;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  background: var(--bg-card);
 }
 
 @media (max-width: 820px) {

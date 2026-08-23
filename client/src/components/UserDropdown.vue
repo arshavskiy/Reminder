@@ -22,7 +22,7 @@
         </div>
         <div class="user-dropdown__meta">
           <span v-if="userName" class="user-dropdown__name">{{ userName }}</span>
-          <span v-if="props.userRole" class="user-dropdown__role">{{ roleLabel }}</span>
+          <!--          <span v-if="props.userRole" class="user-dropdown__role">{{ roleLabel }}</span>-->
         </div>
       </div>
     </n-dropdown>

@@ -118,6 +118,28 @@ export interface ImportedInvoice {
   fields: Record<string, unknown>;
 }
 
+export interface ProfileSubscriptionQuota {
+  category: "invoices" | "contracts" | "documents" | "reminders";
+  scope: "monthly" | "lifetime" | "unlimited";
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+}
+
+export interface ProfileImportCounters {
+  scannedDocuments: number;
+  gmailDocuments: number;
+  gmailInvoices: number;
+}
+
+export interface ProfileSubscription {
+  plan: string;
+  quotas: Record<ProfileSubscriptionQuota["category"], ProfileSubscriptionQuota>;
+  counters: ProfileImportCounters;
+}
+
 export interface EquipmentHistoryEvent {
   id: string;
   contract_type: string | null;
@@ -348,7 +370,14 @@ export const api = {
 
   documents: {
     list: (params?: { status?: string; limit?: number; offset?: number; clientId?: string }, force = false) => {
-      return get<{ rows: Document[]; total: number; totalAll: number; documentLimit: number; counts?: { all: number; done: number; in_progress: number; error: number } }>(`/documents${qs(params)}`, force);
+      return get<{
+        rows: Document[];
+        total: number;
+        totalAll: number;
+        documentLimit: number | null;
+        documentQuotaUsed?: number;
+        counts?: { all: number; done: number; in_progress: number; error: number }
+      }>(`/documents${qs(params)}`, force);
     },
     get: (id: string) => get<Document>(`/documents/${id}`),
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
@@ -510,6 +539,7 @@ export const api = {
   profile: {
     getEngineer: () => get<EngineerProfile>("/profile/engineer"),
     saveEngineer: (body: Partial<EngineerProfile>) => put<EngineerProfile>("/profile/engineer", body),
+    getSubscription: () => get<ProfileSubscription>("/profile/subscription"),
   },
 
   userSettings: {
@@ -691,6 +721,23 @@ export const api = {
     importHistory: () => get<{ history: GmailImportHistoryItem[] }>("/gmail/import-history"),
 
     disconnect: () => del("/gmail/disconnect"),
+  },
+
+  drive: {
+    status: () => get<{
+      connected: boolean;
+      syncEnabled: boolean;
+      folderId: string | null;
+      folderName: string;
+      allowed: boolean
+    }>("/drive/status"),
+    enable: (folderName?: string) => post<{
+      ok: boolean;
+      folderId: string
+    }>("/drive/enable", folderName ? {folderName} : {}),
+    disable: () => post<{ ok: boolean }>("/drive/disable", {}),
+    exportAll: () => post<{ ok: boolean; uploaded: number; failed: number; total: number }>("/drive/export-all", {}),
+    renameFolder: (name: string) => post<{ ok: boolean; folderName: string }>("/drive/rename-folder", {name}),
   },
 
   equipment: {

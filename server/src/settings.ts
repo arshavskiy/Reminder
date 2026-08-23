@@ -81,7 +81,7 @@ function buildSettings(): AppSettings {
       ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
       : [],
 
-    userDocumentLimit: process.env.USER_DOCUMENT_LIMIT ? parseInt(process.env.USER_DOCUMENT_LIMIT, 10) : 25,
+      userDocumentLimit: process.env.USER_DOCUMENT_LIMIT ? parseInt(process.env.USER_DOCUMENT_LIMIT, 10) : 30,
 
     escalationEmail: process.env.ESCALATION_EMAIL ?? "",
     escalationThresholdDays: process.env.ESCALATION_THRESHOLD_DAYS

@@ -10,7 +10,7 @@ export async function getGoogleAuthUrl(state: string, codeVerifier: string, redi
     client_id: settings.googleClientId || "",
     redirect_uri: redirectUri || settings.googleRedirectUri || "",
     response_type: "code",
-    scope: "openid profile email https://www.googleapis.com/auth/gmail.readonly",
+      scope: "openid profile email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.file",
     access_type: "offline",
     prompt: "consent",
     state,

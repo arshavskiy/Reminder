@@ -11,6 +11,9 @@ import {parseDocx} from "../pipeline/docxParser";
 import {parseXlsx} from "../pipeline/xlsxParser";
 import {ocrFile} from "../pipeline/ocrParser";
 import {extractCertificate} from "../pipeline/certificateExtractor";
+import {getDocumentImportQuota, type DocumentImportQuotaCategory} from "../quotas/documentImportQuota";
+import {getImportUsageCounters} from "../quotas/importUsageCounters";
+import {getReminderQuota} from "../quotas/reminderQuota";
 
 const avatarUpload = multer({
   storage: multer.memoryStorage(),
@@ -32,6 +35,13 @@ async function auth(req: express.Request, res: express.Response) {
     res.status(401).json({ error: "Unauthorized" });
     return null;
   }
+}
+
+function normalizeSubscriptionPlan(plan: string | null | undefined): "free" | "basic" | "business" {
+    const value = String(plan ?? "").trim().toLowerCase();
+    if (value === "admin" || value === "business") return "business";
+    if (value === "pro" || value === "basic") return "basic";
+    return "free";
 }
 
 export function registerProfileRoutes(app: express.Application) {
@@ -58,6 +68,62 @@ export function registerProfileRoutes(app: express.Application) {
 
     res.json({ active, snoozed, completed: sent, monthly });
   });
+
+    app.get("/api/profile/subscription", async (req, res) => {
+        const ctx = await auth(req, res);
+        if (!ctx) return;
+
+        const userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
+        const normalizedPlan = normalizeSubscriptionPlan(userPlan);
+        const categories: DocumentImportQuotaCategory[] = ["invoices", "contracts", "documents"];
+        const [quotas, counters, reminderQuota] = await Promise.all([
+            Promise.all(
+                categories.map(async (category) => {
+                    const quota = await getDocumentImportQuota(ctx.userId, userPlan, category);
+                    return [category, {
+                        category: quota.category,
+                        scope: quota.scope,
+                        limit: quota.limit,
+                        used: quota.used,
+                        remaining: quota.remaining,
+                        periodStart: quota.periodStart?.toISOString() ?? null,
+                        periodEnd: quota.periodEnd?.toISOString() ?? null,
+                    }] as const;
+                }),
+            ).then((entries) => Object.fromEntries(entries)),
+            getImportUsageCounters(ctx.userId),
+            getReminderQuota(ctx.userId, userPlan),
+        ]) as [
+            Record<DocumentImportQuotaCategory, {
+                category: DocumentImportQuotaCategory;
+                scope: string;
+                limit: number | null;
+                used: number;
+                remaining: number | null;
+                periodStart: string | null;
+                periodEnd: string | null;
+            }>,
+            Awaited<ReturnType<typeof getImportUsageCounters>>,
+            Awaited<ReturnType<typeof getReminderQuota>>,
+        ];
+
+        res.json({
+            plan: normalizedPlan,
+            quotas: {
+                ...quotas,
+                reminders: {
+                    category: "reminders" as const,
+                    scope: reminderQuota.scope,
+                    limit: reminderQuota.limit,
+                    used: reminderQuota.used,
+                    remaining: reminderQuota.remaining,
+                    periodStart: null,
+                    periodEnd: null,
+                },
+            },
+            counters,
+        });
+    });
 
   // ── Engineer profile ──────────────────────────────────────────────────────
   app.get("/api/profile/engineer", async (req, res) => {

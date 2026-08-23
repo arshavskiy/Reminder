@@ -58,7 +58,13 @@ export function registerInvoiceRoutes(app: express.Application) {
       .filter((row) => {
         if (status && row.status !== status) return false;
         if (type && row.type !== type) return false;
-        if (suppliers.length && !suppliers.includes(row.supplier_name)) return false;
+          if (suppliers.length) {
+              const wantUnidentified = suppliers.includes("__unidentified__");
+              const namedSuppliers = suppliers.filter((s) => s !== "__unidentified__");
+              const isUnidentified = !row.supplier_name || row.supplier_name === "ספק לא מזוהה";
+              const match = (wantUnidentified && isUnidentified) || (namedSuppliers.length > 0 && namedSuppliers.includes(row.supplier_name));
+              if (!match) return false;
+          }
         const rowTs = invoiceDateTs(row);
         if (fromTs && (!rowTs || rowTs < fromTs)) return false;
         if (toTs && (!rowTs || rowTs > toTs)) return false;

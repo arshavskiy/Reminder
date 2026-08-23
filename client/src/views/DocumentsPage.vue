@@ -27,6 +27,21 @@
           <GmailLogo :size="16" class="btn-icon" />
           ייבוא תסקיר בדיקה
         </button>
+        <button
+            v-if="driveAllowed"
+            :class="{ 'rbtn--loading': exportingToDrive }"
+            :disabled="exportingToDrive"
+            class="rbtn rbtn--ghost"
+            type="button"
+            @click="handleDriveExport"
+        >
+          <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+          ייצוא ל-Drive
+        </button>
+        <button class="rbtn rbtn--ghost" type="button" @click="showMonthlyReport = true">
+          <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+          דוח חודשי
+        </button>
       </template>
       <template #actions>
         <div class="documents-actions">
@@ -153,7 +168,7 @@
     <!-- Quota bar (role = user only) -->
     <div v-if="isRegularUser" class="quota-bar">
       <div class="quota-bar__text">
-        <span>מסמכים שנסרקו: {{ store.totalAll }} / {{ store.documentLimit }}</span>
+        <span>מסמכים: {{ store.documentQuotaUsed }} / {{ store.documentLimit ?? "∞" }}</span>
         <span v-if="limitReached" class="quota-bar__limit">הגעת למגבלת סריקות — שדרג ל-Pro</span>
       </div>
       <n-progress
@@ -501,6 +516,7 @@
       @view-document="openDocumentFromModal"
       @create-template="onCreateTemplate"
     />
+    <MonthlyReportModal v-model:show="showMonthlyReport"/>
   </div>
 </template>
 
@@ -544,6 +560,7 @@ import {useDocumentsStore} from "../stores/documents.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useRescanModalStore} from "../stores/rescanModal.js";
 import {api} from "../services/apiService.js";
+import {planAllowsGoogleDrive, resolveUserPlan} from "../shared/pricingPlans.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
 import ListCard from "../components/ListCard.vue";
@@ -551,6 +568,7 @@ import PaginationBar from "../components/PaginationBar.vue";
 import UploadModal from "../components/UploadModal.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import GmailLogo from "../components/GmailLogo.vue";
+import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import type {DocTemplate, Document} from "@shared/types.js";
 import {
   countDuplicateReportRows,
@@ -579,11 +597,18 @@ const {confirm} = useConfirm();
 const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 
 const isRegularUser = computed(() => authStore.user?.role === "user");
-const quotaPercent = computed(() => Math.min(100, Math.round((store.totalAll / store.documentLimit) * 100)));
-const limitReached = computed(() => isRegularUser.value && store.totalAll >= store.documentLimit);
+const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
+const quotaPercent = computed(() => {
+  const limit = store.documentLimit;
+  if (limit === null || limit <= 0) return 0;
+  return Math.min(100, Math.round((store.documentQuotaUsed / limit) * 100));
+});
+const limitReached = computed(() => isRegularUser.value && store.documentLimit !== null && store.documentQuotaUsed >= store.documentLimit);
 
 const uploading = ref(false);
 const importingFromGmail = ref(false);
+const exportingToDrive = ref(false);
+const showMonthlyReport = ref(false);
 let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
 const rescanning = ref(false);
 const rescanningAll = ref(false);
@@ -658,6 +683,39 @@ async function handleGmailImport() {
     }
   } finally {
     importingFromGmail.value = false;
+  }
+}
+
+async function handleDriveExport() {
+  if (!driveAllowed.value) {
+    message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
+  exportingToDrive.value = true;
+  try {
+    const status = await api.drive.status();
+    if (!status.allowed) {
+      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+      return;
+    }
+    if (!status.syncEnabled) {
+      message.warning("יש להפעיל סנכרון Drive בהגדרות הפרופיל לפני ייצוא");
+      return;
+    }
+    const result = await api.drive.exportAll();
+    if (result.total === 0) {
+      message.info("כל המסמכים כבר מסונכרנים ל-Drive");
+    } else {
+      message.success(`הועלו ${result.uploaded} מסמכים ל-Drive${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+    }
+  } catch (err: any) {
+    if (String(err?.message ?? "").includes("drive_plan_required")) {
+      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    } else {
+      message.error("שגיאה בייצוא ל-Drive");
+    }
+  } finally {
+    exportingToDrive.value = false;
   }
 }
 

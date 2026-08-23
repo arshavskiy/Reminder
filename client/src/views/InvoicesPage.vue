@@ -35,6 +35,21 @@
           <GmailLogo :size="16" class="btn-icon" />
           {{ gmailImportButtonLabel }}
         </button>
+        <button
+            v-if="driveAllowed"
+            :class="{ 'rbtn--loading': exportingToDrive }"
+            :disabled="exportingToDrive"
+            class="rbtn rbtn--ghost"
+            type="button"
+            @click="handleDriveExport"
+        >
+          <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+          ייצוא ל-Drive
+        </button>
+        <button class="rbtn rbtn--ghost" type="button" @click="showMonthlyReport = true">
+          <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+          דוח חודשי
+        </button>
       </template>
     </PageHeader>
 
@@ -315,6 +330,7 @@
         </div>
       </div>
     </n-modal>
+    <MonthlyReportModal v-model:show="showMonthlyReport"/>
   </div>
 </template>
 
@@ -325,6 +341,7 @@ import { NButton, NDatePicker, NDropdown, NIcon, NInput, NModal, NPagination, NS
 import {
   ArchiveOutline,
   BriefcaseOutline,
+  CloudUploadOutline,
   DocumentTextOutline,
   DownloadOutline,
   EllipsisVerticalOutline,
@@ -336,11 +353,16 @@ import {
 } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 import GmailLogo from "../components/GmailLogo.vue";
+import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import { api, type ImportedInvoice } from "../services/apiService.js";
 import type { DocTemplate } from "../shared/types.js";
+import {useAuthStore} from "../stores/auth.js";
+import {planAllowsGoogleDrive, resolveUserPlan} from "../shared/pricingPlans.js";
 
 const router = useRouter();
 const message = useMessage();
+const authStore = useAuthStore();
+const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
 
 const rows = ref<ImportedInvoice[]>([]);
 const total = ref(0);
@@ -348,6 +370,8 @@ const totalAll = ref(0);
 const visibleLimit = ref<number | null>(null);
 const loading = ref(false);
 const exporting = ref(false);
+const showMonthlyReport = ref(false);
+const exportingToDrive = ref(false);
 const importingFromGmail = ref(false);
 const gmailConnected = ref<boolean | null>(null);
 const viewMode = ref<"cards" | "table">("table");
@@ -386,7 +410,10 @@ const invoiceStatusOptions: SelectOption[] = [
   { label: "ארכיון", value: "archived" },
 ];
 const typeOptions = computed<SelectOption[]>(() => types.value.map((value) => ({ label: value, value })));
-const supplierOptions = computed<SelectOption[]>(() => suppliers.value.map((value) => ({ label: value, value })));
+const supplierOptions = computed<SelectOption[]>(() => [
+  {label: "ספק לא מזוהה", value: "__unidentified__"},
+  ...suppliers.value.map((value) => ({label: value, value})),
+]);
 const gmailImportButtonLabel = computed(() => gmailConnected.value === false ? "חבר Gmail" : "ייבא הכל");
 const statusStrip = computed(() => [
   { label: "הכל", value: "", count: total.value },
@@ -582,6 +609,39 @@ async function exportInvoicesToExcel() {
     message.error("שגיאה בייצוא לאקסל");
   } finally {
     exporting.value = false;
+  }
+}
+
+async function handleDriveExport() {
+  if (!driveAllowed.value) {
+    message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
+  exportingToDrive.value = true;
+  try {
+    const status = await api.drive.status();
+    if (!status.allowed) {
+      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+      return;
+    }
+    if (!status.syncEnabled) {
+      message.warning("יש להפעיל סנכרון Drive בהגדרות הפרופיל לפני ייצוא");
+      return;
+    }
+    const result = await api.drive.exportAll();
+    if (result.total === 0) {
+      message.info("כל המסמכים כבר מסונכרנים ל-Drive");
+    } else {
+      message.success(`הועלו ${result.uploaded} מסמכים ל-Drive${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+    }
+  } catch (err: any) {
+    if (String(err?.message ?? "").includes("drive_plan_required")) {
+      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    } else {
+      message.error("שגיאה בייצוא ל-Drive");
+    }
+  } finally {
+    exportingToDrive.value = false;
   }
 }
 

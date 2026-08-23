@@ -44,9 +44,7 @@ export function documentImportLimit(
     };
   }
   return {
-    limit: category === "contracts"
-      ? readPositiveIntEnv("FREE_LIFETIME_CONTRACT_DOCUMENT_LIMIT", 20)
-      : readPositiveIntEnv("FREE_LIFETIME_DOCUMENT_LIMIT", 25),
+    limit: readPositiveIntEnv("FREE_LIFETIME_DOCUMENT_LIMIT", readPositiveIntEnv("USER_DOCUMENT_LIMIT", 30)),
     scope: "lifetime",
   };
 }
@@ -64,11 +62,14 @@ export async function getDocumentImportQuota(
   now = new Date(),
 ): Promise<DocumentImportQuota> {
   const normalizedRole = role ?? "user";
+  const plan = normalizePlan(normalizedRole);
   const { limit, scope } = documentImportLimit(normalizedRole, category);
   const { periodStart, periodEnd } = scope === "monthly"
     ? currentUtcMonthWindow(now)
     : { periodStart: null, periodEnd: null };
-  const countFilter = documentQuotaCountFilter(userId, category, scope, periodStart, periodEnd);
+  const countFilter = plan === "free"
+      ? freeDocumentQuotaCountFilter(userId)
+      : documentQuotaCountFilter(userId, category, scope, periodStart, periodEnd);
   const used = limit === null
     ? 0
     : await col("documents").countDocuments(countFilter as any);
@@ -91,7 +92,9 @@ export async function assertDocumentImportQuota(
   requested = 1,
   category: DocumentImportQuotaCategory = "documents",
 ): Promise<DocumentImportQuota> {
-  const quota = await getDocumentImportQuota(userId, role, category);
+  const plan = normalizePlan(role ?? "user");
+  const effectiveCategory = plan === "free" ? "documents" : category;
+  const quota = await getDocumentImportQuota(userId, role, effectiveCategory);
   if (quota.limit !== null && quota.used + requested > quota.limit) {
     throw new DocumentImportQuotaError(quota);
   }
@@ -108,6 +111,13 @@ export function documentImportQuotaErrorPayload(error: DocumentImportQuotaError)
     remaining: error.quota.remaining,
     periodStart: error.quota.periodStart?.toISOString() ?? null,
     periodEnd: error.quota.periodEnd?.toISOString() ?? null,
+  };
+}
+
+function freeDocumentQuotaCountFilter(userId: string): Record<string, unknown> {
+  return {
+    user_id: userId,
+    document_kind: {$ne: "certificate"},
   };
 }
 

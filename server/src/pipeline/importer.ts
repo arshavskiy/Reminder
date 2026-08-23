@@ -14,6 +14,7 @@ import {extractFromOcr} from "./ocrExtractor";
 import {classifyDocumentKind, documentTypeFromTemplate, getOrBuildSystemPrompt, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
 import {deleteFromSpaces, getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
+import {syncDocumentToDrive} from "../storage/gdrive";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
@@ -721,6 +722,11 @@ async function finishDocumentProcessing(
   if (mimeType === "application/pdf") {
     await generatePdfThumbnailForDocument(documentId, { filePath }).catch((err) => {
       logger.warn("document_thumbnail_generation_failed", { document_id: documentId, user_id: userId ?? null, error: err });
+    });
+  }
+  if (userId) {
+    syncDocumentToDrive(documentId, userId).catch((err) => {
+      logger.error("drive_sync_post_processing_failed", {document_id: documentId, user_id: userId, error: err});
     });
   }
   push?.({ type: "document:done", documentId: documentId as any, status: "done" });

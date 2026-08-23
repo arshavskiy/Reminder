@@ -25,6 +25,7 @@ import {
   DocumentImportQuotaError,
   type DocumentImportQuotaCategory,
   documentImportQuotaErrorPayload,
+  getDocumentImportQuota,
 } from "../quotas/documentImportQuota";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -42,9 +43,11 @@ export function registerDocumentRoutes(app: express.Application) {
   // GET /api/documents
   app.get("/api/documents", async (req, res) => {
     let userId: string;
+    let userPlan: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
+      userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -79,13 +82,20 @@ export function registerDocumentRoutes(app: express.Application) {
         .toArray();
       const docIds = links.map((l: any) => String(l.document_id)).filter(Boolean);
       if (!docIds.length) {
-        res.json({ rows: [], total: 0, totalAll: 0 });
+        const documentQuota = await getDocumentImportQuota(userId, userPlan, "documents");
+        res.json({
+          rows: [],
+          total: 0,
+          totalAll: 0,
+          documentLimit: documentQuota.limit,
+          documentQuotaUsed: documentQuota.limit === null ? 0 : documentQuota.used,
+        });
         return;
       }
       filter._id = { $in: docIds.map((id) => new ObjectId(id)) };
     }
 
-    const [rows, total, totalAll, statusCounts] = await Promise.all([
+    const [rows, total, totalAll, statusCounts, documentQuota] = await Promise.all([
       col("documents")
         .find(filter)
         .project({ raw_text: 0 })
@@ -99,6 +109,7 @@ export function registerDocumentRoutes(app: express.Application) {
         { $match: baseFilter },
         { $group: { _id: "$processing_status", count: { $sum: 1 } } },
       ]).toArray(),
+      getDocumentImportQuota(userId, userPlan, "documents"),
     ]);
 
     // Enrich with linked client + reminder status so the documents list can
@@ -186,7 +197,14 @@ export function registerDocumentRoutes(app: express.Application) {
       in_progress: (countsByStatus["queued"] ?? 0) + (countsByStatus["processing"] ?? 0),
       error: countsByStatus["error"] ?? 0,
     };
-    res.json({ rows: enriched, total, totalAll: allCount, counts });
+    res.json({
+      rows: enriched,
+      total,
+      totalAll: allCount,
+      counts,
+      documentLimit: documentQuota.limit,
+      documentQuotaUsed: documentQuota.limit === null ? 0 : documentQuota.used,
+    });
   });
 
   // GET /api/documents/:id

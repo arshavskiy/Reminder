@@ -222,6 +222,10 @@
           <h3>דוחות חודשיים</h3>
           <p>הפק דוחות לפי לקוח, שדות וסדר עמודות שנשמרים לכל משתמש.</p>
         </article>
+        <article class="feature-card">
+          <h3>סנכרון Google Drive</h3>
+          <p>במסלולים בסיסי ועסקי — שמירת מסמכים בתיקיית RemindOCR ב-Google Drive, כולל סנכרון אוטומטי וייצוא.</p>
+        </article>
       </div>
     </section>
 
