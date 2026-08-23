@@ -1,22 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { currentUtcMonthWindow, documentImportMonthlyLimit } from "../quotas/documentImportQuota";
+import { currentUtcMonthWindow, documentImportLimit, documentImportMonthlyLimit } from "../quotas/documentImportQuota";
 
 describe("document monthly import quota", () => {
-  it("limits regular users to 30 documents per month", () => {
-    expect(documentImportMonthlyLimit("user")).toBe(30);
+  it("limits free users to 25 invoice documents for their lifetime", () => {
+    expect(documentImportLimit("free", "invoices")).toEqual({ limit: 25, scope: "lifetime" });
+    expect(documentImportMonthlyLimit("free")).toBe(25);
   });
 
-  it("limits pro users to 100 documents per month", () => {
-    expect(documentImportMonthlyLimit("pro")).toBe(100);
+  it("limits basic users to 50 invoice documents per month", () => {
+    expect(documentImportLimit("basic", "invoices")).toEqual({ limit: 50, scope: "monthly" });
+    expect(documentImportMonthlyLimit("basic")).toBe(50);
   });
 
-  it("does not limit admins", () => {
+  it("limits free/basic contract documents separately", () => {
+    expect(documentImportLimit("free", "contracts")).toEqual({ limit: 20, scope: "lifetime" });
+    expect(documentImportLimit("basic", "contracts")).toEqual({ limit: 40, scope: "monthly" });
+  });
+
+  it("does not limit business users", () => {
+    expect(documentImportMonthlyLimit("business")).toBeNull();
+  });
+
+  it("keeps legacy roles mapped to equivalent plans", () => {
+    expect(documentImportMonthlyLimit("user")).toBe(25);
+    expect(documentImportMonthlyLimit("pro")).toBe(50);
     expect(documentImportMonthlyLimit("admin")).toBeNull();
-  });
-
-  it("treats unknown roles as regular users", () => {
-    expect(documentImportMonthlyLimit(null)).toBe(30);
-    expect(documentImportMonthlyLimit("")).toBe(30);
+    expect(documentImportMonthlyLimit(null)).toBe(25);
+    expect(documentImportMonthlyLimit("")).toBe(25);
   });
 
   it("uses a UTC calendar month window", () => {

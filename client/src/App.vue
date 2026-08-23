@@ -30,6 +30,21 @@
 
              <!-- Tail actions: theme toggle + user dropdown -->
              <div class="appbar__actions">
+               <n-tooltip placement="bottom" :keep-alive-on-hover="false">
+                 <template #trigger>
+                   <button
+                     class="subscription-btn"
+                     :class="{ 'subscription-btn--active': route.path === '/pricing' }"
+                     type="button"
+                     @click="router.push('/pricing')"
+                   >
+                     <n-icon :component="DiamondOutline" :size="15" class="subscription-btn__icon" />
+                     <span class="subscription-btn__label">מנוי</span>
+                     <span v-if="subscriptionPlanLabel" class="subscription-btn__plan">{{ subscriptionPlanLabel }}</span>
+                   </button>
+                 </template>
+                 {{ subscriptionTooltip }}
+               </n-tooltip>
                <div v-if="authStore.isAdmin" class="actas-control" :class="{ 'actas-control--open': actAsExpanded }">
                  <button
                    v-if="!actAsExpanded"
@@ -189,7 +204,7 @@ import {
   unstableTreeSelectRtl,
   unstableUploadsRtl,
 } from "naive-ui";
-import {DownloadOutline, MoonOutline, SunnyOutline} from "@vicons/ionicons5";
+import {DiamondOutline, DownloadOutline, MoonOutline, SunnyOutline} from "@vicons/ionicons5";
 import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
@@ -335,6 +350,31 @@ const isDark = computed(() => darkPref.value);
 const theme = computed(() => (isDark.value ? darkTheme : null));
 const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
 
+const PLAN_SHORT: Record<string, string> = {
+  free: "חינמי",
+  basic: "בסיסי",
+  business: "עסקי",
+};
+
+function resolveUserPlan(): string {
+  const user = authStore.user;
+  if (!user) return "free";
+  if (user.plan) return user.plan;
+  if (user.role === "admin") return "business";
+  if (user.role === "pro") return "basic";
+  return "free";
+}
+
+const subscriptionPlanLabel = computed(() => {
+  if (!authStore.user) return "";
+  return PLAN_SHORT[resolveUserPlan()] ?? "";
+});
+
+const subscriptionTooltip = computed(() => {
+  const plan = subscriptionPlanLabel.value;
+  return plan ? `מנוי נוכחי: ${plan} — לחצו לצפייה במסלולים` : "מסלולי מנוי ומחירים";
+});
+
 const themeOverrides = computed(() => ({
   common: {
     fontFamily: '"Segoe UI", Arial, Helvetica, sans-serif',
@@ -419,11 +459,10 @@ const allNav = [
   {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment },
-  {label: "מנוי", key: "pricing", minRole: "user"},
   // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
   // Print templates are reached from the contracts page, next to "תסקיר חדש".
   // {label: "הדפסת תסקיר", key: "compose", minRole: "user", feature: FEATURES.pages.printTemplates},
-  {label: "Gmail", key: "gmail-inbox", minRole: "user"},
+  {label: "Gmail", key: "gmail-inbox", minRole: "admin"},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];
@@ -595,6 +634,71 @@ html[data-theme="light"] .mobile-nav-list__item--active {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.subscription-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 0 12px;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.subscription-btn__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+
+.subscription-btn__label {
+  line-height: 1;
+}
+
+.subscription-btn__plan {
+  color: var(--text-muted, var(--text-secondary));
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.subscription-btn__plan::before {
+  content: "·";
+  margin-inline-end: 5px;
+  opacity: 0.55;
+}
+
+.subscription-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.subscription-btn:hover .subscription-btn__plan {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.subscription-btn--active {
+  border-color: color-mix(in srgb, var(--brand-color) 28%, var(--border-color));
+  background: color-mix(in srgb, var(--brand-color) 8%, transparent);
+  color: var(--brand-color);
+}
+
+.subscription-btn--active .subscription-btn__plan {
+  color: var(--brand-color);
+  opacity: 0.8;
 }
 
 .actas-control {

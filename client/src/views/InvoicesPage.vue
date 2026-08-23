@@ -1,41 +1,66 @@
 <template>
-  <div class="invoices-page" dir="rtl">
-    <div class="invoice-head">
-      <div>
-        <h1>חשבוניות שיובאו</h1>
-        <p>{{ total }} מסמכים</p>
-      </div>
-      <div class="invoice-actions">
-        <n-button :loading="exporting" :disabled="loading || total === 0" @click="exportInvoicesToExcel">
-          <template #icon><n-icon :component="DownloadOutline" /></template>
-          ייצוא לאקסל
-        </n-button>
-        <n-button @click="load(true)" :loading="loading">
-          <template #icon><n-icon :component="RefreshOutline" /></template>
-          רענן
-        </n-button>
-        <n-button type="primary" @click="router.push('/gmail-inbox')">
-          <template #icon><n-icon :component="CloudUploadOutline" /></template>
-          ייבא הכל
-        </n-button>
-      </div>
+  <div class="page2 invoices-page" dir="rtl">
+    <PageHeader
+      :count="total"
+      title="חשבוניות"
+      subtitle="חשבוניות שיובאו מ-Gmail — צפייה, סינון וניהול"
+    >
+      <template #actions>
+        <div class="invoices-actions">
+          <button
+            :class="{ 'rbtn--loading': exporting }"
+            :disabled="loading || total === 0 || exporting"
+            class="rbtn rbtn--ghost"
+            type="button"
+            @click="exportInvoicesToExcel"
+          >
+            <n-icon :component="DownloadOutline" class="btn-icon" />
+            ייצוא לאקסל
+          </button>
+          <button
+            :disabled="loading"
+            class="rbtn rbtn--ghost"
+            type="button"
+            @click="load(true)"
+          >
+            <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
+            רענן
+          </button>
+          <button
+            :class="{ 'rbtn--loading': importingFromGmail }"
+            :disabled="loading || importingFromGmail"
+            class="rbtn rbtn--primary"
+            type="button"
+            @click="handleGmailImportButton"
+          >
+            <GmailLogo :size="16" class="btn-icon" />
+            {{ gmailImportButtonLabel }}
+          </button>
+        </div>
+      </template>
+    </PageHeader>
+
+    <div class="filterbar filterbar--compact">
+      <button
+        v-for="option in statusStrip"
+        :key="option.value"
+        type="button"
+        class="pill pill--compact"
+        :class="{ 'pill--active': (filters.status ?? '') === option.value }"
+        @click="setStatus(option.value)"
+      >
+        {{ option.label }}
+        <span class="pill__badge">{{ option.count }}</span>
+      </button>
     </div>
 
-    <div class="invoice-toolbar">
+    <div class="toolbar">
       <n-input
         v-model:value="filters.q"
         clearable
         placeholder="חיפוש ספק, מספר, כתובת או קובץ..."
-        class="invoice-toolbar__search"
+        class="toolbar__search"
         @keydown.enter="load(true)"
-      />
-      <n-select
-        v-model:value="filters.status"
-        :options="statusOptions"
-        clearable
-        placeholder="כל הסטטוסים"
-        class="invoice-toolbar__select"
-        @update:value="load(true)"
       />
       <n-select
         v-model:value="filters.type"
@@ -43,7 +68,7 @@
         clearable
         filterable
         placeholder="סוג מסמך"
-        class="invoice-toolbar__select"
+        class="toolbar__type"
         @update:value="load(true)"
       />
       <n-select
@@ -54,50 +79,62 @@
         multiple
         max-tag-count="responsive"
         placeholder="שם הספק"
-        class="invoice-toolbar__select invoice-toolbar__select--supplier"
+        class="toolbar__supplier"
         @update:value="load(true)"
       />
-      <n-button :disabled="filters.suppliers.length < 2" @click="openVendorMergeModal">
-        <template #icon><n-icon :component="BriefcaseOutline" /></template>
+      <button
+        v-if="suppliers.length >= 2"
+        class="rbtn rbtn--ghost"
+        type="button"
+        @click="openVendorMergeModal"
+      >
+        <n-icon :component="BriefcaseOutline" class="btn-icon" />
         מזג ספקים
-      </n-button>
+      </button>
       <n-date-picker
         v-model:value="dateRange"
         type="daterange"
         clearable
-        class="invoice-toolbar__dates"
+        class="toolbar__dates"
         @update:value="load(true)"
       />
-      <div class="invoice-view-toggle">
-        <n-button :type="viewMode === 'cards' ? 'primary' : 'default'" @click="viewMode = 'cards'">
+      <div class="toolbar__view-toggle">
+        <button
+          :class="{ 'rbtn--ghost-active': viewMode === 'cards' }"
+          class="rbtn rbtn--ghost"
+          type="button"
+          @click="viewMode = 'cards'"
+        >
           כרטיסים
-        </n-button>
-        <n-button :type="viewMode === 'table' ? 'primary' : 'default'" @click="viewMode = 'table'">
+        </button>
+        <button
+          :class="{ 'rbtn--ghost-active': viewMode === 'table' }"
+          class="rbtn rbtn--ghost"
+          type="button"
+          @click="viewMode = 'table'"
+        >
           טבלה
-        </n-button>
+        </button>
       </div>
-    </div>
-
-    <div class="status-strip">
-      <button
-        v-for="option in statusStrip"
-        :key="option.value"
-        type="button"
-        class="status-filter"
-        :class="{ 'status-filter--active': (filters.status ?? '') === option.value }"
-        @click="setStatus(option.value)"
-      >
-        <span>{{ option.label }}</span>
-        <strong>{{ option.count }}</strong>
-      </button>
     </div>
 
     <n-spin :show="loading">
-      <div v-if="!rows.length" class="invoice-empty">
-        לא נמצאו חשבוניות מיובאות
+      <div v-if="!rows.length && !loading" class="empty">
+        <n-icon :component="DocumentTextOutline" :size="48" class="empty__icon" />
+        <p>לא נמצאו חשבוניות מיובאות</p>
+        <button
+          :class="{ 'rbtn--loading': importingFromGmail }"
+          :disabled="importingFromGmail"
+          class="rbtn rbtn--primary mt-3"
+          type="button"
+          @click="handleGmailImportButton"
+        >
+          <GmailLogo :size="16" class="btn-icon" />
+          {{ gmailImportButtonLabel }}
+        </button>
       </div>
 
-      <div v-else-if="viewMode === 'cards'" class="invoice-grid">
+      <div v-else-if="rows.length && viewMode === 'cards'" class="invoice-grid">
         <article
           v-for="row in rows"
           :key="row.id"
@@ -128,7 +165,7 @@
         </article>
       </div>
 
-      <div v-else class="invoice-table-wrap">
+      <div v-else-if="rows.length && viewMode === 'table'" class="invoice-table-wrap">
         <table class="invoice-table">
           <thead>
             <tr>
@@ -278,7 +315,6 @@ import { NButton, NDatePicker, NDropdown, NIcon, NInput, NModal, NPagination, NS
 import {
   ArchiveOutline,
   BriefcaseOutline,
-  CloudUploadOutline,
   DocumentTextOutline,
   DownloadOutline,
   EllipsisVerticalOutline,
@@ -286,7 +322,10 @@ import {
   PricetagOutline,
   RefreshOutline,
 } from "@vicons/ionicons5";
+import PageHeader from "../components/PageHeader.vue";
+import GmailLogo from "../components/GmailLogo.vue";
 import { api, type ImportedInvoice } from "../services/apiService.js";
+import type { DocTemplate } from "../shared/types.js";
 
 const router = useRouter();
 const message = useMessage();
@@ -297,6 +336,8 @@ const totalAll = ref(0);
 const visibleLimit = ref<number | null>(null);
 const loading = ref(false);
 const exporting = ref(false);
+const importingFromGmail = ref(false);
+const gmailConnected = ref<boolean | null>(null);
 const viewMode = ref<"cards" | "table">("table");
 const dateRange = ref<[number, number] | null>(null);
 const page = ref(1);
@@ -334,6 +375,7 @@ const invoiceStatusOptions: SelectOption[] = [
 ];
 const typeOptions = computed<SelectOption[]>(() => types.value.map((value) => ({ label: value, value })));
 const supplierOptions = computed<SelectOption[]>(() => suppliers.value.map((value) => ({ label: value, value })));
+const gmailImportButtonLabel = computed(() => gmailConnected.value === false ? "חבר Gmail" : "ייבא הכל");
 const statusStrip = computed(() => [
   { label: "הכל", value: "", count: total.value },
   { label: "חדש", value: "new", count: counts.value.new ?? 0 },
@@ -350,7 +392,17 @@ watch(() => filters.q, () => {
 
 onMounted(() => {
   load();
+  refreshGmailStatus();
 });
+
+async function refreshGmailStatus() {
+  try {
+    const status = await api.gmail.status();
+    gmailConnected.value = status.connected;
+  } catch {
+    gmailConnected.value = false;
+  }
+}
 
 async function load(force = false) {
   if (force) page.value = 1;
@@ -521,6 +573,85 @@ async function exportInvoicesToExcel() {
   }
 }
 
+async function handleGmailImportButton() {
+  importingFromGmail.value = true;
+  try {
+    const status = await api.gmail.status();
+    gmailConnected.value = status.connected;
+    if (!status.connected) {
+      const { url } = await api.gmail.authUrl();
+      window.location.assign(url);
+      return;
+    }
+    const template = await findInvoiceTemplate();
+    const result = await api.gmail.importAll(invoiceGmailQuery(template), undefined, template?.id ? String(template.id) : undefined);
+    const failed = result.results.filter((item) => item.error).length;
+    const imported = result.imported ?? 0;
+    if (imported) {
+      message.success(`יובאו ${imported} מסמכים מ-Gmail`);
+    } else if (failed) {
+      message.warning("לא יובאו מסמכים. חלק מהקבצים נכשלו בעיבוד.");
+    } else {
+      message.info("לא נמצאו מסמכים חדשים לייבוא");
+    }
+    await load(true);
+  } catch (err: any) {
+    const code = String(err?.message ?? "");
+    if (code.includes("gmail_not_connected")) {
+      gmailConnected.value = false;
+      message.error("Gmail לא מחובר. לחץ שוב כדי להתחבר.");
+    } else if (code.includes("document_monthly_quota_exceeded")) {
+      message.error("הגעת למגבלת הייבוא החודשית של המנוי.");
+    } else {
+      message.error("שגיאה בייבוא מ-Gmail");
+    }
+  } finally {
+    importingFromGmail.value = false;
+  }
+}
+
+async function findInvoiceTemplate(): Promise<DocTemplate | null> {
+  const templates = await api.docTemplates.list();
+  return templates.find((template) =>
+    template.document_kind === "invoice" || /חשבונית|קבלה|דרישת\s*תשלום/i.test(template.name)
+  ) ?? null;
+}
+
+function invoiceGmailQuery(template: DocTemplate | null): string {
+  const parts = ["has:attachment", "{filename:pdf filename:jpg filename:jpeg filename:png}"];
+  const terms = invoiceTemplateTerms(template);
+  if (terms.length === 1) {
+    parts.push(formatGmailSearchTerm(terms[0]));
+  } else if (terms.length > 1) {
+    parts.push(`{${terms.map(formatGmailSearchTerm).join(" ")}}`);
+  }
+  return parts.join(" ");
+}
+
+function invoiceTemplateTerms(template: DocTemplate | null): string[] {
+  if (!template) return ["חשבונית", "invoice", "receipt", "קבלה"];
+  const candidates = [
+    template.name,
+    template.document_kind !== "unknown" ? template.document_kind : "",
+    ...(template.match_keywords ?? []),
+  ];
+  const seen = new Set<string>();
+  return candidates
+    .map((term) => String(term ?? "").trim())
+    .filter((term) => term.length >= 3)
+    .filter((term) => {
+      const key = term.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 8);
+}
+
+function formatGmailSearchTerm(term: string): string {
+  return `"${term.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
+}
+
 function renderActionIcon(icon: Component) {
   return () => h(NIcon, { component: icon });
 }
@@ -644,92 +775,194 @@ function replaceRow(updated: ImportedInvoice) {
 </script>
 
 <style scoped>
-.invoices-page {
+.invoices-actions {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.invoice-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.invoice-head h1 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--text-primary);
-}
-
-.invoice-head p {
-  margin: 4px 0 0;
-  color: var(--text-secondary);
-}
-
-.invoice-actions,
-.invoice-toolbar,
-.invoice-view-toggle,
-.status-strip,
-.row-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
 }
 
-.invoice-toolbar {
-  padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-card);
-}
-
-.invoice-toolbar__search {
-  min-width: 260px;
-  flex: 1;
-}
-
-.invoice-toolbar__select {
-  width: 180px;
-}
-
-.invoice-toolbar__select--supplier {
-  width: 260px;
-}
-
-.invoice-toolbar__dates {
-  width: 260px;
-}
-
-.status-filter {
+.rbtn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 6px 12px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-card);
+  border-radius: 999px;
+  background: transparent;
   color: var(--text-primary);
   cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
 }
 
-.status-filter--active {
+.rbtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.rbtn:active {
+  transform: scale(0.97);
+}
+
+.rbtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.rbtn--primary {
+  background: var(--brand-color);
   border-color: var(--brand-color);
-  background: color-mix(in srgb, var(--brand-color) 10%, var(--bg-card));
+  color: var(--text-inverse, #fff);
+  font-weight: 600;
+}
+
+.rbtn--ghost-active {
+  background: var(--bg-elevated);
+  border-color: var(--brand-color);
   color: var(--brand-color);
 }
 
-.invoice-empty {
-  padding: 48px;
-  border: 1px dashed var(--border-color);
-  border-radius: 8px;
-  text-align: center;
+.rbtn--loading {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.rbtn--loading::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-inline-start-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex: 0 0 auto;
+}
+
+.refresh-icon--spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 6px;
+  background: var(--bg-elevated);
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+}
+
+.filterbar--compact {
+  margin-top: -8px;
+  padding: 5px;
+  background: transparent;
+}
+
+.pill {
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
   color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.pill--compact {
+  padding: 6px 13px;
+  font-size: 12px;
+}
+
+.pill:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pill--active {
+  color: var(--brand-color);
+  font-weight: 700;
   background: var(--bg-card);
+  border: 2px solid var(--brand-color);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-color) 55%, transparent);
+}
+
+.pill--active .pill__badge {
+  background: color-mix(in srgb, var(--brand-color) 22%, transparent);
+  color: inherit;
+}
+
+.pill__badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar__search {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+.toolbar__type {
+  width: 200px;
+}
+
+.toolbar__supplier {
+  width: 260px;
+}
+
+.toolbar__dates {
+  width: 260px;
+}
+
+.toolbar__view-toggle {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+}
+
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.empty__icon {
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.mt-3 {
+  margin-top: 12px;
 }
 
 .invoice-grid {
@@ -740,7 +973,7 @@ function replaceRow(updated: ImportedInvoice) {
 
 .invoice-card {
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--bg-card);
   overflow: hidden;
   cursor: pointer;
@@ -767,7 +1000,7 @@ function replaceRow(updated: ImportedInvoice) {
   height: 100%;
   border: 0;
   object-fit: contain;
-  background: #fff;
+  background: var(--bg-card);
 }
 
 .invoice-card__fallback {
@@ -777,8 +1010,10 @@ function replaceRow(updated: ImportedInvoice) {
   color: var(--text-secondary);
 }
 
-.invoice-card__status,
-.invoice-status {
+.invoice-card__status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
   display: inline-flex;
   align-items: center;
   min-height: 24px;
@@ -788,12 +1023,6 @@ function replaceRow(updated: ImportedInvoice) {
   color: var(--brand-color);
   font-size: 12px;
   font-weight: 700;
-}
-
-.invoice-card__status {
-  position: absolute;
-  top: 10px;
-  right: 10px;
 }
 
 .invoice-card__body {
@@ -812,6 +1041,7 @@ function replaceRow(updated: ImportedInvoice) {
   margin-top: 4px;
   font-size: 20px;
   font-weight: 800;
+  color: var(--text-primary);
 }
 
 .invoice-card__line {
@@ -833,7 +1063,7 @@ function replaceRow(updated: ImportedInvoice) {
 
 .invoice-table-wrap {
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--bg-card);
   overflow: auto;
 }
@@ -887,16 +1117,16 @@ function replaceRow(updated: ImportedInvoice) {
   padding: 14px 0 4px;
 }
 
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .cell-strong,
 .cell-amount {
   font-weight: 800;
   color: var(--text-primary);
-}
-
-.cell-file {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .cell-actions {
@@ -913,11 +1143,6 @@ function replaceRow(updated: ImportedInvoice) {
 
 .invoice-row-action:hover {
   color: var(--brand-color);
-}
-
-.invoice-business-modal {
-  width: 460px;
-  max-width: calc(100vw - 32px);
 }
 
 :global(.invoice-business-modal.n-card),
@@ -960,19 +1185,49 @@ function replaceRow(updated: ImportedInvoice) {
   gap: 8px;
 }
 
-@media (max-width: 760px) {
-  .invoice-head {
-    flex-direction: column;
+@media (max-width: 640px) {
+  .invoices-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
   }
 
-  .invoice-toolbar :deep(.n-input),
-  .invoice-toolbar :deep(.n-select),
-  .invoice-toolbar :deep(.n-date-picker) {
-    width: 100% !important;
-    min-width: 0 !important;
+  .invoices-actions > .rbtn {
+    width: 100%;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .toolbar__search,
+  .toolbar__type,
+  .toolbar__supplier,
+  .toolbar__dates {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+  }
+
+  .toolbar__view-toggle {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .toolbar__view-toggle .rbtn {
+    flex: 1;
   }
 
   .invoice-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .invoices-actions {
     grid-template-columns: 1fr;
   }
 }

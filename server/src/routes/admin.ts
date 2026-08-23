@@ -3,12 +3,13 @@ import {ObjectId} from "mongodb";
 import {extname} from "path";
 import {col} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
-import type {UserRole} from "../../src/shared/types.js";
+import type {UserPlan, UserRole} from "../../src/shared/types.js";
 import {getSettings} from "../settings.js";
 import {sendPushToAdmins} from "../push/pushService.js";
 import {DEFAULT_FEATURES, normalizeFeatures} from "../features.js";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
+const VALID_PLANS: UserPlan[] = ["free", "basic", "business"];
 const DEFAULT_REPORT_CONFIG = {
   all_fields: [
     "tracking_date",
@@ -52,7 +53,13 @@ function normalizeReportConfig(raw: unknown) {
 function flatUser(doc: any) {
   if (!doc) return doc;
   const { _id, password_hash, verification_token, reset_token, ...rest } = doc;
-  return { id: _id?.toString(), ...rest };
+  return { id: _id?.toString(), ...rest, plan: doc.plan ?? planFromRole(doc.role) };
+}
+
+function planFromRole(role: string | null | undefined): UserPlan {
+  if (role === "admin") return "business";
+  if (role === "pro") return "basic";
+  return "free";
 }
 
 export function registerAdminRoutes(app: express.Application) {
@@ -129,7 +136,7 @@ export function registerAdminRoutes(app: express.Application) {
     const auth = await adminAuth(req, res);
     if (!auth) return;
 
-    const { role, is_active } = req.body as { role?: string; is_active?: number };
+    const { role, plan, is_active } = req.body as { role?: string; plan?: string; is_active?: number };
 
     const updates: Record<string, any> = { updated_at: new Date() };
 
@@ -139,6 +146,14 @@ export function registerAdminRoutes(app: express.Application) {
         return;
       }
       updates.role = role;
+    }
+
+    if (plan !== undefined) {
+      if (!VALID_PLANS.includes(plan as UserPlan)) {
+        res.status(400).json({ error: `Invalid plan. Must be one of: ${VALID_PLANS.join(", ")}` });
+        return;
+      }
+      updates.plan = plan;
     }
 
     if (is_active !== undefined) {

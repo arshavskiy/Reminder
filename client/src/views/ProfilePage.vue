@@ -533,7 +533,7 @@
               <span class="info-label">תוכנית נוכחית</span>
               <span class="info-val">
                 <n-tag :type="roleTag.type" size="small">{{
-                  roleTag.label
+                  planTag.label
                 }}</n-tag>
               </span>
             </div>
@@ -639,6 +639,25 @@ const ROLE_META: Record<
 const roleTag = computed(
   () => ROLE_META[user.value?.role ?? "user"] ?? ROLE_META.user,
 );
+
+const PLAN_META: Record<
+  string,
+  { label: string; type: "success" | "info" | "default" }
+> = {
+  free: { label: "Free", type: "default" },
+  basic: { label: "Basic", type: "info" },
+  business: { label: "Business", type: "success" },
+};
+const planTag = computed(() => {
+  const plan = (user.value as any)?.plan ?? planFromRole(user.value?.role);
+  return PLAN_META[plan] ?? PLAN_META.free;
+});
+
+function planFromRole(role: string | null | undefined) {
+  if (role === "admin") return "business";
+  if (role === "pro") return "basic";
+  return "free";
+}
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";

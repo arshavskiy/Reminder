@@ -214,7 +214,7 @@ describe("grouped items_table injection in built-in templates", () => {
     model: "AGLY2",
     serial_number: "2305001938",
   };
-  const SAMPLE_TABLE = `<table class="items"><thead><tr><th>תסקיר</th><th>ציוד</th><th>רישוי</th><th>בתוקף עד</th></tr></thead><tbody><tr><td>484590/12100</td><td>מלגזה</td><td>180375</td><td>2026-08-18</td></tr></tbody></table>`;
+  const SAMPLE_TABLE = `<table class="items"><thead><tr><th>תסקיר</th><th>ציוד</th><th>בתוקף עד</th></tr></thead><tbody><tr><td>484590/12100</td><td>מלגזה</td><td>2026-08-18</td></tr></tbody></table>`;
 
   it("inspection.html without items_table still shows the single equipment box", () => {
     const rendered = renderTemplate(loadReminderTemplate("inspection"), TABLE_VARS, { escape: false });

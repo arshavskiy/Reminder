@@ -131,10 +131,24 @@ function toUser(doc: any): User {
     company_name: doc.company_name ?? null,
     picture_url: doc.picture_url,
     role: doc.role,
+    plan: normalizeUserPlan(doc.plan ?? planFromRole(doc.role)),
     is_active: doc.is_active,
     created_at: doc.created_at?.toISOString() ?? "",
     last_login_at: doc.last_login_at?.toISOString() ?? null,
   } as any;
+}
+
+function planFromRole(role: string | null | undefined): "free" | "basic" | "business" {
+  if (role === "admin") return "business";
+  if (role === "pro") return "basic";
+  return "free";
+}
+
+function normalizeUserPlan(value: unknown): "free" | "basic" | "business" {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (text === "business") return "business";
+  if (text === "basic") return "basic";
+  return "free";
 }
 
 export interface SessionIdentity {

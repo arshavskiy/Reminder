@@ -190,7 +190,7 @@
         </article>
         <article class="feature-card feature-card--accent">
           <h3>ייבוא חשבוניות לפי מנוי</h3>
-          <p>מסלול בסיסי כולל עד 30 מסמכים בחודש, ומסלול עסקי כולל עד 100 מסמכים בחודש עם אכיפה בצד השרת.</p>
+          <p>מסלול חינמי כולל 25 מסמכים חד פעמי, בסיסי כולל 50 מסמכים בחודש, ועסקי ללא הגבלה עם אכיפה בצד השרת.</p>
         </article>
 <!--        <article class="feature-card">-->
 <!--          &lt;!&ndash;          <div class="feature-icon">✉️</div>&ndash;&gt;-->
@@ -701,11 +701,12 @@ onMounted(async () => {
 }
 
 .login-brand__logo {
-  width: 82px;
-  height: 82px;
-  border-radius: 18px;
-  object-fit: cover;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  width: 88px;
+  height: 88px;
+  border-radius: 20px;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--bg-card) 88%, var(--brand-color));
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--text-primary) 10%, transparent);
 }
 
 .login-brand__title {

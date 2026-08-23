@@ -23,18 +23,18 @@ describe("groupedReminderKey", () => {
 });
 
 describe("buildGroupedItemsTable", () => {
-  it("renders a row per contract with license and equipment", () => {
+  it("renders a row per contract with equipment and expiry (no license column)", () => {
     const html = buildGroupedItemsTable([
       { contract_number: "484590/12100", equipment: "מלגזה", license_number: "180375", expiry_date: "2026-08-18" },
       { contract_number: "484590/12094", equipment: "מנוף", license_number: "", expiry_date: "2026-08-18" },
     ]);
     expect(html).toContain("תסקיר");
     expect(html).toContain("ציוד");
-    expect(html).toContain("רישוי");
+    expect(html).toContain("בתוקף עד");
+    expect(html).not.toContain("רישוי");
     expect(html).toContain("484590/12100");
-    expect(html).toContain("180375");
+    expect(html).not.toContain("180375");
     expect(html).toContain("מנוף");
-    expect(html).toContain("—");
   });
 
   it("escapes HTML in cell values", () => {
@@ -50,6 +50,8 @@ describe("buildGroupedItemsTable", () => {
     expect(html).toContain("תסקיר");
     expect(html).toContain("484590/13110");
     expect(html).toContain("מנוף הידראולי");
+    expect(html).not.toContain("רישוי");
+    expect(html).not.toContain("233017");
   });
 });
 

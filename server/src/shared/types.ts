@@ -62,6 +62,7 @@ export interface AppSettings {
 
 // Phase 2: Authentication types
 export type UserRole = "admin" | "pro" | "user";
+export type UserPlan = "free" | "basic" | "business";
 
 export interface User {
   id: number;
@@ -71,6 +72,7 @@ export interface User {
   phone: string | null;
   picture_url: string | null;
   role: UserRole;
+  plan?: UserPlan;
   is_active: number;
   created_at: string;
   last_login_at: string | null;

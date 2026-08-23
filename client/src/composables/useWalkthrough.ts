@@ -65,7 +65,7 @@ const tours: Record<string, WalkthroughStep[]> = {
     {
       selector: ".dash__intake",
       title: "אזור העלאה מהירה",
-      text: "גררו מסמכים לכאן או לחצו על + ליצירת תסקיר חדש. המערכת תזהה אוטומטית את סוג המסמך.",
+      text: "גררו מסמכים לכאן, לחצו על + ליצירת תסקיר חדש, או השתמשו בייבוא תסקירי בדיקה מ-Gmail.",
       placement: "bottom",
     },
     {

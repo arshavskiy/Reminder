@@ -62,6 +62,7 @@ const FALLBACK_TEST_HTML = `<!DOCTYPE html>
 
 const GMAIL_SAFE_HTML_BYTES = 90 * 1024;
 const DATA_IMAGE_RE = /data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s-]+/i;
+const GROUPED_REMINDER_TEMPLATE_NAME = "בדיקה תקופתית — טקסט בלבד";
 
 function buildTransport() {
   const s = getSettings();
@@ -645,17 +646,21 @@ async function renderGroupedReminderEmail(opts: {
   vars.trigger_date = opts.triggerDate;
   vars.item_count = opts.reminders.length;
   vars.items_table = opts.itemsHtml;
-  // Hide the single-item equipment box so grouped mail is not duplicated.
+  // Hide single-item fields — the table already lists each inspection.
   vars.equipment_type = "";
   vars.manufacturer = "";
   vars.model = "";
   vars.serial_number = "";
+  vars.checked_equipment = "";
+  vars.license_number = "";
+  vars.lisence_number = "";
 
   let tpl = null as Awaited<ReturnType<typeof loadEmailTemplate>>;
   try {
-    if (first) tpl = await resolveReminderTemplate(first);
+    tpl = await loadEmailTemplateByName(GROUPED_REMINDER_TEMPLATE_NAME);
   } catch (err) {
     logger.warn("grouped_reminder_template_load_failed", {
+      template_name: GROUPED_REMINDER_TEMPLATE_NAME,
       error: err instanceof Error ? err.message : String(err),
     });
   }

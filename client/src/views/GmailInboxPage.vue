@@ -1,8 +1,10 @@
 <template>
-  <div class="page-wrap" dir="rtl">
-    <div class="page-header">
-      <h1 class="page-title">Gmail — קבצים מצורפים <span v-if="connectedEmail" class="connected-email">({{ connectedEmail }})</span></h1>
-      <div class="header-actions">
+  <div class="gmail-page" dir="rtl">
+    <PageHeader
+      title="Gmail"
+      :subtitle="connectedEmail ? `מחובר: ${connectedEmail}` : 'ייבוא קבצים מצורפים מתיבת הדואר'"
+    >
+      <template #actions>
         <n-button v-if="connected && (isAdmin || selectedGuidedFlow)" :loading="loading" type="primary" @click="refreshCurrentFlow">
           <template #icon><n-icon :component="RefreshOutline" /></template>
           רענן
@@ -20,25 +22,24 @@
           <template #icon><n-icon :component="CloudDownloadOutline" /></template>
           ייבא הכל
         </n-button>
-        <n-button v-if="connected && isAdmin && connectionSource === 'oauth'" quaternary type="error" @click="disconnect">
+        <n-button v-if="connected" quaternary type="error" @click="disconnect">
           נתק Gmail
         </n-button>
         <n-button v-if="!connected && !loading" type="primary" @click="connectGmail">
           <template #icon><n-icon :component="LogoGoogle" /></template>
           חבר Gmail
         </n-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
-    <nav v-if="sectionNavItems.length" class="gmail-section-nav" aria-label="ניווט בעמוד Gmail">
+    <nav v-if="sectionNavItems.length" class="filterbar filterbar--compact gmail-section-nav" aria-label="ניווט בעמוד Gmail">
       <a
         v-for="item in sectionNavItems"
         :key="item.id"
-        class="gmail-section-nav__link"
+        class="pill pill--compact"
         :href="`#${item.id}`"
       >
-        <span class="gmail-section-nav__dot" />
-        <span>{{ item.label }}</span>
+        {{ item.label }}
       </a>
     </nav>
 
@@ -76,27 +77,26 @@
     </section>
 
     <!-- Filters -->
-    <div v-if="connected && isAdmin" class="filter-bar">
+    <div v-if="connected && isAdmin" class="toolbar gmail-filter-bar">
       <div class="file-type-checks">
         <n-checkbox v-model:checked="fileTypes.pdf">PDF</n-checkbox>
         <n-checkbox v-model:checked="fileTypes.doc">DOC/DOCX</n-checkbox>
         <n-checkbox v-model:checked="fileTypes.xls">XLS/XLSX</n-checkbox>
         <n-checkbox v-model:checked="fileTypes.img">תמונות</n-checkbox>
       </div>
-      <div class="filter-divider" />
       <n-select
         v-model:value="searchTemplateId"
         :options="templateOptions"
         placeholder="סוג מסמך"
         filterable
         clearable
-        style="width:220px"
+        class="toolbar__select"
       />
       <n-select
         v-model:value="filterType"
         :options="filterTypeOptions"
         placeholder="סינון נוסף"
-        style="width:160px"
+        class="toolbar__select toolbar__select--sm"
         @update:value="onFilterChange"
       />
       <n-select
@@ -107,21 +107,21 @@
         filterable
         clearable
         tag
-        style="width:220px"
+        class="toolbar__select"
       />
       <n-date-picker
         v-if="filterType === 'date'"
         v-model:value="filterDateRange"
         type="daterange"
         clearable
-        style="width:280px"
+        class="toolbar__dates"
       />
       <n-input
         v-if="filterType === 'inspection'"
         v-model:value="filterIdentifierText"
         placeholder="מספר רישוי / תסקיר"
         clearable
-        style="width:220px"
+        class="toolbar__select"
         :allow-input="(v: string) => /^\d*$/.test(v)"
         @keydown.enter="buildAndSearch"
       />
@@ -495,6 +495,7 @@ import {
 import { api, type GmailAttachment, type GmailEmail, type GmailImportedDocument, type GmailImportHistoryItem, type GmailSearchProvider } from "../services/apiService.js";
 import { useAuthStore } from "../stores/auth.js";
 import type { DocTemplate } from "../shared/types.js";
+import PageHeader from "../components/PageHeader.vue";
 
 const route = useRoute();
 const message = useMessage();
@@ -787,6 +788,14 @@ function refreshCurrentFlow() {
   loadInbox();
 }
 
+function requestedGuidedFlow(): "invoice" | "inspection" | null {
+  const queryFlow = String(route.query.flow ?? "");
+  const storedFlow = sessionStorage.getItem("gmail:guided-flow") ?? "";
+  const flow = queryFlow || storedFlow;
+  sessionStorage.removeItem("gmail:guided-flow");
+  return flow === "inspection" || flow === "invoice" ? flow : null;
+}
+
 function selectedSearchTemplateTerms(): string[] {
   const template = templates.value.find((t) => String(t.id) === searchTemplateId.value);
   if (!template) return [];
@@ -1014,7 +1023,12 @@ onMounted(async () => {
     connectedEmail.value = status.email ?? null;
     if (status.connected) {
       await setupPromise;
-      if (isAdmin.value) {
+      const requestedFlow = requestedGuidedFlow();
+      if (requestedFlow) {
+        configureGuidedFlow(requestedFlow);
+        historyOpen.value = true;
+        await Promise.all([loadInbox(), loadHistory()]);
+      } else if (isAdmin.value) {
         buildSearchQuery();
         await Promise.all([loadInbox(), loadHistory()]);
       } else {
@@ -1300,86 +1314,72 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
 </script>
 
 <style scoped>
-.page-wrap {
-  padding: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
+.gmail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 5px;
+}
+.filterbar--compact { margin-top: -8px; }
+
+.pill {
+  padding: 6px 13px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.pill:hover {
+  border-color: var(--brand-color);
+  color: var(--brand-color);
+  background: color-mix(in srgb, var(--brand-color) 8%, var(--bg-card));
 }
 
 .gmail-section-nav {
-  position: fixed;
-  top: 138px;
-  right: max(16px, calc((100vw - 1200px) / 2 - 128px));
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 118px;
-  padding: 8px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
-  box-shadow: 0 10px 26px color-mix(in srgb, var(--text-primary) 9%, transparent);
+  position: static;
+  flex-direction: row;
+  width: auto;
+  min-width: 0;
+  box-shadow: none;
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 
-.gmail-section-nav__link {
+.toolbar,
+.gmail-filter-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 9px;
-  border-radius: 7px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 700;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.gmail-section-nav__link:hover {
-  background: color-mix(in srgb, var(--brand-color) 10%, transparent);
-  color: var(--brand-color);
-}
-
-.gmail-section-nav__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.74;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
+  gap: 10px;
   flex-wrap: wrap;
-  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
 }
-
-.page-title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-}
+.toolbar__select { width: 200px; }
+.toolbar__select--sm { width: 150px; }
+.toolbar__dates { width: 260px; }
 
 .load-more-wrap {
   display: flex;
   justify-content: center;
   padding: 10px 0;
-}
-
-.connected-email {
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--text-color-3, #999);
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
 .gmail-flow-tabs {
@@ -1608,24 +1608,18 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
 }
 
 .filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
+  display: none;
 }
 
 .file-type-checks {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .filter-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--n-border-color, #555);
-  margin: 0 4px;
+  display: none;
 }
 
 /* Import results modal */
@@ -1732,7 +1726,7 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   position: relative;
   min-width: 0;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--bg-card);
   overflow: hidden;
   cursor: pointer;
@@ -1940,15 +1934,7 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
 
 @media (max-width: 1480px) {
   .gmail-section-nav {
-    position: static;
-    flex-direction: row;
-    width: 100%;
-    margin-bottom: 16px;
     overflow-x: auto;
-  }
-
-  .gmail-section-nav__link {
-    flex: 0 0 auto;
   }
 }
 
@@ -1972,11 +1958,20 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
     width: 100%;
   }
 
+  .gmail-filter-bar :deep(.n-input),
+  .gmail-filter-bar :deep(.n-select),
+  .gmail-filter-bar :deep(.n-date-picker),
   .gmail-doc-filters :deep(.n-input),
   .gmail-doc-filters :deep(.n-select),
   .gmail-doc-filters :deep(.n-date-picker) {
     width: 100% !important;
     max-width: none !important;
+  }
+
+  .toolbar__select,
+  .toolbar__select--sm,
+  .toolbar__dates {
+    width: 100%;
   }
 
   .gmail-doc-grid {

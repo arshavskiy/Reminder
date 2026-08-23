@@ -14,6 +14,7 @@ import {
   assertDocumentImportQuota,
   DOCUMENT_MONTHLY_QUOTA_ERROR,
   DocumentImportQuotaError,
+  type DocumentImportQuotaCategory,
   documentImportQuotaErrorPayload,
 } from "../quotas/documentImportQuota";
 
@@ -51,6 +52,7 @@ export function registerGmailRoutes(app: express.Application) {
       code_verifier: codeVerifier,
       user_id: ctx.userId,
       type: "gmail",
+      return_to: safeFrontendReturnPath(req.query.returnTo),
       expires_at: new Date(Date.now() + 10 * 60 * 1000),
     } as any);
     await col("oauth_states").deleteMany({ expires_at: { $lt: new Date() } });
@@ -73,20 +75,21 @@ export function registerGmailRoutes(app: express.Application) {
   // GET /auth/gmail/callback
   app.get("/auth/gmail/callback", async (req, res) => {
     const { code, state, error } = req.query as Record<string, string>;
-    const frontend = frontendUrl("/");
+    const defaultReturnPath = "/gmail-inbox";
 
-    if (error) { res.redirect(frontendUrl(`/gmail-inbox?error=${encodeURIComponent(error)}`)); return; }
-    if (!code || !state) { res.redirect(frontendUrl("/gmail-inbox?error=missing_params")); return; }
+    if (error) { res.redirect(frontendUrl(`${defaultReturnPath}?error=${encodeURIComponent(error)}`)); return; }
+    if (!code || !state) { res.redirect(frontendUrl(`${defaultReturnPath}?error=missing_params`)); return; }
 
     const pkce = await col<any>("oauth_states").findOne({ state, type: "gmail", expires_at: { $gt: new Date() } });
-    if (!pkce) { res.redirect(frontendUrl("/gmail-inbox?error=invalid_state")); return; }
+    if (!pkce) { res.redirect(frontendUrl(`${defaultReturnPath}?error=invalid_state`)); return; }
     await col("oauth_states").deleteOne({ state });
+    const returnPath = safeFrontendReturnPath(pkce.return_to) ?? defaultReturnPath;
 
     const settings = getSettings();
     const googleClientId = settings.googleClientId;
     const googleClientSecret = settings.googleClientSecret;
     if (!googleClientId || !googleClientSecret) {
-      res.redirect(frontendUrl("/gmail-inbox?error=google_client_not_configured"));
+      res.redirect(frontendUrl(`${returnPath}?error=google_client_not_configured`));
       return;
     }
     const redirectUri = gmailRedirectUri(req);
@@ -103,7 +106,7 @@ export function registerGmailRoutes(app: express.Application) {
       }),
     });
 
-    if (!tokenRes.ok) { res.redirect(frontendUrl("/gmail-inbox?error=token_exchange_failed")); return; }
+    if (!tokenRes.ok) { res.redirect(frontendUrl(`${returnPath}?error=token_exchange_failed`)); return; }
     const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number };
 
     await col("users").updateOne(
@@ -116,7 +119,7 @@ export function registerGmailRoutes(app: express.Application) {
       }
     );
 
-    res.redirect(frontendUrl("/gmail-inbox"));
+    res.redirect(frontendUrl(returnPath));
   });
 
   // GET /api/gmail/status — check if Gmail connected
@@ -248,7 +251,7 @@ export function registerGmailRoutes(app: express.Application) {
         res.status(422).json({ error: "monthly_report_not_imported" });
         return;
       }
-      await assertDocumentImportQuota(ctx.userId, ctx.user.role, 1);
+      await assertDocumentImportQuota(ctx.userId, ctx.user.plan ?? ctx.user.role, 1, quotaCategoryFromTemplate(template));
       const pipeline = await gmailImportPipelineOptions(templateId, meta, filename);
       const result = await downloadAndImportAttachment(accessToken, messageId, attachmentId, filename ?? "attachment.pdf", ctx.userId, pipeline);
       await col("gmail_imports").updateOne(
@@ -285,6 +288,7 @@ export function registerGmailRoutes(app: express.Application) {
     const templateId = req.body.templateId as string | undefined;
     const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
     const skipMonthlyReports = isInspectionTemplate(template);
+    const quotaCategory = quotaCategoryFromTemplate(template);
 
     try {
       let listRes = await gmailFetch(accessToken, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
@@ -337,7 +341,7 @@ export function registerGmailRoutes(app: express.Application) {
             continue;
           }
           try {
-            await assertDocumentImportQuota(ctx.userId, ctx.user.role, 1);
+            await assertDocumentImportQuota(ctx.userId, ctx.user.plan ?? ctx.user.role, 1, quotaCategory);
             const pipeline = await gmailImportPipelineOptions(templateId, meta, att.filename);
             const result = await downloadAndImportAttachment(accessToken, id, att.attachmentId, att.filename, ctx.userId, pipeline);
             results.push({ messageId: id, filename: att.filename, documentId: result.documentId });
@@ -605,6 +609,12 @@ function isInspectionTemplate(template: Awaited<ReturnType<typeof loadTemplate>>
   return template.document_kind === "inspection_report" || /תסקיר|בדיקה/.test(template.name);
 }
 
+function quotaCategoryFromTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): DocumentImportQuotaCategory {
+  if (isInspectionTemplate(template) || template?.document_kind === "contract") return "contracts";
+  if (isInvoiceTemplate(template)) return "invoices";
+  return "documents";
+}
+
 function isMonthlyReportGmailItem(meta: GmailMessageHeaders | null, filename = ""): boolean {
   const text = normalizeSearchText(`${meta?.subject ?? ""} ${meta?.from ?? ""} ${filename}`);
   return text.includes("דוח חודשי") || text.includes("דו ח חודשי") || text.includes("monthly report");
@@ -868,4 +878,11 @@ function frontendUrl(path: string) {
     ? (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173")
     : (process.env.FRONTEND_URL ?? "");
   return `${base}${path}`;
+}
+
+function safeFrontendReturnPath(value: unknown): string | null {
+  const text = String(Array.isArray(value) ? value[0] : value ?? "").trim();
+  if (!text || !text.startsWith("/") || text.startsWith("//")) return null;
+  if (/[\r\n]/.test(text)) return null;
+  return text;
 }

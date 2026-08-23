@@ -32,6 +32,7 @@
             <strong class="uf-user__email">{{ u.email || u.name || u.id }}</strong>
             <span class="uf-user__sub">
               {{ roleLabel[u.role] ?? u.role }}
+              · {{ planLabel[userPlan(u)] ?? userPlan(u) }}
               <span v-if="u.is_active === 0"> · inactive</span>
             </span>
           </span>
@@ -55,6 +56,9 @@
             <div class="uf-hero__tags">
               <n-tag :type="roleTagType[selectedUser.role] ?? 'default'" size="small" round>
                 {{ roleLabel[selectedUser.role] ?? selectedUser.role }}
+              </n-tag>
+              <n-tag :type="planTagType[userPlan(selectedUser)] ?? 'default'" size="small" round>
+                {{ planLabel[userPlan(selectedUser)] ?? userPlan(selectedUser) }}
               </n-tag>
               <n-tag :type="selectedUser.is_active === 0 ? 'error' : 'success'" size="small" round>
                 {{ selectedUser.is_active === 0 ? "Inactive" : "Active" }}
@@ -386,6 +390,11 @@
                     <n-select v-model:value="editingRole" :options="roleOptions" size="small" style="width:150px" />
                     <n-button size="small" type="primary" ghost :loading="savingRole" :disabled="editingRole === selectedUser.role" @click="saveRole">Save role</n-button>
                   </div>
+                  <div class="uf-settings__role">
+                    <span>Plan</span>
+                    <n-select v-model:value="editingPlan" :options="planOptions" size="small" style="width:150px" />
+                    <n-button size="small" type="primary" ghost :loading="savingPlan" :disabled="editingPlan === userPlan(selectedUser)" @click="savePlan">Save plan</n-button>
+                  </div>
                   <n-button type="primary" size="small" :loading="savingSettings" @click="saveSettings">Save settings</n-button>
                 </div>
 
@@ -521,6 +530,8 @@ const pipelineGaps = ref<any>(null);
 const settingsForm = ref<any>(null);
 const editingRole = ref("user");
 const savingRole = ref(false);
+const editingPlan = ref("free");
+const savingPlan = ref(false);
 const savingSettings = ref(false);
 const savingTemplate = ref(false);
 const defaultTemplateId = ref<number | null>(null);
@@ -533,10 +544,19 @@ const roleOptions = [
   { label: "Pro", value: "pro" },
   { label: "Admin", value: "admin" },
 ];
+const planOptions = [
+  { label: "Free", value: "free" },
+  { label: "Basic", value: "basic" },
+  { label: "Business", value: "business" },
+];
 const roleTagType: Record<string, "default" | "warning" | "error"> = {
   user: "default", pro: "default", admin: "warning",
 };
 const roleLabel: Record<string, string> = { user: "User", pro: "Pro", admin: "Admin" };
+const planTagType: Record<string, "default" | "success" | "info"> = {
+  free: "default", basic: "info", business: "success",
+};
+const planLabel: Record<string, string> = { free: "Free", basic: "Basic", business: "Business" };
 const themeOptions = [
   { label: "System", value: "system" },
   { label: "Light", value: "light" },
@@ -632,6 +652,18 @@ const issueCount = computed(
 function initials(u: any) {
   const s = String(u.email || u.name || "?").trim();
   return s.slice(0, 2).toUpperCase();
+}
+
+function planFromRole(role: string | null | undefined) {
+  if (role === "admin") return "business";
+  if (role === "pro") return "basic";
+  return "free";
+}
+
+function userPlan(u: any) {
+  const raw = String(u?.plan ?? "").trim().toLowerCase();
+  if (raw === "business" || raw === "basic" || raw === "free") return raw;
+  return planFromRole(u?.role);
 }
 
 function formatBytes(bytes: number) {
@@ -730,6 +762,7 @@ async function reloadAll() {
       defaultTemplateId.value = settingsRes.value.default_email_template_id ?? null;
       settingsForm.value = makeSettingsForm(settingsRes.value);
       editingRole.value = user.role ?? "user";
+      editingPlan.value = userPlan(user);
       applyFeatureDefaults();
     }
 
@@ -787,6 +820,21 @@ async function saveRole() {
     message.error("Error updating role");
   } finally {
     savingRole.value = false;
+  }
+}
+
+async function savePlan() {
+  if (!selectedUser.value) return;
+  savingPlan.value = true;
+  try {
+    const updated = await api.admin.updateUser(selectedUser.value.id, { plan: editingPlan.value });
+    selectedUser.value = { ...selectedUser.value, ...updated };
+    emit("user-updated", updated);
+    message.success("Plan updated");
+  } catch {
+    message.error("Error updating plan");
+  } finally {
+    savingPlan.value = false;
   }
 }
 

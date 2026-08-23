@@ -10,11 +10,11 @@ const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
 export function registerInvoiceRoutes(app: express.Application) {
   app.get("/api/invoices", async (req, res) => {
     let userId: string;
-    let userRole: string | null | undefined;
+    let userPlan: string | null | undefined;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userRole = ctx.user.role;
+      userPlan = ctx.user.plan ?? ctx.user.role;
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -44,8 +44,17 @@ export function registerInvoiceRoutes(app: express.Application) {
       : [];
     const documentMap = new Map(documents.map((doc) => [doc._id.toString(), doc]));
 
-    const rows = invoices
-      .map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id))))
+    const allRows = invoices.map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id))));
+    const facetRows = allRows.filter((row) => {
+      if (status && row.status !== status) return false;
+      if (type && row.type !== type) return false;
+      const rowTs = invoiceDateTs(row);
+      if (fromTs && (!rowTs || rowTs < fromTs)) return false;
+      if (toTs && (!rowTs || rowTs > toTs)) return false;
+      if (!q) return true;
+      return invoiceMatchesQuery(row, q);
+    });
+    const rows = facetRows
       .filter((row) => {
         if (status && row.status !== status) return false;
         if (type && row.type !== type) return false;
@@ -54,19 +63,12 @@ export function registerInvoiceRoutes(app: express.Application) {
         if (fromTs && (!rowTs || rowTs < fromTs)) return false;
         if (toTs && (!rowTs || rowTs > toTs)) return false;
         if (!q) return true;
-        return normalize([
-          row.supplier_name,
-          row.invoice_number,
-          row.type,
-          row.amount_display,
-          row.file_name,
-          row.service_address,
-          row.customer_number,
-        ].join(" ")).includes(q);
+        return invoiceMatchesQuery(row, q);
       });
 
-    const visibleLimit = invoiceListVisibleLimit(userRole);
+    const visibleLimit = invoiceListVisibleLimit(userPlan);
     const visibleRows = visibleLimit === null ? rows : rows.slice(0, visibleLimit);
+    const visibleFacetRows = visibleLimit === null ? facetRows : facetRows.slice(0, visibleLimit);
     const safeOffset = visibleLimit === null ? offset : Math.min(offset, visibleLimit);
     const counts: Record<string, number> = {};
     for (const row of visibleRows) counts[row.status] = (counts[row.status] ?? 0) + 1;
@@ -80,7 +82,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       visibleLimit,
       counts,
       types: uniqueSorted(visibleRows.map((row) => row.type).filter(Boolean)),
-      suppliers: uniqueSorted(visibleRows.map((row) => row.supplier_name).filter(Boolean)),
+      suppliers: uniqueSorted(visibleFacetRows.map((row) => row.supplier_name).filter(Boolean)),
     });
   });
 
@@ -320,6 +322,18 @@ function parseMultiQuery(value: unknown): string[] {
 
 function invoiceDateTs(row: ReturnType<typeof presentInvoice>): number | null {
   return parseDateTs(row.issue_date ?? row.import_date);
+}
+
+function invoiceMatchesQuery(row: ReturnType<typeof presentInvoice>, q: string): boolean {
+  return normalize([
+    row.supplier_name,
+    row.invoice_number,
+    row.type,
+    row.amount_display,
+    row.file_name,
+    row.service_address,
+    row.customer_number,
+  ].join(" ")).includes(q);
 }
 
 function normalizeInvoiceStatus(value: unknown): string {

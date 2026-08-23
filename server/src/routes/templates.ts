@@ -482,6 +482,12 @@ export function registerTemplateRoutes(app: express.Application) {
       safeVars.items_table = sampleGroupedItemsTable();
       safeVars.item_count ??= 3;
     }
+    // When the table is shown, hide single-item duplicates from the first reminder.
+    if (safeVars.items_table) {
+      safeVars.checked_equipment = "";
+      safeVars.license_number = "";
+      safeVars.lisence_number = "";
+    }
     res.json({
       subject: renderTemplate(subject ?? "", safeVars, { escape: false }),
       html: renderTemplate(html ?? "", safeVars, { escape: false }),

@@ -23,6 +23,7 @@ import {firstTrimmedEmail} from "../contracts/contractEmail.js";
 import {
   assertDocumentImportQuota,
   DocumentImportQuotaError,
+  type DocumentImportQuotaCategory,
   documentImportQuotaErrorPayload,
 } from "../quotas/documentImportQuota";
 
@@ -61,11 +62,11 @@ export function registerDocumentRoutes(app: express.Application) {
       { $set: { user_id: userId, updated_at: new Date() } }
     );
 
-    // Hide certificate documents from the main documents list — they live
-    // in Profile → תעודות והסמכות and shouldn't pollute the inspection view.
+    // Hide specialized records from the main documents list. Certificates live
+    // in Profile, and invoices are managed from the invoices workspace.
     const baseFilter: Record<string, any> = {
       user_id: userId,
-      document_kind: { $ne: "certificate" },
+      document_kind: { $nin: ["certificate", "invoice"] },
     };
     const filter: Record<string, any> = { ...baseFilter };
     if (status) filter.processing_status = status;
@@ -212,11 +213,11 @@ export function registerDocumentRoutes(app: express.Application) {
   // POST /api/documents/import
   app.post("/api/documents/import", async (req, res) => {
     let userId: string;
-    let userRole: string;
+    let userPlan: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userRole = ctx.user.role;
+      userPlan = ctx.user.plan ?? ctx.user.role;
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -229,7 +230,7 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
     try {
-      await assertDocumentImportQuota(userId, userRole, 1);
+      await assertDocumentImportQuota(userId, userPlan, 1, "documents");
       const id = await importFile(body.filePath, undefined, userId);
       res.json({ id });
     } catch (err) {
@@ -244,11 +245,11 @@ export function registerDocumentRoutes(app: express.Application) {
   // POST /api/documents/upload — receives multipart file upload from browser
   app.post("/api/documents/upload", upload.array("files"), async (req, res) => {
     let userId: string;
-    let userRole: string;
+    let userPlan: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userRole = ctx.user.role;
+      userPlan = ctx.user.plan ?? ctx.user.role;
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -266,9 +267,11 @@ export function registerDocumentRoutes(app: express.Application) {
       const skipEntities = req.query.skipEntities === "true";
       const skipReminders = req.query.skipReminders === "true";
         const templateId = req.query.templateId as string | undefined;
+        const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
+        const quotaCategory = quotaCategoryFromTemplate(template);
         const pipelineOptions = {skipAi, skipEntities, skipReminders, templateId: templateId || undefined};
 
-      await assertDocumentImportQuota(userId, userRole, files.length);
+      await assertDocumentImportQuota(userId, userPlan, files.length, quotaCategory);
 
       const uploadDir = join(getDataDir(), "uploads");
       mkdirSync(uploadDir, { recursive: true });
@@ -520,7 +523,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
   // POST /api/documents/rescan — by default reprocess error docs and completed
   // docs that did not create a reminder. Pass { all: true } or ?all=true to
-  // intentionally rebuild every completed/error non-certificate document for
+  // intentionally rebuild every completed/error general document for
   // the user, including its derived contracts and reminders.
   app.post("/api/documents/rescan", async (req, res) => {
     let userId: string;
@@ -547,7 +550,7 @@ export function registerDocumentRoutes(app: express.Application) {
       : null;
 
     const candidateDocs = await col("documents")
-      .find({ user_id: userId, processing_status: { $in: ["error", "done"] }, document_kind: { $ne: "certificate" } })
+      .find({ user_id: userId, processing_status: { $in: ["error", "done"] }, document_kind: { $nin: ["certificate", "invoice"] } })
       .project({ raw_text: 0 })
       .sort({ import_date: -1, _id: -1 } as any)
       .limit(limit ?? 0)
@@ -1115,6 +1118,13 @@ function flatDoc(doc: any) {
     ...rest,
     thumbnail_url: doc.thumbnail_key || doc.thumbnail_path ? `/api/documents/${id}/thumbnail` : null,
   };
+}
+
+function quotaCategoryFromTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): DocumentImportQuotaCategory {
+  if (!template) return "documents";
+  if (template.document_kind === "contract" || template.document_kind === "inspection_report") return "contracts";
+  if (template.document_kind === "invoice" || /חשבונית|קבלה|invoice|receipt|bill/i.test(template.name)) return "invoices";
+  return "documents";
 }
 
 function getDocumentReminderStatus(doc: any, reminders: any[]): "pending" | "assigned" | "missing" | "error" | "not_applicable" {

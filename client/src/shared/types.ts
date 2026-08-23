@@ -58,7 +58,8 @@ export interface User {
   name: string | null;
   phone: string | null;
   picture_url: string | null;
-  role: "admin" | "user";
+  role: "admin" | "pro" | "user";
+  plan?: "free" | "basic" | "business";
   is_active: number;
   created_at: string;
   last_login_at: string | null;

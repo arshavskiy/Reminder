@@ -524,7 +524,7 @@ export const api = {
 
   admin: {
     listUsers: () => adminGet<any[]>("/admin/users"),
-    updateUser: (id: string, body: { role?: string; is_active?: number }) =>
+    updateUser: (id: string, body: { role?: string; plan?: string; is_active?: number }) =>
       adminPut<any>(`/admin/users/${id}`, body),
     getDocument: (id: string) => adminGet<any>(`/admin/documents/${id}`),
     monitorDocuments: () => adminGet<any>("/admin/monitor/documents"),
@@ -679,7 +679,7 @@ export const api = {
 
   gmail: {
     status: () => get<{ connected: boolean; source: string | null; email: string | null }>("/gmail/status"),
-    authUrl: () => get<{ url: string }>("/gmail/auth-url"),
+    authUrl: (returnTo?: string) => get<{ url: string }>(`/gmail/auth-url${qs({ returnTo })}`),
     searchProviders: () => get<{ providers: GmailSearchProvider[] }>("/gmail/search-providers"),
     inbox: (q?: string, limit?: number, pageToken?: string) => get<{ emails: GmailEmail[]; nextPageToken: string | null; resultSizeEstimate: number | null }>(`/gmail/inbox${qs({ q, limit, pageToken })}`),
     attachmentUrl: (messageId: string, attachmentId: string, filename: string) =>

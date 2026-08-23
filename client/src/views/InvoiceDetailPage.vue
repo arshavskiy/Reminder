@@ -1,43 +1,39 @@
 <template>
   <div class="invoice-detail" dir="rtl">
-    <div class="invoice-detail__top">
-      <button class="invoice-detail__close" type="button" aria-label="סגור" @click="router.push('/invoices')">
-        <n-icon :component="CloseOutline" :size="22" />
-      </button>
-      <div class="invoice-detail__pager">
-        <n-icon :component="ChevronBackOutline" :size="16" />
-        <span>מסמך 1 מתוך {{ invoice ? 1 : 0 }}</span>
-        <n-icon :component="ChevronForwardOutline" :size="16" />
-      </div>
-      <div class="invoice-detail__title">
-        <h1>{{ invoice?.supplier_name || "חשבונית" }}</h1>
-        <p v-if="sourceLine">מאת: {{ sourceLine }}</p>
-        <div v-if="invoice" class="invoice-detail__chips">
-          <span class="status-chip">{{ statusLabel(invoice.status) }}</span>
-          <span class="meta-chip">{{ invoice.invoice_number || "ללא מספר" }}</span>
-          <span class="meta-chip">{{ invoiceTypeLabel(invoice) }}</span>
-        </div>
-      </div>
+    <PageHeader
+      :title="invoice?.supplier_name || 'חשבונית'"
+      :subtitle="sourceLine ? `מאת: ${sourceLine}` : undefined"
+    >
+      <template #breadcrumb>
+        <router-link to="/invoices">חשבוניות</router-link>
+        <span class="sep">/</span>
+        <span>{{ invoice?.invoice_number || "פרטי חשבונית" }}</span>
+      </template>
+      <template #actions>
+        <button class="rbtn rbtn--ghost" type="button" @click="router.push('/invoices')">
+          <n-icon :component="ArrowForwardOutline" class="btn-icon" />
+          חזרה
+        </button>
+        <button class="rbtn rbtn--ghost" type="button" :disabled="!invoice" @click="downloadInvoice">
+          <n-icon :component="DownloadOutline" class="btn-icon" />
+          הורד
+        </button>
+        <button class="rbtn rbtn--ghost" type="button" :disabled="!invoice?.document_id" @click="openDocumentPage">
+          <n-icon :component="OpenOutline" class="btn-icon" />
+          מסמך מקור
+        </button>
+      </template>
+    </PageHeader>
+
+    <div v-if="invoice" class="invoice-detail__chips">
+      <span class="status-chip">{{ statusLabel(invoice.status) }}</span>
+      <span class="meta-chip">{{ invoice.invoice_number || "ללא מספר" }}</span>
+      <span class="meta-chip">{{ invoiceTypeLabel(invoice) }}</span>
     </div>
 
     <n-spin :show="loading">
       <div v-if="invoice" class="invoice-detail__body">
         <section class="invoice-preview">
-          <div class="invoice-preview__toolbar">
-            <n-button size="small">
-              <template #icon><n-icon :component="ChevronDownOutline" /></template>
-              הוסף לדוח
-            </n-button>
-            <div class="invoice-preview__tools">
-              <n-button quaternary circle @click="downloadInvoice">
-                <template #icon><n-icon :component="DownloadOutline" /></template>
-              </n-button>
-              <n-button quaternary circle @click="openDocumentPage">
-                <template #icon><n-icon :component="OpenOutline" /></template>
-              </n-button>
-            </div>
-          </div>
-
           <div class="invoice-preview__paper">
             <iframe
               v-if="invoice.preview_url && isPdf(invoice)"
@@ -53,18 +49,6 @@
               <n-icon :component="DocumentTextOutline" :size="48" />
               <span>אין תצוגה מקדימה</span>
             </div>
-          </div>
-
-          <div class="invoice-preview__bottom">
-            <div class="invoice-preview__bottom-tools">
-              <button type="button" @click="openDocumentPage"><n-icon :component="OpenOutline" /></button>
-              <button type="button" @click="downloadInvoice"><n-icon :component="DownloadOutline" /></button>
-              <button type="button"><n-icon :component="SearchOutline" /></button>
-            </div>
-            <span v-if="sourceLine" class="invoice-preview__source">
-              מקור: {{ sourceLine }}
-              <n-icon :component="MailOutline" :size="16" />
-            </span>
           </div>
         </section>
 
@@ -105,7 +89,7 @@
           <section class="side-card">
             <h2>
               סיווג
-              <n-icon :component="FolderOutline" :size="20" />
+              <n-icon :component="FolderOutline" :size="18" />
             </h2>
             <div class="form-grid">
               <label>
@@ -201,18 +185,15 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { NButton, NDatePicker, NIcon, NInput, NSelect, NSpin, useMessage, type SelectOption } from "naive-ui";
 import {
-  ChevronBackOutline,
+  ArrowForwardOutline,
   ChevronDownOutline,
-  ChevronForwardOutline,
-  CloseOutline,
   DocumentTextOutline,
   DownloadOutline,
   FolderOutline,
-  MailOutline,
   OpenOutline,
-  SearchOutline,
 } from "@vicons/ionicons5";
 import { api, type ImportedInvoice } from "../services/apiService.js";
+import PageHeader from "../components/PageHeader.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -568,70 +549,18 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
 
 <style scoped>
 .invoice-detail {
-  min-height: calc(100vh - 92px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   color: var(--text-primary);
-}
-
-.invoice-detail__top {
-  display: grid;
-  grid-template-columns: 44px 210px 1fr;
-  align-items: start;
-  gap: 18px;
-  margin-bottom: 22px;
-  direction: ltr;
-}
-
-.invoice-detail__close,
-.invoice-preview__bottom-tools button {
-  display: inline-grid;
-  place-items: center;
-  border: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.invoice-detail__close {
-  width: 36px;
-  height: 36px;
-}
-
-.invoice-detail__pager {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  min-height: 42px;
-  padding: 0 18px;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  direction: rtl;
-}
-
-.invoice-detail__title {
-  text-align: right;
-  direction: rtl;
-}
-
-.invoice-detail__title h1 {
-  margin: 0;
-  font-size: 27px;
-  font-weight: 850;
-}
-
-.invoice-detail__title p {
-  margin: 4px 0 10px;
-  color: var(--text-secondary);
-  font-size: 13px;
 }
 
 .invoice-detail__chips {
   display: flex;
-  justify-content: flex-start;
-  flex-direction: row-reverse;
+  flex-wrap: wrap;
   gap: 8px;
+  margin-top: -8px;
+  margin-bottom: 8px;
 }
 
 .status-chip,
@@ -642,7 +571,7 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   padding: 4px 12px;
   border-radius: 999px;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .status-chip {
@@ -653,42 +582,49 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
 .meta-chip {
   background: var(--bg-elevated);
   color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
+
+.rbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rbtn:hover { border-color: var(--brand-color); color: var(--brand-color); }
+.rbtn:disabled { opacity: 0.55; cursor: not-allowed; }
+.rbtn--ghost { background: transparent; }
+.btn-icon { flex: 0 0 auto; }
 
 .invoice-detail__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 440px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
+  gap: 20px;
   align-items: start;
 }
 
 .invoice-preview {
-  min-height: calc(100vh - 180px);
-  border-radius: 8px;
-  background: #e8f0ff;
+  min-height: 520px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-elevated);
   overflow: hidden;
 }
 
-.invoice-preview__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 24px;
-}
-
-.invoice-preview__tools {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .invoice-preview__paper {
-  width: min(760px, calc(100% - 48px));
-  height: calc(100vh - 290px);
-  min-height: 580px;
-  margin: 0 auto;
-  background: #fff;
-  box-shadow: 0 1px 0 color-mix(in srgb, #000 13%, transparent);
+  width: 100%;
+  height: min(78vh, 860px);
+  min-height: 520px;
+  background: var(--bg-card);
 }
 
 .invoice-preview__paper iframe,
@@ -697,55 +633,21 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   height: 100%;
   border: 0;
   object-fit: contain;
-  background: #fff;
+  background: var(--bg-card);
 }
 
 .invoice-preview__empty {
   display: grid;
   place-items: center;
+  gap: 8px;
   height: 100%;
   color: var(--text-secondary);
-}
-
-.invoice-preview__bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 24px 20px;
-  color: var(--text-secondary);
-}
-
-.invoice-preview__bottom-tools {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  direction: ltr;
-}
-
-.invoice-preview__bottom-tools button {
-  width: 26px;
-  height: 26px;
-}
-
-.invoice-preview__source {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 45%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: color-mix(in srgb, #fff 70%, transparent);
-  color: #0f4fb8;
 }
 
 .invoice-side {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .invoice-warning {
@@ -753,47 +655,39 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   flex-direction: column;
   gap: 6px;
   padding: 14px 16px;
-  border: 1px solid #f59e0b;
-  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #f59e0b 55%, var(--border-color));
+  border-radius: 12px;
   background: color-mix(in srgb, #f59e0b 12%, var(--bg-card));
-  color: var(--text-primary);
 }
 
-.invoice-warning strong {
-  font-size: 14px;
-  font-weight: 850;
-}
-
-.invoice-warning span {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
+.invoice-warning strong { font-size: 14px; font-weight: 800; }
+.invoice-warning span { color: var(--text-secondary); font-size: 13px; }
 
 .side-card {
-  padding: 18px;
-  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
   background: var(--bg-card);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--text-primary) 10%, transparent);
 }
 
 .side-card--main {
-  background: color-mix(in srgb, var(--bg-card) 88%, #e8f0ff);
+  background: color-mix(in srgb, var(--brand-color) 6%, var(--bg-card));
 }
 
 .side-card h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 0 16px;
-  font-size: 16px;
-  font-weight: 850;
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 800;
 }
 
 .finance-summary {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .finance-summary__amount,
@@ -801,33 +695,31 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 78px;
-  padding: 14px;
-  border-radius: 8px;
+  min-height: 74px;
+  padding: 12px;
+  border-radius: 10px;
 }
 
 .finance-summary__amount {
-  background: #1b64f2;
+  background: var(--brand-color);
   color: #fff;
 }
 
 .finance-summary__status {
-  border: 1px solid #65a30d;
-  background: color-mix(in srgb, #65a30d 9%, var(--bg-card));
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
 }
 
 .finance-summary span,
 .form-grid span {
   display: block;
-  margin-bottom: 7px;
+  margin-bottom: 6px;
   color: var(--text-secondary);
   font-size: 12px;
 }
 
-.finance-summary strong {
-  font-size: 24px;
-  font-weight: 850;
-}
+.finance-summary__amount span { color: rgba(255,255,255,0.85); }
+.finance-summary strong { font-size: 22px; font-weight: 800; }
 
 .form-grid {
   display: grid;
@@ -835,26 +727,23 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   gap: 12px;
 }
 
-.form-grid label {
-  min-width: 0;
-}
-
-.field-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+.form-grid label { min-width: 0; }
+.field-stack { display: flex; flex-direction: column; gap: 8px; }
 
 .invoice-side__actions {
   display: flex;
   justify-content: flex-start;
   gap: 8px;
+  position: sticky;
+  bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  backdrop-filter: blur(8px);
 }
 
-.side-card--extracted {
-  padding: 0;
-  overflow: hidden;
-}
+.side-card--extracted { padding: 0; overflow: hidden; }
 
 .extracted-toggle {
   display: flex;
@@ -862,16 +751,15 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  padding: 16px 18px;
+  padding: 16px;
   border: 0;
   background: transparent;
   color: var(--text-primary);
   font: inherit;
-  font-weight: 850;
+  font-weight: 800;
   text-align: right;
   cursor: pointer;
 }
-
 .extracted-toggle small {
   display: block;
   margin-top: 3px;
@@ -879,19 +767,10 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   font-size: 12px;
   font-weight: 600;
 }
+.extracted-toggle .n-icon { transition: transform 0.16s ease; }
+.extracted-toggle .n-icon.is-open { transform: rotate(180deg); }
 
-.extracted-toggle .n-icon {
-  transition: transform 0.16s ease;
-}
-
-.extracted-toggle .n-icon.is-open {
-  transform: rotate(180deg);
-}
-
-.extracted-panel {
-  padding: 0 18px 18px;
-}
-
+.extracted-panel { padding: 0 16px 16px; }
 .extracted-panel__actions {
   display: flex;
   justify-content: flex-start;
@@ -906,7 +785,7 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
 
 .extracted-field {
   display: grid;
-  grid-template-columns: 138px minmax(0, 1fr);
+  grid-template-columns: 130px minmax(0, 1fr);
   gap: 12px;
   padding: 9px 0;
   border-bottom: 1px solid var(--border-color);
@@ -916,32 +795,21 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
 .extracted-field--missing {
   margin: 4px 0;
   padding: 9px 10px;
-  border-bottom-color: color-mix(in srgb, #d03050 18%, var(--border-color));
-  border-radius: 6px;
+  border-radius: 8px;
+  border-bottom-color: transparent;
   background: color-mix(in srgb, #d03050 8%, var(--bg-card));
 }
-
 .extracted-field--missing .extracted-field__label,
-.extracted-field--missing .extracted-field__value {
-  color: #d03050;
-}
+.extracted-field--missing .extracted-field__value { color: #d03050; }
 
-.extracted-field__label {
-  color: var(--text-secondary);
-  font-weight: 700;
-}
-
+.extracted-field__label { color: var(--text-secondary); font-weight: 700; }
 .extracted-field__value {
   min-width: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--text-primary);
 }
-
-.extracted-field__value[dir="ltr"] {
-  text-align: left;
-}
-
+.extracted-field__value[dir='ltr'] { text-align: left; }
 .extracted-empty {
   padding: 16px 0 4px;
   color: var(--text-secondary);
@@ -954,41 +822,15 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   color: var(--text-secondary);
 }
 
-@media (max-width: 1180px) {
-  .invoice-detail__body {
-    grid-template-columns: 1fr;
-  }
-
-  .invoice-side {
-    order: -1;
-  }
+@media (max-width: 1100px) {
+  .invoice-detail__body { grid-template-columns: 1fr; }
+  .invoice-side { order: -1; }
 }
 
 @media (max-width: 720px) {
-  .invoice-detail__top {
-    grid-template-columns: 36px 1fr;
-  }
-
-  .invoice-detail__pager {
-    display: none;
-  }
-
-  .invoice-detail__title h1 {
-    font-size: 21px;
-  }
-
   .form-grid,
-  .finance-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .invoice-preview__paper {
-    width: calc(100% - 24px);
-    min-height: 420px;
-  }
-
-  .invoice-preview__source {
-    max-width: 70%;
-  }
+  .finance-summary { grid-template-columns: 1fr; }
+  .invoice-preview__paper { min-height: 380px; height: 55vh; }
 }
 </style>
+
