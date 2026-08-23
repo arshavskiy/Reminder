@@ -379,8 +379,8 @@ const themeOverrides = computed(() => ({
   common: {
     fontFamily: '"Segoe UI", Arial, Helvetica, sans-serif',
     primaryColor: isDark.value ? "#63e2b7" : "#18a058",
-    primaryColorHover: isDark.value ? "#7fe7c4" : "#36ad6a",
-    primaryColorPressed: isDark.value ? "#5acea7" : "#0c7a43",
+    primaryColorHover: isDark.value ? "#7fe7c4" : "#0c7a43",
+    primaryColorPressed: isDark.value ? "#5acea7" : "#085c32",
   },
   Card: {
     titleFontSize: "18px",
@@ -797,7 +797,7 @@ html[data-theme="dark"] .install-banner {
   transition: background 0.15s;
 }
 
-.install-banner__btn:hover { background: var(--bg-hover); }
+.install-banner__btn:hover:not(.install-banner__btn--primary) { background: var(--bg-hover); }
 
 .install-banner__btn--primary {
   background: var(--brand-color);
@@ -806,7 +806,11 @@ html[data-theme="dark"] .install-banner {
   font-weight: 600;
 }
 
-.install-banner__btn--primary:hover { background: var(--brand-color-hover); }
+.install-banner__btn--primary:hover {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+  color: #fff;
+}
 
 .actas-banner {
   display: flex;
@@ -909,6 +913,27 @@ html[data-theme="dark"] .install-banner {
 
   .appbar__actions {
     gap: 6px;
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  .subscription-btn {
+    padding: 0 10px;
+    max-width: 100%;
+  }
+
+  .subscription-btn__label {
+    display: none;
+  }
+
+  .subscription-btn__plan::before {
+    display: none;
+  }
+
+  .actas-toggle {
+    min-width: 0;
+    padding: 0 10px;
   }
 
   .content {
@@ -931,6 +956,16 @@ html[data-theme="dark"] .install-banner {
   .nav-menu-btn {
     width: 34px;
     height: 34px;
+  }
+
+  .subscription-btn {
+    height: 32px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .actas-control:not(.actas-control--open) {
+    display: none;
   }
 
   .content {

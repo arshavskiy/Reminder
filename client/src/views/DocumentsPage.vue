@@ -5,19 +5,31 @@
       title="מסמכים"
       subtitle="צפייה, סינון וניהול של כל המסמכים במערכת"
     >
+      <template #hero>
+        <button
+            v-if="authStore.isAdmin || true"
+            :class="{ 'rbtn--loading': uploading }"
+            :disabled="limitReached || uploading"
+            class="rbtn rbtn--primary"
+            type="button"
+            @click="openUploadModal()"
+        >
+          <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+          העלה קבצים
+        </button>
+        <button
+            :class="{ 'rbtn--loading': importingFromGmail }"
+            :disabled="importingFromGmail"
+            class="rbtn rbtn--ghost"
+            type="button"
+            @click="handleGmailImport"
+        >
+          <GmailLogo :size="16" class="btn-icon" />
+          ייבוא תסקיר בדיקה
+        </button>
+      </template>
       <template #actions>
         <div class="documents-actions">
-          <button
-              v-if="authStore.isAdmin || true"
-              :class="{ 'rbtn--loading': uploading }"
-              :disabled="limitReached || uploading"
-              class="rbtn rbtn--primary"
-              type="button"
-              @click="openUploadModal()"
-          >
-            <n-icon :component="CloudUploadOutline" class="btn-icon"/>
-            העלה קבצים
-          </button>
           <button :disabled="store.loading" class="rbtn rbtn--ghost" type="button"
                   @click="store.fetch(undefined, true)">
             <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
@@ -221,24 +233,34 @@
         @update:value="currentPage = 1"
       />
       <div class="toolbar__view-toggle">
-        <button
-            :class="{ 'rbtn--ghost-active': viewMode === 'grid' }"
-            class="rbtn rbtn--ghost"
-            type="button"
-          @click="viewMode = 'grid'"
-        >
-          <n-icon :component="GridOutline" class="btn-icon"/>
+        <n-tooltip placement="top">
+          <template #trigger>
+            <button
+              :class="{ 'rbtn--ghost-active': viewMode === 'grid' }"
+              :aria-label="'אריחים'"
+              class="rbtn rbtn--ghost rbtn--icon"
+              type="button"
+              @click="viewMode = 'grid'"
+            >
+              <n-icon :component="GridOutline" :size="16" class="btn-icon"/>
+            </button>
+          </template>
           אריחים
-        </button>
-        <button
-            :class="{ 'rbtn--ghost-active': viewMode === 'list' }"
-            class="rbtn rbtn--ghost"
-            type="button"
-          @click="viewMode = 'list'"
-        >
-          <n-icon :component="ListOutline" class="btn-icon"/>
+        </n-tooltip>
+        <n-tooltip placement="top">
+          <template #trigger>
+            <button
+              :class="{ 'rbtn--ghost-active': viewMode === 'list' }"
+              :aria-label="'רשימה'"
+              class="rbtn rbtn--ghost rbtn--icon"
+              type="button"
+              @click="viewMode = 'list'"
+            >
+              <n-icon :component="ListOutline" :size="16" class="btn-icon"/>
+            </button>
+          </template>
           רשימה
-        </button>
+        </n-tooltip>
       </div>
     </div>
 
@@ -528,6 +550,7 @@ import ListCard from "../components/ListCard.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import UploadModal from "../components/UploadModal.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
+import GmailLogo from "../components/GmailLogo.vue";
 import type {DocTemplate, Document} from "@shared/types.js";
 import {
   countDuplicateReportRows,
@@ -560,6 +583,7 @@ const quotaPercent = computed(() => Math.min(100, Math.round((store.totalAll / s
 const limitReached = computed(() => isRegularUser.value && store.totalAll >= store.documentLimit);
 
 const uploading = ref(false);
+const importingFromGmail = ref(false);
 let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
 const rescanning = ref(false);
 const rescanningAll = ref(false);
@@ -597,6 +621,44 @@ const uploadModalRef = ref<InstanceType<typeof UploadModal> | null>(null);
 
 function openUploadModal() {
   showUploadModal.value = true;
+}
+
+async function handleGmailImport() {
+  importingFromGmail.value = true;
+  try {
+    const status = await api.gmail.status();
+    if (!status.connected) {
+      const { url } = await api.gmail.authUrl();
+      window.location.assign(url);
+      return;
+    }
+    const template = docTemplates.value.find(
+      (t) => t.document_kind === "inspection_report" || /תסקיר|בדיקה|ציוד|הרמה/i.test(t.name)
+    ) ?? null;
+    const templateId = template?.id ? String(template.id) : undefined;
+    const result = await api.gmail.importAll(undefined, undefined, templateId);
+    const failed = result.results.filter((r) => r.error).length;
+    const imported = result.imported ?? 0;
+    if (imported) {
+      message.success(`יובאו ${imported} תסקירים מ-Gmail`);
+    } else if (failed) {
+      message.warning("לא יובאו מסמכים. חלק מהקבצים נכשלו בעיבוד.");
+    } else {
+      message.info("לא נמצאו תסקירים חדשים לייבוא");
+    }
+    await store.fetch(undefined, true);
+  } catch (err: any) {
+    const code = String(err?.message ?? "");
+    if (code.includes("gmail_not_connected")) {
+      message.error("Gmail לא מחובר. לחץ שוב כדי להתחבר.");
+    } else if (code.includes("document_monthly_quota_exceeded")) {
+      message.error("הגעת למגבלת הייבוא החודשית של המנוי.");
+    } else {
+      message.error("שגיאה בייבוא מ-Gmail");
+    }
+  } finally {
+    importingFromGmail.value = false;
+  }
 }
 
 function openDocumentFromModal(id: string) {
@@ -1143,9 +1205,10 @@ function updateRescanRowsFromDocuments() {
   rescanStore.updateRows(rows);
 }
 function confirmDeleteAll() {
+  const count = filteredRows.value.length;
   confirm({
-    title: "מחיקת כל המסמכים",
-    content: `האם למחוק את כל ${store.rows.length} המסמכים? פעולה זו אינה הפיכה.`,
+    title: "מחיקת מסמכים",
+    content: `האם למחוק את ${count} המסמכים המסוננים? פעולה זו אינה הפיכה.`,
     confirmText: "מחק הכל",
     onConfirm: doDeleteAll,
   });
@@ -1219,8 +1282,9 @@ async function doBulkDelete() {
 async function doDeleteAll() {
   deletingAll.value = true;
   try {
-    await Promise.all(store.rows.map((r) => store.deleteDoc(r.id)));
-    message.success("כל המסמכים נמחקו");
+    const ids = filteredRows.value.map((r) => r.id);
+    await Promise.all(ids.map((id) => store.deleteDoc(id)));
+    message.success(`${ids.length} מסמכים נמחקו`);
     await store.fetch(undefined, true);
   } catch {
     message.error("שגיאה במחיקת המסמכים");
@@ -1278,7 +1342,7 @@ async function bulkDownload() {
   white-space: nowrap;
 }
 
-.rbtn:hover {
+.rbtn:hover:not(.rbtn--primary):not(.rbtn--danger):not(.rbtn--warning):not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-strong);
 }
@@ -1297,6 +1361,17 @@ async function bulkDownload() {
   border-color: var(--brand-color);
   color: var(--text-inverse, #fff);
   font-weight: 600;
+}
+
+.rbtn--primary:hover:not(:disabled) {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+  color: var(--text-inverse, #fff);
+}
+
+.rbtn--primary:active:not(:disabled) {
+  background: var(--brand-color-pressed);
+  border-color: var(--brand-color-pressed);
 }
 
 .rbtn--danger {
@@ -1584,7 +1659,39 @@ async function bulkDownload() {
 .toolbar__dates {
   width: 260px;
 }
-.toolbar__view-toggle { display: flex; gap: 4px; margin-right: auto; }
+.toolbar__view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-right: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.toolbar__view-toggle .rbtn {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.toolbar__view-toggle .rbtn:hover {
+  background: var(--bg-hover);
+  border-color: transparent;
+}
+
+.toolbar__view-toggle .rbtn--ghost-active {
+  background: var(--bg-card);
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.rbtn--icon {
+  justify-content: center;
+}
 
 .status-filter {
   display: flex;
@@ -1767,9 +1874,13 @@ async function bulkDownload() {
 
   .documents-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     width: 100%;
+  }
+
+  .documents-actions > .rbtn--primary {
+    grid-column: 1 / -1;
   }
 
   .documents-actions > .rbtn,
@@ -1777,6 +1888,22 @@ async function bulkDownload() {
   .documents-actions :deep(.n-popover),
   .documents-actions :deep(.n-popover-trigger),
   .documents-actions :deep(.n-popover-trigger) > .rbtn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .documents-actions > .bulk-action-anchor {
+    grid-column: 1 / -1;
+  }
+
+  .bulk-action-anchor__row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+
+  .bulk-action-anchor__row > .rbtn {
     width: 100%;
   }
 
@@ -1795,12 +1922,18 @@ async function bulkDownload() {
   }
 
   .toolbar {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
     gap: 8px;
   }
 
-  .toolbar__search,
+  .toolbar__search {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+
   .toolbar__client,
   .toolbar__type,
   .toolbar__dates {
@@ -1809,13 +1942,15 @@ async function bulkDownload() {
     flex-basis: auto;
   }
 
-  .toolbar__view-toggle {
-    width: 100%;
-    margin-right: 0;
+  .toolbar__dates {
+    grid-column: 1 / -1;
   }
 
-  .toolbar__view-toggle .rbtn {
-    flex: 1;
+  .toolbar__view-toggle {
+    grid-column: 1 / -1;
+    width: auto;
+    margin-right: 0;
+    justify-self: end;
   }
 
   .status-filter {
@@ -1859,10 +1994,6 @@ async function bulkDownload() {
 }
 
 @media (max-width: 420px) {
-  .documents-actions {
-    grid-template-columns: 1fr;
-  }
-
   :deep(.list-card__row) {
     flex-direction: column-reverse;
   }

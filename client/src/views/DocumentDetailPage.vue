@@ -1257,7 +1257,7 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.rbtn:hover {
+.rbtn:hover:not(.rbtn--primary):not(.rbtn--danger):not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-strong);
 }
@@ -1276,6 +1276,17 @@ onMounted(async () => {
   border-color: var(--brand-color);
   color: var(--text-inverse, #fff);
   font-weight: 600;
+}
+
+.rbtn--primary:hover:not(:disabled) {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+  color: var(--text-inverse, #fff);
+}
+
+.rbtn--primary:active:not(:disabled) {
+  background: var(--brand-color-pressed);
+  border-color: var(--brand-color-pressed);
 }
 
 .rbtn--danger {

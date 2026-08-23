@@ -1,4 +1,4 @@
-import {copyFileSync, existsSync, mkdirSync, readFileSync, statSync} from "fs";
+import {copyFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync} from "fs";
 import {createHash} from "crypto";
 import {basename, extname, join} from "path";
 import {col} from "../db/db";
@@ -13,7 +13,7 @@ import {extractCertificate} from "./certificateExtractor";
 import {extractFromOcr} from "./ocrExtractor";
 import {classifyDocumentKind, documentTypeFromTemplate, getOrBuildSystemPrompt, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
-import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
+import {deleteFromSpaces, getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
@@ -28,6 +28,7 @@ export interface PipelineOptions {
   startDelayMs?: number;   // optional batch pacing before background processing starts
   templateId?: string;     // force a specific doc_template instead of auto-detection
   storageKeyPrefix?: string; // optional S3 prefix for source-specific organization
+  gmailImport?: boolean;   // true when imported via Gmail — enables post-OCR inspection validation
 }
 
 function parseJsonObject(raw: unknown, fallback: unknown = null): Record<string, unknown> {
@@ -268,6 +269,27 @@ function normalizeStorageKeyPrefix(value: string | null | undefined): string | n
   return clean || null;
 }
 
+const INSPECTION_MARKERS = [
+  /מספר\s*תסקיר/,
+  /בתוקף\s*עד/,
+  /ציוד\s*שנבדק/,
+  /מספר\s*רישוי/,
+  /כושר\s*עמיסה|עומס\s*עבודה\s*בטוח/,
+  /תאריך\s*בדיקה/,
+  /מכונת\s+הרמה|ציוד\s+הרמה/,
+  /פקודת\s+הבטיחות/,
+];
+const MIN_INSPECTION_MARKERS = 2;
+
+function looksLikeInspectionReport(text: string): boolean {
+  let hits = 0;
+  for (const re of INSPECTION_MARKERS) {
+    if (re.test(text)) hits++;
+    if (hits >= MIN_INSPECTION_MARKERS) return true;
+  }
+  return false;
+}
+
 export async function processDocument(
   documentId: string,
   filePath: string,
@@ -322,6 +344,21 @@ export async function processDocument(
   await col("documents").updateOne(docFilter, {
     $set: { raw_text: rawText, page_count: pageCount, processing_status: "processing", updated_at: new Date() },
   });
+
+  if (pipeline?.gmailImport && rawText.trim().length > 0 && !looksLikeInspectionReport(rawText)) {
+    logger.info("gmail_import_not_inspection_skipped", {
+      document_id: documentId,
+      user_id: userId ?? null,
+    });
+    const skippedDoc = await col("documents").findOne(docFilter) as any;
+    if (skippedDoc?.spaces_key) {
+      await deleteFromSpaces(skippedDoc.spaces_key).catch(() => {});
+    }
+    try { unlinkSync(filePath); } catch {}
+    await col("documents").deleteOne(docFilter);
+    push?.({ type: "document:done", documentId: documentId as any, status: "skipped" });
+    return;
+  }
 
   push?.({ type: "document:progress", documentId: documentId as any, stage: "ai_extraction", progress: 50 });
 

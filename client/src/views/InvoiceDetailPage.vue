@@ -600,7 +600,12 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   font-weight: 600;
   cursor: pointer;
 }
-.rbtn:hover { border-color: var(--brand-color); color: var(--brand-color); }
+.rbtn:hover:not(.rbtn--primary):not(:disabled) { border-color: var(--brand-color); color: var(--brand-color); }
+.rbtn--primary:hover:not(:disabled) {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+  color: var(--text-inverse, #fff);
+}
 .rbtn:disabled { opacity: 0.55; cursor: not-allowed; }
 .rbtn--ghost { background: transparent; }
 .btn-icon { flex: 0 0 auto; }

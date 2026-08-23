@@ -3354,7 +3354,7 @@ function exportToExcel() {
   white-space: nowrap;
 }
 
-.btn:hover {
+.btn:hover:not(.btn--primary):not(.btn--danger):not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-strong);
 }
@@ -3399,6 +3399,7 @@ function exportToExcel() {
 .btn--primary:hover {
   background: var(--brand-color-hover);
   border-color: var(--brand-color-hover);
+  color: var(--text-inverse, #fff);
 }
 
 .btn--ghost {

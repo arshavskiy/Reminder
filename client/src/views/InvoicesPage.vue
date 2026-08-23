@@ -5,38 +5,36 @@
       title="חשבוניות"
       subtitle="חשבוניות שיובאו מ-Gmail — צפייה, סינון וניהול"
     >
-      <template #actions>
-        <div class="invoices-actions">
-          <button
-            :class="{ 'rbtn--loading': exporting }"
-            :disabled="loading || total === 0 || exporting"
-            class="rbtn rbtn--ghost"
-            type="button"
-            @click="exportInvoicesToExcel"
-          >
-            <n-icon :component="DownloadOutline" class="btn-icon" />
-            ייצוא לאקסל
-          </button>
-          <button
-            :disabled="loading"
-            class="rbtn rbtn--ghost"
-            type="button"
-            @click="load(true)"
-          >
-            <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
-            רענן
-          </button>
-          <button
-            :class="{ 'rbtn--loading': importingFromGmail }"
-            :disabled="loading || importingFromGmail"
-            class="rbtn rbtn--primary"
-            type="button"
-            @click="handleGmailImportButton"
-          >
-            <GmailLogo :size="16" class="btn-icon" />
-            {{ gmailImportButtonLabel }}
-          </button>
-        </div>
+      <template #hero>
+        <button
+          :class="{ 'rbtn--loading': exporting }"
+          :disabled="loading || total === 0 || exporting"
+          class="rbtn rbtn--ghost"
+          type="button"
+          @click="exportInvoicesToExcel"
+        >
+          <n-icon :component="DownloadOutline" class="btn-icon" />
+          ייצוא לאקסל
+        </button>
+        <button
+          :disabled="loading"
+          class="rbtn rbtn--ghost"
+          type="button"
+          @click="load(true)"
+        >
+          <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
+          רענן
+        </button>
+        <button
+          :class="{ 'rbtn--loading': importingFromGmail }"
+          :disabled="loading || importingFromGmail"
+          class="rbtn rbtn--primary"
+          type="button"
+          @click="handleGmailImportButton"
+        >
+          <GmailLogo :size="16" class="btn-icon" />
+          {{ gmailImportButtonLabel }}
+        </button>
       </template>
     </PageHeader>
 
@@ -52,6 +50,36 @@
         {{ option.label }}
         <span class="pill__badge">{{ option.count }}</span>
       </button>
+      <div class="toolbar__view-toggle">
+        <n-tooltip placement="top">
+          <template #trigger>
+            <button
+              :class="{ 'rbtn--ghost-active': viewMode === 'cards' }"
+              :aria-label="'כרטיסים'"
+              class="rbtn rbtn--ghost rbtn--icon"
+              type="button"
+              @click="viewMode = 'cards'"
+            >
+              <n-icon :component="GridOutline" :size="16" class="btn-icon"/>
+            </button>
+          </template>
+          כרטיסים
+        </n-tooltip>
+        <n-tooltip placement="top">
+          <template #trigger>
+            <button
+              :class="{ 'rbtn--ghost-active': viewMode === 'table' }"
+              :aria-label="'טבלה'"
+              class="rbtn rbtn--ghost rbtn--icon"
+              type="button"
+              @click="viewMode = 'table'"
+            >
+              <n-icon :component="ListOutline" :size="16" class="btn-icon"/>
+            </button>
+          </template>
+          טבלה
+        </n-tooltip>
+      </div>
     </div>
 
     <div class="toolbar">
@@ -98,24 +126,6 @@
         class="toolbar__dates"
         @update:value="load(true)"
       />
-      <div class="toolbar__view-toggle">
-        <button
-          :class="{ 'rbtn--ghost-active': viewMode === 'cards' }"
-          class="rbtn rbtn--ghost"
-          type="button"
-          @click="viewMode = 'cards'"
-        >
-          כרטיסים
-        </button>
-        <button
-          :class="{ 'rbtn--ghost-active': viewMode === 'table' }"
-          class="rbtn rbtn--ghost"
-          type="button"
-          @click="viewMode = 'table'"
-        >
-          טבלה
-        </button>
-      </div>
     </div>
 
     <n-spin :show="loading">
@@ -311,7 +321,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref, watch, type Component } from "vue";
 import { useRouter } from "vue-router";
-import { NButton, NDatePicker, NDropdown, NIcon, NInput, NModal, NPagination, NSelect, NSpin, useMessage, type SelectOption } from "naive-ui";
+import { NButton, NDatePicker, NDropdown, NIcon, NInput, NModal, NPagination, NSelect, NSpin, NTooltip, useMessage, type SelectOption } from "naive-ui";
 import {
   ArchiveOutline,
   BriefcaseOutline,
@@ -319,6 +329,8 @@ import {
   DownloadOutline,
   EllipsisVerticalOutline,
   EyeOutline,
+  GridOutline,
+  ListOutline,
   PricetagOutline,
   RefreshOutline,
 } from "@vicons/ionicons5";
@@ -802,7 +814,7 @@ function replaceRow(updated: ImportedInvoice) {
   white-space: nowrap;
 }
 
-.rbtn:hover {
+.rbtn:hover:not(.rbtn--primary):not(.rbtn--danger):not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-strong);
 }
@@ -821,6 +833,17 @@ function replaceRow(updated: ImportedInvoice) {
   border-color: var(--brand-color);
   color: var(--text-inverse, #fff);
   font-weight: 600;
+}
+
+.rbtn--primary:hover:not(:disabled) {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+  color: var(--text-inverse, #fff);
+}
+
+.rbtn--primary:active:not(:disabled) {
+  background: var(--brand-color-pressed);
+  border-color: var(--brand-color-pressed);
 }
 
 .rbtn--ghost-active {
@@ -858,6 +881,7 @@ function replaceRow(updated: ImportedInvoice) {
 .filterbar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-bottom: 16px;
   padding: 6px;
@@ -944,9 +968,37 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 .toolbar__view-toggle {
-  display: flex;
-  gap: 4px;
-  margin-right: auto;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-inline-start: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.toolbar__view-toggle .rbtn {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.toolbar__view-toggle .rbtn:hover {
+  background: var(--bg-hover);
+  border-color: transparent;
+}
+
+.toolbar__view-toggle .rbtn--ghost-active {
+  background: var(--bg-card);
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.rbtn--icon {
+  justify-content: center;
 }
 
 .empty {
@@ -1081,7 +1133,6 @@ function replaceRow(updated: ImportedInvoice) {
   border-bottom: 1px solid var(--border-color);
   text-align: right;
   white-space: nowrap;
-  font-size: 13px;
 }
 
 .invoice-table th {
@@ -1125,7 +1176,7 @@ function replaceRow(updated: ImportedInvoice) {
 
 .cell-strong,
 .cell-amount {
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
@@ -1210,15 +1261,6 @@ function replaceRow(updated: ImportedInvoice) {
     width: 100%;
     min-width: 0;
     flex-basis: auto;
-  }
-
-  .toolbar__view-toggle {
-    width: 100%;
-    margin-right: 0;
-  }
-
-  .toolbar__view-toggle .rbtn {
-    flex: 1;
   }
 
   .invoice-grid {

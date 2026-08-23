@@ -163,7 +163,10 @@ export function registerGmailRoutes(app: express.Application) {
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
     try {
-      let q = (req.query.q as string) || "has:attachment filename:pdf";
+      const templateId = req.query.templateId as string | undefined;
+      const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
+      const q = buildGmailQuery(req.query.q as string | undefined, template);
+      logger.info("gmail_inbox_query", { query: q, templateId: templateId ?? null, inspection: isInspectionTemplate(template) });
       const maxResults = gmailPageSize(req.query.limit);
       const pageToken = (req.query.pageToken as string) || undefined;
 
@@ -283,10 +286,11 @@ export function registerGmailRoutes(app: express.Application) {
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
-    let q = (req.body.q as string) || "has:attachment filename:pdf";
-    const maxResults = gmailPageSize(req.body.limit);
     const templateId = req.body.templateId as string | undefined;
     const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
+    const q = buildGmailQuery(req.body.q as string | undefined, template);
+    logger.info("gmail_import_all_query", { query: q, templateId: templateId ?? null, inspection: isInspectionTemplate(template) });
+    const maxResults = gmailPageSize(req.body.limit);
     const skipMonthlyReports = isInspectionTemplate(template);
     const quotaCategory = quotaCategoryFromTemplate(template);
 
@@ -586,8 +590,8 @@ async function gmailImportPipelineOptions(
   meta: GmailMessageHeaders | null,
   filename: string | undefined,
 ): Promise<PipelineOptions | undefined> {
-  const pipeline: PipelineOptions = templateId ? { templateId } : {};
-  if (!templateId) return Object.keys(pipeline).length ? pipeline : undefined;
+  const pipeline: PipelineOptions = { gmailImport: true, ...(templateId ? { templateId } : {}) };
+  if (!templateId) return pipeline;
 
   const template = await loadTemplate(templateId).catch(() => null);
   if (!isInvoiceTemplate(template)) return pipeline;
@@ -607,6 +611,17 @@ function isInvoiceTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): 
 function isInspectionTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): boolean {
   if (!template) return false;
   return template.document_kind === "inspection_report" || /תסקיר|בדיקה/.test(template.name);
+}
+
+const INSPECTION_GMAIL_QUERY = "has:attachment filename:pdf תסקיר";
+
+function buildGmailQuery(userQuery: string | undefined, template: Awaited<ReturnType<typeof loadTemplate>>): string {
+  const defaultQuery = "has:attachment filename:pdf";
+  const q = userQuery || defaultQuery;
+  if (isInspectionTemplate(template) && q === defaultQuery) {
+    return INSPECTION_GMAIL_QUERY;
+  }
+  return q;
 }
 
 function quotaCategoryFromTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): DocumentImportQuotaCategory {
@@ -649,7 +664,7 @@ function collectMatchingAttachments(
     const mimeType = String(part.mimeType || "").trim();
     const size = Number(part.body.size || 0);
     const ext = extensionFromFilename(filename);
-    if (matchesRequestedAttachment(filename, mimeType, allowedExtensions)) {
+    if (matchesRequestedAttachment(filename, mimeType, allowedExtensions) && !isJunkAttachment(filename, size)) {
       out.push({
         attachmentId: part.body.attachmentId,
         filename: filename || `attachment.${[...allowedExtensions][0] ?? "bin"}`,
@@ -689,6 +704,15 @@ function matchesRequestedAttachment(filename: string, mimeType: string, allowedE
   if ((allowedExtensions.has("doc") || allowedExtensions.has("docx")) && mime.includes("wordprocessingml")) return true;
   if ((allowedExtensions.has("xls") || allowedExtensions.has("xlsx")) && mime.includes("spreadsheetml")) return true;
   if ((allowedExtensions.has("jpg") || allowedExtensions.has("jpeg") || allowedExtensions.has("png")) && mime.startsWith("image/")) return true;
+  return false;
+}
+
+const JUNK_FILENAME_PATTERNS = /^(logo|signature|banner|header|footer|image\d*|icon|stamp|seal|badge)\./i;
+const MIN_DOCUMENT_SIZE = 5_000; // 5KB — skip tiny attachments (logos, signatures, inline images)
+
+function isJunkAttachment(filename: string, size: number): boolean {
+  if (size > 0 && size < MIN_DOCUMENT_SIZE) return true;
+  if (JUNK_FILENAME_PATTERNS.test(filename)) return true;
   return false;
 }
 

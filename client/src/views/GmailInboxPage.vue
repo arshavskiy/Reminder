@@ -1,34 +1,60 @@
 <template>
-  <div class="gmail-page" dir="rtl">
+  <div class="page2 gmail-page" dir="rtl">
     <PageHeader
       title="Gmail"
       :subtitle="connectedEmail ? `מחובר: ${connectedEmail}` : 'ייבוא קבצים מצורפים מתיבת הדואר'"
+      :count="importedDocuments.length > 0 ? importedDocuments.length : undefined"
     >
       <template #actions>
-        <n-button v-if="connected && (isAdmin || selectedGuidedFlow)" :loading="loading" type="primary" @click="refreshCurrentFlow">
-          <template #icon><n-icon :component="RefreshOutline" /></template>
-          רענן
-        </n-button>
-        <n-select
-          v-if="connected && isAdmin"
-          v-model:value="selectedTemplateId"
-          :options="templateOptions"
-          clearable
-          placeholder="תבנית אוטומטית"
-          size="small"
-          style="width: 200px"
-        />
-        <n-button v-if="connected && (isAdmin || selectedGuidedFlow)" type="success" :loading="importingAll" @click="importAllNew">
-          <template #icon><n-icon :component="CloudDownloadOutline" /></template>
-          ייבא הכל
-        </n-button>
-        <n-button v-if="connected" quaternary type="error" @click="disconnect">
-          נתק Gmail
-        </n-button>
-        <n-button v-if="!connected && !loading" type="primary" @click="connectGmail">
-          <template #icon><n-icon :component="LogoGoogle" /></template>
-          חבר Gmail
-        </n-button>
+        <div class="gmail-actions">
+          <button
+            v-if="connected && (isAdmin || selectedGuidedFlow)"
+            :disabled="loading"
+            class="rbtn rbtn--ghost"
+            type="button"
+            @click="refreshCurrentFlow"
+          >
+            <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
+            רענן
+          </button>
+          <button
+            v-if="connected && (isAdmin || selectedGuidedFlow)"
+            :class="{ 'rbtn--loading': importingAll }"
+            :disabled="loading || importingAll"
+            class="rbtn rbtn--primary"
+            type="button"
+            @click="importAllNew"
+          >
+            <GmailLogo :size="16" class="btn-icon" />
+            ייבא הכל
+          </button>
+          <n-select
+            v-if="connected && isAdmin"
+            v-model:value="selectedTemplateId"
+            :options="templateOptions"
+            clearable
+            placeholder="תבנית אוטומטית"
+            size="small"
+            class="gmail-actions__select"
+          />
+          <button
+            v-if="connected"
+            class="rbtn rbtn--ghost rbtn--danger"
+            type="button"
+            @click="disconnect"
+          >
+            נתק Gmail
+          </button>
+          <button
+            v-if="!connected && !loading"
+            class="rbtn rbtn--primary gmail-actions__btn--full"
+            type="button"
+            @click="connectGmail"
+          >
+            <n-icon :component="LogoGoogle" class="btn-icon" />
+            חבר Gmail
+          </button>
+        </div>
       </template>
     </PageHeader>
 
@@ -43,28 +69,28 @@
       </a>
     </nav>
 
-    <div v-if="connected && !isAdmin" class="gmail-flow-tabs" role="tablist" aria-label="מסלולי ייבוא Gmail">
+    <div v-if="connected && !isAdmin" class="filterbar filterbar--compact gmail-flow-tabs" role="tablist" aria-label="מסלולי ייבוא Gmail">
       <button
         type="button"
-        class="gmail-flow-tab"
-        :class="{ 'gmail-flow-tab--active': selectedGuidedFlow === 'invoice' }"
+        class="pill pill--compact"
+        :class="{ 'pill--active': selectedGuidedFlow === 'invoice' }"
         role="tab"
         :aria-selected="selectedGuidedFlow === 'invoice'"
         @click="selectGuidedFlow('invoice')"
       >
-        <n-icon :component="DocumentOutline" :size="18" />
-        <span>ייבוא חשבוניות</span>
+        <n-icon :component="DocumentOutline" :size="16" />
+        ייבוא חשבוניות
       </button>
       <button
         type="button"
-        class="gmail-flow-tab"
-        :class="{ 'gmail-flow-tab--active': selectedGuidedFlow === 'inspection' }"
+        class="pill pill--compact"
+        :class="{ 'pill--active': selectedGuidedFlow === 'inspection' }"
         role="tab"
         :aria-selected="selectedGuidedFlow === 'inspection'"
         @click="selectGuidedFlow('inspection')"
       >
-        <n-icon :component="DocumentOutline" :size="18" />
-        <span>ייבוא תסקיר בדיקה</span>
+        <n-icon :component="DocumentOutline" :size="16" />
+        ייבוא תסקיר בדיקה
       </button>
     </div>
 
@@ -90,13 +116,13 @@
         placeholder="סוג מסמך"
         filterable
         clearable
-        class="toolbar__select"
+        class="toolbar__type"
       />
       <n-select
         v-model:value="filterType"
         :options="filterTypeOptions"
         placeholder="סינון נוסף"
-        class="toolbar__select toolbar__select--sm"
+        class="toolbar__type toolbar__type--sm"
         @update:value="onFilterChange"
       />
       <n-select
@@ -107,7 +133,7 @@
         filterable
         clearable
         tag
-        class="toolbar__select"
+        class="toolbar__supplier"
       />
       <n-date-picker
         v-if="filterType === 'date'"
@@ -121,21 +147,30 @@
         v-model:value="filterIdentifierText"
         placeholder="מספר רישוי / תסקיר"
         clearable
-        class="toolbar__select"
+        class="toolbar__search"
         :allow-input="(v: string) => /^\d*$/.test(v)"
         @keydown.enter="buildAndSearch"
       />
-      <n-button type="primary" @click="buildAndSearch" :loading="loading">
-        <template #icon><n-icon :component="SearchOutline" /></template>
+      <button
+        :class="{ 'rbtn--loading': loading }"
+        :disabled="loading"
+        class="rbtn rbtn--primary"
+        type="button"
+        @click="buildAndSearch"
+      >
+        <n-icon :component="SearchOutline" class="btn-icon" />
         חפש
-      </n-button>
+      </button>
     </div>
 
     <!-- Not connected -->
-    <div v-if="!connected && !loading" class="empty-state">
-      <n-icon :component="LogoGoogle" size="64" color="#4285F4" />
+    <div v-if="!connected && !loading" class="empty">
+      <n-icon :component="LogoGoogle" :size="48" class="empty__icon" style="color:#4285F4" />
       <p>חבר את חשבון Gmail שלך כדי לראות חשבוניות PDF</p>
-      <n-button type="primary" size="large" @click="connectGmail">חבר Gmail</n-button>
+      <button class="rbtn rbtn--primary mt-3" type="button" @click="connectGmail">
+        <n-icon :component="LogoGoogle" class="btn-icon" />
+        חבר Gmail
+      </button>
     </div>
 
     <!-- Loading status -->
@@ -143,11 +178,55 @@
 
     <!-- Inbox table -->
     <section v-else-if="isAdmin || selectedGuidedFlow" id="gmail-search-section" class="gmail-search-section">
-      <div v-if="!emails.length" class="empty-state">
+      <div v-if="!emails.length" class="empty">
         <p>לא נמצאו מיילים עם קבצי {{ selectedTypeLabel }} מצורפים</p>
       </div>
 
       <div v-else class="inbox-table-block">
+        <div class="inbox-cards">
+          <article
+            v-for="row in emails"
+            :key="`card-${row.id}`"
+            class="inbox-card"
+          >
+            <header class="inbox-card__head">
+              <div class="inbox-card__from" :title="row.from">{{ formatFrom(row.from) }}</div>
+              <div class="inbox-card__date">{{ formatDate(row.internalDate) }}</div>
+            </header>
+            <div class="inbox-card__subject" :title="row.subject">{{ row.subject || "—" }}</div>
+            <div
+              v-for="att in row.attachments"
+              :key="att.attachmentId"
+              class="inbox-card__file"
+            >
+              <div class="inbox-file">
+                <n-icon :component="DocumentOutline" :size="14" class="inbox-file__icon" />
+                <span class="inbox-file__name" :title="`${att.filename || 'קובץ מצורף'} · ${formatSize(att.size)}`">
+                  {{ att.filename || "קובץ מצורף" }}
+                </span>
+              </div>
+              <div class="inbox-row-actions">
+                <button class="btn btn--ghost btn--xs icon-btn" type="button" aria-label="תצוגה מקדימה" @click="previewAttachment(row.id, att)">
+                  <n-icon :component="EyeOutline" :size="14" class="btn-icon" />
+                </button>
+                <button class="btn btn--ghost btn--xs icon-btn" type="button" aria-label="הורד" @click="downloadAttachment(row.id, att)">
+                  <n-icon :component="DownloadOutline" :size="14" class="btn-icon" />
+                </button>
+                <button
+                  class="btn btn--primary btn--xs icon-btn"
+                  type="button"
+                  aria-label="ייבא למסמכים"
+                  :class="{ 'btn--loading': importing[att.attachmentId] }"
+                  :disabled="Boolean(importing[att.attachmentId])"
+                  @click="importAttachment(row.id, att)"
+                >
+                  <n-icon :component="CloudDownloadOutline" :size="14" class="btn-icon" />
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+
         <div class="inbox-table-wrap">
           <table class="inbox-table">
           <thead>
@@ -231,10 +310,16 @@
           </table>
         </div>
         <div v-if="nextPageToken" class="load-more-wrap">
-          <n-button :loading="loadingMore" @click="loadMore">
+          <button
+            :class="{ 'rbtn--loading': loadingMore }"
+            :disabled="loadingMore"
+            class="rbtn rbtn--ghost"
+            type="button"
+            @click="loadMore"
+          >
             טען עוד
             <template v-if="totalEstimate"> ({{ emails.length }} מתוך ~{{ totalEstimate }})</template>
-          </n-button>
+          </button>
         </div>
       </div>
     </section>
@@ -291,29 +376,58 @@
           <h2 class="gmail-docs-title">מסמכים שיובאו מ-Gmail</h2>
           <p class="gmail-docs-subtitle">{{ filteredImportedDocuments.length }} מתוך {{ importedDocuments.length }} מסמכים</p>
         </div>
-        <div class="gmail-docs-view">
-          <n-button size="small" :type="importedView === 'grid' ? 'primary' : 'default'" @click="importedView = 'grid'">
+      </div>
+
+      <div class="filterbar filterbar--compact">
+        <button
+          v-for="option in importedStatusStrip"
+          :key="option.value || 'all'"
+          type="button"
+          class="pill pill--compact"
+          :class="{ 'pill--active': (importedStatusFilter ?? '') === option.value }"
+          @click="setImportedStatus(option.value)"
+        >
+          {{ option.label }}
+          <span class="pill__badge">{{ option.count }}</span>
+        </button>
+        <div class="toolbar__view-toggle">
+          <n-tooltip placement="top">
+            <template #trigger>
+              <button
+                :class="{ 'rbtn--ghost-active': importedView === 'grid' }"
+                :aria-label="'כרטיסים'"
+                class="rbtn rbtn--ghost rbtn--icon"
+                type="button"
+                @click="importedView = 'grid'"
+              >
+                <n-icon :component="GridOutline" :size="16" class="btn-icon"/>
+              </button>
+            </template>
             כרטיסים
-          </n-button>
-          <n-button size="small" :type="importedView === 'list' ? 'primary' : 'default'" @click="importedView = 'list'">
+          </n-tooltip>
+          <n-tooltip placement="top">
+            <template #trigger>
+              <button
+                :class="{ 'rbtn--ghost-active': importedView === 'list' }"
+                :aria-label="'טבלה'"
+                class="rbtn rbtn--ghost rbtn--icon"
+                type="button"
+                @click="importedView = 'list'"
+              >
+                <n-icon :component="ListOutline" :size="16" class="btn-icon"/>
+              </button>
+            </template>
             טבלה
-          </n-button>
+          </n-tooltip>
         </div>
       </div>
 
-      <div class="gmail-doc-filters">
+      <div class="toolbar gmail-doc-filters">
         <n-input
           v-model:value="importedSearch"
           clearable
           placeholder="חיפוש ספק, סכום, סוג או שם קובץ..."
-          style="min-width:260px;max-width:360px"
-        />
-        <n-select
-          v-model:value="importedStatusFilter"
-          :options="importedStatusOptions"
-          clearable
-          placeholder="כל הסטטוסים"
-          style="width:170px"
+          class="toolbar__search"
         />
         <n-select
           v-model:value="importedTypeFilter"
@@ -321,7 +435,7 @@
           clearable
           filterable
           placeholder="סוג מסמך"
-          style="width:190px"
+          class="toolbar__type"
         />
         <n-select
           v-model:value="importedSourceFilter"
@@ -329,13 +443,13 @@
           clearable
           filterable
           placeholder="מקור"
-          style="width:210px"
+          class="toolbar__supplier"
         />
         <n-date-picker
           v-model:value="importedDateRange"
           type="daterange"
           clearable
-          style="width:260px"
+          class="toolbar__dates"
         />
       </div>
 
@@ -346,9 +460,6 @@
           class="gmail-doc-card"
           @click="openImportedDocument(doc)"
         >
-          <div class="gmail-doc-card__status">
-            <span class="status-pill" :class="`status-pill--${doc.processing_status}`">{{ importedStatusLabel(doc.processing_status) }}</span>
-          </div>
           <div class="gmail-doc-card__preview">
             <img
               v-if="importedDocThumbnailSrc(doc)"
@@ -371,6 +482,7 @@
             <div v-else class="gmail-doc-card__fallback">
               <n-icon :component="DocumentOutline" :size="42" />
             </div>
+            <span class="gmail-doc-card__status">{{ importedStatusLabel(doc.processing_status) }}</span>
           </div>
           <div class="gmail-doc-card__body">
             <div class="gmail-doc-card__supplier" :title="importedSupplier(doc)">{{ importedSupplier(doc) }}</div>
@@ -380,9 +492,6 @@
               <span>{{ importedDisplayDate(doc) }}</span>
             </div>
             <div class="gmail-doc-card__source" :title="doc.sourceSubject">{{ doc.sourceSubject || doc.file_name }}</div>
-            <button class="btn btn--ghost btn--xs gmail-doc-card__download" type="button" @click.stop="downloadImportedDocument(doc)">
-              הורד
-            </button>
           </div>
         </article>
       </div>
@@ -394,6 +503,7 @@
               <th>ספק</th>
               <th>סטטוס</th>
               <th>תאריך</th>
+              <th>תאריך ייבוא</th>
               <th>עסק</th>
               <th>סוג</th>
               <th>סכום</th>
@@ -401,9 +511,18 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="doc in pagedImportedDocuments" :key="doc.id">
-              <td>{{ importedSupplier(doc) }}</td>
-              <td>
+            <tr
+              v-for="doc in pagedImportedDocuments"
+              :key="doc.id"
+              class="gmail-doc-table-row"
+              tabindex="0"
+              role="button"
+              @click="openImportedDocument(doc)"
+              @keydown.enter.prevent="openImportedDocument(doc)"
+              @keydown.space.prevent="openImportedDocument(doc)"
+            >
+              <td class="cell-strong">{{ importedSupplier(doc) }}</td>
+              <td @click.stop>
                 <n-select
                   v-if="doc.invoice_id"
                   :value="doc.invoice_status || 'new'"
@@ -415,10 +534,11 @@
                 <span v-else class="status-pill" :class="`status-pill--${doc.processing_status}`">{{ importedStatusLabel(doc.processing_status) }}</span>
               </td>
               <td>{{ importedDisplayDate(doc) }}</td>
+              <td>{{ importedImportDate(doc) }}</td>
               <td>{{ importedBusiness(doc) }}</td>
               <td>{{ importedDocType(doc) }}</td>
               <td class="gmail-doc-table__amount">{{ importedAmount(doc) }}</td>
-              <td class="gmail-doc-table__actions">
+              <td class="gmail-doc-table__actions" @click.stop>
                 <n-dropdown
                   :options="importedDocActionOptions(doc)"
                   placement="bottom-start"
@@ -445,30 +565,11 @@
         />
       </div>
 
-      <div v-if="!filteredImportedDocuments.length" class="gmail-docs-empty">אין מסמכים שתואמים לסינון הנוכחי</div>
+      <div v-if="!filteredImportedDocuments.length" class="empty">
+        אין מסמכים שתואמים לסינון הנוכחי
+      </div>
     </section>
 
-    <!-- Import history -->
-    <div v-if="connected && (isAdmin || selectedGuidedFlow) && filteredHistoryItems.length" id="gmail-history-section" class="history-section">
-      <h3 class="history-title" @click="historyOpen = !historyOpen" style="cursor:pointer">
-        {{ historyTitle }} ({{ filteredHistoryItems.length }})
-        <span class="history-chevron" :class="{ open: historyOpen }">▸</span>
-      </h3>
-      <div v-if="historyOpen" class="history-list">
-        <div v-for="item in filteredHistoryItems" :key="item.message_id" class="history-item">
-          <div class="history-item__header">
-            <span class="history-item__subject">{{ item.subject || "ללא נושא" }}</span>
-            <span class="history-item__date">{{ new Date(item.imported_at).toLocaleDateString("he-IL") }}</span>
-          </div>
-          <div v-if="item.files?.length" class="history-item__files">
-            <span v-for="f in item.files" :key="f.filename" class="history-file" :class="{ 'history-file--err': f.error }">
-              {{ f.filename }}
-              <span v-if="f.error" class="tag tag--danger tag--xs">שגיאה</span>
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -487,6 +588,8 @@ import {
   DownloadOutline,
   EllipsisVerticalOutline,
   EyeOutline,
+  GridOutline,
+  ListOutline,
   LogoGoogle,
   PricetagOutline,
   RefreshOutline,
@@ -496,6 +599,7 @@ import { api, type GmailAttachment, type GmailEmail, type GmailImportedDocument,
 import { useAuthStore } from "../stores/auth.js";
 import type { DocTemplate } from "../shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
+import GmailLogo from "../components/GmailLogo.vue";
 
 const route = useRoute();
 const message = useMessage();
@@ -520,19 +624,12 @@ const importing = ref<Record<string, boolean>>({});
 const selectedGuidedFlow = ref<"invoice" | "inspection" | null>(null);
 const isAdmin = computed(() => authStore.user?.role === "admin");
 const guidedFlowLabel = computed(() => selectedGuidedFlow.value === "invoice" ? "חשבוניות" : "תסקיר בדיקה");
-const historyTitle = computed(() =>
-  selectedGuidedFlow.value === "inspection"
-    ? "היסטוריית ייבוא תסקירי בדיקה"
-    : selectedGuidedFlow.value === "invoice"
-      ? "היסטוריית ייבוא חשבוניות"
-      : "היסטוריית ייבוא"
-);
+
 const sectionNavItems = computed(() => {
   if (!connected.value) return [];
   const items: Array<{ id: string; label: string }> = [];
   if (isAdmin.value || selectedGuidedFlow.value) items.push({ id: "gmail-search-section", label: "חיפוש" });
   if ((isAdmin.value || selectedGuidedFlow.value) && importedDocuments.value.length) items.push({ id: "gmail-imported-section", label: "מסמכים שיובאו" });
-  if ((isAdmin.value || selectedGuidedFlow.value) && filteredHistoryItems.value.length) items.push({ id: "gmail-history-section", label: "היסטוריה" });
   return items;
 });
 
@@ -553,7 +650,7 @@ type ImportedDocumentCard = GmailImportedDocument & {
   sourceFilename: string;
 };
 const historyItems = ref<GmailImportHistoryItem[]>([]);
-const historyOpen = ref(false);
+
 const importedView = ref<"grid" | "list">("grid");
 const importedSearch = ref("");
 const importedStatusFilter = ref<string | null>(null);
@@ -628,10 +725,24 @@ const importedDocuments = computed<ImportedDocumentCard[]>(() => filteredHistory
     })),
 ));
 
-const importedStatusOptions = computed<SelectOption[]>(() => uniqueOptions(
-  importedDocuments.value.map((doc) => doc.processing_status),
-  importedStatusLabel,
-));
+const importedStatusStrip = computed(() => {
+  const counts: Record<string, number> = {};
+  for (const doc of importedDocuments.value) {
+    const status = doc.processing_status || "unknown";
+    counts[status] = (counts[status] ?? 0) + 1;
+  }
+  return [
+    { label: "הכל", value: "", count: importedDocuments.value.length },
+    { label: "בתור", value: "queued", count: counts.queued ?? 0 },
+    { label: "בעיבוד", value: "processing", count: counts.processing ?? 0 },
+    { label: "חדש", value: "done", count: counts.done ?? 0 },
+    { label: "שגיאה", value: "error", count: counts.error ?? 0 },
+  ];
+});
+
+function setImportedStatus(value: string) {
+  importedStatusFilter.value = value || null;
+}
 
 const importedTypeOptions = computed<SelectOption[]>(() => uniqueOptions(
   importedDocuments.value.map((doc) => importedDocType(doc)),
@@ -768,7 +879,7 @@ function selectGuidedFlow(flow: "invoice" | "inspection") {
   importedSourceFilter.value = null;
   importedDateRange.value = null;
   importedPage.value = 1;
-  historyOpen.value = true;
+
   loadInbox();
 }
 
@@ -912,7 +1023,7 @@ async function loadInbox() {
   loading.value = true;
   nextPageToken.value = null;
   try {
-    const result = await api.gmail.inbox(searchQuery.value || undefined);
+    const result = await api.gmail.inbox(searchQuery.value || undefined, undefined, undefined, importTemplateId());
     emails.value = result.emails;
     nextPageToken.value = result.nextPageToken;
     totalEstimate.value = result.resultSizeEstimate;
@@ -936,7 +1047,7 @@ async function loadMore() {
   if (!nextPageToken.value) return;
   loadingMore.value = true;
   try {
-    const result = await api.gmail.inbox(searchQuery.value || undefined, undefined, nextPageToken.value);
+    const result = await api.gmail.inbox(searchQuery.value || undefined, undefined, nextPageToken.value, importTemplateId());
     emails.value = [...emails.value, ...result.emails];
     nextPageToken.value = result.nextPageToken;
   } catch {
@@ -1026,14 +1137,14 @@ onMounted(async () => {
       const requestedFlow = requestedGuidedFlow();
       if (requestedFlow) {
         configureGuidedFlow(requestedFlow);
-        historyOpen.value = true;
+      
         await Promise.all([loadInbox(), loadHistory()]);
       } else if (isAdmin.value) {
         buildSearchQuery();
         await Promise.all([loadInbox(), loadHistory()]);
       } else {
         configureGuidedFlow("invoice");
-        historyOpen.value = true;
+      
         await Promise.all([loadInbox(), loadHistory()]);
       }
     }
@@ -1168,6 +1279,13 @@ function importedDocumentTime(doc: ImportedDocumentCard): number | null {
 function importedDisplayDate(doc: ImportedDocumentCard): string {
   const ts = importedDocumentTime(doc);
   return ts ? new Date(ts).toLocaleDateString("he-IL", { day: "numeric", month: "short", year: "numeric" }) : "—";
+}
+
+function importedImportDate(doc: ImportedDocumentCard): string {
+  const raw = doc.import_date ?? doc.created_at ?? doc.sourceDate;
+  if (!raw) return "—";
+  const ts = Date.parse(raw);
+  return Number.isFinite(ts) ? new Date(ts).toLocaleDateString("he-IL", { day: "numeric", month: "short", year: "numeric" }) : "—";
 }
 
 function importedStatusLabel(status: string): string {
@@ -1320,33 +1438,180 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   gap: 4px;
 }
 
+.gmail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+
+.gmail-actions__select {
+  min-width: 180px;
+  width: 200px;
+}
+
+.rbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
+}
+
+.rbtn:hover:not(.rbtn--primary):not(.rbtn--danger):not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.rbtn:active {
+  transform: scale(0.97);
+}
+
+.rbtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.rbtn--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--text-inverse, #fff);
+  font-weight: 600;
+}
+
+.rbtn--primary:hover:not(:disabled) {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+  color: var(--text-inverse, #fff);
+}
+
+.rbtn--primary:active:not(:disabled) {
+  background: var(--brand-color-pressed);
+  border-color: var(--brand-color-pressed);
+}
+
+.rbtn--danger {
+  border-color: rgba(208, 48, 80, 0.35);
+  color: #d03050;
+}
+
+.rbtn--danger:hover {
+  background: rgba(208, 48, 80, 0.1);
+  border-color: #d03050;
+}
+
+.rbtn--ghost-active {
+  background: var(--bg-elevated);
+  border-color: var(--brand-color);
+  color: var(--brand-color);
+}
+
+.rbtn--loading {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.rbtn--loading::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-inline-start-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex: 0 0 auto;
+}
+
+.rbtn--icon {
+  justify-content: center;
+}
+
+.refresh-icon--spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .filterbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 12px;
-  padding: 5px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 6px;
+  background: var(--bg-elevated);
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
 }
-.filterbar--compact { margin-top: -8px; }
+
+.filterbar--compact {
+  margin-top: -8px;
+  padding: 5px;
+  background: transparent;
+  border: none;
+}
 
 .pill {
-  padding: 6px 13px;
+  padding: 8px 18px;
   border-radius: 10px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
   color: var(--text-secondary);
+  cursor: pointer;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
+
+.pill--compact {
+  padding: 6px 13px;
+  font-size: 12px;
+}
+
 .pill:hover {
-  border-color: var(--brand-color);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pill--active {
   color: var(--brand-color);
-  background: color-mix(in srgb, var(--brand-color) 8%, var(--bg-card));
+  font-weight: 700;
+  background: var(--bg-card);
+  border: 2px solid var(--brand-color);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-color) 55%, transparent);
+}
+
+.pill--active .pill__badge {
+  background: color-mix(in srgb, var(--brand-color) 22%, transparent);
+  color: inherit;
+}
+
+.pill__badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  padding: 1px 6px;
+  border-radius: 999px;
 }
 
 .gmail-section-nav {
@@ -1355,80 +1620,95 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   width: auto;
   min-width: 0;
   box-shadow: none;
-  border: none;
-  background: transparent;
-  padding: 0;
-}
-
-.toolbar,
-.gmail-filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-  padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--bg-card);
-}
-.toolbar__select { width: 200px; }
-.toolbar__select--sm { width: 150px; }
-.toolbar__dates { width: 260px; }
-
-.load-more-wrap {
-  display: flex;
-  justify-content: center;
-  padding: 10px 0;
 }
 
 .gmail-flow-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
   max-width: 760px;
-  margin: 0 auto 18px;
-  padding: 6px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-card);
+  margin: 0 auto 12px;
 }
 
-.gmail-flow-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 8px 14px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text-secondary);
-  font: inherit;
-  font-weight: 800;
-  cursor: pointer;
-  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
-}
-
-.gmail-flow-tab:hover {
-  color: var(--brand-color);
-  background: color-mix(in srgb, var(--brand-color) 7%, transparent);
-}
-
-.gmail-flow-tab--active {
-  border-color: var(--brand-color);
-  background: color-mix(in srgb, var(--brand-color) 11%, var(--bg-card));
-  color: var(--brand-color);
-}
-
-.empty-state {
+.toolbar,
+.gmail-filter-bar,
+.gmail-doc-filters {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 80px 0;
-  color: var(--n-text-color-3);
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar__search {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+.toolbar__type {
+  width: 200px;
+}
+
+.toolbar__type--sm {
+  width: 150px;
+}
+
+.toolbar__supplier {
+  width: 260px;
+}
+
+.toolbar__dates {
+  width: 260px;
+}
+
+.toolbar__view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-inline-start: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.toolbar__view-toggle .rbtn {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.toolbar__view-toggle .rbtn:hover {
+  background: var(--bg-hover);
+  border-color: transparent;
+}
+
+.toolbar__view-toggle .rbtn--ghost-active {
+  background: var(--bg-card);
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.empty__icon {
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.mt-3 {
+  margin-top: 12px;
+}
+
+.file-type-checks {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .guided-flow-bar {
@@ -1439,7 +1719,7 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   margin-bottom: 16px;
   padding: 12px 14px;
   border: 1px solid color-mix(in srgb, var(--brand-color) 32%, var(--border-color));
-  border-radius: 8px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--brand-color) 7%, var(--bg-card));
 }
 
@@ -1462,16 +1742,74 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   direction: ltr;
 }
 
+.gmail-search-section,
+.gmail-docs-section {
+  scroll-margin-top: 86px;
+}
+
 .inbox-table-block {
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-.gmail-search-section,
-.gmail-docs-section,
-.history-section {
-  scroll-margin-top: 86px;
+.inbox-cards {
+  display: none;
+}
+
+.inbox-card {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inbox-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.inbox-card__from {
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-card__date {
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.inbox-card__subject {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.inbox-card__file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color);
+}
+
+.inbox-card__file .inbox-file {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
 }
 
 .inbox-table-wrap {
@@ -1520,25 +1858,15 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
 }
 
-.col-from {
-  width: 34%;
-}
-
-.col-subject {
-  width: 18%;
-}
-
+.col-from { width: 34%; }
+.col-subject { width: 18%; }
 .col-date {
   width: 88px;
   white-space: nowrap;
   color: var(--text-secondary);
   font-size: 12px;
 }
-
-.col-file {
-  width: 16%;
-}
-
+.col-file { width: 16%; }
 .col-actions {
   width: 108px;
   white-space: nowrap;
@@ -1607,22 +1935,6 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   display: inline-flex;
 }
 
-.filter-bar {
-  display: none;
-}
-
-.file-type-checks {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.filter-divider {
-  display: none;
-}
-
-/* Import results modal */
 .import-results__summary {
   display: flex;
   gap: 16px;
@@ -1704,26 +2016,13 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   color: var(--text-secondary);
 }
 
-.gmail-docs-view,
-.gmail-doc-filters {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.gmail-doc-filters {
-  margin-bottom: 16px;
-}
-
 .gmail-doc-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
 }
 
 .gmail-doc-card {
-  position: relative;
   min-width: 0;
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -1739,15 +2038,9 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   transform: translateY(-1px);
 }
 
-.gmail-doc-card__status {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
-}
-
 .gmail-doc-card__preview {
-  height: 210px;
+  position: relative;
+  height: 220px;
   background: color-mix(in srgb, var(--bg-elevated) 82%, var(--bg-card));
   border-bottom: 1px solid var(--border-color);
   overflow: hidden;
@@ -1756,9 +2049,10 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
 .gmail-doc-card__preview img,
 .gmail-doc-card__preview iframe {
   width: 100%;
+  height: 100%;
   border: 0;
-  object-fit: cover;
-  background: #fff;
+  object-fit: contain;
+  background: var(--bg-card);
 }
 
 .gmail-doc-card__fallback {
@@ -1766,6 +2060,22 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   display: grid;
   place-items: center;
   color: var(--text-secondary);
+}
+
+.gmail-doc-card__status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--brand-color) 13%, var(--bg-card));
+  color: var(--brand-color);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .gmail-doc-card__body {
@@ -1783,7 +2093,7 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
 
 .gmail-doc-card__supplier {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text-primary);
 }
 
@@ -1799,57 +2109,28 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 9px;
+  padding-top: 9px;
   border-top: 1px solid var(--border-color);
-  font-size: 12px;
   color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .gmail-doc-card__source {
   margin-top: 8px;
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.gmail-doc-card__download {
-  margin-top: 10px;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 3px 9px;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--brand-color) 13%, var(--bg-card));
-  color: var(--brand-color);
+  color: var(--text-muted);
   font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.status-pill--queued,
-.status-pill--processing {
-  background: color-mix(in srgb, #f0b429 16%, var(--bg-card));
-  color: #a16207;
-}
-
-.status-pill--error {
-  background: color-mix(in srgb, #e74c3c 14%, var(--bg-card));
-  color: #c0392b;
 }
 
 .gmail-doc-table-wrap {
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--bg-card);
   overflow: auto;
 }
 
 .gmail-doc-table {
   width: 100%;
-  min-width: 900px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -1857,52 +2138,89 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
 .gmail-doc-table th,
 .gmail-doc-table td {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border-color);
   text-align: right;
+  border-bottom: 1px solid var(--border-color);
   font-size: 13px;
-  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .gmail-doc-table th {
-  color: var(--text-secondary);
   background: var(--bg-elevated);
-  font-weight: 800;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .gmail-doc-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-.gmail-doc-table__amount {
-  font-weight: 800;
+.gmail-doc-table-row {
+  cursor: pointer;
+}
+
+.gmail-doc-table-row:hover td {
+  background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
+}
+
+.gmail-doc-table-row:focus-visible td {
+  outline: 2px solid color-mix(in srgb, var(--brand-color) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.cell-strong {
+  font-weight: 700;
   color: var(--text-primary);
 }
 
-.gmail-doc-table__actions,
-.gmail-doc-table__actions-head {
-  width: 72px;
+.gmail-doc-table__amount {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gmail-doc-table__actions-head,
+.gmail-doc-table__actions {
+  width: 56px;
+  text-align: center;
 }
 
 .gmail-doc-status-select {
-  width: 112px;
+  min-width: 110px;
 }
 
-.gmail-doc-row-action {
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--bg-elevated);
   color: var(--text-secondary);
 }
 
-.gmail-doc-row-action:hover {
+.status-pill--queued,
+.status-pill--processing {
+  background: color-mix(in srgb, #f0a020 16%, var(--bg-card));
+  color: #c4841d;
+}
+
+.status-pill--done {
+  background: color-mix(in srgb, var(--brand-color) 13%, var(--bg-card));
   color: var(--brand-color);
 }
 
-.gmail-business-modal {
-  width: 460px;
-  max-width: calc(100vw - 32px);
+.status-pill--error {
+  background: color-mix(in srgb, #d03050 14%, var(--bg-card));
+  color: #d03050;
 }
 
-:global(.gmail-business-modal.n-card) {
-  width: 460px !important;
-  max-width: calc(100vw - 32px) !important;
+.gmail-doc-pagination {
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
 }
 
 .gmail-business-form {
@@ -1917,28 +2235,42 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   gap: 8px;
 }
 
-.gmail-docs-empty {
-  padding: 28px;
-  border: 1px dashed var(--border-color);
-  border-radius: 8px;
-  text-align: center;
-  color: var(--text-secondary);
-  background: var(--bg-card);
-}
-
-.gmail-doc-pagination {
-  display: flex;
-  justify-content: center;
-  padding-top: 16px;
-}
-
 @media (max-width: 1480px) {
   .gmail-section-nav {
     overflow-x: auto;
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 640px) {
+  .gmail-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .gmail-actions__select,
+  .gmail-actions__btn--full,
+  .rbtn--danger {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .gmail-section-nav {
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .gmail-section-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .gmail-flow-tabs {
+    max-width: none;
+    width: 100%;
+  }
+
   .guided-flow-bar {
     align-items: stretch;
     flex-direction: column;
@@ -1948,30 +2280,45 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
     max-width: none;
   }
 
-  .gmail-docs-head {
-    flex-direction: column;
+  .gmail-filter-bar,
+  .gmail-doc-filters,
+  .toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
+    gap: 8px;
   }
 
-  .gmail-docs-view,
-  .gmail-doc-filters {
+  .file-type-checks {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+  }
+
+  .toolbar__search,
+  .toolbar__type,
+  .toolbar__supplier,
+  .toolbar__dates,
+  .gmail-filter-bar > .rbtn,
+  .gmail-filter-bar > .toolbar__dates {
     width: 100%;
+    min-width: 0;
   }
 
-  .gmail-filter-bar :deep(.n-input),
-  .gmail-filter-bar :deep(.n-select),
-  .gmail-filter-bar :deep(.n-date-picker),
-  .gmail-doc-filters :deep(.n-input),
-  .gmail-doc-filters :deep(.n-select),
-  .gmail-doc-filters :deep(.n-date-picker) {
-    width: 100% !important;
-    max-width: none !important;
+  .toolbar__search,
+  .toolbar__dates,
+  .gmail-filter-bar > .rbtn {
+    grid-column: 1 / -1;
   }
 
-  .toolbar__select,
-  .toolbar__select--sm,
-  .toolbar__dates {
-    width: 100%;
+  .inbox-cards {
+    display: grid;
+    gap: 10px;
+  }
+
+  .inbox-table-wrap {
+    display: none;
   }
 
   .gmail-doc-grid {
@@ -1979,84 +2326,10 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   }
 }
 
-/* History section */
-.history-section {
-  margin-top: 32px;
-  border-top: 1px solid var(--border-color);
-  padding-top: 16px;
-}
-
-.history-title {
-  margin: 0 0 12px;
-  font-size: 16px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  user-select: none;
-}
-
-.history-chevron {
-  display: inline-block;
-  transition: transform 0.2s;
-  font-size: 14px;
-}
-
-.history-chevron.open {
-  transform: rotate(90deg);
-}
-
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.history-item {
-  padding: 10px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-card);
-}
-
-.history-item__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.history-item__subject {
-  font-weight: 600;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.history-item__date {
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.history-item__files {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.history-file {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--brand-color) 10%, transparent);
-  color: var(--text-primary);
-}
-
-.history-file--err {
-  background: color-mix(in srgb, #e74c3c 10%, transparent);
+@media (max-width: 420px) {
+  .gmail-actions {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
+

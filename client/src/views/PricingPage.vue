@@ -3,10 +3,10 @@
     <nav v-if="!authStore.user" class="pricing-nav">
       <router-link class="pricing-brand" to="/login">
         <img class="pricing-brand__logo" :src="logoSrc" alt="" />
-        <span>RemindOCR</span>
+        <span class="pricing-brand__text">RemindOCR</span>
       </router-link>
       <div class="pricing-nav__links">
-        <router-link to="/login">כניסה</router-link>
+        <router-link class="pricing-nav__link" to="/login">כניסה</router-link>
         <router-link class="pricing-nav__cta" to="/login?tab=register">הרשמה</router-link>
       </div>
     </nav>
@@ -304,7 +304,6 @@ function startPlan(_planId: PlanId) {
   opacity: 0.35;
 }
 
-.pricing-nav,
 .pricing-hero,
 .pricing-grid,
 .pricing-trust,
@@ -314,42 +313,92 @@ function startPlan(_planId: PlanId) {
 }
 
 .pricing-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   height: 64px;
   padding: 0 28px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
-  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
-  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  backdrop-filter: blur(12px);
 }
 
-.pricing-brand,
-.pricing-nav__links {
-  display: flex;
+.pricing-brand {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-}
-
-.pricing-brand,
-.pricing-nav__links a {
+  gap: 10px;
   color: var(--text-primary);
   text-decoration: none;
-  font-weight: 800;
+  min-width: 0;
+}
+
+.pricing-brand__text {
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .pricing-brand__logo {
   width: 36px;
   height: 36px;
   border-radius: 9px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.pricing-nav__links {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.pricing-nav__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pricing-nav__link:hover {
+  background: color-mix(in srgb, var(--brand-color) 10%, transparent);
+  color: var(--brand-color);
 }
 
 .pricing-nav__cta {
-  padding: 8px 14px;
-  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 16px;
+  border-radius: 8px;
   background: var(--brand-color);
   color: #fff !important;
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-color) 28%, transparent);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--brand-color) 24%, transparent);
+  transition: filter 0.15s, transform 0.15s;
+}
+
+.pricing-nav__cta:hover {
+  background: var(--brand-color-hover);
+  filter: none;
+  transform: translateY(-1px);
 }
 
 .pricing-hero {
@@ -564,8 +613,9 @@ function startPlan(_planId: PlanId) {
 }
 
 .plan-cta--primary:hover {
+  background: var(--brand-color-hover);
   transform: translateY(-1px);
-  filter: brightness(1.05);
+  filter: none;
 }
 
 .plan-cta--current {

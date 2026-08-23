@@ -593,6 +593,18 @@ const data_cards = computed(() =>
    row so the dropzone height matches the new-contract button exactly. */
 .dash__drop :deep(> div),
 .dash__intake :deep(.drop-strip) { margin-bottom: 0; }
+.dash__drop :deep(.drop-strip) {
+  min-height: 92px;
+}
+.dash__drop :deep(.drop-strip__copy strong) {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.dash__drop :deep(.drop-strip__copy span) {
+  font-size: 12px;
+  line-height: 1.35;
+}
 .dash__new-contract {
   flex: 0 0 240px;
   display: flex;
@@ -663,8 +675,25 @@ const data_cards = computed(() =>
 }
 
 @media (max-width: 720px) {
-  .dash__intake { flex-direction: column; }
-  .dash__new-contract { flex: 1 1 auto; }
+  .dash__intake {
+    flex-direction: column;
+  }
+
+  .dash__new-contract {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .dash__drop {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .dash__drop :deep(> div),
+  .dash__drop :deep(.drop-strip) {
+    width: 100%;
+    box-sizing: border-box;
+  }
 }
 
 .dash__stats {
