@@ -1,11 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="RemindOCR">
-  <!-- Option B: R monogram with document fold + reminder bell -->
   <rect width="512" height="512" rx="112" fill="#18a058"/>
   <g transform="translate(56 48)">
-    <path fill="#0c7a43" d="M72 40h168c74 0 128 48 128 118 0 52-30 92-78 108l86 142h-92l-78-132H152v132H72V40zm80 68v118h80c36 0 58-20 58-54s-22-64-58-64H152z" opacity="0"/>
     <path fill="#ffffff" d="M64 32h176c78 0 136 50 136 124 0 54-32 96-82 112l90 148h-96L212 272H144v136H64V32zm80 72v124h84c38 0 62-22 62-58s-24-66-62-66H144z"/>
-    <path fill="#18a058" d="M152 88h68l44 44H196c-14 0-24-12-24-26V88z"/>
-    <path fill="#18a058" d="M248 196c-24 0-44 20-44 44v18c0 16-6 28-18 38h124c-12-10-18-22-18-38v-18c0-24-20-44-44-44zm0 112c-14 0-24-8-28-18h56c-4 10-14 18-28 18z"/>
-    <circle cx="302" cy="204" r="24" fill="#f0a020"/>
   </g>
 </svg>
