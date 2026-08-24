@@ -115,6 +115,15 @@
         @update:value="load(true)"
       />
       <n-select
+        v-model:value="filters.category"
+        :options="categoryOptions"
+        clearable
+        filterable
+        placeholder="קטגוריה"
+        class="toolbar__type"
+        @update:value="load(true)"
+      />
+      <n-select
         v-model:value="filters.suppliers"
         :options="supplierOptions"
         clearable
@@ -237,7 +246,7 @@
               @keydown.space.prevent="openDocument(row)"
             >
               <td class="cell-strong invoice-col invoice-col--supplier">
-                <span class="invoice-cell-truncate" :title="row.supplier_name">{{ row.supplier_name }}</span>
+                <span class="invoice-cell-truncate" dir="auto" :title="row.supplier_name">{{ row.supplier_name }}</span>
               </td>
               <td class="invoice-col invoice-col--status" @click.stop>
                 <n-select
@@ -250,13 +259,13 @@
               </td>
               <td class="invoice-col invoice-col--date">{{ formatDate(row.issue_date) }}</td>
               <td class="invoice-col invoice-col--client">
-                <span class="invoice-cell-truncate" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
+                <span class="invoice-cell-truncate" dir="auto" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
               </td>
               <td class="invoice-col invoice-col--category">
-                <span class="invoice-category-chip" :title="row.provider_label || undefined">{{ invoiceProviderCategoryLabel(row) }}</span>
+                <span class="invoice-category-chip" dir="auto" :title="row.provider_label || undefined">{{ invoiceProviderCategoryLabel(row) }}</span>
               </td>
               <td class="invoice-col invoice-col--type">{{ invoiceTypeLabel(row) }}</td>
-              <td class="cell-amount invoice-col invoice-col--amount">{{ row.amount_display }}</td>
+              <td class="cell-amount invoice-col invoice-col--amount" dir="ltr">{{ row.amount_display }}</td>
               <td class="cell-actions invoice-col invoice-col--actions" @click.stop>
                 <div class="row-actions">
                   <n-dropdown
@@ -414,11 +423,13 @@ const page = ref(1);
 const pageSize = ref(20);
 const counts = ref<Record<string, number>>({});
 const types = ref<string[]>([]);
+const categories = ref<string[]>([]);
 const suppliers = ref<string[]>([]);
 const filters = reactive({
   q: "",
   status: null as string | null,
   type: null as string | null,
+  category: null as string | null,
   suppliers: [] as string[],
 });
 const businessModal = reactive({
@@ -444,6 +455,10 @@ const invoiceStatusOptions: SelectOption[] = [
   { label: "ארכיון", value: "archived" },
 ];
 const typeOptions = computed<SelectOption[]>(() => types.value.map((value) => ({ label: value, value })));
+const categoryOptions = computed<SelectOption[]>(() => categories.value.map((value) => ({
+  label: providerCategoryLabel(value),
+  value,
+})));
 const supplierOptions = computed<SelectOption[]>(() => [
   {label: "ספק לא מזוהה", value: "__unidentified__"},
   ...suppliers.value.map((value) => ({label: value, value})),
@@ -487,6 +502,7 @@ async function load(force = false) {
       q: filters.q,
       status: filters.status ?? undefined,
       type: filters.type ?? undefined,
+      category: filters.category ?? undefined,
       supplier: supplierFilterParam(),
       dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
       dateTo: dateTo ? new Date(dateTo).toISOString().slice(0, 10) : undefined,
@@ -499,6 +515,7 @@ async function load(force = false) {
     visibleLimit.value = result.visibleLimit;
     counts.value = result.counts;
     types.value = result.types;
+    categories.value = result.categories;
     suppliers.value = result.suppliers;
   } catch {
     message.error("שגיאה בטעינת החשבוניות");
@@ -631,6 +648,7 @@ async function exportInvoicesToExcel() {
       q: filters.q,
       status: filters.status ?? undefined,
       type: filters.type ?? undefined,
+      category: filters.category ?? undefined,
       supplier: supplierFilterParam(),
       dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
       dateTo: dateTo ? new Date(dateTo).toISOString().slice(0, 10) : undefined,
@@ -1430,11 +1448,22 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 .invoice-col--amount {
+  direction: ltr;
   text-align: left;
 }
 
 .invoice-col--actions {
   text-align: center;
+}
+
+.invoice-col--supplier,
+.invoice-col--status,
+.invoice-col--date,
+.invoice-col--client,
+.invoice-col--category,
+.invoice-col--type {
+  direction: rtl;
+  text-align: right;
 }
 
 .invoice-status-select {

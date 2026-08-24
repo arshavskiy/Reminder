@@ -427,7 +427,7 @@ export const api = {
   },
 
   invoices: {
-    list: (params?: { q?: string; status?: string; type?: string; supplier?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
+    list: (params?: { q?: string; status?: string; type?: string; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
       get<{
         rows: ImportedInvoice[];
         total: number;
@@ -437,6 +437,7 @@ export const api = {
         visibleLimit: number | null;
         counts: Record<string, number>;
         types: string[];
+        categories: GmailSearchProvider["category"][];
         suppliers: string[];
       }>(`/invoices${qs(params)}`, force),
     get: (id: string, force = false) =>

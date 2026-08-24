@@ -27,6 +27,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const q = normalize(String(req.query.q ?? ""));
     const status = String(req.query.status ?? "").trim();
     const type = String(req.query.type ?? "").trim();
+    const category = String(req.query.category ?? "").trim();
     const suppliers = parseMultiQuery(req.query.supplier);
     const fromTs = parseDateTs(req.query.dateFrom);
     const toTs = parseDateTs(req.query.dateTo, true);
@@ -60,6 +61,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       .filter((row) => {
         if (status && row.status !== status) return false;
         if (type && row.type !== type) return false;
+        if (category && row.provider_category !== category) return false;
           if (suppliers.length) {
               const wantUnidentified = suppliers.includes("__unidentified__");
               const namedSuppliers = suppliers.filter((s) => s !== "__unidentified__");
@@ -89,8 +91,9 @@ export function registerInvoiceRoutes(app: express.Application) {
       offset: safeOffset,
       visibleLimit,
       counts,
-      types: uniqueSorted(visibleRows.map((row) => row.type).filter(Boolean)),
-      suppliers: uniqueSorted(visibleFacetRows.map((row) => row.supplier_name).filter(Boolean)),
+      types: uniqueSorted(visibleRows.map((row) => row.type).filter(isNonEmptyString)),
+      categories: uniqueSorted(visibleFacetRows.map((row) => row.provider_category ?? "").filter(isNonEmptyString)),
+      suppliers: uniqueSorted(visibleFacetRows.map((row) => row.supplier_name).filter(isNonEmptyString)),
     });
   });
 
@@ -314,6 +317,10 @@ function firstString(fields: Record<string, unknown> | null | undefined, keys: s
     return String(value).trim() || null;
   }
   return null;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function matchGmailSearchProvider(text: string, providers: GmailSearchProvider[]): GmailSearchProvider | null {
