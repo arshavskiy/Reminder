@@ -203,16 +203,26 @@
 
       <div v-else-if="rows.length && viewMode === 'table'" class="invoice-table-wrap">
         <table class="invoice-table">
+          <colgroup>
+            <col class="invoice-table__col invoice-table__col--supplier" />
+            <col class="invoice-table__col invoice-table__col--status" />
+            <col class="invoice-table__col invoice-table__col--date" />
+            <col class="invoice-table__col invoice-table__col--client" />
+            <col class="invoice-table__col invoice-table__col--category" />
+            <col class="invoice-table__col invoice-table__col--type" />
+            <col class="invoice-table__col invoice-table__col--amount" />
+            <col class="invoice-table__col invoice-table__col--actions" />
+          </colgroup>
           <thead>
             <tr>
-              <th>ספק</th>
-              <th>סטטוס</th>
-              <th>תאריך</th>
-              <th>לקוח</th>
-              <th>קטגוריה</th>
-              <th>סוג</th>
-              <th>סכום</th>
-              <th>פעולות</th>
+              <th class="invoice-col invoice-col--supplier">ספק</th>
+              <th class="invoice-col invoice-col--status">סטטוס</th>
+              <th class="invoice-col invoice-col--date">תאריך</th>
+              <th class="invoice-col invoice-col--client">לקוח</th>
+              <th class="invoice-col invoice-col--category">קטגוריה</th>
+              <th class="invoice-col invoice-col--type">סוג</th>
+              <th class="invoice-col invoice-col--amount">סכום</th>
+              <th class="invoice-col invoice-col--actions">פעולות</th>
             </tr>
           </thead>
           <tbody>
@@ -226,8 +236,10 @@
               @keydown.enter.prevent="openDocument(row)"
               @keydown.space.prevent="openDocument(row)"
             >
-              <td class="cell-strong">{{ row.supplier_name }}</td>
-              <td @click.stop>
+              <td class="cell-strong invoice-col invoice-col--supplier">
+                <span class="invoice-cell-truncate" :title="row.supplier_name">{{ row.supplier_name }}</span>
+              </td>
+              <td class="invoice-col invoice-col--status" @click.stop>
                 <n-select
                   :value="row.status"
                   :options="invoiceStatusOptions"
@@ -236,14 +248,16 @@
                   @update:value="(value) => updateInvoiceStatus(row, String(value))"
                 />
               </td>
-              <td>{{ formatDate(row.issue_date) }}</td>
-              <td>{{ clientLabel(row) }}</td>
-              <td>
+              <td class="invoice-col invoice-col--date">{{ formatDate(row.issue_date) }}</td>
+              <td class="invoice-col invoice-col--client">
+                <span class="invoice-cell-truncate" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
+              </td>
+              <td class="invoice-col invoice-col--category">
                 <span class="invoice-category-chip" :title="row.provider_label || undefined">{{ invoiceProviderCategoryLabel(row) }}</span>
               </td>
-              <td>{{ invoiceTypeLabel(row) }}</td>
-              <td class="cell-amount">{{ row.amount_display }}</td>
-              <td class="cell-actions" @click.stop>
+              <td class="invoice-col invoice-col--type">{{ invoiceTypeLabel(row) }}</td>
+              <td class="cell-amount invoice-col invoice-col--amount">{{ row.amount_display }}</td>
+              <td class="cell-actions invoice-col invoice-col--actions" @click.stop>
                 <div class="row-actions">
                   <n-dropdown
                     :options="invoiceActionOptions(row)"
@@ -1311,9 +1325,42 @@ function replaceRow(updated: ImportedInvoice) {
 
 .invoice-table {
   width: 100%;
-  min-width: 900px;
+  min-width: 980px;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
+}
+
+.invoice-table__col--supplier {
+  width: clamp(180px, 23vw, 280px);
+}
+
+.invoice-table__col--status {
+  width: 132px;
+}
+
+.invoice-table__col--date {
+  width: 132px;
+}
+
+.invoice-table__col--client {
+  width: clamp(170px, 22vw, 260px);
+}
+
+.invoice-table__col--category {
+  width: 144px;
+}
+
+.invoice-table__col--type {
+  width: 108px;
+}
+
+.invoice-table__col--amount {
+  width: 128px;
+}
+
+.invoice-table__col--actions {
+  width: 72px;
 }
 
 .invoice-table th,
@@ -1322,6 +1369,7 @@ function replaceRow(updated: ImportedInvoice) {
   border-bottom: 1px solid var(--border-color);
   text-align: right;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .invoice-table th {
@@ -1351,6 +1399,14 @@ function replaceRow(updated: ImportedInvoice) {
   box-shadow: inset 0 0 0 1px var(--brand-color);
 }
 
+.invoice-cell-truncate {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .invoice-pagination {
   display: flex;
   justify-content: center;
@@ -1373,8 +1429,16 @@ function replaceRow(updated: ImportedInvoice) {
   width: 72px;
 }
 
+.invoice-col--amount {
+  text-align: left;
+}
+
+.invoice-col--actions {
+  text-align: center;
+}
+
 .invoice-status-select {
-  width: 112px;
+  width: 108px;
 }
 
 .invoice-row-action {
@@ -1396,6 +1460,36 @@ function replaceRow(updated: ImportedInvoice) {
 
 :global(.invoice-vendor-merge-modal.n-card) {
   width: 560px !important;
+}
+
+@media (max-width: 1180px) {
+  .invoice-table {
+    min-width: 840px;
+  }
+
+  .invoice-col--type {
+    display: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .invoice-table {
+    min-width: 720px;
+  }
+
+  .invoice-col--date {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .invoice-table {
+    min-width: 620px;
+  }
+
+  .invoice-col--client {
+    display: none;
+  }
 }
 
 .invoice-business-form {
