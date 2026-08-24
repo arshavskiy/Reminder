@@ -150,6 +150,9 @@ export interface ImportedInvoice {
   client_name: string | null;
   business: string | null;
   expense_category: string | null;
+  provider_id: string | null;
+  provider_label: string | null;
+  provider_category: GmailSearchProvider["category"] | null;
   payment_status: string | null;
   note: string | null;
   status: string;

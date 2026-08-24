@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { col } from "../db/db";
 import { HTTPException, requireAuth } from "../auth/middleware";
 import { documentImportMonthlyLimit } from "../quotas/documentImportQuota";
+import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
 
 type InvoiceRow = Record<string, any>;
 const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
@@ -44,7 +45,8 @@ export function registerInvoiceRoutes(app: express.Application) {
       : [];
     const documentMap = new Map(documents.map((doc) => [doc._id.toString(), doc]));
 
-    const allRows = invoices.map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id))));
+    const providers = await loadGmailSearchProviders();
+    const allRows = invoices.map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers));
     const facetRows = allRows.filter((row) => {
       if (status && row.status !== status) return false;
       if (type && row.type !== type) return false;
@@ -167,7 +169,8 @@ export function registerInvoiceRoutes(app: express.Application) {
         } as any, { projection: { subject: 1, imported_at: 1 } } as any) as InvoiceRow | null
       : null;
 
-    res.json(presentInvoice(invoice, doc ?? undefined, gmailImport ?? undefined));
+    const providers = await loadGmailSearchProviders();
+    res.json(presentInvoice(invoice, doc ?? undefined, gmailImport ?? undefined, providers));
   });
 
   app.put("/api/invoices/:id", async (req, res) => {
@@ -232,14 +235,36 @@ export function registerInvoiceRoutes(app: express.Application) {
     const doc = ObjectId.isValid(documentId)
       ? await col("documents").findOne({ _id: new ObjectId(documentId), user_id: userId } as any, { projection: { raw_text: 0 } } as any) as InvoiceRow | null
       : null;
-    res.json(presentInvoice(result, doc ?? undefined));
+    const providers = await loadGmailSearchProviders();
+    res.json(presentInvoice(result, doc ?? undefined, undefined, providers));
   });
 }
 
-function presentInvoice(invoice: InvoiceRow, doc?: InvoiceRow, gmailImport?: InvoiceRow) {
+function presentInvoice(
+  invoice: InvoiceRow,
+  doc?: InvoiceRow,
+  gmailImport?: InvoiceRow,
+  providers: GmailSearchProvider[] = [],
+) {
   const documentId = String(invoice.document_id ?? "");
   const amount = typeof invoice.amount === "number" ? invoice.amount : parseAmount(invoice.amount);
   const currency = normalizeCurrencyCode(invoice.currency);
+  const provider = matchGmailSearchProvider([
+    invoice.supplier_name,
+    invoice.supplier_id,
+    invoice.fields?.supplier_name,
+    invoice.fields?.vendor_name,
+    invoice.fields?.counterparty,
+    invoice.fields?.issuer_name,
+    invoice.fields?.company_name,
+    invoice.customer_number,
+    invoice.account_number,
+    invoice.service_address,
+    gmailImport?.subject,
+    doc?.source_subject,
+    doc?.source_email,
+    doc?.file_name,
+  ].join(" "), providers);
   return {
     id: invoice._id?.toString?.() ?? String(invoice._id),
     document_id: documentId || null,
@@ -259,6 +284,9 @@ function presentInvoice(invoice: InvoiceRow, doc?: InvoiceRow, gmailImport?: Inv
     client_name: invoice.client_company ?? invoice.client_name ?? invoice.fields?.client_company ?? invoice.fields?.client_name ?? null,
     business: invoice.business ?? invoice.fields?.business ?? invoice.fields?.business_name ?? null,
     expense_category: invoice.expense_category ?? invoice.fields?.expense_category ?? null,
+    provider_id: provider?.id ?? null,
+    provider_label: provider?.label ?? null,
+    provider_category: provider?.category ?? null,
     payment_status: invoice.payment_status ?? null,
     note: invoice.note ?? null,
     status: normalizeInvoiceStatus(invoice.status),
@@ -286,6 +314,26 @@ function firstString(fields: Record<string, unknown> | null | undefined, keys: s
     return String(value).trim() || null;
   }
   return null;
+}
+
+function matchGmailSearchProvider(text: string, providers: GmailSearchProvider[]): GmailSearchProvider | null {
+  const haystack = normalize(text);
+  if (!haystack) return null;
+  let best: GmailSearchProvider | null = null;
+  let bestScore = 0;
+  for (const provider of providers) {
+    const terms = [provider.label, ...provider.terms]
+      .map((term) => normalize(term))
+      .filter((term) => term.length >= 2);
+    for (const term of terms) {
+      if (!haystack.includes(term)) continue;
+      if (term.length > bestScore) {
+        best = provider;
+        bestScore = term.length;
+      }
+    }
+  }
+  return best;
 }
 
 function clampInt(value: unknown, fallback: number, min: number, max: number): number {
@@ -333,6 +381,8 @@ function invoiceDateTs(row: ReturnType<typeof presentInvoice>): number | null {
 function invoiceMatchesQuery(row: ReturnType<typeof presentInvoice>, q: string): boolean {
   return normalize([
     row.supplier_name,
+    row.provider_label,
+    row.provider_category,
     row.invoice_number,
     row.type,
     row.amount_display,

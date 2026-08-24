@@ -191,7 +191,7 @@
             </div>
             <div class="invoice-card__line invoice-card__line--muted">
               <span>קטגוריה</span>
-              <span class="invoice-category-chip">{{ invoiceCategoryLabel(row) }}</span>
+              <span class="invoice-category-chip" :title="row.provider_label || undefined">{{ invoiceProviderCategoryLabel(row) }}</span>
             </div>
             <div class="invoice-card__line invoice-card__line--muted">
               <span>{{ row.invoice_number || "ללא מספר" }}</span>
@@ -239,7 +239,7 @@
               <td>{{ formatDate(row.issue_date) }}</td>
               <td>{{ clientLabel(row) }}</td>
               <td>
-                <span class="invoice-category-chip">{{ invoiceCategoryLabel(row) }}</span>
+                <span class="invoice-category-chip" :title="row.provider_label || undefined">{{ invoiceProviderCategoryLabel(row) }}</span>
               </td>
               <td>{{ invoiceTypeLabel(row) }}</td>
               <td class="cell-amount">{{ row.amount_display }}</td>
@@ -540,8 +540,37 @@ function invoiceTypeLabel(row: ImportedInvoice): string {
   return "חשבונית";
 }
 
-function invoiceCategoryLabel(row: ImportedInvoice): string {
-  return row.expense_category?.trim() || firstInvoiceField(row, ["expense_category", "category"]) || "לא מסווג";
+function invoiceProviderCategoryLabel(row: ImportedInvoice): string {
+  return row.provider_category ? providerCategoryLabel(row.provider_category) : "לא מסווג";
+}
+
+function providerCategoryLabel(category: string): string {
+  const labels: Record<string, string> = {
+    electricity: "חשמל",
+    telecom: "תקשורת",
+    water: "מים",
+    transport: "תחבורה",
+    parking: "חניה",
+    fuel: "דלק",
+    gas: "גז",
+    tv: "טלוויזיה וסטרימינג",
+    marketplace: "קניות",
+    food: "מזון",
+    payment: "תשלומים וחשבוניות",
+    government: "ממשלה",
+    municipality: "עירייה",
+    insurance: "ביטוח",
+    finance: "פיננסים",
+    travel: "תיירות",
+    healthcare: "בריאות",
+    education: "לימודים",
+    retail: "קמעונאות",
+    nonprofit: "עמותות",
+    digital: "דיגיטל",
+    development: "פיתוח",
+    general: "כללי",
+  };
+  return labels[category] ?? category;
 }
 
 function firstInvoiceField(row: ImportedInvoice, keys: string[]): string | null {
@@ -607,6 +636,8 @@ async function exportInvoicesToExcel() {
       "מספר חשבונית": row.invoice_number ?? "",
       "מספר לקוח": row.customer_number ?? "",
       "תקופת חיוב": row.billing_period ?? "",
+      "קטגוריית ספק": invoiceProviderCategoryLabel(row),
+      "ספק מזוהה": row.provider_label ?? "",
       "קטגוריית הוצאה": row.expense_category ?? "",
       "קובץ": row.file_name,
     }));
