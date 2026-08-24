@@ -6,6 +6,23 @@
       subtitle="גרף חודשי לפי תאריך חשבונית או תאריך ייבוא"
     >
       <template #hero>
+        <n-dropdown
+          :disabled="loading || exporting || !suppliers.length"
+          :options="exportMenuOptions"
+          placement="bottom-start"
+          trigger="click"
+          @select="exportTotals"
+        >
+          <button
+            :class="{ 'rbtn--loading': exporting }"
+            :disabled="loading || exporting || !suppliers.length"
+            class="rbtn rbtn--ghost"
+            type="button"
+          >
+            <n-icon :component="DownloadOutline" class="btn-icon" />
+            ייצוא
+          </button>
+        </n-dropdown>
         <button
           :disabled="loading"
           class="rbtn rbtn--ghost"
@@ -68,8 +85,8 @@
         <div class="expense-metric">
           <n-icon :component="PeopleOutline" :size="18" class="expense-metric__icon" />
           <div>
-            <span>ספקים מוצגים</span>
-            <strong>{{ chartSeries.length }}</strong>
+            <span>ספקים בגרף</span>
+            <strong>{{ chartSeries.length }} / {{ suppliers.length }}</strong>
           </div>
         </div>
         <div class="expense-metric">
@@ -92,7 +109,7 @@
         <div class="expense-chart-panel">
           <header class="expense-panel__head">
             <h2>מגמה חודשית</h2>
-            <p>כל קו מייצג ספק. עמודת הספקים מאפשרת לבודד ספק אחד.</p>
+            <p>כל קו מייצג ספק. כברירת מחדל מוצגים עד 20 ספקים מובילים.</p>
           </header>
           <div v-if="!chartSeries.length || !months.length" class="expense-empty">
             <n-icon :component="AnalyticsOutline" :size="40" class="expense-empty__icon" />
@@ -114,19 +131,21 @@
               הצג הכל
             </button>
           </header>
-          <button
-            v-for="(series, index) in chartSeries"
-            :key="series.supplier"
-            :aria-pressed="isFocusedSupplier(series.supplier)"
-            :class="{ 'expense-legend__item--active': isFocusedSupplier(series.supplier) }"
-            class="expense-legend__item"
-            type="button"
-            @click="focusSupplier(series.supplier)"
-          >
-            <span class="expense-legend__swatch" :style="{ background: seriesColor(index) }" />
-            <span class="expense-legend__name" dir="auto">{{ series.supplier }}</span>
-            <strong>{{ formatMoney(series.total) }}</strong>
-          </button>
+          <div class="expense-legend__scroll">
+            <button
+              v-for="(series, index) in chartSeries"
+              :key="series.supplier"
+              :aria-pressed="isFocusedSupplier(series.supplier)"
+              :class="{ 'expense-legend__item--active': isFocusedSupplier(series.supplier) }"
+              class="expense-legend__item"
+              type="button"
+              @click="focusSupplier(series.supplier)"
+            >
+              <span class="expense-legend__swatch" :style="{ background: seriesColor(index) }" />
+              <span class="expense-legend__name" dir="auto">{{ series.supplier }}</span>
+              <strong>{{ formatMoney(series.total) }}</strong>
+            </button>
+          </div>
         </aside>
       </section>
     </n-spin>
@@ -135,11 +154,12 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { NDatePicker, NIcon, NSelect, NSpin, type SelectOption, useMessage } from "naive-ui";
+import { NDatePicker, NDropdown, NIcon, NSelect, NSpin, type SelectOption, useMessage } from "naive-ui";
 import {
   AnalyticsOutline,
   CalendarOutline,
   CloseOutline,
+  DownloadOutline,
   PeopleOutline,
   RefreshOutline,
   ReceiptOutline,
@@ -163,11 +183,12 @@ const category = ref<string | null>(null);
 const selectedSuppliers = ref<string[]>([]);
 const dateRange = ref<[number, number] | null>(null);
 const months = ref<string[]>([]);
-const suppliers = ref<{ name: string; total: number }[]>([]);
+const suppliers = ref<{ name: string; total: number; count?: number }[]>([]);
 const categories = ref<string[]>([]);
 const chartSeries = ref<InvoiceExpenseMonthlySeries[]>([]);
 const totalAmount = ref(0);
 const totalInvoices = ref(0);
+const exporting = ref(false);
 const themeTick = ref(0);
 let chart: echarts.EChartsType | null = null;
 let chartResizeObserver: ResizeObserver | null = null;
@@ -176,6 +197,10 @@ let themeObserver: MutationObserver | null = null;
 const dateBasisOptions: SelectOption[] = [
   { label: "תאריך חשבונית", value: "invoice" },
   { label: "תאריך ייבוא", value: "import" },
+];
+const exportMenuOptions = [
+  { label: "Excel — סה״כ לפי ספק", key: "xlsx" },
+  { label: "CSV — סה״כ לפי ספק", key: "csv" },
 ];
 
 const supplierOptions = computed<SelectOption[]>(() =>
@@ -290,7 +315,7 @@ async function load(force = false) {
       supplier: selectedSuppliers.value.length ? selectedSuppliers.value.join("||") : undefined,
       dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
       dateTo: dateTo ? new Date(dateTo).toISOString().slice(0, 10) : undefined,
-      top: selectedSuppliers.value.length ? 20 : 8,
+      top: 20,
     }, force);
     months.value = result.months;
     suppliers.value = result.suppliers;
@@ -319,6 +344,74 @@ function focusSupplier(supplier: string) {
 function clearSupplierFilter() {
   selectedSuppliers.value = [];
   load(true);
+}
+
+function totalsExportRows(): (string | number)[][] {
+  const rows: (string | number)[][] = [["ספק", "סכום", "מספר חשבוניות"]];
+  for (const supplier of suppliers.value) {
+    rows.push([supplier.name, supplier.total, supplier.count ?? 0]);
+  }
+  rows.push(["סה״כ", totalAmount.value, totalInvoices.value]);
+  return rows;
+}
+
+function monthlyExportRows(): (string | number)[][] {
+  const rows: (string | number)[][] = [["ספק", ...months.value.map(formatMonth), "סה״כ"]];
+  for (const series of chartSeries.value) {
+    rows.push([series.supplier, ...series.points.map((point) => point.total), series.total]);
+  }
+  const monthSums = months.value.map((_, index) => (
+    chartSeries.value.reduce((sum, series) => sum + (series.points[index]?.total ?? 0), 0)
+  ));
+  const visibleTotal = chartSeries.value.reduce((sum, series) => sum + series.total, 0);
+  rows.push(["סה״כ בגרף", ...monthSums, visibleTotal]);
+  return rows;
+}
+
+async function exportTotals(format: string | number) {
+  if (format !== "xlsx" && format !== "csv") return;
+  if (!suppliers.value.length) {
+    message.info("אין סכומים לייצוא");
+    return;
+  }
+  exporting.value = true;
+  try {
+    const {utils, write, writeFile} = await import("xlsx");
+    const stamp = new Date().toISOString().slice(0, 10);
+    const totalsSheet = utils.aoa_to_sheet(totalsExportRows());
+    totalsSheet["!cols"] = [{wch: 28}, {wch: 14}, {wch: 16}];
+    if (format === "csv") {
+      const wb = utils.book_new();
+      utils.book_append_sheet(wb, totalsSheet, "totals");
+      const csv = write(wb, {bookType: "csv", type: "string"});
+      const url = URL.createObjectURL(new Blob(["\uFEFF" + csv], {type: "text/csv;charset=utf-8;"}));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `expenses-totals-${stamp}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      message.success("הקובץ כולל סה״כ לפי ספק");
+      return;
+    }
+    const wb = utils.book_new();
+    wb.Workbook = {Views: [{RTL: true}]};
+    utils.book_append_sheet(wb, totalsSheet, "סהכ לפי ספק");
+    if (chartSeries.value.length && months.value.length) {
+      const monthlySheet = utils.aoa_to_sheet(monthlyExportRows());
+      monthlySheet["!cols"] = [
+        {wch: 28},
+        ...months.value.map(() => ({wch: 12})),
+        {wch: 14},
+      ];
+      utils.book_append_sheet(wb, monthlySheet, "פירוט חודשי");
+    }
+    writeFile(wb, `expenses-totals-${stamp}.xlsx`);
+    message.success("הקובץ כולל סה״כ לפי ספק");
+  } catch {
+    message.error("שגיאה בייצוא ההוצאות");
+  } finally {
+    exporting.value = false;
+  }
 }
 
 function renderChart() {
@@ -575,15 +668,28 @@ function providerCategoryLabel(value: string): string {
 }
 
 .expense-legend {
-  display: grid;
-  align-content: start;
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+  min-height: 0;
   padding: 0 10px 12px;
+  overflow: hidden;
 }
 
 .expense-legend .expense-panel__head {
+  flex: 0 0 auto;
   padding-inline: 6px;
   margin-bottom: 6px;
+}
+
+.expense-legend__scroll {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-inline-end: 4px;
+  scrollbar-gutter: stable;
 }
 
 .expense-legend__clear {

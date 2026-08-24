@@ -326,7 +326,17 @@
                 <span class="invoice-cell-truncate" dir="auto" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
               </td>
               <td class="invoice-col invoice-col--category">
-                <span class="invoice-category-chip" dir="auto" :title="row.provider_label || undefined">{{ invoiceProviderCategoryLabel(row) }}</span>
+                <n-select
+                  :value="row.provider_category"
+                  :options="providerCategoryOptions"
+                  clearable
+                  filterable
+                  size="small"
+                  class="invoice-category-select"
+                  placeholder="לא מסווג"
+                  @click.stop
+                  @update:value="(value) => updateInvoiceProviderCategory(row, value)"
+                />
               </td>
               <td class="invoice-col invoice-col--type">{{ invoiceTypeLabel(row) }}</td>
               <td class="cell-amount invoice-col invoice-col--amount" dir="ltr">{{ row.amount_display }}</td>
@@ -533,6 +543,10 @@ const categoryOptions = computed<SelectOption[]>(() => categories.value.map((val
   label: providerCategoryLabel(value),
   value,
 })));
+const providerCategoryOptions = computed<SelectOption[]>(() => PROVIDER_CATEGORIES.map((value) => ({
+  label: providerCategoryLabel(value),
+  value,
+})));
 const supplierOptions = computed<SelectOption[]>(() => [
   {label: "ספק לא מזוהה", value: "__unidentified__"},
   ...suppliers.value.map((value) => ({label: value, value})),
@@ -546,7 +560,7 @@ const allVisibleSelected = computed(() => (
   visibleRowIds.value.length > 0 && visibleRowIds.value.every((id) => selectedInvoiceIds.value.has(id))
 ));
 const statusStrip = computed(() => [
-  { label: "הכל", value: "", count: total.value },
+  { label: "הכל", value: "", count: totalAll.value },
   { label: "חדש", value: "new", count: counts.value.new ?? 0 },
   { label: "נבדק", value: "reviewed", count: counts.value.reviewed ?? 0 },
   { label: "יוצא", value: "outgoing", count: counts.value.outgoing ?? 0 },
@@ -741,7 +755,33 @@ function invoiceProviderCategoryLabel(row: ImportedInvoice): string {
   return row.provider_category ? providerCategoryLabel(row.provider_category) : "לא מסווג";
 }
 
-function providerCategoryLabel(category: string): string {
+const PROVIDER_CATEGORIES: Array<NonNullable<ImportedInvoice["provider_category"]>> = [
+  "electricity",
+  "telecom",
+  "water",
+  "transport",
+  "parking",
+  "fuel",
+  "gas",
+  "tv",
+  "marketplace",
+  "food",
+  "payment",
+  "government",
+  "municipality",
+  "insurance",
+  "finance",
+  "travel",
+  "healthcare",
+  "education",
+  "retail",
+  "nonprofit",
+  "digital",
+  "development",
+  "general",
+];
+
+function providerCategoryLabel(category: string | null): string {
   const labels: Record<string, string> = {
     electricity: "חשמל",
     telecom: "תקשורת",
@@ -1140,7 +1180,18 @@ async function updateInvoiceStatus(row: ImportedInvoice, status: string) {
   }
 }
 
-async function updateInvoiceMeta(row: ImportedInvoice, body: { client_name?: string; business?: string; expense_category?: string }) {
+async function updateInvoiceProviderCategory(row: ImportedInvoice, value: string | null) {
+  if ((row.provider_category ?? null) === (value ?? null)) return;
+  await updateInvoiceMeta(row, { provider_category: normalizeProviderCategory(value) });
+}
+
+function normalizeProviderCategory(value: string | null): ImportedInvoice["provider_category"] | null {
+  return PROVIDER_CATEGORIES.includes(value as NonNullable<ImportedInvoice["provider_category"]>)
+    ? value as NonNullable<ImportedInvoice["provider_category"]>
+    : null;
+}
+
+async function updateInvoiceMeta(row: ImportedInvoice, body: { client_name?: string; business?: string; expense_category?: string; provider_category?: ImportedInvoice["provider_category"] | null }) {
   try {
     const updated = await api.invoices.update(row.id, body);
     replaceRow(updated);

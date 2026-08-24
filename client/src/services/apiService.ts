@@ -77,6 +77,7 @@ export interface GmailImportedDocument {
   invoice_status: string | null;
   possible_not_invoice: boolean;
   invoice_validation_status: string | null;
+  invoice_rejection_label: string | null;
   missing_required_fields: string[];
   business: string | null;
   expense_category: string | null;
@@ -158,6 +159,7 @@ export interface ImportedInvoice {
   status: string;
   possible_not_invoice: boolean;
   invoice_validation_status: string | null;
+  invoice_rejection_label: string | null;
   missing_required_fields: string[];
   file_name: string;
   mime_type: string | null;
@@ -188,7 +190,7 @@ export interface InvoiceExpenseMonthlyResponse {
   months: string[];
   totalInvoices: number;
   totalAmount: number;
-  suppliers: { name: string; total: number }[];
+  suppliers: { name: string; total: number; count?: number }[];
   categories: GmailSearchProvider["category"][];
   series: InvoiceExpenseMonthlySeries[];
 }
@@ -464,7 +466,7 @@ export const api = {
       }>(`/invoices${qs(params)}`, force),
     get: (id: string, force = false) =>
       get<ImportedInvoice>(`/invoices/${id}`, force),
-    update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
+    update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; provider_category?: GmailSearchProvider["category"] | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
       put<ImportedInvoice>(`/invoices/${id}`, body),
     deleteSelected: (body: { ids: string[] }) =>
       post<{ ok: true; requested: number; deleted: number; documentsDeleted: number }>("/invoices/delete-selected", body),

@@ -66,10 +66,20 @@ export function registerDocumentRoutes(app: express.Application) {
     );
 
     // Hide specialized records from the main documents list. Certificates live
-    // in Profile, and invoices are managed from the invoices workspace.
+    // in Profile, and invoices are managed from the invoices workspace. Older
+    // Gmail invoice attempts can have a wrong document_kind, so use invoice
+    // flags and Gmail invoice storage paths as extra guards.
     const baseFilter: Record<string, any> = {
       user_id: userId,
       document_kind: { $nin: ["certificate", "invoice"] },
+      invoice_saved: { $ne: true },
+      invoice_rejected: { $ne: true },
+      spaces_key: { $not: /^gmail\/invoices\// },
+      $or: [
+        { invoice_rejection_reason: { $exists: false } },
+        { invoice_rejection_reason: null },
+        { invoice_rejection_reason: "" },
+      ],
     };
     const filter: Record<string, any> = { ...baseFilter };
     if (status) filter.processing_status = status;
@@ -93,6 +103,14 @@ export function registerDocumentRoutes(app: express.Application) {
         return;
       }
       filter._id = { $in: docIds.map((id) => new ObjectId(id)) };
+    }
+
+    const invoiceDocumentIds = await invoiceDocumentIdsForUser(userId);
+    if (invoiceDocumentIds.length) {
+      baseFilter._id = { $nin: invoiceDocumentIds.map((id) => new ObjectId(id)) };
+      filter._id = filter._id
+        ? { ...filter._id, $nin: invoiceDocumentIds.map((id) => new ObjectId(id)) }
+        : baseFilter._id;
     }
 
     const [rows, total, totalAll, statusCounts, documentQuota] = await Promise.all([
@@ -1087,6 +1105,15 @@ export function registerDocumentRoutes(app: express.Application) {
 
     res.json({ ok: true, fields: merged });
   });
+}
+
+async function invoiceDocumentIdsForUser(userId: string): Promise<string[]> {
+  const invoices = await col("invoices")
+    .find({ user_id: userId } as any, { projection: { document_id: 1 } } as any)
+    .toArray();
+  return [...new Set(invoices
+    .map((invoice: any) => String(invoice.document_id ?? "").trim())
+    .filter((id) => ObjectId.isValid(id)))];
 }
 
 function idFilter(id: string): Record<string, any> {

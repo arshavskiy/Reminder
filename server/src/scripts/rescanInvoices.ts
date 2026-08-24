@@ -56,12 +56,14 @@ async function markPossibleNotInvoice(invoice: InvoiceRow, missing: string[]): P
   const rejectionReason = isProbablyContractOrNonInvoice(missing)
     ? "missing_invoice_number_and_amount"
     : "missing_required_fields";
+  const rejectionLabel = invoiceRejectionLabel(rejectionReason, missing);
   await col("invoices").updateOne(
     {_id: invoice._id} as any,
     {
       $set: {
         possible_not_invoice: true,
         invoice_validation_status: rejectionReason,
+        invoice_rejection_label: rejectionLabel,
         missing_required_fields: missing,
         updated_at: now,
       },
@@ -77,6 +79,7 @@ async function markPossibleNotInvoice(invoice: InvoiceRow, missing: string[]): P
         invoice_saved: false,
         invoice_rejected: true,
         invoice_rejection_reason: rejectionReason,
+        invoice_rejection_label: rejectionLabel,
         invoice_missing_fields: missing,
         reminder_status: "not_applicable",
         updated_at: now,
@@ -100,6 +103,7 @@ async function markValidInvoice(invoice: InvoiceRow, rawText?: string): Promise<
       $set: {
         possible_not_invoice: false,
         invoice_validation_status: "valid",
+        invoice_rejection_label: null,
         missing_required_fields: [],
         status: normalizeInvoiceStatus(invoice.status),
         ...(extractedClient && {client_company: extractedClient}),
@@ -118,12 +122,24 @@ async function markValidInvoice(invoice: InvoiceRow, rawText?: string): Promise<
         invoice_saved: true,
         invoice_rejected: false,
         invoice_rejection_reason: null,
+        invoice_rejection_label: null,
         invoice_missing_fields: [],
         reminder_status: "not_applicable",
         updated_at: now,
       },
     } as any,
   );
+}
+
+function invoiceRejectionLabel(reason: string, missingFields: string[] = []): string {
+  const labels: Record<string, string> = {
+    missing_invoice_number_and_amount: "חסר מספר חשבונית וסכום - כנראה לא חשבונית",
+    missing_required_fields: "חסרים שדות חובה לחשבונית",
+    not_invoice: "המסמך לא זוהה כחשבונית",
+    rejected: "החשבונית נדחתה",
+  };
+  const base = labels[reason] ?? "המסמך נדחה כחשבונית";
+  return missingFields.length ? `${base}: ${missingFields.join(", ")}` : base;
 }
 
 function documentIdFilter(value: unknown): Record<string, unknown> | null {

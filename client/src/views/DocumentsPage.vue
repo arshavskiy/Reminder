@@ -994,6 +994,7 @@ function shouldShowReminderBadge(row: Document): boolean {
 
 /** Prefer the linked/matched template's document_kind (e.g. תלוש משכורת). */
 function documentTypeLabel(row: Document | Record<string, unknown>): string {
+  if (isInvoiceLikeDocument(row)) return "חשבונית";
   let extracted: Record<string, unknown> = {};
   try {
     const raw = (row as any).extracted_fields;
@@ -1027,6 +1028,21 @@ function documentTypeLabel(row: Document | Record<string, unknown>): string {
   if (type) return formatDocumentTypeLabel(type);
   if (kind && kind !== "unknown") return formatDocumentTypeLabel(kind);
   return "";
+}
+
+function isInvoiceLikeDocument(row: Document | Record<string, unknown>): boolean {
+  if ((row as any).invoice_saved === true || (row as any).invoice_rejected === true) return true;
+  if (String((row as any).invoice_rejection_reason ?? "").trim()) return true;
+  if (String((row as any).spaces_key ?? "").startsWith("gmail/invoices/")) return true;
+  const type = `${(row as any).document_type ?? ""} ${(row as any).document_kind ?? ""}`;
+  if (/חשבונית|קבלה|invoice|receipt|bill/i.test(type)) return true;
+  try {
+    const raw = (row as any).extracted_fields;
+    const fields = typeof raw === "string" ? JSON.parse(raw || "{}") : (raw ?? {});
+    return Boolean(fields.invoice_number || fields.receipt_number || fields.supplier_name || fields.payment_due_date);
+  } catch {
+    return false;
+  }
 }
 
 function documentHasEmail(row: Document): boolean {

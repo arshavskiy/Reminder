@@ -866,6 +866,7 @@ function flatGmailImportedDocument(doc: any, invoice?: any) {
     invoice_status: invoice?.status ?? null,
     possible_not_invoice: Boolean(invoice?.possible_not_invoice),
     invoice_validation_status: invoice?.invoice_validation_status ?? null,
+    invoice_rejection_label: invoice?.invoice_rejection_label ?? doc.invoice_rejection_label ?? null,
     missing_required_fields: Array.isArray(invoice?.missing_required_fields) ? invoice.missing_required_fields : [],
     business: invoice?.business ?? invoice?.fields?.business ?? invoice?.fields?.business_name ?? null,
     expense_category: invoice?.expense_category ?? invoice?.fields?.expense_category ?? null,

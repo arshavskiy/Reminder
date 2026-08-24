@@ -93,6 +93,17 @@
             </h2>
             <div class="form-grid">
               <label>
+                <span>קטגוריית ספק</span>
+                <n-select
+                  v-model:value="form.provider_category"
+                  :options="providerCategoryOptions"
+                  clearable
+                  filterable
+                  size="large"
+                  placeholder="לא מסווג"
+                />
+              </label>
+              <label>
                 <span>קטגוריית הוצאה</span>
                 <div class="field-stack">
                   <n-select v-model:value="form.expense_category" :options="categoryOptions" size="large" />
@@ -210,6 +221,7 @@ const form = reactive({
   currency: "ILS" as string | null,
   client_name: "",
   expense_category: "General and Administrative" as string | null,
+  provider_category: null as ImportedInvoice["provider_category"] | null,
   note: "",
   issue_date: null as string | null,
   payment_due_date: null as string | null,
@@ -232,6 +244,31 @@ const categoryOptions: SelectOption[] = [
   { label: "ציוד", value: "ציוד" },
   { label: "תקשורת", value: "תקשורת" },
   { label: "חשמל ומים", value: "חשמל ומים" },
+];
+const providerCategoryOptions: SelectOption[] = [
+  { label: "חשמל", value: "electricity" },
+  { label: "תקשורת", value: "telecom" },
+  { label: "מים", value: "water" },
+  { label: "תחבורה", value: "transport" },
+  { label: "חניה", value: "parking" },
+  { label: "דלק", value: "fuel" },
+  { label: "גז", value: "gas" },
+  { label: "טלוויזיה וסטרימינג", value: "tv" },
+  { label: "קניות", value: "marketplace" },
+  { label: "מזון", value: "food" },
+  { label: "תשלומים וחשבוניות", value: "payment" },
+  { label: "ממשלה", value: "government" },
+  { label: "עירייה", value: "municipality" },
+  { label: "ביטוח", value: "insurance" },
+  { label: "פיננסים", value: "finance" },
+  { label: "תיירות", value: "travel" },
+  { label: "בריאות", value: "healthcare" },
+  { label: "לימודים", value: "education" },
+  { label: "קמעונאות", value: "retail" },
+  { label: "עמותות", value: "nonprofit" },
+  { label: "דיגיטל", value: "digital" },
+  { label: "פיתוח", value: "development" },
+  { label: "כללי", value: "general" },
 ];
 
 const sourceLine = computed(() =>
@@ -314,6 +351,7 @@ async function load(force = false) {
     form.currency = row.currency || "ILS";
     form.client_name = row.client_name || clientFromFields(row) || "";
     form.expense_category = row.expense_category || "General and Administrative";
+    form.provider_category = row.provider_category ?? null;
     form.note = row.note || "";
     form.issue_date = normalizeDate(row.issue_date);
     form.payment_due_date = normalizeDate(row.payment_due_date);
@@ -335,6 +373,7 @@ async function save() {
       currency: form.currency,
       client_name: form.client_name,
       expense_category: form.expense_category,
+      provider_category: form.provider_category,
       issue_date: form.issue_date,
       payment_due_date: form.payment_due_date,
       note: form.note,

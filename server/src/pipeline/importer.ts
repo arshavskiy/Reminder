@@ -2292,6 +2292,7 @@ async function saveInvoiceRecord(
     const rejectionReason = isProbablyContractOrNonInvoice(missingRequired)
       ? "missing_invoice_number_and_amount"
       : "missing_required_fields";
+    const rejectionLabel = invoiceRejectionLabel(rejectionReason, missingRequired);
     await col("invoices").deleteOne({ document_id: documentId } as any);
     await col("documents").updateOne(
       { _id: new ObjectId(documentId) } as any,
@@ -2300,6 +2301,7 @@ async function saveInvoiceRecord(
           invoice_saved: false,
           invoice_rejected: true,
           invoice_rejection_reason: rejectionReason,
+          invoice_rejection_label: rejectionLabel,
           invoice_missing_fields: missingRequired,
           reminder_status: "not_applicable",
           updated_at: now,
@@ -2371,6 +2373,7 @@ async function saveInvoiceRecord(
         invoice_saved: true,
         invoice_rejected: false,
         invoice_rejection_reason: null,
+        invoice_rejection_label: null,
         invoice_missing_fields: [],
         reminder_status: "not_applicable",
         updated_at: now,
@@ -2378,6 +2381,17 @@ async function saveInvoiceRecord(
     },
   );
   return true;
+}
+
+function invoiceRejectionLabel(reason: string, missingFields: string[] = []): string {
+  const labels: Record<string, string> = {
+    missing_invoice_number_and_amount: "חסר מספר חשבונית וסכום - כנראה לא חשבונית",
+    missing_required_fields: "חסרים שדות חובה לחשבונית",
+    not_invoice: "המסמך לא זוהה כחשבונית",
+    rejected: "החשבונית נדחתה",
+  };
+  const base = labels[reason] ?? "המסמך נדחה כחשבונית";
+  return missingFields.length ? `${base}: ${missingFields.join(", ")}` : base;
 }
 
 function invoiceMissingRequiredFields(values: {

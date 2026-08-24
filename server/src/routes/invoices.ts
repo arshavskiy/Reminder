@@ -58,8 +58,9 @@ export function registerInvoiceRoutes(app: express.Application) {
     const eligibleInvoices = invoices.filter((invoice) => invoiceIsVisible(invoice, documentMap.get(String(invoice.document_id))));
     const allRows = eligibleInvoices.map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers));
     const facetRows = allRows.filter((row) => {
-      if (status && row.status !== status) return false;
       if (type && row.type !== type) return false;
+      if (category && row.provider_category !== category) return false;
+      if (suppliers.length && !invoiceMatchesSuppliers(row, suppliers)) return false;
       const rowTs = invoiceDateTs(row);
       if (fromTs && (!rowTs || rowTs < fromTs)) return false;
       if (toTs && (!rowTs || rowTs > toTs)) return false;
@@ -69,20 +70,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const rows = facetRows
       .filter((row) => {
         if (status && row.status !== status) return false;
-        if (type && row.type !== type) return false;
-        if (category && row.provider_category !== category) return false;
-          if (suppliers.length) {
-              const wantUnidentified = suppliers.includes("__unidentified__");
-              const namedSuppliers = suppliers.filter((s) => s !== "__unidentified__");
-              const isUnidentified = !row.supplier_name || row.supplier_name === "ספק לא מזוהה";
-              const match = (wantUnidentified && isUnidentified) || (namedSuppliers.length > 0 && namedSuppliers.includes(row.supplier_name));
-              if (!match) return false;
-          }
-        const rowTs = invoiceDateTs(row);
-        if (fromTs && (!rowTs || rowTs < fromTs)) return false;
-        if (toTs && (!rowTs || rowTs > toTs)) return false;
-        if (!q) return true;
-        return invoiceMatchesQuery(row, q);
+        return true;
       })
       .sort((left, right) => compareInvoiceRows(left, right, sortBy, sortDir));
 
@@ -91,17 +79,17 @@ export function registerInvoiceRoutes(app: express.Application) {
     const visibleFacetRows = visibleLimit === null ? facetRows : facetRows.slice(0, visibleLimit);
     const safeOffset = visibleLimit === null ? offset : Math.min(offset, visibleLimit);
     const counts: Record<string, number> = {};
-    for (const row of visibleRows) counts[row.status] = (counts[row.status] ?? 0) + 1;
+    for (const row of visibleFacetRows) counts[row.status] = (counts[row.status] ?? 0) + 1;
 
     res.json({
       rows: visibleRows.slice(safeOffset, safeOffset + limit),
       total: visibleRows.length,
-      totalAll: rows.length,
+      totalAll: visibleFacetRows.length,
       limit,
       offset: safeOffset,
       visibleLimit,
       counts,
-      types: uniqueSorted(visibleRows.map((row) => row.type).filter(isNonEmptyString)),
+      types: uniqueSorted(visibleFacetRows.map((row) => row.type).filter(isNonEmptyString)),
       categories: uniqueSorted(visibleFacetRows.map((row) => row.provider_category ?? "").filter(isNonEmptyString)),
       suppliers: uniqueSorted(visibleFacetRows.map((row) => row.supplier_name).filter(isNonEmptyString)),
     });
@@ -152,6 +140,7 @@ export function registerInvoiceRoutes(app: express.Application) {
 
     const monthSet = new Set<string>();
     const totals = new Map<string, number>();
+    const counts = new Map<string, number>();
     const buckets = new Map<string, Map<string, { total: number; count: number }>>();
     for (const row of rows) {
       const month = chartMonth(row, dateBasis);
@@ -159,6 +148,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       const supplier = row.supplier_name || "ספק לא מזוהה";
       monthSet.add(month);
       totals.set(supplier, (totals.get(supplier) ?? 0) + (row.amount ?? 0));
+      counts.set(supplier, (counts.get(supplier) ?? 0) + 1);
       if (!buckets.has(supplier)) buckets.set(supplier, new Map());
       const supplierBuckets = buckets.get(supplier)!;
       const current = supplierBuckets.get(month) ?? { total: 0, count: 0 };
@@ -169,7 +159,11 @@ export function registerInvoiceRoutes(app: express.Application) {
 
     const months = [...monthSet].sort();
     const supplierTotals = [...totals.entries()]
-      .map(([name, total]) => ({ name, total }))
+      .map(([name, total]) => ({
+        name,
+        total: roundMoney(total),
+        count: counts.get(name) ?? 0,
+      }))
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "he", { sensitivity: "base" }));
     const selectedSuppliers = suppliers.length ? suppliers : supplierTotals.slice(0, top).map((item) => item.name);
     const series = selectedSuppliers.map((supplier) => {
@@ -373,6 +367,11 @@ export function registerInvoiceRoutes(app: express.Application) {
     }
     const expenseCategory = stringOrNull(req.body?.expense_category);
     if (expenseCategory !== undefined) updates.expense_category = expenseCategory;
+    const providerCategory = stringOrNull(req.body?.provider_category);
+    if (providerCategory !== undefined) {
+      updates.provider_category = providerCategory;
+      updates["fields.provider_category"] = providerCategory;
+    }
     const paymentStatus = stringOrNull(req.body?.payment_status);
     if (paymentStatus !== undefined) updates.payment_status = paymentStatus;
     const currency = stringOrNull(req.body?.currency);
@@ -462,14 +461,15 @@ function presentInvoice(
     client_name: invoice.client_company ?? invoice.client_name ?? invoice.fields?.client_company ?? invoice.fields?.client_name ?? null,
     business: invoice.business ?? invoice.fields?.business ?? invoice.fields?.business_name ?? null,
     expense_category: invoice.expense_category ?? invoice.fields?.expense_category ?? null,
-    provider_id: provider?.id ?? null,
-    provider_label: provider?.label ?? null,
-    provider_category: provider?.category ?? null,
+    provider_id: invoice.provider_id ?? provider?.id ?? null,
+    provider_label: invoice.provider_label ?? provider?.label ?? null,
+    provider_category: invoice.provider_category ?? invoice.fields?.provider_category ?? provider?.category ?? null,
     payment_status: invoice.payment_status ?? null,
     note: invoice.note ?? null,
     status: normalizeInvoiceStatus(invoice.status),
     possible_not_invoice: Boolean(invoice.possible_not_invoice),
     invoice_validation_status: invoice.invoice_validation_status ?? null,
+    invoice_rejection_label: invoice.invoice_rejection_label ?? doc?.invoice_rejection_label ?? null,
     missing_required_fields: Array.isArray(invoice.missing_required_fields) ? invoice.missing_required_fields : [],
     file_name: doc?.file_name ?? "",
     mime_type: doc?.mime_type ?? null,
@@ -554,6 +554,13 @@ function parseMultiQuery(value: unknown): string[] {
     parsed.push(...text.split("||"));
   }
   return uniqueSorted(parsed);
+}
+
+function invoiceMatchesSuppliers(row: ReturnType<typeof presentInvoice>, suppliers: string[]): boolean {
+  const wantUnidentified = suppliers.includes("__unidentified__");
+  const namedSuppliers = suppliers.filter((supplier) => supplier !== "__unidentified__");
+  const isUnidentified = !row.supplier_name || row.supplier_name === "ספק לא מזוהה";
+  return (wantUnidentified && isUnidentified) || (namedSuppliers.length > 0 && namedSuppliers.includes(row.supplier_name));
 }
 
 function invoiceDateTs(row: ReturnType<typeof presentInvoice>): number | null {

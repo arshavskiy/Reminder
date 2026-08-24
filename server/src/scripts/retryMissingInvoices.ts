@@ -101,6 +101,7 @@ async function retryDocument(documentId: string, ownerUserId: string): Promise<v
           invoice_saved: false,
           invoice_rejected: false,
           invoice_rejection_reason: null,
+          invoice_rejection_label: null,
           invoice_missing_fields: [],
           updated_at: new Date(),
         },
