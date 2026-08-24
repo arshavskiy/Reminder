@@ -16,7 +16,6 @@ import InvoiceDetailPage from "../views/InvoiceDetailPage.vue";
 import EmailTemplatesPage from "../views/EmailTemplatesPage.vue";
 import EquipmentPage from "../views/EquipmentPage.vue";
 import ReportsPage from "../views/ReportsPage.vue";
-import ExpenseAnalyticsPage from "../views/ExpenseAnalyticsPage.vue";
 import LoginPage from "../views/LoginPage.vue";
 import PricingPage from "../views/PricingPage.vue";
 import ResetPasswordPage from "../views/ResetPasswordPage.vue";
@@ -41,7 +40,7 @@ export const router = createRouter({
     { path: "/documents", component: DocumentsPage, meta: { feature: FEATURES.pages.documents } },
     { path: "/documents/:id", component: DocumentDetailPage, meta: { feature: FEATURES.pages.documents } },
     { path: "/invoices", component: InvoicesPage, meta: { feature: FEATURES.pages.invoices } },
-    { path: "/invoices/expenses", component: ExpenseAnalyticsPage, meta: { feature: FEATURES.pages.invoices } },
+    { path: "/invoices/expenses", component: () => import("../views/ExpenseAnalyticsPage.vue"), meta: { feature: FEATURES.pages.invoices } },
     { path: "/invoices/:id", component: InvoiceDetailPage, meta: { feature: FEATURES.pages.invoices } },
     { path: "/clients", component: ClientsPage, meta: { feature: FEATURES.pages.clients } },
     { path: "/clients/:id", component: ClientDetailPage, meta: { feature: FEATURES.pages.clients } },

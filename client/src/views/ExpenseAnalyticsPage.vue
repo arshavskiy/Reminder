@@ -65,37 +65,7 @@
           <div v-if="!chartSeries.length || !months.length" class="expense-empty">
             <p>אין נתונים להצגה עבור הסינון הנוכחי</p>
           </div>
-          <svg v-else class="expense-chart" viewBox="0 0 920 420" role="img" aria-label="גרף הוצאות חודשי לפי ספק">
-            <g class="expense-grid">
-              <line v-for="tick in yTicks" :key="`grid-${tick.value}`" x1="64" :y1="tick.y" x2="880" :y2="tick.y" />
-            </g>
-            <g class="expense-axis">
-              <text v-for="tick in yTicks" :key="`y-${tick.value}`" x="56" :y="tick.y + 4" text-anchor="end">
-                {{ compactMoney(tick.value) }}
-              </text>
-              <text v-for="label in xLabels" :key="label.month" :x="label.x" y="398" text-anchor="middle">
-                {{ formatMonth(label.month) }}
-              </text>
-            </g>
-            <g v-for="(series, index) in chartSeries" :key="series.supplier">
-              <polyline
-                class="expense-line"
-                :points="linePoints(series)"
-                :stroke="seriesColor(index)"
-              />
-              <circle
-                v-for="point in plottedPoints(series)"
-                :key="`${series.supplier}-${point.month}`"
-                class="expense-point"
-                r="4"
-                :cx="point.x"
-                :cy="point.y"
-                :fill="seriesColor(index)"
-              >
-                <title>{{ series.supplier }} · {{ formatMonth(point.month) }} · {{ formatMoney(point.total) }}</title>
-              </circle>
-            </g>
-          </svg>
+          <div v-else ref="chartEl" class="expense-chart" role="img" aria-label="גרף הוצאות חודשי לפי ספק" />
         </div>
 
         <aside class="expense-legend" aria-label="ספקים בגרף">
@@ -117,13 +87,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { NDatePicker, NSelect, NSpin, type SelectOption, useMessage } from "naive-ui";
+import * as echarts from "echarts/core";
+import { LineChart } from "echarts/charts";
+import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
 import PageHeader from "../components/PageHeader.vue";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import { api, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
 
+echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
+
 const message = useMessage();
+const chartEl = ref<HTMLDivElement | null>(null);
 const loading = ref(false);
 const dateBasis = ref<"invoice" | "import">("invoice");
 const category = ref<string | null>(null);
@@ -133,6 +110,7 @@ const months = ref<string[]>([]);
 const suppliers = ref<{ name: string; total: number }[]>([]);
 const categories = ref<string[]>([]);
 const chartSeries = ref<InvoiceExpenseMonthlySeries[]>([]);
+let chart: echarts.EChartsType | null = null;
 
 const dateBasisOptions: SelectOption[] = [
   { label: "תאריך חשבונית", value: "invoice" },
@@ -154,19 +132,78 @@ const totalAmount = computed(() => chartSeries.value.reduce((sum, series) => sum
 const totalInvoices = computed(() => chartSeries.value.reduce((sum, series) => (
   sum + series.points.reduce((pointSum, point) => pointSum + point.count, 0)
 ), 0));
-const maxValue = computed(() => Math.max(1, ...chartSeries.value.flatMap((series) => series.points.map((point) => point.total))));
-const yTicks = computed(() => {
-  const ticks = 4;
-  return Array.from({ length: ticks + 1 }, (_, index) => {
-    const value = (maxValue.value / ticks) * (ticks - index);
-    return { value, y: chartY(value) };
-  });
-});
-const xLabels = computed(() => months.value.map((month, index) => ({ month, x: chartX(index) })));
+const chartOption = computed<echarts.EChartsCoreOption>(() => ({
+  color: seriesColors,
+  textStyle: {
+    fontFamily: "Segoe UI, Arial, sans-serif",
+    color: cssVar("--text-secondary", "#64748b"),
+  },
+  tooltip: {
+    trigger: "axis",
+    confine: true,
+    valueFormatter: (value) => formatMoney(Number(value ?? 0)),
+  },
+  legend: {
+    type: "scroll",
+    top: 0,
+    right: 6,
+    left: 6,
+    textStyle: { color: cssVar("--text-secondary", "#64748b") },
+  },
+  grid: {
+    top: 54,
+    right: 18,
+    left: 28,
+    bottom: 42,
+    containLabel: true,
+  },
+  xAxis: {
+    type: "category",
+    boundaryGap: false,
+    data: months.value.map(formatMonth),
+    axisLabel: {
+      color: cssVar("--text-secondary", "#64748b"),
+      interval: 0,
+      rotate: months.value.length > 8 ? 28 : 0,
+    },
+    axisLine: { lineStyle: { color: cssVar("--border-color", "#d9dee8") } },
+    axisTick: { show: false },
+  },
+  yAxis: {
+    type: "value",
+    min: 0,
+    axisLabel: {
+      color: cssVar("--text-secondary", "#64748b"),
+      formatter: (value: number) => compactMoney(value),
+    },
+    splitLine: { lineStyle: { color: cssVar("--border-color", "#d9dee8"), type: "dashed" } },
+  },
+  series: chartSeries.value.map((series) => ({
+    name: series.supplier,
+    type: "line",
+    smooth: true,
+    symbol: "circle",
+    symbolSize: 7,
+    emphasis: { focus: "series" },
+    lineStyle: { width: 3 },
+    data: series.points.map((point) => point.total),
+  })),
+}));
 
 onMounted(() => {
+  window.addEventListener("resize", resizeChart);
   load();
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", resizeChart);
+  chart?.dispose();
+  chart = null;
+});
+
+watch(chartOption, () => {
+  renderChart();
+}, { deep: true });
 
 async function load(force = false) {
   loading.value = true;
@@ -184,6 +221,8 @@ async function load(force = false) {
     suppliers.value = result.suppliers;
     categories.value = result.categories;
     chartSeries.value = result.series.filter((series) => series.total > 0);
+    await nextTick();
+    renderChart();
   } catch {
     message.error("שגיאה בטעינת גרף ההוצאות");
   } finally {
@@ -196,30 +235,20 @@ function focusSupplier(supplier: string) {
   load(true);
 }
 
-function chartX(index: number): number {
-  if (months.value.length <= 1) return 472;
-  return 64 + (index / (months.value.length - 1)) * 816;
+function renderChart() {
+  if (!chartEl.value || !chartSeries.value.length || !months.value.length) return;
+  if (!chart) chart = echarts.init(chartEl.value);
+  chart.setOption(chartOption.value, true);
 }
 
-function chartY(value: number): number {
-  return 40 + (1 - value / maxValue.value) * 320;
+function resizeChart() {
+  chart?.resize();
 }
 
-function linePoints(series: InvoiceExpenseMonthlySeries): string {
-  return plottedPoints(series).map((point) => `${point.x},${point.y}`).join(" ");
-}
-
-function plottedPoints(series: InvoiceExpenseMonthlySeries) {
-  return series.points.map((point, index) => ({
-    ...point,
-    x: chartX(index),
-    y: chartY(point.total),
-  }));
-}
+const seriesColors = ["#18a058", "#2563eb", "#dc2626", "#9333ea", "#0f766e", "#ea580c", "#64748b", "#be123c"];
 
 function seriesColor(index: number): string {
-  const colors = ["#18a058", "#2563eb", "#dc2626", "#9333ea", "#0f766e", "#ea580c", "#64748b", "#be123c"];
-  return colors[index % colors.length];
+  return seriesColors[index % seriesColors.length];
 }
 
 function formatMonth(month: string): string {
@@ -234,6 +263,10 @@ function formatMoney(value: number): string {
 
 function compactMoney(value: number): string {
   return new Intl.NumberFormat("he-IL", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function cssVar(name: string, fallback: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
 function providerCategoryLabel(value: string): string {
@@ -345,28 +378,7 @@ function providerCategoryLabel(value: string): string {
   display: block;
   width: 100%;
   min-width: 760px;
-  height: auto;
-}
-
-.expense-grid line {
-  stroke: color-mix(in srgb, var(--border-color) 72%, transparent);
-}
-
-.expense-axis text {
-  fill: var(--text-secondary);
-  font-size: 12px;
-}
-
-.expense-line {
-  fill: none;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.expense-point {
-  stroke: var(--bg-card);
-  stroke-width: 2;
+  height: 390px;
 }
 
 .expense-empty {
