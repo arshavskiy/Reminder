@@ -64,6 +64,8 @@
       </template>
     </PageHeader>
 
+    <InvoiceSectionNav />
+
     <div class="filterbar filterbar--compact">
       <button
         v-for="option in statusStrip"
@@ -456,6 +458,7 @@ import {
   TrashOutline,
 } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
+import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import GmailLogo from "../components/GmailLogo.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import GmailImportJobStatus from "../components/GmailImportJobStatus.vue";

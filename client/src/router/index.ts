@@ -41,6 +41,7 @@ export const router = createRouter({
     { path: "/documents", component: DocumentsPage, meta: { feature: FEATURES.pages.documents } },
     { path: "/documents/:id", component: DocumentDetailPage, meta: { feature: FEATURES.pages.documents } },
     { path: "/invoices", component: InvoicesPage, meta: { feature: FEATURES.pages.invoices } },
+    { path: "/invoices/expenses", component: ExpenseAnalyticsPage, meta: { feature: FEATURES.pages.invoices } },
     { path: "/invoices/:id", component: InvoiceDetailPage, meta: { feature: FEATURES.pages.invoices } },
     { path: "/clients", component: ClientsPage, meta: { feature: FEATURES.pages.clients } },
     { path: "/clients/:id", component: ClientDetailPage, meta: { feature: FEATURES.pages.clients } },
@@ -54,7 +55,7 @@ export const router = createRouter({
     { path: "/settings/email-templates", component: EmailTemplatesPage, meta: { feature: FEATURES.pages.emailTemplates } },
     { path: "/equipment", component: EquipmentPage, meta: { feature: FEATURES.pages.equipment } },
     { path: "/reports", component: ReportsPage, meta: { feature: FEATURES.pages.reports } },
-    { path: "/reports/expenses", component: ExpenseAnalyticsPage, meta: { feature: FEATURES.pages.reports } },
+    { path: "/reports/expenses", redirect: "/invoices/expenses" },
     { path: "/field", component: () => import("../views/FieldPage.vue"), meta: { feature: FEATURES.pages.field } },
       {
           path: "/print-templates",

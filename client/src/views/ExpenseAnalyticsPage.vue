@@ -6,6 +6,8 @@
       subtitle="גרף חודשי לפי תאריך חשבונית או תאריך ייבוא"
     />
 
+    <InvoiceSectionNav />
+
     <section class="expense-controls" aria-label="סינון גרף הוצאות">
       <n-select
         v-model:value="dateBasis"
@@ -118,6 +120,7 @@
 import { computed, onMounted, ref } from "vue";
 import { NDatePicker, NSelect, NSpin, type SelectOption, useMessage } from "naive-ui";
 import PageHeader from "../components/PageHeader.vue";
+import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import { api, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
 
 const message = useMessage();
