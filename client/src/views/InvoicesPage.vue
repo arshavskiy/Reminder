@@ -190,6 +190,10 @@
               <span>{{ displayDate(row) }}</span>
             </div>
             <div class="invoice-card__line invoice-card__line--muted">
+              <span>קטגוריה</span>
+              <span class="invoice-category-chip">{{ invoiceCategoryLabel(row) }}</span>
+            </div>
+            <div class="invoice-card__line invoice-card__line--muted">
               <span>{{ row.invoice_number || "ללא מספר" }}</span>
               <span>{{ row.billing_period || "" }}</span>
             </div>
@@ -205,6 +209,7 @@
               <th>סטטוס</th>
               <th>תאריך</th>
               <th>לקוח</th>
+              <th>קטגוריה</th>
               <th>סוג</th>
               <th>סכום</th>
               <th>פעולות</th>
@@ -233,6 +238,9 @@
               </td>
               <td>{{ formatDate(row.issue_date) }}</td>
               <td>{{ clientLabel(row) }}</td>
+              <td>
+                <span class="invoice-category-chip">{{ invoiceCategoryLabel(row) }}</span>
+              </td>
               <td>{{ invoiceTypeLabel(row) }}</td>
               <td class="cell-amount">{{ row.amount_display }}</td>
               <td class="cell-actions" @click.stop>
@@ -530,6 +538,10 @@ function invoiceTypeLabel(row: ImportedInvoice): string {
   if (/order|הזמנה/.test(normalized)) return "אישור הזמנה";
   if (/payment|תשלום/.test(normalized)) return "אישור תשלום";
   return "חשבונית";
+}
+
+function invoiceCategoryLabel(row: ImportedInvoice): string {
+  return row.expense_category?.trim() || firstInvoiceField(row, ["expense_category", "category"]) || "לא מסווג";
 }
 
 function firstInvoiceField(row: ImportedInvoice, keys: string[]): string | null {
@@ -1240,6 +1252,23 @@ function replaceRow(updated: ImportedInvoice) {
   margin-top: 4px;
   padding-top: 0;
   border-top: 0;
+}
+
+.invoice-category-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 180px;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--brand-color) 22%, var(--border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-color) 7%, var(--bg-card));
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .invoice-table-wrap {
