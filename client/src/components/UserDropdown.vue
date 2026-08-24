@@ -33,7 +33,17 @@
 import {computed, h} from "vue";
 import {useRouter} from "vue-router";
 import {NDropdown, NIcon} from "naive-ui";
-import {PersonOutline} from "@vicons/ionicons5";
+import {
+  ConstructOutline,
+  DocumentTextOutline,
+  GridOutline,
+  LogOutOutline,
+  MailOutline,
+  MapOutline,
+  PersonOutline,
+  PrintOutline,
+  ShieldCheckmarkOutline,
+} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
 import {useWalkthrough} from "../composables/useWalkthrough.js";
 
@@ -82,17 +92,16 @@ const dropdownThemeOverrides = {
   dividerColor: "rgba(17, 24, 39, 0.08)",
 };
 
-const menuIcons: Record<string, string> = {
-  profile: "👤",
-  templatesGroup: "▤",
-  printTemplates: "▤",
-  documentsTemplates: "▤",
-  emailTemplates: "✉",
-  equipment: "▣",
-  // settings: "⚙",
-  admin: "♡",
-  tour: "🗺",
-  logout: "▦",
+const menuIcons: Record<string, typeof PersonOutline> = {
+  profile: PersonOutline,
+  templatesGroup: GridOutline,
+  printTemplates: PrintOutline,
+  documentsTemplates: DocumentTextOutline,
+  emailTemplates: MailOutline,
+  equipment: ConstructOutline,
+  admin: ShieldCheckmarkOutline,
+  tour: MapOutline,
+  logout: LogOutOutline,
 };
 
 const dropdownItems = computed(() => [
@@ -130,8 +139,11 @@ const dropdownItems = computed(() => [
 ]);
 
 function renderDropdownLabel(option: any) {
+  const icon = menuIcons[String(option.key)];
   return h("span", {class: "user-menu-label", dir: "rtl"}, [
-    h("span", {class: "user-menu-label__icon"}, menuIcons[String(option.key)] ?? ""),
+    icon
+      ? h(NIcon, {component: icon, size: 16, class: "user-menu-label__glyph"})
+      : h("span", {class: "user-menu-label__icon-spacer"}),
     h("span", {class: "user-menu-label__text"}, String(option.label ?? "")),
   ]);
 }
@@ -261,17 +273,17 @@ async function handleSelect(key: string) {
   color: var(--text-primary);
 }
 
-:global(.user-menu-label__icon) {
+:global(.user-menu-label__glyph),
+:global(.user-menu-label__icon-spacer) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-  color: var(--primary-color);
-  font-size: 13px;
-  line-height: 1;
+  background: color-mix(in srgb, var(--brand-color) 12%, transparent);
+  color: var(--brand-color);
+  flex: 0 0 auto;
 }
 
 :global(.user-menu-label__text) {
