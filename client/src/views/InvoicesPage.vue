@@ -690,7 +690,7 @@ async function findInvoiceTemplate(): Promise<DocTemplate | null> {
 }
 
 function invoiceGmailQuery(template: DocTemplate | null): string {
-  const parts = ["has:attachment", "{filename:pdf filename:jpg filename:jpeg filename:png}"];
+  const parts = ["has:attachment", "{filename:pdf filename:doc filename:docx filename:xls filename:xlsx}"];
   const terms = invoiceTemplateTerms(template);
   if (terms.length === 1) {
     parts.push(formatGmailSearchTerm(terms[0]));
