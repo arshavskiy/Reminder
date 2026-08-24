@@ -454,6 +454,22 @@ export function registerGmailRoutes(app: express.Application) {
     });
   });
 
+  app.delete("/api/gmail/import-history/:messageId", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    let ctx: Awaited<ReturnType<typeof requireAuth>>;
+    try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
+
+    const messageId = String(req.params.messageId ?? "").trim();
+    if (!messageId) {
+      res.status(400).json({ error: "messageId required" });
+      return;
+    }
+
+    const result = await col("gmail_imports").deleteOne({ user_id: ctx.userId, message_id: messageId });
+    res.json({ ok: true, deleted: result.deletedCount });
+  });
+
   // DELETE /api/gmail/disconnect
   app.delete("/api/gmail/disconnect", async (req, res) => {
     const cookieHeader = req.headers.cookie ?? undefined;
@@ -695,7 +711,9 @@ function collectMatchingAttachments(
     const mimeType = String(part.mimeType || "").trim();
     const size = Number(part.body.size || 0);
     const ext = extensionFromFilename(filename);
-    if (matchesRequestedAttachment(filename, mimeType, allowedExtensions) && !isJunkAttachment(filename, size)) {
+    const matchesType = matchesRequestedAttachment(filename, mimeType, allowedExtensions);
+    const junk = isJunkAttachment(filename, size);
+    if (matchesType && !junk) {
       out.push({
         attachmentId: part.body.attachmentId,
         filename: filename || `attachment.${[...allowedExtensions][0] ?? "bin"}`,
@@ -710,7 +728,11 @@ function collectMatchingAttachments(
           filename: filename || "(no filename)",
           mimeType: mimeType || "(no mime)",
           size,
-          reason: filename ? `extension_not_selected:${ext || "none"}` : "no_filename",
+          reason: !filename
+            ? "no_filename"
+            : junk
+              ? `junk_attachment:${ext || "none"}`
+              : `extension_not_selected:${ext || "none"}`,
         });
       }
     }

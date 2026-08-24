@@ -719,6 +719,7 @@ export const api = {
     importAll: (q?: string, limit?: number, templateId?: string) =>
       post<{ imported: number; skipped: number; results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> }>("/gmail/import-all", { q, limit, templateId }),
     importHistory: () => get<{ history: GmailImportHistoryItem[] }>("/gmail/import-history"),
+    deleteImportHistory: (messageId: string) => del(`/gmail/import-history/${encodeURIComponent(messageId)}`),
 
     disconnect: () => del("/gmail/disconnect"),
   },
@@ -908,4 +909,3 @@ export const api = {
     url: (name: string) => /^https?:\/\//i.test(name) ? name : `${BASE}/assets/${name}`,
   },
 };
-

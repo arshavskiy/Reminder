@@ -301,6 +301,52 @@ function looksLikeInspectionReport(text: string): boolean {
   return false;
 }
 
+function gmailTemplateSkipReason(
+  pipeline: PipelineOptions | undefined,
+  template: DocTemplate | null,
+  rawText: string,
+): "gmail_import_not_inspection_skipped" | null {
+  if (!pipeline?.gmailImport || rawText.trim().length === 0) return null;
+  if (template && isInspectionTemplate(template) && !looksLikeInspectionReport(rawText)) {
+    return "gmail_import_not_inspection_skipped";
+  }
+  return null;
+}
+
+async function gmailInvoiceWasSaved(documentId: string): Promise<boolean> {
+  const invoice = await col("invoices").findOne(
+    { document_id: documentId } as any,
+    { projection: { _id: 1 } } as any,
+  );
+  return Boolean(invoice);
+}
+
+async function deleteSkippedGmailDocument(
+  documentId: string,
+  docFilter: Record<string, any>,
+  filePath: string,
+): Promise<void> {
+  const skippedDoc = await col("documents").findOne(docFilter) as any;
+  if (skippedDoc?.spaces_key) {
+    await deleteFromSpaces(skippedDoc.spaces_key).catch(() => {});
+  }
+  if (skippedDoc?.thumbnail_key) {
+    await deleteFromSpaces(skippedDoc.thumbnail_key).catch(() => {});
+  }
+  try { unlinkSync(filePath); } catch {}
+  await Promise.all([
+    col("extractions").deleteMany({ document_id: documentId } as any),
+    col("tasks").deleteMany({ document_id: documentId } as any),
+    col("invoices").deleteMany({ document_id: documentId } as any),
+    col("document_clients").deleteMany({ document_id: documentId } as any),
+    col("timeline_events").deleteMany({ source_type: "document", source_id: documentId } as any),
+    col("reminders").deleteMany({ document_id: documentId } as any),
+    col("contracts").deleteMany({ document_id: documentId } as any),
+    col("equipment").deleteMany({ document_id: documentId } as any),
+    col("documents").deleteOne(docFilter),
+  ]);
+}
+
 export async function processDocument(
   documentId: string,
   filePath: string,
@@ -356,18 +402,19 @@ export async function processDocument(
     $set: { raw_text: rawText, page_count: pageCount, processing_status: "processing", updated_at: new Date() },
   });
 
-  if (pipeline?.gmailImport && rawText.trim().length > 0 && !looksLikeInspectionReport(rawText)) {
-    logger.info("gmail_import_not_inspection_skipped", {
+  const forcedTemplate = pipeline?.templateId
+    ? await loadTemplate(pipeline.templateId).catch(() => null)
+    : null;
+  const gmailSkipReason = gmailTemplateSkipReason(pipeline, forcedTemplate, rawText);
+  if (gmailSkipReason) {
+    logger.info(gmailSkipReason, {
       document_id: documentId,
       user_id: userId ?? null,
+      template_id: forcedTemplate?.id ?? pipeline?.templateId ?? null,
+      template_name: forcedTemplate?.name ?? null,
     });
-    const skippedDoc = await col("documents").findOne(docFilter) as any;
-    if (skippedDoc?.spaces_key) {
-      await deleteFromSpaces(skippedDoc.spaces_key).catch(() => {});
-    }
-    try { unlinkSync(filePath); } catch {}
-    await col("documents").deleteOne(docFilter);
-    push?.({ type: "document:done", documentId: documentId as any, status: "skipped" });
+    await deleteSkippedGmailDocument(documentId, docFilter, filePath);
+    push?.({ type: "document:done", documentId: documentId as any, status: "skipped", reason: gmailSkipReason });
     return;
   }
 
@@ -404,7 +451,7 @@ export async function processDocument(
     });
     if (!pipeline?.skipEntities) {
       push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-      await saveInvoiceRecord(documentId, knownInvoiceFields, {
+      const invoiceSaved = await saveInvoiceRecord(documentId, knownInvoiceFields, {
         userId,
         clientId: null,
         documentType: "חשבונית",
@@ -413,6 +460,17 @@ export async function processDocument(
         rawText,
       });
       await deleteContractReminderArtifacts(documentId, userId);
+      if (pipeline?.gmailImport && !invoiceSaved) {
+        logger.info("gmail_import_non_invoice_skipped", {
+          document_id: documentId,
+          user_id: userId ?? null,
+          template_id: forcedTemplate?.id ?? pipeline?.templateId ?? null,
+          template_name: forcedTemplate?.name ?? "חשבונית",
+        });
+        await deleteSkippedGmailDocument(documentId, docFilter, filePath);
+        push?.({ type: "document:done", documentId: documentId as any, status: "skipped", reason: "gmail_import_non_invoice_skipped" });
+        return;
+      }
     }
     await finishDocumentProcessing(documentId, filePath, mimeType, push, userId);
     return;
@@ -589,9 +647,7 @@ export async function processDocument(
       }
     } else {
       // For all other kinds, pick the best matching template then extract.
-      const template = pipeline?.templateId
-          ? await loadTemplate(pipeline.templateId)
-          : await pickTemplate(rawText, userId);
+      const template = forcedTemplate ?? await pickTemplate(rawText, userId);
       logger.info("document_extractor_selected", {
         document_id: documentId,
         user_id: userId ?? null,
@@ -657,8 +713,34 @@ export async function processDocument(
           if (!pipeline?.skipEntities) {
             push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
             await saveTemplateEntities(documentId, template, normalizedFields, userId, pipeline?.skipReminders, rawText);
+            const invoiceWasSaved = pipeline?.gmailImport && isInvoiceTemplate(template)
+              ? await gmailInvoiceWasSaved(documentId)
+              : true;
+            if (pipeline?.gmailImport && isInvoiceTemplate(template) && !invoiceWasSaved) {
+              logger.info("gmail_import_non_invoice_skipped", {
+                document_id: documentId,
+                user_id: userId ?? null,
+                template_id: template.id ?? null,
+                template_name: template.name,
+              });
+              await deleteSkippedGmailDocument(documentId, docFilter, filePath);
+              push?.({ type: "document:done", documentId: documentId as any, status: "skipped", reason: "gmail_import_non_invoice_skipped" });
+              return;
+            }
           }
         } else if (run.error) {
+          if (pipeline?.gmailImport && isInvoiceTemplate(template)) {
+            logger.info("gmail_import_invoice_extraction_failed_skipped", {
+              document_id: documentId,
+              user_id: userId ?? null,
+              template_id: template.id ?? null,
+              template_name: template.name,
+              error: run.error,
+            });
+            await deleteSkippedGmailDocument(documentId, docFilter, filePath);
+            push?.({ type: "document:done", documentId: documentId as any, status: "skipped", reason: "gmail_import_invoice_extraction_failed_skipped" });
+            return;
+          }
           const msg = `AI extraction failed: ${run.error}`;
           await col("documents").updateOne(docFilter, {
             $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
@@ -1767,6 +1849,10 @@ async function saveTemplateEntities(
 
 function isInvoiceTemplate(template: DocTemplate): boolean {
   return template.document_kind === "invoice" || isInvoiceLikeDocument(template.name);
+}
+
+function isInspectionTemplate(template: DocTemplate): boolean {
+  return template.document_kind === "inspection_report" || /תסקיר|בדיקה/.test(template.name);
 }
 
 function isInvoiceLikeDocument(value: unknown): boolean {

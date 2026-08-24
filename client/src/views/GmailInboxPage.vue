@@ -376,6 +376,20 @@
           <h2 class="gmail-docs-title">מסמכים שיובאו מ-Gmail</h2>
           <p class="gmail-docs-subtitle">{{ filteredImportedDocuments.length }} מתוך {{ importedDocuments.length }} מסמכים</p>
         </div>
+        <n-tooltip v-if="selectedImportedCount" placement="top">
+          <template #trigger>
+            <button
+              class="btn btn--ghost btn--xs icon-btn gmail-docs-delete-selected"
+              type="button"
+              :disabled="deletingImportedDocuments"
+              aria-label="מחק נבחרים"
+              @click="deleteSelectedImportedDocuments"
+            >
+              <n-icon :component="TrashOutline" class="btn-icon" />
+            </button>
+          </template>
+          מחק {{ selectedImportedCount }} מסמכים נבחרים
+        </n-tooltip>
       </div>
 
       <div class="filterbar filterbar--compact">
@@ -500,6 +514,14 @@
         <table class="gmail-doc-table">
           <thead>
             <tr>
+              <th class="gmail-doc-table__select-head">
+                <n-checkbox
+                  :checked="allPagedImportedSelected"
+                  :indeterminate="somePagedImportedSelected && !allPagedImportedSelected"
+                  :disabled="deletingImportedDocuments"
+                  @update:checked="togglePagedImportedSelection"
+                />
+              </th>
               <th>ספק</th>
               <th>סטטוס</th>
               <th>תאריך</th>
@@ -521,6 +543,13 @@
               @keydown.enter.prevent="openImportedDocument(doc)"
               @keydown.space.prevent="openImportedDocument(doc)"
             >
+              <td class="gmail-doc-table__select" @click.stop>
+                <n-checkbox
+                  :checked="selectedImportedDocumentIds.has(doc.id)"
+                  :disabled="deletingImportedDocuments"
+                  @update:checked="(checked) => toggleImportedDocument(doc.id, Boolean(checked))"
+                />
+              </td>
               <td class="cell-strong">{{ importedSupplier(doc) }}</td>
               <td @click.stop>
                 <n-select
@@ -594,6 +623,7 @@ import {
   PricetagOutline,
   RefreshOutline,
   SearchOutline,
+  TrashOutline,
 } from "@vicons/ionicons5";
 import { api, type GmailAttachment, type GmailEmail, type GmailImportedDocument, type GmailImportHistoryItem, type GmailSearchProvider } from "../services/apiService.js";
 import { useAuthStore } from "../stores/auth.js";
@@ -659,6 +689,8 @@ const importedSourceFilter = ref<string | null>(null);
 const importedDateRange = ref<[number, number] | null>(null);
 const importedPage = ref(1);
 const importedPageSize = ref(12);
+const selectedImportedDocumentIds = ref(new Set<string>());
+const deletingImportedDocuments = ref(false);
 const importedBusinessModal = ref<{
   show: boolean;
   doc: ImportedDocumentCard | null;
@@ -781,6 +813,14 @@ const pagedImportedDocuments = computed(() => {
   return filteredImportedDocuments.value.slice(start, start + importedPageSize.value);
 });
 
+const selectedImportedCount = computed(() => selectedImportedDocumentIds.value.size);
+const pagedImportedIds = computed(() => pagedImportedDocuments.value.map((doc) => doc.id));
+const allPagedImportedSelected = computed(() => (
+  pagedImportedIds.value.length > 0
+  && pagedImportedIds.value.every((id) => selectedImportedDocumentIds.value.has(id))
+));
+const somePagedImportedSelected = computed(() => pagedImportedIds.value.some((id) => selectedImportedDocumentIds.value.has(id)));
+
 watch(
   [importedSearch, importedStatusFilter, importedTypeFilter, importedSourceFilter, importedDateRange, importedView],
   () => {
@@ -795,7 +835,32 @@ watch(importedPageSize, () => {
 watch(filteredImportedDocuments, (rows) => {
   const maxPage = Math.max(1, Math.ceil(rows.length / importedPageSize.value));
   if (importedPage.value > maxPage) importedPage.value = maxPage;
+  pruneImportedSelection(rows);
 });
+
+function toggleImportedDocument(id: string, selected: boolean) {
+  const next = new Set(selectedImportedDocumentIds.value);
+  if (selected) next.add(id);
+  else next.delete(id);
+  selectedImportedDocumentIds.value = next;
+}
+
+function togglePagedImportedSelection(selected: boolean) {
+  const next = new Set(selectedImportedDocumentIds.value);
+  for (const id of pagedImportedIds.value) {
+    if (selected) next.add(id);
+    else next.delete(id);
+  }
+  selectedImportedDocumentIds.value = next;
+}
+
+function pruneImportedSelection(rows = filteredImportedDocuments.value) {
+  const visible = new Set(rows.map((doc) => doc.id));
+  const next = new Set([...selectedImportedDocumentIds.value].filter((id) => visible.has(id)));
+  if (next.size !== selectedImportedDocumentIds.value.size) {
+    selectedImportedDocumentIds.value = next;
+  }
+}
 
 function onFilterChange() {
   filterSender.value = null;
@@ -861,7 +926,7 @@ function configureGuidedFlow(flow: "invoice" | "inspection") {
   selectedTemplateId.value = templateId;
   searchTemplateId.value = templateId;
   fileTypes.value = flow === "invoice"
-    ? { pdf: true, doc: false, xls: false, img: true }
+    ? { pdf: true, doc: true, xls: true, img: false }
     : { pdf: true, doc: true, xls: false, img: true };
   filterType.value = "none";
   filterSender.value = null;
@@ -1363,6 +1428,12 @@ function importedDocActionOptions(doc: ImportedDocumentCard) {
       icon: renderActionIcon(ArchiveOutline),
       props: { style: "color: var(--color-error, #d03050)" },
     },
+    {
+      label: "מחק מסמך",
+      key: "delete",
+      icon: renderActionIcon(TrashOutline),
+      props: { style: "color: var(--color-error, #d03050)" },
+    },
   ];
 }
 
@@ -1370,9 +1441,47 @@ async function handleImportedDocAction(key: string, doc: ImportedDocumentCard) {
   if (key === "open") return openImportedDocument(doc);
   if (key === "download") return downloadImportedDocument(doc);
   if (key === "archive") return updateImportedInvoiceStatus(doc, "archived");
+  if (key === "delete") return deleteImportedDocuments([doc]);
   if (key === "business:custom") return openImportedBusinessModal(doc);
   if (key.startsWith("business:")) return updateImportedInvoiceMeta(doc, { business: key.slice("business:".length) });
   if (key.startsWith("category:")) return updateImportedInvoiceMeta(doc, { expense_category: key.slice("category:".length) });
+}
+
+async function deleteSelectedImportedDocuments() {
+  const selected = new Set(selectedImportedDocumentIds.value);
+  const docs = importedDocuments.value.filter((doc) => selected.has(doc.id));
+  await deleteImportedDocuments(docs);
+}
+
+async function deleteImportedDocuments(docs: ImportedDocumentCard[]) {
+  if (!docs.length || deletingImportedDocuments.value) return;
+  deletingImportedDocuments.value = true;
+  try {
+    const messageIds = [...new Set(docs.map((doc) => doc.sourceMessageId).filter(Boolean))];
+    for (const doc of docs) {
+      await api.documents.delete(doc.id);
+    }
+    for (const messageId of messageIds) {
+      await api.gmail.deleteImportHistory(messageId);
+    }
+    removeImportedDocumentsFromHistory(new Set(docs.map((doc) => doc.id)), new Set(messageIds));
+    message.success(docs.length === 1 ? "המסמך נמחק" : `${docs.length} מסמכים נמחקו`);
+  } catch {
+    message.error("שגיאה במחיקת המסמכים");
+  } finally {
+    deletingImportedDocuments.value = false;
+  }
+}
+
+function removeImportedDocumentsFromHistory(documentIds: Set<string>, messageIds: Set<string>) {
+  historyItems.value = historyItems.value
+    .filter((item) => !messageIds.has(item.message_id))
+    .map((item) => ({
+      ...item,
+      files: item.files?.filter((file) => !file.document?.id || !documentIds.has(file.document.id)),
+    }))
+    .filter((item) => (item.files ?? []).length > 0);
+  selectedImportedDocumentIds.value = new Set([...selectedImportedDocumentIds.value].filter((id) => !documentIds.has(id)));
 }
 
 function openImportedBusinessModal(doc: ImportedDocumentCard) {
@@ -2020,6 +2129,10 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   color: var(--text-secondary);
 }
 
+.gmail-docs-delete-selected {
+  color: var(--color-error, #d03050);
+}
+
 .gmail-doc-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -2146,6 +2259,12 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   border-bottom: 1px solid var(--border-color);
   font-size: 13px;
   vertical-align: middle;
+}
+
+.gmail-doc-table__select-head,
+.gmail-doc-table__select {
+  width: 42px;
+  text-align: center;
 }
 
 .gmail-doc-table th {
@@ -2336,4 +2455,3 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   }
 }
 </style>
-
