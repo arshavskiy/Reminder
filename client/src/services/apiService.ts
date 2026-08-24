@@ -427,7 +427,7 @@ export const api = {
   },
 
   invoices: {
-    list: (params?: { q?: string; status?: string; type?: string; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
+    list: (params?: { q?: string; status?: string; type?: string; category?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
       get<{
         rows: ImportedInvoice[];
         total: number;

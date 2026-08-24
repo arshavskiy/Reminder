@@ -29,6 +29,8 @@ export function registerInvoiceRoutes(app: express.Application) {
     const type = String(req.query.type ?? "").trim();
     const category = String(req.query.category ?? "").trim();
     const suppliers = parseMultiQuery(req.query.supplier);
+    const sortBy = normalizeInvoiceSortBy(req.query.sortBy);
+    const sortDir = normalizeSortDir(req.query.sortDir);
     const fromTs = parseDateTs(req.query.dateFrom);
     const toTs = parseDateTs(req.query.dateTo, true);
 
@@ -74,7 +76,8 @@ export function registerInvoiceRoutes(app: express.Application) {
         if (toTs && (!rowTs || rowTs > toTs)) return false;
         if (!q) return true;
         return invoiceMatchesQuery(row, q);
-      });
+      })
+      .sort((left, right) => compareInvoiceRows(left, right, sortBy, sortDir));
 
     const visibleLimit = invoiceListVisibleLimit(userPlan);
     const visibleRows = visibleLimit === null ? rows : rows.slice(0, visibleLimit);
@@ -397,6 +400,57 @@ function invoiceMatchesQuery(row: ReturnType<typeof presentInvoice>, q: string):
     row.service_address,
     row.customer_number,
   ].join(" ")).includes(q);
+}
+
+type InvoiceSortBy = "supplier" | "status" | "date" | "client" | "category" | "type" | "amount";
+type SortDir = "asc" | "desc";
+
+function normalizeInvoiceSortBy(value: unknown): InvoiceSortBy {
+  const raw = String(value ?? "").trim();
+  if (raw === "supplier" || raw === "status" || raw === "date" || raw === "client" || raw === "category" || raw === "type" || raw === "amount") {
+    return raw;
+  }
+  return "date";
+}
+
+function normalizeSortDir(value: unknown): SortDir {
+  return String(value ?? "").trim().toLowerCase() === "asc" ? "asc" : "desc";
+}
+
+function compareInvoiceRows(
+  left: ReturnType<typeof presentInvoice>,
+  right: ReturnType<typeof presentInvoice>,
+  sortBy: InvoiceSortBy,
+  sortDir: SortDir,
+): number {
+  const direction = sortDir === "asc" ? 1 : -1;
+  let result = 0;
+  if (sortBy === "amount") {
+    result = compareNumber(left.amount, right.amount);
+  } else if (sortBy === "date") {
+    result = compareNumber(invoiceDateTs(left), invoiceDateTs(right));
+  } else {
+    result = compareText(invoiceSortText(left, sortBy), invoiceSortText(right, sortBy));
+  }
+  return result * direction || compareNumber(invoiceDateTs(left), invoiceDateTs(right)) * -1;
+}
+
+function invoiceSortText(row: ReturnType<typeof presentInvoice>, sortBy: Exclude<InvoiceSortBy, "amount" | "date">): string {
+  if (sortBy === "supplier") return row.supplier_name;
+  if (sortBy === "status") return row.status;
+  if (sortBy === "client") return row.client_name ?? "";
+  if (sortBy === "category") return row.provider_category ?? "";
+  return row.type;
+}
+
+function compareText(left: string | null | undefined, right: string | null | undefined): number {
+  return String(left ?? "").localeCompare(String(right ?? ""), "he", { numeric: true, sensitivity: "base" });
+}
+
+function compareNumber(left: number | null | undefined, right: number | null | undefined): number {
+  const a = typeof left === "number" && Number.isFinite(left) ? left : Number.NEGATIVE_INFINITY;
+  const b = typeof right === "number" && Number.isFinite(right) ? right : Number.NEGATIVE_INFINITY;
+  return a - b;
 }
 
 function normalizeInvoiceStatus(value: unknown): string {

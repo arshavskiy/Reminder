@@ -224,13 +224,48 @@
           </colgroup>
           <thead>
             <tr>
-              <th class="invoice-col invoice-col--supplier">ספק</th>
-              <th class="invoice-col invoice-col--status">סטטוס</th>
-              <th class="invoice-col invoice-col--date">תאריך</th>
-              <th class="invoice-col invoice-col--client">לקוח</th>
-              <th class="invoice-col invoice-col--category">קטגוריה</th>
-              <th class="invoice-col invoice-col--type">סוג</th>
-              <th class="invoice-col invoice-col--amount">סכום</th>
+              <th class="invoice-col invoice-col--supplier">
+                <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('supplier')" @click="setSort('supplier')">
+                  <span>ספק</span>
+                  <n-icon :component="sortIcon('supplier')" :size="14" />
+                </button>
+              </th>
+              <th class="invoice-col invoice-col--status">
+                <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('status')" @click="setSort('status')">
+                  <span>סטטוס</span>
+                  <n-icon :component="sortIcon('status')" :size="14" />
+                </button>
+              </th>
+              <th class="invoice-col invoice-col--date">
+                <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('date')" @click="setSort('date')">
+                  <span>תאריך</span>
+                  <n-icon :component="sortIcon('date')" :size="14" />
+                </button>
+              </th>
+              <th class="invoice-col invoice-col--client">
+                <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('client')" @click="setSort('client')">
+                  <span>לקוח</span>
+                  <n-icon :component="sortIcon('client')" :size="14" />
+                </button>
+              </th>
+              <th class="invoice-col invoice-col--category">
+                <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('category')" @click="setSort('category')">
+                  <span>קטגוריה</span>
+                  <n-icon :component="sortIcon('category')" :size="14" />
+                </button>
+              </th>
+              <th class="invoice-col invoice-col--type">
+                <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('type')" @click="setSort('type')">
+                  <span>סוג</span>
+                  <n-icon :component="sortIcon('type')" :size="14" />
+                </button>
+              </th>
+              <th class="invoice-col invoice-col--amount">
+                <button class="invoice-sort-button invoice-sort-button--amount" type="button" :aria-label="sortAriaLabel('amount')" @click="setSort('amount')">
+                  <span>סכום</span>
+                  <n-icon :component="sortIcon('amount')" :size="14" />
+                </button>
+              </th>
               <th class="invoice-col invoice-col--actions">פעולות</th>
             </tr>
           </thead>
@@ -378,6 +413,8 @@ import { useRouter } from "vue-router";
 import { NButton, NDatePicker, NDropdown, NIcon, NInput, NModal, NPagination, NSelect, NSpin, NTooltip, useMessage, type SelectOption } from "naive-ui";
 import {
   ArchiveOutline,
+  ArrowDownOutline,
+  ArrowUpOutline,
   BriefcaseOutline,
   CloudUploadOutline,
   DocumentTextOutline,
@@ -388,6 +425,7 @@ import {
   ListOutline,
   PricetagOutline,
   RefreshOutline,
+  SwapVerticalOutline,
 } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 import GmailLogo from "../components/GmailLogo.vue";
@@ -421,6 +459,9 @@ const viewMode = ref<"cards" | "table">("table");
 const dateRange = ref<[number, number] | null>(null);
 const page = ref(1);
 const pageSize = ref(20);
+type InvoiceSortKey = "supplier" | "status" | "date" | "client" | "category" | "type" | "amount";
+const sortBy = ref<InvoiceSortKey>("date");
+const sortDir = ref<"asc" | "desc">("desc");
 const counts = ref<Record<string, number>>({});
 const types = ref<string[]>([]);
 const categories = ref<string[]>([]);
@@ -504,6 +545,8 @@ async function load(force = false) {
       type: filters.type ?? undefined,
       category: filters.category ?? undefined,
       supplier: supplierFilterParam(),
+      sortBy: sortBy.value,
+      sortDir: sortDir.value,
       dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
       dateTo: dateTo ? new Date(dateTo).toISOString().slice(0, 10) : undefined,
       limit: pageSize.value,
@@ -527,6 +570,35 @@ async function load(force = false) {
 function setStatus(value: string) {
   filters.status = value || null;
   load(true);
+}
+
+function setSort(key: InvoiceSortKey) {
+  if (sortBy.value === key) {
+    sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
+  } else {
+    sortBy.value = key;
+    sortDir.value = key === "date" || key === "amount" ? "desc" : "asc";
+  }
+  load(true);
+}
+
+function sortIcon(key: InvoiceSortKey): Component {
+  if (sortBy.value !== key) return SwapVerticalOutline;
+  return sortDir.value === "asc" ? ArrowUpOutline : ArrowDownOutline;
+}
+
+function sortAriaLabel(key: InvoiceSortKey): string {
+  const labels: Record<InvoiceSortKey, string> = {
+    supplier: "ספק",
+    status: "סטטוס",
+    date: "תאריך",
+    client: "לקוח",
+    category: "קטגוריה",
+    type: "סוג",
+    amount: "סכום",
+  };
+  const nextDirection = sortBy.value === key && sortDir.value === "asc" ? "יורד" : "עולה";
+  return `מיין לפי ${labels[key]} בסדר ${nextDirection}`;
 }
 
 function statusLabel(status: string): string {
@@ -650,6 +722,8 @@ async function exportInvoicesToExcel() {
       type: filters.type ?? undefined,
       category: filters.category ?? undefined,
       supplier: supplierFilterParam(),
+      sortBy: sortBy.value,
+      sortDir: sortDir.value,
       dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
       dateTo: dateTo ? new Date(dateTo).toISOString().slice(0, 10) : undefined,
       limit: Math.max(total.value, 1),
@@ -1397,6 +1471,46 @@ function replaceRow(updated: ImportedInvoice) {
   background: var(--bg-elevated);
   color: var(--text-secondary);
   font-weight: 800;
+}
+
+.invoice-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.invoice-sort-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invoice-sort-button :deep(.n-icon) {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--text-secondary) 78%, var(--brand-color));
+}
+
+.invoice-sort-button:hover,
+.invoice-sort-button:focus-visible {
+  color: var(--brand-color);
+}
+
+.invoice-sort-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-color) 45%, transparent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.invoice-sort-button--amount {
+  direction: rtl;
 }
 
 .invoice-table tbody tr:last-child td {
