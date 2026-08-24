@@ -119,7 +119,7 @@
             <n-drawer-content title="ניווט" closable>
               <nav class="mobile-nav-list">
                 <button
-                  v-for="item in primaryNav"
+                  v-for="item in sideNav"
                   :key="item.key"
                   :class="{ 'mobile-nav-list__item--active': isActiveNav(item.key) }"
                   class="mobile-nav-list__item"
@@ -133,11 +133,27 @@
           </n-drawer>
 
           <!-- ── Main content ───────────────────────────────────────────── -->
-          <main :class="['content', { 'content--fullpage': isMinimalShell }]">
-            <div :class="isMinimalShell ? '' : 'page'">
-            <router-view />
-            </div>
-          </main>
+          <div :class="['shell-body', { 'shell-body--fullpage': isMinimalShell }]">
+            <aside v-if="!hideAppChrome" class="side-nav" aria-label="ניווט ראשי">
+              <button
+                v-for="item in sideNav"
+                :key="item.key"
+                class="side-nav__item"
+                :class="{ 'side-nav__item--active': isActiveNav(item.key) }"
+                type="button"
+                @click="navigate(item.key)"
+              >
+                <n-icon :component="item.icon" :size="18" />
+                <span>{{ item.label }}</span>
+              </button>
+            </aside>
+
+            <main :class="['content', { 'content--fullpage': isMinimalShell }]">
+              <div :class="isMinimalShell ? '' : 'page'">
+              <router-view />
+              </div>
+            </main>
+          </div>
 
           <footer v-if="route.path !== '/login' && !isLegalRoute" class="app-footer" dir="rtl">
             <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
@@ -204,7 +220,22 @@ import {
   unstableTreeSelectRtl,
   unstableUploadsRtl,
 } from "naive-ui";
-import {DiamondOutline, DownloadOutline, MoonOutline, SunnyOutline} from "@vicons/ionicons5";
+import {
+  AnalyticsOutline,
+  BarChartOutline,
+  CarOutline,
+  ClipboardOutline,
+  DiamondOutline,
+  DocumentTextOutline,
+  DownloadOutline,
+  FileTrayFullOutline,
+  HomeOutline,
+  MoonOutline,
+  NotificationsOutline,
+  PeopleOutline,
+  ReceiptOutline,
+  SunnyOutline,
+} from "@vicons/ionicons5";
 import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
@@ -450,24 +481,34 @@ watch(isDark, (dark) => {
 const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
 
 const allNav = [
-  {label: "ראשי", key: "dashboard", minRole: "user", feature: FEATURES.pages.dashboard},
-  {label: "מסמכים", key: "documents", minRole: "user", feature: FEATURES.pages.documents},
-  {label: "חשבוניות", key: "invoices", minRole: "user", feature: FEATURES.pages.invoices},
-  {label: "תסקירים", key: "contracts", minRole: "user", feature: FEATURES.pages.contracts},
-  {label: "תזכורות", key: "reminders", minRole: "user", feature: FEATURES.pages.reminders},
-  {label: "דוחות", key: "reports", minRole: "user", feature: FEATURES.pages.reports},
-  {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
-  {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
-  {label: "ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment },
+  {label: "ראשי", key: "dashboard", minRole: "user", feature: FEATURES.pages.dashboard, icon: HomeOutline},
+  {label: "מסמכים", key: "documents", minRole: "user", feature: FEATURES.pages.documents, icon: FileTrayFullOutline},
+  {label: "חשבוניות", key: "invoices", minRole: "user", feature: FEATURES.pages.invoices, icon: ReceiptOutline},
+  {label: "הוצאות", key: "reports/expenses", minRole: "user", feature: FEATURES.pages.reports, icon: AnalyticsOutline, sideOnly: true},
+  {label: "תסקירים", key: "contracts", minRole: "user", feature: FEATURES.pages.contracts, icon: ClipboardOutline},
+  {label: "תזכורות", key: "reminders", minRole: "user", feature: FEATURES.pages.reminders, icon: NotificationsOutline},
+  {label: "דוחות", key: "reports", minRole: "user", feature: FEATURES.pages.reports, icon: BarChartOutline},
+  {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients, icon: PeopleOutline},
+  {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field, icon: CarOutline},
+  {label: "ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment, icon: ClipboardOutline },
   // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
   // Print templates are reached from the contracts page, next to "תסקיר חדש".
   // {label: "הדפסת תסקיר", key: "compose", minRole: "user", feature: FEATURES.pages.printTemplates},
-  {label: "Gmail", key: "gmail-inbox", minRole: "admin"},
+  {label: "Gmail", key: "gmail-inbox", minRole: "admin", icon: DocumentTextOutline},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];
 
 const primaryNav = computed(() => {
+  const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
+  return allNav.filter((item) =>
+    !item.sideOnly &&
+    userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
+    (!item.feature || featuresStore.hasFeature(item.feature as FeatureKey))
+  );
+});
+
+const sideNav = computed(() => {
   const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
   return allNav.filter((item) =>
     userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
@@ -482,6 +523,7 @@ const activeKey = computed(() => {
 
 function isActiveNav(key: string): boolean {
   if (key.includes("/")) return route.path === `/${key}` || route.path.startsWith(`/${key}/`);
+  if (route.path === "/reports/expenses" && key === "reports") return false;
   return activeKey.value === key;
 }
 
@@ -880,6 +922,66 @@ html[data-theme="dark"] .install-banner {
 .avatar:hover { background: var(--bg-hover); }
 
 /* ── Content ──────────────────────────────────────────────────────────────── */
+.shell-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-app);
+}
+
+.shell-body--fullpage {
+  display: block;
+}
+
+.side-nav {
+  position: sticky;
+  top: 64px;
+  display: flex;
+  flex: 0 0 88px;
+  flex-direction: column;
+  gap: 6px;
+  align-self: flex-start;
+  height: calc(100vh - 64px);
+  padding: 14px 10px;
+  border-left: 1px solid var(--border-color);
+  background: var(--bg-card);
+}
+
+.side-nav__item {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-height: 58px;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.side-nav__item:hover,
+.side-nav__item:focus-visible {
+  color: var(--brand-color);
+  background: color-mix(in srgb, var(--brand-color) 8%, transparent);
+  outline: none;
+}
+
+.side-nav__item--active {
+  color: var(--brand-color);
+  background: color-mix(in srgb, var(--brand-color) 12%, var(--bg-card));
+}
+
+.side-nav__item span {
+  overflow: hidden;
+  max-width: 72px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .content {
   flex: 1;
   overflow-y: auto;
@@ -938,6 +1040,10 @@ html[data-theme="dark"] .install-banner {
 
   .content {
     padding: 18px 14px 28px;
+  }
+
+  .side-nav {
+    display: none;
   }
 }
 

@@ -171,6 +171,26 @@ export interface ImportedInvoice {
   fields: Record<string, unknown>;
 }
 
+export interface InvoiceExpenseMonthlyPoint {
+  month: string;
+  total: number;
+  count: number;
+}
+
+export interface InvoiceExpenseMonthlySeries {
+  supplier: string;
+  total: number;
+  points: InvoiceExpenseMonthlyPoint[];
+}
+
+export interface InvoiceExpenseMonthlyResponse {
+  dateBasis: "invoice" | "import";
+  months: string[];
+  suppliers: { name: string; total: number }[];
+  categories: GmailSearchProvider["category"][];
+  series: InvoiceExpenseMonthlySeries[];
+}
+
 export interface ProfileSubscriptionQuota {
   category: "invoices" | "contracts" | "documents" | "reminders";
   scope: "monthly" | "lifetime" | "unlimited";
@@ -446,6 +466,8 @@ export const api = {
       put<ImportedInvoice>(`/invoices/${id}`, body),
     mergeVendors: (body: { supplierNames: string[]; canonicalName: string }) =>
       post<{ ok: true; matched: number; modified: number; supplierName: string }>("/invoices/vendors/merge", body),
+    expenseMonthly: (params?: { dateBasis?: "invoice" | "import"; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; top?: number }, force = false) =>
+      get<InvoiceExpenseMonthlyResponse>(`/invoices/expenses/monthly${qs(params)}`, force),
   },
 
   documents: {

@@ -100,6 +100,92 @@ export function registerInvoiceRoutes(app: express.Application) {
     });
   });
 
+  app.get("/api/invoices/expenses/monthly", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const dateBasis = String(req.query.dateBasis ?? "").trim() === "import" ? "import" : "invoice";
+    const category = String(req.query.category ?? "").trim();
+    const suppliers = parseMultiQuery(req.query.supplier);
+    const fromTs = parseDateTs(req.query.dateFrom);
+    const toTs = parseDateTs(req.query.dateTo, true);
+    const top = clampInt(req.query.top, 8, 1, 20);
+
+    const invoices = await col("invoices")
+      .find({ user_id: userId } as any)
+      .sort({ issue_date: -1, created_at: -1 } as any)
+      .limit(5000)
+      .toArray() as InvoiceRow[];
+
+    const documentIds = [...new Set(invoices.map((invoice) => String(invoice.document_id ?? "")).filter(ObjectId.isValid))];
+    const documents = documentIds.length
+      ? await col("documents")
+        .find({ _id: { $in: documentIds.map((id) => new ObjectId(id)) }, user_id: userId } as any, { projection: { raw_text: 0 } } as any)
+        .toArray() as InvoiceRow[]
+      : [];
+    const documentMap = new Map(documents.map((doc) => [doc._id.toString(), doc]));
+    const providers = await loadGmailSearchProviders();
+    const rows = invoices
+      .map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers))
+      .filter((row) => {
+        if (category && row.provider_category !== category) return false;
+        if (suppliers.length && !suppliers.includes(row.supplier_name)) return false;
+        const rowTs = chartDateTs(row, dateBasis);
+        if (fromTs && (!rowTs || rowTs < fromTs)) return false;
+        if (toTs && (!rowTs || rowTs > toTs)) return false;
+        return Boolean(rowTs) && typeof row.amount === "number" && Number.isFinite(row.amount);
+      });
+
+    const monthSet = new Set<string>();
+    const totals = new Map<string, number>();
+    const buckets = new Map<string, Map<string, { total: number; count: number }>>();
+    for (const row of rows) {
+      const month = chartMonth(row, dateBasis);
+      if (!month) continue;
+      const supplier = row.supplier_name || "ספק לא מזוהה";
+      monthSet.add(month);
+      totals.set(supplier, (totals.get(supplier) ?? 0) + (row.amount ?? 0));
+      if (!buckets.has(supplier)) buckets.set(supplier, new Map());
+      const supplierBuckets = buckets.get(supplier)!;
+      const current = supplierBuckets.get(month) ?? { total: 0, count: 0 };
+      current.total += row.amount ?? 0;
+      current.count += 1;
+      supplierBuckets.set(month, current);
+    }
+
+    const months = [...monthSet].sort();
+    const supplierTotals = [...totals.entries()]
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "he", { sensitivity: "base" }));
+    const selectedSuppliers = suppliers.length ? suppliers : supplierTotals.slice(0, top).map((item) => item.name);
+    const series = selectedSuppliers.map((supplier) => {
+      const supplierBuckets = buckets.get(supplier) ?? new Map();
+      return {
+        supplier,
+        total: totals.get(supplier) ?? 0,
+        points: months.map((month) => ({
+          month,
+          total: roundMoney(supplierBuckets.get(month)?.total ?? 0),
+          count: supplierBuckets.get(month)?.count ?? 0,
+        })),
+      };
+    });
+
+    res.json({
+      dateBasis,
+      months,
+      suppliers: supplierTotals,
+      categories: uniqueSorted(rows.map((row) => row.provider_category ?? "").filter(isNonEmptyString)),
+      series,
+    });
+  });
+
   app.post("/api/invoices/vendors/merge", async (req, res) => {
     let userId: string;
     try {
@@ -388,6 +474,18 @@ function invoiceDateTs(row: ReturnType<typeof presentInvoice>): number | null {
   return parseDateTs(row.issue_date ?? row.import_date);
 }
 
+function chartDateTs(row: ReturnType<typeof presentInvoice>, dateBasis: "invoice" | "import"): number | null {
+  return parseDateTs(dateBasis === "import" ? row.import_date : row.issue_date ?? row.import_date);
+}
+
+function chartMonth(row: ReturnType<typeof presentInvoice>, dateBasis: "invoice" | "import"): string | null {
+  const value = dateBasis === "import" ? row.import_date : row.issue_date ?? row.import_date;
+  if (!value) return null;
+  const ts = Date.parse(String(value));
+  if (!Number.isFinite(ts)) return null;
+  return new Date(ts).toISOString().slice(0, 7);
+}
+
 function invoiceMatchesQuery(row: ReturnType<typeof presentInvoice>, q: string): boolean {
   return normalize([
     row.supplier_name,
@@ -496,6 +594,10 @@ function formatAmount(amount: number | null, currency: string): string {
   } catch {
     return `${amount}`;
   }
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function normalizeCurrencyCode(value: unknown): string {
