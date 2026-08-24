@@ -366,6 +366,9 @@ export async function processDocument(
 
   let rawText = "";
   let pageCount: number | null = null;
+  const forcedTemplate = pipeline?.templateId
+    ? await loadTemplate(pipeline.templateId).catch(() => null)
+    : null;
 
   try {
     if (mimeType === "application/pdf") {
@@ -388,6 +391,23 @@ export async function processDocument(
       rawText = readFileSync(filePath, "utf-8");
     }
   } catch (err) {
+    if (pipeline?.gmailImport && forcedTemplate && isInvoiceTemplate(forcedTemplate)) {
+      logger.info("gmail_import_invoice_text_extraction_failed_skipped", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        template_id: forcedTemplate.id ?? pipeline.templateId ?? null,
+        template_name: forcedTemplate.name,
+        error: String(err),
+      });
+      await deleteSkippedGmailDocument(documentId, docFilter, filePath);
+      push?.({
+        type: "document:done",
+        documentId: documentId as any,
+        status: "skipped",
+        reason: "gmail_import_invoice_text_extraction_failed_skipped",
+      });
+      return;
+    }
     const msg = `Text extraction failed: ${err}`;
     await col("documents").updateOne(docFilter, {
       $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
@@ -402,9 +422,6 @@ export async function processDocument(
     $set: { raw_text: rawText, page_count: pageCount, processing_status: "processing", updated_at: new Date() },
   });
 
-  const forcedTemplate = pipeline?.templateId
-    ? await loadTemplate(pipeline.templateId).catch(() => null)
-    : null;
   const gmailSkipReason = gmailTemplateSkipReason(pipeline, forcedTemplate, rawText);
   if (gmailSkipReason) {
     logger.info(gmailSkipReason, {

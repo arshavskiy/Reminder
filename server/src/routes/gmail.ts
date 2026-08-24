@@ -661,6 +661,7 @@ function isInspectionTemplate(template: Awaited<ReturnType<typeof loadTemplate>>
 }
 
 const INSPECTION_GMAIL_QUERY = "has:attachment filename:pdf תסקיר";
+const INVOICE_ATTACHMENT_QUERY = "{filename:pdf filename:doc filename:docx filename:xls filename:xlsx}";
 
 function buildGmailQuery(userQuery: string | undefined, template: Awaited<ReturnType<typeof loadTemplate>>): string {
   const defaultQuery = "has:attachment filename:pdf";
@@ -668,7 +669,23 @@ function buildGmailQuery(userQuery: string | undefined, template: Awaited<Return
   if (isInspectionTemplate(template) && q === defaultQuery) {
     return INSPECTION_GMAIL_QUERY;
   }
+  if (isInvoiceTemplate(template)) {
+    return forceInvoiceAttachmentTypes(q);
+  }
   return q;
+}
+
+function forceInvoiceAttachmentTypes(query: string): string {
+  const withoutAttachmentTypes = query
+    .replace(/\{(?:\s*filename:(?:pdf|doc|docx|xls|xlsx|jpg|jpeg|png)\s*)+\}/gi, " ")
+    .replace(/\bfilename:(?:pdf|doc|docx|xls|xlsx|jpg|jpeg|png)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!withoutAttachmentTypes) return `has:attachment ${INVOICE_ATTACHMENT_QUERY}`;
+  if (/\bhas:attachment\b/i.test(withoutAttachmentTypes)) {
+    return withoutAttachmentTypes.replace(/\bhas:attachment\b/i, `has:attachment ${INVOICE_ATTACHMENT_QUERY}`);
+  }
+  return `has:attachment ${INVOICE_ATTACHMENT_QUERY} ${withoutAttachmentTypes}`;
 }
 
 function quotaCategoryFromTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): DocumentImportQuotaCategory {
