@@ -5,7 +5,7 @@
       :subtitle="connectedEmail ? `מחובר: ${connectedEmail}` : 'ייבוא קבצים מצורפים מתיבת הדואר'"
       :count="importedDocuments.length > 0 ? importedDocuments.length : undefined"
     >
-      <template #actions>
+      <template #hero>
         <div class="gmail-actions">
           <button
             v-if="connected && (isAdmin || selectedGuidedFlow)"
@@ -53,6 +53,68 @@
           >
             <n-icon :component="LogoGoogle" class="btn-icon" />
             חבר Gmail
+          </button>
+        </div>
+      </template>
+      <template v-if="connected && isAdmin" #actions>
+        <div id="gmail-search-section" class="gmail-search-bar">
+          <span class="gmail-search-bar__label">חיפוש</span>
+          <div class="file-type-checks">
+            <n-checkbox v-model:checked="fileTypes.pdf">PDF</n-checkbox>
+            <n-checkbox v-model:checked="fileTypes.doc">DOC/DOCX</n-checkbox>
+            <n-checkbox v-model:checked="fileTypes.xls">XLS/XLSX</n-checkbox>
+            <n-checkbox v-model:checked="fileTypes.img">תמונות</n-checkbox>
+          </div>
+          <n-select
+            v-model:value="searchTemplateId"
+            :options="templateOptions"
+            placeholder="סוג מסמך"
+            filterable
+            clearable
+            class="toolbar__type"
+          />
+          <n-select
+            v-model:value="filterType"
+            :options="filterTypeOptions"
+            placeholder="סינון נוסף"
+            class="toolbar__type toolbar__type--sm"
+            @update:value="onFilterChange"
+          />
+          <n-select
+            v-if="filterType === 'sender'"
+            v-model:value="filterSender"
+            :options="senderOptions"
+            placeholder="שולח"
+            filterable
+            clearable
+            tag
+            class="toolbar__supplier"
+          />
+          <n-date-picker
+            v-if="filterType === 'date'"
+            v-model:value="filterDateRange"
+            type="daterange"
+            clearable
+            class="toolbar__dates"
+          />
+          <n-input
+            v-if="filterType === 'inspection'"
+            v-model:value="filterIdentifierText"
+            placeholder="מספר רישוי / תסקיר"
+            clearable
+            class="toolbar__search"
+            :allow-input="(v: string) => /^\d*$/.test(v)"
+            @keydown.enter="buildAndSearch"
+          />
+          <button
+            :class="{ 'rbtn--loading': loading }"
+            :disabled="loading"
+            class="rbtn rbtn--primary gmail-search-bar__submit"
+            type="button"
+            @click="buildAndSearch"
+          >
+            <n-icon :component="SearchOutline" class="btn-icon" />
+            חפש
           </button>
         </div>
       </template>
@@ -109,67 +171,6 @@
       @dismiss="lastImportJob = null"
     />
 
-    <!-- Filters -->
-    <div v-if="connected && isAdmin" class="toolbar gmail-filter-bar">
-      <div class="file-type-checks">
-        <n-checkbox v-model:checked="fileTypes.pdf">PDF</n-checkbox>
-        <n-checkbox v-model:checked="fileTypes.doc">DOC/DOCX</n-checkbox>
-        <n-checkbox v-model:checked="fileTypes.xls">XLS/XLSX</n-checkbox>
-        <n-checkbox v-model:checked="fileTypes.img">תמונות</n-checkbox>
-      </div>
-      <n-select
-        v-model:value="searchTemplateId"
-        :options="templateOptions"
-        placeholder="סוג מסמך"
-        filterable
-        clearable
-        class="toolbar__type"
-      />
-      <n-select
-        v-model:value="filterType"
-        :options="filterTypeOptions"
-        placeholder="סינון נוסף"
-        class="toolbar__type toolbar__type--sm"
-        @update:value="onFilterChange"
-      />
-      <n-select
-        v-if="filterType === 'sender'"
-        v-model:value="filterSender"
-        :options="senderOptions"
-        placeholder="שולח"
-        filterable
-        clearable
-        tag
-        class="toolbar__supplier"
-      />
-      <n-date-picker
-        v-if="filterType === 'date'"
-        v-model:value="filterDateRange"
-        type="daterange"
-        clearable
-        class="toolbar__dates"
-      />
-      <n-input
-        v-if="filterType === 'inspection'"
-        v-model:value="filterIdentifierText"
-        placeholder="מספר רישוי / תסקיר"
-        clearable
-        class="toolbar__search"
-        :allow-input="(v: string) => /^\d*$/.test(v)"
-        @keydown.enter="buildAndSearch"
-      />
-      <button
-        :class="{ 'rbtn--loading': loading }"
-        :disabled="loading"
-        class="rbtn rbtn--primary"
-        type="button"
-        @click="buildAndSearch"
-      >
-        <n-icon :component="SearchOutline" class="btn-icon" />
-        חפש
-      </button>
-    </div>
-
     <!-- Not connected -->
     <div v-if="!connected && !loading" class="empty">
       <n-icon :component="LogoGoogle" :size="48" class="empty__icon" style="color:#4285F4" />
@@ -184,7 +185,11 @@
     <n-spin v-else-if="loading" size="large" style="margin:80px auto;display:block" />
 
     <!-- Inbox table -->
-    <section v-else-if="isAdmin || selectedGuidedFlow" id="gmail-search-section" class="gmail-search-section">
+    <section
+      v-else-if="isAdmin || selectedGuidedFlow"
+      :id="isAdmin ? undefined : 'gmail-search-section'"
+      class="gmail-search-section"
+    >
       <div v-if="!emails.length" class="empty">
         <p>לא נמצאו מיילים עם קבצי {{ selectedTypeLabel }} מצורפים</p>
       </div>
@@ -682,7 +687,7 @@ const visibleImportJob = computed(() => activeImportJob.value ?? lastImportJob.v
 const sectionNavItems = computed(() => {
   if (!connected.value) return [];
   const items: Array<{ id: string; label: string }> = [];
-  if (isAdmin.value || selectedGuidedFlow.value) items.push({ id: "gmail-search-section", label: "חיפוש" });
+  if (!isAdmin.value && selectedGuidedFlow.value) items.push({ id: "gmail-search-section", label: "חיפוש" });
   if ((isAdmin.value || selectedGuidedFlow.value) && importedDocuments.value.length) items.push({ id: "gmail-imported-section", label: "מסמכים שיובאו" });
   return items;
 });
@@ -1673,8 +1678,8 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
-  width: 100%;
+  align-items: center;
+  gap: 8px;
 }
 
 .gmail-actions__select {
@@ -1866,6 +1871,26 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   gap: 10px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+
+.gmail-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.gmail-search-bar__label {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.gmail-search-bar .file-type-checks {
+  margin: 0;
+}
+.gmail-search-bar__submit {
+  margin-inline-start: auto;
 }
 
 .toolbar__search {
@@ -2507,6 +2532,7 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
+    width: 100%;
   }
 
   .gmail-actions__select,
@@ -2543,11 +2569,16 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
 
   .gmail-filter-bar,
   .gmail-doc-filters,
+  .gmail-search-bar,
   .toolbar {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
     gap: 8px;
+  }
+
+  .gmail-search-bar__label {
+    grid-column: 1 / -1;
   }
 
   .file-type-checks {
@@ -2562,15 +2593,19 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   .toolbar__supplier,
   .toolbar__dates,
   .gmail-filter-bar > .rbtn,
-  .gmail-filter-bar > .toolbar__dates {
+  .gmail-filter-bar > .toolbar__dates,
+  .gmail-search-bar > .rbtn,
+  .gmail-search-bar > .toolbar__dates {
     width: 100%;
     min-width: 0;
   }
 
   .toolbar__search,
   .toolbar__dates,
-  .gmail-filter-bar > .rbtn {
+  .gmail-filter-bar > .rbtn,
+  .gmail-search-bar__submit {
     grid-column: 1 / -1;
+    margin-inline-start: 0;
   }
 
   .inbox-cards {

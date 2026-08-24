@@ -341,7 +341,7 @@ html[dir="rtl"] .n-base-clear {
   z-index: 1;
 }
 
-.page { max-width: 1200px; margin: 0 auto; }
+.page { max-width: 1800px; margin: 0 auto; }
 .page:has(.pricing-page) {
   max-width: 100%;
   padding: 0;

@@ -265,3 +265,83 @@ describe("ensureHealthyDriveFolder", () => {
     expect(store.documentUnset).toBeNull();
   });
 });
+
+describe("ensureAppFolder", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("reuses an existing same-name folder when name search misses but the parent listing has it", async () => {
+    let creates = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = String(init?.method ?? "GET").toUpperCase();
+      if (method === "POST" && url.includes("/files")) {
+        creates += 1;
+        return Response.json({id: "duplicate-folder"});
+      }
+      if (method === "GET" && url.includes("/files?")) {
+        if (url.includes("name%3D") || decodeURIComponent(url).includes("name=")) {
+          return Response.json({files: []});
+        }
+        return Response.json({files: [{id: "existing-invoices", name: "חשבוניות"}]});
+      }
+      return new Response(`unexpected fetch ${method} ${url}`, {status: 500});
+    }));
+
+    const {ensureAppFolder} = await import("../storage/gdrive");
+    const id = await ensureAppFolder("token", "חשבוניות", "remindocr-folder");
+    expect(id).toBe("existing-invoices");
+    expect(creates).toBe(0);
+  });
+
+  it("reuses the first duplicate instead of creating another", async () => {
+    let creates = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = String(init?.method ?? "GET").toUpperCase();
+      if (method === "POST") {
+        creates += 1;
+        return Response.json({id: "third-folder"});
+      }
+      return Response.json({
+        files: [
+          {id: "invoices-a", name: "חשבוניות"},
+          {id: "invoices-b", name: "חשבוניות"},
+        ],
+      });
+    }));
+
+    const {ensureAppFolder} = await import("../storage/gdrive");
+    const id = await ensureAppFolder("token", "חשבוניות", "remindocr-folder");
+    expect(id).toBe("invoices-a");
+    expect(creates).toBe(0);
+  });
+
+  it("shares one create across concurrent callers", async () => {
+    let creates = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = String(init?.method ?? "GET").toUpperCase();
+      if (method === "GET" && url.includes("/files?")) {
+        return Response.json({files: []});
+      }
+      if (method === "POST" && url.includes("/files")) {
+        creates += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return Response.json({id: "created-once"});
+      }
+      return new Response(`unexpected fetch ${method} ${url}`, {status: 500});
+    }));
+
+    const {ensureAppFolder} = await import("../storage/gdrive");
+    const [first, second] = await Promise.all([
+      ensureAppFolder("token", "חשבוניות", "remindocr-folder"),
+      ensureAppFolder("token", "חשבוניות", "remindocr-folder"),
+    ]);
+    expect(first).toBe("created-once");
+    expect(second).toBe("created-once");
+    expect(creates).toBe(1);
+  });
+});
