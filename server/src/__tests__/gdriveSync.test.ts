@@ -13,6 +13,8 @@ const store = vi.hoisted(() => ({
   doc: null as Record<string, unknown> | null,
   documentUpdate: null as Record<string, unknown> | null,
   documentUnset: null as Record<string, unknown> | null,
+  invoiceUpdate: null as Record<string, unknown> | null,
+  invoiceUnset: null as Record<string, unknown> | null,
   syncedCount: 0,
   spacesEnabled: true,
   signedUrl: "https://s3.example.test/signed/invoice.pdf",
@@ -34,13 +36,21 @@ vi.mock("../db/db", () => ({
       }
       return {modifiedCount: 1};
     },
-    updateMany: async (_filter: unknown, update: { $unset?: Record<string, unknown> }) => {
+    updateMany: async (_filter: unknown, update: { $set?: Record<string, unknown>; $unset?: Record<string, unknown> }) => {
       if (name === "documents") {
         store.documentUnset = update.$unset ?? null;
         return {modifiedCount: store.syncedCount};
       }
+      if (name === "invoices") {
+        if (update.$set) store.invoiceUpdate = update.$set;
+        if (update.$unset) store.invoiceUnset = update.$unset ?? null;
+        return {modifiedCount: store.syncedCount};
+      }
       return {modifiedCount: 0};
     },
+    find: () => ({
+      toArray: async () => [],
+    }),
     countDocuments: async () => store.syncedCount,
   }),
 }));
@@ -59,6 +69,8 @@ describe("syncDocumentToDrive", () => {
     store.spacesEnabled = true;
     store.documentUpdate = null;
     store.documentUnset = null;
+    store.invoiceUpdate = null;
+    store.invoiceUnset = null;
     store.syncedCount = 0;
     store.user = {
       _id: USER_ID,
@@ -114,6 +126,10 @@ describe("syncDocumentToDrive", () => {
       drive_file_id: "drive-file-1",
       drive_web_link: "https://drive.google.com/file/d/drive-file-1",
     });
+    expect(store.invoiceUpdate).toMatchObject({
+      drive_file_id: "drive-file-1",
+      drive_web_link: "https://drive.google.com/file/d/drive-file-1",
+    });
     const calls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
     expect(calls.some((url) => url === store.signedUrl)).toBe(true);
     expect(calls.some((url) => url.includes("googleapis.com/upload/drive"))).toBe(true);
@@ -133,9 +149,86 @@ describe("syncDocumentToDrive", () => {
     await syncDocumentToDrive(DOC_ID, USER_ID);
 
     expect(store.documentUpdate).toMatchObject({drive_file_id: "drive-file-1"});
+    expect(store.invoiceUpdate).toMatchObject({drive_file_id: "drive-file-1"});
     const calls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
     expect(calls.some((url) => url.includes("googleapis.com/upload/drive"))).toBe(true);
     expect(readFileSync(join(docsDir, `${FILE_HASH}.pdf`), "utf8")).toContain("local-copy");
+  });
+
+  it("copies an existing Drive file onto matching invoices without re-uploading", async () => {
+    store.doc = {
+      ...store.doc,
+      drive_file_id: "existing-drive",
+      drive_web_link: "https://drive.google.com/file/d/existing-drive",
+    };
+
+    const {syncDocumentToDrive} = await import("../storage/gdrive");
+    await syncDocumentToDrive(DOC_ID, USER_ID);
+
+    expect(store.documentUpdate).toBeNull();
+    expect(store.invoiceUpdate).toMatchObject({
+      drive_file_id: "existing-drive",
+      drive_web_link: "https://drive.google.com/file/d/existing-drive",
+    });
+    const calls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+    expect(calls.some((url) => url.includes("googleapis.com/upload/drive"))).toBe(false);
+  });
+
+  it("uploads invoice-like Hebrew kinds into the חשבוניות subfolder", async () => {
+    store.doc = {
+      ...store.doc,
+      document_kind: "חשבונית",
+      document_type: "חשבונית",
+      invoice_saved: true,
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = String(init?.method ?? "GET").toUpperCase();
+      if (url === store.signedUrl) {
+        return new Response(Buffer.from("%PDF-1.4 google-drive-test"), {status: 200});
+      }
+      if (method === "GET" && url.includes("/files?")) {
+        return Response.json({files: [{id: "invoices-folder", name: "חשבוניות"}]});
+      }
+      if (url.includes("googleapis.com/upload/drive")) {
+        return Response.json({
+          id: "drive-file-1",
+          name: "invoice-100.pdf",
+          mimeType: "application/pdf",
+          webViewLink: "https://drive.google.com/file/d/drive-file-1",
+        });
+      }
+      return new Response(`unexpected fetch ${method} ${url}`, {status: 500});
+    }));
+
+    const {syncDocumentToDrive} = await import("../storage/gdrive");
+    await syncDocumentToDrive(DOC_ID, USER_ID);
+
+    expect(store.documentUpdate).toMatchObject({drive_file_id: "drive-file-1"});
+    expect(store.user).toMatchObject({drive_subfolder_invoice: "invoices-folder"});
+    const uploadCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input).includes("upload/drive"));
+    const uploadBody = uploadCall?.[1]?.body;
+    const uploadText = Buffer.isBuffer(uploadBody) ? uploadBody.toString("utf8") : String(uploadBody ?? "");
+    expect(uploadText).toContain("invoices-folder");
+  });
+});
+
+describe("driveFolderKindForDocument", () => {
+  it("maps English invoice, Hebrew invoice-like kinds, and saved invoices to invoice", async () => {
+    const {driveFolderKindForDocument} = await import("../storage/gdrive");
+    expect(driveFolderKindForDocument({document_kind: "invoice"})).toBe("invoice");
+    expect(driveFolderKindForDocument({document_kind: "חשבונית"})).toBe("invoice");
+    expect(driveFolderKindForDocument({document_kind: "קבלה"})).toBe("invoice");
+    expect(driveFolderKindForDocument({document_type: "receipt"})).toBe("invoice");
+    expect(driveFolderKindForDocument({document_kind: "unknown", invoice_saved: true})).toBe("invoice");
+  });
+
+  it("keeps inspection reports in their folder and leaves other kinds unmapped", async () => {
+    const {driveFolderKindForDocument} = await import("../storage/gdrive");
+    expect(driveFolderKindForDocument({document_kind: "inspection_report"})).toBe("inspection_report");
+    expect(driveFolderKindForDocument({document_kind: "contract"})).toBe("contract");
+    expect(driveFolderKindForDocument({document_kind: "unknown"})).toBe("unknown");
+    expect(driveFolderKindForDocument({})).toBeUndefined();
   });
 });
 
@@ -235,6 +328,7 @@ describe("ensureHealthyDriveFolder", () => {
       recreated: true,
     });
     expect(store.documentUnset).toMatchObject({drive_file_id: "", drive_web_link: ""});
+    expect(store.invoiceUnset).toMatchObject({drive_file_id: "", drive_web_link: ""});
     expect(store.user?.drive_folder_id).toBe("new-folder");
     expect(store.user?.drive_subfolder_invoice).toBeUndefined();
   });

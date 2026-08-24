@@ -20,6 +20,7 @@ import {logger} from "../logger";
 import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
 import {generatePdfThumbnailForDocument} from "../documents/pdfThumbnail";
 import {incrementDocumentUsage, type DocumentUsageKind} from "../quotas/userUsageCounters";
+import {inferInvoiceCashFlow} from "../invoices/cashFlow";
 
 type PushFn = (event: Record<string, unknown>) => void;
 
@@ -32,7 +33,41 @@ export interface PipelineOptions {
   storageKeyPrefix?: string; // optional S3 prefix for source-specific organization
   gmailImport?: boolean;   // true when imported via Gmail — enables post-OCR inspection validation
   usageKind?: DocumentUsageKind; // lifetime usage counter bucket (survives deletes)
+  waitForProcessing?: boolean; // await processing before returning the document id
+  queueProcessing?: boolean; // enqueue processing in document_processing_jobs
+  processingJobContext?: {
+    source?: "gmail" | "upload" | "drive" | string;
+    gmailImportJobId?: string;
+    gmailMessageId?: string;
+    gmailFilename?: string;
+  };
 }
+
+type DocumentProcessingJobStatus = "queued" | "running" | "completed" | "failed" | "retry_wait";
+type DocumentProcessingJob = {
+  _id: ObjectId;
+  user_id?: string | null;
+  document_id: string;
+  file_path: string;
+  mime_type: string;
+  ext: string;
+  pipeline?: PipelineOptions;
+  status: DocumentProcessingJobStatus;
+  attempts: number;
+  max_attempts: number;
+  locked_at?: Date | null;
+  locked_by?: string | null;
+  next_run_at: Date;
+  error_code?: string | null;
+  error_message?: string | null;
+  created_at: Date;
+  updated_at: Date;
+  completed_at?: Date | null;
+};
+
+const DOCUMENT_PROCESSING_JOB_STALE_MS = 10 * 60 * 1000;
+const DOCUMENT_PROCESSING_WORKER_ID = `${process.pid}-${Math.random().toString(36).slice(2)}`;
+let documentProcessingWorkerRunning = false;
 
 function parseJsonObject(raw: unknown, fallback: unknown = null): Record<string, unknown> {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
@@ -201,6 +236,9 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
       spacesKey = null;
       spacesUrl = null;
       downloadUrl = null;
+      if (pipeline?.gmailImport) {
+        throw new Error(`storage_failed: ${err}`);
+      }
     }
   }
 
@@ -248,21 +286,47 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   });
   notifyDocumentUploaded({ fileName });
 
-  const startProcessing = () => processDocument(documentId, managedPath, mimeType, ext, push, userId, pipeline).catch(async (err) => {
+  if (pipeline?.queueProcessing) {
+    await enqueueDocumentProcessingJob({
+      documentId,
+      filePath: managedPath,
+      mimeType,
+      ext,
+      userId,
+      pipeline: {
+        ...pipeline,
+        queueProcessing: false,
+        waitForProcessing: false,
+      },
+    });
+    startDocumentProcessingJobWorker();
+    const queueDelayMs = Number(pipeline.startDelayMs ?? 0);
+    if (Number.isFinite(queueDelayMs) && queueDelayMs > 0) {
+      setTimeout(startDocumentProcessingJobWorker, queueDelayMs + 250);
+    }
+    return documentId;
+  }
+
+  const startProcessing = async () => processDocument(documentId, managedPath, mimeType, ext, push, userId, pipeline).catch(async (err) => {
     logger.error("document_processing_failed", { document_id: documentId, user_id: userId ?? null, error: err });
     await col("documents").updateOne(
       { _id: insertResult.insertedId },
-      { $set: { processing_status: "error", error_message: String(err), updated_at: new Date() } }
+      { $set: retryableDocumentError(String(err), "processing_failed") }
     );
     notifyExtractionFailed({ fileName, error: String(err) });
     push?.({ type: "document:done", documentId: documentId as any, status: "error", error: String(err) });
   });
 
   const startDelayMs = Number(pipeline?.startDelayMs ?? 0);
-  if (Number.isFinite(startDelayMs) && startDelayMs > 0) {
+  if (pipeline?.waitForProcessing) {
+    if (Number.isFinite(startDelayMs) && startDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, startDelayMs));
+    }
+    await startProcessing();
+  } else if (Number.isFinite(startDelayMs) && startDelayMs > 0) {
     setTimeout(startProcessing, startDelayMs);
   } else {
-    startProcessing();
+    void startProcessing();
   }
 
   return documentId;
@@ -278,6 +342,314 @@ function normalizeStorageKeyPrefix(value: string | null | undefined): string | n
     .filter(Boolean)
     .join("/");
   return clean || null;
+}
+
+async function enqueueDocumentProcessingJob(input: {
+  documentId: string;
+  filePath: string;
+  mimeType: string;
+  ext: string;
+  userId?: string;
+  pipeline?: PipelineOptions;
+}): Promise<void> {
+  const now = new Date();
+  const delayMs = Number(input.pipeline?.startDelayMs ?? 0);
+  const nextRunAt = Number.isFinite(delayMs) && delayMs > 0
+    ? new Date(Date.now() + delayMs)
+    : now;
+  await col<DocumentProcessingJob>("document_processing_jobs").updateOne(
+    { document_id: input.documentId } as any,
+    {
+      $setOnInsert: {
+        user_id: input.userId ?? null,
+        document_id: input.documentId,
+        file_path: input.filePath,
+        mime_type: input.mimeType,
+        ext: input.ext,
+        pipeline: input.pipeline,
+        status: "queued",
+        attempts: 0,
+        max_attempts: 3,
+        locked_at: null,
+        locked_by: null,
+        next_run_at: nextRunAt,
+        error_code: null,
+        error_message: null,
+        created_at: now,
+        updated_at: now,
+      },
+      $set: {
+        file_path: input.filePath,
+        mime_type: input.mimeType,
+        ext: input.ext,
+        pipeline: input.pipeline,
+        next_run_at: nextRunAt,
+        updated_at: now,
+      },
+    } as any,
+    { upsert: true },
+  );
+}
+
+export function startDocumentProcessingJobWorker(): void {
+  if (documentProcessingWorkerRunning) return;
+  documentProcessingWorkerRunning = true;
+  void processDocumentProcessingJobs().finally(() => {
+    documentProcessingWorkerRunning = false;
+  });
+}
+
+async function processDocumentProcessingJobs(): Promise<void> {
+  await recoverStaleDocumentProcessingJobs();
+  while (true) {
+    const job = await claimNextDocumentProcessingJob();
+    if (!job) return;
+    await runDocumentProcessingJob(job);
+  }
+}
+
+async function recoverStaleDocumentProcessingJobs(): Promise<void> {
+  await col<DocumentProcessingJob>("document_processing_jobs").updateMany(
+    { status: "retry_wait", next_run_at: { $lte: new Date() } } as any,
+    { $set: { status: "queued", updated_at: new Date() } } as any,
+  );
+  const staleBefore = new Date(Date.now() - DOCUMENT_PROCESSING_JOB_STALE_MS);
+  const result = await col<DocumentProcessingJob>("document_processing_jobs").updateMany(
+    { status: "running", locked_at: { $lt: staleBefore } } as any,
+    {
+      $set: {
+        status: "queued",
+        locked_at: null,
+        locked_by: null,
+        updated_at: new Date(),
+      },
+    } as any,
+  );
+  if (result.modifiedCount) {
+    logger.warn("document_processing_jobs_requeued_stale", { count: result.modifiedCount });
+  }
+}
+
+async function claimNextDocumentProcessingJob(): Promise<DocumentProcessingJob | null> {
+  const now = new Date();
+  return await col<DocumentProcessingJob>("document_processing_jobs").findOneAndUpdate(
+    { status: "queued", next_run_at: { $lte: now } } as any,
+    {
+      $set: {
+        status: "running",
+        locked_at: now,
+        locked_by: DOCUMENT_PROCESSING_WORKER_ID,
+        updated_at: now,
+      },
+      $inc: { attempts: 1 },
+    } as any,
+    { sort: { created_at: 1 }, returnDocument: "after" },
+  ) as DocumentProcessingJob | null;
+}
+
+async function runDocumentProcessingJob(job: DocumentProcessingJob): Promise<void> {
+  try {
+    await processDocument(
+      job.document_id,
+      job.file_path,
+      job.mime_type,
+      job.ext,
+      undefined,
+      job.user_id ?? undefined,
+      job.pipeline,
+    );
+    const retryState = await documentProcessingRetryState(job.document_id);
+    if (retryState.status === "error") {
+      await updateGmailImportFromDocumentProcessingJob(job);
+      const attempts = Number(job.attempts ?? 1);
+      const maxAttempts = Number(job.max_attempts ?? 3);
+      const retryable = retryState.retryable && attempts < maxAttempts;
+      const retryDelayMs = Math.min(60_000 * attempts, 5 * 60_000);
+      await col<DocumentProcessingJob>("document_processing_jobs").updateOne(
+        { _id: job._id } as any,
+        {
+          $set: {
+            status: retryable ? "retry_wait" : "failed",
+            locked_at: null,
+            locked_by: null,
+            next_run_at: retryable ? new Date(Date.now() + retryDelayMs) : new Date(),
+            error_code: retryState.reason,
+            error_message: retryState.message,
+            updated_at: new Date(),
+          },
+        } as any,
+      );
+      if (retryable) setTimeout(startDocumentProcessingJobWorker, retryDelayMs + 250);
+      return;
+    }
+    await updateGmailImportFromDocumentProcessingJob(job);
+    await col<DocumentProcessingJob>("document_processing_jobs").updateOne(
+      { _id: job._id } as any,
+      {
+        $set: {
+          status: "completed",
+          locked_at: null,
+          locked_by: null,
+          error_code: null,
+          error_message: null,
+          completed_at: new Date(),
+          updated_at: new Date(),
+        },
+      } as any,
+    );
+  } catch (err) {
+    const message = String(err);
+    const reason = retryReasonFromError(message);
+    const attempts = Number(job.attempts ?? 1);
+    const maxAttempts = Number(job.max_attempts ?? 3);
+    const retryable = attempts < maxAttempts;
+    const retryDelayMs = Math.min(60_000 * attempts, 5 * 60_000);
+    await col("documents").updateOne(
+      { _id: new ObjectId(job.document_id) } as any,
+      { $set: retryableDocumentError(message, reason) },
+    );
+    await updateGmailImportFromDocumentProcessingJob(job, message, reason);
+    await col<DocumentProcessingJob>("document_processing_jobs").updateOne(
+      { _id: job._id } as any,
+      {
+        $set: {
+          status: retryable ? "retry_wait" : "failed",
+          locked_at: null,
+          locked_by: null,
+          next_run_at: retryable ? new Date(Date.now() + retryDelayMs) : new Date(),
+          error_code: reason,
+          error_message: message,
+          updated_at: new Date(),
+        },
+      } as any,
+    );
+    if (retryable) setTimeout(startDocumentProcessingJobWorker, retryDelayMs + 250);
+  }
+}
+
+async function documentProcessingRetryState(documentId: string): Promise<{
+  status: "ok" | "error";
+  retryable: boolean;
+  reason: string | null;
+  message: string | null;
+}> {
+  if (!ObjectId.isValid(documentId)) return { status: "ok", retryable: false, reason: null, message: null };
+  const doc = await col("documents").findOne(
+    { _id: new ObjectId(documentId) } as any,
+    { projection: { processing_status: 1, processing_retryable: 1, retry_reason: 1, error_message: 1 } } as any,
+  ) as any;
+  if (doc?.processing_status !== "error") return { status: "ok", retryable: false, reason: null, message: null };
+  return {
+    status: "error",
+    retryable: doc.processing_retryable !== false,
+    reason: String(doc.retry_reason ?? retryReasonFromError(doc.error_message)),
+    message: doc.error_message ?? null,
+  };
+}
+
+async function updateGmailImportFromDocumentProcessingJob(
+  job: DocumentProcessingJob,
+  errorMessage?: string,
+  errorReason?: string,
+): Promise<void> {
+  const context = job.pipeline?.processingJobContext;
+  const gmailJobId = context?.gmailImportJobId;
+  if (!gmailJobId || !ObjectId.isValid(gmailJobId)) return;
+
+  const result = await gmailProcessingResult(job, errorMessage, errorReason);
+  const setFields: Record<string, unknown> = {
+    "results.$[item].import_status": result.importStatus,
+    "results.$[item].retryable": result.retryable,
+    "results.$[item].rejection_reason": result.rejectionReason,
+    "results.$[item].rejection_label": result.rejectionLabel,
+    "results.$[item].error": result.error,
+    "results.$[item].ocr_failed": result.ocrFailed,
+    updated_at: new Date(),
+  };
+  const inc: Record<string, number> = {};
+  if (result.importStatus === "invoice") inc.classified_invoices = 1;
+  if (result.importStatus === "rejected") inc.rejected = 1;
+  if (result.ocrFailed) inc.ocr_failed = 1;
+  if (result.aiRetryPending) inc.ai_retry_pending = 1;
+
+  await col("gmail_import_jobs").updateOne(
+    { _id: new ObjectId(gmailJobId) } as any,
+    {
+      $set: setFields,
+      ...(Object.keys(inc).length ? { $inc: inc } : {}),
+    } as any,
+    { arrayFilters: [{ "item.documentId": job.document_id }] } as any,
+  );
+}
+
+async function gmailProcessingResult(
+  job: DocumentProcessingJob,
+  errorMessage?: string,
+  errorReason?: string,
+): Promise<{
+  importStatus: string;
+  retryable: boolean;
+  rejectionReason: string | null;
+  rejectionLabel: string | null;
+  error: string | null;
+  ocrFailed: boolean;
+  aiRetryPending: boolean;
+}> {
+  if (errorMessage) {
+    const reason = errorReason ?? retryReasonFromError(errorMessage);
+    return {
+      importStatus: reason === "ocr_unreadable" ? "ocr_failed" : "failed",
+      retryable: true,
+      rejectionReason: reason,
+      rejectionLabel: retryableProcessingLabel(reason, errorMessage),
+      error: errorMessage,
+      ocrFailed: reason === "ocr_unreadable",
+      aiRetryPending: reason === "ai_rate_limited" || reason === "ai_extraction_failed",
+    };
+  }
+
+  const [doc, invoice] = await Promise.all([
+    col("documents").findOne(
+      { _id: new ObjectId(job.document_id) } as any,
+      { projection: { processing_status: 1, error_message: 1, invoice_rejected: 1, invoice_rejection_reason: 1, invoice_rejection_label: 1, retry_reason: 1, retry_label: 1, ocr_retryable: 1 } } as any,
+    ) as Promise<any>,
+    col("invoices").findOne(
+      { document_id: { $in: [job.document_id, new ObjectId(job.document_id)] } } as any,
+      { projection: { _id: 1, invoice_rejection_reason: 1, invoice_rejection_label: 1, possible_not_invoice: 1, missing_required_fields: 1 } } as any,
+    ) as Promise<any>,
+  ]);
+  if (doc?.processing_status === "error") {
+    const reason = String(doc.retry_reason ?? doc.invoice_rejection_reason ?? retryReasonFromError(doc.error_message));
+    return {
+      importStatus: reason === "ocr_unreadable" ? "ocr_failed" : "failed",
+      retryable: true,
+      rejectionReason: reason,
+      rejectionLabel: doc.retry_label ?? doc.invoice_rejection_label ?? retryableProcessingLabel(reason, doc.error_message),
+      error: doc.error_message ?? null,
+      ocrFailed: reason === "ocr_unreadable",
+      aiRetryPending: reason === "ai_rate_limited" || reason === "ai_extraction_failed",
+    };
+  }
+  if (doc?.invoice_rejected === true || invoice?.possible_not_invoice === true || Array.isArray(invoice?.missing_required_fields) && invoice.missing_required_fields.length > 0) {
+    return {
+      importStatus: "rejected",
+      retryable: true,
+      rejectionReason: invoice?.invoice_rejection_reason ?? doc?.invoice_rejection_reason ?? "rejected",
+      rejectionLabel: invoice?.invoice_rejection_label ?? doc?.invoice_rejection_label ?? "המסמך נדחה כחשבונית",
+      error: null,
+      ocrFailed: Boolean(doc?.ocr_retryable),
+      aiRetryPending: false,
+    };
+  }
+  return {
+    importStatus: invoice?._id ? "invoice" : "stored",
+    retryable: false,
+    rejectionReason: null,
+    rejectionLabel: null,
+    error: null,
+    ocrFailed: false,
+    aiRetryPending: false,
+  };
 }
 
 const INSPECTION_MARKERS = [
@@ -311,6 +683,41 @@ function gmailTemplateSkipReason(
     return "gmail_import_not_inspection_skipped";
   }
   return null;
+}
+
+function retryableDocumentError(error: string, reason: string): Record<string, unknown> {
+  const label = retryableProcessingLabel(reason, error);
+  return {
+    processing_status: "error",
+    error_message: error,
+    processing_retryable: true,
+    retry_reason: reason,
+    retry_label: label,
+    invoice_rejection_reason: reason,
+    invoice_rejection_label: label,
+    updated_at: new Date(),
+  };
+}
+
+function retryableProcessingLabel(reason: string, error = ""): string {
+  const labels: Record<string, string> = {
+    ocr_unreadable: "OCR לא הצליח לקרוא את המסמך",
+    ai_rate_limited: "חילוץ AI נכשל בגלל מגבלת בקשות זמנית",
+    ai_extraction_failed: "חילוץ AI נכשל",
+    storage_failed: "שמירת הקובץ באחסון נכשלה",
+    processing_failed: "עיבוד המסמך נכשל",
+  };
+  if (reason === "ai_extraction_failed" && /429|rate.?limit/i.test(error)) return labels.ai_rate_limited;
+  return labels[reason] ?? "המסמך ממתין לניסיון חוזר";
+}
+
+function retryReasonFromError(error: unknown, fallback = "processing_failed"): string {
+  const text = String(error ?? "");
+  if (/429|rate.?limit/i.test(text)) return "ai_rate_limited";
+  if (/AI extraction failed|OpenAI|ai_extraction/i.test(text)) return "ai_extraction_failed";
+  if (/OCR|ocr|Text extraction|read image|pdftoppm|tesseract/i.test(text)) return "ocr_unreadable";
+  if (/storage|S3|upload/i.test(text)) return "storage_failed";
+  return fallback;
 }
 
 async function gmailInvoiceWasSaved(documentId: string): Promise<boolean> {
@@ -366,6 +773,7 @@ export async function processDocument(
 
   let rawText = "";
   let pageCount: number | null = null;
+  let textSource: "native" | "ocr" | "file" = "file";
   const forcedTemplate = pipeline?.templateId
     ? await loadTemplate(pipeline.templateId).catch(() => null)
     : null;
@@ -377,12 +785,15 @@ export async function processDocument(
       if (pdfResult.needsOcr) {
         push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
         rawText = await ocrFile(filePath);
+        textSource = "ocr";
       } else {
         rawText = pdfResult.text;
+        textSource = "native";
       }
     } else if (mimeType.startsWith("image/")) {
       push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
       rawText = await ocrFile(filePath);
+      textSource = "ocr";
     } else if (ext === ".docx") {
       rawText = await parseDocx(filePath);
     } else if (ext === ".xlsx") {
@@ -392,25 +803,31 @@ export async function processDocument(
     }
   } catch (err) {
     if (pipeline?.gmailImport && forcedTemplate && isInvoiceTemplate(forcedTemplate)) {
+      const reason = retryReasonFromError(err, "ocr_unreadable");
+      const msg = `Text extraction failed: ${err}`;
       logger.info("gmail_import_invoice_text_extraction_failed_skipped", {
         document_id: documentId,
         user_id: userId ?? null,
         template_id: forcedTemplate.id ?? pipeline.templateId ?? null,
         template_name: forcedTemplate.name,
         error: String(err),
+        retry_reason: reason,
       });
-      await deleteSkippedGmailDocument(documentId, docFilter, filePath);
+      await col("documents").updateOne(docFilter, {
+        $set: retryableDocumentError(msg, reason),
+      });
       push?.({
         type: "document:done",
         documentId: documentId as any,
-        status: "skipped",
-        reason: "gmail_import_invoice_text_extraction_failed_skipped",
+        status: "error",
+        reason,
+        error: msg,
       });
       return;
     }
     const msg = `Text extraction failed: ${err}`;
     await col("documents").updateOne(docFilter, {
-      $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+      $set: retryableDocumentError(msg, retryReasonFromError(err, "ocr_unreadable")),
     });
     const failedDoc = await col("documents").findOne(docFilter, { projection: { file_name: 1 } } as any) as any;
     notifyExtractionFailed({ fileName: failedDoc?.file_name ?? documentId, error: msg });
@@ -419,7 +836,7 @@ export async function processDocument(
   }
 
   await col("documents").updateOne(docFilter, {
-    $set: { raw_text: rawText, page_count: pageCount, processing_status: "processing", updated_at: new Date() },
+    $set: { raw_text: rawText, text_extraction_source: textSource, page_count: pageCount, processing_status: "processing", updated_at: new Date() },
   });
 
   const gmailSkipReason = gmailTemplateSkipReason(pipeline, forcedTemplate, rawText);
@@ -690,15 +1107,71 @@ export async function processDocument(
 
         // Use cached prompt when no inspector exclusions are needed.
         const systemPrompt = await getOrBuildSystemPrompt(template, inspector as any);
-        const run = await extractWithTemplate(rawText, template, documentId, docRow?.file_name, inspector as any, systemPrompt);
-        const normalizedFields = normalizeExtractionFieldsForTemplate(rawText, template, run.fields);
+        let extractionText = rawText;
+        let run = await extractWithTemplate(extractionText, template, documentId, docRow?.file_name, inspector as any, systemPrompt);
+        let normalizedFields = normalizeExtractionFieldsForTemplate(extractionText, template, run.fields);
+        const shouldTryOcrForInvoice = pipeline?.gmailImport
+          && isInvoiceTemplate(template)
+          && mimeType === "application/pdf"
+          && textSource === "native"
+          && normalizedFields
+          && invoiceMissingRequiredFieldsFromFields(normalizedFields, extractionText).length > 0;
+        if (shouldTryOcrForInvoice && normalizedFields) {
+          try {
+            push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 62 });
+            const ocrText = await ocrFile(filePath);
+            const ocrRun = await extractWithTemplate(ocrText, template, documentId, docRow?.file_name, inspector as any, systemPrompt);
+            const ocrFields = normalizeExtractionFieldsForTemplate(ocrText, template, ocrRun.fields);
+            const nativeMissing = invoiceMissingRequiredFieldsFromFields(normalizedFields, extractionText);
+            const ocrMissing = ocrFields ? invoiceMissingRequiredFieldsFromFields(ocrFields, ocrText) : nativeMissing;
+            await col("documents").updateOne(docFilter, {
+              $set: {
+                ocr_text: ocrText,
+                ocr_attempted: true,
+                ocr_reason: "invoice_required_fields_missing",
+                updated_at: new Date(),
+              },
+            });
+            logger.info("gmail_invoice_ocr_second_pass_completed", {
+              document_id: documentId,
+              user_id: userId ?? null,
+              template_id: template.id ?? null,
+              native_missing_fields: nativeMissing,
+              ocr_missing_fields: ocrMissing,
+              ocr_fields_extracted: ocrFields ? Object.keys(ocrFields).length : 0,
+            });
+            if (ocrFields && ocrMissing.length < nativeMissing.length) {
+              extractionText = ocrText;
+              run = ocrRun;
+              normalizedFields = ocrFields;
+              textSource = "ocr";
+            }
+          } catch (ocrErr) {
+            await col("documents").updateOne(docFilter, {
+              $set: {
+                ocr_attempted: true,
+                ocr_retryable: true,
+                ocr_error: String(ocrErr),
+                retry_reason: "ocr_unreadable",
+                retry_label: retryableProcessingLabel("ocr_unreadable", String(ocrErr)),
+                updated_at: new Date(),
+              },
+            });
+            logger.warn("gmail_invoice_ocr_second_pass_failed", {
+              document_id: documentId,
+              user_id: userId ?? null,
+              template_id: template.id ?? null,
+              error: String(ocrErr),
+            });
+          }
+        }
 
         await col("extractions").insertOne({
           document_id: documentId,
           backend: run.backend,
           model: run.model,
           result_json: parseJsonObject(run.rawJson, normalizedFields),
-          raw_text: rawText,
+          raw_text: extractionText,
           parsed_ok: normalizedFields ? 1 : 0,
           error: run.error ?? null,
           exec_ms: run.execMs,
@@ -723,13 +1196,14 @@ export async function processDocument(
               template_id: template.id,
               document_type: documentTypeFromTemplate(template),
               document_kind: documentTypeFromTemplate(template),
+              text_extraction_source: textSource,
               updated_at: new Date(),
             },
           });
 
           if (!pipeline?.skipEntities) {
             push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-            await saveTemplateEntities(documentId, template, normalizedFields, userId, pipeline?.skipReminders, rawText);
+            await saveTemplateEntities(documentId, template, normalizedFields, userId, pipeline?.skipReminders, extractionText);
             const invoiceWasSaved = pipeline?.gmailImport && isInvoiceTemplate(template)
               ? await gmailInvoiceWasSaved(documentId)
               : true;
@@ -747,20 +1221,25 @@ export async function processDocument(
           }
         } else if (run.error) {
           if (pipeline?.gmailImport && isInvoiceTemplate(template)) {
+            const msg = `AI extraction failed: ${run.error}`;
+            const reason = retryReasonFromError(msg, "ai_extraction_failed");
             logger.info("gmail_import_invoice_extraction_failed_skipped", {
               document_id: documentId,
               user_id: userId ?? null,
               template_id: template.id ?? null,
               template_name: template.name,
               error: run.error,
+              retry_reason: reason,
             });
-            await deleteSkippedGmailDocument(documentId, docFilter, filePath);
-            push?.({ type: "document:done", documentId: documentId as any, status: "skipped", reason: "gmail_import_invoice_extraction_failed_skipped" });
+            await col("documents").updateOne(docFilter, {
+              $set: retryableDocumentError(msg, reason),
+            });
+            push?.({ type: "document:done", documentId: documentId as any, status: "error", reason, error: msg });
             return;
           }
           const msg = `AI extraction failed: ${run.error}`;
           await col("documents").updateOne(docFilter, {
-            $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+            $set: retryableDocumentError(msg, retryReasonFromError(msg, "ai_extraction_failed")),
           });
           notifyExtractionFailed({ fileName: docRow?.file_name ?? documentId, error: msg });
           push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
@@ -804,7 +1283,7 @@ export async function processDocument(
         } else if (extraction.error) {
           const msg = `AI extraction failed: ${extraction.error}`;
           await col("documents").updateOne(docFilter, {
-            $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+            $set: retryableDocumentError(msg, retryReasonFromError(msg, "ai_extraction_failed")),
           });
           notifyExtractionFailed({ fileName: docRow?.file_name ?? documentId, error: msg });
           push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
@@ -862,6 +1341,26 @@ async function saveExtractionEntities(
     );
   }
 
+  if (isInvoiceLikeDocument(result.document_type)) {
+    await col("document_clients").deleteMany({ document_id: documentId } as any);
+    const invoiceSaved = await saveInvoiceRecord(documentId, result as unknown as Record<string, unknown>, {
+      userId,
+      clientId: null,
+      documentType: result.document_type ?? "invoice",
+      rawText,
+    });
+    await deleteContractReminderArtifacts(documentId, userId);
+    if (invoiceSaved) {
+      logger.info("invoice_entity_saved", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        source: "generic-extraction",
+        document_type: result.document_type ?? null,
+      });
+    }
+    return;
+  }
+
   let clientId: string | null = null;
   const displayName = result.client_company ?? result.client_name;
   const entityType: "company" | "person" = result.client_company ? "company" : "person";
@@ -905,25 +1404,6 @@ async function saveExtractionEntities(
       source_type: "document",
       created_at: new Date(),
     } as any);
-  }
-
-  if (isInvoiceLikeDocument(result.document_type)) {
-    const invoiceSaved = await saveInvoiceRecord(documentId, result as unknown as Record<string, unknown>, {
-      userId,
-      clientId,
-      documentType: result.document_type ?? "invoice",
-      rawText,
-    });
-    await deleteContractReminderArtifacts(documentId, userId);
-    if (invoiceSaved) {
-      logger.info("invoice_entity_saved", {
-        document_id: documentId,
-        user_id: userId ?? null,
-        source: "generic-extraction",
-        document_type: result.document_type ?? null,
-      });
-    }
-    return;
   }
 
   const resultFields = result as any;
@@ -1704,6 +2184,28 @@ async function saveTemplateEntities(
     return Number.isFinite(n) ? n : null;
   };
 
+  if (isInvoiceTemplate(template)) {
+    await col("document_clients").deleteMany({ document_id: documentId } as any);
+    const invoiceSaved = await saveInvoiceRecord(documentId, fields, {
+      userId,
+      clientId: null,
+      documentType: template.name,
+      templateId: template.id,
+      templateName: template.name,
+      rawText,
+    });
+    await deleteContractReminderArtifacts(documentId, userId);
+    if (invoiceSaved) {
+      logger.info("invoice_entity_saved", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        template_id: template.id ?? null,
+        template_name: template.name,
+      });
+    }
+    return;
+  }
+
   const clientCompany = getStr("client_company");
   const contactPerson = getStr("contact_person") ?? getStr("client_name");
   const displayName = clientCompany ?? contactPerson;
@@ -1747,27 +2249,6 @@ async function saveTemplateEntities(
       source_type: "document",
       created_at: new Date(),
     } as any);
-  }
-
-  if (isInvoiceTemplate(template)) {
-    const invoiceSaved = await saveInvoiceRecord(documentId, fields, {
-      userId,
-      clientId,
-      documentType: template.name,
-      templateId: template.id,
-      templateName: template.name,
-      rawText,
-    });
-    await deleteContractReminderArtifacts(documentId, userId);
-    if (invoiceSaved) {
-      logger.info("invoice_entity_saved", {
-        document_id: documentId,
-        user_id: userId ?? null,
-        template_id: template.id ?? null,
-        template_name: template.name,
-      });
-    }
-    return;
   }
 
   const docNumber =
@@ -2289,9 +2770,7 @@ async function saveInvoiceRecord(
     amount,
   });
   if (missingRequired.length > 0) {
-    const rejectionReason = isProbablyContractOrNonInvoice(missingRequired)
-      ? "missing_invoice_number_and_amount"
-      : "missing_required_fields";
+    const rejectionReason = invoiceRejectionReason(missingRequired);
     const rejectionLabel = invoiceRejectionLabel(rejectionReason, missingRequired);
     await col("invoices").deleteOne({ document_id: documentId } as any);
     await col("documents").updateOne(
@@ -2301,6 +2780,7 @@ async function saveInvoiceRecord(
           invoice_saved: false,
           invoice_rejected: true,
           invoice_rejection_reason: rejectionReason,
+          invoice_rejection_code: rejectionReason,
           invoice_rejection_label: rejectionLabel,
           invoice_missing_fields: missingRequired,
           reminder_status: "not_applicable",
@@ -2357,11 +2837,30 @@ async function saveInvoiceRecord(
     };
   }
 
+  const sourceDoc = await col<any>("documents").findOne(
+    { _id: new ObjectId(documentId) } as any,
+    { projection: { spaces_key: 1, drive_file_id: 1, drive_web_link: 1 } } as any,
+  );
+  if (sourceDoc?.spaces_key) invoiceFields.spaces_key = sourceDoc.spaces_key;
+  if (sourceDoc?.drive_file_id) {
+    invoiceFields.drive_file_id = sourceDoc.drive_file_id;
+    invoiceFields.drive_web_link = sourceDoc.drive_web_link ?? null;
+  }
+
   await col("invoices").updateOne(
     { document_id: documentId } as any,
     {
       $set: invoiceFields,
-      $setOnInsert: { document_id: documentId, created_at: now, status: "new" },
+      $setOnInsert: {
+        document_id: documentId,
+        created_at: now,
+        status: "new",
+        cash_flow: inferInvoiceCashFlow({
+          document_subtype: invoiceFields.document_subtype,
+          notes: invoiceFields.notes,
+          fields,
+        }),
+      },
     } as any,
     { upsert: true },
   );
@@ -2373,6 +2872,7 @@ async function saveInvoiceRecord(
         invoice_saved: true,
         invoice_rejected: false,
         invoice_rejection_reason: null,
+        invoice_rejection_code: null,
         invoice_rejection_label: null,
         invoice_missing_fields: [],
         reminder_status: "not_applicable",
@@ -2387,11 +2887,39 @@ function invoiceRejectionLabel(reason: string, missingFields: string[] = []): st
   const labels: Record<string, string> = {
     missing_invoice_number_and_amount: "חסר מספר חשבונית וסכום - כנראה לא חשבונית",
     missing_required_fields: "חסרים שדות חובה לחשבונית",
+    missing_amount: "חסר סכום חשבונית",
+    missing_supplier: "חסר ספק",
+    missing_date: "חסר תאריך חשבונית או תאריך לתשלום",
+    ocr_unreadable: "OCR לא הצליח לקרוא את המסמך",
+    storage_failed: "שמירת הקובץ באחסון נכשלה",
+    ai_rate_limited: "חילוץ AI נכשל בגלל מגבלת בקשות זמנית",
+    ai_extraction_failed: "חילוץ AI נכשל",
     not_invoice: "המסמך לא זוהה כחשבונית",
     rejected: "החשבונית נדחתה",
   };
   const base = labels[reason] ?? "המסמך נדחה כחשבונית";
   return missingFields.length ? `${base}: ${missingFields.join(", ")}` : base;
+}
+
+function invoiceRejectionReason(missing: string[]): string {
+  if (missing.includes("invoice_number") && missing.includes("amount")) return "not_invoice";
+  if (missing.includes("amount")) return "missing_amount";
+  if (missing.includes("supplier_name")) return "missing_supplier";
+  if (missing.includes("issue_date") || missing.includes("payment_due_date")) return "missing_date";
+  return "missing_required_fields";
+}
+
+function invoiceMissingRequiredFieldsFromFields(fields: Record<string, unknown>, rawText?: string): string[] {
+  const supplierName = firstInvoiceString(fields, ["supplier_name", "vendor_name", "counterparty", "issuer_name", "company_name"]);
+  const invoiceNumber = firstInvoiceString(fields, ["invoice_number", "receipt_number", "document_number", "reference_number"]);
+  const clientName = firstInvoiceString(fields, ["client_company", "client_name", "customer_name", "bill_to"])
+    ?? extractInvoiceRecipientFromRawText(rawText);
+  const issueDate = firstInvoiceString(fields, ["issue_date", "invoice_date", "receipt_date", "date"]);
+  const paymentDueDate = firstInvoiceString(fields, ["payment_due_date", "due_date", "expiry_date"]);
+  const amount = parseInvoiceAmount(
+    fields.amount ?? fields.total_amount ?? fields.amount_due ?? fields.total_to_pay ?? fields.total,
+  );
+  return invoiceMissingRequiredFields({ supplierName, invoiceNumber, clientName, issueDate, paymentDueDate, amount });
 }
 
 function invoiceMissingRequiredFields(values: {

@@ -46,15 +46,55 @@ export async function inspectDriveFolder(accessToken: string, folderId: string):
     }
 }
 
-export async function clearDriveFileLinks(userId: string): Promise<number> {
-    const result = await col("documents").updateMany(
-        {user_id: userId, drive_file_id: {$exists: true, $nin: [null, ""]}} as any,
+function invoiceDocumentFilter(userId: string, documentId: string): Record<string, unknown> {
+    const ids: unknown[] = [documentId];
+    if (ObjectId.isValid(documentId)) ids.push(new ObjectId(documentId));
+    return {user_id: userId, document_id: {$in: ids}};
+}
+
+export async function persistInvoiceDriveLinks(
+    userId: string,
+    documentId: string,
+    driveFileId: string,
+    driveWebLink: string | null | undefined,
+): Promise<void> {
+    await col("invoices").updateMany(
+        invoiceDocumentFilter(userId, documentId) as any,
         {
-            $unset: {drive_file_id: "", drive_web_link: ""},
-            $set: {updated_at: new Date()},
+            $set: {
+                drive_file_id: driveFileId,
+                drive_web_link: driveWebLink ?? null,
+                updated_at: new Date(),
+            },
         },
     );
+}
+
+const DRIVE_LINK_FILTER = {drive_file_id: {$exists: true, $nin: [null, ""]}};
+
+export async function clearDriveFileLinks(userId: string): Promise<number> {
+    const filter = {user_id: userId, ...DRIVE_LINK_FILTER} as any;
+    const update = {
+        $unset: {drive_file_id: "", drive_web_link: ""},
+        $set: {updated_at: new Date()},
+    };
+    const result = await col("documents").updateMany(filter, update as any);
+    await col("invoices").updateMany(filter, update as any);
     return result.modifiedCount ?? 0;
+}
+
+export async function copyDocumentDriveLinksToInvoices(userId: string): Promise<number> {
+    const docs = await col<any>("documents").find(
+        {user_id: userId, ...DRIVE_LINK_FILTER} as any,
+        {projection: {_id: 1, drive_file_id: 1, drive_web_link: 1}} as any,
+    ).toArray();
+    await Promise.all(docs.map((doc) => persistInvoiceDriveLinks(
+        userId,
+        String(doc._id),
+        String(doc.drive_file_id),
+        doc.drive_web_link ?? null,
+    )));
+    return docs.length;
 }
 
 export async function ensureHealthyDriveFolder(
@@ -333,6 +373,26 @@ const SUB_FOLDERS: Record<string, string> = {
     inspection_report: "תסקירי בדיקה",
 };
 
+const INVOICE_KIND_RE = /invoice|receipt|bill|חשבונית|קבלה|דרישת\s*תשלום|חיוב/i;
+const INSPECTION_KIND_RE = /inspection[_\s-]?report|תסקיר|בדיקה/i;
+
+export function driveFolderKindForDocument(doc: {
+    document_kind?: unknown;
+    document_type?: unknown;
+    invoice_saved?: unknown;
+}): string | undefined {
+    const kind = String(doc.document_kind ?? "").trim();
+    const type = String(doc.document_type ?? "").trim();
+    const combined = `${kind} ${type}`;
+
+    if (kind === "inspection_report") return "inspection_report";
+    if (kind === "invoice" || doc.invoice_saved === true || INVOICE_KIND_RE.test(combined)) {
+        return "invoice";
+    }
+    if (INSPECTION_KIND_RE.test(combined)) return "inspection_report";
+    return kind || undefined;
+}
+
 async function resolveSubFolder(
     accessToken: string,
     parentFolderId: string,
@@ -370,7 +430,10 @@ export async function syncDocumentToDrive(documentId: string, userId: string): P
 
     const doc = await col<any>("documents").findOne({_id: new ObjectId(documentId)} as any);
     if (!doc?.file_path && !doc?.spaces_key) return;
-    if (doc.drive_file_id) return;
+    if (doc.drive_file_id) {
+        await persistInvoiceDriveLinks(userId, documentId, doc.drive_file_id, doc.drive_web_link);
+        return;
+    }
 
     const accessToken = await resolveDriveToken(userId);
     if (!accessToken) {
@@ -389,7 +452,12 @@ export async function syncDocumentToDrive(documentId: string, userId: string): P
             );
         }
 
-        const targetFolderId = await resolveSubFolder(accessToken, rootFolderId, userId, doc.document_kind);
+        const targetFolderId = await resolveSubFolder(
+            accessToken,
+            rootFolderId,
+            userId,
+            driveFolderKindForDocument(doc),
+        );
         const localPath = await resolveDocumentFilePath(doc);
 
         const driveFile = await uploadToDrive(
@@ -404,6 +472,7 @@ export async function syncDocumentToDrive(documentId: string, userId: string): P
             {_id: new ObjectId(documentId)} as any,
             {$set: {drive_file_id: driveFile.id, drive_web_link: driveFile.webViewLink ?? null, updated_at: new Date()}}
         );
+        await persistInvoiceDriveLinks(userId, documentId, driveFile.id, driveFile.webViewLink ?? null);
 
         logger.info("drive_sync_uploaded", {
             document_id: documentId,

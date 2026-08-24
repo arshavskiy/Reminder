@@ -171,6 +171,14 @@ export interface Document {
   page_count: number | null;
   created_at: string;
   updated_at: string;
+  client_id?: string | null;
+  client_name?: string | null;
+  spaces_key?: string | null;
+  in_s3?: boolean;
+  drive_file_id?: string | null;
+  drive_web_link?: string | null;
+  download_url?: string | null;
+  thumbnail_url?: string | null;
 }
 
 export interface Client {

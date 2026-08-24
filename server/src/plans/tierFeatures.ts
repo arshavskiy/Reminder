@@ -39,6 +39,17 @@ export function normalizePlanId(planOrRole: string | null | undefined): PlanId {
   return "free";
 }
 
+export function featureFlagsForUser(user: { plan?: string | null; role?: string | null } | null | undefined): TierFeatureFlags {
+  if (String(user?.role ?? "").trim().toLowerCase() === "admin") {
+    return { ...TIER_FEATURE_FLAGS.business, gmailInvoiceHistoryMonths: null };
+  }
+  return tierFeatureFlags(user?.plan ?? user?.role);
+}
+
 export function tierFeatureFlags(planOrRole: string | null | undefined): TierFeatureFlags {
+  const value = String(planOrRole ?? "").trim().toLowerCase();
+  if (value === "admin") {
+    return { ...TIER_FEATURE_FLAGS.business, gmailInvoiceHistoryMonths: null };
+  }
   return TIER_FEATURE_FLAGS[normalizePlanId(planOrRole)];
 }

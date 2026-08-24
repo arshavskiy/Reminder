@@ -21,11 +21,48 @@
     </div>
 
     <div class="gmail-job__stats">
-      <span>{{ job.processedMessages }} מתוך {{ totalForProgress }} הודעות</span>
-      <span>{{ job.imported }} קבצים יובאו</span>
-      <span>{{ job.skipped }} דולגו</span>
+      <span>{{ job.processedMessages }} מתוך {{ totalForProgress }} מיילים נסרקו</span>
+      <span>{{ job.attachmentsFound ?? job.results.length }} קבצים נמצאו</span>
+      <span>{{ job.stored ?? job.imported }} נשמרו</span>
+      <span>{{ job.classifiedInvoices ?? 0 }} סווגו כחשבונית</span>
+      <span>{{ job.rejected ?? 0 }} נדחו</span>
+      <span v-if="job.ocrFailed" class="gmail-job__error">{{ job.ocrFailed }} OCR נכשל</span>
+      <span v-if="job.aiRetryPending" class="gmail-job__warn">{{ job.aiRetryPending }} ממתינים לניסיון AI חוזר</span>
       <span v-if="job.errors" class="gmail-job__error">{{ job.errors }} שגיאות</span>
     </div>
+
+    <div v-if="summaryItems.length" class="gmail-job__summary" aria-label="פירוט תוצאות ייבוא">
+      <span
+        v-for="item in summaryItems"
+        :key="item.key"
+        class="gmail-job__chip"
+        :class="`gmail-job__chip--${item.key}`"
+      >
+        {{ item.label }} {{ item.count }}
+      </span>
+    </div>
+
+    <div v-if="retryableCount" class="gmail-job__retry">
+      <span>{{ retryableCount }} קבצים ניתנים לניסיון חוזר</span>
+      <button class="btn btn--ghost btn--xs" type="button" @click="$emit('retry', 'retryable')">
+        נסה שוב
+      </button>
+    </div>
+
+    <details v-if="visibleResults.length" class="gmail-job__details">
+      <summary>פירוט קבצים</summary>
+      <div class="gmail-job__result-list">
+        <div v-for="result in visibleResults" :key="`${result.messageId}:${result.filename}`" class="gmail-job__result">
+          <span class="gmail-job__result-file" :title="result.filename">{{ result.filename }}</span>
+          <span class="gmail-job__result-status" :class="`gmail-job__result-status--${resultStatus(result)}`">
+            {{ resultStatusLabel(resultStatus(result)) }}
+          </span>
+          <span class="gmail-job__result-reason" :title="result.explanation ?? result.rejection_label ?? result.error ?? ''">
+            {{ result.explanation ?? result.rejection_label ?? result.error ?? "—" }}
+          </span>
+        </div>
+      </div>
+    </details>
   </section>
 </template>
 
@@ -48,6 +85,7 @@ const props = defineProps<{
 
 defineEmits<{
   dismiss: [];
+  retry: [mode: "failed" | "rejected" | "retryable"];
 }>();
 
 const totalForProgress = computed(() => props.job.newMessages || props.job.totalMessages || props.job.total || 0);
@@ -72,6 +110,40 @@ const statusIcon = computed(() => {
   if (props.job.status === "queued") return TimeOutline;
   return CloudDownloadOutline;
 });
+
+const summaryItems = computed(() => {
+  const summary = props.job.explanationSummary ?? {};
+  return [
+    { key: "stored", label: "נשמרו", count: Number(props.job.stored ?? summary.stored ?? props.job.imported ?? 0) },
+    { key: "invoice", label: "חשבוניות", count: Number(props.job.classifiedInvoices ?? summary.invoice ?? 0) },
+    { key: "failed", label: "נכשלו", count: Number(summary.failed ?? props.job.errors ?? 0) },
+    { key: "rejected", label: "נדחו", count: Number(props.job.rejected ?? summary.rejected ?? 0) },
+    { key: "ocr_failed", label: "OCR נכשל", count: Number(props.job.ocrFailed ?? summary.ocr_failed ?? 0) },
+    { key: "quota_limited", label: "מגבלה", count: Number(summary.quota_limited ?? 0) },
+  ].filter((item) => item.count > 0);
+});
+
+const retryableCount = computed(() => Number(props.job.explanationSummary?.retryable ?? 0));
+const visibleResults = computed(() => (props.job.results ?? []).slice(0, 12));
+
+function resultStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    imported: "יובא",
+    invoice: "חשבונית",
+    stored: "נשמר",
+    failed: "נכשל",
+    rejected: "נדחה",
+    skipped: "דולג",
+    quota_limited: "מגבלה",
+    missing_document: "חסר",
+    ocr_failed: "OCR נכשל",
+  };
+  return labels[status] ?? status;
+}
+
+function resultStatus(result: GmailImportJob["results"][number]): string {
+  return result.importStatus ?? result.import_status ?? (result.documentId ? "stored" : "failed");
+}
 </script>
 
 <style scoped>
@@ -123,6 +195,10 @@ const statusIcon = computed(() => {
   color: var(--color-error);
 }
 
+.gmail-job__warn {
+  color: #c4841d;
+}
+
 .gmail-job--failed .gmail-job__bar-fill {
   background: var(--color-error);
 }
@@ -133,5 +209,117 @@ const statusIcon = computed(() => {
   gap: 8px 14px;
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+.gmail-job__summary,
+.gmail-job__retry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.gmail-job__chip,
+.gmail-job__result-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.gmail-job__chip--stored,
+.gmail-job__chip--invoice,
+.gmail-job__chip--imported,
+.gmail-job__result-status--stored,
+.gmail-job__result-status--invoice,
+.gmail-job__result-status--imported {
+  background: color-mix(in srgb, var(--color-success) 13%, var(--bg-card));
+  color: var(--color-success);
+}
+
+.gmail-job__chip--failed,
+.gmail-job__chip--rejected,
+.gmail-job__chip--ocr_failed,
+.gmail-job__result-status--failed,
+.gmail-job__result-status--rejected,
+.gmail-job__result-status--ocr_failed,
+.gmail-job__result-status--missing_document {
+  background: color-mix(in srgb, var(--color-error) 13%, var(--bg-card));
+  color: var(--color-error);
+}
+
+.gmail-job__chip--quota_limited,
+.gmail-job__result-status--quota_limited,
+.gmail-job__result-status--skipped {
+  background: color-mix(in srgb, #f0a020 15%, var(--bg-card));
+  color: #c4841d;
+}
+
+.gmail-job__retry {
+  justify-content: space-between;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #f0a020 28%, var(--border-color));
+  border-radius: 8px;
+  background: color-mix(in srgb, #f0a020 7%, var(--bg-card));
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.gmail-job__details {
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+}
+
+.gmail-job__details summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gmail-job__result-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.gmail-job__result {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.1fr) auto minmax(140px, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: var(--bg-elevated);
+  font-size: 12px;
+}
+
+.gmail-job__result-file,
+.gmail-job__result-reason {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gmail-job__result-file {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.gmail-job__result-reason {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 720px) {
+  .gmail-job__result {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

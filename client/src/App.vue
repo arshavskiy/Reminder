@@ -459,13 +459,13 @@ const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
 const allNav = [
   {label: "ראשי", key: "dashboard", minRole: "user", feature: FEATURES.pages.dashboard},
   {label: "מסמכים", key: "documents", minRole: "user", feature: FEATURES.pages.documents},
-  {label: "חשבוניות", key: "invoices", minRole: "user", feature: FEATURES.pages.invoices},
   {label: "תסקירים", key: "contracts", minRole: "user", feature: FEATURES.pages.contracts},
   {label: "תזכורות", key: "reminders", minRole: "user", feature: FEATURES.pages.reminders},
   {label: "דוחות", key: "reports", minRole: "user", feature: FEATURES.pages.reports},
   {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment},
+  {label: "חשבוניות", key: "invoices", minRole: "user", feature: FEATURES.pages.invoices},
   // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
   // Print templates are reached from the contracts page, next to "תסקיר חדש".
   // {label: "הדפסת תסקיר", key: "compose", minRole: "user", feature: FEATURES.pages.printTemplates},

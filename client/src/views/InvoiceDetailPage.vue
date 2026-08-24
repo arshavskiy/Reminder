@@ -29,6 +29,15 @@
       <span class="status-chip">{{ statusLabel(invoice.status) }}</span>
       <span class="meta-chip">{{ invoice.invoice_number || "ללא מספר" }}</span>
       <span class="meta-chip">{{ invoiceTypeLabel(invoice) }}</span>
+      <span class="meta-chip" :class="form.cash_flow === 'income' ? 'meta-chip--income' : 'meta-chip--expense'">
+        {{ form.cash_flow === "income" ? "הכנסה" : "הוצאה" }}
+      </span>
+      <StorageSyncIcons
+        :in-s3="invoice.in_s3"
+        :drive-synced="Boolean(invoice.drive_file_id)"
+        :drive-link="invoice.drive_web_link"
+        :download-url="invoice.download_url"
+      />
     </div>
 
     <n-spin :show="loading">
@@ -80,8 +89,8 @@
                 <n-select v-model:value="form.currency" :options="currencyOptions" size="large" />
               </label>
               <label>
-                <span>מס</span>
-                <n-input :value="taxDisplay" size="large" readonly />
+                <span>מע"מ</span>
+                <n-input :value="vatDisplay" size="large" readonly />
               </label>
             </div>
           </section>
@@ -92,6 +101,10 @@
               <n-icon :component="FolderOutline" :size="18" />
             </h2>
             <div class="form-grid">
+              <label>
+                <span>סוג תנועה</span>
+                <n-select v-model:value="form.cash_flow" :options="cashFlowOptions" size="large" />
+              </label>
               <label>
                 <span>קטגוריית ספק</span>
                 <n-select
@@ -104,10 +117,14 @@
                 />
               </label>
               <label>
-                <span>קטגוריית הוצאה</span>
+                <span>{{ form.cash_flow === "income" ? "קטגוריית הכנסה" : "קטגוריית הוצאה" }}</span>
                 <div class="field-stack">
                   <n-select v-model:value="form.expense_category" :options="categoryOptions" size="large" />
-                  <n-input v-model:value="form.expense_category" size="large" placeholder="קטגוריית הוצאה חדשה" />
+                  <n-input
+                    v-model:value="form.expense_category"
+                    size="large"
+                    :placeholder="form.cash_flow === 'income' ? 'קטגוריית הכנסה חדשה' : 'קטגוריית הוצאה חדשה'"
+                  />
                 </div>
               </label>
               <label>
@@ -130,7 +147,7 @@
                 />
               </label>
               <label>
-                <span>תאריך הוצאה</span>
+                <span>{{ form.cash_flow === "income" ? "תאריך הנפקה" : "תאריך הוצאה" }}</span>
                 <n-date-picker
                   v-model:value="issueDateValue"
                   type="date"
@@ -205,6 +222,7 @@ import {
 } from "@vicons/ionicons5";
 import { api, type ImportedInvoice } from "../services/apiService.js";
 import PageHeader from "../components/PageHeader.vue";
+import StorageSyncIcons from "../components/StorageSyncIcons.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -219,6 +237,7 @@ const form = reactive({
   status: "new",
   payment_status: "paid" as string | null,
   currency: "ILS" as string | null,
+  cash_flow: "expense" as "income" | "expense",
   client_name: "",
   expense_category: "General and Administrative" as string | null,
   provider_category: null as ImportedInvoice["provider_category"] | null,
@@ -231,6 +250,10 @@ const paymentStatusOptions: SelectOption[] = [
   { label: "שולם", value: "paid" },
   { label: "ממתין", value: "pending" },
   { label: "באיחור", value: "overdue" },
+];
+const cashFlowOptions: SelectOption[] = [
+  { label: "הוצאה", value: "expense" },
+  { label: "הכנסה", value: "income" },
 ];
 const currencyOptions: SelectOption[] = [
   { label: "₪ ILS - Israeli shekels", value: "ILS" },
@@ -285,14 +308,14 @@ const receivedDateValue = computed<number | null>({
   get: () => dateToTs(form.payment_due_date),
   set: (value) => { form.payment_due_date = tsToDate(value); },
 });
-const taxDisplay = computed(() => {
-  const amount = invoice.value?.amount;
-  if (!amount) return "—";
+const vatDisplay = computed(() => {
+  const amount = invoice.value?.vat_amount;
+  if (amount == null) return "—";
   return new Intl.NumberFormat("he-IL", {
     style: "currency",
     currency: form.currency || "ILS",
     maximumFractionDigits: 2,
-  }).format(amount * 0.1525423729);
+  }).format(amount);
 });
 const extractedFields = computed(() => {
   const fields = invoice.value?.fields ?? {};
@@ -349,6 +372,7 @@ async function load(force = false) {
     form.status = row.status || "new";
     form.payment_status = normalizePaymentStatus(row.payment_status);
     form.currency = row.currency || "ILS";
+    form.cash_flow = row.cash_flow === "income" ? "income" : "expense";
     form.client_name = row.client_name || clientFromFields(row) || "";
     form.expense_category = row.expense_category || "General and Administrative";
     form.provider_category = row.provider_category ?? null;
@@ -371,6 +395,7 @@ async function save() {
       status: form.status,
       payment_status: form.payment_status,
       currency: form.currency,
+      cash_flow: form.cash_flow,
       client_name: form.client_name,
       expense_category: form.expense_category,
       provider_category: form.provider_category,
@@ -622,6 +647,15 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   background: var(--bg-elevated);
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
+}
+
+.meta-chip--income {
+  color: var(--brand-color);
+  border-color: color-mix(in srgb, var(--brand-color) 45%, var(--border-color));
+}
+
+.meta-chip--expense {
+  color: var(--text-primary);
 }
 
 .rbtn {

@@ -806,7 +806,7 @@ import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
 import { useUserSettingsStore } from "../stores/userSettings.js";
 import { useEngineerStore } from "../stores/engineer.js";
-import {api, type DriveStatus, type ProfileSubscription} from "../services/apiService.js";
+import {api, type DriveExportJob, type DriveStatus, type ProfileSubscription} from "../services/apiService.js";
 import type { User, UserSettings } from "@shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useConfirm} from "../composables/useConfirm.js";
@@ -1235,7 +1235,8 @@ async function repairDriveFolder() {
     onConfirm: async () => {
       repairingFolder.value = true;
       try {
-        const result = await api.drive.exportAll();
+        const started = await api.drive.exportAll();
+        const result = await waitForDriveExportJob(started.jobId);
         const folderHint = result.folderName ? ` לתיקיית "${result.folderName}"` : "";
         if (result.uploaded === 0 && result.total === 0) {
           message.success("נוצרה תיקייה חדשה ב-Google Drive");
@@ -1258,6 +1259,17 @@ async function repairDriveFolder() {
       }
     },
   });
+}
+
+async function waitForDriveExportJob(jobId: string | null): Promise<DriveExportJob> {
+  if (!jobId) throw new Error("drive_export_missing_job");
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    const last = await api.drive.exportJob(jobId);
+    if (last.status === "completed") return last;
+    if (last.status === "failed") throw new Error(last.error || "drive_export_failed");
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+  }
+  throw new Error("drive_export_timeout");
 }
 
 async function reconnectGmailForDrive() {

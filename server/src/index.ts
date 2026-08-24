@@ -30,7 +30,7 @@ import {registerTemplateRoutes} from "./routes/templates";
 import {registerEquipmentRoutes} from "./routes/equipment";
 import {registerAuthRoutes} from "./routes/auth";
 import {registerGmailRoutes, startGmailImportJobWorker} from "./routes/gmail";
-import {registerGdriveRoutes} from "./routes/gdrive";
+import {registerGdriveRoutes, startDriveExportJobWorker} from "./routes/gdrive";
 import {registerInvoiceRoutes} from "./routes/invoices";
 import {registerUserSettingsRoutes} from "./routes/userSettings";
 import {registerProfileRoutes} from "./routes/profile";
@@ -41,7 +41,7 @@ import {registerPrintTemplateRoutes} from "./routes/printTemplates";
 import {registerFeatureRoutes} from "./routes/features";
 import {registerLegalRoutes} from "./routes/legal";
 import {seedGmailSearchProviders} from "./gmail/searchProviders";
-import {importFile} from "./pipeline/importer";
+import {importFile, startDocumentProcessingJobWorker} from "./pipeline/importer";
 import {applyScannedKeys, scanFileForKeys, shouldScanFile} from "./pipeline/keyScanner";
 import {logger, requestLogger} from "./logger";
 import {registerResendWebhook} from "./reminders/resendDelivery";
@@ -223,6 +223,8 @@ async function main() {
   await seedGmailSearchProviders();
   await collapseDuplicateGeneratedPdfs();
   startGmailImportJobWorker();
+  startDriveExportJobWorker();
+  startDocumentProcessingJobWorker();
 
   app.listen(settings.port, () => {
     logger.info("server_started", {

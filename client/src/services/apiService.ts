@@ -95,6 +95,10 @@ export interface GmailImportHistoryFile {
   filename: string;
   document_id: string | null;
   error: string | null;
+  import_status?: string;
+  import_explanation?: string;
+  retryable?: boolean;
+  retry_mode?: "failed" | "rejected" | "retryable" | null;
   document?: GmailImportedDocument | null;
 }
 
@@ -110,13 +114,22 @@ export interface GmailImportJobResult {
   filename: string;
   documentId?: string;
   error?: string;
+  importStatus?: string;
+  import_status?: string;
+  explanation?: string;
+  rejection_label?: string | null;
+  rejection_reason?: string | null;
+  retryable?: boolean;
+  ocr_failed?: boolean;
+  retryMode?: "failed" | "rejected" | "retryable" | null;
 }
 
 export interface GmailImportJob {
-  jobId: string;
+  jobId: string | null;
   status: "queued" | "running" | "completed" | "failed";
   q?: string;
   templateId?: string | null;
+  retryMode?: "failed" | "rejected" | "retryable" | null;
   total: number;
   totalMessages: number;
   newMessages: number;
@@ -124,7 +137,14 @@ export interface GmailImportJob {
   imported: number;
   skipped: number;
   errors: number;
+  attachmentsFound?: number;
+  stored?: number;
+  classifiedInvoices?: number;
+  rejected?: number;
+  ocrFailed?: number;
+  aiRetryPending?: number;
   results: GmailImportJobResult[];
+  explanationSummary?: Record<string, number>;
   quota?: Record<string, unknown> | null;
   error?: string | null;
   createdAt?: string;
@@ -147,7 +167,9 @@ export interface ImportedInvoice {
   billing_period: string | null;
   amount: number | null;
   amount_display: string;
+  vat_amount: number | null;
   currency: string;
+  cash_flow: "income" | "expense";
   client_name: string | null;
   business: string | null;
   expense_category: string | null;
@@ -168,6 +190,9 @@ export interface ImportedInvoice {
   preview_url: string | null;
   thumbnail_url: string | null;
   download_url: string | null;
+  in_s3: boolean;
+  drive_file_id: string | null;
+  drive_web_link: string | null;
   source_subject: string | null;
   source_email: string | null;
   fields: Record<string, unknown>;
@@ -183,6 +208,14 @@ export interface InvoiceExpenseMonthlySeries {
   supplier: string;
   total: number;
   points: InvoiceExpenseMonthlyPoint[];
+  isOther?: boolean;
+}
+
+export interface InvoiceExpenseCategorySeries {
+  category: string;
+  total: number;
+  count: number;
+  suppliers: { name: string; total: number; count: number }[];
 }
 
 export interface InvoiceExpenseMonthlyResponse {
@@ -192,6 +225,7 @@ export interface InvoiceExpenseMonthlyResponse {
   totalAmount: number;
   suppliers: { name: string; total: number; count?: number }[];
   categories: GmailSearchProvider["category"][];
+  categorySeries?: InvoiceExpenseCategorySeries[];
   series: InvoiceExpenseMonthlySeries[];
 }
 
@@ -241,6 +275,31 @@ export interface DriveExportResult {
   folderUrl?: string | null;
   recreated?: boolean;
   resetCount?: number;
+}
+
+export interface DriveExportJobResult {
+  documentId: string;
+  fileName: string;
+  status: "uploaded" | "failed";
+  error?: string;
+}
+
+export interface DriveExportJob {
+  jobId: string | null;
+  status: "queued" | "running" | "completed" | "failed";
+  ok: boolean;
+  uploaded: number;
+  failed: number;
+  skipped: number;
+  processed: number;
+  total: number;
+  folderId?: string | null;
+  folderName?: string;
+  folderUrl?: string | null;
+  recreated?: boolean;
+  resetCount?: number;
+  error?: string | null;
+  results?: DriveExportJobResult[];
 }
 
 export interface EquipmentHistoryEvent {
@@ -451,7 +510,7 @@ export const api = {
   },
 
   invoices: {
-    list: (params?: { q?: string; status?: string; type?: string; category?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
+    list: (params?: { q?: string; status?: string; type?: string; cashFlow?: string; category?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
       get<{
         rows: ImportedInvoice[];
         total: number;
@@ -466,7 +525,7 @@ export const api = {
       }>(`/invoices${qs(params)}`, force),
     get: (id: string, force = false) =>
       get<ImportedInvoice>(`/invoices/${id}`, force),
-    update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; provider_category?: GmailSearchProvider["category"] | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
+    update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; cash_flow?: "income" | "expense" | null; provider_category?: GmailSearchProvider["category"] | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
       put<ImportedInvoice>(`/invoices/${id}`, body),
     deleteSelected: (body: { ids: string[] }) =>
       post<{ ok: true; requested: number; deleted: number; documentsDeleted: number }>("/invoices/delete-selected", body),
@@ -826,6 +885,8 @@ export const api = {
       post<{ documentId: string; filename: string }>("/gmail/import-attachment", { messageId, attachmentId, filename, templateId }),
     importAll: (q?: string, limit?: number, templateId?: string) =>
       post<GmailImportJob>("/gmail/import-all", { q, limit, templateId }),
+    importRetry: (mode: "failed" | "rejected" | "retryable", q?: string, templateId?: string) =>
+      post<GmailImportJob>("/gmail/import-retry", { mode, q, templateId }),
     importJob: (jobId: string) => get<GmailImportJob>(`/gmail/import-jobs/${encodeURIComponent(jobId)}`),
     importHistory: () => get<{ history: GmailImportHistoryItem[] }>("/gmail/import-history"),
     deleteImportHistory: (messageId: string) => del(`/gmail/import-history/${encodeURIComponent(messageId)}`),
@@ -843,7 +904,8 @@ export const api = {
       resetCount?: number;
     }>("/drive/enable", folderName ? {folderName} : {}),
     disable: () => post<{ ok: boolean }>("/drive/disable", {}),
-    exportAll: () => post<DriveExportResult>("/drive/export-all", {}),
+    exportAll: () => post<DriveExportJob>("/drive/export-all", {}),
+    exportJob: (jobId: string) => get<DriveExportJob>(`/drive/export-jobs/${encodeURIComponent(jobId)}`),
     renameFolder: (name: string) => post<{ ok: boolean; folderName: string }>("/drive/rename-folder", {name}),
   },
 

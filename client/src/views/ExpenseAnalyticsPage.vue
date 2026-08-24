@@ -3,7 +3,7 @@
     <PageHeader
       :count="totalInvoices"
       title="הוצאות לפי ספק"
-      subtitle="גרף חודשי לפי תאריך חשבונית או תאריך ייבוא"
+      subtitle="גרף חודשי של הוצאות לפי תאריך חשבונית או תאריך ייבוא"
     >
       <template #hero>
         <n-dropdown
@@ -85,8 +85,8 @@
         <div class="expense-metric">
           <n-icon :component="PeopleOutline" :size="18" class="expense-metric__icon" />
           <div>
-            <span>ספקים בגרף</span>
-            <strong>{{ chartSeries.length }} / {{ suppliers.length }}</strong>
+            <span>{{ legendByCategory ? "קטגוריות בגרף" : "ספקים בגרף" }}</span>
+            <strong>{{ legendByCategory ? categorySeries.length : `${namedChartSeries.length} / ${suppliers.length}` }}</strong>
           </div>
         </div>
         <div class="expense-metric">
@@ -108,43 +108,82 @@
       <section class="expense-layout">
         <div class="expense-chart-panel">
           <header class="expense-panel__head">
-            <h2>מגמה חודשית</h2>
-            <p>כל קו מייצג ספק. כברירת מחדל מוצגים עד 20 ספקים מובילים.</p>
+            <div>
+              <h2>{{ activeChartType.title }}</h2>
+              <p>{{ activeChartType.hint }}</p>
+            </div>
+            <div class="expense-chart-types" role="group" aria-label="סוג גרף">
+              <n-tooltip v-for="item in chartTypeOptions" :key="item.id" placement="top">
+                <template #trigger>
+                  <button
+                    :aria-label="item.label"
+                    :aria-pressed="chartType === item.id"
+                    :class="{ 'rbtn--ghost-active': chartType === item.id }"
+                    class="rbtn rbtn--ghost rbtn--icon"
+                    type="button"
+                    @click="chartType = item.id"
+                  >
+                    <n-icon :component="item.icon" :size="16" class="btn-icon" />
+                  </button>
+                </template>
+                {{ item.label }}
+              </n-tooltip>
+            </div>
           </header>
-          <div v-if="!chartSeries.length || !months.length" class="expense-empty">
+          <div v-if="!hasChartData" class="expense-empty">
             <n-icon :component="AnalyticsOutline" :size="40" class="expense-empty__icon" />
             <p>אין נתונים להצגה עבור הסינון הנוכחי</p>
           </div>
-          <div v-else ref="chartEl" class="expense-chart" role="img" aria-label="גרף הוצאות חודשי לפי ספק" />
+          <div v-else ref="chartEl" class="expense-chart" role="img" :aria-label="activeChartType.ariaLabel" />
         </div>
 
-        <aside class="expense-legend" aria-label="ספקים בגרף">
+        <aside class="expense-legend" :aria-label="legendByCategory ? 'קטגוריות בגרף' : 'ספקים בגרף'">
           <header class="expense-panel__head">
-            <h2>לפי ספק</h2>
+            <h2>{{ legendByCategory ? "לפי קטגוריה" : "לפי ספק" }}</h2>
             <button
-              v-if="selectedSuppliers.length"
+              v-if="legendByCategory ? Boolean(category) : selectedSuppliers.length > 0"
               class="expense-legend__clear"
               type="button"
-              @click="clearSupplierFilter"
+              @click="legendByCategory ? clearCategoryFilter() : clearSupplierFilter()"
             >
               <n-icon :component="CloseOutline" :size="14" />
               הצג הכל
             </button>
           </header>
           <div class="expense-legend__scroll">
-            <button
-              v-for="(series, index) in chartSeries"
-              :key="series.supplier"
-              :aria-pressed="isFocusedSupplier(series.supplier)"
-              :class="{ 'expense-legend__item--active': isFocusedSupplier(series.supplier) }"
-              class="expense-legend__item"
-              type="button"
-              @click="focusSupplier(series.supplier)"
-            >
-              <span class="expense-legend__swatch" :style="{ background: seriesColor(index) }" />
-              <span class="expense-legend__name" dir="auto">{{ series.supplier }}</span>
-              <strong>{{ formatMoney(series.total) }}</strong>
-            </button>
+            <template v-if="legendByCategory">
+              <button
+                v-for="(row, index) in categorySeries"
+                :key="row.category"
+                :aria-pressed="isFocusedCategory(row.category)"
+                :class="{ 'expense-legend__item--active': isFocusedCategory(row.category) }"
+                class="expense-legend__item"
+                type="button"
+                @click="focusCategory(row.category)"
+              >
+                <span class="expense-legend__swatch" :style="{ background: categoryColor(index) }" />
+                <span class="expense-legend__name" dir="auto">{{ providerCategoryLabel(row.category) }}</span>
+                <strong>{{ formatMoney(row.total) }}</strong>
+              </button>
+            </template>
+            <template v-else>
+              <button
+                v-for="(series, index) in chartSeries"
+                :key="series.supplier"
+                :aria-pressed="series.isOther ? undefined : isFocusedSupplier(series.supplier)"
+                :class="{
+                  'expense-legend__item--active': isFocusedSupplier(series.supplier),
+                  'expense-legend__item--static': series.isOther,
+                }"
+                class="expense-legend__item"
+                type="button"
+                @click="focusSupplier(series.supplier)"
+              >
+                <span class="expense-legend__swatch" :style="{ background: seriesColor(index, series) }" />
+                <span class="expense-legend__name" dir="auto">{{ series.supplier }}</span>
+                <strong>{{ formatMoney(series.total) }}</strong>
+              </button>
+            </template>
           </div>
         </aside>
       </section>
@@ -154,26 +193,33 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { NDatePicker, NDropdown, NIcon, NSelect, NSpin, type SelectOption, useMessage } from "naive-ui";
+import { NDatePicker, NDropdown, NIcon, NSelect, NSpin, NTooltip, type SelectOption, useMessage } from "naive-ui";
 import {
   AnalyticsOutline,
+  BarChartOutline,
   CalendarOutline,
   CloseOutline,
   DownloadOutline,
+  LayersOutline,
+  MapOutline,
   PeopleOutline,
+  PieChartOutline,
   RefreshOutline,
   ReceiptOutline,
+  StatsChartOutline,
   WalletOutline,
 } from "@vicons/ionicons5";
 import * as echarts from "echarts/core";
-import { LineChart } from "echarts/charts";
+import { BarChart, LineChart, PieChart, TreemapChart } from "echarts/charts";
 import { GridComponent, TooltipComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import PageHeader from "../components/PageHeader.vue";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
-import { api, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
+import { api, type InvoiceExpenseCategorySeries, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
 
-echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
+echarts.use([BarChart, LineChart, PieChart, TreemapChart, GridComponent, TooltipComponent, CanvasRenderer]);
+
+type ExpenseChartType = "stacked" | "grouped" | "line" | "pie" | "map";
 
 const message = useMessage();
 const chartEl = ref<HTMLDivElement | null>(null);
@@ -185,11 +231,14 @@ const dateRange = ref<[number, number] | null>(null);
 const months = ref<string[]>([]);
 const suppliers = ref<{ name: string; total: number; count?: number }[]>([]);
 const categories = ref<string[]>([]);
+const categorySeries = ref<InvoiceExpenseCategorySeries[]>([]);
 const chartSeries = ref<InvoiceExpenseMonthlySeries[]>([]);
 const totalAmount = ref(0);
 const totalInvoices = ref(0);
 const exporting = ref(false);
 const themeTick = ref(0);
+const chartType = ref<ExpenseChartType>("stacked");
+const supplierColorIndex = ref<Record<string, number>>({});
 let chart: echarts.EChartsType | null = null;
 let chartResizeObserver: ResizeObserver | null = null;
 let themeObserver: MutationObserver | null = null;
@@ -202,6 +251,14 @@ const exportMenuOptions = [
   { label: "Excel — סה״כ לפי ספק", key: "xlsx" },
   { label: "CSV — סה״כ לפי ספק", key: "csv" },
 ];
+const chartTypeOptions = [
+  { id: "stacked" as const, label: "עמודות מוערמות", icon: LayersOutline, title: "מגמה חודשית", hint: "כל עמודה היא חודש. הגובה הוא סה״כ ההוצאות, והצבעים הם הספקים.", ariaLabel: "עמודות מוערמות של הוצאות חודשיות לפי ספק" },
+  { id: "grouped" as const, label: "עמודות מקובצות", icon: BarChartOutline, title: "השוואה חודשית", hint: "כל קבוצה היא חודש, וכל עמודה היא ספק.", ariaLabel: "עמודות מקובצות של הוצאות חודשיות לפי ספק" },
+  { id: "line" as const, label: "קווים", icon: StatsChartOutline, title: "מגמה חודשית", hint: "כל קו מייצג ספק לאורך החודשים.", ariaLabel: "גרף קווים של הוצאות חודשיות לפי ספק" },
+  { id: "pie" as const, label: "עוגה לפי קטגוריה", icon: PieChartOutline, title: "התפלגות לפי קטגוריה", hint: "כל פלח הוא סכום ההוצאות בקטגוריית ספק.", ariaLabel: "גרף עוגה של הוצאות לפי קטגוריה" },
+  { id: "map" as const, label: "מפה", icon: MapOutline, title: "מפת קטגוריות", hint: "שטח לפי סכום. לחצו על קטגוריה כדי לראות ספקים.", ariaLabel: "מפת עץ של הוצאות לפי קטגוריה וספק" },
+];
+const activeChartType = computed(() => chartTypeOptions.find((item) => item.id === chartType.value) ?? chartTypeOptions[0]);
 
 const supplierOptions = computed<SelectOption[]>(() =>
   suppliers.value.map((supplier) => ({
@@ -213,28 +270,116 @@ const supplierOptions = computed<SelectOption[]>(() =>
 const categoryOptions = computed<SelectOption[]>(() =>
   categories.value.map((value) => ({ label: providerCategoryLabel(value), value })),
 );
+const namedChartSeries = computed(() => chartSeries.value.filter((series) => !series.isOther));
+const legendByCategory = computed(() => chartType.value === "pie" || chartType.value === "map");
+const hasChartData = computed(() => legendByCategory.value
+  ? categorySeries.value.length > 0
+  : chartSeries.value.length > 0 && months.value.length > 0);
 
 const chartOption = computed<echarts.EChartsCoreOption>(() => {
   themeTick.value;
+  const type = chartType.value;
   const colors = chartPalette();
   const text = cssVar("--text-secondary", "#64748b");
   const border = cssVar("--border-color", "#d9dee8");
   const tooltipBg = cssVar("--bg-elevated", "#ffffff");
   const tooltipText = cssVar("--text-primary", "#2c3e50");
-  return {
+  const lastIndex = chartSeries.value.length - 1;
+  const shared = {
     color: colors,
     textStyle: {
       fontFamily: cssVar("--font-ui", "Segoe UI, Arial, sans-serif"),
       color: text,
     },
+  };
+
+  if (type === "pie") {
+    return {
+      ...shared,
+      tooltip: {
+        trigger: "item",
+        confine: true,
+        backgroundColor: tooltipBg,
+        borderColor: border,
+        textStyle: { color: tooltipText },
+        extraCssText: "direction: rtl; text-align: right; max-width: 280px;",
+        formatter: (raw: unknown) => formatPieTooltip(raw),
+      },
+      series: [{
+        type: "pie",
+        radius: ["46%", "72%"],
+        center: ["50%", "54%"],
+        avoidLabelOverlap: true,
+        label: { show: false },
+        labelLine: { show: false },
+        itemStyle: {
+          borderColor: tooltipBg,
+          borderWidth: 2,
+        },
+        data: categorySeries.value.map((row, index) => ({
+          name: providerCategoryLabel(row.category),
+          value: row.total,
+          itemStyle: { color: categoryColor(index) },
+        })),
+      }],
+    };
+  }
+
+  if (type === "map") {
+    return {
+      ...shared,
+      tooltip: {
+        trigger: "item",
+        confine: true,
+        backgroundColor: tooltipBg,
+        borderColor: border,
+        textStyle: { color: tooltipText },
+        extraCssText: "direction: rtl; text-align: right; max-width: 280px;",
+        formatter: (raw: unknown) => formatPieTooltip(raw),
+      },
+      series: [{
+        type: "treemap",
+        roam: false,
+        nodeClick: "zoomToNode",
+        breadcrumb: {
+          show: true,
+          left: "center",
+          itemStyle: { color: tooltipBg, textStyle: { color: tooltipText } },
+        },
+        label: {
+          show: true,
+          formatter: (params: { name?: string; value?: number }) => `${params.name ?? ""}\n${compactMoney(Number(params.value ?? 0))}`,
+        },
+        upperLabel: { show: true, height: 24 },
+        itemStyle: { borderColor: tooltipBg, gapWidth: 4 },
+        levels: [
+          { itemStyle: { borderWidth: 0, gapWidth: 6 } },
+          { itemStyle: { borderWidth: 2, gapWidth: 2 }, colorSaturation: [0.35, 0.7] },
+        ],
+        data: categorySeries.value.map((row, index) => ({
+          name: providerCategoryLabel(row.category),
+          value: row.total,
+          itemStyle: { color: categoryColor(index) },
+          children: row.suppliers.slice(0, 12).map((supplier) => ({
+            name: supplier.name,
+            value: supplier.total,
+          })),
+        })),
+      }],
+    };
+  }
+
+  return {
+    ...shared,
     tooltip: {
       trigger: "axis",
+      axisPointer: { type: type === "line" ? "line" : "shadow" },
       confine: true,
       backgroundColor: tooltipBg,
       borderColor: border,
       textStyle: { color: tooltipText },
-      extraCssText: "direction: rtl; text-align: right;",
-      valueFormatter: (value) => formatMoney(Number(value ?? 0)),
+      extraCssText: "direction: rtl; text-align: right; max-width: 280px;",
+      formatter: (raw: unknown) => formatStackTooltip(raw, border),
     },
     grid: {
       top: 18,
@@ -245,7 +390,7 @@ const chartOption = computed<echarts.EChartsCoreOption>(() => {
     },
     xAxis: {
       type: "category",
-      boundaryGap: false,
+      boundaryGap: type !== "line",
       data: months.value.map(formatMonth),
       axisLabel: {
         color: text,
@@ -265,17 +410,36 @@ const chartOption = computed<echarts.EChartsCoreOption>(() => {
       },
       splitLine: { lineStyle: { color: border, type: "dashed" } },
     },
-    series: chartSeries.value.map((series, index) => ({
-      name: series.supplier,
-      type: "line",
-      smooth: true,
-      symbol: "circle",
-      symbolSize: 7,
-      emphasis: { focus: "series" },
-      lineStyle: { width: 3 },
-      areaStyle: { color: colors[index % colors.length], opacity: 0.08 },
-      data: series.points.map((point) => point.total),
-    })),
+    series: chartSeries.value.map((series, index) => {
+      const color = seriesColor(index, series);
+      if (type === "line") {
+        return {
+          name: series.supplier,
+          type: "line",
+          smooth: true,
+          symbol: "circle",
+          symbolSize: 7,
+          emphasis: { focus: "series" },
+          lineStyle: { width: 3, color },
+          itemStyle: { color },
+          areaStyle: { color, opacity: 0.08 },
+          data: series.points.map((point) => point.total),
+        };
+      }
+      return {
+        name: series.supplier,
+        type: "bar",
+        stack: type === "stacked" ? "expenses" : undefined,
+        barMaxWidth: type === "stacked" ? 44 : 18,
+        barGap: type === "grouped" ? "20%" : undefined,
+        emphasis: { focus: "series" },
+        itemStyle: {
+          color,
+          borderRadius: type === "stacked" && index === lastIndex ? [4, 4, 0, 0] : [3, 3, 0, 0],
+        },
+        data: series.points.map((point) => point.total),
+      };
+    }),
   };
 });
 
@@ -301,6 +465,12 @@ onBeforeUnmount(() => {
   chart = null;
 });
 
+watch(chartType, () => {
+  chart?.dispose();
+  chart = null;
+  nextTick(renderChart);
+});
+
 watch(chartOption, () => {
   renderChart();
 }, { deep: true });
@@ -315,12 +485,14 @@ async function load(force = false) {
       supplier: selectedSuppliers.value.length ? selectedSuppliers.value.join("||") : undefined,
       dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
       dateTo: dateTo ? new Date(dateTo).toISOString().slice(0, 10) : undefined,
-      top: 20,
+      top: 8,
     }, force);
     months.value = result.months;
     suppliers.value = result.suppliers;
     categories.value = result.categories;
+    categorySeries.value = (result.categorySeries ?? []).filter((row) => row.total > 0);
     chartSeries.value = result.series.filter((series) => series.total > 0);
+    rememberSupplierColors(chartSeries.value);
     totalAmount.value = result.totalAmount;
     totalInvoices.value = result.totalInvoices;
     await nextTick();
@@ -332,11 +504,26 @@ async function load(force = false) {
   }
 }
 
+function isFocusedCategory(value: string): boolean {
+  return category.value === value;
+}
+
+function focusCategory(value: string) {
+  category.value = isFocusedCategory(value) ? null : value;
+  load(true);
+}
+
+function clearCategoryFilter() {
+  category.value = null;
+  load(true);
+}
+
 function isFocusedSupplier(supplier: string): boolean {
   return selectedSuppliers.value.length === 1 && selectedSuppliers.value[0] === supplier;
 }
 
 function focusSupplier(supplier: string) {
+  if (chartSeries.value.find((series) => series.supplier === supplier)?.isOther) return;
   selectedSuppliers.value = isFocusedSupplier(supplier) ? [] : [supplier];
   load(true);
 }
@@ -415,7 +602,7 @@ async function exportTotals(format: string | number) {
 }
 
 function renderChart() {
-  if (!chartEl.value || !chartSeries.value.length || !months.value.length) return;
+  if (!chartEl.value || !hasChartData.value) return;
   if (!chart) {
     chart = echarts.init(chartEl.value);
     chartResizeObserver?.disconnect();
@@ -438,8 +625,63 @@ function chartPalette(): string[] {
     : [brand, "#2080f0", "#d03050", "#7c3aed", "#0f766e", "#ea580c", "#64748b", "#be123c"];
 }
 
-function seriesColor(index: number): string {
+function categoryColor(index: number): string {
   return chartPalette()[index % chartPalette().length];
+}
+
+function rememberSupplierColors(seriesList: InvoiceExpenseMonthlySeries[]) {
+  const named = seriesList.filter((series) => !series.isOther);
+  if (named.length <= 1 && Object.keys(supplierColorIndex.value).length) return;
+  supplierColorIndex.value = Object.fromEntries(named.map((series, index) => [series.supplier, index]));
+}
+
+function seriesColor(index: number, series?: InvoiceExpenseMonthlySeries): string {
+  if (series?.isOther) return otherSeriesColor();
+  const mapped = series ? supplierColorIndex.value[series.supplier] : undefined;
+  return chartPalette()[(mapped ?? index) % chartPalette().length];
+}
+
+function otherSeriesColor(): string {
+  return document.documentElement.getAttribute("data-theme") === "dark" ? "#64748b" : "#94a3b8";
+}
+
+function formatStackTooltip(raw: unknown, border: string): string {
+  const items = (Array.isArray(raw) ? raw : [raw]) as Array<{
+    axisValueLabel?: string;
+    marker?: string;
+    seriesName?: string;
+    value?: number;
+  }>;
+  const visible = items.filter((item) => Number(item.value ?? 0) > 0);
+  const monthTotal = visible.reduce((sum, item) => sum + Number(item.value ?? 0), 0);
+  const title = visible[0]?.axisValueLabel ?? items[0]?.axisValueLabel ?? "";
+  const rows = visible.map((item) => {
+    const value = Number(item.value ?? 0);
+    const percent = monthTotal ? Math.round((value / monthTotal) * 100) : 0;
+    return `<div style="display:flex;gap:10px;justify-content:space-between;align-items:center;">
+      <span>${item.marker ?? ""} ${item.seriesName ?? ""}</span>
+      <span>${formatMoney(value)} · ${percent}%</span>
+    </div>`;
+  }).join("");
+  return `<div style="min-width:190px">
+    <div style="margin-bottom:8px;font-weight:700">${title}</div>
+    ${rows || "אין הוצאות בחודש זה"}
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid ${border};font-weight:700">סה״כ ${formatMoney(monthTotal)}</div>
+  </div>`;
+}
+
+function formatPieTooltip(raw: unknown): string {
+  const item = (Array.isArray(raw) ? raw[0] : raw) as {
+    marker?: string;
+    name?: string;
+    value?: number;
+    percent?: number;
+  } | undefined;
+  if (!item) return "";
+  return `<div style="min-width:160px">
+    <div>${item.marker ?? ""} ${item.name ?? ""}</div>
+    <div style="margin-top:6px;font-weight:700">${formatMoney(Number(item.value ?? 0))} · ${Math.round(Number(item.percent ?? 0))}%</div>
+  </div>`;
 }
 
 function formatMonth(month: string): string {
@@ -622,6 +864,40 @@ function providerCategoryLabel(value: string): string {
   padding: 14px 16px 0;
 }
 
+.expense-chart-types {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  flex: 0 0 auto;
+}
+
+.expense-chart-types .rbtn {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.expense-chart-types .rbtn--ghost-active {
+  background: var(--bg-card);
+  border-color: var(--brand-color);
+  color: var(--brand-color);
+}
+
+.rbtn--icon {
+  justify-content: center;
+}
+
+.rbtn--ghost-active {
+  background: var(--bg-card);
+  border-color: var(--brand-color);
+  color: var(--brand-color);
+}
+
 .expense-panel__head h2 {
   margin: 0;
   font-size: 15px;
@@ -740,6 +1016,13 @@ function providerCategoryLabel(value: string): string {
   background: color-mix(in srgb, var(--brand-color) 12%, transparent);
 }
 
+.expense-legend__item--static,
+.expense-legend__item--static:hover,
+.expense-legend__item--static:focus-visible {
+  cursor: default;
+  background: transparent;
+}
+
 .expense-legend__swatch {
   width: 10px;
   height: 10px;
@@ -777,6 +1060,10 @@ function providerCategoryLabel(value: string): string {
 }
 
 @media (max-width: 640px) {
+  .expense-panel__head {
+    flex-wrap: wrap;
+  }
+
   .expense-chart {
     height: 280px;
   }

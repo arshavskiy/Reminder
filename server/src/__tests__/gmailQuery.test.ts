@@ -24,6 +24,15 @@ describe("Gmail query tier limits", () => {
     );
   });
 
+  it("does not cap admin invoice searches with newer_than:48m", () => {
+    expect(buildGmailQuery("has:attachment HOT", invoiceTemplate, "admin")).toBe(
+      "has:attachment {filename:pdf filename:doc filename:docx filename:xls filename:xlsx} HOT",
+    );
+    expect(buildGmailQuery("has:attachment HOT newer_than:48m", invoiceTemplate, "admin")).toBe(
+      "has:attachment {filename:pdf filename:doc filename:docx filename:xls filename:xlsx} HOT",
+    );
+  });
+
   it("replaces client-provided invoice history windows with the tier window", () => {
     expect(buildGmailQuery("has:attachment HOT newer_than:36m", invoiceTemplate, "basic")).toBe(
       "has:attachment {filename:pdf filename:doc filename:docx filename:xls filename:xlsx} HOT newer_than:12m",

@@ -54,7 +54,7 @@
             type="button"
             @click="handleDriveExport"
         >
-          <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+          <GoogleDriveLogo :size="16" />
           ייצוא ל-Drive
         </button>
         <button class="rbtn rbtn--ghost" type="button" @click="showMonthlyReport = true">
@@ -128,6 +128,14 @@
         @update:value="load(true)"
       />
       <n-select
+        v-model:value="filters.cashFlow"
+        :options="cashFlowFilterOptions"
+        clearable
+        placeholder="הכנסה / הוצאה"
+        class="toolbar__type"
+        @update:value="load(true)"
+      />
+      <n-select
         v-model:value="filters.category"
         :options="categoryOptions"
         clearable
@@ -171,6 +179,12 @@
       :dismissible="!importingFromGmail"
       @dismiss="lastGmailImportJob = null"
     />
+    <DriveExportJobStatus
+      v-if="visibleDriveExportJob"
+      :job="visibleDriveExportJob"
+      :dismissible="!exportingToDrive"
+      @dismiss="lastDriveExportJob = null"
+    />
 
     <n-spin :show="loading">
       <div v-if="!rows.length && !loading" class="empty">
@@ -203,12 +217,20 @@
               <n-icon :component="DocumentTextOutline" :size="42" />
             </div>
             <span class="invoice-card__status">{{ statusLabel(row.status) }}</span>
+            <StorageSyncIcons
+              class="invoice-card__storage"
+              :in-s3="row.in_s3"
+              :drive-synced="Boolean(row.drive_file_id)"
+              :drive-busy="exportingToDrive && !row.drive_file_id"
+              :drive-link="row.drive_web_link"
+              :download-url="row.download_url"
+            />
           </div>
           <div class="invoice-card__body">
             <div class="invoice-card__supplier" :title="row.supplier_name">{{ row.supplier_name }}</div>
             <div class="invoice-card__amount">{{ row.amount_display }}</div>
             <div class="invoice-card__line">
-              <span>{{ row.type }}</span>
+              <span>{{ invoiceTypeLabel(row) }} · {{ cashFlowLabel(row) }}</span>
               <span>{{ displayDate(row) }}</span>
             </div>
             <div class="invoice-card__line invoice-card__line--muted">
@@ -228,7 +250,6 @@
           <colgroup>
             <col class="invoice-table__col invoice-table__col--select" />
             <col class="invoice-table__col invoice-table__col--supplier" />
-            <col class="invoice-table__col invoice-table__col--status" />
             <col class="invoice-table__col invoice-table__col--date" />
             <col class="invoice-table__col invoice-table__col--client" />
             <col class="invoice-table__col invoice-table__col--category" />
@@ -250,12 +271,6 @@
                 <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('supplier')" @click="setSort('supplier')">
                   <span>ספק</span>
                   <n-icon :component="sortIcon('supplier')" :size="14" />
-                </button>
-              </th>
-              <th class="invoice-col invoice-col--status">
-                <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('status')" @click="setSort('status')">
-                  <span>סטטוס</span>
-                  <n-icon :component="sortIcon('status')" :size="14" />
                 </button>
               </th>
               <th class="invoice-col invoice-col--date">
@@ -312,15 +327,6 @@
               <td class="cell-strong invoice-col invoice-col--supplier">
                 <span class="invoice-cell-truncate" dir="auto" :title="row.supplier_name">{{ row.supplier_name }}</span>
               </td>
-              <td class="invoice-col invoice-col--status" @click.stop>
-                <n-select
-                  :value="row.status"
-                  :options="invoiceStatusOptions"
-                  size="small"
-                  class="invoice-status-select"
-                  @update:value="(value) => updateInvoiceStatus(row, String(value))"
-                />
-              </td>
               <td class="invoice-col invoice-col--date">{{ formatDate(row.issue_date) }}</td>
               <td class="invoice-col invoice-col--client">
                 <span class="invoice-cell-truncate" dir="auto" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
@@ -338,10 +344,18 @@
                   @update:value="(value) => updateInvoiceProviderCategory(row, value)"
                 />
               </td>
-              <td class="invoice-col invoice-col--type">{{ invoiceTypeLabel(row) }}</td>
+              <td class="invoice-col invoice-col--type">{{ invoiceTypeLabel(row) }} · {{ cashFlowLabel(row) }}</td>
               <td class="cell-amount invoice-col invoice-col--amount" dir="ltr">{{ row.amount_display }}</td>
               <td class="cell-actions invoice-col invoice-col--actions" @click.stop>
                 <div class="row-actions">
+                  <StorageSyncIcons
+                    compact
+                    :in-s3="row.in_s3"
+                    :drive-synced="Boolean(row.drive_file_id)"
+                    :drive-busy="exportingToDrive && !row.drive_file_id"
+                    :drive-link="row.drive_web_link"
+                    :download-url="row.download_url"
+                  />
                   <n-dropdown
                     :options="invoiceActionOptions(row)"
                     placement="bottom-start"
@@ -455,7 +469,6 @@ import {
   ArrowDownOutline,
   ArrowUpOutline,
   BriefcaseOutline,
-  CloudUploadOutline,
   DocumentTextOutline,
   DownloadOutline,
   EllipsisVerticalOutline,
@@ -470,9 +483,12 @@ import {
 import PageHeader from "../components/PageHeader.vue";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import GmailLogo from "../components/GmailLogo.vue";
+import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
+import StorageSyncIcons from "../components/StorageSyncIcons.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import GmailImportJobStatus from "../components/GmailImportJobStatus.vue";
-import { api, type GmailImportJob, type ImportedInvoice } from "../services/apiService.js";
+import DriveExportJobStatus from "../components/DriveExportJobStatus.vue";
+import { api, type DriveExportJob, type GmailImportJob, type ImportedInvoice } from "../services/apiService.js";
 import type { DocTemplate } from "../shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
 import {planAllowsGoogleDrive, resolveUserPlan} from "../shared/pricingPlans.js";
@@ -496,6 +512,8 @@ const exportingToDrive = ref(false);
 const importingFromGmail = ref(false);
 const activeGmailImportJob = ref<GmailImportJob | null>(null);
 const lastGmailImportJob = ref<GmailImportJob | null>(null);
+const activeDriveExportJob = ref<DriveExportJob | null>(null);
+const lastDriveExportJob = ref<DriveExportJob | null>(null);
 const gmailConnected = ref<boolean | null>(null);
 const viewMode = ref<"cards" | "table">("table");
 const selectedInvoiceIds = ref(new Set<string>());
@@ -513,6 +531,7 @@ const filters = reactive({
   q: "",
   status: null as string | null,
   type: null as string | null,
+  cashFlow: null as string | null,
   category: null as string | null,
   suppliers: [] as string[],
 });
@@ -539,6 +558,10 @@ const invoiceStatusOptions: SelectOption[] = [
   { label: "ארכיון", value: "archived" },
 ];
 const typeOptions = computed<SelectOption[]>(() => types.value.map((value) => ({ label: value, value })));
+const cashFlowFilterOptions: SelectOption[] = [
+  { label: "הוצאה", value: "expense" },
+  { label: "הכנסה", value: "income" },
+];
 const categoryOptions = computed<SelectOption[]>(() => categories.value.map((value) => ({
   label: providerCategoryLabel(value),
   value,
@@ -553,6 +576,7 @@ const supplierOptions = computed<SelectOption[]>(() => [
 ]);
 const gmailImportButtonLabel = computed(() => gmailConnected.value === false ? "חבר Gmail" : "ייבא הכל");
 const visibleGmailImportJob = computed(() => activeGmailImportJob.value ?? lastGmailImportJob.value);
+const visibleDriveExportJob = computed(() => activeDriveExportJob.value ?? lastDriveExportJob.value);
 const selectedInvoiceCount = computed(() => selectedInvoiceIds.value.size);
 const visibleRowIds = computed(() => rows.value.map((row) => row.id));
 const someVisibleSelected = computed(() => visibleRowIds.value.some((id) => selectedInvoiceIds.value.has(id)));
@@ -596,6 +620,7 @@ async function load(force = false) {
       q: filters.q,
       status: filters.status ?? undefined,
       type: filters.type ?? undefined,
+      cashFlow: filters.cashFlow ?? undefined,
       category: filters.category ?? undefined,
       supplier: supplierFilterParam(),
       sortBy: sortBy.value,
@@ -751,6 +776,10 @@ function invoiceTypeLabel(row: ImportedInvoice): string {
   return "חשבונית";
 }
 
+function cashFlowLabel(row: ImportedInvoice): string {
+  return row.cash_flow === "income" ? "הכנסה" : "הוצאה";
+}
+
 function invoiceProviderCategoryLabel(row: ImportedInvoice): string {
   return row.provider_category ? providerCategoryLabel(row.provider_category) : "לא מסווג";
 }
@@ -854,6 +883,7 @@ async function exportInvoicesToExcel() {
       q: filters.q,
       status: filters.status ?? undefined,
       type: filters.type ?? undefined,
+      cashFlow: filters.cashFlow ?? undefined,
       category: filters.category ?? undefined,
       supplier: supplierFilterParam(),
       sortBy: sortBy.value,
@@ -871,6 +901,7 @@ async function exportInvoicesToExcel() {
       "תאריך לתשלום": isoDate(row.payment_due_date),
       "לקוח": clientLabel(row),
       "סוג": invoiceTypeLabel(row),
+      "תנועה": cashFlowLabel(row),
       "סכום": row.amount ?? "",
       "מטבע": row.currency,
       "מספר חשבונית": row.invoice_number ?? "",
@@ -878,7 +909,7 @@ async function exportInvoicesToExcel() {
       "תקופת חיוב": row.billing_period ?? "",
       "קטגוריית ספק": invoiceProviderCategoryLabel(row),
       "ספק מזוהה": row.provider_label ?? "",
-      "קטגוריית הוצאה": row.expense_category ?? "",
+      "קטגוריה": row.expense_category ?? "",
       "קובץ": row.file_name,
     }));
     const ws = utils.json_to_sheet(data);
@@ -889,6 +920,7 @@ async function exportInvoicesToExcel() {
       { wch: 16 },
       { wch: 24 },
       { wch: 18 },
+      { wch: 12 },
       { wch: 12 },
       { wch: 10 },
       { wch: 20 },
@@ -949,8 +981,13 @@ async function handleDriveExport() {
 
 async function runDriveExport() {
   exportingToDrive.value = true;
+  lastDriveExportJob.value = null;
   try {
-    const result = await api.drive.exportAll();
+    const started = await api.drive.exportAll();
+    activeDriveExportJob.value = started;
+    message.info("ייצוא ל-Drive התחיל ברקע");
+    const result = await waitForDriveExportJob(started.jobId);
+    lastDriveExportJob.value = result;
     const folderHint = result.folderName ? ` לתיקיית "${result.folderName}"` : "";
     if (result.recreated) {
       message.success(`נוצרה תיקייה חדשה והועלו ${result.uploaded} מסמכים${folderHint}${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
@@ -962,6 +999,7 @@ async function runDriveExport() {
     if (result.folderUrl) {
       window.open(result.folderUrl, "_blank", "noopener,noreferrer");
     }
+    await load(true);
   } catch (err: any) {
     if (String(err?.message ?? "").includes("drive_plan_required")) {
       message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
@@ -971,6 +1009,7 @@ async function runDriveExport() {
       message.error("שגיאה בייצוא ל-Drive");
     }
   } finally {
+    activeDriveExportJob.value = null;
     exportingToDrive.value = false;
   }
 }
@@ -1028,6 +1067,19 @@ async function waitForGmailImportJob(jobId: string): Promise<GmailImportJob> {
     await delay(2000);
   }
   throw new Error("gmail_import_timeout");
+}
+
+async function waitForDriveExportJob(jobId: string | null): Promise<DriveExportJob> {
+  if (!jobId) throw new Error("drive_export_missing_job");
+  let last: DriveExportJob | null = null;
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    last = await api.drive.exportJob(jobId);
+    activeDriveExportJob.value = last;
+    if (last.status === "completed") return last;
+    if (last.status === "failed") throw new Error(last.error || "drive_export_failed");
+    await delay(2000);
+  }
+  throw new Error("drive_export_timeout");
 }
 
 function delay(ms: number) {
@@ -1100,12 +1152,21 @@ function invoiceActionOptions(row: ImportedInvoice) {
       ],
     },
     {
-      label: "הגדר קטגוריית הוצאה",
+      label: row.cash_flow === "income" ? "הגדר קטגוריית הכנסה" : "הגדר קטגוריית הוצאה",
       key: "category",
       icon: renderActionIcon(PricetagOutline),
       children: [
         { label: "חשבוניות", key: "category:חשבוניות" },
         { label: "קבלות", key: "category:קבלות" },
+      ],
+    },
+    {
+      label: "סוג תנועה",
+      key: "cashFlow",
+      icon: renderActionIcon(SwapVerticalOutline),
+      children: [
+        { label: "הוצאה", key: "cashFlow:expense" },
+        { label: "הכנסה", key: "cashFlow:income" },
       ],
     },
     { type: "divider", key: "d2" },
@@ -1125,6 +1186,8 @@ async function handleInvoiceAction(key: string, row: ImportedInvoice) {
   if (key === "business:custom") return openBusinessModal(row);
   if (key.startsWith("business:")) return updateInvoiceMeta(row, { client_name: key.slice("business:".length) });
   if (key.startsWith("category:")) return updateInvoiceMeta(row, { expense_category: key.slice("category:".length) });
+  if (key === "cashFlow:income") return updateInvoiceMeta(row, { cash_flow: "income" });
+  if (key === "cashFlow:expense") return updateInvoiceMeta(row, { cash_flow: "expense" });
 }
 
 function openBusinessModal(row: ImportedInvoice) {
@@ -1191,7 +1254,7 @@ function normalizeProviderCategory(value: string | null): ImportedInvoice["provi
     : null;
 }
 
-async function updateInvoiceMeta(row: ImportedInvoice, body: { client_name?: string; business?: string; expense_category?: string; provider_category?: ImportedInvoice["provider_category"] | null }) {
+async function updateInvoiceMeta(row: ImportedInvoice, body: { client_name?: string; business?: string; expense_category?: string; cash_flow?: ImportedInvoice["cash_flow"]; provider_category?: ImportedInvoice["provider_category"] | null }) {
   try {
     const updated = await api.invoices.update(row.id, body);
     replaceRow(updated);
@@ -1516,6 +1579,12 @@ function replaceRow(updated: ImportedInvoice) {
   font-weight: 700;
 }
 
+.invoice-card__storage {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
 .invoice-card__body {
   padding: 12px 14px 14px;
 }
@@ -1592,10 +1661,6 @@ function replaceRow(updated: ImportedInvoice) {
   width: clamp(180px, 23vw, 280px);
 }
 
-.invoice-table__col--status {
-  width: 132px;
-}
-
 .invoice-table__col--date {
   width: 132px;
 }
@@ -1617,7 +1682,7 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 .invoice-table__col--actions {
-  width: 72px;
+  width: 132px;
 }
 
 .invoice-table th,
@@ -1723,7 +1788,7 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 .cell-actions {
-  width: 72px;
+  width: 132px;
 }
 
 .invoice-col--amount {
@@ -1740,17 +1805,12 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 .invoice-col--supplier,
-.invoice-col--status,
 .invoice-col--date,
 .invoice-col--client,
 .invoice-col--category,
 .invoice-col--type {
   direction: rtl;
   text-align: right;
-}
-
-.invoice-status-select {
-  width: 108px;
 }
 
 .invoice-row-action {

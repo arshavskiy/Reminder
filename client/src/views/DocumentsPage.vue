@@ -105,7 +105,7 @@
                 {{ selectedIds.size === filteredRows.length ? 'בטל הכל' : 'בחר הכל' }}
               </button>
             </div>
-            <div v-if="bulkMode && selectedIds.size > 0" class="bulk-action-anchor__actions">
+            <div v-if="selectedIds.size > 0" class="bulk-action-anchor__actions">
               <button
                   :class="{ 'bulk-action-item--loading': bulkDownloading }"
                   :disabled="bulkDownloading"
@@ -164,6 +164,13 @@
         </div>
       </template>
     </PageHeader>
+
+    <DriveExportJobStatus
+      v-if="visibleDriveExportJob"
+      :job="visibleDriveExportJob"
+      :dismissible="!exportingToDrive"
+      @dismiss="lastDriveExportJob = null"
+    />
 
     <!-- Quota bar (role = user only) -->
     <div v-if="isRegularUser" class="quota-bar">
@@ -266,7 +273,7 @@
           <template #trigger>
             <button
               :class="{ 'rbtn--ghost-active': viewMode === 'list' }"
-              :aria-label="'רשימה'"
+              :aria-label="'טבלה'"
               class="rbtn rbtn--ghost rbtn--icon"
               type="button"
               @click="viewMode = 'list'"
@@ -274,7 +281,7 @@
               <n-icon :component="ListOutline" :size="16" class="btn-icon"/>
             </button>
           </template>
-          רשימה
+          טבלה
         </n-tooltip>
       </div>
     </div>
@@ -304,13 +311,21 @@
             />
             <StatusBadge :status="row.processing_status" />
             <div class="tile__actions" @click.stop>
+              <StorageSyncIcons
+                compact
+                :in-s3="documentInS3(row)"
+                :drive-synced="Boolean(documentDriveId(row))"
+                :drive-busy="exportingToDrive && !documentDriveId(row)"
+                :drive-link="documentDriveLink(row)"
+                :download-url="documentDownloadUrl(row)"
+              />
               <n-dropdown
                 :options="rowActionsFor(row)"
                 placement="bottom-end"
                 trigger="click"
                 @select="(k: string) => handleRowAction(k, row)"
               >
-                <button class="btn btn--ghost btn--xs icon-btn" title="פעולות" type="button">
+                <button class="btn btn--ghost btn--xs icon-btn" type="button" aria-label="פעולות">
                   <n-icon :component="EllipsisVerticalOutline" class="btn-icon"/>
                 </button>
               </n-dropdown>
@@ -356,89 +371,112 @@
         </article>
       </div>
 
-      <!-- ── List view (compact) ──────────────────────────────────────── -->
-      <div v-else-if="pagedRows.length && viewMode === 'list'" class="cards">
-        <ListCard
-          v-for="row in pagedRows"
-          :key="row.id"
-          :selected="selectedIds.has(String(row.id))"
-          @click="onDocumentClick(row)"
-        >
-          <template #title>
-            <n-checkbox
-              v-if="bulkMode"
-              :checked="selectedIds.has(String(row.id))"
-              @click.stop
-              @update:checked="toggleSelect(String(row.id))"
-            />
-            <n-icon
-              :component="fileTypeIcon(row.mime_type)"
-              :class="['list-file-icon', `file-type-icon--${fileKind(row.mime_type)}`]"
-              :size="22"
-            />
-            <span class="truncate font-semibold">{{ row.file_name }}</span>
-          </template>
-          <template #actions>
-            <button class="btn btn--ghost btn--xs icon-btn" title="הורד" type="button" @click.stop="openDownload(row)">
-              <n-icon :component="DownloadOutline" class="btn-icon"/>
-            </button>
-            <button
-                v-if="canExtractDocument(row)"
-                class="btn btn--ghost btn--xs icon-btn"
-                title="חלץ AI"
-                type="button"
-                @click.stop="openExtractModal(String(row.id))"
+      <div v-else-if="pagedRows.length && viewMode === 'list'" class="document-table-wrap">
+        <table class="document-table">
+          <colgroup>
+            <col class="document-table__col document-table__col--select" />
+            <col class="document-table__col document-table__col--file" />
+            <col class="document-table__col document-table__col--status" />
+            <col class="document-table__col document-table__col--date" />
+            <col class="document-table__col document-table__col--client" />
+            <col class="document-table__col document-table__col--number" />
+            <col class="document-table__col document-table__col--actions" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="document-col document-col--select" @click.stop>
+                <n-checkbox
+                  :checked="allVisibleSelected"
+                  :indeterminate="someVisibleSelected && !allVisibleSelected"
+                  aria-label="בחר את כל המסמכים בעמוד"
+                  @update:checked="toggleSelectVisible"
+                />
+              </th>
+              <th class="document-col document-col--file">קובץ</th>
+              <th class="document-col document-col--status">סטטוס</th>
+              <th class="document-col document-col--date">תאריך</th>
+              <th class="document-col document-col--client">לקוח</th>
+              <th class="document-col document-col--number">מספר</th>
+              <th class="document-col document-col--actions">פעולות</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="row in pagedRows"
+              :key="row.id"
+              class="document-table-row"
+              tabindex="0"
+              role="button"
+              @click="openDocumentRow(row)"
+              @keydown.enter.prevent="openDocumentRow(row)"
+              @keydown.space.prevent="openDocumentRow(row)"
             >
-              <n-icon :component="FlashOutline" class="btn-icon"/>
-            </button>
-            <button
-                class="btn btn--danger-ghost btn--xs icon-btn"
-                title="מחק"
-                type="button"
-                @click.stop="confirmDeleteDocument(row)"
-            >
-              <n-icon :component="TrashOutline" class="btn-icon"/>
-            </button>
-          </template>
-          <template #pills>
-            <StatusBadge :status="row.processing_status" />
-            <n-tag
-              v-if="shouldShowReminderBadge(row)"
-              :type="reminderTagType((row as any).reminder_status)"
-              round
-              size="small"
-            >
-              {{ reminderStatusLabel((row as any).reminder_status) }}
-            </n-tag>
-            <span
-              v-for="issue in documentIssues(row)"
-              :key="issue.kind"
-              :class="['tag', issue.tagClass]"
-            >
-              {{ issue.label }}
-            </span>
-            <span class="tag tag--neutral">{{ row.mime_type }}</span>
-          </template>
-          <template #footer>
-            <div class="flex flex-col gap-1">
-              <span v-if="(row as any).client_name" class="kv">
-                <strong>חברה:</strong> {{ (row as any).client_name }}
-              </span>
-              <span class="kv"><strong>ייבוא:</strong> {{ formatDate(row.import_date) }}</span>
-            </div>
-            <div class="flex flex-col gap-1 items-end">
-              <span v-if="documentTypeLabel(row)" class="kv"><strong>סוג:</strong> {{ documentTypeLabel(row) }}</span>
-              <span v-if="(row as any).expiry_date" class="kv">
-                <strong>תפוגה:</strong>
-                <span :class="expiryClass((row as any).expiry_date)">{{ formatDate((row as any).expiry_date) }}</span>
-              </span>
-              <span v-if="(row as any).reminder_date" class="kv">
-                <strong>תוקף:</strong>
-                <span :class="expiryClass((row as any).reminder_date)">{{ formatDate((row as any).reminder_date) }}</span>
-              </span>
-            </div>
-          </template>
-        </ListCard>
+              <td class="document-col document-col--select" @click.stop>
+                <n-checkbox
+                  :checked="selectedIds.has(String(row.id))"
+                  :aria-label="`בחר ${row.file_name}`"
+                  @update:checked="(checked: boolean) => setRowSelected(String(row.id), checked)"
+                />
+              </td>
+              <td class="cell-strong document-col document-col--file">
+                <span class="document-file-cell">
+                  <n-icon
+                    :component="fileTypeIcon(row.mime_type)"
+                    :class="['document-file-icon', `file-type-icon--${fileKind(row.mime_type)}`]"
+                    :size="16"
+                  />
+                  <span class="document-cell-truncate" dir="auto" :title="row.file_name">{{ row.file_name }}</span>
+                </span>
+              </td>
+              <td class="document-col document-col--status">
+                <StatusBadge :status="row.processing_status" />
+              </td>
+              <td class="document-col document-col--date">
+                <span v-if="documentExpiryDate(row)" class="document-expiry">
+                  <strong class="document-expiry__label">בתוקף עד:</strong>
+                  <span :class="expiryClass(documentExpiryDate(row))">{{ formatExpiryDate(documentExpiryDate(row)) }}</span>
+                </span>
+                <span v-else>—</span>
+              </td>
+              <td class="document-col document-col--client">
+                <router-link
+                  v-if="documentClientId(row)"
+                  class="document-cell-truncate client-link"
+                  dir="auto"
+                  :title="documentClientName(row)"
+                  :to="`/clients/${documentClientId(row)}`"
+                  @click.stop
+                >{{ documentClientName(row) }}</router-link>
+                <span v-else class="document-cell-truncate" dir="auto" :title="documentClientName(row)">{{ documentClientName(row) }}</span>
+              </td>
+              <td class="document-col document-col--number">
+                <span class="document-cell-truncate">{{ documentReportNumberLabel(row) || "—" }}</span>
+              </td>
+              <td class="cell-actions document-col document-col--actions" @click.stop>
+                <div class="row-actions">
+                  <StorageSyncIcons
+                    compact
+                    :in-s3="documentInS3(row)"
+                    :drive-synced="Boolean(documentDriveId(row))"
+                    :drive-busy="exportingToDrive && !documentDriveId(row)"
+                    :drive-link="documentDriveLink(row)"
+                    :download-url="documentDownloadUrl(row)"
+                  />
+                  <n-dropdown
+                    :options="rowActionsFor(row)"
+                    placement="bottom-start"
+                    trigger="click"
+                    @select="(key: string) => handleRowAction(key, row)"
+                  >
+                    <button class="btn btn--ghost btn--xs icon-btn document-row-action" type="button" aria-label="פעולות">
+                      <n-icon :component="EllipsisVerticalOutline" class="btn-icon" />
+                    </button>
+                  </n-dropdown>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <div v-else-if="!store.loading" class="empty">
@@ -559,15 +597,16 @@ import {
 import {useDocumentsStore} from "../stores/documents.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useRescanModalStore} from "../stores/rescanModal.js";
-import {api} from "../services/apiService.js";
+import {api, type DriveExportJob} from "../services/apiService.js";
 import {planAllowsGoogleDrive, resolveUserPlan} from "../shared/pricingPlans.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
-import ListCard from "../components/ListCard.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import UploadModal from "../components/UploadModal.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import GmailLogo from "../components/GmailLogo.vue";
+import DriveExportJobStatus from "../components/DriveExportJobStatus.vue";
+import StorageSyncIcons from "../components/StorageSyncIcons.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import type {DocTemplate, Document} from "@shared/types.js";
 import {
@@ -608,6 +647,9 @@ const limitReached = computed(() => isRegularUser.value && store.documentLimit !
 const uploading = ref(false);
 const importingFromGmail = ref(false);
 const exportingToDrive = ref(false);
+const activeDriveExportJob = ref<DriveExportJob | null>(null);
+const lastDriveExportJob = ref<DriveExportJob | null>(null);
+const visibleDriveExportJob = computed(() => activeDriveExportJob.value ?? lastDriveExportJob.value);
 const showMonthlyReport = ref(false);
 let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
 const rescanning = ref(false);
@@ -727,8 +769,13 @@ async function handleDriveExport() {
 
 async function runDriveExport() {
   exportingToDrive.value = true;
+  lastDriveExportJob.value = null;
   try {
-    const result = await api.drive.exportAll();
+    const started = await api.drive.exportAll();
+    activeDriveExportJob.value = started;
+    message.info("ייצוא ל-Drive התחיל ברקע");
+    const result = await waitForDriveExportJob(started.jobId);
+    lastDriveExportJob.value = result;
     const folderHint = result.folderName ? ` לתיקיית "${result.folderName}"` : "";
     if (result.recreated) {
       message.success(`נוצרה תיקייה חדשה והועלו ${result.uploaded} מסמכים${folderHint}${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
@@ -740,6 +787,7 @@ async function runDriveExport() {
     if (result.folderUrl) {
       window.open(result.folderUrl, "_blank", "noopener,noreferrer");
     }
+    await store.fetch(undefined, true);
   } catch (err: any) {
     if (String(err?.message ?? "").includes("drive_plan_required")) {
       message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
@@ -749,8 +797,22 @@ async function runDriveExport() {
       message.error("שגיאה בייצוא ל-Drive");
     }
   } finally {
+    activeDriveExportJob.value = null;
     exportingToDrive.value = false;
   }
+}
+
+async function waitForDriveExportJob(jobId: string | null): Promise<DriveExportJob> {
+  if (!jobId) throw new Error("drive_export_missing_job");
+  let last: DriveExportJob | null = null;
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    last = await api.drive.exportJob(jobId);
+    activeDriveExportJob.value = last;
+    if (last.status === "completed") return last;
+    if (last.status === "failed") throw new Error(last.error || "drive_export_failed");
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+  }
+  throw new Error("drive_export_timeout");
 }
 
 function openDocumentFromModal(id: string) {
@@ -922,6 +984,13 @@ const pagedRows = computed(() => {
   return filteredRows.value.slice(start, start + pageSize.value);
 });
 
+const allVisibleSelected = computed(() =>
+  pagedRows.value.length > 0 && pagedRows.value.every((row) => selectedIds.value.has(String(row.id))),
+);
+const someVisibleSelected = computed(() =>
+  pagedRows.value.some((row) => selectedIds.value.has(String(row.id))),
+);
+
 const allSelected = computed(() =>
   bulkMode.value && selectedIds.value.size > 0 && selectedIds.value.size === filteredRows.value.length
 );
@@ -944,6 +1013,18 @@ watch(filteredRows, (rows, oldRows) => {
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("he-IL");
+}
+function formatExpiryDate(d: string | null | undefined) {
+  if (!d) return "—";
+  const iso = String(d).slice(0, 10);
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+  return formatDate(d);
+}
+function documentExpiryDate(row: Document): string | null {
+  const reminderDate = (row as any).reminder_date;
+  if (reminderDate) return String(reminderDate);
+  return row.expiry_date ?? null;
 }
 function expiryClass(date: string | null | undefined) {
   if (!date) return "";
@@ -1084,6 +1165,30 @@ function fileTypeIcon(mime: string | null | undefined) {
   if (kind === "xls") return GridOutline;
   if (kind === "img") return ImageOutline;
   return DocumentOutline;
+}
+
+function documentClientName(row: Document): string {
+  return String(row.client_name ?? "").trim() || "—";
+}
+function documentClientId(row: Document): string | null {
+  const id = String(row.client_id ?? "").trim();
+  return id || null;
+}
+
+function documentInS3(row: Document): boolean {
+  return Boolean(row.in_s3 || row.spaces_key);
+}
+
+function documentDriveId(row: Document): string | null {
+  return row.drive_file_id || null;
+}
+
+function documentDriveLink(row: Document): string | null {
+  return row.drive_web_link || null;
+}
+
+function documentDownloadUrl(row: Document): string {
+  return row.download_url || `${SERVER}/api/documents/${row.id}/download?dl=1`;
 }
 
 function renderActionIcon(icon: Component) {
@@ -1354,11 +1459,34 @@ function toggleSelect(id: string) {
   else next.add(id);
   selectedIds.value = next;
 }
+
+function setRowSelected(id: string, checked: boolean) {
+  const next = new Set(selectedIds.value);
+  if (checked) next.add(id);
+  else next.delete(id);
+  selectedIds.value = next;
+}
+
+function toggleSelectVisible(checked: boolean) {
+  const visible = pagedRows.value.map((row) => String(row.id));
+  const next = new Set(selectedIds.value);
+  if (checked) {
+    for (const id of visible) next.add(id);
+  } else {
+    for (const id of visible) next.delete(id);
+  }
+  selectedIds.value = next;
+}
+
 function onDocumentClick(row: Document) {
-  if (bulkMode.value) {
+  if (bulkMode.value && viewMode.value === "grid") {
     toggleSelect(String(row.id));
     return;
   }
+  router.push(`/documents/${row.id}`);
+}
+
+function openDocumentRow(row: Document) {
   router.push(`/documents/${row.id}`);
 }
 function confirmBulkDelete() {
@@ -1869,6 +1997,9 @@ async function bulkDownload() {
 .tile__actions {
   margin-inline-start: auto;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .tile__thumb {
   height: 72px;
@@ -1941,8 +2072,130 @@ async function bulkDownload() {
   margin-top: auto;
 }
 
-/* ── List card extras ────────────────────────────────────────────────────── */
-.cards { display: flex; flex-direction: column; gap: 12px; }
+/* ── Document table ──────────────────────────────────────────────────────── */
+.document-table-wrap {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  overflow: auto;
+}
+
+.document-table {
+  width: 100%;
+  min-width: 840px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.document-table__col--select { width: 46px; }
+.document-table__col--file { width: clamp(180px, 28vw, 320px); }
+.document-table__col--status { width: 132px; }
+.document-table__col--date { width: 148px; }
+.document-table__col--client { width: clamp(140px, 18vw, 220px); }
+.document-table__col--number { width: 120px; }
+.document-table__col--actions { width: 148px; }
+
+.document-table th,
+.document-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: right;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.document-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: 800;
+}
+
+.document-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.document-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
+}
+
+.document-table-row {
+  cursor: pointer;
+  outline: none;
+}
+
+.document-table-row:focus-visible td {
+  background: color-mix(in srgb, var(--brand-color) 8%, var(--bg-card));
+  box-shadow: inset 0 0 0 1px var(--brand-color);
+}
+
+.document-cell-truncate {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-link {
+  color: var(--brand-color);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.client-link:hover {
+  opacity: 0.8;
+}
+
+.document-file-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.document-file-icon {
+  flex: 0 0 auto;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.cell-strong {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cell-actions,
+.document-col--actions,
+.document-col--select {
+  text-align: center;
+}
+
+.document-col--file,
+.document-col--status,
+.document-col--date,
+.document-col--client,
+.document-col--number {
+  direction: rtl;
+  text-align: right;
+}
+
+.document-row-action {
+  color: var(--text-secondary);
+}
+
+.document-row-action:hover {
+  color: var(--brand-color);
+}
+
 .tag {
   display: inline-flex; align-items: center;
   padding: 2px 8px;
@@ -1957,6 +2210,17 @@ async function bulkDownload() {
 .tile__meta-item--num { font-family: ui-monospace, monospace; direction: ltr; }
 .kv { font-size: 12px; color: var(--text-primary); display: inline-flex; align-items: center; gap: 6px; }
 .kv strong { color: var(--text-secondary); font-weight: 600; }
+.document-expiry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+.document-expiry__label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
 .expiry { font-weight: 600; }
 .expiry--ok { color: #1a7951; }
 .expiry--warn { color: #b27a02; }

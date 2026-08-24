@@ -144,6 +144,9 @@ export interface Document {
   spaces_url: string | null;
   download_url: string | null;
   signed_url_expires_at: string | null;
+  in_s3?: boolean;
+  drive_file_id?: string | null;
+  drive_web_link?: string | null;
   created_at: string;
   updated_at: string;
 }

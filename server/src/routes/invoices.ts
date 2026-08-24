@@ -4,6 +4,7 @@ import { col } from "../db/db";
 import { HTTPException, requireAuth } from "../auth/middleware";
 import { documentImportMonthlyLimit } from "../quotas/documentImportQuota";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
+import { inferInvoiceCashFlow, normalizeCashFlow, resolveVatAmount } from "../invoices/cashFlow";
 
 type InvoiceRow = Record<string, any>;
 const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
@@ -33,6 +34,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const q = normalize(String(req.query.q ?? ""));
     const status = String(req.query.status ?? "").trim();
     const type = String(req.query.type ?? "").trim();
+    const cashFlow = normalizeCashFlow(req.query.cashFlow);
     const category = String(req.query.category ?? "").trim();
     const suppliers = parseMultiQuery(req.query.supplier);
     const sortBy = normalizeInvoiceSortBy(req.query.sortBy);
@@ -59,6 +61,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const allRows = eligibleInvoices.map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers));
     const facetRows = allRows.filter((row) => {
       if (type && row.type !== type) return false;
+      if (cashFlow && row.cash_flow !== cashFlow) return false;
       if (category && row.provider_category !== category) return false;
       if (suppliers.length && !invoiceMatchesSuppliers(row, suppliers)) return false;
       const rowTs = invoiceDateTs(row);
@@ -130,6 +133,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       .filter((invoice) => invoiceIsVisible(invoice, documentMap.get(String(invoice.document_id))))
       .map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers))
       .filter((row) => {
+        if (row.cash_flow === "income") return false;
         if (category && row.provider_category !== category) return false;
         if (suppliers.length && !suppliers.includes(row.supplier_name)) return false;
         const rowTs = chartDateTs(row, dateBasis);
@@ -142,19 +146,34 @@ export function registerInvoiceRoutes(app: express.Application) {
     const totals = new Map<string, number>();
     const counts = new Map<string, number>();
     const buckets = new Map<string, Map<string, { total: number; count: number }>>();
+    const categoryTotals = new Map<string, { total: number; count: number }>();
+    const categorySupplierTotals = new Map<string, Map<string, { total: number; count: number }>>();
     for (const row of rows) {
       const month = chartMonth(row, dateBasis);
       if (!month) continue;
       const supplier = row.supplier_name || "ספק לא מזוהה";
+      const amount = row.amount ?? 0;
+      const categoryKey = row.provider_category || "general";
       monthSet.add(month);
-      totals.set(supplier, (totals.get(supplier) ?? 0) + (row.amount ?? 0));
+      totals.set(supplier, (totals.get(supplier) ?? 0) + amount);
       counts.set(supplier, (counts.get(supplier) ?? 0) + 1);
       if (!buckets.has(supplier)) buckets.set(supplier, new Map());
       const supplierBuckets = buckets.get(supplier)!;
       const current = supplierBuckets.get(month) ?? { total: 0, count: 0 };
-      current.total += row.amount ?? 0;
+      current.total += amount;
       current.count += 1;
       supplierBuckets.set(month, current);
+
+      const categoryAgg = categoryTotals.get(categoryKey) ?? { total: 0, count: 0 };
+      categoryAgg.total += amount;
+      categoryAgg.count += 1;
+      categoryTotals.set(categoryKey, categoryAgg);
+      if (!categorySupplierTotals.has(categoryKey)) categorySupplierTotals.set(categoryKey, new Map());
+      const bySupplier = categorySupplierTotals.get(categoryKey)!;
+      const supplierAgg = bySupplier.get(supplier) ?? { total: 0, count: 0 };
+      supplierAgg.total += amount;
+      supplierAgg.count += 1;
+      bySupplier.set(supplier, supplierAgg);
     }
 
     const months = [...monthSet].sort();
@@ -166,11 +185,16 @@ export function registerInvoiceRoutes(app: express.Application) {
       }))
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "he", { sensitivity: "base" }));
     const selectedSuppliers = suppliers.length ? suppliers : supplierTotals.slice(0, top).map((item) => item.name);
-    const series = selectedSuppliers.map((supplier) => {
+    const series: Array<{
+      supplier: string;
+      total: number;
+      isOther?: boolean;
+      points: { month: string; total: number; count: number }[];
+    }> = selectedSuppliers.map((supplier) => {
       const supplierBuckets = buckets.get(supplier) ?? new Map();
       return {
         supplier,
-        total: totals.get(supplier) ?? 0,
+        total: roundMoney(totals.get(supplier) ?? 0),
         points: months.map((month) => ({
           month,
           total: roundMoney(supplierBuckets.get(month)?.total ?? 0),
@@ -178,6 +202,45 @@ export function registerInvoiceRoutes(app: express.Application) {
         })),
       };
     });
+    if (!suppliers.length) {
+      const named = new Set(selectedSuppliers);
+      const otherPoints = months.map((month) => {
+        let total = 0;
+        let count = 0;
+        for (const [name, supplierBuckets] of buckets) {
+          if (named.has(name)) continue;
+          const bucket = supplierBuckets.get(month);
+          if (!bucket) continue;
+          total += bucket.total;
+          count += bucket.count;
+        }
+        return { month, total: roundMoney(total), count };
+      });
+      const otherTotal = roundMoney(otherPoints.reduce((sum, point) => sum + point.total, 0));
+      if (otherTotal > 0) {
+        series.push({
+          supplier: "אחרים",
+          total: otherTotal,
+          isOther: true,
+          points: otherPoints,
+        });
+      }
+    }
+
+    const categorySeries = [...categoryTotals.entries()]
+      .map(([categoryKey, agg]) => ({
+        category: categoryKey,
+        total: roundMoney(agg.total),
+        count: agg.count,
+        suppliers: [...(categorySupplierTotals.get(categoryKey)?.entries() ?? [])]
+          .map(([name, supplierAgg]) => ({
+            name,
+            total: roundMoney(supplierAgg.total),
+            count: supplierAgg.count,
+          }))
+          .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "he", { sensitivity: "base" })),
+      }))
+      .sort((a, b) => b.total - a.total || a.category.localeCompare(b.category, "he", { sensitivity: "base" }));
 
     res.json({
       dateBasis,
@@ -185,7 +248,8 @@ export function registerInvoiceRoutes(app: express.Application) {
       totalInvoices: rows.length,
       totalAmount: roundMoney(rows.reduce((sum, row) => sum + (row.amount ?? 0), 0)),
       suppliers: supplierTotals,
-      categories: uniqueSorted(rows.map((row) => row.provider_category ?? "").filter(isNonEmptyString)),
+      categories: uniqueSorted(categorySeries.map((item) => item.category).filter(isNonEmptyString)),
+      categorySeries,
       series,
     });
   });
@@ -367,6 +431,15 @@ export function registerInvoiceRoutes(app: express.Application) {
     }
     const expenseCategory = stringOrNull(req.body?.expense_category);
     if (expenseCategory !== undefined) updates.expense_category = expenseCategory;
+    const cashFlow = stringOrNull(req.body?.cash_flow);
+    if (cashFlow !== undefined) {
+      const normalized = cashFlow === null ? null : normalizeCashFlow(cashFlow);
+      if (cashFlow !== null && !normalized) {
+        res.status(400).json({ error: "Invalid cash_flow" });
+        return;
+      }
+      updates.cash_flow = normalized;
+    }
     const providerCategory = stringOrNull(req.body?.provider_category);
     if (providerCategory !== undefined) {
       updates.provider_category = providerCategory;
@@ -457,7 +530,22 @@ function presentInvoice(
     billing_period: invoice.billing_period ?? null,
     amount,
     amount_display: formatAmount(amount, currency),
+    vat_amount: resolveVatAmount({
+      amount,
+      vat_amount: invoice.vat_amount,
+      amount_before_vat: invoice.amount_before_vat,
+      fields: invoice.fields,
+    }),
     currency,
+    cash_flow: inferInvoiceCashFlow({
+      cash_flow: invoice.cash_flow,
+      document_subtype: invoice.document_subtype,
+      type: invoice.template_name,
+      provider_id: invoice.provider_id ?? provider?.id,
+      provider_category: invoice.provider_category ?? invoice.fields?.provider_category ?? provider?.category,
+      notes: invoice.notes ?? invoice.fields?.notes,
+      fields: invoice.fields,
+    }),
     client_name: invoice.client_company ?? invoice.client_name ?? invoice.fields?.client_company ?? invoice.fields?.client_name ?? null,
     business: invoice.business ?? invoice.fields?.business ?? invoice.fields?.business_name ?? null,
     expense_category: invoice.expense_category ?? invoice.fields?.expense_category ?? null,
@@ -478,6 +566,9 @@ function presentInvoice(
     preview_url: documentId ? `/api/documents/${documentId}/download?raw=1` : null,
     thumbnail_url: doc?.thumbnail_key || doc?.thumbnail_path ? `/api/documents/${documentId}/thumbnail` : null,
     download_url: documentId ? `/api/documents/${documentId}/download?dl=1` : null,
+    in_s3: Boolean(invoice.spaces_key || doc?.spaces_key),
+    drive_file_id: invoice.drive_file_id || doc?.drive_file_id || null,
+    drive_web_link: invoice.drive_web_link || doc?.drive_web_link || null,
     source_subject: gmailImport?.subject ?? doc?.source_subject ?? null,
     source_email: doc?.source_email ?? null,
     fields: invoice.fields ?? {},
@@ -586,6 +677,7 @@ function invoiceMatchesQuery(row: ReturnType<typeof presentInvoice>, q: string):
     row.provider_category,
     row.invoice_number,
     row.type,
+    row.cash_flow === "income" ? "הכנסה income" : "הוצאה expense",
     row.amount_display,
     row.file_name,
     row.service_address,

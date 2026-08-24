@@ -2,12 +2,197 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {requireAuth} from "../auth/middleware";
-import {pinFolderToMyDrive, renameDriveFolder, resolveDriveToken, syncDocumentToDrive, driveFolderWebUrl, driveTrashWebUrl, inspectDriveFolder, ensureHealthyDriveFolder} from "../storage/gdrive";
+import {pinFolderToMyDrive, renameDriveFolder, resolveDriveToken, syncDocumentToDrive, driveFolderWebUrl, driveTrashWebUrl, inspectDriveFolder, ensureHealthyDriveFolder, copyDocumentDriveLinksToInvoices} from "../storage/gdrive";
 import {logger} from "../logger";
 import {tierFeatureFlags} from "../plans/tierFeatures";
 
 function planAllowsGoogleDrive(planOrRole: string | null | undefined): boolean {
     return tierFeatureFlags(planOrRole).googleDriveSync;
+}
+
+const DRIVE_JOB_STALE_MS = 10 * 60 * 1000;
+const HAS_FILE_FILTER = {
+    $or: [
+        {file_path: {$exists: true, $ne: null}},
+        {spaces_key: {$exists: true, $ne: null}},
+    ],
+};
+
+type DriveExportJobStatus = "queued" | "running" | "completed" | "failed";
+type DriveExportJobResult = {documentId: string; fileName: string; status: "uploaded" | "failed"; error?: string};
+type DriveExportJob = {
+    _id: ObjectId;
+    user_id: string;
+    status: DriveExportJobStatus;
+    document_ids: string[];
+    cursor: number;
+    total: number;
+    processed: number;
+    uploaded: number;
+    failed: number;
+    skipped: number;
+    results: DriveExportJobResult[];
+    folder_id: string | null;
+    folder_name: string;
+    folder_url: string | null;
+    recreated: boolean;
+    reset_count: number;
+    error: string | null;
+    created_at: Date;
+    updated_at: Date;
+    started_at?: Date;
+    completed_at?: Date | null;
+};
+
+function presentDriveExportJob(job: DriveExportJob) {
+    return {
+        jobId: job._id.toString(),
+        status: job.status,
+        ok: job.status === "completed",
+        uploaded: job.uploaded,
+        failed: job.failed,
+        skipped: job.skipped,
+        processed: job.processed,
+        total: job.total,
+        folderId: job.folder_id,
+        folderName: job.folder_name,
+        folderUrl: job.folder_url,
+        recreated: job.recreated,
+        resetCount: job.reset_count,
+        error: job.error ?? null,
+        results: (job.results ?? []).slice(-12),
+        createdAt: job.created_at,
+        updatedAt: job.updated_at,
+        completedAt: job.completed_at ?? null,
+    };
+}
+
+let driveExportWorkerRunning = false;
+
+export function startDriveExportJobWorker() {
+    if (driveExportWorkerRunning) return;
+    driveExportWorkerRunning = true;
+    void processDriveExportJobs().finally(() => {
+        driveExportWorkerRunning = false;
+    });
+}
+
+async function processDriveExportJobs() {
+    await recoverStaleDriveExportJobs();
+    while (true) {
+        const job = await claimNextDriveExportJob();
+        if (!job) return;
+        try {
+            await runDriveExportJob(job);
+        } catch (err: any) {
+            logger.error("drive_export_job_failed", {job_id: job._id.toString(), user_id: job.user_id, error: err.message});
+            await col("drive_export_jobs").updateOne(
+                {_id: job._id} as any,
+                {$set: {status: "failed", error: err.message ?? "drive_export_failed", updated_at: new Date(), completed_at: new Date()}} as any,
+            );
+        }
+    }
+}
+
+async function recoverStaleDriveExportJobs() {
+    const staleBefore = new Date(Date.now() - DRIVE_JOB_STALE_MS);
+    const result = await col("drive_export_jobs").updateMany(
+        {status: "running", updated_at: {$lt: staleBefore}} as any,
+        {$set: {status: "queued", updated_at: new Date()}} as any,
+    );
+    if (result.modifiedCount) {
+        logger.warn("drive_export_jobs_requeued_stale", {count: result.modifiedCount});
+    }
+}
+
+async function claimNextDriveExportJob(): Promise<DriveExportJob | null> {
+    const now = new Date();
+    return await col<DriveExportJob>("drive_export_jobs").findOneAndUpdate(
+        {status: "queued"} as any,
+        {$set: {status: "running", started_at: now, updated_at: now}} as any,
+        {sort: {created_at: 1}, returnDocument: "after"},
+    ) as DriveExportJob | null;
+}
+
+async function runDriveExportJob(job: DriveExportJob) {
+    logger.info("drive_export_job_started", {job_id: job._id.toString(), user_id: job.user_id, total: job.total});
+    const ids = job.document_ids ?? [];
+    let uploaded = job.uploaded ?? 0;
+    let failed = job.failed ?? 0;
+    let processed = job.processed ?? 0;
+
+    for (let index = job.cursor ?? 0; index < ids.length; index += 1) {
+        const documentId = ids[index];
+        const doc = await col<any>("documents").findOne({_id: new ObjectId(documentId)} as any);
+        const fileName = String(doc?.file_name ?? documentId);
+        let result: DriveExportJobResult = {documentId, fileName, status: "failed"};
+        try {
+            await syncDocumentToDrive(documentId, job.user_id);
+            const updated = await col<any>("documents").findOne({_id: new ObjectId(documentId)} as any);
+            if (updated?.drive_file_id) {
+                uploaded += 1;
+                result = {documentId, fileName, status: "uploaded"};
+            } else {
+                failed += 1;
+                result = {documentId, fileName, status: "failed", error: "drive_upload_unconfirmed"};
+            }
+        } catch (err: any) {
+            failed += 1;
+            result = {documentId, fileName, status: "failed", error: String(err?.message ?? err)};
+            logger.error("drive_export_file_failed", {document_id: documentId, job_id: job._id.toString(), error: err});
+        }
+        processed = index + 1;
+        await col("drive_export_jobs").updateOne(
+            {_id: job._id} as any,
+            {
+                $set: {cursor: processed, processed, uploaded, failed, updated_at: new Date()},
+                $push: {results: {$each: [result], $slice: -20}},
+            } as any,
+        );
+    }
+
+    try {
+        await copyDocumentDriveLinksToInvoices(job.user_id);
+    } catch (err) {
+        logger.warn("drive_export_invoice_link_failed", {user_id: job.user_id, error: err});
+    }
+
+    const latestUser = await col<any>("users").findOne({_id: new ObjectId(job.user_id)} as any);
+    const folderId = (latestUser?.drive_folder_id ?? job.folder_id ?? null) as string | null;
+    const accessToken = await resolveDriveToken(job.user_id);
+    if (folderId && accessToken) {
+        await pinFolderToMyDrive(accessToken, folderId);
+    }
+    const folderName = latestUser?.drive_folder_name ?? job.folder_name ?? "RemindOCR";
+    const folderUrl = folderId ? driveFolderWebUrl(folderId) : null;
+    const now = new Date();
+    await col("drive_export_jobs").updateOne(
+        {_id: job._id} as any,
+        {
+            $set: {
+                status: "completed",
+                processed,
+                uploaded,
+                failed,
+                folder_id: folderId,
+                folder_name: folderName,
+                folder_url: folderUrl,
+                error: null,
+                updated_at: now,
+                completed_at: now,
+            },
+        } as any,
+    );
+    logger.info("drive_export_all_complete", {
+        user_id: job.user_id,
+        job_id: job._id.toString(),
+        uploaded,
+        failed,
+        total: ids.length,
+        folder_id: folderId,
+        recreated: job.recreated,
+        reset_count: job.reset_count,
+    });
 }
 
 export function registerGdriveRoutes(app: express.Express) {
@@ -136,6 +321,16 @@ export function registerGdriveRoutes(app: express.Express) {
             return;
         }
 
+        const existing = await col<DriveExportJob>("drive_export_jobs").findOne({
+            user_id: ctx.userId,
+            status: {$in: ["queued", "running"]},
+        } as any);
+        if (existing) {
+            startDriveExportJobWorker();
+            res.status(202).json(presentDriveExportJob(existing));
+            return;
+        }
+
         let healthy: Awaited<ReturnType<typeof ensureHealthyDriveFolder>>;
         try {
             healthy = await ensureHealthyDriveFolder(ctx.userId, accessToken);
@@ -159,58 +354,72 @@ export function registerGdriveRoutes(app: express.Express) {
             });
         }
 
-        const docs = await col<any>("documents").find({
+        const pendingDocs = await col<any>("documents").find({
             user_id: ctx.userId,
             drive_file_id: {$exists: false},
-            $or: [
-                {file_path: {$exists: true, $ne: null}},
-                {spaces_key: {$exists: true, $ne: null}},
-            ],
-        } as any).toArray();
-
-        let uploaded = 0;
-        let failed = 0;
-
-        for (const doc of docs) {
-            try {
-                await syncDocumentToDrive(doc._id.toString(), ctx.userId);
-                const updated = await col<any>("documents").findOne({_id: doc._id} as any);
-                if (updated?.drive_file_id) uploaded++;
-                else failed++;
-            } catch (err) {
-                logger.error("drive_export_file_failed", {document_id: doc._id.toString(), error: err});
-                failed++;
-            }
-        }
-
-        const latestUser = await col<any>("users").findOne({_id: new ObjectId(ctx.userId)} as any);
-        const folderId = (latestUser?.drive_folder_id ?? healthy.folderId ?? null) as string | null;
-        if (folderId) {
-            await pinFolderToMyDrive(accessToken, folderId);
-        }
-        const folderName = latestUser?.drive_folder_name ?? user.drive_folder_name ?? "RemindOCR";
-        const folderUrl = folderId ? driveFolderWebUrl(folderId) : null;
-
-        logger.info("drive_export_all_complete", {
+            ...HAS_FILE_FILTER,
+        } as any).project({_id: 1, file_name: 1}).toArray();
+        const skipped = await col("documents").countDocuments({
             user_id: ctx.userId,
-            uploaded,
-            failed,
-            total: docs.length,
+            drive_file_id: {$exists: true, $nin: [null, ""]},
+            ...HAS_FILE_FILTER,
+        } as any);
+
+        const folderId = healthy.folderId;
+        const folderName = user.drive_folder_name ?? "RemindOCR";
+        const now = new Date();
+        const insert = await col<DriveExportJob>("drive_export_jobs").insertOne({
+            user_id: ctx.userId,
+            status: "queued",
+            document_ids: pendingDocs.map((doc) => String(doc._id)),
+            cursor: 0,
+            total: pendingDocs.length,
+            processed: 0,
+            uploaded: 0,
+            failed: 0,
+            skipped,
+            results: [],
             folder_id: folderId,
+            folder_name: folderName,
+            folder_url: folderId ? driveFolderWebUrl(folderId) : null,
             recreated: healthy.recreated,
             reset_count: healthy.resetCount,
-        });
-        res.json({
-            ok: true,
-            uploaded,
-            failed,
-            total: docs.length,
-            folderId,
-            folderName,
-            folderUrl,
-            recreated: healthy.recreated,
-            resetCount: healthy.resetCount,
-        });
+            error: null,
+            created_at: now,
+            updated_at: now,
+            completed_at: null,
+        } as any);
+        startDriveExportJobWorker();
+        const job = await col<DriveExportJob>("drive_export_jobs").findOne({_id: insert.insertedId} as any);
+        res.status(202).json(presentDriveExportJob(job as DriveExportJob));
+        return;
+    });
+
+    app.get("/api/drive/export-jobs/:jobId", async (req, res) => {
+        const cookieHeader = req.headers.cookie ?? undefined;
+        let ctx: Awaited<ReturnType<typeof requireAuth>>;
+        try {
+            ctx = await requireAuth(cookieHeader);
+        } catch {
+            res.status(401).json({error: "unauthorized"});
+            return;
+        }
+
+        const jobId = String(req.params.jobId ?? "");
+        if (!ObjectId.isValid(jobId)) {
+            res.status(400).json({error: "invalid_job_id"});
+            return;
+        }
+        startDriveExportJobWorker();
+        const job = await col<DriveExportJob>("drive_export_jobs").findOne({
+            _id: new ObjectId(jobId),
+            user_id: ctx.userId,
+        } as any);
+        if (!job) {
+            res.status(404).json({error: "job_not_found"});
+            return;
+        }
+        res.json(presentDriveExportJob(job));
     });
 
     app.post("/api/drive/rename-folder", async (req, res) => {

@@ -132,6 +132,10 @@ export function normalizePlanId(planId: PlanId | string | null | undefined): Pla
 }
 
 export function tierFeatureFlags(planId: PlanId | string | null | undefined): TierFeatureFlags {
+    const value = String(planId ?? "").trim().toLowerCase();
+    if (value === "admin") {
+        return { ...TIER_FEATURE_FLAGS.business, gmailInvoiceHistoryMonths: null };
+    }
     return TIER_FEATURE_FLAGS[normalizePlanId(planId)];
 }
 

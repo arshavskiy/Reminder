@@ -9,7 +9,7 @@ import { generateState, generateCodeVerifier, generateCodeChallenge } from "../a
 import { importFile, type PipelineOptions } from "../pipeline/importer";
 import { logger } from "../logger";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
-import { tierFeatureFlags } from "../plans/tierFeatures";
+import { featureFlagsForUser, tierFeatureFlags } from "../plans/tierFeatures";
 import { loadTemplate } from "../templates/seedTemplates";
 import {
   assertDocumentImportQuota,
@@ -30,7 +30,18 @@ const REJECTED_INVOICE_VALIDATION_STATUSES = new Set([
 ]);
 
 type GmailImportJobStatus = "queued" | "running" | "completed" | "failed";
-type GmailImportJobResult = { messageId: string; filename: string; documentId?: string; error?: string };
+type GmailImportRetryMode = "failed" | "rejected" | "retryable";
+type GmailImportJobResult = {
+  messageId: string;
+  filename: string;
+  documentId?: string;
+  error?: string;
+  import_status?: string;
+  rejection_label?: string | null;
+  rejection_reason?: string | null;
+  retryable?: boolean;
+  ocr_failed?: boolean;
+};
 type GmailImportJob = {
   _id: ObjectId;
   user_id: string;
@@ -44,8 +55,15 @@ type GmailImportJob = {
   imported: number;
   skipped: number;
   errors: number;
+  attachments_found?: number;
+  stored?: number;
+  classified_invoices?: number;
+  rejected?: number;
+  ocr_failed?: number;
+  ai_retry_pending?: number;
   results: GmailImportJobResult[];
   message_ids?: string[];
+  retry_mode?: GmailImportRetryMode | null;
   cursor?: number;
   error?: string | null;
   quota?: Record<string, unknown> | null;
@@ -58,6 +76,13 @@ type GmailImportJob = {
 type GmailImportHistoryRow = {
   message_id?: string;
   files?: Array<{ document_id?: unknown; error?: unknown }>;
+};
+
+type GmailImportExplainableFile = {
+  filename?: string;
+  document_id?: unknown;
+  error?: unknown;
+  document?: any;
 };
 
 let gmailImportWorkerRunning = false;
@@ -232,16 +257,16 @@ export function registerGmailRoutes(app: express.Application) {
       const templateId = req.query.templateId as string | undefined;
       const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
       const invoiceHistoryMonths = isInvoiceTemplate(template)
-        ? tierFeatureFlags(ctx.user.plan ?? ctx.user.role).gmailInvoiceHistoryMonths
+        ? featureFlagsForUser(ctx.user).gmailInvoiceHistoryMonths
         : null;
-      if (isInvoiceTemplate(template) && (!invoiceHistoryMonths || invoiceHistoryMonths < 1)) {
+      if (isInvoiceTemplate(template) && invoiceHistoryMonths === 0) {
         res.status(403).json({
           error: "gmail_invoice_plan_required",
           message: "ייבוא חשבוניות מ-Gmail זמין במסלולים בסיסי ועסקי בלבד",
         });
         return;
       }
-      const q = buildGmailQuery(req.query.q as string | undefined, template, ctx.user.plan ?? ctx.user.role);
+      const q = buildGmailQuery(req.query.q as string | undefined, template, gmailFeatureKey(ctx.user));
       logger.info("gmail_inbox_query", {
         query: q,
         templateId: templateId ?? null,
@@ -370,16 +395,16 @@ export function registerGmailRoutes(app: express.Application) {
     const templateId = req.body.templateId as string | undefined;
     const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
     const invoiceHistoryMonths = isInvoiceTemplate(template)
-      ? tierFeatureFlags(ctx.user.plan ?? ctx.user.role).gmailInvoiceHistoryMonths
+      ? featureFlagsForUser(ctx.user).gmailInvoiceHistoryMonths
       : null;
-    if (isInvoiceTemplate(template) && (!invoiceHistoryMonths || invoiceHistoryMonths < 1)) {
+    if (isInvoiceTemplate(template) && invoiceHistoryMonths === 0) {
       res.status(403).json({
         error: "gmail_invoice_plan_required",
         message: "ייבוא חשבוניות מ-Gmail זמין במסלולים בסיסי ועסקי בלבד",
       });
       return;
     }
-    const q = buildGmailQuery(req.body.q as string | undefined, template, ctx.user.plan ?? ctx.user.role);
+    const q = buildGmailQuery(req.body.q as string | undefined, template, gmailFeatureKey(ctx.user));
     logger.info("gmail_import_all_query", {
       query: q,
       templateId: templateId ?? null,
@@ -402,6 +427,12 @@ export function registerGmailRoutes(app: express.Application) {
         imported: 0,
         skipped: 0,
         errors: 0,
+        attachments_found: 0,
+        stored: 0,
+        classified_invoices: 0,
+        rejected: 0,
+        ocr_failed: 0,
+        ai_retry_pending: 0,
         results: [],
         cursor: 0,
         error: null,
@@ -413,12 +444,144 @@ export function registerGmailRoutes(app: express.Application) {
       res.status(202).json({
         jobId: insert.insertedId.toString(),
         status: "queued",
+        q,
+        templateId: templateId ?? null,
+        total: 0,
+        totalMessages: 0,
+        newMessages: 0,
+        processedMessages: 0,
         imported: 0,
         skipped: 0,
+        errors: 0,
+        attachmentsFound: 0,
+        stored: 0,
+        classifiedInvoices: 0,
+        rejected: 0,
+        ocrFailed: 0,
+        aiRetryPending: 0,
         results: [],
       });
     } catch (err: any) {
       logger.error("gmail_import_all_failed", { user_id: ctx.userId, error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/gmail/import-retry", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    let ctx: Awaited<ReturnType<typeof requireAuth>>;
+    try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
+
+    const accessToken = await resolveGmailToken(ctx.userId);
+    if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
+
+    const mode = normalizeGmailRetryMode(req.body.mode);
+    if (!mode) {
+      res.status(400).json({ error: "invalid_retry_mode" });
+      return;
+    }
+
+    const templateId = req.body.templateId as string | undefined;
+    const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
+    const invoiceHistoryMonths = isInvoiceTemplate(template)
+      ? featureFlagsForUser(ctx.user).gmailInvoiceHistoryMonths
+      : null;
+    if (isInvoiceTemplate(template) && invoiceHistoryMonths === 0) {
+      res.status(403).json({
+        error: "gmail_invoice_plan_required",
+        message: "ייבוא חשבוניות מ-Gmail זמין במסלולים בסיסי ועסקי בלבד",
+      });
+      return;
+    }
+
+    const q = buildGmailQuery(req.body.q as string | undefined, template, gmailFeatureKey(ctx.user));
+    const retryMessageIds = await findRetryableGmailMessageIds(ctx.userId, mode);
+    if (!retryMessageIds.length) {
+      res.status(200).json({
+        jobId: null,
+        status: "completed",
+        q,
+        templateId: templateId ?? null,
+        retryMode: mode,
+        total: 0,
+        totalMessages: 0,
+        newMessages: 0,
+        processedMessages: 0,
+        imported: 0,
+        skipped: 0,
+        errors: 0,
+        attachmentsFound: 0,
+        stored: 0,
+        classifiedInvoices: 0,
+        rejected: 0,
+        ocrFailed: 0,
+        aiRetryPending: 0,
+        results: [],
+        explanationSummary: { retryable: 0 },
+        quota: null,
+        error: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        completedAt: new Date(),
+      });
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const insert = await col<GmailImportJob>("gmail_import_jobs").insertOne({
+        user_id: ctx.userId,
+        status: "queued",
+        q,
+        template_id: templateId ?? null,
+        max_results: Math.min(retryMessageIds.length, GMAIL_MAX_PAGE_SIZE),
+        total_messages: retryMessageIds.length,
+        new_messages: retryMessageIds.length,
+        processed_messages: 0,
+        imported: 0,
+        skipped: 0,
+        errors: 0,
+        attachments_found: 0,
+        stored: 0,
+        classified_invoices: 0,
+        rejected: 0,
+        ocr_failed: 0,
+        ai_retry_pending: 0,
+        results: [],
+        message_ids: retryMessageIds,
+        retry_mode: mode,
+        cursor: 0,
+        error: null,
+        quota: null,
+        created_at: now,
+        updated_at: now,
+      } as any);
+      startGmailImportJobWorker();
+      res.status(202).json({
+        jobId: insert.insertedId.toString(),
+        status: "queued",
+        q,
+        templateId: templateId ?? null,
+        retryMode: mode,
+        total: retryMessageIds.length,
+        totalMessages: retryMessageIds.length,
+        newMessages: retryMessageIds.length,
+        processedMessages: 0,
+        imported: 0,
+        skipped: 0,
+        errors: 0,
+        attachmentsFound: 0,
+        stored: 0,
+        classifiedInvoices: 0,
+        rejected: 0,
+        ocrFailed: 0,
+        aiRetryPending: 0,
+        results: [],
+        explanationSummary: { retryable: retryMessageIds.length },
+      });
+    } catch (err: any) {
+      logger.error("gmail_import_retry_failed", { user_id: ctx.userId, mode, error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
@@ -471,6 +634,7 @@ export function registerGmailRoutes(app: express.Application) {
       : [];
     const invoiceMap = new Map(invoices.map((invoice: any) => [String(invoice.document_id), invoice]));
     const docMap = new Map(documents.map((doc: any) => [doc._id.toString(), flatGmailImportedDocument(doc, invoiceMap.get(doc._id.toString()))]));
+    const documentMap = new Map(documents.map((doc: any) => [doc._id.toString(), doc]));
 
     res.json({
       history: history.map((item: any) => ({
@@ -478,6 +642,10 @@ export function registerGmailRoutes(app: express.Application) {
         files: (item.files ?? []).map((file: any) => ({
           ...file,
           document: file.document_id ? docMap.get(String(file.document_id)) ?? null : null,
+          import_status: gmailFileExplanation(file, documentMap, invoiceMap).status,
+          import_explanation: gmailFileExplanation(file, documentMap, invoiceMap).explanation,
+          retryable: gmailFileExplanation(file, documentMap, invoiceMap).retryable,
+          retry_mode: gmailFileExplanation(file, documentMap, invoiceMap).retryMode,
         })),
       })),
     });
@@ -570,7 +738,7 @@ async function runGmailImportJob(job: GmailImportJob) {
 
   let messageIds = job.message_ids ?? [];
   let importedSet = new Set<string>();
-  let importedSetLoaded = false;
+  let importedSetLoaded = Boolean(job.retry_mode);
   let diagnostics = createGmailDiagnostics(job.q, requestedExtensionsFromQuery(job.q), job.total_messages);
 
   if (!messageIds.length) {
@@ -626,22 +794,42 @@ async function runGmailImportJob(job: GmailImportJob) {
           message_id: id,
           filename: att.filename,
         });
-        fileResults.push({ messageId: id, filename: att.filename, error: "monthly_report_not_imported" });
+        fileResults.push({ messageId: id, filename: att.filename, error: "monthly_report_not_imported", import_status: "skipped", retryable: false });
         continue;
       }
       try {
         const user = await col<any>("users").findOne({ _id: new ObjectId(job.user_id) } as any, { projection: { role: 1, plan: 1 } } as any);
         await assertDocumentImportQuota(job.user_id, user?.plan ?? user?.role, 1, quotaCategory);
-        const pipeline = await gmailImportPipelineOptions(job.template_id ?? undefined, meta, att.filename);
+        const basePipeline = await gmailImportPipelineOptions(job.template_id ?? undefined, meta, att.filename);
+        const pipeline: PipelineOptions | undefined = basePipeline
+          ? {
+              ...basePipeline,
+              queueProcessing: true,
+              waitForProcessing: false,
+              processingJobContext: {
+                source: "gmail",
+                gmailImportJobId: job._id.toString(),
+                gmailMessageId: id,
+                gmailFilename: att.filename,
+              },
+            }
+          : basePipeline;
         const result = await downloadAndImportAttachment(freshToken, id, att.attachmentId, att.filename, job.user_id, pipeline);
-        fileResults.push({ messageId: id, filename: att.filename, documentId: result.documentId });
+        fileResults.push(await explainImportedGmailAttachment(job.user_id, id, att.filename, result.documentId));
       } catch (err: any) {
         if (err instanceof DocumentImportQuotaError) {
           quotaLimitReached = err;
-          fileResults.push({ messageId: id, filename: att.filename, error: DOCUMENT_MONTHLY_QUOTA_ERROR });
+          fileResults.push({ messageId: id, filename: att.filename, error: DOCUMENT_MONTHLY_QUOTA_ERROR, import_status: "quota_limited", retryable: true });
           break;
         }
-        fileResults.push({ messageId: id, filename: att.filename, error: err.message });
+        fileResults.push({
+          messageId: id,
+          filename: att.filename,
+          error: err.message,
+          import_status: gmailErrorStatus(err.message),
+          rejection_reason: retryReasonFromText(err.message),
+          retryable: true,
+        });
       }
     }
 
@@ -656,7 +844,13 @@ async function runGmailImportJob(job: GmailImportJob) {
     await updateGmailImportJobProgress(job._id, {
       cursor: index + 1,
       processedDelta: 1,
-      importedDelta: fileResults.filter(r => r.documentId).length,
+      attachmentDelta: meta.attachments.length,
+      importedDelta: fileResults.filter(r => r.documentId && r.import_status !== "rejected" && r.import_status !== "failed").length,
+      storedDelta: fileResults.filter(r => r.documentId).length,
+      invoiceDelta: fileResults.filter(r => r.import_status === "invoice").length,
+      rejectedDelta: fileResults.filter(r => r.import_status === "rejected").length,
+      ocrFailedDelta: fileResults.filter(r => r.ocr_failed || r.rejection_reason === "ocr_unreadable" || r.import_status === "ocr_failed").length,
+      aiRetryDelta: fileResults.filter(r => r.rejection_reason === "ai_rate_limited" || r.rejection_reason === "ai_extraction_failed").length,
       skippedDelta: fileResults.length ? 0 : 1,
       errorDelta: fileResults.filter(r => r.error).length,
       results: fileResults,
@@ -737,6 +931,52 @@ async function findSuccessfullyImportedMessageIds(userId: string, messageIds: st
     .filter(Boolean));
 }
 
+async function findRetryableGmailMessageIds(userId: string, mode: GmailImportRetryMode): Promise<string[]> {
+  const imports = await col("gmail_imports").find(
+    { user_id: userId },
+    { projection: { message_id: 1, files: 1 } }
+  ).sort({ imported_at: -1 }).limit(500).toArray() as GmailImportHistoryRow[];
+  const documentIds = [...new Set(
+    imports.flatMap((item) => (item.files ?? [])
+      .map((file) => String(file.document_id ?? "").trim())
+      .filter((id) => ObjectId.isValid(id)))
+  )];
+  const documents = documentIds.length
+    ? await col("documents").find(
+      { user_id: userId, _id: { $in: documentIds.map((id) => new ObjectId(id)) } } as any,
+      { projection: { _id: 1, processing_status: 1, invoice_rejected: 1 } } as any
+    ).toArray()
+    : [];
+  const invoices = documentIds.length
+    ? await col("invoices").find(
+      { user_id: userId, document_id: { $in: [...documentIds, ...documentIds.map((id) => new ObjectId(id))] } } as any
+    ).toArray()
+    : [];
+  const documentMap = new Map(documents.map((doc: any) => [doc._id.toString(), doc]));
+  const invoiceMap = new Map(invoices.map((invoice: any) => [String(invoice.document_id ?? ""), invoice]));
+  const retryIds: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of imports) {
+    const messageId = String(item.message_id ?? "").trim();
+    if (!messageId || seen.has(messageId)) continue;
+    const files = item.files ?? [];
+    const hasFailed = files.some((file) => gmailFileExplanation(file, documentMap, invoiceMap).retryMode === "failed");
+    const hasRejected = files.some((file) => gmailFileExplanation(file, documentMap, invoiceMap).retryMode === "rejected");
+    const match = mode === "failed"
+      ? hasFailed
+      : mode === "rejected"
+        ? hasRejected
+        : hasFailed || hasRejected;
+    if (match) {
+      retryIds.push(messageId);
+      seen.add(messageId);
+    }
+  }
+
+  return retryIds.slice(0, GMAIL_MAX_PAGE_SIZE);
+}
+
 function gmailImportHasSuccessfulDocument(
   row: GmailImportHistoryRow,
   documentMap: Map<string, any>,
@@ -762,12 +1002,23 @@ function invoiceIsRejectedForGmailRetry(invoice: any): boolean {
   return Array.isArray(invoice?.missing_required_fields) && invoice.missing_required_fields.length > 0;
 }
 
+function normalizeGmailRetryMode(value: unknown): GmailImportRetryMode | null {
+  const mode = String(value ?? "").trim();
+  return mode === "failed" || mode === "rejected" || mode === "retryable" ? mode : null;
+}
+
 async function updateGmailImportJobProgress(
   jobId: ObjectId,
   patch: {
     cursor: number;
     processedDelta?: number;
+    attachmentDelta?: number;
     importedDelta?: number;
+    storedDelta?: number;
+    invoiceDelta?: number;
+    rejectedDelta?: number;
+    ocrFailedDelta?: number;
+    aiRetryDelta?: number;
     skippedDelta?: number;
     errorDelta?: number;
     results?: GmailImportJobResult[];
@@ -776,7 +1027,13 @@ async function updateGmailImportJobProgress(
 ) {
   const inc: Record<string, number> = {};
   if (patch.processedDelta) inc.processed_messages = patch.processedDelta;
+  if (patch.attachmentDelta) inc.attachments_found = patch.attachmentDelta;
   if (patch.importedDelta) inc.imported = patch.importedDelta;
+  if (patch.storedDelta) inc.stored = patch.storedDelta;
+  if (patch.invoiceDelta) inc.classified_invoices = patch.invoiceDelta;
+  if (patch.rejectedDelta) inc.rejected = patch.rejectedDelta;
+  if (patch.ocrFailedDelta) inc.ocr_failed = patch.ocrFailedDelta;
+  if (patch.aiRetryDelta) inc.ai_retry_pending = patch.aiRetryDelta;
   if (patch.skippedDelta) inc.skipped = patch.skippedDelta;
   if (patch.errorDelta) inc.errors = patch.errorDelta;
 
@@ -824,11 +1081,20 @@ async function completeGmailImportJob(
 }
 
 function presentGmailImportJob(job: GmailImportJob) {
+  const explainedResults = (job.results ?? []).map((result) => ({
+    ...result,
+    importStatus: gmailJobResultStatus(result),
+    explanation: gmailJobResultExplanation(result),
+    retryable: Boolean(result.error),
+    retryMode: result.error ? "failed" : null,
+  }));
+  const explanationSummary = summarizeGmailImportResults(explainedResults);
   return {
     jobId: job._id.toString(),
     status: job.status,
     q: job.q,
     templateId: job.template_id,
+    retryMode: job.retry_mode ?? null,
     total: job.total_messages,
     totalMessages: job.total_messages,
     newMessages: job.new_messages,
@@ -836,13 +1102,193 @@ function presentGmailImportJob(job: GmailImportJob) {
     imported: job.imported,
     skipped: job.skipped,
     errors: job.errors,
-    results: job.results ?? [],
+    attachmentsFound: job.attachments_found ?? 0,
+    stored: job.stored ?? job.imported ?? 0,
+    classifiedInvoices: job.classified_invoices ?? 0,
+    rejected: job.rejected ?? 0,
+    ocrFailed: job.ocr_failed ?? 0,
+    aiRetryPending: job.ai_retry_pending ?? 0,
+    results: explainedResults,
+    explanationSummary,
     quota: job.quota ?? null,
     error: job.error ?? null,
     createdAt: job.created_at,
     updatedAt: job.updated_at,
     completedAt: job.completed_at ?? null,
   };
+}
+
+function gmailJobResultStatus(result: GmailImportJobResult): string {
+  if (result.import_status) return result.import_status;
+  if (result.documentId) return "imported";
+  if (result.error === DOCUMENT_MONTHLY_QUOTA_ERROR) return "quota_limited";
+  if (result.error) return "failed";
+  return "skipped";
+}
+
+function gmailJobResultExplanation(result: GmailImportJobResult): string {
+  if (result.rejection_label) return result.rejection_label;
+  if (result.documentId && result.import_status === "invoice") return "הקובץ נשמר וסווג כחשבונית";
+  if (result.documentId && result.import_status === "rejected") return "הקובץ נשמר אבל נדחה כחשבונית";
+  if (result.documentId && result.import_status === "failed") return "הקובץ נשמר אבל העיבוד נכשל";
+  if (result.documentId) return "הקובץ נשמר ועבר לעיבוד מסמך";
+  return gmailErrorExplanation(result.error);
+}
+
+function summarizeGmailImportResults(results: Array<{ importStatus: string; retryable: boolean }>) {
+  const counts: Record<string, number> = {
+    imported: 0,
+    invoice: 0,
+    stored: 0,
+    failed: 0,
+    rejected: 0,
+    ocr_failed: 0,
+    skipped: 0,
+    quota_limited: 0,
+    retryable: 0,
+  };
+  for (const result of results) {
+    counts[result.importStatus] = (counts[result.importStatus] ?? 0) + 1;
+    if (result.importStatus === "invoice" || result.importStatus === "stored") counts.stored += 1;
+    if (result.retryable) counts.retryable += 1;
+  }
+  return counts;
+}
+
+async function explainImportedGmailAttachment(
+  userId: string,
+  messageId: string,
+  filename: string,
+  documentId: string,
+): Promise<GmailImportJobResult> {
+  const doc = ObjectId.isValid(documentId)
+    ? await col("documents").findOne(
+      { _id: new ObjectId(documentId), user_id: userId } as any,
+      { projection: { processing_status: 1, error_message: 1, invoice_rejected: 1, invoice_rejection_reason: 1, invoice_rejection_label: 1, retry_reason: 1, retry_label: 1, processing_retryable: 1, ocr_retryable: 1, ocr_error: 1 } } as any
+    ) as any
+    : null;
+  const invoice = await col("invoices").findOne(
+    { user_id: userId, document_id: { $in: [documentId, ObjectId.isValid(documentId) ? new ObjectId(documentId) : documentId] } } as any,
+    { projection: { _id: 1, invoice_validation_status: 1, invoice_rejection_reason: 1, invoice_rejection_label: 1, possible_not_invoice: 1, missing_required_fields: 1 } } as any
+  ) as any;
+
+  const base: GmailImportJobResult = { messageId, filename, documentId };
+  if (doc?.processing_status === "error") {
+    const reason = String(doc.retry_reason ?? doc.invoice_rejection_reason ?? retryReasonFromText(doc.error_message));
+    return {
+      ...base,
+      import_status: reason === "ocr_unreadable" ? "ocr_failed" : "failed",
+      error: doc.error_message ?? doc.retry_label ?? "processing_failed",
+      rejection_reason: reason,
+      rejection_label: doc.retry_label ?? doc.invoice_rejection_label ?? gmailErrorExplanation(doc.error_message),
+      retryable: doc.processing_retryable !== false,
+    };
+  }
+  if (doc?.invoice_rejected === true || invoiceIsRejectedForGmailRetry(invoice)) {
+    return {
+      ...base,
+      import_status: "rejected",
+      rejection_reason: invoice?.invoice_rejection_reason ?? doc?.invoice_rejection_reason ?? "rejected",
+      rejection_label: invoice?.invoice_rejection_label ?? doc?.invoice_rejection_label ?? "המסמך נדחה כחשבונית",
+      retryable: true,
+      ocr_failed: Boolean(doc?.ocr_retryable),
+    };
+  }
+  if (invoice?._id) {
+    return { ...base, import_status: "invoice", retryable: false };
+  }
+  return { ...base, import_status: "stored", retryable: false };
+}
+
+function retryReasonFromText(value: unknown): string {
+  const text = String(value ?? "");
+  if (/429|rate.?limit/i.test(text)) return "ai_rate_limited";
+  if (/AI extraction failed|OpenAI|ai_extraction/i.test(text)) return "ai_extraction_failed";
+  if (/OCR|ocr|Text extraction|read image|pdftoppm|tesseract/i.test(text)) return "ocr_unreadable";
+  if (/storage|S3|upload/i.test(text)) return "storage_failed";
+  return "processing_failed";
+}
+
+function gmailErrorStatus(error: unknown): string {
+  const reason = retryReasonFromText(error);
+  if (reason === "ocr_unreadable") return "ocr_failed";
+  if (reason === "storage_failed") return "failed";
+  return "failed";
+}
+
+function gmailFileExplanation(
+  file: GmailImportExplainableFile,
+  documentMap: Map<string, any>,
+  invoiceMap: Map<string, any>,
+): { status: string; explanation: string; retryable: boolean; retryMode: GmailImportRetryMode | null } {
+  if (file.error) {
+    return {
+      status: "failed",
+      explanation: gmailErrorExplanation(file.error),
+      retryable: true,
+      retryMode: "failed",
+    };
+  }
+
+  const documentId = String(file.document_id ?? "").trim();
+  if (!ObjectId.isValid(documentId)) {
+    return {
+      status: "skipped",
+      explanation: "לא נוצר מסמך לקובץ הזה",
+      retryable: false,
+      retryMode: null,
+    };
+  }
+
+  const doc = documentMap.get(documentId);
+  if (!doc) {
+    return {
+      status: "missing_document",
+      explanation: "הרשומת Gmail קיימת אבל המסמך לא נמצא במערכת",
+      retryable: true,
+      retryMode: "failed",
+    };
+  }
+
+  if (doc.processing_status === "error") {
+    const reason = String(doc.retry_reason ?? doc.invoice_rejection_reason ?? retryReasonFromText(doc.error_message));
+    return {
+      status: reason === "ocr_unreadable" ? "ocr_failed" : "failed",
+      explanation: doc.retry_label ?? doc.invoice_rejection_label ?? (doc.error_message ? `עיבוד המסמך נכשל: ${doc.error_message}` : "עיבוד המסמך נכשל"),
+      retryable: true,
+      retryMode: reason === "ai_rate_limited" || reason === "ai_extraction_failed" ? "failed" : "failed",
+    };
+  }
+
+  const invoice = invoiceMap.get(documentId);
+  if (doc.invoice_rejected === true || invoiceIsRejectedForGmailRetry(invoice)) {
+    return {
+      status: "rejected",
+      explanation: invoice?.invoice_rejection_label ?? doc.invoice_rejection_label ?? "המסמך נדחה כחשבונית חסרה או לא תקינה",
+      retryable: true,
+      retryMode: "rejected",
+    };
+  }
+
+  return {
+    status: "imported",
+    explanation: "הקובץ נשמר ועבר סיווג/עיבוד בהצלחה",
+    retryable: false,
+    retryMode: null,
+  };
+}
+
+function gmailErrorExplanation(error: unknown): string {
+  const text = String(error ?? "").trim();
+  if (!text) return "לא נוצר מסמך לקובץ הזה";
+  if (text === "monthly_report_not_imported") return "דוח חודשי לא מיובא במסלול תסקיר בדיקה";
+  if (text === DOCUMENT_MONTHLY_QUOTA_ERROR) return "מגבלת הייבוא החודשית נוצלה";
+  if (/429|rate.?limit|quota/i.test(text)) return "הייבוא נכשל בגלל עומס/מגבלת בקשות זמנית";
+  if (/Text extraction failed|text_extraction|OCR|ocr/i.test(text)) return "חילוץ הטקסט או OCR נכשל";
+  if (/AI extraction failed|OpenAI|ai_extraction/i.test(text)) return "חילוץ הנתונים עם AI נכשל";
+  if (/storage|S3|upload/i.test(text)) return "שמירת הקובץ באחסון נכשלה";
+  if (/gmail_not_connected|auth|permission|scope/i.test(text)) return "חיבור Gmail או הרשאות Gmail לא תקינים";
+  return text;
 }
 
 function hasFullGmailAccess(role: string | null | undefined): boolean {
@@ -1042,12 +1488,18 @@ export function buildGmailQuery(
 
 function applyInvoiceHistoryWindow(query: string, planOrRole: string | null | undefined): string {
   const months = tierFeatureFlags(planOrRole).gmailInvoiceHistoryMonths;
-  if (!months || months < 1) return query;
   const withoutExistingHistory = query
     .replace(/\bnewer_than:\S+/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+  if (!months || months < 1) return withoutExistingHistory;
   return `${withoutExistingHistory} newer_than:${months}m`;
+}
+
+function gmailFeatureKey(user: { plan?: string | null; role?: string | null }): string {
+  return String(user.role ?? "").trim().toLowerCase() === "admin"
+    ? "admin"
+    : String(user.plan ?? user.role ?? "");
 }
 
 function forceInvoiceAttachmentTypes(query: string): string {

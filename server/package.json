@@ -17,6 +17,7 @@
     "pdf:hebrew": "tsx src/scripts/parseHebrewPdf.ts",
     "pdf:hebrew:fields": "tsx src/scripts/parseHebrewPdf.ts --fields-only",
     "pdf:hebrew:ocr": "tsx src/scripts/parseHebrewPdf.ts --ocr-only",
+    "ocr:audit-flow": "tsx src/scripts/auditPdfOcrFlow.ts",
     "report:send-all": "tsx src/scripts/sendMonthlyReportEmail.ts all",
     "report:send-both": "tsx src/scripts/sendMonthlyReportEmail.ts send-both",
     "report:send-client": "tsx src/scripts/sendMonthlyReportEmail.ts client",

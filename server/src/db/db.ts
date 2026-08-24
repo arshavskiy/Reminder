@@ -58,6 +58,7 @@ const ALL_COLLECTIONS = [
   "gmail_imports",
   "gmail_import_jobs",
   "gmail_search_providers",
+  "document_processing_jobs",
 ];
 
 async function ensureCollections(db: Db): Promise<void> {
@@ -241,6 +242,12 @@ async function applyIndexes(db: Db): Promise<void> {
   // gmail_search_providers
   await db.collection("gmail_search_providers").createIndex({ id: 1 }, { unique: true });
   await db.collection("gmail_search_providers").createIndex({ enabled: 1, sort_order: 1 });
+
+  // document_processing_jobs
+  await db.collection("document_processing_jobs").createIndex({ status: 1, next_run_at: 1, created_at: 1 });
+  await db.collection("document_processing_jobs").createIndex({ document_id: 1 });
+  await db.collection("document_processing_jobs").createIndex({ user_id: 1, status: 1, created_at: -1 });
+  await db.collection("document_processing_jobs").createIndex({ locked_at: 1 });
 }
 
 // Typed collection helper

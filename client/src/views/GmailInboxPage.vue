@@ -168,6 +168,7 @@
       v-if="visibleImportJob"
       :job="visibleImportJob"
       :dismissible="!importingAll"
+      @retry="retryGmailImports"
       @dismiss="lastImportJob = null"
     />
 
@@ -351,7 +352,9 @@
               <td class="import-results__file">{{ r.filename }}</td>
               <td>
                 <span v-if="r.documentId" class="tag tag--success">יובא</span>
-                <span v-else-if="r.error" class="tag tag--danger" :title="r.error">שגיאה</span>
+                <span v-else-if="r.error" class="tag tag--danger" :title="r.explanation ?? r.error">
+                  {{ r.explanation ?? "שגיאה" }}
+                </span>
               </td>
             </tr>
           </tbody>
@@ -526,6 +529,14 @@
               <span>{{ importedDisplayDate(doc) }}</span>
             </div>
             <div class="gmail-doc-card__category">{{ importedProviderCategoryLabel(doc) }}</div>
+            <div
+              v-if="doc.importExplanation"
+              class="gmail-doc-card__explain"
+              :class="`gmail-doc-card__explain--${doc.importStatus ?? 'imported'}`"
+              :title="doc.importExplanation"
+            >
+              {{ importStatusLabel(doc.importStatus) }} · {{ doc.importExplanation }}
+            </div>
             <div class="gmail-doc-card__source" :title="doc.sourceSubject">{{ doc.sourceSubject || doc.file_name }}</div>
           </div>
         </article>
@@ -546,6 +557,7 @@
               <th>ספק</th>
               <th>קטגוריה</th>
               <th>סטטוס</th>
+              <th>הסבר ייבוא</th>
               <th>תאריך</th>
               <th>תאריך ייבוא</th>
               <th>עסק</th>
@@ -586,6 +598,16 @@
                   @update:value="(value) => updateImportedInvoiceStatus(doc, String(value))"
                 />
                 <span v-else class="status-pill" :class="`status-pill--${doc.processing_status}`">{{ importedStatusLabel(doc.processing_status) }}</span>
+              </td>
+              <td>
+                <span
+                  class="gmail-import-explain"
+                  :class="`gmail-import-explain--${doc.importStatus ?? 'imported'}`"
+                  :title="doc.importExplanation ?? ''"
+                >
+                  {{ importStatusLabel(doc.importStatus) }}
+                  <span v-if="doc.importExplanation">· {{ doc.importExplanation }}</span>
+                </span>
               </td>
               <td>{{ importedDisplayDate(doc) }}</td>
               <td>{{ importedImportDate(doc) }}</td>
@@ -698,7 +720,7 @@ const importResults = ref<{
   imported: number;
   skipped: number;
   errors: number;
-  results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }>;
+  results: Array<{ messageId: string; filename: string; documentId?: string; error?: string; explanation?: string }>;
 }>({ show: false, imported: 0, skipped: 0, errors: 0, results: [] });
 
 // Import history
@@ -707,6 +729,10 @@ type ImportedDocumentCard = GmailImportedDocument & {
   sourceDate: string | null;
   sourceMessageId: string;
   sourceFilename: string;
+  importStatus: string | null;
+  importExplanation: string | null;
+  importRetryable: boolean;
+  importRetryMode: "failed" | "rejected" | "retryable" | null;
 };
 const historyItems = ref<GmailImportHistoryItem[]>([]);
 
@@ -784,6 +810,10 @@ const importedDocuments = computed<ImportedDocumentCard[]>(() => filteredHistory
       sourceDate: item.imported_at || null,
       sourceMessageId: item.message_id,
       sourceFilename: file.filename,
+      importStatus: file.import_status ?? null,
+      importExplanation: file.import_explanation ?? null,
+      importRetryable: Boolean(file.retryable),
+      importRetryMode: file.retry_mode ?? null,
     })),
 ));
 
@@ -840,6 +870,7 @@ const filteredImportedDocuments = computed(() => {
       importedDocType(doc),
       importedAmount(doc),
       importedDisplayDate(doc),
+      doc.importExplanation,
     ].join(" ").toLowerCase();
     return haystack.includes(query);
   });
@@ -1187,6 +1218,7 @@ async function importAllNew() {
   lastImportJob.value = null;
   try {
     const started = await api.gmail.importAll(searchQuery.value || undefined, undefined, importTemplateId());
+    if (!started.jobId) throw new Error("gmail_import_job_missing");
     activeImportJob.value = started;
     message.info("ייבוא מ-Gmail התחיל ברקע");
     const result = await waitForGmailImportJob(started.jobId);
@@ -1202,6 +1234,36 @@ async function importAllNew() {
     loadHistory();
   } catch (err: any) {
     message.error(`שגיאה בייבוא: ${gmailErrorMessage(err)}`);
+  } finally {
+    activeImportJob.value = null;
+    importingAll.value = false;
+  }
+}
+
+async function retryGmailImports(mode: "failed" | "rejected" | "retryable") {
+  importingAll.value = true;
+  lastImportJob.value = null;
+  try {
+    const started = await api.gmail.importRetry(mode, searchQuery.value || undefined, importTemplateId());
+    if (!started.jobId) {
+      message.info("אין כרגע קבצים שמתאימים לניסיון חוזר");
+      lastImportJob.value = started;
+      return;
+    }
+    activeImportJob.value = started;
+    message.info("ניסיון חוזר לייבוא Gmail התחיל ברקע");
+    const result = await waitForGmailImportJob(started.jobId);
+    lastImportJob.value = result;
+    importResults.value = {
+      show: true,
+      imported: result.imported,
+      skipped: result.skipped,
+      errors: result.results.filter(r => r.error).length,
+      results: result.results,
+    };
+    loadHistory();
+  } catch (err: any) {
+    message.error(`שגיאה בניסיון חוזר: ${gmailErrorMessage(err)}`);
   } finally {
     activeImportJob.value = null;
     importingAll.value = false;
@@ -1488,6 +1550,18 @@ function importedStatusLabel(status: string): string {
     error: "שגיאה",
   };
   return labels[status] ?? status;
+}
+
+function importStatusLabel(status: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    imported: "יובא",
+    failed: "נכשל",
+    rejected: "נדחה",
+    skipped: "דולג",
+    quota_limited: "מגבלה",
+    missing_document: "חסר מסמך",
+  };
+  return labels[String(status ?? "imported")] ?? String(status ?? "יובא");
 }
 
 function importedDocPreviewSrc(doc: ImportedDocumentCard): string {
@@ -2394,6 +2468,59 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
 
 .gmail-doc-card__category {
   margin-top: 8px;
+}
+
+.gmail-doc-card__explain,
+.gmail-import-explain {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 23px;
+  padding: 2px 8px;
+  border-radius: 7px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.gmail-doc-card__explain {
+  margin-top: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gmail-import-explain {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gmail-doc-card__explain--imported,
+.gmail-import-explain--imported {
+  background: color-mix(in srgb, var(--brand-color) 10%, var(--bg-card));
+  color: var(--brand-color);
+}
+
+.gmail-doc-card__explain--failed,
+.gmail-doc-card__explain--rejected,
+.gmail-doc-card__explain--missing_document,
+.gmail-import-explain--failed,
+.gmail-import-explain--rejected,
+.gmail-import-explain--missing_document {
+  background: color-mix(in srgb, #d03050 12%, var(--bg-card));
+  color: #d03050;
+}
+
+.gmail-doc-card__explain--quota_limited,
+.gmail-doc-card__explain--skipped,
+.gmail-import-explain--quota_limited,
+.gmail-import-explain--skipped {
+  background: color-mix(in srgb, #f0a020 13%, var(--bg-card));
+  color: #c4841d;
 }
 
 .gmail-doc-card__source {

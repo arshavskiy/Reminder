@@ -267,7 +267,10 @@ export function registerDocumentRoutes(app: express.Application) {
     }
     try {
       await assertDocumentImportQuota(userId, userPlan, 1, "documents");
-      const id = await importFile(body.filePath, undefined, userId);
+      const id = await importFile(body.filePath, undefined, userId, undefined, {
+        queueProcessing: true,
+        processingJobContext: { source: "upload" },
+      });
       res.json({ id });
     } catch (err) {
       if (err instanceof DocumentImportQuotaError) {
@@ -328,6 +331,8 @@ export function registerDocumentRoutes(app: express.Application) {
         const beforeCount = await col("documents").countDocuments({ user_id: userId });
         const id = await importFile(destPath, undefined, userId, displayName, {
           ...pipelineOptions,
+          queueProcessing: true,
+          processingJobContext: { source: "upload" },
           startDelayMs: index * UPLOAD_START_STAGGER_MS,
         });
         const afterCount = await col("documents").countDocuments({ user_id: userId });
@@ -1162,6 +1167,10 @@ function flatDoc(doc: any) {
     id,
     ...rest,
     thumbnail_url: doc.thumbnail_key || doc.thumbnail_path ? `/api/documents/${id}/thumbnail` : null,
+    in_s3: Boolean(doc.spaces_key),
+    drive_file_id: doc.drive_file_id || null,
+    drive_web_link: doc.drive_web_link || null,
+    download_url: id ? `/api/documents/${id}/download?dl=1` : null,
   };
 }
 
