@@ -625,7 +625,7 @@ import {
   SearchOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
-import { api, type GmailAttachment, type GmailEmail, type GmailImportedDocument, type GmailImportHistoryItem, type GmailSearchProvider } from "../services/apiService.js";
+import { api, type GmailAttachment, type GmailEmail, type GmailImportedDocument, type GmailImportHistoryItem, type GmailImportJob, type GmailSearchProvider } from "../services/apiService.js";
 import { useAuthStore } from "../stores/auth.js";
 import type { DocTemplate } from "../shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
@@ -646,6 +646,7 @@ const connectedEmail = ref<string | null>(null);
 const loading = ref(false);
 const loadingMore = ref(false);
 const importingAll = ref(false);
+const activeImportJob = ref<GmailImportJob | null>(null);
 const emails = ref<GmailEmail[]>([]);
 const searchQuery = ref("");
 const nextPageToken = ref<string | null>(null);
@@ -1147,7 +1148,10 @@ async function importAttachment(messageId: string, att: GmailAttachment) {
 async function importAllNew() {
   importingAll.value = true;
   try {
-    const result = await api.gmail.importAll(searchQuery.value || undefined, undefined, importTemplateId());
+    const started = await api.gmail.importAll(searchQuery.value || undefined, undefined, importTemplateId());
+    activeImportJob.value = started;
+    message.info("ייבוא מ-Gmail התחיל ברקע");
+    const result = await waitForGmailImportJob(started.jobId);
     const errors = result.results.filter(r => r.error).length;
     importResults.value = {
       show: true,
@@ -1160,8 +1164,25 @@ async function importAllNew() {
   } catch (err: any) {
     message.error(`שגיאה בייבוא: ${gmailErrorMessage(err)}`);
   } finally {
+    activeImportJob.value = null;
     importingAll.value = false;
   }
+}
+
+async function waitForGmailImportJob(jobId: string): Promise<GmailImportJob> {
+  let last: GmailImportJob | null = null;
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    last = await api.gmail.importJob(jobId);
+    activeImportJob.value = last;
+    if (last.status === "completed") return last;
+    if (last.status === "failed") throw new Error(last.error || "gmail_import_failed");
+    await delay(2000);
+  }
+  throw new Error("gmail_import_timeout");
+}
+
+function delay(ms: number) {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
 async function loadHistory() {

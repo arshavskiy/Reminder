@@ -1,20 +1,22 @@
 # Gmail Invoice Import Flow
 
-This document describes how Gmail invoice import works today, how it behaves in production with multiple users, and what should change before the import volume grows.
+This document describes how Gmail invoice import works today and how it behaves in production with multiple users.
 
 ## Executive Summary
 
-Gmail invoice import is currently a request-driven flow:
+Gmail invoice import is a durable background job flow:
 
 1. The client builds a Gmail search query from the selected guided flow.
-2. The server searches Gmail with the authenticated user's OAuth token.
-3. The server downloads matching attachments.
-4. Each attachment is inserted into `documents`.
-5. Document processing starts in the background inside the same Node process.
-6. Invoice extraction creates rows in `invoices`.
-7. Non-invoices in the invoice flow are skipped and deleted instead of being saved as document errors.
+2. `POST /api/gmail/import-all` creates a `gmail_import_jobs` row and returns a `jobId`.
+3. A background worker claims queued jobs and resolves the authenticated user's Gmail OAuth token.
+4. The worker searches Gmail, stores message IDs, and imports message-by-message.
+5. Each attachment is inserted into `documents`.
+6. Document processing starts in the background inside the same Node process.
+7. Invoice extraction creates rows in `invoices`.
+8. Non-invoices in the invoice flow are skipped and deleted instead of being saved as document errors.
+9. The UI polls `GET /api/gmail/import-jobs/:jobId` for progress and final results.
 
-This works for small and moderate batches, but `import-all` is not a durable background job. For production and multiple users, the Gmail bulk import path should move to a queue.
+The job stores message IDs and a cursor, so stale `running` jobs can be re-queued and resumed after a restart or deploy.
 
 ## Current Invoice Query
 
@@ -47,22 +49,26 @@ flowchart TD
   G --> H[Fetch message metadata and attachments]
   H --> I[Return visible emails with matching attachments]
 
-  E --> J[Resolve user's Gmail OAuth token]
-  J --> K[Search Gmail messages]
-  K --> L[Skip messages already in gmail_imports]
-  L --> M[Fetch attachments for each new message]
-  M --> N[Check quota per attachment]
-  N --> O[Download attachment]
-  O --> P[importFile creates documents row]
-  P --> Q[processDocument starts in background]
-  Q --> R[Extract text]
-  R --> S[Run invoice template extraction]
-  S --> T{Invoice row created?}
-  T -->|yes| U[Save invoice in invoices]
-  T -->|no| V[Delete skipped Gmail document and derived rows]
-  U --> W[Mark document done]
-  W --> X[Optional Drive sync]
-  V --> Y[Do not show in documents errors]
+  E --> J[Create gmail_import_jobs row]
+  J --> K[Return jobId immediately]
+  K --> L[UI polls GET /api/gmail/import-jobs/:jobId]
+  J --> M[Worker claims queued job]
+  M --> N[Resolve user's Gmail OAuth token]
+  N --> O[Search Gmail messages and store IDs]
+  O --> P[Skip messages already in gmail_imports]
+  P --> Q[Fetch attachments for each new message]
+  Q --> R[Check quota per attachment]
+  R --> S[Download attachment]
+  S --> T[importFile creates documents row]
+  T --> U[processDocument starts in background]
+  U --> V[Extract text]
+  V --> W[Run invoice template extraction]
+  W --> X{Invoice row created?}
+  X -->|yes| Y[Save invoice in invoices]
+  X -->|no| Z[Delete skipped Gmail document and derived rows]
+  Y --> AA[Mark document done]
+  AA --> AB[Optional Drive sync]
+  Z --> AC[Do not show in documents errors]
 ```
 
 ## Client Responsibilities
@@ -73,7 +79,8 @@ The Gmail page handles:
 - Selecting the document template for extraction.
 - Building the Gmail query from file-type toggles and template keywords.
 - Calling `GET /api/gmail/inbox` for preview.
-- Calling `POST /api/gmail/import-all` for bulk import.
+- Calling `POST /api/gmail/import-all` to create a bulk import job.
+- Polling `GET /api/gmail/import-jobs/:jobId` until the job is completed or failed.
 - Showing imported Gmail documents from `GET /api/gmail/import-history`.
 - Deleting imported Gmail documents from the imported-documents table.
 
@@ -96,9 +103,15 @@ sequenceDiagram
 
   UI->>API: POST /api/gmail/import-all
   API->>DB: requireAuth(cookie)
+  API->>DB: insert gmail_import_jobs
+  API-->>UI: 202 Accepted with jobId
+  UI->>API: GET /api/gmail/import-jobs/:jobId
+  API-->>UI: queued/running progress
+  API->>DB: worker claims queued job
   API->>DB: load user's Gmail token
   API->>Gmail: messages?q=...
   Gmail-->>API: message IDs
+  API->>DB: store message_ids and cursor
   API->>DB: read gmail_imports for user/message IDs
   API->>Gmail: fetch each new message
   Gmail-->>API: attachment metadata
@@ -110,9 +123,12 @@ sequenceDiagram
   Pipeline->>DB: insert documents row
   Pipeline-->>API: documentId
   API->>DB: upsert gmail_imports message/files
+  API->>DB: update gmail_import_jobs counters/results/cursor
   Pipeline->>Pipeline: processDocument async
   Pipeline->>DB: create invoice or delete skipped non-invoice
-  API-->>UI: imported/skipped/results summary
+  API->>DB: mark job completed
+  UI->>API: GET /api/gmail/import-jobs/:jobId
+  API-->>UI: completed summary
 ```
 
 ## Important Collections
@@ -120,6 +136,7 @@ sequenceDiagram
 | Collection | Purpose |
 |---|---|
 | `users` | Stores Gmail OAuth tokens and usage counters. |
+| `gmail_import_jobs` | Stores queued/running/completed bulk import jobs, message IDs, cursor, counters, and per-attachment results. |
 | `gmail_imports` | Tracks imported Gmail messages/files per user, used to avoid duplicate imports. |
 | `documents` | Stores imported file metadata and processing status. |
 | `extractions` | Stores OCR/AI extraction audit rows. |

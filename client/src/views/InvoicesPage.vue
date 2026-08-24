@@ -354,7 +354,7 @@ import {
 import PageHeader from "../components/PageHeader.vue";
 import GmailLogo from "../components/GmailLogo.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
-import { api, type ImportedInvoice } from "../services/apiService.js";
+import { api, type GmailImportJob, type ImportedInvoice } from "../services/apiService.js";
 import type { DocTemplate } from "../shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
 import {planAllowsGoogleDrive, resolveUserPlan} from "../shared/pricingPlans.js";
@@ -373,6 +373,7 @@ const exporting = ref(false);
 const showMonthlyReport = ref(false);
 const exportingToDrive = ref(false);
 const importingFromGmail = ref(false);
+const activeGmailImportJob = ref<GmailImportJob | null>(null);
 const gmailConnected = ref<boolean | null>(null);
 const viewMode = ref<"cards" | "table">("table");
 const dateRange = ref<[number, number] | null>(null);
@@ -656,8 +657,11 @@ async function handleGmailImportButton() {
       return;
     }
     const template = await findInvoiceTemplate();
-    const result = await api.gmail.importAll(invoiceGmailQuery(template), undefined, template?.id ? String(template.id) : undefined);
-    const failed = result.results.filter((item) => item.error).length;
+    const started = await api.gmail.importAll(invoiceGmailQuery(template), undefined, template?.id ? String(template.id) : undefined);
+    activeGmailImportJob.value = started;
+    message.info("ייבוא החשבוניות מ-Gmail התחיל ברקע");
+    const result = await waitForGmailImportJob(started.jobId);
+    const failed = result.errors || result.results.filter((item) => item.error).length;
     const imported = result.imported ?? 0;
     if (imported) {
       message.success(`יובאו ${imported} מסמכים מ-Gmail`);
@@ -678,8 +682,25 @@ async function handleGmailImportButton() {
       message.error("שגיאה בייבוא מ-Gmail");
     }
   } finally {
+    activeGmailImportJob.value = null;
     importingFromGmail.value = false;
   }
+}
+
+async function waitForGmailImportJob(jobId: string): Promise<GmailImportJob> {
+  let last: GmailImportJob | null = null;
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    last = await api.gmail.importJob(jobId);
+    activeGmailImportJob.value = last;
+    if (last.status === "completed") return last;
+    if (last.status === "failed") throw new Error(last.error || "gmail_import_failed");
+    await delay(2000);
+  }
+  throw new Error("gmail_import_timeout");
+}
+
+function delay(ms: number) {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
 async function findInvoiceTemplate(): Promise<DocTemplate | null> {

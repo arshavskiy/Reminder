@@ -81,6 +81,33 @@ export interface GmailImportHistoryItem {
   files?: GmailImportHistoryFile[];
 }
 
+export interface GmailImportJobResult {
+  messageId: string;
+  filename: string;
+  documentId?: string;
+  error?: string;
+}
+
+export interface GmailImportJob {
+  jobId: string;
+  status: "queued" | "running" | "completed" | "failed";
+  q?: string;
+  templateId?: string | null;
+  total: number;
+  totalMessages: number;
+  newMessages: number;
+  processedMessages: number;
+  imported: number;
+  skipped: number;
+  errors: number;
+  results: GmailImportJobResult[];
+  quota?: Record<string, unknown> | null;
+  error?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  completedAt?: string | null;
+}
+
 export interface ImportedInvoice {
   id: string;
   document_id: string | null;
@@ -717,7 +744,8 @@ export const api = {
     importAttachment: (messageId: string, attachmentId: string, filename: string, templateId?: string) =>
       post<{ documentId: string; filename: string }>("/gmail/import-attachment", { messageId, attachmentId, filename, templateId }),
     importAll: (q?: string, limit?: number, templateId?: string) =>
-      post<{ imported: number; skipped: number; results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> }>("/gmail/import-all", { q, limit, templateId }),
+      post<GmailImportJob>("/gmail/import-all", { q, limit, templateId }),
+    importJob: (jobId: string) => get<GmailImportJob>(`/gmail/import-jobs/${encodeURIComponent(jobId)}`),
     importHistory: () => get<{ history: GmailImportHistoryItem[] }>("/gmail/import-history"),
     deleteImportHistory: (messageId: string) => del(`/gmail/import-history/${encodeURIComponent(messageId)}`),
 

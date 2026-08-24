@@ -56,6 +56,7 @@ const ALL_COLLECTIONS = [
   "certificates",
   "notifications",
   "gmail_imports",
+  "gmail_import_jobs",
   "gmail_search_providers",
 ];
 
@@ -231,6 +232,11 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("gmail_imports").createIndex({ message_id: 1 });
   await db.collection("gmail_imports").createIndex({ user_id: 1, message_id: 1 }, { unique: true });
   await db.collection("gmail_imports").createIndex({ imported_at: -1 });
+
+  // gmail_import_jobs
+  await db.collection("gmail_import_jobs").createIndex({ user_id: 1, created_at: -1 });
+  await db.collection("gmail_import_jobs").createIndex({ status: 1, updated_at: 1 });
+  await db.collection("gmail_import_jobs").createIndex({ user_id: 1, status: 1, created_at: -1 });
 
   // gmail_search_providers
   await db.collection("gmail_search_providers").createIndex({ id: 1 }, { unique: true });

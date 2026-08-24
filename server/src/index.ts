@@ -29,7 +29,7 @@ import {registerDashboardRoutes} from "./routes/dashboard";
 import {registerTemplateRoutes} from "./routes/templates";
 import {registerEquipmentRoutes} from "./routes/equipment";
 import {registerAuthRoutes} from "./routes/auth";
-import {registerGmailRoutes} from "./routes/gmail";
+import {registerGmailRoutes, startGmailImportJobWorker} from "./routes/gmail";
 import {registerGdriveRoutes} from "./routes/gdrive";
 import {registerInvoiceRoutes} from "./routes/invoices";
 import {registerUserSettingsRoutes} from "./routes/userSettings";
@@ -222,6 +222,7 @@ async function main() {
   await promoteSharedPrintTemplates();
   await seedGmailSearchProviders();
   await collapseDuplicateGeneratedPdfs();
+  startGmailImportJobWorker();
 
   app.listen(settings.port, () => {
     logger.info("server_started", {

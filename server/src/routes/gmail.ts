@@ -22,6 +22,35 @@ const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly https://www.
 const GMAIL_FULL_ACCESS_ROLES = new Set(["user", "pro", "admin"]);
 const GMAIL_DEFAULT_PAGE_SIZE = 500;
 const GMAIL_MAX_PAGE_SIZE = 500;
+const GMAIL_JOB_STALE_MS = 10 * 60 * 1000;
+
+type GmailImportJobStatus = "queued" | "running" | "completed" | "failed";
+type GmailImportJobResult = { messageId: string; filename: string; documentId?: string; error?: string };
+type GmailImportJob = {
+  _id: ObjectId;
+  user_id: string;
+  status: GmailImportJobStatus;
+  q: string;
+  template_id: string | null;
+  max_results: number;
+  total_messages: number;
+  new_messages: number;
+  processed_messages: number;
+  imported: number;
+  skipped: number;
+  errors: number;
+  results: GmailImportJobResult[];
+  message_ids?: string[];
+  cursor?: number;
+  error?: string | null;
+  quota?: Record<string, unknown> | null;
+  created_at: Date;
+  updated_at: Date;
+  started_at?: Date;
+  completed_at?: Date;
+};
+
+let gmailImportWorkerRunning = false;
 
 export function registerGmailRoutes(app: express.Application) {
   app.get("/api/gmail/search-providers", async (req, res) => {
@@ -303,7 +332,7 @@ export function registerGmailRoutes(app: express.Application) {
     }
   });
 
-  // POST /api/gmail/import-all — scan inbox, import all new PDF attachments
+  // POST /api/gmail/import-all — enqueue a durable Gmail bulk import job.
   app.post("/api/gmail/import-all", async (req, res) => {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
@@ -318,98 +347,58 @@ export function registerGmailRoutes(app: express.Application) {
     const q = buildGmailQuery(req.body.q as string | undefined, template);
     logger.info("gmail_import_all_query", { query: q, templateId: templateId ?? null, inspection: isInspectionTemplate(template) });
     const maxResults = gmailPageSize(req.body.limit);
-    const skipMonthlyReports = isInspectionTemplate(template);
-    const quotaCategory = quotaCategoryFromTemplate(template);
 
     try {
-      let listRes = await gmailFetch(accessToken, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
-      if (listRes.status === 401) {
-        const refreshed = await retryWithRefresh(ctx.userId);
-        if (refreshed) listRes = await gmailFetch(refreshed, `messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`);
-      }
-      const listError = await parseGmailError(listRes);
-      if (listError) {
-        logger.error("gmail_import_all_api_error", { status: listRes.status, code: listError.code, message: listError.message, body: listError.body.slice(0, 500) });
-        res.status(listError.httpStatus).json({ error: listError.code, detail: listError.message });
-        return;
-      }
-      const listData = await listRes.json() as { messages?: { id: string }[] };
-      const messageIds = listData.messages ?? [];
-      const diagnostics = createGmailDiagnostics(q, requestedExtensionsFromQuery(q), messageIds.length);
-
-      const alreadyImported = await col("gmail_imports").find(
-        { user_id: ctx.userId, message_id: { $in: messageIds.map(m => m.id) } },
-        { projection: { message_id: 1 } }
-      ).toArray();
-      const importedSet = new Set(alreadyImported.map((r: any) => r.message_id));
-
-      const newMessages = messageIds.filter(m => !importedSet.has(m.id));
-      if (!newMessages.length) { res.json({ imported: 0, skipped: messageIds.length, results: [] }); return; }
-
-      const results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> = [];
-      let quotaLimitReached: DocumentImportQuotaError | null = null;
-
-      for (const { id } of newMessages) {
-        const meta = await fetchEmailMeta(accessToken, id, diagnostics.allowedExtensions, diagnostics);
-        if (!meta) continue;
-        if (skipMonthlyReports && isMonthlyReportGmailItem(meta)) {
-          logger.info("gmail_import_monthly_report_skipped", {
-            user_id: ctx.userId,
-            message_id: id,
-            template_id: templateId ?? null,
-            subject: meta.subject,
-          });
-          continue;
-        }
-
-        for (const att of meta.attachments) {
-          if (skipMonthlyReports && isMonthlyReportGmailItem(meta, att.filename)) {
-            logger.info("gmail_import_monthly_report_attachment_skipped", {
-              user_id: ctx.userId,
-              message_id: id,
-              filename: att.filename,
-            });
-            continue;
-          }
-          try {
-            await assertDocumentImportQuota(ctx.userId, ctx.user.plan ?? ctx.user.role, 1, quotaCategory);
-            const pipeline = await gmailImportPipelineOptions(templateId, meta, att.filename);
-            const result = await downloadAndImportAttachment(accessToken, id, att.attachmentId, att.filename, ctx.userId, pipeline);
-            results.push({ messageId: id, filename: att.filename, documentId: result.documentId });
-          } catch (err: any) {
-            if (err instanceof DocumentImportQuotaError) {
-              quotaLimitReached = err;
-              results.push({ messageId: id, filename: att.filename, error: DOCUMENT_MONTHLY_QUOTA_ERROR });
-              break;
-            }
-            results.push({ messageId: id, filename: att.filename, error: err.message });
-          }
-        }
-
-        const fileResults = results.filter(r => r.messageId === id);
-        await col("gmail_imports").updateOne(
-          { user_id: ctx.userId, message_id: id },
-          {
-            $setOnInsert: { user_id: ctx.userId, message_id: id, imported_at: new Date(), subject: meta.subject },
-            $set: { files: fileResults.map(r => ({ filename: r.filename, document_id: r.documentId ?? null, error: r.error ?? null })) },
-          },
-          { upsert: true }
-        );
-        if (quotaLimitReached) break;
-      }
-
-      logGmailDiagnostics("gmail_import_all_parse", diagnostics, results.length ? new Set(results.map(r => r.messageId)).size : 0);
-      logger.info("gmail_bulk_import", { user_id: ctx.userId, total: messageIds.length, new: newMessages.length, imported: results.filter(r => r.documentId).length, quota_limit_reached: Boolean(quotaLimitReached) });
-      res.json({
-        imported: results.filter(r => r.documentId).length,
-        skipped: importedSet.size,
-        results,
-        quota: quotaLimitReached ? documentImportQuotaErrorPayload(quotaLimitReached) : null,
+      const now = new Date();
+      const insert = await col<GmailImportJob>("gmail_import_jobs").insertOne({
+        user_id: ctx.userId,
+        status: "queued",
+        q,
+        template_id: templateId ?? null,
+        max_results: maxResults,
+        total_messages: 0,
+        new_messages: 0,
+        processed_messages: 0,
+        imported: 0,
+        skipped: 0,
+        errors: 0,
+        results: [],
+        cursor: 0,
+        error: null,
+        quota: null,
+        created_at: now,
+        updated_at: now,
+      } as any);
+      startGmailImportJobWorker();
+      res.status(202).json({
+        jobId: insert.insertedId.toString(),
+        status: "queued",
+        imported: 0,
+        skipped: 0,
+        results: [],
       });
     } catch (err: any) {
       logger.error("gmail_import_all_failed", { user_id: ctx.userId, error: err.message });
       res.status(500).json({ error: err.message });
     }
+  });
+
+  app.get("/api/gmail/import-jobs/:jobId", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    let ctx: Awaited<ReturnType<typeof requireAuth>>;
+    try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
+
+    const jobId = String(req.params.jobId ?? "");
+    if (!ObjectId.isValid(jobId)) { res.status(400).json({ error: "invalid_job_id" }); return; }
+    startGmailImportJobWorker();
+
+    const job = await col<GmailImportJob>("gmail_import_jobs").findOne(
+      { _id: new ObjectId(jobId), user_id: ctx.userId } as any,
+      { projection: { message_ids: 0 } } as any
+    );
+    if (!job) { res.status(404).json({ error: "job_not_found" }); return; }
+    res.json(presentGmailImportJob(job));
   });
 
   // GET /api/gmail/import-history — list previously imported messages
@@ -483,6 +472,287 @@ export function registerGmailRoutes(app: express.Application) {
     );
     res.json({ ok: true });
   });
+}
+
+export function startGmailImportJobWorker() {
+  if (gmailImportWorkerRunning) return;
+  gmailImportWorkerRunning = true;
+  void processGmailImportJobs().finally(() => {
+    gmailImportWorkerRunning = false;
+  });
+}
+
+async function processGmailImportJobs() {
+  await recoverStaleGmailImportJobs();
+  while (true) {
+    const job = await claimNextGmailImportJob();
+    if (!job) return;
+    try {
+      await runGmailImportJob(job);
+    } catch (err: any) {
+      logger.error("gmail_import_job_failed", { job_id: job._id.toString(), user_id: job.user_id, error: err.message });
+      await col<GmailImportJob>("gmail_import_jobs").updateOne(
+        { _id: job._id } as any,
+        { $set: { status: "failed", error: err.message, updated_at: new Date(), completed_at: new Date() } } as any
+      );
+    }
+  }
+}
+
+async function recoverStaleGmailImportJobs() {
+  const staleBefore = new Date(Date.now() - GMAIL_JOB_STALE_MS);
+  const result = await col<GmailImportJob>("gmail_import_jobs").updateMany(
+    { status: "running", updated_at: { $lt: staleBefore } } as any,
+    { $set: { status: "queued", updated_at: new Date() } } as any
+  );
+  if (result.modifiedCount) {
+    logger.warn("gmail_import_jobs_requeued_stale", { count: result.modifiedCount });
+  }
+}
+
+async function claimNextGmailImportJob(): Promise<GmailImportJob | null> {
+  const now = new Date();
+  return await col<GmailImportJob>("gmail_import_jobs").findOneAndUpdate(
+    { status: "queued" } as any,
+    { $set: { status: "running", started_at: now, updated_at: now } } as any,
+    { sort: { created_at: 1 }, returnDocument: "after" }
+  ) as GmailImportJob | null;
+}
+
+async function runGmailImportJob(job: GmailImportJob) {
+  logger.info("gmail_import_job_started", { job_id: job._id.toString(), user_id: job.user_id, query: job.q, template_id: job.template_id });
+
+  const template = job.template_id ? await loadTemplate(job.template_id).catch(() => null) : null;
+  const skipMonthlyReports = isInspectionTemplate(template);
+  const quotaCategory = quotaCategoryFromTemplate(template);
+  const accessToken = await resolveGmailToken(job.user_id);
+  if (!accessToken) throw new Error("gmail_not_connected");
+
+  let messageIds = job.message_ids ?? [];
+  let importedSet = new Set<string>();
+  let importedSetLoaded = false;
+  let diagnostics = createGmailDiagnostics(job.q, requestedExtensionsFromQuery(job.q), job.total_messages);
+
+  if (!messageIds.length) {
+    const initialized = await initializeGmailImportJob(job, accessToken);
+    messageIds = initialized.messageIds;
+    importedSet = initialized.importedSet;
+    importedSetLoaded = true;
+    diagnostics = initialized.diagnostics;
+    job = initialized.job;
+  }
+
+  if (!messageIds.length) {
+    await completeGmailImportJob(job, diagnostics);
+    return;
+  }
+
+  let quotaLimitReached: DocumentImportQuotaError | null = null;
+  for (let index = job.cursor ?? 0; index < messageIds.length; index += 1) {
+    const id = messageIds[index];
+    const freshToken = await resolveGmailToken(job.user_id);
+    if (!freshToken) throw new Error("gmail_not_connected");
+
+    if (!importedSetLoaded) {
+      const imported = await col("gmail_imports").find(
+        { user_id: job.user_id, message_id: { $in: messageIds } },
+        { projection: { message_id: 1 } }
+      ).toArray();
+      importedSet = new Set(imported.map((r: any) => r.message_id));
+      importedSetLoaded = true;
+    }
+    if (importedSet.has(id)) {
+      await updateGmailImportJobProgress(job._id, { cursor: index + 1, processedDelta: 1 });
+      continue;
+    }
+
+    const meta = await fetchEmailMeta(freshToken, id, diagnostics.allowedExtensions, diagnostics);
+    if (!meta) {
+      await updateGmailImportJobProgress(job._id, { cursor: index + 1, processedDelta: 1, skippedDelta: 1 });
+      continue;
+    }
+    if (skipMonthlyReports && isMonthlyReportGmailItem(meta)) {
+      logger.info("gmail_import_monthly_report_skipped", {
+        user_id: job.user_id,
+        message_id: id,
+        template_id: job.template_id,
+        subject: meta.subject,
+      });
+      await updateGmailImportJobProgress(job._id, { cursor: index + 1, processedDelta: 1, skippedDelta: 1 });
+      continue;
+    }
+
+    const fileResults: GmailImportJobResult[] = [];
+    for (const att of meta.attachments) {
+      if (skipMonthlyReports && isMonthlyReportGmailItem(meta, att.filename)) {
+        logger.info("gmail_import_monthly_report_attachment_skipped", {
+          user_id: job.user_id,
+          message_id: id,
+          filename: att.filename,
+        });
+        fileResults.push({ messageId: id, filename: att.filename, error: "monthly_report_not_imported" });
+        continue;
+      }
+      try {
+        const user = await col<any>("users").findOne({ _id: new ObjectId(job.user_id) } as any, { projection: { role: 1, plan: 1 } } as any);
+        await assertDocumentImportQuota(job.user_id, user?.plan ?? user?.role, 1, quotaCategory);
+        const pipeline = await gmailImportPipelineOptions(job.template_id ?? undefined, meta, att.filename);
+        const result = await downloadAndImportAttachment(freshToken, id, att.attachmentId, att.filename, job.user_id, pipeline);
+        fileResults.push({ messageId: id, filename: att.filename, documentId: result.documentId });
+      } catch (err: any) {
+        if (err instanceof DocumentImportQuotaError) {
+          quotaLimitReached = err;
+          fileResults.push({ messageId: id, filename: att.filename, error: DOCUMENT_MONTHLY_QUOTA_ERROR });
+          break;
+        }
+        fileResults.push({ messageId: id, filename: att.filename, error: err.message });
+      }
+    }
+
+    await col("gmail_imports").updateOne(
+      { user_id: job.user_id, message_id: id },
+      {
+        $setOnInsert: { user_id: job.user_id, message_id: id, imported_at: new Date(), subject: meta.subject },
+        $set: { files: fileResults.map(r => ({ filename: r.filename, document_id: r.documentId ?? null, error: r.error ?? null })) },
+      },
+      { upsert: true }
+    );
+    await updateGmailImportJobProgress(job._id, {
+      cursor: index + 1,
+      processedDelta: 1,
+      importedDelta: fileResults.filter(r => r.documentId).length,
+      skippedDelta: fileResults.length ? 0 : 1,
+      errorDelta: fileResults.filter(r => r.error).length,
+      results: fileResults,
+      quota: quotaLimitReached ? documentImportQuotaErrorPayload(quotaLimitReached) : null,
+    });
+    if (quotaLimitReached) break;
+  }
+
+  await completeGmailImportJob(job, diagnostics, quotaLimitReached);
+}
+
+async function initializeGmailImportJob(job: GmailImportJob, accessToken: string) {
+  let listRes = await gmailFetch(accessToken, `messages?q=${encodeURIComponent(job.q)}&maxResults=${job.max_results}`);
+  if (listRes.status === 401) {
+    const refreshed = await retryWithRefresh(job.user_id);
+    if (refreshed) listRes = await gmailFetch(refreshed, `messages?q=${encodeURIComponent(job.q)}&maxResults=${job.max_results}`);
+  }
+  const listError = await parseGmailError(listRes);
+  if (listError) {
+    logger.error("gmail_import_all_api_error", { status: listRes.status, code: listError.code, message: listError.message, body: listError.body.slice(0, 500) });
+    throw new Error(listError.code);
+  }
+  const listData = await listRes.json() as { messages?: { id: string }[] };
+  const allMessageIds = (listData.messages ?? []).map((message) => message.id);
+  const diagnostics = createGmailDiagnostics(job.q, requestedExtensionsFromQuery(job.q), allMessageIds.length);
+  const alreadyImported = allMessageIds.length
+    ? await col("gmail_imports").find(
+      { user_id: job.user_id, message_id: { $in: allMessageIds } },
+      { projection: { message_id: 1 } }
+    ).toArray()
+    : [];
+  const importedSet = new Set(alreadyImported.map((r: any) => r.message_id));
+  const messageIds = allMessageIds.filter((id) => !importedSet.has(id));
+
+  const updated = await col<GmailImportJob>("gmail_import_jobs").findOneAndUpdate(
+    { _id: job._id } as any,
+    {
+      $set: {
+        total_messages: allMessageIds.length,
+        new_messages: messageIds.length,
+        skipped: importedSet.size,
+        message_ids: messageIds,
+        cursor: 0,
+        updated_at: new Date(),
+      },
+    } as any,
+    { returnDocument: "after" }
+  ) as GmailImportJob | null;
+  return { job: updated ?? job, messageIds, importedSet, diagnostics };
+}
+
+async function updateGmailImportJobProgress(
+  jobId: ObjectId,
+  patch: {
+    cursor: number;
+    processedDelta?: number;
+    importedDelta?: number;
+    skippedDelta?: number;
+    errorDelta?: number;
+    results?: GmailImportJobResult[];
+    quota?: Record<string, unknown> | null;
+  }
+) {
+  const inc: Record<string, number> = {};
+  if (patch.processedDelta) inc.processed_messages = patch.processedDelta;
+  if (patch.importedDelta) inc.imported = patch.importedDelta;
+  if (patch.skippedDelta) inc.skipped = patch.skippedDelta;
+  if (patch.errorDelta) inc.errors = patch.errorDelta;
+
+  await col<GmailImportJob>("gmail_import_jobs").updateOne(
+    { _id: jobId } as any,
+    {
+      $set: {
+        cursor: patch.cursor,
+        updated_at: new Date(),
+        ...(patch.quota ? { quota: patch.quota } : {}),
+      },
+      ...(Object.keys(inc).length ? { $inc: inc } : {}),
+      ...(patch.results?.length ? { $push: { results: { $each: patch.results } } } : {}),
+    } as any
+  );
+}
+
+async function completeGmailImportJob(
+  job: GmailImportJob,
+  diagnostics: GmailDiagnostics,
+  quotaLimitReached: DocumentImportQuotaError | null = null
+) {
+  const current = await col<GmailImportJob>("gmail_import_jobs").findOne({ _id: job._id } as any);
+  if (!current) return;
+  logGmailDiagnostics("gmail_import_all_parse", diagnostics, current.results.length ? new Set(current.results.map(r => r.messageId)).size : 0);
+  logger.info("gmail_bulk_import", {
+    job_id: job._id.toString(),
+    user_id: job.user_id,
+    total: current.total_messages,
+    new: current.new_messages,
+    imported: current.imported,
+    quota_limit_reached: Boolean(quotaLimitReached ?? current.quota),
+  });
+  await col<GmailImportJob>("gmail_import_jobs").updateOne(
+    { _id: job._id } as any,
+    {
+      $set: {
+        status: "completed",
+        updated_at: new Date(),
+        completed_at: new Date(),
+        quota: quotaLimitReached ? documentImportQuotaErrorPayload(quotaLimitReached) : current.quota ?? null,
+      },
+    } as any
+  );
+}
+
+function presentGmailImportJob(job: GmailImportJob) {
+  return {
+    jobId: job._id.toString(),
+    status: job.status,
+    q: job.q,
+    templateId: job.template_id,
+    total: job.total_messages,
+    totalMessages: job.total_messages,
+    newMessages: job.new_messages,
+    processedMessages: job.processed_messages,
+    imported: job.imported,
+    skipped: job.skipped,
+    errors: job.errors,
+    results: job.results ?? [],
+    quota: job.quota ?? null,
+    error: job.error ?? null,
+    createdAt: job.created_at,
+    updatedAt: job.updated_at,
+    completedAt: job.completed_at ?? null,
+  };
 }
 
 function hasFullGmailAccess(role: string | null | undefined): boolean {
