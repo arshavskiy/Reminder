@@ -9,6 +9,7 @@ import {ObjectId} from "mongodb";
 import type {DocTemplate, DocumentKind, TemplateField} from "../../src/shared/types.js";
 import {buildPromptForTemplate, type InspectorProfile} from "./buildPrompt";
 import {logger} from "../logger";
+import {DEFAULT_GMAIL_SEARCH_PROVIDERS} from "../gmail/searchProviders";
 
 interface SeedRow {
   name: string;
@@ -19,6 +20,40 @@ interface SeedRow {
   expiry_field: string | null;
   is_default: number;
 }
+
+const INVOICE_BASE_MATCH_KEYWORDS = [
+  "חשבונית",
+  "invoice",
+  "receipt",
+  "bill",
+  "חשבונית מס",
+  "קבלה",
+  "דרישת תשלום",
+  "חשבון תקופתי",
+  "פירוט חשבון",
+  "פירוט חודשי",
+  "לתשלום",
+  "סכום לתשלום",
+  "סכום כולל מע\"מ",
+  "תקופת חשבון",
+  "תקופת חיוב",
+  "תקופת השימושים",
+  "מספר לקוח",
+  "מספר מנוי",
+  "מספר חשבון חוזה",
+  "מספר מונה",
+  "קריאת מונה",
+];
+
+const INVOICE_PROVIDER_MATCH_KEYWORDS = DEFAULT_GMAIL_SEARCH_PROVIDERS.flatMap((provider) => [
+  provider.label,
+  ...provider.terms,
+]);
+
+const INVOICE_MATCH_KEYWORDS = uniqueKeywords([
+  ...INVOICE_BASE_MATCH_KEYWORDS,
+  ...INVOICE_PROVIDER_MATCH_KEYWORDS,
+]);
 
 const SEEDS: SeedRow[] = [
   {
@@ -81,25 +116,74 @@ const SEEDS: SeedRow[] = [
   },
   {
     name: "חשבונית",
-    description: "חשבונית מס / קבלה / דרישת תשלום",
+    description: "חשבונית מס / קבלה / דרישת תשלום, כולל חשבונות חשמל, מים, תקשורת וספקי שירות ישראליים",
     document_kind: "invoice",
-    match_keywords: ["חשבונית", "מספר חשבונית", "תשלום"],
+    match_keywords: INVOICE_MATCH_KEYWORDS,
     expiry_field: "payment_due_date",
     is_default: 0,
     fields: [
-      { key: "invoice_number",   label_he: "מספר חשבונית",  type: "text", required: true },
-      { key: "client_company",   label_he: "שם הלקוח",      type: "text", required: true },
-      { key: "client_id",        label_he: "ח.פ / ת.ז",      type: "text" },
-      { key: "issue_date",       label_he: "תאריך הוצאה",    type: "date", required: true },
-      { key: "payment_due_date", label_he: "תאריך לתשלום",   type: "date", required: true,
-        hint_he: "מתי צריך לשלם — מפעיל תזכורת" },
-      { key: "amount",           label_he: "סכום לתשלום",   type: "currency", required: true },
-      { key: "currency",         label_he: "מטבע",          type: "text",     example_he: "ILS" },
-      { key: "vat_amount",       label_he: "סכום מע\"מ",    type: "currency" },
-      { key: "items",            label_he: "פירוט פריטים",  type: "list" },
+      { key: "supplier_name",     label_he: "שם הספק",          type: "text", required: true,
+        hint_he: "החברה שהנפיקה את החשבונית או דרישת התשלום, למשל חברת חשמל לישראל, בזק, סלקום, פרטנר, הגיחון או מי אביבים. אל תחליף בשם הלקוח." },
+      { key: "supplier_id",       label_he: "ח.פ / מזהה ספק",    type: "text",
+        hint_he: "מספר ח.פ או מזהה רשמי של הספק אם מופיע במסמך." },
+      { key: "invoice_number",    label_he: "מספר חשבונית",      type: "text", required: true,
+        hint_he: "מספר החשבונית, הקבלה או דרישת התשלום. באנגלית: Invoice number או Receipt number. אם אין מספר חשבונית מפורש, השתמש במספר הודעה/אסמכתא/מסמך המרכזי." },
+      { key: "document_subtype",  label_he: "סוג מסמך",          type: "text", example_he: "חשבונית מס / קבלה / דרישת תשלום / חשבון תקופתי" },
+      { key: "client_company",    label_he: "שם הלקוח",          type: "text", required: true,
+        hint_he: "שם הלקוח/מנוי/צרכן שעל שמו החשבון. אל תשתמש בשם הספק." },
+      { key: "client_id",         label_he: "ח.פ / ת.ז לקוח",     type: "text" },
+      { key: "customer_number",   label_he: "מספר לקוח / מנוי",   type: "text",
+        hint_he: "מספר לקוח, מספר מנוי, מספר צרכן או מספר משלם." },
+      { key: "account_number",    label_he: "מספר חשבון / חוזה",  type: "text",
+        hint_he: "מספר חשבון חוזה, מספר חשבון, מספר חוזה או מספר נכס שירות." },
+      { key: "service_address",   label_he: "כתובת שירות",       type: "text",
+        hint_he: "כתובת הנכס/נקודת השירות שאליה מתייחס החשבון, אם שונה מכתובת למשלוח דואר." },
+      { key: "issue_date",        label_he: "תאריך הוצאה",        type: "date", required: true },
+      { key: "billing_period",    label_he: "תקופת חיוב",         type: "text",
+        hint_he: "טווח התקופה של החשבון כמו 01/07/2026 - 31/07/2026. אם יש תאריך התחלה וסיום, שמור את שניהם באותו ערך." },
+      { key: "billing_period_start", label_he: "תחילת תקופת חיוב", type: "date" },
+      { key: "billing_period_end",   label_he: "סוף תקופת חיוב",   type: "date" },
+      { key: "payment_due_date",  label_he: "תאריך לתשלום",       type: "date", required: true,
+        hint_he: "המועד האחרון לתשלום או תאריך חיוב בפועל. באנגלית: Date due. בקבלה באנגלית Date paid יכול לשמש גם כתאריך ההוצאה וגם כתאריך התשלום. זה השדה שמפעיל תזכורת." },
+      { key: "amount",            label_he: "סכום לתשלום",        type: "currency", required: true,
+        hint_he: "הסכום הסופי לתשלום כולל מע\"מ, לאחר זיכויים/יתרות קודמות אם מופיעים. באנגלית העדף Amount paid, Amount due, Total לפי הסדר. אל תיקח Tax/VAT כסכום לתשלום." },
+      { key: "amount_before_vat", label_he: "סכום לפני מע\"מ",     type: "currency" },
+      { key: "vat_amount",        label_he: "סכום מע\"מ",          type: "currency" },
+      { key: "currency",          label_he: "מטבע",               type: "text", example_he: "ILS",
+        hint_he: "החזר קוד ISO בן 3 אותיות בלבד: ILS, USD, EUR, GBP. אם מופיע $, USD או שורה כמו 11.25 USD, החזר USD ולא ש\"ח." },
+      { key: "payment_status",    label_he: "סטטוס תשלום",        type: "text", example_he: "לתשלום / שולם / הוראת קבע / חיוב אשראי",
+        hint_he: "אם מופיע Receipt, paid, Amount paid או Date paid, החזר paid/שולם." },
+      { key: "payment_method",    label_he: "אמצעי תשלום",        type: "text", example_he: "כרטיס אשראי / הוראת קבע / העברה בנקאית",
+        hint_he: "באנגלית: Payment method או Charged to, למשל Mastercard - 8021." },
+      { key: "meter_number",      label_he: "מספר מונה",          type: "text",
+        hint_he: "לחשבונות חשמל/מים/גז בלבד. אם יש כמה מונים, שמור את כולם." },
+      { key: "previous_reading",  label_he: "קריאה קודמת",        type: "text" },
+      { key: "current_reading",   label_he: "קריאה נוכחית",       type: "text" },
+      { key: "usage_quantity",    label_he: "צריכה",              type: "text",
+        hint_he: "כמות הצריכה ויחידה, למשל קוט\"ש, מ\"ק, דקות, GB או יחידות שירות." },
+      { key: "tariff_plan",       label_he: "מסלול / תעריף",      type: "text",
+        hint_he: "שם מסלול, תעריף, חבילה, תוכנית סלולר/אינטרנט או סוג צריכה אם מופיע." },
+      { key: "items",             label_he: "פירוט חיובים",       type: "list",
+        hint_he: "רשימת שורות חיוב מרכזיות: שירות, תקופה, כמות, סכום. שמור רק פריטים משמעותיים ולא טקסט משפטי ארוך." },
+      { key: "notes",             label_he: "הערות",              type: "text",
+        hint_he: "הערות חשובות כמו יתרת חוב, זיכוי, התראה לפני ניתוק, חיוב חריג או שינוי תעריף." },
     ],
   },
 ];
+
+function uniqueKeywords(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const keyword = String(value ?? "").trim();
+    if (!keyword) continue;
+    const key = keyword.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(keyword);
+  }
+  return out;
+}
 
 export async function seedBuiltinTemplates(): Promise<void> {
   const collection = col<any>("doc_templates");
@@ -183,27 +267,67 @@ function safeJson<T>(raw: unknown, fallback: T): T {
 }
 
 /**
- * Pick the best matching template for a given raw document text.
- * Returns the one whose match_keywords have the most hits, falling back to
- * is_default, then to the first row, then null.
+ * Display / storage type for a document extracted with this template.
+ * Prefer document_kind when set (including custom Hebrew kinds like "תלוש משכורת"),
+ * otherwise fall back to the template name.
  */
+export function documentTypeFromTemplate(template: DocTemplate): string {
+  const kind = String(template.document_kind ?? "").trim();
+  if (kind && kind !== "unknown") return kind;
+  return String(template.name ?? "").trim() || "unknown";
+}
 export async function pickTemplate(rawText: string, userId?: string): Promise<DocTemplate | null> {
   const all = await loadAllTemplates(userId);
   if (!all.length) return null;
 
   let best: { tpl: DocTemplate; score: number } | null = null;
   for (const tpl of all) {
-    let score = 0;
-    for (const kw of tpl.match_keywords) {
-      if (kw && rawText.includes(kw)) score++;
+    const score = scoreTemplateMatch(rawText, tpl);
+    if (!best || score > best.score || (score === best.score && preferTemplate(tpl, best.tpl, userId))) {
+      best = { tpl, score };
     }
-    if (!best || score > best.score) best = { tpl, score };
   }
   if (best && best.score > 0) return best.tpl;
 
   return all.find((t) => userId && t.user_id === userId && t.is_default) ??
     all.find((t) => t.is_default) ??
+    all.find((t) => userId && t.user_id === userId) ??
     all[0];
+}
+
+/** Exported for tests — higher = stronger match. */
+export function scoreTemplateMatch(rawText: string, tpl: DocTemplate): number {
+  if (!rawText) return 0;
+  let score = 0;
+  for (const kw of tpl.match_keywords ?? []) {
+    const needle = String(kw ?? "").trim();
+    if (!needle) continue;
+    // Skip ultra-generic 2–3 char tokens that collide across document types.
+    if (needle.length < 4) continue;
+    if (rawText.includes(needle)) {
+      score += Math.max(2, Math.min(needle.length, 28));
+    }
+  }
+  const name = String(tpl.name ?? "").trim();
+  if (name.length >= 4 && rawText.includes(name)) {
+    score += Math.max(10, Math.min(name.length, 28));
+  }
+  return score;
+}
+
+function preferTemplate(candidate: DocTemplate, current: DocTemplate, userId?: string): boolean {
+  const candBuiltin = Number(candidate.is_builtin) === 1;
+  const curBuiltin = Number(current.is_builtin) === 1;
+  if (candBuiltin !== curBuiltin) return !candBuiltin;
+  if (userId) {
+    const candUser = candidate.user_id === userId;
+    const curUser = current.user_id === userId;
+    if (candUser !== curUser) return candUser;
+  }
+  const candDefault = Boolean(candidate.is_default);
+  const curDefault = Boolean(current.is_default);
+  if (candDefault !== curDefault) return candDefault;
+  return false;
 }
 
 // ── Keyword tables for document-kind classification ─────────────────────────

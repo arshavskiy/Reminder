@@ -166,53 +166,69 @@
               </n-form-item>
 
               <n-form-item label="גוף ה-HTML">
-                <div style="width:100%">
-                  <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap">
-                    <n-button size="tiny" @click="detectVars" :loading="detectingVars">זהה משתנים</n-button>
+                <div class="html-body-editor">
+                  <div class="html-body-editor__toolbar">
+                    <n-button
+                      class="detect-vars-btn"
+                      size="tiny"
+                      type="info"
+                      secondary
+                      attr-type="button"
+                      :loading="detectingVars"
+                      @click="detectVars"
+                    >
+                      זהה משתנים
+                    </n-button>
                     <n-button size="tiny" @click="insertItemsTable">הוסף טבלת פריטים</n-button>
                     <n-button size="tiny" @click="insertSampleHtml" v-if="!editing.html">טען תבנית ברירת מחדל</n-button>
                     <n-button size="tiny" quaternary @click="resetToDefault" :loading="resettingDefault">אפס לברירת מחדל</n-button>
-                    <n-tag
+                    <span
                       v-for="v in detectedVars"
                       :key="v"
-                      size="small"
-                      style="cursor:pointer; font-family:monospace"
-                      @click="insertVar(v)"
-                    >(( {{v}} ))</n-tag>
+                      class="var-chip var-chip--detected var-chip--readonly"
+                      title="נמצא בתבנית"
+                      v-text="formatVarToken(v)"
+                    />
                   </div>
-                  <n-input
-                    ref="htmlInputRef"
-                    v-model:value="editing.html"
-                    type="textarea"
-                    :rows="20"
-                    placeholder="<div>תזכורת: {{title}}</div>"
-                    style="font-family: monospace; font-size: 12px; direction: ltr; text-align: left"
-                  />
+                  <div class="html-editor">
+                    <pre
+                      ref="htmlHighlightRef"
+                      class="html-editor__highlight"
+                      aria-hidden="true"
+                      v-html="highlightedHtml"
+                    />
+                    <textarea
+                      ref="htmlTextareaRef"
+                      class="html-editor__input"
+                      :value="editing.html"
+                      placeholder="<div>תזכורת: {{title}}</div>"
+                      spellcheck="false"
+                      @input="onHtmlInput"
+                      @scroll="syncHtmlScroll"
+                    />
+                  </div>
                 </div>
               </n-form-item>
 
-              <n-alert type="info" :show-icon="false" style="font-size:12px">
+              <n-alert type="info" :show-icon="false" class="vars-help">
                 <b>משתנים זמינים:</b>
-                <code v-pre>{{title}}</code>,
-                <code v-pre>{{trigger_date}}</code>,
-                <code v-pre>{{expiry_date}}</code>,
-                <code v-pre>{{client_company}}</code>,
-                <code v-pre>{{contact_person}}</code>,
-                <code v-pre>{{contact_phone}}</code>,
-                <code v-pre>{{document_number}}</code>,
-                <code v-pre>{{inspector_number}}</code>,
-                <code v-pre>{{license_number}}</code>,
-                <code v-pre>{{logo_url}}</code>,
-                <code v-pre>{{poster_url}}</code>,
-                <code v-pre>{{document_url}}</code>,
-                <code v-pre>{{items_table}}</code>,
-                <code v-pre>{{item_count}}</code>
-                וכל שדה מתבנית המסמך לפי ה-<code>key</code> שלו.
-                <br/>
-                <code v-pre>{{items_table}}</code> — טבלת תסקירים כשנשלחות כמה תזכורות לאותו לקוח באותו יום. ריקה במייל בודד.
-                <br/>
-                בלוקים מותנים: <code v-pre>{{#if var}}...{{/if}}</code> &nbsp;|&nbsp;
-                ערכי ברירת מחדל: <code v-pre>{{name|ברירת מחדל}}</code>
+                <div class="vars-help__chips">
+                  <button
+                    v-for="v in availableVars"
+                    :key="v"
+                    type="button"
+                    class="var-chip"
+                    :title="'הכנס ' + formatVarToken(v)"
+                    v-text="formatVarToken(v)"
+                    @click="insertVar(v)"
+                  />
+                </div>
+                <p class="vars-help__note">
+                  וכל שדה מתבנית המסמך לפי ה-<code>key</code> שלו.
+                  <code v-pre>{{items_table}}</code> — טבלת תסקירים כשנשלחות כמה תזכורות לאותו לקוח באותו יום.
+                  בלוקים מותנים: <code v-pre>{{#if var}}...{{/if}}</code>
+                  · ערכי ברירת מחדל: <code v-pre>{{name|ברירת מחדל}}</code>
+                </p>
               </n-alert>
 
               <n-form-item style="margin-top:12px">
@@ -256,7 +272,6 @@ import {
   NSpin,
   NTabPane,
   NTabs,
-  NTag,
   NText,
   NUpload,
   useMessage,
@@ -279,13 +294,60 @@ const previewHtml = ref("");
 const previewSubject = ref("");
 const detectedVars = ref<string[]>([]);
 const activeTab = ref("editor");
-const htmlInputRef = ref<any>(null);
+const htmlTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const htmlHighlightRef = ref<HTMLPreElement | null>(null);
 const message = useMessage();
 const {confirm: confirmDialog} = useConfirm();
 const authStore = useAuthStore();
 const isMobile = ref(false);
 const templateGridCols = computed(() => isMobile.value ? 1 : 3);
 const drawerWidth = computed(() => isMobile.value ? "100vw" : 960);
+
+const availableVars = [
+  "title",
+  "trigger_date",
+  "expiry_date",
+  "client_company",
+  "contact_person",
+  "contact_phone",
+  "document_number",
+  "inspector_number",
+  "license_number",
+  "logo_url",
+  "poster_url",
+  "document_url",
+  "items_table",
+] as const;
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+const highlightedHtml = computed(() => {
+  const raw = editing.value?.html ?? "";
+  const escaped = escapeHtml(raw);
+  // Color {{vars}}, {{#if}}, {{/if}}, and {{name|default}}
+  return escaped.replace(
+    /(\{\{(?:#[\w.-]+|\w[\w.-]*(?:\|[^}]*)?|\/\w+)\}\})/g,
+    '<mark class="tpl-var">$1</mark>',
+  ) + "\n";
+});
+
+function onHtmlInput(event: Event) {
+  if (!editing.value) return;
+  editing.value.html = (event.target as HTMLTextAreaElement).value;
+}
+
+function syncHtmlScroll() {
+  const ta = htmlTextareaRef.value;
+  const pre = htmlHighlightRef.value;
+  if (!ta || !pre) return;
+  pre.scrollTop = ta.scrollTop;
+  pre.scrollLeft = ta.scrollLeft;
+}
 
 function updateViewport() {
   isMobile.value = window.innerWidth <= 720;
@@ -452,20 +514,30 @@ async function uploadExampleDoc({ file, onFinish, onError }: any) {
   }
 }
 
+function formatVarToken(varName: string): string {
+  return `{{${varName}}}`;
+}
+
 function insertAtCursor(snippet: string) {
   if (!editing.value) return;
-  const textarea = htmlInputRef.value?.$el?.querySelector("textarea");
+  const textarea = htmlTextareaRef.value;
   if (textarea) {
     const start = textarea.selectionStart ?? editing.value.html.length;
     const end = textarea.selectionEnd ?? start;
     editing.value.html = editing.value.html.slice(0, start) + snippet + editing.value.html.slice(end);
+    requestAnimationFrame(() => {
+      const pos = start + snippet.length;
+      textarea.focus();
+      textarea.setSelectionRange(pos, pos);
+      syncHtmlScroll();
+    });
   } else {
     editing.value.html += snippet;
   }
 }
 
 function insertVar(varName: string) {
-  insertAtCursor(`{{${varName}}}`);
+  insertAtCursor(formatVarToken(varName));
 }
 
 function insertItemsTable() {
@@ -535,7 +607,7 @@ async function refreshPreview() {
       inspector_number: "484590",
       license_number: "233017",
       document_type: "תסקיר בדיקה",
-      from_name: " ReminderOCR ",
+      from_name: " RemindOCR ",
       body: "טקסט גוף לדוגמה",
       logo_url: editing.value.logo_path ? api.assets.url(editing.value.logo_path) : null,
       poster_url: editing.value.poster_url ?? null,
@@ -598,6 +670,146 @@ async function deleteTpl() {
 </script>
 
 <style scoped>
+.html-body-editor {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.html-body-editor__toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.detect-vars-btn {
+  font-weight: 700;
+}
+
+.var-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 9px;
+  border: 1px solid color-mix(in srgb, var(--brand-color) 35%, var(--border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-color) 12%, var(--bg-card));
+  color: var(--brand-color);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.var-chip:hover {
+  background: color-mix(in srgb, var(--brand-color) 22%, var(--bg-card));
+  border-color: var(--brand-color);
+  transform: translateY(-1px);
+}
+.var-chip--detected {
+  background: color-mix(in srgb, #2080f0 14%, var(--bg-card));
+  border-color: color-mix(in srgb, #2080f0 45%, var(--border-color));
+  color: #2080f0;
+}
+.var-chip--detected:hover {
+  background: color-mix(in srgb, #2080f0 24%, var(--bg-card));
+  border-color: #2080f0;
+}
+.var-chip--readonly {
+  cursor: default;
+  transform: none;
+}
+.var-chip--readonly:hover {
+  transform: none;
+}
+
+.html-editor {
+  position: relative;
+  width: 100%;
+  min-height: 360px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+.html-editor__highlight,
+.html-editor__input {
+  margin: 0;
+  padding: 12px;
+  width: 100%;
+  min-height: 360px;
+  height: 360px;
+  box-sizing: border-box;
+  border: 0;
+  outline: none;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  direction: ltr;
+  text-align: left;
+  tab-size: 2;
+}
+
+.html-editor__highlight {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  pointer-events: none;
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.html-editor__input {
+  position: relative;
+  z-index: 1;
+  color: transparent;
+  caret-color: var(--text-primary);
+  background: transparent;
+}
+
+.html-editor__input::placeholder {
+  color: var(--text-muted, var(--text-secondary));
+}
+
+.html-editor__highlight :deep(.tpl-var) {
+  color: #0c7a43;
+  background: color-mix(in srgb, var(--brand-color) 18%, transparent);
+  border-radius: 4px;
+  padding: 0 2px;
+  font-weight: 700;
+}
+
+html[data-theme="dark"] .html-editor__highlight :deep(.tpl-var),
+:global(html[data-theme="dark"]) .html-editor__highlight :deep(.tpl-var) {
+  color: #63e2b7;
+  background: color-mix(in srgb, #63e2b7 18%, transparent);
+}
+
+.vars-help {
+  font-size: 12px;
+}
+.vars-help__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.vars-help__note {
+  margin: 12px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.vars-help__note code {
+  color: var(--brand-color);
+  font-weight: 700;
+}
+
 @media (max-width: 720px) {
   :deep(.n-space) {
     width: 100%;
@@ -635,6 +847,12 @@ async function deleteTpl() {
 
   :deep(.n-drawer-footer .n-button) {
     width: 100%;
+  }
+
+  .html-editor__highlight,
+  .html-editor__input {
+    min-height: 280px;
+    height: 280px;
   }
 }
 

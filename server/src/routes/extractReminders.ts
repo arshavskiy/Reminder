@@ -10,6 +10,11 @@ import {parseXlsx} from "../pipeline/xlsxParser";
 import {extractDocument, extractWithTemplate} from "../pipeline/extractor";
 import {pickTemplate} from "../templates/seedTemplates";
 import {getDataDir, getSettings} from "../settings";
+import {
+    assertReminderQuota,
+    ReminderQuotaError,
+    reminderQuotaErrorPayload,
+} from "../quotas/reminderQuota";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -93,9 +98,11 @@ export function registerExtractRemindersRoutes(app: express.Application) {
    */
   app.post("/api/extract/reminders/save", async (req, res) => {
     let userId: string;
+      let userPlan: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
+        userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -107,6 +114,16 @@ export function registerExtractRemindersRoutes(app: express.Application) {
       res.status(400).json({ error: "reminders array required" });
       return;
     }
+
+      try {
+          await assertReminderQuota(userId, userPlan, body.reminders.length);
+      } catch (err) {
+          if (err instanceof ReminderQuotaError) {
+              res.status(403).json(reminderQuotaErrorPayload(err));
+              return;
+          }
+          throw err;
+      }
 
     const { col } = await import("../db/db.js");
     const now = new Date();
@@ -143,6 +160,11 @@ export function registerExtractRemindersRoutes(app: express.Application) {
       } as any);
 
       inserted.push(r.insertedId.toString());
+    }
+
+    if (inserted.length) {
+      const { incrementReminderUsage } = await import("../quotas/userUsageCounters.js");
+      await incrementReminderUsage(userId, inserted.length);
     }
 
     res.json({ saved: inserted.length, ids: inserted });

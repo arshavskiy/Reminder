@@ -67,8 +67,8 @@ MONGODB_URI=mongodb+srv://arshavskypasha_db_user:<password>@cluster10.zyzi9bi.mo
 MONGODB_DB=reminder-app
 
 # Google OAuth
-GOOGLE_CLIENT_ID=715853749049-ofuh7narb5ld95l3tck3rmllcuofhmu3.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=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
+GOOGLE_CLIENT_ID=<google-oauth-client-id>
+GOOGLE_CLIENT_SECRET=<google-oauth-client-secret>
 GOOGLE_REDIRECT_URI=https://<your-railway-domain>/auth/google/callback
 
 # Session
@@ -78,9 +78,9 @@ SESSION_SECRET=<generate: openssl rand -hex 32>
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=pavelspersonalhelper@gmail.com
-SMTP_PASS=ujeg thdj ehms avgn
-EMAIL_FROM=sabenko@gmail.com
+SMTP_USER=<smtp-user>
+SMTP_PASS=<smtp-password>
+EMAIL_FROM=<verified-sender-email>
 EMAIL_FROM_NAME= ReminderOCR
 
 # OpenAI
@@ -119,7 +119,7 @@ curl https://<your-railway-domain>/auth/me
 ### Environment variables (set in Vercel dashboard)
 ```
 VITE_API_BASE=https://<your-railway-domain>
-VITE_GOOGLE_CLIENT_ID=715853749049-ofuh7narb5ld95l3tck3rmllcuofhmu3.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_ID=<google-oauth-client-id>
 ```
 
 > These are baked into the JS bundle at build time — redeploy after changing them.

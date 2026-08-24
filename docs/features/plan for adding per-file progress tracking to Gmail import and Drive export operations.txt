@@ -1,0 +1,281 @@
+Design an implementation plan for adding per-file progress tracking to Gmail import and Drive export operations, reusing the existing upload/rescan progress modal pattern.
+
+Background
+
+The app has an existing "תוצאות העלאה" (upload results) progress modal in UploadModal.vue that shows per-file status cards with progress bar, summary stats, and clickable rows. It uses a 3-layer architecture:
+
+Pinia store (client/src/stores/rescanModal.ts) — holds session state with start(), updateRows(), setRemaining(), markDone(). Has a kind field currently typed as "rescan" | "upload".
+Orchestrator (in DocumentsPage.vue) — starts sessions, runs polling via startBatchPolling() (3s interval, fetches documents, filters to tracked IDs, counts remaining), feeds data into store.
+Presenter (UploadModal.vue) — reads rescan state via prop, renders progress bar, stat grid (4 stats), and per-file cards with status badges. Uses isUploadSession computed (kind === "upload") to switch Hebrew labels.
+Current flows that need progress UI:
+
+Gmail import (handleGmailImport in DocumentsPage.vue):
+
+Currently calls api.gmail.importAll() which returns { imported: number, results: [{ messageId, filename, documentId?, error? }] } synchronously
+Creates documents in DB, then returns all results at once
+Already has per-file results in the response, just not shown in a modal
+
+Drive export (handleDriveExport in DocumentsPage.vue, also InvoicesPage.vue):
+
+Currently calls api.drive.exportAll() which returns { ok, uploaded, failed, total } — only aggregate counts
+Server endpoint loops through docs sequentially, uploading each
+No per-file results returned
+Key constraints:
+UploadModal.vue is only used in DocumentsPage.vue, not InvoicesPage.vue
+InvoicesPage.vue also has Drive export and Gmail import buttons
+The rescan modal store is global (Pinia), so can be shared
+Gmail import returns all results at once (no real-time polling needed — just display results)
+Drive export is synchronous server-side loop — could be made async with polling, or kept synchronous with results returned at end
+Existing interfaces:
+// rescanModal store
+interface RescanRowState {
+  id: string | number;
+  file_name: string;
+  processing_status: string; // queued/processing/done/error
+  reminder_status?: string | null;
+  reminder_date?: string | null;
+  document_type?: string | null;
+  error_message?: string | null;
+  duplicate?: boolean;
+}
+
+// UploadModal rescan tab reads from:
+interface RescanState {
+  queued: number;
+  remaining: number;
+  done: boolean;
+  kind: "rescan" | "upload";
+  rows: RescanRowState[];
+}
+What needs to happen:
+Extract the rescan/results tab from UploadModal into a standalone reusable component (or create a new standalone modal)
+Add new kind values for gmail-import and drive-export
+Update label/stat rendering to support new kinds
+Wire up Gmail import to show results in the modal after the API returns
+Wire up Drive export — server returns per-file results, client shows them in modal
+Both DocumentsPage and InvoicesPage need to use this
+Design decision needed:
+
+Should we extract the rescan tab into a separate ProgressResultsModal.vue component, or keep extending UploadModal? Given that InvoicesPage needs it too and doesn't use UploadModal at all, a standalone component makes more sense.
+
+Please design a concrete implementation plan with files to modify, key code changes, and verification steps. Keep it concise.
+
+Found files, read 6 files, searched code
+
+I now have complete understanding of the architecture. Here is the implementation plan.
+
+Implementation Plan: Per-File Progress Tracking for Gmail Import and Drive Export
+Architecture Decision
+
+Create a new standalone ProgressResultsModal.vue component extracted from the rescan tab of UploadModal.vue. This is the right approach because:
+
+InvoicesPage needs it but does not use UploadModal at all
+The rescan tab in UploadModal is already conceptually independent (no shared state with the upload/extract tabs)
+The Pinia store is already global and can be shared across pages
+Step 1: Extend the Pinia store (rescanModal.ts)
+
+File: E:\Projects\Reminder\client\src\stores\rescanModal.ts
+
+Add two new kind values to support Gmail import and Drive export sessions:
+
+Change the kind type from "rescan" | "upload" to "rescan" | "upload" | "gmail-import" | "drive-export"
+Add a computed succeeded (rows where processing_status === "done" and no error) for use by the new kinds
+No other structural changes needed. The existing start(), updateRows(), markDone(), setRemaining() interface works for all four kinds
+
+The RescanRowState interface already has all fields needed. For Gmail import results, map each result to a RescanRowState where:
+
+id = messageId (or messageId + filename for uniqueness)
+file_name = the attachment filename
+processing_status = "done" if documentId exists, "error" if error exists
+error_message = the error string if present
+
+For Drive export, same mapping once the server returns per-file results.
+
+Step 2: Create ProgressResultsModal.vue
+
+New file: E:\Projects\Reminder\client\src\components\ProgressResultsModal.vue
+
+Extract the rescan tab template (lines 269-338 of UploadModal.vue), the rescan footer (lines 401-407), and all rescan-related computed properties and helper functions from UploadModal into this new standalone modal.
+
+The component interface:
+
+// Props
+interface Props {
+  state: {
+    queued: number;
+    remaining: number;
+    done: boolean;
+    kind: "rescan" | "upload" | "gmail-import" | "drive-export";
+    rows: RescanRowState[];
+  } | null;
+}
+
+// Events
+defineEmits<{
+  (e: "close"): void;
+  (e: "view-document", id: string): void;
+  (e: "background"): void;
+}>();
+
+// v-model for visibility
+const visible = defineModel<boolean>({ required: true });
+
+The component contains:
+
+The hero section (spinner or checkmark), with title/subtitle that switch on kind
+Progress bar
+4-stat summary grid with labels that switch on kind
+Scrollable per-file card list with status badges
+Footer with "close" / "continue in background" button
+
+Label map by kind (all Hebrew):
+
+Stat slot	rescan	upload	gmail-import	drive-export
+Slot 1	נסרקים	בהעלאה	בייבוא	בייצוא
+Slot 2	קיבלו תזכורת	עובדו	יובאו	הועלו
+Slot 3	ללא תזכורת	כפולים	דולגו	נכשלו
+Slot 4	שגיאות	שגיאות	שגיאות	שגיאות
+
+Title patterns:
+
+gmail-import running: "ייבוא Gmail פעיל", done: "ייבוא Gmail הסתיים"
+drive-export running: "ייצוא Drive פעיל", done: "ייצוא Drive הסתיים"
+
+The view-document click handler only applies when the row has a valid document ID (Gmail import rows that succeeded).
+
+Step 3: Refactor UploadModal.vue to use the new component
+
+File: E:\Projects\Reminder\client\src\components\UploadModal.vue
+
+Replace the entire rescan tab section (lines 269-338) and rescan footer (lines 401-407) with <ProgressResultsModal> rendered inside the existing modal when activeTab === 'rescan'
+Alternatively, and simpler: keep UploadModal's rescan tab as-is but make DocumentsPage use the new standalone ProgressResultsModal for rescan/upload sessions too. This avoids touching UploadModal at all and is lower risk.
+
+Recommended approach: keep UploadModal unchanged for now. For DocumentsPage, continue using UploadModal for upload/rescan as before. Add a separate ProgressResultsModal instance for gmail-import and drive-export flows. This is additive, no regression risk.
+
+Step 4: Wire up Gmail import to show results in the modal
+
+File: E:\Projects\Reminder\client\src\views\DocumentsPage.vue
+
+In handleGmailImport():
+
+Before the API call, start the rescan store session:
+rescanStore.start({ queued: 0, ids: [], kind: "gmail-import" });
+showProgressModal.value = true;
+After api.gmail.importAll() returns, map result.results to RescanRowState[]:
+const rows: RescanRowState[] = result.results.map((r, i) => ({
+  id: r.documentId ?? `gmail-${r.messageId}-${i}`,
+  file_name: r.filename,
+  processing_status: r.documentId ? "done" : "error",
+  error_message: r.error ?? null,
+}));
+rescanStore.start({ queued: result.results.length, ids: rows.map(r => String(r.id)), kind: "gmail-import" });
+rescanStore.updateRows(rows);
+rescanStore.markDone();
+No polling needed since Gmail import returns all results synchronously.
+
+File: E:\Projects\Reminder\client\src\views\InvoicesPage.vue
+
+Same pattern in handleGmailImportButton(). Add:
+
+Import useRescanModalStore
+Import ProgressResultsModal
+Add template instance of ProgressResultsModal
+Map results identically
+Step 5: Wire up Drive export with per-file results
+
+Server file: E:\Projects\Reminder\server\src\routes\gdrive.ts
+
+Modify the /api/drive/export-all endpoint to return per-file results:
+
+// Change the results accumulation (lines 77-93):
+const results: Array<{ documentId: string; filename: string; error?: string }> = [];
+
+for (const doc of docs) {
+  try {
+    await syncDocumentToDrive(doc._id.toString(), ctx.userId);
+    const updated = await col<any>("documents").findOne({ _id: doc._id } as any);
+    if (updated?.drive_file_id) {
+      results.push({ documentId: doc._id.toString(), filename: doc.file_name ?? doc.original_filename ?? "unknown" });
+      uploaded++;
+    } else {
+      results.push({ documentId: doc._id.toString(), filename: doc.file_name ?? "unknown", error: "upload_failed" });
+      failed++;
+    }
+  } catch (err: any) {
+    results.push({ documentId: doc._id.toString(), filename: doc.file_name ?? "unknown", error: err.message });
+    failed++;
+  }
+}
+
+res.json({ ok: true, uploaded, failed, total: docs.length, results });
+
+Client API file: E:\Projects\Reminder\client\src\services\apiService.ts
+
+Update the exportAll return type to include results:
+
+exportAll: () => post<{
+  ok: boolean;
+  uploaded: number;
+  failed: number;
+  total: number;
+  results: Array<{ documentId: string; filename: string; error?: string }>;
+}>("/drive/export-all", {}),
+
+Client pages (DocumentsPage.vue and InvoicesPage.vue):
+
+In handleDriveExport():
+
+Before the API call:
+rescanStore.start({ queued: 0, ids: [], kind: "drive-export" });
+showProgressModal.value = true;
+After api.drive.exportAll() returns:
+const rows: RescanRowState[] = result.results.map((r) => ({
+  id: r.documentId,
+  file_name: r.filename,
+  processing_status: r.error ? "error" : "done",
+  error_message: r.error ?? null,
+}));
+rescanStore.start({ queued: rows.length, ids: rows.map(r => String(r.id)), kind: "drive-export" });
+rescanStore.updateRows(rows);
+rescanStore.markDone();
+Drive export is also synchronous (server does the loop), so no polling needed.
+Step 6: Add ProgressResultsModal to both pages
+
+DocumentsPage.vue template additions:
+
+<ProgressResultsModal
+  v-model="showProgressModal"
+  :state="progressModalState"
+  @view-document="openDocumentFromModal"
+  @close="rescanStore.clear()"
+/>
+
+Add computed progressModalState that reads from rescanStore (same pattern as existing rescanModalState).
+
+InvoicesPage.vue template additions:
+Same ProgressResultsModal usage. For view-document, navigate to /invoices/:id or /documents/:id depending on context.
+
+Sequencing
+Extend the Pinia store - add new kind values (minimal change, no breaking impact)
+Create ProgressResultsModal.vue - new standalone component, extracted from UploadModal rescan tab
+Update server Drive endpoint - return per-file results (backward compatible, adds results field)
+Update client API types - add results to exportAll return type
+Wire Gmail import in DocumentsPage - show modal after import completes
+Wire Gmail import in InvoicesPage - same pattern
+Wire Drive export in DocumentsPage - show modal after export completes
+Wire Drive export in InvoicesPage - same pattern
+Verification Steps
+Upload files via DocumentsPage, confirm existing rescan/upload modal still works unchanged
+Click "import from Gmail" on DocumentsPage, confirm the progress modal shows per-file results with correct status badges
+Click "import from Gmail" on InvoicesPage, confirm same behavior
+Click "export to Drive" on DocumentsPage, confirm per-file results appear
+Click "export to Drive" on InvoicesPage, confirm same behavior
+Test error cases: Gmail import with some failures, Drive export with some failures -- verify error badges and error messages display
+Test empty results: no new Gmail messages, all docs already synced to Drive
+Verify the "view document" click on a Gmail-imported row navigates to the correct document
+Critical Files for Implementation
+E:\Projects\Reminder\client\src\stores\rescanModal.ts
+E:\Projects\Reminder\client\src\components\UploadModal.vue
+E:\Projects\Reminder\client\src\views\DocumentsPage.vue
+E:\Projects\Reminder\client\src\views\InvoicesPage.vue
+E:\Projects\Reminder\server\src\routes\gdrive.ts

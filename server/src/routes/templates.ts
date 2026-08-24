@@ -113,18 +113,31 @@ export function registerTemplateRoutes(app: express.Application) {
       res.status(400).json({ error: "name required" });
       return;
     }
+    const userId = await currentUserId(req).catch(() => undefined);
     const now = new Date();
+    const name = String(body.name).trim();
+    const kindRaw = String(body.document_kind ?? "").trim();
+    const document_kind = kindRaw && kindRaw !== "unknown" ? kindRaw : name;
     const doc = {
-      name: body.name,
+      name,
       description: body.description ?? null,
+      document_kind,
       match_keywords: body.match_keywords ?? [],
       fields: body.fields ?? [],
       expiry_field: body.expiry_field ?? null,
       is_default: body.is_default ?? 0,
       is_builtin: 0,
+      ...(userId ? { user_id: userId } : {}),
       created_at: now,
       updated_at: now,
     };
+    // Keep a single default per user (or global when no user).
+    if (doc.is_default) {
+      const defaultFilter = userId
+        ? { $or: [{ user_id: userId }, { user_id: null }, { user_id: { $exists: false } }] }
+        : {};
+      await col("doc_templates").updateMany(defaultFilter as any, { $set: { is_default: 0 } });
+    }
     const result = await col("doc_templates").insertOne(doc as any);
     res.json(await loadTemplate(result.insertedId.toString()));
   });
@@ -137,7 +150,11 @@ export function registerTemplateRoutes(app: express.Application) {
     if (body.name !== undefined) updates.name = body.name;
     if (body.description !== undefined) updates.description = body.description;
     if (body.match_keywords !== undefined) updates.match_keywords = body.match_keywords;
-    if (body.document_kind !== undefined) updates.document_kind = body.document_kind;
+    if (body.document_kind !== undefined) {
+      const kindRaw = String(body.document_kind ?? "").trim();
+      const name = body.name !== undefined ? String(body.name).trim() : undefined;
+      updates.document_kind = kindRaw && kindRaw !== "unknown" ? kindRaw : (name || kindRaw || "unknown");
+    }
     if (body.fields !== undefined) updates.fields = body.fields;
     if (body.expiry_field !== undefined) updates.expiry_field = body.expiry_field;
     if (body.is_default !== undefined) updates.is_default = body.is_default;
@@ -300,7 +317,7 @@ export function registerTemplateRoutes(app: express.Application) {
         // Build a temporary template object for extraction
         const { extractWithTemplate } = await import("../pipeline/extractor.js");
         const tpl: DocTemplate = {
-          id: 0,
+          id: "0",
           name: "test",
           description: null,
           match_keywords: [],
@@ -464,6 +481,12 @@ export function registerTemplateRoutes(app: express.Application) {
     if (safeVars.items_table == null || safeVars.items_table === "") {
       safeVars.items_table = sampleGroupedItemsTable();
       safeVars.item_count ??= 3;
+    }
+    // When the table is shown, hide single-item duplicates from the first reminder.
+    if (safeVars.items_table) {
+      safeVars.checked_equipment = "";
+      safeVars.license_number = "";
+      safeVars.lisence_number = "";
     }
     res.json({
       subject: renderTemplate(subject ?? "", safeVars, { escape: false }),

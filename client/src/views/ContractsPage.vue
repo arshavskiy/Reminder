@@ -28,6 +28,14 @@
                 @click="toggleBulkMode"
             >
               ☑ בחירה מרובה
+              <span v-if="selectedIds.size">({{ selectedIds.size }})</span>
+            </button>
+            <button
+                v-if="bulkMode && contractItems.length"
+                class="btn btn--ghost"
+                @click="selectAll"
+            >
+              {{ selectedIds.size === contractItems.length ? 'בטל הכל' : 'בחר הכל' }}
             </button>
             <div v-if="bulkMode && selectedIds.size > 0" class="bulk-action-anchor__actions">
               <button
@@ -809,9 +817,21 @@ const bulkSending = ref(false);
 const showBulkDeleteConfirm = ref(false);
 const bulkDeleteRelatedReminders = ref(false);
 
+const contractItems = computed(() =>
+    visibleItems.value.filter((i): i is ContractListItem => i.__type === "contract")
+);
+
 function toggleBulkMode() {
   bulkMode.value = !bulkMode.value;
   if (!bulkMode.value) selectedIds.value = new Set();
+}
+
+function selectAll() {
+  if (selectedIds.value.size === contractItems.value.length) {
+    selectedIds.value = new Set();
+  } else {
+    selectedIds.value = new Set(contractItems.value.map((i) => String(i.row.id)));
+  }
 }
 
 function toggleSelect(id: string) {
@@ -3334,7 +3354,7 @@ function exportToExcel() {
   white-space: nowrap;
 }
 
-.btn:hover {
+.btn:hover:not(.btn--primary):not(.btn--danger):not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-strong);
 }
@@ -3379,6 +3399,7 @@ function exportToExcel() {
 .btn--primary:hover {
   background: var(--brand-color-hover);
   border-color: var(--brand-color-hover);
+  color: var(--text-inverse, #fff);
 }
 
 .btn--ghost {

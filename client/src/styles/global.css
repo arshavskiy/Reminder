@@ -83,8 +83,8 @@ html[data-theme="light"] {
   --border-strong: rgba(0, 0, 0, 0.16);
 
   --brand-color: #18a058;
-  --brand-color-hover: #36ad6a;
-  --brand-color-pressed: #0c7a43;
+  --brand-color-hover: #0c7a43;
+  --brand-color-pressed: #085c32;
 
   color-scheme: light;
 }
@@ -341,7 +341,17 @@ html[dir="rtl"] .n-base-clear {
   z-index: 1;
 }
 
-.page { max-width: 1200px; margin: 0 auto; }
+.page { max-width: 1800px; margin: 0 auto; }
+.page:has(.pricing-page) {
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+}
+.content:has(.pricing-page) {
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+}
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn {
@@ -359,7 +369,7 @@ html[dir="rtl"] .n-base-clear {
   transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
   white-space: nowrap;
 }
-.btn:hover {
+.btn:hover:not(.btn--primary):not(.btn--danger):not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-strong);
 }
@@ -392,9 +402,14 @@ html[dir="rtl"] .n-base-clear {
   color: var(--text-inverse, #fff);
   font-weight: 600;
 }
-.btn--primary:hover {
+.btn--primary:hover:not(:disabled) {
   background: var(--brand-color-hover);
   border-color: var(--brand-color-hover);
+  color: var(--text-inverse, #fff);
+}
+.btn--primary:active:not(:disabled) {
+  background: var(--brand-color-pressed);
+  border-color: var(--brand-color-pressed);
 }
 .btn--ghost {
   background: transparent;
@@ -474,7 +489,7 @@ html[dir="rtl"] .n-base-clear {
   transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
   white-space: nowrap;
 }
-.btn:hover {
+.btn:hover:not(.btn--primary):not(.btn--danger):not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-strong);
 }
@@ -507,9 +522,14 @@ html[dir="rtl"] .n-base-clear {
   color: var(--text-inverse, #fff);
   font-weight: 600;
 }
-.btn--primary:hover {
+.btn--primary:hover:not(:disabled) {
   background: var(--brand-color-hover);
   border-color: var(--brand-color-hover);
+  color: var(--text-inverse, #fff);
+}
+.btn--primary:active:not(:disabled) {
+  background: var(--brand-color-pressed);
+  border-color: var(--brand-color-pressed);
 }
 .btn--ghost {
   background: transparent;

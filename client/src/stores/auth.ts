@@ -8,6 +8,8 @@ interface AuthUser {
   phone?: string | null;
   picture_url: string | null;
   role: "admin" | "pro" | "user";
+  plan?: "free" | "basic" | "business";
+  onboarding_completed?: boolean;
 }
 
 const STORAGE_KEY = "auth_user";

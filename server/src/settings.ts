@@ -48,7 +48,7 @@ function buildSettings(): AppSettings {
     smtpPass: process.env.SMTP_PASS ?? "",
     smtpRejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== "false",
     emailFrom: process.env.EMAIL_FROM ?? "",
-    emailFromName: process.env.EMAIL_FROM_NAME ?? "ReminderOCR",
+    emailFromName: process.env.EMAIL_FROM_NAME ?? "RemindOCR",
 
     reminderEnabled: process.env.REMINDER_ENABLED !== "false",
     reminderAdvanceDays: process.env.REMINDER_ADVANCE_DAYS
@@ -81,7 +81,7 @@ function buildSettings(): AppSettings {
       ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
       : [],
 
-    userDocumentLimit: process.env.USER_DOCUMENT_LIMIT ? parseInt(process.env.USER_DOCUMENT_LIMIT, 10) : 25,
+      userDocumentLimit: process.env.USER_DOCUMENT_LIMIT ? parseInt(process.env.USER_DOCUMENT_LIMIT, 10) : 30,
 
     escalationEmail: process.env.ESCALATION_EMAIL ?? "",
     escalationThresholdDays: process.env.ESCALATION_THRESHOLD_DAYS

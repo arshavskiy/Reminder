@@ -36,6 +36,272 @@ export interface GmailEmail {
   attachments: GmailAttachment[];
 }
 
+export interface GmailSearchProvider {
+  id: string;
+  category:
+    | "electricity"
+    | "telecom"
+    | "water"
+    | "transport"
+    | "parking"
+    | "fuel"
+    | "gas"
+    | "tv"
+    | "marketplace"
+    | "food"
+    | "payment"
+    | "government"
+    | "municipality"
+    | "insurance"
+    | "finance"
+    | "travel"
+    | "healthcare"
+    | "education"
+    | "retail"
+    | "nonprofit"
+    | "digital"
+    | "development"
+    | "general";
+  label: string;
+  terms: string[];
+  sort_order: number;
+  enabled: boolean;
+}
+
+export interface GmailImportedDocument {
+  id: string;
+  file_name: string;
+  mime_type: string | null;
+  processing_status: string;
+  invoice_id: string | null;
+  invoice_status: string | null;
+  possible_not_invoice: boolean;
+  invoice_validation_status: string | null;
+  invoice_rejection_label: string | null;
+  missing_required_fields: string[];
+  business: string | null;
+  expense_category: string | null;
+  document_kind: string | null;
+  document_type: string | null;
+  extracted_fields: Record<string, unknown>;
+  import_date: string | null;
+  created_at: string | null;
+  preview_url: string;
+  thumbnail_url: string | null;
+  download_url: string;
+}
+
+export interface GmailImportHistoryFile {
+  filename: string;
+  document_id: string | null;
+  error: string | null;
+  import_status?: string;
+  import_explanation?: string;
+  retryable?: boolean;
+  retry_mode?: "failed" | "rejected" | "retryable" | null;
+  document?: GmailImportedDocument | null;
+}
+
+export interface GmailImportHistoryItem {
+  message_id: string;
+  subject: string;
+  imported_at: string;
+  files?: GmailImportHistoryFile[];
+}
+
+export interface GmailImportJobResult {
+  messageId: string;
+  filename: string;
+  documentId?: string;
+  error?: string;
+  importStatus?: string;
+  import_status?: string;
+  explanation?: string;
+  rejection_label?: string | null;
+  rejection_reason?: string | null;
+  retryable?: boolean;
+  ocr_failed?: boolean;
+  retryMode?: "failed" | "rejected" | "retryable" | null;
+}
+
+export interface GmailImportJob {
+  jobId: string | null;
+  status: "queued" | "running" | "completed" | "failed";
+  q?: string;
+  templateId?: string | null;
+  retryMode?: "failed" | "rejected" | "retryable" | null;
+  total: number;
+  totalMessages: number;
+  newMessages: number;
+  processedMessages: number;
+  imported: number;
+  skipped: number;
+  errors: number;
+  attachmentsFound?: number;
+  stored?: number;
+  classifiedInvoices?: number;
+  rejected?: number;
+  ocrFailed?: number;
+  aiRetryPending?: number;
+  results: GmailImportJobResult[];
+  explanationSummary?: Record<string, number>;
+  quota?: Record<string, unknown> | null;
+  error?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  completedAt?: string | null;
+}
+
+export interface ImportedInvoice {
+  id: string;
+  document_id: string | null;
+  supplier_name: string;
+  supplier_id: string | null;
+  invoice_number: string | null;
+  type: string;
+  customer_number: string | null;
+  account_number: string | null;
+  service_address: string | null;
+  issue_date: string | null;
+  payment_due_date: string | null;
+  billing_period: string | null;
+  amount: number | null;
+  amount_display: string;
+  vat_amount: number | null;
+  currency: string;
+  cash_flow: "income" | "expense";
+  client_name: string | null;
+  business: string | null;
+  expense_category: string | null;
+  provider_id: string | null;
+  provider_label: string | null;
+  provider_category: GmailSearchProvider["category"] | null;
+  payment_status: string | null;
+  note: string | null;
+  status: string;
+  possible_not_invoice: boolean;
+  invoice_validation_status: string | null;
+  invoice_rejection_label: string | null;
+  missing_required_fields: string[];
+  file_name: string;
+  mime_type: string | null;
+  created_at: string | null;
+  import_date: string | null;
+  preview_url: string | null;
+  thumbnail_url: string | null;
+  download_url: string | null;
+  in_s3: boolean;
+  drive_file_id: string | null;
+  drive_web_link: string | null;
+  source_subject: string | null;
+  source_email: string | null;
+  fields: Record<string, unknown>;
+}
+
+export interface InvoiceExpenseMonthlyPoint {
+  month: string;
+  total: number;
+  count: number;
+}
+
+export interface InvoiceExpenseMonthlySeries {
+  supplier: string;
+  total: number;
+  points: InvoiceExpenseMonthlyPoint[];
+  isOther?: boolean;
+}
+
+export interface InvoiceExpenseCategorySeries {
+  category: string;
+  total: number;
+  count: number;
+  suppliers: { name: string; total: number; count: number }[];
+}
+
+export interface InvoiceExpenseMonthlyResponse {
+  dateBasis: "invoice" | "import";
+  months: string[];
+  totalInvoices: number;
+  totalAmount: number;
+  suppliers: { name: string; total: number; count?: number }[];
+  categories: GmailSearchProvider["category"][];
+  categorySeries?: InvoiceExpenseCategorySeries[];
+  series: InvoiceExpenseMonthlySeries[];
+}
+
+export interface ProfileSubscriptionQuota {
+  category: "invoices" | "contracts" | "documents" | "reminders";
+  scope: "monthly" | "lifetime" | "unlimited";
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+}
+
+export interface ProfileImportCounters {
+  scannedDocuments: number;
+  gmailDocuments: number;
+  gmailInvoices: number;
+}
+
+export interface ProfileSubscription {
+  plan: string;
+  quotas: Record<ProfileSubscriptionQuota["category"], ProfileSubscriptionQuota>;
+  counters: ProfileImportCounters;
+}
+
+export type DriveFolderState = "ok" | "trashed" | "missing" | "unknown";
+
+export interface DriveStatus {
+  connected: boolean;
+  syncEnabled: boolean;
+  folderId: string | null;
+  folderName: string;
+  folderUrl: string | null;
+  folderState?: DriveFolderState | null;
+  syncedFileCount?: number;
+  trashUrl?: string | null;
+  allowed: boolean;
+}
+
+export interface DriveExportResult {
+  ok: boolean;
+  uploaded: number;
+  failed: number;
+  total: number;
+  folderId?: string | null;
+  folderName?: string;
+  folderUrl?: string | null;
+  recreated?: boolean;
+  resetCount?: number;
+}
+
+export interface DriveExportJobResult {
+  documentId: string;
+  fileName: string;
+  status: "uploaded" | "failed";
+  error?: string;
+}
+
+export interface DriveExportJob {
+  jobId: string | null;
+  status: "queued" | "running" | "completed" | "failed";
+  ok: boolean;
+  uploaded: number;
+  failed: number;
+  skipped: number;
+  processed: number;
+  total: number;
+  folderId?: string | null;
+  folderName?: string;
+  folderUrl?: string | null;
+  recreated?: boolean;
+  resetCount?: number;
+  error?: string | null;
+  results?: DriveExportJobResult[];
+}
+
 export interface EquipmentHistoryEvent {
   id: string;
   contract_type: string | null;
@@ -143,7 +409,7 @@ async function get<T>(path: string, force = false): Promise<T> {
     cache: force ? "reload" : "default",
   });
   if (!res.ok) {
-    const err = new Error(`GET ${path} failed: ${res.status}`) as any;
+    const err = new Error(await responseErrorMessage(res, `GET ${path} failed: ${res.status}`)) as any;
     err.status = res.status;
     throw err;
   }
@@ -243,16 +509,49 @@ export const api = {
     stats: (force = false) => get<DashboardStats>("/dashboard/stats", force),
   },
 
+  invoices: {
+    list: (params?: { q?: string; status?: string; type?: string; cashFlow?: string; category?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
+      get<{
+        rows: ImportedInvoice[];
+        total: number;
+        totalAll: number;
+        limit: number;
+        offset: number;
+        visibleLimit: number | null;
+        counts: Record<string, number>;
+        types: string[];
+        categories: GmailSearchProvider["category"][];
+        suppliers: string[];
+      }>(`/invoices${qs(params)}`, force),
+    get: (id: string, force = false) =>
+      get<ImportedInvoice>(`/invoices/${id}`, force),
+    update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; cash_flow?: "income" | "expense" | null; provider_category?: GmailSearchProvider["category"] | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
+      put<ImportedInvoice>(`/invoices/${id}`, body),
+    deleteSelected: (body: { ids: string[] }) =>
+      post<{ ok: true; requested: number; deleted: number; documentsDeleted: number }>("/invoices/delete-selected", body),
+    mergeVendors: (body: { supplierNames: string[]; canonicalName: string }) =>
+      post<{ ok: true; matched: number; modified: number; supplierName: string }>("/invoices/vendors/merge", body),
+    expenseMonthly: (params?: { dateBasis?: "invoice" | "import"; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; top?: number }, force = false) =>
+      get<InvoiceExpenseMonthlyResponse>(`/invoices/expenses/monthly${qs(params)}`, force),
+  },
+
   documents: {
     list: (params?: { status?: string; limit?: number; offset?: number; clientId?: string }, force = false) => {
-      return get<{ rows: Document[]; total: number; totalAll: number; documentLimit: number; counts?: { all: number; done: number; in_progress: number; error: number } }>(`/documents${qs(params)}`, force);
+      return get<{
+        rows: Document[];
+        total: number;
+        totalAll: number;
+        documentLimit: number | null;
+        documentQuotaUsed?: number;
+        counts?: { all: number; done: number; in_progress: number; error: number }
+      }>(`/documents${qs(params)}`, force);
     },
     get: (id: string) => get<Document>(`/documents/${id}`),
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
     upload: async (
       files: File[],
       options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean },
-      templateId?: number
+      templateId?: string | number
     ) => {
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
@@ -277,7 +576,7 @@ export const api = {
     uploadOne: async (
       file: File,
       options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean },
-      templateId?: number
+      templateId?: string | number
     ): Promise<{ id: string; duplicate: boolean }> => {
       const fd = new FormData();
       fd.append("files", file);
@@ -407,6 +706,7 @@ export const api = {
   profile: {
     getEngineer: () => get<EngineerProfile>("/profile/engineer"),
     saveEngineer: (body: Partial<EngineerProfile>) => put<EngineerProfile>("/profile/engineer", body),
+    getSubscription: () => get<ProfileSubscription>("/profile/subscription"),
   },
 
   userSettings: {
@@ -421,7 +721,7 @@ export const api = {
 
   admin: {
     listUsers: () => adminGet<any[]>("/admin/users"),
-    updateUser: (id: string, body: { role?: string; is_active?: number }) =>
+    updateUser: (id: string, body: { role?: string; plan?: string; is_active?: number }) =>
       adminPut<any>(`/admin/users/${id}`, body),
     getDocument: (id: string) => adminGet<any>(`/admin/documents/${id}`),
     monitorDocuments: () => adminGet<any>("/admin/monitor/documents"),
@@ -495,6 +795,18 @@ export const api = {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
       }).then(r => r.json()),
+    browseStorage: (params?: { user_id?: string; prefix?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.user_id) qs.set("user_id", params.user_id);
+      if (params?.prefix) qs.set("prefix", params.prefix);
+      const q = qs.toString();
+      return adminGet<any>(`/admin/storage/browse${q ? "?" + q : ""}`);
+    },
+    storageDownloadUrl: (key: string) => `${ADMIN_BASE}/admin/storage/download?key=${encodeURIComponent(key)}`,
+    deleteStorageFile: (key: string) =>
+      fetch(`${ADMIN_BASE}/admin/storage/delete?key=${encodeURIComponent(key)}`, {
+        method: "DELETE", credentials: "include",
+      }).then(r => r.json()),
   },
 
   config: {
@@ -512,7 +824,7 @@ export const api = {
     kinds: () => get<{ kinds: string[] }>("/doc-templates/kinds"),
     suggestKind: (body: { name: string; description: string; fields: unknown[]; match_keywords: string[] }) =>
       post<{ kind: string | null }>("/doc-templates/suggest-kind", body),
-    get: (id: number) => get<DocTemplate>(`/doc-templates/${id}`),
+    get: (id: string | number) => get<DocTemplate>(`/doc-templates/${id}`),
     create: (body: Partial<DocTemplate>) => post<DocTemplate>("/doc-templates", body),
     update: (id: number, body: Partial<DocTemplate>) => put<DocTemplate>(`/doc-templates/${id}`, body),
     delete: (id: number) => del(`/doc-templates/${id}`),
@@ -564,17 +876,37 @@ export const api = {
 
   gmail: {
     status: () => get<{ connected: boolean; source: string | null; email: string | null }>("/gmail/status"),
-    authUrl: () => get<{ url: string }>("/gmail/auth-url"),
-    inbox: (q?: string, limit?: number, pageToken?: string) => get<{ emails: GmailEmail[]; nextPageToken: string | null; resultSizeEstimate: number | null }>(`/gmail/inbox${qs({ q, limit, pageToken })}`),
+    authUrl: (returnTo?: string) => get<{ url: string }>(`/gmail/auth-url${qs({ returnTo })}`),
+    searchProviders: () => get<{ providers: GmailSearchProvider[] }>("/gmail/search-providers"),
+    inbox: (q?: string, limit?: number, pageToken?: string, templateId?: string) => get<{ emails: GmailEmail[]; nextPageToken: string | null; resultSizeEstimate: number | null }>(`/gmail/inbox${qs({ q, limit, pageToken, templateId })}`),
     attachmentUrl: (messageId: string, attachmentId: string, filename: string) =>
       `${BASE}/gmail/attachment/${messageId}/${attachmentId}?filename=${encodeURIComponent(filename)}`,
-    importAttachment: (messageId: string, attachmentId: string, filename: string) =>
-      post<{ documentId: string; filename: string }>("/gmail/import-attachment", { messageId, attachmentId, filename }),
-    importAll: (q?: string, limit?: number) =>
-      post<{ imported: number; skipped: number; results: Array<{ messageId: string; filename: string; documentId?: string; error?: string }> }>("/gmail/import-all", { q, limit }),
-    importHistory: () => get<{ history: Array<{ message_id: string; subject: string; imported_at: string; files?: Array<{ filename: string; document_id: string | null; error: string | null }> }> }>("/gmail/import-history"),
+    importAttachment: (messageId: string, attachmentId: string, filename: string, templateId?: string) =>
+      post<{ documentId: string; filename: string }>("/gmail/import-attachment", { messageId, attachmentId, filename, templateId }),
+    importAll: (q?: string, limit?: number, templateId?: string) =>
+      post<GmailImportJob>("/gmail/import-all", { q, limit, templateId }),
+    importRetry: (mode: "failed" | "rejected" | "retryable", q?: string, templateId?: string) =>
+      post<GmailImportJob>("/gmail/import-retry", { mode, q, templateId }),
+    importJob: (jobId: string) => get<GmailImportJob>(`/gmail/import-jobs/${encodeURIComponent(jobId)}`),
+    importHistory: () => get<{ history: GmailImportHistoryItem[] }>("/gmail/import-history"),
+    deleteImportHistory: (messageId: string) => del(`/gmail/import-history/${encodeURIComponent(messageId)}`),
 
     disconnect: () => del("/gmail/disconnect"),
+  },
+
+  drive: {
+    status: () => get<DriveStatus>("/drive/status"),
+    enable: (folderName?: string) => post<{
+      ok: boolean;
+      folderId: string;
+      folderUrl: string;
+      recreated?: boolean;
+      resetCount?: number;
+    }>("/drive/enable", folderName ? {folderName} : {}),
+    disable: () => post<{ ok: boolean }>("/drive/disable", {}),
+    exportAll: () => post<DriveExportJob>("/drive/export-all", {}),
+    exportJob: (jobId: string) => get<DriveExportJob>(`/drive/export-jobs/${encodeURIComponent(jobId)}`),
+    renameFolder: (name: string) => post<{ ok: boolean; folderName: string }>("/drive/rename-folder", {name}),
   },
 
   equipment: {
@@ -745,4 +1077,3 @@ export const api = {
     url: (name: string) => /^https?:\/\//i.test(name) ? name : `${BASE}/assets/${name}`,
   },
 };
-

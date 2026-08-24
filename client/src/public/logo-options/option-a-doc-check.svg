@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="RemindOCR option A">
+  <rect width="512" height="512" rx="112" fill="#18a058"/>
+  <path fill="#ffffff" d="M164 108h152l68 68v220c0 24-20 44-44 44H164c-24 0-44-20-44-44V152c0-24 20-44 44-44z"/>
+  <path fill="#0c7a43" d="M316 108v52c0 18 14 32 32 32h52z"/>
+  <path fill="none" stroke="#18a058" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" d="M210 286l38 38 78-86"/>
+  <path fill="#ffffff" d="M360 132c-18 0-32 14-32 32v8c0 10-4 18-10 24h84c-6-6-10-14-10-24v-8c0-18-14-32-32-32z"/>
+</svg>

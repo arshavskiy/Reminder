@@ -1,0 +1,37 @@
+---
+description: Reminder client theme, Naive UI, and Ionicons conventions
+globs: client/**/*.{vue,css,ts}
+alwaysApply: false
+---
+
+# Frontend UI data
+
+This app does **not** use Lucide, Heroicons, shadcn, or Font Awesome.
+
+## Stack
+
+- Vue 3 Composition API + **Naive UI**
+- Icons: **`@vicons/ionicons5`** (Outline only) via `<n-icon :component="…" />`
+- Theme tokens: `client/src/styles/global.css` + `html[data-theme="dark|light"]`
+- Naive theme: `darkTheme` / `themeOverrides` in `client/src/App.vue`
+
+## Icons — how to use
+
+```vue
+<n-icon :component="EyeOutline" :size="14" />
+```
+
+```ts
+import { EyeOutline, DownloadOutline } from "@vicons/ionicons5";
+h(NIcon, { component: EyeOutline, class: "btn-icon" })
+```
+
+- Compact actions: 14–16px. App bar: 18–22px.
+- Icon-only controls: `btn btn--ghost btn--xs icon-btn` + `n-tooltip`.
+- Do not mix filled/outline sets. Do not use emoji as UI icons.
+
+## Theme
+
+Use CSS variables (`var(--brand-color)`, `var(--bg-card)`, `var(--text-primary)`, `var(--border-color)`). Brand: `#63e2b7` (dark) / `#18a058` (light). Fonts: `--font-ui` / `--font-base` start with Segoe UI (Hebrew). Tailwind exists but is not the icon or component system.
+
+Hebrew pages: `dir="rtl"`. Admin English: `dir="ltr"`. Naive `n-data-table` often misaligns in RTL — prefer a custom `<table>` when headers/body drift.

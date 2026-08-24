@@ -53,17 +53,33 @@ export function isValidReminderDate(value: unknown): boolean {
   return normalizeDateForContract(text) != null;
 }
 
-export function readExpiryDateValue(fields: Record<string, unknown> | null | undefined): string {
+export function readExpiryDateValue(
+  fields: Record<string, unknown> | null | undefined,
+  template?: DocTemplate | null | undefined,
+): string {
   if (!fields) return "";
-  for (const key of [EXPIRY_FIELD, "next_inspection_date"] as const) {
+  const keys = [
+    template?.expiry_field,
+    EXPIRY_FIELD,
+    "next_inspection_date",
+    "payment_due_date",
+    "next_action_date",
+  ].filter((key): key is string => Boolean(key));
+  const seen = new Set<string>();
+  for (const key of keys) {
+    if (seen.has(key)) continue;
+    seen.add(key);
     const value = fields[key];
     if (value != null && String(value).trim()) return String(value).trim();
   }
   return "";
 }
 
-export function hasExpiryDateValue(extracted: Record<string, unknown>): boolean {
-  return Boolean(readExpiryDateValue(extracted));
+export function hasExpiryDateValue(
+  extracted: Record<string, unknown>,
+  template?: DocTemplate | null | undefined,
+): boolean {
+  return Boolean(readExpiryDateValue(extracted, template));
 }
 
 export function canonicalExpiryFieldKey(_template: DocTemplate | null | undefined): string {
@@ -73,9 +89,15 @@ export function canonicalExpiryFieldKey(_template: DocTemplate | null | undefine
 export function resolveMissingFieldInitialValue(
   fieldKey: string,
   extracted: Record<string, unknown>,
-  _template: DocTemplate | null | undefined,
+  template: DocTemplate | null | undefined,
 ): string {
-  if (fieldKey === EXPIRY_FIELD || fieldKey === "next_inspection_date") return readExpiryDateValue(extracted);
+  if (
+    fieldKey === EXPIRY_FIELD ||
+    fieldKey === "next_inspection_date" ||
+    fieldKey === template?.expiry_field
+  ) {
+    return readExpiryDateValue(extracted, template);
+  }
   if (fieldKey === "client_email" || fieldKey === "contact_email" || fieldKey === "email") {
     for (const key of ["client_email", "contact_email", "email"] as const) {
       const value = extracted[key];

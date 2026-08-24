@@ -10,7 +10,7 @@ import {
 import type {DocTemplate} from "../../src/shared/types.js";
 
 const inspectionTemplate: DocTemplate = {
-  id: 1,
+  id: "1",
   name: "תסקיר בדיקה",
   description: null,
   document_kind: "inspection_report",

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="RemindOCR">
+  <rect width="512" height="512" rx="112" fill="#18a058"/>
+  <g transform="translate(56 48)">
+    <path fill="#ffffff" d="M64 32h176c78 0 136 50 136 124 0 54-32 96-82 112l90 148h-96L212 272H144v136H64V32zm80 72v124h84c38 0 62-22 62-58s-24-66-62-66H144z"/>
+  </g>
+</svg>

@@ -11,7 +11,7 @@
         </div>
       </div>
       <div class="rcal__controls">
-        <div class="rcal__toggle">
+        <div class="rcal__toggle" role="group" aria-label="תצוגת לוח">
           <n-button
             :type="view === 'month' ? 'primary' : 'default'"
             size="small"
@@ -23,20 +23,30 @@
             @click="view = 'agenda'"
           >☰ רשימה</n-button>
         </div>
-        <n-button size="small" secondary @click="emit('open-monthly-report', cursor.getTime())">דוח חודשי</n-button>
-        <!--        <n-button size="small" secondary @click="printCalendar">הדפסה</n-button>-->
-        <n-button
-          v-if="!testsOnly"
-          :disabled="sendableVisibleReminders.length === 0 || sendingVisible"
-          :loading="sendingVisible"
-          size="small"
-          type="primary"
-          ghost
-          @click="showSendVisibleConfirm = true"
-        >
-          שלח נראות ({{ sendableVisibleReminders.length }})
-        </n-button>
-        <n-button :loading="loading" size="small" @click="$emit('refresh')">↻</n-button>
+        <div class="rcal__actions">
+          <n-button size="small" secondary class="rcal__action-btn" @click="emit('open-monthly-report', cursor.getTime())">
+            דוח חודשי
+          </n-button>
+          <n-button
+            v-if="!testsOnly"
+            :disabled="sendableVisibleReminders.length === 0 || sendingVisible"
+            :loading="sendingVisible"
+            size="small"
+            type="primary"
+            ghost
+            class="rcal__action-btn"
+            @click="showSendVisibleConfirm = true"
+          >
+            שלח נראות ({{ sendableVisibleReminders.length }})
+          </n-button>
+          <n-button
+            :loading="loading"
+            size="small"
+            class="rcal__refresh-btn"
+            aria-label="רענן"
+            @click="$emit('refresh')"
+          >↻</n-button>
+        </div>
       </div>
       <div v-if="featuresStore.hasFeature(FEATURES.dashboard.calendarFilters)" class="rcal__summary">
         <button
@@ -754,7 +764,20 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   justify-content: flex-end;
   flex-wrap: wrap;
 }
-.rcal__toggle { display: flex; gap: 4px; }
+.rcal__toggle {
+  display: inline-flex;
+  gap: 4px;
+}
+.rcal__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rcal__refresh-btn {
+  min-width: 34px;
+  padding-inline: 0;
+}
 .rcal__summary,
 .rcal__filters {
   display: flex;
@@ -1146,36 +1169,89 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
 
   .rcal__head {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
 
-  .rcal__title-wrap,
-  .rcal__controls,
-  .rcal__legend {
-    justify-content: flex-start;
+  .rcal__title-wrap {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .rcal__title {
+    font-size: 16px;
+    width: 100%;
   }
 
   .rcal__controls {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
   }
 
   .rcal__toggle {
-    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    gap: 6px;
   }
 
   .rcal__toggle :deep(.n-button) {
-    flex: 1;
+    width: 100%;
+    height: 38px;
+    justify-content: center;
   }
 
-  .rcal__summary,
+  .rcal__actions {
+    display: flex;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .rcal__action-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 38px;
+    justify-content: center;
+  }
+
+  .rcal__refresh-btn {
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+  }
+
+  .rcal__summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px;
+    overflow: visible;
+  }
+
+  .rcal__summary-chip {
+    justify-content: space-between;
+    min-height: 38px;
+    width: 100%;
+    padding: 6px 10px;
+  }
+
   .rcal__filters {
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
+    padding-bottom: 2px;
   }
 
-  .rcal__summary::-webkit-scrollbar,
   .rcal__filters::-webkit-scrollbar {
     display: none;
+  }
+
+  .rcal__legend {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px 12px;
   }
 
   .rcal__month {

@@ -24,6 +24,21 @@
           </span>
           <span class="dash__new-contract__hint">צור תסקיר או חוזה ידני</span>
         </button>
+        <button
+          v-if="hasFeature(FEATURES.pages.contracts)"
+          class="dash__new-contract dash__new-contract--gmail"
+          type="button"
+          :disabled="gmailInspectionLoading"
+          @click="openGmailInspectionImport"
+        >
+          <span class="dash__new-contract__top">
+            <GmailLogo :size="22" />
+            <span class="dash__new-contract__label">ייבוא תסקיר בדיקה</span>
+          </span>
+          <span class="dash__new-contract__hint">
+            {{ gmailInspectionLoading ? "מייבא מ-Gmail…" : "חפש וייבא תסקירים מ-Gmail" }}
+          </span>
+        </button>
         <DocumentDropStrip class="dash__drop" @uploaded="store.fetch(true)" />
       </div>
 
@@ -193,6 +208,7 @@ import {NIcon, NSpin, NSwitch, useMessage} from "naive-ui";
 import {
   AlarmOutline,
   ClipboardOutline,
+  CloudUploadOutline,
   ConstructOutline,
   ExtensionPuzzleOutline,
   MailOutline,
@@ -206,12 +222,14 @@ import {useFeaturesStore} from "../stores/features.js";
 import {useUserSettingsStore} from "../stores/userSettings.js";
 import type {ExpiryCalendarItem} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
+import type {DocTemplate} from "../shared/types.js";
 import {type FeatureKey, FEATURES} from "../shared/features.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
+import GmailLogo from "../components/GmailLogo.vue";
 
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
 const showHydraulicModal = ref(false);
@@ -227,6 +245,7 @@ const expiryItems = ref<ExpiryCalendarItem[]>([]);
 const loadingExpiryItems = ref(false);
 const calendarNextTestsOnly = ref(true);
 const savingCalendarPreference = ref(false);
+const gmailInspectionLoading = ref(false);
 const showMonthlyReport = ref(false);
 const monthlyReportMonthMs = ref<number | null>(null);
 function hasFeature(feature: FeatureKey): boolean {
@@ -264,6 +283,7 @@ onMounted(async () => {
   if (hasFeature(FEATURES.dashboard.calendar)) {
     refreshCalendar(false);
   }
+  continuePendingGmailInspectionImport();
 });
 
 async function loadCalendarPreference() {
@@ -304,6 +324,93 @@ async function refreshCalendar(force: boolean) {
   } finally {
     loadingExpiryItems.value = false;
   }
+}
+
+async function openGmailInspectionImport(options: { skipConnect?: boolean } = {}) {
+  gmailInspectionLoading.value = true;
+  try {
+    const status = await api.gmail.status();
+    if (status.connected) {
+      const template = await findInspectionTemplate();
+      const result = await api.gmail.importAll(inspectionGmailQuery(template), undefined, template?.id ? String(template.id) : undefined);
+      const imported = result.imported ?? 0;
+      const failed = result.results.filter((item) => item.error).length;
+      if (imported) {
+        message.success(`יובאו ${imported} תסקירי בדיקה מ-Gmail`);
+        store.fetch(true);
+        refreshCalendar(true);
+      } else if (failed) {
+        message.warning("לא יובאו תסקירים. חלק מהקבצים נכשלו בעיבוד.");
+      } else {
+        message.info("לא נמצאו תסקירי בדיקה חדשים לייבוא");
+      }
+      return;
+    }
+    if (options.skipConnect) {
+      message.error("Gmail לא מחובר");
+      return;
+    }
+    sessionStorage.setItem("dashboard:gmail-inspection-import", "1");
+    const { url } = await api.gmail.authUrl("/");
+    window.location.assign(url);
+  } catch (err) {
+    sessionStorage.removeItem("dashboard:gmail-inspection-import");
+    message.error(err instanceof Error ? err.message : "שגיאה בחיבור ל-Gmail");
+  } finally {
+    gmailInspectionLoading.value = false;
+  }
+}
+
+function continuePendingGmailInspectionImport() {
+  if (sessionStorage.getItem("dashboard:gmail-inspection-import") !== "1") return;
+  sessionStorage.removeItem("dashboard:gmail-inspection-import");
+  openGmailInspectionImport({ skipConnect: true });
+}
+
+async function findInspectionTemplate(): Promise<DocTemplate | null> {
+  const templates = await api.docTemplates.list();
+  return templates.find((template) =>
+    template.document_kind === "inspection_report" || /תסקיר|בדיקה|ציוד|הרמה/i.test(template.name)
+  ) ?? null;
+}
+
+function inspectionGmailQuery(template: DocTemplate | null): string {
+  const parts = [
+    "has:attachment",
+    "{filename:pdf filename:doc filename:docx filename:jpg filename:jpeg filename:png}",
+  ];
+  const terms = inspectionTemplateTerms(template);
+  if (terms.length === 1) {
+    parts.push(formatGmailSearchTerm(terms[0]));
+  } else if (terms.length > 1) {
+    parts.push(`{${terms.map(formatGmailSearchTerm).join(" ")}}`);
+  }
+  parts.push(`-${formatGmailSearchTerm("דוח חודשי")}`, `-${formatGmailSearchTerm("monthly report")}`);
+  return parts.join(" ");
+}
+
+function inspectionTemplateTerms(template: DocTemplate | null): string[] {
+  if (!template) return ["תסקיר", "בדיקה", "inspection", "report"];
+  const candidates = [
+    template.name,
+    template.document_kind !== "unknown" ? template.document_kind : "",
+    ...(template.match_keywords ?? []),
+  ];
+  const seen = new Set<string>();
+  return candidates
+    .map((term) => String(term ?? "").trim())
+    .filter((term) => term.length >= 3)
+    .filter((term) => {
+      const key = term.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 8);
+}
+
+function formatGmailSearchTerm(term: string): string {
+  return `"${term.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
 }
 
 function todayIso() {
@@ -411,15 +518,15 @@ const modules = [
     to: "/reminders",
     show: true,
   },
-  {
-    key: "settings",
-    feature: FEATURES.pages.settings,
-    title: "הגדרות",
-    desc: "AI, SMTP, מעקב תיקיות, ערכת נושא ועוד.",
-    icon: SettingsOutline,
-    to: "/settings",
-    show: authStore.user?.role === "admin", // Only show to admins
-  },
+  // {
+  //   key: "settings",
+  //   feature: FEATURES.pages.settings,
+  //   title: "הגדרות",
+  //   desc: "AI, SMTP, מעקב תיקיות, ערכת נושא ועוד.",
+  //   icon: SettingsOutline,
+  //   to: "/settings",
+  //   show: authStore.user?.role === "admin", // Only show to admins
+  // },
 ];
 
 const data_cards = computed(() =>
@@ -486,26 +593,66 @@ const data_cards = computed(() =>
    row so the dropzone height matches the new-contract button exactly. */
 .dash__drop :deep(> div),
 .dash__intake :deep(.drop-strip) { margin-bottom: 0; }
+.dash__drop :deep(.drop-strip) {
+  min-height: 92px;
+}
+.dash__drop :deep(.drop-strip__copy strong) {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.dash__drop :deep(.drop-strip__copy span) {
+  font-size: 12px;
+  line-height: 1.35;
+}
 .dash__new-contract {
   flex: 0 0 240px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 16px;
-  border: 1px solid var(--brand-color);
+  gap: 6px;
+  min-height: 92px;
+  padding: 16px 14px;
+  border: 1px solid color-mix(in srgb, var(--brand-color) 40%, var(--border-color));
   border-radius: 14px;
   background: var(--bg-card);
   color: var(--text-primary);
   cursor: pointer;
-  transition: background var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
 }
-.dash__new-contract:hover { background: var(--bg-hover); box-shadow: var(--shadow-sm); }
+.dash__new-contract:hover {
+  background: var(--bg-hover);
+  border-color: color-mix(in srgb, var(--brand-color) 35%, var(--border-color));
+  box-shadow: var(--shadow-sm);
+}
 .dash__new-contract:active { transform: scale(0.98); }
+.dash__new-contract:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+.dash__new-contract--gmail {
+  border-color: color-mix(in srgb, #EA4335 28%, var(--border-color));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #EA4335 6%, var(--bg-card)) 0%,
+      var(--bg-card) 55%
+    );
+}
+.dash__new-contract--gmail:hover {
+  border-color: color-mix(in srgb, #EA4335 45%, var(--border-color));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #EA4335 10%, var(--bg-card)) 0%,
+      var(--bg-hover) 60%
+    );
+}
 .dash__new-contract__top {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
 }
 .dash__new-contract__icon {
@@ -514,12 +661,39 @@ const data_cards = computed(() =>
   color: var(--brand-color);
   line-height: 1;
 }
-.dash__new-contract__label { font-size: 15px; font-weight: 700; }
-.dash__new-contract__hint { font-size: 12px; color: var(--text-secondary); }
+.dash__new-contract__label {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+.dash__new-contract__hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.35;
+}
 
 @media (max-width: 720px) {
-  .dash__intake { flex-direction: column; }
-  .dash__new-contract { flex: 1 1 auto; }
+  .dash__intake {
+    flex-direction: column;
+  }
+
+  .dash__new-contract {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .dash__drop {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .dash__drop :deep(> div),
+  .dash__drop :deep(.drop-strip) {
+    width: 100%;
+    box-sizing: border-box;
+  }
 }
 
 .dash__stats {

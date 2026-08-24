@@ -62,6 +62,7 @@ export interface AppSettings {
 
 // Phase 2: Authentication types
 export type UserRole = "admin" | "pro" | "user";
+export type UserPlan = "free" | "basic" | "business";
 
 export interface User {
   id: number;
@@ -71,6 +72,7 @@ export interface User {
   phone: string | null;
   picture_url: string | null;
   role: UserRole;
+  plan?: UserPlan;
   is_active: number;
   created_at: string;
   last_login_at: string | null;
@@ -107,7 +109,7 @@ export interface UserSettings {
 }
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
-export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error";
+export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error" | "not_applicable";
 export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
 export type EntityType = "person" | "company";
@@ -142,6 +144,9 @@ export interface Document {
   spaces_url: string | null;
   download_url: string | null;
   signed_url_expires_at: string | null;
+  in_s3?: boolean;
+  drive_file_id?: string | null;
+  drive_web_link?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -384,7 +389,7 @@ export interface TemplateField {
 }
 
 export interface DocTemplate {
-  id: number;
+  id: string;
   user_id?: string | null;
   name: string;                 // Hebrew, e.g. "תסקיר בדיקה"
   description: string | null;

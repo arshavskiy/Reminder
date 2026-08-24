@@ -1,10 +1,11 @@
 import express from "express";
 import {extname, join} from "path";
-import {mkdirSync, writeFileSync} from "fs";
+import {existsSync, mkdirSync, unlinkSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {
   importFile,
+  extractKnownInvoiceFields,
   normalizeEmail,
   normalizeExtractionFieldsForTemplate,
   processDocument,
@@ -13,11 +14,19 @@ import {
 import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
+import {resolveDocumentThumbnail} from "../documents/pdfThumbnail";
 import {extractWithTemplate} from "../pipeline/extractor";
-import {loadAllTemplates, loadTemplate, pickTemplate} from "../templates/seedTemplates";
+import {loadAllTemplates, loadTemplate, pickTemplate, documentTypeFromTemplate} from "../templates/seedTemplates";
 import multer from "multer";
 import {logger} from "../logger";
 import {firstTrimmedEmail} from "../contracts/contractEmail.js";
+import {
+  assertDocumentImportQuota,
+  DocumentImportQuotaError,
+  type DocumentImportQuotaCategory,
+  documentImportQuotaErrorPayload,
+  getDocumentImportQuota,
+} from "../quotas/documentImportQuota";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -34,9 +43,11 @@ export function registerDocumentRoutes(app: express.Application) {
   // GET /api/documents
   app.get("/api/documents", async (req, res) => {
     let userId: string;
+    let userPlan: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
+      userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -54,11 +65,21 @@ export function registerDocumentRoutes(app: express.Application) {
       { $set: { user_id: userId, updated_at: new Date() } }
     );
 
-    // Hide certificate documents from the main documents list — they live
-    // in Profile → תעודות והסמכות and shouldn't pollute the inspection view.
+    // Hide specialized records from the main documents list. Certificates live
+    // in Profile, and invoices are managed from the invoices workspace. Older
+    // Gmail invoice attempts can have a wrong document_kind, so use invoice
+    // flags and Gmail invoice storage paths as extra guards.
     const baseFilter: Record<string, any> = {
       user_id: userId,
-      document_kind: { $ne: "certificate" },
+      document_kind: { $nin: ["certificate", "invoice"] },
+      invoice_saved: { $ne: true },
+      invoice_rejected: { $ne: true },
+      spaces_key: { $not: /^gmail\/invoices\// },
+      $or: [
+        { invoice_rejection_reason: { $exists: false } },
+        { invoice_rejection_reason: null },
+        { invoice_rejection_reason: "" },
+      ],
     };
     const filter: Record<string, any> = { ...baseFilter };
     if (status) filter.processing_status = status;
@@ -71,13 +92,28 @@ export function registerDocumentRoutes(app: express.Application) {
         .toArray();
       const docIds = links.map((l: any) => String(l.document_id)).filter(Boolean);
       if (!docIds.length) {
-        res.json({ rows: [], total: 0, totalAll: 0 });
+        const documentQuota = await getDocumentImportQuota(userId, userPlan, "documents");
+        res.json({
+          rows: [],
+          total: 0,
+          totalAll: 0,
+          documentLimit: documentQuota.limit,
+          documentQuotaUsed: documentQuota.limit === null ? 0 : documentQuota.used,
+        });
         return;
       }
       filter._id = { $in: docIds.map((id) => new ObjectId(id)) };
     }
 
-    const [rows, total, totalAll, statusCounts] = await Promise.all([
+    const invoiceDocumentIds = await invoiceDocumentIdsForUser(userId);
+    if (invoiceDocumentIds.length) {
+      baseFilter._id = { $nin: invoiceDocumentIds.map((id) => new ObjectId(id)) };
+      filter._id = filter._id
+        ? { ...filter._id, $nin: invoiceDocumentIds.map((id) => new ObjectId(id)) }
+        : baseFilter._id;
+    }
+
+    const [rows, total, totalAll, statusCounts, documentQuota] = await Promise.all([
       col("documents")
         .find(filter)
         .project({ raw_text: 0 })
@@ -91,6 +127,7 @@ export function registerDocumentRoutes(app: express.Application) {
         { $match: baseFilter },
         { $group: { _id: "$processing_status", count: { $sum: 1 } } },
       ]).toArray(),
+      getDocumentImportQuota(userId, userPlan, "documents"),
     ]);
 
     // Enrich with linked client + reminder status so the documents list can
@@ -178,7 +215,14 @@ export function registerDocumentRoutes(app: express.Application) {
       in_progress: (countsByStatus["queued"] ?? 0) + (countsByStatus["processing"] ?? 0),
       error: countsByStatus["error"] ?? 0,
     };
-    res.json({ rows: enriched, total, totalAll: allCount, counts });
+    res.json({
+      rows: enriched,
+      total,
+      totalAll: allCount,
+      counts,
+      documentLimit: documentQuota.limit,
+      documentQuotaUsed: documentQuota.limit === null ? 0 : documentQuota.used,
+    });
   });
 
   // GET /api/documents/:id
@@ -205,23 +249,15 @@ export function registerDocumentRoutes(app: express.Application) {
   // POST /api/documents/import
   app.post("/api/documents/import", async (req, res) => {
     let userId: string;
-    let userRole: string;
+    let userPlan: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userRole = ctx.user.role;
+      userPlan = ctx.user.plan ?? ctx.user.role;
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
       return;
-    }
-
-    if (userRole === "user") {
-      const count = await col("documents").countDocuments({ user_id: userId, ai_extracted: true });
-      if (count >= getSettings().userDocumentLimit) {
-        res.status(403).json({ error: "document_limit_reached" });
-        return;
-      }
     }
 
     const body = req.body as { filePath?: string };
@@ -230,9 +266,17 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
     try {
-      const id = await importFile(body.filePath, undefined, userId);
+      await assertDocumentImportQuota(userId, userPlan, 1, "documents");
+      const id = await importFile(body.filePath, undefined, userId, undefined, {
+        queueProcessing: true,
+        processingJobContext: { source: "upload" },
+      });
       res.json({ id });
     } catch (err) {
+      if (err instanceof DocumentImportQuotaError) {
+        res.status(403).json(documentImportQuotaErrorPayload(err));
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
@@ -240,11 +284,11 @@ export function registerDocumentRoutes(app: express.Application) {
   // POST /api/documents/upload — receives multipart file upload from browser
   app.post("/api/documents/upload", upload.array("files"), async (req, res) => {
     let userId: string;
-    let userRole: string;
+    let userPlan: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userRole = ctx.user.role;
+      userPlan = ctx.user.plan ?? ctx.user.role;
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -261,15 +305,12 @@ export function registerDocumentRoutes(app: express.Application) {
       const skipAi       = req.query.skipAi       === "true";
       const skipEntities = req.query.skipEntities === "true";
       const skipReminders = req.query.skipReminders === "true";
-      const pipelineOptions = { skipAi, skipEntities, skipReminders };
+        const templateId = req.query.templateId as string | undefined;
+        const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
+        const quotaCategory = quotaCategoryFromTemplate(template);
+        const pipelineOptions = {skipAi, skipEntities, skipReminders, templateId: templateId || undefined};
 
-      if (userRole === "user" && !skipAi) {
-        const count = await col("documents").countDocuments({ user_id: userId, ai_extracted: true });
-        if (count + files.length > getSettings().userDocumentLimit) {
-          res.status(403).json({ error: "document_limit_reached" });
-          return;
-        }
-      }
+      await assertDocumentImportQuota(userId, userPlan, files.length, quotaCategory);
 
       const uploadDir = join(getDataDir(), "uploads");
       mkdirSync(uploadDir, { recursive: true });
@@ -290,6 +331,8 @@ export function registerDocumentRoutes(app: express.Application) {
         const beforeCount = await col("documents").countDocuments({ user_id: userId });
         const id = await importFile(destPath, undefined, userId, displayName, {
           ...pipelineOptions,
+          queueProcessing: true,
+          processingJobContext: { source: "upload" },
           startDelayMs: index * UPLOAD_START_STAGGER_MS,
         });
         const afterCount = await col("documents").countDocuments({ user_id: userId });
@@ -299,7 +342,48 @@ export function registerDocumentRoutes(app: express.Application) {
 
       res.json({ ids, duplicates });
     } catch (err) {
+      if (err instanceof DocumentImportQuotaError) {
+        res.status(403).json(documentImportQuotaErrorPayload(err));
+        return;
+      }
       res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // GET /api/documents/:id/thumbnail — streams a generated PNG preview.
+  app.get("/api/documents/:id/thumbnail", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const doc = await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
+    if (!doc) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    try {
+      const thumbnail = await resolveDocumentThumbnail(doc);
+      if (!thumbnail) {
+        res.status(404).json({ error: "thumbnail_not_found" });
+        return;
+      }
+      if (thumbnail.url) {
+        res.redirect(thumbnail.url);
+        return;
+      }
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.sendFile(thumbnail.path!, { root: "/" });
+    } catch (err) {
+      logger.warn("document_thumbnail_serve_failed", { document_id: req.params.id, user_id: userId, error: err });
+      res.status(503).json({ error: "thumbnail_not_accessible" });
     }
   });
 
@@ -322,10 +406,24 @@ export function registerDocumentRoutes(app: express.Application) {
     }
 
     // Prefer S3 signed URL — use cached one if still fresh, otherwise regenerate
+    const wantDownload = req.query.dl === "1";
+    const wantRaw = req.query.raw === "1";
     if (doc.spaces_key) {
       try {
-        const { getSpacesSignedUrl } = await import("../storage/spaces.js");
+        const { getSpacesSignedUrl, fileExistsInSpaces } = await import("../storage/spaces.js");
+        const exists = await fileExistsInSpaces(doc.spaces_key);
+        if (!exists) {
+          res.status(404).json({ error: "הקובץ לא נמצא באחסון. ייתכן שהקובץ נמחק או שההעלאה נכשלה." });
+          return;
+        }
         const SIGNED_URL_TTL = 7 * 24 * 3600;
+
+        if (wantDownload || wantRaw) {
+          const url = await getSpacesSignedUrl(doc.spaces_key, wantDownload ? 300 : 3600, doc.file_name ?? undefined, wantDownload);
+          res.redirect(url);
+          return;
+        }
+
         const expiresAt: Date | null = doc.signed_url_expires_at ? new Date(doc.signed_url_expires_at) : null;
         const needsRefresh = !doc.download_url || !expiresAt || expiresAt.getTime() - Date.now() < 3600_000;
         let url: string = doc.download_url ?? "";
@@ -371,6 +469,7 @@ export function registerDocumentRoutes(app: express.Application) {
     const doc = await col("documents").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
     if (!doc) { res.status(404).json({ error: "Not found" }); return; }
 
+    await clearDerivedDocumentData(req.params.id, userId);
     await col("documents").deleteOne({ _id: doc._id });
 
     if (doc.spaces_key) {
@@ -378,6 +477,17 @@ export function registerDocumentRoutes(app: express.Application) {
       deleteFromSpaces(doc.spaces_key).catch((err) =>
         logger.warn("document_s3_delete_failed", { document_id: req.params.id, spaces_key: doc.spaces_key, error: err })
       );
+    }
+    if (doc.thumbnail_key) {
+      const { deleteFromSpaces } = await import("../storage/spaces.js");
+      deleteFromSpaces(doc.thumbnail_key).catch((err) =>
+        logger.warn("document_thumbnail_s3_delete_failed", { document_id: req.params.id, thumbnail_key: doc.thumbnail_key, error: err })
+      );
+    }
+    if (doc.thumbnail_path && existsSync(doc.thumbnail_path)) {
+      try { unlinkSync(doc.thumbnail_path); } catch (err) {
+        logger.warn("document_thumbnail_local_delete_failed", { document_id: req.params.id, thumbnail_path: doc.thumbnail_path, error: err });
+      }
     }
 
     res.json({ ok: true });
@@ -397,7 +507,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     const errorDocs = await col("documents")
       .find({ user_id: userId, processing_status: "error" })
-      .project({ _id: 1, spaces_key: 1 })
+      .project({ _id: 1, spaces_key: 1, thumbnail_key: 1, thumbnail_path: 1 })
       .toArray();
 
     const ids = errorDocs.map((d: any) => d._id?.toString());
@@ -410,6 +520,7 @@ export function registerDocumentRoutes(app: express.Application) {
     for (const id of ids) {
       await col("extractions").deleteMany({ document_id: id });
       await col("tasks").deleteMany({ document_id: id });
+      await col("invoices").deleteMany({ document_id: id });
       await col("document_clients").deleteMany({ document_id: id });
       await col("timeline_events").deleteMany({ source_type: "document", source_id: id });
 
@@ -435,6 +546,16 @@ export function registerDocumentRoutes(app: express.Application) {
           logger.warn("document_s3_delete_failed", { spaces_key: d.spaces_key, error: err })
         );
       }
+      if (d.thumbnail_key) {
+        deleteFromSpaces(d.thumbnail_key).catch((err) =>
+          logger.warn("document_thumbnail_s3_delete_failed", { thumbnail_key: d.thumbnail_key, error: err })
+        );
+      }
+      if (d.thumbnail_path && existsSync(d.thumbnail_path)) {
+        try { unlinkSync(d.thumbnail_path); } catch (err) {
+          logger.warn("document_thumbnail_local_delete_failed", { thumbnail_path: d.thumbnail_path, error: err });
+        }
+      }
     }
 
     logger.warn("corrupt_documents_deleted", { user_id: userId, deleted_count: ids.length });
@@ -443,7 +564,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
   // POST /api/documents/rescan — by default reprocess error docs and completed
   // docs that did not create a reminder. Pass { all: true } or ?all=true to
-  // intentionally rebuild every completed/error non-certificate document for
+  // intentionally rebuild every completed/error general document for
   // the user, including its derived contracts and reminders.
   app.post("/api/documents/rescan", async (req, res) => {
     let userId: string;
@@ -470,7 +591,7 @@ export function registerDocumentRoutes(app: express.Application) {
       : null;
 
     const candidateDocs = await col("documents")
-      .find({ user_id: userId, processing_status: { $in: ["error", "done"] }, document_kind: { $ne: "certificate" } })
+      .find({ user_id: userId, processing_status: { $in: ["error", "done"] }, document_kind: { $nin: ["certificate", "invoice"] } })
       .project({ raw_text: 0 })
       .sort({ import_date: -1, _id: -1 } as any)
       .limit(limit ?? 0)
@@ -510,6 +631,7 @@ export function registerDocumentRoutes(app: express.Application) {
       // Wipe derived data for a clean re-process
       await col("extractions").deleteMany({ document_id: id });
       await col("tasks").deleteMany({ document_id: id });
+      await col("invoices").deleteMany({ document_id: id });
       await col("document_clients").deleteMany({ document_id: id });
       await col("timeline_events").deleteMany({ source_type: "document", source_id: id });
 
@@ -612,6 +734,52 @@ export function registerDocumentRoutes(app: express.Application) {
       const { loadTemplate } = await import("../templates/seedTemplates.js");
       template = await loadTemplate(String(body.templateId));
     }
+    const knownInvoiceFields = extractKnownInvoiceFields(rawText, doc.file_name);
+    if (knownInvoiceFields) {
+      const now = new Date();
+      const invoiceTemplate =
+        template ??
+        (await loadAllTemplates(userId)).find((tpl) => tpl.document_kind === "invoice" || tpl.name === "חשבונית") ??
+        null;
+      if (!invoiceTemplate) {
+        res.status(422).json({ error: "No invoice template found" });
+        return;
+      }
+
+      await col("extractions").insertOne({
+        document_id: id,
+        template_id: invoiceTemplate.id ?? null,
+        template_name: invoiceTemplate.name,
+        backend: "deterministic",
+        model: "known-invoice-parser",
+        fields: knownInvoiceFields,
+        raw_json: knownInvoiceFields,
+        error: null,
+        usage: null,
+        exec_ms: 0,
+        created_at: now,
+      } as any);
+      await col("documents").updateOne(idFilter(id), {
+        $set: {
+          extracted_fields: JSON.stringify(knownInvoiceFields),
+          template_id: invoiceTemplate.id,
+          document_type: documentTypeFromTemplate(invoiceTemplate),
+          document_kind: documentTypeFromTemplate(invoiceTemplate),
+          processing_status: "done",
+          error_message: null,
+          updated_at: now,
+        },
+      });
+      try {
+        await clearDerivedDocumentData(id, userId);
+        await saveTemplateEntitiesForDoc(id, invoiceTemplate, knownInvoiceFields as any, userId);
+      } catch (e) {
+        logger.error("document_known_invoice_entities_failed", { document_id: id, user_id: userId, error: e });
+      }
+      const updated = await col("documents").findOne(idFilter(id));
+      res.json({ ok: true, fields: knownInvoiceFields, template: invoiceTemplate.name, document: flatDoc(updated) });
+      return;
+    }
     if (!template) template = await pickTemplate(rawText, userId);
     if (!template) {
       res.status(422).json({ error: "No matching template found" });
@@ -648,11 +816,13 @@ export function registerDocumentRoutes(app: express.Application) {
     } as any);
 
     if (normalizedFields) {
+      const typeLabel = documentTypeFromTemplate(template);
       await col("documents").updateOne(idFilter(id), {
         $set: {
           extracted_fields: JSON.stringify(normalizedFields),
           template_id: template.id,
-          document_type: template.name,
+          document_type: typeLabel,
+          document_kind: typeLabel,
           updated_at: now,
         },
       });
@@ -724,6 +894,7 @@ export function registerDocumentRoutes(app: express.Application) {
     // Wipe all derived data for a clean re-process
     await col("extractions").deleteMany({ document_id: id });
     await col("tasks").deleteMany({ document_id: id });
+    await col("invoices").deleteMany({ document_id: id });
 
     // Find contracts linked to this document and delete related reminders
     const contracts = await col("contracts").find({ document_id: id }).toArray();
@@ -941,6 +1112,15 @@ export function registerDocumentRoutes(app: express.Application) {
   });
 }
 
+async function invoiceDocumentIdsForUser(userId: string): Promise<string[]> {
+  const invoices = await col("invoices")
+    .find({ user_id: userId } as any, { projection: { document_id: 1 } } as any)
+    .toArray();
+  return [...new Set(invoices
+    .map((invoice: any) => String(invoice.document_id ?? "").trim())
+    .filter((id) => ObjectId.isValid(id)))];
+}
+
 function idFilter(id: string): Record<string, any> {
   try {
     return { _id: new ObjectId(id) };
@@ -974,6 +1154,7 @@ async function clearDerivedDocumentData(id: string, userId: string): Promise<voi
     col("timeline_events").deleteMany({ source_type: "document", source_id: id } as any),
     col("reminders").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
     col("contracts").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
+    col("invoices").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
     col("equipment").deleteMany({ user_id: userId, document_id: { $in: documentIds } } as any),
   ]);
 }
@@ -981,14 +1162,48 @@ async function clearDerivedDocumentData(id: string, userId: string): Promise<voi
 function flatDoc(doc: any) {
   if (!doc) return doc;
   const { _id, ...rest } = doc;
-  return { id: _id?.toString(), ...rest };
+  const id = _id?.toString();
+  return {
+    id,
+    ...rest,
+    thumbnail_url: doc.thumbnail_key || doc.thumbnail_path ? `/api/documents/${id}/thumbnail` : null,
+    in_s3: Boolean(doc.spaces_key),
+    drive_file_id: doc.drive_file_id || null,
+    drive_web_link: doc.drive_web_link || null,
+    download_url: id ? `/api/documents/${id}/download?dl=1` : null,
+  };
 }
 
-function getDocumentReminderStatus(doc: any, reminders: any[]): "pending" | "assigned" | "missing" | "error" {
+function quotaCategoryFromTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): DocumentImportQuotaCategory {
+  if (!template) return "documents";
+  if (template.document_kind === "contract" || template.document_kind === "inspection_report") return "contracts";
+  if (template.document_kind === "invoice" || /חשבונית|קבלה|invoice|receipt|bill/i.test(template.name)) return "invoices";
+  return "documents";
+}
+
+function getDocumentReminderStatus(doc: any, reminders: any[]): "pending" | "assigned" | "missing" | "error" | "not_applicable" {
   if (doc.processing_status === "queued" || doc.processing_status === "processing") return "pending";
   if (doc.processing_status === "error") return "error";
   if (reminders.length > 0) return "assigned";
+  if (isNonReminderDocument(doc)) return "not_applicable";
   return "missing";
+}
+
+function isNonReminderDocument(doc: any): boolean {
+  const type = `${doc?.document_type ?? ""} ${doc?.document_kind ?? ""}`;
+  if (/תלוש|חשבונית|קבלה|invoice|receipt|bill/i.test(type)) return true;
+  const fields = parseObjectJson(doc?.extracted_fields);
+  if (!fields) return false;
+  return Boolean(
+    fields.invoice_number ||
+    fields.receipt_number ||
+    fields.payment_due_date ||
+    fields.supplier_name ||
+    fields.payroll_month ||
+    fields.employee_name ||
+    fields.net_payment ||
+    fields.base_salary,
+  );
 }
 
 function getDocumentReminderDate(doc: any, contract: any, reminders: any[]): string | null {

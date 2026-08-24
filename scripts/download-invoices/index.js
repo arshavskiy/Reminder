@@ -16,9 +16,14 @@ const __dir = dirname(fileURLToPath(import.meta.url));
 const TOKEN_PATH = join(__dir, "token.json");
 const OUT_DIR = join(__dir, "invoices");
 
-const CLIENT_ID = "715853749049-e6d8sn2b5pkvt8fu0tj6qhdeq2jh301s.apps.googleusercontent.com";
-const CLIENT_SECRET = "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";
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
+const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
 const REDIRECT_URI = "http://localhost:3333/oauth2callback";
+
+if (!CLIENT_ID || !CLIENT_SECRET) {
+  console.error("Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variable.");
+  process.exit(1);
+}
 
 // Senders to include (cell, internet, digital services)
 const PAYMENT_SENDERS = [

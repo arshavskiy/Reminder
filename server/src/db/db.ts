@@ -40,6 +40,7 @@ const ALL_COLLECTIONS = [
   "document_clients",
   "clients",
   "contracts",
+  "invoices",
   "reminders",
   "tasks",
   "extractions",
@@ -55,6 +56,9 @@ const ALL_COLLECTIONS = [
   "certificates",
   "notifications",
   "gmail_imports",
+  "gmail_import_jobs",
+  "gmail_search_providers",
+  "document_processing_jobs",
 ];
 
 async function ensureCollections(db: Db): Promise<void> {
@@ -75,6 +79,7 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("users").createIndex({ email: 1 }, { unique: true, sparse: true });
   await db.collection("users").createIndex({ verification_token: 1 }, { sparse: true });
   await db.collection("users").createIndex({ reset_token: 1 }, { sparse: true });
+  await db.collection("users").createIndex({gmail_email: 1}, {unique: true, sparse: true});
 
   // sessions
   await db.collection("sessions").createIndex({ user_id: 1 });
@@ -105,6 +110,7 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("documents").createIndex({ processing_status: 1 });
   await db.collection("documents").createIndex({ document_source: 1 });
   await db.collection("documents").createIndex({ user_id: 1 });
+  await db.collection("documents").createIndex({ user_id: 1, created_at: -1 });
   await db.collection("documents").createIndex({ created_at: -1 });
   await db.collection("documents").createIndex({ import_date: -1 });
 
@@ -135,6 +141,13 @@ async function applyIndexes(db: Db): Promise<void> {
     { unique: true, partialFilterExpression: { document_id: { $type: "string" } } }
   );
   await db.collection("contracts").createIndex({ client_id: 1 });
+
+  // invoices / bills — extracted from invoice templates; not part of reminder contract flow
+  await db.collection("invoices").createIndex({ user_id: 1 });
+  await db.collection("invoices").createIndex({ document_id: 1 }, { unique: true });
+  await db.collection("invoices").createIndex({ supplier_name: 1 });
+  await db.collection("invoices").createIndex({ payment_due_date: 1 });
+  await db.collection("invoices").createIndex({ created_at: -1 });
 
   // reminders
   await db.collection("reminders").createIndex({ user_id: 1 });
@@ -220,6 +233,21 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("gmail_imports").createIndex({ message_id: 1 });
   await db.collection("gmail_imports").createIndex({ user_id: 1, message_id: 1 }, { unique: true });
   await db.collection("gmail_imports").createIndex({ imported_at: -1 });
+
+  // gmail_import_jobs
+  await db.collection("gmail_import_jobs").createIndex({ user_id: 1, created_at: -1 });
+  await db.collection("gmail_import_jobs").createIndex({ status: 1, updated_at: 1 });
+  await db.collection("gmail_import_jobs").createIndex({ user_id: 1, status: 1, created_at: -1 });
+
+  // gmail_search_providers
+  await db.collection("gmail_search_providers").createIndex({ id: 1 }, { unique: true });
+  await db.collection("gmail_search_providers").createIndex({ enabled: 1, sort_order: 1 });
+
+  // document_processing_jobs
+  await db.collection("document_processing_jobs").createIndex({ status: 1, next_run_at: 1, created_at: 1 });
+  await db.collection("document_processing_jobs").createIndex({ document_id: 1 });
+  await db.collection("document_processing_jobs").createIndex({ user_id: 1, status: 1, created_at: -1 });
+  await db.collection("document_processing_jobs").createIndex({ locked_at: 1 });
 }
 
 // Typed collection helper

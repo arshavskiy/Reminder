@@ -4,13 +4,13 @@
       <n-dialog-provider>
         <div class="app-shell">
           <!-- ── Top horizontal app bar ─────────────────────────────────── -->
-          <header v-if="route.path !== '/login' && !route.path.startsWith('/admin')" class="appbar">
+          <header v-if="!hideAppChrome" class="appbar">
             <!-- Brand on the right (RTL "start") -->
             <div class="appbar__brand" @click="router.push('/')">
               <div class="appbar__logo">
-                <n-icon :component="BriefcaseOutline" :size="22" />
+                <img class="appbar__logo-img" :src="logoSrc" alt="" />
               </div>
-              <span class="appbar__brand-text"> ReminderOCR </span>
+              <span class="appbar__brand-text"> RemindOCR </span>
             </div>
 
             <!-- Center nav -->
@@ -30,6 +30,21 @@
 
              <!-- Tail actions: theme toggle + user dropdown -->
              <div class="appbar__actions">
+               <n-tooltip placement="bottom" :keep-alive-on-hover="false">
+                 <template #trigger>
+                   <button
+                     class="subscription-btn"
+                     :class="{ 'subscription-btn--active': route.path === '/pricing' }"
+                     type="button"
+                     @click="router.push('/pricing')"
+                   >
+                     <n-icon :component="DiamondOutline" :size="15" class="subscription-btn__icon" />
+                     <span class="subscription-btn__label">מנוי</span>
+                     <span v-if="subscriptionPlanLabel" class="subscription-btn__plan">{{ subscriptionPlanLabel }}</span>
+                   </button>
+                 </template>
+                 {{ subscriptionTooltip }}
+               </n-tooltip>
                <div v-if="authStore.isAdmin" class="actas-control" :class="{ 'actas-control--open': actAsExpanded }">
                  <button
                    v-if="!actAsExpanded"
@@ -85,7 +100,7 @@
           </header>
 
           <!-- PWA install banner -->
-          <div v-if="showInstallBanner && route.path !== '/login'" class="install-banner">
+          <div v-if="showInstallBanner && !hideAppChrome" class="install-banner">
             <span class="install-banner__text">📲 התקן את האפליקציה למחשב לגישה מהירה</span>
             <div class="install-banner__actions">
               <button class="install-banner__btn install-banner__btn--primary" @click="installAndDismiss">התקן</button>
@@ -118,30 +133,35 @@
           </n-drawer>
 
           <!-- ── Main content ───────────────────────────────────────────── -->
-          <main :class="['content', { 'content--fullpage': route.path === '/login' || route.path.startsWith('/admin') }]">
-            <div :class="(route.path === '/login' || route.path.startsWith('/admin')) ? '' : 'page'">
-            <router-view />
-            </div>
-          </main>
+          <div :class="['shell-body', { 'shell-body--fullpage': isMinimalShell }]">
+            <main :class="['content', { 'content--fullpage': isMinimalShell }]">
+              <div :class="isMinimalShell ? '' : 'page'">
+              <router-view />
+              </div>
+            </main>
+          </div>
 
-          <footer v-if="route.path !== '/login'" class="app-footer" dir="rtl">
-            <strong>ReminderOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
+          <footer v-if="route.path !== '/login' && !isLegalRoute" class="app-footer" dir="rtl">
+            <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
             <div class="app-footer__legal">
               © 2026 HandCoded. All rights reserved. |
-              <a href="https://handcoded.tech/privacy.html" target="_blank">Privacy Policy</a> |
-              <a href="https://handcoded.tech/terms.html" target="_blank">Terms of Service</a>
+              <router-link to="/pricing">Pricing</router-link> |
+              <router-link to="/privacy">Privacy Policy</router-link> |
+              <router-link to="/terms">Terms of Service</router-link>
             </div>
           </footer>
         </div>
 
         <WsConnector />
+        <OnboardingWizard v-if="showOnboarding" v-model="showOnboarding" />
+        <WalkthroughOverlay />
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref, watch, watchEffect} from "vue";
+import {computed, onBeforeUnmount, onMounted, ref, watch, watchEffect} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
   darkTheme,
@@ -186,10 +206,18 @@ import {
   unstableTreeSelectRtl,
   unstableUploadsRtl,
 } from "naive-ui";
-import {BriefcaseOutline, DownloadOutline, MoonOutline, SunnyOutline} from "@vicons/ionicons5";
+import {
+  DiamondOutline,
+  DownloadOutline,
+  MoonOutline,
+  SunnyOutline,
+} from "@vicons/ionicons5";
 import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
+import OnboardingWizard from "./components/OnboardingWizard.vue";
+import WalkthroughOverlay from "./components/WalkthroughOverlay.vue";
+import {useWalkthrough} from "./composables/useWalkthrough.js";
 import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
@@ -217,7 +245,47 @@ const featuresStore = useFeaturesStore();
 const userSettingsStore = useUserSettingsStore();
 const pwa = usePwa();
 
+const isLegalRoute = computed(() => Boolean(route.meta.legal));
+const isMinimalShell = computed(() =>
+  route.path === "/login" ||
+  (route.path === "/pricing" && !authStore.user) ||
+  route.path === "/reset-password" ||
+  isLegalRoute.value ||
+  route.path.startsWith("/admin"),
+);
+const hideAppChrome = computed(() =>
+  route.path === "/login" ||
+  (route.path === "/pricing" && !authStore.user) ||
+  route.path === "/reset-password" ||
+  isLegalRoute.value ||
+  route.path.startsWith("/admin"),
+);
+
 const mobileNavOpen = ref(false);
+
+// ── Onboarding wizard ───────────────────────────────────────────────────────
+const showOnboarding = ref(false);
+
+watch(
+  () => authStore.user,
+  (user) => {
+    if (user && !(user as any).onboarding_completed && !hideAppChrome.value) {
+      showOnboarding.value = true;
+    }
+  },
+  { immediate: true },
+);
+
+// ── Walkthrough auto-trigger per page ────────────────────────────────────────
+const walkthrough = useWalkthrough();
+watch(
+  () => route.path,
+  (path) => {
+    if (authStore.user && !showOnboarding.value && path !== "/login") {
+      walkthrough.autoTriggerForPage(path);
+    }
+  },
+);
 
 // ── PWA install banner ───────────────────────────────────────────────────────
 const showInstallBanner = ref(false);
@@ -287,13 +355,39 @@ async function onActAsChange(userId: string | null) {
 const darkPref = ref<boolean>(localStorage.getItem("theme") === "dark");
 const isDark = computed(() => darkPref.value);
 const theme = computed(() => (isDark.value ? darkTheme : null));
+const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
+
+const PLAN_SHORT: Record<string, string> = {
+  free: "חינמי",
+  basic: "בסיסי",
+  business: "עסקי",
+};
+
+function resolveUserPlan(): string {
+  const user = authStore.user;
+  if (!user) return "free";
+  if (user.plan) return user.plan;
+  if (user.role === "admin") return "business";
+  if (user.role === "pro") return "basic";
+  return "free";
+}
+
+const subscriptionPlanLabel = computed(() => {
+  if (!authStore.user) return "";
+  return PLAN_SHORT[resolveUserPlan()] ?? "";
+});
+
+const subscriptionTooltip = computed(() => {
+  const plan = subscriptionPlanLabel.value;
+  return plan ? `מנוי נוכחי: ${plan} — לחצו לצפייה במסלולים` : "מסלולי מנוי ומחירים";
+});
 
 const themeOverrides = computed(() => ({
   common: {
     fontFamily: '"Segoe UI", Arial, Helvetica, sans-serif',
     primaryColor: isDark.value ? "#63e2b7" : "#18a058",
-    primaryColorHover: isDark.value ? "#7fe7c4" : "#36ad6a",
-    primaryColorPressed: isDark.value ? "#5acea7" : "#0c7a43",
+    primaryColorHover: isDark.value ? "#7fe7c4" : "#0c7a43",
+    primaryColorPressed: isDark.value ? "#5acea7" : "#085c32",
   },
   Card: {
     titleFontSize: "18px",
@@ -312,7 +406,16 @@ async function toggleTheme() {
   userSettingsStore.save({ theme: next }).catch(() => {});
 }
 
+function onThemeChanged(event: Event) {
+  const next = (event as CustomEvent<"dark" | "light">).detail;
+  if (next === "dark" || next === "light") {
+    darkPref.value = next === "dark";
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener("remindocr:theme-change", onThemeChanged);
+
   if (authStore.user) {
     // Sync theme from user-settings only after auth is known. The login page
     // should not call protected user-settings endpoints.
@@ -326,6 +429,10 @@ onMounted(async () => {
     featuresStore.fetchFeatures().catch(() => {});
     loadActAsUsers();
   }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("remindocr:theme-change", onThemeChanged);
 });
 
 watch(
@@ -357,11 +464,12 @@ const allNav = [
   {label: "דוחות", key: "reports", minRole: "user", feature: FEATURES.pages.reports},
   {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
-  {label: "ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment },
+  {label: "ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment},
+  {label: "חשבוניות", key: "invoices", minRole: "user", feature: FEATURES.pages.invoices},
   // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
   // Print templates are reached from the contracts page, next to "תסקיר חדש".
   // {label: "הדפסת תסקיר", key: "compose", minRole: "user", feature: FEATURES.pages.printTemplates},
-  {label: "Gmail", key: "gmail-inbox", minRole: "user" ,feature: FEATURES.pages.gmail},
+  {label: "Gmail", key: "gmail-inbox", minRole: "admin"},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];
@@ -370,7 +478,7 @@ const primaryNav = computed(() => {
   const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
   return allNav.filter((item) =>
     userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
-    featuresStore.hasFeature(item.feature as FeatureKey)
+    (!item.feature || featuresStore.hasFeature(item.feature as FeatureKey))
   );
 });
 
@@ -422,12 +530,19 @@ function navigate(key: string) {
 .appbar__logo {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--brand-color), var(--brand-color-hover));
-  color: #fff;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: var(--shadow-sm);
+}
+.appbar__logo-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 .appbar__brand-text {
   font-weight: 700;
@@ -528,6 +643,71 @@ html[data-theme="light"] .mobile-nav-list__item--active {
   gap: 10px;
 }
 
+.subscription-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 0 12px;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.subscription-btn__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+
+.subscription-btn__label {
+  line-height: 1;
+}
+
+.subscription-btn__plan {
+  color: var(--text-muted, var(--text-secondary));
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.subscription-btn__plan::before {
+  content: "·";
+  margin-inline-end: 5px;
+  opacity: 0.55;
+}
+
+.subscription-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.subscription-btn:hover .subscription-btn__plan {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.subscription-btn--active {
+  border-color: color-mix(in srgb, var(--brand-color) 28%, var(--border-color));
+  background: color-mix(in srgb, var(--brand-color) 8%, transparent);
+  color: var(--brand-color);
+}
+
+.subscription-btn--active .subscription-btn__plan {
+  color: var(--brand-color);
+  opacity: 0.8;
+}
+
 .actas-control {
   display: flex;
   align-items: center;
@@ -624,7 +804,7 @@ html[data-theme="dark"] .install-banner {
   transition: background 0.15s;
 }
 
-.install-banner__btn:hover { background: var(--bg-hover); }
+.install-banner__btn:hover:not(.install-banner__btn--primary) { background: var(--bg-hover); }
 
 .install-banner__btn--primary {
   background: var(--brand-color);
@@ -633,7 +813,11 @@ html[data-theme="dark"] .install-banner {
   font-weight: 600;
 }
 
-.install-banner__btn--primary:hover { background: var(--brand-color-hover); }
+.install-banner__btn--primary:hover {
+  background: var(--brand-color-hover);
+  border-color: var(--brand-color-hover);
+  color: #fff;
+}
 
 .actas-banner {
   display: flex;
@@ -703,8 +887,18 @@ html[data-theme="dark"] .install-banner {
 .avatar:hover { background: var(--bg-hover); }
 
 /* ── Content ──────────────────────────────────────────────────────────────── */
-.content {
+.shell-body {
   flex: 1;
+  min-height: 0;
+  background: var(--bg-app);
+}
+
+.shell-body--fullpage {
+  display: block;
+}
+
+.content {
+  height: 100%;
   overflow-y: auto;
   padding: 32px 48px;
   background: var(--bg-app);
@@ -736,6 +930,27 @@ html[data-theme="dark"] .install-banner {
 
   .appbar__actions {
     gap: 6px;
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  .subscription-btn {
+    padding: 0 10px;
+    max-width: 100%;
+  }
+
+  .subscription-btn__label {
+    display: none;
+  }
+
+  .subscription-btn__plan::before {
+    display: none;
+  }
+
+  .actas-toggle {
+    min-width: 0;
+    padding: 0 10px;
   }
 
   .content {
@@ -758,6 +973,16 @@ html[data-theme="dark"] .install-banner {
   .nav-menu-btn {
     width: 34px;
     height: 34px;
+  }
+
+  .subscription-btn {
+    height: 32px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .actas-control:not(.actas-control--open) {
+    display: none;
   }
 
   .content {

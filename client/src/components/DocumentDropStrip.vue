@@ -15,7 +15,7 @@
         <n-icon :component="CloudUploadOutline" :size="30" />
       </div>
       <div class="drop-strip__copy">
-        <strong>{{ isDragging ? "שחרר כאן והייבוא יתחיל" : "גרור מסמכים לכאן" }}</strong>
+        <strong>{{ isDragging ? "שחרר כאן והייבוא יתחיל" : "גרור מסמכים לתזכורת כאן" }}</strong>
         <span>גרירה או לחיצה מעלות מיד</span>
       </div>
     </div>
@@ -144,6 +144,9 @@ import MissingFieldsModal from "./MissingFieldsModal.vue";
 import {
   listMissingDocumentFields,
   missingFieldsBlockReminders,
+  templateUsesReminders,
+  isPayslipLikeTemplate,
+  isPayslipLikeExtraction,
   type MissingFieldItem,
 } from "@shared/missingDocumentFields.js";
 import { resolveMissingFieldInitialValue } from "@shared/documentDates.js";
@@ -444,6 +447,13 @@ async function promptMissingFieldsForCompletedRows() {
         try {
           template = await api.docTemplates.get(String(doc.template_id));
         } catch { /* ignore */ }
+      }
+      if (
+        !templateUsesReminders(template) ||
+        isPayslipLikeTemplate(template) ||
+        isPayslipLikeExtraction(fields)
+      ) {
+        continue;
       }
       const missing = listMissingDocumentFields(template, fields);
       if (!missingFieldsBlockReminders(missing)) continue;

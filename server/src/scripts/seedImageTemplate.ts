@@ -12,7 +12,7 @@ const name = "תזכורת בדיקה — פצ׳רסקי (תמונה)";
 // poster_url is stored as a template FIELD (not baked into the HTML). The
 // render layer substitutes {{poster_url}} from this field, so the raw template
 // HTML keeps the placeholder and stays editable in the app UI.
-const posterUrl = process.env.POSTER_URL || "https://app.handcoded.tech/pechersky-reminder-poster.png";
+const posterUrl = process.env.POSTER_URL || "https://remindocr.com/pechersky-reminder-poster.png";
 console.log("Poster URL:", posterUrl);
 
 // Load template HTML as-is ({{poster_url}} placeholder preserved).

@@ -188,6 +188,7 @@ const clientDetails = computed<ClientDetailItem[]>(() => {
     detailItem("contact_person", "איש קשר", client.contact_person),
     detailItem("email", "אימייל", client.email),
     detailItem("phone", "טלפון", client.phone),
+    detailItem("mobile", "נייד", client.mobile),
     detailItem("id_number", "מספר ת.ז / ח.פ", client.id_number),
     detailItem("created_at", "נוצר", formatDate(client.created_at)),
     detailItem("updated_at", "עודכן", formatDate(client.updated_at)),

@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /login
+Allow: /pricing
+Allow: /privacy
+Allow: /terms
+Disallow: /documents
+Disallow: /invoices
+Disallow: /clients
+Disallow: /contracts
+Disallow: /reminders
+Disallow: /search
+Disallow: /profile
+Disallow: /settings
+Disallow: /equipment
+Disallow: /reports
+Disallow: /field
+Disallow: /print-templates
+Disallow: /admin
+Disallow: /gmail
+Disallow: /reset-password
+
+Sitemap: https://remindocr.com/sitemap.xml

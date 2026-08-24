@@ -119,6 +119,7 @@ export function registerAuthRoutes(app: express.Application) {
           },
           $setOnInsert: {
             role: "user",
+            plan: "free",
             is_active: 1,
             created_at: new Date(),
           },
@@ -195,6 +196,7 @@ export function registerAuthRoutes(app: express.Application) {
           },
           $setOnInsert: {
             role: "user",
+            plan: "free",
             is_active: 1,
             created_at: new Date(),
           },
@@ -238,6 +240,7 @@ export function registerAuthRoutes(app: express.Application) {
           name: user.name,
           picture_url: user.picture_url,
           role: user.role,
+          plan: user.plan ?? planFromRole(user.role),
         },
       });
     } catch (err) {
@@ -282,6 +285,7 @@ export function registerAuthRoutes(app: express.Application) {
     }
     const { user, actingAs } = identity;
 
+    const userDoc = await col("users").findOne({ _id: new ObjectId((user as any).id) }) as any;
     res.json({
       user: {
         id: (user as any).id,
@@ -291,6 +295,8 @@ export function registerAuthRoutes(app: express.Application) {
         company_name: (user as any).company_name ?? null,
         picture_url: user.picture_url,
         role: user.role,
+        plan: user.plan ?? planFromRole(user.role),
+        onboarding_completed: userDoc?.onboarding_completed ?? false,
       },
       actingAs: actingAs
         ? {
@@ -299,6 +305,7 @@ export function registerAuthRoutes(app: express.Application) {
             name: actingAs.name,
             picture_url: actingAs.picture_url,
             role: actingAs.role,
+            plan: (actingAs as any).plan ?? planFromRole(actingAs.role),
           }
         : null,
     });
@@ -358,7 +365,13 @@ export function registerAuthRoutes(app: express.Application) {
 
     res.json({
       ok: true,
-      actingAs: { id: target._id.toString(), email: target.email, name: target.name, role: target.role },
+      actingAs: {
+        id: target._id.toString(),
+        email: target.email,
+        name: target.name,
+        role: target.role,
+        plan: target.plan ?? planFromRole(target.role),
+      },
     });
   });
 
@@ -413,6 +426,7 @@ export function registerAuthRoutes(app: express.Application) {
       verification_token: verificationToken,
       verification_token_expires: tokenExpiry,
       role: "user",
+      plan: "free",
       is_active: 1,
       created_at: new Date(),
       last_login_at: null,
@@ -486,6 +500,8 @@ export function registerAuthRoutes(app: express.Application) {
         name: user.name,
         picture_url: user.picture_url,
         role: user.role,
+        plan: user.plan ?? planFromRole(user.role),
+        onboarding_completed: user.onboarding_completed ?? false,
       },
     });
   });
@@ -654,7 +670,12 @@ function frontendUrl(path: string): string {
 
 function googleCallbackUri(req: express.Request): string {
   if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
-  return `${serverBaseUrl(req)}/auth/google/callback`;
+  return `${authCallbackBaseUrl(req)}/auth/google/callback`;
+}
+
+function authCallbackBaseUrl(req: express.Request): string {
+  if (isProd && process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
+  return serverBaseUrl(req);
 }
 
 function serverBaseUrl(req: express.Request): string {
@@ -662,6 +683,12 @@ function serverBaseUrl(req: express.Request): string {
   const proto = req.headers["x-forwarded-proto"] ?? req.protocol;
   const host = req.headers["x-forwarded-host"] ?? req.headers.host;
   return `${proto}://${host}`;
+}
+
+function planFromRole(role: string | null | undefined): "free" | "basic" | "business" {
+  if (role === "admin") return "business";
+  if (role === "pro") return "basic";
+  return "free";
 }
 
 function logAuth(

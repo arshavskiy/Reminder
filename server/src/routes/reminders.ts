@@ -13,6 +13,12 @@ import {
   normalizePhoneIdentityKey
 } from "../utils/clientNames";
 import {logger} from "../logger";
+import {
+  assertReminderQuota,
+  ReminderQuotaError,
+  reminderQuotaErrorPayload,
+} from "../quotas/reminderQuota";
+import {incrementReminderUsage} from "../quotas/userUsageCounters";
 
 const MIN_INSPECTION_INTERVAL_MONTHS = 1;
 const MAX_INSPECTION_INTERVAL_MONTHS = 24;
@@ -122,8 +128,8 @@ export function registerReminderRoutes(app: express.Application) {
       engineerProfile?.company_name,
       user?.company_name,
       settings.emailFromName,
-      "ReminderOCR",
-    ].find((value) => typeof value === "string" && value.trim()) ?? "ReminderOCR";
+      "RemindOCR",
+    ].find((value) => typeof value === "string" && value.trim()) ?? "RemindOCR";
 
     res.json({
       email: settings.emailFrom || settings.smtpUser || null,
@@ -199,13 +205,25 @@ export function registerReminderRoutes(app: express.Application) {
   // POST /api/reminders
   app.post("/api/reminders", async (req, res) => {
     let userId: string;
+    let userPlan: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
+      userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
       return;
+    }
+
+    try {
+      await assertReminderQuota(userId, userPlan, 1);
+    } catch (err) {
+      if (err instanceof ReminderQuotaError) {
+        res.status(403).json(reminderQuotaErrorPayload(err));
+        return;
+      }
+      throw err;
     }
 
     const body = req.body as Record<string, unknown>;
@@ -233,6 +251,7 @@ export function registerReminderRoutes(app: express.Application) {
       updated_at: now,
     };
     const result = await col("reminders").insertOne(doc as any);
+    await incrementReminderUsage(userId, 1);
     const inserted = await col("reminders").findOne({ _id: result.insertedId });
     res.status(201).json(flatDoc(inserted));
   });

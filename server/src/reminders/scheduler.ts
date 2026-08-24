@@ -5,6 +5,7 @@ import {sendGroupedReminderEmail, sendReminderEmail} from "./emailSender";
 import {sendMonthlyReportToRecipients} from "../reports/monthlyReports";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
+import {insertReminderIfAllowed} from "../quotas/reminderQuota";
 import {clientDisplayName} from "../utils/clientNames";
 import {notifyEmailSendFailed, notifyReminderSkipped} from "../push/adminNotify";
 import {parseObjectRecord, parseReminderEmailTo, pickContractEmail, pickContractEmailWithMeta} from "../contracts/contractEmail.js";
@@ -656,7 +657,7 @@ export async function generateTaskReminders(
 
     const title = `משימה: ${label} (יעד: ${dueDate})`;
 
-    await col("reminders").insertOne({
+      await insertReminderIfAllowed(userId, {
       ...(userId && { user_id: userId }),
       source_type: "task",
       source_id: taskId,
@@ -668,7 +669,7 @@ export async function generateTaskReminders(
       status: "pending",
       created_at: new Date(),
       updated_at: new Date(),
-    } as any);
+      });
   }
 }
 
@@ -807,7 +808,7 @@ export async function generateContractReminders(
 
     const equipment = contract?.equipment_description ?? contract?.checked_equipment ?? null;
 
-    await col("reminders").insertOne({
+      await insertReminderIfAllowed(userId, {
       ...(userId && { user_id: userId }),
       source_type: "contract_expiry",
       source_id: contractId,
@@ -821,6 +822,6 @@ export async function generateContractReminders(
       status: "pending",
       created_at: new Date(),
       updated_at: new Date(),
-    } as any);
+      });
   }
 }

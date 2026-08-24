@@ -50,7 +50,6 @@ export function buildGroupedItemsTable(items: GroupedReminderItem[]): string {
   const rows = items.map((item) => `<tr>
       <td style="${TD_STYLE}">${cell(item.contract_number)}</td>
       <td style="${TD_STYLE}">${cell(item.equipment)}</td>
-      <td style="${TD_STYLE}">${cell(item.license_number)}</td>
       <td style="${TD_STYLE}">${cell(item.expiry_date)}</td>
     </tr>`).join("");
   return `<table class="items" cellpadding="0" cellspacing="0" role="presentation" dir="rtl" style="${TABLE_STYLE}">
@@ -58,7 +57,6 @@ export function buildGroupedItemsTable(items: GroupedReminderItem[]): string {
       <tr>
         <th style="${TH_STYLE}">תסקיר</th>
         <th style="${TH_STYLE}">ציוד</th>
-        <th style="${TH_STYLE}">רישוי</th>
         <th style="${TH_STYLE}">בתוקף עד</th>
       </tr>
     </thead>

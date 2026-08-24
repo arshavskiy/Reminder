@@ -111,6 +111,16 @@
         <div class="pipeline-toggles">
           <div class="pipeline-toggles__title">אפשרויות עיבוד</div>
           <label class="toggle-row">
+            <n-select
+                v-model:value="selectedTemplateId"
+                :options="templateOptions"
+                clearable
+                placeholder="תבנית אוטומטית"
+                size="small"
+                style="width: 100%"
+            />
+          </label>
+          <label class="toggle-row">
             <n-switch v-model:value="doAi" size="small" />
             <span class="toggle-row__label">חילוץ AI</span>
             <span class="toggle-row__hint">זיהוי שדות, תאריכים וסכומים</span>
@@ -399,13 +409,20 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, ref, watch} from "vue";
+import {computed, onMounted, ref, watch} from "vue";
 import {NButton, NCheckbox, NInput, NModal, NProgress, NSelect, NSpin, NSwitch, NTab, NTabs, NTag} from "naive-ui";
+import {api} from "../services/apiService.js";
 
 const API = import.meta.env.VITE_API_BASE ?? "";
 
 interface ExtractionField { key: string; label_he: string; type: string }
-export interface UploadOptions { doAi: boolean; doEntities: boolean; doReminders: boolean }
+
+export interface UploadOptions {
+  doAi: boolean;
+  doEntities: boolean;
+  doReminders: boolean;
+  templateId?: number
+}
 
 interface ReminderPreview {
   title: string;
@@ -455,8 +472,21 @@ const dragOver = ref(false);
 const files = ref<File[]>([]);
 const fields = ref<ExtractionField[]>([]);
 const doAi = ref(true);
-const doEntities = ref(true);
-const doReminders = ref(true);
+const doEntities = ref(false);
+const doReminders = ref(false);
+const selectedTemplateId = ref<string | null>(null);
+const templateOptions = ref<{ label: string; value: string }[]>([]);
+
+onMounted(async () => {
+  try {
+    const templates = await api.docTemplates.list();
+    templateOptions.value = templates.map(t => ({
+      label: `${t.name} (${t.document_kind})`,
+      value: t.id,
+    }));
+  } catch {
+  }
+});
 
 // ── Extract tab state ───────────────────────────────────────────────────────
 const activeTab = ref<"upload" | "extract" | "rescan">("upload");
@@ -567,6 +597,7 @@ function submit() {
     doAi: doAi.value,
     doEntities: doEntities.value && doAi.value,
     doReminders: doReminders.value && doEntities.value,
+    templateId: selectedTemplateId.value ?? undefined,
   });
 }
 

@@ -23,8 +23,8 @@ self.addEventListener("push", (event: PushEvent) => {
   const title = payload.title || "בודק ציוד";
   const options: NotificationOptions = {
     body: payload.body || "",
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    icon: "/icon-192-v2.png",
+    badge: "/icon-192-v2.png",
     tag: (payload.data?.tag as string) || "admin-alert",
     data: payload.data || {},
     dir: "rtl",

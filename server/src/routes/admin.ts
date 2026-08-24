@@ -3,12 +3,13 @@ import {ObjectId} from "mongodb";
 import {extname} from "path";
 import {col} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
-import type {UserRole} from "../../src/shared/types.js";
+import type {UserPlan, UserRole} from "../../src/shared/types.js";
 import {getSettings} from "../settings.js";
 import {sendPushToAdmins} from "../push/pushService.js";
 import {DEFAULT_FEATURES, normalizeFeatures} from "../features.js";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
+const VALID_PLANS: UserPlan[] = ["free", "basic", "business"];
 const DEFAULT_REPORT_CONFIG = {
   all_fields: [
     "tracking_date",
@@ -52,7 +53,13 @@ function normalizeReportConfig(raw: unknown) {
 function flatUser(doc: any) {
   if (!doc) return doc;
   const { _id, password_hash, verification_token, reset_token, ...rest } = doc;
-  return { id: _id?.toString(), ...rest };
+  return { id: _id?.toString(), ...rest, plan: doc.plan ?? planFromRole(doc.role) };
+}
+
+function planFromRole(role: string | null | undefined): UserPlan {
+  if (role === "admin") return "business";
+  if (role === "pro") return "basic";
+  return "free";
 }
 
 export function registerAdminRoutes(app: express.Application) {
@@ -129,7 +136,7 @@ export function registerAdminRoutes(app: express.Application) {
     const auth = await adminAuth(req, res);
     if (!auth) return;
 
-    const { role, is_active } = req.body as { role?: string; is_active?: number };
+    const { role, plan, is_active } = req.body as { role?: string; plan?: string; is_active?: number };
 
     const updates: Record<string, any> = { updated_at: new Date() };
 
@@ -139,6 +146,14 @@ export function registerAdminRoutes(app: express.Application) {
         return;
       }
       updates.role = role;
+    }
+
+    if (plan !== undefined) {
+      if (!VALID_PLANS.includes(plan as UserPlan)) {
+        res.status(400).json({ error: `Invalid plan. Must be one of: ${VALID_PLANS.join(", ")}` });
+        return;
+      }
+      updates.plan = plan;
     }
 
     if (is_active !== undefined) {
@@ -1392,6 +1407,105 @@ export function registerAdminRoutes(app: express.Application) {
       });
     } catch (err: any) {
       console.error("system-health error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // ── S3 Storage Browser ──────────────────────────────────────────────────
+  // GET /api/admin/storage/browse?user_id=&prefix=
+  app.get("/api/admin/storage/browse", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const { listSpacesFiles, spacesEnabled, getSpacesSignedUrl } = await import("../storage/spaces.js");
+      if (!spacesEnabled()) {
+        res.status(400).json({ error: "Object storage not configured" });
+        return;
+      }
+
+      const userId = req.query.user_id as string | undefined;
+      const prefix = userId ? `documents/${userId}/` : (req.query.prefix as string ?? "documents/");
+
+      const { files, truncated } = await listSpacesFiles(prefix, 500);
+
+      // Cross-reference with DB to get filenames and doc IDs
+      const keys = files.map((f) => f.key);
+      const docs = keys.length
+        ? await col("documents")
+            .find({ spaces_key: { $in: keys } })
+            .project({ _id: 1, file_name: 1, spaces_key: 1, user_id: 1, processing_status: 1, created_at: 1 })
+            .toArray()
+        : [];
+
+      const docByKey: Record<string, any> = {};
+      for (const d of docs) {
+        docByKey[d.spaces_key as string] = d;
+      }
+
+      const enriched = files.map((f) => {
+        const doc = docByKey[f.key];
+        return {
+          key: f.key,
+          size: f.size,
+          last_modified: f.last_modified,
+          doc_id: doc?._id?.toString() ?? null,
+          file_name: doc?.file_name ?? f.key.split("/").pop() ?? f.key,
+          user_id: doc?.user_id ?? null,
+          status: doc?.processing_status ?? null,
+          in_db: !!doc,
+        };
+      });
+
+      res.json({ files: enriched, truncated, prefix });
+    } catch (err: any) {
+      console.error("storage-browse error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // GET /api/admin/storage/download?key= — signed download URL for any S3 key
+  app.get("/api/admin/storage/download", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const { getSpacesSignedUrl, spacesEnabled } = await import("../storage/spaces.js");
+      if (!spacesEnabled()) {
+        res.status(400).json({ error: "Object storage not configured" });
+        return;
+      }
+      const key = req.query.key as string;
+      if (!key) {
+        res.status(400).json({ error: "key is required" });
+        return;
+      }
+      const fileName = key.split("/").pop() ?? "file";
+      const url = await getSpacesSignedUrl(key, 300, fileName, true);
+      res.redirect(url);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // DELETE /api/admin/storage/delete?key= — delete an S3 file (orphans only)
+  app.delete("/api/admin/storage/delete", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const { deleteFromSpaces, spacesEnabled } = await import("../storage/spaces.js");
+      if (!spacesEnabled()) {
+        res.status(400).json({ error: "Object storage not configured" });
+        return;
+      }
+      const key = req.query.key as string;
+      if (!key) {
+        res.status(400).json({ error: "key is required" });
+        return;
+      }
+      const dbDoc = await col("documents").findOne({ spaces_key: key });
+      if (dbDoc) {
+        res.status(400).json({ error: "File is linked to a document record — delete the document first" });
+        return;
+      }
+      await deleteFromSpaces(key);
+      res.json({ ok: true, deleted: key });
+    } catch (err: any) {
       res.status(500).json({ error: err.message ?? "Failed" });
     }
   });

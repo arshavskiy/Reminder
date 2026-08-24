@@ -65,6 +65,40 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+let nextOpenAiRequestAt = 0;
+let openAiRequestQueue: Promise<void> = Promise.resolve();
+
+async function waitForAiRequestSlot(meta: { documentId?: string | number; model: string; backend: string; scope: string }): Promise<void> {
+  if (meta.backend !== "openai") return;
+  const minIntervalMs = readIntEnv("AI_REQUEST_MIN_INTERVAL_MS", 2_500, 0, 60_000);
+  if (minIntervalMs <= 0) return;
+
+  const previous = openAiRequestQueue;
+  let release!: () => void;
+  openAiRequestQueue = new Promise((resolve) => {
+    release = resolve;
+  });
+  await previous.catch(() => {});
+
+  try {
+    const now = Date.now();
+    const waitMs = Math.max(0, nextOpenAiRequestAt - now);
+    nextOpenAiRequestAt = Math.max(now, nextOpenAiRequestAt) + minIntervalMs;
+    if (waitMs > 0) {
+      logger.warn("ai_extraction_throttled", {
+        document_id: meta.documentId ?? null,
+        backend: meta.backend,
+        model: meta.model,
+        scope: meta.scope,
+        wait_ms: waitMs,
+      });
+      await sleep(waitMs);
+    }
+  } finally {
+    release();
+  }
+}
+
 function getRetryAfterMs(err: unknown): number | null {
   const anyErr = err as any;
   const headers = anyErr?.headers;
@@ -107,6 +141,7 @@ async function withRateLimitRetry<T>(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
+      await waitForAiRequestSlot(meta);
       return await fn();
     } catch (err) {
       lastErr = err;

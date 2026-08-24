@@ -1,4 +1,4 @@
-import {copyFileSync, existsSync, mkdirSync, readFileSync, statSync} from "fs";
+import {copyFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync} from "fs";
 import {createHash} from "crypto";
 import {basename, extname, join} from "path";
 import {col} from "../db/db";
@@ -11,12 +11,16 @@ import {parseXlsx} from "./xlsxParser";
 import {extractDocument, extractWithTemplate} from "./extractor";
 import {extractCertificate} from "./certificateExtractor";
 import {extractFromOcr} from "./ocrExtractor";
-import {classifyDocumentKind, getOrBuildSystemPrompt, pickTemplate} from "../templates/seedTemplates";
+import {classifyDocumentKind, documentTypeFromTemplate, getOrBuildSystemPrompt, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
-import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
+import {deleteFromSpaces, getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
+import {syncDocumentToDrive} from "../storage/gdrive";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
+import {generatePdfThumbnailForDocument} from "../documents/pdfThumbnail";
+import {incrementDocumentUsage, type DocumentUsageKind} from "../quotas/userUsageCounters";
+import {inferInvoiceCashFlow} from "../invoices/cashFlow";
 
 type PushFn = (event: Record<string, unknown>) => void;
 
@@ -25,7 +29,45 @@ export interface PipelineOptions {
   skipEntities?: boolean;  // skip client/contract/equipment creation
   skipReminders?: boolean; // skip reminder generation
   startDelayMs?: number;   // optional batch pacing before background processing starts
+  templateId?: string;     // force a specific doc_template instead of auto-detection
+  storageKeyPrefix?: string; // optional S3 prefix for source-specific organization
+  gmailImport?: boolean;   // true when imported via Gmail — enables post-OCR inspection validation
+  usageKind?: DocumentUsageKind; // lifetime usage counter bucket (survives deletes)
+  waitForProcessing?: boolean; // await processing before returning the document id
+  queueProcessing?: boolean; // enqueue processing in document_processing_jobs
+  processingJobContext?: {
+    source?: "gmail" | "upload" | "drive" | string;
+    gmailImportJobId?: string;
+    gmailMessageId?: string;
+    gmailFilename?: string;
+  };
 }
+
+type DocumentProcessingJobStatus = "queued" | "running" | "completed" | "failed" | "retry_wait";
+type DocumentProcessingJob = {
+  _id: ObjectId;
+  user_id?: string | null;
+  document_id: string;
+  file_path: string;
+  mime_type: string;
+  ext: string;
+  pipeline?: PipelineOptions;
+  status: DocumentProcessingJobStatus;
+  attempts: number;
+  max_attempts: number;
+  locked_at?: Date | null;
+  locked_by?: string | null;
+  next_run_at: Date;
+  error_code?: string | null;
+  error_message?: string | null;
+  created_at: Date;
+  updated_at: Date;
+  completed_at?: Date | null;
+};
+
+const DOCUMENT_PROCESSING_JOB_STALE_MS = 10 * 60 * 1000;
+const DOCUMENT_PROCESSING_WORKER_ID = `${process.pid}-${Math.random().toString(36).slice(2)}`;
+let documentProcessingWorkerRunning = false;
 
 function parseJsonObject(raw: unknown, fallback: unknown = null): Record<string, unknown> {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
@@ -182,7 +224,10 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   const SIGNED_URL_TTL = 7 * 24 * 3600; // 7 days
   if (spacesEnabled()) {
     try {
-      spacesKey = userId ? `documents/${userId}/${fileHash}${ext}` : `documents/${fileHash}${ext}`;
+      const prefix = normalizeStorageKeyPrefix(pipeline?.storageKeyPrefix);
+      spacesKey = prefix
+        ? `${prefix}/${userId ? `${userId}/` : ""}${fileHash}${ext}`
+        : userId ? `documents/${userId}/${fileHash}${ext}` : `documents/${fileHash}${ext}`;
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
       downloadUrl = await getSpacesSignedUrl(spacesKey, SIGNED_URL_TTL, fileName);
       logger.info("document_storage_uploaded", { user_id: userId ?? null, spaces_key: spacesKey });
@@ -191,6 +236,9 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
       spacesKey = null;
       spacesUrl = null;
       downloadUrl = null;
+      if (pipeline?.gmailImport) {
+        throw new Error(`storage_failed: ${err}`);
+      }
     }
   }
 
@@ -219,6 +267,14 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   const insertResult = await col("documents").insertOne(docRecord);
   const documentId = insertResult.insertedId.toString();
 
+  if (userId) {
+    const kind: DocumentUsageKind = pipeline?.usageKind
+      ?? (pipeline?.gmailImport ? "gmail_document" : "scanned");
+    await incrementDocumentUsage(userId, kind, 1).catch((err) => {
+      logger.warn("document_usage_increment_failed", { user_id: userId, document_id: documentId, error: String(err) });
+    });
+  }
+
   push?.({ type: "document:queued", documentId: documentId as any, fileName });
   logger.info("document_import_queued", {
     document_id: documentId,
@@ -230,24 +286,472 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   });
   notifyDocumentUploaded({ fileName });
 
-  const startProcessing = () => processDocument(documentId, managedPath, mimeType, ext, push, userId, pipeline).catch(async (err) => {
+  if (pipeline?.queueProcessing) {
+    await enqueueDocumentProcessingJob({
+      documentId,
+      filePath: managedPath,
+      mimeType,
+      ext,
+      userId,
+      pipeline: {
+        ...pipeline,
+        queueProcessing: false,
+        waitForProcessing: false,
+      },
+    });
+    startDocumentProcessingJobWorker();
+    const queueDelayMs = Number(pipeline.startDelayMs ?? 0);
+    if (Number.isFinite(queueDelayMs) && queueDelayMs > 0) {
+      setTimeout(startDocumentProcessingJobWorker, queueDelayMs + 250);
+    }
+    return documentId;
+  }
+
+  const startProcessing = async () => processDocument(documentId, managedPath, mimeType, ext, push, userId, pipeline).catch(async (err) => {
     logger.error("document_processing_failed", { document_id: documentId, user_id: userId ?? null, error: err });
     await col("documents").updateOne(
       { _id: insertResult.insertedId },
-      { $set: { processing_status: "error", error_message: String(err), updated_at: new Date() } }
+      { $set: retryableDocumentError(String(err), "processing_failed") }
     );
     notifyExtractionFailed({ fileName, error: String(err) });
     push?.({ type: "document:done", documentId: documentId as any, status: "error", error: String(err) });
   });
 
   const startDelayMs = Number(pipeline?.startDelayMs ?? 0);
-  if (Number.isFinite(startDelayMs) && startDelayMs > 0) {
+  if (pipeline?.waitForProcessing) {
+    if (Number.isFinite(startDelayMs) && startDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, startDelayMs));
+    }
+    await startProcessing();
+  } else if (Number.isFinite(startDelayMs) && startDelayMs > 0) {
     setTimeout(startProcessing, startDelayMs);
   } else {
-    startProcessing();
+    void startProcessing();
   }
 
   return documentId;
+}
+
+function normalizeStorageKeyPrefix(value: string | null | undefined): string | null {
+  const clean = String(value ?? "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .map((part) => part.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-"))
+    .filter(Boolean)
+    .join("/");
+  return clean || null;
+}
+
+async function enqueueDocumentProcessingJob(input: {
+  documentId: string;
+  filePath: string;
+  mimeType: string;
+  ext: string;
+  userId?: string;
+  pipeline?: PipelineOptions;
+}): Promise<void> {
+  const now = new Date();
+  const delayMs = Number(input.pipeline?.startDelayMs ?? 0);
+  const nextRunAt = Number.isFinite(delayMs) && delayMs > 0
+    ? new Date(Date.now() + delayMs)
+    : now;
+  await col<DocumentProcessingJob>("document_processing_jobs").updateOne(
+    { document_id: input.documentId } as any,
+    {
+      $setOnInsert: {
+        user_id: input.userId ?? null,
+        document_id: input.documentId,
+        file_path: input.filePath,
+        mime_type: input.mimeType,
+        ext: input.ext,
+        pipeline: input.pipeline,
+        status: "queued",
+        attempts: 0,
+        max_attempts: 3,
+        locked_at: null,
+        locked_by: null,
+        next_run_at: nextRunAt,
+        error_code: null,
+        error_message: null,
+        created_at: now,
+        updated_at: now,
+      },
+      $set: {
+        file_path: input.filePath,
+        mime_type: input.mimeType,
+        ext: input.ext,
+        pipeline: input.pipeline,
+        next_run_at: nextRunAt,
+        updated_at: now,
+      },
+    } as any,
+    { upsert: true },
+  );
+}
+
+export function startDocumentProcessingJobWorker(): void {
+  if (documentProcessingWorkerRunning) return;
+  documentProcessingWorkerRunning = true;
+  void processDocumentProcessingJobs().finally(() => {
+    documentProcessingWorkerRunning = false;
+  });
+}
+
+async function processDocumentProcessingJobs(): Promise<void> {
+  await recoverStaleDocumentProcessingJobs();
+  while (true) {
+    const job = await claimNextDocumentProcessingJob();
+    if (!job) return;
+    await runDocumentProcessingJob(job);
+  }
+}
+
+async function recoverStaleDocumentProcessingJobs(): Promise<void> {
+  await col<DocumentProcessingJob>("document_processing_jobs").updateMany(
+    { status: "retry_wait", next_run_at: { $lte: new Date() } } as any,
+    { $set: { status: "queued", updated_at: new Date() } } as any,
+  );
+  const staleBefore = new Date(Date.now() - DOCUMENT_PROCESSING_JOB_STALE_MS);
+  const result = await col<DocumentProcessingJob>("document_processing_jobs").updateMany(
+    { status: "running", locked_at: { $lt: staleBefore } } as any,
+    {
+      $set: {
+        status: "queued",
+        locked_at: null,
+        locked_by: null,
+        updated_at: new Date(),
+      },
+    } as any,
+  );
+  if (result.modifiedCount) {
+    logger.warn("document_processing_jobs_requeued_stale", { count: result.modifiedCount });
+  }
+}
+
+async function claimNextDocumentProcessingJob(): Promise<DocumentProcessingJob | null> {
+  const now = new Date();
+  return await col<DocumentProcessingJob>("document_processing_jobs").findOneAndUpdate(
+    { status: "queued", next_run_at: { $lte: now } } as any,
+    {
+      $set: {
+        status: "running",
+        locked_at: now,
+        locked_by: DOCUMENT_PROCESSING_WORKER_ID,
+        updated_at: now,
+      },
+      $inc: { attempts: 1 },
+    } as any,
+    { sort: { created_at: 1 }, returnDocument: "after" },
+  ) as DocumentProcessingJob | null;
+}
+
+async function runDocumentProcessingJob(job: DocumentProcessingJob): Promise<void> {
+  try {
+    await processDocument(
+      job.document_id,
+      job.file_path,
+      job.mime_type,
+      job.ext,
+      undefined,
+      job.user_id ?? undefined,
+      job.pipeline,
+    );
+    const retryState = await documentProcessingRetryState(job.document_id);
+    if (retryState.status === "error") {
+      await updateGmailImportFromDocumentProcessingJob(job);
+      const attempts = Number(job.attempts ?? 1);
+      const maxAttempts = Number(job.max_attempts ?? 3);
+      const retryable = retryState.retryable && attempts < maxAttempts;
+      const retryDelayMs = Math.min(60_000 * attempts, 5 * 60_000);
+      await col<DocumentProcessingJob>("document_processing_jobs").updateOne(
+        { _id: job._id } as any,
+        {
+          $set: {
+            status: retryable ? "retry_wait" : "failed",
+            locked_at: null,
+            locked_by: null,
+            next_run_at: retryable ? new Date(Date.now() + retryDelayMs) : new Date(),
+            error_code: retryState.reason,
+            error_message: retryState.message,
+            updated_at: new Date(),
+          },
+        } as any,
+      );
+      if (retryable) setTimeout(startDocumentProcessingJobWorker, retryDelayMs + 250);
+      return;
+    }
+    await updateGmailImportFromDocumentProcessingJob(job);
+    await col<DocumentProcessingJob>("document_processing_jobs").updateOne(
+      { _id: job._id } as any,
+      {
+        $set: {
+          status: "completed",
+          locked_at: null,
+          locked_by: null,
+          error_code: null,
+          error_message: null,
+          completed_at: new Date(),
+          updated_at: new Date(),
+        },
+      } as any,
+    );
+  } catch (err) {
+    const message = String(err);
+    const reason = retryReasonFromError(message);
+    const attempts = Number(job.attempts ?? 1);
+    const maxAttempts = Number(job.max_attempts ?? 3);
+    const retryable = attempts < maxAttempts;
+    const retryDelayMs = Math.min(60_000 * attempts, 5 * 60_000);
+    await col("documents").updateOne(
+      { _id: new ObjectId(job.document_id) } as any,
+      { $set: retryableDocumentError(message, reason) },
+    );
+    await updateGmailImportFromDocumentProcessingJob(job, message, reason);
+    await col<DocumentProcessingJob>("document_processing_jobs").updateOne(
+      { _id: job._id } as any,
+      {
+        $set: {
+          status: retryable ? "retry_wait" : "failed",
+          locked_at: null,
+          locked_by: null,
+          next_run_at: retryable ? new Date(Date.now() + retryDelayMs) : new Date(),
+          error_code: reason,
+          error_message: message,
+          updated_at: new Date(),
+        },
+      } as any,
+    );
+    if (retryable) setTimeout(startDocumentProcessingJobWorker, retryDelayMs + 250);
+  }
+}
+
+async function documentProcessingRetryState(documentId: string): Promise<{
+  status: "ok" | "error";
+  retryable: boolean;
+  reason: string | null;
+  message: string | null;
+}> {
+  if (!ObjectId.isValid(documentId)) return { status: "ok", retryable: false, reason: null, message: null };
+  const doc = await col("documents").findOne(
+    { _id: new ObjectId(documentId) } as any,
+    { projection: { processing_status: 1, processing_retryable: 1, retry_reason: 1, error_message: 1 } } as any,
+  ) as any;
+  if (doc?.processing_status !== "error") return { status: "ok", retryable: false, reason: null, message: null };
+  return {
+    status: "error",
+    retryable: doc.processing_retryable !== false,
+    reason: String(doc.retry_reason ?? retryReasonFromError(doc.error_message)),
+    message: doc.error_message ?? null,
+  };
+}
+
+async function updateGmailImportFromDocumentProcessingJob(
+  job: DocumentProcessingJob,
+  errorMessage?: string,
+  errorReason?: string,
+): Promise<void> {
+  const context = job.pipeline?.processingJobContext;
+  const gmailJobId = context?.gmailImportJobId;
+  if (!gmailJobId || !ObjectId.isValid(gmailJobId)) return;
+
+  const result = await gmailProcessingResult(job, errorMessage, errorReason);
+  const setFields: Record<string, unknown> = {
+    "results.$[item].import_status": result.importStatus,
+    "results.$[item].retryable": result.retryable,
+    "results.$[item].rejection_reason": result.rejectionReason,
+    "results.$[item].rejection_label": result.rejectionLabel,
+    "results.$[item].error": result.error,
+    "results.$[item].ocr_failed": result.ocrFailed,
+    updated_at: new Date(),
+  };
+  const inc: Record<string, number> = {};
+  if (result.importStatus === "invoice") inc.classified_invoices = 1;
+  if (result.importStatus === "rejected") inc.rejected = 1;
+  if (result.ocrFailed) inc.ocr_failed = 1;
+  if (result.aiRetryPending) inc.ai_retry_pending = 1;
+
+  await col("gmail_import_jobs").updateOne(
+    { _id: new ObjectId(gmailJobId) } as any,
+    {
+      $set: setFields,
+      ...(Object.keys(inc).length ? { $inc: inc } : {}),
+    } as any,
+    { arrayFilters: [{ "item.documentId": job.document_id }] } as any,
+  );
+}
+
+async function gmailProcessingResult(
+  job: DocumentProcessingJob,
+  errorMessage?: string,
+  errorReason?: string,
+): Promise<{
+  importStatus: string;
+  retryable: boolean;
+  rejectionReason: string | null;
+  rejectionLabel: string | null;
+  error: string | null;
+  ocrFailed: boolean;
+  aiRetryPending: boolean;
+}> {
+  if (errorMessage) {
+    const reason = errorReason ?? retryReasonFromError(errorMessage);
+    return {
+      importStatus: reason === "ocr_unreadable" ? "ocr_failed" : "failed",
+      retryable: true,
+      rejectionReason: reason,
+      rejectionLabel: retryableProcessingLabel(reason, errorMessage),
+      error: errorMessage,
+      ocrFailed: reason === "ocr_unreadable",
+      aiRetryPending: reason === "ai_rate_limited" || reason === "ai_extraction_failed",
+    };
+  }
+
+  const [doc, invoice] = await Promise.all([
+    col("documents").findOne(
+      { _id: new ObjectId(job.document_id) } as any,
+      { projection: { processing_status: 1, error_message: 1, invoice_rejected: 1, invoice_rejection_reason: 1, invoice_rejection_label: 1, retry_reason: 1, retry_label: 1, ocr_retryable: 1 } } as any,
+    ) as Promise<any>,
+    col("invoices").findOne(
+      { document_id: { $in: [job.document_id, new ObjectId(job.document_id)] } } as any,
+      { projection: { _id: 1, invoice_rejection_reason: 1, invoice_rejection_label: 1, possible_not_invoice: 1, missing_required_fields: 1 } } as any,
+    ) as Promise<any>,
+  ]);
+  if (doc?.processing_status === "error") {
+    const reason = String(doc.retry_reason ?? doc.invoice_rejection_reason ?? retryReasonFromError(doc.error_message));
+    return {
+      importStatus: reason === "ocr_unreadable" ? "ocr_failed" : "failed",
+      retryable: true,
+      rejectionReason: reason,
+      rejectionLabel: doc.retry_label ?? doc.invoice_rejection_label ?? retryableProcessingLabel(reason, doc.error_message),
+      error: doc.error_message ?? null,
+      ocrFailed: reason === "ocr_unreadable",
+      aiRetryPending: reason === "ai_rate_limited" || reason === "ai_extraction_failed",
+    };
+  }
+  if (doc?.invoice_rejected === true || invoice?.possible_not_invoice === true || Array.isArray(invoice?.missing_required_fields) && invoice.missing_required_fields.length > 0) {
+    return {
+      importStatus: "rejected",
+      retryable: true,
+      rejectionReason: invoice?.invoice_rejection_reason ?? doc?.invoice_rejection_reason ?? "rejected",
+      rejectionLabel: invoice?.invoice_rejection_label ?? doc?.invoice_rejection_label ?? "המסמך נדחה כחשבונית",
+      error: null,
+      ocrFailed: Boolean(doc?.ocr_retryable),
+      aiRetryPending: false,
+    };
+  }
+  return {
+    importStatus: invoice?._id ? "invoice" : "stored",
+    retryable: false,
+    rejectionReason: null,
+    rejectionLabel: null,
+    error: null,
+    ocrFailed: false,
+    aiRetryPending: false,
+  };
+}
+
+const INSPECTION_MARKERS = [
+  /מספר\s*תסקיר/,
+  /בתוקף\s*עד/,
+  /ציוד\s*שנבדק/,
+  /מספר\s*רישוי/,
+  /כושר\s*עמיסה|עומס\s*עבודה\s*בטוח/,
+  /תאריך\s*בדיקה/,
+  /מכונת\s+הרמה|ציוד\s+הרמה/,
+  /פקודת\s+הבטיחות/,
+];
+const MIN_INSPECTION_MARKERS = 2;
+
+function looksLikeInspectionReport(text: string): boolean {
+  let hits = 0;
+  for (const re of INSPECTION_MARKERS) {
+    if (re.test(text)) hits++;
+    if (hits >= MIN_INSPECTION_MARKERS) return true;
+  }
+  return false;
+}
+
+function gmailTemplateSkipReason(
+  pipeline: PipelineOptions | undefined,
+  template: DocTemplate | null,
+  rawText: string,
+): "gmail_import_not_inspection_skipped" | null {
+  if (!pipeline?.gmailImport || rawText.trim().length === 0) return null;
+  if (template && isInspectionTemplate(template) && !looksLikeInspectionReport(rawText)) {
+    return "gmail_import_not_inspection_skipped";
+  }
+  return null;
+}
+
+function retryableDocumentError(error: string, reason: string): Record<string, unknown> {
+  const label = retryableProcessingLabel(reason, error);
+  return {
+    processing_status: "error",
+    error_message: error,
+    processing_retryable: true,
+    retry_reason: reason,
+    retry_label: label,
+    invoice_rejection_reason: reason,
+    invoice_rejection_label: label,
+    updated_at: new Date(),
+  };
+}
+
+function retryableProcessingLabel(reason: string, error = ""): string {
+  const labels: Record<string, string> = {
+    ocr_unreadable: "OCR לא הצליח לקרוא את המסמך",
+    ai_rate_limited: "חילוץ AI נכשל בגלל מגבלת בקשות זמנית",
+    ai_extraction_failed: "חילוץ AI נכשל",
+    storage_failed: "שמירת הקובץ באחסון נכשלה",
+    processing_failed: "עיבוד המסמך נכשל",
+  };
+  if (reason === "ai_extraction_failed" && /429|rate.?limit/i.test(error)) return labels.ai_rate_limited;
+  return labels[reason] ?? "המסמך ממתין לניסיון חוזר";
+}
+
+function retryReasonFromError(error: unknown, fallback = "processing_failed"): string {
+  const text = String(error ?? "");
+  if (/429|rate.?limit/i.test(text)) return "ai_rate_limited";
+  if (/AI extraction failed|OpenAI|ai_extraction/i.test(text)) return "ai_extraction_failed";
+  if (/OCR|ocr|Text extraction|read image|pdftoppm|tesseract/i.test(text)) return "ocr_unreadable";
+  if (/storage|S3|upload/i.test(text)) return "storage_failed";
+  return fallback;
+}
+
+async function gmailInvoiceWasSaved(documentId: string): Promise<boolean> {
+  const invoice = await col("invoices").findOne(
+    { document_id: documentId } as any,
+    { projection: { _id: 1 } } as any,
+  );
+  return Boolean(invoice);
+}
+
+async function deleteSkippedGmailDocument(
+  documentId: string,
+  docFilter: Record<string, any>,
+  filePath: string,
+): Promise<void> {
+  const skippedDoc = await col("documents").findOne(docFilter) as any;
+  if (skippedDoc?.spaces_key) {
+    await deleteFromSpaces(skippedDoc.spaces_key).catch(() => {});
+  }
+  if (skippedDoc?.thumbnail_key) {
+    await deleteFromSpaces(skippedDoc.thumbnail_key).catch(() => {});
+  }
+  try { unlinkSync(filePath); } catch {}
+  await Promise.all([
+    col("extractions").deleteMany({ document_id: documentId } as any),
+    col("tasks").deleteMany({ document_id: documentId } as any),
+    col("invoices").deleteMany({ document_id: documentId } as any),
+    col("document_clients").deleteMany({ document_id: documentId } as any),
+    col("timeline_events").deleteMany({ source_type: "document", source_id: documentId } as any),
+    col("reminders").deleteMany({ document_id: documentId } as any),
+    col("contracts").deleteMany({ document_id: documentId } as any),
+    col("equipment").deleteMany({ document_id: documentId } as any),
+    col("documents").deleteOne(docFilter),
+  ]);
 }
 
 export async function processDocument(
@@ -269,6 +773,10 @@ export async function processDocument(
 
   let rawText = "";
   let pageCount: number | null = null;
+  let textSource: "native" | "ocr" | "file" = "file";
+  const forcedTemplate = pipeline?.templateId
+    ? await loadTemplate(pipeline.templateId).catch(() => null)
+    : null;
 
   try {
     if (mimeType === "application/pdf") {
@@ -277,12 +785,15 @@ export async function processDocument(
       if (pdfResult.needsOcr) {
         push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
         rawText = await ocrFile(filePath);
+        textSource = "ocr";
       } else {
         rawText = pdfResult.text;
+        textSource = "native";
       }
     } else if (mimeType.startsWith("image/")) {
       push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
       rawText = await ocrFile(filePath);
+      textSource = "ocr";
     } else if (ext === ".docx") {
       rawText = await parseDocx(filePath);
     } else if (ext === ".xlsx") {
@@ -291,9 +802,32 @@ export async function processDocument(
       rawText = readFileSync(filePath, "utf-8");
     }
   } catch (err) {
+    if (pipeline?.gmailImport && forcedTemplate && isInvoiceTemplate(forcedTemplate)) {
+      const reason = retryReasonFromError(err, "ocr_unreadable");
+      const msg = `Text extraction failed: ${err}`;
+      logger.info("gmail_import_invoice_text_extraction_failed_skipped", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        template_id: forcedTemplate.id ?? pipeline.templateId ?? null,
+        template_name: forcedTemplate.name,
+        error: String(err),
+        retry_reason: reason,
+      });
+      await col("documents").updateOne(docFilter, {
+        $set: retryableDocumentError(msg, reason),
+      });
+      push?.({
+        type: "document:done",
+        documentId: documentId as any,
+        status: "error",
+        reason,
+        error: msg,
+      });
+      return;
+    }
     const msg = `Text extraction failed: ${err}`;
     await col("documents").updateOne(docFilter, {
-      $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+      $set: retryableDocumentError(msg, retryReasonFromError(err, "ocr_unreadable")),
     });
     const failedDoc = await col("documents").findOne(docFilter, { projection: { file_name: 1 } } as any) as any;
     notifyExtractionFailed({ fileName: failedDoc?.file_name ?? documentId, error: msg });
@@ -302,12 +836,79 @@ export async function processDocument(
   }
 
   await col("documents").updateOne(docFilter, {
-    $set: { raw_text: rawText, page_count: pageCount, processing_status: "processing", updated_at: new Date() },
+    $set: { raw_text: rawText, text_extraction_source: textSource, page_count: pageCount, processing_status: "processing", updated_at: new Date() },
   });
+
+  const gmailSkipReason = gmailTemplateSkipReason(pipeline, forcedTemplate, rawText);
+  if (gmailSkipReason) {
+    logger.info(gmailSkipReason, {
+      document_id: documentId,
+      user_id: userId ?? null,
+      template_id: forcedTemplate?.id ?? pipeline?.templateId ?? null,
+      template_name: forcedTemplate?.name ?? null,
+    });
+    await deleteSkippedGmailDocument(documentId, docFilter, filePath);
+    push?.({ type: "document:done", documentId: documentId as any, status: "skipped", reason: gmailSkipReason });
+    return;
+  }
 
   push?.({ type: "document:progress", documentId: documentId as any, stage: "ai_extraction", progress: 50 });
 
   const aiWillRun = settings.autoExtract && rawText.trim().length > 0 && !pipeline?.skipAi;
+  const docRowForKnownInvoice = await col("documents").findOne(docFilter) as any;
+  const knownInvoiceFields = extractKnownInvoiceFields(rawText, docRowForKnownInvoice?.file_name);
+  if (knownInvoiceFields) {
+    logger.info("known_invoice_extracted", {
+      document_id: documentId,
+      user_id: userId ?? null,
+      supplier_name: knownInvoiceFields.supplier_name ?? null,
+      document_subtype: knownInvoiceFields.document_subtype ?? null,
+    });
+    await col("extractions").insertOne({
+      document_id: documentId,
+      backend: "deterministic",
+      model: "known-invoice-parser",
+      result_json: knownInvoiceFields,
+      raw_text: rawText,
+      parsed_ok: 1,
+      error: null,
+      exec_ms: 0,
+      created_at: new Date(),
+    } as any);
+    await col("documents").updateOne(docFilter, {
+      $set: {
+        extracted_fields: JSON.stringify(knownInvoiceFields),
+        document_type: "invoice",
+        document_kind: "invoice",
+        updated_at: new Date(),
+      },
+    });
+    if (!pipeline?.skipEntities) {
+      push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
+      const invoiceSaved = await saveInvoiceRecord(documentId, knownInvoiceFields, {
+        userId,
+        clientId: null,
+        documentType: "חשבונית",
+        templateId: pipeline?.templateId,
+        templateName: "חשבונית",
+        rawText,
+      });
+      await deleteContractReminderArtifacts(documentId, userId);
+      if (pipeline?.gmailImport && !invoiceSaved) {
+        logger.info("gmail_import_non_invoice_skipped", {
+          document_id: documentId,
+          user_id: userId ?? null,
+          template_id: forcedTemplate?.id ?? pipeline?.templateId ?? null,
+          template_name: forcedTemplate?.name ?? "חשבונית",
+        });
+        await deleteSkippedGmailDocument(documentId, docFilter, filePath);
+        push?.({ type: "document:done", documentId: documentId as any, status: "skipped", reason: "gmail_import_non_invoice_skipped" });
+        return;
+      }
+    }
+    await finishDocumentProcessing(documentId, filePath, mimeType, push, userId);
+    return;
+  }
 
   // ── Stage A: OCR regex baseline — always runs when there is text ────────────
   // Runs regardless of AI setting. Persists a diagnostic extraction row and a
@@ -480,7 +1081,7 @@ export async function processDocument(
       }
     } else {
       // For all other kinds, pick the best matching template then extract.
-      const template = await pickTemplate(rawText, userId);
+      const template = forcedTemplate ?? await pickTemplate(rawText, userId);
       logger.info("document_extractor_selected", {
         document_id: documentId,
         user_id: userId ?? null,
@@ -506,15 +1107,71 @@ export async function processDocument(
 
         // Use cached prompt when no inspector exclusions are needed.
         const systemPrompt = await getOrBuildSystemPrompt(template, inspector as any);
-        const run = await extractWithTemplate(rawText, template, documentId, docRow?.file_name, inspector as any, systemPrompt);
-        const normalizedFields = normalizeExtractionFieldsForTemplate(rawText, template, run.fields);
+        let extractionText = rawText;
+        let run = await extractWithTemplate(extractionText, template, documentId, docRow?.file_name, inspector as any, systemPrompt);
+        let normalizedFields = normalizeExtractionFieldsForTemplate(extractionText, template, run.fields);
+        const shouldTryOcrForInvoice = pipeline?.gmailImport
+          && isInvoiceTemplate(template)
+          && mimeType === "application/pdf"
+          && textSource === "native"
+          && normalizedFields
+          && invoiceMissingRequiredFieldsFromFields(normalizedFields, extractionText).length > 0;
+        if (shouldTryOcrForInvoice && normalizedFields) {
+          try {
+            push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 62 });
+            const ocrText = await ocrFile(filePath);
+            const ocrRun = await extractWithTemplate(ocrText, template, documentId, docRow?.file_name, inspector as any, systemPrompt);
+            const ocrFields = normalizeExtractionFieldsForTemplate(ocrText, template, ocrRun.fields);
+            const nativeMissing = invoiceMissingRequiredFieldsFromFields(normalizedFields, extractionText);
+            const ocrMissing = ocrFields ? invoiceMissingRequiredFieldsFromFields(ocrFields, ocrText) : nativeMissing;
+            await col("documents").updateOne(docFilter, {
+              $set: {
+                ocr_text: ocrText,
+                ocr_attempted: true,
+                ocr_reason: "invoice_required_fields_missing",
+                updated_at: new Date(),
+              },
+            });
+            logger.info("gmail_invoice_ocr_second_pass_completed", {
+              document_id: documentId,
+              user_id: userId ?? null,
+              template_id: template.id ?? null,
+              native_missing_fields: nativeMissing,
+              ocr_missing_fields: ocrMissing,
+              ocr_fields_extracted: ocrFields ? Object.keys(ocrFields).length : 0,
+            });
+            if (ocrFields && ocrMissing.length < nativeMissing.length) {
+              extractionText = ocrText;
+              run = ocrRun;
+              normalizedFields = ocrFields;
+              textSource = "ocr";
+            }
+          } catch (ocrErr) {
+            await col("documents").updateOne(docFilter, {
+              $set: {
+                ocr_attempted: true,
+                ocr_retryable: true,
+                ocr_error: String(ocrErr),
+                retry_reason: "ocr_unreadable",
+                retry_label: retryableProcessingLabel("ocr_unreadable", String(ocrErr)),
+                updated_at: new Date(),
+              },
+            });
+            logger.warn("gmail_invoice_ocr_second_pass_failed", {
+              document_id: documentId,
+              user_id: userId ?? null,
+              template_id: template.id ?? null,
+              error: String(ocrErr),
+            });
+          }
+        }
 
         await col("extractions").insertOne({
           document_id: documentId,
           backend: run.backend,
           model: run.model,
           result_json: parseJsonObject(run.rawJson, normalizedFields),
-          raw_text: rawText,
+          raw_text: extractionText,
           parsed_ok: normalizedFields ? 1 : 0,
           error: run.error ?? null,
           exec_ms: run.execMs,
@@ -537,19 +1194,52 @@ export async function processDocument(
             $set: {
               extracted_fields: JSON.stringify(normalizedFields),
               template_id: template.id,
-              document_type: template.name,
+              document_type: documentTypeFromTemplate(template),
+              document_kind: documentTypeFromTemplate(template),
+              text_extraction_source: textSource,
               updated_at: new Date(),
             },
           });
 
           if (!pipeline?.skipEntities) {
             push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-            await saveTemplateEntities(documentId, template, normalizedFields, userId, pipeline?.skipReminders);
+            await saveTemplateEntities(documentId, template, normalizedFields, userId, pipeline?.skipReminders, extractionText);
+            const invoiceWasSaved = pipeline?.gmailImport && isInvoiceTemplate(template)
+              ? await gmailInvoiceWasSaved(documentId)
+              : true;
+            if (pipeline?.gmailImport && isInvoiceTemplate(template) && !invoiceWasSaved) {
+              logger.info("gmail_import_non_invoice_skipped", {
+                document_id: documentId,
+                user_id: userId ?? null,
+                template_id: template.id ?? null,
+                template_name: template.name,
+              });
+              await deleteSkippedGmailDocument(documentId, docFilter, filePath);
+              push?.({ type: "document:done", documentId: documentId as any, status: "skipped", reason: "gmail_import_non_invoice_skipped" });
+              return;
+            }
           }
         } else if (run.error) {
+          if (pipeline?.gmailImport && isInvoiceTemplate(template)) {
+            const msg = `AI extraction failed: ${run.error}`;
+            const reason = retryReasonFromError(msg, "ai_extraction_failed");
+            logger.info("gmail_import_invoice_extraction_failed_skipped", {
+              document_id: documentId,
+              user_id: userId ?? null,
+              template_id: template.id ?? null,
+              template_name: template.name,
+              error: run.error,
+              retry_reason: reason,
+            });
+            await col("documents").updateOne(docFilter, {
+              $set: retryableDocumentError(msg, reason),
+            });
+            push?.({ type: "document:done", documentId: documentId as any, status: "error", reason, error: msg });
+            return;
+          }
           const msg = `AI extraction failed: ${run.error}`;
           await col("documents").updateOne(docFilter, {
-            $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+            $set: retryableDocumentError(msg, retryReasonFromError(msg, "ai_extraction_failed")),
           });
           notifyExtractionFailed({ fileName: docRow?.file_name ?? documentId, error: msg });
           push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
@@ -588,12 +1278,12 @@ export async function processDocument(
       extraction.result.expiry_date = forwardPastNextActionDate(extraction.result.expiry_date);
       if (!pipeline?.skipEntities) {
             push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-            await saveExtractionEntities(documentId, extraction.result, userId, pipeline?.skipReminders);
+            await saveExtractionEntities(documentId, extraction.result, userId, pipeline?.skipReminders, rawText);
           }
         } else if (extraction.error) {
           const msg = `AI extraction failed: ${extraction.error}`;
           await col("documents").updateOne(docFilter, {
-            $set: { processing_status: "error", error_message: msg, updated_at: new Date() },
+            $set: retryableDocumentError(msg, retryReasonFromError(msg, "ai_extraction_failed")),
           });
           notifyExtractionFailed({ fileName: docRow?.file_name ?? documentId, error: msg });
           push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
@@ -603,9 +1293,30 @@ export async function processDocument(
     }
   }
 
-  await col("documents").updateOne(docFilter, {
-    $set: { processing_status: "done", updated_at: new Date() },
-  });
+  await finishDocumentProcessing(documentId, filePath, mimeType, push, userId);
+}
+
+async function finishDocumentProcessing(
+  documentId: string,
+  filePath: string,
+  mimeType: string,
+  push?: PushFn,
+  userId?: string,
+): Promise<void> {
+  await col("documents").updateOne(
+    { _id: new ObjectId(documentId) } as any,
+    { $set: { processing_status: "done", updated_at: new Date() } },
+  );
+  if (mimeType === "application/pdf") {
+    await generatePdfThumbnailForDocument(documentId, { filePath }).catch((err) => {
+      logger.warn("document_thumbnail_generation_failed", { document_id: documentId, user_id: userId ?? null, error: err });
+    });
+  }
+  if (userId) {
+    syncDocumentToDrive(documentId, userId).catch((err) => {
+      logger.error("drive_sync_post_processing_failed", {document_id: documentId, user_id: userId, error: err});
+    });
+  }
   push?.({ type: "document:done", documentId: documentId as any, status: "done" });
   logger.info("document_processing_completed", { document_id: documentId, user_id: userId ?? null });
 }
@@ -614,7 +1325,8 @@ async function saveExtractionEntities(
   documentId: string,
   result: import("../../src/shared/types.js").ExtractionResult,
   userId?: string,
-  skipReminders?: boolean
+  skipReminders?: boolean,
+  rawText?: string,
 ) {
   if (result.document_type || result.document_number) {
     await col("documents").updateOne(
@@ -627,6 +1339,26 @@ async function saveExtractionEntities(
         },
       }
     );
+  }
+
+  if (isInvoiceLikeDocument(result.document_type)) {
+    await col("document_clients").deleteMany({ document_id: documentId } as any);
+    const invoiceSaved = await saveInvoiceRecord(documentId, result as unknown as Record<string, unknown>, {
+      userId,
+      clientId: null,
+      documentType: result.document_type ?? "invoice",
+      rawText,
+    });
+    await deleteContractReminderArtifacts(documentId, userId);
+    if (invoiceSaved) {
+      logger.info("invoice_entity_saved", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        source: "generic-extraction",
+        document_type: result.document_type ?? null,
+      });
+    }
+    return;
   }
 
   let clientId: string | null = null;
@@ -1435,7 +2167,8 @@ async function saveTemplateEntities(
   template: DocTemplate,
   fields: DynamicExtraction,
   userId?: string,
-  skipReminders?: boolean
+  skipReminders?: boolean,
+  rawText?: string,
 ) {
   const f = fields;
 
@@ -1450,6 +2183,28 @@ async function saveTemplateEntities(
     const n = typeof v === "number" ? v : parseFloat(String(v));
     return Number.isFinite(n) ? n : null;
   };
+
+  if (isInvoiceTemplate(template)) {
+    await col("document_clients").deleteMany({ document_id: documentId } as any);
+    const invoiceSaved = await saveInvoiceRecord(documentId, fields, {
+      userId,
+      clientId: null,
+      documentType: template.name,
+      templateId: template.id,
+      templateName: template.name,
+      rawText,
+    });
+    await deleteContractReminderArtifacts(documentId, userId);
+    if (invoiceSaved) {
+      logger.info("invoice_entity_saved", {
+        document_id: documentId,
+        user_id: userId ?? null,
+        template_id: template.id ?? null,
+        template_name: template.name,
+      });
+    }
+    return;
+  }
 
   const clientCompany = getStr("client_company");
   const contactPerson = getStr("contact_person") ?? getStr("client_name");
@@ -1588,6 +2343,630 @@ async function saveTemplateEntities(
       model: eq.model ?? null,
     });
   }
+}
+
+function isInvoiceTemplate(template: DocTemplate): boolean {
+  return template.document_kind === "invoice" || isInvoiceLikeDocument(template.name);
+}
+
+function isInspectionTemplate(template: DocTemplate): boolean {
+  return template.document_kind === "inspection_report" || /תסקיר|בדיקה/.test(template.name);
+}
+
+function isInvoiceLikeDocument(value: unknown): boolean {
+  const text = String(value ?? "").toLowerCase();
+  return /invoice|receipt|bill|חשבונית|קבלה|דרישת\s*תשלום|חיוב/.test(text);
+}
+
+export function extractKnownInvoiceFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  return extractHotInvoiceFields(rawText, fileName)
+    ?? extractGitHubReceiptFields(rawText, fileName)
+    ?? extractVercelReceiptFields(rawText, fileName);
+}
+
+function extractHotInvoiceFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  const text = rawText.replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const lower = text.toLowerCase();
+  const nameLower = String(fileName ?? "").toLowerCase();
+  if (!(/\bhot\b/i.test(text) || text.includes("הוט") || nameLower.includes("hot"))) return null;
+  if (!/פירוט\s+(?:חודשי|חשבון)|תקופת\s+חיוב|תקופת\s+השימושים|שירותי\s+אינטרנט|שירותי\s+טלוויזיה/.test(text)) return null;
+
+  const customerNumber =
+    matchFirst(text, /(?:למנוי|מספר\s*(?:לקוח|מנוי|חשבון))\s*:?\s*(?:[^\d\n]{0,80}?[-–]\s*)?(\d{4,12})/i) ??
+    matchFirst(text, /\b(\d{5,12})\b/);
+  const clientCompany =
+    extractHotClientName(text) ??
+    extractInvoiceRecipientFromRawText(text) ??
+    customerNumber;
+  const billingPeriod = extractHotBillingPeriod(text);
+  const issueDate =
+    billingPeriod?.end ??
+    parseMonthYear(matchFirst(text, /חודש\s*החשבון\s*:?\s*(\d{1,2}[./]\d{4})/)) ??
+    parseIsraeliDate(matchFirst(text, /תאריך\s*(?:הפקה|חשבונית|חשבון)\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/));
+  const dueDate =
+    parseIsraeliDate(matchFirst(text, /(?:לתשלום|תשלום|בתאריך)\s*(?:עד|בפועל|בתאריך)?\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/)) ??
+    parseIsraeliDate(matchFirst(text, /(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s*(?:יסתיים|לתשלום|תשלום)/)) ??
+    issueDate;
+  const amount = extractHotTotalAmount(text);
+  const invoiceNumber = [
+    "HOT",
+    customerNumber,
+    billingPeriod?.start,
+    billingPeriod?.end,
+  ].filter(Boolean).join("-");
+
+  if (!customerNumber || !clientCompany || !issueDate || !dueDate || amount === null || !invoiceNumber) return null;
+
+  return {
+    supplier_name: "HOT",
+    supplier_id: null,
+    invoice_number: invoiceNumber,
+    document_subtype: "חשבון תקופתי",
+    client_company: clientCompany,
+    client_name: clientCompany,
+    customer_number: customerNumber,
+    issue_date: issueDate,
+    payment_due_date: dueDate,
+    billing_period: billingPeriod ? `${billingPeriod.start} - ${billingPeriod.end}` : null,
+    billing_period_start: billingPeriod?.start ?? null,
+    billing_period_end: billingPeriod?.end ?? null,
+    amount,
+    amount_before_vat: extractHotSubtotalAmount(text),
+    vat_amount: null,
+    currency: "ILS",
+    payment_status: /הוראת\s*קבע|כרטיס\s*אשראי|יחויב/.test(text) ? "חיוב אוטומטי" : null,
+    items: extractHotItems(text),
+    notes: "HOT periodic bill",
+  };
+}
+
+function extractHotClientName(text: string): string | null {
+  const direct =
+    matchFirst(text, /(?:לכבוד|למנוי)\s*:?\s*([^\n\r\-–:]{2,80})\s*[-–]\s*\d{4,12}/) ??
+    matchFirst(text, /(?:לכבוד|למנוי)\s*:?\s*([^\n\r:]{2,80})/);
+  if (!direct) return null;
+  return direct
+    .replace(/\bHOT\b/ig, "")
+    .replace(/פירוט\s+(?:חודשי|חשבון).*/g, "")
+    .trim() || null;
+}
+
+function extractHotBillingPeriod(text: string): { start: string; end: string } | null {
+  const match =
+    /(?:תקופת\s+(?:חיוב|השימושים)|תקופת\s+החשבון)\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s*[-–]\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/.exec(text) ??
+    /(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s*[-–]\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/.exec(text);
+  const start = parseIsraeliDate(match?.[1] ?? null);
+  const end = parseIsraeliDate(match?.[2] ?? null);
+  return start && end ? { start, end } : null;
+}
+
+function extractHotTotalAmount(text: string): number | null {
+  const totalsContext = [
+    /סה"?כ[^\n]{0,80}(?:לתקופת\s+החשבון\s+הנוכחית|חיובים\s+וזיכויים)[^\n]*(?:\n| )([^\n]{0,120})/i,
+    /סכום\s+כולל\s+מע"?מ[^\n]*(?:\n| )([^\n]{0,120})/i,
+  ];
+  for (const pattern of totalsContext) {
+    const context = pattern.exec(text)?.[1] ?? "";
+    const values = decimalAmounts(context);
+    const positive = values.filter((value) => value > 0);
+    if (positive.length) return positive[positive.length - 1];
+  }
+  const tableValues = decimalAmounts(text);
+  const candidates = tableValues.filter((value) => value > 0 && value < 100_000);
+  return candidates.length ? candidates[candidates.length - 1] : null;
+}
+
+function extractHotSubtotalAmount(text: string): number | null {
+  const match = /סה"?כ[^\n]{0,80}(?:לתקופת\s+החשבון\s+הנוכחית|חיובים\s+וזיכויים)[^\n]*(?:\n| )([^\n]{0,120})/i.exec(text);
+  const values = decimalAmounts(match?.[1] ?? "");
+  return values.length >= 2 ? values[values.length - 2] : null;
+}
+
+function extractHotItems(text: string): Array<{ description: string; amount?: number; currency: string }> {
+  const items: Array<{ description: string; amount?: number; currency: string }> = [];
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    if (!/שירותי|חבילת|הטבה|אינטרנט|טלוויזיה|טלפון/i.test(line)) continue;
+    const amount = decimalAmounts(line).filter((value) => Math.abs(value) < 100_000).pop();
+    items.push({ description: line.slice(0, 160), ...(amount !== undefined ? { amount } : {}), currency: "ILS" });
+    if (items.length >= 8) break;
+  }
+  return items;
+}
+
+function extractGitHubReceiptFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  const text = rawText.replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const lower = text.toLowerCase();
+  const nameLower = String(fileName ?? "").toLowerCase();
+  if (!lower.includes("github") || !(lower.includes("receipt") || nameLower.includes("receipt"))) return null;
+
+  const dateRaw =
+    matchValueAfterLabel(text, "Date") ??
+    matchFirst(text, /\b([A-Z][a-z]{2,9}\s+\d{1,2},\s+\d{4})\b/) ??
+    matchFirst(text, /\b(\d{4}-\d{2}-\d{2})\b/);
+  const issueDate = normalizeInvoiceDate(dateRaw);
+  const transactionId = matchValueAfterLabel(text, "Transaction ID");
+  const accountBilled = matchValueAfterLabel(text, "Account billed");
+  const amountRaw =
+    matchValueAfterLabel(text, "Total") ??
+    matchValueAfterLabel(text, "Amount") ??
+    matchFirst(text, /(?:Total|Amount)\s*([\d,]+(?:\.\d{1,2})?)\s*USD/i) ??
+    matchFirst(text, /\$[\s]*([\d,]+(?:\.\d{1,2})?)\s*USD/i);
+  const taxRaw = matchValueAfterLabel(text, "Tax");
+  const paymentMethod = matchValueAfterLabel(text, "Charged to");
+  const serviceDescription = matchFirst(text, /(GitHub\s+[^\n]+?)(?=\s+\$?\d|[\r\n])/i);
+  const amount = parseInvoiceAmount(amountRaw);
+  const invoiceNumber =
+    transactionId ??
+    matchFirst(fileName ?? "", /receipt[-_](\d{4}-\d{2}-\d{2})/i) ??
+    matchFirst(fileName ?? "", /github[-_\w]*receipt[-_]?([^.]+)/i);
+
+  if (!issueDate || amount === null || !invoiceNumber) return null;
+
+  return {
+    supplier_name: "GitHub, Inc.",
+    supplier_id: null,
+    invoice_number: invoiceNumber,
+    document_subtype: "קבלה",
+    client_company: accountBilled ?? null,
+    client_name: accountBilled ?? null,
+    customer_number: accountBilled ? accountBilled.replace(/\s*\([^)]*\)\s*$/, "") : null,
+    issue_date: issueDate,
+    payment_due_date: issueDate,
+    billing_period: matchFirst(text, /\b([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4}\s*-\s*[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})\b/),
+    amount,
+    amount_before_vat: amount,
+    vat_amount: parseInvoiceAmount(taxRaw) ?? 0,
+    currency: "USD",
+    payment_status: "paid",
+    payment_method: paymentMethod,
+    items: serviceDescription
+      ? [{ description: serviceDescription, amount, currency: "USD" }]
+      : [],
+    notes: "GitHub subscription receipt",
+  };
+}
+
+function extractVercelReceiptFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  const text = rawText.replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const lower = text.toLowerCase();
+  const nameLower = String(fileName ?? "").toLowerCase();
+  if (!lower.includes("vercel") || !(lower.includes("invoice") || lower.includes("receipt") || /invoice|receipt/.test(nameLower))) {
+    return null;
+  }
+
+  const isReceipt = lower.includes("receipt") || nameLower.includes("receipt");
+  const issueDate =
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date paid")) ??
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date of issue")) ??
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date due")) ??
+    normalizeInvoiceDate(matchFirst(text, /\b([A-Z][a-z]{2,9}\s+\d{1,2},\s+\d{4})\b/));
+  const dueDate =
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date due")) ??
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date paid")) ??
+    issueDate;
+  const invoiceNumber =
+    formatVercelDocumentNumber(matchValueAfterLabel(text, "Invoice number")) ??
+    matchFirst(fileName ?? "", /Invoice[-_]?([A-Z0-9-]+)/i);
+  const receiptNumber =
+    formatVercelDocumentNumber(matchValueAfterLabel(text, "Receipt number")) ??
+    matchFirst(fileName ?? "", /Receipt[-_]?([A-Z0-9-]+)/i);
+  const amountRaw =
+    matchValueAfterLabel(text, "Amount paid") ??
+    matchValueAfterLabel(text, "Amount due") ??
+    matchValueAfterLabel(text, "Total") ??
+    matchFirst(text, /\b([\d,]+(?:\.\d{1,2})?)\s+USD\s+(?:due|paid)\b/i);
+  const amount = parseInvoiceAmount(amountRaw);
+  const subtotal = parseInvoiceAmount(matchValueAfterLabel(text, "Subtotal"));
+  const clientCompany = extractVercelBillTo(text);
+  const paymentMethod = extractVercelPaymentMethod(text);
+  const itemDescription = matchFirst(text, /\n(?!Subtotal|Total|Amount)([^\n]*?(?:Domain purchase|subscription|seat|usage)[^\n]*?)(?=\d[\d.,]*\d[\d.,]*|\n|$)/i);
+
+  if (!issueDate || amount === null || !(invoiceNumber || receiptNumber) || !clientCompany) return null;
+
+  return {
+    supplier_name: "Vercel Inc.",
+    supplier_id: null,
+    invoice_number: invoiceNumber ?? receiptNumber,
+    receipt_number: receiptNumber ?? null,
+    document_subtype: isReceipt ? "קבלה" : "חשבונית",
+    client_company: clientCompany,
+    client_name: clientCompany,
+    service_address: extractVercelBillToAddress(text),
+    issue_date: issueDate,
+    payment_due_date: dueDate,
+    amount,
+    amount_before_vat: subtotal,
+    vat_amount: null,
+    currency: "USD",
+    payment_status: isReceipt ? "paid" : null,
+    payment_method: paymentMethod,
+    items: itemDescription
+      ? [{ description: itemDescription, amount, currency: "USD" }]
+      : [],
+    notes: isReceipt ? "Vercel receipt" : "Vercel invoice",
+  };
+}
+
+function formatVercelDocumentNumber(value: string | null): string | null {
+  if (!value) return null;
+  const clean = value.replace(/[^A-Za-z0-9-]/g, "");
+  const invoiceMatch = /^([A-Z0-9]{8})(\d{4})$/i.exec(clean);
+  if (invoiceMatch) return `${invoiceMatch[1]}-${invoiceMatch[2]}`;
+  const receiptMatch = /^(\d{4})(\d{4})$/.exec(clean);
+  if (receiptMatch) return `${receiptMatch[1]}-${receiptMatch[2]}`;
+  return clean || null;
+}
+
+function extractVercelBillTo(text: string): string | null {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const index = lines.findIndex((line) => /^Bill to$/i.test(line));
+  if (index < 0) return null;
+  const value = lines[index + 1];
+  return value ? cleanKnownInvoiceValue(value) : null;
+}
+
+function extractVercelBillToAddress(text: string): string | null {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const index = lines.findIndex((line) => /^Bill to$/i.test(line));
+  if (index < 0) return null;
+  const address: string[] = [];
+  for (const line of lines.slice(index + 2)) {
+    if (/@/.test(line)) continue;
+    if (/^\d+(?:\.\d{1,2})?\s+(?:USD\s+)?(?:due|paid)\b/i.test(line)) break;
+    if (/^VAT-?Code/i.test(line)) break;
+    address.push(line);
+  }
+  return address.join(", ") || null;
+}
+
+function extractVercelPaymentMethod(text: string): string | null {
+  return matchFirst(text, /\b((?:Mastercard|Visa|American Express|Amex|Discover|PayPal)\s*[-–]\s*\d{2,4})\b/i)
+    ?? matchValueAfterLabel(text, "Payment method");
+}
+
+function matchValueAfterLabel(text: string, label: string): string | null {
+  const escaped = escapeRegex(label);
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const inline = new RegExp(`^${escaped}\\s*[:：-]?\\s*(.+)$`, "i").exec(line);
+    if (inline?.[1] && inline[1].trim().toLowerCase() !== label.toLowerCase()) {
+      return cleanKnownInvoiceValue(inline[1]);
+    }
+    if (new RegExp(`^${escaped}$`, "i").test(line)) {
+      const next = lines[i + 1];
+      if (next) return cleanKnownInvoiceValue(next);
+    }
+  }
+  const loose = new RegExp(`${escaped}\\s+([^\\n]+)`, "i").exec(text);
+  return loose?.[1] ? cleanKnownInvoiceValue(loose[1]) : null;
+}
+
+function matchFirst(text: string, pattern: RegExp): string | null {
+  const match = pattern.exec(text);
+  return match?.[1] ? cleanKnownInvoiceValue(match[1]) : null;
+}
+
+function cleanKnownInvoiceValue(value: string): string | null {
+  const cleaned = value
+    .replace(/\s{2,}/g, " ")
+    .replace(/^\s*[:：-]\s*/, "")
+    .replace(/\s*[*•]\s*$/, "")
+    .trim();
+  return cleaned || null;
+}
+
+function normalizeInvoiceDate(value: string | null): string | null {
+  if (!value) return null;
+  const israeli = parseIsraeliDate(value);
+  if (israeli) return israeli;
+  const cleaned = value.replace(/\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\s*[A-Z]{2,4}\b/i, "").trim();
+  const parsed = Date.parse(cleaned);
+  if (!Number.isFinite(parsed)) return null;
+  return new Date(parsed).toISOString().slice(0, 10);
+}
+
+function parseIsraeliDate(value: string | null): string | null {
+  if (!value) return null;
+  const match = /(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/.exec(value);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const rawYear = Number(match[3]);
+  const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function parseMonthYear(value: string | null): string | null {
+  if (!value) return null;
+  const match = /(\d{1,2})[./](\d{4})/.exec(value);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const year = Number(match[2]);
+  if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year)) return null;
+  return new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10);
+}
+
+function decimalAmounts(value: string): number[] {
+  return [...value.matchAll(/-?\d{1,6}(?:[,.]\d{2})/g)]
+    .map((match) => Number(match[0].replace(",", ".")))
+    .filter(Number.isFinite);
+}
+
+function firstInvoiceString(fields: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = fields[key];
+    if (value === undefined || value === null || value === "") continue;
+    return String(value).trim() || null;
+  }
+  return null;
+}
+
+function parseInvoiceAmount(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const normalized = String(value)
+    .replace(/[₪$€£,\s]/g, "")
+    .replace(/[^\d.-]/g, "");
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function deleteContractReminderArtifacts(documentId: string, userId?: string): Promise<void> {
+  const contractFilter: Record<string, unknown> = { document_id: documentId };
+  if (userId) contractFilter.user_id = userId;
+  const contracts = await col("contracts").find(contractFilter as any).project({ _id: 1 }).toArray();
+  const contractIds = contracts.map((contract: any) => contract._id?.toString()).filter(Boolean);
+  if (contractIds.length > 0) {
+    const reminderFilter: Record<string, unknown> = {
+      source_type: "contract_expiry",
+      source_id: { $in: contractIds },
+    };
+    if (userId) reminderFilter.user_id = userId;
+    await col("reminders").deleteMany(reminderFilter as any);
+  }
+  const directReminderFilter: Record<string, unknown> = { document_id: documentId };
+  if (userId) directReminderFilter.user_id = userId;
+  await Promise.all([
+    col("contracts").deleteMany(contractFilter as any),
+    col("reminders").deleteMany(directReminderFilter as any),
+    col("tasks").deleteMany(directReminderFilter as any),
+  ]);
+}
+
+async function saveInvoiceRecord(
+  documentId: string,
+  fields: Record<string, unknown>,
+  options: {
+    userId?: string;
+    clientId?: string | null;
+    documentType?: string | null;
+    templateId?: string | number;
+    templateName?: string | null;
+    rawText?: string;
+  },
+): Promise<boolean> {
+  const now = new Date();
+  const supplierName = firstInvoiceString(fields, ["supplier_name", "vendor_name", "counterparty", "issuer_name", "company_name"]);
+  const invoiceNumber = firstInvoiceString(fields, ["invoice_number", "receipt_number", "document_number", "reference_number"]);
+  const clientName = firstInvoiceString(fields, ["client_company", "client_name", "customer_name", "bill_to"])
+    ?? extractInvoiceRecipientFromRawText(options.rawText);
+  const issueDate = firstInvoiceString(fields, ["issue_date", "invoice_date", "receipt_date", "date"]);
+  const paymentDueDate = firstInvoiceString(fields, ["payment_due_date", "due_date", "expiry_date"]);
+  const amount = parseInvoiceAmount(
+    fields.amount ?? fields.total_amount ?? fields.amount_due ?? fields.total_to_pay ?? fields.total,
+  );
+  const missingRequired = invoiceMissingRequiredFields({
+    supplierName,
+    invoiceNumber,
+    clientName,
+    issueDate,
+    paymentDueDate,
+    amount,
+  });
+  if (missingRequired.length > 0) {
+    const rejectionReason = invoiceRejectionReason(missingRequired);
+    const rejectionLabel = invoiceRejectionLabel(rejectionReason, missingRequired);
+    await col("invoices").deleteOne({ document_id: documentId } as any);
+    await col("documents").updateOne(
+      { _id: new ObjectId(documentId) } as any,
+      {
+        $set: {
+          invoice_saved: false,
+          invoice_rejected: true,
+          invoice_rejection_reason: rejectionReason,
+          invoice_rejection_code: rejectionReason,
+          invoice_rejection_label: rejectionLabel,
+          invoice_missing_fields: missingRequired,
+          reminder_status: "not_applicable",
+          updated_at: now,
+        },
+      },
+    );
+    logger.info("invoice_entity_skipped_missing_fields", {
+      document_id: documentId,
+      user_id: options.userId ?? null,
+      missing_fields: missingRequired,
+    });
+    return false;
+  }
+  const invoiceFields: Record<string, unknown> = {
+    ...(options.userId && { user_id: options.userId }),
+    client_id: options.clientId ?? null,
+    template_id: options.templateId ?? null,
+    template_name: options.templateName ?? null,
+    supplier_name: supplierName,
+    supplier_id: firstInvoiceString(fields, ["supplier_id", "vendor_id", "business_id", "vat_id"]),
+    invoice_number: invoiceNumber,
+    document_subtype: firstInvoiceString(fields, ["document_subtype", "invoice_type", "receipt_type"]) ?? options.documentType ?? null,
+    customer_number: firstInvoiceString(fields, ["customer_number", "account_customer_number"]),
+    account_number: firstInvoiceString(fields, ["account_number", "contract_number"]),
+    service_address: firstInvoiceString(fields, ["service_address", "site_address", "address"]),
+    issue_date: issueDate,
+    billing_period: firstInvoiceString(fields, ["billing_period", "period"]),
+    billing_period_start: firstInvoiceString(fields, ["billing_period_start", "period_start"]),
+    billing_period_end: firstInvoiceString(fields, ["billing_period_end", "period_end"]),
+    payment_due_date: paymentDueDate,
+    amount,
+    amount_before_vat: parseInvoiceAmount(fields.amount_before_vat ?? fields.subtotal),
+    vat_amount: parseInvoiceAmount(fields.vat_amount ?? fields.vat),
+    currency: normalizeInvoiceCurrency(firstInvoiceString(fields, ["currency"])),
+    payment_status: firstInvoiceString(fields, ["payment_status", "status"]),
+    payment_method: firstInvoiceString(fields, ["payment_method"]),
+    meter_number: firstInvoiceString(fields, ["meter_number"]),
+    previous_reading: firstInvoiceString(fields, ["previous_reading"]),
+    current_reading: firstInvoiceString(fields, ["current_reading"]),
+    usage_quantity: firstInvoiceString(fields, ["usage_quantity", "consumption", "kwh"]),
+    tariff_plan: firstInvoiceString(fields, ["tariff_plan"]),
+    items: Array.isArray(fields.items) ? fields.items : [],
+    notes: firstInvoiceString(fields, ["notes", "summary_hebrew", "summary"]),
+    fields,
+    updated_at: now,
+  };
+  if (clientName) {
+    invoiceFields.client_company = clientName;
+    invoiceFields.fields = {
+      ...fields,
+      client_company: fields.client_company ?? clientName,
+      client_name: fields.client_name ?? clientName,
+    };
+  }
+
+  const sourceDoc = await col<any>("documents").findOne(
+    { _id: new ObjectId(documentId) } as any,
+    { projection: { spaces_key: 1, drive_file_id: 1, drive_web_link: 1 } } as any,
+  );
+  if (sourceDoc?.spaces_key) invoiceFields.spaces_key = sourceDoc.spaces_key;
+  if (sourceDoc?.drive_file_id) {
+    invoiceFields.drive_file_id = sourceDoc.drive_file_id;
+    invoiceFields.drive_web_link = sourceDoc.drive_web_link ?? null;
+  }
+
+  await col("invoices").updateOne(
+    { document_id: documentId } as any,
+    {
+      $set: invoiceFields,
+      $setOnInsert: {
+        document_id: documentId,
+        created_at: now,
+        status: "new",
+        cash_flow: inferInvoiceCashFlow({
+          document_subtype: invoiceFields.document_subtype,
+          notes: invoiceFields.notes,
+          fields,
+        }),
+      },
+    } as any,
+    { upsert: true },
+  );
+
+  await col("documents").updateOne(
+    { _id: new ObjectId(documentId) } as any,
+    {
+      $set: {
+        invoice_saved: true,
+        invoice_rejected: false,
+        invoice_rejection_reason: null,
+        invoice_rejection_code: null,
+        invoice_rejection_label: null,
+        invoice_missing_fields: [],
+        reminder_status: "not_applicable",
+        updated_at: now,
+      },
+    },
+  );
+  return true;
+}
+
+function invoiceRejectionLabel(reason: string, missingFields: string[] = []): string {
+  const labels: Record<string, string> = {
+    missing_invoice_number_and_amount: "חסר מספר חשבונית וסכום - כנראה לא חשבונית",
+    missing_required_fields: "חסרים שדות חובה לחשבונית",
+    missing_amount: "חסר סכום חשבונית",
+    missing_supplier: "חסר ספק",
+    missing_date: "חסר תאריך חשבונית או תאריך לתשלום",
+    ocr_unreadable: "OCR לא הצליח לקרוא את המסמך",
+    storage_failed: "שמירת הקובץ באחסון נכשלה",
+    ai_rate_limited: "חילוץ AI נכשל בגלל מגבלת בקשות זמנית",
+    ai_extraction_failed: "חילוץ AI נכשל",
+    not_invoice: "המסמך לא זוהה כחשבונית",
+    rejected: "החשבונית נדחתה",
+  };
+  const base = labels[reason] ?? "המסמך נדחה כחשבונית";
+  return missingFields.length ? `${base}: ${missingFields.join(", ")}` : base;
+}
+
+function invoiceRejectionReason(missing: string[]): string {
+  if (missing.includes("invoice_number") && missing.includes("amount")) return "not_invoice";
+  if (missing.includes("amount")) return "missing_amount";
+  if (missing.includes("supplier_name")) return "missing_supplier";
+  if (missing.includes("issue_date") || missing.includes("payment_due_date")) return "missing_date";
+  return "missing_required_fields";
+}
+
+function invoiceMissingRequiredFieldsFromFields(fields: Record<string, unknown>, rawText?: string): string[] {
+  const supplierName = firstInvoiceString(fields, ["supplier_name", "vendor_name", "counterparty", "issuer_name", "company_name"]);
+  const invoiceNumber = firstInvoiceString(fields, ["invoice_number", "receipt_number", "document_number", "reference_number"]);
+  const clientName = firstInvoiceString(fields, ["client_company", "client_name", "customer_name", "bill_to"])
+    ?? extractInvoiceRecipientFromRawText(rawText);
+  const issueDate = firstInvoiceString(fields, ["issue_date", "invoice_date", "receipt_date", "date"]);
+  const paymentDueDate = firstInvoiceString(fields, ["payment_due_date", "due_date", "expiry_date"]);
+  const amount = parseInvoiceAmount(
+    fields.amount ?? fields.total_amount ?? fields.amount_due ?? fields.total_to_pay ?? fields.total,
+  );
+  return invoiceMissingRequiredFields({ supplierName, invoiceNumber, clientName, issueDate, paymentDueDate, amount });
+}
+
+function invoiceMissingRequiredFields(values: {
+  supplierName: string | null;
+  invoiceNumber: string | null;
+  clientName: string | null;
+  issueDate: string | null;
+  paymentDueDate: string | null;
+  amount: number | null;
+}): string[] {
+  const missing: string[] = [];
+  if (!values.supplierName) missing.push("supplier_name");
+  if (!values.invoiceNumber) missing.push("invoice_number");
+  if (!values.clientName) missing.push("client_company");
+  if (!values.issueDate) missing.push("issue_date");
+  if (!values.paymentDueDate) missing.push("payment_due_date");
+  if (values.amount === null) missing.push("amount");
+  return missing;
+}
+
+function isProbablyContractOrNonInvoice(missing: string[]): boolean {
+  return missing.includes("invoice_number") && missing.includes("amount");
+}
+
+function extractInvoiceRecipientFromRawText(rawText: string | null | undefined): string | null {
+  if (!rawText) return null;
+  const match = rawText.match(/(?:^|\n|\r)\s*לכבוד\s*:?\s*([^\n\r\t|:]{2,100})/m);
+  const raw = match?.[1]?.trim();
+  if (!raw) return null;
+  const compact = raw
+    .replace(/\s{2,}/g, " ")
+    .replace(/[,:;|\-]+$/g, "")
+    .trim();
+  const company = compact.match(/^(.+?בע["״']?מ)\b/);
+  if (company?.[1]) return company[1].trim();
+  return compact
+    .replace(/\s+(?:לתשלום|תשלום|סה["״]?כ|עד|מספר|חשבון)\b.*$/, "")
+    .trim() || null;
+}
+
+function normalizeInvoiceCurrency(value: unknown): string {
+  const text = String(value ?? "").trim().toUpperCase();
+  if (!text || /₪|ש"?ח|שקל|NIS|ILS/.test(text)) return "ILS";
+  if (/\$|USD|DOLLAR/.test(text)) return "USD";
+  if (/€|EUR/.test(text)) return "EUR";
+  if (/£|GBP/.test(text)) return "GBP";
+  return /^[A-Z]{3}$/.test(text) ? text : "ILS";
 }
 
 function escapeRegex(s: string): string {
@@ -1774,10 +3153,21 @@ async function findOrCreateClient(input: ClientInput): Promise<string> {
   // 2. Phone (normalised on both sides: 050-1234567, 050 1234567, +972501234567).
   // Phone is treated as the hard dedupe anchor because OCR often corrupts the
   // company name while keeping the phone number stable.
+  // Also checks the `mobile` field to prevent duplicates when the same number
+  // appears in either phone or mobile.
   if (!existing && phone) {
     if (normalizedPhone) {
-      const all = await col("clients").find({ ...userScope, phone: { $exists: true, $ne: null } }).toArray() as any[];
-      const matches = all.filter((c: any) => normalizePhoneIdentityKey(c.phone) === normalizedPhone);
+      const all = await col("clients").find({
+        ...userScope,
+        $or: [
+          { phone: { $exists: true, $ne: null } },
+          { mobile: { $exists: true, $ne: null } },
+        ],
+      }).toArray() as any[];
+      const matches = all.filter((c: any) =>
+        normalizePhoneIdentityKey(c.phone) === normalizedPhone ||
+        normalizePhoneIdentityKey(c.mobile) === normalizedPhone,
+      );
       existing = chooseCanonicalClient(matches);
       if (existing) {
         matchStrategy = "phone";

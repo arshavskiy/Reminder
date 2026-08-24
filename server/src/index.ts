@@ -29,7 +29,9 @@ import {registerDashboardRoutes} from "./routes/dashboard";
 import {registerTemplateRoutes} from "./routes/templates";
 import {registerEquipmentRoutes} from "./routes/equipment";
 import {registerAuthRoutes} from "./routes/auth";
-import {registerGmailRoutes} from "./routes/gmail";
+import {registerGmailRoutes, startGmailImportJobWorker} from "./routes/gmail";
+import {registerGdriveRoutes, startDriveExportJobWorker} from "./routes/gdrive";
+import {registerInvoiceRoutes} from "./routes/invoices";
 import {registerUserSettingsRoutes} from "./routes/userSettings";
 import {registerProfileRoutes} from "./routes/profile";
 import {registerAdminRoutes} from "./routes/admin";
@@ -38,7 +40,8 @@ import {registerExtractRemindersRoutes} from "./routes/extractReminders";
 import {registerPrintTemplateRoutes} from "./routes/printTemplates";
 import {registerFeatureRoutes} from "./routes/features";
 import {registerLegalRoutes} from "./routes/legal";
-import {importFile} from "./pipeline/importer";
+import {seedGmailSearchProviders} from "./gmail/searchProviders";
+import {importFile, startDocumentProcessingJobWorker} from "./pipeline/importer";
 import {applyScannedKeys, scanFileForKeys, shouldScanFile} from "./pipeline/keyScanner";
 import {logger, requestLogger} from "./logger";
 import {registerResendWebhook} from "./reminders/resendDelivery";
@@ -77,9 +80,9 @@ const VERCEL_PREVIEW_RE = /^https:\/\/reminder[a-z0-9-]*\.vercel\.app$/;
 const LOCALHOST_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const isDevEnv = process.env.APP_ENV !== "production";
 
-// Production custom domains — any handcoded.tech subdomain (app, reminder, …)
-// so new front-end hostnames work without editing ALLOWED_ORIGINS.
+// Production custom domains — any subdomain under handcoded.tech or remindocr.com
 const HANDCODED_DOMAIN_RE = /^https:\/\/([a-z0-9-]+\.)*handcoded\.tech$/;
+const REMINDOCR_DOMAIN_RE = /^https:\/\/([a-z0-9-]+\.)*remindocr\.com$/;
 
 app.use(
   cors({
@@ -89,6 +92,7 @@ app.use(
       if (isDevEnv && LOCALHOST_RE.test(origin)) return cb(null, true);
       if (VERCEL_PREVIEW_RE.test(origin)) return cb(null, true);
       if (HANDCODED_DOMAIN_RE.test(origin)) return cb(null, true);
+      if (REMINDOCR_DOMAIN_RE.test(origin)) return cb(null, true);
       logger.warn("cors_origin_rejected", { origin });
       cb(new Error(`CORS: origin ${origin} not allowed`));
     },
@@ -124,7 +128,7 @@ try {
         urls: [
           {
             url: "/api-docs.json",
-            name: "ReminderOCR API",
+            name: "RemindOCR API",
           },
         ],
       },
@@ -175,7 +179,10 @@ app.use("/api/equipment", (req, res, next) => {
 
 registerAuthRoutes(app);
 app.use("/api/gmail", requireAnyFeature(["pages.gmail"]));
+app.use("/api/invoices", requireAnyFeature(["pages.invoices", "pages.gmail"]));
 registerGmailRoutes(app);
+registerGdriveRoutes(app);
+registerInvoiceRoutes(app);
 registerDocumentRoutes(app);
 registerClientRoutes(app);
 registerContractRoutes(app);
@@ -213,7 +220,11 @@ async function main() {
   await seedBuiltinTemplates();
   await seedDefaultEmailTemplate();
   await promoteSharedPrintTemplates();
+  await seedGmailSearchProviders();
   await collapseDuplicateGeneratedPdfs();
+  startGmailImportJobWorker();
+  startDriveExportJobWorker();
+  startDocumentProcessingJobWorker();
 
   app.listen(settings.port, () => {
     logger.info("server_started", {

@@ -54,7 +54,7 @@ const FALLBACK_TEST_HTML = `<!DOCTYPE html>
     {{#if body}}<p>{{body}}</p>
 
     <div class="footer">
-      {{from_name| ReminderOCR }} — תזכורת אוטומטית, אין צורך להשיב
+      {{from_name| RemindOCR }} — תזכורת אוטומטית, אין צורך להשיב
     </div>
   </div>
 </body>
@@ -62,6 +62,7 @@ const FALLBACK_TEST_HTML = `<!DOCTYPE html>
 
 const GMAIL_SAFE_HTML_BYTES = 90 * 1024;
 const DATA_IMAGE_RE = /data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s-]+/i;
+const GROUPED_REMINDER_TEMPLATE_NAME = "בדיקה תקופתית — טקסט בלבד";
 
 function buildTransport() {
   const s = getSettings();
@@ -170,7 +171,7 @@ function hostedImageUrl(value: unknown): string | null {
 
 async function resolveSenderName(userId: string | number | null | undefined): Promise<string> {
   const settings = getSettings();
-  if (!userId) return firstNonEmpty(settings.emailFromName, "ReminderOCR") ?? "ReminderOCR";
+  if (!userId) return firstNonEmpty(settings.emailFromName, "RemindOCR") ?? "RemindOCR";
 
   const [userSettings, engineerProfile, user] = await Promise.all([
     col("user_settings").findOne({ user_id: String(userId) }) as Promise<any>,
@@ -183,8 +184,8 @@ async function resolveSenderName(userId: string | number | null | undefined): Pr
     engineerProfile?.company_name,
     user?.company_name,
     settings.emailFromName,
-    "ReminderOCR",
-  ) ?? "ReminderOCR";
+    "RemindOCR",
+  ) ?? "RemindOCR";
 }
 
 const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
@@ -645,23 +646,27 @@ async function renderGroupedReminderEmail(opts: {
   vars.trigger_date = opts.triggerDate;
   vars.item_count = opts.reminders.length;
   vars.items_table = opts.itemsHtml;
-  // Hide the single-item equipment box so grouped mail is not duplicated.
+  // Hide single-item fields — the table already lists each inspection.
   vars.equipment_type = "";
   vars.manufacturer = "";
   vars.model = "";
   vars.serial_number = "";
+  vars.checked_equipment = "";
+  vars.license_number = "";
+  vars.lisence_number = "";
 
   let tpl = null as Awaited<ReturnType<typeof loadEmailTemplate>>;
   try {
-    if (first) tpl = await resolveReminderTemplate(first);
+    tpl = await loadEmailTemplateByName(GROUPED_REMINDER_TEMPLATE_NAME);
   } catch (err) {
     logger.warn("grouped_reminder_template_load_failed", {
+      template_name: GROUPED_REMINDER_TEMPLATE_NAME,
       error: err instanceof Error ? err.message : String(err),
     });
   }
 
   if (!tpl) {
-    vars.from_name = vars.from_name ?? "ReminderOCR";
+    vars.from_name = vars.from_name ?? "RemindOCR";
     return { subject, html: renderGroupedFallbackHtml(vars, opts.itemsHtml) };
   }
 
@@ -822,7 +827,7 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
       body: " זהו דוא״ל בדיקה באמצעות תבנית שנבחרה.",
       client_name: " לקוח לדוגמה",
       document_name: " מסמך לדוגמה",
-      from_name: firstNonEmpty((engineerProfile as any)?.company_name, user?.company_name, settings.emailFromName, "ReminderOCR") ?? "ReminderOCR",
+      from_name: firstNonEmpty((engineerProfile as any)?.company_name, user?.company_name, settings.emailFromName, "RemindOCR") ?? "RemindOCR",
       client_company: " חברה לדוגמה",
       contact_email: to,
       contact_phone: "050-1234567 ",

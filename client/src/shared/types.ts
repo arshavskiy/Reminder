@@ -58,7 +58,8 @@ export interface User {
   name: string | null;
   phone: string | null;
   picture_url: string | null;
-  role: "admin" | "user";
+  role: "admin" | "pro" | "user";
+  plan?: "free" | "basic" | "business";
   is_active: number;
   created_at: string;
   last_login_at: string | null;
@@ -83,6 +84,7 @@ export interface PipelineFlags {
 export interface EngineerProfile {
   inspector_number?: string | null;
   address?: string | null;
+  city?: string | null;
   title?: string | null;
   expertise?: string | null;
   mr_number?: string | null;
@@ -133,7 +135,7 @@ export interface FeatureDefinition {
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
 export type DocumentSource = "scanned" | "generated";
-export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error";
+export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error" | "not_applicable";
 export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
 export type EntityType = "person" | "company";
@@ -169,6 +171,14 @@ export interface Document {
   page_count: number | null;
   created_at: string;
   updated_at: string;
+  client_id?: string | null;
+  client_name?: string | null;
+  spaces_key?: string | null;
+  in_s3?: boolean;
+  drive_file_id?: string | null;
+  drive_web_link?: string | null;
+  download_url?: string | null;
+  thumbnail_url?: string | null;
 }
 
 export interface Client {
@@ -405,7 +415,8 @@ export type DocumentKind =
   | "contract"
   | "invoice"
   | "certificate"
-  | "unknown";
+  | "unknown"
+  | (string & {});
 
 // ── Document templates ──────────────────────────────────────────────────────
 export type FieldType =

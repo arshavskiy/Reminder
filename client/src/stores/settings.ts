@@ -9,7 +9,7 @@ export const useSettingsStore = defineStore("settings", () => {
   const saving = ref(false);
 
   // Public config available to all authenticated users
-  const userDocumentLimit = ref<number>(25);
+    const userDocumentLimit = ref<number>(30);
   let _configLoaded = false;
 
   async function loadConfig() {

@@ -2,6 +2,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -135,17 +136,47 @@ export async function deleteFromSpaces(key: string): Promise<void> {
   await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
 }
 
-export async function getSpacesSignedUrl(key: string, expiresIn = 3600, fileName?: string): Promise<string> {
+export interface S3FileEntry {
+  key: string;
+  size: number;
+  last_modified: string | null;
+}
+
+export async function listSpacesFiles(prefix: string, maxKeys = 500): Promise<{ files: S3FileEntry[]; truncated: boolean }> {
   const client = getClient();
   const config = getStorageConfig();
   if (!client || !config) throw new Error("Object storage not configured");
+
+  const result = await client.send(new ListObjectsV2Command({
+    Bucket: config.bucket,
+    Prefix: prefix,
+    MaxKeys: maxKeys,
+  }));
+
+  const files: S3FileEntry[] = (result.Contents ?? []).map((obj) => ({
+    key: obj.Key ?? "",
+    size: obj.Size ?? 0,
+    last_modified: obj.LastModified?.toISOString() ?? null,
+  }));
+
+  return { files, truncated: result.IsTruncated ?? false };
+}
+
+export async function getSpacesSignedUrl(key: string, expiresIn = 3600, fileName?: string, asAttachment = false): Promise<string> {
+  const client = getClient();
+  const config = getStorageConfig();
+  if (!client || !config) throw new Error("Object storage not configured");
+
+  const disposition = fileName
+    ? `${asAttachment ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(fileName)}`
+    : undefined;
 
   return getSignedUrl(
     client,
     new GetObjectCommand({
       Bucket: config.bucket,
       Key: key,
-      ...(fileName && { ResponseContentDisposition: `inline; filename*=UTF-8''${encodeURIComponent(fileName)}` }),
+      ...(disposition && { ResponseContentDisposition: disposition }),
     }),
     { expiresIn }
   );

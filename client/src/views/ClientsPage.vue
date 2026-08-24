@@ -1,5 +1,5 @@
 <template>
-  <div class="page2">
+  <div class="clients-page" dir="rtl">
     <PageHeader
       :count="store.total"
       title="לקוחות"
@@ -7,160 +7,287 @@
     >
       <template #actions>
         <div class="clients-actions">
-          <button :disabled="store.loading" class="rbtn rbtn--ghost" @click="refresh">
-            <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
+          <button :disabled="store.loading" class="btn btn--ghost" type="button" @click="refresh">
+            <n-icon :class="{ 'spin': store.loading }" :component="RefreshOutline" class="btn-icon" />
             רענן
           </button>
-          <button class="rbtn rbtn--primary" type="button" @click="showCreate = true">
-            <n-icon :component="AddOutline" class="btn-icon"/>
-            צור לקוח
+          <button
+            class="btn btn--ghost"
+            :class="{ 'btn--ghost-active': bulkMode }"
+            type="button"
+            @click="toggleBulkMode"
+          >
+            <n-icon :component="CheckboxOutline" class="btn-icon" />
+            בחירה
           </button>
-          <button v-if="store.rows.length" class="rbtn rbtn--danger" type="button" @click="doDeleteAll">
-            <n-icon :component="TrashOutline" class="btn-icon"/>
+          <button
+            v-if="store.rows.length"
+            class="btn btn--danger-ghost"
+            type="button"
+            @click="doDeleteAll"
+          >
+            <n-icon :component="TrashOutline" class="btn-icon" />
             מחק הכל
           </button>
-          <div v-if="store.rows.length" class="bulk-action-anchor">
-            <button
-                :class="{ 'rbtn--ghost-active': bulkMode }"
-                class="rbtn rbtn--ghost"
-                title="בחירה מרובה"
-                type="button"
-                @click="toggleBulkMode"
-            >
-              <n-icon :component="CheckboxOutline" class="btn-icon"/>
-              בחירה מרובה
-              <span v-if="selectedClientKeys.length">({{ selectedClientKeys.length }})</span>
-            </button>
-            <div v-if="bulkMode && selectedClientKeys.length > 0" class="bulk-action-anchor__actions">
-              <button class="bulk-action-item bulk-action-item--danger" type="button" @click="bulkDeleteSelected">
-                <n-icon :component="TrashOutline" class="bulk-action-item__icon"/>
-                <span class="bulk-action-item__text">מחק נבחרים</span>
-                <span class="bulk-action-item__count">{{ selectedClientKeys.length }}</span>
-              </button>
-            </div>
-          </div>
+          <button class="btn btn--primary" type="button" @click="openCreate">
+            <n-icon :component="AddOutline" class="btn-icon" />
+            לקוח חדש
+          </button>
         </div>
       </template>
     </PageHeader>
 
-    <!-- ── Search ───────────────────────────────────────────────────────── -->
-    <n-input
-      v-model:value="search"
-      clearable
-      class="client-search"
-      placeholder="חיפוש לפי שם לקוח, איש קשר או אימייל..."
-      @update:value="onSearch"
-    >
-      <template #prefix><n-icon :component="SearchOutline" /></template>
-    </n-input>
+    <!-- Filters -->
+    <div class="clients-toolbar">
+      <n-input
+        v-model:value="search"
+        clearable
+        class="clients-toolbar__search"
+        placeholder="חיפוש לפי שם, איש קשר או אימייל..."
+        @update:value="onSearch"
+      >
+        <template #prefix><n-icon :component="SearchOutline" :size="16" /></template>
+      </n-input>
 
-    <!-- ── Table ─────────────────────────────────────────────────────────── -->
-    <div class="table-wrap">
-      <n-data-table
-        v-if="store.rows.length"
-        :bordered="false"
-        :columns="columns"
-        :data="store.rows"
-        :loading="store.loading"
-        :pagination="false"
-        :row-key="(row: Client) => row.id"
-        :row-props="rowProps"
-        :checked-row-keys="selectedClientKeys"
-        :scroll-x="bulkMode ? 1116 : 1070"
-        class="clients-data-table"
-        dir="rtl"
-        @update:checked-row-keys="onSelectedClientKeys"
-      />
-
-      <n-empty v-else-if="store.loading" description="טוען..." class="empty-state" />
-      <n-empty v-else description="אין לקוחות להצגה" class="empty-state">
-        <template #extra>
-          <n-button type="primary" @click="showCreate = true">
-            <template #icon><n-icon :component="AddOutline" /></template>
-            צור לקוח ראשון
-          </n-button>
-        </template>
-      </n-empty>
+      <div class="clients-filters">
+        <button
+          v-for="f in typeFilters"
+          :key="f.value"
+          class="pill"
+          :class="{ 'pill--active': entityFilter === f.value }"
+          type="button"
+          @click="entityFilter = f.value"
+        >
+          {{ f.label }}
+          <span class="pill__badge">{{ f.count }}</span>
+        </button>
+      </div>
     </div>
 
-    <!-- Pagination info -->
-    <div v-if="store.rows.length" class="pagination-info">
-      מציג 1–{{ store.rows.length }} מתוך {{ store.total }} לקוחות
+    <!-- Bulk bar -->
+    <div v-if="bulkMode && selectedClientKeys.length" class="bulk-bar">
+      <span class="bulk-bar__label">נבחרו {{ selectedClientKeys.length }}</span>
+      <button class="btn btn--danger-ghost btn--xs" type="button" @click="bulkDeleteSelected">
+        <n-icon :component="TrashOutline" :size="14" class="btn-icon" />
+        מחק נבחרים
+      </button>
+      <button class="btn btn--ghost btn--xs" type="button" @click="selectedClientKeys = []">
+        נקה בחירה
+      </button>
     </div>
 
-    <!-- ── Create / Edit modal ──────────────────────────────────────────── -->
+    <!-- List -->
+    <n-spin :show="store.loading">
+      <div v-if="filteredRows.length" class="clients-table-wrap">
+        <table class="clients-table">
+          <thead>
+            <tr>
+              <th v-if="bulkMode" class="col-check">
+                <n-checkbox
+                  :checked="allVisibleSelected"
+                  :indeterminate="someVisibleSelected && !allVisibleSelected"
+                  @update:checked="toggleSelectAll"
+                />
+              </th>
+              <th class="col-name">שם הלקוח</th>
+              <th class="col-contact">איש קשר</th>
+              <th class="col-email">אימייל</th>
+              <th class="col-phone">נייד</th>
+              <th class="col-id">מזהה</th>
+              <th class="col-actions">פעולות</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="row in filteredRows"
+              :key="row.id"
+              class="clients-row"
+              :class="{ 'clients-row--selected': selectedClientKeys.includes(row.id) }"
+              @click="onRowClick(row, $event)"
+            >
+              <td v-if="bulkMode" class="col-check" @click.stop>
+                <n-checkbox
+                  :checked="selectedClientKeys.includes(row.id)"
+                  @update:checked="() => toggleClientSelection(row)"
+                />
+              </td>
+              <td class="col-name">
+                <div class="client-name">
+                  <span class="client-avatar" :class="`client-avatar--${row.entity_type}`">
+                    <n-icon
+                      :component="row.entity_type === 'company' ? BusinessOutline : PersonOutline"
+                      :size="14"
+                    />
+                  </span>
+                  <div class="client-name__meta">
+                    <strong class="client-name__title" :title="displayClientName(row.display_name)">
+                      {{ displayClientName(row.display_name) }}
+                    </strong>
+                    <span class="client-type">{{ row.entity_type === 'company' ? 'חברה' : 'פרטי' }}</span>
+                  </div>
+                </div>
+              </td>
+              <td class="col-contact">
+                <span :class="row.contact_person ? '' : 'muted'" :title="row.contact_person || undefined">
+                  {{ row.contact_person || "—" }}
+                </span>
+              </td>
+              <td class="col-email">
+                <span
+                  class="ltr"
+                  :class="row.email ? '' : 'muted'"
+                  :title="row.email || undefined"
+                >{{ row.email || "—" }}</span>
+              </td>
+              <td class="col-phone">
+                <span
+                  v-if="row.mobile || row.phone"
+                  class="ltr"
+                  :title="row.mobile || row.phone || undefined"
+                >{{ row.mobile || row.phone }}</span>
+                <span v-else class="muted">—</span>
+              </td>
+              <td class="col-id">
+                <span class="ltr" :class="row.id_number ? '' : 'muted'">{{ row.id_number || "—" }}</span>
+              </td>
+              <td class="col-actions" @click.stop>
+                <div class="row-actions">
+                  <n-tooltip placement="top">
+                    <template #trigger>
+                      <button class="btn btn--ghost btn--xs icon-btn" type="button" @click="goDetail(row)">
+                        <n-icon :component="EyeOutline" :size="14" class="btn-icon" />
+                      </button>
+                    </template>
+                    פרטים
+                  </n-tooltip>
+                  <n-tooltip placement="top">
+                    <template #trigger>
+                      <button class="btn btn--ghost btn--xs icon-btn" type="button" @click="openEdit(row)">
+                        <n-icon :component="CreateOutline" :size="14" class="btn-icon" />
+                      </button>
+                    </template>
+                    עריכה
+                  </n-tooltip>
+                  <n-tooltip placement="top">
+                    <template #trigger>
+                      <button class="btn btn--danger-ghost btn--xs icon-btn" type="button" @click="doDelete(row)">
+                        <n-icon :component="TrashOutline" :size="14" class="btn-icon" />
+                      </button>
+                    </template>
+                    מחיקה
+                  </n-tooltip>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-else-if="!store.loading" class="clients-empty">
+        <n-icon :component="PeopleOutline" :size="40" class="clients-empty__icon" />
+        <h3 class="clients-empty__title">{{ search || entityFilter !== 'all' ? 'לא נמצאו לקוחות' : 'אין לקוחות עדיין' }}</h3>
+        <p class="clients-empty__desc">
+          {{ search || entityFilter !== 'all' ? 'נסו לשנות את החיפוש או הסינון' : 'צרו לקוח ראשון כדי להתחיל' }}
+        </p>
+        <button v-if="!search && entityFilter === 'all'" class="btn btn--primary" type="button" @click="openCreate">
+          <n-icon :component="AddOutline" class="btn-icon" />
+          צור לקוח ראשון
+        </button>
+      </div>
+    </n-spin>
+
+    <p v-if="filteredRows.length" class="clients-foot">
+      מציג {{ filteredRows.length }} מתוך {{ store.total }} לקוחות
+    </p>
+
+    <!-- Create / Edit -->
     <n-modal
       v-model:show="showForm"
+      preset="card"
       :title="editingId ? 'עריכת לקוח' : 'לקוח חדש'"
-      :show-icon="false"
-      preset="dialog"
-      style="width:500px"
+      class="client-form-modal"
+      style="width: min(560px, 94vw)"
+      :mask-closable="!saving"
     >
-      <n-form label-placement="top">
+      <n-form label-placement="top" class="client-form">
         <n-form-item label="שם מלא / שם חברה" required>
-          <n-input v-model:value="form.display_name" placeholder="ישראל ישראלי" />
+          <n-input v-model:value="form.display_name" placeholder="ישראל ישראלי / חברת דוגמה בע״מ" />
         </n-form-item>
         <n-form-item label="סוג">
           <n-radio-group v-model:value="form.entity_type">
-            <n-radio value="person">אדם פרטי</n-radio>
-            <n-radio value="company">חברה</n-radio>
+            <n-radio-button value="person">אדם פרטי</n-radio-button>
+            <n-radio-button value="company">חברה</n-radio-button>
           </n-radio-group>
         </n-form-item>
-        <n-form-item label="איש קשר">
-          <n-input v-model:value="form.contact_person" placeholder="שם איש הקשר" />
-        </n-form-item>
-        <n-form-item label="אימייל">
-          <n-input v-model:value="form.email" class="email-ltr" dir="ltr" placeholder="israel@example.com" />
-        </n-form-item>
-        <n-form-item label="טלפון">
-          <n-input v-model:value="form.phone" placeholder="02-0000000" />
-        </n-form-item>
-        <n-form-item label="נייד">
-          <n-input v-model:value="form.mobile" placeholder="050-0000000" />
-        </n-form-item>
-        <n-form-item label="מספר ת.ז / ח.פ">
-          <n-input v-model:value="form.id_number" />
-        </n-form-item>
+        <div class="client-form__grid">
+          <n-form-item label="איש קשר">
+            <n-input v-model:value="form.contact_person" placeholder="שם איש הקשר" />
+          </n-form-item>
+          <n-form-item label="מספר ת.ז / ח.פ">
+            <n-input v-model:value="form.id_number" dir="ltr" />
+          </n-form-item>
+          <n-form-item label="אימייל">
+            <n-input v-model:value="form.email" dir="ltr" placeholder="israel@example.com" />
+          </n-form-item>
+          <n-form-item label="טלפון">
+            <n-input v-model:value="form.phone" placeholder="02-0000000" />
+          </n-form-item>
+          <n-form-item label="נייד">
+            <n-input v-model:value="form.mobile" placeholder="050-0000000" />
+          </n-form-item>
+        </div>
       </n-form>
-      <template #action>
-        <n-button @click="showForm = false">ביטול</n-button>
-        <n-button :loading="saving" type="primary" @click="doSave">
-          {{ editingId ? 'שמור' : 'צור לקוח' }}
-        </n-button>
+      <template #footer>
+        <div class="client-form__footer">
+          <n-button :disabled="saving" @click="showForm = false">ביטול</n-button>
+          <n-button :loading="saving" type="primary" @click="doSave">
+            {{ editingId ? 'שמור שינויים' : 'צור לקוח' }}
+          </n-button>
+        </div>
       </template>
     </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, h, onMounted, ref} from "vue";
-import {useRouter} from "vue-router";
+import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import {
-  type DataTableColumns,
   NButton,
-  NDataTable,
-  NEmpty,
+  NCheckbox,
   NForm,
   NFormItem,
   NIcon,
   NInput,
   NModal,
-  NRadio,
+  NRadioButton,
   NRadioGroup,
-  useMessage
+  NSpin,
+  NTooltip,
+  useMessage,
 } from "naive-ui";
-import {AddOutline, CheckboxOutline, RefreshOutline, SearchOutline, TrashOutline,} from "@vicons/ionicons5";
-import {useClientsStore} from "../stores/clients.js";
-import {useConfirm} from "../composables/useConfirm.js";
+import {
+  AddOutline,
+  BusinessOutline,
+  CheckboxOutline,
+  CreateOutline,
+  EyeOutline,
+  PeopleOutline,
+  PersonOutline,
+  RefreshOutline,
+  SearchOutline,
+  TrashOutline,
+} from "@vicons/ionicons5";
+import { useClientsStore } from "../stores/clients.js";
+import { useConfirm } from "../composables/useConfirm.js";
 import PageHeader from "../components/PageHeader.vue";
-import type {Client} from "@shared/types.js";
+import type { Client } from "@shared/types.js";
 
 const store = useClientsStore();
 const router = useRouter();
 const message = useMessage();
 const { confirm } = useConfirm();
 
-// ── Search ────────────────────────────────────────────────────────────────────
 const search = ref("");
 let searchTimer: ReturnType<typeof setTimeout>;
 function onSearch() {
@@ -171,113 +298,49 @@ function refresh() {
   store.fetch({ q: search.value || undefined, limit: 200 }, true);
 }
 
-onMounted(() => { store.fetch({ limit: 200 }, true); });
+onMounted(() => {
+  store.fetch({ limit: 200 }, true);
+});
+
+type EntityFilter = "all" | "person" | "company";
+const entityFilter = ref<EntityFilter>("all");
+
+const filteredRows = computed(() => {
+  if (entityFilter.value === "all") return store.rows;
+  return store.rows.filter((r) => r.entity_type === entityFilter.value);
+});
+
+const typeFilters = computed(() => {
+  const person = store.rows.filter((r) => r.entity_type === "person").length;
+  const company = store.rows.filter((r) => r.entity_type === "company").length;
+  return [
+    { value: "all" as const, label: "הכל", count: store.rows.length },
+    { value: "person" as const, label: "פרטי", count: person },
+    { value: "company" as const, label: "חברה", count: company },
+  ];
+});
 
 const bulkMode = ref(false);
 const selectedClientKeys = ref<Array<string | number>>([]);
 
-const baseColumns: DataTableColumns<Client> = [
-  {
-    title: "שם הלקוח",
-    key: "display_name",
-    align: "right",
-    titleAlign: "right",
-    width: 300,
-    minWidth: 300,
-    render(row) {
-      return h("div", { class: "client-main-cell" }, [
-        h("div", { class: "client-main-cell__copy" }, [
-          h("strong", displayClientName(row.display_name)),
-        ]),
-      ]);
-    },
-  },
-  {
-    title: "איש קשר",
-    key: "contact_person",
-    align: "right",
-    titleAlign: "right",
-    width: 190,
-    minWidth: 190,
-    render(row) {
-      return row.contact_person
-        ? h("span", { class: "client-text-cell" }, row.contact_person)
-        : h("span", { class: "muted" }, "—");
-    },
-  },
-  {
-    title: "אימייל",
-    key: "email",
-    align: "right",
-    titleAlign: "right",
-    width: 260,
-    minWidth: 260,
-    render(row) {
-      return row.email
-        ? h("span", { class: "client-email-cell" }, row.email)
-        : h("span", { class: "muted" }, "—");
-    },
-  },
-  {
-    title: "טלפון",
-    key: "phone",
-    align: "right",
-    titleAlign: "right",
-    width: 140,
-    minWidth: 130,
-    render(row) {
-      return row.phone
-        ? h("span", { class: "client-phone-cell" }, row.phone)
-        : h("span", { class: "muted" }, "—");
-    },
-  },
-  {
-    title: "נייד",
-    key: "mobile",
-    align: "right",
-    titleAlign: "right",
-    width: 140,
-    minWidth: 130,
-    render(row) {
-      return row.mobile
-        ? h("span", { class: "client-phone-cell" }, row.mobile)
-        : h("span", { class: "muted" }, "—");
-    },
-  },
-  {
-    title: "מספר מזהה",
-    key: "id_number",
-    align: "right",
-    titleAlign: "right",
-    width: 160,
-    minWidth: 160,
-    render(row) {
-      return row.id_number
-        ? h("span", { class: "client-id-cell" }, row.id_number)
-        : h("span", { class: "muted" }, "—");
-    },
-  },
-];
-
-const columns = computed<DataTableColumns<Client>>(() =>
-  bulkMode.value
-    ? [{ type: "selection", width: 46, fixed: "right" }, ...baseColumns]
-    : baseColumns
+const allVisibleSelected = computed(
+  () =>
+    filteredRows.value.length > 0 &&
+    filteredRows.value.every((r) => selectedClientKeys.value.includes(r.id)),
+);
+const someVisibleSelected = computed(() =>
+  filteredRows.value.some((r) => selectedClientKeys.value.includes(r.id)),
 );
 
-function rowProps(row: Client) {
-  return {
-    class: `client-row${bulkMode.value ? " client-row--selectable" : ""}`,
-    onClick: (event: MouseEvent) => {
-      if (!bulkMode.value) {
-        router.push(`/clients/${row.id}`);
-        return;
-      }
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("button, a, .n-checkbox")) return;
-      toggleClientSelection(row);
-    },
-  };
+function toggleSelectAll(checked: boolean) {
+  if (checked) {
+    const ids = new Set(selectedClientKeys.value);
+    for (const r of filteredRows.value) ids.add(r.id);
+    selectedClientKeys.value = [...ids];
+  } else {
+    const visible = new Set(filteredRows.value.map((r) => r.id));
+    selectedClientKeys.value = selectedClientKeys.value.filter((id) => !visible.has(String(id)) && !visible.has(Number(id)));
+  }
 }
 
 function toggleBulkMode() {
@@ -285,21 +348,30 @@ function toggleBulkMode() {
   if (!bulkMode.value) selectedClientKeys.value = [];
 }
 
-function onSelectedClientKeys(keys: Array<string | number>) {
-  selectedClientKeys.value = keys;
-}
-
 function toggleClientSelection(row: Client) {
-  const id = row.id;
   const selected = new Set(selectedClientKeys.value);
-  if (selected.has(id)) selected.delete(id);
-  else selected.add(id);
+  if (selected.has(row.id)) selected.delete(row.id);
+  else selected.add(row.id);
   selectedClientKeys.value = [...selected];
 }
 
 function selectedClients() {
   const selected = new Set(selectedClientKeys.value.map(String));
   return store.rows.filter((row) => selected.has(String(row.id)));
+}
+
+function onRowClick(row: Client, event: MouseEvent) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest("button, a, .n-checkbox, .col-actions, .col-check")) return;
+  if (bulkMode.value) {
+    toggleClientSelection(row);
+    return;
+  }
+  goDetail(row);
+}
+
+function goDetail(row: Client) {
+  router.push(`/clients/${row.id}`);
 }
 
 function displayClientName(value: string) {
@@ -312,40 +384,63 @@ function displayClientName(value: string) {
   return numericPrefix ? `${numericPrefix[2].trim()} ${numericPrefix[1]}` : spaced;
 }
 
-// ── Create / Edit ─────────────────────────────────────────────────────────────
 const showCreate = ref(false);
 const showForm = computed({
   get: () => showCreate.value,
-  set: (v) => { showCreate.value = v; if (!v) resetForm(); },
+  set: (v) => {
+    showCreate.value = v;
+    if (!v) resetForm();
+  },
 });
 const editingId = ref<string | null>(null);
 const saving = ref(false);
 const form = ref({
-  display_name: "", entity_type: "person" as "person" | "company",
-  contact_person: "", email: "", phone: "", mobile: "", id_number: "",
+  display_name: "",
+  entity_type: "person" as "person" | "company",
+  contact_person: "",
+  email: "",
+  phone: "",
+  mobile: "",
+  id_number: "",
 });
 
 function resetForm() {
   editingId.value = null;
-  form.value = { display_name: "", entity_type: "person", contact_person: "", email: "", phone: "", mobile: "", id_number: "" };
+  form.value = {
+    display_name: "",
+    entity_type: "person",
+    contact_person: "",
+    email: "",
+    phone: "",
+    mobile: "",
+    id_number: "",
+  };
+}
+
+function openCreate() {
+  resetForm();
+  showCreate.value = true;
 }
 
 function openEdit(row: Client) {
   editingId.value = String(row.id);
   form.value = {
     display_name: row.display_name,
-    entity_type:  row.entity_type,
+    entity_type: row.entity_type,
     contact_person: row.contact_person ?? "",
-    email:        row.email ?? "",
-    phone:        row.phone ?? "",
-    mobile:       row.mobile ?? "",
-    id_number:    row.id_number ?? "",
+    email: row.email ?? "",
+    phone: row.phone ?? "",
+    mobile: row.mobile ?? "",
+    id_number: row.id_number ?? "",
   };
   showCreate.value = true;
 }
 
 async function doSave() {
-  if (!form.value.display_name.trim()) { message.warning("יש להזין שם"); return; }
+  if (!form.value.display_name.trim()) {
+    message.warning("יש להזין שם");
+    return;
+  }
   saving.value = true;
   try {
     if (editingId.value) {
@@ -421,149 +516,72 @@ function bulkDeleteSelected() {
 </script>
 
 <style scoped>
+.clients-page {
+  margin: 0 auto;
+  padding: 0 4px 32px;
+}
+
 .clients-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
-  width: 100%;
+  gap: 8px;
 }
 
-.rbtn {
+.clients-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.clients-toolbar__search {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.clients-toolbar__search :deep(.n-input__input-el) {
+  direction: rtl;
+}
+
+.clients-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  min-height: 38px;
-  padding: 0 14px;
+  min-height: 32px;
+  padding: 4px 12px;
   border: 1px solid var(--border-color);
   border-radius: 999px;
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  line-height: 1;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
-  white-space: nowrap;
-}
-
-.rbtn:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-strong);
-}
-
-.rbtn:active {
-  transform: scale(0.97);
-}
-
-.rbtn:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
-
-.rbtn--primary {
-  background: var(--brand-color);
-  border-color: var(--brand-color);
-  color: var(--text-inverse, #fff);
-  font-weight: 600;
-}
-
-.rbtn--danger {
-  background: transparent;
-  border-color: rgba(208, 48, 80, 0.35);
-  color: #d03050;
-}
-
-.rbtn--ghost-active {
-  background: var(--bg-elevated);
-  border-color: var(--brand-color);
-  color: var(--brand-color);
-}
-
-.bulk-action-anchor {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: stretch;
-  position: relative;
-}
-
-.bulk-action-anchor > .rbtn {
-  width: 100%;
-}
-
-.bulk-action-anchor__actions {
-  display: grid;
-  gap: 8px;
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 8px);
-  right: 0;
-  min-width: 210px;
-  padding: 10px;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
   background: var(--bg-card);
-  box-shadow: var(--shadow-lg, 0 14px 32px rgba(15, 23, 42, 0.14));
-}
-
-.bulk-action-anchor__actions::before {
-  content: "";
-  position: absolute;
-  top: -6px;
-  right: 24px;
-  width: 10px;
-  height: 10px;
-  background: var(--bg-card);
-  border-top: 1px solid var(--border-color);
-  border-right: 1px solid var(--border-color);
-  transform: rotate(-45deg);
-}
-
-.bulk-action-item {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
+  color: var(--text-secondary);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  text-align: start;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
-.bulk-action-item:hover {
+.pill:hover {
   background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
-.bulk-action-item--danger {
-  color: #d03050;
+.pill--active {
+  border-color: var(--brand-color);
+  background: color-mix(in srgb, var(--brand-color) 12%, var(--bg-card));
+  color: var(--brand-color);
 }
 
-.bulk-action-item__icon {
-  display: inline-flex;
-  justify-content: center;
-  width: 26px;
-  font-size: 19px;
-  line-height: 1;
-}
-
-.bulk-action-item__text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bulk-action-item__count {
-  min-width: 24px;
-  padding: 2px 7px;
+.pill__badge {
+  min-width: 20px;
+  padding: 1px 6px;
   border-radius: 999px;
   background: var(--bg-elevated);
   color: var(--text-secondary);
@@ -572,12 +590,283 @@ function bulkDeleteSelected() {
   text-align: center;
 }
 
-.refresh-icon {
-  display: inline-flex;
-  line-height: 1;
+.pill--active .pill__badge {
+  background: color-mix(in srgb, var(--brand-color) 18%, transparent);
+  color: var(--brand-color);
 }
 
-.refresh-icon--spin {
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-color) 35%, var(--border-color));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-color) 8%, var(--bg-card));
+}
+
+.bulk-bar__label {
+  margin-inline-end: auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.clients-table-wrap {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-card);
+  overflow: auto;
+  max-height: min(70vh, 720px);
+}
+
+.clients-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.clients-table th,
+.clients-table td {
+  padding: 8px 10px;
+  text-align: right;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.clients-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.clients-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.clients-row {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.clients-row:hover td {
+  background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
+}
+
+.clients-row--selected td {
+  background: color-mix(in srgb, var(--brand-color) 9%, var(--bg-card));
+}
+
+.col-check {
+  width: 44px;
+}
+
+.col-name {
+  width: 28%;
+}
+
+.col-contact {
+  width: 14%;
+}
+
+.col-email {
+  width: 20%;
+}
+
+.col-phone {
+  width: 14%;
+}
+
+.col-id {
+  width: 12%;
+}
+
+.col-actions {
+  width: 112px;
+  white-space: nowrap;
+}
+
+.col-name,
+.col-contact,
+.col-email,
+.col-phone,
+.col-id {
+  overflow: hidden;
+}
+
+.client-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.client-avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.client-avatar--company {
+  background: color-mix(in srgb, var(--brand-color) 14%, transparent);
+  color: var(--brand-color);
+}
+
+.client-avatar--person {
+  background: color-mix(in srgb, #2080f0 14%, transparent);
+  color: #2080f0;
+}
+
+.client-name__meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.client-name__title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.client-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.col-contact span,
+.col-email span,
+.col-id span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: right;
+}
+
+.phone-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.phone-stack span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.phone-stack__mobile {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.muted {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+}
+
+.icon-btn {
+  padding: 2px;
+  min-width: 28px;
+  min-height: 28px;
+  justify-content: center;
+}
+
+.icon-btn .btn-icon {
+  margin: 0;
+}
+
+.clients-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 64px 20px;
+  border: 1px dashed var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-card);
+  text-align: center;
+}
+
+.clients-empty__icon {
+  color: var(--brand-color);
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+
+.clients-empty__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.clients-empty__desc {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.clients-foot {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.client-form__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+
+.client-form__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.spin {
   animation: spin 0.8s linear infinite;
 }
 
@@ -587,148 +876,51 @@ function bulkDeleteSelected() {
   }
 }
 
-/* ── Search ──────────────────────────────────────────────────────────────── */
-.client-search {
-  width: 100%;
-  margin-bottom: 16px;
-}
-.client-search :deep(.n-input__input-el) { direction: rtl; }
+@media (max-width: 860px) {
+  .col-contact,
+  .col-id {
+    display: none;
+  }
 
-/* ── Table ───────────────────────────────────────────────────────────────── */
-.table-wrap {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.clients-data-table {
-  direction: rtl;
-}
-.clients-data-table :deep(.n-data-table-wrapper),
-.clients-data-table :deep(.n-data-table-base-table),
-.clients-data-table :deep(.n-data-table-table) {
-  direction: rtl;
-}
-.clients-data-table :deep(th) {
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  text-align: right;
-}
-.clients-data-table :deep(.n-data-table-th__title) {
-  justify-content: flex-start;
-  width: 100%;
-}
-.clients-data-table :deep(td) {
-  direction: rtl;
-  text-align: right;
-  vertical-align: middle;
-}
-.clients-data-table :deep(.client-row) {
-  cursor: pointer;
-  transition: background 0.12s;
-}
-.clients-data-table :deep(.client-row:hover td) { background: var(--bg-hover); }
-.clients-data-table :deep(.client-row--selectable:hover td) {
-  background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
+  .col-name {
+    width: 40%;
+  }
+
+  .col-email {
+    width: 28%;
+  }
+
+  .col-phone {
+    width: 18%;
+  }
 }
 
-.client-main-cell {
-  display: block;
-  align-items: center;
-  min-width: 0;
-}
-
-.client-main-cell__copy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.client-main-cell__copy strong,
-.client-text-cell,
-.client-email-cell,
-.client-phone-cell,
-.client-id-cell {
-  display: block;
-  overflow: hidden;
-  min-width: 0;
-  font-size: 13px;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.client-main-cell__copy strong {
-  color: var(--text-primary);
-  font-weight: 700;
-}
-
-.client-text-cell {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.client-email-cell {
-  direction: ltr;
-  unicode-bidi: isolate;
-  color: var(--text-secondary);
-  text-align: right;
-}
-
-.client-phone-cell,
-.client-id-cell {
-  direction: ltr;
-  color: var(--text-secondary);
-  text-align: right;
-  font-weight: 600;
-}
-
-.muted { color: var(--text-muted); font-size: 12px; }
-
-/* ── Pagination info ─────────────────────────────────────────────────────── */
-.pagination-info {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 10px;
-  text-align: start;
-}
-
-.empty-state {
-  padding: 60px 20px;
-}
-
-@media (max-width: 720px) {
+@media (max-width: 640px) {
   .clients-actions,
-  .rbtn {
+  .clients-actions .btn {
     width: 100%;
   }
 
-  .bulk-action-anchor {
-    width: 100%;
+  .clients-toolbar__search {
+    max-width: none;
+    flex-basis: 100%;
   }
 
-  .bulk-action-anchor__actions {
-    right: auto;
-    left: 0;
-    min-width: 100%;
+  .client-form__grid {
+    grid-template-columns: 1fr;
   }
 
-  .pagination-info {
-    text-align: center;
+  .col-email,
+  .col-phone {
+    display: none;
   }
 
-  :deep(.n-dialog .n-dialog__action),
-  :deep(.n-card__footer > div) {
-    align-items: stretch !important;
-    flex-direction: column-reverse;
-    gap: 8px;
+  .col-name {
+    width: auto;
   }
 
-  :deep(.n-card__footer .n-button) {
-    width: 100%;
+  .col-actions {
+    width: 100px;
   }
 }
-
 </style>

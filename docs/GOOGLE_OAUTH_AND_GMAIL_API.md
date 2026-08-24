@@ -33,8 +33,8 @@ Add one redirect URI per environment, per flow:
 | Environment | Google Sign-In | Gmail API |
 |---|---|---|
 | Local dev | `http://localhost:3737/auth/google/callback` | `http://localhost:3737/auth/gmail/callback` |
-| Production | `https://reminder.handcoded.tech/auth/google/callback` | `https://reminder.handcoded.tech/auth/gmail/callback` |
-| Dev server | `https://reminder.dev.handcoded.tech/auth/google/callback` | `https://reminder.dev.handcoded.tech/auth/gmail/callback` |
+| Production | `https://remindocr.com/auth/google/callback` | `https://remindocr.com/auth/gmail/callback` |
+| Dev server | `https://dev.remindocr.com/auth/google/callback` | `https://dev.remindocr.com/auth/gmail/callback` |
 | Railway (direct) | `https://reminder-production.up.railway.app/auth/google/callback` | `https://reminder-production.up.railway.app/auth/gmail/callback` |
 
 **Important:** Every redirect URI must match **exactly** — protocol, domain, port, path. Google returns `redirect_uri_mismatch` (400) on any discrepancy. Changes in Console can take up to 5 minutes to propagate.
@@ -70,13 +70,13 @@ SESSION_SECRET=<random-hex-string>
 ALLOWED_EMAILS=user1@gmail.com,user2@gmail.com
 
 # Frontend URL for post-auth redirects (production only)
-FRONTEND_URL=https://reminder.handcoded.tech
+FRONTEND_URL=https://remindocr.com
 
 # APP_ENV or NODE_ENV = "production" to activate production mode
 APP_ENV=production
 ```
 
-**Redirect URI auto-derivation:** If `GOOGLE_REDIRECT_URI` / `GMAIL_REDIRECT_URI` are **not set**, the server builds the redirect URI from the incoming request's `x-forwarded-host` and `x-forwarded-proto` headers (set by Railway/reverse proxy). This works when custom domains are configured correctly. Set the env var explicitly if auto-derivation produces wrong values.
+**Redirect URI auto-derivation:** In production, if `GOOGLE_REDIRECT_URI` / `GMAIL_REDIRECT_URI` are **not set**, the server uses `FRONTEND_URL` for OAuth callbacks so Vercel can proxy `/auth/*` as same-origin. In local development, it builds the redirect URI from the incoming request's `x-forwarded-host` and `x-forwarded-proto` headers. Set the env var explicitly if auto-derivation produces wrong values.
 
 ### Client (Vercel / `.env` for Vite)
 
@@ -231,25 +231,27 @@ Non-admin users' bulk import (`/api/gmail/import-all`) automatically scopes the 
 
 ## Redirect URI Resolution
 
-Both flows auto-derive redirect URIs from the request if env vars are unset:
+Both flows auto-derive redirect URIs if env vars are unset:
 
 ```typescript
 // Google Sign-In (auth.ts)
 function googleCallbackUri(req): string {
   if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
+  if (isProd && process.env.FRONTEND_URL) return `${process.env.FRONTEND_URL}/auth/google/callback`;
   return `${serverBaseUrl(req)}/auth/google/callback`;
 }
 
 // Gmail (gmail.ts)
 function gmailRedirectUri(req): string {
   if (process.env.GMAIL_REDIRECT_URI) return process.env.GMAIL_REDIRECT_URI;
+  if (isProd && process.env.FRONTEND_URL) return `${process.env.FRONTEND_URL}/auth/gmail/callback`;
   const proto = req.headers["x-forwarded-proto"] ?? req.protocol;
   const host = req.headers["x-forwarded-host"] ?? req.headers.host;
   return `${proto}://${host}/auth/gmail/callback`;
 }
 ```
 
-`serverBaseUrl` reads `x-forwarded-proto` and `x-forwarded-host` headers (set by Railway/reverse proxy).
+In production, this should produce `https://remindocr.com/auth/google/callback` and `https://remindocr.com/auth/gmail/callback`. `serverBaseUrl` reads `x-forwarded-proto` and `x-forwarded-host` headers for local/dev fallback.
 
 **If `SERVER_URL` env var is set**, `serverBaseUrl` returns that instead.
 
@@ -262,12 +264,72 @@ After OAuth callback, server redirects user to the frontend:
 ```typescript
 const isProd = process.env.NODE_ENV === "production" || process.env.APP_ENV === "production";
 const base = isProd
-  ? (process.env.FRONTEND_URL ?? "")     // e.g. https://reminder.handcoded.tech
+  ? (process.env.FRONTEND_URL ?? "")     // e.g. https://remindocr.com
   : (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173");
 ```
 
 **Production:** Set `FRONTEND_URL` in Railway env. If empty, redirects to relative path (same origin).
 **Dev:** Defaults to `http://localhost:4173` (Vite dev server).
+
+---
+
+## Cookie & Session Architecture
+
+### Cookie Settings
+
+Sessions use a single `session` cookie set by the server:
+
+```
+session=<64-char-hex>; Path=/; HttpOnly; Secure; SameSite=None; Domain=.remindocr.com; Max-Age=604800
+```
+
+| Attribute | Production | Local dev |
+|---|---|---|
+| `Secure` | `true` (HTTPS) | `false` (HTTP) |
+| `SameSite` | `None` | `Lax` |
+| `Domain` | `.remindocr.com` | not set (defaults to request host) |
+| `Max-Age` | 604800 (7 days) | 604800 (7 days) |
+
+These are auto-derived in `server/src/auth/session.ts` — functions `shouldUseSecureCookie()`, `cookieSameSite()`, `cookieDomain()`.
+
+### Vercel API Proxy (Critical)
+
+The client on Vercel (`remindocr.com`) proxies all API requests to the server (`api.remindocr.com`) via Vercel rewrites in `client/vercel.json`:
+
+```json
+{ "source": "/api/:path*", "destination": "https://api.remindocr.com/api/:path*" },
+{ "source": "/auth/:path*", "destination": "https://api.remindocr.com/auth/:path*" }
+```
+
+**Why this is required:** Chrome (especially Android, v127+) blocks third-party cookies with `SameSite=None`. Without the proxy, `remindocr.com` makes cross-origin requests to `api.remindocr.com` — the `Set-Cookie` from the server is treated as a third-party cookie and silently dropped by the browser. The Vercel rewrite makes all requests same-origin from the browser's perspective.
+
+**Symptoms when proxy is missing:** Login succeeds (200), `/api/auth/me` returns cached 304, but all other API calls return 401. Refreshing the page logs the user out. Desktop Chrome may still work (less aggressive cookie blocking), while Android Chrome fails.
+
+**`VITE_API_BASE` must be unset (empty)** on Vercel so the client makes relative requests (`/api/...`) that hit the Vercel rewrite. If `VITE_API_BASE` is set to `https://api.remindocr.com`, requests bypass the proxy and third-party cookie issues return.
+
+### Local Development
+
+Vite dev server proxies `/api/*` and `/auth/*` to `http://127.0.0.1:3737` via `vite.config.ts` — same-origin by default, no cookie issues. `VITE_API_BASE` is not needed locally either.
+
+### Cookie Flow Diagram
+
+```
+Production (via Vercel proxy):
+  Browser → remindocr.com/api/auth/login
+         → Vercel rewrite → api.remindocr.com/api/auth/login
+         ← Set-Cookie: session=...; Domain=.remindocr.com
+         ← Cookie stored as first-party on remindocr.com ✓
+
+  Browser → remindocr.com/api/dashboard/stats
+         → Vercel rewrite → api.remindocr.com/api/dashboard/stats
+         → Cookie: session=... (sent as first-party) ✓
+
+Local dev (via Vite proxy):
+  Browser → localhost:4173/api/auth/login
+         → Vite proxy → 127.0.0.1:3737/api/auth/login
+         ← Set-Cookie: session=...; (no Domain, SameSite=Lax)
+         ← Cookie stored on localhost:4173 ✓
+```
 
 ---
 
@@ -283,6 +345,8 @@ const base = isProd
 | `gmail_not_connected` | No Gmail token on user doc and no env fallback | User needs to connect Gmail via `/api/gmail/auth-url` |
 | `token_exchange_failed` | Code exchange with Google failed | Check client secret, redirect URI match |
 | Gmail 401 after token refresh | Refresh token revoked or expired | User needs to re-authorize Gmail (disconnect + reconnect) |
+| Login 200 but all API 401 (Android) | Third-party cookies blocked by Chrome | Ensure Vercel proxy rewrites are in `vercel.json` and `VITE_API_BASE` is unset on Vercel |
+| Works on desktop, fails on mobile | Same cookie issue — mobile Chrome stricter | Same fix: Vercel proxy + unset `VITE_API_BASE` |
 
 ### Debugging Redirect URIs
 

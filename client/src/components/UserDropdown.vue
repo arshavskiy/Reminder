@@ -1,28 +1,28 @@
 <template>
   <div class="user-dropdown">
     <n-dropdown
-      trigger="click"
-      :options="dropdownItems"
-      :render-label="renderDropdownLabel"
-      :theme-overrides="dropdownThemeOverrides"
-      show-arrow
-      @select="handleSelect"
-      placement="bottom-end"
+        :options="dropdownItems"
+        :render-label="renderDropdownLabel"
+        :theme-overrides="dropdownThemeOverrides"
+        placement="bottom-end"
+        show-arrow
+        trigger="click"
+        @select="handleSelect"
     >
       <div class="user-dropdown__trigger">
         <div class="user-dropdown__avatar">
           <img
-            v-if="avatarSrc"
-            :src="avatarSrc"
-            :alt="userName"
-            class="user-dropdown__avatar-img"
-            referrerpolicy="no-referrer"
+              v-if="avatarSrc"
+              :alt="userName"
+              :src="avatarSrc"
+              class="user-dropdown__avatar-img"
+              referrerpolicy="no-referrer"
           />
-          <n-icon v-else :component="PersonOutline" :size="18" />
+          <n-icon v-else :component="PersonOutline" :size="18"/>
         </div>
         <div class="user-dropdown__meta">
           <span v-if="userName" class="user-dropdown__name">{{ userName }}</span>
-          <span v-if="props.userRole" class="user-dropdown__role">{{ roleLabel }}</span>
+          <!--          <span v-if="props.userRole" class="user-dropdown__role">{{ roleLabel }}</span>-->
         </div>
       </div>
     </n-dropdown>
@@ -33,8 +33,19 @@
 import {computed, h} from "vue";
 import {useRouter} from "vue-router";
 import {NDropdown, NIcon} from "naive-ui";
-import {PersonOutline} from "@vicons/ionicons5";
+import {
+  ConstructOutline,
+  DocumentTextOutline,
+  GridOutline,
+  LogOutOutline,
+  MailOutline,
+  MapOutline,
+  PersonOutline,
+  PrintOutline,
+  ShieldCheckmarkOutline,
+} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
+import {useWalkthrough} from "../composables/useWalkthrough.js";
 
 interface Props {
   userName?: string | null;
@@ -46,19 +57,20 @@ interface Props {
 const props = defineProps<Props>();
 const router = useRouter();
 const authStore = useAuthStore();
+const walkthrough = useWalkthrough();
 
 // Create avatar from email / name
 const avatarUrl = computed<string>(() => {
   if (props.userPicture) return props.userPicture as string;
   const source = props.userName || props.userEmail || "";
   const initials =
-    source
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((s) => s[0])
-      .join("")
-      .toUpperCase() || source.substring(0, 2).toUpperCase();
+      source
+          .split(" ")
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((s) => s[0])
+          .join("")
+          .toUpperCase() || source.substring(0, 2).toUpperCase();
   return `https://ui-avatars.com/api/?name=${initials}&background=18a058&color=fff&size=40`;
 });
 
@@ -80,15 +92,16 @@ const dropdownThemeOverrides = {
   dividerColor: "rgba(17, 24, 39, 0.08)",
 };
 
-const menuIcons: Record<string, string> = {
-  profile: "👤",
-  templatesGroup: "▤",
-  printTemplates: "▤",
-  emailTemplates: "✉",
-  equipment: "▣",
-  settings: "⚙",
-  admin: "♡",
-  logout: "▦",
+const menuIcons: Record<string, typeof PersonOutline> = {
+  profile: PersonOutline,
+  templatesGroup: GridOutline,
+  printTemplates: PrintOutline,
+  documentsTemplates: DocumentTextOutline,
+  emailTemplates: MailOutline,
+  equipment: ConstructOutline,
+  admin: ShieldCheckmarkOutline,
+  tour: MapOutline,
+  logout: LogOutOutline,
 };
 
 const dropdownItems = computed(() => [
@@ -101,18 +114,23 @@ const dropdownItems = computed(() => [
     key: "templatesGroup",
     children: [
       {label: "תבניות הדפסה", key: "printTemplates"},
-      { label: "תבניות אימייל", key: "emailTemplates" },
-      { label: "הגדרת ציוד", key: "equipment" },
+      {label: "תבניות אימייל", key: "emailTemplates"},
+      {label: "הגדרת ציוד", key: "equipment"},
+      {label: "הגדרת מסמכים", key: "documentsTemplates"},
     ],
   },
   ...(props.userRole === "admin"
-    ? [
-        { label: "הגדרות אישיות", key: "settings" },
-        { label: "פאנל ניהול", key: "admin" },
+      ? [
+        // {label: "הגדרות אישיות", key: "settings"},
+        {label: "פאנל ניהול", key: "admin"},
       ]
-    : []),
+      : []),
   {
     type: "divider",
+  },
+  {
+    label: "סיור במערכת",
+    key: "tour",
   },
   {
     label: "התנתק",
@@ -121,9 +139,12 @@ const dropdownItems = computed(() => [
 ]);
 
 function renderDropdownLabel(option: any) {
-  return h("span", { class: "user-menu-label", dir: "rtl" }, [
-    h("span", { class: "user-menu-label__icon" }, menuIcons[String(option.key)] ?? ""),
-    h("span", { class: "user-menu-label__text" }, String(option.label ?? "")),
+  const icon = menuIcons[String(option.key)];
+  return h("span", {class: "user-menu-label", dir: "rtl"}, [
+    icon
+      ? h(NIcon, {component: icon, size: 16, class: "user-menu-label__glyph"})
+      : h("span", {class: "user-menu-label__icon-spacer"}),
+    h("span", {class: "user-menu-label__text"}, String(option.label ?? "")),
   ]);
 }
 
@@ -132,14 +153,18 @@ async function handleSelect(key: string) {
     router.push("/profile");
   } else if (key === "printTemplates") {
     router.push("/print-templates");
+  } else if (key === "documentsTemplates") {
+    router.push("/settings/doc-templates");
   } else if (key === "emailTemplates") {
     router.push("/settings/email-templates");
   } else if (key === "equipment") {
     router.push("/equipment");
-  } else if (key === "settings") {
-    router.push("/settings");
+    // } else if (key === "settings") {
+    //   router.push("/settings");
   } else if (key === "admin") {
     router.push("/admin");
+  } else if (key === "tour") {
+    walkthrough.startTour("main");
   } else if (key === "logout") {
     await authStore.logout();
   }
@@ -161,10 +186,9 @@ async function handleSelect(key: string) {
   border: 1px solid transparent;
   border-radius: 999px;
   cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+  transition: background var(--transition-fast),
+  border-color var(--transition-fast),
+  box-shadow var(--transition-fast);
 }
 
 .user-dropdown__trigger:hover {
@@ -249,17 +273,17 @@ async function handleSelect(key: string) {
   color: var(--text-primary);
 }
 
-:global(.user-menu-label__icon) {
+:global(.user-menu-label__glyph),
+:global(.user-menu-label__icon-spacer) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-  color: var(--primary-color);
-  font-size: 13px;
-  line-height: 1;
+  background: color-mix(in srgb, var(--brand-color) 12%, transparent);
+  color: var(--brand-color);
+  flex: 0 0 auto;
 }
 
 :global(.user-menu-label__text) {

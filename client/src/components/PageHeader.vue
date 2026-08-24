@@ -7,6 +7,9 @@
       <div class="page-header__title-row">
         <h1 class="page-header__title">{{ title }}</h1>
         <span v-if="count !== undefined" class="page-header__count">{{ count }}</span>
+        <div v-if="$slots.hero" class="page-header__hero">
+          <slot name="hero" />
+        </div>
       </div>
       <p v-if="subtitle" class="page-header__subtitle">{{ subtitle }}</p>
     </div>
@@ -28,17 +31,22 @@ defineProps<Props>();
 <style scoped>
 .page-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 16px;
   margin-bottom: 24px;
-  flex-wrap: wrap;
 }
 .page-header__copy {
   display: grid;
   gap: 6px;
   min-width: 0;
-  flex: 1 1 220px;
+  width: 100%;
+}
+.page-header__hero {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-inline-start: auto;
 }
 .page-header__breadcrumb {
   display: flex;
@@ -90,22 +98,14 @@ defineProps<Props>();
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  flex: 1 1 280px;
+  justify-content: flex-start;
+  width: 100%;
 }
 
 @media (max-width: 640px) {
   .page-header {
-    flex-direction: column;
-    align-items: stretch;
     margin-bottom: 18px;
   }
-  .page-header__copy,
-  .page-header__actions {
-    flex: 1 1 auto;
-    width: 100%;
-  }
   .page-header__title { font-size: 23px; }
-  .page-header__actions { justify-content: flex-start; }
 }
 </style>

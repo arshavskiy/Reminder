@@ -120,7 +120,7 @@ describe("reminder email templates — full data fill", () => {
     body: "הערה לבדיקה",
     client_name: "יוסי כהן",
     document_name: "תסקיר 18163.pdf",
-    from_name: "ReminderOCR",
+    from_name: "RemindOCR",
     client_company: "מן הנדסת חשמל",
     contact_email: "office@example.com",
     contact_phone: "052-1234567",
@@ -153,7 +153,7 @@ describe("reminder email templates — full data fill", () => {
     body: null,
     client_name: "יוסי כהן",
     document_name: null,
-    from_name: "ReminderOCR",
+    from_name: "RemindOCR",
     client_company: "מן הנדסת חשמל",
     contact_email: "office@example.com",
     contact_phone: "052-1234567",
@@ -202,7 +202,7 @@ describe("grouped items_table injection in built-in templates", () => {
     trigger_date: "2026-10-22",
     advance_days: 30,
     body: "הערה לבדיקה",
-    from_name: "ReminderOCR",
+    from_name: "RemindOCR",
     client_company: "מן הנדסת חשמל",
     contact_person: "יוסי כהן",
     contact_phone: "052-1234567",
@@ -214,7 +214,7 @@ describe("grouped items_table injection in built-in templates", () => {
     model: "AGLY2",
     serial_number: "2305001938",
   };
-  const SAMPLE_TABLE = `<table class="items"><thead><tr><th>תסקיר</th><th>ציוד</th><th>רישוי</th><th>בתוקף עד</th></tr></thead><tbody><tr><td>484590/12100</td><td>מלגזה</td><td>180375</td><td>2026-08-18</td></tr></tbody></table>`;
+  const SAMPLE_TABLE = `<table class="items"><thead><tr><th>תסקיר</th><th>ציוד</th><th>בתוקף עד</th></tr></thead><tbody><tr><td>484590/12100</td><td>מלגזה</td><td>2026-08-18</td></tr></tbody></table>`;
 
   it("inspection.html without items_table still shows the single equipment box", () => {
     const rendered = renderTemplate(loadReminderTemplate("inspection"), TABLE_VARS, { escape: false });

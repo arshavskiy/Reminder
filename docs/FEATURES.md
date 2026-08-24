@@ -2,7 +2,7 @@
 
 Current feature inventory for ReminderOCR.  
 Stack: Node.js 22 / Express · MongoDB · Vue 3 + Naive UI + Tailwind v4 · Railway + Vercel  
-**Updated**: 2026-08-19
+**Updated**: 2026-08-24
 
 ---
 
@@ -44,6 +44,27 @@ Three roles with numeric rank (`user=0`, `pro=1`, `admin=2`):
 
 - Server-side: `requireRole(ctx, minRole)` throws `403` if rank is too low
 - Client-side: router guard redirects to `/403`; `primaryNav` computed filters nav by `minRole`
+
+---
+
+## Tier Feature Flags
+
+Subscription plans have explicit feature-flag settings so tier behavior is visible outside individual route code.
+
+Source files:
+
+- Client pricing display: `client/src/shared/pricingPlans.ts`
+- Server enforcement: `server/src/plans/tierFeatures.ts`
+
+Current tier flags:
+
+| Tier | Gmail invoice history | Google Drive sync/export | Automatic email reminders | Monthly reports | Excel export |
+|------|------------------------|--------------------------|----------------------------|-----------------|--------------|
+| Free | Not included | Off | Off | Off | Off |
+| Basic | 12 months | On | On | On | On |
+| Business | 4 years | On | On | On | On |
+
+Gmail invoice imports enforce the history flag in both `/api/gmail/inbox` and `/api/gmail/import-all`. Free users receive `gmail_invoice_plan_required`; Basic users are capped at `newer_than:12m`; Business users are capped at `newer_than:48m`.
 
 ---
 

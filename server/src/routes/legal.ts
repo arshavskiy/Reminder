@@ -1,11 +1,13 @@
 import express from "express";
+import {existsSync} from "fs";
+import {resolve} from "path";
 
 const PRIVACY_HTML = `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>מדיניות פרטיות — ReminderOCR</title>
+  <title>מדיניות פרטיות — RemindOCR</title>
   <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 24px; color: #2c3e50; line-height: 1.7; }
     h1 { color: #18a058; font-size: 28px; margin-bottom: 8px; }
@@ -20,7 +22,7 @@ const PRIVACY_HTML = `<!DOCTYPE html>
   <p class="updated">עודכן לאחרונה: אוגוסט 2026</p>
 
   <h2>1. מבוא</h2>
-  <p>ReminderOCR ("האפליקציה") היא מערכת לניהול תזכורות ותסקירים המיועדת לשימוש עסקי פנימי. אנו מחויבים להגן על פרטיות המשתמשים.</p>
+  <p>RemindOCR ("האפליקציה") היא מערכת לניהול תזכורות ותסקירים המיועדת לשימוש עסקי פנימי. אנו מחויבים להגן על פרטיות המשתמשים.</p>
 
   <h2>2. המידע שאנו אוספים</h2>
   <ul>
@@ -57,7 +59,7 @@ const TERMS_HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>תנאי שימוש — ReminderOCR</title>
+  <title>תנאי שימוש — RemindOCR</title>
   <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 24px; color: #2c3e50; line-height: 1.7; }
     h1 { color: #18a058; font-size: 28px; margin-bottom: 8px; }
@@ -72,10 +74,10 @@ const TERMS_HTML = `<!DOCTYPE html>
   <p class="updated">עודכן לאחרונה: אוגוסט 2026</p>
 
   <h2>1. קבלת התנאים</h2>
-  <p>השימוש במערכת ReminderOCR מהווה הסכמה לתנאי שימוש אלו. אם אינך מסכים לתנאים, אנא הפסק את השימוש באפליקציה.</p>
+  <p>השימוש במערכת RemindOCR מהווה הסכמה לתנאי שימוש אלו. אם אינך מסכים לתנאים, אנא הפסק את השימוש באפליקציה.</p>
 
   <h2>2. תיאור השירות</h2>
-  <p>ReminderOCR היא מערכת לניהול תזכורות, תסקירים וחוזים. המערכת מאפשרת העלאת מסמכים, חילוץ נתונים אוטומטי ושליחת תזכורות ללקוחות.</p>
+  <p>RemindOCR היא מערכת לניהול תזכורות, תסקירים וחוזים. המערכת מאפשרת העלאת מסמכים, חילוץ נתונים אוטומטי ושליחת תזכורות ללקוחות.</p>
 
   <h2>3. שימוש מותר</h2>
   <ul>
@@ -99,13 +101,29 @@ const TERMS_HTML = `<!DOCTYPE html>
 </html>`;
 
 export function registerLegalRoutes(app: express.Application) {
-  app.get("/privacy", (_req, res) => {
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(PRIVACY_HTML);
+  app.get(["/privacy", "/privacy.html"], (_req, res) => {
+    sendLandingHtml(res, "privacy.html", PRIVACY_HTML);
   });
 
-  app.get("/terms", (_req, res) => {
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(TERMS_HTML);
+  app.get(["/terms", "/terms.html"], (_req, res) => {
+    sendLandingHtml(res, "terms.html", TERMS_HTML);
   });
+}
+
+function sendLandingHtml(res: express.Response, fileName: string, fallbackHtml: string) {
+  const filePath = findLandingFile(fileName);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  if (filePath) {
+    res.sendFile(filePath);
+    return;
+  }
+  res.send(fallbackHtml);
+}
+
+function findLandingFile(fileName: string): string | null {
+  const candidates = [
+    resolve(process.cwd(), "../landing", fileName),
+    resolve(process.cwd(), "landing", fileName),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
 }

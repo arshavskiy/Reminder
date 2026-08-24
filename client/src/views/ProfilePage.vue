@@ -1,40 +1,48 @@
 <template>
-  <div class="profile-shell">
-    <!-- ── Left sidebar nav ──────────────────────────────────────────────── -->
+  <div class="profile-page">
+    <PageHeader
+      title="פרופיל"
+      subtitle="ניהול פרטים אישיים, פרופיל מהנדס, הגדרות ומנוי"
+    />
+
+    <div class="profile-shell">
     <aside class="profile-sidebar">
       <div class="sidebar-user">
         <div class="sidebar-avatar">
-          <img v-if="user?.picture_url" :src="user.picture_url" alt="avatar" />
+          <img
+            v-if="user?.picture_url"
+            :src="user.picture_url"
+            alt=""
+            referrerpolicy="no-referrer"
+          />
           <span v-else class="sidebar-avatar__initials">{{ initials }}</span>
         </div>
         <div class="sidebar-user__info">
           <div class="sidebar-user__name">
             {{ user?.name || user?.email || "—" }}
           </div>
-          <n-tag :type="roleTag.type" size="small" style="margin-top: 4px">{{
-            roleTag.label
-          }}</n-tag>
+          <n-tag :type="roleTag.type" size="small">{{ roleTag.label }}</n-tag>
         </div>
       </div>
 
-      <nav class="sidebar-nav">
-        <a
+      <nav class="sidebar-nav" aria-label="ניווט פרופיל">
+        <button
           v-for="item in navItems"
           :key="item.key"
+          type="button"
           class="sidebar-nav__item"
           :class="{ 'sidebar-nav__item--active': activeSection === item.key }"
+          :aria-current="activeSection === item.key ? 'page' : undefined"
           @click="activeSection = item.key"
         >
-          <span class="sidebar-nav__icon">{{ item.icon }}</span>
+          <n-icon :component="item.icon" :size="18" />
           <span>{{ item.label }}</span>
-        </a>
+        </button>
       </nav>
     </aside>
 
-    <!-- ── Main content area ─────────────────────────────────────────────── -->
     <main class="profile-content">
       <n-spin :show="loading">
-        <!-- פרטים אישיים -->
         <section v-if="activeSection === 'personal'">
           <div class="section-header">
             <h2 class="section-title">פרטים אישיים</h2>
@@ -42,19 +50,22 @@
               v-if="!editingPersonal"
               size="small"
               @click="startEditPersonal"
-              >✏️ עריכה</n-button
             >
+              <template #icon>
+                <n-icon :component="CreateOutline" />
+              </template>
+              עריכה
+            </n-button>
             <n-space v-else>
-              <n-button size="small" @click="cancelEditPersonal"
-                >ביטול</n-button
-              >
+              <n-button size="small" @click="cancelEditPersonal">ביטול</n-button>
               <n-button
                 size="small"
                 type="primary"
                 :loading="savingPersonal"
                 @click="savePersonal"
-                >שמור</n-button
               >
+                שמור
+              </n-button>
             </n-space>
           </div>
           <div class="info-card">
@@ -103,8 +114,12 @@
               v-if="!editingEngineer"
               size="small"
               @click="startEditEngineer"
-              >✏️ עריכה</n-button
             >
+              <template #icon>
+                <n-icon :component="CreateOutline" />
+              </template>
+              עריכה
+            </n-button>
             <n-space v-else>
               <n-button size="small" @click="cancelEditEngineer"
                 >ביטול</n-button
@@ -136,9 +151,22 @@
                 v-if="editingEngineer"
                 v-model:value="engineerForm.address"
                 class="info-input"
+                placeholder="רחוב ומספר"
               />
               <span v-else class="info-val">{{
                 engineerProfile?.address || "—"
+              }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">עיר</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.city"
+                class="info-input"
+                placeholder="תל אביב"
+              />
+              <span v-else class="info-val">{{
+                engineerProfile?.city || "—"
               }}</span>
             </div>
             <div class="info-row">
@@ -157,8 +185,8 @@
               <n-date-picker
                 v-if="editingEngineer"
                 v-model:value="engineerForm.membership_start_ms"
+                class="info-input"
                 type="date"
-                style="flex: 1"
               />
               <span v-else class="info-val">{{
                 formatDate(engineerProfile?.membership_start_date)
@@ -168,14 +196,15 @@
               <span class="info-label">מספר התחלת תסקירים</span>
               <div
                 v-if="editingEngineer"
-                style="flex: 1; display: flex; flex-direction: column; gap: 4px"
+                class="info-stack"
               >
                 <n-input
                   v-model:value="engineerForm.inspector_id_start"
                   placeholder="לדוגמה: 16125"
                 />
                 <span v-if="engineerForm.inspector_id_start" class="info-hint">
-                  🔒 מספר זה נקבע כבר. הבא יהיה:
+                  <n-icon :component="LockClosedOutline" :size="14" />
+                  מספר זה נקבע כבר. הבא יהיה:
                   {{ engineerProfile?.inspector_number ?? "—" }}/{{
                     engineerForm.inspector_id_start
                   }}
@@ -183,8 +212,7 @@
               </div>
               <div
                 v-else
-                class="info-val"
-                style="display: flex; flex-direction: column; gap: 4px"
+                class="info-val info-stack"
               >
                 <span>{{ engineerProfile?.inspector_id_start || "—" }}</span>
                 <span
@@ -261,23 +289,26 @@
                 (engineerProfile as any)?.company_email || "—"
               }}</span>
             </div>
-            <div class="info-row" style="align-items:flex-start">
+            <div class="info-row info-row--top">
               <span class="info-label">לוגו החברה</span>
-              <div style="display:flex; flex-direction:column; gap:8px; flex:1">
+              <div class="logo-upload">
                 <img
                   v-if="(engineerProfile as any)?.company_logo_url"
                   :src="(engineerProfile as any)?.company_logo_url"
-                  style="max-height:56px; max-width:180px; border-radius:6px; object-fit:contain"
+                  class="logo-upload__preview"
                   alt="לוגו חברה"
                 />
                 <input
                   ref="companyLogoInput"
                   type="file"
                   accept="image/*"
-                  style="display:none"
+                  class="visually-hidden"
                   @change="uploadCompanyLogo"
                 />
                 <n-button size="small" secondary @click="(companyLogoInput as HTMLInputElement)?.click()">
+                  <template #icon>
+                    <n-icon :component="ImageOutline" />
+                  </template>
                   {{ (engineerProfile as any)?.company_logo_url ? 'החלף לוגו' : 'העלה לוגו' }}
                 </n-button>
               </div>
@@ -289,9 +320,12 @@
         <section v-if="activeSection === 'stats'">
           <div class="section-header">
             <h2 class="section-title">סטטיסטיקות</h2>
-            <n-button size="small" @click="exportStatsCsv"
-              >📥 יצוא CSV</n-button
-            >
+            <n-button size="small" @click="exportStatsCsv">
+              <template #icon>
+                <n-icon :component="DownloadOutline" />
+              </template>
+              יצוא CSV
+            </n-button>
           </div>
           <div class="stats-row">
             <div class="stat-card">
@@ -309,7 +343,7 @@
               <span class="stat-card__label">ממתינים</span>
             </div>
           </div>
-          <div class="info-card" style="margin-top: 20px">
+          <div class="info-card info-card--spaced">
             <div class="info-row">
               <span class="info-label">סה״כ תסקירים</span>
               <div class="progress-wrap">
@@ -317,7 +351,7 @@
                   type="line"
                   :percentage="100"
                   :height="8"
-                  color="#18a058"
+                  color="var(--color-success)"
                   :show-indicator="false"
                 />
                 <span class="info-val">{{ inspectionStats.total }}</span>
@@ -330,7 +364,7 @@
                   type="line"
                   :percentage="completedPct"
                   :height="8"
-                  color="#18a058"
+                  color="var(--color-success)"
                   :show-indicator="false"
                 />
                 <span class="info-val">{{ inspectionStats.completed }}</span>
@@ -343,14 +377,14 @@
                   type="line"
                   :percentage="pendingPct"
                   :height="8"
-                  color="#f0a020"
+                  color="var(--color-warning)"
                   :show-indicator="false"
                 />
                 <span class="info-val">{{ inspectionStats.pending }}</span>
               </div>
             </div>
           </div>
-          <div class="info-card" style="margin-top: 16px">
+          <div class="info-card info-card--tight">
             <div class="info-row">
               <span class="info-label">סיכום חודשי</span>
               <span class="info-val"
@@ -367,8 +401,8 @@
             <n-select
               v-model:value="notifFilter"
               :options="notifFilterOptions"
+              class="notif-filter"
               size="small"
-              style="width: 160px"
             />
           </div>
           <div class="notif-list">
@@ -381,9 +415,8 @@
               <n-tag
                 :type="notifTagType(notif.type)"
                 size="small"
-                style="flex-shrink: 0"
-                >{{ notifTypeLabel(notif.type) }}</n-tag
-              >
+                class="notif-tag"
+              >{{ notifTypeLabel(notif.type) }}</n-tag>
               <div class="notif-body">
                 <div class="notif-title">{{ notif.title }}</div>
                 <div class="notif-date">{{ formatDate(notif.created_at) }}</div>
@@ -395,13 +428,12 @@
           </div>
         </section>
 
-        <!-- הגדרות -->
         <section v-if="activeSection === 'settings'">
           <h2 class="section-title">הגדרות</h2>
 
           <div class="settings-group">
             <h3 class="settings-group__title">שינוי סיסמה</h3>
-            <n-form label-placement="top" style="max-width: 400px">
+            <n-form class="settings-form" label-placement="top">
               <n-form-item label="סיסמה נוכחית">
                 <n-input
                   v-model:value="pwForm.current"
@@ -427,8 +459,9 @@
                 type="primary"
                 :loading="savingPw"
                 @click="changePassword"
-                >שנה סיסמה</n-button
               >
+                שנה סיסמה
+              </n-button>
             </n-form>
           </div>
 
@@ -439,7 +472,8 @@
                 <img
                   v-if="user?.picture_url"
                   :src="user.picture_url"
-                  alt="avatar"
+                  alt=""
+                  referrerpolicy="no-referrer"
                 />
                 <span v-else class="sidebar-avatar__initials">{{
                   initials
@@ -449,25 +483,133 @@
                 ref="avatarInput"
                 type="file"
                 accept="image/*"
-                style="display: none"
+                class="visually-hidden"
                 @change="onAvatarChange"
               />
               <n-button
                 size="small"
                 :loading="uploadingAvatar"
                 @click="avatarInput?.click()"
-                >📷 שנה תמונה</n-button
               >
+                <template #icon>
+                  <n-icon :component="CameraOutline" />
+                </template>
+                שנה תמונה
+              </n-button>
             </div>
           </div>
 
-          <!--          <div class="settings-group">-->
-          <!--            <h3 class="settings-group__title">יצוא נתונים</h3>-->
-          <!--            <n-space>-->
-          <!--              <n-button size="small" @click="exportPdf">📄 יצוא PDF</n-button>-->
-          <!--              <n-button size="small" @click="exportWord">📝 יצוא Word</n-button>-->
-          <!--            </n-space>-->
-          <!--          </div>-->
+          <div class="settings-group">
+            <h3 class="settings-group__title">סנכרון Google Drive</h3>
+            <p class="settings-desc">
+              סנכרן מסמכים שהועלו אוטומטית לתיקיית
+              <strong>{{ driveStatus?.folderName || "RemindOCR" }}</strong>
+              ב-Google Drive (ב־My Drive). חשבוניות נשמרות בתת־תיקייה ״חשבוניות״, ותסקירים ב״תסקירי בדיקה״.
+            </p>
+            <div v-if="!driveAllowed" class="settings-desc settings-desc--follow">
+              זמין במסלולים <strong>בסיסי</strong> ו<strong>עסקי</strong> בלבד.
+              <router-link class="settings-link" to="/pricing">
+                שדרוג מנוי
+              </router-link>
+            </div>
+            <div v-else-if="driveStatus">
+              <n-tag v-if="driveFolderGone" size="small" class="drive-status-tag" type="warning">תיקייה חסרה</n-tag>
+              <n-tag v-else-if="driveStatus.syncEnabled" size="small" class="drive-status-tag" type="success">מופעל</n-tag>
+              <n-tag v-else size="small" class="drive-status-tag" type="default">כבוי</n-tag>
+              <div class="drive-actions">
+                <n-button
+                    v-if="!driveStatus.syncEnabled"
+                    :disabled="!driveStatus.connected"
+                    :loading="driveToggling"
+                    size="small"
+                    type="primary"
+                    @click="enableDriveSync"
+                >הפעל סנכרון
+                </n-button>
+                <n-button
+                    v-else
+                    :loading="driveToggling"
+                    size="small"
+                    @click="disableDriveSync"
+                >כבה סנכרון
+                </n-button>
+                <span v-if="!driveStatus.connected" class="settings-desc settings-desc--inline">
+                  יש להתחבר עם Google כדי להפעיל
+                </span>
+              </div>
+              <div v-if="driveFolderGone" class="drive-folder-alert">
+                <n-alert :bordered="false" type="warning">
+                  <template v-if="driveStatus.folderState === 'trashed'">
+                    תיקיית Google Drive נמצאת בפח.
+                    <span v-if="driveStatus.syncedFileCount">
+                      {{ driveStatus.syncedFileCount }} מסמכים סומנו כמסונכרנים, אבל הם בפח יחד עם התיקייה.
+                    </span>
+                    אפשר לשחזר אותה מהפח, או ליצור תיקייה חדשה ולהעלות מחדש.
+                  </template>
+                  <template v-else>
+                    תיקיית Google Drive נמחקה.
+                    <span v-if="driveStatus.syncedFileCount">
+                      {{ driveStatus.syncedFileCount }} מסמכים סומנו כמסונכרנים, אבל הם כבר לא ב-Drive.
+                    </span>
+                    צריך ליצור תיקייה חדשה ולהעלות אותם מחדש.
+                  </template>
+                </n-alert>
+                <a
+                  v-if="driveStatus.folderState === 'trashed' && driveStatus.trashUrl"
+                  class="settings-link drive-folder__open"
+                  :href="driveStatus.trashUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <n-icon :component="OpenOutline" :size="14" />
+                  פתח את הפח ב-Google Drive
+                </a>
+                <n-button
+                  :loading="repairingFolder"
+                  class="drive-repair-btn"
+                  size="small"
+                  type="warning"
+                  @click="repairDriveFolder"
+                >
+                  צור תיקייה והעלה מחדש
+                </n-button>
+              </div>
+              <div v-if="driveStatus.syncEnabled && !driveFolderGone" class="drive-folder">
+                <label class="settings-desc drive-folder__label">שם תיקייה ב-Drive</label>
+                <div class="drive-folder__row">
+                  <n-input
+                      v-model:value="driveFolderName"
+                      class="drive-folder__input"
+                      placeholder="RemindOCR"
+                      size="small"
+                  />
+                  <n-button
+                      :disabled="!driveFolderName?.trim() || driveFolderName.trim() === driveStatus.folderName"
+                      :loading="renamingFolder"
+                      size="small"
+                      @click="renameDriveFolder"
+                  >שמור
+                  </n-button>
+                </div>
+                <a
+                  v-if="driveFolderUrl"
+                  class="settings-link drive-folder__open"
+                  :href="driveFolderUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <n-icon :component="OpenOutline" :size="14" />
+                  פתח תיקייה ב-Google Drive
+                </a>
+              </div>
+              <div v-if="driveNeedsReauth" class="drive-reauth">
+                <n-alert :bordered="false" class="drive-reauth__alert" type="warning">
+                  יש להתחבר מחדש ל-Gmail כדי לאשר הרשאות Drive.
+                </n-alert>
+                <n-button size="small" type="warning" @click="reconnectGmailForDrive">התחבר מחדש ל-Gmail</n-button>
+              </div>
+            </div>
+          </div>
 
           <div class="settings-group">
             <h3 class="settings-group__title">ניהול הפעלות</h3>
@@ -478,16 +620,20 @@
               type="error"
               :loading="disconnecting"
               @click="disconnectAll"
-              >התנתק מכל המכשירים</n-button
             >
+              <template #icon>
+                <n-icon :component="LogOutOutline" />
+              </template>
+              התנתק מכל המכשירים
+            </n-button>
           </div>
         </section>
 
-        <!-- נושא עיצוב -->
         <section v-if="activeSection === 'theme'">
           <h2 class="section-title">נושא עיצוב</h2>
           <div class="theme-cards">
-            <div
+            <button
+              type="button"
               class="theme-card"
               :class="{ 'theme-card--active': currentTheme === 'light' }"
               @click="setTheme('light')"
@@ -496,9 +642,13 @@
                 <div class="theme-preview-bar" />
                 <div class="theme-preview-content" />
               </div>
-              <div class="theme-card__label">☀️ מצב בהיר</div>
-            </div>
-            <div
+              <div class="theme-card__label">
+                <n-icon :component="SunnyOutline" :size="16" />
+                מצב בהיר
+              </div>
+            </button>
+            <button
+              type="button"
               class="theme-card"
               :class="{ 'theme-card--active': currentTheme === 'dark' }"
               @click="setTheme('dark')"
@@ -507,73 +657,175 @@
                 <div class="theme-preview-bar" />
                 <div class="theme-preview-content" />
               </div>
-              <div class="theme-card__label">🌙 מצב כהה</div>
-            </div>
+              <div class="theme-card__label">
+                <n-icon :component="MoonOutline" :size="16" />
+                מצב כהה
+              </div>
+            </button>
           </div>
         </section>
 
-        <!-- מנוי ותשלומים -->
         <section v-if="activeSection === 'subscription'">
           <h2 class="section-title">מנוי ותשלומים</h2>
-          <div class="info-card" style="margin-bottom: 20px">
+
+          <article v-if="currentPricingPlan" class="sub-plan-card">
+            <div class="sub-plan-card__head">
+              <div>
+                <p class="sub-plan-card__eyebrow">המסלול שלכם</p>
+                <h3 class="sub-plan-card__title">{{ currentPricingPlan.name }}</h3>
+                <p class="sub-plan-card__blurb">{{ currentPricingPlan.blurb }}</p>
+              </div>
+              <div class="sub-plan-card__price">
+                <strong>{{ currentPricingPlan.price === 0 ? "חינם" : `₪${currentPricingPlan.price}` }}</strong>
+                <span v-if="currentPricingPlan.period">{{ currentPricingPlan.period }}</span>
+              </div>
+            </div>
+            <ul class="sub-plan-card__features">
+              <li v-for="feature in currentPricingPlan.features.slice(0, 4)" :key="feature">
+                <n-icon :component="CheckmarkCircleOutline" :size="16" />
+                <span>{{ feature }}</span>
+              </li>
+            </ul>
+            <router-link class="sub-plan-card__link" to="/pricing">צפייה בכל המסלולים והמחירים</router-link>
+          </article>
+
+          <div class="info-card sub-usage-card">
             <div class="info-row">
               <span class="info-label">תוכנית נוכחית</span>
               <span class="info-val">
-                <n-tag :type="roleTag.type" size="small">{{
-                  roleTag.label
-                }}</n-tag>
+                <n-tag :type="planTag.type" size="small">{{ planTag.label }}</n-tag>
               </span>
             </div>
             <div class="info-row">
-              <span class="info-label">תוקף מנוי</span>
-              <span class="info-val">{{
-                subscription.validUntil || "חינמי"
-              }}</span>
+              <span class="info-label">מחיר</span>
+              <span class="info-val">{{ planPriceLabel }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">תסקירים החודש</span>
-              <span class="info-val">{{ subscription.monthlyCount }}</span>
+              <span class="info-label">סוג מכסה</span>
+              <span class="info-val">{{ quotaScopeLabel }}</span>
+            </div>
+            <div v-if="quotaPeriodLabel" class="info-row">
+              <span class="info-label">תקופת מכסה</span>
+              <span class="info-val">{{ quotaPeriodLabel }}</span>
+            </div>
+
+            <div v-for="item in quotaUsageRows" :key="item.key" class="sub-quota">
+              <div class="sub-quota__head">
+                <span class="sub-quota__label">{{ item.label }}</span>
+                <span class="sub-quota__value">{{ item.usageLabel }}</span>
+              </div>
+              <n-progress
+                  v-if="item.limit !== null"
+                  :color="item.percent >= 100 ? 'var(--color-error)' : item.percent >= 80 ? 'var(--color-warning)' : 'var(--brand-color)'"
+                  :height="8"
+                  :percentage="item.percent"
+                  :show-indicator="false"
+                  type="line"
+              />
+              <p v-else class="sub-quota__unlimited">ללא הגבלה</p>
             </div>
           </div>
-          <div class="section-header" style="margin-bottom: 12px">
-            <h3 class="settings-group__title" style="margin: 0">
-              היסטוריית חיוב
-            </h3>
+
+          <div v-if="importCounterRows.length" class="info-card sub-usage-card sub-counters-card">
+            <h3 class="settings-group__title sub-counters-card__title">פירוט שימוש</h3>
+            <div v-for="item in importCounterRows" :key="item.key" class="info-row">
+              <span class="info-label">{{ item.label }}</span>
+              <span class="info-val">{{ item.value }}</span>
+            </div>
           </div>
-          <n-data-table
-            :columns="billingColumns"
-            :data="billingHistory"
-            :pagination="false"
-            :scroll-x="620"
-            size="small"
-          />
+
+          <h3 class="billing-title">היסטוריית חיוב</h3>
+          <div v-if="billingHistory.length" class="billing-table-wrap">
+            <table class="billing-table">
+              <thead>
+                <tr>
+                  <th>תאריך</th>
+                  <th>סכום</th>
+                  <th>סטטוס</th>
+                  <th>תיאור</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, index) in billingHistory" :key="index">
+                  <td>{{ formatDate(row.date) }}</td>
+                  <td>₪{{ row.amount }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>{{ row.description }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="sub-billing-empty">
+            אין חיובים עדיין. תשלומים יופיעו כאן לאחר חיבור מערכת התשלומים.
+          </div>
         </section>
       </n-spin>
     </main>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import {computed, onMounted, ref, watch, type Component} from "vue";
+import {useRoute} from "vue-router";
 import {
+  NAlert,
   NButton,
   NDatePicker,
   NForm,
   NFormItem,
+  NIcon,
   NInput,
   NProgress,
   NSelect,
   NSpace,
   NSpin,
+  NTag,
   useMessage,
 } from "naive-ui";
+import {
+  CameraOutline,
+  CheckmarkCircleOutline,
+  ColorPaletteOutline,
+  ConstructOutline,
+  CreateOutline,
+  DiamondOutline,
+  DownloadOutline,
+  ImageOutline,
+  LockClosedOutline,
+  LogOutOutline,
+  MoonOutline,
+  NotificationsOutline,
+  OpenOutline,
+  PersonOutline,
+  SettingsOutline,
+  StatsChartOutline,
+  SunnyOutline,
+} from "@vicons/ionicons5";
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
 import { useUserSettingsStore } from "../stores/userSettings.js";
 import { useEngineerStore } from "../stores/engineer.js";
+import {api, type DriveExportJob, type DriveStatus, type ProfileSubscription} from "../services/apiService.js";
 import type { User, UserSettings } from "@shared/types.js";
+import PageHeader from "../components/PageHeader.vue";
+import {useConfirm} from "../composables/useConfirm.js";
+import {
+  PLAN_LABELS,
+  formatPlanPrice,
+  formatQuotaScope,
+  formatQuotaUsage,
+  getPricingPlan,
+  quotaPercent,
+  resolveUserPlan,
+  planAllowsGoogleDrive,
+  type PlanId,
+} from "../shared/pricingPlans.js";
+
+const route = useRoute();
 
 const message = useMessage();
+const {confirm} = useConfirm();
 const authStore = useAuthStore();
 const userSettingsStore = useUserSettingsStore();
 const engineerStore = useEngineerStore();
@@ -590,15 +842,22 @@ const userSettings = ref<UserSettings | null>(null);
 // ── Sidebar nav ──────────────────────────────────────────────────────────────
 const navItems = computed(() => {
   const isAdmin = user.value?.role === "admin";
-  return [
-    { key: "personal", icon: "👤", label: "פרטים אישיים" },
-    { key: "engineer", icon: "🔧", label: "פרופיל מהנדס" },
-    ...(isAdmin ? [{ key: "stats", icon: "📊", label: "סטטיסטיקות" }] : []),
-    ...(isAdmin ? [{ key: "notifications", icon: "🔔", label: "התראות ועדכונים" }] : []),
-    { key: "settings", icon: "⚙️", label: "הגדרות" },
-    ...(isAdmin ? [{ key: "theme", icon: "🎨", label: "נושא עיצוב" }] : []),
-    ...(isAdmin ? [{ key: "subscription", icon: "💳", label: "מנוי ותשלומים" }] : []),
+  const items: { key: string; icon: Component; label: string }[] = [
+    { key: "personal", icon: PersonOutline, label: "פרטים אישיים" },
+    { key: "engineer", icon: ConstructOutline, label: "פרופיל מהנדס" },
   ];
+  if (isAdmin) {
+    items.push(
+      { key: "stats", icon: StatsChartOutline, label: "סטטיסטיקות" },
+      { key: "notifications", icon: NotificationsOutline, label: "התראות ועדכונים" },
+    );
+  }
+  items.push({ key: "settings", icon: SettingsOutline, label: "הגדרות" });
+  if (isAdmin) {
+    items.push({ key: "theme", icon: ColorPaletteOutline, label: "נושא עיצוב" });
+  }
+  items.push({ key: "subscription", icon: DiamondOutline, label: "מנוי ותשלומים" });
+  return items;
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -626,6 +885,19 @@ const ROLE_META: Record<
 const roleTag = computed(
   () => ROLE_META[user.value?.role ?? "user"] ?? ROLE_META.user,
 );
+
+const PLAN_TAG_TYPES: Record<PlanId, "success" | "info" | "default"> = {
+  free: "default",
+  basic: "info",
+  business: "success",
+};
+const currentPlanId = computed(() => resolveUserPlan(user.value));
+const currentPricingPlan = computed(() => getPricingPlan(currentPlanId.value));
+const planTag = computed(() => ({
+  label: PLAN_LABELS[currentPlanId.value],
+  type: PLAN_TAG_TYPES[currentPlanId.value],
+}));
+const planPriceLabel = computed(() => formatPlanPrice(currentPricingPlan.value));
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
@@ -688,6 +960,7 @@ const savingEngineer = ref(false);
 const engineerForm = ref({
   inspector_number: "",
   address: "",
+  city: "",
   title: "",
   expertise: "",
   mr_number: "",
@@ -706,6 +979,7 @@ function startEditEngineer() {
   engineerForm.value = {
     inspector_number: p?.inspector_number ?? "",
     address: p?.address ?? "",
+    city: p?.city ?? "",
     title: p?.title ?? "",
     expertise: p?.expertise ?? "",
     mr_number: p?.mr_number ?? "",
@@ -862,6 +1136,150 @@ async function onAvatarChange(e: Event) {
 const pwForm = ref({ current: "", next: "", confirm: "" });
 const savingPw = ref(false);
 const disconnecting = ref(false);
+const driveStatus = ref<DriveStatus | null>(null);
+const driveToggling = ref(false);
+const driveNeedsReauth = ref(false);
+const driveFolderName = ref("RemindOCR");
+const renamingFolder = ref(false);
+const repairingFolder = ref(false);
+const driveAllowed = computed(() => {
+  if (driveStatus.value?.allowed === false) return false;
+  return planAllowsGoogleDrive(currentPlanId.value);
+});
+const driveFolderGone = computed(() => {
+  const state = driveStatus.value?.folderState;
+  return state === "missing" || state === "trashed";
+});
+const driveFolderUrl = computed(() => {
+  if (driveFolderGone.value) return null;
+  if (driveStatus.value?.folderUrl) return driveStatus.value.folderUrl;
+  if (driveStatus.value?.folderId) {
+    return `https://drive.google.com/drive/folders/${driveStatus.value.folderId}`;
+  }
+  return null;
+});
+
+async function loadDriveStatus() {
+  try {
+    driveStatus.value = await api.drive.status();
+    driveFolderName.value = driveStatus.value.folderName || "RemindOCR";
+  } catch {
+    driveStatus.value = null;
+  }
+}
+
+async function enableDriveSync() {
+  if (!driveAllowed.value) {
+    message.warning("סנכרון Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
+  driveToggling.value = true;
+  try {
+    await api.drive.enable();
+    message.success("סנכרון Google Drive הופעל");
+    await loadDriveStatus();
+  } catch (err: any) {
+    if (err?.message?.includes("drive_plan_required")) {
+      message.warning("סנכרון Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    } else if (err?.message?.includes("no_google_token")) {
+      message.warning("חבר את חשבון Google כדי להפעיל סנכרון Drive");
+    } else if (err?.message?.includes("drive_scope_missing")) {
+      driveNeedsReauth.value = true;
+      message.warning("יש להתחבר מחדש ל-Gmail כדי לאשר גישה ל-Drive");
+    } else {
+      message.error("שגיאה בהפעלת סנכרון Drive");
+    }
+  } finally {
+    driveToggling.value = false;
+  }
+}
+
+async function disableDriveSync() {
+  driveToggling.value = true;
+  try {
+    await api.drive.disable();
+    message.info("סנכרון Google Drive כובה");
+    await loadDriveStatus();
+  } catch {
+    message.error("שגיאה בכיבוי סנכרון Drive");
+  } finally {
+    driveToggling.value = false;
+  }
+}
+
+async function renameDriveFolder() {
+  const name = driveFolderName.value?.trim();
+  if (!name) return;
+  renamingFolder.value = true;
+  try {
+    await api.drive.renameFolder(name);
+    message.success("שם התיקייה עודכן");
+    await loadDriveStatus();
+  } catch {
+    message.error("שגיאה בשינוי שם התיקייה");
+  } finally {
+    renamingFolder.value = false;
+  }
+}
+
+async function repairDriveFolder() {
+  const count = driveStatus.value?.syncedFileCount ?? 0;
+  const trashed = driveStatus.value?.folderState === "trashed";
+  confirm({
+    title: trashed ? "תיקיית Drive בפח" : "תיקיית Drive נמחקה",
+    content: count
+      ? `${count} מסמכים סומנו כמסונכרנים אבל הם כבר לא בתיקייה. ליצור תיקייה חדשה ולהעלות אותם מחדש?`
+      : "ליצור תיקייה חדשה ב-Google Drive ולהעלות את המסמכים?",
+    confirmText: "העלה מחדש",
+    type: "warning",
+    onConfirm: async () => {
+      repairingFolder.value = true;
+      try {
+        const started = await api.drive.exportAll();
+        const result = await waitForDriveExportJob(started.jobId);
+        const folderHint = result.folderName ? ` לתיקיית "${result.folderName}"` : "";
+        if (result.uploaded === 0 && result.total === 0) {
+          message.success("נוצרה תיקייה חדשה ב-Google Drive");
+        } else {
+          message.success(`נוצרה תיקייה חדשה והועלו ${result.uploaded} מסמכים${folderHint}${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+        }
+        if (result.folderUrl) {
+          window.open(result.folderUrl, "_blank", "noopener,noreferrer");
+        }
+        await loadDriveStatus();
+      } catch (err: any) {
+        if (String(err?.message ?? "").includes("drive_scope_missing")) {
+          driveNeedsReauth.value = true;
+          message.warning("יש להתחבר מחדש ל-Gmail כדי לאשר גישה ל-Drive");
+        } else {
+          message.error("שגיאה בשחזור תיקיית Drive");
+        }
+      } finally {
+        repairingFolder.value = false;
+      }
+    },
+  });
+}
+
+async function waitForDriveExportJob(jobId: string | null): Promise<DriveExportJob> {
+  if (!jobId) throw new Error("drive_export_missing_job");
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    const last = await api.drive.exportJob(jobId);
+    if (last.status === "completed") return last;
+    if (last.status === "failed") throw new Error(last.error || "drive_export_failed");
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+  }
+  throw new Error("drive_export_timeout");
+}
+
+async function reconnectGmailForDrive() {
+  try {
+    const {url} = await api.gmail.authUrl("/profile");
+    window.location.href = url;
+  } catch {
+    message.error("שגיאה בקבלת קישור חיבור Gmail");
+  }
+}
 
 async function changePassword() {
   if (!pwForm.value.next || pwForm.value.next !== pwForm.value.confirm) {
@@ -913,14 +1331,74 @@ async function setTheme(t: string) {
 }
 
 // ── Subscription ─────────────────────────────────────────────────────────────
-const subscription = ref({ validUntil: "", monthlyCount: 0 });
+const subscriptionData = ref<ProfileSubscription | null>(null);
 const billingHistory = ref<any[]>([]);
-const billingColumns = [
-  { title: "תאריך", key: "date", render: (r: any) => formatDate(r.date) },
-  { title: "סכום", key: "amount", render: (r: any) => `₪${r.amount}` },
-  { title: "סטטוס", key: "status" },
-  { title: "תיאור", key: "description" },
-];
+
+const quotaScopeLabel = computed(() => {
+  if (!subscriptionData.value) return "—";
+  const plan = subscriptionData.value.plan;
+  if (plan === "free") {
+    return formatQuotaScope(subscriptionData.value.quotas.documents?.scope ?? "lifetime");
+  }
+  const scope = subscriptionData.value.quotas.invoices?.scope
+      ?? subscriptionData.value.quotas.contracts?.scope;
+  return scope ? formatQuotaScope(scope) : "—";
+});
+
+const quotaPeriodLabel = computed(() => {
+  if (!subscriptionData.value) return "";
+  const plan = subscriptionData.value.plan;
+  const quota = plan === "free"
+      ? subscriptionData.value.quotas.documents
+      : subscriptionData.value.quotas.invoices ?? subscriptionData.value.quotas.contracts;
+  const periodStart = quota?.periodStart;
+  const periodEnd = quota?.periodEnd;
+  if (!periodStart || !periodEnd) return "";
+  return `${formatDate(periodStart)} – ${formatDate(periodEnd)}`;
+});
+
+const quotaUsageRows = computed(() => {
+  if (!subscriptionData.value) return [];
+  const plan = subscriptionData.value.plan;
+  const defs = plan === "free"
+      ? [
+        {key: "documents" as const, label: "מסמכים (סה״כ)"},
+        {key: "reminders" as const, label: "תזכורות אימייל"},
+      ]
+      : [
+        {key: "invoices" as const, label: "חשבוניות וקבלות (ייבוא)"},
+        {key: "contracts" as const, label: "תסקירים וחוזים (העלאה/ייבוא)"},
+        {key: "reminders" as const, label: "תזכורות אימייל"},
+      ];
+  return defs.map(({key, label}) => {
+    const quota = subscriptionData.value!.quotas[key];
+    return {
+      key,
+      label,
+      limit: quota?.limit ?? null,
+      usageLabel: formatQuotaUsage(quota?.used ?? 0, quota?.limit ?? null),
+      percent: quotaPercent(quota?.used ?? 0, quota?.limit ?? null),
+    };
+  });
+});
+
+const importCounterRows = computed(() => {
+  const counters = subscriptionData.value?.counters;
+  if (!counters) return [];
+  return [
+    {key: "scanned", label: "מסמכים שנסרקו (העלאה ידנית)", value: counters.scannedDocuments},
+    {key: "gmail-docs", label: "מסמכים שיובאו מ-Gmail", value: counters.gmailDocuments},
+    {key: "gmail-invoices", label: "חשבוניות שיובאו מ-Gmail", value: counters.gmailInvoices},
+  ];
+});
+
+async function loadSubscription() {
+  try {
+    subscriptionData.value = await api.profile.getSubscription();
+  } catch {
+    subscriptionData.value = null;
+  }
+}
 
 // ── Export helpers ───────────────────────────────────────────────────────────
 function buildProfileHtml(): string {
@@ -960,6 +1438,7 @@ function buildProfileHtml(): string {
   <table>${rows([
     ["מספר מפקח", ep.inspector_number],
     ["כתובת", ep.address],
+    ["עיר", ep.city],
     ["תואר מקצועי", ep.title],
     ["התמחות", ep.expertise],
     ["מספר מ.ר.", ep.mr_number],
@@ -1002,6 +1481,9 @@ function exportWord() {
 
 // ── Mount ────────────────────────────────────────────────────────────────────
 onMounted(async () => {
+  if (route.query.section === "subscription") {
+    activeSection.value = "subscription";
+  }
   try {
     const [settingsRes, statsRes, engineerRes, notifsRes] =
       await Promise.allSettled([
@@ -1011,6 +1493,7 @@ onMounted(async () => {
         fetch(`${SERVER}/api/profile/notifications`, {
           credentials: "include",
         }),
+        loadSubscription(),
       ]);
 
     if (settingsRes.status === "fulfilled") {
@@ -1034,25 +1517,47 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+  loadDriveStatus();
+});
+
+watch(activeSection, (section) => {
+  if (section === "subscription" && !subscriptionData.value) {
+    void loadSubscription();
+  }
 });
 </script>
 
 <style scoped>
+.profile-page {
+  min-width: 0;
+}
+
 .profile-shell {
   display: flex;
   gap: 24px;
   align-items: flex-start;
-  min-height: calc(100vh - 64px - 64px);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────────────────── */
 .profile-sidebar {
-  width: 220px;
+  width: 240px;
   flex-shrink: 0;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  padding: 20px 16px;
+  padding: 20px 12px;
   position: sticky;
   top: 16px;
 }
@@ -1061,7 +1566,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-bottom: 16px;
+  padding: 4px 8px 16px;
   border-bottom: 1px solid var(--border-color);
   margin-bottom: 12px;
 }
@@ -1070,12 +1575,14 @@ onMounted(async () => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #ddeafe;
+  background: color-mix(in srgb, var(--brand-color) 16%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--brand-color) 28%, var(--border-color));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
+  color: var(--brand-color);
 }
 .sidebar-avatar--lg {
   width: 64px;
@@ -1084,16 +1591,20 @@ onMounted(async () => {
 .sidebar-avatar img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 .sidebar-avatar__initials {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--brand-color);
 }
 
 .sidebar-user__info {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 .sidebar-user__name {
   font-size: 13px;
@@ -1102,6 +1613,7 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .sidebar-nav {
@@ -1113,30 +1625,34 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
   border-radius: 10px;
+  background: transparent;
+  font-family: var(--font-ui);
   font-size: 13px;
+  line-height: 1.3;
   color: var(--text-secondary);
+  text-align: start;
   cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
-  user-select: none;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-nav__item :deep(.n-icon) {
+  flex: 0 0 auto;
 }
 .sidebar-nav__item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+.sidebar-nav__item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-color) 55%, transparent);
+  outline-offset: 2px;
+}
 .sidebar-nav__item--active {
-  background: rgba(99, 226, 183, 0.14);
-  color: var(--brand-color, #18a058);
+  background: color-mix(in srgb, var(--brand-color) 14%, transparent);
+  color: var(--brand-color);
   font-weight: 600;
-}
-html[data-theme="light"] .sidebar-nav__item--active {
-  background: rgba(24, 160, 88, 0.1);
-}
-.sidebar-nav__icon {
-  font-size: 16px;
 }
 
 /* ── Content ─────────────────────────────────────────────────────────────── */
@@ -1153,10 +1669,14 @@ html[data-theme="light"] .sidebar-nav__item--active {
 }
 
 .section-title {
-  margin: 0;
+  margin: 0 0 16px;
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.section-header .section-title {
+  margin: 0;
 }
 
 .info-card {
@@ -1164,6 +1684,12 @@ html[data-theme="light"] .sidebar-nav__item--active {
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 0 20px;
+}
+.info-card--spaced {
+  margin-top: 20px;
+}
+.info-card--tight {
+  margin-top: 16px;
 }
 
 .info-row {
@@ -1173,6 +1699,9 @@ html[data-theme="light"] .sidebar-nav__item--active {
   padding: 14px 0;
   border-bottom: 1px solid var(--border-color);
   font-size: 14px;
+}
+.info-row--top {
+  align-items: flex-start;
 }
 .info-row:last-child {
   border-bottom: none;
@@ -1188,10 +1717,37 @@ html[data-theme="light"] .sidebar-nav__item--active {
 }
 .info-input {
   flex: 1;
+  min-width: 0;
+}
+.info-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 .info-hint {
-  font-size: 11px;
-  color: var(--color-warning, #f0a020);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-warning);
+}
+.logo-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.logo-upload__preview {
+  max-height: 56px;
+  max-width: 180px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  padding: 4px;
 }
 .info-section-divider {
   grid-column: 1 / -1;
@@ -1219,34 +1775,6 @@ html[data-theme="light"] .sidebar-nav__item--active {
   flex-wrap: wrap;
 }
 
-.stat-pill {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 16px 24px;
-  min-width: 100px;
-}
-.stat-pill--green {
-  border-color: rgba(24, 160, 88, 0.3);
-}
-.stat-pill--red {
-  border-color: rgba(208, 48, 80, 0.3);
-}
-.stat-pill__num {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.stat-pill__label {
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-  text-align: center;
-}
-
 .stat-card {
   flex: 1;
   min-width: 120px;
@@ -1259,10 +1787,10 @@ html[data-theme="light"] .sidebar-nav__item--active {
   align-items: center;
 }
 .stat-card--green {
-  border-color: rgba(24, 160, 88, 0.3);
+  border-color: color-mix(in srgb, var(--color-success) 35%, var(--border-color));
 }
 .stat-card--orange {
-  border-color: rgba(240, 160, 32, 0.3);
+  border-color: color-mix(in srgb, var(--color-warning) 40%, var(--border-color));
 }
 .stat-card__num {
   font-size: 32px;
@@ -1291,7 +1819,13 @@ html[data-theme="light"] .sidebar-nav__item--active {
   padding: 12px 16px;
 }
 .notif-item--unread {
-  border-color: var(--brand-color, #18a058);
+  border-color: var(--brand-color);
+}
+.notif-tag {
+  flex-shrink: 0;
+}
+.notif-filter {
+  width: 160px;
 }
 .notif-body {
   flex: 1;
@@ -1332,6 +1866,67 @@ html[data-theme="light"] .sidebar-nav__item--active {
   font-size: 13px;
   color: var(--text-secondary);
 }
+.settings-form {
+  max-width: 400px;
+}
+.settings-desc--follow {
+  margin-top: 8px;
+}
+.settings-desc--inline {
+  margin: 0;
+}
+.settings-link {
+  margin-inline-start: 6px;
+  color: var(--brand-color);
+  font-weight: 700;
+  text-decoration: none;
+}
+.settings-link:hover {
+  text-decoration: underline;
+}
+.drive-status-tag {
+  margin-bottom: 8px;
+}
+.drive-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.drive-folder {
+  margin-top: 12px;
+}
+.drive-folder__label {
+  display: block;
+  margin-bottom: 4px;
+}
+.drive-folder__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.drive-folder__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.drive-folder-alert {
+  margin-top: 12px;
+}
+.drive-repair-btn {
+  margin-top: 10px;
+}
+.drive-folder__input {
+  max-width: 220px;
+}
+.drive-reauth {
+  margin-top: 8px;
+}
+.drive-reauth__alert {
+  margin-bottom: 8px;
+}
 .avatar-upload-row {
   display: flex;
   align-items: center;
@@ -1349,11 +1944,20 @@ html[data-theme="light"] .sidebar-nav__item--active {
   border: 2px solid var(--border-color);
   border-radius: 12px;
   overflow: hidden;
-  width: 160px;
-  transition: border-color 0.15s;
+  width: 168px;
+  padding: 0;
+  background: var(--bg-card);
+  font-family: inherit;
+  text-align: start;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.theme-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-color) 55%, transparent);
+  outline-offset: 2px;
 }
 .theme-card--active {
-  border-color: var(--brand-color, #18a058);
+  border-color: var(--brand-color);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-color) 35%, transparent);
 }
 .theme-card__preview {
   height: 100px;
@@ -1379,6 +1983,10 @@ html[data-theme="light"] .sidebar-nav__item--active {
   background: rgba(128, 128, 128, 0.15);
 }
 .theme-card__label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 10px;
   text-align: center;
   font-size: 13px;
@@ -1387,20 +1995,188 @@ html[data-theme="light"] .sidebar-nav__item--active {
   background: var(--bg-card);
   border-top: 1px solid var(--border-color);
 }
-.drop-zone {
-  border: 2px dashed #444;
-  border-radius: 8px;
-  padding: 16px;
-  text-align: center;
-  transition:
-    border-color 0.2s,
-    background 0.2s;
-  cursor: pointer;
+
+.sub-plan-card {
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--brand-color) 28%, var(--border-color));
+  border-radius: 16px;
+  background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--brand-color) 8%, var(--bg-card)) 0%,
+      var(--bg-card) 72%
+  );
+}
+
+.sub-plan-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.sub-plan-card__eyebrow {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-color);
+}
+
+.sub-plan-card__title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.sub-plan-card__blurb {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.sub-plan-card__price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.sub-plan-card__price strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.sub-plan-card__price span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sub-plan-card__features {
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.sub-plan-card__features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.sub-plan-card__features :deep(.n-icon) {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--brand-color);
+}
+
+.sub-plan-card__link {
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-color);
+  text-decoration: none;
+}
+
+.sub-plan-card__link:hover {
+  text-decoration: underline;
+}
+
+.sub-usage-card {
+  margin-bottom: 24px;
+}
+
+.sub-quota {
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.sub-quota__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
   font-size: 13px;
 }
-.drop-zone--active {
-  border-color: #63e2b7;
-  background: rgba(99, 226, 183, 0.06);
+
+.sub-quota__label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.sub-quota__value {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.sub-quota__unlimited {
+  margin: 0;
+  font-size: 12px;
+  color: var(--brand-color);
+  font-weight: 600;
+}
+
+.sub-counters-card {
+  margin-top: 12px;
+}
+
+.sub-counters-card__title {
+  margin: 0 0 8px;
+}
+
+.billing-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.billing-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+
+.billing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.billing-table th,
+.billing-table td {
+  padding: 10px 14px;
+  text-align: start;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.billing-table th {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.billing-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sub-billing-empty {
+  padding: 24px;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  background: var(--bg-card);
 }
 
 @media (max-width: 820px) {
@@ -1434,6 +2210,7 @@ html[data-theme="light"] .sidebar-nav__item--active {
 
   .sidebar-nav__item {
     flex: 0 0 auto;
+    width: auto;
     white-space: nowrap;
   }
 
@@ -1479,7 +2256,6 @@ html[data-theme="light"] .sidebar-nav__item--active {
     flex-direction: column;
   }
 
-  .stat-pill,
   .stat-card,
   .theme-card {
     width: 100%;
@@ -1490,8 +2266,18 @@ html[data-theme="light"] .sidebar-nav__item--active {
     flex-direction: column;
   }
 
-  .drop-zone {
-    line-height: 1.5;
+  .drive-folder__row,
+  .drive-folder__input {
+    width: 100%;
+    max-width: none;
+  }
+
+  .sub-plan-card__head {
+    flex-direction: column;
+  }
+
+  .sub-plan-card__price {
+    align-items: flex-start;
   }
 }
 </style>
