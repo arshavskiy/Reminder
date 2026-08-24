@@ -38,6 +38,8 @@
     "invoices:known-receipts:dry": "tsx src/scripts/backfillKnownInvoiceReceipts.ts",
     "doc-templates:seed": "tsx src/scripts/seedDocTemplates.ts",
     "gmail:seed-search-providers": "tsx src/scripts/seedGmailSearchProviders.ts",
+    "gmail:cleanup-rejected": "tsx src/scripts/cleanupRejectedGmailImports.ts --apply",
+    "gmail:cleanup-rejected:dry": "tsx src/scripts/cleanupRejectedGmailImports.ts",
     "users:plans": "tsx src/scripts/backfillUserPlans.ts --apply",
     "users:plans:dry": "tsx src/scripts/backfillUserPlans.ts",
     "contracts:revert-reminder-advances": "tsx src/scripts/revertContractReminderAdvances.ts --apply",

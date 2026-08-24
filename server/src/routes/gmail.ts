@@ -24,6 +24,10 @@ const GMAIL_FULL_ACCESS_ROLES = new Set(["user", "pro", "admin"]);
 const GMAIL_DEFAULT_PAGE_SIZE = 500;
 const GMAIL_MAX_PAGE_SIZE = 500;
 const GMAIL_JOB_STALE_MS = 10 * 60 * 1000;
+const REJECTED_INVOICE_VALIDATION_STATUSES = new Set([
+  "missing_required_fields",
+  "missing_invoice_number_and_amount",
+]);
 
 type GmailImportJobStatus = "queued" | "running" | "completed" | "failed";
 type GmailImportJobResult = { messageId: string; filename: string; documentId?: string; error?: string };
@@ -49,6 +53,11 @@ type GmailImportJob = {
   updated_at: Date;
   started_at?: Date;
   completed_at?: Date;
+};
+
+type GmailImportHistoryRow = {
+  message_id?: string;
+  files?: Array<{ document_id?: unknown; error?: unknown }>;
 };
 
 let gmailImportWorkerRunning = false;
@@ -585,11 +594,7 @@ async function runGmailImportJob(job: GmailImportJob) {
     if (!freshToken) throw new Error("gmail_not_connected");
 
     if (!importedSetLoaded) {
-      const imported = await col("gmail_imports").find(
-        { user_id: job.user_id, message_id: { $in: messageIds } },
-        { projection: { message_id: 1 } }
-      ).toArray();
-      importedSet = new Set(imported.map((r: any) => r.message_id));
+      importedSet = await findSuccessfullyImportedMessageIds(job.user_id, messageIds);
       importedSetLoaded = true;
     }
     if (importedSet.has(id)) {
@@ -677,13 +682,7 @@ async function initializeGmailImportJob(job: GmailImportJob, accessToken: string
   const listData = await listRes.json() as { messages?: { id: string }[] };
   const allMessageIds = (listData.messages ?? []).map((message) => message.id);
   const diagnostics = createGmailDiagnostics(job.q, requestedExtensionsFromQuery(job.q), allMessageIds.length);
-  const alreadyImported = allMessageIds.length
-    ? await col("gmail_imports").find(
-      { user_id: job.user_id, message_id: { $in: allMessageIds } },
-      { projection: { message_id: 1 } }
-    ).toArray()
-    : [];
-  const importedSet = new Set(alreadyImported.map((r: any) => r.message_id));
+  const importedSet = await findSuccessfullyImportedMessageIds(job.user_id, allMessageIds);
   const messageIds = allMessageIds.filter((id) => !importedSet.has(id));
 
   const updated = await col<GmailImportJob>("gmail_import_jobs").findOneAndUpdate(
@@ -701,6 +700,66 @@ async function initializeGmailImportJob(job: GmailImportJob, accessToken: string
     { returnDocument: "after" }
   ) as GmailImportJob | null;
   return { job: updated ?? job, messageIds, importedSet, diagnostics };
+}
+
+async function findSuccessfullyImportedMessageIds(userId: string, messageIds: string[]): Promise<Set<string>> {
+  if (!messageIds.length) return new Set();
+  const imports = await col("gmail_imports").find(
+    { user_id: userId, message_id: { $in: messageIds } },
+    { projection: { message_id: 1, files: 1 } }
+  ).toArray() as GmailImportHistoryRow[];
+  const documentIds = [...new Set(
+    imports.flatMap((item) => (item.files ?? [])
+      .map((file) => String(file.document_id ?? "").trim())
+      .filter((id) => ObjectId.isValid(id)))
+  )];
+  const documents = documentIds.length
+    ? await col("documents").find(
+      { user_id: userId, _id: { $in: documentIds.map((id) => new ObjectId(id)) } } as any,
+      { projection: { _id: 1, processing_status: 1, invoice_rejected: 1 } } as any
+    ).toArray()
+    : [];
+  const invoices = documentIds.length
+    ? await col("invoices").find(
+      { user_id: userId, document_id: { $in: [...documentIds, ...documentIds.map((id) => new ObjectId(id))] } } as any,
+      { projection: { document_id: 1, possible_not_invoice: 1, invoice_validation_status: 1, missing_required_fields: 1 } } as any
+    ).toArray()
+    : [];
+  const documentMap = new Map(documents.map((doc: any) => [doc._id.toString(), doc]));
+  const rejectedInvoiceDocumentIds = new Set(invoices
+    .filter((invoice: any) => invoiceIsRejectedForGmailRetry(invoice))
+    .map((invoice: any) => String(invoice.document_id ?? "").trim())
+    .filter((id: string) => ObjectId.isValid(id)));
+
+  return new Set(imports
+    .filter((item) => gmailImportHasSuccessfulDocument(item, documentMap, rejectedInvoiceDocumentIds))
+    .map((item) => String(item.message_id ?? ""))
+    .filter(Boolean));
+}
+
+function gmailImportHasSuccessfulDocument(
+  row: GmailImportHistoryRow,
+  documentMap: Map<string, any>,
+  rejectedInvoiceDocumentIds: Set<string>,
+): boolean {
+  return (row.files ?? []).some((file) => {
+    if (file.error) return false;
+    const documentId = String(file.document_id ?? "").trim();
+    if (!ObjectId.isValid(documentId)) return false;
+    if (rejectedInvoiceDocumentIds.has(documentId)) return false;
+    const doc = documentMap.get(documentId);
+    if (!doc) return false;
+    if (doc.processing_status === "error") return false;
+    if (doc.invoice_rejected === true) return false;
+    return true;
+  });
+}
+
+function invoiceIsRejectedForGmailRetry(invoice: any): boolean {
+  if (invoice?.possible_not_invoice === true) return true;
+  const status = String(invoice?.invoice_validation_status ?? "").trim();
+  if (REJECTED_INVOICE_VALIDATION_STATUSES.has(status)) return true;
+  return Array.isArray(invoice?.missing_required_fields) && invoice.missing_required_fields.length > 0;
 }
 
 async function updateGmailImportJobProgress(

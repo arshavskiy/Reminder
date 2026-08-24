@@ -186,6 +186,8 @@ export interface InvoiceExpenseMonthlySeries {
 export interface InvoiceExpenseMonthlyResponse {
   dateBasis: "invoice" | "import";
   months: string[];
+  totalInvoices: number;
+  totalAmount: number;
   suppliers: { name: string; total: number }[];
   categories: GmailSearchProvider["category"][];
   series: InvoiceExpenseMonthlySeries[];

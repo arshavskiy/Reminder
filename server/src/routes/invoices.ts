@@ -7,6 +7,12 @@ import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/sea
 
 type InvoiceRow = Record<string, any>;
 const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
+const REJECTED_INVOICE_VALIDATION_STATUSES = new Set([
+  "missing_invoice_number_and_amount",
+  "missing_required_fields",
+  "not_invoice",
+  "rejected",
+]);
 
 export function registerInvoiceRoutes(app: express.Application) {
   app.get("/api/invoices", async (req, res) => {
@@ -49,7 +55,8 @@ export function registerInvoiceRoutes(app: express.Application) {
     const documentMap = new Map(documents.map((doc) => [doc._id.toString(), doc]));
 
     const providers = await loadGmailSearchProviders();
-    const allRows = invoices.map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers));
+    const eligibleInvoices = invoices.filter((invoice) => invoiceIsVisible(invoice, documentMap.get(String(invoice.document_id))));
+    const allRows = eligibleInvoices.map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers));
     const facetRows = allRows.filter((row) => {
       if (status && row.status !== status) return false;
       if (type && row.type !== type) return false;
@@ -132,6 +139,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const documentMap = new Map(documents.map((doc) => [doc._id.toString(), doc]));
     const providers = await loadGmailSearchProviders();
     const rows = invoices
+      .filter((invoice) => invoiceIsVisible(invoice, documentMap.get(String(invoice.document_id))))
       .map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers))
       .filter((row) => {
         if (category && row.provider_category !== category) return false;
@@ -180,6 +188,8 @@ export function registerInvoiceRoutes(app: express.Application) {
     res.json({
       dateBasis,
       months,
+      totalInvoices: rows.length,
+      totalAmount: roundMoney(rows.reduce((sum, row) => sum + (row.amount ?? 0), 0)),
       suppliers: supplierTotals,
       categories: uniqueSorted(rows.map((row) => row.provider_category ?? "").filter(isNonEmptyString)),
       series,
@@ -311,6 +321,10 @@ export function registerInvoiceRoutes(app: express.Application) {
     const doc = ObjectId.isValid(documentId)
       ? await col("documents").findOne({ _id: new ObjectId(documentId), user_id: userId } as any, { projection: { raw_text: 0 } } as any) as InvoiceRow | null
       : null;
+    if (!invoiceIsVisible(invoice, doc ?? undefined)) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
     const gmailImport = documentId
       ? await col("gmail_imports").findOne({
           user_id: userId,
@@ -384,9 +398,24 @@ export function registerInvoiceRoutes(app: express.Application) {
     const doc = ObjectId.isValid(documentId)
       ? await col("documents").findOne({ _id: new ObjectId(documentId), user_id: userId } as any, { projection: { raw_text: 0 } } as any) as InvoiceRow | null
       : null;
+    if (!invoiceIsVisible(result, doc ?? undefined)) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
     const providers = await loadGmailSearchProviders();
     res.json(presentInvoice(result, doc ?? undefined, undefined, providers));
   });
+}
+
+function invoiceIsVisible(invoice: InvoiceRow, doc?: InvoiceRow): boolean {
+  if (!doc) return false;
+  if (invoice.possible_not_invoice === true) return false;
+  if (doc.invoice_rejected === true) return false;
+  const invoiceValidationStatus = String(invoice.invoice_validation_status ?? "").trim();
+  if (invoiceValidationStatus && REJECTED_INVOICE_VALIDATION_STATUSES.has(invoiceValidationStatus)) return false;
+  const documentRejectionReason = String(doc.invoice_rejection_reason ?? "").trim();
+  if (documentRejectionReason && REJECTED_INVOICE_VALIDATION_STATUSES.has(documentRejectionReason)) return false;
+  return true;
 }
 
 function presentInvoice(

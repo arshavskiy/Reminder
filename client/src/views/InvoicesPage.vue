@@ -1275,9 +1275,13 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 .filterbar--compact {
-  margin-top: -8px;
+  margin-top: 10px;
   padding: 5px;
   background: transparent;
+}
+
+.invoices-page :deep(.invoice-section-nav) {
+  margin-top: 2px;
 }
 
 .pill {
