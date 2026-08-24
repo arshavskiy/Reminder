@@ -4,6 +4,7 @@ import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {logger} from "../logger";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
+import {tierFeatureFlags} from "../plans/tierFeatures";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -365,9 +366,7 @@ export async function syncDocumentToDrive(documentId: string, userId: string): P
     const user = await col<any>("users").findOne({_id: new ObjectId(userId)} as any);
     if (!user?.drive_sync_enabled) return;
 
-    const plan = String(user.plan ?? user.role ?? "").trim().toLowerCase();
-    const allowed = plan === "basic" || plan === "business" || plan === "pro" || plan === "admin";
-    if (!allowed) return;
+    if (!tierFeatureFlags(user.plan ?? user.role).googleDriveSync) return;
 
     const doc = await col<any>("documents").findOne({_id: new ObjectId(documentId)} as any);
     if (!doc?.file_path && !doc?.spaces_key) return;

@@ -60,6 +60,17 @@
           </li>
         </ul>
 
+        <dl class="plan-flags">
+          <div>
+            <dt>ייבוא Gmail היסטורי</dt>
+            <dd>{{ formatGmailInvoiceHistoryLimit(tierFeatureFlags(plan.id).gmailInvoiceHistoryMonths) }}</dd>
+          </div>
+          <div>
+            <dt>Google Drive</dt>
+            <dd>{{ tierFeatureFlags(plan.id).googleDriveSync ? "כלול" : "לא כלול" }}</dd>
+          </div>
+        </dl>
+
         <button
           class="plan-cta"
           :class="{
@@ -124,8 +135,10 @@ import { useAuthStore } from "../stores/auth.js";
 import {
   PLAN_LABELS,
   PRICING_PLANS,
+  formatGmailInvoiceHistoryLimit,
   planFromRole,
   resolveUserPlan,
+  tierFeatureFlags,
   type PlanId,
 } from "../shared/pricingPlans.js";
 
@@ -521,6 +534,40 @@ function startPlan(_planId: PlanId) {
   color: var(--brand-color);
   flex: 0 0 auto;
   margin-top: 1px;
+}
+
+.plan-flags {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
+}
+
+.plan-flags div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan-flags dt,
+.plan-flags dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.plan-flags dt {
+  color: var(--text-secondary);
+}
+
+.plan-flags dd {
+  color: var(--text-primary);
+  font-weight: 800;
+  text-align: left;
 }
 
 .plan-cta {

@@ -33,6 +33,21 @@ The query shape is:
 has:attachment {filename:pdf filename:doc filename:docx filename:xls filename:xlsx} {<invoice template keywords>}
 ```
 
+The server also applies the user's tier history window for invoice templates:
+
+| Tier | Gmail invoice history | Query behavior |
+| --- | --- | --- |
+| Free | Not included | Invoice Gmail import returns `gmail_invoice_plan_required` |
+| Basic | 12 months | Adds `newer_than:12m` to invoice Gmail searches |
+| Business | 4 years | Adds `newer_than:48m` to invoice Gmail searches |
+
+Tier feature flags live in:
+
+- Client display: `client/src/shared/pricingPlans.ts`
+- Server enforcement: `server/src/plans/tierFeatures.ts`
+
+When a user searches or imports Gmail invoices, `/api/gmail/inbox` and `/api/gmail/import-all` both check the tier and rebuild the final Gmail query on the server. Existing `newer_than:*` values are replaced by the tier limit, so Basic users cannot widen the import beyond 12 months by changing the request.
+
 The invoice template keywords are seeded from two sources:
 
 - Base invoice words, such as `חשבונית`, `invoice`, `receipt`, `bill`, `חשבונית מס`, `קבלה`, `דרישת תשלום`, `פירוט חשבון`, `פירוט חודשי`, `לתשלום`, `תקופת חיוב`, `מספר לקוח`, and meter/account identifiers.

@@ -4,16 +4,10 @@ import {ObjectId} from "mongodb";
 import {requireAuth} from "../auth/middleware";
 import {pinFolderToMyDrive, renameDriveFolder, resolveDriveToken, syncDocumentToDrive, driveFolderWebUrl, driveTrashWebUrl, inspectDriveFolder, ensureHealthyDriveFolder} from "../storage/gdrive";
 import {logger} from "../logger";
-
-function normalizeDrivePlan(planOrRole: string | null | undefined): "free" | "basic" | "business" {
-    const value = String(planOrRole ?? "").trim().toLowerCase();
-    if (value === "admin" || value === "business") return "business";
-    if (value === "pro" || value === "basic") return "basic";
-    return "free";
-}
+import {tierFeatureFlags} from "../plans/tierFeatures";
 
 function planAllowsGoogleDrive(planOrRole: string | null | undefined): boolean {
-    return normalizeDrivePlan(planOrRole) !== "free";
+    return tierFeatureFlags(planOrRole).googleDriveSync;
 }
 
 export function registerGdriveRoutes(app: express.Express) {

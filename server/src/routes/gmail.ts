@@ -9,6 +9,7 @@ import { generateState, generateCodeVerifier, generateCodeChallenge } from "../a
 import { importFile, type PipelineOptions } from "../pipeline/importer";
 import { logger } from "../logger";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
+import { tierFeatureFlags } from "../plans/tierFeatures";
 import { loadTemplate } from "../templates/seedTemplates";
 import {
   assertDocumentImportQuota,
@@ -221,8 +222,23 @@ export function registerGmailRoutes(app: express.Application) {
     try {
       const templateId = req.query.templateId as string | undefined;
       const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
-      const q = buildGmailQuery(req.query.q as string | undefined, template);
-      logger.info("gmail_inbox_query", { query: q, templateId: templateId ?? null, inspection: isInspectionTemplate(template) });
+      const invoiceHistoryMonths = isInvoiceTemplate(template)
+        ? tierFeatureFlags(ctx.user.plan ?? ctx.user.role).gmailInvoiceHistoryMonths
+        : null;
+      if (isInvoiceTemplate(template) && (!invoiceHistoryMonths || invoiceHistoryMonths < 1)) {
+        res.status(403).json({
+          error: "gmail_invoice_plan_required",
+          message: "ייבוא חשבוניות מ-Gmail זמין במסלולים בסיסי ועסקי בלבד",
+        });
+        return;
+      }
+      const q = buildGmailQuery(req.query.q as string | undefined, template, ctx.user.plan ?? ctx.user.role);
+      logger.info("gmail_inbox_query", {
+        query: q,
+        templateId: templateId ?? null,
+        inspection: isInspectionTemplate(template),
+        gmailInvoiceHistoryMonths: invoiceHistoryMonths,
+      });
       const maxResults = gmailPageSize(req.query.limit);
       const pageToken = (req.query.pageToken as string) || undefined;
 
@@ -344,8 +360,23 @@ export function registerGmailRoutes(app: express.Application) {
 
     const templateId = req.body.templateId as string | undefined;
     const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
-    const q = buildGmailQuery(req.body.q as string | undefined, template);
-    logger.info("gmail_import_all_query", { query: q, templateId: templateId ?? null, inspection: isInspectionTemplate(template) });
+    const invoiceHistoryMonths = isInvoiceTemplate(template)
+      ? tierFeatureFlags(ctx.user.plan ?? ctx.user.role).gmailInvoiceHistoryMonths
+      : null;
+    if (isInvoiceTemplate(template) && (!invoiceHistoryMonths || invoiceHistoryMonths < 1)) {
+      res.status(403).json({
+        error: "gmail_invoice_plan_required",
+        message: "ייבוא חשבוניות מ-Gmail זמין במסלולים בסיסי ועסקי בלבד",
+      });
+      return;
+    }
+    const q = buildGmailQuery(req.body.q as string | undefined, template, ctx.user.plan ?? ctx.user.role);
+    logger.info("gmail_import_all_query", {
+      query: q,
+      templateId: templateId ?? null,
+      inspection: isInspectionTemplate(template),
+      gmailInvoiceHistoryMonths: invoiceHistoryMonths,
+    });
     const maxResults = gmailPageSize(req.body.limit);
 
     try {
@@ -933,16 +964,30 @@ function isInspectionTemplate(template: Awaited<ReturnType<typeof loadTemplate>>
 const INSPECTION_GMAIL_QUERY = "has:attachment filename:pdf תסקיר";
 const INVOICE_ATTACHMENT_QUERY = "{filename:pdf filename:doc filename:docx filename:xls filename:xlsx}";
 
-function buildGmailQuery(userQuery: string | undefined, template: Awaited<ReturnType<typeof loadTemplate>>): string {
+export function buildGmailQuery(
+  userQuery: string | undefined,
+  template: Awaited<ReturnType<typeof loadTemplate>>,
+  planOrRole?: string | null,
+): string {
   const defaultQuery = "has:attachment filename:pdf";
   const q = userQuery || defaultQuery;
   if (isInspectionTemplate(template) && q === defaultQuery) {
     return INSPECTION_GMAIL_QUERY;
   }
   if (isInvoiceTemplate(template)) {
-    return forceInvoiceAttachmentTypes(q);
+    return applyInvoiceHistoryWindow(forceInvoiceAttachmentTypes(q), planOrRole);
   }
   return q;
+}
+
+function applyInvoiceHistoryWindow(query: string, planOrRole: string | null | undefined): string {
+  const months = tierFeatureFlags(planOrRole).gmailInvoiceHistoryMonths;
+  if (!months || months < 1) return query;
+  const withoutExistingHistory = query
+    .replace(/\bnewer_than:\S+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${withoutExistingHistory} newer_than:${months}m`;
 }
 
 function forceInvoiceAttachmentTypes(query: string): string {
