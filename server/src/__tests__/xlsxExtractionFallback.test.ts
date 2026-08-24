@@ -320,6 +320,30 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(fields?.contact_email).toBe("reymond.adir@hanson.biz");
   });
 
+  it("removes the known engineer email from extracted client email fields", () => {
+    const fields = normalizeExtractionFieldsForTemplate("מייל: pechersky.m@gmail.com", inspectionTemplate, {
+      client_company: "חברת בדיקה",
+      contact_email: "pechersky.m@gmail.com",
+      client_email: "pechersky.m@gmail.com",
+    });
+
+    expect(fields?.contact_email).toBeNull();
+    expect(fields?.client_email).toBeNull();
+  });
+
+  it("removes profile engineer emails from extracted client email fields", () => {
+    const fields = normalizeExtractionFieldsForTemplate("מייל: engineer@example.com", inspectionTemplate, {
+      client_company: "חברת בדיקה",
+      contact_email: "engineer@example.com",
+      client_email: "engineer@example.com",
+    }, {
+      company_email: "engineer@example.com",
+    });
+
+    expect(fields?.contact_email).toBeNull();
+    expect(fields?.client_email).toBeNull();
+  });
+
   it("fills contact_email from a Hebrew table line fused to a reversed email", () => {
     const fields = normalizeExtractionFieldsForTemplate("תקופתית: סוג בדיקהcom.afar-d@Dafar:", inspectionTemplate, {
       client_company: "דפר עפר בע\"מ",

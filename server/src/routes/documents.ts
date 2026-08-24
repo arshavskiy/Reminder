@@ -798,7 +798,7 @@ export function registerDocumentRoutes(app: express.Application) {
       personal_company_name: userRow?.company_name ?? null,
     };
     const run = await extractWithTemplate(rawText, template, id, doc.file_name, inspector);
-    const normalizedFields = normalizeExtractionFieldsForTemplate(rawText, template, run.fields);
+    const normalizedFields = normalizeExtractionFieldsForTemplate(rawText, template, run.fields, inspector);
     const now = new Date();
 
     await col("extractions").insertOne({

@@ -67,7 +67,14 @@ type DocumentProcessingJob = {
 
 const DOCUMENT_PROCESSING_JOB_STALE_MS = 10 * 60 * 1000;
 const DOCUMENT_PROCESSING_WORKER_ID = `${process.pid}-${Math.random().toString(36).slice(2)}`;
+const ALWAYS_EXCLUDED_CLIENT_EMAILS = ["pechersky.m@gmail.com"];
 let documentProcessingWorkerRunning = false;
+
+type ClientEmailExclusionSource = {
+  company_email?: unknown;
+  personal_email?: unknown;
+  email?: unknown;
+};
 
 function parseJsonObject(raw: unknown, fallback: unknown = null): Record<string, unknown> {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
@@ -1109,7 +1116,7 @@ export async function processDocument(
         const systemPrompt = await getOrBuildSystemPrompt(template, inspector as any);
         let extractionText = rawText;
         let run = await extractWithTemplate(extractionText, template, documentId, docRow?.file_name, inspector as any, systemPrompt);
-        let normalizedFields = normalizeExtractionFieldsForTemplate(extractionText, template, run.fields);
+        let normalizedFields = normalizeExtractionFieldsForTemplate(extractionText, template, run.fields, inspector);
         const shouldTryOcrForInvoice = pipeline?.gmailImport
           && isInvoiceTemplate(template)
           && mimeType === "application/pdf"
@@ -1121,7 +1128,7 @@ export async function processDocument(
             push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 62 });
             const ocrText = await ocrFile(filePath);
             const ocrRun = await extractWithTemplate(ocrText, template, documentId, docRow?.file_name, inspector as any, systemPrompt);
-            const ocrFields = normalizeExtractionFieldsForTemplate(ocrText, template, ocrRun.fields);
+            const ocrFields = normalizeExtractionFieldsForTemplate(ocrText, template, ocrRun.fields, inspector);
             const nativeMissing = invoiceMissingRequiredFieldsFromFields(normalizedFields, extractionText);
             const ocrMissing = ocrFields ? invoiceMissingRequiredFieldsFromFields(ocrFields, ocrText) : nativeMissing;
             await col("documents").updateOne(docFilter, {
@@ -1328,6 +1335,8 @@ async function saveExtractionEntities(
   skipReminders?: boolean,
   rawText?: string,
 ) {
+  await stripExcludedClientEmailsForUser(result as unknown as Record<string, unknown>, userId);
+
   if (result.document_type || result.document_number) {
     await col("documents").updateOne(
       { _id: new ObjectId(documentId) } as any,
@@ -1539,7 +1548,8 @@ export async function saveTemplateEntitiesForDoc(
 export function normalizeExtractionFieldsForTemplate(
   rawText: string,
   template: DocTemplate,
-  fields: DynamicExtraction | null
+  fields: DynamicExtraction | null,
+  inspector?: ClientEmailExclusionSource | null
 ): DynamicExtraction | null {
   if (!fields) return null;
 
@@ -1573,6 +1583,7 @@ export function normalizeExtractionFieldsForTemplate(
   ) {
     normalized.client_email = normalized.contact_email;
   }
+  stripExcludedClientEmails(normalized, buildExcludedClientEmailSet(inspector));
   const supportsLicenseNumber = template.fields.some((field) => field.key === "license_number");
   // Equipment that structurally never carries a license plate.
   const neverLicensedPattern = /עגורן\s*שער|עגרן\s*שער|ג['׳]ק\s*גירים|אביזר(?:י)?\s*הרמה|קורת\s*הרמה/i;
@@ -1742,6 +1753,51 @@ function firstEmailInText(value: string): string | null {
 }
 
 const KNOWN_TLDS = new Set(["com", "net", "org", "il", "co", "io", "me", "info", "biz", "edu", "gov"]);
+
+function buildExcludedClientEmailSet(source?: ClientEmailExclusionSource | null): Set<string> {
+  const excluded = new Set<string>();
+  for (const email of ALWAYS_EXCLUDED_CLIENT_EMAILS) {
+    excluded.add(normalizeEmail(email));
+  }
+  for (const value of [source?.company_email, source?.personal_email, source?.email]) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    excluded.add(normalizeEmail(value));
+  }
+  return excluded;
+}
+
+function stripExcludedClientEmails(fields: Record<string, unknown>, excludedEmails: Set<string>): void {
+  if (!excludedEmails.size) return;
+  for (const key of ["client_email", "contact_email", "email"]) {
+    const value = fields[key];
+    if (typeof value !== "string" || !value.trim()) continue;
+    if (excludedEmails.has(normalizeEmail(value))) {
+      fields[key] = null;
+    }
+  }
+}
+
+async function stripExcludedClientEmailsForUser(fields: Record<string, unknown>, userId?: string): Promise<void> {
+  const sources: ClientEmailExclusionSource[] = [];
+  if (userId) {
+    const [engineerProfile, userRow] = await Promise.all([
+      col("engineer_profiles").findOne({ user_id: userId }) as Promise<any>,
+      ObjectId.isValid(userId)
+        ? col("users").findOne({ _id: new ObjectId(userId) as any }) as Promise<any>
+        : Promise.resolve(null),
+    ]);
+    sources.push(engineerProfile ?? {});
+    sources.push({
+      email: userRow?.email ?? null,
+      personal_email: userRow?.email ?? null,
+    });
+  }
+  const excluded = sources.reduce((set, source) => {
+    for (const email of buildExcludedClientEmailSet(source)) set.add(email);
+    return set;
+  }, buildExcludedClientEmailSet());
+  stripExcludedClientEmails(fields, excluded);
+}
 
 function reverseDotSegments(s: string): string {
   return s.split(".").reverse().join(".");
@@ -2170,6 +2226,7 @@ async function saveTemplateEntities(
   skipReminders?: boolean,
   rawText?: string,
 ) {
+  await stripExcludedClientEmailsForUser(fields, userId);
   const f = fields;
 
   const getStr = (k: string): string | null => {
