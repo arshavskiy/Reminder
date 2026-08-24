@@ -102,6 +102,13 @@
       <span class="guided-flow-bar__query">{{ searchQuery }}</span>
     </section>
 
+    <GmailImportJobStatus
+      v-if="visibleImportJob"
+      :job="visibleImportJob"
+      :dismissible="!importingAll"
+      @dismiss="lastImportJob = null"
+    />
+
     <!-- Filters -->
     <div v-if="connected && isAdmin" class="toolbar gmail-filter-bar">
       <div class="file-type-checks">
@@ -630,6 +637,7 @@ import { useAuthStore } from "../stores/auth.js";
 import type { DocTemplate } from "../shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
 import GmailLogo from "../components/GmailLogo.vue";
+import GmailImportJobStatus from "../components/GmailImportJobStatus.vue";
 
 const route = useRoute();
 const message = useMessage();
@@ -647,6 +655,7 @@ const loading = ref(false);
 const loadingMore = ref(false);
 const importingAll = ref(false);
 const activeImportJob = ref<GmailImportJob | null>(null);
+const lastImportJob = ref<GmailImportJob | null>(null);
 const emails = ref<GmailEmail[]>([]);
 const searchQuery = ref("");
 const nextPageToken = ref<string | null>(null);
@@ -655,6 +664,7 @@ const importing = ref<Record<string, boolean>>({});
 const selectedGuidedFlow = ref<"invoice" | "inspection" | null>(null);
 const isAdmin = computed(() => authStore.user?.role === "admin");
 const guidedFlowLabel = computed(() => selectedGuidedFlow.value === "invoice" ? "חשבוניות" : "תסקיר בדיקה");
+const visibleImportJob = computed(() => activeImportJob.value ?? lastImportJob.value);
 
 const sectionNavItems = computed(() => {
   if (!connected.value) return [];
@@ -1147,11 +1157,13 @@ async function importAttachment(messageId: string, att: GmailAttachment) {
 
 async function importAllNew() {
   importingAll.value = true;
+  lastImportJob.value = null;
   try {
     const started = await api.gmail.importAll(searchQuery.value || undefined, undefined, importTemplateId());
     activeImportJob.value = started;
     message.info("ייבוא מ-Gmail התחיל ברקע");
     const result = await waitForGmailImportJob(started.jobId);
+    lastImportJob.value = result;
     const errors = result.results.filter(r => r.error).length;
     importResults.value = {
       show: true,

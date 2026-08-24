@@ -9,6 +9,7 @@ import {ObjectId} from "mongodb";
 import type {DocTemplate, DocumentKind, TemplateField} from "../../src/shared/types.js";
 import {buildPromptForTemplate, type InspectorProfile} from "./buildPrompt";
 import {logger} from "../logger";
+import {DEFAULT_GMAIL_SEARCH_PROVIDERS} from "../gmail/searchProviders";
 
 interface SeedRow {
   name: string;
@@ -19,6 +20,40 @@ interface SeedRow {
   expiry_field: string | null;
   is_default: number;
 }
+
+const INVOICE_BASE_MATCH_KEYWORDS = [
+  "חשבונית",
+  "invoice",
+  "receipt",
+  "bill",
+  "חשבונית מס",
+  "קבלה",
+  "דרישת תשלום",
+  "חשבון תקופתי",
+  "פירוט חשבון",
+  "פירוט חודשי",
+  "לתשלום",
+  "סכום לתשלום",
+  "סכום כולל מע\"מ",
+  "תקופת חשבון",
+  "תקופת חיוב",
+  "תקופת השימושים",
+  "מספר לקוח",
+  "מספר מנוי",
+  "מספר חשבון חוזה",
+  "מספר מונה",
+  "קריאת מונה",
+];
+
+const INVOICE_PROVIDER_MATCH_KEYWORDS = DEFAULT_GMAIL_SEARCH_PROVIDERS.flatMap((provider) => [
+  provider.label,
+  ...provider.terms,
+]);
+
+const INVOICE_MATCH_KEYWORDS = uniqueKeywords([
+  ...INVOICE_BASE_MATCH_KEYWORDS,
+  ...INVOICE_PROVIDER_MATCH_KEYWORDS,
+]);
 
 const SEEDS: SeedRow[] = [
   {
@@ -83,36 +118,7 @@ const SEEDS: SeedRow[] = [
     name: "חשבונית",
     description: "חשבונית מס / קבלה / דרישת תשלום, כולל חשבונות חשמל, מים, תקשורת וספקי שירות ישראליים",
     document_kind: "invoice",
-    match_keywords: [
-      "חשבונית",
-      "invoice",
-      "receipt",
-      "GitHub",
-      "Vercel",
-      "חשבונית מס",
-      "קבלה",
-      "דרישת תשלום",
-      "לתשלום",
-      "סכום לתשלום",
-      "תקופת חשבון",
-      "תקופת חיוב",
-      "מספר לקוח",
-      "מספר חשבון חוזה",
-      "מספר מונה",
-      "קריאת מונה",
-      "חברת חשמל",
-      "חברת חשמל לישראל",
-      "בזק",
-      "סלקום",
-      "פרטנר",
-      "פלאפון",
-      "הוט",
-      "HOT",
-      "גולן טלקום",
-      "מי אביבים",
-      "הגיחון",
-      "מקורות",
-    ],
+    match_keywords: INVOICE_MATCH_KEYWORDS,
     expiry_field: "payment_due_date",
     is_default: 0,
     fields: [
@@ -164,6 +170,20 @@ const SEEDS: SeedRow[] = [
     ],
   },
 ];
+
+function uniqueKeywords(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const keyword = String(value ?? "").trim();
+    if (!keyword) continue;
+    const key = keyword.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(keyword);
+  }
+  return out;
+}
 
 export async function seedBuiltinTemplates(): Promise<void> {
   const collection = col<any>("doc_templates");

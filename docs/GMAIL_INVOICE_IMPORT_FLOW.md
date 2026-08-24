@@ -30,10 +30,273 @@ For the invoice guided flow, the client enables:
 The query shape is:
 
 ```text
-has:attachment {filename:pdf filename:doc filename:docx filename:xls filename:xlsx} {"חשבונית" "invoice" "receipt" "GitHub" "Vercel" "חשבונית מס" "קבלה" "דרישת תשלום"}
+has:attachment {filename:pdf filename:doc filename:docx filename:xls filename:xlsx} {<invoice template keywords>}
 ```
 
+The invoice template keywords are seeded from two sources:
+
+- Base invoice words, such as `חשבונית`, `invoice`, `receipt`, `bill`, `חשבונית מס`, `קבלה`, `דרישת תשלום`, `פירוט חשבון`, `פירוט חודשי`, `לתשלום`, `תקופת חיוב`, `מספר לקוח`, and meter/account identifiers.
+- Enabled Gmail search providers from `DEFAULT_GMAIL_SEARCH_PROVIDERS`, including each provider `label` and every configured search term/domain.
+
 Images are intentionally excluded from invoice import by default because Gmail messages often contain inline logos and signatures named `image.png` or `image001.png`.
+
+## Provider Tags and OCR Interaction
+
+Provider tags are stored in MongoDB collection `gmail_search_providers` and are seeded by `seedGmailSearchProviders()` from `server/src/gmail/searchProviders.ts`.
+
+They interact with the import flow in four places:
+
+1. **Gmail discovery** — `/api/gmail/search-providers` feeds the sender/provider dropdown. When a provider is selected, the client builds a Gmail query using that provider's configured terms.
+2. **Bulk import matching** — the invoice template's `match_keywords` include provider labels and terms, so import-all searches can find provider invoices even when the subject uses a brand name rather than the word `invoice`.
+3. **Source/provider tagging** — when an attachment is imported, the server compares the email sender, subject, and filename against enabled providers. A match can populate source metadata such as business/provider hints.
+4. **OCR/template classification** — providers do not run OCR and do not replace OCR. OCR still extracts text from the attachment. After text extraction, the provider keywords increase the chance that the invoice template matches documents containing names like `HOT`, `גולן טלקום`, `שופרסל`, `Pango`, or `כביש 6`.
+
+Important distinction:
+
+- Provider list = search terms, tags, and template matching hints.
+- OCR = text extraction from PDF/image/DOCX content.
+- Known invoice parsers = supplier-specific deterministic field extraction, such as the HOT parser.
+
+Adding a provider helps Gmail find and classify the file, but it does not automatically guarantee full invoice field extraction. If a provider has unusual invoice layout, add a known parser or improve the generic invoice extraction prompts/field rules.
+
+## Current Provider List
+
+The source of truth is `DEFAULT_GMAIL_SEARCH_PROVIDERS`. The seeded DB collection is `gmail_search_providers`.
+
+### Electricity
+
+- חשמל - חברת חשמל לישראל
+- חשמל - נגה / ניהול מערכת החשמל
+- חשמל - אלקטרה פאוור
+- חשמל - סלקום חשמל
+- חשמל - פרטנר חשמל
+- חשמל - בזק חשמל
+- חשמל - HOT Energy
+- חשמל - אמישראגז חשמל
+- חשמל - פזגז חשמל
+
+### Telecom
+
+- תקשורת - בזק
+- תקשורת - בזק בינלאומי
+- תקשורת - פלאפון
+- תקשורת - סלקום
+- תקשורת - פרטנר
+- תקשורת - HOT
+- תקשורת - HOT Mobile
+- תקשורת - 012 מובייל
+- תקשורת - 013 נטוויז'ן
+- תקשורת - 018 אקספון
+- תקשורת - 019 טלזר
+- תקשורת - גולן טלקום
+- תקשורת - רמי לוי תקשורת
+- תקשורת - Wecom
+- תקשורת - אינטרנט רימון
+- תקשורת - בינת עסקים
+- תקשורת - Unlimited / IBC
+
+### Water
+
+- מים - מקורות
+- מים - מי אביבים
+- מים - הגיחון
+- מים - מי שבע
+- מים - מי ברק
+- מים - מי רמת גן
+- מים - מניב ראשון
+- מים - מי ציונה
+- מים - מי מודיעין
+- מים - מי אונו
+- מים - מי הרצליה
+- מים - מי נתניה
+- מים - מי רעננה
+- מים - שרונים
+- מים - עין אפק
+- מים - מי כרמל
+- מים - יובלים אשדוד
+- מים - מי אשקלון
+- מים - פלגי השרון
+- מים - פלג הגליל
+- מים - מעיינות השרון
+- מים - מעיינות המשולש
+- מים - מי עירון
+- מים - התנור
+
+### Transport and Parking
+
+- תחבורה - כביש 6
+- תחבורה - מנהרות הכרמל
+- תחבורה - הנתיבים המהירים
+- תחבורה - רכבת ישראל
+- תחבורה - רב-קו אונליין
+- תחבורה - רב-פס
+- תחבורה - Moovit
+- תחבורה - Gett
+- תחבורה - Yango
+- תחבורה - אגד
+- תחבורה - דן
+- תחבורה - מטרופולין
+- תחבורה - קווים
+- תחבורה - סופרבוס
+- תחבורה - אלקטרה אפיקים
+- תחבורה - תנופה
+- תחבורה - נתיב אקספרס
+- תחבורה - 6 צפון
+- חניה - Pango
+- חניה - Cello
+- חניה - אחוזות החוף
+
+### Fuel and Gas
+
+- דלק - פז
+- דלק - דלק
+- דלק - סונול
+- דלק - דור אלון
+- דלק - Ten
+- דלק - מנטה
+- גז - אמישראגז
+- גז - סופרגז
+- גז - פזגז
+- גז - דור גז
+
+### TV, Streaming, and Marketplaces
+
+- טלוויזיה - yes
+- טלוויזיה - STINGTV
+- טלוויזיה - HOT
+- טלוויזיה - פרטנר TV
+- טלוויזיה - סלקום TV
+- טלוויזיה - FreeTV
+- טלוויזיה - NEXT TV
+- סטרימינג - Netflix
+- סטרימינג - Amazon Prime Video
+- סטרימינג - Disney+
+- סטרימינג - Apple TV
+- סטרימינג - Spotify
+- קניות - Amazon
+- קניות - AliExpress
+- קניות - eBay
+- קניות - KSP
+- קניות - Ivory
+- קניות - BUG
+- קניות - Zap
+- קניות - LastPrice
+- קניות - TERMINAL X
+- קניות - וואלה שופס
+
+### Food
+
+- מזון - שופרסל
+- מזון - רמי לוי
+- מזון - ויקטורי
+- מזון - יוחננוף
+- מזון - אושר עד
+- מזון - טיב טעם
+- מזון - קשת טעמים
+- מזון - AM:PM
+- מזון - Wolt
+- מזון - תן ביס
+- מזון - Cibus
+
+### Payment and Invoice Platforms
+
+- תשלומים - Grow
+- תשלומים - Cardcom
+- תשלומים - Tranzila
+- חשבוניות - S-Invoice
+- חשבוניות - MyOfficeGuy
+- תשלומים - MoneySend
+- דיגיטל - Morning (חשבונית ירוקה)
+
+### Government and Municipal
+
+- ממשלה - gov.il
+- ממשלה - שירות התשלומים הממשלתי
+- ממשלה - רשות המסים
+- ממשלה - רשות שוק ההון
+- ממשלה - משטרת ישראל
+- דואר - דואר ישראל
+- ממשלה - אתר האישורים צה"ל
+- עירייה - תל אביב יפו
+- עירייה - חולון
+
+### Insurance and Finance
+
+- ביטוח - הפניקס
+- ביטוח - כלל
+- ביטוח - מנורה מבטחים
+- ביטוח - PassportCard
+- ביטוח - שומרה
+- ביטוח - Wobi
+- ביטוח - מסלקה פנסיונית
+- פיננסים - בנק לאומי
+- פיננסים - בנק הפועלים
+- פיננסים - IBI
+- פיננסים - מור גמל ופנסיה
+
+### Travel, Healthcare, Education, Retail, and Nonprofit
+
+- תיירות - אל על
+- תיירות - ישראייר
+- תיירות - ארקיע
+- תיירות - Ferryscanner
+- תיירות - 12Go
+- תיירות - Bravofly
+- בריאות - הדסה
+- בריאות - מכבידנט
+- בריאות - FEMI
+- בריאות - נטלי
+- בריאות - מדיטון
+- בריאות - Med Balance
+- לימודים - HIT
+- לימודים - ג'ון ברייס
+- לימודים - Classoos
+- לימודים - המכללה למנהל
+- לימודים - Israel Cyber Campus
+- לימודים - DevOps Experts
+- לימודים - מיקה סנטר
+- קמעונאות - מחסני חשמל
+- קמעונאות - הום סנטר
+- קמעונאות - אינטרטויס
+- קמעונאות - A&A מחשבים וסלולר
+- קמעונאות - שמרת הזורע
+- קמעונאות - Fizikal
+- קמעונאות - Headstart
+- עמותות - הצופים
+- עמותות - בני ברוך
+- עמותות - שפרה פשוט לאהוב
+
+### Digital and Development
+
+- דיגיטל - Google
+- דיגיטל - Slack
+- דיגיטל - Notion
+- דיגיטל - Figma
+- דיגיטל - Canva
+- דיגיטל - Linear
+- דיגיטל - Atlassian
+- פיתוח - OpenAI
+- פיתוח - Anthropic
+- פיתוח - GitHub
+- פיתוח - GitLab
+- פיתוח - npm
+- פיתוח - Docker
+- פיתוח - Vercel
+- פיתוח - Netlify
+- פיתוח - Render
+- פיתוח - Railway
+- פיתוח - DigitalOcean
+- פיתוח - Cloudflare
+- פיתוח - AWS
+- פיתוח - Microsoft Azure
+- פיתוח - Google Cloud
+- פיתוח - Sentry
+- פיתוח - Stripe
+- פיתוח - Twilio
+- פיתוח - SendGrid
+- פיתוח - Resend
+- פיתוח - Namecheap
+- פיתוח - GoDaddy
 
 ## High-Level Flow
 
@@ -138,6 +401,7 @@ sequenceDiagram
 | `users` | Stores Gmail OAuth tokens and usage counters. |
 | `gmail_import_jobs` | Stores queued/running/completed bulk import jobs, message IDs, cursor, counters, and per-attachment results. |
 | `gmail_imports` | Tracks imported Gmail messages/files per user, used to avoid duplicate imports. |
+| `gmail_search_providers` | Stores enabled provider tags, search terms, categories, and sort order. Seeded from `DEFAULT_GMAIL_SEARCH_PROVIDERS`. |
 | `documents` | Stores imported file metadata and processing status. |
 | `extractions` | Stores OCR/AI extraction audit rows. |
 | `invoices` | Stores normalized invoice rows shown in the invoices page. |
@@ -151,7 +415,7 @@ The invoice guided flow forces the invoice template. After extraction:
 flowchart TD
   A[Attachment imported as document] --> B[Text extraction]
   B --> C[Known invoice parser]
-  C -->|matched GitHub/Vercel etc.| D[Save invoice record]
+  C -->|matched HOT/GitHub/Vercel/etc.| D[Save invoice record]
   C -->|not matched| E[Invoice template AI extraction]
   E --> F[Normalize fields]
   F --> G[saveTemplateEntities]

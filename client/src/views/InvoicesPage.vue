@@ -143,6 +143,13 @@
       />
     </div>
 
+    <GmailImportJobStatus
+      v-if="visibleGmailImportJob"
+      :job="visibleGmailImportJob"
+      :dismissible="!importingFromGmail"
+      @dismiss="lastGmailImportJob = null"
+    />
+
     <n-spin :show="loading">
       <div v-if="!rows.length && !loading" class="empty">
         <n-icon :component="DocumentTextOutline" :size="48" class="empty__icon" />
@@ -354,13 +361,16 @@ import {
 import PageHeader from "../components/PageHeader.vue";
 import GmailLogo from "../components/GmailLogo.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
+import GmailImportJobStatus from "../components/GmailImportJobStatus.vue";
 import { api, type GmailImportJob, type ImportedInvoice } from "../services/apiService.js";
 import type { DocTemplate } from "../shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
 import {planAllowsGoogleDrive, resolveUserPlan} from "../shared/pricingPlans.js";
+import {useConfirm} from "../composables/useConfirm.js";
 
 const router = useRouter();
 const message = useMessage();
+const {confirm} = useConfirm();
 const authStore = useAuthStore();
 const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
 
@@ -374,6 +384,7 @@ const showMonthlyReport = ref(false);
 const exportingToDrive = ref(false);
 const importingFromGmail = ref(false);
 const activeGmailImportJob = ref<GmailImportJob | null>(null);
+const lastGmailImportJob = ref<GmailImportJob | null>(null);
 const gmailConnected = ref<boolean | null>(null);
 const viewMode = ref<"cards" | "table">("table");
 const dateRange = ref<[number, number] | null>(null);
@@ -416,6 +427,7 @@ const supplierOptions = computed<SelectOption[]>(() => [
   ...suppliers.value.map((value) => ({label: value, value})),
 ]);
 const gmailImportButtonLabel = computed(() => gmailConnected.value === false ? "חבר Gmail" : "ייבא הכל");
+const visibleGmailImportJob = computed(() => activeGmailImportJob.value ?? lastGmailImportJob.value);
 const statusStrip = computed(() => [
   { label: "הכל", value: "", count: total.value },
   { label: "חדש", value: "new", count: counts.value.new ?? 0 },
@@ -618,7 +630,6 @@ async function handleDriveExport() {
     message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
     return;
   }
-  exportingToDrive.value = true;
   try {
     const status = await api.drive.status();
     if (!status.allowed) {
@@ -629,15 +640,50 @@ async function handleDriveExport() {
       message.warning("יש להפעיל סנכרון Drive בהגדרות הפרופיל לפני ייצוא");
       return;
     }
+    const folderGone = status.folderState === "missing" || status.folderState === "trashed";
+    if (folderGone) {
+      const count = status.syncedFileCount ?? 0;
+      confirm({
+        title: status.folderState === "trashed" ? "תיקיית Drive בפח" : "תיקיית Drive נמחקה",
+        content: count
+          ? `${count} מסמכים סומנו כמסונכרנים אבל הם כבר לא בתיקייה. ליצור תיקייה חדשה ולהעלות מחדש?`
+          : "תיקיית Google Drive נמחקה. ליצור תיקייה חדשה ולהעלות את המסמכים?",
+        confirmText: "העלה מחדש",
+        type: "warning",
+        onConfirm: runDriveExport,
+      });
+      return;
+    }
+    await runDriveExport();
+  } catch (err: any) {
+    if (String(err?.message ?? "").includes("drive_plan_required")) {
+      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    } else {
+      message.error("שגיאה בייצוא ל-Drive");
+    }
+  }
+}
+
+async function runDriveExport() {
+  exportingToDrive.value = true;
+  try {
     const result = await api.drive.exportAll();
-    if (result.total === 0) {
+    const folderHint = result.folderName ? ` לתיקיית "${result.folderName}"` : "";
+    if (result.recreated) {
+      message.success(`נוצרה תיקייה חדשה והועלו ${result.uploaded} מסמכים${folderHint}${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+    } else if (result.total === 0) {
       message.info("כל המסמכים כבר מסונכרנים ל-Drive");
     } else {
-      message.success(`הועלו ${result.uploaded} מסמכים ל-Drive${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+      message.success(`הועלו ${result.uploaded} מסמכים${folderHint} ב-Google Drive${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+    }
+    if (result.folderUrl) {
+      window.open(result.folderUrl, "_blank", "noopener,noreferrer");
     }
   } catch (err: any) {
     if (String(err?.message ?? "").includes("drive_plan_required")) {
       message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    } else if (String(err?.message ?? "").includes("drive_scope_missing")) {
+      message.warning("יש להתחבר מחדש ל-Gmail כדי לאשר גישה ל-Drive");
     } else {
       message.error("שגיאה בייצוא ל-Drive");
     }
@@ -648,6 +694,7 @@ async function handleDriveExport() {
 
 async function handleGmailImportButton() {
   importingFromGmail.value = true;
+  lastGmailImportJob.value = null;
   try {
     const status = await api.gmail.status();
     gmailConnected.value = status.connected;
@@ -661,6 +708,7 @@ async function handleGmailImportButton() {
     activeGmailImportJob.value = started;
     message.info("ייבוא החשבוניות מ-Gmail התחיל ברקע");
     const result = await waitForGmailImportJob(started.jobId);
+    lastGmailImportJob.value = result;
     const failed = result.errors || result.results.filter((item) => item.error).length;
     const imported = result.imported ?? 0;
     if (imported) {

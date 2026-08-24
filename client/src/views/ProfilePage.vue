@@ -502,7 +502,9 @@
           <div class="settings-group">
             <h3 class="settings-group__title">סנכרון Google Drive</h3>
             <p class="settings-desc">
-              סנכרן מסמכים שהועלו אוטומטית לתיקיית RemindOCR ב-Google Drive שלך.
+              סנכרן מסמכים שהועלו אוטומטית לתיקיית
+              <strong>{{ driveStatus?.folderName || "RemindOCR" }}</strong>
+              ב-Google Drive (ב־My Drive). חשבוניות נשמרות בתת־תיקייה ״חשבוניות״, ותסקירים ב״תסקירי בדיקה״.
             </p>
             <div v-if="!driveAllowed" class="settings-desc settings-desc--follow">
               זמין במסלולים <strong>בסיסי</strong> ו<strong>עסקי</strong> בלבד.
@@ -511,7 +513,8 @@
               </router-link>
             </div>
             <div v-else-if="driveStatus">
-              <n-tag v-if="driveStatus.syncEnabled" size="small" class="drive-status-tag" type="success">מופעל</n-tag>
+              <n-tag v-if="driveFolderGone" size="small" class="drive-status-tag" type="warning">תיקייה חסרה</n-tag>
+              <n-tag v-else-if="driveStatus.syncEnabled" size="small" class="drive-status-tag" type="success">מופעל</n-tag>
               <n-tag v-else size="small" class="drive-status-tag" type="default">כבוי</n-tag>
               <div class="drive-actions">
                 <n-button
@@ -534,7 +537,44 @@
                   יש להתחבר עם Google כדי להפעיל
                 </span>
               </div>
-              <div v-if="driveStatus.syncEnabled" class="drive-folder">
+              <div v-if="driveFolderGone" class="drive-folder-alert">
+                <n-alert :bordered="false" type="warning">
+                  <template v-if="driveStatus.folderState === 'trashed'">
+                    תיקיית Google Drive נמצאת בפח.
+                    <span v-if="driveStatus.syncedFileCount">
+                      {{ driveStatus.syncedFileCount }} מסמכים סומנו כמסונכרנים, אבל הם בפח יחד עם התיקייה.
+                    </span>
+                    אפשר לשחזר אותה מהפח, או ליצור תיקייה חדשה ולהעלות מחדש.
+                  </template>
+                  <template v-else>
+                    תיקיית Google Drive נמחקה.
+                    <span v-if="driveStatus.syncedFileCount">
+                      {{ driveStatus.syncedFileCount }} מסמכים סומנו כמסונכרנים, אבל הם כבר לא ב-Drive.
+                    </span>
+                    צריך ליצור תיקייה חדשה ולהעלות אותם מחדש.
+                  </template>
+                </n-alert>
+                <a
+                  v-if="driveStatus.folderState === 'trashed' && driveStatus.trashUrl"
+                  class="settings-link drive-folder__open"
+                  :href="driveStatus.trashUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <n-icon :component="OpenOutline" :size="14" />
+                  פתח את הפח ב-Google Drive
+                </a>
+                <n-button
+                  :loading="repairingFolder"
+                  class="drive-repair-btn"
+                  size="small"
+                  type="warning"
+                  @click="repairDriveFolder"
+                >
+                  צור תיקייה והעלה מחדש
+                </n-button>
+              </div>
+              <div v-if="driveStatus.syncEnabled && !driveFolderGone" class="drive-folder">
                 <label class="settings-desc drive-folder__label">שם תיקייה ב-Drive</label>
                 <div class="drive-folder__row">
                   <n-input
@@ -551,6 +591,16 @@
                   >שמור
                   </n-button>
                 </div>
+                <a
+                  v-if="driveFolderUrl"
+                  class="settings-link drive-folder__open"
+                  :href="driveFolderUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <n-icon :component="OpenOutline" :size="14" />
+                  פתח תיקייה ב-Google Drive
+                </a>
               </div>
               <div v-if="driveNeedsReauth" class="drive-reauth">
                 <n-alert :bordered="false" class="drive-reauth__alert" type="warning">
@@ -746,6 +796,7 @@ import {
   LogOutOutline,
   MoonOutline,
   NotificationsOutline,
+  OpenOutline,
   PersonOutline,
   SettingsOutline,
   StatsChartOutline,
@@ -755,9 +806,10 @@ import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
 import { useUserSettingsStore } from "../stores/userSettings.js";
 import { useEngineerStore } from "../stores/engineer.js";
-import {api, type ProfileSubscription} from "../services/apiService.js";
+import {api, type DriveStatus, type ProfileSubscription} from "../services/apiService.js";
 import type { User, UserSettings } from "@shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
+import {useConfirm} from "../composables/useConfirm.js";
 import {
   PLAN_LABELS,
   formatPlanPrice,
@@ -773,6 +825,7 @@ import {
 const route = useRoute();
 
 const message = useMessage();
+const {confirm} = useConfirm();
 const authStore = useAuthStore();
 const userSettingsStore = useUserSettingsStore();
 const engineerStore = useEngineerStore();
@@ -1083,20 +1136,27 @@ async function onAvatarChange(e: Event) {
 const pwForm = ref({ current: "", next: "", confirm: "" });
 const savingPw = ref(false);
 const disconnecting = ref(false);
-const driveStatus = ref<{
-  connected: boolean;
-  syncEnabled: boolean;
-  folderId: string | null;
-  folderName?: string;
-  allowed?: boolean
-} | null>(null);
+const driveStatus = ref<DriveStatus | null>(null);
 const driveToggling = ref(false);
 const driveNeedsReauth = ref(false);
 const driveFolderName = ref("RemindOCR");
 const renamingFolder = ref(false);
+const repairingFolder = ref(false);
 const driveAllowed = computed(() => {
   if (driveStatus.value?.allowed === false) return false;
   return planAllowsGoogleDrive(currentPlanId.value);
+});
+const driveFolderGone = computed(() => {
+  const state = driveStatus.value?.folderState;
+  return state === "missing" || state === "trashed";
+});
+const driveFolderUrl = computed(() => {
+  if (driveFolderGone.value) return null;
+  if (driveStatus.value?.folderUrl) return driveStatus.value.folderUrl;
+  if (driveStatus.value?.folderId) {
+    return `https://drive.google.com/drive/folders/${driveStatus.value.folderId}`;
+  }
+  return null;
 });
 
 async function loadDriveStatus() {
@@ -1160,6 +1220,44 @@ async function renameDriveFolder() {
   } finally {
     renamingFolder.value = false;
   }
+}
+
+async function repairDriveFolder() {
+  const count = driveStatus.value?.syncedFileCount ?? 0;
+  const trashed = driveStatus.value?.folderState === "trashed";
+  confirm({
+    title: trashed ? "תיקיית Drive בפח" : "תיקיית Drive נמחקה",
+    content: count
+      ? `${count} מסמכים סומנו כמסונכרנים אבל הם כבר לא בתיקייה. ליצור תיקייה חדשה ולהעלות אותם מחדש?`
+      : "ליצור תיקייה חדשה ב-Google Drive ולהעלות את המסמכים?",
+    confirmText: "העלה מחדש",
+    type: "warning",
+    onConfirm: async () => {
+      repairingFolder.value = true;
+      try {
+        const result = await api.drive.exportAll();
+        const folderHint = result.folderName ? ` לתיקיית "${result.folderName}"` : "";
+        if (result.uploaded === 0 && result.total === 0) {
+          message.success("נוצרה תיקייה חדשה ב-Google Drive");
+        } else {
+          message.success(`נוצרה תיקייה חדשה והועלו ${result.uploaded} מסמכים${folderHint}${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+        }
+        if (result.folderUrl) {
+          window.open(result.folderUrl, "_blank", "noopener,noreferrer");
+        }
+        await loadDriveStatus();
+      } catch (err: any) {
+        if (String(err?.message ?? "").includes("drive_scope_missing")) {
+          driveNeedsReauth.value = true;
+          message.warning("יש להתחבר מחדש ל-Gmail כדי לאשר גישה ל-Drive");
+        } else {
+          message.error("שגיאה בשחזור תיקיית Drive");
+        }
+      } finally {
+        repairingFolder.value = false;
+      }
+    },
+  });
 }
 
 async function reconnectGmailForDrive() {
@@ -1795,6 +1893,18 @@ watch(activeSection, (section) => {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+.drive-folder__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.drive-folder-alert {
+  margin-top: 12px;
+}
+.drive-repair-btn {
+  margin-top: 10px;
 }
 .drive-folder__input {
   max-width: 220px;

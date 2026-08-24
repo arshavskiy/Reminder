@@ -691,7 +691,6 @@ async function handleDriveExport() {
     message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
     return;
   }
-  exportingToDrive.value = true;
   try {
     const status = await api.drive.status();
     if (!status.allowed) {
@@ -702,15 +701,50 @@ async function handleDriveExport() {
       message.warning("יש להפעיל סנכרון Drive בהגדרות הפרופיל לפני ייצוא");
       return;
     }
+    const folderGone = status.folderState === "missing" || status.folderState === "trashed";
+    if (folderGone) {
+      const count = status.syncedFileCount ?? 0;
+      confirm({
+        title: status.folderState === "trashed" ? "תיקיית Drive בפח" : "תיקיית Drive נמחקה",
+        content: count
+          ? `${count} מסמכים סומנו כמסונכרנים אבל הם כבר לא בתיקייה. ליצור תיקייה חדשה ולהעלות מחדש?`
+          : "תיקיית Google Drive נמחקה. ליצור תיקייה חדשה ולהעלות את המסמכים?",
+        confirmText: "העלה מחדש",
+        type: "warning",
+        onConfirm: runDriveExport,
+      });
+      return;
+    }
+    await runDriveExport();
+  } catch (err: any) {
+    if (String(err?.message ?? "").includes("drive_plan_required")) {
+      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    } else {
+      message.error("שגיאה בייצוא ל-Drive");
+    }
+  }
+}
+
+async function runDriveExport() {
+  exportingToDrive.value = true;
+  try {
     const result = await api.drive.exportAll();
-    if (result.total === 0) {
+    const folderHint = result.folderName ? ` לתיקיית "${result.folderName}"` : "";
+    if (result.recreated) {
+      message.success(`נוצרה תיקייה חדשה והועלו ${result.uploaded} מסמכים${folderHint}${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+    } else if (result.total === 0) {
       message.info("כל המסמכים כבר מסונכרנים ל-Drive");
     } else {
-      message.success(`הועלו ${result.uploaded} מסמכים ל-Drive${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+      message.success(`הועלו ${result.uploaded} מסמכים${folderHint} ב-Google Drive${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+    }
+    if (result.folderUrl) {
+      window.open(result.folderUrl, "_blank", "noopener,noreferrer");
     }
   } catch (err: any) {
     if (String(err?.message ?? "").includes("drive_plan_required")) {
       message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    } else if (String(err?.message ?? "").includes("drive_scope_missing")) {
+      message.warning("יש להתחבר מחדש ל-Gmail כדי לאשר גישה ל-Drive");
     } else {
       message.error("שגיאה בייצוא ל-Drive");
     }

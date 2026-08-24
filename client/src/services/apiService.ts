@@ -38,7 +38,30 @@ export interface GmailEmail {
 
 export interface GmailSearchProvider {
   id: string;
-  category: "electricity" | "telecom" | "water" | "general";
+  category:
+    | "electricity"
+    | "telecom"
+    | "water"
+    | "transport"
+    | "parking"
+    | "fuel"
+    | "gas"
+    | "tv"
+    | "marketplace"
+    | "food"
+    | "payment"
+    | "government"
+    | "municipality"
+    | "insurance"
+    | "finance"
+    | "travel"
+    | "healthcare"
+    | "education"
+    | "retail"
+    | "nonprofit"
+    | "digital"
+    | "development"
+    | "general";
   label: string;
   terms: string[];
   sort_order: number;
@@ -165,6 +188,32 @@ export interface ProfileSubscription {
   plan: string;
   quotas: Record<ProfileSubscriptionQuota["category"], ProfileSubscriptionQuota>;
   counters: ProfileImportCounters;
+}
+
+export type DriveFolderState = "ok" | "trashed" | "missing" | "unknown";
+
+export interface DriveStatus {
+  connected: boolean;
+  syncEnabled: boolean;
+  folderId: string | null;
+  folderName: string;
+  folderUrl: string | null;
+  folderState?: DriveFolderState | null;
+  syncedFileCount?: number;
+  trashUrl?: string | null;
+  allowed: boolean;
+}
+
+export interface DriveExportResult {
+  ok: boolean;
+  uploaded: number;
+  failed: number;
+  total: number;
+  folderId?: string | null;
+  folderName?: string;
+  folderUrl?: string | null;
+  recreated?: boolean;
+  resetCount?: number;
 }
 
 export interface EquipmentHistoryEvent {
@@ -753,19 +802,16 @@ export const api = {
   },
 
   drive: {
-    status: () => get<{
-      connected: boolean;
-      syncEnabled: boolean;
-      folderId: string | null;
-      folderName: string;
-      allowed: boolean
-    }>("/drive/status"),
+    status: () => get<DriveStatus>("/drive/status"),
     enable: (folderName?: string) => post<{
       ok: boolean;
-      folderId: string
+      folderId: string;
+      folderUrl: string;
+      recreated?: boolean;
+      resetCount?: number;
     }>("/drive/enable", folderName ? {folderName} : {}),
     disable: () => post<{ ok: boolean }>("/drive/disable", {}),
-    exportAll: () => post<{ ok: boolean; uploaded: number; failed: number; total: number }>("/drive/export-all", {}),
+    exportAll: () => post<DriveExportResult>("/drive/export-all", {}),
     renameFolder: (name: string) => post<{ ok: boolean; folderName: string }>("/drive/rename-folder", {name}),
   },
 

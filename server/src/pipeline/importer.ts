@@ -1878,7 +1878,119 @@ function isInvoiceLikeDocument(value: unknown): boolean {
 }
 
 export function extractKnownInvoiceFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
-  return extractGitHubReceiptFields(rawText, fileName) ?? extractVercelReceiptFields(rawText, fileName);
+  return extractHotInvoiceFields(rawText, fileName)
+    ?? extractGitHubReceiptFields(rawText, fileName)
+    ?? extractVercelReceiptFields(rawText, fileName);
+}
+
+function extractHotInvoiceFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  const text = rawText.replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const lower = text.toLowerCase();
+  const nameLower = String(fileName ?? "").toLowerCase();
+  if (!(/\bhot\b/i.test(text) || text.includes("הוט") || nameLower.includes("hot"))) return null;
+  if (!/פירוט\s+(?:חודשי|חשבון)|תקופת\s+חיוב|תקופת\s+השימושים|שירותי\s+אינטרנט|שירותי\s+טלוויזיה/.test(text)) return null;
+
+  const customerNumber =
+    matchFirst(text, /(?:למנוי|מספר\s*(?:לקוח|מנוי|חשבון))\s*:?\s*(?:[^\d\n]{0,80}?[-–]\s*)?(\d{4,12})/i) ??
+    matchFirst(text, /\b(\d{5,12})\b/);
+  const clientCompany =
+    extractHotClientName(text) ??
+    extractInvoiceRecipientFromRawText(text) ??
+    customerNumber;
+  const billingPeriod = extractHotBillingPeriod(text);
+  const issueDate =
+    billingPeriod?.end ??
+    parseMonthYear(matchFirst(text, /חודש\s*החשבון\s*:?\s*(\d{1,2}[./]\d{4})/)) ??
+    parseIsraeliDate(matchFirst(text, /תאריך\s*(?:הפקה|חשבונית|חשבון)\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/));
+  const dueDate =
+    parseIsraeliDate(matchFirst(text, /(?:לתשלום|תשלום|בתאריך)\s*(?:עד|בפועל|בתאריך)?\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/)) ??
+    parseIsraeliDate(matchFirst(text, /(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s*(?:יסתיים|לתשלום|תשלום)/)) ??
+    issueDate;
+  const amount = extractHotTotalAmount(text);
+  const invoiceNumber = [
+    "HOT",
+    customerNumber,
+    billingPeriod?.start,
+    billingPeriod?.end,
+  ].filter(Boolean).join("-");
+
+  if (!customerNumber || !clientCompany || !issueDate || !dueDate || amount === null || !invoiceNumber) return null;
+
+  return {
+    supplier_name: "HOT",
+    supplier_id: null,
+    invoice_number: invoiceNumber,
+    document_subtype: "חשבון תקופתי",
+    client_company: clientCompany,
+    client_name: clientCompany,
+    customer_number: customerNumber,
+    issue_date: issueDate,
+    payment_due_date: dueDate,
+    billing_period: billingPeriod ? `${billingPeriod.start} - ${billingPeriod.end}` : null,
+    billing_period_start: billingPeriod?.start ?? null,
+    billing_period_end: billingPeriod?.end ?? null,
+    amount,
+    amount_before_vat: extractHotSubtotalAmount(text),
+    vat_amount: null,
+    currency: "ILS",
+    payment_status: /הוראת\s*קבע|כרטיס\s*אשראי|יחויב/.test(text) ? "חיוב אוטומטי" : null,
+    items: extractHotItems(text),
+    notes: "HOT periodic bill",
+  };
+}
+
+function extractHotClientName(text: string): string | null {
+  const direct =
+    matchFirst(text, /(?:לכבוד|למנוי)\s*:?\s*([^\n\r\-–:]{2,80})\s*[-–]\s*\d{4,12}/) ??
+    matchFirst(text, /(?:לכבוד|למנוי)\s*:?\s*([^\n\r:]{2,80})/);
+  if (!direct) return null;
+  return direct
+    .replace(/\bHOT\b/ig, "")
+    .replace(/פירוט\s+(?:חודשי|חשבון).*/g, "")
+    .trim() || null;
+}
+
+function extractHotBillingPeriod(text: string): { start: string; end: string } | null {
+  const match =
+    /(?:תקופת\s+(?:חיוב|השימושים)|תקופת\s+החשבון)\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s*[-–]\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/.exec(text) ??
+    /(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s*[-–]\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/.exec(text);
+  const start = parseIsraeliDate(match?.[1] ?? null);
+  const end = parseIsraeliDate(match?.[2] ?? null);
+  return start && end ? { start, end } : null;
+}
+
+function extractHotTotalAmount(text: string): number | null {
+  const totalsContext = [
+    /סה"?כ[^\n]{0,80}(?:לתקופת\s+החשבון\s+הנוכחית|חיובים\s+וזיכויים)[^\n]*(?:\n| )([^\n]{0,120})/i,
+    /סכום\s+כולל\s+מע"?מ[^\n]*(?:\n| )([^\n]{0,120})/i,
+  ];
+  for (const pattern of totalsContext) {
+    const context = pattern.exec(text)?.[1] ?? "";
+    const values = decimalAmounts(context);
+    const positive = values.filter((value) => value > 0);
+    if (positive.length) return positive[positive.length - 1];
+  }
+  const tableValues = decimalAmounts(text);
+  const candidates = tableValues.filter((value) => value > 0 && value < 100_000);
+  return candidates.length ? candidates[candidates.length - 1] : null;
+}
+
+function extractHotSubtotalAmount(text: string): number | null {
+  const match = /סה"?כ[^\n]{0,80}(?:לתקופת\s+החשבון\s+הנוכחית|חיובים\s+וזיכויים)[^\n]*(?:\n| )([^\n]{0,120})/i.exec(text);
+  const values = decimalAmounts(match?.[1] ?? "");
+  return values.length >= 2 ? values[values.length - 2] : null;
+}
+
+function extractHotItems(text: string): Array<{ description: string; amount?: number; currency: string }> {
+  const items: Array<{ description: string; amount?: number; currency: string }> = [];
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    if (!/שירותי|חבילת|הטבה|אינטרנט|טלוויזיה|טלפון/i.test(line)) continue;
+    const amount = decimalAmounts(line).filter((value) => Math.abs(value) < 100_000).pop();
+    items.push({ description: line.slice(0, 160), ...(amount !== undefined ? { amount } : {}), currency: "ILS" });
+    if (items.length >= 8) break;
+  }
+  return items;
 }
 
 function extractGitHubReceiptFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
@@ -2066,10 +2178,42 @@ function cleanKnownInvoiceValue(value: string): string | null {
 
 function normalizeInvoiceDate(value: string | null): string | null {
   if (!value) return null;
+  const israeli = parseIsraeliDate(value);
+  if (israeli) return israeli;
   const cleaned = value.replace(/\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\s*[A-Z]{2,4}\b/i, "").trim();
   const parsed = Date.parse(cleaned);
   if (!Number.isFinite(parsed)) return null;
   return new Date(parsed).toISOString().slice(0, 10);
+}
+
+function parseIsraeliDate(value: string | null): string | null {
+  if (!value) return null;
+  const match = /(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/.exec(value);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const rawYear = Number(match[3]);
+  const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function parseMonthYear(value: string | null): string | null {
+  if (!value) return null;
+  const match = /(\d{1,2})[./](\d{4})/.exec(value);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const year = Number(match[2]);
+  if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year)) return null;
+  return new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10);
+}
+
+function decimalAmounts(value: string): number[] {
+  return [...value.matchAll(/-?\d{1,6}(?:[,.]\d{2})/g)]
+    .map((match) => Number(match[0].replace(",", ".")))
+    .filter(Number.isFinite);
 }
 
 function firstInvoiceString(fields: Record<string, unknown>, keys: string[]): string | null {
