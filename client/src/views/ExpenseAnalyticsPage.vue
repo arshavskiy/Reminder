@@ -111,6 +111,7 @@ const suppliers = ref<{ name: string; total: number }[]>([]);
 const categories = ref<string[]>([]);
 const chartSeries = ref<InvoiceExpenseMonthlySeries[]>([]);
 let chart: echarts.EChartsType | null = null;
+const seriesColors = ["#18a058", "#2563eb", "#dc2626", "#9333ea", "#0f766e", "#ea580c", "#64748b", "#be123c"];
 
 const dateBasisOptions: SelectOption[] = [
   { label: "תאריך חשבונית", value: "invoice" },
@@ -244,8 +245,6 @@ function renderChart() {
 function resizeChart() {
   chart?.resize();
 }
-
-const seriesColors = ["#18a058", "#2563eb", "#dc2626", "#9333ea", "#0f766e", "#ea580c", "#64748b", "#be123c"];
 
 function seriesColor(index: number): string {
   return seriesColors[index % seriesColors.length];
