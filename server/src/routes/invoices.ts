@@ -228,6 +228,63 @@ export function registerInvoiceRoutes(app: express.Application) {
     });
   });
 
+  app.post("/api/invoices/delete-selected", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const ids = Array.isArray(req.body?.ids)
+      ? uniqueSorted(req.body.ids.map((id: unknown) => String(id ?? "").trim()).filter(ObjectId.isValid)).slice(0, 200)
+      : [];
+    if (!ids.length) {
+      res.status(400).json({ error: "No invoice ids selected" });
+      return;
+    }
+
+    const invoiceObjectIds = ids.map((id) => new ObjectId(id));
+    const invoices = await col("invoices")
+      .find({ _id: { $in: invoiceObjectIds }, user_id: userId } as any, { projection: { document_id: 1 } } as any)
+      .toArray() as InvoiceRow[];
+    if (!invoices.length) {
+      res.json({ ok: true, requested: ids.length, deleted: 0, documentsDeleted: 0 });
+      return;
+    }
+
+    const documentIdStrings = uniqueSorted(invoices
+      .map((invoice) => String(invoice.document_id ?? "").trim())
+      .filter(ObjectId.isValid));
+    const documentObjectIds = documentIdStrings.map((id) => new ObjectId(id));
+    const documentIdsForLinks = [...documentIdStrings, ...documentObjectIds];
+
+    const deleteResult = await col("invoices").deleteMany({ _id: { $in: invoiceObjectIds }, user_id: userId } as any);
+    let documentsDeleted = 0;
+    if (documentObjectIds.length) {
+      await Promise.all([
+        col("extractions").deleteMany({ user_id: userId, document_id: { $in: documentIdsForLinks } } as any),
+        col("tasks").deleteMany({ user_id: userId, document_id: { $in: documentIdsForLinks } } as any),
+        col("document_clients").deleteMany({ document_id: { $in: documentIdsForLinks } } as any),
+        col("timeline_events").deleteMany({ source_type: "document", source_id: { $in: documentIdStrings } } as any),
+        col("reminders").deleteMany({ user_id: userId, document_id: { $in: documentIdsForLinks } } as any),
+        col("contracts").deleteMany({ user_id: userId, document_id: { $in: documentIdsForLinks } } as any),
+        col("equipment").deleteMany({ user_id: userId, document_id: { $in: documentIdsForLinks } } as any),
+      ]);
+      const docsResult = await col("documents").deleteMany({ _id: { $in: documentObjectIds }, user_id: userId } as any);
+      documentsDeleted = docsResult.deletedCount ?? 0;
+    }
+
+    res.json({
+      ok: true,
+      requested: ids.length,
+      deleted: deleteResult.deletedCount ?? 0,
+      documentsDeleted,
+    });
+  });
+
   app.get("/api/invoices/:id", async (req, res) => {
     let userId: string;
     try {

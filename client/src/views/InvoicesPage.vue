@@ -7,6 +7,17 @@
     >
       <template #hero>
         <button
+          v-if="selectedInvoiceCount > 0"
+          :class="{ 'rbtn--loading': deletingSelected }"
+          :disabled="loading || deletingSelected"
+          class="rbtn rbtn--danger"
+          type="button"
+          @click="confirmDeleteSelected"
+        >
+          <n-icon :component="TrashOutline" class="btn-icon" />
+          מחק {{ selectedInvoiceCount }}
+        </button>
+        <button
           :class="{ 'rbtn--loading': exporting }"
           :disabled="loading || total === 0 || exporting"
           class="rbtn rbtn--ghost"
@@ -213,6 +224,7 @@
       <div v-else-if="rows.length && viewMode === 'table'" class="invoice-table-wrap">
         <table class="invoice-table">
           <colgroup>
+            <col class="invoice-table__col invoice-table__col--select" />
             <col class="invoice-table__col invoice-table__col--supplier" />
             <col class="invoice-table__col invoice-table__col--status" />
             <col class="invoice-table__col invoice-table__col--date" />
@@ -224,6 +236,14 @@
           </colgroup>
           <thead>
             <tr>
+              <th class="invoice-col invoice-col--select" @click.stop>
+                <n-checkbox
+                  :checked="allVisibleSelected"
+                  :indeterminate="someVisibleSelected && !allVisibleSelected"
+                  aria-label="בחר את כל החשבוניות בעמוד"
+                  @update:checked="toggleSelectVisible"
+                />
+              </th>
               <th class="invoice-col invoice-col--supplier">
                 <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('supplier')" @click="setSort('supplier')">
                   <span>ספק</span>
@@ -280,6 +300,13 @@
               @keydown.enter.prevent="openDocument(row)"
               @keydown.space.prevent="openDocument(row)"
             >
+              <td class="invoice-col invoice-col--select" @click.stop>
+                <n-checkbox
+                  :checked="selectedInvoiceIds.has(row.id)"
+                  :aria-label="`בחר חשבונית של ${row.supplier_name}`"
+                  @update:checked="(checked) => toggleSelectInvoice(row.id, checked)"
+                />
+              </td>
               <td class="cell-strong invoice-col invoice-col--supplier">
                 <span class="invoice-cell-truncate" dir="auto" :title="row.supplier_name">{{ row.supplier_name }}</span>
               </td>
@@ -410,7 +437,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref, watch, type Component } from "vue";
 import { useRouter } from "vue-router";
-import { NButton, NDatePicker, NDropdown, NIcon, NInput, NModal, NPagination, NSelect, NSpin, NTooltip, useMessage, type SelectOption } from "naive-ui";
+import { NButton, NCheckbox, NDatePicker, NDropdown, NIcon, NInput, NModal, NPagination, NSelect, NSpin, NTooltip, useMessage, type SelectOption } from "naive-ui";
 import {
   ArchiveOutline,
   ArrowDownOutline,
@@ -426,6 +453,7 @@ import {
   PricetagOutline,
   RefreshOutline,
   SwapVerticalOutline,
+  TrashOutline,
 } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 import GmailLogo from "../components/GmailLogo.vue";
@@ -449,6 +477,7 @@ const totalAll = ref(0);
 const visibleLimit = ref<number | null>(null);
 const loading = ref(false);
 const exporting = ref(false);
+const deletingSelected = ref(false);
 const showMonthlyReport = ref(false);
 const exportingToDrive = ref(false);
 const importingFromGmail = ref(false);
@@ -456,6 +485,7 @@ const activeGmailImportJob = ref<GmailImportJob | null>(null);
 const lastGmailImportJob = ref<GmailImportJob | null>(null);
 const gmailConnected = ref<boolean | null>(null);
 const viewMode = ref<"cards" | "table">("table");
+const selectedInvoiceIds = ref(new Set<string>());
 const dateRange = ref<[number, number] | null>(null);
 const page = ref(1);
 const pageSize = ref(20);
@@ -506,6 +536,12 @@ const supplierOptions = computed<SelectOption[]>(() => [
 ]);
 const gmailImportButtonLabel = computed(() => gmailConnected.value === false ? "חבר Gmail" : "ייבא הכל");
 const visibleGmailImportJob = computed(() => activeGmailImportJob.value ?? lastGmailImportJob.value);
+const selectedInvoiceCount = computed(() => selectedInvoiceIds.value.size);
+const visibleRowIds = computed(() => rows.value.map((row) => row.id));
+const someVisibleSelected = computed(() => visibleRowIds.value.some((id) => selectedInvoiceIds.value.has(id)));
+const allVisibleSelected = computed(() => (
+  visibleRowIds.value.length > 0 && visibleRowIds.value.every((id) => selectedInvoiceIds.value.has(id))
+));
 const statusStrip = computed(() => [
   { label: "הכל", value: "", count: total.value },
   { label: "חדש", value: "new", count: counts.value.new ?? 0 },
@@ -560,10 +596,65 @@ async function load(force = false) {
     types.value = result.types;
     categories.value = result.categories;
     suppliers.value = result.suppliers;
+    pruneSelectedInvoices();
   } catch {
     message.error("שגיאה בטעינת החשבוניות");
   } finally {
     loading.value = false;
+  }
+}
+
+function toggleSelectInvoice(id: string, checked: boolean) {
+  const next = new Set(selectedInvoiceIds.value);
+  if (checked) {
+    next.add(id);
+  } else {
+    next.delete(id);
+  }
+  selectedInvoiceIds.value = next;
+}
+
+function toggleSelectVisible(checked: boolean) {
+  const next = new Set(selectedInvoiceIds.value);
+  for (const id of visibleRowIds.value) {
+    if (checked) {
+      next.add(id);
+    } else {
+      next.delete(id);
+    }
+  }
+  selectedInvoiceIds.value = next;
+}
+
+function pruneSelectedInvoices() {
+  if (selectedInvoiceIds.value.size === 0) return;
+  const visible = new Set(rows.value.map((row) => row.id));
+  selectedInvoiceIds.value = new Set([...selectedInvoiceIds.value].filter((id) => visible.has(id)));
+}
+
+function confirmDeleteSelected() {
+  const ids = [...selectedInvoiceIds.value];
+  if (!ids.length) return;
+  confirm({
+    title: "מחיקת חשבוניות",
+    content: `למחוק ${ids.length} חשבוניות שנבחרו? הפעולה תמחק גם את המסמכים המקושרים.`,
+    confirmText: "מחק",
+    type: "warning",
+    onConfirm: () => deleteSelectedInvoices(ids),
+  });
+}
+
+async function deleteSelectedInvoices(ids: string[]) {
+  deletingSelected.value = true;
+  try {
+    const result = await api.invoices.deleteSelected({ ids });
+    selectedInvoiceIds.value = new Set();
+    message.success(`נמחקו ${result.deleted} חשבוניות`);
+    await load(true);
+  } catch {
+    message.error("שגיאה במחיקת החשבוניות");
+  } finally {
+    deletingSelected.value = false;
   }
 }
 
@@ -1124,6 +1215,18 @@ function replaceRow(updated: ImportedInvoice) {
   border-color: var(--brand-color-pressed);
 }
 
+.rbtn--danger {
+  background: var(--color-error, #d03050);
+  border-color: var(--color-error, #d03050);
+  color: #fff;
+  font-weight: 700;
+}
+
+.rbtn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error, #d03050) 88%, #000);
+  border-color: color-mix(in srgb, var(--color-error, #d03050) 88%, #000);
+}
+
 .rbtn--ghost-active {
   background: var(--bg-elevated);
   border-color: var(--brand-color);
@@ -1417,10 +1520,14 @@ function replaceRow(updated: ImportedInvoice) {
 
 .invoice-table {
   width: 100%;
-  min-width: 980px;
+  min-width: 1020px;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
+}
+
+.invoice-table__col--select {
+  width: 46px;
 }
 
 .invoice-table__col--supplier {
@@ -1567,6 +1674,10 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 .invoice-col--actions {
+  text-align: center;
+}
+
+.invoice-col--select {
   text-align: center;
 }
 
