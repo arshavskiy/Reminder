@@ -466,6 +466,14 @@
           placeholder="מקור"
           class="toolbar__supplier"
         />
+        <n-select
+          v-model:value="importedCategoryFilter"
+          :options="importedCategoryOptions"
+          clearable
+          filterable
+          placeholder="קטגוריה"
+          class="toolbar__type"
+        />
         <n-date-picker
           v-model:value="importedDateRange"
           type="daterange"
@@ -512,6 +520,7 @@
               <span>{{ importedDocType(doc) }}</span>
               <span>{{ importedDisplayDate(doc) }}</span>
             </div>
+            <div class="gmail-doc-card__category">{{ importedProviderCategoryLabel(doc) }}</div>
             <div class="gmail-doc-card__source" :title="doc.sourceSubject">{{ doc.sourceSubject || doc.file_name }}</div>
           </div>
         </article>
@@ -530,6 +539,7 @@
                 />
               </th>
               <th>ספק</th>
+              <th>קטגוריה</th>
               <th>סטטוס</th>
               <th>תאריך</th>
               <th>תאריך ייבוא</th>
@@ -558,6 +568,9 @@
                 />
               </td>
               <td class="cell-strong">{{ importedSupplier(doc) }}</td>
+              <td>
+                <span class="gmail-doc-category">{{ importedProviderCategoryLabel(doc) }}</span>
+              </td>
               <td @click.stop>
                 <n-select
                   v-if="doc.invoice_id"
@@ -697,6 +710,7 @@ const importedSearch = ref("");
 const importedStatusFilter = ref<string | null>(null);
 const importedTypeFilter = ref<string | null>(null);
 const importedSourceFilter = ref<string | null>(null);
+const importedCategoryFilter = ref<string | null>(null);
 const importedDateRange = ref<[number, number] | null>(null);
 const importedPage = ref(1);
 const importedPageSize = ref(12);
@@ -795,12 +809,18 @@ const importedSourceOptions = computed<SelectOption[]>(() => uniqueOptions(
   importedDocuments.value.map((doc) => importedSupplier(doc)).filter((value) => value !== "ספק לא מזוהה"),
 ));
 
+const importedCategoryOptions = computed<SelectOption[]>(() => uniqueOptions(
+  importedDocuments.value.map((doc) => importedProviderCategory(doc)),
+  providerCategoryLabel,
+));
+
 const filteredImportedDocuments = computed(() => {
   const query = importedSearch.value.trim().toLowerCase();
   return importedDocuments.value.filter((doc) => {
     if (importedStatusFilter.value && doc.processing_status !== importedStatusFilter.value) return false;
     if (importedTypeFilter.value && importedDocType(doc) !== importedTypeFilter.value) return false;
     if (importedSourceFilter.value && importedSupplier(doc) !== importedSourceFilter.value) return false;
+    if (importedCategoryFilter.value && importedProviderCategory(doc) !== importedCategoryFilter.value) return false;
     if (importedDateRange.value) {
       const ts = importedDocumentTime(doc);
       const [from, to] = importedDateRange.value;
@@ -811,6 +831,7 @@ const filteredImportedDocuments = computed(() => {
       doc.file_name,
       doc.sourceSubject,
       importedSupplier(doc),
+      importedProviderCategoryLabel(doc),
       importedDocType(doc),
       importedAmount(doc),
       importedDisplayDate(doc),
@@ -833,7 +854,7 @@ const allPagedImportedSelected = computed(() => (
 const somePagedImportedSelected = computed(() => pagedImportedIds.value.some((id) => selectedImportedDocumentIds.value.has(id)));
 
 watch(
-  [importedSearch, importedStatusFilter, importedTypeFilter, importedSourceFilter, importedDateRange, importedView],
+  [importedSearch, importedStatusFilter, importedTypeFilter, importedSourceFilter, importedCategoryFilter, importedDateRange, importedView],
   () => {
     importedPage.value = 1;
   },
@@ -953,6 +974,7 @@ function selectGuidedFlow(flow: "invoice" | "inspection") {
   importedStatusFilter.value = null;
   importedTypeFilter.value = null;
   importedSourceFilter.value = null;
+  importedCategoryFilter.value = null;
   importedDateRange.value = null;
   importedPage.value = 1;
 
@@ -1312,6 +1334,69 @@ function importedField(doc: ImportedDocumentCard, keys: string[]): string | null
 
 function importedSupplier(doc: ImportedDocumentCard): string {
   return importedField(doc, ["supplier_name", "vendor_name", "counterparty", "issuer_name", "company_name", "client_company"]) ?? "ספק לא מזוהה";
+}
+
+function importedProviderCategory(doc: ImportedDocumentCard): GmailSearchProvider["category"] | null {
+  const provider = matchImportedProvider(doc);
+  return provider?.category ?? null;
+}
+
+function importedProviderCategoryLabel(doc: ImportedDocumentCard): string {
+  const category = importedProviderCategory(doc);
+  return category ? providerCategoryLabel(category) : "לא מסווג";
+}
+
+function matchImportedProvider(doc: ImportedDocumentCard): GmailSearchProvider | null {
+  const haystack = [
+    importedSupplier(doc),
+    doc.sourceSubject,
+    doc.sourceFilename,
+    doc.file_name,
+    importedField(doc, ["supplier_id", "customer_number", "account_number", "service_address"]),
+  ].join(" ").toLowerCase();
+  let best: GmailSearchProvider | null = null;
+  let bestScore = 0;
+  for (const provider of senderProviders.value) {
+    const terms = [provider.label, ...provider.terms].map((term) => term.trim()).filter((term) => term.length >= 2);
+    for (const term of terms) {
+      const needle = term.toLowerCase();
+      if (!needle || !haystack.includes(needle)) continue;
+      if (needle.length > bestScore) {
+        best = provider;
+        bestScore = needle.length;
+      }
+    }
+  }
+  return best;
+}
+
+function providerCategoryLabel(category: string): string {
+  const labels: Record<string, string> = {
+    electricity: "חשמל",
+    telecom: "תקשורת",
+    water: "מים",
+    transport: "תחבורה",
+    parking: "חניה",
+    fuel: "דלק",
+    gas: "גז",
+    tv: "טלוויזיה וסטרימינג",
+    marketplace: "קניות",
+    food: "מזון",
+    payment: "תשלומים וחשבוניות",
+    government: "ממשלה",
+    municipality: "עירייה",
+    insurance: "ביטוח",
+    finance: "פיננסים",
+    travel: "תיירות",
+    healthcare: "בריאות",
+    education: "לימודים",
+    retail: "קמעונאות",
+    nonprofit: "עמותות",
+    digital: "דיגיטל",
+    development: "פיתוח",
+    general: "כללי",
+  };
+  return labels[category] ?? category;
 }
 
 function importedDocType(doc: ImportedDocumentCard): string {
@@ -2264,6 +2349,26 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   border-top: 1px solid var(--border-color);
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+.gmail-doc-card__category,
+.gmail-doc-category {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--brand-color) 28%, var(--border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-color) 8%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.gmail-doc-card__category {
+  margin-top: 8px;
 }
 
 .gmail-doc-card__source {
