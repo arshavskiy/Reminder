@@ -3,6 +3,7 @@ import {basename} from "path";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {logger} from "../logger";
+import {resolveDocumentFilePath} from "../documents/fileResolver";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -190,7 +191,7 @@ export async function syncDocumentToDrive(documentId: string, userId: string): P
     if (!allowed) return;
 
     const doc = await col<any>("documents").findOne({_id: new ObjectId(documentId)} as any);
-    if (!doc?.file_path) return;
+    if (!doc?.file_path && !doc?.spaces_key) return;
     if (doc.drive_file_id) return;
 
     const accessToken = await resolveDriveToken(userId);
@@ -210,10 +211,11 @@ export async function syncDocumentToDrive(documentId: string, userId: string): P
         }
 
         const targetFolderId = await resolveSubFolder(accessToken, rootFolderId, userId, doc.document_kind);
+        const localPath = await resolveDocumentFilePath(doc);
 
         const driveFile = await uploadToDrive(
             accessToken,
-            doc.file_path,
+            localPath,
             doc.mime_type || "application/pdf",
             targetFolderId,
             doc.file_name,

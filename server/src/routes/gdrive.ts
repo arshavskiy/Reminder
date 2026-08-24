@@ -122,7 +122,10 @@ export function registerGdriveRoutes(app: express.Express) {
         const docs = await col<any>("documents").find({
             user_id: ctx.userId,
             drive_file_id: {$exists: false},
-            file_path: {$exists: true, $ne: null},
+            $or: [
+                {file_path: {$exists: true, $ne: null}},
+                {spaces_key: {$exists: true, $ne: null}},
+            ],
         } as any).toArray();
 
         let uploaded = 0;
