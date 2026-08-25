@@ -70,6 +70,10 @@ export function registerUserSettingsRoutes(app: express.Application) {
         monthly_report_formats: JSON.stringify(["docx", "xlsx"]),
         monthly_report_last_sent: null,
         report_config: DEFAULT_REPORT_CONFIG,
+        // Default on: cloud storage is what makes a document survive a redeploy,
+        // so opting out has to be a deliberate choice rather than the default.
+        s3_store_invoices: true,
+        s3_store_inspection_reports: true,
       };
       await col("user_settings").updateOne(
         { user_id: auth.userId },
@@ -133,6 +137,8 @@ export function registerUserSettingsRoutes(app: express.Application) {
       default_email_template_id?: string | null;
       features?: Record<string, boolean> | string | null;
       features_json?: string | null;
+      s3_store_invoices?: boolean;
+      s3_store_inspection_reports?: boolean;
     };
 
     const patch: Record<string, unknown> = {};
@@ -148,6 +154,8 @@ export function registerUserSettingsRoutes(app: express.Application) {
     if (body.report_config !== undefined) patch.report_config = normalizeReportConfig(body.report_config);
     if (body.calendar_next_tests_only !== undefined) patch.calendar_next_tests_only = Boolean(body.calendar_next_tests_only);
     if (body.default_email_template_id !== undefined) patch.default_email_template_id = body.default_email_template_id ?? null;
+    if (body.s3_store_invoices !== undefined) patch.s3_store_invoices = Boolean(body.s3_store_invoices);
+    if (body.s3_store_inspection_reports !== undefined) patch.s3_store_inspection_reports = Boolean(body.s3_store_inspection_reports);
     const rawFeatures = body.features !== undefined ? body.features : body.features_json;
     if (rawFeatures !== undefined) {
       try {

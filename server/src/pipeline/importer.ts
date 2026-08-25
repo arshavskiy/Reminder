@@ -277,7 +277,11 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   let spacesUrl: string | null = null;
   let downloadUrl: string | null = null;
   const SIGNED_URL_TTL = 7 * 24 * 3600; // 7 days
-  if (spacesEnabled()) {
+  // Resolved before the upload because it decides both whether the file goes to
+  // cloud storage and what document_kind the row is created with.
+  const intendedKind = await intendedDocumentKind(pipeline);
+  const cloudStorageAllowed = await userAllowsCloudStorage(userId, intendedKind);
+  if (spacesEnabled() && cloudStorageAllowed) {
     try {
       spacesKey = buildStorageKey(userId, pipeline?.storageKeyPrefix, fileHash, ext);
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
@@ -292,6 +296,12 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
         throw new Error(`storage_failed: ${err}`);
       }
     }
+  } else if (spacesEnabled() && !cloudStorageAllowed) {
+    logger.info("document_storage_skipped_by_setting", {
+      user_id: userId ?? null,
+      file_name: fileName,
+      document_kind: intendedKind,
+    });
   }
 
   const now = new Date();
@@ -329,7 +339,6 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   // classifyDocumentKind() overwrites this once text extraction runs; until
   // then document_kind would be null and an invoice would surface in the
   // documents list. Derived from the chosen template, never from the file path.
-  const intendedKind = await intendedDocumentKind(pipeline);
   if (intendedKind) docRecord.document_kind = intendedKind;
 
   const insertResult = await col("documents").insertOne(docRecord);
@@ -417,6 +426,30 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
  * been read. Only returns a value when the caller chose a template that pins
  * the kind — an untyped upload stays null so classification decides.
  */
+/**
+ * Whether this user wants documents of this kind kept in object storage.
+ *
+ * Opting out keeps the file on the server's disk only, which on an ephemeral
+ * container means it is lost on redeploy — so the toggles default to on and an
+ * unset value is treated as enabled. Only invoices and inspection reports are
+ * configurable; everything else always uses cloud storage.
+ */
+async function userAllowsCloudStorage(userId: string | undefined, kind: string | null): Promise<boolean> {
+  if (!userId) return true;
+  if (kind !== "invoice" && kind !== "inspection_report") return true;
+
+  const settings = await col<any>("user_settings").findOne(
+    { user_id: userId } as any,
+    { projection: { s3_store_invoices: 1, s3_store_inspection_reports: 1 } } as any,
+  );
+  if (!settings) return true;
+
+  const flag = kind === "invoice"
+    ? settings.s3_store_invoices
+    : settings.s3_store_inspection_reports;
+  return flag !== false;
+}
+
 async function intendedDocumentKind(pipeline?: PipelineOptions): Promise<string | null> {
   if (!pipeline?.templateId) return null;
   const template = await loadTemplate(pipeline.templateId).catch(() => null);

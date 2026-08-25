@@ -612,6 +612,46 @@
           </div>
 
           <div class="settings-group">
+            <h3 class="settings-group__title">שמירה בענן</h3>
+            <p class="settings-desc">
+              קבצים נשמרים באחסון ענן כדי שיישארו זמינים גם לאחר עדכון גרסה.
+              כיבוי ישמור את הקובץ על השרת בלבד, והוא עלול להימחק בעדכון הבא.
+            </p>
+            <div class="cloud-storage">
+              <div class="cloud-storage__row">
+                <div class="cloud-storage__text">
+                  <strong>חשבוניות</strong>
+                  <span class="settings-desc">שמירת קבצי חשבוניות באחסון ענן</span>
+                </div>
+                <n-switch
+                  :value="s3StoreInvoices"
+                  :loading="savingCloudStorage === 'invoices'"
+                  @update:value="(v: boolean) => saveCloudStorage('invoices', v)"
+                />
+              </div>
+              <div class="cloud-storage__row">
+                <div class="cloud-storage__text">
+                  <strong>תסקירי בדיקה</strong>
+                  <span class="settings-desc">שמירת קבצי תסקירים באחסון ענן</span>
+                </div>
+                <n-switch
+                  :value="s3StoreInspections"
+                  :loading="savingCloudStorage === 'inspections'"
+                  @update:value="(v: boolean) => saveCloudStorage('inspections', v)"
+                />
+              </div>
+            </div>
+            <n-alert
+              v-if="!s3StoreInvoices || !s3StoreInspections"
+              :bordered="false"
+              class="settings-desc--follow"
+              type="warning"
+            >
+              קבצים שלא נשמרים בענן עלולים ללכת לאיבוד בעדכון גרסה של השרת.
+            </n-alert>
+          </div>
+
+          <div class="settings-group">
             <h3 class="settings-group__title">ניהול הפעלות</h3>
             <p class="settings-desc">
               סיים את כל ההפעלות הפעילות בכל המכשירים.
@@ -780,6 +820,7 @@ import {
   NSelect,
   NSpace,
   NSpin,
+  NSwitch,
   NTag,
   useMessage,
 } from "naive-ui";
@@ -838,6 +879,30 @@ const activeSection = ref("personal");
 
 const user = computed(() => authStore.user as User | null);
 const userSettings = ref<UserSettings | null>(null);
+
+// ── Cloud storage toggles ───────────────────────────────────────────────────
+// Unset means enabled: the settings row predates these fields for existing
+// users, and the server applies the same default.
+const savingCloudStorage = ref<"invoices" | "inspections" | null>(null);
+const s3StoreInvoices = computed(() => userSettings.value?.s3_store_invoices !== false);
+const s3StoreInspections = computed(() => userSettings.value?.s3_store_inspection_reports !== false);
+
+async function saveCloudStorage(target: "invoices" | "inspections", value: boolean) {
+  savingCloudStorage.value = target;
+  const patch = target === "invoices"
+    ? { s3_store_invoices: value }
+    : { s3_store_inspection_reports: value };
+  try {
+    await userSettingsStore.save(patch as Partial<UserSettings>);
+    // Mirror locally so the switch reflects the saved state without a reload.
+    if (userSettings.value) Object.assign(userSettings.value, patch);
+    message.success(value ? "שמירה בענן הופעלה" : "שמירה בענן כובתה");
+  } catch {
+    message.error("שגיאה בשמירת ההגדרה");
+  } finally {
+    savingCloudStorage.value = null;
+  }
+}
 
 // ── Sidebar nav ──────────────────────────────────────────────────────────────
 const navItems = computed(() => {
@@ -1855,6 +1920,31 @@ watch(activeSection, (section) => {
   padding: 20px 24px;
   margin-bottom: 16px;
 }
+.cloud-storage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.cloud-storage__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-card);
+}
+
+.cloud-storage__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .settings-group__title {
   margin: 0 0 16px;
   font-size: 15px;

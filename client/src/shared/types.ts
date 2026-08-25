@@ -119,6 +119,10 @@ export interface UserSettings extends PipelineFlags {
     client_fields?: string[];
   } | null;
   calendar_next_tests_only?: boolean;
+  /** Keep invoices in object storage. Unset is treated as enabled. */
+  s3_store_invoices?: boolean;
+  /** Keep inspection reports in object storage. Unset is treated as enabled. */
+  s3_store_inspection_reports?: boolean;
   features?: Record<string, boolean> | null;
 }
 
