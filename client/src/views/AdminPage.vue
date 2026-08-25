@@ -714,6 +714,210 @@
       </section>
 
       <!-- ── System Health ── -->
+      <!-- ── Import Queue ── -->
+      <section v-if="activeSection === 'import_queue'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="importQueue">
+          <n-alert
+            v-if="importQueue.worker.stalled"
+            type="error"
+            title="Worker appears stalled"
+            style="margin-bottom:14px"
+          >
+            {{ importQueue.jobs.claimable_now }} job(s) are claimable but nothing has completed in
+            {{ importQueue.worker.minutes_since_last_completion }} minutes.
+          </n-alert>
+          <n-alert
+            v-if="importQueue.documents.stuck_without_job > 0"
+            type="warning"
+            title="Documents with no processing job"
+            style="margin-bottom:14px"
+          >
+            {{ importQueue.documents.stuck_without_job }} document(s) are queued but have no job row,
+            so nothing will process them.
+          </n-alert>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">
+            <AdminStatCard title="Queued" :primary="importQueue.jobs.by_status.queued ?? 0" primary-label="Waiting" />
+            <AdminStatCard title="Running" :primary="importQueue.jobs.by_status.running ?? 0" primary-label="In flight" />
+            <AdminStatCard title="Retry Wait" :primary="importQueue.jobs.by_status.retry_wait ?? 0" primary-label="Backing off" />
+            <AdminStatCard title="Completed" :primary="importQueue.jobs.by_status.completed ?? 0" primary-label="Done" />
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">Queue Health</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:8px;margin-top:10px;font-size:13px">
+              <div><span style="color:var(--text-secondary)">Claimable now:</span> {{ importQueue.jobs.claimable_now }}</div>
+              <div><span style="color:var(--text-secondary)">Stale locks:</span> {{ importQueue.jobs.stale_running }}</div>
+              <div><span style="color:var(--text-secondary)">Docs without job:</span> {{ importQueue.documents.stuck_without_job }}</div>
+              <div><span style="color:var(--text-secondary)">Jobs without doc:</span> {{ importQueue.integrity.jobs_without_document }}</div>
+              <div>
+                <span style="color:var(--text-secondary)">Last completion:</span>
+                {{ importQueue.worker.minutes_since_last_completion != null
+                  ? importQueue.worker.minutes_since_last_completion + "m ago"
+                  : "—" }}
+              </div>
+            </div>
+          </div>
+
+          <div v-if="importQueue.failure_reasons.length" class="monitor-block">
+            <div class="monitor-block__title">Failure Reasons</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+              <n-tag v-for="r in importQueue.failure_reasons" :key="r.reason" type="warning" size="small">
+                {{ r.reason }} · {{ r.count }}
+              </n-tag>
+            </div>
+          </div>
+
+          <div v-if="importQueue.recent_failures.length" class="monitor-block">
+            <div class="monitor-block__title">Recent Failures &amp; Retries</div>
+            <n-data-table
+              :columns="queueFailureColumns"
+              :data="importQueue.recent_failures"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+        </template>
+      </section>
+
+      <!-- ── Invoices ── -->
+      <section v-if="activeSection === 'invoices'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="invoiceMonitor">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">
+            <AdminStatCard title="Invoices" :primary="invoiceMonitor.totals.invoices" primary-label="Saved rows" />
+            <AdminStatCard title="With Amount" :primary="invoiceMonitor.totals.with_amount" primary-label="Have a total" />
+            <AdminStatCard
+              title="Save Rate"
+              :primary="invoiceMonitor.totals.save_rate != null ? Math.round(invoiceMonitor.totals.save_rate * 100) + '%' : '—'"
+              primary-label="Processed → saved"
+              format="custom"
+            />
+            <AdminStatCard title="Not Saved" :primary="invoiceMonitor.processed_not_saved.reduce((s: number, r: any) => s + r.count, 0)" primary-label="Processed, skipped" />
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">By Document Subtype</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+              <n-tag v-for="r in invoiceMonitor.by_subtype" :key="r.subtype" size="small">
+                {{ r.subtype }} · {{ r.count }}
+              </n-tag>
+            </div>
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">Cash Flow</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+              <n-tag v-for="(n, k) in invoiceMonitor.by_cash_flow" :key="k" size="small" :type="k === 'income' ? 'success' : 'default'">
+                {{ k }} · {{ n }}
+              </n-tag>
+            </div>
+          </div>
+
+          <div v-if="invoiceMonitor.known_extractor_providers.length" class="monitor-block">
+            <div class="monitor-block__title">Matched Vendors (deterministic extractors)</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+              <n-tag v-for="r in invoiceMonitor.known_extractor_providers" :key="r.provider" size="small" type="info">
+                {{ r.provider }} · {{ r.count }}
+              </n-tag>
+            </div>
+          </div>
+
+          <div v-if="invoiceMonitor.processed_not_saved.length" class="monitor-block">
+            <div class="monitor-block__title">Processed But Not Saved (by classified kind)</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+              <n-tag v-for="r in invoiceMonitor.processed_not_saved" :key="r.document_kind" size="small" type="warning">
+                {{ r.document_kind }} · {{ r.count }}
+              </n-tag>
+            </div>
+          </div>
+
+          <div v-if="invoiceMonitor.missing_required_fields.length" class="monitor-block">
+            <div class="monitor-block__title">Missing Required Fields</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+              <n-tag v-for="r in invoiceMonitor.missing_required_fields" :key="r.field" size="small" type="error">
+                {{ r.field }} · {{ r.count }}
+              </n-tag>
+            </div>
+          </div>
+        </template>
+      </section>
+
+      <!-- ── Storage & Drive ── -->
+      <section v-if="activeSection === 'storage_drive'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="storageDrive">
+          <n-alert
+            v-if="!storageDrive.object_storage.configured"
+            type="warning"
+            title="Object storage is not configured"
+            style="margin-bottom:14px"
+          >
+            Local files are the only copy in this environment.
+          </n-alert>
+          <n-alert
+            v-if="storageDrive.object_storage.stale_cached_urls > 0"
+            type="warning"
+            title="Stale cached URLs"
+            style="margin-bottom:14px"
+          >
+            {{ storageDrive.object_storage.stale_cached_urls }} document(s) hold a signed URL pointing at a
+            pre-migration key.
+          </n-alert>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">
+            <AdminStatCard title="With Storage Key" :primary="storageDrive.object_storage.with_spaces_key" primary-label="In object storage" />
+            <AdminStatCard title="Missing Key" :primary="storageDrive.object_storage.without_spaces_key" primary-label="No key" />
+            <AdminStatCard title="Legacy Layout" :primary="storageDrive.object_storage.legacy_layout_keys" primary-label="Pre-migration keys" />
+            <AdminStatCard title="Drive Synced" :primary="storageDrive.drive.synced" primary-label="Uploaded to Drive" />
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">Object Storage</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:8px;margin-top:10px;font-size:13px">
+              <div><span style="color:var(--text-secondary)">Configured:</span> {{ storageDrive.object_storage.configured ? "yes" : "no" }}</div>
+              <div><span style="color:var(--text-secondary)">Documents:</span> {{ storageDrive.object_storage.documents_total }}</div>
+              <div><span style="color:var(--text-secondary)">Flagged missing:</span> {{ storageDrive.object_storage.flagged_file_missing }}</div>
+              <div><span style="color:var(--text-secondary)">Stale URLs:</span> {{ storageDrive.object_storage.stale_cached_urls }}</div>
+            </div>
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">Import Sources</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+              <n-tag v-for="(n, k) in storageDrive.import_sources" :key="k" size="small">
+                {{ k }} · {{ n }}
+              </n-tag>
+            </div>
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">Google Drive</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:8px;margin-top:10px;font-size:13px">
+              <div><span style="color:var(--text-secondary)">Synced:</span> {{ storageDrive.drive.synced }} / {{ storageDrive.drive.documents_total }}</div>
+              <div><span style="color:var(--text-secondary)">Not synced:</span> {{ storageDrive.drive.not_synced }}</div>
+            </div>
+            <div v-if="Object.keys(storageDrive.drive.jobs_by_status).length" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+              <n-tag v-for="(n, k) in storageDrive.drive.jobs_by_status" :key="k" size="small">
+                {{ k }} · {{ n }}
+              </n-tag>
+            </div>
+            <n-data-table
+              v-if="storageDrive.drive.recent_jobs.length"
+              :columns="driveJobColumns"
+              :data="storageDrive.drive.recent_jobs"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+        </template>
+      </section>
+
       <section v-if="activeSection === 'system_health'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="systemHealth">
@@ -1076,6 +1280,7 @@ import {computed, h, onMounted, onUnmounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import type {DataTableColumns} from "naive-ui";
 import {
+  NAlert,
   NButton,
   NDataTable,
   NIcon,
@@ -1106,8 +1311,10 @@ import {
   PulseOutline,
   NotificationsOutline,
   PeopleOutline,
+  ReceiptOutline,
   RefreshOutline,
   SearchOutline,
+  ServerOutline,
   SettingsOutline,
   TimerOutline,
   TrashOutline,
@@ -1167,8 +1374,11 @@ const adminSections = [
   { key: "scheduler",          label: "Scheduler",              icon: TimerOutline },
   { key: "monthly",            label: "Monthly Reports",        icon: CalendarOutline },
   { key: "bad_emails",         label: "Bad Emails",             icon: MailOutline },
+  { key: "import_queue",      label: "Import Queue",           icon: TimerOutline },
+  { key: "invoices",          label: "Invoices",               icon: ReceiptOutline },
   { key: "system_health",     label: "System Health",          icon: PulseOutline },
   { key: "s3_storage",        label: "S3 Storage",             icon: CloudUploadOutline },
+  { key: "storage_drive",     label: "Storage & Drive",        icon: ServerOutline },
   { key: "settings",           label: "Settings",               icon: SettingsOutline },
 ];
 const sidebarItems = adminSections.filter((item) => item.key !== "settings");
@@ -1748,6 +1958,9 @@ const badEmailsData = ref<any>(null);
 
 // ── System health ─────────────────────────────────────────────────────────
 const systemHealth = ref<any>(null);
+const importQueue = ref<any>(null);
+const invoiceMonitor = ref<any>(null);
+const storageDrive = ref<any>(null);
 
 const collectionStatsColumns: DataTableColumns<any> = [
   { title: "Collection", key: "collection", minWidth: 180 },
@@ -1757,6 +1970,46 @@ const collectionStatsColumns: DataTableColumns<any> = [
       row.count >= 0 ? row.count.toLocaleString() : "—"),
     sorter: (a: any, b: any) => a.count - b.count,
   },
+];
+
+const queueFailureColumns: DataTableColumns<any> = [
+  {
+    title: "Document", key: "document_id", minWidth: 200,
+    render: (row) => h("span", { style: "font-family:var(--font-mono,monospace);font-size:12px" },
+      String(row.document_id ?? "—")),
+  },
+  {
+    title: "Status", key: "status", width: 110,
+    render: (row) => h(NTag, { size: "small", type: row.status === "failed" ? "error" : "warning" },
+      { default: () => String(row.status ?? "—") }),
+  },
+  {
+    title: "Attempts", key: "attempts", width: 100, align: "right",
+    render: (row) => h("span", { style: "font-size:13px" },
+      `${row.attempts ?? 0}/${row.max_attempts ?? 3}`),
+  },
+  { title: "Reason", key: "error_code", minWidth: 150 },
+  {
+    title: "Message", key: "error_message", minWidth: 260,
+    render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" },
+      String(row.error_message ?? "").slice(0, 160) || "—"),
+  },
+];
+
+const driveJobColumns: DataTableColumns<any> = [
+  {
+    title: "User", key: "user_id", minWidth: 200,
+    render: (row) => h("span", { style: "font-family:var(--font-mono,monospace);font-size:12px" },
+      String(row.user_id ?? "—")),
+  },
+  {
+    title: "Status", key: "status", width: 120,
+    render: (row) => h(NTag, { size: "small", type: row.status === "failed" ? "error" : "success" },
+      { default: () => String(row.status ?? "—") }),
+  },
+  { title: "Uploaded", key: "uploaded", width: 100, align: "right" },
+  { title: "Failed", key: "failed", width: 90, align: "right" },
+  { title: "Skipped", key: "skipped", width: 100, align: "right" },
 ];
 
 // ── S3 Storage Browser ──────────────────────────────────────────────────
@@ -2088,6 +2341,12 @@ async function loadSectionData(key: string) {
       monthlyMonitor.value = await api.admin.monitorMonthlyReports();
     } else if (key === "bad_emails") {
       badEmailsData.value = await api.admin.monitorBadEmails();
+    } else if (key === "import_queue") {
+      importQueue.value = await api.admin.monitorImportQueue();
+    } else if (key === "invoices") {
+      invoiceMonitor.value = await api.admin.monitorInvoices();
+    } else if (key === "storage_drive") {
+      storageDrive.value = await api.admin.monitorStorageDrive();
     } else if (key === "system_health") {
       systemHealth.value = await api.admin.monitorSystemHealth();
     } else if (key === "s3_storage") {

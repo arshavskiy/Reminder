@@ -1352,6 +1352,347 @@ export function registerAdminRoutes(app: express.Application) {
 
   // ── System health ────────────────────────────────────────────────────────
   // GET /api/admin/monitor/system-health
+  // ── Import queue monitor ────────────────────────────────────────────────
+  // Surfaces the document_processing_jobs pipeline: what is waiting, what is
+  // wedged, and whether the worker is actually consuming. Read-only.
+  app.get("/api/admin/monitor/import-queue", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const now = Date.now();
+      const staleLockCutoff = new Date(now - 10 * 60 * 1000);
+      const claimableCutoff = new Date(now);
+
+      const [
+        jobsByStatus,
+        documentsByStatus,
+        claimable,
+        staleRunning,
+        orphanedDocs,
+        jobsWithoutDocument,
+        failureReasons,
+        recentFailures,
+        oldestQueued,
+        lastCompleted,
+      ] = await Promise.all([
+        col("document_processing_jobs").aggregate([
+          { $group: { _id: "$status", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+        ]).toArray(),
+
+        col("documents").aggregate([
+          { $group: { _id: "$processing_status", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+        ]).toArray(),
+
+        // Ready to be picked up right now. If this stays high while nothing
+        // completes, the worker is not running.
+        col("document_processing_jobs").countDocuments({
+          status: "queued",
+          next_run_at: { $lte: claimableCutoff },
+        } as any),
+
+        // Claimed but never released — a worker died mid-job.
+        col("document_processing_jobs").countDocuments({
+          status: "running",
+          locked_at: { $lt: staleLockCutoff },
+        } as any),
+
+        // Documents waiting forever because no job row exists for them. This is
+        // what the failed-upload path produced.
+        col("documents").aggregate([
+          { $match: { processing_status: { $in: ["queued", "processing"] } } },
+          { $addFields: { id_string: { $toString: "$_id" } } },
+          {
+            $lookup: {
+              from: "document_processing_jobs",
+              localField: "id_string",
+              foreignField: "document_id",
+              as: "jobs",
+            },
+          },
+          { $match: { jobs: { $size: 0 } } },
+          { $count: "n" },
+        ]).toArray(),
+
+        col("document_processing_jobs").aggregate([
+          { $addFields: { doc_oid: { $toObjectId: "$document_id" } } },
+          {
+            $lookup: {
+              from: "documents",
+              localField: "doc_oid",
+              foreignField: "_id",
+              as: "doc",
+            },
+          },
+          { $match: { doc: { $size: 0 } } },
+          { $count: "n" },
+        ]).toArray().catch(() => []),
+
+        col("document_processing_jobs").aggregate([
+          { $match: { error_code: { $nin: [null, ""] } } },
+          { $group: { _id: "$error_code", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+        ]).toArray(),
+
+        col("document_processing_jobs").find(
+          { status: { $in: ["failed", "retry_wait"] } } as any,
+          { projection: { document_id: 1, user_id: 1, status: 1, attempts: 1, max_attempts: 1, error_code: 1, error_message: 1, next_run_at: 1, updated_at: 1 } } as any,
+        ).sort({ updated_at: -1 }).limit(50).toArray(),
+
+        col("document_processing_jobs").find(
+          { status: "queued" } as any,
+          { projection: { document_id: 1, created_at: 1, next_run_at: 1, attempts: 1 } } as any,
+        ).sort({ created_at: 1 }).limit(1).toArray(),
+
+        col("document_processing_jobs").find(
+          { status: "completed" } as any,
+          { projection: { document_id: 1, completed_at: 1 } } as any,
+        ).sort({ completed_at: -1 }).limit(1).toArray(),
+      ]);
+
+      const statusMap = Object.fromEntries(jobsByStatus.map((r: any) => [String(r._id ?? "unknown"), r.n]));
+      const completedAt = (lastCompleted[0] as any)?.completed_at ?? null;
+      const minutesSinceCompletion = completedAt
+        ? Math.round((now - new Date(completedAt).getTime()) / 60000)
+        : null;
+
+      // The worker is only suspect when there is work it could take but has
+      // not finished anything recently.
+      const workerStalled = claimable > 0
+        && minutesSinceCompletion !== null
+        && minutesSinceCompletion > 15;
+
+      res.json({
+        jobs: {
+          by_status: statusMap,
+          total: Object.values(statusMap).reduce((sum: number, n: any) => sum + Number(n), 0),
+          claimable_now: claimable,
+          stale_running: staleRunning,
+        },
+        documents: {
+          by_status: Object.fromEntries(documentsByStatus.map((r: any) => [String(r._id ?? "unknown"), r.n])),
+          stuck_without_job: (orphanedDocs[0] as any)?.n ?? 0,
+        },
+        integrity: {
+          jobs_without_document: (jobsWithoutDocument[0] as any)?.n ?? 0,
+        },
+        worker: {
+          last_completed_at: completedAt,
+          minutes_since_last_completion: minutesSinceCompletion,
+          stalled: workerStalled,
+        },
+        oldest_queued: oldestQueued[0] ?? null,
+        failure_reasons: failureReasons.map((r: any) => ({ reason: String(r._id), count: r.n })),
+        recent_failures: recentFailures,
+      });
+    } catch (err: any) {
+      console.error("import-queue monitor error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // ── Invoice pipeline monitor ────────────────────────────────────────────
+  // How well invoice-template documents convert into invoice rows, and where
+  // the ones that do not are being lost. Read-only.
+  app.get("/api/admin/monitor/invoices", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const [
+        totals,
+        byCategory,
+        byCashFlow,
+        byValidation,
+        knownExtractors,
+        rejectionReasons,
+        processedNotSaved,
+        missingFields,
+      ] = await Promise.all([
+        col("invoices").aggregate([
+          {
+            $group: {
+              _id: null,
+              total: { $sum: 1 },
+              with_amount: { $sum: { $cond: [{ $gt: ["$amount", 0] }, 1, 0] } },
+              possible_not_invoice: { $sum: { $cond: [{ $eq: ["$possible_not_invoice", true] }, 1, 0] } },
+            },
+          },
+        ]).toArray(),
+
+        // document_subtype is the stored value; the category shown in the UI is
+        // derived from it at read time, so report the raw subtype here.
+        col("invoices").aggregate([
+          { $group: { _id: "$document_subtype", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+          { $limit: 25 },
+        ]).toArray(),
+
+        col("invoices").aggregate([
+          { $group: { _id: "$cash_flow", n: { $sum: 1 } } },
+        ]).toArray(),
+
+        col("invoices").aggregate([
+          { $group: { _id: "$invoice_validation_status", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+        ]).toArray(),
+
+        // Documents whose fields came from a deterministic vendor extractor
+        // rather than the AI path.
+        col("documents").aggregate([
+          { $match: { gmail_provider_id: { $nin: [null, ""] } } },
+          { $group: { _id: "$gmail_provider_id", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+          { $limit: 30 },
+        ]).toArray(),
+
+        col("documents").aggregate([
+          { $match: { invoice_rejected: true } },
+          { $group: { _id: "$invoice_rejection_reason", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+        ]).toArray(),
+
+        // Finished under an invoice storage prefix but never produced a row.
+        col("documents").aggregate([
+          {
+            $match: {
+              processing_status: "done",
+              spaces_key: { $regex: "/invoices/" },
+              invoice_saved: { $ne: true },
+            },
+          },
+          { $group: { _id: "$document_kind", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+        ]).toArray(),
+
+        col("documents").aggregate([
+          { $match: { missing_required_fields: { $exists: true, $ne: [] } } },
+          { $unwind: "$missing_required_fields" },
+          { $group: { _id: "$missing_required_fields", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+        ]).toArray(),
+      ]);
+
+      const summary = (totals[0] as any) ?? { total: 0, with_amount: 0, possible_not_invoice: 0 };
+      const notSaved = processedNotSaved.reduce((sum: number, r: any) => sum + r.n, 0);
+      const processedTotal = summary.total + notSaved;
+
+      res.json({
+        totals: {
+          invoices: summary.total,
+          with_amount: summary.with_amount,
+          possible_not_invoice: summary.possible_not_invoice,
+          processed_invoice_documents: processedTotal,
+          save_rate: processedTotal ? Number((summary.total / processedTotal).toFixed(3)) : null,
+        },
+        by_subtype: byCategory.map((r: any) => ({ subtype: r._id ?? "(none)", count: r.n })),
+        by_cash_flow: Object.fromEntries(byCashFlow.map((r: any) => [String(r._id ?? "unset"), r.n])),
+        by_validation_status: byValidation.map((r: any) => ({ status: r._id ?? "(none)", count: r.n })),
+        known_extractor_providers: knownExtractors.map((r: any) => ({ provider: r._id, count: r.n })),
+        rejection_reasons: rejectionReasons.map((r: any) => ({ reason: r._id ?? "(none)", count: r.n })),
+        processed_not_saved: processedNotSaved.map((r: any) => ({ document_kind: r._id ?? "(none)", count: r.n })),
+        missing_required_fields: missingFields.map((r: any) => ({ field: r._id, count: r.n })),
+      });
+    } catch (err: any) {
+      console.error("invoice monitor error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // ── Storage + Drive monitor ─────────────────────────────────────────────
+  // Object-storage key-layout health and Google Drive export state. Read-only.
+  app.get("/api/admin/monitor/storage-drive", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const { spacesEnabled } = await import("../storage/spaces.js");
+
+      const [
+        keyCoverage,
+        legacyKeys,
+        staleUrls,
+        driveJobs,
+        driveCoverage,
+        driveFailures,
+        importSources,
+      ] = await Promise.all([
+        col("documents").aggregate([
+          {
+            $group: {
+              _id: null,
+              total: { $sum: 1 },
+              with_key: { $sum: { $cond: [{ $ifNull: ["$spaces_key", false] }, 1, 0] } },
+              missing_flagged: { $sum: { $cond: [{ $eq: ["$file_missing", true] }, 1, 0] } },
+            },
+          },
+        ]).toArray(),
+
+        // Objects still on the pre-migration layout, which is not tenant-first.
+        col("documents").countDocuments({
+          spaces_key: { $regex: "^gmail/invoices/|^documents/" },
+        } as any),
+
+        // Cached signed URLs pointing at a key that no longer exists.
+        col("documents").countDocuments({
+          $or: [
+            { download_url: { $regex: "gmail/invoices/" } },
+            { spaces_url: { $regex: "gmail/invoices/" } },
+          ],
+        } as any),
+
+        col("drive_export_jobs").aggregate([
+          { $group: { _id: "$status", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+        ]).toArray().catch(() => []),
+
+        col("documents").aggregate([
+          {
+            $group: {
+              _id: null,
+              total: { $sum: 1 },
+              synced: { $sum: { $cond: [{ $ifNull: ["$drive_file_id", false] }, 1, 0] } },
+            },
+          },
+        ]).toArray(),
+
+        col("drive_export_jobs").find(
+          { status: { $in: ["failed", "completed"] } } as any,
+          { projection: { user_id: 1, status: 1, uploaded: 1, failed: 1, skipped: 1, processed: 1, updated_at: 1 } } as any,
+        ).sort({ updated_at: -1 }).limit(20).toArray().catch(() => []),
+
+        col("documents").aggregate([
+          { $group: { _id: "$import_source", n: { $sum: 1 } } },
+          { $sort: { n: -1 } },
+        ]).toArray(),
+      ]);
+
+      const coverage = (keyCoverage[0] as any) ?? { total: 0, with_key: 0, missing_flagged: 0 };
+      const drive = (driveCoverage[0] as any) ?? { total: 0, synced: 0 };
+
+      res.json({
+        object_storage: {
+          configured: spacesEnabled(),
+          documents_total: coverage.total,
+          with_spaces_key: coverage.with_key,
+          without_spaces_key: coverage.total - coverage.with_key,
+          flagged_file_missing: coverage.missing_flagged,
+          legacy_layout_keys: legacyKeys,
+          stale_cached_urls: staleUrls,
+        },
+        drive: {
+          documents_total: drive.total,
+          synced: drive.synced,
+          not_synced: drive.total - drive.synced,
+          jobs_by_status: Object.fromEntries(driveJobs.map((r: any) => [String(r._id ?? "unknown"), r.n])),
+          recent_jobs: driveFailures,
+        },
+        import_sources: Object.fromEntries(
+          importSources.map((r: any) => [String(r._id ?? "(unset)"), r.n]),
+        ),
+      });
+    } catch (err: any) {
+      console.error("storage-drive monitor error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
   app.get("/api/admin/monitor/system-health", async (req, res) => {
     if (!await adminAuth(req, res)) return;
     try {
@@ -1363,6 +1704,8 @@ export function registerAdminRoutes(app: express.Application) {
         "reminders", "equipment", "email_log", "extractions",
         "print_templates", "print_template_drafts", "email_templates",
         "doc_templates", "timeline_events", "tasks",
+        "invoices", "document_processing_jobs", "gmail_imports",
+        "gmail_import_jobs", "drive_export_jobs",
       ];
 
       const countPromises = collectionNames.map(async (name) => {
