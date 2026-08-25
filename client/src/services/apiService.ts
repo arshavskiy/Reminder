@@ -282,7 +282,7 @@ export interface DriveExportResult {
 export interface DriveExportJobResult {
   documentId: string;
   fileName: string;
-  status: "uploaded" | "failed";
+  status: "uploaded" | "failed" | "skipped";
   error?: string;
 }
 

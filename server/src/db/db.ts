@@ -59,6 +59,7 @@ const ALL_COLLECTIONS = [
   "gmail_import_jobs",
   "gmail_search_providers",
   "document_processing_jobs",
+  "drive_export_jobs",
 ];
 
 async function ensureCollections(db: Db): Promise<void> {

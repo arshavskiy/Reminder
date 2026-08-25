@@ -905,6 +905,9 @@
                 {{ k }} · {{ n }}
               </n-tag>
             </div>
+            <div v-else style="margin-top:10px;font-size:13px;color:var(--text-secondary)">
+              No bulk export jobs have run. Documents above were synced individually after processing.
+            </div>
             <n-data-table
               v-if="storageDrive.drive.recent_jobs.length"
               :columns="driveJobColumns"
@@ -989,6 +992,14 @@
                 class="s3-browser__status"
                 :disabled="!s3Files.length"
               />
+              <n-select
+                v-model:value="s3AreaFilter"
+                :options="s3AreaOptions"
+                placeholder="Area"
+                clearable
+                class="s3-browser__status"
+                :disabled="!s3Files.length"
+              />
               <button
                 class="btn btn--ghost"
                 type="button"
@@ -1017,6 +1028,10 @@
                 <span class="s3-stat__num">{{ s3Stats.orphan }}</span>
                 <span class="s3-stat__label">Orphan</span>
               </div>
+              <div class="s3-stat" :class="{ 's3-stat--warn': s3Stats.legacy > 0 }">
+                <span class="s3-stat__num">{{ s3Stats.legacy }}</span>
+                <span class="s3-stat__label">Legacy key</span>
+              </div>
               <div class="s3-stat">
                 <span class="s3-stat__num">{{ filteredS3Files.length }}</span>
                 <span class="s3-stat__label">Showing</span>
@@ -1032,6 +1047,7 @@
                     <th class="s3-col-size">Size</th>
                     <th class="s3-col-date">Modified</th>
                     <th class="s3-col-db">DB</th>
+                    <th class="s3-col-status">Area</th>
                     <th class="s3-col-status">Status</th>
                     <th class="s3-col-key">S3 Key</th>
                     <th class="s3-col-actions">Actions</th>
@@ -1050,6 +1066,11 @@
                     <td class="s3-col-db">
                       <span class="s3-badge" :class="row.in_db ? 's3-badge--ok' : 's3-badge--err'">
                         {{ row.in_db ? "Linked" : "Orphan" }}
+                      </span>
+                    </td>
+                    <td class="s3-col-status">
+                      <span class="s3-badge" :class="row.layout === 'legacy' ? 's3-badge--err' : 's3-badge--ok'">
+                        {{ row.area || "—" }}
                       </span>
                     </td>
                     <td class="s3-col-status">
@@ -2018,6 +2039,7 @@ const s3BrowseUserId = ref<string | null>(null);
 const s3Truncated = ref(false);
 const s3FileSearch = ref("");
 const s3StatusFilter = ref<string | null>(null);
+const s3AreaFilter = ref<string | null>(null);
 const s3Page = ref(1);
 const s3PageSize = 25;
 
@@ -2039,7 +2061,13 @@ const filteredS3Files = computed(() => {
   if (status === "in_db") result = result.filter((f) => f.in_db);
   else if (status === "not_in_db") result = result.filter((f) => !f.in_db);
   else if (status) result = result.filter((f) => f.status === status);
+  if (s3AreaFilter.value) result = result.filter((f) => f.area === s3AreaFilter.value);
   return result;
+});
+
+const s3AreaOptions = computed(() => {
+  const areas = [...new Set(s3Files.value.map((f) => f.area).filter(Boolean))].sort();
+  return [{ label: "All areas", value: null }, ...areas.map((a) => ({ label: a, value: a }))];
 });
 
 const s3Stats = computed(() => {
@@ -2049,6 +2077,7 @@ const s3Stats = computed(() => {
     bytes: files.reduce((sum, f) => sum + (f.size ?? 0), 0),
     inDb: files.filter((f) => f.in_db).length,
     orphan: files.filter((f) => !f.in_db).length,
+    legacy: files.filter((f) => f.layout === "legacy").length,
   };
 });
 
@@ -2076,6 +2105,9 @@ async function loadS3Files() {
     s3Files.value = res.files;
     s3Truncated.value = res.truncated;
     s3Page.value = 1;
+    // The previous user's areas do not apply to this listing; a stale value
+    // would filter every row away.
+    s3AreaFilter.value = null;
   } catch {
     message.error("Error loading S3 files");
     s3Files.value = [];

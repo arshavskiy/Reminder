@@ -1911,9 +1911,40 @@ export function registerAdminRoutes(app: express.Application) {
       }
 
       const userId = req.query.user_id as string | undefined;
-      const prefix = userId ? `documents/${userId}/` : (req.query.prefix as string ?? "documents/");
+      const explicitPrefix = req.query.prefix as string | undefined;
 
-      const { files, truncated } = await listSpacesFiles(prefix, 500);
+      // Keys are tenant-first ({user_id}/documents/…, {user_id}/invoices/…),
+      // but objects written before the migration still live under the legacy
+      // documents/{user_id}/ prefix. Browsing a user has to cover both, or the
+      // listing silently omits nearly everything.
+      let files: Awaited<ReturnType<typeof listSpacesFiles>>["files"] = [];
+      let truncated = false;
+      let prefix: string;
+
+      if (explicitPrefix) {
+        prefix = explicitPrefix;
+        const result = await listSpacesFiles(prefix, 500);
+        files = result.files;
+        truncated = result.truncated;
+      } else if (userId) {
+        prefix = `${userId}/`;
+        const [current, legacy] = await Promise.all([
+          listSpacesFiles(`${userId}/`, 500),
+          listSpacesFiles(`documents/${userId}/`, 500),
+        ]);
+        const seen = new Set<string>();
+        files = [...current.files, ...legacy.files].filter((f) => {
+          if (seen.has(f.key)) return false;
+          seen.add(f.key);
+          return true;
+        });
+        truncated = current.truncated || legacy.truncated;
+      } else {
+        prefix = "";
+        const result = await listSpacesFiles("", 500);
+        files = result.files;
+        truncated = result.truncated;
+      }
 
       // Cross-reference with DB to get filenames and doc IDs
       const keys = files.map((f) => f.key);
@@ -1931,6 +1962,7 @@ export function registerAdminRoutes(app: express.Application) {
 
       const enriched = files.map((f) => {
         const doc = docByKey[f.key];
+        const legacy = /^gmail\/invoices\//.test(f.key) || /^documents\//.test(f.key);
         return {
           key: f.key,
           size: f.size,
@@ -1940,10 +1972,20 @@ export function registerAdminRoutes(app: express.Application) {
           user_id: doc?.user_id ?? null,
           status: doc?.processing_status ?? null,
           in_db: !!doc,
+          layout: legacy ? "legacy" : "tenant",
+          area: storageAreaFromKey(f.key),
         };
       });
 
-      res.json({ files: enriched, truncated, prefix });
+      res.json({
+        files: enriched,
+        truncated,
+        prefix,
+        layout_counts: {
+          tenant: enriched.filter((f) => f.layout === "tenant").length,
+          legacy: enriched.filter((f) => f.layout === "legacy").length,
+        },
+      });
     } catch (err: any) {
       console.error("storage-browse error:", err);
       res.status(500).json({ error: err.message ?? "Failed" });
@@ -1997,4 +2039,19 @@ export function registerAdminRoutes(app: express.Application) {
       res.status(500).json({ error: err.message ?? "Failed" });
     }
   });
+}
+
+/**
+ * Human-readable area for a storage key, across both layouts:
+ *   {user_id}/invoices/gmail/…   -> invoices/gmail   (current)
+ *   gmail/invoices/telecom/hot/… -> invoices/gmail   (legacy)
+ *   {user_id}/documents/…        -> documents
+ */
+function storageAreaFromKey(key: string): string {
+  if (/^gmail\/invoices\//.test(key)) return "invoices/gmail";
+  if (/^documents\//.test(key)) return "documents";
+  const parts = key.split("/");
+  if (parts.length >= 3 && parts[1] === "invoices") return `invoices/${parts[2]}`;
+  if (parts.length >= 2 && parts[1]) return parts[1];
+  return "other";
 }
