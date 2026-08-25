@@ -504,6 +504,7 @@ export function registerDocumentRoutes(app: express.Application) {
         logger.warn("document_thumbnail_local_delete_failed", { document_id: req.params.id, thumbnail_path: doc.thumbnail_path, error: err });
       }
     }
+    await releaseDeletedDocumentSideEffects(doc, userId, req.params.id);
 
     res.json({ ok: true });
   });
@@ -571,6 +572,7 @@ export function registerDocumentRoutes(app: express.Application) {
           logger.warn("document_thumbnail_local_delete_failed", { thumbnail_path: d.thumbnail_path, error: err });
         }
       }
+      await releaseDeletedDocumentSideEffects(d, userId, String(d._id));
     }
 
     logger.warn("corrupt_documents_deleted", { user_id: userId, deleted_count: ids.length });
@@ -1141,6 +1143,53 @@ function idFilter(id: string): Record<string, any> {
     return { _id: new ObjectId(id) };
   } catch {
     return { _id: id };
+  }
+}
+
+/**
+ * Cleans up the copies of a deleted document that live outside Mongo and S3:
+ * the Google Drive file and the managed local copy.
+ *
+ * Both were previously left behind, so a user who deleted a document still had
+ * it in their Drive folder and the local cache kept growing. Failures are
+ * logged, never thrown: the document row is already gone by this point and the
+ * delete must not report an error the caller cannot act on.
+ */
+async function releaseDeletedDocumentSideEffects(
+  doc: any,
+  userId: string,
+  documentId: string,
+): Promise<void> {
+  if (doc.drive_file_id) {
+    try {
+      const { resolveDriveToken, trashDriveFile } = await import("../storage/gdrive.js");
+      const accessToken = await resolveDriveToken(userId);
+      if (accessToken) {
+        const trashed = await trashDriveFile(accessToken, String(doc.drive_file_id));
+        logger.info("document_drive_delete", {
+          document_id: documentId,
+          drive_file_id: doc.drive_file_id,
+          trashed,
+        });
+      }
+    } catch (err) {
+      logger.warn("document_drive_delete_failed", {
+        document_id: documentId,
+        drive_file_id: doc.drive_file_id,
+        error: String(err),
+      });
+    }
+  }
+
+  // Only remove the managed copy, never an arbitrary stored path.
+  const docsDir = join(getDataDir(), "documents");
+  const localPath = String(doc.file_path ?? "");
+  if (localPath.startsWith(docsDir) && existsSync(localPath)) {
+    try {
+      unlinkSync(localPath);
+    } catch (err) {
+      logger.warn("document_local_delete_failed", { document_id: documentId, error: String(err) });
+    }
   }
 }
 

@@ -1033,6 +1033,10 @@
                 <span class="s3-stat__label">Legacy key</span>
               </div>
               <div class="s3-stat">
+                <span class="s3-stat__num">{{ s3Stats.thumbnails }}</span>
+                <span class="s3-stat__label">Thumbnails</span>
+              </div>
+              <div class="s3-stat">
                 <span class="s3-stat__num">{{ filteredS3Files.length }}</span>
                 <span class="s3-stat__label">Showing</span>
               </div>
@@ -1054,7 +1058,12 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in pagedS3Files" :key="row.key" class="s3-row" :class="{ 's3-row--orphan': !row.in_db }">
+                  <tr
+                    v-for="row in pagedS3Files"
+                    :key="row.key"
+                    class="s3-row"
+                    :class="{ 's3-row--orphan': !row.in_db && row.kind !== 'thumbnail' }"
+                  >
                     <td class="s3-col-file">
                       <div class="s3-file">
                         <n-icon :component="DocumentOutline" :size="14" class="s3-file__icon" />
@@ -1064,8 +1073,11 @@
                     <td class="s3-col-size">{{ formatBytes(row.size) }}</td>
                     <td class="s3-col-date">{{ row.last_modified ? new Date(row.last_modified).toLocaleString("en-US") : "—" }}</td>
                     <td class="s3-col-db">
-                      <span class="s3-badge" :class="row.in_db ? 's3-badge--ok' : 's3-badge--err'">
-                        {{ row.in_db ? "Linked" : "Orphan" }}
+                      <span
+                        class="s3-badge"
+                        :class="row.kind === 'thumbnail' ? 's3-badge--ok' : (row.in_db ? 's3-badge--ok' : 's3-badge--err')"
+                      >
+                        {{ row.kind === "thumbnail" ? "Thumbnail" : (row.in_db ? "Linked" : "Orphan") }}
                       </span>
                     </td>
                     <td class="s3-col-status">
@@ -2047,6 +2059,8 @@ const s3StatusOptions = [
   { label: "All", value: null },
   { label: "In DB", value: "in_db" },
   { label: "Orphan (not in DB)", value: "not_in_db" },
+  { label: "Documents only", value: "documents" },
+  { label: "Thumbnails only", value: "thumbnails" },
   { label: "Done", value: "done" },
   { label: "Error", value: "error" },
   { label: "Processing", value: "processing" },
@@ -2059,7 +2073,11 @@ const filteredS3Files = computed(() => {
   if (q) result = result.filter((f) => f.file_name?.toLowerCase().includes(q) || f.key?.toLowerCase().includes(q));
   const status = s3StatusFilter.value;
   if (status === "in_db") result = result.filter((f) => f.in_db);
-  else if (status === "not_in_db") result = result.filter((f) => !f.in_db);
+  // Matches the orphan stat: thumbnails are regenerable derivatives, so they
+  // are not what someone filtering for orphans is looking for.
+  else if (status === "not_in_db") result = result.filter((f) => !f.in_db && f.kind !== "thumbnail");
+  else if (status === "thumbnails") result = result.filter((f) => f.kind === "thumbnail");
+  else if (status === "documents") result = result.filter((f) => f.kind !== "thumbnail");
   else if (status) result = result.filter((f) => f.status === status);
   if (s3AreaFilter.value) result = result.filter((f) => f.area === s3AreaFilter.value);
   return result;
@@ -2076,7 +2094,10 @@ const s3Stats = computed(() => {
     total: files.length,
     bytes: files.reduce((sum, f) => sum + (f.size ?? 0), 0),
     inDb: files.filter((f) => f.in_db).length,
-    orphan: files.filter((f) => !f.in_db).length,
+    // Thumbnails are generated derivatives, not user data — an unreferenced one
+    // is regenerable, so counting it as an orphan overstated the real problem.
+    orphan: files.filter((f) => !f.in_db && f.kind !== "thumbnail").length,
+    thumbnails: files.filter((f) => f.kind === "thumbnail").length,
     legacy: files.filter((f) => f.layout === "legacy").length,
   };
 });

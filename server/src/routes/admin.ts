@@ -1946,32 +1946,45 @@ export function registerAdminRoutes(app: express.Application) {
         truncated = result.truncated;
       }
 
-      // Cross-reference with DB to get filenames and doc IDs
+      // Cross-reference with the DB. Thumbnails are generated derivatives kept
+      // beside their source PDF and tracked in thumbnail_key, not spaces_key,
+      // so matching only on spaces_key reported every thumbnail as an orphan.
       const keys = files.map((f) => f.key);
       const docs = keys.length
         ? await col("documents")
-            .find({ spaces_key: { $in: keys } })
-            .project({ _id: 1, file_name: 1, spaces_key: 1, user_id: 1, processing_status: 1, created_at: 1 })
+            .find({ $or: [{ spaces_key: { $in: keys } }, { thumbnail_key: { $in: keys } }] } as any)
+            .project({ _id: 1, file_name: 1, spaces_key: 1, thumbnail_key: 1, user_id: 1, processing_status: 1, created_at: 1 })
             .toArray()
         : [];
 
       const docByKey: Record<string, any> = {};
+      const thumbOwnerByKey: Record<string, any> = {};
       for (const d of docs) {
-        docByKey[d.spaces_key as string] = d;
+        if (d.spaces_key) docByKey[d.spaces_key as string] = d;
+        if (d.thumbnail_key) thumbOwnerByKey[d.thumbnail_key as string] = d;
       }
 
       const enriched = files.map((f) => {
+        const isThumbnail = f.key.endsWith(".thumb.png");
         const doc = docByKey[f.key];
+        const thumbOwner = thumbOwnerByKey[f.key];
+        // A thumbnail counts as linked when its owning document references it,
+        // or when the source object it was derived from is present.
+        const derivedFrom = isThumbnail && !thumbOwner
+          ? docByKey[f.key.replace(/\.thumb\.png$/, ".pdf")]
+          : null;
+        const owner = doc ?? thumbOwner ?? derivedFrom;
         const legacy = /^gmail\/invoices\//.test(f.key) || /^documents\//.test(f.key);
         return {
           key: f.key,
           size: f.size,
           last_modified: f.last_modified,
-          doc_id: doc?._id?.toString() ?? null,
-          file_name: doc?.file_name ?? f.key.split("/").pop() ?? f.key,
-          user_id: doc?.user_id ?? null,
+          doc_id: owner?._id?.toString() ?? null,
+          file_name: doc?.file_name ?? (owner?.file_name ? `${owner.file_name} (thumbnail)` : (f.key.split("/").pop() ?? f.key)),
+          user_id: owner?.user_id ?? null,
           status: doc?.processing_status ?? null,
-          in_db: !!doc,
+          kind: isThumbnail ? "thumbnail" : "document",
+          in_db: !!owner,
           layout: legacy ? "legacy" : "tenant",
           area: storageAreaFromKey(f.key),
         };
@@ -1984,6 +1997,10 @@ export function registerAdminRoutes(app: express.Application) {
         layout_counts: {
           tenant: enriched.filter((f) => f.layout === "tenant").length,
           legacy: enriched.filter((f) => f.layout === "legacy").length,
+        },
+        kind_counts: {
+          document: enriched.filter((f) => f.kind === "document").length,
+          thumbnail: enriched.filter((f) => f.kind === "thumbnail").length,
         },
       });
     } catch (err: any) {

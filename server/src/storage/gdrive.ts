@@ -276,6 +276,28 @@ export async function renameDriveFolder(accessToken: string, folderId: string, n
     if (!res.ok) throw new Error(`Drive folder rename failed: ${res.status}`);
 }
 
+/**
+ * Moves a Drive file to the owner's trash.
+ *
+ * Trashed rather than permanently deleted so the user can recover a file they
+ * removed by mistake; Drive empties its own trash on its usual schedule.
+ * Returns false when the file is already gone, so callers can treat a missing
+ * file as success rather than an error.
+ */
+export async function trashDriveFile(accessToken: string, fileId: string): Promise<boolean> {
+    const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+        method: "PATCH",
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({trashed: true}),
+    });
+    if (res.status === 404) return false;
+    if (!res.ok) throw new Error(`Drive file trash failed: ${res.status}`);
+    return true;
+}
+
 export async function uploadToDrive(
     accessToken: string,
     filePath: string,
