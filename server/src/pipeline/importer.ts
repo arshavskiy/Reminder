@@ -13,12 +13,13 @@ import {extractCertificate} from "./certificateExtractor";
 import {extractFromOcr} from "./ocrExtractor";
 import {classifyDocumentKind, documentTypeFromTemplate, getOrBuildSystemPrompt, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
-import {deleteFromSpaces, getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
+import {deleteFromSpaces, fileExistsInSpaces, getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import {syncDocumentToDrive} from "../storage/gdrive";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
 import {generatePdfThumbnailForDocument} from "../documents/pdfThumbnail";
+import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {incrementDocumentUsage, type DocumentUsageKind} from "../quotas/userUsageCounters";
 import {inferInvoiceCashFlow} from "../invoices/cashFlow";
 
@@ -31,10 +32,13 @@ export interface PipelineOptions {
   startDelayMs?: number;   // optional batch pacing before background processing starts
   templateId?: string;     // force a specific doc_template instead of auto-detection
   storageKeyPrefix?: string; // optional S3 prefix for source-specific organization
+  gmailProviderId?: string; // provider matched at Gmail import time, stored on the document
+  gmailProviderCategory?: string; // that provider's category, recorded as data not as a key path
   gmailImport?: boolean;   // true when imported via Gmail — enables post-OCR inspection validation
   usageKind?: DocumentUsageKind; // lifetime usage counter bucket (survives deletes)
   waitForProcessing?: boolean; // await processing before returning the document id
   queueProcessing?: boolean; // enqueue processing in document_processing_jobs
+  reprocessDuplicate?: boolean; // when dedup hits an existing document, enqueue it again with this pipeline
   processingJobContext?: {
     source?: "gmail" | "upload" | "drive" | string;
     gmailImportJobId?: string;
@@ -202,24 +206,68 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   const fileHash = computeHash(originalPath);
   const fileSize = statSync(originalPath).size;
   const mimeType = getMimeType(ext);
+  const docsDir = join(getDataDir(), "documents");
+  const managedPath = join(docsDir, `${fileHash}${ext}`);
 
   // Dedup check — scoped to user if provided
   const dedupFilter: Record<string, any> = { file_hash: fileHash };
   if (userId) dedupFilter.user_id = userId;
-  const existing = await col("documents").findOne(dedupFilter);
+  const existing = await col<any>("documents").findOne(dedupFilter);
   if (existing) {
+    const existingDocumentId = existing._id!.toString();
     logger.info("document_import_duplicate", {
-      document_id: existing._id!.toString(),
+      document_id: existingDocumentId,
       user_id: userId ?? null,
       file_name: fileName,
     });
-    return existing._id!.toString();
+    if (pipeline?.queueProcessing && pipeline.reprocessDuplicate) {
+      mkdirSync(docsDir, { recursive: true });
+      if (!existsSync(managedPath)) {
+        copyFileSync(originalPath, managedPath);
+      }
+      const existingFilePath = typeof existing.file_path === "string" && existsSync(existing.file_path)
+        ? existing.file_path
+        : managedPath;
+      await col("documents").updateOne(
+        { _id: existing._id } as any,
+        {
+          $set: {
+            file_path: existingFilePath,
+            mime_type: existing.mime_type ?? mimeType,
+            processing_status: "queued",
+            storage_status: "available",
+            file_missing: false,
+            error_message: null,
+            updated_at: new Date(),
+          },
+          $unset: { drive_sync_error: "" },
+        },
+      );
+      await enqueueDocumentProcessingJob({
+        documentId: existingDocumentId,
+        filePath: existingFilePath,
+        mimeType: existing.mime_type ?? mimeType,
+        ext,
+        userId,
+        pipeline: {
+          ...pipeline,
+          queueProcessing: false,
+          waitForProcessing: false,
+          reprocessDuplicate: false,
+        },
+      });
+      startDocumentProcessingJobWorker();
+      logger.info("document_import_duplicate_requeued", {
+        document_id: existingDocumentId,
+        user_id: userId ?? null,
+        template_id: pipeline.templateId ?? null,
+      });
+    }
+    return existingDocumentId;
   }
 
   // Copy to managed documents folder
-  const docsDir = join(getDataDir(), "documents");
   mkdirSync(docsDir, { recursive: true });
-  const managedPath = join(docsDir, `${fileHash}${ext}`);
   if (!existsSync(managedPath)) {
     copyFileSync(originalPath, managedPath);
   }
@@ -231,10 +279,7 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   const SIGNED_URL_TTL = 7 * 24 * 3600; // 7 days
   if (spacesEnabled()) {
     try {
-      const prefix = normalizeStorageKeyPrefix(pipeline?.storageKeyPrefix);
-      spacesKey = prefix
-        ? `${prefix}/${userId ? `${userId}/` : ""}${fileHash}${ext}`
-        : userId ? `documents/${userId}/${fileHash}${ext}` : `documents/${fileHash}${ext}`;
+      spacesKey = buildStorageKey(userId, pipeline?.storageKeyPrefix, fileHash, ext);
       spacesUrl = await uploadToSpaces(managedPath, spacesKey, mimeType);
       downloadUrl = await getSpacesSignedUrl(spacesKey, SIGNED_URL_TTL, fileName);
       logger.info("document_storage_uploaded", { user_id: userId ?? null, spaces_key: spacesKey });
@@ -269,7 +314,23 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
     signed_url_expires_at: signedUrlExpiresAt,
   };
   if (userId) docRecord.user_id = userId;
+  // Kept separate from document_source ("scanned" | "generated"), which drives
+  // capability checks such as whether a document can be re-extracted. This
+  // records where the file came in from, purely for provenance and display.
+  docRecord.import_source = pipeline?.gmailImport
+    ? "gmail"
+    : (pipeline?.processingJobContext?.source === "drive" ? "drive" : "upload");
+  if (pipeline?.gmailProviderId) docRecord.gmail_provider_id = pipeline.gmailProviderId;
+  if (pipeline?.gmailProviderCategory) docRecord.gmail_provider_category = pipeline.gmailProviderCategory;
   docRecord.ai_extracted = !pipeline?.skipAi;
+
+  // Provisional kind from the import intent, so list filters (which hide
+  // invoices and certificates) work while the document is still queued.
+  // classifyDocumentKind() overwrites this once text extraction runs; until
+  // then document_kind would be null and an invoice would surface in the
+  // documents list. Derived from the chosen template, never from the file path.
+  const intendedKind = await intendedDocumentKind(pipeline);
+  if (intendedKind) docRecord.document_kind = intendedKind;
 
   const insertResult = await col("documents").insertOne(docRecord);
   const documentId = insertResult.insertedId.toString();
@@ -339,6 +400,43 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   return documentId;
 }
 
+/**
+ * Object storage key layout — tenant first, so a single prefix scan lists one
+ * user's files and per-user IAM scoping stays expressible:
+ *
+ *   {user_id}/invoices/gmail/{hash}{ext}      invoice imported from Gmail
+ *   {user_id}/invoices/uploaded/{hash}{ext}   invoice uploaded by the user
+ *   {user_id}/documents/{hash}{ext}           everything else
+ *
+ * Provider/category deliberately stay out of the key: they are mutable metadata
+ * (a vendor gets recategorized) while an S3 key is immutable, so encoding them
+ * here made the folder tree drift from the DB. Filter by category in Mongo.
+ */
+/**
+ * The document kind implied by the import request itself, before any text has
+ * been read. Only returns a value when the caller chose a template that pins
+ * the kind — an untyped upload stays null so classification decides.
+ */
+async function intendedDocumentKind(pipeline?: PipelineOptions): Promise<string | null> {
+  if (!pipeline?.templateId) return null;
+  const template = await loadTemplate(pipeline.templateId).catch(() => null);
+  if (!template) return null;
+  if (isInvoiceTemplate(template)) return "invoice";
+  if (isInspectionTemplate(template)) return "inspection_report";
+  return null;
+}
+
+export function buildStorageKey(
+  userId: string | undefined,
+  storageKeyPrefix: string | null | undefined,
+  fileHash: string,
+  ext: string,
+): string {
+  const prefix = normalizeStorageKeyPrefix(storageKeyPrefix) ?? "documents";
+  if (!userId) return `${prefix}/${fileHash}${ext}`;
+  return `${userId}/${prefix}/${fileHash}${ext}`;
+}
+
 function normalizeStorageKeyPrefix(value: string | null | undefined): string | null {
   const clean = String(value ?? "")
     .trim()
@@ -390,6 +488,12 @@ async function enqueueDocumentProcessingJob(input: {
         mime_type: input.mimeType,
         ext: input.ext,
         pipeline: input.pipeline,
+        status: "queued",
+        locked_at: null,
+        locked_by: null,
+        error_code: null,
+        error_message: null,
+        completed_at: null,
         next_run_at: nextRunAt,
         updated_at: now,
       },
@@ -454,11 +558,32 @@ async function claimNextDocumentProcessingJob(): Promise<DocumentProcessingJob |
   ) as DocumentProcessingJob | null;
 }
 
+/**
+ * Resolves the file for a processing job in the current environment. Prefers
+ * the document's own storage record (local candidates, then object storage) and
+ * only falls back to the path stored on the job when the document row is gone.
+ */
+async function resolveJobFilePath(job: DocumentProcessingJob): Promise<string> {
+  const doc = await col<any>("documents").findOne(
+    { _id: new ObjectId(job.document_id) } as any,
+    { projection: { file_path: 1, file_hash: 1, mime_type: 1, spaces_key: 1 } } as any,
+  );
+  if (doc) return await resolveDocumentFilePath(doc);
+  if (job.file_path) return job.file_path;
+  throw new Error(`Cannot resolve file for document ${job.document_id}`);
+}
+
 async function runDocumentProcessingJob(job: DocumentProcessingJob): Promise<void> {
   try {
+    // Resolve the file here rather than trusting job.file_path: that value was
+    // recorded when the job was enqueued, possibly by a different machine, and
+    // an absolute path is only meaningful in the environment that produced it.
+    // resolveDocumentFilePath falls back to object storage, so this works in
+    // any environment as long as the document has a spaces_key.
+    const filePath = await resolveJobFilePath(job);
     await processDocument(
       job.document_id,
-      job.file_path,
+      filePath,
       job.mime_type,
       job.ext,
       undefined,
@@ -1320,12 +1445,62 @@ async function finishDocumentProcessing(
     });
   }
   if (userId) {
-    syncDocumentToDrive(documentId, userId).catch((err) => {
+    // Awaited so the local cache cleanup below cannot delete the file out from
+    // under the Drive upload's read stream. Failures stay non-fatal.
+    await syncDocumentToDrive(documentId, userId).catch((err) => {
       logger.error("drive_sync_post_processing_failed", {document_id: documentId, user_id: userId, error: err});
     });
   }
+  await releaseLocalDocumentCache(documentId, filePath, userId);
   push?.({ type: "document:done", documentId: documentId as any, status: "done" });
   logger.info("document_processing_completed", { document_id: documentId, user_id: userId ?? null });
+}
+
+/**
+ * Drops the managed local copy once the document is durably in object storage.
+ *
+ * The local file under {dataDir}/documents is only needed while importing: the
+ * S3 upload, the OCR/PDF binaries and the Drive upload all take a filesystem
+ * path. After that it is a cache, and nothing ever evicted it, so the directory
+ * grew one copy of every file ever imported — a full duplicate of the bucket.
+ *
+ * Every later reader goes through resolveDocumentFilePath(), which falls back to
+ * object storage, so removing the copy costs at most one download. When object
+ * storage is not configured (pure local dev) the file on disk IS the document,
+ * so it is kept.
+ */
+async function releaseLocalDocumentCache(
+  documentId: string,
+  filePath: string,
+  userId?: string,
+): Promise<void> {
+  if (!spacesEnabled()) return;
+  const docsDir = join(getDataDir(), "documents");
+  // Only ever remove files we manage: never the caller's original upload, and
+  // never a temp file object storage downloaded for this run.
+  if (!filePath.startsWith(docsDir)) return;
+
+  const doc = await col<any>("documents").findOne(
+    { _id: new ObjectId(documentId) } as any,
+    { projection: { spaces_key: 1 } } as any,
+  );
+  if (!doc?.spaces_key) return; // never uploaded — the local copy is all there is
+  if (!await fileExistsInSpaces(doc.spaces_key)) {
+    logger.warn("document_local_cache_kept_missing_in_storage", {
+      document_id: documentId,
+      user_id: userId ?? null,
+      spaces_key: doc.spaces_key,
+    });
+    return;
+  }
+
+  try {
+    unlinkSync(filePath);
+  } catch (err: any) {
+    if (err?.code !== "ENOENT") {
+      logger.warn("document_local_cache_release_failed", { document_id: documentId, error: err });
+    }
+  }
 }
 
 async function saveExtractionEntities(
@@ -2417,8 +2592,182 @@ function isInvoiceLikeDocument(value: unknown): boolean {
 
 export function extractKnownInvoiceFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
   return extractHotInvoiceFields(rawText, fileName)
+    ?? extractGettReceiptFields(rawText, fileName)
+    ?? extractIsraelElectricReceiptFields(rawText, fileName)
     ?? extractGitHubReceiptFields(rawText, fileName)
+    ?? extractRailwayReceiptFields(rawText, fileName)
     ?? extractVercelReceiptFields(rawText, fileName);
+}
+
+function extractIsraelElectricReceiptFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  const text = rawText.replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const nameLower = String(fileName ?? "").toLowerCase();
+  if (!/חברת\s+החשמל\s+לישראל|iec\.co\.il|חח["׳']י/.test(text) && !/iec|electric/.test(nameLower)) return null;
+  if (!/קבלה|מספר\s+קבלה|חשבונית/.test(text)) return null;
+
+  const receiptNumber =
+    matchFirst(text, /מספר\s+קבלה\s*[-–]?\s*מקור\s+(\d{6,20})/) ??
+    matchFirst(text, /מספר\s+קבלה\s*[:：-]?\s*(\d{6,20})/) ??
+    matchFirst(text, /\b(3\d{9,14})\b/);
+  const contractAccount =
+    matchFirst(text, /מספר\s+חשבון\s+חוזה\s+(\d{6,20})/) ??
+    matchFirst(text, /חשבון\s+חוזה\s+(\d{6,20})/);
+  const companyNumber =
+    matchFirst(text, /מספר\s+חברה\s+(\d{6,20})/) ??
+    matchFirst(text, /מורשה\s+באיחוד\s+עוסקים\s+מס['׳]?\s*(\d{6,20})/);
+  const clientCompany = extractIsraelElectricClientName(text);
+  const issueDate =
+    parseIsraeliDate(matchFirst(text, /תאריך\s+תשלום\s+(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/)) ??
+    parseIsraeliDate(matchFirst(text, /כרטיס\s+אשראי\s+(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/)) ??
+    parseIsraeliDate(matchFirst(text, /\b(\d{1,2}[./-]\d{1,2}[./-]\d{4})\b/));
+  const amount =
+    parseInvoiceAmount(matchFirst(text, /סה["״]?כ\s+לתשלום\s*\(ש["״]?ח\)\s*([\d,.]+)/)) ??
+    parseInvoiceAmount(matchFirst(text, /סה["״]?כ\s+לתשלום[^\d]{0,20}([\d,.]+)/)) ??
+    parseInvoiceAmount(matchFirst(text, /(?:סכום|סה["״]?כ)\s+([\d,.]+)\s*$/m)) ??
+    extractIsraelElectricAmount(text);
+  const paymentMethod = /כרטיס\s+אשראי/.test(text) ? "כרטיס אשראי" : null;
+  const cardLast4 = matchFirst(text, /מספר\s+כרטיס\s+אשראי\s+(\d{3,4})/) ?? matchFirst(text, /\b(\d{4})\s+\d{1,2}[./-]\d{1,2}[./-]\d{2,4}/);
+
+  if (!receiptNumber || !contractAccount || !clientCompany || !issueDate || amount === null) return null;
+
+  return {
+    supplier_name: "חברת החשמל לישראל בע\"מ",
+    supplier_id: companyNumber ?? "520000472",
+    invoice_number: receiptNumber,
+    receipt_number: receiptNumber,
+    document_subtype: "קבלה",
+    client_company: clientCompany,
+    client_name: clientCompany,
+    customer_number: contractAccount,
+    account_number: contractAccount,
+    issue_date: issueDate,
+    payment_due_date: issueDate,
+    amount,
+    amount_before_vat: amount,
+    vat_amount: 0,
+    currency: "ILS",
+    payment_status: "paid",
+    payment_method: cardLast4 ? `${paymentMethod ?? "כרטיס"} - ${cardLast4}` : paymentMethod,
+    items: [{
+      description: `תשלום חשבון חוזה ${contractAccount}`,
+      amount,
+      currency: "ILS",
+    }],
+    notes: "Israel Electric Company receipt",
+  };
+}
+
+function extractIsraelElectricClientName(text: string): string | null {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!/^לכבוד\s*:?\s*$/.test(lines[i])) continue;
+    for (const candidate of lines.slice(i + 1, i + 5)) {
+      if (!candidate || /^\d/.test(candidate)) continue;
+      if (/תל\s+אביב|נתיב\s+האור|חיפה|להחזרה|מספר|חברת\s+החשמל/.test(candidate)) continue;
+      return cleanKnownInvoiceValue(candidate);
+    }
+  }
+  return matchFirst(text, /לכבוד\s*:?\s*([^\n\r]{2,80})/) ??
+    extractInvoiceRecipientFromRawText(text);
+}
+
+function extractIsraelElectricAmount(text: string): number | null {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const amountLines = lines.filter((line) => /סה["״]?כ|לתשלום|סכום/.test(line));
+  for (const line of amountLines.reverse()) {
+    const amounts = decimalAmounts(line).filter((value) => value > 0 && value < 100_000);
+    if (amounts.length) return amounts[amounts.length - 1];
+  }
+  const all = decimalAmounts(text).filter((value) => value > 0 && value < 100_000);
+  return all.length ? all[all.length - 1] : null;
+}
+
+/**
+ * Gett (ג'יטי גטאקסי סיסטמס בע"מ) ride receipts.
+ *
+ * The PDFs are Hebrew RTL and pdf parsing emits each line reversed, so the
+ * patterns below match the reversed forms as they actually appear in raw_text —
+ * e.g. `קבלה - מספר: 132306144` arrives as `מקור 132306144: מספר - קבלה`, and
+ * the company name as `מ"בע סיסטמס גטאקסי יטי'ג`. Matching the visually correct
+ * strings would never fire.
+ */
+function extractGettReceiptFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  const text = rawText.replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const nameLower = String(fileName ?? "").toLowerCase();
+
+  // Reversed company name, either Gett company id, or the receipt_<date> filename.
+  const isGett =
+    /גטאקסי|יטי'ג|gett/i.test(text) ||
+    /\b(?:514593573|514486547)\b/.test(text) ||
+    /^receipt_\d{8}_\d+\.pdf$/i.test(nameLower);
+  if (!isGett) return null;
+  if (!/קבלה/.test(text)) return null;
+
+  // `מקור 132306144: מספר - קבלה`  (reversed "קבלה - מספר: 132306144 מקור")
+  const receiptNumber =
+    matchFirst(text, /מספר\s*[:：]\s*(\d{6,20})/) ??
+    matchFirst(text, /(\d{6,20})\s*[:：]\s*מספר/) ??
+    matchFirst(nameLower, /receipt_\d{8}_(\d+)/);
+  // `83219292': מס נסיעה`
+  const rideNumber =
+    matchFirst(text, /(\d{6,20})\s*['׳']?\s*[:：]\s*מס/) ??
+    matchFirst(text, /נסיעה\s*מס['׳']?\s*[:：]?\s*(\d{6,20})/);
+  const companyNumber = matchFirst(text, /\b(514593573|514486547)\b/) ?? null;
+  // `22/01/2026: תאריך`
+  const issueDate =
+    parseIsraeliDate(matchFirst(text, /(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s*[:：]\s*תאריך/)) ??
+    parseIsraeliDate(matchFirst(text, /תאריך\s*[:：]?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/)) ??
+    parseIsraeliDate(matchFirst(text, /\b(\d{1,2}[./-]\d{1,2}[./-]\d{4})\b/));
+  // `122.60כ"סה` — the total is glued to the reversed סה"כ label.
+  const amount =
+    parseInvoiceAmount(matchFirst(text, /([\d,]+\.\d{2})\s*כ["״']?\s*סה/)) ??
+    parseInvoiceAmount(matchFirst(text, /סה["״']?כ\s*[:：]?\s*([\d,]+(?:\.\d{1,2})?)/)) ??
+    parseInvoiceAmount(matchFirst(text, /([\d,]+\.\d{2})\s*באמצעות\s*שולם/));
+  const cardLast4 = matchFirst(text, /\*(\d{4})/);
+  // No leading \b: the total is glued to the brand in reversed output, as in
+  // `122.60Mastercard *8021`, so a word boundary would never match.
+  const cardBrand = matchFirst(text, /(Mastercard|Visa|American Express|Amex|Isracard)\b/i);
+  const clientName = extractGettRecipient(text);
+
+  if (!receiptNumber || issueDate === null || amount === null) return null;
+
+  const paymentMethod = cardBrand
+    ? (cardLast4 ? `${cardBrand} - ${cardLast4}` : cardBrand)
+    : null;
+
+  return {
+    supplier_name: "ג'יטי גטאקסי סיסטמס בע\"מ",
+    supplier_id: companyNumber,
+    invoice_number: receiptNumber,
+    receipt_number: receiptNumber,
+    document_subtype: "קבלה",
+    client_company: clientName,
+    client_name: clientName,
+    issue_date: issueDate,
+    payment_due_date: issueDate,
+    amount,
+    amount_before_vat: amount,
+    vat_amount: 0,
+    currency: "ILS",
+    payment_status: "paid",
+    payment_method: paymentMethod,
+    items: [{
+      description: rideNumber ? `נסיעה מס' ${rideNumber}` : "נסיעה",
+      amount,
+      currency: "ILS",
+    }],
+    notes: "Gett ride receipt",
+  };
+}
+
+/** `Pavel :לכבוד` — the recipient trails the reversed לכבוד label. */
+function extractGettRecipient(text: string): string | null {
+  const direct =
+    matchFirst(text, /([^\n:：]{2,60})\s*[:：]\s*לכבוד/) ??
+    matchFirst(text, /לכבוד\s*[:：]?\s*([^\n]{2,60})/);
+  const cleaned = direct ? cleanKnownInvoiceValue(direct) : null;
+  if (cleaned && !/^\d+$/.test(cleaned)) return cleaned;
+  return null;
 }
 
 function extractHotInvoiceFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
@@ -2548,10 +2897,11 @@ function extractGitHubReceiptFields(rawText: string, fileName?: string | null): 
     matchValueAfterLabel(text, "Total") ??
     matchValueAfterLabel(text, "Amount") ??
     matchFirst(text, /(?:Total|Amount)\s*([\d,]+(?:\.\d{1,2})?)\s*USD/i) ??
+    extractGitHubTotalAmount(text) ??
     matchFirst(text, /\$[\s]*([\d,]+(?:\.\d{1,2})?)\s*USD/i);
   const taxRaw = matchValueAfterLabel(text, "Tax");
   const paymentMethod = matchValueAfterLabel(text, "Charged to");
-  const serviceDescription = matchFirst(text, /(GitHub\s+[^\n]+?)(?=\s+\$?\d|[\r\n])/i);
+  const serviceDescription = extractGitHubServiceDescription(text);
   const amount = parseInvoiceAmount(amountRaw);
   const invoiceNumber =
     transactionId ??
@@ -2584,6 +2934,115 @@ function extractGitHubReceiptFields(rawText: string, fileName?: string | null): 
   };
 }
 
+function extractGitHubTotalAmount(text: string): string | null {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^Total$/i.test(line)) {
+      const next = lines[index + 1] ?? "";
+      const amount = matchFirst(next, /\$?\s*([\d,]+(?:\.\d{1,2})?)\s*USD\*?/i);
+      if (amount) return amount;
+    }
+    const sameLine = matchFirst(line, /^Total\s+\$?\s*([\d,]+(?:\.\d{1,2})?)\s*USD\*?/i);
+    if (sameLine) return sameLine;
+  }
+  return null;
+}
+
+function extractGitHubServiceDescription(text: string): string | null {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    if (/^GitHub\s+/i.test(line) && !/^GitHub,?\s+Inc\.?$/i.test(line)) return cleanKnownInvoiceValue(line);
+  }
+  return matchFirst(text, /(GitHub\s+[^\n]+?)(?=\s+\$?\d|[\r\n])/i);
+}
+
+function extractRailwayReceiptFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
+  const text = rawText.replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const lower = text.toLowerCase();
+  const nameLower = String(fileName ?? "").toLowerCase();
+  if (!lower.includes("railway corporation") && !/\brailway\b/.test(nameLower)) return null;
+  if (!lower.includes("receipt") && !lower.includes("invoice number") && !/receipt|invoice/.test(nameLower)) return null;
+
+  const invoiceNumber =
+    matchValueAfterLabel(text, "Invoice number") ??
+    matchFirst(fileName ?? "", /Invoice[-_]?([A-Z0-9-]+)/i);
+  const receiptNumber =
+    matchValueAfterLabel(text, "Receipt number") ??
+    matchFirst(fileName ?? "", /Receipt[-_]?([A-Z0-9-]+)/i);
+  const issueDate =
+    normalizeInvoiceDate(matchValueAfterLabel(text, "Date paid")) ??
+    normalizeInvoiceDate(matchFirst(text, /\b([A-Z][a-z]{2,9}\s+\d{1,2},\s+\d{4})\b/));
+  const amountRaw =
+    matchFirst(text, /\$([\d,]+(?:\.\d{1,2})?)\s+paid\s+on\b/i) ??
+    matchValueAfterLabel(text, "Amount paid") ??
+    matchValueAfterLabel(text, "Total");
+  const amount = parseInvoiceAmount(amountRaw);
+  const subtotal = parseInvoiceAmount(matchValueAfterLabel(text, "Subtotal"));
+  const clientCompany = extractRailwayBillTo(text);
+  const paymentMethod = matchFirst(text, /((?:Mastercard|Visa|American Express|Amex|Discover)\s*-\s*\d{3,4})/i);
+  const billingPeriod = matchFirst(text, /\b([A-Z][a-z]{2}\s+\d{1,2}\s*[-–]\s*[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})\b/);
+  const items = extractRailwayItems(text);
+
+  if (!issueDate || amount === null || !(invoiceNumber || receiptNumber)) return null;
+
+  // A Railway receipt reprints the originating invoice number, so keying both
+  // documents on it would collapse them into one record. The receipt is
+  // identified by its own receipt number; only the invoice keys on the invoice
+  // number. isReceipt is decided by the document's own heading, not by the mere
+  // presence of a receipt number (invoices carry a payment-history block too).
+  const isReceipt = /^\s*receipt\b/im.test(text) || /receipt/i.test(nameLower);
+  const identifier = isReceipt ? (receiptNumber ?? invoiceNumber) : (invoiceNumber ?? receiptNumber);
+
+  return {
+    supplier_name: "Railway Corporation",
+    supplier_id: null,
+    invoice_number: identifier,
+    receipt_number: receiptNumber ?? null,
+    document_subtype: isReceipt ? "קבלה" : "חשבונית",
+    client_company: clientCompany,
+    client_name: clientCompany,
+    issue_date: issueDate,
+    payment_due_date: issueDate,
+    billing_period: billingPeriod,
+    amount,
+    amount_before_vat: subtotal ?? amount,
+    vat_amount: 0,
+    currency: "USD",
+    payment_status: "paid",
+    payment_method: paymentMethod,
+    items,
+    notes: "Railway usage receipt",
+  };
+}
+
+function extractRailwayBillTo(text: string): string | null {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const index = lines.findIndex((line) => /^Bill to$/i.test(line));
+  if (index < 0) return null;
+  const candidates = lines.slice(index + 1, index + 4)
+    .filter((line) => !/@/.test(line))
+    .filter((line) => !/^Invoice|Receipt|Date|Railway/i.test(line));
+  return candidates[0] ? cleanKnownInvoiceValue(candidates[0]) : null;
+}
+
+function extractRailwayItems(text: string): Array<{ description: string; amount?: number; currency: string }> {
+  const items: Array<{ description: string; amount?: number; currency: string }> = [];
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!/^(Agent Usage|Disk|Network|vCPU|Memory|Object Storage|Hobby plan)\b/i.test(line)) continue;
+    const nextLine = lines[index + 1] ?? "";
+    const amount = decimalAmounts(line).filter((value) => Math.abs(value) < 100_000).pop();
+    const description = nextLine && /^[A-Z][a-z]{2}\s+\d{1,2}/.test(nextLine)
+      ? `${line} ${nextLine}`
+      : line;
+    items.push({ description: description.slice(0, 160), ...(amount !== undefined ? { amount } : {}), currency: "USD" });
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
 function extractVercelReceiptFields(rawText: string, fileName?: string | null): Record<string, unknown> | null {
   const text = rawText.replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
   const lower = text.toLowerCase();
@@ -2592,7 +3051,9 @@ function extractVercelReceiptFields(rawText: string, fileName?: string | null): 
     return null;
   }
 
-  const isReceipt = lower.includes("receipt") || nameLower.includes("receipt");
+  // Anchored to the document's own heading: an invoice also prints a payment
+  // history containing "Receipt number", so a bare substring test misreads it.
+  const isReceipt = /^\s*receipt\b/im.test(text) || nameLower.includes("receipt");
   const issueDate =
     normalizeInvoiceDate(matchValueAfterLabel(text, "Date paid")) ??
     normalizeInvoiceDate(matchValueAfterLabel(text, "Date of issue")) ??
@@ -2621,10 +3082,14 @@ function extractVercelReceiptFields(rawText: string, fileName?: string | null): 
 
   if (!issueDate || amount === null || !(invoiceNumber || receiptNumber) || !clientCompany) return null;
 
+  // As with Railway, a Vercel receipt reprints the invoice number it settles;
+  // keying both on it would merge the two documents into one record.
+  const identifier = isReceipt ? (receiptNumber ?? invoiceNumber) : (invoiceNumber ?? receiptNumber);
+
   return {
     supplier_name: "Vercel Inc.",
     supplier_id: null,
-    invoice_number: invoiceNumber ?? receiptNumber,
+    invoice_number: identifier,
     receipt_number: receiptNumber ?? null,
     document_subtype: isReceipt ? "קבלה" : "חשבונית",
     client_company: clientCompany,
@@ -2716,12 +3181,65 @@ function cleanKnownInvoiceValue(value: string): string | null {
 
 function normalizeInvoiceDate(value: string | null): string | null {
   if (!value) return null;
+  const iso = parseIsoInvoiceDate(value);
+  if (iso) return iso;
   const israeli = parseIsraeliDate(value);
   if (israeli) return israeli;
   const cleaned = value.replace(/\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\s*[A-Z]{2,4}\b/i, "").trim();
+  const english = parseEnglishMonthDate(cleaned);
+  if (english) return english;
   const parsed = Date.parse(cleaned);
   if (!Number.isFinite(parsed)) return null;
   return new Date(parsed).toISOString().slice(0, 10);
+}
+
+function parseIsoInvoiceDate(value: string): string | null {
+  const match = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function parseEnglishMonthDate(value: string): string | null {
+  const months: Record<string, number> = {
+    jan: 1,
+    january: 1,
+    feb: 2,
+    february: 2,
+    mar: 3,
+    march: 3,
+    apr: 4,
+    april: 4,
+    may: 5,
+    jun: 6,
+    june: 6,
+    jul: 7,
+    july: 7,
+    aug: 8,
+    august: 8,
+    sep: 9,
+    sept: 9,
+    september: 9,
+    oct: 10,
+    october: 10,
+    nov: 11,
+    november: 11,
+    dec: 12,
+    december: 12,
+  };
+  const match = /\b([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})\b/.exec(value);
+  if (!match) return null;
+  const month = months[match[1].toLowerCase()];
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  if (!month || !Number.isInteger(day) || day < 1 || day > 31 || !Number.isInteger(year)) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date.toISOString().slice(0, 10);
 }
 
 function parseIsraeliDate(value: string | null): string | null {
@@ -2818,13 +3336,16 @@ async function saveInvoiceRecord(
   const amount = parseInvoiceAmount(
     fields.amount ?? fields.total_amount ?? fields.amount_due ?? fields.total_to_pay ?? fields.total,
   );
+  const normalizedPaymentDueDate = paymentDueDate ?? issueDate;
   const missingRequired = invoiceMissingRequiredFields({
     supplierName,
     invoiceNumber,
     clientName,
     issueDate,
-    paymentDueDate,
+    paymentDueDate: normalizedPaymentDueDate,
     amount,
+    documentSubtype: firstInvoiceString(fields, ["document_subtype", "invoice_type", "receipt_type"]),
+    paymentStatus: firstInvoiceString(fields, ["payment_status", "status"]),
   });
   if (missingRequired.length > 0) {
     const rejectionReason = invoiceRejectionReason(missingRequired);
@@ -2868,7 +3389,7 @@ async function saveInvoiceRecord(
     billing_period: firstInvoiceString(fields, ["billing_period", "period"]),
     billing_period_start: firstInvoiceString(fields, ["billing_period_start", "period_start"]),
     billing_period_end: firstInvoiceString(fields, ["billing_period_end", "period_end"]),
-    payment_due_date: paymentDueDate,
+    payment_due_date: normalizedPaymentDueDate,
     amount,
     amount_before_vat: parseInvoiceAmount(fields.amount_before_vat ?? fields.subtotal),
     vat_amount: parseInvoiceAmount(fields.vat_amount ?? fields.vat),
@@ -2972,11 +3493,20 @@ function invoiceMissingRequiredFieldsFromFields(fields: Record<string, unknown>,
   const clientName = firstInvoiceString(fields, ["client_company", "client_name", "customer_name", "bill_to"])
     ?? extractInvoiceRecipientFromRawText(rawText);
   const issueDate = firstInvoiceString(fields, ["issue_date", "invoice_date", "receipt_date", "date"]);
-  const paymentDueDate = firstInvoiceString(fields, ["payment_due_date", "due_date", "expiry_date"]);
+  const paymentDueDate = firstInvoiceString(fields, ["payment_due_date", "due_date", "expiry_date"]) ?? issueDate;
   const amount = parseInvoiceAmount(
     fields.amount ?? fields.total_amount ?? fields.amount_due ?? fields.total_to_pay ?? fields.total,
   );
-  return invoiceMissingRequiredFields({ supplierName, invoiceNumber, clientName, issueDate, paymentDueDate, amount });
+  return invoiceMissingRequiredFields({
+    supplierName,
+    invoiceNumber,
+    clientName,
+    issueDate,
+    paymentDueDate,
+    amount,
+    documentSubtype: firstInvoiceString(fields, ["document_subtype", "invoice_type", "receipt_type"]),
+    paymentStatus: firstInvoiceString(fields, ["payment_status", "status"]),
+  });
 }
 
 function invoiceMissingRequiredFields(values: {
@@ -2986,11 +3516,16 @@ function invoiceMissingRequiredFields(values: {
   issueDate: string | null;
   paymentDueDate: string | null;
   amount: number | null;
+  documentSubtype?: string | null;
+  paymentStatus?: string | null;
 }): string[] {
+  const subtype = String(values.documentSubtype ?? "").toLowerCase();
+  const paymentStatus = String(values.paymentStatus ?? "").toLowerCase();
+  const isReceiptLike = /receipt|קבלה/.test(subtype) || /paid|שולם/.test(paymentStatus);
   const missing: string[] = [];
   if (!values.supplierName) missing.push("supplier_name");
   if (!values.invoiceNumber) missing.push("invoice_number");
-  if (!values.clientName) missing.push("client_company");
+  if (!values.clientName && !isReceiptLike) missing.push("client_company");
   if (!values.issueDate) missing.push("issue_date");
   if (!values.paymentDueDate) missing.push("payment_due_date");
   if (values.amount === null) missing.push("amount");

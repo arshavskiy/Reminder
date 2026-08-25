@@ -1,4 +1,5 @@
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -126,6 +127,31 @@ export async function uploadBufferToSpaces(
   }
   const endpointUrl = new URL(config.endpoint);
   return `${endpointUrl.protocol}//${config.bucket}.${endpointUrl.host}/${key}`;
+}
+
+/**
+ * Server-side copy — object storage has no rename, so a "move" is copy then
+ * delete. Returns false when the source is absent so callers can skip instead
+ * of failing the whole batch.
+ */
+export async function copyWithinSpaces(sourceKey: string, targetKey: string): Promise<boolean> {
+  const client = getClient();
+  const config = getStorageConfig();
+  if (!client || !config) throw new Error("Object storage not configured");
+  if (sourceKey === targetKey) return true;
+
+  try {
+    await client.send(new CopyObjectCommand({
+      Bucket: config.bucket,
+      CopySource: `${config.bucket}/${sourceKey}`,
+      Key: targetKey,
+    }));
+    return true;
+  } catch (err: any) {
+    const code = String(err?.name ?? err?.Code ?? "");
+    if (code === "NoSuchKey" || code === "NotFound" || err?.$metadata?.httpStatusCode === 404) return false;
+    throw err;
+  }
 }
 
 export async function deleteFromSpaces(key: string): Promise<void> {

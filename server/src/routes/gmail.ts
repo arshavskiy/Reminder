@@ -24,6 +24,8 @@ const GMAIL_FULL_ACCESS_ROLES = new Set(["user", "pro", "admin"]);
 const GMAIL_DEFAULT_PAGE_SIZE = 500;
 const GMAIL_MAX_PAGE_SIZE = 500;
 const GMAIL_JOB_STALE_MS = 10 * 60 * 1000;
+const DEFAULT_GMAIL_ATTACHMENT_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx"];
+const DEFAULT_GMAIL_ATTACHMENT_EXTENSION_SET = new Set(DEFAULT_GMAIL_ATTACHMENT_EXTENSIONS);
 const REJECTED_INVOICE_VALIDATION_STATUSES = new Set([
   "missing_required_fields",
   "missing_invoice_number_and_amount",
@@ -739,7 +741,7 @@ async function runGmailImportJob(job: GmailImportJob) {
   let messageIds = job.message_ids ?? [];
   let importedSet = new Set<string>();
   let importedSetLoaded = Boolean(job.retry_mode);
-  let diagnostics = createGmailDiagnostics(job.q, requestedExtensionsFromQuery(job.q), job.total_messages);
+  let diagnostics = createGmailDiagnostics(job.q, requestedExtensionsForGmailImport(job.q, template), job.total_messages);
 
   if (!messageIds.length) {
     const initialized = await initializeGmailImportJob(job, accessToken);
@@ -875,7 +877,8 @@ async function initializeGmailImportJob(job: GmailImportJob, accessToken: string
   }
   const listData = await listRes.json() as { messages?: { id: string }[] };
   const allMessageIds = (listData.messages ?? []).map((message) => message.id);
-  const diagnostics = createGmailDiagnostics(job.q, requestedExtensionsFromQuery(job.q), allMessageIds.length);
+  const template = job.template_id ? await loadTemplate(job.template_id).catch(() => null) : null;
+  const diagnostics = createGmailDiagnostics(job.q, requestedExtensionsForGmailImport(job.q, template), allMessageIds.length);
   const importedSet = await findSuccessfullyImportedMessageIds(job.user_id, allMessageIds);
   const messageIds = allMessageIds.filter((id) => !importedSet.has(id));
 
@@ -1450,11 +1453,18 @@ async function gmailImportPipelineOptions(
   const template = await loadTemplate(templateId).catch(() => null);
   if (!isInvoiceTemplate(template)) return pipeline;
 
+  // Provider/category are recorded as document fields rather than encoded in
+  // the storage key: an S3 key is immutable, so a recategorized vendor used to
+  // strand old objects under the old folder. Matching here still sees the email
+  // from/subject, which read-time matching in presentInvoice() does not, so the
+  // result is worth persisting. See buildStorageKey() in pipeline/importer.ts.
   const provider = await matchGmailSearchProvider(`${meta?.from ?? ""} ${meta?.subject ?? ""} ${filename ?? ""}`);
-  const invoiceFolder = provider
-    ? `gmail/invoices/${provider.category}/${provider.id}`
-    : "gmail/invoices/other";
-  return { ...pipeline, usageKind: "gmail_invoice", storageKeyPrefix: invoiceFolder };
+  return {
+    ...pipeline,
+    usageKind: "gmail_invoice",
+    storageKeyPrefix: "invoices/gmail",
+    ...(provider ? { gmailProviderId: provider.id, gmailProviderCategory: provider.category } : {}),
+  };
 }
 
 function isInvoiceTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): boolean {
@@ -1468,7 +1478,16 @@ function isInspectionTemplate(template: Awaited<ReturnType<typeof loadTemplate>>
 }
 
 const INSPECTION_GMAIL_QUERY = "has:attachment filename:pdf תסקיר";
-const INVOICE_ATTACHMENT_QUERY = "{filename:pdf filename:doc filename:docx filename:xls filename:xlsx}";
+const INVOICE_GMAIL_QUERY = `has:attachment {${[
+  "חשבונית",
+  "invoice",
+  "receipt",
+  "bill",
+  "חשבונית מס",
+  "קבלה",
+  "דרישת תשלום",
+  "חשבון תקופתי",
+].map(formatGmailSearchTerm).join(" ")}}`;
 
 export function buildGmailQuery(
   userQuery: string | undefined,
@@ -1476,14 +1495,18 @@ export function buildGmailQuery(
   planOrRole?: string | null,
 ): string {
   const defaultQuery = "has:attachment filename:pdf";
-  const q = userQuery || defaultQuery;
+  const q = userQuery || (isInvoiceTemplate(template) ? INVOICE_GMAIL_QUERY : defaultQuery);
   if (isInspectionTemplate(template) && q === defaultQuery) {
     return INSPECTION_GMAIL_QUERY;
   }
   if (isInvoiceTemplate(template)) {
-    return applyInvoiceHistoryWindow(forceInvoiceAttachmentTypes(q), planOrRole);
+    return applyInvoiceHistoryWindow(normalizeInvoiceAttachmentQuery(q), planOrRole);
   }
   return q;
+}
+
+function formatGmailSearchTerm(term: string): string {
+  return `"${term.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
 }
 
 function applyInvoiceHistoryWindow(query: string, planOrRole: string | null | undefined): string {
@@ -1502,17 +1525,15 @@ function gmailFeatureKey(user: { plan?: string | null; role?: string | null }): 
     : String(user.plan ?? user.role ?? "");
 }
 
-function forceInvoiceAttachmentTypes(query: string): string {
+function normalizeInvoiceAttachmentQuery(query: string): string {
   const withoutAttachmentTypes = query
     .replace(/\{(?:\s*filename:(?:pdf|doc|docx|xls|xlsx|jpg|jpeg|png)\s*)+\}/gi, " ")
     .replace(/\bfilename:(?:pdf|doc|docx|xls|xlsx|jpg|jpeg|png)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
-  if (!withoutAttachmentTypes) return `has:attachment ${INVOICE_ATTACHMENT_QUERY}`;
-  if (/\bhas:attachment\b/i.test(withoutAttachmentTypes)) {
-    return withoutAttachmentTypes.replace(/\bhas:attachment\b/i, `has:attachment ${INVOICE_ATTACHMENT_QUERY}`);
-  }
-  return `has:attachment ${INVOICE_ATTACHMENT_QUERY} ${withoutAttachmentTypes}`;
+  if (!withoutAttachmentTypes) return "has:attachment";
+  if (/\bhas:attachment\b/i.test(withoutAttachmentTypes)) return withoutAttachmentTypes;
+  return `has:attachment ${withoutAttachmentTypes}`;
 }
 
 function quotaCategoryFromTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): DocumentImportQuotaCategory {
@@ -1618,6 +1639,17 @@ function requestedExtensionsFromQuery(query: string): Set<string> {
   const supported = new Set(["pdf", "doc", "docx", "xls", "xlsx", "jpg", "jpeg", "png"]);
   const selected = matches.filter((ext) => supported.has(ext));
   return new Set(selected.length ? selected : ["pdf"]);
+}
+
+function requestedExtensionsForGmailImport(
+  query: string,
+  template: Awaited<ReturnType<typeof loadTemplate>>,
+): Set<string> {
+  const requested = requestedExtensionsFromQuery(query);
+  if (isInvoiceTemplate(template) && !/\bfilename:[a-z0-9]+\b/i.test(query)) {
+    return new Set(DEFAULT_GMAIL_ATTACHMENT_EXTENSION_SET);
+  }
+  return requested;
 }
 
 function createGmailDiagnostics(query: string, allowedExtensions: Set<string>, messageCount: number): GmailDiagnostics {

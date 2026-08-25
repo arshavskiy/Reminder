@@ -74,7 +74,9 @@ export function registerDocumentRoutes(app: express.Application) {
       document_kind: { $nin: ["certificate", "invoice"] },
       invoice_saved: { $ne: true },
       invoice_rejected: { $ne: true },
-      spaces_key: { $not: /^gmail\/invoices\// },
+      // Matches both the legacy `gmail/invoices/...` layout and the tenant-first
+      // `{user_id}/invoices/...` one, so this guard survives the key migration.
+      spaces_key: { $not: /(^gmail\/invoices\/|^[^/]+\/invoices\/)/ },
       $or: [
         { invoice_rejection_reason: { $exists: false } },
         { invoice_rejection_reason: null },
@@ -135,7 +137,12 @@ export function registerDocumentRoutes(app: express.Application) {
     const docIds = rows.map((r) => r._id);
     const docIdStrings = docIds.map((id) => id.toString());
     const links = docIds.length
-      ? await col("document_clients").find({ document_id: { $in: docIdStrings } } as any).toArray()
+      ? await col("document_clients").find({
+          $or: [
+            { document_id: { $in: docIdStrings } },
+            { document_id: { $in: docIds } },
+          ],
+        } as any).toArray()
       : [];
     const clientIds = [...new Set(links.map((l: any) => l.client_id).filter(Boolean))];
     const [clients, reminders, contracts] = await Promise.all([
@@ -196,7 +203,7 @@ export function registerDocumentRoutes(app: express.Application) {
       return {
         ...flatDoc(r),
         client_id: link?.id ?? null,
-        client_name: link?.name ?? null,
+        client_name: link?.name ?? extractedClientDisplayName(parseObjectJson(r.extracted_fields)) ?? null,
         reminder_count: documentReminders.length,
         reminder_status: getDocumentReminderStatus(r, documentReminders),
         reminder_date: getDocumentReminderDate(r, contract, documentReminders),
@@ -305,10 +312,18 @@ export function registerDocumentRoutes(app: express.Application) {
       const skipAi       = req.query.skipAi       === "true";
       const skipEntities = req.query.skipEntities === "true";
       const skipReminders = req.query.skipReminders === "true";
+      const reprocessDuplicates = req.query.reprocessDuplicates === "true";
         const templateId = req.query.templateId as string | undefined;
         const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
         const quotaCategory = quotaCategoryFromTemplate(template);
-        const pipelineOptions = {skipAi, skipEntities, skipReminders, templateId: templateId || undefined};
+        const pipelineOptions = {
+          skipAi,
+          skipEntities,
+          skipReminders,
+          templateId: templateId || undefined,
+          reprocessDuplicate: reprocessDuplicates,
+          ...(quotaCategory === "invoices" ? {storageKeyPrefix: "invoices/uploaded"} : {}),
+        };
 
       await assertDocumentImportQuota(userId, userPlan, files.length, quotaCategory);
 
@@ -1232,5 +1247,22 @@ function parseObjectJson(value: unknown): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+const EXTRACTED_CLIENT_NAME_KEYS = [
+  "client_company",
+  "client_name",
+  "company",
+  "counterparty",
+  "contact_person",
+] as const;
+
+function extractedClientDisplayName(fields: Record<string, unknown> | null): string | null {
+  if (!fields) return null;
+  for (const key of EXTRACTED_CLIENT_NAME_KEYS) {
+    const value = fields[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
 }
 

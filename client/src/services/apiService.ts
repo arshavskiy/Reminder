@@ -158,7 +158,9 @@ export interface ImportedInvoice {
   supplier_name: string;
   supplier_id: string | null;
   invoice_number: string | null;
+  receipt_number: string | null;
   type: string;
+  document_category: "invoice" | "receipt" | "bill" | "payment_request" | "credit_note";
   customer_number: string | null;
   account_number: string | null;
   service_address: string | null;
@@ -510,7 +512,7 @@ export const api = {
   },
 
   invoices: {
-    list: (params?: { q?: string; status?: string; type?: string; cashFlow?: string; category?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
+    list: (params?: { q?: string; status?: string; type?: string; documentCategory?: ImportedInvoice["document_category"]; cashFlow?: string; category?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
       get<{
         rows: ImportedInvoice[];
         total: number;
@@ -519,6 +521,7 @@ export const api = {
         offset: number;
         visibleLimit: number | null;
         counts: Record<string, number>;
+        documentCategoryCounts: Record<ImportedInvoice["document_category"], number>;
         types: string[];
         categories: GmailSearchProvider["category"][];
         suppliers: string[];
@@ -550,7 +553,7 @@ export const api = {
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
     upload: async (
       files: File[],
-      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean },
+      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean },
       templateId?: string | number
     ) => {
       const fd = new FormData();
@@ -559,6 +562,7 @@ export const api = {
       if (options?.doAi === false) params.set("skipAi", "true");
       if (options?.doEntities === false) params.set("skipEntities", "true");
       if (options?.doReminders === false) params.set("skipReminders", "true");
+      if (options?.reprocessDuplicates === true) params.set("reprocessDuplicates", "true");
       if (templateId) params.set("templateId", String(templateId));
       const qs = params.toString();
       const url = `${BASE}/documents/upload${qs ? "?" + qs : ""}`;
@@ -575,7 +579,7 @@ export const api = {
     },
     uploadOne: async (
       file: File,
-      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean },
+      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean },
       templateId?: string | number
     ): Promise<{ id: string; duplicate: boolean }> => {
       const fd = new FormData();
@@ -584,6 +588,7 @@ export const api = {
       if (options?.doAi === false) params.set("skipAi", "true");
       if (options?.doEntities === false) params.set("skipEntities", "true");
       if (options?.doReminders === false) params.set("skipReminders", "true");
+      if (options?.reprocessDuplicates === true) params.set("reprocessDuplicates", "true");
       if (templateId) params.set("templateId", String(templateId));
       const qs = params.toString();
       const url = `${BASE}/documents/upload${qs ? "?" + qs : ""}`;
@@ -622,6 +627,8 @@ export const api = {
     deleteAll: () => del("/clients"),
     timeline: (id: string) => get(`/clients/${id}/timeline`),
     documents: (id: string) => get<Document[]>(`/clients/${id}/documents`),
+    merge: (body: { sourceIds: string[]; canonicalId: string }) =>
+      post<{ ok: true; merged: number; kept: string; clientName: string }>("/clients/merge", body),
   },
 
   contracts: {

@@ -33,6 +33,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const offset = clampInt(req.query.offset, 0, 0, 100_000);
     const q = normalize(String(req.query.q ?? ""));
     const status = String(req.query.status ?? "").trim();
+    const documentCategory = normalizeInvoiceDocumentCategory(req.query.documentCategory);
     const type = String(req.query.type ?? "").trim();
     const cashFlow = normalizeCashFlow(req.query.cashFlow);
     const category = String(req.query.category ?? "").trim();
@@ -73,6 +74,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const rows = facetRows
       .filter((row) => {
         if (status && row.status !== status) return false;
+        if (documentCategory && row.document_category !== documentCategory) return false;
         return true;
       })
       .sort((left, right) => compareInvoiceRows(left, right, sortBy, sortDir));
@@ -92,6 +94,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       offset: safeOffset,
       visibleLimit,
       counts,
+      documentCategoryCounts: countBy(visibleFacetRows, (row) => row.document_category),
       types: uniqueSorted(visibleFacetRows.map((row) => row.type).filter(isNonEmptyString)),
       categories: uniqueSorted(visibleFacetRows.map((row) => row.provider_category ?? "").filter(isNonEmptyString)),
       suppliers: uniqueSorted(visibleFacetRows.map((row) => row.supplier_name).filter(isNonEmptyString)),
@@ -521,7 +524,9 @@ function presentInvoice(
     supplier_name: invoice.supplier_name ?? "ספק לא מזוהה",
     supplier_id: invoice.supplier_id ?? null,
     invoice_number: invoice.invoice_number ?? null,
+    receipt_number: invoice.receipt_number ?? invoice.fields?.receipt_number ?? null,
     type: invoice.document_subtype ?? invoice.template_name ?? "חשבונית",
+    document_category: invoiceDocumentCategory(invoice.document_subtype ?? invoice.template_name ?? invoice.fields?.document_subtype),
     customer_number: invoice.customer_number ?? null,
     account_number: invoice.account_number ?? null,
     service_address: invoice.service_address ?? null,
@@ -587,6 +592,51 @@ function firstString(fields: Record<string, unknown> | null | undefined, keys: s
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+type InvoiceDocumentCategory = "invoice" | "receipt" | "bill" | "payment_request" | "credit_note";
+
+const INVOICE_DOCUMENT_CATEGORIES: InvoiceDocumentCategory[] = [
+  "invoice", "receipt", "bill", "payment_request", "credit_note",
+];
+
+function invoiceDocumentCategory(value: unknown): InvoiceDocumentCategory {
+  const text = String(value ?? "").trim().toLowerCase();
+  // Checked first: "חשבונית זיכוי" and "חשבונית מס זיכוי" also contain the
+  // plain invoice and receipt words, so a later test would misclassify them.
+  if (/זיכוי|credit\s*note|credit\s*memo/.test(text)) return "credit_note";
+  if (/receipt|קבלה/.test(text)) return "receipt";
+  if (/bill|חשבון\s*תקופתי|חיוב/.test(text)) return "bill";
+  if (/דרישת\s*תשלום|payment\s*request/.test(text)) return "payment_request";
+  return "invoice";
+}
+
+/** Hebrew + English terms so a category is findable by free-text search. */
+function invoiceDocumentCategorySearchTerms(category: unknown): string {
+  switch (category) {
+    case "receipt": return "קבלה receipt";
+    case "bill": return "חשבון תקופתי bill";
+    case "payment_request": return "דרישת תשלום payment request";
+    case "credit_note": return "זיכוי חשבונית זיכוי credit note";
+    default: return "חשבונית invoice";
+  }
+}
+
+function normalizeInvoiceDocumentCategory(value: unknown): InvoiceDocumentCategory | null {
+  const text = String(value ?? "").trim().toLowerCase();
+  return (INVOICE_DOCUMENT_CATEGORIES as string[]).includes(text)
+    ? text as InvoiceDocumentCategory
+    : null;
+}
+
+function countBy<T>(rows: T[], keyFn: (row: T) => string | null | undefined): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    const key = keyFn(row);
+    if (!key) continue;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
 }
 
 function matchGmailSearchProvider(text: string, providers: GmailSearchProvider[]): GmailSearchProvider | null {
@@ -676,7 +726,9 @@ function invoiceMatchesQuery(row: ReturnType<typeof presentInvoice>, q: string):
     row.provider_label,
     row.provider_category,
     row.invoice_number,
+    row.receipt_number,
     row.type,
+    invoiceDocumentCategorySearchTerms(row.document_category),
     row.cash_flow === "income" ? "הכנסה income" : "הוצאה expense",
     row.amount_display,
     row.file_name,

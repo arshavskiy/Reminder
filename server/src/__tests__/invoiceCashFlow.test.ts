@@ -29,6 +29,24 @@ describe("inferInvoiceCashFlow", () => {
   it("defaults unknown invoices to expense", () => {
     expect(inferInvoiceCashFlow({ document_subtype: "חשבונית" })).toBe("expense");
   });
+
+  it("treats credit notes as income so they offset spending", () => {
+    expect(inferInvoiceCashFlow({ document_subtype: "חשבונית זיכוי" })).toBe("income");
+    expect(inferInvoiceCashFlow({ document_subtype: "זיכוי" })).toBe("income");
+    expect(inferInvoiceCashFlow({ document_subtype: "Credit Note" })).toBe("income");
+  });
+
+  it("keeps a vendor credit note as income despite expense hints", () => {
+    // provider_id alone would otherwise force "expense".
+    expect(inferInvoiceCashFlow({
+      document_subtype: "חשבונית מס זיכוי",
+      provider_id: "golan-telecom",
+    })).toBe("income");
+  });
+
+  it("still treats an explicit stored cash_flow as authoritative", () => {
+    expect(inferInvoiceCashFlow({ cash_flow: "expense", document_subtype: "זיכוי" })).toBe("expense");
+  });
 });
 
 describe("resolveVatAmount", () => {

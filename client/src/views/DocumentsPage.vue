@@ -344,7 +344,7 @@
               <span v-if="documentReportNumberLabel(row)" class="tile__meta-item tile__meta-item--num">
                 {{ documentReportNumberLabel(row) }}
               </span>
-              <span v-if="(row as any).client_name" class="tile__meta-item">{{ (row as any).client_name }}</span>
+              <span v-if="documentHasClient(row)" class="tile__meta-item">{{ documentClientName(row) }}</span>
               <span v-if="documentTypeLabel(row)" class="tile__meta-item">{{ documentTypeLabel(row) }}</span>
             </div>
             <div class="tile__pills">
@@ -392,11 +392,36 @@
                   @update:checked="toggleSelectVisible"
                 />
               </th>
-              <th class="document-col document-col--file">קובץ</th>
-              <th class="document-col document-col--status">סטטוס</th>
-              <th class="document-col document-col--date">תאריך</th>
-              <th class="document-col document-col--client">לקוח</th>
-              <th class="document-col document-col--number">מספר</th>
+              <th class="document-col document-col--file">
+                <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('file')" @click="setDocumentSort('file')">
+                  <span>קובץ</span>
+                  <n-icon :component="documentSortIcon('file')" :size="14" />
+                </button>
+              </th>
+              <th class="document-col document-col--status">
+                <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('status')" @click="setDocumentSort('status')">
+                  <span>סטטוס</span>
+                  <n-icon :component="documentSortIcon('status')" :size="14" />
+                </button>
+              </th>
+              <th class="document-col document-col--date">
+                <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('date')" @click="setDocumentSort('date')">
+                  <span>בתוקף</span>
+                  <n-icon :component="documentSortIcon('date')" :size="14" />
+                </button>
+              </th>
+              <th class="document-col document-col--client">
+                <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('client')" @click="setDocumentSort('client')">
+                  <span>לקוח</span>
+                  <n-icon :component="documentSortIcon('client')" :size="14" />
+                </button>
+              </th>
+              <th class="document-col document-col--number">
+                <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('number')" @click="setDocumentSort('number')">
+                  <span>מספר</span>
+                  <n-icon :component="documentSortIcon('number')" :size="14" />
+                </button>
+              </th>
               <th class="document-col document-col--actions">פעולות</th>
             </tr>
           </thead>
@@ -426,6 +451,14 @@
                     :size="16"
                   />
                   <span class="document-cell-truncate" dir="auto" :title="row.file_name">{{ row.file_name }}</span>
+                  <n-tooltip v-if="isGmailImported(row)" trigger="hover">
+                    <template #trigger>
+                      <span class="document-source-badge" aria-label="יובא מ-Gmail">
+                        <GmailLogo :size="13" />
+                      </span>
+                    </template>
+                    יובא מ-Gmail
+                  </n-tooltip>
                 </span>
               </td>
               <td class="document-col document-col--status">
@@ -433,7 +466,6 @@
               </td>
               <td class="document-col document-col--date">
                 <span v-if="documentExpiryDate(row)" class="document-expiry">
-                  <strong class="document-expiry__label">בתוקף עד:</strong>
                   <span :class="expiryClass(documentExpiryDate(row))">{{ formatExpiryDate(documentExpiryDate(row)) }}</span>
                 </span>
                 <span v-else>—</span>
@@ -464,6 +496,7 @@
                   />
                   <n-dropdown
                     :options="rowActionsFor(row)"
+                    class="document-row-actions-menu"
                     placement="bottom-start"
                     trigger="click"
                     @select="(key: string) => handleRowAction(key, row)"
@@ -579,6 +612,8 @@ import {
   useMessage,
 } from "naive-ui";
 import {
+  ArrowDownOutline,
+  ArrowUpOutline,
   CloudUploadOutline,
   DocumentOutline,
   DocumentTextOutline,
@@ -592,6 +627,7 @@ import {
   RefreshOutline,
   CheckboxOutline,
   SettingsOutline,
+  SwapVerticalOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
 import {useDocumentsStore} from "../stores/documents.js";
@@ -861,6 +897,9 @@ const filterClientId = ref<string | null>(null);
 const filterDocumentType = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
 const statusFilter = ref<DocumentStatusFilter>(initialDocumentFilter());
+type DocumentSortKey = "file" | "status" | "date" | "client" | "number";
+const documentSortBy = ref<DocumentSortKey>("date");
+const documentSortDir = ref<"asc" | "desc">("desc");
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   inspection_report: "תסקיר בדיקה",
@@ -943,7 +982,7 @@ async function loadClients() {
 // ── Pagination ─────────────────────────────────────────────────────────────────
 const pageSize = ref(20);
 const currentPage = ref(1);
-watch([search, filterClientId, filterDocumentType, filterDateRange, statusFilter, pageSize], () => {
+watch([search, filterClientId, filterDocumentType, filterDateRange, statusFilter, pageSize, documentSortBy, documentSortDir], () => {
   currentPage.value = 1;
 });
 
@@ -979,10 +1018,80 @@ const filteredRows = computed(() => {
   return rows;
 });
 
+const sortedRows = computed(() => {
+  return [...filteredRows.value].sort((a, b) => compareDocuments(a, b, documentSortBy.value, documentSortDir.value));
+});
+
 const pagedRows = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
-  return filteredRows.value.slice(start, start + pageSize.value);
+  return sortedRows.value.slice(start, start + pageSize.value);
 });
+
+function setDocumentSort(key: DocumentSortKey) {
+  if (documentSortBy.value === key) {
+    documentSortDir.value = documentSortDir.value === "asc" ? "desc" : "asc";
+  } else {
+    documentSortBy.value = key;
+    documentSortDir.value = key === "date" ? "desc" : "asc";
+  }
+}
+
+function documentSortIcon(key: DocumentSortKey): Component {
+  if (documentSortBy.value !== key) return SwapVerticalOutline;
+  return documentSortDir.value === "asc" ? ArrowUpOutline : ArrowDownOutline;
+}
+
+function documentSortAriaLabel(key: DocumentSortKey): string {
+  const labels: Record<DocumentSortKey, string> = {
+    file: "קובץ",
+    status: "סטטוס",
+    date: "בתוקף",
+    client: "לקוח",
+    number: "מספר",
+  };
+  const nextDirection = documentSortBy.value === key && documentSortDir.value === "asc" ? "יורד" : "עולה";
+  return `מיין לפי ${labels[key]} בסדר ${nextDirection}`;
+}
+
+function compareDocuments(a: Document, b: Document, key: DocumentSortKey, dir: "asc" | "desc"): number {
+  const direction = dir === "asc" ? 1 : -1;
+  const result = key === "date"
+    ? compareNullableNumbers(documentDateSortValue(a), documentDateSortValue(b))
+    : compareNullableText(documentSortText(a, key), documentSortText(b, key));
+  if (result !== 0) return result * direction;
+  return compareNullableText(a.file_name ?? "", b.file_name ?? "");
+}
+
+function documentSortText(row: Document, key: DocumentSortKey): string | null {
+  if (key === "file") return row.file_name ?? "";
+  if (key === "status") return row.processing_status ?? "";
+  if (key === "client") return documentClientName(row);
+  if (key === "number") return documentReportNumberLabel(row) || documentReportNumber(row) || "";
+  return "";
+}
+
+function documentDateSortValue(row: Document): number | null {
+  const raw = documentExpiryDate(row) ?? row.import_date ?? null;
+  if (!raw) return null;
+  const time = new Date(raw).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+function compareNullableNumbers(a: number | null, b: number | null): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a - b;
+}
+
+function compareNullableText(a: string | null, b: string | null): number {
+  const aa = String(a ?? "").trim();
+  const bb = String(b ?? "").trim();
+  if (!aa && !bb) return 0;
+  if (!aa || aa === "—") return 1;
+  if (!bb || bb === "—") return -1;
+  return aa.localeCompare(bb, "he", { numeric: true, sensitivity: "base" });
+}
 
 const allVisibleSelected = computed(() =>
   pagedRows.value.length > 0 && pagedRows.value.every((row) => selectedIds.value.has(String(row.id))),
@@ -1111,10 +1220,19 @@ function documentTypeLabel(row: Document | Record<string, unknown>): string {
   return "";
 }
 
+function isGmailImported(row: Document | Record<string, unknown>): boolean {
+  // import_source is authoritative for anything imported after it was added.
+  // gmail_provider_id covers older rows the backfill could not reach: only the
+  // Gmail import path ever sets it.
+  if ((row as any).import_source === "gmail") return true;
+  return Boolean((row as any).gmail_provider_id);
+}
+
 function isInvoiceLikeDocument(row: Document | Record<string, unknown>): boolean {
   if ((row as any).invoice_saved === true || (row as any).invoice_rejected === true) return true;
   if (String((row as any).invoice_rejection_reason ?? "").trim()) return true;
-  if (String((row as any).spaces_key ?? "").startsWith("gmail/invoices/")) return true;
+  // Legacy `gmail/invoices/...` and tenant-first `{user_id}/invoices/...` keys.
+  if (/(^gmail\/invoices\/|^[^/]+\/invoices\/)/.test(String((row as any).spaces_key ?? ""))) return true;
   const type = `${(row as any).document_type ?? ""} ${(row as any).document_kind ?? ""}`;
   if (/חשבונית|קבלה|invoice|receipt|bill/i.test(type)) return true;
   try {
@@ -1167,8 +1285,28 @@ function fileTypeIcon(mime: string | null | undefined) {
   return DocumentOutline;
 }
 
+function documentExtractedFields(row: Document | Record<string, unknown>): Record<string, unknown> {
+  try {
+    const raw = (row as any).extracted_fields;
+    if (!raw) return {};
+    return typeof raw === "string" ? JSON.parse(raw || "{}") : raw;
+  } catch {
+    return {};
+  }
+}
+
 function documentClientName(row: Document): string {
-  return String(row.client_name ?? "").trim() || "—";
+  const linked = String(row.client_name ?? "").trim();
+  if (linked) return linked;
+  const fields = documentExtractedFields(row);
+  for (const key of ["client_company", "client_name", "company", "counterparty", "contact_person"]) {
+    const text = String(fields[key] ?? "").trim();
+    if (text) return text;
+  }
+  return "—";
+}
+function documentHasClient(row: Document): boolean {
+  return documentClientName(row) !== "—";
 }
 function documentClientId(row: Document): string | null {
   const id = String(row.client_id ?? "").trim();
@@ -2114,6 +2252,42 @@ async function bulkDownload() {
   font-weight: 800;
 }
 
+.document-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.document-sort-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-sort-button :deep(.n-icon) {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--text-secondary) 78%, var(--brand-color));
+}
+
+.document-sort-button:hover,
+.document-sort-button:focus-visible {
+  color: var(--brand-color);
+}
+
+.document-sort-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-color) 45%, transparent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
 .document-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -2155,6 +2329,14 @@ async function bulkDownload() {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.document-source-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
 }
 
 .document-file-icon {
@@ -2381,4 +2563,16 @@ async function bulkDownload() {
   }
 }
 
+</style>
+
+<style>
+/* Not scoped: n-dropdown teleports its menu to the body, so scoped styles
+   never reach it. Scoped to the menu class to avoid touching other dropdowns. */
+.document-row-actions-menu.n-dropdown {
+  min-width: 190px;
+}
+
+.document-row-actions-menu.n-dropdown .n-dropdown-option-body {
+  padding-inline: 6px;
+}
 </style>

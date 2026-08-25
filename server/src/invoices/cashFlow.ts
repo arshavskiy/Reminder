@@ -6,6 +6,10 @@ export const ISRAEL_VAT_INCLUDED_FACTOR = ISRAEL_VAT_RATE / (1 + ISRAEL_VAT_RATE
 const EXPENSE_HINT_RE = /github|vercel|subscription|חשבון\s*תקופתי|דרישת\s*תשלום|utility|\bbill\b|חיוב\s*אוטומטי/;
 const HEBREW_RECEIPT_RE = /קבלה/;
 const ENGLISH_VENDOR_RECEIPT_RE = /\breceipt\b/;
+// A credit note refunds money the user already paid, so it offsets spending
+// rather than adding to it. Expense analytics excludes income rows, so leaving
+// these as "expense" would inflate reported costs.
+const CREDIT_NOTE_RE = /זיכוי|credit\s*note|credit\s*memo/;
 
 export function normalizeCashFlow(value: unknown): InvoiceCashFlow | null {
   const text = String(value ?? "").trim().toLowerCase();
@@ -25,6 +29,11 @@ export function inferInvoiceCashFlow(input: {
 }): InvoiceCashFlow {
   const stored = normalizeCashFlow(input.cash_flow) ?? normalizeCashFlow(input.fields?.cash_flow);
   if (stored) return stored;
+
+  // Tested before the vendor/provider hints below: a credit note from a known
+  // vendor is still a refund, and those hints would otherwise force "expense".
+  const subtype = String(input.document_subtype ?? input.type ?? input.fields?.document_subtype ?? "").toLowerCase();
+  if (CREDIT_NOTE_RE.test(subtype)) return "income";
 
   if (input.provider_id) return "expense";
   const category = String(input.provider_category ?? input.fields?.provider_category ?? "").trim();

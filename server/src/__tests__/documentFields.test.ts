@@ -300,3 +300,38 @@ describe("PUT /documents/:id/fields — email overlay", () => {
     expect(firstTrimmedEmail(merged.client_email, merged.contact_email, merged.email)).toBe("anous_adnan@yahoo.com");
   });
 });
+
+const EXTRACTED_CLIENT_NAME_KEYS = [
+  "client_company",
+  "client_name",
+  "company",
+  "counterparty",
+  "contact_person",
+] as const;
+
+function extractedClientDisplayName(fields: Record<string, unknown> | null): string | null {
+  if (!fields) return null;
+  for (const key of EXTRACTED_CLIENT_NAME_KEYS) {
+    const value = fields[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+describe("GET /documents list — client column fallback", () => {
+  it("prefers extracted company name over contact person", () => {
+    expect(extractedClientDisplayName({
+      client_company: "שחם גיא בע\"מ",
+      client_name: "אורי",
+      contact_person: "אורי",
+    })).toBe("שחם גיא בע\"מ");
+  });
+
+  it("falls back to client_name when company is missing", () => {
+    expect(extractedClientDisplayName({ client_name: "גיא שחם" })).toBe("גיא שחם");
+  });
+
+  it("returns null when no client identity fields exist", () => {
+    expect(extractedClientDisplayName({ report_number: "484590/18239" })).toBeNull();
+  });
+});

@@ -10,11 +10,11 @@
       </template>
       <template #actions>
         <div class="doc-detail-actions">
-          <StatusBadge :status="doc.processing_status"/>
-          <button v-if="!props.docId" class="rbtn rbtn--ghost" type="button" @click="$router.back()">
-            <n-icon :component="ArrowBackOutline" class="btn-icon"/>
-            חזרה
-          </button>
+<!--          <StatusBadge :status="doc.processing_status"/>-->
+<!--          <button v-if="!props.docId" class="rbtn rbtn&#45;&#45;ghost" type="button" @click="$router.back()">-->
+<!--            <n-icon :component="ArrowBackOutline" class="btn-icon"/>-->
+<!--            חזרה-->
+<!--          </button>-->
           <button
               :class="{ 'rbtn--loading': downloading }"
               :disabled="downloading"

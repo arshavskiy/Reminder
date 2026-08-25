@@ -62,11 +62,29 @@
           <span class="pill__badge">{{ f.count }}</span>
         </button>
       </div>
+      <button
+        v-if="store.rows.length >= 2"
+        class="btn btn--ghost"
+        type="button"
+        @click="openClientMergeModal"
+      >
+        <n-icon :component="BriefcaseOutline" class="btn-icon" />
+        מזג לקוחות
+      </button>
     </div>
 
     <!-- Bulk bar -->
     <div v-if="bulkMode && selectedClientKeys.length" class="bulk-bar">
       <span class="bulk-bar__label">נבחרו {{ selectedClientKeys.length }}</span>
+      <button
+        v-if="selectedClientKeys.length >= 2"
+        class="btn btn--ghost btn--xs"
+        type="button"
+        @click="openClientMergeModal"
+      >
+        <n-icon :component="BriefcaseOutline" :size="14" class="btn-icon" />
+        מזג נבחרים
+      </button>
       <button class="btn btn--danger-ghost btn--xs" type="button" @click="bulkDeleteSelected">
         <n-icon :component="TrashOutline" :size="14" class="btn-icon" />
         מחק נבחרים
@@ -246,11 +264,58 @@
         </div>
       </template>
     </n-modal>
+
+    <n-modal
+      v-model:show="mergeModal.show"
+      preset="card"
+      title="מיזוג לקוחות"
+      class="client-merge-modal"
+      :style="{ width: '560px', maxWidth: 'calc(100vw - 32px)' }"
+    >
+      <div class="client-merge-form" dir="rtl">
+        <label class="client-merge-label">
+          לקוחות למיזוג
+          <n-select
+            v-model:value="mergeModal.sourceIds"
+            :options="clientMergeOptions"
+            clearable
+            filterable
+            multiple
+            max-tag-count="responsive"
+            placeholder="בחר לקוחות"
+          />
+        </label>
+        <label class="client-merge-label">
+          לקוח מאוחד
+          <n-select
+            v-model:value="mergeModal.canonicalId"
+            :options="canonicalMergeOptions"
+            clearable
+            filterable
+            placeholder="בחר את הלקוח שישאר"
+          />
+        </label>
+        <p class="client-merge-hint">
+          כל המסמכים, החוזים והתזכורות של הלקוחות שנבחרו יועברו ללקוח המאוחד. הלקוחות האחרים יימחקו.
+        </p>
+        <div class="client-merge-actions">
+          <n-button @click="mergeModal.show = false">ביטול</n-button>
+          <n-button
+            type="primary"
+            :loading="mergeModal.saving"
+            :disabled="mergeModal.sourceIds.length < 2 || !mergeModal.canonicalId"
+            @click="saveClientMerge"
+          >
+            מזג ושמור
+          </n-button>
+        </div>
+      </div>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   NButton,
@@ -262,12 +327,15 @@ import {
   NModal,
   NRadioButton,
   NRadioGroup,
+  NSelect,
   NSpin,
   NTooltip,
   useMessage,
+  type SelectOption,
 } from "naive-ui";
 import {
   AddOutline,
+  BriefcaseOutline,
   BusinessOutline,
   CheckboxOutline,
   CreateOutline,
@@ -281,6 +349,7 @@ import {
 import { useClientsStore } from "../stores/clients.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import PageHeader from "../components/PageHeader.vue";
+import { api } from "../services/apiService.js";
 import type { Client } from "@shared/types.js";
 
 const store = useClientsStore();
@@ -295,7 +364,7 @@ function onSearch() {
   searchTimer = setTimeout(() => store.fetch({ q: search.value || undefined, limit: 200 }), 300);
 }
 function refresh() {
-  store.fetch({ q: search.value || undefined, limit: 200 }, true);
+  return store.fetch({ q: search.value || undefined, limit: 200 }, true);
 }
 
 onMounted(() => {
@@ -358,6 +427,62 @@ function toggleClientSelection(row: Client) {
 function selectedClients() {
   const selected = new Set(selectedClientKeys.value.map(String));
   return store.rows.filter((row) => selected.has(String(row.id)));
+}
+
+const mergeModal = reactive({
+  show: false,
+  sourceIds: [] as string[],
+  canonicalId: null as string | null,
+  saving: false,
+});
+
+const clientMergeOptions = computed<SelectOption[]>(() =>
+  store.rows.map((row) => ({
+    label: displayClientName(row.display_name),
+    value: String(row.id),
+  })),
+);
+
+const canonicalMergeOptions = computed<SelectOption[]>(() => {
+  const selected = new Set(mergeModal.sourceIds);
+  return clientMergeOptions.value.filter((option) => selected.has(String(option.value)));
+});
+
+watch(
+  () => mergeModal.sourceIds.join("|"),
+  () => {
+    if (!mergeModal.sourceIds.includes(String(mergeModal.canonicalId ?? ""))) {
+      mergeModal.canonicalId = mergeModal.sourceIds[0] ?? null;
+    }
+  },
+);
+
+async function openClientMergeModal() {
+  const selected = selectedClients().map((row) => String(row.id));
+  if (store.total > store.rows.length) {
+    await store.fetch({ limit: Math.max(store.total, 2000) });
+  }
+  mergeModal.sourceIds = selected.length >= 2 ? selected : [];
+  mergeModal.canonicalId = mergeModal.sourceIds[0] ?? null;
+  mergeModal.show = true;
+}
+
+async function saveClientMerge() {
+  const sourceIds = [...new Set(mergeModal.sourceIds.map((id) => String(id).trim()).filter(Boolean))];
+  const canonicalId = String(mergeModal.canonicalId ?? "").trim();
+  if (sourceIds.length < 2 || !canonicalId) return;
+  mergeModal.saving = true;
+  try {
+    const result = await api.clients.merge({ sourceIds, canonicalId });
+    mergeModal.show = false;
+    selectedClientKeys.value = selectedClientKeys.value.filter((id) => String(id) === result.kept);
+    message.success(`${result.merged + 1} לקוחות מוזגו תחת ${result.clientName || "הלקוח המאוחד"}`);
+    await refresh();
+  } catch {
+    message.error("שגיאה במיזוג לקוחות");
+  } finally {
+    mergeModal.saving = false;
+  }
 }
 
 function onRowClick(row: Client, event: MouseEvent) {
@@ -549,6 +674,33 @@ function bulkDeleteSelected() {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.client-merge-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.client-merge-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.client-merge-hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.client-merge-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
 }
 
 .pill {

@@ -1,6 +1,6 @@
 import "dotenv/config";
-import {ObjectId} from "mongodb";
 import {closeDb, col, connectDb} from "../db/db";
+import {mergeClientRecord} from "../clients/mergeClients";
 import {normalizeClientIdentityKey, normalizePhoneIdentityKey} from "../pipeline/importer";
 
 const OWNER_EMAIL = "arshavsky.pasha@gmail.com";
@@ -17,14 +17,6 @@ function arg(name: string): string | undefined {
 
 function isApply(): boolean {
   return process.argv.includes("--apply");
-}
-
-function toObjectId(id: string): ObjectId | null {
-  try {
-    return new ObjectId(id);
-  } catch {
-    return null;
-  }
 }
 
 function legalSuffixPenalty(name: string): number {
@@ -67,81 +59,6 @@ async function findUserId(): Promise<string> {
   return user._id.toString();
 }
 
-async function relinkDocumentClients(duplicateId: string, canonicalId: string) {
-  const links = await col("document_clients").find({client_id: duplicateId}).toArray() as any[];
-  let relinked = 0;
-  let removed = 0;
-
-  for (const link of links) {
-    const existing = await col("document_clients").findOne({
-      document_id: link.document_id,
-      client_id: canonicalId,
-    }) as any;
-
-    if (existing) {
-      await col("document_clients").deleteOne({_id: link._id});
-      removed += 1;
-    } else {
-      await col("document_clients").updateOne({_id: link._id}, {$set: {client_id: canonicalId}});
-      relinked += 1;
-    }
-  }
-
-  return {relinked, removed};
-}
-
-async function relinkSimpleClientFields(duplicateId: string, canonicalId: string) {
-  const duplicateObjectId = toObjectId(duplicateId);
-  const idValues: any[] = [duplicateId, ...(duplicateObjectId ? [duplicateObjectId] : [])];
-
-  const [contracts, reminders, tasks, equipment, timeline] = await Promise.all([
-    col("contracts").updateMany({client_id: {$in: idValues}} as any, {$set: {client_id: canonicalId}}),
-    col("reminders").updateMany({client_id: {$in: idValues}} as any, {$set: {client_id: canonicalId}}),
-    col("tasks").updateMany({client_id: {$in: idValues}} as any, {$set: {client_id: canonicalId}}),
-    col("equipment").updateMany({client_id: {$in: idValues}} as any, {$set: {client_id: canonicalId}}),
-    col("timeline_events").updateMany({client_id: {$in: idValues}} as any, {$set: {client_id: canonicalId}}),
-  ]);
-
-  return {
-    contracts: contracts.modifiedCount,
-    reminders: reminders.modifiedCount,
-    tasks: tasks.modifiedCount,
-    equipment: equipment.modifiedCount,
-    timeline: timeline.modifiedCount,
-  };
-}
-
-async function mergeClient(duplicate: any, canonical: any) {
-  const duplicateId = duplicate._id.toString();
-  const canonicalId = canonical._id.toString();
-  const documentClients = await relinkDocumentClients(duplicateId, canonicalId);
-  const linked = await relinkSimpleClientFields(duplicateId, canonicalId);
-
-  const notes = [
-    canonical.notes,
-    duplicate.notes,
-    `Merged duplicate client "${duplicate.display_name}" (${duplicateId})`,
-  ].filter(Boolean).join("\n");
-
-  await col("clients").updateOne(
-    {_id: canonical._id},
-    {
-      $set: {
-        ...(duplicate.email && !canonical.email && {email: duplicate.email}),
-        ...(duplicate.phone && !canonical.phone && {phone: duplicate.phone}),
-        ...(duplicate.mobile && !canonical.mobile && {mobile: duplicate.mobile}),
-        ...(duplicate.contact_person && !canonical.contact_person && {contact_person: duplicate.contact_person}),
-        ...(duplicate.id_number && !canonical.id_number && {id_number: duplicate.id_number}),
-        notes,
-        updated_at: new Date(),
-      },
-    },
-  );
-  await col("clients").deleteOne({_id: duplicate._id});
-
-  return {documentClients, linked};
-}
-
 async function main() {
   const apply = isApply();
   await connectDb();
@@ -171,7 +88,7 @@ async function main() {
 
     if (!apply) continue;
     for (const duplicate of duplicates) {
-      const result = await mergeClient(duplicate, canonical);
+      const result = await mergeClientRecord(duplicate, canonical);
       console.log(`[client-merge] merged ${duplicate._id} -> ${canonical._id}`, result);
     }
   }

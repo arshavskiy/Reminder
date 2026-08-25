@@ -31,6 +31,11 @@ export const useClientsStore = defineStore("clients", () => {
         api.clients.documents(id),
         api.clients.timeline(id) as Promise<TimelineEvent[]>,
       ]);
+    } catch (error) {
+      active.value = null;
+      activeDocuments.value = [];
+      activeTimeline.value = [];
+      throw error;
     } finally {
       loading.value = false;
     }

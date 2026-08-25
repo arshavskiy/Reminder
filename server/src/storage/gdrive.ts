@@ -3,7 +3,7 @@ import {basename} from "path";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {logger} from "../logger";
-import {resolveDocumentFilePath} from "../documents/fileResolver";
+import {isObjectStorageMissingError, resolveDocumentFilePath} from "../documents/fileResolver";
 import {tierFeatureFlags} from "../plans/tierFeatures";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -480,7 +480,30 @@ export async function syncDocumentToDrive(documentId: string, userId: string): P
             drive_file_id: driveFile.id,
         });
     } catch (err) {
+        if (isObjectStorageMissingError(err)) {
+            const now = new Date();
+            await col("documents").updateOne(
+                {_id: new ObjectId(documentId)} as any,
+                {
+                    $set: {
+                        storage_status: "missing",
+                        file_missing: true,
+                        drive_sync_error: "storage_missing",
+                        updated_at: now,
+                    },
+                    $unset: {drive_file_id: "", drive_web_link: ""},
+                } as any,
+            );
+            await col("invoices").updateMany(
+                invoiceDocumentFilter(userId, documentId) as any,
+                {
+                    $set: {drive_sync_error: "storage_missing", updated_at: now},
+                    $unset: {drive_file_id: "", drive_web_link: ""},
+                } as any,
+            );
+        }
         logger.error("drive_sync_failed", {document_id: documentId, user_id: userId, error: err});
+        throw err;
     }
 }
 

@@ -135,6 +135,9 @@ export interface FeatureDefinition {
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
 export type DocumentSource = "scanned" | "generated";
+/** Where the file entered the system. Distinct from DocumentSource, which
+ *  drives capability checks (re-extract, replace) rather than provenance. */
+export type DocumentImportSource = "gmail" | "drive" | "upload";
 export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error" | "not_applicable";
 export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
@@ -158,6 +161,8 @@ export interface Document {
   import_date: string;
   processing_status: ProcessingStatus;
   document_source?: DocumentSource | null;
+  import_source?: DocumentImportSource | null;
+  gmail_provider_id?: string | null;
   error_message: string | null;
   raw_text: string | null;
   extracted_fields?: string | null;

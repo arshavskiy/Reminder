@@ -11,6 +11,25 @@ export interface StoredDocumentFile {
   spaces_key?: string | null;
 }
 
+export class ObjectStorageDownloadError extends Error {
+  code = "object_storage_download_failed";
+  status: number;
+
+  constructor(status: number) {
+    super(`Object storage download failed: ${status}`);
+    this.name = "ObjectStorageDownloadError";
+    this.status = status;
+  }
+}
+
+export function isObjectStorageMissingError(error: unknown): boolean {
+  const err = error as { code?: unknown; status?: unknown; message?: unknown } | null;
+  return (
+    err?.code === "object_storage_download_failed" &&
+    err?.status === 404
+  ) || /Object storage download failed:\s*404/i.test(String(err?.message ?? error ?? ""));
+}
+
 function pathBasename(pathValue: string): string {
   return pathValue.split(/[\\/]/).filter(Boolean).pop() ?? "";
 }
@@ -51,7 +70,7 @@ export async function resolveDocumentFilePath(doc: StoredDocumentFile): Promise<
   if (spacesEnabled() && doc.spaces_key) {
     const signedUrl = await getSpacesSignedUrl(doc.spaces_key, 300);
     const res = await fetch(signedUrl);
-    if (!res.ok) throw new Error(`Object storage download failed: ${res.status}`);
+    if (!res.ok) throw new ObjectStorageDownloadError(res.status);
 
     const ext = extname(doc.spaces_key);
     const tmpDir = join(getDataDir(), "tmp");

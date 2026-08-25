@@ -5,6 +5,7 @@ import {HTTPException, requireAuth} from "../auth/middleware";
 import {normalizeClientDisplayName, normalizePhoneIdentityKey} from "../utils/clientNames";
 import {logger} from "../logger";
 import {readExpiryDateValue} from "../shared/expiryField.js";
+import {MergeClientsError, mergeClientsForUser, uniqueClientIds} from "../clients/mergeClients";
 
 export function registerClientRoutes(app: express.Application) {
   // GET /api/clients
@@ -40,6 +41,40 @@ export function registerClientRoutes(app: express.Application) {
     ]);
 
     res.json({ rows: rows.map(flatClient), total });
+  });
+
+  app.post("/api/clients/merge", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    try {
+      const result = await mergeClientsForUser(
+        userId,
+        uniqueClientIds(req.body?.sourceIds),
+        String(req.body?.canonicalId ?? ""),
+      );
+      logger.info("clients_merged", {
+        user_id: userId,
+        kept: result.kept,
+        merged: result.merged,
+        client_name: result.clientName,
+      });
+      res.json(result);
+    } catch (err) {
+      if (err instanceof MergeClientsError) {
+        res.status(err.status).json({ error: err.message });
+        return;
+      }
+      logger.error("clients_merge_failed", {user_id: userId, error: String(err)});
+      res.status(500).json({ error: "Failed to merge clients" });
+    }
   });
 
   // GET /api/clients/:id

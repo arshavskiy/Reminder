@@ -5,6 +5,7 @@ import {requireAuth} from "../auth/middleware";
 import {pinFolderToMyDrive, renameDriveFolder, resolveDriveToken, syncDocumentToDrive, driveFolderWebUrl, driveTrashWebUrl, inspectDriveFolder, ensureHealthyDriveFolder, copyDocumentDriveLinksToInvoices} from "../storage/gdrive";
 import {logger} from "../logger";
 import {tierFeatureFlags} from "../plans/tierFeatures";
+import {isObjectStorageMissingError} from "../documents/fileResolver";
 
 function planAllowsGoogleDrive(planOrRole: string | null | undefined): boolean {
     return tierFeatureFlags(planOrRole).googleDriveSync;
@@ -17,9 +18,14 @@ const HAS_FILE_FILTER = {
         {spaces_key: {$exists: true, $ne: null}},
     ],
 };
+const EXPORTABLE_FILE_FILTER = {
+    ...HAS_FILE_FILTER,
+    storage_status: {$ne: "missing"},
+    file_missing: {$ne: true},
+};
 
 type DriveExportJobStatus = "queued" | "running" | "completed" | "failed";
-type DriveExportJobResult = {documentId: string; fileName: string; status: "uploaded" | "failed"; error?: string};
+type DriveExportJobResult = {documentId: string; fileName: string; status: "uploaded" | "failed" | "skipped"; error?: string};
 type DriveExportJob = {
     _id: ObjectId;
     user_id: string;
@@ -119,6 +125,7 @@ async function runDriveExportJob(job: DriveExportJob) {
     const ids = job.document_ids ?? [];
     let uploaded = job.uploaded ?? 0;
     let failed = job.failed ?? 0;
+    let skipped = job.skipped ?? 0;
     let processed = job.processed ?? 0;
 
     for (let index = job.cursor ?? 0; index < ids.length; index += 1) {
@@ -127,6 +134,16 @@ async function runDriveExportJob(job: DriveExportJob) {
         const fileName = String(doc?.file_name ?? documentId);
         let result: DriveExportJobResult = {documentId, fileName, status: "failed"};
         try {
+            if (!doc) {
+                skipped += 1;
+                result = {documentId, fileName, status: "skipped", error: "document_missing"};
+                continue;
+            }
+            if (doc.file_missing === true || doc.storage_status === "missing") {
+                skipped += 1;
+                result = {documentId, fileName, status: "skipped", error: "storage_missing"};
+                continue;
+            }
             await syncDocumentToDrive(documentId, job.user_id);
             const updated = await col<any>("documents").findOne({_id: new ObjectId(documentId)} as any);
             if (updated?.drive_file_id) {
@@ -137,18 +154,25 @@ async function runDriveExportJob(job: DriveExportJob) {
                 result = {documentId, fileName, status: "failed", error: "drive_upload_unconfirmed"};
             }
         } catch (err: any) {
-            failed += 1;
-            result = {documentId, fileName, status: "failed", error: String(err?.message ?? err)};
+            const storageMissing = isObjectStorageMissingError(err);
+            if (storageMissing) {
+                skipped += 1;
+                result = {documentId, fileName, status: "skipped", error: "storage_missing"};
+            } else {
+                failed += 1;
+                result = {documentId, fileName, status: "failed", error: String(err?.message ?? err)};
+            }
             logger.error("drive_export_file_failed", {document_id: documentId, job_id: job._id.toString(), error: err});
+        } finally {
+            processed = index + 1;
+            await col("drive_export_jobs").updateOne(
+                {_id: job._id} as any,
+                {
+                    $set: {cursor: processed, processed, uploaded, failed, skipped, updated_at: new Date()},
+                    $push: {results: {$each: [result], $slice: -20}},
+                } as any,
+            );
         }
-        processed = index + 1;
-        await col("drive_export_jobs").updateOne(
-            {_id: job._id} as any,
-            {
-                $set: {cursor: processed, processed, uploaded, failed, updated_at: new Date()},
-                $push: {results: {$each: [result], $slice: -20}},
-            } as any,
-        );
     }
 
     try {
@@ -174,6 +198,7 @@ async function runDriveExportJob(job: DriveExportJob) {
                 processed,
                 uploaded,
                 failed,
+                skipped,
                 folder_id: folderId,
                 folder_name: folderName,
                 folder_url: folderUrl,
@@ -357,12 +382,12 @@ export function registerGdriveRoutes(app: express.Express) {
         const pendingDocs = await col<any>("documents").find({
             user_id: ctx.userId,
             drive_file_id: {$exists: false},
-            ...HAS_FILE_FILTER,
+            ...EXPORTABLE_FILE_FILTER,
         } as any).project({_id: 1, file_name: 1}).toArray();
         const skipped = await col("documents").countDocuments({
             user_id: ctx.userId,
             drive_file_id: {$exists: true, $nin: [null, ""]},
-            ...HAS_FILE_FILTER,
+            ...EXPORTABLE_FILE_FILTER,
         } as any);
 
         const folderId = healthy.folderId;

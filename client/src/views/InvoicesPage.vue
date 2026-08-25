@@ -6,6 +6,14 @@
       subtitle="חשבוניות שיובאו מ-Gmail — צפייה, סינון וניהול"
     >
       <template #hero>
+        <input
+          ref="invoiceUploadInput"
+          class="sr-only"
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx,.xls,.xlsx,image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          @change="onInvoiceUploadInputChange"
+        />
         <button
           v-if="selectedInvoiceCount > 0"
           :class="{ 'rbtn--loading': deletingSelected }"
@@ -18,14 +26,24 @@
           מחק {{ selectedInvoiceCount }}
         </button>
         <button
-          :class="{ 'rbtn--loading': exporting }"
-          :disabled="loading || total === 0 || exporting"
+          :class="{ 'rbtn--loading': importingFromGmail }"
+          :disabled="loading || importingFromGmail"
+          class="rbtn rbtn--primary"
+          type="button"
+          @click="handleGmailImportButton"
+        >
+          <GmailLogo :size="16" class="btn-icon" />
+          {{ gmailImportButtonLabel }}
+        </button>
+        <button
+          :class="{ 'rbtn--loading': uploadingInvoices }"
+          :disabled="loading || uploadingInvoices"
           class="rbtn rbtn--ghost"
           type="button"
-          @click="exportInvoicesToExcel"
+          @click="openInvoiceUploadPicker"
         >
-          <n-icon :component="DownloadOutline" class="btn-icon" />
-          ייצוא לאקסל
+          <n-icon :component="CloudUploadOutline" class="btn-icon" />
+          העלה קבצים
         </button>
         <button
           :disabled="loading"
@@ -37,14 +55,14 @@
           רענן
         </button>
         <button
-          :class="{ 'rbtn--loading': importingFromGmail }"
-          :disabled="loading || importingFromGmail"
-          class="rbtn rbtn--primary"
+          :class="{ 'rbtn--loading': exporting }"
+          :disabled="loading || total === 0 || exporting"
+          class="rbtn rbtn--ghost"
           type="button"
-          @click="handleGmailImportButton"
+          @click="exportInvoicesToExcel"
         >
-          <GmailLogo :size="16" class="btn-icon" />
-          {{ gmailImportButtonLabel }}
+          <n-icon :component="DownloadOutline" class="btn-icon" />
+          ייצוא לאקסל
         </button>
         <button
             v-if="driveAllowed"
@@ -67,6 +85,17 @@
     <InvoiceSectionNav />
 
     <div class="filterbar filterbar--compact">
+      <button
+        v-for="option in documentCategoryStrip"
+        :key="option.value"
+        type="button"
+        class="pill pill--compact pill--soft"
+        :class="{ 'pill--active': (filters.documentCategory ?? '') === option.value }"
+        @click="setDocumentCategory(option.value)"
+      >
+        {{ option.label }}
+        <span class="pill__badge">{{ option.count }}</span>
+      </button>
       <button
         v-for="option in statusStrip"
         :key="option.value"
@@ -469,6 +498,7 @@ import {
   ArrowDownOutline,
   ArrowUpOutline,
   BriefcaseOutline,
+  CloudUploadOutline,
   DocumentTextOutline,
   DownloadOutline,
   EllipsisVerticalOutline,
@@ -507,6 +537,7 @@ const visibleLimit = ref<number | null>(null);
 const loading = ref(false);
 const exporting = ref(false);
 const deletingSelected = ref(false);
+const uploadingInvoices = ref(false);
 const showMonthlyReport = ref(false);
 const exportingToDrive = ref(false);
 const importingFromGmail = ref(false);
@@ -516,6 +547,7 @@ const activeDriveExportJob = ref<DriveExportJob | null>(null);
 const lastDriveExportJob = ref<DriveExportJob | null>(null);
 const gmailConnected = ref<boolean | null>(null);
 const viewMode = ref<"cards" | "table">("table");
+const invoiceUploadInput = ref<HTMLInputElement | null>(null);
 const selectedInvoiceIds = ref(new Set<string>());
 const dateRange = ref<[number, number] | null>(null);
 const page = ref(1);
@@ -524,6 +556,7 @@ type InvoiceSortKey = "supplier" | "status" | "date" | "client" | "category" | "
 const sortBy = ref<InvoiceSortKey>("date");
 const sortDir = ref<"asc" | "desc">("desc");
 const counts = ref<Record<string, number>>({});
+const documentCategoryCounts = ref<Record<string, number>>({});
 const types = ref<string[]>([]);
 const categories = ref<string[]>([]);
 const suppliers = ref<string[]>([]);
@@ -531,6 +564,7 @@ const filters = reactive({
   q: "",
   status: null as string | null,
   type: null as string | null,
+  documentCategory: null as ImportedInvoice["document_category"] | null,
   cashFlow: null as string | null,
   category: null as string | null,
   suppliers: [] as string[],
@@ -547,7 +581,7 @@ const vendorMergeModal = reactive({
   saving: false,
 });
 
-const statusOptions = computed<SelectOption[]>(() => statusStrip.value.slice(1).map((item) => ({
+const statusOptions = computed<SelectOption[]>(() => statusStrip.value.map((item) => ({
   label: `${item.label} (${item.count})`,
   value: item.value,
 })));
@@ -584,11 +618,18 @@ const allVisibleSelected = computed(() => (
   visibleRowIds.value.length > 0 && visibleRowIds.value.every((id) => selectedInvoiceIds.value.has(id))
 ));
 const statusStrip = computed(() => [
-  { label: "הכל", value: "", count: totalAll.value },
   { label: "חדש", value: "new", count: counts.value.new ?? 0 },
   { label: "נבדק", value: "reviewed", count: counts.value.reviewed ?? 0 },
   { label: "יוצא", value: "outgoing", count: counts.value.outgoing ?? 0 },
   { label: "ארכיון", value: "archived", count: counts.value.archived ?? 0 },
+]);
+const documentCategoryStrip = computed(() => [
+  { label: "הכל", value: "", count: totalAll.value },
+  { label: "חשבוניות", value: "invoice", count: documentCategoryCounts.value.invoice ?? 0 },
+  { label: "קבלות", value: "receipt", count: documentCategoryCounts.value.receipt ?? 0 },
+  { label: "חשבונות", value: "bill", count: documentCategoryCounts.value.bill ?? 0 },
+  { label: "דרישות תשלום", value: "payment_request", count: documentCategoryCounts.value.payment_request ?? 0 },
+  { label: "זיכויים", value: "credit_note", count: documentCategoryCounts.value.credit_note ?? 0 },
 ]);
 
 let searchTimer: number | undefined;
@@ -620,6 +661,7 @@ async function load(force = false) {
       q: filters.q,
       status: filters.status ?? undefined,
       type: filters.type ?? undefined,
+      documentCategory: filters.documentCategory ?? undefined,
       cashFlow: filters.cashFlow ?? undefined,
       category: filters.category ?? undefined,
       supplier: supplierFilterParam(),
@@ -635,6 +677,7 @@ async function load(force = false) {
     totalAll.value = result.totalAll;
     visibleLimit.value = result.visibleLimit;
     counts.value = result.counts;
+    documentCategoryCounts.value = result.documentCategoryCounts ?? {};
     types.value = result.types;
     categories.value = result.categories;
     suppliers.value = result.suppliers;
@@ -700,9 +743,62 @@ async function deleteSelectedInvoices(ids: string[]) {
   }
 }
 
+function openInvoiceUploadPicker() {
+  invoiceUploadInput.value?.click();
+}
+
+async function onInvoiceUploadInputChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = "";
+  if (!files.length) return;
+  await uploadInvoiceFiles(files);
+}
+
+async function uploadInvoiceFiles(files: File[]) {
+  uploadingInvoices.value = true;
+  try {
+    const template = await findInvoiceTemplate();
+    const templateId = template?.id ? String(template.id) : undefined;
+    const result = await api.documents.upload(
+      files,
+      { doAi: true, doEntities: true, doReminders: false, reprocessDuplicates: true },
+      templateId,
+    );
+    const duplicateCount = result.duplicates?.length ?? 0;
+    const queuedCount = Math.max(0, result.ids.length - duplicateCount);
+    if (queuedCount > 0) {
+      message.success(`${queuedCount} קבצים נוספו לתור עיבוד חשבוניות`);
+    }
+    if (duplicateCount > 0) {
+      message.info(`${duplicateCount} קבצים כבר קיימים ונשלחו לעיבוד חוזר כחשבוניות`);
+    }
+    await load(true);
+  } catch (err: any) {
+    const code = String(err?.message ?? "");
+    if (code.includes("document_limit_reached") || code.includes("document_monthly_quota_exceeded")) {
+      message.error("הגעת למגבלת הייבוא של המנוי.");
+    } else {
+      message.error("שגיאה בהעלאת החשבוניות");
+    }
+  } finally {
+    uploadingInvoices.value = false;
+  }
+}
+
 function setStatus(value: string) {
-  filters.status = value || null;
+  filters.status = filters.status === value ? null : (value || null);
   load(true);
+}
+
+function setDocumentCategory(value: string) {
+  filters.documentCategory = isInvoiceDocumentCategory(value) ? value : null;
+  load(true);
+}
+
+function isInvoiceDocumentCategory(value: string): value is ImportedInvoice["document_category"] {
+  return value === "invoice" || value === "receipt" || value === "bill"
+    || value === "payment_request" || value === "credit_note";
 }
 
 function setSort(key: InvoiceSortKey) {
@@ -768,6 +864,9 @@ function clientLabel(row: ImportedInvoice): string {
 }
 
 function invoiceTypeLabel(row: ImportedInvoice): string {
+  if (row.document_category === "receipt") return "קבלה";
+  if (row.document_category === "bill") return "חשבון";
+  if (row.document_category === "payment_request") return "דרישת תשלום";
   const value = String(row.type || firstInvoiceField(row, ["document_subtype", "invoice_type", "receipt_type"]) || "").trim();
   const normalized = value.toLowerCase();
   if (/receipt|קבלה/.test(normalized)) return "קבלה";
@@ -1026,7 +1125,7 @@ async function handleGmailImportButton() {
       return;
     }
     const template = await findInvoiceTemplate();
-    const started = await api.gmail.importAll(invoiceGmailQuery(template), undefined, template?.id ? String(template.id) : undefined);
+    const started = await api.gmail.importAll(undefined, undefined, template?.id ? String(template.id) : undefined);
     activeGmailImportJob.value = started;
     message.info("ייבוא החשבוניות מ-Gmail התחיל ברקע");
     const result = await waitForGmailImportJob(started.jobId);
@@ -1093,41 +1192,6 @@ async function findInvoiceTemplate(): Promise<DocTemplate | null> {
   ) ?? null;
 }
 
-function invoiceGmailQuery(template: DocTemplate | null): string {
-  const parts = ["has:attachment", "{filename:pdf filename:doc filename:docx filename:xls filename:xlsx}"];
-  const terms = invoiceTemplateTerms(template);
-  if (terms.length === 1) {
-    parts.push(formatGmailSearchTerm(terms[0]));
-  } else if (terms.length > 1) {
-    parts.push(`{${terms.map(formatGmailSearchTerm).join(" ")}}`);
-  }
-  return parts.join(" ");
-}
-
-function invoiceTemplateTerms(template: DocTemplate | null): string[] {
-  if (!template) return ["חשבונית", "invoice", "receipt", "קבלה"];
-  const candidates = [
-    template.name,
-    template.document_kind !== "unknown" ? template.document_kind : "",
-    ...(template.match_keywords ?? []),
-  ];
-  const seen = new Set<string>();
-  return candidates
-    .map((term) => String(term ?? "").trim())
-    .filter((term) => term.length >= 3)
-    .filter((term) => {
-      const key = term.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 8);
-}
-
-function formatGmailSearchTerm(term: string): string {
-  return `"${term.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
-}
-
 function renderActionIcon(icon: Component) {
   return () => h(NIcon, { component: icon });
 }
@@ -1158,6 +1222,7 @@ function invoiceActionOptions(row: ImportedInvoice) {
       children: [
         { label: "חשבוניות", key: "category:חשבוניות" },
         { label: "קבלות", key: "category:קבלות" },
+        { label: "זיכויים", key: "category:זיכויים" },
       ],
     },
     {
@@ -1416,6 +1481,10 @@ function replaceRow(updated: ImportedInvoice) {
 .pill--compact {
   padding: 6px 13px;
   font-size: 12px;
+}
+
+.pill--soft {
+  background: color-mix(in srgb, var(--brand-color) 8%, transparent);
 }
 
 .pill:hover {
