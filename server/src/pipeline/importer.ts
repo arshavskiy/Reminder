@@ -465,23 +465,15 @@ async function enqueueDocumentProcessingJob(input: {
   await col<DocumentProcessingJob>("document_processing_jobs").updateOne(
     { document_id: input.documentId } as any,
     {
+      // Only fields NOT present in $set may appear here: MongoDB rejects the
+      // whole update with "would create a conflict at '<path>'" if a path is
+      // named by both operators, which failed every upload that enqueued a job.
       $setOnInsert: {
         user_id: input.userId ?? null,
         document_id: input.documentId,
-        file_path: input.filePath,
-        mime_type: input.mimeType,
-        ext: input.ext,
-        pipeline: input.pipeline,
-        status: "queued",
         attempts: 0,
         max_attempts: 3,
-        locked_at: null,
-        locked_by: null,
-        next_run_at: nextRunAt,
-        error_code: null,
-        error_message: null,
         created_at: now,
-        updated_at: now,
       },
       $set: {
         file_path: input.filePath,
