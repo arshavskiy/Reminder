@@ -1105,6 +1105,105 @@ export function registerAdminRoutes(app: express.Application) {
       col("sessions").countDocuments({ user_id: userId, expires_at: { $gt: new Date() } }),
     ]);
 
+    // Per-user invoice / queue / storage state. Queried separately so the
+    // existing block above stays readable; all are scoped to this user.
+    const [
+      invoiceTotals,
+      invoiceSubtypes,
+      invoiceCashFlow,
+      recentInvoices,
+      queueByStatus,
+      queueOrphans,
+      driveCoverage,
+      importSources,
+      gmailJobs,
+    ] = await Promise.all([
+      col("invoices").aggregate([
+        { $match: { user_id: userId } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            with_amount: { $sum: { $cond: [{ $gt: ["$amount", 0] }, 1, 0] } },
+            total_amount: { $sum: { $ifNull: ["$amount", 0] } },
+          },
+        },
+      ]).toArray(),
+
+      col("invoices").aggregate([
+        { $match: { user_id: userId } },
+        { $group: { _id: "$document_subtype", n: { $sum: 1 } } },
+        { $sort: { n: -1 } },
+        { $limit: 15 },
+      ]).toArray(),
+
+      col("invoices").aggregate([
+        { $match: { user_id: userId } },
+        { $group: { _id: "$cash_flow", n: { $sum: 1 } } },
+      ]).toArray(),
+
+      col("invoices").find(
+        { user_id: userId } as any,
+        { projection: { supplier_name: 1, invoice_number: 1, amount: 1, currency: 1, issue_date: 1, document_subtype: 1, cash_flow: 1, created_at: 1 } } as any,
+      ).sort({ created_at: -1 }).limit(25).toArray(),
+
+      col("document_processing_jobs").aggregate([
+        { $match: { user_id: userId } },
+        { $group: { _id: "$status", n: { $sum: 1 } } },
+        { $sort: { n: -1 } },
+      ]).toArray(),
+
+      // Documents of this user waiting with no job row to run them.
+      col("documents").aggregate([
+        { $match: { user_id: userId, processing_status: { $in: ["queued", "processing"] } } },
+        { $addFields: { id_string: { $toString: "$_id" } } },
+        {
+          $lookup: {
+            from: "document_processing_jobs",
+            localField: "id_string",
+            foreignField: "document_id",
+            as: "jobs",
+          },
+        },
+        { $match: { jobs: { $size: 0 } } },
+        { $count: "n" },
+      ]).toArray(),
+
+      col("documents").aggregate([
+        { $match: { user_id: userId } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            synced: { $sum: { $cond: [{ $ifNull: ["$drive_file_id", false] }, 1, 0] } },
+            with_key: { $sum: { $cond: [{ $ifNull: ["$spaces_key", false] }, 1, 0] } },
+            legacy_keys: {
+              $sum: {
+                $cond: [
+                  { $regexMatch: { input: { $ifNull: ["$spaces_key", ""] }, regex: "^gmail/invoices/|^documents/" } },
+                  1, 0,
+                ],
+              },
+            },
+          },
+        },
+      ]).toArray(),
+
+      col("documents").aggregate([
+        { $match: { user_id: userId } },
+        { $group: { _id: "$import_source", n: { $sum: 1 } } },
+        { $sort: { n: -1 } },
+      ]).toArray(),
+
+      col("gmail_import_jobs").find(
+        { user_id: userId } as any,
+        { projection: { status: 1, total_messages: 1, processed_messages: 1, imported: 1, stored: 1, classified_invoices: 1, rejected: 1, errors: 1, created_at: 1, completed_at: 1 } } as any,
+      ).sort({ created_at: -1 }).limit(10).toArray(),
+    ]);
+
+    const invoiceSummary = (invoiceTotals[0] as any) ?? { total: 0, with_amount: 0, total_amount: 0 };
+    const driveSummary = (driveCoverage[0] as any) ?? { total: 0, synced: 0, with_key: 0, legacy_keys: 0 };
+
     const reminderStatusMap: Record<string, number> = {};
     for (const r of reminderCounts) reminderStatusMap[r._id ?? "unknown"] = r.count;
 
@@ -1216,7 +1315,53 @@ export function registerAdminRoutes(app: express.Application) {
         documents: documentCount,
         emails: emailCount,
         extractions: extractionCount,
+        invoices: invoiceSummary.total,
         total_storage_bytes: documents.reduce((sum: number, d: any) => sum + (d.file_size_bytes ?? 0), 0),
+      },
+      invoices: {
+        total: invoiceSummary.total,
+        with_amount: invoiceSummary.with_amount,
+        total_amount: Math.round((invoiceSummary.total_amount ?? 0) * 100) / 100,
+        by_subtype: invoiceSubtypes.map((r: any) => ({ subtype: r._id ?? "(none)", count: r.n })),
+        by_cash_flow: Object.fromEntries(invoiceCashFlow.map((r: any) => [String(r._id ?? "unset"), r.n])),
+        recent: recentInvoices.map((i: any) => ({
+          id: i._id?.toString(),
+          supplier_name: i.supplier_name ?? null,
+          invoice_number: i.invoice_number ?? null,
+          amount: i.amount ?? null,
+          currency: i.currency ?? null,
+          issue_date: i.issue_date ?? null,
+          document_subtype: i.document_subtype ?? null,
+          cash_flow: i.cash_flow ?? null,
+        })),
+      },
+      import_queue: {
+        by_status: Object.fromEntries(queueByStatus.map((r: any) => [String(r._id ?? "unknown"), r.n])),
+        stuck_without_job: (queueOrphans[0] as any)?.n ?? 0,
+        gmail_jobs: gmailJobs.map((j: any) => ({
+          id: j._id?.toString(),
+          status: j.status,
+          total_messages: j.total_messages ?? 0,
+          processed_messages: j.processed_messages ?? 0,
+          imported: j.imported ?? 0,
+          stored: j.stored ?? 0,
+          classified_invoices: j.classified_invoices ?? 0,
+          rejected: j.rejected ?? 0,
+          errors: j.errors ?? 0,
+          created_at: j.created_at,
+          completed_at: j.completed_at ?? null,
+        })),
+      },
+      storage: {
+        documents_total: driveSummary.total,
+        with_spaces_key: driveSummary.with_key,
+        without_spaces_key: driveSummary.total - driveSummary.with_key,
+        legacy_layout_keys: driveSummary.legacy_keys,
+        drive_synced: driveSummary.synced,
+        drive_not_synced: driveSummary.total - driveSummary.synced,
+        import_sources: Object.fromEntries(
+          importSources.map((r: any) => [String(r._id ?? "(unset)"), r.n]),
+        ),
       },
       active_sessions: activeSessions,
     });

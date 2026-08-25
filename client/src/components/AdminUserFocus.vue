@@ -95,8 +95,12 @@
             <div class="uf-stat"><span class="uf-stat__n">{{ detail.counts.contracts }}</span><span class="uf-stat__l">Contracts</span></div>
             <div class="uf-stat"><span class="uf-stat__n">{{ detail.counts.equipment }}</span><span class="uf-stat__l">Equipment</span></div>
             <div class="uf-stat"><span class="uf-stat__n">{{ formatBytes(detail.counts.total_storage_bytes) }}</span><span class="uf-stat__l">Storage</span></div>
+            <div class="uf-stat"><span class="uf-stat__n">{{ detail.counts.invoices ?? 0 }}</span><span class="uf-stat__l">Invoices</span></div>
             <div class="uf-stat"><span class="uf-stat__n">{{ detail.counts.emails }}</span><span class="uf-stat__l">Emails</span></div>
             <div class="uf-stat"><span class="uf-stat__n">{{ detail.active_sessions }}</span><span class="uf-stat__l">Sessions</span></div>
+            <div v-if="queueStuck > 0" class="uf-stat uf-stat--warn">
+              <span class="uf-stat__n">{{ queueStuck }}</span><span class="uf-stat__l">No job row</span>
+            </div>
             <div class="uf-stat" :class="{ 'uf-stat--warn': orphansCount > 0 }">
               <span class="uf-stat__n">{{ orphansCount }}</span><span class="uf-stat__l">S3 orphans</span>
             </div>
@@ -126,6 +130,29 @@
                     <li><span>Pending reminders</span><strong>{{ userPendingReminders.length }}</strong></li>
                     <li><span>Bad client emails</span><strong>{{ userBadClients.length }}</strong></li>
                     <li><span>S3 files</span><strong>{{ storageFiles.length }}{{ storageTruncated ? "+" : "" }}</strong></li>
+                    <li v-if="queueStuck > 0" class="uf-kv__warn">
+                      <span>Queued, no job row</span><strong>{{ queueStuck }}</strong>
+                    </li>
+                  </ul>
+                </section>
+                <section v-if="detail?.import_queue" class="uf-card">
+                  <h3 class="uf-card__title">Import queue</h3>
+                  <div v-if="Object.keys(detail.import_queue.by_status).length" class="uf-pills" style="margin:0 0 10px">
+                    <n-tag
+                      v-for="(n, status) in detail.import_queue.by_status"
+                      :key="status"
+                      :type="status === 'failed' ? 'error' : status === 'retry_wait' ? 'warning' : status === 'completed' ? 'success' : 'default'"
+                      size="small"
+                      round
+                    >
+                      {{ status }}: {{ n }}
+                    </n-tag>
+                  </div>
+                  <p v-else class="uf-muted">No processing jobs for this user.</p>
+                  <ul v-if="detail.storage" class="uf-kv">
+                    <li><span>Drive synced</span><strong>{{ detail.storage.drive_synced }} / {{ detail.storage.documents_total }}</strong></li>
+                    <li><span>Missing storage key</span><strong>{{ detail.storage.without_spaces_key }}</strong></li>
+                    <li><span>Legacy key layout</span><strong>{{ detail.storage.legacy_layout_keys }}</strong></li>
                   </ul>
                 </section>
                 <section class="uf-card">
@@ -155,6 +182,98 @@
                   </div>
                 </section>
               </div>
+            </n-tab-pane>
+
+            <n-tab-pane name="invoices" :tab="`Invoices (${detail?.invoices?.total ?? 0})`">
+              <div v-if="!detail?.invoices?.total" class="uf-muted">No invoices for this user.</div>
+              <template v-else>
+                <div class="uf-pills" style="margin-bottom:12px">
+                  <n-tag size="small" round>Total: {{ detail.invoices.total }}</n-tag>
+                  <n-tag size="small" round>With amount: {{ detail.invoices.with_amount }}</n-tag>
+                  <n-tag size="small" round type="info">
+                    Sum: {{ detail.invoices.total_amount.toLocaleString("en-US") }}
+                  </n-tag>
+                  <n-tag
+                    v-for="(n, flow) in detail.invoices.by_cash_flow"
+                    :key="flow"
+                    size="small"
+                    round
+                    :type="flow === 'income' ? 'success' : 'default'"
+                  >
+                    {{ flow }}: {{ n }}
+                  </n-tag>
+                </div>
+
+                <div v-if="detail.invoices.by_subtype.length" class="uf-pills" style="margin-bottom:12px">
+                  <n-tag v-for="r in detail.invoices.by_subtype" :key="r.subtype" size="small" round>
+                    {{ r.subtype }}: {{ r.count }}
+                  </n-tag>
+                </div>
+
+                <div v-if="detail.storage?.import_sources" class="uf-pills" style="margin-bottom:12px">
+                  <n-tag v-for="(n, src) in detail.storage.import_sources" :key="src" size="small" round type="info">
+                    {{ src }}: {{ n }}
+                  </n-tag>
+                </div>
+
+                <div v-if="detail.invoices.recent.length" class="uf-table-wrap">
+                <table class="uf-table">
+                  <thead>
+                    <tr>
+                      <th>Supplier</th>
+                      <th>Number</th>
+                      <th>Type</th>
+                      <th>Date</th>
+                      <th style="text-align:right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="inv in detail.invoices.recent" :key="inv.id">
+                      <td>{{ inv.supplier_name ?? "—" }}</td>
+                      <td><code>{{ inv.invoice_number ?? "—" }}</code></td>
+                      <td>{{ inv.document_subtype ?? "—" }}</td>
+                      <td>{{ inv.issue_date ?? "—" }}</td>
+                      <td style="text-align:right">
+                        {{ inv.amount != null ? inv.amount.toLocaleString("en-US") : "—" }}
+                        {{ inv.currency ?? "" }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                </div>
+
+                <template v-if="detail.import_queue?.gmail_jobs?.length">
+                  <h3 class="uf-card__title" style="margin-top:16px">Recent Gmail imports</h3>
+                  <div class="uf-table-wrap">
+                  <table class="uf-table">
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th style="text-align:right">Messages</th>
+                        <th style="text-align:right">Stored</th>
+                        <th style="text-align:right">Invoices</th>
+                        <th style="text-align:right">Rejected</th>
+                        <th style="text-align:right">Errors</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="job in detail.import_queue.gmail_jobs" :key="job.id">
+                        <td>
+                          <n-tag :type="job.status === 'failed' ? 'error' : job.status === 'completed' ? 'success' : 'default'" size="small" round>
+                            {{ job.status }}
+                          </n-tag>
+                        </td>
+                        <td style="text-align:right">{{ job.processed_messages }} / {{ job.total_messages }}</td>
+                        <td style="text-align:right">{{ job.stored }}</td>
+                        <td style="text-align:right">{{ job.classified_invoices }}</td>
+                        <td style="text-align:right">{{ job.rejected }}</td>
+                        <td style="text-align:right">{{ job.errors }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  </div>
+                </template>
+              </template>
             </n-tab-pane>
 
             <n-tab-pane name="documents" :tab="`Documents (${detail?.counts?.documents ?? detail?.documents?.length ?? 0})`">
@@ -616,6 +735,10 @@ const userGaps = computed(() => {
   };
 });
 const orphansCount = computed(() => storageFiles.value.filter((f) => !f.in_db).length);
+
+// Documents queued for processing with no job row to run them — the signature
+// of an enqueue that failed after the document was already written.
+const queueStuck = computed(() => Number(props.detail?.import_queue?.stuck_without_job ?? 0));
 
 const filteredStorageFiles = computed(() => {
   let result = storageFiles.value;
@@ -1106,6 +1229,8 @@ watch([storageSearch, storageStatusFilter], () => {
   border-color: color-mix(in srgb, #f0a020 40%, var(--border-color));
   background: color-mix(in srgb, #f0a020 8%, var(--bg-card));
 }
+
+.uf-kv__warn strong { color: #f0a020; }
 
 .uf-stat__n { font-size: 16px; font-weight: 700; }
 .uf-stat__l { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
