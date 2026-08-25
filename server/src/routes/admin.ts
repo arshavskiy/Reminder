@@ -2056,6 +2056,159 @@ export function registerAdminRoutes(app: express.Application) {
       res.status(500).json({ error: err.message ?? "Failed" });
     }
   });
+
+  // GET /api/admin/storage/folders — top-level prefixes with object counts.
+  // Always safe: lists only, and marks which prefixes are referenced in Mongo.
+  app.get("/api/admin/storage/folders", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const { listAllSpacesFiles, spacesEnabled } = await import("../storage/spaces.js");
+      if (!spacesEnabled()) {
+        res.status(400).json({ error: "Object storage not configured" });
+        return;
+      }
+
+      const { files, truncated } = await listAllSpacesFiles("", 50_000);
+      const keys = files.map((f) => f.key);
+
+      // A key is "referenced" when a document row still points at it, either as
+      // the stored object or as its generated thumbnail.
+      const referenced = new Set<string>();
+      for (let i = 0; i < keys.length; i += 1000) {
+        const chunk = keys.slice(i, i + 1000);
+        const docs = await col("documents")
+          .find({ $or: [{ spaces_key: { $in: chunk } }, { thumbnail_key: { $in: chunk } }] } as any)
+          .project({ spaces_key: 1, thumbnail_key: 1 })
+          .toArray() as any[];
+        for (const d of docs) {
+          if (d.spaces_key) referenced.add(String(d.spaces_key));
+          if (d.thumbnail_key) referenced.add(String(d.thumbnail_key));
+        }
+      }
+
+      const groups: Record<string, { objects: number; bytes: number; referenced: number }> = {};
+      for (const f of files) {
+        const prefix = f.key.includes("/") ? `${f.key.split("/")[0]}/` : "(root)";
+        groups[prefix] ??= { objects: 0, bytes: 0, referenced: 0 };
+        groups[prefix].objects += 1;
+        groups[prefix].bytes += f.size ?? 0;
+        if (referenced.has(f.key)) groups[prefix].referenced += 1;
+      }
+
+      const users = await col("users").find({} as any).project({ _id: 1, email: 1 }).toArray() as any[];
+      const emailById = new Map(users.map((u) => [String(u._id), u.email]));
+
+      const folders = Object.entries(groups).map(([prefix, g]) => {
+        const id = prefix.replace(/\/$/, "");
+        return {
+          prefix,
+          objects: g.objects,
+          bytes: g.bytes,
+          referenced: g.referenced,
+          unreferenced: g.objects - g.referenced,
+          owner_email: emailById.get(id) ?? null,
+          looks_like_user_id: /^[0-9a-f]{24}$/.test(id),
+        };
+      }).sort((a, b) => b.objects - a.objects);
+
+      res.json({ folders, truncated, total_objects: files.length });
+    } catch (err: any) {
+      console.error("storage-folders error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // DELETE /api/admin/storage/folder?prefix=&confirm=
+  // Deletes every object under a top-level prefix. Refuses when any object is
+  // still referenced by a document, and requires the prefix echoed back in
+  // `confirm` so a mistyped or auto-submitted request cannot destroy data.
+  app.delete("/api/admin/storage/folder", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const { listAllSpacesFiles, deleteManyFromSpaces, spacesEnabled } = await import("../storage/spaces.js");
+      if (!spacesEnabled()) {
+        res.status(400).json({ error: "Object storage not configured" });
+        return;
+      }
+
+      const prefix = String(req.query.prefix ?? "");
+      const confirm = String(req.query.confirm ?? "");
+      const force = req.query.force === "true";
+
+      if (!prefix) {
+        res.status(400).json({ error: "prefix is required" });
+        return;
+      }
+      // Only whole top-level folders: an arbitrary prefix such as "6a1" would
+      // match across unrelated folders.
+      if (!/^[A-Za-z0-9._-]+\/$/.test(prefix)) {
+        res.status(400).json({ error: "prefix must be a single top-level folder ending in '/', e.g. documents/" });
+        return;
+      }
+      if (confirm !== prefix) {
+        res.status(400).json({ error: "confirm must exactly match the prefix" });
+        return;
+      }
+
+      const { files, truncated } = await listAllSpacesFiles(prefix, 50_000);
+      if (!files.length) {
+        res.json({ ok: true, prefix, deleted: 0, note: "prefix is already empty" });
+        return;
+      }
+      if (truncated) {
+        res.status(409).json({ error: "Folder is larger than the 50000 object safety limit — delete it with a script instead" });
+        return;
+      }
+
+      const keys = files.map((f) => f.key);
+      const linked: string[] = [];
+      for (let i = 0; i < keys.length; i += 1000) {
+        const chunk = keys.slice(i, i + 1000);
+        const docs = await col("documents")
+          .find({ $or: [{ spaces_key: { $in: chunk } }, { thumbnail_key: { $in: chunk } }] } as any)
+          .project({ spaces_key: 1, thumbnail_key: 1 })
+          .toArray() as any[];
+        for (const d of docs) {
+          if (d.spaces_key && chunk.includes(String(d.spaces_key))) linked.push(String(d.spaces_key));
+          if (d.thumbnail_key && chunk.includes(String(d.thumbnail_key))) linked.push(String(d.thumbnail_key));
+        }
+      }
+
+      // Deleting a referenced object breaks a document the user can still see,
+      // so it takes an explicit override rather than being the default.
+      if (linked.length && !force) {
+        res.status(409).json({
+          error: "Folder contains objects still linked to documents",
+          linked_count: linked.length,
+          total_objects: files.length,
+          sample_linked: linked.slice(0, 10),
+        });
+        return;
+      }
+
+      const result = await deleteManyFromSpaces(keys);
+      console.warn("admin_storage_folder_deleted", {
+        prefix,
+        objects: files.length,
+        deleted: result.deleted,
+        linked_overridden: force ? linked.length : 0,
+        errors: result.errors.length,
+      });
+
+      res.json({
+        ok: true,
+        prefix,
+        total_objects: files.length,
+        deleted: result.deleted,
+        linked_overridden: force ? linked.length : 0,
+        errors: result.errors.slice(0, 20),
+        error_count: result.errors.length,
+      });
+    } catch (err: any) {
+      console.error("storage-folder-delete error:", err);
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
 }
 
 /**

@@ -817,6 +817,16 @@ export const api = {
       fetch(`${ADMIN_BASE}/admin/storage/delete?key=${encodeURIComponent(key)}`, {
         method: "DELETE", credentials: "include",
       }).then(r => r.json()),
+    listStorageFolders: () => adminGet<any>("/admin/storage/folders"),
+    // `confirm` must equal the prefix; `force` overrides the refusal to delete
+    // objects still linked to documents.
+    deleteStorageFolder: (prefix: string, opts?: { force?: boolean }) => {
+      const qs = new URLSearchParams({ prefix, confirm: prefix });
+      if (opts?.force) qs.set("force", "true");
+      return fetch(`${ADMIN_BASE}/admin/storage/folder?${qs.toString()}`, {
+        method: "DELETE", credentials: "include",
+      }).then(r => r.json());
+    },
   },
 
   config: {

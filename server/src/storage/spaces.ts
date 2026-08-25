@@ -1,6 +1,7 @@
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
@@ -186,6 +187,76 @@ export async function listSpacesFiles(prefix: string, maxKeys = 500): Promise<{ 
   }));
 
   return { files, truncated: result.IsTruncated ?? false };
+}
+
+/**
+ * Lists every object under a prefix, following continuation tokens.
+ *
+ * listSpacesFiles() returns only the first page, so any caller that acts on the
+ * whole prefix (counting or deleting) would silently miss everything past it.
+ * `limit` caps the walk so a mistaken call cannot enumerate an entire bucket.
+ */
+export async function listAllSpacesFiles(
+  prefix: string,
+  limit = 10_000,
+): Promise<{ files: S3FileEntry[]; truncated: boolean }> {
+  const client = getClient();
+  const config = getStorageConfig();
+  if (!client || !config) throw new Error("Object storage not configured");
+
+  const files: S3FileEntry[] = [];
+  let token: string | undefined;
+
+  do {
+    const result: any = await client.send(new ListObjectsV2Command({
+      Bucket: config.bucket,
+      Prefix: prefix,
+      MaxKeys: 1000,
+      ContinuationToken: token,
+    }));
+    for (const obj of result.Contents ?? []) {
+      files.push({
+        key: obj.Key ?? "",
+        size: obj.Size ?? 0,
+        last_modified: obj.LastModified?.toISOString() ?? null,
+      });
+      if (files.length >= limit) return { files, truncated: true };
+    }
+    token = result.IsTruncated ? result.NextContinuationToken : undefined;
+  } while (token);
+
+  return { files, truncated: false };
+}
+
+/**
+ * Deletes the given keys, 1000 at a time (the S3 DeleteObjects maximum).
+ * Returns per-key errors rather than throwing, so one failure does not abandon
+ * the rest of the batch.
+ */
+export async function deleteManyFromSpaces(
+  keys: string[],
+): Promise<{ deleted: number; errors: Array<{ key: string; message: string }> }> {
+  const client = getClient();
+  const config = getStorageConfig();
+  if (!client || !config) throw new Error("Object storage not configured");
+  if (!keys.length) return { deleted: 0, errors: [] };
+
+  let deleted = 0;
+  const errors: Array<{ key: string; message: string }> = [];
+
+  for (let i = 0; i < keys.length; i += 1000) {
+    const chunk = keys.slice(i, i + 1000);
+    const result: any = await client.send(new DeleteObjectsCommand({
+      Bucket: config.bucket,
+      Delete: { Objects: chunk.map((Key) => ({ Key })), Quiet: false },
+    }));
+    deleted += (result.Deleted ?? []).length;
+    for (const err of result.Errors ?? []) {
+      errors.push({ key: String(err.Key), message: String(err.Message ?? err.Code ?? "unknown") });
+    }
+  }
+
+  return { deleted, errors };
 }
 
 export async function getSpacesSignedUrl(key: string, expiresIn = 3600, fileName?: string, asAttachment = false): Promise<string> {

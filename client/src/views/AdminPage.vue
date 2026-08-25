@@ -72,7 +72,7 @@
             <template #icon><n-icon :component="SettingsOutline" /></template>
             Settings
           </n-button>
-          <n-button size="small" :loading="sectionLoading" @click="reloadSection">↻ Refresh</n-button>
+          <n-button size="small" :loading="sectionLoading || s3Loading" @click="reloadSection">↻ Refresh</n-button>
         </div>
         <div class="admin-main__meta">
           System Admin Dashboard
@@ -919,6 +919,267 @@
             />
           </div>
         </template>
+
+        <div class="monitor-block" style="margin-top:16px">
+          <div class="monitor-block__title">Object Storage Browser</div>
+          <p class="s3-browser__intro">
+            List files in a user's S3 prefix and cross-check database links, orphans, and legacy keys.
+          </p>
+          <n-spin :show="s3Loading">
+            <div class="s3-browser" dir="ltr">
+              <div class="s3-folders">
+                <div class="s3-folders__head">
+                  <span class="s3-folders__title">Bucket folders</span>
+                  <button class="btn btn--ghost btn--xs" type="button" :disabled="foldersLoading" @click="loadStorageFolders">
+                    <n-icon :component="RefreshOutline" :size="14" class="btn-icon" />
+                    {{ storageFolders.length ? "Refresh" : "Load" }}
+                  </button>
+                  <span v-if="storageFoldersTruncated" class="s3-folders__warn">
+                    listing truncated — counts are partial
+                  </span>
+                </div>
+                <table v-if="storageFolders.length" class="s3-table">
+                  <thead>
+                    <tr>
+                      <th>Prefix</th>
+                      <th style="text-align:right">Objects</th>
+                      <th style="text-align:right">Size</th>
+                      <th style="text-align:right">Linked</th>
+                      <th style="text-align:right">Unreferenced</th>
+                      <th style="text-align:right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="f in storageFolders" :key="f.prefix">
+                      <td>
+                        <code class="s3-key">{{ f.prefix }}</code>
+                        <span v-if="f.owner_email" class="s3-muted"> — {{ f.owner_email }}</span>
+                        <span v-else-if="f.looks_like_user_id" class="s3-folders__warn"> — unknown user id</span>
+                      </td>
+                      <td style="text-align:right">{{ f.objects }}</td>
+                      <td style="text-align:right">{{ formatBytes(f.bytes) }}</td>
+                      <td style="text-align:right">
+                        <span class="s3-badge" :class="f.referenced ? 's3-badge--ok' : 's3-badge--err'">{{ f.referenced }}</span>
+                      </td>
+                      <td style="text-align:right">{{ f.unreferenced }}</td>
+                      <td style="text-align:right">
+                        <button
+                          class="btn btn--danger btn--xs"
+                          type="button"
+                          :disabled="deletingFolder === f.prefix"
+                          @click="confirmDeleteFolder(f)"
+                        >
+                          <n-icon :component="TrashOutline" :size="14" class="btn-icon" />
+                          Delete folder
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p v-else-if="!foldersLoading" class="s3-muted" style="margin:8px 0 0">
+                  Load to see every top-level prefix in the bucket and how much of it is still referenced.
+                </p>
+              </div>
+
+              <div class="s3-browser__toolbar">
+                <n-select
+                  v-model:value="s3BrowseUserId"
+                  :options="userSelectOptions"
+                  placeholder="Select user to browse"
+                  clearable
+                  filterable
+                  class="s3-browser__user"
+                  @update:value="loadS3Files"
+                />
+                <n-input
+                  v-model:value="s3FileSearch"
+                  placeholder="Filter by file name or key..."
+                  clearable
+                  class="s3-browser__search"
+                  :disabled="!s3Files.length"
+                >
+                  <template #prefix><n-icon :component="SearchOutline" :size="16" /></template>
+                </n-input>
+                <n-select
+                  v-model:value="s3StatusFilter"
+                  :options="s3StatusOptions"
+                  placeholder="Status"
+                  clearable
+                  class="s3-browser__status"
+                  :disabled="!s3Files.length"
+                />
+                <n-select
+                  v-model:value="s3AreaFilter"
+                  :options="s3AreaOptions"
+                  placeholder="Area"
+                  clearable
+                  class="s3-browser__status"
+                  :disabled="!s3Files.length"
+                />
+                <button
+                  class="btn btn--ghost"
+                  type="button"
+                  :disabled="!s3BrowseUserId || s3Loading"
+                  @click="loadS3Files"
+                >
+                  <n-icon :component="RefreshOutline" :size="16" :class="{ 's3-spin': s3Loading }" class="btn-icon" />
+                  Refresh
+                </button>
+              </div>
+
+              <div v-if="s3BrowseUserId && s3Files.length" class="s3-stats">
+                <div class="s3-stat">
+                  <span class="s3-stat__num">{{ s3Stats.total }}</span>
+                  <span class="s3-stat__label">Files</span>
+                </div>
+                <div class="s3-stat">
+                  <span class="s3-stat__num">{{ formatBytes(s3Stats.bytes) }}</span>
+                  <span class="s3-stat__label">Total size</span>
+                </div>
+                <div class="s3-stat s3-stat--ok">
+                  <span class="s3-stat__num">{{ s3Stats.inDb }}</span>
+                  <span class="s3-stat__label">In DB</span>
+                </div>
+                <div class="s3-stat" :class="{ 's3-stat--warn': s3Stats.orphan > 0 }">
+                  <span class="s3-stat__num">{{ s3Stats.orphan }}</span>
+                  <span class="s3-stat__label">Orphan</span>
+                </div>
+                <div class="s3-stat" :class="{ 's3-stat--warn': s3Stats.legacy > 0 }">
+                  <span class="s3-stat__num">{{ s3Stats.legacy }}</span>
+                  <span class="s3-stat__label">Legacy key</span>
+                </div>
+                <div class="s3-stat">
+                  <span class="s3-stat__num">{{ s3Stats.thumbnails }}</span>
+                  <span class="s3-stat__label">Thumbnails</span>
+                </div>
+                <div class="s3-stat">
+                  <span class="s3-stat__num">{{ filteredS3Files.length }}</span>
+                  <span class="s3-stat__label">Showing</span>
+                </div>
+                <n-tag v-if="s3Truncated" type="warning" size="small" round>List truncated — more files exist</n-tag>
+              </div>
+
+              <div v-if="filteredS3Files.length" class="s3-table-wrap">
+                <table class="s3-table">
+                  <thead>
+                    <tr>
+                      <th class="s3-col-file">File</th>
+                      <th class="s3-col-size">Size</th>
+                      <th class="s3-col-date">Modified</th>
+                      <th class="s3-col-db">DB</th>
+                      <th class="s3-col-status">Area</th>
+                      <th class="s3-col-status">Status</th>
+                      <th class="s3-col-key">S3 Key</th>
+                      <th class="s3-col-actions">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="row in pagedS3Files"
+                      :key="row.key"
+                      class="s3-row"
+                      :class="{ 's3-row--orphan': !row.in_db && row.kind !== 'thumbnail' }"
+                    >
+                      <td class="s3-col-file">
+                        <div class="s3-file">
+                          <n-icon :component="DocumentOutline" :size="14" class="s3-file__icon" />
+                          <span class="s3-file__name" :title="row.file_name">{{ row.file_name || "—" }}</span>
+                        </div>
+                      </td>
+                      <td class="s3-col-size">{{ formatBytes(row.size) }}</td>
+                      <td class="s3-col-date">{{ row.last_modified ? new Date(row.last_modified).toLocaleString("en-US") : "—" }}</td>
+                      <td class="s3-col-db">
+                        <span
+                          class="s3-badge"
+                          :class="row.kind === 'thumbnail' ? 's3-badge--ok' : (row.in_db ? 's3-badge--ok' : 's3-badge--err')"
+                        >
+                          {{ row.kind === "thumbnail" ? "Thumbnail" : (row.in_db ? "Linked" : "Orphan") }}
+                        </span>
+                      </td>
+                      <td class="s3-col-status">
+                        <span class="s3-badge" :class="row.layout === 'legacy' ? 's3-badge--err' : 's3-badge--ok'">
+                          {{ row.area || "—" }}
+                        </span>
+                      </td>
+                      <td class="s3-col-status">
+                        <span v-if="row.status" class="s3-badge" :class="`s3-badge--${row.status}`">{{ row.status }}</span>
+                        <span v-else class="s3-muted">—</span>
+                      </td>
+                      <td class="s3-col-key">
+                        <code class="s3-key" :title="row.key">{{ row.key }}</code>
+                      </td>
+                      <td class="s3-col-actions">
+                        <div class="s3-actions">
+                          <n-tooltip placement="top">
+                            <template #trigger>
+                              <button
+                                class="btn btn--ghost btn--xs icon-btn"
+                                type="button"
+                                @click="windowOpenStorage(row.key)"
+                              >
+                                <n-icon :component="DownloadOutline" :size="14" class="btn-icon" />
+                              </button>
+                            </template>
+                            Download
+                          </n-tooltip>
+                          <n-tooltip v-if="row.doc_id" placement="top">
+                            <template #trigger>
+                              <button
+                                class="btn btn--ghost btn--xs icon-btn"
+                                type="button"
+                                @click="openDocModal(row.doc_id)"
+                              >
+                                <n-icon :component="EyeOutline" :size="14" class="btn-icon" />
+                              </button>
+                            </template>
+                            Open document
+                          </n-tooltip>
+                          <n-tooltip v-if="!row.in_db" placement="top">
+                            <template #trigger>
+                              <button
+                                class="btn btn--ghost btn--xs icon-btn"
+                                type="button"
+                                style="color: var(--error-color)"
+                                @click="deleteOrphanFile(row.key)"
+                              >
+                                <n-icon :component="TrashOutline" :size="14" class="btn-icon" />
+                              </button>
+                            </template>
+                            Delete orphan
+                          </n-tooltip>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div v-if="filteredS3Files.length > s3PageSize" class="s3-pager">
+                <button class="btn btn--ghost btn--xs" type="button" :disabled="s3Page <= 1" @click="s3Page--">Prev</button>
+                <span class="s3-pager__label">Page {{ s3Page }} / {{ s3PageCount }}</span>
+                <button class="btn btn--ghost btn--xs" type="button" :disabled="s3Page >= s3PageCount" @click="s3Page++">Next</button>
+              </div>
+
+              <div v-else-if="s3BrowseUserId && !s3Loading && !s3Files.length" class="s3-empty">
+                <n-icon :component="CloudUploadOutline" :size="36" class="s3-empty__icon" />
+                <h3 class="s3-empty__title">No files for this user</h3>
+                <p class="s3-empty__desc">Nothing under <code>documents/{{ s3BrowseUserId }}/</code></p>
+              </div>
+
+              <div v-else-if="s3BrowseUserId && s3Files.length && !filteredS3Files.length" class="s3-empty">
+                <n-icon :component="SearchOutline" :size="36" class="s3-empty__icon" />
+                <h3 class="s3-empty__title">No matches</h3>
+                <p class="s3-empty__desc">Try clearing the search or status filter</p>
+              </div>
+
+              <div v-else-if="!s3BrowseUserId && !s3Loading" class="s3-empty">
+                <n-icon :component="CloudUploadOutline" :size="36" class="s3-empty__icon" />
+                <h3 class="s3-empty__title">Browse object storage</h3>
+                <p class="s3-empty__desc">Select a user to list files in their S3 prefix and cross-check DB links</p>
+              </div>
+            </div>
+          </n-spin>
+        </div>
       </section>
 
       <section v-if="activeSection === 'system_health'" class="admin-section">
@@ -959,210 +1220,6 @@
             />
           </div>
         </template>
-      </section>
-
-      <!-- ── S3 Storage Browser ── -->
-      <section v-if="activeSection === 's3_storage'" class="admin-section">
-        <n-spin :show="sectionLoading">
-          <div class="s3-browser" dir="ltr">
-            <div class="s3-browser__toolbar">
-              <n-select
-                v-model:value="s3BrowseUserId"
-                :options="userSelectOptions"
-                placeholder="Select user to browse"
-                clearable
-                filterable
-                class="s3-browser__user"
-                @update:value="loadS3Files"
-              />
-              <n-input
-                v-model:value="s3FileSearch"
-                placeholder="Filter by file name or key..."
-                clearable
-                class="s3-browser__search"
-                :disabled="!s3Files.length"
-              >
-                <template #prefix><n-icon :component="SearchOutline" :size="16" /></template>
-              </n-input>
-              <n-select
-                v-model:value="s3StatusFilter"
-                :options="s3StatusOptions"
-                placeholder="Status"
-                clearable
-                class="s3-browser__status"
-                :disabled="!s3Files.length"
-              />
-              <n-select
-                v-model:value="s3AreaFilter"
-                :options="s3AreaOptions"
-                placeholder="Area"
-                clearable
-                class="s3-browser__status"
-                :disabled="!s3Files.length"
-              />
-              <button
-                class="btn btn--ghost"
-                type="button"
-                :disabled="!s3BrowseUserId || sectionLoading"
-                @click="loadS3Files"
-              >
-                <n-icon :component="RefreshOutline" :size="16" :class="{ 's3-spin': sectionLoading }" class="btn-icon" />
-                Refresh
-              </button>
-            </div>
-
-            <div v-if="s3BrowseUserId && s3Files.length" class="s3-stats">
-              <div class="s3-stat">
-                <span class="s3-stat__num">{{ s3Stats.total }}</span>
-                <span class="s3-stat__label">Files</span>
-              </div>
-              <div class="s3-stat">
-                <span class="s3-stat__num">{{ formatBytes(s3Stats.bytes) }}</span>
-                <span class="s3-stat__label">Total size</span>
-              </div>
-              <div class="s3-stat s3-stat--ok">
-                <span class="s3-stat__num">{{ s3Stats.inDb }}</span>
-                <span class="s3-stat__label">In DB</span>
-              </div>
-              <div class="s3-stat" :class="{ 's3-stat--warn': s3Stats.orphan > 0 }">
-                <span class="s3-stat__num">{{ s3Stats.orphan }}</span>
-                <span class="s3-stat__label">Orphan</span>
-              </div>
-              <div class="s3-stat" :class="{ 's3-stat--warn': s3Stats.legacy > 0 }">
-                <span class="s3-stat__num">{{ s3Stats.legacy }}</span>
-                <span class="s3-stat__label">Legacy key</span>
-              </div>
-              <div class="s3-stat">
-                <span class="s3-stat__num">{{ s3Stats.thumbnails }}</span>
-                <span class="s3-stat__label">Thumbnails</span>
-              </div>
-              <div class="s3-stat">
-                <span class="s3-stat__num">{{ filteredS3Files.length }}</span>
-                <span class="s3-stat__label">Showing</span>
-              </div>
-              <n-tag v-if="s3Truncated" type="warning" size="small" round>List truncated — more files exist</n-tag>
-            </div>
-
-            <div v-if="filteredS3Files.length" class="s3-table-wrap">
-              <table class="s3-table">
-                <thead>
-                  <tr>
-                    <th class="s3-col-file">File</th>
-                    <th class="s3-col-size">Size</th>
-                    <th class="s3-col-date">Modified</th>
-                    <th class="s3-col-db">DB</th>
-                    <th class="s3-col-status">Area</th>
-                    <th class="s3-col-status">Status</th>
-                    <th class="s3-col-key">S3 Key</th>
-                    <th class="s3-col-actions">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="row in pagedS3Files"
-                    :key="row.key"
-                    class="s3-row"
-                    :class="{ 's3-row--orphan': !row.in_db && row.kind !== 'thumbnail' }"
-                  >
-                    <td class="s3-col-file">
-                      <div class="s3-file">
-                        <n-icon :component="DocumentOutline" :size="14" class="s3-file__icon" />
-                        <span class="s3-file__name" :title="row.file_name">{{ row.file_name || "—" }}</span>
-                      </div>
-                    </td>
-                    <td class="s3-col-size">{{ formatBytes(row.size) }}</td>
-                    <td class="s3-col-date">{{ row.last_modified ? new Date(row.last_modified).toLocaleString("en-US") : "—" }}</td>
-                    <td class="s3-col-db">
-                      <span
-                        class="s3-badge"
-                        :class="row.kind === 'thumbnail' ? 's3-badge--ok' : (row.in_db ? 's3-badge--ok' : 's3-badge--err')"
-                      >
-                        {{ row.kind === "thumbnail" ? "Thumbnail" : (row.in_db ? "Linked" : "Orphan") }}
-                      </span>
-                    </td>
-                    <td class="s3-col-status">
-                      <span class="s3-badge" :class="row.layout === 'legacy' ? 's3-badge--err' : 's3-badge--ok'">
-                        {{ row.area || "—" }}
-                      </span>
-                    </td>
-                    <td class="s3-col-status">
-                      <span v-if="row.status" class="s3-badge" :class="`s3-badge--${row.status}`">{{ row.status }}</span>
-                      <span v-else class="s3-muted">—</span>
-                    </td>
-                    <td class="s3-col-key">
-                      <code class="s3-key" :title="row.key">{{ row.key }}</code>
-                    </td>
-                    <td class="s3-col-actions">
-                      <div class="s3-actions">
-                        <n-tooltip placement="top">
-                          <template #trigger>
-                            <button
-                              class="btn btn--ghost btn--xs icon-btn"
-                              type="button"
-                              @click="windowOpenStorage(row.key)"
-                            >
-                              <n-icon :component="DownloadOutline" :size="14" class="btn-icon" />
-                            </button>
-                          </template>
-                          Download
-                        </n-tooltip>
-                        <n-tooltip v-if="row.doc_id" placement="top">
-                          <template #trigger>
-                            <button
-                              class="btn btn--ghost btn--xs icon-btn"
-                              type="button"
-                              @click="openDocModal(row.doc_id)"
-                            >
-                              <n-icon :component="EyeOutline" :size="14" class="btn-icon" />
-                            </button>
-                          </template>
-                          Open document
-                        </n-tooltip>
-                        <n-tooltip v-if="!row.in_db" placement="top">
-                          <template #trigger>
-                            <button
-                              class="btn btn--ghost btn--xs icon-btn"
-                              type="button"
-                              style="color: var(--error-color)"
-                              @click="deleteOrphanFile(row.key)"
-                            >
-                              <n-icon :component="TrashOutline" :size="14" class="btn-icon" />
-                            </button>
-                          </template>
-                          Delete orphan
-                        </n-tooltip>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div v-if="filteredS3Files.length > s3PageSize" class="s3-pager">
-              <button class="btn btn--ghost btn--xs" type="button" :disabled="s3Page <= 1" @click="s3Page--">Prev</button>
-              <span class="s3-pager__label">Page {{ s3Page }} / {{ s3PageCount }}</span>
-              <button class="btn btn--ghost btn--xs" type="button" :disabled="s3Page >= s3PageCount" @click="s3Page++">Next</button>
-            </div>
-
-            <div v-else-if="s3BrowseUserId && !sectionLoading && !s3Files.length" class="s3-empty">
-              <n-icon :component="CloudUploadOutline" :size="36" class="s3-empty__icon" />
-              <h3 class="s3-empty__title">No files for this user</h3>
-              <p class="s3-empty__desc">Nothing under <code>documents/{{ s3BrowseUserId }}/</code></p>
-            </div>
-
-            <div v-else-if="s3BrowseUserId && s3Files.length && !filteredS3Files.length" class="s3-empty">
-              <n-icon :component="SearchOutline" :size="36" class="s3-empty__icon" />
-              <h3 class="s3-empty__title">No matches</h3>
-              <p class="s3-empty__desc">Try clearing the search or status filter</p>
-            </div>
-
-            <div v-else-if="!s3BrowseUserId && !sectionLoading" class="s3-empty">
-              <n-icon :component="CloudUploadOutline" :size="36" class="s3-empty__icon" />
-              <h3 class="s3-empty__title">Browse object storage</h3>
-              <p class="s3-empty__desc">Select a user to list files in their S3 prefix and cross-check DB links</p>
-            </div>
-          </div>
-        </n-spin>
       </section>
 
       <!-- ── Settings ── -->
@@ -1410,7 +1467,6 @@ const adminSections = [
   { key: "import_queue",      label: "Import Queue",           icon: TimerOutline },
   { key: "invoices",          label: "Invoices",               icon: ReceiptOutline },
   { key: "system_health",     label: "System Health",          icon: PulseOutline },
-  { key: "s3_storage",        label: "S3 Storage",             icon: CloudUploadOutline },
   { key: "storage_drive",     label: "Storage & Drive",        icon: ServerOutline },
   { key: "settings",           label: "Settings",               icon: SettingsOutline },
 ];
@@ -2047,11 +2103,81 @@ const driveJobColumns: DataTableColumns<any> = [
 
 // ── S3 Storage Browser ──────────────────────────────────────────────────
 const s3Files = ref<any[]>([]);
+const s3Loading = ref(false);
 const s3BrowseUserId = ref<string | null>(null);
 const s3Truncated = ref(false);
 const s3FileSearch = ref("");
 const s3StatusFilter = ref<string | null>(null);
 const s3AreaFilter = ref<string | null>(null);
+
+// ── Bucket folder maintenance ───────────────────────────────────────────
+const storageFolders = ref<any[]>([]);
+const storageFoldersTruncated = ref(false);
+const foldersLoading = ref(false);
+const deletingFolder = ref<string | null>(null);
+
+async function loadStorageFolders() {
+  foldersLoading.value = true;
+  try {
+    const res = await api.admin.listStorageFolders();
+    if (res?.error) {
+      message.error(res.error);
+      return;
+    }
+    storageFolders.value = res.folders ?? [];
+    storageFoldersTruncated.value = Boolean(res.truncated);
+  } catch {
+    message.error("Error loading bucket folders");
+  } finally {
+    foldersLoading.value = false;
+  }
+}
+
+/**
+ * Two-step confirmation before an irreversible bucket delete: the first dialog
+ * states the object count, the second requires the prefix to be typed back.
+ * A folder holding referenced objects is refused by the server and reported
+ * rather than force-deleted from here.
+ */
+async function confirmDeleteFolder(folder: any) {
+  const linkedNote = folder.referenced > 0
+    ? `\n\nWARNING: ${folder.referenced} of these objects are still linked to documents.`
+    : "";
+  const proceed = window.confirm(
+    `Permanently delete every object under "${folder.prefix}"?\n\n` +
+    `${folder.objects} objects, ${formatBytes(folder.bytes)}.${linkedNote}\n\n` +
+    "This cannot be undone.",
+  );
+  if (!proceed) return;
+
+  const typed = window.prompt(`Type the folder prefix exactly to confirm:\n${folder.prefix}`);
+  if (typed !== folder.prefix) {
+    if (typed !== null) message.warning("Prefix did not match — nothing was deleted");
+    return;
+  }
+
+  deletingFolder.value = folder.prefix;
+  try {
+    const res = await api.admin.deleteStorageFolder(folder.prefix);
+    if (res?.error) {
+      // The server refuses linked folders unless force is set; surface that
+      // rather than silently retrying with force.
+      message.error(
+        res.linked_count
+          ? `${res.error} (${res.linked_count} linked objects). Delete those documents first.`
+          : res.error,
+      );
+      return;
+    }
+    message.success(`Deleted ${res.deleted} object(s) from ${res.prefix}`);
+    await loadStorageFolders();
+    if (s3BrowseUserId.value) await loadS3Files();
+  } catch {
+    message.error("Error deleting folder");
+  } finally {
+    deletingFolder.value = null;
+  }
+}
 const s3Page = ref(1);
 const s3PageSize = 25;
 
@@ -2120,7 +2246,7 @@ async function loadS3Files() {
     s3Page.value = 1;
     return;
   }
-  sectionLoading.value = true;
+  s3Loading.value = true;
   try {
     const res = await api.admin.browseStorage({ user_id: s3BrowseUserId.value });
     s3Files.value = res.files;
@@ -2133,7 +2259,7 @@ async function loadS3Files() {
     message.error("Error loading S3 files");
     s3Files.value = [];
   } finally {
-    sectionLoading.value = false;
+    s3Loading.value = false;
   }
 }
 
@@ -2360,6 +2486,7 @@ function formatInterval(seconds: number): string {
 
 // ── Section switching & loading ────────────────────────────────────────────
 async function switchSection(key: string) {
+  if (key === "s3_storage") key = "storage_drive";
   activeSection.value = key;
   if (isMobileViewport.value) {
     showMobileNav.value = false;
@@ -2398,14 +2525,11 @@ async function loadSectionData(key: string) {
       importQueue.value = await api.admin.monitorImportQueue();
     } else if (key === "invoices") {
       invoiceMonitor.value = await api.admin.monitorInvoices();
-    } else if (key === "storage_drive") {
+    } else if (key === "storage_drive" || key === "s3_storage") {
+      if (users.value.length === 0) await loadUsers();
       storageDrive.value = await api.admin.monitorStorageDrive();
     } else if (key === "system_health") {
       systemHealth.value = await api.admin.monitorSystemHealth();
-    } else if (key === "s3_storage") {
-      if (users.value.length === 0) await loadUsers();
-      if (s3BrowseUserId.value) await loadS3Files();
-      else sectionLoading.value = false;
     } else if (key === "settings") {
       adminSettings.value = await api.admin.getAdminSettings();
     }
@@ -2413,6 +2537,9 @@ async function loadSectionData(key: string) {
     message.error("Error loading data");
   } finally {
     sectionLoading.value = false;
+  }
+  if ((key === "storage_drive" || key === "s3_storage") && s3BrowseUserId.value) {
+    await loadS3Files();
   }
 }
 
@@ -2746,12 +2873,43 @@ onUnmounted(() => {
 }
 
 /* ── S3 Storage Browser ──────────────────────────────────────────────────── */
+.s3-browser__intro {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: -4px 0 12px;
+}
+
 .s3-browser {
   display: flex;
   flex-direction: column;
   gap: 14px;
   direction: ltr;
   text-align: left;
+}
+
+.s3-folders {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px;
+  margin-bottom: 14px;
+  background: var(--bg-card);
+}
+
+.s3-folders__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.s3-folders__title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.s3-folders__warn {
+  font-size: 12px;
+  color: #f0a020;
 }
 
 .s3-browser__toolbar {
