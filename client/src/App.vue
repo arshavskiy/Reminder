@@ -32,16 +32,14 @@
              <div class="appbar__actions">
                <n-tooltip placement="bottom" :keep-alive-on-hover="false">
                  <template #trigger>
-                   <button
+                   <a
                      class="subscription-btn"
-                     :class="{ 'subscription-btn--active': route.path === '/pricing' }"
-                     type="button"
-                     @click="router.push('/pricing')"
+                     href="https://remindocr.com/pricing"
                    >
                      <n-icon :component="DiamondOutline" :size="15" class="subscription-btn__icon" />
                      <span class="subscription-btn__label">מנוי</span>
                      <span v-if="subscriptionPlanLabel" class="subscription-btn__plan">{{ subscriptionPlanLabel }}</span>
-                   </button>
+                   </a>
                  </template>
                  {{ subscriptionTooltip }}
                </n-tooltip>
@@ -145,9 +143,9 @@
             <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
             <div class="app-footer__legal">
               © 2026 HandCoded. All rights reserved. |
-              <router-link to="/pricing">Pricing</router-link> |
-              <router-link to="/privacy">Privacy Policy</router-link> |
-              <router-link to="/terms">Terms of Service</router-link>
+              <a href="https://remindocr.com/pricing">Pricing</a> |
+              <a href="https://remindocr.com/privacy">Privacy Policy</a> |
+              <a href="https://remindocr.com/terms">Terms of Service</a>
             </div>
           </footer>
         </div>
@@ -246,10 +244,11 @@ const userSettingsStore = useUserSettingsStore();
 const pwa = usePwa();
 
 const isLegalRoute = computed(() => Boolean(route.meta.legal));
+// /pricing, /privacy and /terms are served by the marketing site now, so the
+// only routes reachable here without a session are sign-in and password reset.
 const isPublicMarketingRoute = computed(() =>
   route.path === "/" ||
   route.path === "/login" ||
-  (route.path === "/pricing" && !authStore.user) ||
   route.path === "/reset-password",
 );
 const isMinimalShell = computed(() =>

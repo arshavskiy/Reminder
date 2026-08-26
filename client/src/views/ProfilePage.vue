@@ -554,9 +554,9 @@
             </p>
             <div v-if="!driveAllowed" class="settings-desc settings-desc--follow">
               זמין במסלולים <strong>בסיסי</strong> ו<strong>עסקי</strong> בלבד.
-              <router-link class="settings-link" to="/pricing">
+              <a class="settings-link" href="https://remindocr.com/pricing">
                 שדרוג מנוי
-              </router-link>
+              </a>
             </div>
             <div v-else-if="driveStatus">
               <n-tag v-if="driveFolderGone" size="small" class="drive-status-tag" type="warning">תיקייה חסרה</n-tag>
@@ -772,7 +772,7 @@
                 <span>{{ feature }}</span>
               </li>
             </ul>
-            <router-link class="sub-plan-card__link" to="/pricing">צפייה בכל המסלולים והמחירים</router-link>
+            <a class="sub-plan-card__link" href="https://remindocr.com/pricing">צפייה בכל המסלולים והמחירים</a>
           </article>
 
           <div class="info-card sub-usage-card">

@@ -17,10 +17,7 @@ import EmailTemplatesPage from "../views/EmailTemplatesPage.vue";
 import EquipmentPage from "../views/EquipmentPage.vue";
 import ReportsPage from "../views/ReportsPage.vue";
 import LoginPage from "../views/LoginPage.vue";
-import PricingPage from "../views/PricingPage.vue";
 import ResetPasswordPage from "../views/ResetPasswordPage.vue";
-import PrivacyPage from "../views/PrivacyPage.vue";
-import TermsPage from "../views/TermsPage.vue";
 import AdminPage from "../views/AdminPage.vue";
 import {trackPageView} from "../analytics.js";
 import {applySeo} from "../seo.js";
@@ -53,16 +50,6 @@ export const router = createRouter({
       },
     },
     {
-      path: "/pricing",
-      component: PricingPage,
-      meta: {
-        public: true,
-        canonicalPath: "/pricing",
-        title: "מחירים - RemindOCR",
-        description: "מסלולי RemindOCR לניהול תסקירי בדיקה, חשבוניות, מסמכים ותזכורות אוטומטיות לפי נפח העבודה של העסק.",
-      },
-    },
-    {
       path: "/reset-password",
       component: ResetPasswordPage,
       meta: {
@@ -72,30 +59,6 @@ export const router = createRouter({
         description: "איפוס סיסמה למשתמשי RemindOCR.",
       },
     },
-    {
-      path: "/privacy",
-      component: PrivacyPage,
-      meta: {
-        public: true,
-        legal: true,
-        canonicalPath: "/privacy",
-        title: "מדיניות פרטיות - RemindOCR",
-        description: "מדיניות הפרטיות של RemindOCR, כולל שימוש במסמכים, חשבונות משתמש וחיבור Gmail אופציונלי לקריאת קבצים מצורפים.",
-      },
-    },
-    {
-      path: "/terms",
-      component: TermsPage,
-      meta: {
-        public: true,
-        legal: true,
-        canonicalPath: "/terms",
-        title: "תנאי שימוש - RemindOCR",
-        description: "תנאי השימוש של RemindOCR לניהול תסקירי בדיקה, מסמכים, לקוחות ותזכורות.",
-      },
-    },
-    { path: "/privacy.html", redirect: "/privacy" },
-    { path: "/terms.html", redirect: "/terms" },
     { path: "/dashboard", component: DashboardPage, meta: { feature: FEATURES.pages.dashboard } },
     { path: "/documents", component: DocumentsPage, meta: { feature: FEATURES.pages.documents } },
     { path: "/documents/:id", component: DocumentDetailPage, meta: { feature: FEATURES.pages.documents } },

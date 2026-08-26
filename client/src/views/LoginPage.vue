@@ -8,7 +8,7 @@
       <div class="nav-links">
         <a href="#features">תכונות</a>
         <a href="#how">איך זה עובד</a>
-        <router-link to="/pricing">מחירים</router-link>
+        <a href="https://remindocr.com/pricing">מחירים</a>
         <n-tooltip placement="bottom" :keep-alive-on-hover="false">
           <template #trigger>
             <button
@@ -288,9 +288,9 @@
       <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
       <div class="landing-footer__legal">
         © 2026 HandCoded. All rights reserved. |
-        <router-link to="/pricing">Pricing</router-link> |
-        <router-link to="/privacy">Privacy Policy</router-link> |
-        <router-link to="/terms">Terms of Service</router-link>
+        <a href="https://remindocr.com/pricing">Pricing</a> |
+        <a href="https://remindocr.com/privacy">Privacy Policy</a> |
+        <a href="https://remindocr.com/terms">Terms of Service</a>
       </div>
     </footer>
   </div>
