@@ -491,9 +491,17 @@ export interface Equipment {
   document_id?: string | null;
   document_name?: string | null;
   photo_urls?: { key: string; taken_at: string }[];
+    inspection_checklist?: EquipmentChecklistItem[];
   is_active: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface EquipmentChecklistItem {
+    id: string;
+    label: string;
+    checked: boolean;
+    note?: string | null;
 }
 
 // ── Email templates ─────────────────────────────────────────────────────────

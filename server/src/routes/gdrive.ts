@@ -232,15 +232,31 @@ export function registerGdriveRoutes(app: express.Express) {
         }
 
         const user = await col<any>("users").findOne({_id: new ObjectId(ctx.userId)} as any);
-        const hasToken = Boolean(user?.gmail_access_token);
+        const hasToken = Boolean(user?.drive_access_token || user?.gmail_access_token) && user?.drive_scope_granted !== false;
         const syncEnabled = Boolean(user?.drive_sync_enabled);
         const folderId = user?.drive_folder_id ?? null;
         const folderName = user?.drive_folder_name ?? "RemindOCR";
         const allowed = planAllowsGoogleDrive(user?.plan ?? ctx.user.plan ?? ctx.user.role);
-        const syncedFileCount = await col("documents").countDocuments({
-            user_id: ctx.userId,
-            drive_file_id: {$exists: true, $nin: [null, ""]},
-        } as any);
+        const [syncedFileCount, pendingFileCount, missingFileCount, latestJob] = await Promise.all([
+            col("documents").countDocuments({
+                user_id: ctx.userId,
+                drive_file_id: {$exists: true, $nin: [null, ""]},
+                ...EXPORTABLE_FILE_FILTER,
+            } as any),
+            col("documents").countDocuments({
+                user_id: ctx.userId,
+                drive_file_id: {$exists: false},
+                ...EXPORTABLE_FILE_FILTER,
+            } as any),
+            col("documents").countDocuments({
+                user_id: ctx.userId,
+                $or: [{storage_status: "missing"}, {file_missing: true}],
+            } as any),
+            col<DriveExportJob>("drive_export_jobs").findOne(
+                {user_id: ctx.userId} as any,
+                {sort: {created_at: -1}} as any,
+            ),
+        ]);
 
         let folderState: "ok" | "trashed" | "missing" | "unknown" | null = folderId ? "unknown" : null;
         if (folderId) {
@@ -259,6 +275,9 @@ export function registerGdriveRoutes(app: express.Express) {
             folderUrl: folderHealthy && folderId ? driveFolderWebUrl(folderId) : null,
             folderState,
             syncedFileCount,
+            pendingFileCount,
+            missingFileCount,
+            latestJob: latestJob ? presentDriveExportJob(latestJob) : null,
             trashUrl: folderState === "trashed" ? driveTrashWebUrl() : null,
             allowed,
         });

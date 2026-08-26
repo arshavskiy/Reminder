@@ -728,6 +728,7 @@ export function registerEquipmentRoutes(app: express.Application) {
       load_radius: (body as any).load_radius ?? null,
       description: body.description ?? null,
       notes: body.notes ?? null,
+        inspection_checklist: normalizeChecklist((body as any).inspection_checklist),
       is_active: body.is_active ?? 1,
       created_at: now,
       updated_at: now,
@@ -756,16 +757,40 @@ export function registerEquipmentRoutes(app: express.Application) {
     const fields = [
       "name", "category", "manufacturer", "model", "serial_number",
       "license_number", "capacity", "load_capacity_test", "load_radius",
-      "description", "notes", "is_active", "client_id",
+        "description", "notes", "is_active", "client_id", "inspection_checklist",
     ];
     for (const f of fields) {
-      if ((body as any)[f] !== undefined) updates[f] = (body as any)[f];
+        if ((body as any)[f] !== undefined) {
+            updates[f] = f === "inspection_checklist" ? normalizeChecklist((body as any)[f]) : (body as any)[f];
+        }
     }
 
     await col("equipment").updateOne(filter, { $set: updates });
     const updated = await col("equipment").findOne(filter);
     res.json(flatDoc(updated));
   });
+
+    app.put("/api/equipment/:id/checklist", async (req, res) => {
+        let userId: string;
+        try {
+            const ctx = await requireAuth(req.headers.cookie);
+            userId = ctx.userId;
+        } catch (e) {
+            const err = e as HTTPException;
+            res.status(err.status ?? 401).json({error: err.message});
+            return;
+        }
+
+        const checklist = normalizeChecklist((req.body as any)?.checklist);
+        const filter = {...idFilter(req.params.id), user_id: userId};
+        await col("equipment").updateOne(filter, {$set: {inspection_checklist: checklist, updated_at: new Date()}});
+        const updated = await col("equipment").findOne(filter);
+        if (!updated) {
+            res.status(404).json({error: "Not found"});
+            return;
+        }
+        res.json({ok: true, checklist: (updated as any).inspection_checklist ?? []});
+    });
 
   // DELETE /api/equipment/:id
   app.delete("/api/equipment/:id", async (req, res) => {
@@ -1019,6 +1044,40 @@ function flatDoc(doc: any) {
   if (!doc) return doc;
   const { _id, ...rest } = doc;
   return { id: _id?.toString(), ...rest };
+}
+
+function normalizeChecklist(value: unknown): Array<{
+    id: string;
+    label: string;
+    checked: boolean;
+    note: string | null
+}> {
+    if (!Array.isArray(value)) return defaultInspectionChecklist();
+    const rows = value
+        .map((item: any, index) => ({
+            id: safeChecklistId(item?.id, index),
+            label: String(item?.label ?? "").trim(),
+            checked: Boolean(item?.checked),
+            note: typeof item?.note === "string" && item.note.trim() ? item.note.trim() : null,
+        }))
+        .filter((item) => item.label)
+        .slice(0, 30);
+    return rows.length ? rows : defaultInspectionChecklist();
+}
+
+function defaultInspectionChecklist() {
+    return [
+        {id: "visual", label: "בדיקה חזותית", checked: false, note: null},
+        {id: "serial", label: "אימות מספר סידורי / רישוי", checked: false, note: null},
+        {id: "load", label: "בדיקת עומס והתאמה", checked: false, note: null},
+        {id: "safety", label: "בדיקת אמצעי בטיחות", checked: false, note: null},
+        {id: "photos", label: "צילום מצב הציוד", checked: false, note: null},
+    ];
+}
+
+function safeChecklistId(value: unknown, index: number): string {
+    const text = String(value ?? "").trim().replace(/[^a-zA-Z0-9_-]/g, "");
+    return text || `item-${index + 1}`;
 }
 
 function extractContactPersonFromNotes(value: unknown): string | null {

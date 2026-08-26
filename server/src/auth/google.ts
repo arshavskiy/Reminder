@@ -4,13 +4,18 @@ import { getSettings } from "../settings";
 /**
  * Generate authorization URL to redirect user to Google
  */
-export async function getGoogleAuthUrl(state: string, codeVerifier: string, redirectUri?: string): Promise<string> {
+export async function getGoogleAuthUrl(
+    state: string,
+    codeVerifier: string,
+    redirectUri?: string,
+    scope = "openid profile email",
+): Promise<string> {
   const settings = getSettings();
   const params = new URLSearchParams({
     client_id: settings.googleClientId || "",
     redirect_uri: redirectUri || settings.googleRedirectUri || "",
     response_type: "code",
-      scope: "openid profile email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.file",
+      scope,
     access_type: "offline",
     prompt: "consent",
     state,

@@ -263,6 +263,9 @@ export interface DriveStatus {
   folderUrl: string | null;
   folderState?: DriveFolderState | null;
   syncedFileCount?: number;
+    pendingFileCount?: number;
+    missingFileCount?: number;
+    latestJob?: DriveExportJob | null;
   trashUrl?: string | null;
   allowed: boolean;
 }
@@ -896,7 +899,9 @@ export const api = {
 
   gmail: {
     status: () => get<{ connected: boolean; source: string | null; email: string | null }>("/gmail/status"),
-    authUrl: (returnTo?: string) => get<{ url: string }>(`/gmail/auth-url${qs({ returnTo })}`),
+      authUrl: (returnTo?: string, purpose?: "gmail" | "drive" | "all") => get<{
+          url: string
+      }>(`/gmail/auth-url${qs({returnTo, purpose})}`),
     searchProviders: () => get<{ providers: GmailSearchProvider[] }>("/gmail/search-providers"),
     inbox: (q?: string, limit?: number, pageToken?: string, templateId?: string) => get<{ emails: GmailEmail[]; nextPageToken: string | null; resultSizeEstimate: number | null }>(`/gmail/inbox${qs({ q, limit, pageToken, templateId })}`),
     attachmentUrl: (messageId: string, attachmentId: string, filename: string) =>
@@ -941,6 +946,11 @@ export const api = {
     expiryCalendar: (params?: { from?: string; to?: string }) =>
       get<ExpiryCalendarItem[]>(`/equipment/expiry-calendar${qs(params)}`),
     history: (id: string) => get<EquipmentHistoryEvent[]>(`/equipment/${id}/history`),
+      saveChecklist: (id: string, checklist: NonNullable<Equipment["inspection_checklist"]>) =>
+          put<{
+              ok: boolean;
+              checklist: NonNullable<Equipment["inspection_checklist"]>
+          }>(`/equipment/${id}/checklist`, {checklist}),
     downloadReport: async (id: string) => {
       const res = await fetch(`${BASE}/equipment/${id}/report.pdf`, { credentials: "include" });
       if (!res.ok) {

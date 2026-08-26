@@ -115,6 +115,10 @@
               </p>
             </div>
             <div class="row__actions">
+              <button class="btn btn--xs btn--ghost" @click="openQr(r)">
+                <n-icon :component="QrCodeOutline" class="btn-icon"/>
+                QR
+              </button>
               <button class="btn btn--xs btn--ghost" @click="openHistory(r)">היסטוריה</button>
 <!--              <button class="btn btn&#45;&#45;xs btn&#45;&#45;ghost" @click="api.equipment.downloadReport(r.id)">PDF</button>-->
               <button class="btn btn--xs btn--ghost" @click="openEdit(r)">ערוך</button>
@@ -260,6 +264,38 @@
               <img :src="lightboxUrl" class="hist__lightbox-img" />
             </div>
           </n-tab-pane>
+
+          <n-tab-pane name="checklist" tab="צ׳קליסט">
+            <div class="checklist" style="margin-top:12px">
+              <div class="checklist__head">
+                <div>
+                  <h3>בדיקת שטח</h3>
+                  <p>נשמר על פריט הציוד ומופיע גם במסך שטח.</p>
+                </div>
+                <n-button secondary size="small" @click="addChecklistItem">
+                  <template #icon>
+                    <n-icon :component="AddCircleOutline"/>
+                  </template>
+                  הוסף שורה
+                </n-button>
+              </div>
+              <div v-for="(item, index) in checklistDraft" :key="item.id" class="checklist__row">
+                <n-checkbox v-model:checked="item.checked"/>
+                <n-input v-model:value="item.label" placeholder="סעיף בדיקה"/>
+                <n-input v-model:value="item.note" placeholder="הערה"/>
+                <button class="btn btn--xs btn--ghost btn--danger" @click="removeChecklistItem(index)">
+                  <n-icon :component="RemoveCircleOutline" class="btn-icon"/>
+                </button>
+              </div>
+              <n-button
+                  :loading="savingChecklist"
+                  type="primary"
+                  @click="saveChecklist"
+              >
+                שמור צ׳קליסט
+              </n-button>
+            </div>
+          </n-tab-pane>
         </n-tabs>
 
         <!-- New equipment (no id) — just the form, no tabs -->
@@ -294,6 +330,37 @@
         </template>
       </n-drawer-content>
     </n-drawer>
+
+    <n-modal v-model:show="showQr" class="qr-modal" preset="card" title="QR לציוד">
+      <div v-if="qrEquipment" class="qr-card">
+        <img :src="qrImageUrl" alt="קוד QR לציוד" class="qr-card__image"/>
+        <div class="qr-card__body">
+          <strong>{{ qrEquipment.name }}</strong>
+          <span v-if="qrEquipment.serial_number">מ״ס {{ qrEquipment.serial_number }}</span>
+          <input :value="qrFieldUrl" class="qr-card__link" readonly/>
+        </div>
+        <div class="qr-card__actions">
+          <n-button secondary @click="copyQrLink">
+            <template #icon>
+              <n-icon :component="ClipboardOutline"/>
+            </template>
+            העתק קישור
+          </n-button>
+          <n-button secondary @click="printQr">
+            <template #icon>
+              <n-icon :component="PrintOutline"/>
+            </template>
+            הדפס
+          </n-button>
+          <n-button type="primary" @click="router.push(qrFieldPath)">
+            <template #icon>
+              <n-icon :component="OpenOutline"/>
+            </template>
+            פתח בשטח
+          </n-button>
+        </div>
+      </div>
+    </n-modal>
   </div>
 </template>
 
@@ -310,6 +377,8 @@ import {
   NGrid,
   NIcon,
   NInput,
+  NCheckbox,
+  NModal,
   NSelect,
   NSpace,
   NSpin,
@@ -319,17 +388,24 @@ import {
 } from "naive-ui";
 import {
   AirplaneOutline,
+  AddCircleOutline,
   BuildOutline,
   BusinessOutline,
+  ClipboardOutline,
   CloudUploadOutline,
   ConstructOutline,
   CubeOutline,
   GitBranchOutline,
   LayersOutline,
+  OpenOutline,
+  PrintOutline,
+  QrCodeOutline,
   RefreshOutline,
+  RemoveCircleOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
 import {RouterLink} from "vue-router";
+import {useRouter} from "vue-router";
 import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
@@ -338,6 +414,7 @@ import XlsxImportModal from "../components/XlsxImportModal.vue";
 
 const message = useMessage();
 const { confirm } = useConfirm();
+const router = useRouter();
 
 const section = ref<"equipment" | "categories" | "manufacturers" | "declarations">("equipment");
 const sections = [
@@ -426,11 +503,15 @@ const showEdit = ref(false);
 const editing = ref<Partial<Equipment> | null>(null);
 const saving = ref(false);
 const backfilling = ref(false);
-const drawerTab = ref<"details" | "history">("details");
+const drawerTab = ref<"details" | "history" | "checklist">("details");
 const history = ref<EquipmentHistoryEvent[]>([]);
 const historyLoading = ref(false);
 const photos = ref<{ url: string; key: string; taken_at: string }[]>([]);
 const lightboxUrl = ref<string | null>(null);
+const checklistDraft = ref<NonNullable<Equipment["inspection_checklist"]>>([]);
+const savingChecklist = ref(false);
+const showQr = ref(false);
+const qrEquipment = ref<Equipment | null>(null);
 
 const clientOptions = computed<SelectOption[]>(() =>
   clients.value.map((c) => ({ label: c.display_name, value: c.id.toString() }))
@@ -539,6 +620,7 @@ function loadHistoryData(id: string | number) {
 function openEdit(r: Equipment) {
   editing.value = { ...r };
   drawerTab.value = "details";
+  checklistDraft.value = checklistFromEquipment(r);
   history.value = [];
   showEdit.value = true;
   if (r.id) loadHistoryData(r.id);
@@ -547,9 +629,67 @@ function openEdit(r: Equipment) {
 function openHistory(r: Equipment) {
   editing.value = { ...r };
   drawerTab.value = "history";
+  checklistDraft.value = checklistFromEquipment(r);
   history.value = [];
   showEdit.value = true;
   if (r.id) loadHistoryData(r.id);
+}
+
+function checklistFromEquipment(r: Equipment): NonNullable<Equipment["inspection_checklist"]> {
+  return (r.inspection_checklist?.length ? r.inspection_checklist : defaultChecklist()).map((item) => ({...item}));
+}
+
+function defaultChecklist(): NonNullable<Equipment["inspection_checklist"]> {
+  return [
+    {id: "visual", label: "בדיקה חזותית", checked: false, note: null},
+    {id: "serial", label: "אימות מספר סידורי / רישוי", checked: false, note: null},
+    {id: "load", label: "בדיקת עומס והתאמה", checked: false, note: null},
+    {id: "safety", label: "בדיקת אמצעי בטיחות", checked: false, note: null},
+    {id: "photos", label: "צילום מצב הציוד", checked: false, note: null},
+  ];
+}
+
+function addChecklistItem() {
+  checklistDraft.value.push({id: `custom-${Date.now()}`, label: "", checked: false, note: null});
+}
+
+function removeChecklistItem(index: number) {
+  checklistDraft.value.splice(index, 1);
+}
+
+async function saveChecklist() {
+  if (!editing.value?.id) return;
+  savingChecklist.value = true;
+  try {
+    const checklist = checklistDraft.value.filter((item) => item.label.trim());
+    const saved = await api.equipment.saveChecklist(String(editing.value.id), checklist);
+    checklistDraft.value = saved.checklist.map((item) => ({...item}));
+    const row = rows.value.find((item) => String(item.id) === String(editing.value?.id));
+    if (row) row.inspection_checklist = saved.checklist;
+    message.success("הצ׳קליסט נשמר");
+  } catch {
+    message.error("שגיאה בשמירת הצ׳קליסט");
+  } finally {
+    savingChecklist.value = false;
+  }
+}
+
+const qrFieldPath = computed(() => qrEquipment.value ? `/field?equipment=${encodeURIComponent(String(qrEquipment.value.id))}` : "/field");
+const qrFieldUrl = computed(() => `${window.location.origin}${qrFieldPath.value}`);
+const qrImageUrl = computed(() => `https://quickchart.io/qr?size=240&margin=2&text=${encodeURIComponent(qrFieldUrl.value)}`);
+
+function openQr(r: Equipment) {
+  qrEquipment.value = r;
+  showQr.value = true;
+}
+
+async function copyQrLink() {
+  await navigator.clipboard.writeText(qrFieldUrl.value);
+  message.success("הקישור הועתק");
+}
+
+function printQr() {
+  window.print();
 }
 
 async function save() {
@@ -1015,6 +1155,95 @@ html[data-theme="light"] .row__tag { background: rgba(24, 160, 88, 0.10); }
   object-fit: contain;
 }
 
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checklist__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.checklist__head h3 {
+  margin: 0 0 2px;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.checklist__head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.checklist__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.qr-modal {
+  max-width: 420px;
+}
+
+.qr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.qr-card__image {
+  width: 240px;
+  height: 240px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.qr-card__body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.qr-card__body strong {
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.qr-card__body span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.qr-card__link {
+  margin-top: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  direction: ltr;
+  text-align: left;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+}
+
+.qr-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
 @media (max-width: 720px) {
   .page__title {
     font-size: 23px;
@@ -1108,12 +1337,41 @@ html[data-theme="light"] .row__tag { background: rgba(24, 160, 88, 0.10); }
   :deep(.n-drawer-body-content-wrapper) {
     padding: 16px;
   }
+
+  .checklist__head {
+    flex-direction: column;
+  }
+
+  .checklist__row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .checklist__row :deep(.n-input):nth-of-type(2) {
+    grid-column: 2;
+  }
 }
 
 @media (max-width: 420px) {
   .equipment-actions,
   .row__actions {
     grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .qr-modal,
+  .qr-modal * {
+    visibility: visible;
+  }
+
+  .qr-modal {
+    position: fixed;
+    inset: 0;
+    max-width: none;
   }
 }
 </style>

@@ -346,20 +346,31 @@ export async function uploadToDrive(
 export async function resolveDriveToken(userId: string): Promise<string | null> {
     const user = await col<any>("users").findOne({_id: new ObjectId(userId)} as any);
     if (!user) return null;
+    if (user.drive_scope_granted === false) return null;
+
+    if (user.drive_access_token) {
+        if (user.drive_token_expires_at && new Date(user.drive_token_expires_at) > new Date()) {
+            return user.drive_access_token;
+        }
+        if (user.drive_refresh_token) {
+            const refreshed = await refreshDriveToken(user.drive_refresh_token, userId, "drive");
+            if (refreshed) return refreshed;
+        }
+    }
 
     if (user.gmail_access_token) {
         if (user.gmail_token_expires_at && new Date(user.gmail_token_expires_at) > new Date()) {
             return user.gmail_access_token;
         }
         if (user.gmail_refresh_token) {
-            const refreshed = await refreshDriveToken(user.gmail_refresh_token, userId);
+            const refreshed = await refreshDriveToken(user.gmail_refresh_token, userId, "gmail");
             if (refreshed) return refreshed;
         }
     }
     return null;
 }
 
-async function refreshDriveToken(refreshToken: string, userId: string): Promise<string | null> {
+async function refreshDriveToken(refreshToken: string, userId: string, target: "drive" | "gmail"): Promise<string | null> {
     const {getSettings} = await import("../settings");
     const settings = getSettings();
     try {
@@ -375,13 +386,19 @@ async function refreshDriveToken(refreshToken: string, userId: string): Promise<
         });
         if (!res.ok) return null;
         const data = await res.json() as { access_token: string; expires_in: number };
+        const tokenFields = target === "drive"
+            ? {
+                drive_access_token: data.access_token,
+                drive_token_expires_at: new Date(Date.now() + data.expires_in * 1000),
+            }
+            : {
+                gmail_access_token: data.access_token,
+                gmail_token_expires_at: new Date(Date.now() + data.expires_in * 1000),
+            };
         await col("users").updateOne(
             {_id: new ObjectId(userId)} as any,
             {
-                $set: {
-                    gmail_access_token: data.access_token,
-                    gmail_token_expires_at: new Date(Date.now() + data.expires_in * 1000)
-                }
+                $set: tokenFields
             }
         );
         return data.access_token;

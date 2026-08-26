@@ -572,7 +572,7 @@
                       <template v-if="!driveAllowed">זמין במסלולים בסיסי ועסקי בלבד.</template>
                       <template v-else-if="!driveStatus">טוען סטטוס...</template>
                       <template v-else-if="driveFolderGone">תיקיית הסנכרון חסרה.</template>
-                      <template v-else-if="!driveStatus.connected">יש להתחבר עם Google כדי להפעיל.</template>
+                      <template v-else-if="!driveStatus.connected">נדרש אישור Google Drive בלבד.</template>
                       <template v-else>{{ driveStatus.folderName || "RemindOCR" }}</template>
                     </span>
                   </div>
@@ -586,8 +586,19 @@
                     </a>
                     <template v-else-if="driveStatus">
                       <n-button
-                        v-if="!driveStatus.syncEnabled"
-                        :disabled="!driveStatus.connected"
+                          v-if="!driveStatus.connected"
+                          :loading="driveToggling"
+                          size="small"
+                          type="primary"
+                          @click="connectDriveFromProfile"
+                      >
+                        <template #icon>
+                          <n-icon :component="LogoGoogle"/>
+                        </template>
+                        חבר Drive
+                      </n-button>
+                      <n-button
+                          v-else-if="!driveStatus.syncEnabled"
                         :loading="driveToggling"
                         size="small"
                         type="primary"
@@ -655,6 +666,25 @@
                 v-if="driveAllowed && driveStatus?.syncEnabled && !driveFolderGone"
                 class="settings-panel"
               >
+                <div aria-label="סטטוס סנכרון Drive" class="drive-dashboard">
+                  <div class="drive-dashboard__item">
+                    <strong>{{ driveStatus.syncedFileCount ?? 0 }}</strong>
+                    <span>מסונכרנים</span>
+                  </div>
+                  <div class="drive-dashboard__item">
+                    <strong>{{ driveStatus.pendingFileCount ?? 0 }}</strong>
+                    <span>ממתינים</span>
+                  </div>
+                  <div :class="{ 'drive-dashboard__item--warn': (driveStatus.missingFileCount ?? 0) > 0 }"
+                       class="drive-dashboard__item">
+                    <strong>{{ driveStatus.missingFileCount ?? 0 }}</strong>
+                    <span>קבצים חסרים</span>
+                  </div>
+                  <div class="drive-dashboard__item">
+                    <strong>{{ latestDriveJobLabel }}</strong>
+                    <span>ייצוא אחרון</span>
+                  </div>
+                </div>
                 <label class="settings-panel__label" for="drive-folder-name">שם תיקייה ב-Drive</label>
                 <div class="drive-folder__row">
                   <n-input
@@ -1418,6 +1448,14 @@ const driveFolderUrl = computed(() => {
   }
   return null;
 });
+const latestDriveJobLabel = computed(() => {
+  const job = driveStatus.value?.latestJob;
+  if (!job) return "אין";
+  if (job.status === "queued") return "ממתין";
+  if (job.status === "running") return `${job.processed}/${job.total}`;
+  if (job.status === "failed") return "נכשל";
+  return `${job.uploaded} הועלו`;
+});
 
 async function loadDriveStatus() {
   try {
@@ -1442,11 +1480,22 @@ async function loadGmailStatus() {
 async function connectGmailFromProfile() {
   gmailLoading.value = true;
   try {
-    const {url} = await api.gmail.authUrl("/profile");
+    const {url} = await api.gmail.authUrl("/profile?section=settings", "gmail");
     window.location.href = url;
   } catch {
     gmailLoading.value = false;
     message.error("שגיאה בקבלת קישור חיבור Google");
+  }
+}
+
+async function connectDriveFromProfile() {
+  driveToggling.value = true;
+  try {
+    const {url} = await api.gmail.authUrl("/profile?section=settings", "drive");
+    window.location.href = url;
+  } catch {
+    driveToggling.value = false;
+    message.error("שגיאה בקבלת קישור חיבור Drive");
   }
 }
 
@@ -1577,10 +1626,10 @@ async function waitForDriveExportJob(jobId: string | null): Promise<DriveExportJ
 
 async function reconnectGmailForDrive() {
   try {
-    const {url} = await api.gmail.authUrl("/profile");
+    const {url} = await api.gmail.authUrl("/profile?section=settings", "drive");
     window.location.href = url;
   } catch {
-    message.error("שגיאה בקבלת קישור חיבור Gmail");
+    message.error("שגיאה בקבלת קישור חיבור Drive");
   }
 }
 
@@ -2308,6 +2357,40 @@ watch(
   font-weight: 600;
   color: var(--text-secondary);
 }
+
+.drive-dashboard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.drive-dashboard__item {
+  min-height: 70px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+.drive-dashboard__item strong {
+  color: var(--text-primary);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.drive-dashboard__item span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.drive-dashboard__item--warn strong {
+  color: var(--color-warning);
+}
 .drive-folder__row {
   display: flex;
   gap: 8px;
@@ -2659,6 +2742,10 @@ watch(
   .drive-folder__input {
     width: 100%;
     max-width: none;
+  }
+
+  .drive-dashboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .sub-plan-card__head {

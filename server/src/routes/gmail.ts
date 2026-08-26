@@ -19,7 +19,9 @@ import {
   documentImportQuotaErrorPayload,
 } from "../quotas/documentImportQuota";
 
-const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.file";
+const GOOGLE_IDENTITY_SCOPE = "openid profile email";
+const GMAIL_SCOPE = `${GOOGLE_IDENTITY_SCOPE} https://www.googleapis.com/auth/gmail.readonly`;
+const DRIVE_SCOPE = `${GOOGLE_IDENTITY_SCOPE} https://www.googleapis.com/auth/drive.file`;
 const GMAIL_DEFAULT_PAGE_SIZE = 500;
 const GMAIL_MAX_PAGE_SIZE = 500;
 const GMAIL_JOB_STALE_MS = 10 * 60 * 1000;
@@ -110,11 +112,13 @@ export function registerGmailRoutes(app: express.Application) {
     const state = generateState();
     const codeVerifier = generateCodeVerifier();
 
+      const purpose = googlePermissionPurpose(req.query.purpose);
     await col("oauth_states").insertOne({
       state,
       code_verifier: codeVerifier,
       user_id: ctx.userId,
       type: "gmail",
+        purpose,
       return_to: safeFrontendReturnPath(req.query.returnTo),
       expires_at: new Date(Date.now() + 10 * 60 * 1000),
     } as any);
@@ -124,12 +128,13 @@ export function registerGmailRoutes(app: express.Application) {
       client_id: googleClientId,
       redirect_uri: gmailRedirectUri(req),
       response_type: "code",
-      scope: GMAIL_SCOPE,
+        scope: purpose === "drive" ? DRIVE_SCOPE : purpose === "all" ? `${GMAIL_SCOPE} https://www.googleapis.com/auth/drive.file` : GMAIL_SCOPE,
       access_type: "offline",
       prompt: "consent",
       state,
       code_challenge: await generateCodeChallenge(codeVerifier),
       code_challenge_method: "S256",
+        include_granted_scopes: "true",
     });
 
     res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
@@ -147,6 +152,8 @@ export function registerGmailRoutes(app: express.Application) {
     if (!pkce) { res.redirect(frontendUrl(`${defaultReturnPath}?error=invalid_state`)); return; }
     await col("oauth_states").deleteOne({ state });
     const returnPath = safeFrontendReturnPath(pkce.return_to) ?? defaultReturnPath;
+      const userObjectId = new ObjectId(String(pkce.user_id));
+      const purpose = googlePermissionPurpose(pkce.purpose);
 
     const settings = getSettings();
     const googleClientId = settings.googleClientId;
@@ -170,22 +177,32 @@ export function registerGmailRoutes(app: express.Application) {
     });
 
     if (!tokenRes.ok) { res.redirect(frontendUrl(`${returnPath}?error=token_exchange_failed`)); return; }
-    const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number };
+      const tokens = await tokenRes.json() as {
+          access_token: string;
+          refresh_token?: string;
+          expires_in: number;
+          scope?: string
+      };
+      const grantedScopes = String(tokens.scope ?? "").split(/\s+/).filter(Boolean);
+      const hasGmailScope = grantedScopes.includes("https://www.googleapis.com/auth/gmail.readonly");
+      const hasDriveScope = grantedScopes.includes("https://www.googleapis.com/auth/drive.file");
 
       let gmailEmail: string | null = null;
       try {
+          if (hasGmailScope) {
           const profileRes = await gmailFetch(tokens.access_token, "profile");
           if (profileRes.ok) {
               const profile = await profileRes.json() as { emailAddress?: string };
               gmailEmail = profile.emailAddress ?? null;
           }
+          }
       } catch {
       }
 
-      if (gmailEmail) {
+      if ((purpose === "gmail" || purpose === "all") && gmailEmail) {
           const existing = await col("users").findOne({
               gmail_email: gmailEmail,
-              _id: {$ne: pkce.user_id},
+              _id: {$ne: userObjectId},
           } as any);
           if (existing) {
               logger.warn("gmail_connect_duplicate_blocked", {
@@ -198,16 +215,26 @@ export function registerGmailRoutes(app: express.Application) {
           }
       }
 
-    await col("users").updateOne(
-      { _id: pkce.user_id } as any,
-      { $set: {
-          gmail_access_token: tokens.access_token,
-          gmail_refresh_token: tokens.refresh_token ?? null,
-          gmail_token_expires_at: new Date(Date.now() + tokens.expires_in * 1000),
-              gmail_email: gmailEmail,
-        }
+      const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+      const setFields: Record<string, any> = {
+          google_granted_scopes: grantedScopes,
+          updated_at: new Date(),
+      };
+      if (purpose === "drive" || purpose === "all") {
+          setFields.drive_access_token = tokens.access_token;
+          if (tokens.refresh_token) setFields.drive_refresh_token = tokens.refresh_token;
+          setFields.drive_token_expires_at = tokenExpiresAt;
+          setFields.drive_scope_granted = hasDriveScope;
       }
-    );
+      if (purpose === "gmail" || purpose === "all") {
+          setFields.gmail_access_token = tokens.access_token;
+          if (tokens.refresh_token) setFields.gmail_refresh_token = tokens.refresh_token;
+          setFields.gmail_token_expires_at = tokenExpiresAt;
+          setFields.gmail_scope_granted = hasGmailScope;
+          if (gmailEmail) setFields.gmail_email = gmailEmail;
+      }
+
+      await col("users").updateOne({_id: userObjectId} as any, {$set: setFields});
 
     res.redirect(frontendUrl(returnPath));
   });
@@ -219,7 +246,7 @@ export function registerGmailRoutes(app: express.Application) {
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
     const user = await col<any>("users").findOne({ _id: new ObjectId(ctx.userId) } as any);
-    const userConnected = Boolean(user?.gmail_access_token);
+      const userConnected = Boolean(user?.gmail_access_token) && user?.gmail_scope_granted !== false;
     const envConnected = allowEnvGmailFallback() && Boolean(process.env.GMAIL_ACCESS_TOKEN || process.env.GMAIL_REFRESH_TOKEN);
     const connected = userConnected || envConnected;
     const source = userConnected ? "oauth" : envConnected ? "env" : null;
@@ -672,6 +699,11 @@ export function registerGmailRoutes(app: express.Application) {
           gmail_refresh_token: "",
           gmail_token_expires_at: "",
           gmail_email: "",
+            gmail_scope_granted: "",
+            drive_access_token: "",
+            drive_refresh_token: "",
+            drive_token_expires_at: "",
+            drive_scope_granted: "",
         },
       }
     );
@@ -1705,6 +1737,7 @@ function gmailFetch(accessToken: string, path: string) {
 async function resolveGmailToken(userId: string): Promise<string | null> {
   // 1. Check user's OAuth token
   const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
+    if (user?.gmail_scope_granted === false) return null;
   if (user?.gmail_access_token) {
     if (user.gmail_token_expires_at && new Date(user.gmail_token_expires_at) <= new Date()) {
       logger.info("gmail_token_resolve", { source: "user_oauth", action: "refreshing_expired" });
@@ -1836,4 +1869,11 @@ function safeFrontendReturnPath(value: unknown): string | null {
   if (!text || !text.startsWith("/") || text.startsWith("//")) return null;
   if (/[\r\n]/.test(text)) return null;
   return text;
+}
+
+function googlePermissionPurpose(value: unknown): "gmail" | "drive" | "all" {
+    const text = String(Array.isArray(value) ? value[0] : value ?? "").trim().toLowerCase();
+    if (text === "drive") return "drive";
+    if (text === "all") return "all";
+    return "gmail";
 }

@@ -58,6 +58,29 @@
         </div>
       </div>
 
+      <div class="field__checklist">
+        <div class="field__checklist-head">
+          <h3>צ׳קליסט בדיקה</h3>
+          <button
+              :disabled="checklistSaving"
+              class="field__small-btn"
+              @click="saveChecklist"
+          >
+            {{ checklistSaving ? "שומר..." : "שמור" }}
+          </button>
+        </div>
+        <label v-for="item in checklistDraft" :key="item.id" class="field__check">
+          <input v-model="item.checked" type="checkbox"/>
+          <span>{{ item.label }}</span>
+          <input
+              v-model="item.note"
+              class="field__check-note"
+              placeholder="הערה"
+              type="text"
+          />
+        </label>
+      </div>
+
       <!-- Inspection history preview -->
       <div v-if="historyLoading" class="field__loading">טוען היסטוריה...</div>
       <div v-else-if="history.length" class="field__hist">
@@ -119,7 +142,7 @@
 
 <script lang="ts" setup>
 import {onMounted, onUnmounted, ref} from "vue";
-import {useRouter} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
@@ -127,9 +150,12 @@ import type {Equipment} from "../shared/types.js";
 
 const {confirm} = useConfirm();
 const router = useRouter();
+const route = useRoute();
 const query = ref("");
 const results = ref<Equipment[]>([]);
 const selected = ref<Equipment | null>(null);
+const checklistDraft = ref<NonNullable<Equipment["inspection_checklist"]>>([]);
+const checklistSaving = ref(false);
 const history = ref<EquipmentHistoryEvent[]>([]);
 const historyLoading = ref(false);
 const loading = ref(false);
@@ -159,6 +185,7 @@ async function doSearch() {
 
 async function select(r: Equipment) {
   selected.value = r;
+  checklistDraft.value = checklistFromEquipment(r);
   results.value = [];
   query.value = "";
   savedPhotos.value = [];
@@ -174,6 +201,30 @@ async function select(r: Equipment) {
     const { photos } = await api.equipment.getSignedPhotos(String(r.id));
     savedPhotos.value = photos;
   } catch {}
+}
+
+function checklistFromEquipment(r: Equipment): NonNullable<Equipment["inspection_checklist"]> {
+  return (r.inspection_checklist?.length ? r.inspection_checklist : [
+    {id: "visual", label: "בדיקה חזותית", checked: false, note: null},
+    {id: "serial", label: "אימות מספר סידורי / רישוי", checked: false, note: null},
+    {id: "load", label: "בדיקת עומס והתאמה", checked: false, note: null},
+    {id: "safety", label: "בדיקת אמצעי בטיחות", checked: false, note: null},
+    {id: "photos", label: "צילום מצב הציוד", checked: false, note: null},
+  ]).map((item) => ({...item}));
+}
+
+async function saveChecklist() {
+  if (!selected.value) return;
+  checklistSaving.value = true;
+  try {
+    const saved = await api.equipment.saveChecklist(String(selected.value.id), checklistDraft.value);
+    checklistDraft.value = saved.checklist.map((item) => ({...item}));
+    selected.value.inspection_checklist = saved.checklist;
+  } catch {
+    alert("שגיאה בשמירת הצ׳קליסט");
+  } finally {
+    checklistSaving.value = false;
+  }
 }
 
 function expiryClass(ev: EquipmentHistoryEvent) {
@@ -217,6 +268,11 @@ function updateOnline() { online.value = navigator.onLine; }
 onMounted(() => {
   window.addEventListener("online", updateOnline);
   window.addEventListener("offline", updateOnline);
+  const equipmentId = String(route.query.equipment ?? "").trim();
+  if (equipmentId) {
+    api.equipment.get(equipmentId).then(select).catch(() => {
+    });
+  }
 });
 onUnmounted(() => {
   window.removeEventListener("online", updateOnline);
@@ -330,6 +386,73 @@ onUnmounted(() => {
   color: var(--text-muted);
   min-width: 100px;
   flex-shrink: 0;
+}
+
+.field__checklist {
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  padding: 14px 0;
+  margin-bottom: 18px;
+}
+
+.field__checklist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.field__checklist-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.field__small-btn {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+}
+
+.field__small-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.field__check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: center;
+  padding: 8px 0;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.field__check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand-color);
+}
+
+.field__check-note {
+  grid-column: 2;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  padding: 8px 10px;
 }
 
 /* Inspection history */
