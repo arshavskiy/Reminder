@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:all": "concurrently \"npm run dev\" \"npm --prefix ../server run dev:watch\"",
-    "build": "vite build && node scripts/prerender-public-pages.mjs",
+    "build": "vite build",
     "test": "npx playwright test"
   },
   "dependencies": {
