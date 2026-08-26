@@ -32,15 +32,15 @@
           <!--          <div class="hero-badge">-->
           <!--            <span>מותאם לעסקים ישראלים</span>-->
           <!--          </div>-->
-          <p class="hero-kicker">ניהול תסקירים, מסמכים ותזכורות</p>
-          <h1>EXTRACT • TRACK • AUTOMATE</h1>
+          <h1>ניהול תסקירים, מסמכים ותזכורות</h1>
+          <h2 style="font-size: 24px; line-height: 52px">EXTRACT • TRACK • AUTOMATE</h2>
           <p class="hero-desc">
             RemindOCR היא מערכת לניהול תסקירי בדיקה, מסמכים, לקוחות וחוזים. המערכת מאפשרת להעלות או לייבא מסמכים,
             לחלץ מהם תאריכים ופרטי לקוח בעזרת OCR ו-AI, ולעקוב אחרי תוקף מסמכים באמצעות תזכורות אוטומטיות.
           </p>
-          <p class="hero-purpose">
-            חיבור Gmail הוא אופציונלי ומשמש רק להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר להכניס למערכת.
-          </p>
+          <!--          <p class="hero-purpose">-->
+          <!--            חיבור Gmail הוא אופציונלי ומשמש רק להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר להכניס למערכת.-->
+          <!--          </p>-->
           <!--          <div class="hero-actions">-->
           <!--            <a class="btn-primary" href="#login-card">כניסה למערכת</a>-->
           <!--            <a class="btn-secondary" href="#features">למד עוד</a>-->
