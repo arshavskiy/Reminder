@@ -15,6 +15,12 @@ export default defineConfig({
       filename: "sw.ts",
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // Vite does not empty dist/ for assets it no longer emits, so files
+        // from earlier builds get swept into the precache manifest. Vercel
+        // answers its own injected `_live-*` assets with a 307 to vercel.com,
+        // which sends no CORS header — the precache fetch then throws and the
+        // whole service worker install fails.
+        globIgnores: ["**/_live-*", "**/_vercel/**"],
       },
       devOptions: {
         enabled: true,

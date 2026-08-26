@@ -69,6 +69,7 @@
                       placeholder="you@example.com"
                       size="large"
                       autocomplete="email"
+                      :input-props="{ autocomplete: 'username', name: 'email' }"
                       :disabled="loading"
                   />
                 </n-form-item>
@@ -111,6 +112,7 @@
                       placeholder="ישראל ישראלי"
                       size="large"
                       autocomplete="name"
+                      :input-props="{ autocomplete: 'name', name: 'name' }"
                       :disabled="loading"
                   />
                 </n-form-item>
@@ -121,6 +123,7 @@
                       placeholder="you@example.com"
                       size="large"
                       autocomplete="email"
+                      :input-props="{ autocomplete: 'username', name: 'email' }"
                       :disabled="loading"
                   />
                 </n-form-item>
