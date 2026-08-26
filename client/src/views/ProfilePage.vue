@@ -21,7 +21,6 @@
           <div class="sidebar-user__name">
             {{ user?.name || user?.email || "—" }}
           </div>
-          <n-tag :type="roleTag.type" size="small">{{ roleTag.label }}</n-tag>
         </div>
       </div>
 
