@@ -3,6 +3,8 @@ Allow: /login
 Allow: /pricing
 Allow: /privacy
 Allow: /terms
+Disallow: /api
+Disallow: /auth
 Disallow: /documents
 Disallow: /invoices
 Disallow: /clients

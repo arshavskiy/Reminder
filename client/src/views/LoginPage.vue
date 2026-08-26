@@ -101,7 +101,6 @@
               <GoogleSignIn @error="onGisError"/>
             </n-tab-pane>
 
-            Register tab
             <n-tab-pane name="register" tab="הרשמה">
               <n-form @submit.prevent="handleRegister" style="margin-top:8px">
                 <n-form-item label="שם מלא" :show-feedback="false" style="margin-bottom:12px">

@@ -22,6 +22,7 @@ import ResetPasswordPage from "../views/ResetPasswordPage.vue";
 import PrivacyPage from "../views/PrivacyPage.vue";
 import TermsPage from "../views/TermsPage.vue";
 import AdminPage from "../views/AdminPage.vue";
+import {applySeo} from "../seo.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {type FeatureKey, FEATURES} from "../shared/features.js";
@@ -29,11 +30,58 @@ import {type FeatureKey, FEATURES} from "../shared/features.js";
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: "/login", component: LoginPage, meta: { public: true } },
-    { path: "/pricing", component: PricingPage, meta: { public: true } },
-    { path: "/reset-password", component: ResetPasswordPage, meta: { public: true } },
-    { path: "/privacy", component: PrivacyPage, meta: { public: true, legal: true } },
-    { path: "/terms", component: TermsPage, meta: { public: true, legal: true } },
+    {
+      path: "/login",
+      component: LoginPage,
+      meta: {
+        public: true,
+        canonicalPath: "/login",
+        title: "RemindOCR - ניהול תסקירים, מסמכים ותזכורות",
+        description: "RemindOCR מרכזת תסקירי בדיקה, מסמכים, לקוחות ותזכורות במערכת עברית עם OCR, חילוץ נתונים וייבוא PDF אופציונלי מ-Gmail.",
+      },
+    },
+    {
+      path: "/pricing",
+      component: PricingPage,
+      meta: {
+        public: true,
+        canonicalPath: "/pricing",
+        title: "מחירים - RemindOCR",
+        description: "מסלולי RemindOCR לניהול תסקירי בדיקה, חשבוניות, מסמכים ותזכורות אוטומטיות לפי נפח העבודה של העסק.",
+      },
+    },
+    {
+      path: "/reset-password",
+      component: ResetPasswordPage,
+      meta: {
+        public: true,
+        robots: "noindex,nofollow",
+        title: "איפוס סיסמה - RemindOCR",
+        description: "איפוס סיסמה למשתמשי RemindOCR.",
+      },
+    },
+    {
+      path: "/privacy",
+      component: PrivacyPage,
+      meta: {
+        public: true,
+        legal: true,
+        canonicalPath: "/privacy",
+        title: "מדיניות פרטיות - RemindOCR",
+        description: "מדיניות הפרטיות של RemindOCR, כולל שימוש במסמכים, חשבונות משתמש וחיבור Gmail אופציונלי לקריאת קבצים מצורפים.",
+      },
+    },
+    {
+      path: "/terms",
+      component: TermsPage,
+      meta: {
+        public: true,
+        legal: true,
+        canonicalPath: "/terms",
+        title: "תנאי שימוש - RemindOCR",
+        description: "תנאי השימוש של RemindOCR לניהול תסקירי בדיקה, מסמכים, לקוחות ותזכורות.",
+      },
+    },
     { path: "/privacy.html", redirect: "/privacy" },
     { path: "/terms.html", redirect: "/terms" },
     { path: "/", component: DashboardPage, meta: { feature: FEATURES.pages.dashboard } },
@@ -96,6 +144,10 @@ export const router = createRouter({
     { path: "/admin", component: AdminPage, meta: { requireRole: "admin" } },
     { path: "/403", component: () => import("../views/ForbiddenPage.vue") },
   ],
+});
+
+router.afterEach((to) => {
+  applySeo(to);
 });
 
 router.beforeEach(async (to) => {
