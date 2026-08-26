@@ -114,7 +114,7 @@ export const router = createRouter({
     { path: "/doc-templates", redirect: "/settings/doc-templates", meta: { feature: FEATURES.pages.docTemplates } },
     { path: "/email-templates", redirect: "/settings/email-templates", meta: { feature: FEATURES.pages.emailTemplates } },
       {path: "/compose", redirect: "/print-templates", meta: {feature: FEATURES.pages.printTemplates}},
-    { path: "/gmail-inbox", component: GmailInboxPage, validate: true, meta: { feature: FEATURES.pages.gmail } },
+    {path: "/gmail-inbox", component: GmailInboxPage, meta: {requireRole: "admin"}},
     { path: "/admin", component: AdminPage, meta: { requireRole: "admin" } },
     { path: "/403", component: () => import("../views/ForbiddenPage.vue") },
   ],
