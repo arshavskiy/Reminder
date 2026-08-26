@@ -20,7 +20,6 @@ import {
 } from "../quotas/documentImportQuota";
 
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.file";
-const GMAIL_FULL_ACCESS_ROLES = new Set(["user", "pro", "admin"]);
 const GMAIL_DEFAULT_PAGE_SIZE = 500;
 const GMAIL_MAX_PAGE_SIZE = 500;
 const GMAIL_JOB_STALE_MS = 10 * 60 * 1000;
@@ -94,7 +93,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const providers = await loadGmailSearchProviders();
     res.json({ providers });
@@ -105,7 +103,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const settings = getSettings();
     const googleClientId = settings.googleClientId;
@@ -220,7 +217,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const user = await col<any>("users").findOne({ _id: new ObjectId(ctx.userId) } as any);
     const userConnected = Boolean(user?.gmail_access_token);
@@ -250,7 +246,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
@@ -314,7 +309,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
@@ -347,7 +341,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const { messageId, attachmentId, filename, templateId } = req.body;
     if (!messageId || !attachmentId) { res.status(400).json({ error: "messageId and attachmentId required" }); return; }
@@ -389,7 +382,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
@@ -473,7 +465,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
@@ -592,7 +583,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const jobId = String(req.params.jobId ?? "");
     if (!ObjectId.isValid(jobId)) { res.status(400).json({ error: "invalid_job_id" }); return; }
@@ -611,7 +601,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const history = await col("gmail_imports").find(
       { user_id: ctx.userId },
@@ -657,7 +646,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     const messageId = String(req.params.messageId ?? "").trim();
     if (!messageId) {
@@ -674,7 +662,6 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
-    if (!hasFullGmailAccess(ctx.user.role)) { res.status(403).json({ error: "forbidden" }); return; }
 
     await col("users").updateOne(
       { _id: new ObjectId(ctx.userId) } as any,
@@ -1300,10 +1287,6 @@ function gmailErrorExplanation(error: unknown): string {
   if (/storage|S3|upload/i.test(text)) return "שמירת הקובץ באחסון נכשלה";
   if (/gmail_not_connected|auth|permission|scope/i.test(text)) return "חיבור Gmail או הרשאות Gmail לא תקינים";
   return text;
-}
-
-function hasFullGmailAccess(role: string | null | undefined): boolean {
-  return GMAIL_FULL_ACCESS_ROLES.has(role ?? "");
 }
 
 function gmailPageSize(value: unknown): number {
