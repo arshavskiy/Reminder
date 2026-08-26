@@ -31,7 +31,7 @@
 
 <script setup lang="ts">
 import {computed, h} from "vue";
-import {useRouter} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {NDropdown, NIcon} from "naive-ui";
 import {
   ConstructOutline,
@@ -53,6 +53,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const walkthrough = useWalkthrough();
@@ -129,13 +130,24 @@ const dropdownItems = computed(() => [
   },
 ]);
 
+const activeMenuKey = computed(() => {
+  if (route.path !== "/profile") return "";
+  const section = String(route.query.section ?? "personal");
+  if (section === "personal") return "profile";
+  if (section === "engineer" || section === "settings" || section === "subscription") return section;
+  return "";
+});
+
 function renderDropdownLabel(option: any) {
-  const icon = menuIcons[String(option.key)];
-  return h("span", {class: "user-menu-label", dir: "rtl"}, [
+  const key = String(option.key);
+  const icon = menuIcons[key];
+  const isActive = key === activeMenuKey.value;
+  return h("span", {class: ["user-menu-label", {"user-menu-label--active": isActive}], dir: "rtl"}, [
     icon
       ? h(NIcon, {component: icon, size: 16, class: "user-menu-label__glyph"})
       : h("span", {class: "user-menu-label__icon-spacer"}),
     h("span", {class: "user-menu-label__text"}, String(option.label ?? "")),
+    isActive ? h("span", {class: "user-menu-label__active-dot"}) : null,
   ]);
 }
 
@@ -276,6 +288,22 @@ async function handleSelect(key: string) {
 :global(.user-menu-label__text) {
   flex: 1;
   text-align: right;
+}
+
+:global(.user-menu-label--active) {
+  color: var(--brand-color);
+}
+
+:global(.user-menu-label--active .user-menu-label__glyph) {
+  background: color-mix(in srgb, var(--brand-color) 18%, transparent);
+}
+
+:global(.user-menu-label__active-dot) {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--brand-color);
+  flex: 0 0 auto;
 }
 
 </style>
