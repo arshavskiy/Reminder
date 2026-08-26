@@ -35,7 +35,7 @@
             type="button"
             @click="handleDriveExport"
         >
-          <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+          <GoogleDriveLogo :size="16" />
           ייצוא ל-Drive
         </button>
         <button class="rbtn rbtn--ghost" type="button" @click="showMonthlyReport = true">
@@ -641,6 +641,7 @@ import PaginationBar from "../components/PaginationBar.vue";
 import UploadModal from "../components/UploadModal.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import GmailLogo from "../components/GmailLogo.vue";
+import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
 import DriveExportJobStatus from "../components/DriveExportJobStatus.vue";
 import StorageSyncIcons from "../components/StorageSyncIcons.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";

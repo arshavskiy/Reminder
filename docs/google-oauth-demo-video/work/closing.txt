@@ -1,0 +1,1 @@
+This demo shows the complete user-controlled flow: sign in, connect Gmail through Google OAuth, import selected attachments, optionally sync RemindOCR-created files to Google Drive, and disconnect access. Google data is used only to provide these user-facing document import and sync features.

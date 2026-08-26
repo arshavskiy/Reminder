@@ -428,161 +428,191 @@
         </section>
 
         <section v-if="activeSection === 'settings'">
-          <h2 class="section-title">הגדרות</h2>
-
-          <div class="settings-group">
-            <h3 class="settings-group__title">שינוי סיסמה</h3>
-            <n-form class="settings-form" label-placement="top">
-              <n-form-item label="סיסמה נוכחית">
-                <n-input
-                  v-model:value="pwForm.current"
-                  type="password"
-                  show-password-on="click"
-                />
-              </n-form-item>
-              <n-form-item label="סיסמה חדשה">
-                <n-input
-                  v-model:value="pwForm.next"
-                  type="password"
-                  show-password-on="click"
-                />
-              </n-form-item>
-              <n-form-item label="אימות סיסמה חדשה">
-                <n-input
-                  v-model:value="pwForm.confirm"
-                  type="password"
-                  show-password-on="click"
-                />
-              </n-form-item>
-              <n-button
-                type="primary"
-                :loading="savingPw"
-                @click="changePassword"
-              >
-                שנה סיסמה
-              </n-button>
-            </n-form>
+          <div class="section-header">
+            <h2 class="section-title">הגדרות</h2>
           </div>
 
-          <div class="settings-group">
-            <h3 class="settings-group__title">תמונת פרופיל</h3>
-            <div class="avatar-upload-row">
-              <div class="sidebar-avatar sidebar-avatar--lg">
-                <img
-                  v-if="user?.picture_url"
-                  :src="user.picture_url"
-                  alt=""
-                  referrerpolicy="no-referrer"
-                />
-                <span v-else class="sidebar-avatar__initials">{{
-                  initials
-                }}</span>
-              </div>
-              <input
-                ref="avatarInput"
-                type="file"
-                accept="image/*"
-                class="visually-hidden"
-                @change="onAvatarChange"
-              />
-              <n-button
-                size="small"
-                :loading="uploadingAvatar"
-                @click="avatarInput?.click()"
-              >
-                <template #icon>
-                  <n-icon :component="CameraOutline" />
-                </template>
-                שנה תמונה
-              </n-button>
-            </div>
-          </div>
-
-          <div class="settings-group">
-            <h3 class="settings-group__title">חיבור Google / Gmail</h3>
-            <p class="settings-desc">
-              חיבור Google משמש לקריאת Gmail במצב צפייה בלבד ולייבוא קבצים מצורפים שתבחרו, וגם להפעלת סנכרון Drive.
-            </p>
-            <div class="google-connection">
-              <n-tag v-if="gmailStatus?.connected" size="small" type="success">
-                מחובר{{ gmailStatus.email ? `: ${gmailStatus.email}` : "" }}
-              </n-tag>
-              <n-tag v-else size="small" type="default">לא מחובר</n-tag>
-              <div class="drive-actions">
-                <n-button
-                  v-if="!gmailStatus?.connected"
-                  :loading="gmailLoading"
-                  size="small"
-                  type="primary"
-                  @click="connectGmailFromProfile"
-                >
-                  <template #icon>
-                    <n-icon :component="LogoGoogle" />
-                  </template>
-                  חבר Google
-                </n-button>
-                <n-button
-                  v-else
-                  :loading="gmailDisconnecting"
-                  size="small"
-                  type="error"
-                  ghost
-                  @click="disconnectGmailFromProfile"
-                >
-                  נתק Gmail
-                </n-button>
-                <a
-                  class="settings-link drive-folder__open"
-                  href="https://myaccount.google.com/permissions"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <n-icon :component="OpenOutline" :size="14" />
-                  ניהול הרשאות Google
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-group">
-            <h3 class="settings-group__title">סנכרון Google Drive</h3>
-            <p class="settings-desc">
-              סנכרן מסמכים שהועלו אוטומטית לתיקיית
-              <strong>{{ driveStatus?.folderName || "RemindOCR" }}</strong>
-              ב-Google Drive (ב־My Drive). חשבוניות נשמרות בתת־תיקייה ״חשבוניות״, ותסקירים ב״תסקירי בדיקה״.
-            </p>
-            <div v-if="!driveAllowed" class="settings-desc settings-desc--follow">
-              זמין במסלולים <strong>בסיסי</strong> ו<strong>עסקי</strong> בלבד.
-              <a class="settings-link" href="https://remindocr.com/pricing">
-                שדרוג מנוי
-              </a>
-            </div>
-            <div v-else-if="driveStatus">
-              <n-tag v-if="driveFolderGone" size="small" class="drive-status-tag" type="warning">תיקייה חסרה</n-tag>
-              <n-tag v-else-if="driveStatus.syncEnabled" size="small" class="drive-status-tag" type="success">מופעל</n-tag>
-              <n-tag v-else size="small" class="drive-status-tag" type="default">כבוי</n-tag>
-              <div class="drive-actions">
-                <n-button
-                    v-if="!driveStatus.syncEnabled"
-                    :disabled="!driveStatus.connected"
-                    :loading="driveToggling"
-                    size="small"
-                    type="primary"
-                    @click="enableDriveSync"
-                >הפעל סנכרון
-                </n-button>
-                <n-button
-                    v-else
-                    :loading="driveToggling"
-                    size="small"
-                    @click="disableDriveSync"
-                >כבה סנכרון
-                </n-button>
-                <span v-if="!driveStatus.connected" class="settings-desc settings-desc--inline">
-                  יש להתחבר עם Google כדי להפעיל
+          <div class="settings-stack">
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="CameraOutline" :size="18" />
                 </span>
+                <div>
+                  <h3 class="settings-group__title">תמונת פרופיל</h3>
+                  <p class="settings-group__desc">התמונה מוצגת בתפריט המשתמש ובמסך הפרופיל.</p>
+                </div>
               </div>
-              <div v-if="driveFolderGone" class="drive-folder-alert">
+              <div class="settings-row">
+                <div class="sidebar-avatar sidebar-avatar--lg">
+                  <img
+                    v-if="user?.picture_url"
+                    :src="user.picture_url"
+                    alt=""
+                    referrerpolicy="no-referrer"
+                  />
+                  <span v-else class="sidebar-avatar__initials">{{ initials }}</span>
+                </div>
+                <div class="settings-row__body">
+                  <div class="settings-row__text">
+                    <span class="settings-row__title">{{ user?.name || user?.email || "—" }}</span>
+                    <span class="settings-row__desc">JPG או PNG</span>
+                  </div>
+                  <input
+                    ref="avatarInput"
+                    type="file"
+                    accept="image/*"
+                    class="visually-hidden"
+                    @change="onAvatarChange"
+                  />
+                  <div class="settings-row__actions">
+                    <n-button
+                      size="small"
+                      :loading="uploadingAvatar"
+                      @click="avatarInput?.click()"
+                    >
+                      <template #icon>
+                        <n-icon :component="CameraOutline" />
+                      </template>
+                      שנה תמונה
+                    </n-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="LogoGoogle" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">חיבורי Google</h3>
+                  <p class="settings-group__desc">
+                    Gmail לקריאת מיילים וייבוא קבצים מצורפים שתבחרו, וסנכרון מסמכים לתיקיית
+                    <strong>{{ driveStatus?.folderName || "RemindOCR" }}</strong>
+                    ב-Drive. חשבוניות נשמרות ב״חשבוניות״ ותסקירים ב״תסקירי בדיקה״.
+                  </p>
+                </div>
+              </div>
+
+              <div class="settings-rows">
+                <div class="settings-row">
+                  <span class="settings-row__media">
+                    <GmailLogo :size="20" />
+                  </span>
+                  <div class="settings-row__body">
+                  <div class="settings-row__text">
+                    <span class="settings-row__title">
+                      Gmail
+                      <n-tag v-if="gmailStatus?.connected" size="small" type="success">מחובר</n-tag>
+                      <n-tag v-else size="small">לא מחובר</n-tag>
+                    </span>
+                    <span class="settings-row__desc">
+                      {{
+                        gmailStatus?.connected
+                          ? (gmailStatus.email || "מחובר")
+                          : gmailLoading
+                            ? "טוען..."
+                            : "קריאת מיילים וייבוא קבצים מצורפים"
+                      }}
+                    </span>
+                  </div>
+                  <div class="settings-row__actions">
+                    <n-button
+                      v-if="!gmailStatus?.connected"
+                      :loading="gmailLoading"
+                      size="small"
+                      type="primary"
+                      @click="connectGmailFromProfile"
+                    >
+                      <template #icon>
+                        <n-icon :component="LogoGoogle" />
+                      </template>
+                      חבר Google
+                    </n-button>
+                    <n-button
+                      v-else
+                      :loading="gmailDisconnecting"
+                      size="small"
+                      type="error"
+                      ghost
+                      @click="disconnectGmailFromProfile"
+                    >
+                      נתק Gmail
+                    </n-button>
+                    <a
+                      class="settings-link"
+                      href="https://myaccount.google.com/permissions"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <n-icon :component="OpenOutline" :size="14" />
+                      ניהול הרשאות
+                    </a>
+                  </div>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <span class="settings-row__media">
+                    <GoogleDriveLogo :size="20" />
+                  </span>
+                  <div class="settings-row__body">
+                  <div class="settings-row__text">
+                    <span class="settings-row__title">
+                      Google Drive
+                      <template v-if="driveAllowed && driveStatus">
+                        <n-tag v-if="driveFolderGone" size="small" type="warning">תיקייה חסרה</n-tag>
+                        <n-tag v-else-if="driveStatus.syncEnabled" size="small" type="success">מופעל</n-tag>
+                        <n-tag v-else size="small">כבוי</n-tag>
+                      </template>
+                    </span>
+                    <span class="settings-row__desc">
+                      <template v-if="!driveAllowed">זמין במסלולים בסיסי ועסקי בלבד.</template>
+                      <template v-else-if="!driveStatus">טוען סטטוס...</template>
+                      <template v-else-if="driveFolderGone">תיקיית הסנכרון חסרה.</template>
+                      <template v-else-if="!driveStatus.connected">יש להתחבר עם Google כדי להפעיל.</template>
+                      <template v-else>{{ driveStatus.folderName || "RemindOCR" }}</template>
+                    </span>
+                  </div>
+                  <div class="settings-row__actions">
+                    <a
+                      v-if="!driveAllowed"
+                      class="settings-link"
+                      href="https://remindocr.com/pricing"
+                    >
+                      שדרוג מנוי
+                    </a>
+                    <template v-else-if="driveStatus">
+                      <n-button
+                        v-if="!driveStatus.syncEnabled"
+                        :disabled="!driveStatus.connected"
+                        :loading="driveToggling"
+                        size="small"
+                        type="primary"
+                        @click="enableDriveSync"
+                      >
+                        הפעל סנכרון
+                      </n-button>
+                      <n-button
+                        v-else
+                        :loading="driveToggling"
+                        size="small"
+                        @click="disableDriveSync"
+                      >
+                        כבה סנכרון
+                      </n-button>
+                    </template>
+                  </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-if="driveAllowed && driveStatus && driveFolderGone"
+                class="settings-panel"
+              >
                 <n-alert :bordered="false" type="warning">
                   <template v-if="driveStatus.folderState === 'trashed'">
                     תיקיית Google Drive נמצאת בפח.
@@ -599,46 +629,53 @@
                     צריך ליצור תיקייה חדשה ולהעלות אותם מחדש.
                   </template>
                 </n-alert>
-                <a
-                  v-if="driveStatus.folderState === 'trashed' && driveStatus.trashUrl"
-                  class="settings-link drive-folder__open"
-                  :href="driveStatus.trashUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <n-icon :component="OpenOutline" :size="14" />
-                  פתח את הפח ב-Google Drive
-                </a>
-                <n-button
-                  :loading="repairingFolder"
-                  class="drive-repair-btn"
-                  size="small"
-                  type="warning"
-                  @click="repairDriveFolder"
-                >
-                  צור תיקייה והעלה מחדש
-                </n-button>
+                <div class="settings-row__actions">
+                  <a
+                    v-if="driveStatus.folderState === 'trashed' && driveStatus.trashUrl"
+                    class="settings-link"
+                    :href="driveStatus.trashUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <n-icon :component="OpenOutline" :size="14" />
+                    פתח את הפח ב-Google Drive
+                  </a>
+                  <n-button
+                    :loading="repairingFolder"
+                    size="small"
+                    type="warning"
+                    @click="repairDriveFolder"
+                  >
+                    צור תיקייה והעלה מחדש
+                  </n-button>
+                </div>
               </div>
-              <div v-if="driveStatus.syncEnabled && !driveFolderGone" class="drive-folder">
-                <label class="settings-desc drive-folder__label">שם תיקייה ב-Drive</label>
+
+              <div
+                v-if="driveAllowed && driveStatus?.syncEnabled && !driveFolderGone"
+                class="settings-panel"
+              >
+                <label class="settings-panel__label" for="drive-folder-name">שם תיקייה ב-Drive</label>
                 <div class="drive-folder__row">
                   <n-input
-                      v-model:value="driveFolderName"
-                      class="drive-folder__input"
-                      placeholder="RemindOCR"
-                      size="small"
+                    id="drive-folder-name"
+                    v-model:value="driveFolderName"
+                    class="drive-folder__input"
+                    placeholder="RemindOCR"
+                    size="small"
                   />
                   <n-button
-                      :disabled="!driveFolderName?.trim() || driveFolderName.trim() === driveStatus.folderName"
-                      :loading="renamingFolder"
-                      size="small"
-                      @click="renameDriveFolder"
-                  >שמור
+                    :disabled="!driveFolderName?.trim() || driveFolderName.trim() === driveStatus.folderName"
+                    :loading="renamingFolder"
+                    size="small"
+                    @click="renameDriveFolder"
+                  >
+                    שמור
                   </n-button>
                 </div>
                 <a
                   v-if="driveFolderUrl"
-                  class="settings-link drive-folder__open"
+                  class="settings-link"
                   :href="driveFolderUrl"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -647,70 +684,162 @@
                   פתח תיקייה ב-Google Drive
                 </a>
               </div>
-              <div v-if="driveNeedsReauth" class="drive-reauth">
-                <n-alert :bordered="false" class="drive-reauth__alert" type="warning">
+
+              <div v-if="driveNeedsReauth" class="settings-panel">
+                <n-alert :bordered="false" type="warning">
                   יש להתחבר מחדש ל-Gmail כדי לאשר הרשאות Drive.
                 </n-alert>
-                <n-button size="small" type="warning" @click="reconnectGmailForDrive">התחבר מחדש ל-Gmail</n-button>
+                <n-button size="small" type="warning" @click="reconnectGmailForDrive">
+                  התחבר מחדש ל-Gmail
+                </n-button>
               </div>
             </div>
-          </div>
 
-          <div class="settings-group">
-            <h3 class="settings-group__title">שמירה בענן</h3>
-            <p class="settings-desc">
-              קבצים נשמרים באחסון ענן כדי שיישארו זמינים גם לאחר עדכון גרסה.
-              כיבוי ישמור את הקובץ על השרת בלבד, והוא עלול להימחק בעדכון הבא.
-            </p>
-            <div class="cloud-storage">
-              <div class="cloud-storage__row">
-                <div class="cloud-storage__text">
-                  <strong>חשבוניות</strong>
-                  <span class="settings-desc">שמירת קבצי חשבוניות באחסון ענן</span>
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="CloudUploadOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">שמירה בענן</h3>
+                  <p class="settings-group__desc">
+                    קבצים נשמרים באחסון ענן כדי שיישארו זמינים גם לאחר עדכון גרסה.
+                    כיבוי ישמור את הקובץ על השרת בלבד, והוא עלול להימחק בעדכון הבא.
+                  </p>
                 </div>
-                <n-switch
-                  :value="s3StoreInvoices"
-                  :loading="savingCloudStorage === 'invoices'"
-                  @update:value="(v: boolean) => saveCloudStorage('invoices', v)"
-                />
               </div>
-              <div class="cloud-storage__row">
-                <div class="cloud-storage__text">
-                  <strong>תסקירי בדיקה</strong>
-                  <span class="settings-desc">שמירת קבצי תסקירים באחסון ענן</span>
+              <div class="settings-rows">
+                <div class="settings-row">
+                  <span class="settings-row__media">
+                    <AwsS3Logo :size="18" />
+                  </span>
+                  <div class="settings-row__body">
+                    <div class="settings-row__text">
+                      <span class="settings-row__title">
+                        חשבוניות
+                        <n-switch
+                          :value="s3StoreInvoices"
+                          :loading="savingCloudStorage === 'invoices'"
+                          @update:value="(v: boolean) => saveCloudStorage('invoices', v)"
+                        />
+                      </span>
+                      <span class="settings-row__desc">שמירת קבצי חשבוניות באחסון ענן</span>
+                    </div>
+                  </div>
                 </div>
-                <n-switch
-                  :value="s3StoreInspections"
-                  :loading="savingCloudStorage === 'inspections'"
-                  @update:value="(v: boolean) => saveCloudStorage('inspections', v)"
-                />
+                <div class="settings-row">
+                  <span class="settings-row__media">
+                    <AwsS3Logo :size="18" />
+                  </span>
+                  <div class="settings-row__body">
+                    <div class="settings-row__text">
+                      <span class="settings-row__title">
+                        תסקירי בדיקה
+                        <n-switch
+                          :value="s3StoreInspections"
+                          :loading="savingCloudStorage === 'inspections'"
+                          @update:value="(v: boolean) => saveCloudStorage('inspections', v)"
+                        />
+                      </span>
+                      <span class="settings-row__desc">שמירת קבצי תסקירים באחסון ענן</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <n-alert
+                v-if="!s3StoreInvoices || !s3StoreInspections"
+                :bordered="false"
+                class="settings-panel"
+                type="warning"
+              >
+                קבצים שלא נשמרים בענן עלולים ללכת לאיבוד בעדכון גרסה של השרת.
+              </n-alert>
+            </div>
+
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="KeyOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">שינוי סיסמה</h3>
+                  <p class="settings-group__desc">הסיסמה משמשת לכניסה עם אימייל.</p>
+                </div>
+              </div>
+              <n-form class="settings-form" label-placement="top">
+                <div class="settings-form__grid">
+                  <n-form-item label="סיסמה נוכחית" :show-feedback="false">
+                    <n-input
+                      v-model:value="pwForm.current"
+                      type="password"
+                      show-password-on="click"
+                      autocomplete="current-password"
+                    />
+                  </n-form-item>
+                  <n-form-item label="סיסמה חדשה" :show-feedback="false">
+                    <n-input
+                      v-model:value="pwForm.next"
+                      type="password"
+                      show-password-on="click"
+                      autocomplete="new-password"
+                    />
+                  </n-form-item>
+                  <n-form-item
+                    class="settings-form__span"
+                    label="אימות סיסמה חדשה"
+                    :show-feedback="false"
+                  >
+                    <n-input
+                      v-model:value="pwForm.confirm"
+                      type="password"
+                      show-password-on="click"
+                      autocomplete="new-password"
+                    />
+                  </n-form-item>
+                  <div class="settings-form__span">
+                    <n-button
+                      type="primary"
+                      :loading="savingPw"
+                      @click="changePassword"
+                    >
+                      שנה סיסמה
+                    </n-button>
+                  </div>
+                </div>
+              </n-form>
+            </div>
+
+            <div class="settings-group settings-group--danger">
+              <div class="settings-group__head">
+                <span class="settings-group__icon settings-group__icon--danger" aria-hidden="true">
+                  <n-icon :component="LogOutOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">ניהול הפעלות</h3>
+                  <p class="settings-group__desc">סיים את כל ההפעלות הפעילות בכל המכשירים.</p>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row__body">
+                  <div class="settings-row__text">
+                    <span class="settings-row__title">התנתקות מכל המכשירים</span>
+                    <span class="settings-row__desc">יסיים את ההפעלה הנוכחית וכל שאר המכשירים המחוברים.</span>
+                  </div>
+                  <div class="settings-row__actions">
+                    <n-button
+                      type="error"
+                      :loading="disconnecting"
+                      @click="disconnectAll"
+                    >
+                      <template #icon>
+                        <n-icon :component="LogOutOutline" />
+                      </template>
+                      התנתק מכל המכשירים
+                    </n-button>
+                  </div>
+                </div>
               </div>
             </div>
-            <n-alert
-              v-if="!s3StoreInvoices || !s3StoreInspections"
-              :bordered="false"
-              class="settings-desc--follow"
-              type="warning"
-            >
-              קבצים שלא נשמרים בענן עלולים ללכת לאיבוד בעדכון גרסה של השרת.
-            </n-alert>
-          </div>
-
-          <div class="settings-group">
-            <h3 class="settings-group__title">ניהול הפעלות</h3>
-            <p class="settings-desc">
-              סיים את כל ההפעלות הפעילות בכל המכשירים.
-            </p>
-            <n-button
-              type="error"
-              :loading="disconnecting"
-              @click="disconnectAll"
-            >
-              <template #icon>
-                <n-icon :component="LogOutOutline" />
-              </template>
-              התנתק מכל המכשירים
-            </n-button>
           </div>
         </section>
 
@@ -872,12 +1001,14 @@ import {
 import {
   CameraOutline,
   CheckmarkCircleOutline,
+  CloudUploadOutline,
   ColorPaletteOutline,
   ConstructOutline,
   CreateOutline,
   DiamondOutline,
   DownloadOutline,
   ImageOutline,
+  KeyOutline,
   LockClosedOutline,
   LogOutOutline,
   LogoGoogle,
@@ -896,6 +1027,9 @@ import { useEngineerStore } from "../stores/engineer.js";
 import {api, type DriveExportJob, type DriveStatus, type ProfileSubscription} from "../services/apiService.js";
 import type { User, UserSettings } from "@shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
+import GmailLogo from "../components/GmailLogo.vue";
+import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
+import AwsS3Logo from "../components/AwsS3Logo.vue";
 import {useConfirm} from "../composables/useConfirm.js";
 import {
   PLAN_LABELS,
@@ -2021,114 +2155,168 @@ watch(
 }
 
 /* ── Settings ────────────────────────────────────────────────────────────── */
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 .settings-group {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 20px 24px;
+}
+.settings-group--danger {
+  border-color: color-mix(in srgb, var(--color-error) 32%, var(--border-color));
+  background: color-mix(in srgb, var(--color-error) 5%, var(--bg-card));
+}
+.settings-group__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 16px;
 }
-.cloud-storage {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.cloud-storage__row {
+.settings-group__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--brand-color) 14%, transparent);
+  color: var(--brand-color);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md, 8px);
-  background: var(--bg-card);
+  justify-content: center;
+  flex-shrink: 0;
 }
-
-.cloud-storage__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+.settings-group__icon--danger {
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  color: var(--color-error);
 }
-
 .settings-group__title {
-  margin: 0 0 16px;
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
 }
-.settings-desc {
-  margin: 0 0 12px;
+.settings-group__desc {
+  margin: 4px 0 0;
   font-size: 13px;
+  line-height: 1.45;
   color: var(--text-secondary);
 }
+.settings-rows {
+  display: flex;
+  flex-direction: column;
+}
+.settings-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.settings-rows .settings-row:first-child {
+  padding-top: 0;
+}
+.settings-rows .settings-row:last-child,
+.settings-group > .settings-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.settings-row__media {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.settings-row__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.settings-row__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.settings-row__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.settings-row__desc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+.settings-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
 .settings-form {
-  max-width: 400px;
+  width: 100%;
 }
-.settings-desc--follow {
-  margin-top: 8px;
+.settings-form__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  max-width: 560px;
 }
-.settings-desc--inline {
-  margin: 0;
+.settings-form__span {
+  grid-column: 1 / -1;
+}
+.settings-form :deep(.n-form-item) {
+  margin-bottom: 8px;
 }
 .settings-link {
-  margin-inline-start: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--brand-color);
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 13px;
   text-decoration: none;
 }
 .settings-link:hover {
   text-decoration: underline;
 }
-.drive-status-tag {
-  margin-bottom: 8px;
-}
-.drive-actions {
+.settings-panel {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-.drive-folder {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
   margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
 }
-.drive-folder__label {
-  display: block;
-  margin-bottom: 4px;
+.settings-panel__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 .drive-folder__row {
   display: flex;
   gap: 8px;
   align-items: center;
-}
-.drive-folder__open {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-}
-.drive-folder-alert {
-  margin-top: 12px;
-}
-.drive-repair-btn {
-  margin-top: 10px;
+  width: 100%;
 }
 .drive-folder__input {
-  max-width: 220px;
-}
-.drive-reauth {
-  margin-top: 8px;
-}
-.drive-reauth__alert {
-  margin-bottom: 8px;
-}
-.avatar-upload-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  max-width: 280px;
+  flex: 1;
 }
 
 /* ── Theme ───────────────────────────────────────────────────────────────── */
@@ -2459,9 +2647,12 @@ watch(
     width: 100%;
   }
 
-  .avatar-upload-row {
-    align-items: stretch;
-    flex-direction: column;
+  .settings-row__desc {
+    white-space: normal;
+  }
+
+  .settings-form__grid {
+    grid-template-columns: 1fr;
   }
 
   .drive-folder__row,

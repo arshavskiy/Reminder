@@ -5,7 +5,7 @@ import { NavigationRoute, registerRoute } from "workbox-routing";
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<{ url: string; revision: string | null }> };
 
-const manifest = self.__WB_MANIFEST ?? [];
+const manifest = self.__WB_MANIFEST || [];
 precacheAndRoute(manifest);
 
 // Serve the app shell for navigations. Without this, precaching index.html is

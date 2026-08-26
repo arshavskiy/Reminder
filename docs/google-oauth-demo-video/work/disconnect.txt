@@ -1,0 +1,1 @@
+The user can disconnect Gmail inside RemindOCR at any time. The user can also revoke RemindOCR access from Google Account permissions.
