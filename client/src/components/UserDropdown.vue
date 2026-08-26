@@ -35,13 +35,11 @@ import {useRouter} from "vue-router";
 import {NDropdown, NIcon} from "naive-ui";
 import {
   ConstructOutline,
-  DocumentTextOutline,
-  GridOutline,
+  DiamondOutline,
   LogOutOutline,
-  MailOutline,
   MapOutline,
   PersonOutline,
-  PrintOutline,
+  SettingsOutline,
   ShieldCheckmarkOutline,
 } from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
@@ -76,12 +74,6 @@ const avatarUrl = computed<string>(() => {
 
 const avatarSrc = computed<string>(() => avatarUrl.value || "");
 
-const roleLabel = computed(() => {
-  if (props.userRole === "admin") return "מנהל";
-  if (props.userRole === "pro") return "Pro";
-  return "משתמש";
-});
-
 const dropdownThemeOverrides = {
   borderRadius: "10px",
   padding: "6px",
@@ -94,11 +86,9 @@ const dropdownThemeOverrides = {
 
 const menuIcons: Record<string, typeof PersonOutline> = {
   profile: PersonOutline,
-  templatesGroup: GridOutline,
-  printTemplates: PrintOutline,
-  documentsTemplates: DocumentTextOutline,
-  emailTemplates: MailOutline,
-  equipment: ConstructOutline,
+  engineer: ConstructOutline,
+  settings: SettingsOutline,
+  subscription: DiamondOutline,
   admin: ShieldCheckmarkOutline,
   tour: MapOutline,
   logout: LogOutOutline,
@@ -110,18 +100,19 @@ const dropdownItems = computed(() => [
     key: "profile",
   },
   {
-    label: "הגדרת תבניות וציוד",
-    key: "templatesGroup",
-    children: [
-      {label: "תבניות הדפסה", key: "printTemplates"},
-      {label: "תבניות אימייל", key: "emailTemplates"},
-      {label: "הגדרת ציוד", key: "equipment"},
-      {label: "הגדרת מסמכים", key: "documentsTemplates"},
-    ],
+    label: "פרופיל מהנדס",
+    key: "engineer",
+  },
+  {
+    label: "הגדרות",
+    key: "settings",
+  },
+  {
+    label: "מנוי ותשלומים",
+    key: "subscription",
   },
   ...(props.userRole === "admin"
       ? [
-        // {label: "הגדרות אישיות", key: "settings"},
         {label: "פאנל ניהול", key: "admin"},
       ]
       : []),
@@ -150,17 +141,13 @@ function renderDropdownLabel(option: any) {
 
 async function handleSelect(key: string) {
   if (key === "profile") {
-    router.push("/profile");
-  } else if (key === "printTemplates") {
-    router.push("/print-templates");
-  } else if (key === "documentsTemplates") {
-    router.push("/settings/doc-templates");
-  } else if (key === "emailTemplates") {
-    router.push("/settings/email-templates");
-  } else if (key === "equipment") {
-    router.push("/equipment");
-    // } else if (key === "settings") {
-    //   router.push("/settings");
+    router.push({path: "/profile", query: {section: "personal"}});
+  } else if (key === "engineer") {
+    router.push({path: "/profile", query: {section: "engineer"}});
+  } else if (key === "settings") {
+    router.push({path: "/profile", query: {section: "settings"}});
+  } else if (key === "subscription") {
+    router.push({path: "/profile", query: {section: "subscription"}});
   } else if (key === "admin") {
     router.push("/admin");
   } else if (key === "tour") {

@@ -224,7 +224,7 @@ export function registerGmailRoutes(app: express.Application) {
 
     const user = await col<any>("users").findOne({ _id: new ObjectId(ctx.userId) } as any);
     const userConnected = Boolean(user?.gmail_access_token);
-    const envConnected = Boolean(process.env.GMAIL_ACCESS_TOKEN || process.env.GMAIL_REFRESH_TOKEN);
+    const envConnected = allowEnvGmailFallback() && Boolean(process.env.GMAIL_ACCESS_TOKEN || process.env.GMAIL_REFRESH_TOKEN);
     const connected = userConnected || envConnected;
     const source = userConnected ? "oauth" : envConnected ? "env" : null;
 
@@ -678,7 +678,15 @@ export function registerGmailRoutes(app: express.Application) {
 
     await col("users").updateOne(
       { _id: new ObjectId(ctx.userId) } as any,
-        {$unset: {gmail_access_token: "", gmail_refresh_token: "", gmail_token_expires_at: "", gmail_email: ""}}
+      {
+        $set: { drive_sync_enabled: false },
+        $unset: {
+          gmail_access_token: "",
+          gmail_refresh_token: "",
+          gmail_token_expires_at: "",
+          gmail_email: "",
+        },
+      }
     );
     res.json({ ok: true });
   });
@@ -1719,14 +1727,15 @@ async function resolveGmailToken(userId: string): Promise<string | null> {
       logger.info("gmail_token_resolve", { source: "user_oauth", action: "refreshing_expired" });
       const refreshed = await refreshGmailToken(user, userId);
       if (refreshed) return refreshed;
-      logger.warn("gmail_token_resolve", { source: "user_oauth", action: "refresh_failed_falling_to_env" });
+      logger.warn("gmail_token_resolve", { source: "user_oauth", action: "refresh_failed" });
     } else {
       logger.info("gmail_token_resolve", { source: "user_oauth", action: "using_valid_token" });
       return user.gmail_access_token;
     }
   }
 
-  // 2. Fall back to env tokens
+  // 2. Fall back to env tokens only for local/development testing.
+  if (!allowEnvGmailFallback()) return null;
   const envToken = process.env.GMAIL_ACCESS_TOKEN;
   const envRefresh = process.env.GMAIL_REFRESH_TOKEN;
   logger.info("gmail_token_resolve", { source: "env", hasToken: !!envToken, hasRefresh: !!envRefresh, hasCached: !!cachedEnvToken, cacheExpiry: envTokenExpiry?.toISOString() ?? null });
@@ -1804,10 +1813,16 @@ async function retryWithRefresh(userId: string): Promise<string | null> {
   if (user?.gmail_refresh_token) {
     return refreshGmailToken(user, userId);
   }
-  if (process.env.GMAIL_REFRESH_TOKEN) {
+  if (allowEnvGmailFallback() && process.env.GMAIL_REFRESH_TOKEN) {
     return refreshEnvGmailToken();
   }
   return null;
+}
+
+function allowEnvGmailFallback(): boolean {
+  const isProd = process.env.NODE_ENV === "production" || process.env.APP_ENV === "production";
+  if (isProd) return process.env.GMAIL_ENV_FALLBACK_ENABLED === "true";
+  return true;
 }
 
 function gmailRedirectUri(req: express.Request): string {

@@ -33,7 +33,7 @@
           class="sidebar-nav__item"
           :class="{ 'sidebar-nav__item--active': activeSection === item.key }"
           :aria-current="activeSection === item.key ? 'page' : undefined"
-          @click="activeSection = item.key"
+          @click="setActiveSection(item.key)"
         >
           <n-icon :component="item.icon" :size="18" />
           <span>{{ item.label }}</span>
@@ -500,6 +500,52 @@
           </div>
 
           <div class="settings-group">
+            <h3 class="settings-group__title">חיבור Google / Gmail</h3>
+            <p class="settings-desc">
+              חיבור Google משמש לקריאת Gmail במצב צפייה בלבד ולייבוא קבצים מצורפים שתבחרו, וגם להפעלת סנכרון Drive.
+            </p>
+            <div class="google-connection">
+              <n-tag v-if="gmailStatus?.connected" size="small" type="success">
+                מחובר{{ gmailStatus.email ? `: ${gmailStatus.email}` : "" }}
+              </n-tag>
+              <n-tag v-else size="small" type="default">לא מחובר</n-tag>
+              <div class="drive-actions">
+                <n-button
+                  v-if="!gmailStatus?.connected"
+                  :loading="gmailLoading"
+                  size="small"
+                  type="primary"
+                  @click="connectGmailFromProfile"
+                >
+                  <template #icon>
+                    <n-icon :component="LogoGoogle" />
+                  </template>
+                  חבר Google
+                </n-button>
+                <n-button
+                  v-else
+                  :loading="gmailDisconnecting"
+                  size="small"
+                  type="error"
+                  ghost
+                  @click="disconnectGmailFromProfile"
+                >
+                  נתק Gmail
+                </n-button>
+                <a
+                  class="settings-link drive-folder__open"
+                  href="https://myaccount.google.com/permissions"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <n-icon :component="OpenOutline" :size="14" />
+                  ניהול הרשאות Google
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
             <h3 class="settings-group__title">סנכרון Google Drive</h3>
             <p class="settings-desc">
               סנכרן מסמכים שהועלו אוטומטית לתיקיית
@@ -835,6 +881,7 @@ import {
   ImageOutline,
   LockClosedOutline,
   LogOutOutline,
+  LogoGoogle,
   MoonOutline,
   NotificationsOutline,
   OpenOutline,
@@ -924,6 +971,18 @@ const navItems = computed(() => {
   items.push({ key: "subscription", icon: DiamondOutline, label: "מנוי ותשלומים" });
   return items;
 });
+
+function setActiveSection(section: string) {
+  if (!navItems.value.some((item) => item.key === section)) return;
+  activeSection.value = section;
+}
+
+function applySectionFromRoute() {
+  const section = String(route.query.section ?? "");
+  if (section) {
+    setActiveSection(section);
+  }
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const initials = computed(() => {
@@ -1201,6 +1260,9 @@ async function onAvatarChange(e: Event) {
 const pwForm = ref({ current: "", next: "", confirm: "" });
 const savingPw = ref(false);
 const disconnecting = ref(false);
+const gmailStatus = ref<{ connected: boolean; source: string | null; email: string | null } | null>(null);
+const gmailLoading = ref(false);
+const gmailDisconnecting = ref(false);
 const driveStatus = ref<DriveStatus | null>(null);
 const driveToggling = ref(false);
 const driveNeedsReauth = ref(false);
@@ -1231,6 +1293,49 @@ async function loadDriveStatus() {
   } catch {
     driveStatus.value = null;
   }
+}
+
+async function loadGmailStatus() {
+  gmailLoading.value = true;
+  try {
+    gmailStatus.value = await api.gmail.status();
+  } catch {
+    gmailStatus.value = null;
+  } finally {
+    gmailLoading.value = false;
+  }
+}
+
+async function connectGmailFromProfile() {
+  gmailLoading.value = true;
+  try {
+    const {url} = await api.gmail.authUrl("/profile");
+    window.location.href = url;
+  } catch {
+    gmailLoading.value = false;
+    message.error("שגיאה בקבלת קישור חיבור Google");
+  }
+}
+
+async function disconnectGmailFromProfile() {
+  confirm({
+    title: "ניתוק Gmail",
+    content: "לנתק את חיבור Google/Gmail? פעולה זו תכבה גם סנכרון Drive עד לחיבור מחדש.",
+    confirmText: "נתק",
+    type: "warning",
+    onConfirm: async () => {
+      gmailDisconnecting.value = true;
+      try {
+        await api.gmail.disconnect();
+        message.success("חיבור Gmail נותק");
+        await Promise.all([loadGmailStatus(), loadDriveStatus()]);
+      } catch {
+        message.error("שגיאה בניתוק Gmail");
+      } finally {
+        gmailDisconnecting.value = false;
+      }
+    },
+  });
 }
 
 async function enableDriveSync() {
@@ -1546,9 +1651,7 @@ function exportWord() {
 
 // ── Mount ────────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  if (route.query.section === "subscription") {
-    activeSection.value = "subscription";
-  }
+  applySectionFromRoute();
   try {
     const [settingsRes, statsRes, engineerRes, notifsRes] =
       await Promise.allSettled([
@@ -1582,6 +1685,7 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+  loadGmailStatus();
   loadDriveStatus();
 });
 
@@ -1590,6 +1694,11 @@ watch(activeSection, (section) => {
     void loadSubscription();
   }
 });
+
+watch(
+  () => route.query.section,
+  () => applySectionFromRoute(),
+);
 </script>
 
 <style scoped>
