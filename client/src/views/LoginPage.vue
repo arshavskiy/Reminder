@@ -32,7 +32,8 @@
           <!--          <div class="hero-badge">-->
           <!--            <span>מותאם לעסקים ישראלים</span>-->
           <!--          </div>-->
-          <h1>ניהול תסקירים ותזכורות <span>בלי כאב ראש</span></h1>
+          <p class="hero-kicker">ניהול תסקירים, מסמכים ותזכורות</p>
+          <h1>EXTRACT • TRACK • AUTOMATE</h1>
           <p class="hero-desc">
             RemindOCR היא מערכת לניהול תסקירי בדיקה, מסמכים, לקוחות וחוזים. המערכת מאפשרת להעלות או לייבא מסמכים,
             לחלץ מהם תאריכים ופרטי לקוח בעזרת OCR ו-AI, ולעקוב אחרי תוקף מסמכים באמצעות תזכורות אוטומטיות.
@@ -302,6 +303,7 @@ import {useContractsStore} from "../stores/contracts.js";
 import {useClientsStore} from "../stores/clients.js";
 import {useRemindersStore} from "../stores/reminders.js";
 import GoogleSignIn from "../components/GoogleSignIn.vue";
+import {trackConversion} from "../analytics.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -360,7 +362,7 @@ const errorMsg = computed(() => {
 function clearError() {
   gisError.value = null;
   routeError.value = null;
-  router.replace("/login");
+  router.replace(route.path === "/login" ? "/login" : "/");
 }
 
 function onGisError(msg: string) {
@@ -393,6 +395,7 @@ async function handleLogin() {
       return;
     }
     authStore.setUser(data.user);
+    trackConversion("Login", {method: "email"});
     // if (data.user?.role === "admin") {
     //   router.replace("/admin");
     //   return;
@@ -406,7 +409,7 @@ async function handleLogin() {
       remindersStore.fetch(),
     ]).catch(() => {
     });
-    router.replace("/");
+    router.replace("/dashboard");
   } catch {
     routeError.value = "auth_failed";
   } finally {
@@ -432,6 +435,7 @@ async function handleRegister() {
       return;
     }
     successMsg.value = "נשלח אימייל לאימות הכתובת. אנא בדוק את תיבת הדואר ולחץ על הקישור.";
+    trackConversion("CompleteRegistration", {method: "email"});
     regEmail.value = "";
     regPassword.value = "";
     regName.value = "";
@@ -470,7 +474,7 @@ onMounted(async () => {
   if (route.query.tab === "register") activeTab.value = "register";
 
   if (!authStore.initialized) await authStore.fetchMe();
-  if (authStore.user) router.replace("/");
+  if (authStore.user) router.replace("/dashboard");
 });
 </script>
 
@@ -603,6 +607,13 @@ onMounted(async () => {
   font-size: 13px;
   font-weight: 700;
   margin-bottom: 20px;
+}
+
+.hero-kicker {
+  margin: 0 0 8px;
+  color: var(--brand-color);
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .hero h1 {

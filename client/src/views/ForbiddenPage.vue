@@ -3,7 +3,7 @@
     <div style="font-size:64px;margin-bottom:16px">🔒</div>
     <h2 style="margin:0 0 8px;font-size:24px">אין הרשאה</h2>
     <p style="color:var(--text-secondary);margin:0 0 24px">הדף הזה מיועד למנהלי מערכת בלבד.</p>
-    <n-button @click="$router.push('/')">חזרה לדף הבית</n-button>
+    <n-button @click="$router.push('/dashboard')">חזרה לדף הבית</n-button>
   </div>
 </template>
 

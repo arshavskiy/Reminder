@@ -22,6 +22,7 @@ import ResetPasswordPage from "../views/ResetPasswordPage.vue";
 import PrivacyPage from "../views/PrivacyPage.vue";
 import TermsPage from "../views/TermsPage.vue";
 import AdminPage from "../views/AdminPage.vue";
+import {trackPageView} from "../analytics.js";
 import {applySeo} from "../seo.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
@@ -31,13 +32,24 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
+      path: "/",
+      component: LoginPage,
+      meta: {
+        public: true,
+        canonicalPath: "/",
+        title: "RemindOCR - EXTRACT • TRACK • AUTOMATE",
+        description: "RemindOCR מרכזת תסקירי בדיקה, מסמכים, לקוחות ותזכורות במערכת עברית עם OCR, חילוץ נתונים וייבוא PDF אופציונלי מ-Gmail.",
+      },
+    },
+    {
       path: "/login",
       component: LoginPage,
       meta: {
         public: true,
         canonicalPath: "/login",
-        title: "RemindOCR - ניהול תסקירים, מסמכים ותזכורות",
-        description: "RemindOCR מרכזת תסקירי בדיקה, מסמכים, לקוחות ותזכורות במערכת עברית עם OCR, חילוץ נתונים וייבוא PDF אופציונלי מ-Gmail.",
+        robots: "noindex,nofollow",
+        title: "כניסה - RemindOCR",
+        description: "כניסה לחשבון RemindOCR.",
       },
     },
     {
@@ -84,7 +96,7 @@ export const router = createRouter({
     },
     { path: "/privacy.html", redirect: "/privacy" },
     { path: "/terms.html", redirect: "/terms" },
-    { path: "/", component: DashboardPage, meta: { feature: FEATURES.pages.dashboard } },
+    { path: "/dashboard", component: DashboardPage, meta: { feature: FEATURES.pages.dashboard } },
     { path: "/documents", component: DocumentsPage, meta: { feature: FEATURES.pages.documents } },
     { path: "/documents/:id", component: DocumentDetailPage, meta: { feature: FEATURES.pages.documents } },
     { path: "/invoices", component: InvoicesPage, meta: { feature: FEATURES.pages.invoices } },
@@ -148,6 +160,7 @@ export const router = createRouter({
 
 router.afterEach((to) => {
   applySeo(to);
+  trackPageView(to.fullPath);
 });
 
 router.beforeEach(async (to) => {

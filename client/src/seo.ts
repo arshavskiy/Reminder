@@ -54,6 +54,16 @@ function upsertJsonLd(id: string, data: Record<string, unknown>) {
   }
 }
 
+function organizationJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: SITE_NAME,
+    url: SITE_URL,
+    logo: `${SITE_URL}/icon-512-v2.png`,
+  };
+}
+
 export function applySeo(route: RouteLocationNormalizedLoaded) {
   const meta = route.meta as SeoMeta;
   const title = meta.title ?? DEFAULT_TITLE;
@@ -80,15 +90,16 @@ export function applySeo(route: RouteLocationNormalizedLoaded) {
   upsertMeta('meta[name="twitter:image"]', {name: "twitter:image", content: DEFAULT_IMAGE});
 
   removeJsonLd("route-seo-jsonld");
+  upsertJsonLd("site-organization-jsonld", organizationJsonLd());
 
-  if (canonicalPath === "/login" || canonicalPath === "/") {
+  if (canonicalPath === "/") {
     upsertJsonLd("route-seo-jsonld", {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       name: SITE_NAME,
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
-      url: `${SITE_URL}/login`,
+      url: SITE_URL,
       image: DEFAULT_IMAGE,
       inLanguage: "he-IL",
       description,

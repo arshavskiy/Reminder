@@ -16,7 +16,7 @@
         'admin-sidebar--collapsed': !isMobileViewport && !showDesktopSidebar,
       }"
     >
-      <div class="admin-sidebar__brand" @click="router.push('/')">
+      <div class="admin-sidebar__brand" @click="router.push('/dashboard')">
         <n-icon :component="BriefcaseOutline" :size="20" />
         <span>RemindOCR</span>
       </div>
@@ -41,7 +41,7 @@
           <span>{{ appEnv === 'production' ? 'PRODUCTION' : appEnv.toUpperCase() }}</span>
           <span v-if="dbName" class="admin-env-badge__db">{{ dbName }}</span>
         </div>
-        <button class="admin-sidebar__item" type="button" @click="router.push('/')">
+        <button class="admin-sidebar__item" type="button" @click="router.push('/dashboard')">
           <n-icon :component="ArrowBackOutline" :size="18" />
           <span>Back to App</span>
         </button>

@@ -6,7 +6,7 @@
           <!-- ── Top horizontal app bar ─────────────────────────────────── -->
           <header v-if="!hideAppChrome" class="appbar">
             <!-- Brand on the right (RTL "start") -->
-            <div class="appbar__brand" @click="router.push('/')">
+            <div class="appbar__brand" @click="router.push('/dashboard')">
               <div class="appbar__logo">
                 <img class="appbar__logo-img" :src="logoSrc" alt="" />
               </div>
@@ -141,7 +141,7 @@
             </main>
           </div>
 
-          <footer v-if="route.path !== '/login' && !isLegalRoute" class="app-footer" dir="rtl">
+          <footer v-if="!isPublicMarketingRoute && !isLegalRoute" class="app-footer" dir="rtl">
             <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
             <div class="app-footer__legal">
               © 2026 HandCoded. All rights reserved. |
@@ -246,17 +246,19 @@ const userSettingsStore = useUserSettingsStore();
 const pwa = usePwa();
 
 const isLegalRoute = computed(() => Boolean(route.meta.legal));
-const isMinimalShell = computed(() =>
+const isPublicMarketingRoute = computed(() =>
+  route.path === "/" ||
   route.path === "/login" ||
   (route.path === "/pricing" && !authStore.user) ||
-  route.path === "/reset-password" ||
+  route.path === "/reset-password",
+);
+const isMinimalShell = computed(() =>
+  isPublicMarketingRoute.value ||
   isLegalRoute.value ||
   route.path.startsWith("/admin"),
 );
 const hideAppChrome = computed(() =>
-  route.path === "/login" ||
-  (route.path === "/pricing" && !authStore.user) ||
-  route.path === "/reset-password" ||
+  isPublicMarketingRoute.value ||
   isLegalRoute.value ||
   route.path.startsWith("/admin"),
 );
@@ -494,7 +496,7 @@ function isActiveNav(key: string): boolean {
 
 function navigate(key: string) {
   mobileNavOpen.value = false;
-  router.push(key === "dashboard" ? "/" : `/${key}`);
+  router.push(key === "dashboard" ? "/dashboard" : `/${key}`);
 }
 </script>
 

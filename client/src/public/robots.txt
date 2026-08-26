@@ -1,5 +1,5 @@
 User-agent: *
-Allow: /login
+Allow: /
 Allow: /pricing
 Allow: /privacy
 Allow: /terms
@@ -19,6 +19,7 @@ Disallow: /field
 Disallow: /print-templates
 Disallow: /admin
 Disallow: /gmail
+Disallow: /login
 Disallow: /reset-password
 
 Sitemap: https://remindocr.com/sitemap.xml

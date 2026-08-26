@@ -1,7 +1,7 @@
 <template>
   <div class="pricing-page" dir="rtl">
     <nav v-if="!authStore.user" class="pricing-nav">
-      <router-link class="pricing-brand" to="/login">
+      <router-link class="pricing-brand" to="/">
         <img class="pricing-brand__logo" :src="logoSrc" alt="" />
         <span class="pricing-brand__text">RemindOCR</span>
       </router-link>
@@ -141,6 +141,7 @@ import {
   tierFeatureFlags,
   type PlanId,
 } from "../shared/pricingPlans.js";
+import {trackConversion} from "../analytics.js";
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -181,6 +182,7 @@ function ctaLabel(planId: PlanId): string {
 }
 
 function startPlan(_planId: PlanId) {
+  trackConversion(authStore.user ? "Subscribe" : "Lead", {plan: _planId});
   router.push(authStore.user ? "/profile?section=subscription" : "/login?tab=register");
 }
 </script>
