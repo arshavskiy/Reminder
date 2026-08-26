@@ -48,7 +48,14 @@ export default defineConfig({
         display_override: ["window-controls-overlay", "standalone", "minimal-ui"],
         dir: "rtl",
         lang: "he",
-        start_url: "/",
+        // The app lives on its own subdomain now, so the installed app should
+        // open straight into it. "/" renders the login page and only bounces a
+        // signed-in user onward once fetchMe() resolves, which flashes the login
+        // screen on every launch; the router guard sends anyone unauthenticated
+        // to /login anyway. scope keeps in-app navigation inside the PWA window.
+        start_url: "/dashboard",
+        scope: "/",
+        id: "/",
         icons: [
           { src: "/icon-192-v2.png", sizes: "192x192", type: "image/png", purpose: "any" },
           { src: "/icon-512-v2.png", sizes: "512x512", type: "image/png", purpose: "any" },

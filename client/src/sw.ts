@@ -1,10 +1,22 @@
 /// <reference lib="webworker" />
 /* Custom service worker — Workbox precache (injectManifest) + Web Push handlers. */
-import { precacheAndRoute } from "workbox-precaching";
+import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
+import { NavigationRoute, registerRoute } from "workbox-routing";
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<{ url: string; revision: string | null }> };
 
 precacheAndRoute(self.__WB_MANIFEST);
+
+// Serve the app shell for navigations. Without this, precaching index.html is
+// not enough: an installed PWA opening at its start_url (/dashboard) has no
+// cached response for that path and fails offline. Vue routes on the client, so
+// every in-app path resolves from the same shell.
+//
+// /api and /auth are excluded — they are proxied to the API and must reach the
+// network rather than being answered with HTML.
+registerRoute(new NavigationRoute(createHandlerBoundToURL("index.html"), {
+  denylist: [/^\/api\//, /^\/auth\//],
+}));
 
 // API requests always hit the network — no cache layer that could go stale.
 
