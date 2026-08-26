@@ -156,7 +156,7 @@ export function registerAuthRoutes(app: express.Application) {
       });
 
       res.setHeader("Set-Cookie", cookies);
-      res.redirect(frontendUrl("/"));
+      res.redirect(frontendUrl(POST_LOGIN_PATH));
     } catch (err) {
       logger.error("login_failed", { method: "google_oauth", reason: "callback_error", error: err, ip: clientIp(req) ?? null });
       res.redirect(frontendUrl("/login?error=auth_failed"));
@@ -536,7 +536,7 @@ export function registerAuthRoutes(app: express.Application) {
     logAuth("login_success", req, { user, method: "magic_link", is_new_user: false });
 
     res.setHeader("Set-Cookie", cookies);
-    res.redirect(frontendUrl("/"));
+    res.redirect(frontendUrl(POST_LOGIN_PATH));
   });
 
   // GET /auth/verify-email?token=...
@@ -663,6 +663,13 @@ const isProd = process.env.NODE_ENV === "production" || process.env.APP_ENV === 
 const DEV_FRONTEND = !isProd
   ? (process.env.DEV_FRONTEND_URL ?? "http://localhost:4173")
   : (process.env.FRONTEND_URL ?? "");
+
+/**
+ * Where a completed sign-in lands. Sending users to "/" relied on that route
+ * rendering the app and bouncing them onward, which flashed the login page and
+ * breaks entirely once the root domain serves the marketing site instead.
+ */
+const POST_LOGIN_PATH = "/dashboard";
 
 function frontendUrl(path: string): string {
   return `${DEV_FRONTEND}${path}`;
