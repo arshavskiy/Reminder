@@ -20,3 +20,4 @@ playwright-report/
 dist/
 *.bson
 mongodump-atlas/**
+docs/google-oauth-demo-video/

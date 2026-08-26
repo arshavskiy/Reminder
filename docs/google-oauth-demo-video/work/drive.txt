@@ -1,1 +1,0 @@
-Drive sync is controlled by the user. When enabled, RemindOCR stores exported or synced documents in a RemindOCR folder in My Drive, with separate folders for invoices and inspection reports.

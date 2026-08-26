@@ -1,1 +1,0 @@
-After consent, RemindOCR lists matching emails with attachments. It shows email metadata like sender, subject, date, and attachment file names. The user chooses which attachment to import. The app downloads the selected attachment and processes it as a RemindOCR document.

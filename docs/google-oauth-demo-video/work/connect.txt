@@ -1,1 +1,0 @@
-Gmail is not connected by default. The user explicitly starts the connection from the Gmail page.
