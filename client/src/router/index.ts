@@ -7,7 +7,7 @@ import ClientDetailPage from "../views/ClientDetailPage.vue";
 import ContractsPage from "../views/ContractsPage.vue";
 import RemindersPage from "../views/RemindersPage.vue";
 import SearchPage from "../views/SearchPage.vue";
-import SettingsPage from "../views/SettingsPage.vue";
+// import SettingsPage from "../views/SettingsPage.vue";
 import ProfilePage from "../views/ProfilePage.vue";
 import DocTemplatesPage from "../views/DocTemplatesPage.vue";
 import GmailInboxPage from "../views/GmailInboxPage.vue";
