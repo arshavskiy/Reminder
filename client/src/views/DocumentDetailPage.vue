@@ -755,13 +755,16 @@ const FALLBACK_SKIP_KEYS = new Set([
 
 const ALWAYS_VISIBLE_FIELD_KEYS = new Set(["license_number"]);
 
+/** Keys surfaced regardless of the template schema (see extractedFields). */
+const FORCED_FIELD_KEYS = new Set(["client_email", "contact_email", "email"]);
+
 function resolveExtractedFieldValue(
   key: string,
   raw: Record<string, unknown>,
   contractEmail: string | null,
 ): unknown {
-  if (key === "client_email") {
-    return raw.client_email ?? raw.contact_email ?? raw.email ?? contractEmail ?? null;
+  if (key === "client_email" || key === "contact_email" || key === "email") {
+    return raw[key] ?? raw.client_email ?? raw.contact_email ?? raw.email ?? contractEmail ?? null;
   }
   if (key === "expiry_date") {
     return raw.expiry_date ?? raw.next_inspection_date ?? null;
@@ -790,6 +793,12 @@ const extractedFields = computed(() => {
         label: field.label_he?.trim() || LABEL_MAP[key] || key,
       });
     }
+    // The email drives reminder delivery, so it stays editable even when the
+    // template schema omits it — otherwise "חסר אימייל" can never be resolved here.
+    if (!seen.has("client_email") && !seen.has("contact_email") && !seen.has("email")) {
+      seen.add("client_email");
+      schema.push({ key: "client_email", label: LABEL_MAP.client_email });
+    }
   } else {
     for (const field of DEFAULT_FIELDS) {
       seen.add(field.key);
@@ -814,7 +823,7 @@ const extractedFields = computed(() => {
     label: field.label,
     value: resolveExtractedFieldValue(field.key, raw, contractEmail),
     fromClient:
-      field.key === "client_email" &&
+      isEmailField(field.key) &&
       !(raw.client_email ?? raw.contact_email ?? raw.email) &&
       !!contractEmail,
   }));
@@ -864,7 +873,16 @@ function displayExtractedValue(field: { key: string; value: unknown }): string {
   return String(field.value);
 }
 
+function isEmptyFieldValue(value: unknown): boolean {
+  if (value == null || value === "") return true;
+  if (typeof value === "string" && !value.trim()) return true;
+  return Array.isArray(value) && value.length === 0;
+}
+
 function isMissingField(field: { key: string; value: unknown }): boolean {
+  if (FORCED_FIELD_KEYS.has(field.key) || isRequiredTemplateField(field.key)) {
+    return isEmptyFieldValue(field.value);
+  }
   if (!missingFieldKeys.value.has(field.key)) return false;
   if (field.key === "expiry_date" || field.key === docTemplate.value?.expiry_field) {
     if (field.value == null || field.value === "") return true;
@@ -877,8 +895,13 @@ function isMissingField(field: { key: string; value: unknown }): boolean {
   return false;
 }
 
+function isRequiredTemplateField(key: string): boolean {
+  return Boolean(docTemplate.value?.fields?.some((f) => f.key === key && (f as any).required));
+}
+
 function shouldShowExtractedField(field: { key: string; value: unknown }) {
   if (editingFields.value || showEmptyFields.value) return true;
+  if (isRequiredTemplateField(field.key)) return true;
   if (
     ALWAYS_VISIBLE_FIELD_KEYS.has(field.key) &&
     (!docTemplate.value?.fields?.length ||
@@ -887,6 +910,7 @@ function shouldShowExtractedField(field: { key: string; value: unknown }) {
     return true;
   }
   if (missingFieldKeys.value.has(field.key)) return true;
+  if (FORCED_FIELD_KEYS.has(field.key)) return true;
   if (Array.isArray(field.value)) return field.value.length > 0;
   return field.value !== null && field.value !== "";
 }
