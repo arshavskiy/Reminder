@@ -1,6 +1,8 @@
 import type {RouteLocationNormalizedLoaded} from "vue-router";
 
-const SITE_URL = "https://remindocr.com";
+// The app's own origin. remindocr.com serves the marketing site, so canonical
+// and OG tags emitted here must not claim URLs that belong to it.
+const SITE_URL = "https://app.remindocr.com";
 const SITE_NAME = "RemindOCR";
 const DEFAULT_TITLE = "RemindOCR - מערכת ניהול תסקירים ותזכורות";
 const DEFAULT_DESCRIPTION =

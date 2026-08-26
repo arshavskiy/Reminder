@@ -1,25 +1,5 @@
+# app.remindocr.com is the application. Everything it serves is behind sign-in,
+# so there is nothing here for a crawler to index — the marketing pages and the
+# sitemap live on remindocr.com.
 User-agent: *
-Allow: /
-Allow: /pricing
-Allow: /privacy
-Allow: /terms
-Disallow: /api
-Disallow: /auth
-Disallow: /documents
-Disallow: /invoices
-Disallow: /clients
-Disallow: /contracts
-Disallow: /reminders
-Disallow: /search
-Disallow: /profile
-Disallow: /settings
-Disallow: /equipment
-Disallow: /reports
-Disallow: /field
-Disallow: /print-templates
-Disallow: /admin
-Disallow: /gmail
-Disallow: /login
-Disallow: /reset-password
-
-Sitemap: https://remindocr.com/sitemap.xml
+Disallow: /

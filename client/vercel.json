@@ -20,21 +20,12 @@
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     }
   ],
-  "redirects": [
-    {
-      "source": "/:path*",
-      "has": [{ "type": "host", "value": "www.remindocr.com" }],
-      "destination": "https://remindocr.com/:path*",
-      "permanent": true
-    }
-  ],
   "rewrites": [
     { "source": "/manifest.webmanifest", "destination": "/manifest.webmanifest" },
     { "source": "/sw.js", "destination": "/sw.js" },
     { "source": "/workbox-(.*)", "destination": "/workbox-$1" },
     { "source": "/registerSW.js", "destination": "/registerSW.js" },
     { "source": "/robots.txt", "destination": "/robots.txt" },
-    { "source": "/sitemap.xml", "destination": "/sitemap.xml" },
     { "source": "/api/:path*", "destination": "https://api.remindocr.com/api/:path*" },
     { "source": "/auth/:path*", "destination": "https://api.remindocr.com/auth/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }

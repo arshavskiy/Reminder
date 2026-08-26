@@ -576,7 +576,7 @@ export function registerAuthRoutes(app: express.Application) {
     const { cookies } = await createSession(user._id.toString(), ua, ip);
     logAuth("login_success", req, { user, method: "email_verification", is_new_user: false });
     res.setHeader("Set-Cookie", cookies);
-    res.redirect(frontendUrl("/?verified=1"));
+    res.redirect(frontendUrl(`${POST_LOGIN_PATH}?verified=1`));
   });
 
   // POST /api/auth/forgot-password
@@ -605,7 +605,9 @@ export function registerAuthRoutes(app: express.Application) {
       { $set: { reset_token: resetToken, reset_token_expires: resetExpiry } }
     );
 
-    const base = serverBaseUrl(req);
+    // Frontend origin: the emailed link opens /reset-password, a client-side
+    // route, so it must not be built from the API host.
+    const base = frontendBaseUrl(req);
     try {
       await sendPasswordResetEmail(emailLower, resetToken, base);
       notifyPasswordResetRequested({email: emailLower});
@@ -690,6 +692,20 @@ function serverBaseUrl(req: express.Request): string {
   const proto = req.headers["x-forwarded-proto"] ?? req.protocol;
   const host = req.headers["x-forwarded-host"] ?? req.headers.host;
   return `${proto}://${host}`;
+}
+
+/**
+ * Base URL for links the user opens in the app rather than on the API.
+ *
+ * Distinct from serverBaseUrl: a link to a client-side route such as
+ * /reset-password has no server handler, so building it from the API origin
+ * produces a 404. That only worked while SERVER_URL and the frontend shared a
+ * host, which stops being true once the app moves to its own subdomain.
+ */
+function frontendBaseUrl(req: express.Request): string {
+  if (isProd && process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
+  if (DEV_FRONTEND) return DEV_FRONTEND;
+  return serverBaseUrl(req);
 }
 
 function planFromRole(role: string | null | undefined): "free" | "basic" | "business" {
