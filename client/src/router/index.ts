@@ -72,7 +72,6 @@ export const router = createRouter({
     { path: "/reminders", component: RemindersPage, meta: { feature: FEATURES.pages.reminders } },
     { path: "/search", component: SearchPage, meta: { feature: FEATURES.pages.search } },
     { path: "/profile", component: ProfilePage, meta: { feature: FEATURES.pages.profile } },
-    { path: "/settings", component: SettingsPage, meta: { requireRole: "admin", feature: FEATURES.pages.settings } },
     { path: "/settings/doc-templates", component: DocTemplatesPage, meta: { feature: FEATURES.pages.docTemplates } },
     { path: "/settings/email-templates", component: EmailTemplatesPage, meta: { feature: FEATURES.pages.emailTemplates } },
     { path: "/equipment", component: EquipmentPage, meta: { feature: FEATURES.pages.equipment } },
