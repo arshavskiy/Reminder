@@ -745,15 +745,15 @@
                   </span>
                   <div class="settings-row__body">
                     <div class="settings-row__text">
-                      <span class="settings-row__title">
-                        חשבוניות
-                        <n-switch
+                      <span class="settings-row__title">חשבוניות</span>
+                      <span class="settings-row__desc">שמירת קבצי חשבוניות באחסון ענן</span>
+                    </div>
+                    <div class="settings-row__actions">
+                      <n-switch
                           :value="s3StoreInvoices"
                           :loading="savingCloudStorage === 'invoices'"
                           @update:value="(v: boolean) => saveCloudStorage('invoices', v)"
-                        />
-                      </span>
-                      <span class="settings-row__desc">שמירת קבצי חשבוניות באחסון ענן</span>
+                      />
                     </div>
                   </div>
                 </div>
@@ -763,15 +763,15 @@
                   </span>
                   <div class="settings-row__body">
                     <div class="settings-row__text">
-                      <span class="settings-row__title">
-                        תסקירי בדיקה
-                        <n-switch
+                      <span class="settings-row__title">תסקירי בדיקה</span>
+                      <span class="settings-row__desc">שמירת קבצי תסקירים באחסון ענן</span>
+                    </div>
+                    <div class="settings-row__actions">
+                      <n-switch
                           :value="s3StoreInspections"
                           :loading="savingCloudStorage === 'inspections'"
                           @update:value="(v: boolean) => saveCloudStorage('inspections', v)"
-                        />
-                      </span>
-                      <span class="settings-row__desc">שמירת קבצי תסקירים באחסון ענן</span>
+                      />
                     </div>
                   </div>
                 </div>
@@ -2015,6 +2015,7 @@ watch(
 .profile-content {
   flex: 1;
   min-width: 0;
+  max-width: 800px;
 }
 
 .section-header {
@@ -2258,7 +2259,7 @@ watch(
 }
 .settings-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border-color);
@@ -2283,11 +2284,12 @@ watch(
   flex-shrink: 0;
 }
 .settings-row__body {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
+  flex: 1;
   min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 16px;
 }
 .settings-row__text {
   min-width: 0;
@@ -2313,8 +2315,9 @@ watch(
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 8px;
+  grid-column: 2;
 }
 .settings-form {
   width: 100%;
@@ -2728,6 +2731,13 @@ watch(
   .stat-card,
   .theme-card {
     width: 100%;
+  }
+
+  .settings-row__body {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 
   .settings-row__desc {

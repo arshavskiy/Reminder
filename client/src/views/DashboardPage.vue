@@ -536,7 +536,7 @@ const data_cards = computed(() =>
 
 <style scoped>
 .dash {
-  max-width: 1200px;
+  max-width: 80vw;
   margin: 0 auto;
 }
 
