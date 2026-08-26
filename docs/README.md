@@ -24,6 +24,7 @@ Complete documentation for the ReminderOCR platform.
 - **[ocr-and-ai-extraction.md](./ocr-and-ai-extraction.md)** — OCR, regex extraction, AI extraction, and rebuild flow
 - **[INSPECTION_TEMPLATE_FLOW.md](./INSPECTION_TEMPLATE_FLOW.md)** — תסקיר template drafts, PDF, contract/client/equipment linkage, and DB shape
 - **[WORKFLOW_NOTES_2026-08-09.md](./WORKFLOW_NOTES_2026-08-09.md)** — Latest document processing, rescan, calendar, and reminder logic notes
+- **[GOOGLE_OAUTH_DEMO_VIDEO.md](./GOOGLE_OAUTH_DEMO_VIDEO.md)** — Script and checklist for Google OAuth Gmail/Drive verification video
 
 ### 🚀 Operations
 
