@@ -5,7 +5,8 @@ import { NavigationRoute, registerRoute } from "workbox-routing";
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<{ url: string; revision: string | null }> };
 
-precacheAndRoute(self.__WB_MANIFEST);
+const manifest = self.__WB_MANIFEST ?? [];
+precacheAndRoute(manifest);
 
 // Serve the app shell for navigations. Without this, precaching index.html is
 // not enough: an installed PWA opening at its start_url (/dashboard) has no
@@ -14,9 +15,16 @@ precacheAndRoute(self.__WB_MANIFEST);
 //
 // /api and /auth are excluded — they are proxied to the API and must reach the
 // network rather than being answered with HTML.
-registerRoute(new NavigationRoute(createHandlerBoundToURL("index.html"), {
-  denylist: [/^\/api\//, /^\/auth\//],
-}));
+//
+// Guarded on the manifest actually containing the shell: in dev the manifest is
+// empty, and createHandlerBoundToURL throws non-precached-url for a URL that was
+// never precached, which aborts the whole worker before the push handlers below
+// are registered.
+if (manifest.some((entry) => entry.url === "index.html")) {
+  registerRoute(new NavigationRoute(createHandlerBoundToURL("index.html"), {
+    denylist: [/^\/api\//, /^\/auth\//],
+  }));
+}
 
 // API requests always hit the network — no cache layer that could go stale.
 
