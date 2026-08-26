@@ -21,6 +21,7 @@
               size="large"
               show-password-on="click"
               autocomplete="new-password"
+              :input-props="{ autocomplete: 'new-password' }"
               :disabled="loading"
             />
           </n-form-item>
@@ -32,6 +33,7 @@
               size="large"
               show-password-on="click"
               autocomplete="new-password"
+              :input-props="{ autocomplete: 'new-password' }"
               :disabled="loading"
             />
           </n-form-item>
