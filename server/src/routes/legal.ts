@@ -100,6 +100,54 @@ const TERMS_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+const ACCESSIBILITY_HTML = `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>נגישות — RemindOCR</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 24px; color: #2c3e50; line-height: 1.7; }
+    h1 { color: #18a058; font-size: 28px; margin-bottom: 8px; }
+    h2 { font-size: 18px; margin-top: 32px; color: #0d1f4c; }
+    p, li { font-size: 15px; }
+    .updated { color: #95a5a6; font-size: 13px; margin-bottom: 32px; }
+    a { color: #18a058; }
+  </style>
+</head>
+<body>
+  <h1>הצהרת נגישות</h1>
+  <p class="updated">עודכן לאחרונה: אוגוסט 2026</p>
+  <p>RemindOCR פועלת לשפר את נגישות האתר והאפליקציה למשתמשים עם מוגבלויות.</p>
+  <h2>יצירת קשר</h2>
+  <p>לדיווח על בעיית נגישות: <a href="mailto:arshavsky.pasha@gmail.com">arshavsky.pasha@gmail.com</a></p>
+</body>
+</html>`;
+
+const SECURITY_HTML = `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>אבטחת מידע — RemindOCR</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 24px; color: #2c3e50; line-height: 1.7; }
+    h1 { color: #18a058; font-size: 28px; margin-bottom: 8px; }
+    h2 { font-size: 18px; margin-top: 32px; color: #0d1f4c; }
+    p, li { font-size: 15px; }
+    .updated { color: #95a5a6; font-size: 13px; margin-bottom: 32px; }
+    a { color: #18a058; }
+  </style>
+</head>
+<body>
+  <h1>אבטחת מידע</h1>
+  <p class="updated">עודכן לאחרונה: אוגוסט 2026</p>
+  <p>RemindOCR משתמשת ב־HTTPS, אחסון מאובטח ובקרת גישה לפי תפקיד כדי להגן על המידע שלכם.</p>
+  <h2>יצירת קשר</h2>
+  <p>לשאלות אבטחה: <a href="mailto:arshavsky.pasha@gmail.com">arshavsky.pasha@gmail.com</a></p>
+</body>
+</html>`;
+
 export function registerLegalRoutes(app: express.Application) {
   app.get(["/privacy", "/privacy.html"], (_req, res) => {
     sendLandingHtml(res, "privacy.html", PRIVACY_HTML);
@@ -107,6 +155,14 @@ export function registerLegalRoutes(app: express.Application) {
 
   app.get(["/terms", "/terms.html"], (_req, res) => {
     sendLandingHtml(res, "terms.html", TERMS_HTML);
+  });
+
+  app.get(["/accessibility", "/accessibility.html"], (_req, res) => {
+    sendLandingHtml(res, "accessibility.html", ACCESSIBILITY_HTML);
+  });
+
+  app.get(["/security", "/security.html"], (_req, res) => {
+    sendLandingHtml(res, "security.html", SECURITY_HTML);
   });
 }
 

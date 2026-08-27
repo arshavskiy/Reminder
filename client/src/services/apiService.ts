@@ -222,6 +222,7 @@ export interface InvoiceExpenseCategorySeries {
 
 export interface InvoiceExpenseMonthlyResponse {
   dateBasis: "invoice" | "import";
+  proofFilter?: "all" | "paid" | "requested";
   months: string[];
   totalInvoices: number;
   totalAmount: number;
@@ -590,7 +591,7 @@ export const api = {
       post<{ ok: true; requested: number; deleted: number; documentsDeleted: number }>("/invoices/delete-selected", body),
     mergeVendors: (body: { supplierNames: string[]; canonicalName: string }) =>
       post<{ ok: true; matched: number; modified: number; supplierName: string }>("/invoices/vendors/merge", body),
-    expenseMonthly: (params?: { dateBasis?: "invoice" | "import"; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; top?: number }, force = false) =>
+    expenseMonthly: (params?: { dateBasis?: "invoice" | "import"; proofFilter?: "all" | "paid" | "requested"; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; top?: number }, force = false) =>
       get<InvoiceExpenseMonthlyResponse>(`/invoices/expenses/monthly${qs(params)}`, force),
   },
 

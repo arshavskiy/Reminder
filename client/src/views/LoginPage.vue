@@ -291,10 +291,11 @@
     <footer class="landing-footer">
       <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
       <div class="landing-footer__legal">
-        © 2026 HandCoded. All rights reserved. |
-        <a href="https://remindocr.com/pricing">Pricing</a> |
-        <a href="https://remindocr.com/privacy">Privacy Policy</a> |
-        <a href="https://remindocr.com/terms">Terms of Service</a>
+        © 2026 HandCoded. כל הזכויות שמורות. |
+        <a href="https://remindocr.com/terms">תנאי שימוש</a> |
+        <a href="https://remindocr.com/privacy">מדיניות פרטיות</a> |
+        <a href="https://remindocr.com/accessibility">נגישות</a> |
+        <a href="https://remindocr.com/security">אבטחת מידע</a>
       </div>
     </footer>
   </div>

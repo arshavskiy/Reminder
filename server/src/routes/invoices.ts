@@ -6,6 +6,7 @@ import { documentImportMonthlyLimit } from "../quotas/documentImportQuota";
 import { featureFlagsForUser, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
 import { inferInvoiceCashFlow, normalizeCashFlow, resolveVatAmount } from "../invoices/cashFlow";
+import { matchesExpenseProofFilter, normalizeExpenseProofFilter } from "../invoices/documentProof";
 
 type InvoiceRow = Record<string, any>;
 const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
@@ -127,6 +128,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const fromTs = parseDateTs(req.query.dateFrom);
     const toTs = parseDateTs(req.query.dateTo, true);
     const top = clampInt(req.query.top, 8, 1, 20);
+    const proofFilter = normalizeExpenseProofFilter(req.query.proofFilter);
 
     const invoices = await col("invoices")
       .find({ user_id: userId } as any)
@@ -147,6 +149,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       .map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers))
       .filter((row) => {
         if (row.cash_flow === "income") return false;
+        if (!matchesExpenseProofFilter(row.type, proofFilter)) return false;
         if (category && row.provider_category !== category) return false;
         if (suppliers.length && !suppliers.includes(row.supplier_name)) return false;
         const rowTs = chartDateTs(row, dateBasis);
@@ -257,6 +260,7 @@ export function registerInvoiceRoutes(app: express.Application) {
 
     res.json({
       dateBasis,
+      proofFilter,
       months,
       totalInvoices: rows.length,
       totalAmount: roundMoney(rows.reduce((sum, row) => sum + (row.amount ?? 0), 0)),

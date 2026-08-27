@@ -3,7 +3,7 @@
     <PageHeader
       :count="totalInvoices"
       title="הוצאות לפי ספק"
-      subtitle="גרף חודשי של הוצאות לפי תאריך חשבונית או תאריך ייבוא"
+      subtitle="גרף חודשי של הוצאות — סננו הוכחת תשלום מול דרישות תשלום"
     >
       <template #hero>
         <n-dropdown
@@ -38,6 +38,19 @@
     <InvoiceSectionNav />
 
     <div class="toolbar">
+      <div class="proof-strip" role="tablist" aria-label="סוג מסמך בגרף">
+        <button
+          v-for="item in proofFilterOptions"
+          :key="item.value"
+          :aria-pressed="proofFilter === item.value"
+          :class="{ 'proof-strip__btn--active': proofFilter === item.value }"
+          class="proof-strip__btn"
+          type="button"
+          @click="setProofFilter(item.value)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
       <n-select
         v-model:value="dateBasis"
         :options="dateBasisOptions"
@@ -225,6 +238,7 @@ const message = useMessage();
 const chartEl = ref<HTMLDivElement | null>(null);
 const loading = ref(false);
 const dateBasis = ref<"invoice" | "import">("invoice");
+const proofFilter = ref<"all" | "paid" | "requested">("all");
 const category = ref<string | null>(null);
 const selectedSuppliers = ref<string[]>([]);
 const dateRange = ref<[number, number] | null>(null);
@@ -246,6 +260,11 @@ let themeObserver: MutationObserver | null = null;
 const dateBasisOptions: SelectOption[] = [
   { label: "תאריך חשבונית", value: "invoice" },
   { label: "תאריך ייבוא", value: "import" },
+];
+const proofFilterOptions = [
+  { label: "הכל", value: "all" as const },
+  { label: "הוכחת תשלום", value: "paid" as const },
+  { label: "דרישות תשלום", value: "requested" as const },
 ];
 const exportMenuOptions = [
   { label: "Excel — סה״כ לפי ספק", key: "xlsx" },
@@ -481,6 +500,7 @@ async function load(force = false) {
     const [dateFrom, dateTo] = dateRange.value ?? [];
     const result = await api.invoices.expenseMonthly({
       dateBasis: dateBasis.value,
+      proofFilter: proofFilter.value,
       category: category.value ?? undefined,
       supplier: selectedSuppliers.value.length ? selectedSuppliers.value.join("||") : undefined,
       dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
@@ -502,6 +522,12 @@ async function load(force = false) {
   } finally {
     loading.value = false;
   }
+}
+
+function setProofFilter(value: "all" | "paid" | "requested") {
+  if (proofFilter.value === value) return;
+  proofFilter.value = value;
+  load(true);
 }
 
 function isFocusedCategory(value: string): boolean {
@@ -786,6 +812,34 @@ function providerCategoryLabel(value: string): string {
   gap: 10px;
   margin: 14px 0 16px;
   flex-wrap: wrap;
+}
+
+.proof-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+}
+
+.proof-strip__btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.proof-strip__btn--active {
+  background: color-mix(in srgb, var(--brand-color) 14%, transparent);
+  color: var(--brand-color);
 }
 
 .toolbar__type {
