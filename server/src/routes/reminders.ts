@@ -178,6 +178,14 @@ export function registerReminderRoutes(app: express.Application) {
       col("reminders").countDocuments(filter),
     ]);
 
+    const reminderIds = reminderDocs.map((r: any) => String(r._id));
+    const calendarLinks = reminderIds.length
+      ? await col<any>("calendar_links")
+        .find({ user_id: userId, source_type: "reminder", source_id: { $in: reminderIds } })
+        .toArray()
+      : [];
+    const calendarLinkByReminderId = new Map(calendarLinks.map((link: any) => [String(link.source_id), link]));
+
     const rows = await Promise.all(
       reminderDocs.map(async (r: any) => {
         const [document, contract] = await Promise.all([
@@ -186,6 +194,7 @@ export function registerReminderRoutes(app: express.Application) {
         ]);
         const client = await resolveReminderClient(r, contract, userId);
         const contactFields = contactFieldsFromSources(contract, document);
+        const calendarLink = calendarLinkByReminderId.get(String(r._id));
         return {
           ...flatDoc(r),
           client_name: normalizeClientNameForDisplay((client as any)?.display_name),
@@ -195,6 +204,9 @@ export function registerReminderRoutes(app: express.Application) {
           document_name: (document as any)?.file_name ?? null,
           contract_number: (contract as any)?.contract_number ?? null,
           contract_type: (contract as any)?.contract_type ?? null,
+          calendar_synced: Boolean(calendarLink?.gcal_event_id),
+          calendar_event_id: calendarLink?.gcal_event_id ?? null,
+          calendar_last_synced_at: calendarLink?.last_synced_at ?? null,
         };
       })
     );
@@ -242,6 +254,13 @@ export function registerReminderRoutes(app: express.Application) {
       email_to: body.email_to ?? null,
       email_template_id: emailTemplateId,
       status: "pending",
+      client_company: body.client_company ?? body.company_name ?? body.client_name ?? null,
+      client_name: body.client_name ?? null,
+      contact_person: body.contact_person ?? null,
+      client_email: body.client_email ?? null,
+      client_phone: body.client_phone ?? null,
+      contract_number: body.contract_number ?? null,
+      contract_type: body.contract_type ?? null,
       equipment_type: body.equipment_type ?? null,
       manufacturer: body.manufacturer ?? null,
       model: body.model ?? null,
@@ -610,6 +629,13 @@ export function registerReminderRoutes(app: express.Application) {
         {
           $set: {
             ...(contactEmail && { email_to: JSON.stringify([contactEmail]) }),
+            client_company: clientDisplayName,
+            client_name: clientDisplayName,
+            contact_person: contactPerson,
+            client_email: contactEmail,
+            client_phone: contactPhone,
+            contract_number: reportNumber,
+            contract_type: "בדיקה הידראולית",
             equipment_type: category,
             manufacturer: body.equipment?.manufacturer?.trim() || null,
             model: body.equipment?.model?.trim() || null,
@@ -652,6 +678,7 @@ export function registerReminderRoutes(app: express.Application) {
     const updates: Record<string, any> = { updated_at: new Date() };
     const fields = [
       "title", "body", "trigger_date", "email_to", "status", "email_template_id",
+      "client_company", "client_name", "contact_person", "client_email", "client_phone", "contract_number", "contract_type",
       "equipment_type", "manufacturer", "model", "serial_number", "license_number",
     ];
     for (const f of fields) {

@@ -72,6 +72,14 @@ export function registerDashboardRoutes(app: express.Application) {
       col("reminders").find({ user_id: userId, status: "pending" }).sort({ trigger_date: 1 }).limit(10).toArray(),
     ]);
 
+    const reminderIds = upcoming_reminders_raw.map((r: any) => String(r._id));
+    const calendarLinks = reminderIds.length
+      ? await col<any>("calendar_links")
+        .find({ user_id: userId, source_type: "reminder", source_id: { $in: reminderIds } })
+        .toArray()
+      : [];
+    const calendarLinkByReminderId = new Map(calendarLinks.map((link: any) => [String(link.source_id), link]));
+
     const upcoming_reminders = await Promise.all(
       upcoming_reminders_raw.map(async (r: any) => {
         const [client, document, contract] = await Promise.all([
@@ -79,12 +87,16 @@ export function registerDashboardRoutes(app: express.Application) {
           r.document_id ? col("documents").findOne({ _id: r.document_id }) : null,
           resolveReminderContract(r, userId),
         ]);
+        const calendarLink = calendarLinkByReminderId.get(String(r._id));
         return {
           ...flatDoc(r),
           client_name: (client as any)?.display_name ?? null,
           document_name: (document as any)?.file_name ?? null,
           contract_number: (contract as any)?.contract_number ?? null,
           contract_type: (contract as any)?.contract_type ?? null,
+          calendar_synced: Boolean(calendarLink?.gcal_event_id),
+          calendar_event_id: calendarLink?.gcal_event_id ?? null,
+          calendar_last_synced_at: calendarLink?.last_synced_at ?? null,
         };
       })
     );

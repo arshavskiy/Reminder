@@ -227,37 +227,37 @@ export function registerProfileRoutes(app: express.Application) {
     if (!ctx) return;
     if (!req.file) { res.status(400).json({ error: "no_file" }); return; }
 
-      const {
-          publicBucketEnabled,
-          uploadBufferToPublicSpaces,
-          spacesEnabled,
-          uploadBufferToSpaces,
-      } = await import("../storage/spaces.js");
+    const {
+      publicBucketEnabled,
+      uploadBufferToPublicSpaces,
+      spacesEnabled,
+      uploadBufferToSpaces,
+    } = await import("../storage/spaces.js");
 
-      const ext = avatarExtension(req.file.originalname, req.file.mimetype);
-      const key = `users/${ctx.userId}/avatar/avatar_${Date.now()}${ext}`;
-      let pictureUrl: string;
+    const ext = avatarExtension(req.file.originalname, req.file.mimetype);
+    const key = `users/${ctx.userId}/avatar/avatar_${Date.now()}${ext}`;
+    let pictureUrl: string;
 
-      if (publicBucketEnabled()) {
-          pictureUrl = await uploadBufferToPublicSpaces(req.file.buffer, key, req.file.mimetype);
-      } else if (spacesEnabled()) {
-          pictureUrl = await uploadBufferToSpaces(req.file.buffer, key, req.file.mimetype);
-      } else {
-          res.status(500).json({error: "object_storage_not_configured"});
-          return;
-      }
+    if (publicBucketEnabled()) {
+      pictureUrl = await uploadBufferToPublicSpaces(req.file.buffer, key, req.file.mimetype);
+    } else if (spacesEnabled()) {
+      pictureUrl = await uploadBufferToSpaces(req.file.buffer, key, req.file.mimetype);
+    } else {
+      res.status(500).json({ error: "object_storage_not_configured" });
+      return;
+    }
 
     await col("users").updateOne(
       { _id: new ObjectId(ctx.userId) as any },
-        {
-            $set: {
-                picture_url: pictureUrl,
-                picture_storage_key: key,
-                updated_at: new Date().toISOString(),
-            },
+      {
+        $set: {
+          picture_url: pictureUrl,
+          picture_storage_key: key,
+          updated_at: new Date().toISOString(),
         },
+      },
     );
-      res.json({picture_url: pictureUrl});
+    res.json({ picture_url: pictureUrl });
   });
 
   // ── Certificates ──────────────────────────────────────────────────────────
@@ -519,11 +519,11 @@ export function registerProfileRoutes(app: express.Application) {
 }
 
 export function avatarExtension(originalName: string | undefined, mimetype: string | undefined): string {
-    const ext = extname(originalName ?? "").toLowerCase();
-    if (ext && [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"].includes(ext)) return ext;
-    if (mimetype === "image/png") return ".png";
-    if (mimetype === "image/gif") return ".gif";
-    if (mimetype === "image/webp") return ".webp";
-    if (mimetype === "image/svg+xml") return ".svg";
-    return ".jpg";
+  const ext = extname(originalName ?? "").toLowerCase();
+  if (ext && [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"].includes(ext)) return ext;
+  if (mimetype === "image/png") return ".png";
+  if (mimetype === "image/gif") return ".gif";
+  if (mimetype === "image/webp") return ".webp";
+  if (mimetype === "image/svg+xml") return ".svg";
+  return ".jpg";
 }

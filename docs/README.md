@@ -10,6 +10,8 @@ Complete documentation for the ReminderOCR platform.
 
 - **[PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md)** — Start here! High-level overview of features, architecture, use cases
 - **[API_QUICK_REFERENCE.md](./API_QUICK_REFERENCE.md)** — API endpoints cheat sheet with examples
+- **[TASKAL_FEATURE_GAPS.md](./TASKAL_FEATURE_GAPS.md)** — תסקל 2.0 competitive gaps; build-first list
+- **[FEATURE_IDEAS.md](./FEATURE_IDEAS.md)** — Product ideas, including the Taskal build-first list
 
 ### 👨‍💻 For Developers
 
@@ -23,6 +25,7 @@ Complete documentation for the ReminderOCR platform.
 - **[REMINDER_FLOW.md](./REMINDER_FLOW.md)** — How reminders are created, scheduled, and sent
 - **[ocr-and-ai-extraction.md](./ocr-and-ai-extraction.md)** — OCR, regex extraction, AI extraction, and rebuild flow
 - **[INSPECTION_TEMPLATE_FLOW.md](./INSPECTION_TEMPLATE_FLOW.md)** — תסקיר template drafts, PDF, contract/client/equipment linkage, and DB shape
+- **[GOOGLE_CALENDAR_SYNC.md](./GOOGLE_CALENDAR_SYNC.md)** — Google Calendar OAuth, event naming, sync rules, and UI indicators
 - **[WORKFLOW_NOTES_2026-08-09.md](./WORKFLOW_NOTES_2026-08-09.md)** — Latest document processing, rescan, calendar, and reminder logic notes
 - **[GOOGLE_OAUTH_DEMO_VIDEO.md](./GOOGLE_OAUTH_DEMO_VIDEO.md)** — Script and checklist for Google OAuth Gmail/Drive verification video
 
@@ -46,10 +49,12 @@ Complete documentation for the ReminderOCR platform.
 | **REMINDER_FLOW.md** | Reminder scheduling logic | Feature developers |
 | **ocr-and-ai-extraction.md** | OCR, AI extraction, retry behavior, entity rebuild flow | Feature developers |
 | **INSPECTION_TEMPLATE_FLOW.md** | Manual תסקיר, print-template drafts, PDF, and client/contract/equipment linkage | Feature developers |
+| **GOOGLE_CALENDAR_SYNC.md** | Calendar OAuth, reminder event format, and two-way sync rules | Feature developers, product |
 | **WORKFLOW_NOTES_2026-08-09.md** | Dated summary of today's processing and UI flow changes | Developers |
 | **DEPLOYMENT.md** | Production deployment steps | DevOps, release managers |
 | **PROJECT_STATUS_REPORT.md** | Progress, roadmap, milestones | Project managers, stakeholders |
 | **FEATURES.md** | Feature list and descriptions | Product managers, clients |
+| **TASKAL_FEATURE_GAPS.md** | תסקל 2.0 gaps and build-first list | Product |
 | **USE_CASES.md** | Real-world usage scenarios | Product, sales |
 
 ---
@@ -159,9 +164,12 @@ docs/
 ├── ARCHITECTURE.md
 ├── REMINDER_FLOW.md
 ├── ocr-and-ai-extraction.md
+├── GOOGLE_CALENDAR_SYNC.md
 ├── WORKFLOW_NOTES_2026-08-09.md
 ├── PROJECT_STATUS_REPORT.md
 ├── FEATURES.md
+├── FEATURE_IDEAS.md
+├── TASKAL_FEATURE_GAPS.md
 ├── USE_CASES.md
 ├── DEPLOYMENT.md
 └── features/

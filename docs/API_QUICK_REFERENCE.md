@@ -189,6 +189,20 @@ All endpoints require `sid` cookie (set by login) except where noted with 🔓.
 
 ---
 
+## Google Calendar
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/calendar/auth-url?returnTo=/profile?section=settings` | Start Google Calendar OAuth consent |
+| GET | `/api/calendar/status` | Get connection state, account email, synced count, and calendar link |
+| POST | `/api/calendar/sync` | Push pending reminders to Google Calendar and pull remote date/deletion changes |
+| POST | `/api/calendar/disconnect` | Disconnect Calendar tokens and forget event links |
+| GET | `/auth/calendar/callback` | OAuth callback used by Google |
+
+Calendar sync creates a dedicated Google calendar named `תסקירים`. Reminder events use the title `תסקיר לא בתוקף - <company name>` and keep client/contact/equipment data in the event details.
+
+---
+
 ## Email & Reporting
 
 | Method | Endpoint | Description |

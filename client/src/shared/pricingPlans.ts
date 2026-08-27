@@ -20,6 +20,7 @@ export interface PricingPlan {
 export interface TierFeatureFlags {
     gmailInvoiceHistoryMonths: number | null;
     googleDriveSync: boolean;
+    googleCalendarSync: boolean;
     automaticEmailReminders: boolean;
     automaticMonthlyReports: boolean;
     excelExport: boolean;
@@ -29,6 +30,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     free: {
         gmailInvoiceHistoryMonths: 0,
         googleDriveSync: false,
+        googleCalendarSync: false,
         automaticEmailReminders: false,
         automaticMonthlyReports: false,
         excelExport: false,
@@ -36,6 +38,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     basic: {
         gmailInvoiceHistoryMonths: 12,
         googleDriveSync: true,
+        googleCalendarSync: true,
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
@@ -43,6 +46,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     business: {
         gmailInvoiceHistoryMonths: 48,
         googleDriveSync: true,
+        googleCalendarSync: true,
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
@@ -91,7 +95,7 @@ export const PRICING_PLANS: PricingPlan[] = [
         price: 179,
         oldPrice: 224,
         period: "/ חודש",
-        blurb: "למי שמייבא מסמכים באופן שוטף ורוצה יותר נפח עבודה.",
+        blurb: "לצוותים ועסקים שמייבאים מסמכים באופן שוטף, עובדים עם כמה משתמשים ורוצים יומן Google מסונכרן.",
         highlighted: true,
         features: [
             "משתמשים ללא הגבלה",
@@ -101,6 +105,7 @@ export const PRICING_PLANS: PricingPlan[] = [
             "סנכרון היסטורי של 4 שנים",
             "מסמכים ללא הגבלה לניהול ידני",
             "תזכורות אימייל ללא הגבלה",
+            "סנכרון Google Calendar לתסקירים עתידיים",
             "דוחות חודשיים אוטומטיים לכל הלקוחות",
             "סנכרון Google Drive אוטומטי + ייצוא מלא",
         ],

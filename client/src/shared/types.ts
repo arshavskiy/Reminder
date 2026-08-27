@@ -279,6 +279,13 @@ export interface Reminder {
   email_template_id: number | null;
   status: ReminderStatus;
   snoozed_until: string | null;
+  client_company?: string | null;
+  client_name?: string | null;
+  contact_person?: string | null;
+  client_email?: string | null;
+  client_phone?: string | null;
+  contract_number?: string | null;
+  contract_type?: string | null;
   // Equipment snapshot stored on the reminder — sent to email templates.
   equipment_type: EquipmentCategory | null;
   manufacturer: string | null;
@@ -367,6 +374,9 @@ export interface ReminderWithContext extends Reminder {
   client_email?: string | null;
   client_phone?: string | null;
   document_name: string | null;
+  calendar_synced?: boolean;
+  calendar_event_id?: string | null;
+  calendar_last_synced_at?: string | null;
 }
 
 export interface ClientDetail extends Client {

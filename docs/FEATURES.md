@@ -2,7 +2,7 @@
 
 Current feature inventory for ReminderOCR.  
 Stack: Node.js 22 / Express · MongoDB · Vue 3 + Naive UI + Tailwind v4 · Railway + Vercel  
-**Updated**: 2026-08-24
+**Updated**: 2026-08-27
 
 ---
 
@@ -58,11 +58,11 @@ Source files:
 
 Current tier flags:
 
-| Tier | Gmail invoice history | Google Drive sync/export | Automatic email reminders | Monthly reports | Excel export |
-|------|------------------------|--------------------------|----------------------------|-----------------|--------------|
-| Free | Not included | Off | Off | Off | Off |
-| Basic | 12 months | On | On | On | On |
-| Business | 4 years | On | On | On | On |
+| Tier | Gmail invoice history | Google Drive sync/export | Google Calendar sync | Automatic email reminders | Monthly reports | Excel export |
+|------|------------------------|--------------------------|----------------------|----------------------------|-----------------|--------------|
+| Free | Not included | Off | Off | Off | Off | Off |
+| Basic | 12 months | On | On | On | On | On |
+| Business | 4 years | On | On | On | On | On |
 
 Gmail invoice imports enforce the history flag in both `/api/gmail/inbox` and `/api/gmail/import-all`. Free users receive `gmail_invoice_plan_required`; Basic users are capped at `newer_than:12m`; Business users are capped at `newer_than:48m`.
 
@@ -264,6 +264,18 @@ If the email template contains `{{items_table}}` or `{{{items_table}}}`, the gro
 - Background interval (default 60 s, configurable)
 - Idempotent: checks `email_log` before sending
 - Failure retry: logs each attempt; marks `error` after 3 failures
+
+### Google Calendar Sync
+
+Users can connect Google Calendar from Profile settings and mirror pending/snoozed reminders into a dedicated secondary Google calendar.
+
+- OAuth uses the narrow `calendar.app.created` scope, so ReminderOCR manages only calendars/events it created.
+- The dedicated calendar is named `תסקירים`; existing old labels are renamed during sync.
+- Reminder events are all-day events. Titles use `תסקיר לא בתוקף - <company name>`.
+- Event details include the reminder snapshot: client/company, contact person, email, phone, contract number/type, equipment details, and the original reminder text.
+- Older reminders missing snapshot fields are repaired from linked client/contract/document data during sync and saved back to `reminders`.
+- Manual sync endpoint: `POST /api/calendar/sync`; status endpoint: `GET /api/calendar/status`.
+- Google date moves are pulled back to the reminder when the remote event is newer than the last app push; deleted Google events dismiss the reminder.
 
 ### Reminder Escalation
 

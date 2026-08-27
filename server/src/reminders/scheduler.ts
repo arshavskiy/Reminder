@@ -5,6 +5,7 @@ import {sendGroupedReminderEmail, sendReminderEmail} from "./emailSender";
 import {sendMonthlyReportToRecipients} from "../reports/monthlyReports";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
+import { syncAllCalendars, pushReminderToCalendar } from "../calendar/sync";
 import {insertReminderIfAllowed} from "../quotas/reminderQuota";
 import {clientDisplayName} from "../utils/clientNames";
 import {notifyEmailSendFailed, notifyReminderSkipped} from "../push/adminNotify";
@@ -57,6 +58,7 @@ export function startScheduler() {
     if (settings.reminderEnabled) await runWithHealth("checkReminders", checkReminders);
     await runWithHealth("checkMonthlyReports", checkMonthlyReports);
     if (settings.reminderEnabled) await runWithHealth("checkEscalations", checkEscalations);
+    await runWithHealth("syncCalendars", syncAllCalendars);
     await col("scheduler_health").updateOne(
       { name: "tick" },
       { $set: { name: "tick", last_run_at: new Date(), last_error: null, consecutive_failures: 0 } },
@@ -161,6 +163,10 @@ function formatIsoDateOnly(d: Date): string {
 
 function uniqueEmails(values: Array<unknown>) {
   return [...new Set(values.filter((value): value is string => typeof value === "string" && value.trim() !== "").map((value) => value.trim().toLowerCase()))];
+}
+
+function textField(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function parseFormats(raw: unknown): string[] {
@@ -711,6 +717,7 @@ export async function generateContractReminders(
     null,
     client,
   );
+  const manualFields = parseObjectRecord(contract?.manual_fields);
   const emailResolved = emailMeta.email;
   if (emailMeta.corrected) {
     logger.info("contract_reminder_email_autocorrected", {
@@ -818,10 +825,37 @@ export async function generateContractReminders(
       advance_days: days,
       email_to: JSON.stringify([emailResolved]),
       ...(emailMeta.corrected && emailMeta.raw ? { email_autocorrected_from: emailMeta.raw } : {}),
+      client_company: clientDisplayName((client as any)?.display_name),
+      client_name: clientDisplayName((client as any)?.display_name),
+      contact_person: textField((client as any)?.contact_person) ?? textField(manualFields.contact_person),
+      client_email: textField((client as any)?.email) ?? textField(manualFields.contact_email) ?? textField(manualFields.client_email) ?? emailResolved,
+      client_phone: textField((client as any)?.phone) ?? textField(manualFields.contact_phone),
+      contract_number: textField(contract?.contract_number),
+      contract_type: textField(contract?.contract_type),
       title: equipment ? `${title} | ${equipment}` : title,
       status: "pending",
       created_at: new Date(),
       updated_at: new Date(),
       });
+  }
+
+  await syncContractRemindersToCalendar(userId, contractId);
+}
+
+/**
+ * Mirror a contract's pending reminders onto the user's Google Calendar.
+ * Fire-and-forget: a calendar outage must never fail reminder generation.
+ */
+async function syncContractRemindersToCalendar(userId: string | undefined, contractId: string): Promise<void> {
+  if (!userId) return;
+  try {
+    const reminders = await col("reminders")
+      .find({ user_id: userId, source_type: "contract_expiry", source_id: contractId })
+      .toArray() as Array<{ _id: unknown }>;
+    for (const reminder of reminders) {
+      await pushReminderToCalendar(userId, String(reminder._id));
+    }
+  } catch (e) {
+    logger.warn("calendar_contract_sync_failed", { user_id: userId, contract_id: contractId, error: String(e) });
   }
 }

@@ -134,7 +134,13 @@
                   class="rcal__pill"
                   @click.stop
                 >
-                  {{ reminderCalendarLabel(r) }}
+                  <n-icon
+                    v-if="r.calendar_synced"
+                    :component="CalendarOutline"
+                    class="rcal__gcal-icon"
+                    aria-label="מסונכרן ל-Google Calendar"
+                  />
+                  <span class="rcal__pill-label">{{ reminderCalendarLabel(r) }}</span>
                 </button>
               </template>
               <ReminderQuickView :reminder="r" @navigate="onNavigate" />
@@ -210,6 +216,12 @@
             <template #trigger>
               <button :class="`rcal__agenda-item--${reminderVisualStatus(r)}`" class="rcal__agenda-item">
                 <span class="rcal__agenda-dot" />
+                <n-icon
+                  v-if="r.calendar_synced"
+                  :component="CalendarOutline"
+                  class="rcal__gcal-icon rcal__gcal-icon--agenda"
+                  aria-label="מסונכרן ל-Google Calendar"
+                />
                 <span class="rcal__agenda-title">{{ reminderCalendarLabel(r) }}</span>
                 <span v-if="isReminderOverdue(r)" class="rcal__agenda-overdue">באיחור</span>
                 <span v-if="reminderSecondaryLabel(r)" class="rcal__agenda-client">— {{ reminderSecondaryLabel(r) }}</span>
@@ -253,6 +265,12 @@
             @click="onNavigate({ type: 'reminder', id: r.id })"
           >
             <span class="rcal__day-dot" />
+            <n-icon
+              v-if="r.calendar_synced"
+              :component="CalendarOutline"
+              class="rcal__gcal-icon rcal__gcal-icon--day"
+              aria-label="מסונכרן ל-Google Calendar"
+            />
             <span class="rcal__day-row-title">{{ reminderCalendarLabel(r) }}</span>
             <span v-if="isReminderOverdue(r)" class="rcal__day-badge">באיחור</span>
             <span v-if="reminderSecondaryLabel(r)" class="rcal__day-row-sub">— {{ reminderSecondaryLabel(r) }}</span>
@@ -299,7 +317,8 @@
 <script lang="ts" setup>
 import {computed, ref} from "vue";
 import {useRouter} from "vue-router";
-import {NButton, NModal, NPopover, useMessage} from "naive-ui";
+import {NButton, NIcon, NModal, NPopover, useMessage} from "naive-ui";
+import {CalendarOutline} from "@vicons/ionicons5";
 import type {ReminderWithContext} from "@shared/types.js";
 import {api, type ExpiryCalendarItem} from "../services/apiService.js";
 import {useFeaturesStore} from "../stores/features.js";
@@ -924,7 +943,9 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   transition: filter 0.12s;
   max-width: 100%;
   width: 100%;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .rcal__pill:hover { filter: brightness(1.1); }
 .rcal__pill--overdue { background: #d03050; }
@@ -932,6 +953,22 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
 .rcal__pill--dismissed { background: var(--text-muted); }
 .rcal__pill--error { background: var(--color-error, #d03050); }
 .rcal__pill--failed { background: var(--color-error, #d03050); }
+.rcal__gcal-icon {
+  flex: 0 0 auto;
+  color: currentColor;
+  font-size: 12px;
+  opacity: 0.95;
+}
+.rcal__gcal-icon--agenda,
+.rcal__gcal-icon--day {
+  color: #18a058;
+  font-size: 14px;
+}
+.rcal__pill-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .rcal__more {
   font-size: 10px;
   color: var(--brand-color);

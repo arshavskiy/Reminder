@@ -23,6 +23,13 @@
         <span class="rqv__label">אימייל</span>
         <span class="rqv__value">{{ contactEmail }}</span>
       </div>
+      <div v-if="reminder.calendar_synced" class="rqv__row">
+        <span class="rqv__label">Google Calendar</span>
+        <span class="rqv__value rqv__value--synced">
+          <n-icon :component="CalendarOutline" :size="14" />
+          מסונכרן
+        </span>
+      </div>
     </div>
 
     <div class="rqv__actions">
@@ -44,7 +51,8 @@
 
 <script lang="ts" setup>
 import {computed} from "vue";
-import {NButton} from "naive-ui";
+import {NButton, NIcon} from "naive-ui";
+import {CalendarOutline} from "@vicons/ionicons5";
 import type {ReminderWithContext} from "@shared/types.js";
 
 interface Props {
@@ -103,5 +111,11 @@ function firstReminderEmail(value: string | null | undefined): string | null {
 .rqv__row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
 .rqv__label { color: var(--text-muted); }
 .rqv__value { color: var(--text-primary); font-weight: 500; text-align: end; }
+.rqv__value--synced {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #18a058;
+}
 .rqv__actions { margin-top: 8px; }
 </style>

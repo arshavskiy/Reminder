@@ -2,6 +2,19 @@
 
 Scanned from the current RemindOCR app structure and documentation.
 
+## What תסקל 2.0 sells that we don’t — build these first
+
+Full write-up: [TASKAL_FEATURE_GAPS.md](./TASKAL_FEATURE_GAPS.md) (scanned 2026-08-27).
+
+1. WhatsApp + SMS reminders
+2. Google Calendar + inspection scheduling
+3. Invoice from the inspection (bill the client)
+4. Send the PDF to all stakeholders in one click
+5. Field app: renew an inspection in seconds
+6. Sub-inspectors / office team
+7. Statutory template pack (Ministry of Labor forms)
+8. Defects table + combined Excel export
+
 ## Best Feature Ideas
 
 1. **Real Google OAuth verification mode**  

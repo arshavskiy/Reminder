@@ -1,5 +1,15 @@
 <template>
   <div class="storage-sync" :class="{ 'storage-sync--compact': compact }" @click.stop>
+    <n-tooltip v-if="fromGmail" placement="top">
+      <template #trigger>
+        <span class="storage-sync__wrap">
+          <span class="storage-sync__btn storage-sync__btn--source" aria-label="יובא מ-Gmail">
+            <GmailLogo :size="size" />
+          </span>
+        </span>
+      </template>
+      יובא מ-Gmail
+    </n-tooltip>
     <n-tooltip placement="top">
       <template #trigger>
         <span class="storage-sync__wrap">
@@ -44,6 +54,7 @@
 import { computed } from "vue";
 import { NTooltip } from "naive-ui";
 import AwsS3Logo from "./AwsS3Logo.vue";
+import GmailLogo from "./GmailLogo.vue";
 import GoogleDriveLogo from "./GoogleDriveLogo.vue";
 
 const props = withDefaults(defineProps<{
@@ -52,6 +63,7 @@ const props = withDefaults(defineProps<{
   driveBusy?: boolean;
   driveLink?: string | null;
   downloadUrl?: string | null;
+  fromGmail?: boolean;
   compact?: boolean;
   size?: number;
 }>(), {
@@ -60,6 +72,7 @@ const props = withDefaults(defineProps<{
   driveBusy: false,
   driveLink: null,
   downloadUrl: null,
+  fromGmail: false,
   compact: false,
   size: 16,
 });
@@ -99,6 +112,13 @@ function openDrive() {
   min-height: 28px;
   justify-content: center;
   background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+}
+
+.storage-sync__btn--source {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
 
 .storage-sync__btn--off {

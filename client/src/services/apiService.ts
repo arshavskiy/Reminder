@@ -919,6 +919,20 @@ export const api = {
     disconnect: () => del("/gmail/disconnect"),
   },
 
+  calendar: {
+    status: () => get<{
+      connected: boolean;
+      calendar_id: string | null;
+      calendar_url: string | null;
+      email: string | null;
+      synced_count: number;
+      last_synced_at: string | null;
+    }>("/calendar/status"),
+    authUrl: (returnTo?: string) => get<{ url: string }>(`/calendar/auth-url${qs({ returnTo })}`),
+    sync: () => post<{ pushed: number; updated: number; cancelled: number }>("/calendar/sync", {}),
+    disconnect: () => post<{ ok: boolean }>("/calendar/disconnect", {}),
+  },
+
   drive: {
     status: () => get<DriveStatus>("/drive/status"),
     enable: (folderName?: string) => post<{

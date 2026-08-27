@@ -60,6 +60,7 @@ const ALL_COLLECTIONS = [
   "gmail_search_providers",
   "document_processing_jobs",
   "drive_export_jobs",
+  "calendar_links",
 ];
 
 async function ensureCollections(db: Db): Promise<void> {
@@ -83,6 +84,12 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("users").createIndex({gmail_email: 1}, {unique: true, sparse: true});
 
   // sessions
+  await db.collection("calendar_links").createIndex(
+    { user_id: 1, source_type: 1, source_id: 1 },
+    { unique: true },
+  );
+  await db.collection("calendar_links").createIndex({ user_id: 1, gcal_event_id: 1 });
+
   await db.collection("sessions").createIndex({ user_id: 1 });
   await db.collection("sessions").createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
 

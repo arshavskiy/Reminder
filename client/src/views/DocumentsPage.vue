@@ -118,6 +118,17 @@
                 <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
               </button>
               <button
+                  :class="{ 'bulk-action-item--loading': bulkExtracting }"
+                  :disabled="bulkExtracting || selectedExtractableIds.length === 0"
+                  class="bulk-action-item bulk-action-item--primary"
+                  type="button"
+                  @click="bulkExtractAi"
+              >
+                <n-icon :component="FlashOutline" class="bulk-action-item__icon"/>
+                <span class="bulk-action-item__text">חלץ AI</span>
+                <span class="bulk-action-item__count">{{ selectedExtractableIds.length }}</span>
+              </button>
+              <button
                   :class="{ 'bulk-action-item--loading': bulkDeleting }"
                   :disabled="bulkDeleting"
                   class="bulk-action-item bulk-action-item--danger"
@@ -318,6 +329,7 @@
                 :drive-busy="exportingToDrive && !documentDriveId(row)"
                 :drive-link="documentDriveLink(row)"
                 :download-url="documentDownloadUrl(row)"
+                :from-gmail="isGmailImported(row)"
               />
               <n-dropdown
                 :options="rowActionsFor(row)"
@@ -451,14 +463,6 @@
                     :size="16"
                   />
                   <span class="document-cell-truncate" dir="auto" :title="row.file_name">{{ row.file_name }}</span>
-                  <n-tooltip v-if="isGmailImported(row)" trigger="hover">
-                    <template #trigger>
-                      <span class="document-source-badge" aria-label="יובא מ-Gmail">
-                        <GmailLogo :size="13" />
-                      </span>
-                    </template>
-                    יובא מ-Gmail
-                  </n-tooltip>
                 </span>
               </td>
               <td class="document-col document-col--status">
@@ -493,6 +497,7 @@
                     :drive-busy="exportingToDrive && !documentDriveId(row)"
                     :drive-link="documentDriveLink(row)"
                     :download-url="documentDownloadUrl(row)"
+                    :from-gmail="isGmailImported(row)"
                   />
                   <n-dropdown
                     :options="rowActionsFor(row)"
@@ -696,6 +701,7 @@ const bulkMode = ref(false);
 const selectedIds = ref(new Set<string>());
 const bulkDeleting = ref(false);
 const bulkDownloading = ref(false);
+const bulkExtracting = ref(false);
 const showRescanAllConfirm = ref(false);
 const showLimitModal = ref(false);
 const viewMode = ref<"grid" | "list">("list");
@@ -1103,6 +1109,11 @@ const someVisibleSelected = computed(() =>
 
 const allSelected = computed(() =>
   bulkMode.value && selectedIds.value.size > 0 && selectedIds.value.size === filteredRows.value.length
+);
+const selectedExtractableIds = computed(() =>
+  filteredRows.value
+    .filter((row) => selectedIds.value.has(String(row.id)) && canExtractDocument(row))
+    .map((row) => String(row.id)),
 );
 
 watch(filteredRows, (rows, oldRows) => {
@@ -1685,6 +1696,31 @@ async function bulkDownload() {
     bulkDownloading.value = false;
   }
 }
+
+async function bulkExtractAi() {
+  const ids = selectedExtractableIds.value;
+  if (!ids.length || bulkExtracting.value) return;
+  bulkExtracting.value = true;
+  let failed = 0;
+  try {
+    for (const id of ids) {
+      try {
+        await api.documents.extract(id);
+      } catch {
+        failed += 1;
+      }
+    }
+    const completed = ids.length - failed;
+    if (failed) {
+      message.warning(`חילוץ AI הסתיים: ${completed} הצליחו, ${failed} נכשלו`);
+    } else {
+      message.success(`חילוץ AI הושלם עבור ${completed} מסמכים`);
+    }
+    await store.fetch(undefined, true);
+  } finally {
+    bulkExtracting.value = false;
+  }
+}
 </script>
 
 <style scoped>
@@ -2233,7 +2269,7 @@ async function bulkDownload() {
 .document-table__col--date { width: 148px; }
 .document-table__col--client { width: clamp(140px, 18vw, 220px); }
 .document-table__col--number { width: 120px; }
-.document-table__col--actions { width: 148px; }
+.document-table__col--actions { width: 172px; }
 
 .document-table th,
 .document-table td {
@@ -2242,6 +2278,11 @@ async function bulkDownload() {
   text-align: right;
   white-space: nowrap;
   vertical-align: middle;
+}
+
+.document-table td.document-col--actions,
+.document-table th.document-col--actions {
+  text-align: left;
 }
 
 .document-table th {
@@ -2332,14 +2373,6 @@ async function bulkDownload() {
   min-width: 0;
 }
 
-.document-source-badge {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.85;
-}
-
 .document-file-icon {
   flex: 0 0 auto;
 }
@@ -2347,7 +2380,8 @@ async function bulkDownload() {
 .row-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  width: 100%;
   gap: 8px;
 }
 
@@ -2357,7 +2391,10 @@ async function bulkDownload() {
 }
 
 .cell-actions,
-.document-col--actions,
+.document-col--actions {
+  text-align: left;
+}
+
 .document-col--select {
   text-align: center;
 }

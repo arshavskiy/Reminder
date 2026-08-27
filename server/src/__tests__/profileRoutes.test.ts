@@ -1,4 +1,5 @@
 import {describe, expect, it, vi} from "vitest";
+import {avatarExtension} from "../routes/profile";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -214,19 +215,23 @@ describe("PUT /api/profile — name + phone patch", () => {
 
 // ── Avatar upload ─────────────────────────────────────────────────────────────
 
-describe("avatar upload — data URL construction", () => {
-  it("builds a valid base64 data URL", () => {
-    const mimetype = "image/jpeg";
-    const buffer = Buffer.from("fake-image-bytes");
-    const dataUrl = `data:${mimetype};base64,${buffer.toString("base64")}`;
-    expect(dataUrl).toMatch(/^data:image\/jpeg;base64,/);
+describe("avatar upload — object storage key", () => {
+  it("keeps a safe image extension from the original file name", () => {
+    expect(avatarExtension("profile.WEBP", "image/jpeg")).toBe(".webp");
   });
 
-  it("preserves the correct MIME type in the URL", () => {
-    const mimetype = "image/png";
-    const buffer = Buffer.from("png-bytes");
-    const dataUrl = `data:${mimetype};base64,${buffer.toString("base64")}`;
-    expect(dataUrl).toContain("image/png");
+  it("falls back to the MIME type when the file name has no supported extension", () => {
+    expect(avatarExtension("profile.bin", "image/png")).toBe(".png");
+  });
+
+  it("defaults to jpg for unknown image MIME types", () => {
+    expect(avatarExtension("profile", "image/avif")).toBe(".jpg");
+  });
+
+  it("uses a user-scoped storage key instead of an inline data URL", () => {
+    const key = `users/u1/avatar/avatar_${Date.now()}${avatarExtension("profile.jpg", "image/jpeg")}`;
+    expect(key).toMatch(/^users\/u1\/avatar\/avatar_\d+\.jpg$/);
+    expect(key).not.toContain("data:image");
   });
 });
 

@@ -110,6 +110,68 @@ Google Identity Services (GIS) one-tap sign-in.
 
 ---
 
+## Google Calendar
+
+Calendar endpoints require the authenticated `sid` cookie.
+
+### `GET /api/calendar/auth-url`
+
+Starts the Google Calendar OAuth consent flow.
+
+**Query params**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `returnTo` | string | Optional frontend path to return to after consent |
+
+**Response** `200`
+
+```json
+{ "url": "https://accounts.google.com/o/oauth2/v2/auth?..." }
+```
+
+### `GET /api/calendar/status`
+
+Returns Calendar connection state for the current user.
+
+**Response** `200`
+
+```json
+{
+  "connected": true,
+  "calendar_id": "...",
+  "calendar_url": "https://calendar.google.com/calendar/u/0/r?cid=...",
+  "email": "user@example.com",
+  "synced_count": 12,
+  "last_synced_at": "2026-08-27T06:00:00.000Z"
+}
+```
+
+### `POST /api/calendar/sync`
+
+Pushes pending/snoozed reminders to the app-owned Google calendar, then pulls remote date changes and deleted events back into reminders.
+
+**Response** `200`
+
+```json
+{ "pushed": 12, "updated": 1, "cancelled": 0 }
+```
+
+Calendar behavior:
+
+- Dedicated calendar name: `תסקירים`
+- Event title: `תסקיר לא בתוקף - <company name>`
+- Event details include reminder snapshot data: company/client, contact person, email, phone, contract number/type, equipment, and original reminder text
+- Events are matched through private extended properties, not by title
+
+### `POST /api/calendar/disconnect`
+
+Removes Calendar tokens and local event links. Existing Google Calendar events are left in the user's Google account.
+
+**Response** `200` `{ "ok": true }`
+
+---
+
 ## Documents
 
 All document endpoints are user-scoped. One user cannot access another user's documents.

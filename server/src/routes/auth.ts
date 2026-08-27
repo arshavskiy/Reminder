@@ -84,6 +84,15 @@ export function registerAuthRoutes(app: express.Application) {
       res.redirect(frontendUrl("/login?error=invalid_state"));
       return;
     }
+
+    if ((pkce as any).type === "calendar") {
+      res.redirect(`/auth/calendar/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
+      return;
+    }
+    if ((pkce as any).type === "gmail") {
+      res.redirect(`/auth/gmail/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
+      return;
+    }
     await col("oauth_states").deleteOne({ state });
 
     try {
