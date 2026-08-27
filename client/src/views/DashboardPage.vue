@@ -24,21 +24,21 @@
           </span>
           <span class="dash__new-contract__hint">צור תסקיר או חוזה ידני</span>
         </button>
-        <button
-          v-if="hasFeature(FEATURES.pages.contracts)"
-          class="dash__new-contract dash__new-contract--gmail"
-          type="button"
-          :disabled="gmailInspectionLoading"
-          @click="openGmailInspectionImport"
-        >
-          <span class="dash__new-contract__top">
-            <GmailLogo :size="22" />
-            <span class="dash__new-contract__label">ייבוא תסקיר בדיקה</span>
-          </span>
-          <span class="dash__new-contract__hint">
-            {{ gmailInspectionLoading ? "מייבא מ-Gmail…" : "חפש וייבא תסקירים מ-Gmail" }}
-          </span>
-        </button>
+        <!--        <button-->
+        <!--          v-if="hasFeature(FEATURES.pages.contracts)"-->
+        <!--          class="dash__new-contract dash__new-contract&#45;&#45;gmail"-->
+        <!--          type="button"-->
+        <!--          :disabled="gmailInspectionLoading"-->
+        <!--          @click="openGmailInspectionImport"-->
+        <!--        >-->
+        <!--          <span class="dash__new-contract__top">-->
+        <!--            <GmailLogo :size="22" />-->
+        <!--            <span class="dash__new-contract__label">ייבוא תסקיר בדיקה</span>-->
+        <!--          </span>-->
+        <!--          <span class="dash__new-contract__hint">-->
+        <!--            {{ gmailInspectionLoading ? "מייבא מ-Gmail…" : "חפש וייבא תסקירים מ-Gmail" }}-->
+        <!--          </span>-->
+        <!--        </button>-->
         <DocumentDropStrip class="dash__drop" @uploaded="store.fetch(true)" />
       </div>
 

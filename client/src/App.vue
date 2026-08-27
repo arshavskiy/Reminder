@@ -467,7 +467,7 @@ const allNav: Array<{
   {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment},
-  {label: "Gmail", key: "gmail", minRole: "user", minPlan: "business", feature: FEATURES.pages.gmail},
+  {label: "Gmail", key: "gmail", minPlan: "business", feature: FEATURES.pages.gmail},
   {label: "חשבוניות", key: "invoices", minRole: "admin"},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
