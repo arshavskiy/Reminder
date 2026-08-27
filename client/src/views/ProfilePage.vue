@@ -1079,6 +1079,42 @@
                 </div>
               </div>
             </div>
+
+            <div class="settings-group settings-group--danger">
+              <div class="settings-group__head">
+                <span class="settings-group__icon settings-group__icon--danger" aria-hidden="true">
+                  <n-icon :component="TrashOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">סגירת חשבון ומחיקת נתונים</h3>
+                  <p class="settings-group__desc">
+                    מחיקה בלתי הפיכה של החשבון וכל הנתונים, כולל מסמכים ונתונים שמקורם ב־Google.
+                    פירוט נוסף ב־
+                    <a href="https://remindocr.com/security" target="_blank" rel="noopener noreferrer">עמוד אבטחת מידע</a>.
+                  </p>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row__text">
+                  <span class="settings-row__title">מחיקת החשבון לצמיתות</span>
+                  <span class="settings-row__desc">לא ניתן לשחזר מסמכים, לקוחות, תזכורות או חיבורי Google לאחר המחיקה.</span>
+                </div>
+                <div class="settings-row__actions">
+                  <n-button
+                    ghost
+                    type="error"
+                    size="small"
+                    :loading="deletingAccount"
+                    @click="openDeleteAccount"
+                  >
+                    <template #icon>
+                      <n-icon :component="TrashOutline" />
+                    </template>
+                    סגירת חשבון ומחיקת נתונים
+                  </n-button>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1216,6 +1252,51 @@
     </main>
     </div>
   </div>
+
+  <n-modal
+    v-model:show="showDeleteAccountModal"
+    preset="card"
+    title="סגירת חשבון ומחיקת נתונים"
+    style="width: min(480px, 94vw)"
+    :mask-closable="!deletingAccount"
+    :closable="!deletingAccount"
+  >
+    <p class="delete-account-warn">
+      פעולה זו תמחק לצמיתות את החשבון ואת כל הנתונים (מסמכים, לקוחות, תזכורות, חיבורי Google ועוד).
+      לא ניתן לשחזר.
+    </p>
+    <n-form-item v-if="user?.email" label="הקלידו את כתובת האימייל של החשבון לאישור" :show-feedback="false">
+      <n-input
+        v-model:value="deleteAccountEmail"
+        type="text"
+        :placeholder="user.email"
+        :disabled="deletingAccount"
+        autocomplete="off"
+      />
+    </n-form-item>
+    <n-form-item label='הקלידו DELETE_ACCOUNT לאישור סופי' :show-feedback="false">
+      <n-input
+        v-model:value="deleteAccountConfirm"
+        type="text"
+        placeholder="DELETE_ACCOUNT"
+        :disabled="deletingAccount"
+        autocomplete="off"
+      />
+    </n-form-item>
+    <template #footer>
+      <n-space justify="end">
+        <n-button :disabled="deletingAccount" @click="showDeleteAccountModal = false">ביטול</n-button>
+        <n-button
+          type="error"
+          :loading="deletingAccount"
+          :disabled="!canConfirmDeleteAccount"
+          @click="confirmDeleteAccount"
+        >
+          מחק חשבון ונתונים
+        </n-button>
+      </n-space>
+    </template>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
@@ -1229,6 +1310,7 @@ import {
   NFormItem,
   NIcon,
   NInput,
+  NModal,
   NProgress,
   NSelect,
   NSpace,
@@ -1262,6 +1344,7 @@ import {
   SettingsOutline,
   StatsChartOutline,
   SunnyOutline,
+  TrashOutline,
 } from "@vicons/ionicons5";
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
@@ -1639,6 +1722,49 @@ async function onAvatarChange(e: Event) {
 const pwForm = ref({ current: "", next: "", confirm: "" });
 const savingPw = ref(false);
 const disconnecting = ref(false);
+const deletingAccount = ref(false);
+const showDeleteAccountModal = ref(false);
+const deleteAccountEmail = ref("");
+const deleteAccountConfirm = ref("");
+
+const canConfirmDeleteAccount = computed(() => {
+  const phraseOk = deleteAccountConfirm.value.trim() === "DELETE_ACCOUNT";
+  const accountEmail = String(user.value?.email ?? "").trim().toLowerCase();
+  if (!accountEmail) return phraseOk;
+  return phraseOk && deleteAccountEmail.value.trim().toLowerCase() === accountEmail;
+});
+
+function openDeleteAccount() {
+  deleteAccountEmail.value = "";
+  deleteAccountConfirm.value = "";
+  showDeleteAccountModal.value = true;
+}
+
+async function confirmDeleteAccount() {
+  if (!canConfirmDeleteAccount.value) {
+    message.error("יש לאשר את המחיקה לפי ההנחיות");
+    return;
+  }
+  deletingAccount.value = true;
+  try {
+    await api.profile.deleteAccount({
+      confirm: "DELETE_ACCOUNT",
+      email: user.value?.email ? deleteAccountEmail.value.trim() : undefined,
+    });
+    showDeleteAccountModal.value = false;
+    message.success("החשבון והנתונים נמחקו");
+    localStorage.removeItem("auth_user");
+    window.location.href = "/login";
+  } catch (err: any) {
+    const code = String(err?.message ?? "");
+    if (code.includes("email_mismatch")) message.error("כתובת האימייל אינה תואמת");
+    else if (code.includes("cannot_delete_while_impersonating")) message.error("לא ניתן למחוק חשבון במצב צפייה כמשתמש אחר");
+    else if (code.includes("confirm_required")) message.error("יש להקליד DELETE_ACCOUNT לאישור");
+    else message.error("שגיאה במחיקת החשבון");
+  } finally {
+    deletingAccount.value = false;
+  }
+}
 const gmailStatus = ref<{ connected: boolean; source: string | null; email: string | null } | null>(null);
 const gmailLoading = ref(false);
 const gmailDisconnecting = ref(false);
@@ -2550,6 +2676,12 @@ function showGoogleConnectionErrorFromRoute() {
 .settings-group--danger {
   border-color: color-mix(in srgb, var(--color-error) 32%, var(--border-color));
   background: color-mix(in srgb, var(--color-error) 5%, var(--bg-card));
+}
+.delete-account-warn {
+  margin: 0 0 16px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-size: 14px;
 }
 .settings-group__head {
   display: flex;

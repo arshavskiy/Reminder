@@ -516,6 +516,47 @@ export function registerProfileRoutes(app: express.Application) {
     );
     res.json({ ok: true });
   });
+
+  // ── Close account & delete all user data (irreversible) ───────────────────
+  app.post("/api/profile/account/delete", async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+
+    if (ctx.actingAs) {
+      res.status(403).json({ error: "cannot_delete_while_impersonating" });
+      return;
+    }
+
+    const body = (req.body ?? {}) as { confirm?: string; email?: string };
+    const {ACCOUNT_DELETE_CONFIRM_PHRASE, deleteAccountData} = await import("../account/deleteAccountData.js");
+    if (String(body.confirm ?? "").trim() !== ACCOUNT_DELETE_CONFIRM_PHRASE) {
+      res.status(400).json({ error: "confirm_required", expected: ACCOUNT_DELETE_CONFIRM_PHRASE });
+      return;
+    }
+
+    const accountEmail = String((ctx.user as any).email ?? "").trim().toLowerCase();
+    if (accountEmail) {
+      const provided = String(body.email ?? "").trim().toLowerCase();
+      if (provided !== accountEmail) {
+        res.status(400).json({ error: "email_mismatch" });
+        return;
+      }
+    }
+
+    try {
+      const result = await deleteAccountData(ctx.realUserId);
+      const {clearSessionCookie} = await import("../auth/session.js");
+      res.setHeader("Set-Cookie", clearSessionCookie());
+      res.json({ ok: true, result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "delete_failed";
+      if (message === "user_not_found") {
+        res.status(404).json({ error: message });
+        return;
+      }
+      res.status(500).json({ error: "delete_failed" });
+    }
+  });
 }
 
 export function avatarExtension(originalName: string | undefined, mimetype: string | undefined): string {

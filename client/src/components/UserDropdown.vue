@@ -128,10 +128,6 @@ const dropdownItems = computed(() => {
       key: "profile",
     },
     {
-      label: "פרופיל מהנדס",
-      key: "engineer",
-    },
-    {
       label: "הגדרות",
       key: "settings",
     },

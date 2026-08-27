@@ -771,6 +771,8 @@ export const api = {
     getEngineer: () => get<EngineerProfile>("/profile/engineer"),
     saveEngineer: (body: Partial<EngineerProfile>) => put<EngineerProfile>("/profile/engineer", body),
     getSubscription: () => get<ProfileSubscription>("/profile/subscription"),
+    deleteAccount: (body: { confirm: "DELETE_ACCOUNT"; email?: string }) =>
+      post<{ ok: boolean }>("/profile/account/delete", body),
   },
 
   userSettings: {

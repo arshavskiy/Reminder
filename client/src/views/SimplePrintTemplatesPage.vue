@@ -63,17 +63,16 @@
           <span class="sep">/</span>
           <span>{{ editing.name || "עריכת תבנית" }}</span>
         </template>
-        <template #actions>
-          <button class="btn btn--ghost" @click="goList">ביטול</button>
-          <button v-if="canMutateEditing" :disabled="saving" class="btn btn--primary" @click="saveTemplate">שמור
-          </button>
-        </template>
       </PageHeader>
       <SimpleLayoutEditor
           v-model:name="editing.name"
           :layout="editingLayout"
           @update:layout="editingLayout = $event"
       />
+      <div class="edit-footer">
+        <button class="btn btn--ghost" @click="goList">ביטול</button>
+        <button v-if="canMutateEditing" :disabled="saving" class="btn btn--primary" @click="saveTemplate">שמור</button>
+      </div>
     </template>
 
     <!-- Compose -->
@@ -455,6 +454,14 @@ onMounted(() => {
 .pt-card__head h3 { margin: 0; font-size: 16px; }
 .pt-card__meta { margin: 0 0 12px; font-size: 12px; color: var(--text-secondary); }
 .pt-card__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.edit-footer {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
 .compose-grid {
   display: grid;
   grid-template-columns: 320px 1fr;
