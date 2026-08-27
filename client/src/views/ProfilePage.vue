@@ -2160,7 +2160,6 @@ const quotaUsageRows = computed(() => {
         {key: "reminders" as const, label: "תזכורות אימייל"},
       ]
       : [
-        {key: "invoices" as const, label: "חשבוניות וקבלות (ייבוא)"},
         {key: "contracts" as const, label: "תסקירים וחוזים (העלאה/ייבוא)"},
         {key: "reminders" as const, label: "תזכורות אימייל"},
       ];
