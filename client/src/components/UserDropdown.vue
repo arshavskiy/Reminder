@@ -34,6 +34,7 @@ import {computed, h} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {NDropdown, NIcon} from "naive-ui";
 import {
+  AlbumsOutline,
   ConstructOutline,
   DiamondOutline,
   DocumentTextOutline,
@@ -96,6 +97,7 @@ const menuIcons: Record<string, typeof PersonOutline> = {
   engineer: ConstructOutline,
   settings: SettingsOutline,
   subscription: DiamondOutline,
+  templates: AlbumsOutline,
   "print-templates": PrintOutline,
   "email-templates": MailOutline,
   "doc-templates": DocumentTextOutline,
@@ -118,41 +120,52 @@ const templateMenuItems = computed(() => {
   return items;
 });
 
-const dropdownItems = computed(() => [
-  {
-    label: "הפרופיל שלי",
-    key: "profile",
-  },
-  {
-    label: "פרופיל מהנדס",
-    key: "engineer",
-  },
-  {
-    label: "הגדרות",
-    key: "settings",
-  },
-  {
-    label: "מנוי ותשלומים",
-    key: "subscription",
-  },
-  ...templateMenuItems.value,
-  ...(props.userRole === "admin"
-      ? [
-        {label: "פאנל ניהול", key: "admin"},
-      ]
-      : []),
-  {
-    type: "divider",
-  },
-  {
-    label: "סיור במערכת",
-    key: "tour",
-  },
-  {
-    label: "התנתק",
-    key: "logout",
-  },
-]);
+const dropdownItems = computed(() => {
+  const templates = templateMenuItems.value;
+  return [
+    {
+      label: "הפרופיל שלי",
+      key: "profile",
+    },
+    {
+      label: "פרופיל מהנדס",
+      key: "engineer",
+    },
+    {
+      label: "הגדרות",
+      key: "settings",
+    },
+    {
+      label: "מנוי ותשלומים",
+      key: "subscription",
+    },
+    ...(templates.length
+        ? [{
+          label: "תבניות",
+          key: "templates",
+          children: templates,
+        }]
+        : []),
+    ...(props.userRole === "admin"
+        ? [
+          {label: "פאנל ניהול", key: "admin"},
+        ]
+        : []),
+    {
+      type: "divider" as const,
+    },
+    {
+      label: "סיור במערכת",
+      key: "tour",
+    },
+    {
+      label: "התנתק",
+      key: "logout",
+    },
+  ];
+});
+
+const TEMPLATE_KEYS = new Set(["print-templates", "email-templates", "doc-templates"]);
 
 const activeMenuKey = computed(() => {
   if (route.path.startsWith("/print-templates") || route.path.includes("/print-templates")) return "print-templates";
@@ -170,13 +183,14 @@ function renderDropdownLabel(option: any) {
   const key = String(option.key ?? "");
   if (!key || option.type === "divider") return option.label;
   const icon = menuIcons[key];
-  const isActive = key === activeMenuKey.value;
+  const isActive = key === activeMenuKey.value
+      || (key === "templates" && TEMPLATE_KEYS.has(activeMenuKey.value));
   return h("span", {class: ["user-menu-label", {"user-menu-label--active": isActive}], dir: "rtl"}, [
     icon
       ? h(NIcon, {component: icon, size: 16, class: "user-menu-label__glyph"})
       : h("span", {class: "user-menu-label__icon-spacer"}),
     h("span", {class: "user-menu-label__text"}, String(option.label ?? "")),
-    isActive ? h("span", {class: "user-menu-label__active-dot"}) : null,
+    isActive && key !== "templates" ? h("span", {class: "user-menu-label__active-dot"}) : null,
   ]);
 }
 
