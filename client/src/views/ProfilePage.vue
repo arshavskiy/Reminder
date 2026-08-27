@@ -1167,6 +1167,7 @@
               <div class="sub-plan-card__price">
                 <strong>{{ currentPricingPlan.price === 0 ? "חינם" : `₪${currentPricingPlan.price}` }}</strong>
                 <span v-if="currentPricingPlan.period">{{ currentPricingPlan.period }}</span>
+                <span v-if="planYearlyLabel" class="sub-plan-card__yearly">{{ planYearlyLabel }}</span>
               </div>
             </div>
             <ul class="sub-plan-card__features">
@@ -1360,6 +1361,7 @@ import {useConfirm} from "../composables/useConfirm.js";
 import {
   PLAN_LABELS,
   formatPlanPrice,
+  formatPlanYearlyPrice,
   formatQuotaScope,
   formatQuotaUsage,
   getPricingPlan,
@@ -1484,6 +1486,7 @@ const planTag = computed(() => ({
   type: PLAN_TAG_TYPES[currentPlanId.value],
 }));
 const planPriceLabel = computed(() => formatPlanPrice(currentPricingPlan.value));
+const planYearlyLabel = computed(() => formatPlanYearlyPrice(currentPricingPlan.value));
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
@@ -3016,6 +3019,12 @@ function showGoogleConnectionErrorFromRoute() {
 .sub-plan-card__price span {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.sub-plan-card__yearly {
+  white-space: normal;
+  text-align: end;
+  max-width: 11rem;
 }
 
 .sub-plan-card__features {

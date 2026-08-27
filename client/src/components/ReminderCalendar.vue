@@ -45,7 +45,9 @@
             class="rcal__refresh-btn"
             aria-label="רענן"
             @click="$emit('refresh')"
-          >↻</n-button>
+          >
+            <span v-if="!loading" aria-hidden="true">↻</span>
+          </n-button>
         </div>
       </div>
       <div v-if="featuresStore.hasFeature(FEATURES.dashboard.calendarFilters)" class="rcal__summary">

@@ -416,19 +416,44 @@ async function openRouteCompose() {
 }
 
 watch(
-  () => route.path,
-  () => {
-    if (route.name === "print-templates-layout-compose") void openRouteCompose();
-    else if (route.name === "print-templates-layout") {
-      mode.value = "list";
-      void loadTemplates();
+  () => [route.path, route.query.create, route.query.edit] as const,
+  async () => {
+    if (route.name === "print-templates-layout-compose") {
+      void openRouteCompose();
+      return;
     }
+    if (route.name !== "print-templates-layout") return;
+    await loadTemplates();
+    if (String(route.query.create ?? "") === "1") {
+      createTemplate();
+      const nextQuery = {...route.query};
+      delete nextQuery.create;
+      void router.replace({path: "/print-templates/layout", query: nextQuery});
+      return;
+    }
+    const editId = typeof route.query.edit === "string" ? route.query.edit : "";
+    if (editId) {
+      const t = templates.value.find((x) => x._id === editId);
+      if (t) editTemplate(t);
+      else message.warning("התבנית לא נמצאה");
+      const nextQuery = {...route.query};
+      delete nextQuery.edit;
+      void router.replace({path: "/print-templates/layout", query: nextQuery});
+      return;
+    }
+    if (mode.value !== "edit") mode.value = "list";
   },
-  { immediate: true },
+  {immediate: true},
 );
 
 onMounted(() => {
-  if (route.name === "print-templates-layout") void loadTemplates();
+  if (
+    route.name === "print-templates-layout"
+    && String(route.query.create ?? "") !== "1"
+    && !route.query.edit
+  ) {
+    void loadTemplates();
+  }
 });
 </script>
 
@@ -457,47 +482,69 @@ onMounted(() => {
 .edit-footer {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 16px;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 16px 0 8px;
   border-top: 1px solid var(--border-color);
 }
+
+.layout-pt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .compose-grid {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 16px;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  gap: 20px;
   align-items: start;
+  margin-top: 8px;
 }
+
 .compose-form {
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 12px;
-  background: var(--bg-elevated);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--bg-card, var(--bg-elevated));
   max-height: 75vh;
   overflow: auto;
 }
-.compose-form__title { margin: 0 0 10px; font-size: 14px; }
+
+.compose-form__title {
+  margin: 0 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.compose-form :deep(.n-form-item) {
+  margin-bottom: 14px;
+}
 
 .compose-preview-area {
   display: flex;
   justify-content: center;
   min-width: 0;
 }
+
 .compose-preview {
   width: 500px;
   max-width: 100%;
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   background: #fff;
 }
+
 .compose-preview__label {
-  padding: 8px 10px;
+  padding: 10px 14px;
   font-size: 12px;
   font-weight: 600;
+  color: var(--text-secondary);
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-color);
 }
+
 @media (max-width: 900px) {
   .compose-grid { grid-template-columns: 1fr; }
 }

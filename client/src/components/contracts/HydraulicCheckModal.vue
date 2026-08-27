@@ -67,15 +67,45 @@
                   </div>
                   <div class="hm-field">
                     <label>תבנית הדפסה</label>
-                    <n-select
-                        v-model:value="templateId"
-                        :loading="loadingTemplates"
-                        :options="templateOptions"
-                        :virtual-scroll="false"
-                        filterable
-                        placeholder="בחר תבנית"
-                        @update:value="selectTemplate"
-                    />
+                    <div class="hm-field__row">
+                      <n-select
+                          v-model:value="templateId"
+                          :loading="loadingTemplates"
+                          :options="templateOptions"
+                          :virtual-scroll="false"
+                          filterable
+                          placeholder="בחר תבנית"
+                          style="flex:1"
+                          @update:value="selectTemplate"
+                      />
+                      <n-tooltip trigger="hover">
+                        <template #trigger>
+                          <button
+                              type="button"
+                              class="btn btn--ghost btn--xs icon-btn"
+                              aria-label="ערוך תבנית"
+                              :disabled="!templateId"
+                              @click="openEditPrintTemplate"
+                          >
+                            <n-icon :component="CreateOutline" :size="16"/>
+                          </button>
+                        </template>
+                        ערוך תבנית
+                      </n-tooltip>
+                      <n-tooltip trigger="hover">
+                        <template #trigger>
+                          <button
+                              type="button"
+                              class="btn btn--ghost btn--xs icon-btn"
+                              aria-label="תבנית חדשה"
+                              @click="openCreatePrintTemplate"
+                          >
+                            <n-icon :component="AddCircleOutline" :size="16"/>
+                          </button>
+                        </template>
+                        תבנית חדשה
+                      </n-tooltip>
+                    </div>
                   </div>
                   <div class="hm-field">
                     <label>לקוח קיים</label>
@@ -410,7 +440,7 @@
 <script lang="ts" setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
-import {NDatePicker, NDynamicTags, NIcon, NInput, NModal, NSelect, NSpin, useMessage} from "naive-ui";
+import {NDatePicker, NDynamicTags, NIcon, NInput, NModal, NSelect, NSpin, NTooltip, useMessage} from "naive-ui";
 import {
   AddCircleOutline,
   BusinessOutline,
@@ -419,6 +449,7 @@ import {
   ChevronForwardOutline,
   CloseOutline,
   ConstructOutline,
+  CreateOutline,
   DocumentTextOutline,
   ListOutline,
   SaveOutline,
@@ -975,6 +1006,20 @@ function selectTemplate(id: string | null) {
     nextValues[field.bind] = templateValues.value[field.bind] || defaultValue;
   }
   templateValues.value = nextValues;
+}
+
+function openCreatePrintTemplate() {
+  visible.value = false;
+  void router.push({path: "/print-templates/layout", query: {create: "1"}});
+}
+
+function openEditPrintTemplate() {
+  if (!templateId.value) {
+    message.warning("בחר תבנית לעריכה");
+    return;
+  }
+  visible.value = false;
+  void router.push({path: "/print-templates/layout", query: {edit: templateId.value}});
 }
 
 // ── Equipment actions ────────────────────────────────────────────────────────
@@ -1905,6 +1950,21 @@ defineExpose({open, openForUpdate});
   display: flex;
   gap: 6px;
   align-items: center;
+}
+
+.hm-field__row .icon-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hm-field__row .icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .hm-field label.required::after {

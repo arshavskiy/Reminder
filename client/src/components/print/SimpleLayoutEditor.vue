@@ -1,31 +1,31 @@
 <template>
   <div class="layout-editor">
     <div class="layout-editor__toolbar">
-      <n-form-item label="שם תבנית" label-placement="left" :show-feedback="false" class="layout-editor__name">
+      <n-form-item label="שם תבנית" label-placement="top" :show-feedback="false" class="layout-editor__name">
         <n-input :value="name" placeholder="שם התבנית" @update:value="$emit('update:name', $event)" />
       </n-form-item>
-      <n-form-item label="צבע מסגרת" label-placement="left" :show-feedback="false">
+      <n-form-item label="צבע מסגרת" label-placement="top" :show-feedback="false">
         <n-select
             :value="layout.styles.borderColor"
             :options="borderColorOptions"
-            style="width: 140px"
+            style="width: 160px"
             @update:value="setBorderColor"
         />
       </n-form-item>
-      <n-form-item label="עובי מסגרת" label-placement="left" :show-feedback="false">
+      <n-form-item label="עובי מסגרת" label-placement="top" :show-feedback="false">
         <n-select
             :value="layout.styles.borderWidth"
             :options="borderWidthOptions"
-            style="width: 120px"
+            style="width: 140px"
             @update:value="setBorderWidth"
         />
       </n-form-item>
-      <n-form-item :show-feedback="false" label="הוסף סעיף" label-placement="left">
+      <n-form-item :show-feedback="false" label="הוסף סעיף" label-placement="top">
         <n-select
             v-model:value="newSectionType"
             :options="sectionTypeOptions"
             placeholder="בחר סוג"
-            style="width: 140px"
+            style="width: 160px"
             @update:value="addNewSection"
         />
       </n-form-item>
@@ -102,7 +102,7 @@
                   @click="toggleHeaderBold(si, 'title')"
               >B</button>
             </div>
-            <div class="heading-row" style="margin-top:6px">
+            <div class="heading-row heading-row--follow">
               <n-input v-model:value="section.subtitle" placeholder="כותרת משנה" size="small" />
               <n-select
                   :value="section.subtitleSize ?? 'normal'"
@@ -150,14 +150,14 @@
           </template>
 
           <template v-else-if="section.type === 'fields'">
-            <div class="field-row" style="margin-bottom:6px">
+            <div class="field-row field-row--title">
               <n-input v-model:value="section.title" placeholder="כותרת סעיף" size="small" />
-              <n-form-item label="עמודות" :show-feedback="false" label-placement="left">
+              <n-form-item label="עמודות" :show-feedback="false" label-placement="left" class="field-row__columns">
                 <n-select
                     :value="section.columns ?? 3"
                     :options="columnsOptions"
                     size="small"
-                    style="width: 70px"
+                    style="width: 72px"
                     @update:value="setFieldsColumns(si, $event)"
                 />
               </n-form-item>
@@ -737,81 +737,178 @@ function removeFindingRow(sectionIndex: number, rowIndex: number) {
 </script>
 
 <style scoped>
+.layout-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .layout-editor__toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 20px;
-  margin-bottom: 16px;
-  align-items: center;
+  gap: 16px 20px;
+  align-items: flex-end;
+  padding: 16px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card, var(--bg-elevated));
 }
-.layout-editor__name { min-width: 260px; }
+
+.layout-editor__toolbar :deep(.n-form-item) {
+  margin-bottom: 0;
+}
+
+.layout-editor__toolbar :deep(.n-form-item-label) {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding-bottom: 4px !important;
+}
+
+.layout-editor__name {
+  flex: 1 1 240px;
+  min-width: 220px;
+  max-width: 360px;
+}
+
 .layout-editor__body {
   display: grid;
-  grid-template-columns: 1fr 500px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 480px);
+  gap: 20px;
   align-items: start;
 }
-.layout-editor__sections { display: flex; flex-direction: column; gap: 12px; }
+
+.layout-editor__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
 .section-card {
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 12px;
-  background: var(--bg-elevated);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--bg-card, var(--bg-elevated));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
+
 .section-card__head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  gap: 12px;
+  margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
 }
-.section-card__actions { display: flex; gap: 4px; }
-.section-card__opts { margin-bottom: 8px; font-size: 13px; }
+
+.section-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.section-card__opts {
+  margin: 0;
+  font-size: 13px;
+}
+
 .section-card__type {
   font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.02em;
   color: var(--text-secondary);
-  text-transform: uppercase;
 }
+
 .section-card__hint {
-  margin: 6px 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.section-card :deep(.n-form-item) {
+  margin-bottom: 0;
+}
+
+.section-card :deep(.n-form-item-label) {
   font-size: 12px;
   color: var(--text-secondary);
+  padding-bottom: 4px !important;
 }
-.field-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+
+.field-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 0;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr auto;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
 }
+
 .field-row--style {
   grid-template-columns: 1fr 1fr auto auto auto;
 }
+
 .heading-row {
   display: grid;
   grid-template-columns: 1fr auto auto;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
 }
+
+.heading-row--follow {
+  margin-top: 0;
+}
+
+.field-row--title {
+  grid-template-columns: 1fr auto;
+  margin: 0;
+}
+
+.field-row__columns :deep(.n-form-item-label) {
+  padding-left: 8px !important;
+  padding-right: 0 !important;
+}
+
 .btn--ghost-active {
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--brand-color) 12%, transparent);
   border-color: var(--brand-color);
   color: var(--brand-color);
 }
-.field-row--3 { grid-template-columns: 60px 1fr 1fr; }
-.field-row--4 { grid-template-columns: 60px 1fr 1fr auto; }
+
+.field-row--3 {
+  grid-template-columns: 60px 1fr 1fr;
+}
+
+.field-row--4 {
+  grid-template-columns: 60px 1fr 1fr auto;
+}
+
 .layout-editor__preview {
   position: sticky;
   top: 12px;
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   background: #fff;
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 4%, transparent);
 }
+
 .layout-editor__preview-label {
-  padding: 8px 10px;
+  padding: 10px 14px;
   font-size: 12px;
   font-weight: 600;
+  color: var(--text-secondary);
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-color);
 }
@@ -819,23 +916,51 @@ function removeFindingRow(sectionIndex: number, rowIndex: number) {
 .sig-upload {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .sig-upload__preview {
-  max-height: 56px;
-  max-width: 140px;
+  max-height: 64px;
+  max-width: 160px;
   object-fit: contain;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fff;
+  padding: 4px;
 }
 
 .sig-upload__input {
   display: none;
 }
+
+@media (max-width: 1100px) {
+  .layout-editor__body {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+    gap: 16px;
+  }
+}
+
 @media (max-width: 960px) {
-  .layout-editor__body { grid-template-columns: 1fr; }
-  .layout-editor__preview { position: static; }
+  .layout-editor__toolbar {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .layout-editor__body {
+    grid-template-columns: 1fr;
+  }
+
+  .layout-editor__preview {
+    position: static;
+  }
+
+  .field-row--style {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .field-row--style > :nth-child(n + 3) {
+    justify-self: start;
+  }
 }
 </style>

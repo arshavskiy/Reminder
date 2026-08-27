@@ -13,7 +13,10 @@ export interface PricingPlan {
     name: string;
     price: number;
     oldPrice?: number;
+    /** Monthly sticker price period label, e.g. "/ חודש". */
     period: string;
+    /** Annual billed total in ILS, when payment is yearly. */
+    yearlyPrice?: number;
     blurb: string;
     highlighted?: boolean;
     features: string[];
@@ -113,6 +116,7 @@ export const PRICING_PLANS: PricingPlan[] = [
         price: 69,
         oldPrice: 86,
         period: "/ חודש",
+        yearlyPrice: 828,
         blurb: "מתאים לעסק קטן שמייבא מסמכים בכל חודש.",
         features: [
             "2 משתמשים",
@@ -122,7 +126,7 @@ export const PRICING_PLANS: PricingPlan[] = [
             "OCR מתקדם",
             "המרת קבלות לקובץ אקסל",
             "ייבוא חשבוניות מ-Gmail עד 12 חודשים אחורה",
-            "תזכורות אימייל אוטומטיות",
+            "ניהול תסקירים ושליחת תזכורות ללקוחות",
             "דוחות חודשיים אוטומטיים",
             "סנכרון Google Drive אוטומטי",
         ],
@@ -133,6 +137,7 @@ export const PRICING_PLANS: PricingPlan[] = [
         price: 179,
         oldPrice: 224,
         period: "/ חודש",
+        yearlyPrice: 2148,
         blurb: "לצוותים ועסקים שמייבאים מסמכים באופן שוטף, עובדים עם כמה משתמשים ורוצים יומן Google מסונכרן.",
         highlighted: true,
         features: [
@@ -142,7 +147,7 @@ export const PRICING_PLANS: PricingPlan[] = [
             "תסקירים וחוזים ללא הגבלה",
             "סנכרון היסטורי של 4 שנים",
             "מסמכים ללא הגבלה לניהול ידני",
-            "תזכורות אימייל ללא הגבלה",
+            "ניהול תסקירים ושליחת תזכורות ללקוחות",
             "סנכרון Google Calendar לתסקירים עתידיים",
             "דוחות חודשיים אוטומטיים לכל הלקוחות",
             "סנכרון Google Drive אוטומטי + ייצוא מלא",
@@ -215,7 +220,16 @@ export function getPricingPlan(planId: PlanId): PricingPlan {
 
 export function formatPlanPrice(plan: PricingPlan): string {
     if (plan.price === 0) return "חינם";
-    return `₪${plan.price}${plan.period ? ` ${plan.period}` : ""}`;
+    const monthly = `₪${plan.price}${plan.period ? ` ${plan.period}` : ""}`;
+    if (plan.yearlyPrice) {
+        return `${monthly} · ₪${plan.yearlyPrice.toLocaleString("he-IL")} לשנה`;
+    }
+    return monthly;
+}
+
+export function formatPlanYearlyPrice(plan: PricingPlan): string | null {
+    if (!plan.yearlyPrice) return null;
+    return `₪${plan.yearlyPrice.toLocaleString("he-IL")} לשנה · חיוב שנתי`;
 }
 
 export function formatQuotaScope(scope: QuotaScope): string {
