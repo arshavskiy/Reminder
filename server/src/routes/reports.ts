@@ -2,6 +2,7 @@ import express from "express";
 import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {featureFlagsForUser, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 import {
     generateMonthlyContractReports,
     generateMonthlyTrackingReport,
@@ -11,6 +12,7 @@ import {
     sendMonthlyReportsPerClient,
     sendMonthlyReportToRecipients,
 } from "../reports/monthlyReports";
+import {resolveAccountReportRecipients, uniqueEmails} from "../reports/monthlyReportRecipients";
 
 export function registerReportRoutes(app: express.Application) {
   app.get("/api/reports/monthly/download", async (req, res) => {
@@ -31,6 +33,13 @@ export function registerReportRoutes(app: express.Application) {
           ? undefined
           : Number(req.query.month);
       const format = String(req.query.format ?? "docx");
+      if (format === "xlsx") {
+        const user = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
+        if (!featureFlagsForUser(user).excelExport) {
+          res.status(403).json({ error: "excel_export_plan_required", message: PLAN_GATE_MESSAGES.excelExport });
+          return;
+        }
+      }
       const clientId =
         typeof req.query.clientId === "string" ? req.query.clientId : undefined;
       const mode = typeof req.query.mode === "string" ? req.query.mode : undefined;
@@ -127,32 +136,40 @@ export function registerReportRoutes(app: express.Application) {
         col("user_settings").findOne({ user_id: userId }) as Promise<any>,
         col("users").findOne({ _id: new ObjectId(userId) }) as Promise<any>,
       ]);
-      const configuredRecipients = String(
-        settings?.monthly_report_recipients ?? "",
-      )
-        .split(/[;,\s]+/)
-        .filter(Boolean);
-      const baseRecipients = body.recipients?.length ? body.recipients : configuredRecipients;
-      const recipients = uniqueEmails([
-        ...baseRecipients,
-        ...(baseRecipients.length ? [] : (user?.email ? [user.email] : [])),
-      ]);
+      if (!featureFlagsForUser(user).automaticMonthlyReports) {
+        res.status(403).json({
+          error: "automatic_reports_plan_required",
+          message: PLAN_GATE_MESSAGES.automaticMonthlyReports,
+        });
+        return;
+      }
+      const baseRecipients = body.recipients?.length ? body.recipients : null;
+      const recipients = baseRecipients?.length
+        ? uniqueEmails(baseRecipients)
+        : resolveAccountReportRecipients({
+            configuredRecipients: settings?.monthly_report_recipients,
+            accountEmail: user?.email ?? null,
+          });
+      const deliveryMode = body.deliveryMode === "combined" ? "combined" : "client";
       const formats = body.formats?.length
         ? normalizeFormats(body.formats)
         : parseFormats(settings?.monthly_report_formats);
       const savedFields = savedReportFieldsFromSettings(settings, "client");
       const selectedFields = body.fields?.length ? body.fields : savedFields;
-      if (!recipients.length || !formats.length) {
-        res
-          .status(400)
-          .json({
-            error: "Configure at least one recipient and one file format",
-          });
+      if (!formats.length) {
+        res.status(400).json({ error: "Configure at least one file format" });
+        return;
+      }
+      // Combined/account reports need account recipients; client mode can rely on client emails.
+      if (deliveryMode === "combined" && !recipients.length) {
+        res.status(400).json({
+          error: "Configure at least one recipient (or use an account with an email)",
+        });
         return;
       }
 
       const result =
-        body.deliveryMode === "combined"
+        deliveryMode === "combined"
           ? await sendMonthlyReportToRecipients({
               userId,
               year,
@@ -265,17 +282,4 @@ function normalizeFormats(raw: unknown): string[] {
       (format) => format === "docx" || format === "xlsx" || format === "csv",
     );
   return selected.length ? selected : ["docx", "xlsx"];
-}
-
-function uniqueEmails(values: Array<unknown>) {
-  return [
-    ...new Set(
-      values
-        .filter(
-          (value): value is string =>
-            typeof value === "string" && value.trim() !== "",
-        )
-        .map((value) => value.trim().toLowerCase()),
-    ),
-  ];
 }

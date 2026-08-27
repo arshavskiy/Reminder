@@ -403,10 +403,33 @@ export interface PrintTemplateDraftSummary {
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const BASE = `${SERVER}/api`;
 
-// Admin panel always hits the production server when VITE_ADMIN_API_BASE is set.
+// Optional build-time production admin API host (legacy). Runtime DB target uses
+// X-Admin-Db-Target against the local server's dual Mongo links instead.
 const ADMIN_SERVER = (import.meta.env.VITE_ADMIN_API_BASE as string | undefined) || SERVER;
 const ADMIN_BASE = `${ADMIN_SERVER}/api`;
 
+export type AdminDbTarget = "local" | "production";
+const ADMIN_DB_TARGET_KEY = "remindocr_admin_db_target";
+
+export function getAdminDbTarget(): AdminDbTarget {
+  try {
+    const raw = localStorage.getItem(ADMIN_DB_TARGET_KEY);
+    if (raw === "production" || raw === "prod" || raw === "atlas") return "production";
+  } catch { /* ignore */ }
+  return "local";
+}
+
+export function setAdminDbTarget(target: AdminDbTarget): void {
+  try {
+    localStorage.setItem(ADMIN_DB_TARGET_KEY, target);
+  } catch { /* ignore */ }
+}
+
+function adminHeaders(extra?: HeadersInit): Headers {
+  const headers = new Headers(extra);
+  headers.set("X-Admin-Db-Target", getAdminDbTarget());
+  return headers;
+}
 
 async function get<T>(path: string, force = false): Promise<T> {
   const res = await fetch(BASE + path, {
@@ -472,7 +495,10 @@ async function responseErrorMessage(res: Response, fallback: string): Promise<st
 }
 
 async function adminGet<T>(path: string): Promise<T> {
-  const res = await fetch(ADMIN_BASE + path, { credentials: "include" });
+  const res = await fetch(ADMIN_BASE + path, {
+    credentials: "include",
+    headers: adminHeaders(),
+  });
   if (!res.ok) {
     const err = new Error(`GET ${path} failed: ${res.status}`) as any;
     err.status = res.status;
@@ -484,11 +510,38 @@ async function adminGet<T>(path: string): Promise<T> {
 async function adminPut<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(ADMIN_BASE + path, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: adminHeaders({ "Content-Type": "application/json" }),
     credentials: "include",
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let detail = text;
+    try {
+      const parsed = JSON.parse(text);
+      detail = parsed?.error ?? text;
+    } catch { /* keep text */ }
+    throw new Error(detail || `PUT ${path} failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function adminPost<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(ADMIN_BASE + path, {
+    method: "POST",
+    headers: adminHeaders({ "Content-Type": "application/json" }),
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let detail = text;
+    try {
+      const parsed = JSON.parse(text);
+      detail = parsed?.error ?? text;
+    } catch { /* keep text */ }
+    throw new Error(detail || `POST ${path} failed: ${res.status}`);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -515,7 +568,7 @@ export const api = {
   },
 
   invoices: {
-    list: (params?: { q?: string; status?: string; type?: string; documentCategory?: ImportedInvoice["document_category"]; cashFlow?: string; category?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }, force = false) =>
+    list: (params?: { q?: string; status?: string; type?: string; documentCategory?: ImportedInvoice["document_category"]; cashFlow?: string; category?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number; export?: boolean }, force = false) =>
       get<{
         rows: ImportedInvoice[];
         total: number;
@@ -731,8 +784,52 @@ export const api = {
 
   admin: {
     listUsers: () => adminGet<any[]>("/admin/users"),
-    updateUser: (id: string, body: { role?: string; plan?: string; is_active?: number }) =>
-      adminPut<any>(`/admin/users/${id}`, body),
+    updateUser: (id: string, body: {
+      email?: string | null;
+      username?: string | null;
+      password?: string | null;
+      name?: string | null;
+      phone?: string | null;
+      company_name?: string | null;
+      picture_url?: string | null;
+      role?: string;
+      plan?: string;
+      is_active?: boolean | number;
+      email_verified?: boolean | number;
+    }) => adminPut<any>(`/admin/users/${id}`, body),
+    createMagicLink: (body: {
+      email?: string | null;
+      username?: string | null;
+      password?: string | null;
+      name?: string | null;
+      role?: string;
+      plan?: string;
+      is_active?: boolean | number;
+      email_verified?: boolean | number;
+      company_name?: string | null;
+      phone?: string | null;
+      picture_url?: string | null;
+      issue_link?: boolean;
+    }) =>
+      adminPost<{
+        ok: boolean;
+        isNewUser: boolean;
+        expiresInMinutes: number | null;
+        magicLink: string | null;
+        user: any;
+      }>("/admin/users/magic-link", body),
+    getDbTargets: () => adminGet<{
+      active: AdminDbTarget;
+      primary: AdminDbTarget;
+      local: { configured: boolean; connected: boolean; dbName: string; host: string };
+      production: {
+        configured: boolean;
+        connected: boolean;
+        dbName: string;
+        host: string | null;
+        sameAsLocal: boolean;
+      };
+    }>("/admin/db-targets"),
     getDocument: (id: string) => adminGet<any>(`/admin/documents/${id}`),
     monitorDocuments: () => adminGet<any>("/admin/monitor/documents"),
     monitorExtractions: (params?: { user_id?: string; page?: number; limit?: number }) => {
@@ -763,7 +860,7 @@ export const api = {
     setUserDefaultTemplate: (id: string, templateId: number | null) => {
       return fetch(`${ADMIN_BASE}/admin/users/${id}/settings`, {
         method: "PUT", credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ default_email_template_id: templateId }),
       }).then((r) => {
         if (!r.ok) throw new Error(`PUT /admin/users/${id}/settings failed: ${r.status}`);
@@ -775,38 +872,38 @@ export const api = {
       return fetch(`${ADMIN_BASE}/admin/documents/${id}/reprocess`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders({ "Content-Type": "application/json" }),
       }).then(r => r.json());
     },
     retryEscalation: (reminderId: string) => {
       return fetch(`${ADMIN_BASE}/admin/reminders/${reminderId}/retry-escalation`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders({ "Content-Type": "application/json" }),
       }).then(r => r.json());
     },
     triggerMonthlyReport: (userId: string) => {
       return fetch(`${ADMIN_BASE}/admin/monthly-reports/trigger/${userId}`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders({ "Content-Type": "application/json" }),
       }).then(r => r.json());
     },
     pushVapidKey: () => adminGet<{ key: string | null }>("/admin/push/vapid-key"),
     pushSubscribe: (body: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
       fetch(`${ADMIN_BASE}/admin/push/subscribe`, {
         method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        headers: adminHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body),
       }).then(r => r.json()),
     pushUnsubscribe: (endpoint: string) =>
       fetch(`${ADMIN_BASE}/admin/push/unsubscribe`, {
         method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint }),
+        headers: adminHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ endpoint }),
       }).then(r => r.json()),
     pushTest: () =>
       fetch(`${ADMIN_BASE}/admin/push/test`, {
         method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders({ "Content-Type": "application/json" }),
       }).then(r => r.json()),
     browseStorage: (params?: { user_id?: string; prefix?: string }) => {
       const qs = new URLSearchParams();
@@ -815,10 +912,13 @@ export const api = {
       const q = qs.toString();
       return adminGet<any>(`/admin/storage/browse${q ? "?" + q : ""}`);
     },
-    storageDownloadUrl: (key: string) => `${ADMIN_BASE}/admin/storage/download?key=${encodeURIComponent(key)}`,
+    storageDownloadUrl: (key: string) =>
+      `${ADMIN_BASE}/admin/storage/download?key=${encodeURIComponent(key)}&admin_db_target=${encodeURIComponent(getAdminDbTarget())}`,
     deleteStorageFile: (key: string) =>
       fetch(`${ADMIN_BASE}/admin/storage/delete?key=${encodeURIComponent(key)}`, {
-        method: "DELETE", credentials: "include",
+        method: "DELETE",
+        credentials: "include",
+        headers: adminHeaders(),
       }).then(r => r.json()),
     listStorageFolders: () => adminGet<any>("/admin/storage/folders"),
     // `confirm` must equal the prefix; `force` overrides the refusal to delete
@@ -827,7 +927,9 @@ export const api = {
       const qs = new URLSearchParams({ prefix, confirm: prefix });
       if (opts?.force) qs.set("force", "true");
       return fetch(`${ADMIN_BASE}/admin/storage/folder?${qs.toString()}`, {
-        method: "DELETE", credentials: "include",
+        method: "DELETE",
+        credentials: "include",
+        headers: adminHeaders(),
       }).then(r => r.json());
     },
   },
@@ -921,6 +1023,7 @@ export const api = {
 
   calendar: {
     status: () => get<{
+      allowed: boolean;
       connected: boolean;
       calendar_id: string | null;
       calendar_url: string | null;

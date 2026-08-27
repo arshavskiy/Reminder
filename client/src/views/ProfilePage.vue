@@ -627,6 +627,7 @@
                     <span class="settings-row__title">
                       Google Calendar
                       <span
+                        v-if="calendarAllowed"
                         class="settings-status"
                         :class="calendarStatus?.connected ? 'settings-status--on' : 'settings-status--off'"
                       >
@@ -634,7 +635,8 @@
                       </span>
                     </span>
                     <span class="settings-row__desc">
-                      <template v-if="calendarLoading">טוען...</template>
+                      <template v-if="!calendarAllowed">זמין במסלול עסקי בלבד.</template>
+                      <template v-else-if="calendarLoading">טוען...</template>
                       <template v-else-if="calendarStatus?.connected">
                         {{ calendarStatus.email || "מחובר" }}
                         <small class="settings-row__subline">
@@ -646,7 +648,25 @@
                   </div>
                   <div class="settings-row__actions">
                     <n-button
-                      v-if="!calendarStatus?.connected"
+                      v-if="!calendarAllowed"
+                      size="small"
+                      ghost
+                      tag="a"
+                      href="https://remindocr.com/pricing"
+                    >
+                      שדרוג מנוי
+                    </n-button>
+                    <n-button
+                      v-if="!calendarAllowed && calendarStatus?.connected"
+                      :loading="calendarDisconnecting"
+                      size="small"
+                      ghost
+                      @click="disconnectCalendarFromProfile"
+                    >
+                      נתק
+                    </n-button>
+                    <n-button
+                      v-else-if="!calendarStatus?.connected"
                       :loading="calendarLoading"
                       size="small"
                       ghost
@@ -803,6 +823,115 @@
                 <n-button size="small" ghost type="warning" @click="reconnectGmailForDrive">
                   התחבר מחדש ל-Gmail
                 </n-button>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="DiamondOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">תכונות לפי מסלול</h3>
+                  <p class="settings-group__desc">
+                    חלק מהיכולות כלולות במסלול שלכם, ואחרות דורשות שדרוג.
+                  </p>
+                </div>
+              </div>
+              <div class="settings-rows">
+                <div class="settings-row">
+                  <span class="settings-row__media">
+                    <n-icon :component="NotificationsOutline" :size="20" />
+                  </span>
+                  <div class="settings-row__text">
+                    <span class="settings-row__title">
+                      תזכורות אימייל אוטומטיות
+                      <span
+                        class="settings-status"
+                        :class="autoRemindersAllowed ? 'settings-status--on' : 'settings-status--off'"
+                      >
+                        {{ autoRemindersAllowed ? "פעיל" : "לא כלול" }}
+                      </span>
+                    </span>
+                    <span class="settings-row__desc">
+                      <template v-if="autoRemindersAllowed">המערכת שולחת תזכורות במועד שנקבע.</template>
+                      <template v-else>זמין במסלולים בסיסי ועסקי בלבד. אפשר לשלוח ידנית במסלול החינמי.</template>
+                    </span>
+                  </div>
+                  <div class="settings-row__actions">
+                    <n-button
+                      v-if="!autoRemindersAllowed"
+                      size="small"
+                      ghost
+                      tag="a"
+                      href="https://remindocr.com/pricing"
+                    >
+                      שדרוג מנוי
+                    </n-button>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <span class="settings-row__media">
+                    <n-icon :component="PeopleOutline" :size="20" />
+                  </span>
+                  <div class="settings-row__text">
+                    <span class="settings-row__title">משתמשים</span>
+                    <span class="settings-row__desc">{{ seatsUsageLabel }}</span>
+                  </div>
+                  <div class="settings-row__actions">
+                    <n-tooltip>
+                      <template #trigger>
+                        <span>
+                          <n-button size="small" ghost disabled>
+                            הוסף משתמש
+                          </n-button>
+                        </span>
+                      </template>
+                      {{ seatLimit === 1 ? extraUsersLockedMessage : "הוספת משתמשים נוספים תתאפשר בהמשך." }}
+                    </n-tooltip>
+                    <n-button
+                      v-if="seatLimit === 1"
+                      size="small"
+                      ghost
+                      tag="a"
+                      href="https://remindocr.com/pricing"
+                    >
+                      שדרוג מנוי
+                    </n-button>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <span class="settings-row__media">
+                    <n-icon :component="MailOutline" :size="20" />
+                  </span>
+                  <div class="settings-row__text">
+                    <span class="settings-row__title">חשבונות דוא״ל</span>
+                    <span class="settings-row__desc">{{ emailAccountsUsageLabel }}</span>
+                  </div>
+                  <div class="settings-row__actions">
+                    <n-tooltip>
+                      <template #trigger>
+                        <span>
+                          <n-button size="small" ghost disabled>
+                            הוסף חשבון
+                          </n-button>
+                        </span>
+                      </template>
+                      {{ emailAccountLimit === 1 ? extraEmailLockedMessage : "חיבור חשבון דוא״ל נוסף יתאפשר בהמשך." }}
+                    </n-tooltip>
+                    <n-button
+                      v-if="emailAccountLimit === 1"
+                      size="small"
+                      ghost
+                      tag="a"
+                      href="https://remindocr.com/pricing"
+                    >
+                      שדרוג מנוי
+                    </n-button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1106,6 +1235,7 @@ import {
   NSpin,
   NSwitch,
   NTag,
+  NTooltip,
   useMessage,
 } from "naive-ui";
 import {
@@ -1123,9 +1253,11 @@ import {
   LockClosedOutline,
   LogOutOutline,
   LogoGoogle,
+  MailOutline,
   MoonOutline,
   NotificationsOutline,
   OpenOutline,
+  PeopleOutline,
   PersonOutline,
   SettingsOutline,
   StatsChartOutline,
@@ -1151,6 +1283,9 @@ import {
   quotaPercent,
   resolveUserPlan,
   planAllowsGoogleDrive,
+  planAllowsGoogleCalendar,
+  planAllowsAutomaticEmailReminders,
+  PLAN_GATE_MESSAGES,
   type PlanId,
 } from "../shared/pricingPlans.js";
 
@@ -1508,6 +1643,7 @@ const gmailStatus = ref<{ connected: boolean; source: string | null; email: stri
 const gmailLoading = ref(false);
 const gmailDisconnecting = ref(false);
 const calendarStatus = ref<{
+  allowed?: boolean;
   connected: boolean;
   calendar_id: string | null;
   calendar_url: string | null;
@@ -1528,6 +1664,31 @@ const driveAllowed = computed(() => {
   if (driveStatus.value?.allowed === false) return false;
   return planAllowsGoogleDrive(currentPlanId.value);
 });
+const calendarAllowed = computed(() => {
+  if (calendarStatus.value?.allowed === false) return false;
+  return userSettings.value?.plan_entitlements?.googleCalendarSync
+    ?? planAllowsGoogleCalendar(currentPlanId.value);
+});
+const autoRemindersAllowed = computed(() =>
+  userSettings.value?.plan_entitlements?.automaticEmailReminders
+  ?? planAllowsAutomaticEmailReminders(currentPlanId.value),
+);
+const seatLimit = computed(() =>
+  userSettings.value?.plan_entitlements?.maxUsers
+  ?? (currentPlanId.value === "business" ? null : currentPlanId.value === "basic" ? 2 : 1),
+);
+const emailAccountLimit = computed(() =>
+  userSettings.value?.plan_entitlements?.maxEmailAccounts
+  ?? (currentPlanId.value === "business" ? null : currentPlanId.value === "basic" ? 2 : 1),
+);
+const seatsUsageLabel = computed(() =>
+  seatLimit.value === null ? "1 · ללא הגבלה" : `1 מתוך ${seatLimit.value}`,
+);
+const emailAccountsUsageLabel = computed(() =>
+  emailAccountLimit.value === null ? "1 · ללא הגבלה" : `1 מתוך ${emailAccountLimit.value}`,
+);
+const extraUsersLockedMessage = PLAN_GATE_MESSAGES.extraUsers;
+const extraEmailLockedMessage = PLAN_GATE_MESSAGES.extraEmailAccounts;
 const driveFolderGone = computed(() => {
   const state = driveStatus.value?.folderState;
   return state === "missing" || state === "trashed";
@@ -1570,6 +1731,10 @@ async function loadCalendarStatus() {
 }
 
 async function connectCalendarFromProfile() {
+  if (!calendarAllowed.value) {
+    message.warning(PLAN_GATE_MESSAGES.calendar);
+    return;
+  }
   calendarLoading.value = true;
   try {
     const {url} = await api.calendar.authUrl("/profile?section=settings");
@@ -1581,6 +1746,10 @@ async function connectCalendarFromProfile() {
 }
 
 async function syncCalendarNow() {
+  if (!calendarAllowed.value) {
+    message.warning(PLAN_GATE_MESSAGES.calendar);
+    return;
+  }
   calendarSyncing.value = true;
   try {
     const result = await api.calendar.sync();
@@ -2039,6 +2208,8 @@ function showGoogleConnectionErrorFromRoute() {
     message.error("Google Calendar נבחר בחשבון אחר. התחבר עם חשבון Google של המשתמש המחובר באפליקציה.");
   } else if (error === "calendar_identity_check_failed") {
     message.error("לא הצלחנו לאמת את חשבון Google שנבחר ליומן. נסה להתחבר שוב.");
+  } else if (error === "calendar_plan_required") {
+    message.error("סנכרון Google Calendar זמין במסלול עסקי בלבד.");
   }
 }
 </script>

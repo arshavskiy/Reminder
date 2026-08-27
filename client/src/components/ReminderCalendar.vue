@@ -426,7 +426,7 @@ function reminderMatchesFilter(r: ReminderWithContext, filter: CalendarFilterKey
   }
   if (filter === "month") return isIsoInRange(iso, from, to);
   if (filter === "sent") return r.status === "sent";
-  if (filter === "no_email") return !reminderHasEmail(r);
+  if (filter === "no_email") return r.status === "no_email" || !reminderHasEmail(r);
   if (filter === "expiries") return false;
   return true;
 }

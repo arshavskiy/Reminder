@@ -3,10 +3,16 @@ import {ObjectId} from "mongodb";
 import {getSettings} from "../settings";
 import {sendGroupedReminderEmail, sendReminderEmail} from "./emailSender";
 import {sendMonthlyReportToRecipients} from "../reports/monthlyReports";
+import {
+  isMonthlyReportDue,
+  monthlyReportMonthKey,
+  resolveAccountReportRecipients,
+} from "../reports/monthlyReportRecipients";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import { syncAllCalendars, pushReminderToCalendar } from "../calendar/sync";
 import {insertReminderIfAllowed} from "../quotas/reminderQuota";
+import {featureFlagsForUser} from "../plans/tierFeatures";
 import {clientDisplayName} from "../utils/clientNames";
 import {notifyEmailSendFailed, notifyReminderSkipped} from "../push/adminNotify";
 import {parseObjectRecord, parseReminderEmailTo, pickContractEmail, pickContractEmailWithMeta} from "../contracts/contractEmail.js";
@@ -84,19 +90,35 @@ export function stopScheduler() {
 
 async function checkMonthlyReports() {
   const now = new Date();
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const monthKey = monthlyReportMonthKey(now);
   const settingsRows = await col("user_settings").find({monthly_report_enabled: true}).toArray();
   for (const row of settingsRows as any[]) {
-    const day = Math.min(28, Math.max(1, Number(row.monthly_report_day ?? 1)));
-    const hour = Number(row.monthly_report_hour ?? 8);
-    if (now.getDate() < day || (now.getDate() === day && now.getHours() < hour)) continue;
-    if (String(row.monthly_report_last_sent ?? "").startsWith(monthKey)) continue;
+    if (!isMonthlyReportDue({
+      now,
+      day: row.monthly_report_day,
+      hour: row.monthly_report_hour,
+      lastSent: row.monthly_report_last_sent,
+    })) continue;
 
     const user = await col("users").findOne({_id: toObjectId(row.user_id)}) as any;
-    const configuredRecipients = String(row.monthly_report_recipients ?? "").split(/[;,\s]+/).filter(Boolean);
-    const recipients = uniqueEmails([...configuredRecipients, user?.email]);
+    if (!featureFlagsForUser(user).automaticMonthlyReports) continue;
+    // Automatic combined report: account recipients only (never client emails).
+    // Empty recipients → app user's email only.
+    const recipients = resolveAccountReportRecipients({
+      configuredRecipients: row.monthly_report_recipients,
+      accountEmail: user?.email ?? null,
+    });
     const formats = parseFormats(row.monthly_report_formats);
-    if (!recipients.length || !formats.length) continue;
+    if (!recipients.length || !formats.length) {
+      if (!recipients.length) {
+        logger.warn("monthly_reports_skipped_no_recipients", {
+          user_id: row.user_id,
+          month: monthKey,
+          has_account_email: Boolean(user?.email),
+        });
+      }
+      continue;
+    }
 
     const result = await sendMonthlyReportToRecipients({
       userId: row.user_id,
@@ -161,10 +183,6 @@ function formatIsoDateOnly(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function uniqueEmails(values: Array<unknown>) {
-  return [...new Set(values.filter((value): value is string => typeof value === "string" && value.trim() !== "").map((value) => value.trim().toLowerCase()))];
-}
-
 function textField(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -195,6 +213,8 @@ async function checkReminders() {
       trigger_date: { $lte: today },
       $or: [
         { status: "pending" },
+        // Retry when a business email may have been added later
+        { status: "no_email" },
         {
           status: "error",
           $or: [
@@ -206,6 +226,17 @@ async function checkReminders() {
       ],
     })
     .toArray();
+
+  const autoSendByUser = new Map<string, boolean>();
+  async function allowsAutomaticEmailReminders(userId: unknown): Promise<boolean> {
+    const id = String(userId ?? "");
+    if (!id) return false;
+    if (autoSendByUser.has(id)) return autoSendByUser.get(id)!;
+    const owner = await col("users").findOne({_id: toObjectId(id)}) as any;
+    const allowed = featureFlagsForUser(owner).automaticEmailReminders;
+    autoSendByUser.set(id, allowed);
+    return allowed;
+  }
 
   logger.debug("reminder_check_completed", { due_count: due.length });
 
@@ -222,6 +253,10 @@ async function checkReminders() {
   for (const reminder of due) {
     const remId = reminder._id?.toString();
     if (sentIds.has(remId)) continue;
+    if (!(await allowsAutomaticEmailReminders((reminder as any).user_id))) {
+      logger.info("reminder_auto_send_skipped_plan", { reminder_id: remId, user_id: (reminder as any).user_id ?? null });
+      continue;
+    }
 
     const r = reminder as any;
     const contract = await resolveReminderContract(r);
@@ -417,7 +452,8 @@ async function processReminder(reminder: ReminderWithContext) {
   }
 
   if (recipients.length === 0) {
-    if ((reminder as any).status === "error") {
+    const currentStatus = String((reminder as any).status ?? "");
+    if (currentStatus === "no_email") {
       logger.debug("reminder_send_still_no_recipients", { reminder_id: remId });
       return;
     }
@@ -427,28 +463,31 @@ async function processReminder(reminder: ReminderWithContext) {
       reason: "no_recipients",
       user_id: (reminder as any).user_id ?? null,
     });
-    await col("email_log").insertOne({
-      reminder_id: remId,
-      user_id: (reminder as any).user_id ?? null,
-      log_type: "skipped",
-      to_address: "",
-      recipient: "",
-      subject: `תזכורת - ${reminder.title}`,
-      sent_at: new Date(),
-      success: 0,
-      error: "no recipients resolved",
-      smtp_host: settings.smtpHost || "in-app-only",
-    } as any);
-    notifyReminderSkipped({
-      title: reminder.title,
-      reminderId: String(remId),
-      clientId: reminder.client_id != null ? String(reminder.client_id) : null,
-      userId: (reminder as any).user_id != null ? String((reminder as any).user_id) : null,
-      reason: "no_recipients",
-    });
+    // First skip (or migrate legacy status:"error" with no recipients) → no_email once
+    if (currentStatus !== "error") {
+      await col("email_log").insertOne({
+        reminder_id: remId,
+        user_id: (reminder as any).user_id ?? null,
+        log_type: "skipped",
+        to_address: "",
+        recipient: "",
+        subject: `תזכורת - ${reminder.title}`,
+        sent_at: new Date(),
+        success: 0,
+        error: "no recipients resolved",
+        smtp_host: settings.smtpHost || "in-app-only",
+      } as any);
+      notifyReminderSkipped({
+        title: reminder.title,
+        reminderId: String(remId),
+        clientId: reminder.client_id != null ? String(reminder.client_id) : null,
+        userId: (reminder as any).user_id != null ? String((reminder as any).user_id) : null,
+        reason: "no_recipients",
+      });
+    }
     await col("reminders").updateOne(
       { _id: toObjectId(remId) } as any,
-      { $set: { status: "error", updated_at: new Date() } },
+      { $set: { status: "no_email", updated_at: new Date() } },
     );
     return;
   }

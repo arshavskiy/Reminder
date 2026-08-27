@@ -6,28 +6,26 @@ This document explains exactly how future reminders are scheduled, polled, and d
 
 ## TL;DR
 
-There is **no real cron job**. The trigger is a simple **`setInterval` loop inside the Bun server process**. Every minute it asks SQLite: _"any reminders with `trigger_date <= today` and `status = 'pending'`?"_ — if yes, it sends them via SMTP.
+There is **no external cron**. The Node server runs `startScheduler()` which uses `setInterval` with `REMINDER_CHECK_INTERVAL_MS` (**default 1 hour**). The scheduler **only runs when `APP_ENV=production`**. Each tick asks Mongo: due pending reminders, monthly reports, escalations, then calendar sync.
 
 ```
-Bun server starts
+Node server starts (APP_ENV=production)
        │
        ▼
-   startScheduler(broadcast)
+   startScheduler()
        │
        ▼
-   setInterval(checkReminders, 60_000)  ◄── the trigger
+   setInterval(tick, REMINDER_CHECK_INTERVAL_MS)  ◄── default 3600000 ms
        │
-       ▼ every 60 s
-   SELECT … FROM reminders WHERE trigger_date <= date('now')
-       │
-       ▼ for each due row
-   nodemailer → SMTP → recipient
-       │
-       ▼
-   reminders.status = 'sent'
-   email_log row inserted
-   WebSocket push "reminder:fired" → UI toast
+       ▼ each tick
+   checkReminders → checkMonthlyReports → checkEscalations → syncCalendars
 ```
+
+**Reminder email templates:** `reminder.email_template_id` → `user_settings.default_email_template_id` → doc-bound / global default. Auto-generated reminders usually omit `email_template_id`, so the owner's default template is used at send time with `buildEmailVars` data.
+
+**Reminder email recipients:** **To** = business address (contract / PDF / client). **CC** = app user email. No business email → status `no_email`, skip send (no CC either).
+
+**Monthly reports (automatic):** account recipients only — configured list, or the **app user's email** when empty; never client emails.
 
 ---
 

@@ -5,9 +5,9 @@
       subtitle="הפקה, הורדה ושליחה חודשית של נתוני חוזים ותסקירים"
     >
       <template #actions>
-        <div class="reports-status" :class="{ 'is-active': form.enabled }">
+        <div class="reports-status" :class="{ 'is-active': form.enabled && autoReportsAllowed }">
           <span class="status-dot" aria-hidden="true"></span>
-          <span>{{ form.enabled ? "שליחה אוטומטית פעילה" : "שליחה אוטומטית כבויה" }}</span>
+          <span>{{ autoReportsAllowed && form.enabled ? "שליחה אוטומטית פעילה" : autoReportsAllowed ? "שליחה אוטומטית כבויה" : "שליחה אוטומטית לא כלולה" }}</span>
         </div>
       </template>
     </PageHeader>
@@ -53,8 +53,24 @@
         </div>
         <div class="reports-actions reports-actions--generator">
           <n-button :loading="downloading === 'docx'" :disabled="!hasFields" type="primary" @click="downloadReport('docx')">הורד DOCX</n-button>
-          <n-button :loading="downloading === 'xlsx'" :disabled="!hasFields" type="primary" @click="downloadReport('xlsx')">הורד XLSX</n-button>
-          <n-button :loading="sending" :disabled="!canSendReport" type="primary" @click="sendNow">
+          <n-tooltip v-if="!excelAllowed">
+            <template #trigger>
+              <span>
+                <n-button :disabled="true" type="primary">הורד XLSX</n-button>
+              </span>
+            </template>
+            {{ excelLockedMessage }}
+          </n-tooltip>
+          <n-button v-else :loading="downloading === 'xlsx'" :disabled="!hasFields" type="primary" @click="downloadReport('xlsx')">הורד XLSX</n-button>
+          <n-tooltip v-if="!autoReportsAllowed">
+            <template #trigger>
+              <span>
+                <n-button :disabled="true" type="primary">{{ sendButtonLabel }}</n-button>
+              </span>
+            </template>
+            {{ autoReportsLockedMessage }}
+          </n-tooltip>
+          <n-button v-else :loading="sending" :disabled="!canSendReport" type="primary" @click="sendNow">
             {{ sendButtonLabel }}
           </n-button>
         </div>
@@ -65,8 +81,9 @@
           <div>
             <h2>דוח חודשי במייל</h2>
             <p>המערכת תיצור את הקבצים ותשלח אותם אוטומטית פעם בחודש.</p>
+            <p v-if="!autoReportsAllowed" class="hint">זמין במסלולים בסיסי ועסקי בלבד.</p>
           </div>
-          <n-switch v-model:value="form.enabled"/>
+          <n-switch v-model:value="form.enabled" :disabled="!autoReportsAllowed"/>
         </div>
 
         <n-divider/>
@@ -91,7 +108,7 @@
             <n-form-item label="קבצים מצורפים">
               <n-space>
                 <n-checkbox v-model:checked="form.docx">DOCX</n-checkbox>
-                <n-checkbox v-model:checked="form.xlsx">XLSX</n-checkbox>
+                <n-checkbox v-model:checked="form.xlsx" :disabled="!excelAllowed">XLSX</n-checkbox>
               </n-space>
             </n-form-item>
           </n-gi>
@@ -105,7 +122,18 @@
         </n-alert>
 
         <div class="reports-actions">
-          <n-button :loading="saving" type="primary" @click="saveSettings">שמור הגדרות</n-button>
+          <n-button
+            :loading="saving"
+            type="primary"
+            :disabled="!autoReportsAllowed"
+            @click="saveSettings"
+          >שמור הגדרות</n-button>
+          <n-button
+            v-if="!autoReportsAllowed"
+            ghost
+            tag="a"
+            href="https://remindocr.com/pricing"
+          >שדרוג מנוי</n-button>
         </div>
       </section>
       </div>
@@ -129,14 +157,33 @@ import {
   NSpace,
   NSpin,
   NSwitch,
+  NTooltip,
   useMessage,
 } from "naive-ui";
 import {api} from "../services/apiService.js";
 import {useUserSettingsStore} from "../stores/userSettings.js";
+import {useAuthStore} from "../stores/auth.js";
+import {
+  planAllowsAutomaticMonthlyReports,
+  planAllowsExcelExport,
+  resolveUserPlan,
+  PLAN_GATE_MESSAGES,
+} from "../shared/pricingPlans.js";
 import PageHeader from "../components/PageHeader.vue";
 
 const message = useMessage();
 const userSettingsStore = useUserSettingsStore();
+const authStore = useAuthStore();
+const autoReportsAllowed = computed(() =>
+  userSettingsStore.settings?.plan_entitlements?.automaticMonthlyReports
+  ?? planAllowsAutomaticMonthlyReports(resolveUserPlan(authStore.user)),
+);
+const excelAllowed = computed(() =>
+  userSettingsStore.settings?.plan_entitlements?.excelExport
+  ?? planAllowsExcelExport(resolveUserPlan(authStore.user)),
+);
+const autoReportsLockedMessage = PLAN_GATE_MESSAGES.automaticMonthlyReports;
+const excelLockedMessage = PLAN_GATE_MESSAGES.excelExport;
 const loading = ref(true);
 const saving = ref(false);
 const sending = ref(false);
@@ -275,12 +322,12 @@ async function loadSettings() {
     ];
     clientEmailById.value = Object.fromEntries(clients.rows.filter((client) => Boolean(client.email)).map((client) => [String(client.id), String(client.email)]));
     const formats = parseFormats(settings.monthly_report_formats);
-    form.enabled = Boolean(settings.monthly_report_enabled);
+    form.enabled = Boolean(settings.monthly_report_enabled) && autoReportsAllowed.value;
     form.recipients = settings.monthly_report_recipients ?? "";
     form.day = Math.min(28, Math.max(1, Number(settings.monthly_report_day ?? 1)));
     form.hour = Number(settings.monthly_report_hour ?? 8);
     form.docx = formats.length ? formats.includes("docx") : true;
-    form.xlsx = formats.length ? formats.includes("xlsx") : true;
+    form.xlsx = excelAllowed.value && (formats.length ? formats.includes("xlsx") : true);
     form.lastSent = settings.monthly_report_last_sent ?? null;
     form.lastError = settings.monthly_report_last_error ?? null;
     selectedFields.value = fieldsForCurrentMode();
@@ -292,6 +339,10 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
+  if (!autoReportsAllowed.value) {
+    message.warning(PLAN_GATE_MESSAGES.automaticMonthlyReports);
+    return;
+  }
   if (!hasFormat.value) {
     message.warning("יש לבחור לפחות סוג קובץ אחד");
     return;
@@ -317,6 +368,10 @@ async function saveSettings() {
 }
 
 async function downloadReport(format: "docx" | "xlsx") {
+  if (format === "xlsx" && !excelAllowed.value) {
+    message.warning(PLAN_GATE_MESSAGES.excelExport);
+    return;
+  }
   downloading.value = format;
   try {
     await userSettingsStore.save({report_config: nextReportConfig()});
@@ -342,6 +397,10 @@ function formatLastSent(raw: string): string {
 }
 
 async function sendNow() {
+  if (!autoReportsAllowed.value) {
+    message.warning(PLAN_GATE_MESSAGES.automaticMonthlyReports);
+    return;
+  }
   if (!hasFormat.value) {
     message.warning("יש לבחור לפחות סוג קובץ אחד");
     return;

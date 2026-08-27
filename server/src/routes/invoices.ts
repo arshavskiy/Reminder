@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { col } from "../db/db";
 import { HTTPException, requireAuth } from "../auth/middleware";
 import { documentImportMonthlyLimit } from "../quotas/documentImportQuota";
+import { featureFlagsForUser, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
 import { inferInvoiceCashFlow, normalizeCashFlow, resolveVatAmount } from "../invoices/cashFlow";
 
@@ -27,6 +28,15 @@ export function registerInvoiceRoutes(app: express.Application) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
       return;
+    }
+
+    const exportRequested = String(req.query.export ?? "") === "true" || String(req.query.export ?? "") === "1";
+    if (exportRequested) {
+      const dbUser = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
+      if (!featureFlagsForUser(dbUser ?? { plan: userPlan }).excelExport) {
+        res.status(403).json({ error: "excel_export_plan_required", message: PLAN_GATE_MESSAGES.excelExport });
+        return;
+      }
     }
 
     const limit = clampInt(req.query.limit, 50, 1, 500);

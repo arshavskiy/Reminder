@@ -54,7 +54,8 @@ export interface AppSettings {
 export interface User {
   id: number;
   google_sub: string;
-  email: string;
+  email: string | null;
+  username?: string | null;
   name: string | null;
   phone: string | null;
   picture_url: string | null;
@@ -124,6 +125,8 @@ export interface UserSettings extends PipelineFlags {
   /** Keep inspection reports in object storage. Unset is treated as enabled. */
   s3_store_inspection_reports?: boolean;
   features?: Record<string, boolean> | null;
+  plan_entitlements?: import("./pricingPlans").PlanEntitlements;
+  plan_entitlements_updated_at?: string | Date | null;
 }
 
 export interface FeatureDefinition {
@@ -143,7 +146,7 @@ export type DocumentSource = "scanned" | "generated";
  *  drives capability checks (re-extract, replace) rather than provenance. */
 export type DocumentImportSource = "gmail" | "drive" | "upload";
 export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error" | "not_applicable";
-export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error";
+export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error" | "no_email";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
 export type EntityType = "person" | "company";
 export type TaskStatus = "open" | "done" | "cancelled";

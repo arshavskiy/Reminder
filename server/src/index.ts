@@ -46,7 +46,7 @@ import {importFile, startDocumentProcessingJobWorker} from "./pipeline/importer"
 import {applyScannedKeys, scanFileForKeys, shouldScanFile} from "./pipeline/keyScanner";
 import {logger, requestLogger} from "./logger";
 import {registerResendWebhook} from "./reminders/resendDelivery";
-import {requireAnyFeature} from "./auth/middleware";
+import {requireAnyFeature, requireMinRole} from "./auth/middleware";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -180,7 +180,7 @@ app.use("/api/equipment", (req, res, next) => {
 
 registerAuthRoutes(app);
 app.use("/api/gmail", requireAnyFeature(["pages.gmail"]));
-app.use("/api/invoices", requireAnyFeature(["pages.invoices", "pages.gmail"]));
+app.use("/api/invoices", requireMinRole("admin"));
 registerGmailRoutes(app);
 registerCalendarRoutes(app);
 registerGdriveRoutes(app);

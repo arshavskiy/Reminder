@@ -10,6 +10,9 @@ Complete documentation for the ReminderOCR platform.
 
 - **[PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md)** — Start here! High-level overview of features, architecture, use cases
 - **[API_QUICK_REFERENCE.md](./API_QUICK_REFERENCE.md)** — API endpoints cheat sheet with examples
+- **[FEATURES.md](./FEATURES.md)** — Feature inventory
+- **[ADMIN_MAGIC_LINKS.md](./ADMIN_MAGIC_LINKS.md)** — Admin magic links, username identity, DB target
+- **[ROLES_AND_PLANS.md](./ROLES_AND_PLANS.md)** — Roles, subscription plans, page access, and entitlements matrix
 - **[TASKAL_FEATURE_GAPS.md](./TASKAL_FEATURE_GAPS.md)** — תסקל 2.0 competitive gaps; build-first list
 - **[FEATURE_IDEAS.md](./FEATURE_IDEAS.md)** — Product ideas, including the Taskal build-first list
 
@@ -54,6 +57,7 @@ Complete documentation for the ReminderOCR platform.
 | **DEPLOYMENT.md** | Production deployment steps | DevOps, release managers |
 | **PROJECT_STATUS_REPORT.md** | Progress, roadmap, milestones | Project managers, stakeholders |
 | **FEATURES.md** | Feature list and descriptions | Product managers, clients |
+| **ADMIN_MAGIC_LINKS.md** | Magic links, username identity, admin DB target | Admins, developers |
 | **TASKAL_FEATURE_GAPS.md** | תסקל 2.0 gaps and build-first list | Product |
 | **USE_CASES.md** | Real-world usage scenarios | Product, sales |
 

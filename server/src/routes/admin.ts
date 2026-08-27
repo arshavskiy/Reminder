@@ -1,15 +1,39 @@
 import express from "express";
 import {ObjectId} from "mongodb";
 import {extname} from "path";
-import {col} from "../db/db";
+import {col, enterAdminDbTarget, getDbTargetStatus, parseAdminDbTarget, runWithPrimaryDb} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
 import type {UserPlan, UserRole} from "../../src/shared/types.js";
 import {getSettings} from "../settings.js";
 import {sendPushToAdmins} from "../push/pushService.js";
 import {DEFAULT_FEATURES, normalizeFeatures} from "../features.js";
+import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
+import {createMagicLinkToken} from "../auth/session";
+import {hashPassword} from "../auth/emailAuth";
+import {logger} from "../logger";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 const VALID_PLANS: UserPlan[] = ["free", "basic", "business"];
+const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
+
+function normalizeUsername(raw: unknown): string | null {
+  const value = String(raw ?? "").trim().toLowerCase();
+  return value || null;
+}
+
+function isValidUsername(username: string): boolean {
+  return USERNAME_RE.test(username) && !username.includes("@");
+}
+
+function normalizeEmail(raw: unknown): string | null {
+  const value = String(raw ?? "").trim().toLowerCase();
+  return value || null;
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 const DEFAULT_REPORT_CONFIG = {
   all_fields: [
     "tracking_date",
@@ -52,7 +76,14 @@ function normalizeReportConfig(raw: unknown) {
 
 function flatUser(doc: any) {
   if (!doc) return doc;
-  const { _id, password_hash, verification_token, reset_token, ...rest } = doc;
+  const {
+    _id,
+    password_hash,
+    verification_token,
+    reset_token,
+    gmail_refresh_token,
+    ...rest
+  } = doc;
   return { id: _id?.toString(), ...rest, plan: doc.plan ?? planFromRole(doc.role) };
 }
 
@@ -62,17 +93,49 @@ function planFromRole(role: string | null | undefined): UserPlan {
   return "free";
 }
 
+/** Magic links hit the API `/auth/magic` handler, so use the server origin. */
+function adminMagicLinkBase(req: express.Request): string | null {
+  if (process.env.SERVER_URL) return process.env.SERVER_URL.replace(/\/$/, "");
+  const isProd = process.env.NODE_ENV === "production" || process.env.APP_ENV === "production";
+  if (isProd) return null;
+  const proto = req.protocol;
+  const host = req.get("host");
+  if (!host) return null;
+  return `${proto}://${host}`;
+}
+
 export function registerAdminRoutes(app: express.Application) {
-  // All /api/admin/* routes require admin role
-  async function adminAuth(req: express.Request, res: express.Response) {
-    try {
-      const auth = await requireAuth(req.headers.cookie ?? undefined);
-      requireRole(auth, "admin");
-      return auth;
-    } catch (err: any) {
-      res.status(err.status ?? 403).json({ error: err.message });
-      return null;
+  // Admin data can target local or production Mongo while auth stays on primary.
+  app.use("/api/admin", (req, res, next) => {
+    const fromHeader = req.headers["x-admin-db-target"];
+    const fromQuery = req.query.admin_db_target;
+    const target = parseAdminDbTarget(fromHeader ?? fromQuery);
+    if (target === "production") {
+      const status = getDbTargetStatus();
+      if (!status.production.connected) {
+        res.status(503).json({
+          error: "production_db_unavailable",
+          hint: "Set MONGODB_LOCAL_URI + MONGODB_URI (or MONGODB_PRODUCTION_URI) and restart the server",
+        });
+        return;
+      }
     }
+    enterAdminDbTarget(target);
+    next();
+  });
+
+  // All /api/admin/* routes require admin role (always verified against primary DB)
+  async function adminAuth(req: express.Request, res: express.Response) {
+    return runWithPrimaryDb(async () => {
+      try {
+        const auth = await requireAuth(req.headers.cookie ?? undefined);
+        requireRole(auth, "admin");
+        return auth;
+      } catch (err: any) {
+        res.status(err.status ?? 403).json({ error: err.message });
+        return null;
+      }
+    });
   }
 
   // GET /api/admin/users — list all users
@@ -85,6 +148,234 @@ export function registerAdminRoutes(app: express.Application) {
       .toArray();
 
     res.json(users.map(flatUser));
+  });
+
+  // POST /api/admin/users/magic-link — create/reuse user and optionally issue a magic link
+  app.post("/api/admin/users/magic-link", async (req, res) => {
+    const auth = await adminAuth(req, res);
+    if (!auth) return;
+
+    const body = req.body as {
+      email?: string | null;
+      username?: string | null;
+      password?: string | null;
+      name?: string | null;
+      role?: string;
+      plan?: string;
+      is_active?: boolean | number;
+      email_verified?: boolean | number;
+      company_name?: string | null;
+      phone?: string | null;
+      picture_url?: string | null;
+      issue_link?: boolean;
+    };
+
+    const email = normalizeEmail(body.email);
+    const username = normalizeUsername(body.username);
+    if (!email && !username) {
+      res.status(400).json({ error: "email_or_username_required" });
+      return;
+    }
+    if (email && !isValidEmail(email)) {
+      res.status(400).json({ error: "valid_email_required" });
+      return;
+    }
+    if (username && !isValidUsername(username)) {
+      res.status(400).json({
+        error: "invalid_username",
+        hint: "Username must be 2–32 chars: letters, digits, . _ - (no @)",
+      });
+      return;
+    }
+
+    const role = (body.role ?? "user") as UserRole;
+    if (!VALID_ROLES.includes(role)) {
+      res.status(400).json({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}` });
+      return;
+    }
+
+    const plan = (body.plan ?? DEFAULT_NEW_USER_PLAN) as UserPlan;
+    if (!VALID_PLANS.includes(plan)) {
+      res.status(400).json({ error: `Invalid plan. Must be one of: ${VALID_PLANS.join(", ")}` });
+      return;
+    }
+
+    const name = body.name != null ? String(body.name).trim() || null : null;
+    const companyName = body.company_name != null ? String(body.company_name).trim() || null : null;
+    const phone = body.phone != null ? String(body.phone).trim() || null : null;
+    const pictureUrl = body.picture_url != null ? String(body.picture_url).trim() || null : null;
+    const isActive = body.is_active === undefined ? 1 : (body.is_active ? 1 : 0);
+    const emailVerified = body.email_verified === undefined
+      ? (email ? 1 : 0)
+      : (body.email_verified ? 1 : 0);
+    const issueLink = body.issue_link !== false;
+    const password = body.password != null ? String(body.password) : "";
+
+    if (password && password.length < 8) {
+      res.status(400).json({ error: "password_too_short" });
+      return;
+    }
+
+    if (issueLink && !isActive) {
+      res.status(400).json({ error: "cannot_issue_magic_link_for_inactive_user" });
+      return;
+    }
+
+    const identityQuery = email && username
+      ? { $or: [{ email }, { username }] }
+      : email
+        ? { email }
+        : { username };
+
+    const existing = await col("users").findOne(identityQuery as any) as any;
+    if (existing) {
+      if (email && existing.email && existing.email !== email) {
+        const clash = await col("users").findOne({ email }) as any;
+        if (clash && String(clash._id) !== String(existing._id)) {
+          res.status(409).json({ error: "email_already_in_use" });
+          return;
+        }
+      }
+      if (username && existing.username && existing.username !== username) {
+        const clash = await col("users").findOne({ username }) as any;
+        if (clash && String(clash._id) !== String(existing._id)) {
+          res.status(409).json({ error: "username_already_in_use" });
+          return;
+        }
+      }
+      if (email && !existing.email) {
+        const clash = await col("users").findOne({ email }) as any;
+        if (clash && String(clash._id) !== String(existing._id)) {
+          res.status(409).json({ error: "email_already_in_use" });
+          return;
+        }
+      }
+      if (username && !existing.username) {
+        const clash = await col("users").findOne({ username }) as any;
+        if (clash && String(clash._id) !== String(existing._id)) {
+          res.status(409).json({ error: "username_already_in_use" });
+          return;
+        }
+      }
+    }
+
+    const isNewUser = !existing;
+    const now = new Date();
+
+    if (existing && String(existing._id) === auth.userId) {
+      if (role !== "admin") {
+        res.status(400).json({ error: "Cannot change your own role" });
+        return;
+      }
+    }
+
+    const profileSet: Record<string, any> = {
+      name: name ?? existing?.name ?? null,
+      role,
+      plan,
+      is_active: isActive,
+      email_verified: emailVerified,
+      updated_at: now,
+    };
+    if (body.email !== undefined) profileSet.email = email;
+    if (body.username !== undefined) profileSet.username = username;
+    if (body.company_name !== undefined) profileSet.company_name = companyName;
+    if (body.phone !== undefined) profileSet.phone = phone;
+    if (body.picture_url !== undefined) profileSet.picture_url = pictureUrl;
+    let passwordHash: string | null = null;
+    if (password) {
+      passwordHash = await hashPassword(password);
+      profileSet.password_hash = passwordHash;
+    }
+
+    let createdNew = isNewUser;
+    let userIdForLookup: string | null = existing ? String(existing._id) : null;
+
+    if (existing) {
+      await col("users").updateOne({ _id: existing._id }, { $set: profileSet });
+    } else {
+      try {
+        const insert = await col("users").insertOne({
+          email,
+          username,
+          name,
+          picture_url: pictureUrl,
+          google_sub: null,
+          password_hash: passwordHash,
+          email_verified: emailVerified,
+          role,
+          plan,
+          is_active: isActive,
+          company_name: companyName,
+          phone,
+          created_at: now,
+          last_login_at: null,
+        } as any);
+        userIdForLookup = insert.insertedId.toString();
+      } catch (err: any) {
+        if (err?.code !== 11000) throw err;
+        createdNew = false;
+        const raced = await col("users").findOne(identityQuery as any) as any;
+        if (!raced) {
+          res.status(409).json({ error: "identity_conflict" });
+          return;
+        }
+        await col("users").updateOne({ _id: raced._id }, { $set: profileSet });
+        userIdForLookup = String(raced._id);
+      }
+    }
+
+    const user = userIdForLookup
+      ? await col("users").findOne({ _id: new ObjectId(userIdForLookup) }) as any
+      : await col("users").findOne(identityQuery as any) as any;
+    if (!user) {
+      res.status(500).json({ error: "user_not_found_after_upsert" });
+      return;
+    }
+
+    const userId = String(user._id);
+    await ensureUserSettingsWithEntitlements(userId, { ...user, role, plan });
+
+    let magicLink: string | null = null;
+    let expiresInMinutes: number | null = null;
+    if (issueLink) {
+      const token = await createMagicLinkToken(userId);
+      const base = adminMagicLinkBase(req);
+      if (!base) {
+        res.status(500).json({ error: "SERVER_URL_required_for_magic_links" });
+        return;
+      }
+      magicLink = `${base}/auth/magic?token=${token}`;
+      expiresInMinutes = 15;
+      logger.info("admin_magic_link_created", {
+        admin_id: auth.userId,
+        user_id: userId,
+        email: user.email ?? null,
+        username: user.username ?? null,
+        role,
+        plan,
+        is_new_user: createdNew,
+      });
+    } else {
+      logger.info("admin_user_upserted", {
+        admin_id: auth.userId,
+        user_id: userId,
+        email: user.email ?? null,
+        username: user.username ?? null,
+        role,
+        plan,
+        is_new_user: createdNew,
+      });
+    }
+
+    const fresh = await col("users").findOne({ _id: user._id }) as any;
+    res.status(createdNew ? 201 : 200).json({
+      ok: true,
+      isNewUser: createdNew,
+      expiresInMinutes,
+      magicLink,
+      user: flatUser(fresh ?? user),
+    });
   });
 
   // ── Web Push subscription (admin notifications) ───────────────────────────
@@ -131,33 +422,91 @@ export function registerAdminRoutes(app: express.Application) {
     res.json({ ok: true });
   });
 
-  // PUT /api/admin/users/:id — update role / is_active
+  // PUT /api/admin/users/:id — update profile / role / plan / flags
   app.put("/api/admin/users/:id", async (req, res) => {
     const auth = await adminAuth(req, res);
     if (!auth) return;
 
-    const { role, plan, is_active } = req.body as { role?: string; plan?: string; is_active?: number };
+    const body = req.body as {
+      email?: string | null;
+      username?: string | null;
+      password?: string | null;
+      name?: string | null;
+      phone?: string | null;
+      company_name?: string | null;
+      picture_url?: string | null;
+      role?: string;
+      plan?: string;
+      is_active?: boolean | number;
+      email_verified?: boolean | number;
+    };
 
     const updates: Record<string, any> = { updated_at: new Date() };
 
-    if (role !== undefined) {
-      if (!VALID_ROLES.includes(role as UserRole)) {
+    if (body.email !== undefined) {
+      const email = normalizeEmail(body.email);
+      if (email && !isValidEmail(email)) {
+        res.status(400).json({ error: "valid_email_required" });
+        return;
+      }
+      updates.email = email;
+    }
+
+    if (body.username !== undefined) {
+      const username = normalizeUsername(body.username);
+      if (username && !isValidUsername(username)) {
+        res.status(400).json({
+          error: "invalid_username",
+          hint: "Username must be 2–32 chars: letters, digits, . _ - (no @)",
+        });
+        return;
+      }
+      updates.username = username;
+    }
+
+    if (body.password != null && String(body.password).length > 0) {
+      if (String(body.password).length < 8) {
+        res.status(400).json({ error: "password_too_short" });
+        return;
+      }
+      updates.password_hash = await hashPassword(String(body.password));
+    }
+
+    if (body.name !== undefined) {
+      updates.name = body.name != null ? String(body.name).trim() || null : null;
+    }
+    if (body.phone !== undefined) {
+      updates.phone = body.phone != null ? String(body.phone).trim() || null : null;
+    }
+    if (body.company_name !== undefined) {
+      updates.company_name = body.company_name != null ? String(body.company_name).trim() || null : null;
+    }
+    if (body.picture_url !== undefined) {
+      updates.picture_url = body.picture_url != null ? String(body.picture_url).trim() || null : null;
+    }
+
+    if (body.role !== undefined) {
+      if (!VALID_ROLES.includes(body.role as UserRole)) {
         res.status(400).json({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}` });
         return;
       }
-      updates.role = role;
+      updates.role = body.role;
     }
 
-    if (plan !== undefined) {
-      if (!VALID_PLANS.includes(plan as UserPlan)) {
+    if (body.plan !== undefined) {
+      if (!VALID_PLANS.includes(body.plan as UserPlan)) {
         res.status(400).json({ error: `Invalid plan. Must be one of: ${VALID_PLANS.join(", ")}` });
         return;
       }
-      updates.plan = plan;
+      updates.plan = body.plan;
     }
 
-    if (is_active !== undefined) {
-      updates.is_active = is_active ? 1 : 0;
+    if (body.is_active !== undefined) {
+      updates.is_active = body.is_active ? 1 : 0;
+    }
+
+    if (body.email_verified !== undefined) {
+      updates.email_verified = body.email_verified ? 1 : 0;
     }
 
     let filter: Record<string, any>;
@@ -168,14 +517,58 @@ export function registerAdminRoutes(app: express.Application) {
       return;
     }
 
-    // Prevent admin from demoting themselves
-    if (role && role !== "admin" && req.params.id === auth.userId) {
-      res.status(400).json({ error: "Cannot change your own role" });
+    // Prevent admin from demoting / deactivating themselves on the primary DB
+    if (req.params.id === auth.userId) {
+      if (updates.role && updates.role !== "admin") {
+        res.status(400).json({ error: "Cannot change your own role" });
+        return;
+      }
+      if (updates.is_active === 0) {
+        res.status(400).json({ error: "Cannot deactivate your own account" });
+        return;
+      }
+    }
+
+    const existing = await col("users").findOne(filter) as any;
+    if (!existing) {
+      res.status(404).json({ error: "User not found" });
       return;
+    }
+
+    const nextEmail = updates.email !== undefined ? updates.email : (existing.email ?? null);
+    const nextUsername = updates.username !== undefined ? updates.username : (existing.username ?? null);
+    if (!nextEmail && !nextUsername) {
+      res.status(400).json({ error: "email_or_username_required" });
+      return;
+    }
+
+    if (updates.email) {
+      const clash = await col("users").findOne({
+        email: updates.email,
+        _id: { $ne: filter._id },
+      } as any);
+      if (clash) {
+        res.status(409).json({ error: "email_already_in_use" });
+        return;
+      }
+    }
+
+    if (updates.username) {
+      const clash = await col("users").findOne({
+        username: updates.username,
+        _id: { $ne: filter._id },
+      } as any);
+      if (clash) {
+        res.status(409).json({ error: "username_already_in_use" });
+        return;
+      }
     }
 
     await col("users").updateOne(filter, { $set: updates });
     const updated = await col("users").findOne(filter);
+    if (updated && (body.plan !== undefined || body.role !== undefined)) {
+      await ensureUserSettingsWithEntitlements(String(updated._id), updated as any);
+    }
     res.json(flatUser(updated));
   });
 
@@ -349,7 +742,7 @@ export function registerAdminRoutes(app: express.Application) {
       // All pending reminders across all users
       col("reminders").find(
         { status: "pending" },
-        { projection: { _id: 1, user_id: 1, client_id: 1, trigger_date: 1, note: 1, doc_type: 1 } },
+        { projection: { _id: 1, user_id: 1, client_id: 1, trigger_date: 1, title: 1, body: 1, source_type: 1, contract_type: 1, note: 1 } },
       ).sort({ trigger_date: 1 }).limit(100).toArray(),
 
       // Status counts per user
@@ -390,8 +783,11 @@ export function registerAdminRoutes(app: express.Application) {
         user_id: r.user_id,
         client_id: r.client_id?.toString?.() ?? r.client_id,
         trigger_date: r.trigger_date,
-        note: r.note,
-        doc_type: r.doc_type,
+        // Reminders store `title` + `source_type` (legacy rows may have note/doc_type).
+        title: r.title ?? r.note ?? null,
+        note: r.title ?? r.note ?? r.body ?? null,
+        source_type: r.source_type ?? r.doc_type ?? null,
+        doc_type: r.source_type ?? r.doc_type ?? null,
       })),
       byUserStatus: userStatusMap,
       failedSends: failedSends.map((l: any) => ({
@@ -841,9 +1237,12 @@ export function registerAdminRoutes(app: express.Application) {
       dbName = (getDb() as any).databaseName ?? "";
     } catch { /* non-critical */ }
 
+    const dbTargets = getDbTargetStatus();
+
     res.json({
       appEnv: process.env.APP_ENV ?? process.env.NODE_ENV ?? "development",
       dbName,
+      dbTargets,
       reminderEnabled: s.reminderEnabled,
       autoExtract: s.autoExtract,
       reminderCheckIntervalMs: s.reminderCheckIntervalMs,
@@ -858,6 +1257,12 @@ export function registerAdminRoutes(app: express.Application) {
       s3BucketPresent: !!s.doSpacesBucket,
       userDocumentLimit: s.userDocumentLimit,
     });
+  });
+
+  // GET /api/admin/db-targets — which Mongo links are available for override
+  app.get("/api/admin/db-targets", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    res.json(getDbTargetStatus());
   });
 
   // ── Download monthly report for a user (admin) ───────────────────────────
@@ -923,16 +1328,16 @@ export function registerAdminRoutes(app: express.Application) {
       // month: null means "whole year"; undefined/missing also means whole year for admin trigger
       const month = (body.month != null && body.month !== 0) ? Number(body.month) : undefined;
 
-      // Resolve recipients: body > user settings > user email
-      let recipients: string[] = body.recipients?.length ? body.recipients : [];
+      // Resolve recipients: body override → settings → app user email (never clients on combined)
+      const { resolveAccountReportRecipients, uniqueEmails } = await import("../reports/monthlyReportRecipients.js");
+      let recipients: string[] = body.recipients?.length ? uniqueEmails(body.recipients) : [];
       if (!recipients.length) {
         const userSettings = await col("user_settings").findOne({ user_id: userId }) as any;
-        const raw = userSettings?.monthly_report_recipients ?? "";
-        recipients = raw ? raw.split(/[;,\s]+/).filter(Boolean) : [];
-      }
-      if (!recipients.length) {
         const user = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
-        if (user?.email) recipients = [user.email];
+        recipients = resolveAccountReportRecipients({
+          configuredRecipients: userSettings?.monthly_report_recipients,
+          accountEmail: user?.email ?? null,
+        });
       }
 
       // Resolve formats: body > user settings > default
@@ -1069,9 +1474,9 @@ export function registerAdminRoutes(app: express.Application) {
         { projection: { _id: 1, file_name: 1, processing_status: 1, error_message: 1, spaces_key: 1, file_size_bytes: 1, created_at: 1, document_type: 1, extracted_fields: 1, template_id: 1 } },
       ).sort({ created_at: -1 }).limit(200).toArray(),
 
-      // All email log entries for this user
+      // Email log entries for this user (exclude skipped — those are non-sends)
       col("email_log").find(
-        { user_id: userId },
+        { user_id: userId, log_type: { $ne: "skipped" } },
         { projection: { _id: 1, log_type: 1, success: 1, recipient: 1, to_address: 1, subject: 1, error: 1, sent_at: 1, reminder_id: 1 } },
       ).sort({ sent_at: -1 }).limit(100).toArray(),
 
@@ -1087,9 +1492,9 @@ export function registerAdminRoutes(app: express.Application) {
         { projection: { _id: 1, document_id: 1, backend: 1, model: 1, parsed_ok: 1, exec_ms: 1, error: 1, created_at: 1 } },
       ).sort({ created_at: -1 }).limit(50).toArray(),
 
-      // Scheduler errors involving this user
+      // Scheduler errors involving this user (exclude skipped non-sends)
       col("email_log").find(
-        { user_id: userId, success: 0 },
+        { user_id: userId, success: 0, log_type: { $ne: "skipped" } },
         { projection: { _id: 1, log_type: 1, error: 1, sent_at: 1, recipient: 1 } },
       ).sort({ sent_at: -1 }).limit(50).toArray(),
 
@@ -1098,7 +1503,7 @@ export function registerAdminRoutes(app: express.Application) {
       col("contracts").countDocuments({ user_id: userId }),
       col("equipment").countDocuments({ user_id: userId }),
       col("documents").countDocuments({ user_id: userId }),
-      col("email_log").countDocuments({ user_id: userId }),
+      col("email_log").countDocuments({ user_id: userId, log_type: { $ne: "skipped" } }),
       col("extractions").countDocuments({ user_id: userId }),
 
       // Active sessions

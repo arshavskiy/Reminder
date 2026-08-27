@@ -46,6 +46,7 @@ export const DEFAULT_FEATURES: Record<FeatureKey, boolean> = Object.fromEntries(
 ) as Record<FeatureKey, boolean>;
 
 DEFAULT_FEATURES[FEATURES.pages.gmail] = false;
+DEFAULT_FEATURES[FEATURES.pages.invoices] = false;
 
 // Convert nested {pages: {dashboard: true}, dashboard: {calendar: true}}
 // or flat {"pages.dashboard": true} to internal flat dotted-key format.

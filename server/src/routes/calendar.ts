@@ -7,6 +7,7 @@ import { generateState, generateCodeVerifier, generateCodeChallenge, verifyIdTok
 import { logger } from "../logger";
 import { CALENDAR_SCOPE, resolveCalendarToken } from "../calendar/googleCalendar";
 import { pullCalendarChanges, pushAllReminders } from "../calendar/sync";
+import { featureFlagsForUser, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
 
 const GOOGLE_IDENTITY_SCOPE = "openid profile email";
 const CALENDAR_CONNECT_SCOPE = `${GOOGLE_IDENTITY_SCOPE} ${CALENDAR_SCOPE}`;
@@ -26,6 +27,12 @@ export function registerCalendarRoutes(app: express.Express) {
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
+    if (!featureFlagsForUser(user).googleCalendarSync) {
+      res.status(403).json({ error: "calendar_plan_required", message: PLAN_GATE_MESSAGES.calendar });
       return;
     }
 
@@ -83,6 +90,11 @@ export function registerCalendarRoutes(app: express.Express) {
 
     const returnPath = safeFrontendReturnPath(pkce.return_to) ?? DEFAULT_RETURN_PATH;
     const userObjectId = new ObjectId(String(pkce.user_id));
+    const connectingUser = await col<any>("users").findOne({ _id: userObjectId } as any);
+    if (!featureFlagsForUser(connectingUser).googleCalendarSync) {
+      res.redirect(frontendUrl(`${returnPath}?error=calendar_plan_required`));
+      return;
+    }
 
     const settings = getSettings();
     const googleClientId = settings.googleClientId;
@@ -180,6 +192,7 @@ export function registerCalendarRoutes(app: express.Express) {
 
     const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
     const connected = Boolean(user?.calendar_access_token) && user?.calendar_scope_granted !== false;
+    const allowed = featureFlagsForUser(user).googleCalendarSync;
     const syncedCount = connected
       ? await col("calendar_links").countDocuments({
         user_id: userId,
@@ -189,6 +202,7 @@ export function registerCalendarRoutes(app: express.Express) {
     const calendarId = user?.calendar_id ? String(user.calendar_id) : null;
 
     res.json({
+      allowed,
       connected,
       calendar_id: calendarId,
       calendar_url: calendarId ? googleCalendarUrl(calendarId) : null,
@@ -206,6 +220,12 @@ export function registerCalendarRoutes(app: express.Express) {
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
+    if (!featureFlagsForUser(user).googleCalendarSync) {
+      res.status(403).json({ error: "calendar_plan_required", message: PLAN_GATE_MESSAGES.calendar });
       return;
     }
 

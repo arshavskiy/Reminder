@@ -353,6 +353,7 @@ function reminderStatusLabel(status: string): string {
     sent: "נשלח",
     snoozed: "נדחה",
     dismissed: "בוטל",
+    no_email: "חסר אימייל",
     error: "שגיאה",
   };
   return map[status] ?? status;
@@ -364,6 +365,7 @@ function reminderStatusClass(status: string): string {
     sent: "rbadge rbadge--sent",
     snoozed: "rbadge rbadge--snoozed",
     dismissed: "rbadge rbadge--dismissed",
+    no_email: "rbadge rbadge--no-email",
     error: "rbadge rbadge--error",
   };
   return map[status] ?? "rbadge";
@@ -778,6 +780,12 @@ html[data-theme="dark"] .expiry--bad {
   border: 1px solid rgba(240, 160, 32, 0.3);
 }
 
+.rbadge--no-email {
+  background: rgba(240, 160, 32, 0.12);
+  color: #9a6200;
+  border: 1px solid rgba(240, 160, 32, 0.28);
+}
+
 .rbadge--sent {
   background: rgba(99, 226, 183, 0.15);
   color: #1a7951;
@@ -804,6 +812,10 @@ html[data-theme="dark"] .expiry--bad {
 
 html[data-theme="dark"] .rbadge--pending {
   color: #f0a020;
+}
+
+html[data-theme="dark"] .rbadge--no-email {
+  color: #f0b040;
 }
 
 html[data-theme="dark"] .rbadge--sent {

@@ -28,8 +28,8 @@ import {
     verifyPassword,
 } from "../auth/emailAuth";
 import {clientIp, logger} from "../logger";
-import {DEFAULT_FEATURES_NESTED} from "../features";
 import {notifyPasswordResetRequested} from "../push/adminNotify";
+import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
 
 export function registerAuthRoutes(app: express.Application) {
   // GET /auth/google — kick off OAuth flow
@@ -123,7 +123,7 @@ export function registerAuthRoutes(app: express.Application) {
           },
           $setOnInsert: {
             role: "user",
-            plan: "free",
+            plan: DEFAULT_NEW_USER_PLAN,
             is_active: 1,
             created_at: new Date(),
           },
@@ -134,21 +134,8 @@ export function registerAuthRoutes(app: express.Application) {
       const user = await col("users").findOne({ $or: [{ google_sub: profile.sub }, { email: profile.email }] }) as any;
       if (!user) throw new Error("User not found after upsert");
 
-      // Ensure user_settings row exists
-      await col("user_settings").updateOne(
-        { user_id: user._id.toString() },
-        {
-          $setOnInsert: {
-            user_id: user._id.toString(),
-            theme: "light",
-            email_from_name: null,
-            reminder_advance_days: "[90,60,30]",
-            ocr_language: "heb+eng",
-            features: DEFAULT_FEATURES_NESTED,
-          },
-        },
-        { upsert: true }
-      );
+      // New Google users land on free until paid; refresh entitlements on every login.
+      await ensureUserSettingsWithEntitlements(user._id.toString(), user);
 
       const ua = req.headers["user-agent"] ?? undefined;
       const ip = clientIp(req);
@@ -200,7 +187,7 @@ export function registerAuthRoutes(app: express.Application) {
           },
           $setOnInsert: {
             role: "user",
-            plan: "free",
+            plan: DEFAULT_NEW_USER_PLAN,
             is_active: 1,
             created_at: new Date(),
           },
@@ -211,21 +198,7 @@ export function registerAuthRoutes(app: express.Application) {
       const user = await col("users").findOne({ $or: [{ google_sub: profile.sub }, { email: profile.email }] }) as any;
       if (!user) throw new Error("User not found after upsert");
 
-      // Ensure user_settings row exists
-      await col("user_settings").updateOne(
-        { user_id: user._id.toString() },
-        {
-          $setOnInsert: {
-            user_id: user._id.toString(),
-            theme: "light",
-            email_from_name: null,
-            reminder_advance_days: "[90,60,30]",
-            ocr_language: "heb+eng",
-            features: DEFAULT_FEATURES_NESTED,
-          },
-        },
-        { upsert: true }
-      );
+      await ensureUserSettingsWithEntitlements(user._id.toString(), user);
 
       const ua = req.headers["user-agent"] ?? undefined;
       const ip = clientIp(req);
@@ -430,15 +403,18 @@ export function registerAuthRoutes(app: express.Application) {
       verification_token: verificationToken,
       verification_token_expires: tokenExpiry,
       role: "user",
-      plan: "free",
+      plan: DEFAULT_NEW_USER_PLAN,
       is_active: 1,
       created_at: new Date(),
       last_login_at: null,
     } as any);
+    const userId = insert.insertedId.toString();
+    await ensureUserSettingsWithEntitlements(userId, { plan: DEFAULT_NEW_USER_PLAN, role: "user" });
     logger.info("user_registered", {
-      user_id: insert.insertedId.toString(),
+      user_id: userId,
       email: emailLower,
       method: "email_password",
+      plan: DEFAULT_NEW_USER_PLAN,
       ip: clientIp(req) ?? null,
     });
 
@@ -533,6 +509,7 @@ export function registerAuthRoutes(app: express.Application) {
     }
 
     await col("users").updateOne({ _id: user._id }, { $set: { last_login_at: new Date() } });
+    await ensureUserSettingsWithEntitlements(user._id.toString(), user);
 
     const ua = req.headers["user-agent"] ?? undefined;
     const ip = clientIp(req);

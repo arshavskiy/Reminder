@@ -90,3 +90,25 @@ export function requireAnyFeature(featureKeys: string[]) {
     });
   };
 }
+
+/** Express middleware: require the session user to have at least `minRole`. */
+export function requireMinRole(minRole: UserRole) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    let context: AuthContext;
+    try {
+      context = await requireAuth(req.headers.cookie);
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({error: err.message});
+      return;
+    }
+
+    try {
+      requireRole(context, minRole);
+      next();
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 403).json({error: err.message, status: err.status ?? 403});
+    }
+  };
+}

@@ -29,7 +29,7 @@
         >
           <span class="uf-user__avatar">{{ initials(u) }}</span>
           <span class="uf-user__meta">
-            <strong class="uf-user__email">{{ u.email || u.name || u.id }}</strong>
+            <strong class="uf-user__email">{{ u.email || u.username || u.name || u.id }}</strong>
             <span class="uf-user__sub">
               {{ roleLabel[u.role] ?? u.role }}
               · {{ planLabel[userPlan(u)] ?? userPlan(u) }}
@@ -52,7 +52,7 @@
       <template v-else>
         <header class="uf-hero">
           <div class="uf-hero__copy">
-            <h2 class="uf-hero__title">{{ selectedUser.email || selectedUser.name }}</h2>
+            <h2 class="uf-hero__title">{{ selectedUser.email || selectedUser.username || selectedUser.name }}</h2>
             <div class="uf-hero__tags">
               <n-tag :type="roleTagType[selectedUser.role] ?? 'default'" size="small" round>
                 {{ roleLabel[selectedUser.role] ?? selectedUser.role }}
@@ -110,7 +110,7 @@
             <n-tag
               v-for="(count, status) in detail.reminderStatus"
               :key="status"
-              :type="status === 'error' ? 'error' : status === 'pending' ? 'warning' : status === 'sent' ? 'success' : 'default'"
+              :type="status === 'error' ? 'error' : status === 'pending' || status === 'no_email' ? 'warning' : status === 'sent' ? 'success' : 'default'"
               size="small"
               round
             >
@@ -439,8 +439,8 @@
                   <thead><tr><th>Type</th><th>Note</th><th>Trigger</th></tr></thead>
                   <tbody>
                     <tr v-for="(row, i) in userPendingReminders" :key="`p-${i}`">
-                      <td>{{ row.doc_type || "—" }}</td>
-                      <td class="uf-ellipsis">{{ row.note || "—" }}</td>
+                      <td>{{ reminderTypeLabel(row) }}</td>
+                      <td class="uf-ellipsis" :title="row.note || row.title || ''">{{ row.note || row.title || "—" }}</td>
                       <td class="uf-muted">{{ row.trigger_date ? new Date(row.trigger_date).toLocaleDateString("en-US") : "—" }}</td>
                     </tr>
                   </tbody>
@@ -466,9 +466,43 @@
             <n-tab-pane name="issues" :tab="`Issues (${issueCount})`">
               <div class="uf-grid">
                 <section class="uf-card">
-                  <h3 class="uf-card__title">Failed documents ({{ userFailedDocs.length }})</h3>
-                  <div v-for="(row, i) in userFailedDocs.slice(0, 20)" :key="`fd-${i}`" class="uf-error-item">
-                    <strong class="uf-ellipsis">{{ row.filename || "—" }}</strong>
+                  <div class="uf-card__head">
+                    <h3 class="uf-card__title">Failed documents ({{ userFailedDocs.length }})</h3>
+                    <n-button
+                      v-if="userFailedDocs.length"
+                      size="small"
+                      type="primary"
+                      :loading="rescanningAll"
+                      :disabled="busy"
+                      @click="rescanAllFailed"
+                    >
+                      AI Rescan all
+                    </n-button>
+                  </div>
+                  <div v-for="(row, i) in userFailedDocs.slice(0, 20)" :key="row.id || `fd-${i}`" class="uf-error-item">
+                    <div class="uf-error-item__top">
+                      <strong class="uf-ellipsis" :title="row.filename || ''">{{ row.filename || "—" }}</strong>
+                      <div class="uf-error-item__actions">
+                        <n-button
+                          size="tiny"
+                          quaternary
+                          :disabled="!row.id"
+                          @click="$emit('open-doc', row.id)"
+                        >
+                          Open
+                        </n-button>
+                        <n-button
+                          size="tiny"
+                          type="primary"
+                          ghost
+                          :loading="rescanningIds.has(row.id)"
+                          :disabled="!row.id || rescanningAll"
+                          @click="rescanDoc(row.id)"
+                        >
+                          AI Rescan
+                        </n-button>
+                      </div>
+                    </div>
                     <code>{{ row.error || "—" }}</code>
                   </div>
                   <div v-if="!userFailedDocs.length" class="uf-muted">None</div>
@@ -503,17 +537,34 @@
 
             <n-tab-pane name="settings" tab="Settings">
               <div v-if="settingsForm" class="uf-settings">
+                <section class="uf-card">
+                  <h3 class="uf-card__title">User profile</h3>
+                  <div class="uf-settings__grid">
+                    <label class="uf-control"><span>Email</span><n-input v-model:value="profileForm.email" size="small" clearable placeholder="Optional if username set" /></label>
+                    <label class="uf-control"><span>Username</span><n-input v-model:value="profileForm.username" size="small" clearable placeholder="Optional if email set" /></label>
+                    <label class="uf-control"><span>Display name</span><n-input v-model:value="profileForm.name" size="small" clearable /></label>
+                    <label class="uf-control"><span>Phone</span><n-input v-model:value="profileForm.phone" size="small" clearable /></label>
+                    <label class="uf-control"><span>Company</span><n-input v-model:value="profileForm.company_name" size="small" clearable /></label>
+                    <label class="uf-control"><span>Picture URL</span><n-input v-model:value="profileForm.picture_url" size="small" clearable /></label>
+                    <label class="uf-control">
+                      <span>Role</span>
+                      <n-select v-model:value="profileForm.role" :options="roleOptions" size="small" />
+                    </label>
+                    <label class="uf-control">
+                      <span>Plan</span>
+                      <n-select v-model:value="profileForm.plan" :options="planOptions" size="small" />
+                    </label>
+                  </div>
+                  <div class="uf-switches" style="margin-top:10px">
+                    <label><n-switch v-model:value="profileForm.is_active" size="small" /> Active</label>
+                    <label><n-switch v-model:value="profileForm.email_verified" size="small" /> Email verified</label>
+                  </div>
+                  <div class="uf-settings__bar" style="margin-top:12px">
+                    <n-button type="primary" size="small" :loading="savingProfile" @click="saveProfile">Save profile</n-button>
+                  </div>
+                </section>
+
                 <div class="uf-settings__bar">
-                  <div class="uf-settings__role">
-                    <span>Role</span>
-                    <n-select v-model:value="editingRole" :options="roleOptions" size="small" style="width:150px" />
-                    <n-button size="small" type="primary" ghost :loading="savingRole" :disabled="editingRole === selectedUser.role" @click="saveRole">Save role</n-button>
-                  </div>
-                  <div class="uf-settings__role">
-                    <span>Plan</span>
-                    <n-select v-model:value="editingPlan" :options="planOptions" size="small" style="width:150px" />
-                    <n-button size="small" type="primary" ghost :loading="savingPlan" :disabled="editingPlan === userPlan(selectedUser)" @click="savePlan">Save plan</n-button>
-                  </div>
                   <n-button type="primary" size="small" :loading="savingSettings" @click="saveSettings">Save settings</n-button>
                 </div>
 
@@ -593,9 +644,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import {
-  NCheckbox, NCheckboxGroup, NIcon, NInput, NInputNumber,
+  NButton, NCheckbox, NCheckboxGroup, NIcon, NInput, NInputNumber,
   NSelect, NSpace, NSpin, NSwitch, NTabPane, NTabs, NTag, NTooltip, useMessage,
 } from "naive-ui";
 import {
@@ -647,10 +698,19 @@ const badEmails = ref<any>(null);
 const pipelineGaps = ref<any>(null);
 
 const settingsForm = ref<any>(null);
-const editingRole = ref("user");
-const savingRole = ref(false);
-const editingPlan = ref("free");
-const savingPlan = ref(false);
+const profileForm = reactive({
+  email: "",
+  username: "",
+  name: "",
+  phone: "",
+  company_name: "",
+  picture_url: "",
+  role: "user",
+  plan: "free",
+  is_active: true,
+  email_verified: true,
+});
+const savingProfile = ref(false);
 const savingSettings = ref(false);
 const savingTemplate = ref(false);
 const defaultTemplateId = ref<number | null>(null);
@@ -690,7 +750,10 @@ const filteredUsers = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return props.users;
   return props.users.filter(
-    (u) => u.email?.toLowerCase().includes(q) || u.name?.toLowerCase().includes(q),
+    (u) =>
+      u.email?.toLowerCase().includes(q)
+      || u.username?.toLowerCase().includes(q)
+      || u.name?.toLowerCase().includes(q),
   );
 });
 
@@ -718,6 +781,71 @@ const userPendingReminders = computed(() =>
 const userFailedSends = computed(() =>
   (reminderMonitor.value?.failedSends ?? []).filter((r: any) => r.user_id === uid.value),
 );
+
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  contract_expiry: "Contract",
+  manual: "Manual",
+  task: "Task",
+};
+
+function reminderTypeLabel(row: any): string {
+  const raw = row?.source_type ?? row?.doc_type;
+  if (!raw) return "—";
+  return SOURCE_TYPE_LABELS[raw] ?? String(raw);
+}
+
+const rescanningIds = ref<Set<string>>(new Set());
+const rescanningAll = ref(false);
+
+async function rescanDoc(docId: string) {
+  if (!docId) return;
+  rescanningIds.value = new Set([...rescanningIds.value, docId]);
+  try {
+    await api.admin.reprocessDocument(docId);
+    message.success("AI rescan queued");
+    // Refresh monitors so status flips off "error" after queue pickup.
+    const [docs, gaps] = await Promise.allSettled([
+      api.admin.monitorDocuments(),
+      api.admin.monitorPipelineGaps(),
+    ]);
+    if (docs.status === "fulfilled") docMonitor.value = docs.value;
+    if (gaps.status === "fulfilled") pipelineGaps.value = gaps.value;
+  } catch (err: any) {
+    message.error(err?.message ?? "AI rescan failed");
+  } finally {
+    const next = new Set(rescanningIds.value);
+    next.delete(docId);
+    rescanningIds.value = next;
+  }
+}
+
+async function rescanAllFailed() {
+  const ids = userFailedDocs.value.map((r: any) => r.id).filter(Boolean) as string[];
+  if (!ids.length) return;
+  rescanningAll.value = true;
+  let ok = 0;
+  let fail = 0;
+  try {
+    for (const id of ids) {
+      try {
+        await api.admin.reprocessDocument(id);
+        ok += 1;
+      } catch {
+        fail += 1;
+      }
+    }
+    if (ok) message.success(`Queued AI rescan for ${ok} document${ok === 1 ? "" : "s"}`);
+    if (fail) message.error(`${fail} rescan${fail === 1 ? "" : "s"} failed to queue`);
+    const [docs, gaps] = await Promise.allSettled([
+      api.admin.monitorDocuments(),
+      api.admin.monitorPipelineGaps(),
+    ]);
+    if (docs.status === "fulfilled") docMonitor.value = docs.value;
+    if (gaps.status === "fulfilled") pipelineGaps.value = gaps.value;
+  } finally {
+    rescanningAll.value = false;
+  }
+}
 const userSchedule = computed(() =>
   (monthlyMonitor.value?.schedules ?? []).find((s: any) => s.user_id === uid.value || s.id === uid.value),
 );
@@ -773,7 +901,7 @@ const issueCount = computed(
 );
 
 function initials(u: any) {
-  const s = String(u.email || u.name || "?").trim();
+  const s = String(u.email || u.username || u.name || "?").trim();
   return s.slice(0, 2).toUpperCase();
 }
 
@@ -851,6 +979,7 @@ function applyFeatureDefaults() {
 async function selectUser(user: any) {
   selectedId.value = user.id;
   selectedUser.value = user;
+  fillProfileForm(user);
   tab.value = "overview";
   storageSearch.value = "";
   storageStatusFilter.value = null;
@@ -884,8 +1013,7 @@ async function reloadAll() {
     if (settingsRes.status === "fulfilled") {
       defaultTemplateId.value = settingsRes.value.default_email_template_id ?? null;
       settingsForm.value = makeSettingsForm(settingsRes.value);
-      editingRole.value = user.role ?? "user";
-      editingPlan.value = userPlan(user);
+      fillProfileForm(user);
       applyFeatureDefaults();
     }
 
@@ -924,6 +1052,7 @@ async function toggleActive() {
   try {
     const updated = await api.admin.updateUser(selectedUser.value.id, { is_active: newActive });
     selectedUser.value = { ...selectedUser.value, ...updated };
+    fillProfileForm(selectedUser.value);
     emit("user-updated", updated);
     message.success(newActive ? "User activated" : "User deactivated");
   } catch {
@@ -931,33 +1060,57 @@ async function toggleActive() {
   }
 }
 
-async function saveRole() {
-  if (!selectedUser.value) return;
-  savingRole.value = true;
-  try {
-    const updated = await api.admin.updateUser(selectedUser.value.id, { role: editingRole.value });
-    selectedUser.value = { ...selectedUser.value, ...updated };
-    emit("user-updated", updated);
-    message.success("Role updated");
-  } catch {
-    message.error("Error updating role");
-  } finally {
-    savingRole.value = false;
-  }
+function fillProfileForm(user: any) {
+  profileForm.email = user?.email ?? "";
+  profileForm.username = user?.username ?? "";
+  profileForm.name = user?.name ?? "";
+  profileForm.phone = user?.phone ?? "";
+  profileForm.company_name = user?.company_name ?? "";
+  profileForm.picture_url = user?.picture_url ?? "";
+  profileForm.role = user?.role ?? "user";
+  profileForm.plan = userPlan(user);
+  profileForm.is_active = user?.is_active !== 0;
+  profileForm.email_verified = user?.email_verified !== 0 && user?.email_verified !== false;
 }
 
-async function savePlan() {
+async function saveProfile() {
   if (!selectedUser.value) return;
-  savingPlan.value = true;
+  const email = profileForm.email.trim().toLowerCase();
+  const username = profileForm.username.trim().toLowerCase();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    message.error("Email is invalid");
+    return;
+  }
+  if (username && (!/^[a-z0-9][a-z0-9._-]{1,31}$/.test(username) || username.includes("@"))) {
+    message.error("Username must be 2–32 chars: letters, digits, . _ - (no @)");
+    return;
+  }
+  if (!email && !username) {
+    message.error("Email or username is required");
+    return;
+  }
+  savingProfile.value = true;
   try {
-    const updated = await api.admin.updateUser(selectedUser.value.id, { plan: editingPlan.value });
+    const updated = await api.admin.updateUser(selectedUser.value.id, {
+      email: email || null,
+      username: username || null,
+      name: profileForm.name.trim() || null,
+      phone: profileForm.phone.trim() || null,
+      company_name: profileForm.company_name.trim() || null,
+      picture_url: profileForm.picture_url.trim() || null,
+      role: profileForm.role,
+      plan: profileForm.plan,
+      is_active: profileForm.is_active,
+      email_verified: profileForm.email_verified,
+    });
     selectedUser.value = { ...selectedUser.value, ...updated };
+    fillProfileForm(selectedUser.value);
     emit("user-updated", updated);
-    message.success("Plan updated");
-  } catch {
-    message.error("Error updating plan");
+    message.success("User profile saved");
+  } catch (err: any) {
+    message.error(err?.message ?? "Error updating profile");
   } finally {
-    savingPlan.value = false;
+    savingProfile.value = false;
   }
 }
 
@@ -1261,6 +1414,18 @@ watch([storageSearch, storageStatusFilter], () => {
 
 .uf-card--wide { grid-column: 1 / -1; }
 
+.uf-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.uf-card__head .uf-card__title {
+  margin: 0;
+}
+
 .uf-card__title {
   margin: 0 0 10px;
   font-size: 14px;
@@ -1350,6 +1515,12 @@ watch([storageSearch, storageStatusFilter], () => {
   gap: 8px;
   margin-bottom: 4px;
   color: var(--text-secondary);
+}
+.uf-error-item__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  align-items: center;
 }
 .uf-error-item code {
   display: block;

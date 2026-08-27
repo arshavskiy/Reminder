@@ -12,6 +12,7 @@ import { ObjectId } from "mongodb";
 import { createHash } from "crypto";
 import { col } from "../db/db";
 import { logger } from "../logger";
+import { featureFlagsForUser } from "../plans/tierFeatures";
 import {
   deleteEvent,
   ensureAppCalendar,
@@ -136,6 +137,8 @@ async function linkFor(userId: string, reminderId: string) {
  * when the user has not connected a calendar or nothing changed.
  */
 export async function pushReminderToCalendar(userId: string, reminderId: string): Promise<void> {
+  const user = await col<any>("users").findOne({ _id: toObjectId(userId) });
+  if (!featureFlagsForUser(user).googleCalendarSync) return;
   const accessToken = await resolveCalendarToken(userId);
   if (!accessToken) return;
   const calendarId = await ensureAppCalendar(userId, accessToken);
@@ -334,12 +337,13 @@ export async function pushAllReminders(userId: string): Promise<number> {
  * the user's own and must be left alone.
  */
 export async function pullCalendarChanges(userId: string): Promise<{ updated: number; cancelled: number }> {
+  const user = await col<any>("users").findOne({ _id: toObjectId(userId) });
+  if (!featureFlagsForUser(user).googleCalendarSync) return { updated: 0, cancelled: 0 };
   const accessToken = await resolveCalendarToken(userId);
   if (!accessToken) return { updated: 0, cancelled: 0 };
   const calendarId = await ensureAppCalendar(userId, accessToken);
   if (!calendarId) return { updated: 0, cancelled: 0 };
 
-  const user = await col<any>("users").findOne({ _id: toObjectId(userId) });
   const storedToken = user?.calendar_sync_token ? String(user.calendar_sync_token) : null;
 
   let result = await listEventChanges(accessToken, calendarId, storedToken);
@@ -404,9 +408,10 @@ export async function pullCalendarChanges(userId: string): Promise<{ updated: nu
 export async function syncAllCalendars(): Promise<void> {
   const users = await col<any>("users")
     .find({ calendar_access_token: { $exists: true, $ne: "" }, calendar_scope_granted: { $ne: false } })
-    .project({ _id: 1 })
+    .project({ _id: 1, plan: 1, role: 1 })
     .toArray();
   for (const user of users) {
+    if (!featureFlagsForUser(user).googleCalendarSync) continue;
     try {
       await pullCalendarChanges(String(user._id));
     } catch (e) {

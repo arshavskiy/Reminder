@@ -1,32 +1,155 @@
+import {AsyncLocalStorage} from "async_hooks";
 import {Collection, Db, MongoClient} from "mongodb";
 import {logger} from "../logger";
 
-const MONGODB_URI = process.env.MONGODB_LOCAL_URI ?? process.env.MONGODB_URI ?? "mongodb://127.0.0.1:27017";
-const DB_NAME = process.env.MONGODB_DB ?? "reminder-app";
+export type AdminDbTarget = "local" | "production";
 
-let _client: MongoClient | null = null;
-let _db: Db | null = null;
+const LOCAL_URI =
+  process.env.MONGODB_LOCAL_URI
+  ?? ((process.env.MONGODB_URI && !process.env.MONGODB_PRODUCTION_URI)
+    ? process.env.MONGODB_URI
+    : "mongodb://127.0.0.1:27017");
+
+/** Atlas / production URI when distinct from local. */
+const PRODUCTION_URI =
+  process.env.MONGODB_PRODUCTION_URI
+  ?? (process.env.MONGODB_LOCAL_URI ? process.env.MONGODB_URI : undefined);
+
+const LOCAL_DB_NAME = process.env.MONGODB_DB ?? "reminder-app";
+const PRODUCTION_DB_NAME =
+  process.env.MONGODB_PRODUCTION_DB
+  ?? process.env.MONGODB_DB
+  ?? "reminder-app";
+
+/** Startup / non-admin default: prefer local when both are configured. */
+const PRIMARY_TARGET: AdminDbTarget =
+  process.env.MONGODB_LOCAL_URI && PRODUCTION_URI ? "local" : "local";
+
+type DbSlot = {
+  target: AdminDbTarget;
+  client: MongoClient;
+  db: Db;
+  uri: string;
+  dbName: string;
+};
+
+const als = new AsyncLocalStorage<{ target: AdminDbTarget }>();
+
+let _primary: DbSlot | null = null;
+let _local: DbSlot | null = null;
+let _production: DbSlot | null = null;
+
+function redactUri(uri: string): string {
+  return uri.replace(/\/\/[^:]+:[^@]+@/, "//***:***@");
+}
+
+async function openSlot(target: AdminDbTarget, uri: string, dbName: string): Promise<DbSlot> {
+  const client = new MongoClient(uri);
+  await client.connect();
+  const db = client.db(dbName);
+  await ensureCollections(db);
+  await applyIndexes(db);
+  logger.info("db_connected", {
+    target,
+    db_name: dbName,
+    uri: redactUri(uri),
+  });
+  return { target, client, db, uri, dbName };
+}
 
 export async function connectDb(): Promise<Db> {
-  if (_db) return _db;
-  _client = new MongoClient(MONGODB_URI);
-  await _client.connect();
-  _db = _client.db(DB_NAME);
-  await ensureCollections(_db);
-  await applyIndexes(_db);
-  logger.info("db_connected", { db_name: DB_NAME, uri: MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, "//***:***@") });
-  return _db;
+  if (_primary) return _primary.db;
+
+  _local = await openSlot("local", LOCAL_URI, LOCAL_DB_NAME);
+
+  if (PRODUCTION_URI && PRODUCTION_URI !== LOCAL_URI) {
+    try {
+      _production = await openSlot("production", PRODUCTION_URI, PRODUCTION_DB_NAME);
+    } catch (err) {
+      logger.warn("db_production_connect_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        uri: redactUri(PRODUCTION_URI),
+      });
+      _production = null;
+    }
+  } else if (PRODUCTION_URI && PRODUCTION_URI === LOCAL_URI) {
+    _production = _local;
+  }
+
+  _primary = _local;
+  return _primary.db;
+}
+
+export function getPrimaryDb(): Db {
+  if (!_primary) throw new Error("Database not connected. Call connectDb() first.");
+  return _primary.db;
 }
 
 export function getDb(): Db {
-  if (!_db) throw new Error("Database not connected. Call connectDb() first.");
-  return _db;
+  const override = als.getStore()?.target;
+  if (override === "production") {
+    if (!_production) {
+      throw new Error("Production database is not configured or failed to connect");
+    }
+    return _production.db;
+  }
+  if (override === "local") {
+    if (!_local) throw new Error("Database not connected. Call connectDb() first.");
+    return _local.db;
+  }
+  return getPrimaryDb();
+}
+
+export function getActiveDbTarget(): AdminDbTarget {
+  return als.getStore()?.target ?? PRIMARY_TARGET;
+}
+
+export function enterAdminDbTarget(target: AdminDbTarget): void {
+  als.enterWith({ target });
+}
+
+export function runWithDbTarget<T>(target: AdminDbTarget, fn: () => T): T {
+  return als.run({ target }, fn);
+}
+
+export function runWithPrimaryDb<T>(fn: () => T): T {
+  return als.run({ target: PRIMARY_TARGET }, fn);
+}
+
+export function parseAdminDbTarget(raw: unknown): AdminDbTarget {
+  const value = String(raw ?? "local").trim().toLowerCase();
+  if (value === "production" || value === "prod" || value === "atlas") return "production";
+  return "local";
+}
+
+export function getDbTargetStatus() {
+  return {
+    active: getActiveDbTarget(),
+    primary: PRIMARY_TARGET,
+    local: {
+      configured: Boolean(_local),
+      connected: Boolean(_local),
+      dbName: _local?.dbName ?? LOCAL_DB_NAME,
+      host: redactUri(_local?.uri ?? LOCAL_URI),
+    },
+    production: {
+      configured: Boolean(PRODUCTION_URI),
+      connected: Boolean(_production),
+      dbName: _production?.dbName ?? PRODUCTION_DB_NAME,
+      host: PRODUCTION_URI ? redactUri(_production?.uri ?? PRODUCTION_URI) : null,
+      sameAsLocal: Boolean(_production && _local && _production.db === _local.db),
+    },
+  };
 }
 
 export async function closeDb(): Promise<void> {
-  await _client?.close();
-  _client = null;
-  _db = null;
+  const clients = new Set<MongoClient>();
+  if (_local) clients.add(_local.client);
+  if (_production) clients.add(_production.client);
+  await Promise.all([...clients].map((c) => c.close()));
+  _primary = null;
+  _local = null;
+  _production = null;
 }
 
 // All collection names used by the application
@@ -70,7 +193,7 @@ async function ensureCollections(db: Db): Promise<void> {
   for (const name of ALL_COLLECTIONS) {
     if (!existing.has(name)) {
       await db.createCollection(name);
-      logger.info("db_collection_created", { collection: name });
+      logger.info("db_collection_created", { collection: name, db_name: db.databaseName });
     }
   }
 }
@@ -79,6 +202,7 @@ async function applyIndexes(db: Db): Promise<void> {
   // users
   await db.collection("users").createIndex({ google_sub: 1 }, { unique: true, sparse: true });
   await db.collection("users").createIndex({ email: 1 }, { unique: true, sparse: true });
+  await db.collection("users").createIndex({ username: 1 }, { unique: true, sparse: true });
   await db.collection("users").createIndex({ verification_token: 1 }, { sparse: true });
   await db.collection("users").createIndex({ reset_token: 1 }, { sparse: true });
   await db.collection("users").createIndex({gmail_email: 1}, {unique: true, sparse: true});
@@ -138,11 +262,6 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("contracts").createIndex({ user_id: 1 });
   await db.collection("contracts").createIndex({ expiry_date: 1 });
   await db.collection("contracts").createIndex({ status: 1 });
-  // Unique per real document_id, but many manual contracts (document_id: null)
-  // must coexist. A sparse index still indexes explicit nulls, so a second
-  // manual contract collides; a partial index scoped to string document_ids
-  // enforces uniqueness only where it matters. Recreate if the old
-  // sparse/plain index is present.
   try { await db.collection("contracts").dropIndex("document_id_1"); } catch { /* didn't exist */ }
   await db.collection("contracts").createIndex(
     { document_id: 1 },
@@ -150,7 +269,7 @@ async function applyIndexes(db: Db): Promise<void> {
   );
   await db.collection("contracts").createIndex({ client_id: 1 });
 
-  // invoices / bills — extracted from invoice templates; not part of reminder contract flow
+  // invoices / bills
   await db.collection("invoices").createIndex({ user_id: 1 });
   await db.collection("invoices").createIndex({ document_id: 1 }, { unique: true });
   await db.collection("invoices").createIndex({ supplier_name: 1 });
@@ -183,7 +302,7 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("email_log").createIndex({ provider_message_id: 1 });
   await db.collection("email_log").createIndex({ sent_at: -1 });
 
-  // equipment — drop old unique(name,category) if present, replace with serial_number
+  // equipment
   try { await db.collection("equipment").dropIndex("name_1_category_1"); } catch { /* didn't exist */ }
   await db.collection("equipment").createIndex({ category: 1 });
   await db.collection("equipment").createIndex({ name: 1 });
@@ -209,9 +328,9 @@ async function applyIndexes(db: Db): Promise<void> {
   // print_templates
   await db.collection("print_templates").createIndex({ user_id: 1 });
   await db.collection("print_templates").createIndex({ user_id: 1, name: 1 });
-    await db.collection("print_templates").createIndex({is_shared: 1}, {sparse: true});
+  await db.collection("print_templates").createIndex({is_shared: 1}, {sparse: true});
 
-  // print_template_drafts — legacy template drafts plus one saved fill-state per contract
+  // print_template_drafts
   try { await db.collection("print_template_drafts").dropIndex("user_id_1_template_id_1"); } catch { /* didn't exist */ }
   await db.collection("print_template_drafts").createIndex({ user_id: 1, template_id: 1 });
   await db.collection("print_template_drafts").createIndex(
@@ -224,7 +343,7 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("features").createIndex({ key: 1 }, { unique: true });
   await db.collection("features").createIndex({ scope: 1, sort_order: 1 });
 
-  // engineer_profiles — one per user
+  // engineer_profiles
   await db.collection("engineer_profiles").createIndex({ user_id: 1 }, { unique: true, sparse: true });
 
   // certificates

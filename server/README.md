@@ -101,8 +101,11 @@ Open **http://localhost:4173**. Vite proxies `/api`, `/auth`, and `/ws` to the s
 
 | Variable | Required | Default | Description |
 |----------|:--------:|---------|-------------|
-| `MONGODB_URI` | ✓ | `mongodb://127.0.0.1:27017` | Connection string |
+| `MONGODB_URI` | ✓ | `mongodb://127.0.0.1:27017` | Connection string (production / Atlas when `MONGODB_LOCAL_URI` is also set) |
+| `MONGODB_LOCAL_URI` | | — | Local Mongo for admin DB override (preferred startup DB) |
+| `MONGODB_PRODUCTION_URI` | | — | Optional explicit production URI for admin override |
 | `MONGODB_DB` | | `reminder-app` | Database name |
+| `MONGODB_PRODUCTION_DB` | | same as `MONGODB_DB` | Optional production DB name |
 | `PORT` | | `3737` | HTTP port |
 | `OPENAI_API_KEY` | ✓ | — | GPT-4o-mini |
 | `OLLAMA_URL` | | `http://localhost:11434` | Local inference endpoint |

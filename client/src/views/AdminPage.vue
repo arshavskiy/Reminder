@@ -36,9 +36,19 @@
       </nav>
 
       <div class="admin-sidebar__footer">
-        <div class="admin-env-badge" :class="`admin-env-badge--${appEnv}`">
+        <div class="admin-db-switch" title="Admin data source (Mongo)">
+          <span class="admin-db-switch__label">DB</span>
+          <n-select
+            size="tiny"
+            :value="adminDbTarget"
+            :options="adminDbTargetOptions"
+            :disabled="dbTargetSwitching"
+            @update:value="onAdminDbTargetChange"
+          />
+        </div>
+        <div class="admin-env-badge" :class="`admin-env-badge--${adminDbTarget === 'production' ? 'production' : appEnv}`">
           <span class="admin-env-badge__dot" />
-          <span>{{ appEnv === 'production' ? 'PRODUCTION' : appEnv.toUpperCase() }}</span>
+          <span>{{ adminDbTarget === 'production' ? 'PROD DATA' : 'LOCAL DATA' }}</span>
           <span v-if="dbName" class="admin-env-badge__db">{{ dbName }}</span>
         </div>
         <button class="admin-sidebar__item" type="button" @click="router.push('/dashboard')">
@@ -85,6 +95,7 @@
       <!-- ── Users ── -->
       <section v-if="activeSection === 'users'" class="admin-section admin-section--users">
         <AdminUserFocus
+          :key="adminDbTarget"
           :users="users"
           :loading="usersLoading"
           @refresh="loadUsers"
@@ -92,6 +103,14 @@
           @open-report="openReportModal"
           @user-updated="onFocusedUserUpdated"
         />
+      </section>
+
+      <section v-if="activeSection === 'magic_links'" class="admin-section">
+        <AdminMagicLinkPanel :key="adminDbTarget" @created="onMagicLinkUserCreated" />
+      </section>
+
+      <section v-if="activeSection === 'gmail'" class="admin-section admin-section--gmail">
+        <GmailInboxPage />
       </section>
 
       <!-- ── Documents & Extraction ── -->
@@ -1248,7 +1267,16 @@
             <div class="monitor-block__title">Application Configuration</div>
             <div class="admin-settings-grid" style="margin-top:12px">
               <div class="admin-setting-row"><span class="admin-setting-key">Environment</span><span class="admin-setting-val">{{ adminSettings.appEnv }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Active DB target</span><span class="admin-setting-val">{{ adminDbTarget }}</span></div>
               <div class="admin-setting-row"><span class="admin-setting-key">Database</span><span class="admin-setting-val">{{ adminSettings.dbName || '—' }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Local Mongo</span><span class="admin-setting-val">{{ adminSettings.dbTargets?.local?.host || '—' }}</span></div>
+              <div class="admin-setting-row"><span class="admin-setting-key">Production Mongo</span>
+                <span class="admin-setting-val">
+                  {{ adminSettings.dbTargets?.production?.connected
+                    ? (adminSettings.dbTargets.production.host || 'connected')
+                    : (adminSettings.dbTargets?.production?.configured ? 'configured (offline)' : 'not configured') }}
+                </span>
+              </div>
               <div class="admin-setting-row"><span class="admin-setting-key">Auto Extract</span>
                 <n-tag :type="adminSettings.autoExtract ? 'default' : 'error'" size="small" round>{{ adminSettings.autoExtract ? 'Enabled' : 'Disabled' }}</n-tag>
               </div>
@@ -1367,7 +1395,7 @@
 
 <script setup lang="ts">
 import {computed, h, onMounted, onUnmounted, ref, watch} from "vue";
-import {useRouter} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import type {DataTableColumns} from "naive-ui";
 import {
   NAlert,
@@ -1396,6 +1424,7 @@ import {
   DownloadOutline,
   EyeOutline,
   FlashOutline,
+  KeyOutline,
   MailOutline,
   MenuOutline,
   PulseOutline,
@@ -1409,13 +1438,16 @@ import {
   TimerOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
-import {api} from "../services/apiService.js";
+import {api, getAdminDbTarget, setAdminDbTarget, type AdminDbTarget} from "../services/apiService.js";
 import DocumentDetailPage from "./DocumentDetailPage.vue";
 import AdminStatCard from "../components/AdminStatCard.vue";
 import AdminReportModal from "../components/AdminReportModal.vue";
 import AdminUserFocus from "../components/AdminUserFocus.vue";
+import AdminMagicLinkPanel from "../components/AdminMagicLinkPanel.vue";
+import GmailInboxPage from "./GmailInboxPage.vue";
 
 const router = useRouter();
+const route = useRoute();
 const message = useMessage();
 
 // ── Admin push notifications ──
@@ -1454,10 +1486,52 @@ async function onTestPush() {
 
 const appEnv = ref("development");
 const dbName = ref("");
+const adminDbTarget = ref<AdminDbTarget>(getAdminDbTarget());
+const dbTargetSwitching = ref(false);
+const adminDbTargetOptions = [
+  { label: "Local", value: "local" },
+  { label: "Production", value: "production" },
+];
+const productionDbAvailable = ref(true);
 
+async function refreshDbTargetMeta() {
+  try {
+    const status = await api.admin.getDbTargets();
+    productionDbAvailable.value = Boolean(status.production?.connected);
+    dbName.value = adminDbTarget.value === "production"
+      ? (status.production?.dbName || dbName.value)
+      : (status.local?.dbName || dbName.value);
+  } catch {
+    /* non-critical */
+  }
+}
+
+async function onAdminDbTargetChange(next: AdminDbTarget) {
+  if (!next || next === adminDbTarget.value) return;
+  if (next === "production" && !productionDbAvailable.value) {
+    message.warning("Production Mongo is not configured. Set MONGODB_URI (+ MONGODB_LOCAL_URI) or MONGODB_PRODUCTION_URI.");
+    return;
+  }
+  dbTargetSwitching.value = true;
+  try {
+    setAdminDbTarget(next);
+    adminDbTarget.value = next;
+    users.value = [];
+    docMonitor.value = null;
+    await refreshDbTargetMeta();
+    await loadSectionData(activeSection.value);
+    message.success(next === "production" ? "Admin data: production Mongo" : "Admin data: local Mongo");
+  } catch (err: any) {
+    message.error(err?.message ?? "Failed to switch database target");
+  } finally {
+    dbTargetSwitching.value = false;
+  }
+}
 // ── Sidebar ────────────────────────────────────────────────────────────────
 const adminSections = [
   { key: "users",              label: "Users",                  icon: PeopleOutline },
+  { key: "magic_links",        label: "Magic Links",            icon: KeyOutline },
+  { key: "gmail",              label: "Gmail Inbox",            icon: MailOutline },
   { key: "documents",          label: "Documents & Extraction", icon: DocumentOutline },
   { key: "extraction_quality", label: "Extraction Quality",     icon: FlashOutline },
   { key: "reminders",          label: "Reminders",              icon: NotificationsOutline },
@@ -1494,8 +1568,24 @@ function onFocusedUserUpdated(updated: any) {
   users.value = users.value.map((u) => (u.id === updated.id ? { ...u, ...updated } : u));
 }
 
+function onMagicLinkUserCreated(user: any) {
+  if (!user?.id) {
+    void loadUsers();
+    return;
+  }
+  const idx = users.value.findIndex((u) => u.id === user.id);
+  if (idx >= 0) {
+    users.value[idx] = { ...users.value[idx], ...user };
+  } else {
+    users.value = [user, ...users.value];
+  }
+}
+
 function resolveUserEmail(userId: string) {
-  return users.value.find((u) => u.id === userId)?.email ?? userId?.slice(-6) ?? "—";
+  return users.value.find((u) => u.id === userId)?.email
+    ?? users.value.find((u) => u.id === userId)?.username
+    ?? userId?.slice(-6)
+    ?? "—";
 }
 
 const showDocModal = ref(false);
@@ -1563,7 +1653,7 @@ const extractionLimit = 50;
 const extractionUserId = ref<string | null>(null);
 const extractionsLoading = ref(false);
 const userSelectOptions = computed(() =>
-  users.value.map((u) => ({ label: u.email ?? u.id, value: u.id })),
+  users.value.map((u) => ({ label: u.email || u.username || u.id, value: u.id })),
 );
 
 
@@ -1732,13 +1822,19 @@ const failedDocsColumns: DataTableColumns<any> = [
       row.created_at ? new Date(row.created_at).toLocaleDateString("en-US") : "—"),
   },
   {
-    title: "Action", key: "action", align: "center", width: 100,
-    render: (row) => h("n-button", {
+    title: "Action", key: "action", align: "center", width: 110,
+    render: (row) => row.id ? h(NButton, {
+      size: "tiny",
+      type: "primary",
+      ghost: true,
+      loading: reprocessingIds.value.has(row.id),
+      onClick: () => reprocessDoc(row.id),
+    }, { default: () => "AI Rescan" }) : h(NButton, {
       text: true,
       type: "primary",
       size: "small",
       onClick: () => openErrorModal(row),
-    }, "View Error"),
+    }, { default: () => "View Error" }),
   },
 ];
 
@@ -1888,7 +1984,7 @@ const monthlyTriggerColumns: DataTableColumns<any> = [
 // ── Reminders monitor ──────────────────────────────────────────────────────
 const reminderMonitor = ref<any>(null);
 
-const REMINDER_STATUSES = ["pending", "sent", "snoozed", "dismissed", "error"];
+const REMINDER_STATUSES = ["pending", "sent", "snoozed", "dismissed", "no_email", "error"];
 const REMINDER_STATUS_HE: Record<string, string> = {
   pending: "Pending", sent: "Sent", snoozed: "Snoozed", dismissed: "Dismissed", error: "Error",
 };
@@ -1921,12 +2017,12 @@ const pendingReminderColumns: DataTableColumns<any> = [
     render: (row) => h("span", { style: "font-size:12px" }, resolveUserEmail(row.user_id)),
   },
   {
-    title: "Type", key: "doc_type", align: "left", width: 110,
-    render: (row) => h("span", { style: "font-size:12px" }, row.doc_type ?? "—"),
+    title: "Type", key: "source_type", align: "left", width: 130,
+    render: (row) => h("span", { style: "font-size:12px" }, row.source_type ?? row.doc_type ?? "—"),
   },
   {
     title: "Note", key: "note", align: "left", minWidth: 220, ellipsis: { tooltip: true },
-    render: (row) => h("span", { style: "font-size:12px" }, row.note ?? "—"),
+    render: (row) => h("span", { style: "font-size:12px" }, row.note ?? row.title ?? "—"),
   },
   {
     title: "Trigger Date", key: "trigger_date", align: "left", width: 120,
@@ -2491,6 +2587,9 @@ async function switchSection(key: string) {
   if (isMobileViewport.value) {
     showMobileNav.value = false;
   }
+  if (route.query.section !== key) {
+    await router.replace({ query: { ...route.query, section: key } });
+  }
   await loadSectionData(key);
 }
 
@@ -2499,8 +2598,8 @@ async function reloadSection() {
 }
 
 async function loadSectionData(key: string) {
-  if (key === "users" || key === "stats") {
-    if (users.value.length === 0) await loadUsers();
+  if (key === "users" || key === "stats" || key === "magic_links" || key === "gmail") {
+    if (key !== "gmail" && users.value.length === 0) await loadUsers();
     return;
   }
   sectionLoading.value = true;
@@ -2596,6 +2695,14 @@ async function startPolling() {
   }, POLLING_SCHEDULE.documents));
 }
 
+function sectionFromQuery(): string | null {
+  const raw = route.query.section;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || typeof value !== "string") return null;
+  if (value === "s3_storage") return "storage_drive";
+  return adminSections.some((item) => item.key === value) ? value : null;
+}
+
 onMounted(async () => {
   updateViewportState();
   window.addEventListener("resize", updateViewportState);
@@ -2605,9 +2712,24 @@ onMounted(async () => {
     dbName.value = cfg.dbName ?? "";
   } catch { /* non-critical */ }
   await loadUsers();
+  await refreshDbTargetMeta();
+  const initialSection = sectionFromQuery();
+  if (initialSection) {
+    await switchSection(initialSection);
+  }
   startPolling();
   refreshPushState();
 });
+
+watch(
+  () => route.query.section,
+  async () => {
+    const next = sectionFromQuery();
+    if (next && next !== activeSection.value) {
+      await switchSection(next);
+    }
+  },
+);
 
 onUnmounted(() => {
   window.removeEventListener("resize", updateViewportState);
@@ -2799,6 +2921,16 @@ onUnmounted(() => {
   min-height: 0;
   padding: 0;
   overflow: hidden;
+}
+
+.admin-section--gmail {
+  padding: 0;
+  max-width: none;
+}
+
+.admin-section--gmail :deep(.page2.gmail-page) {
+  padding-top: 0;
+  min-height: auto;
 }
 
 .admin-section__toolbar {
@@ -3200,6 +3332,25 @@ onUnmounted(() => {
 }
 
 /* ── Env badge ───────────────────────────────────────────────────────────── */
+.admin-db-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0 2px;
+}
+
+.admin-db-switch__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.admin-db-switch :deep(.n-base-selection) {
+  min-width: 118px;
+}
+
 .admin-env-badge {
   display: flex;
   align-items: center;

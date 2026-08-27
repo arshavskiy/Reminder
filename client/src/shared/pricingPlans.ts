@@ -6,6 +6,8 @@ export const PLAN_LABELS: Record<PlanId, string> = {
     business: "עסקי",
 };
 
+export type QuotaScope = "monthly" | "lifetime" | "unlimited";
+
 export interface PricingPlan {
     id: PlanId;
     name: string;
@@ -24,6 +26,25 @@ export interface TierFeatureFlags {
     automaticEmailReminders: boolean;
     automaticMonthlyReports: boolean;
     excelExport: boolean;
+    /** null = unlimited */
+    maxUsers: number | null;
+    /** null = unlimited */
+    maxEmailAccounts: number | null;
+}
+
+export interface PlanEntitlements extends TierFeatureFlags {
+    plan: PlanId;
+    ocr: true;
+    previewAndExtraction: true;
+    documents: {
+        scope: QuotaScope;
+        invoices: number | null;
+        contracts: number | null;
+    };
+    reminders: {
+        scope: QuotaScope;
+        limit: number | null;
+    };
 }
 
 export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
@@ -34,14 +55,18 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         automaticEmailReminders: false,
         automaticMonthlyReports: false,
         excelExport: false,
+        maxUsers: 1,
+        maxEmailAccounts: 1,
     },
     basic: {
         gmailInvoiceHistoryMonths: 12,
         googleDriveSync: true,
-        googleCalendarSync: true,
+        googleCalendarSync: false,
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
+        maxUsers: 2,
+        maxEmailAccounts: 2,
     },
     business: {
         gmailInvoiceHistoryMonths: 48,
@@ -50,8 +75,21 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
+        maxUsers: null,
+        maxEmailAccounts: null,
     },
 };
+
+export const PLAN_GATE_MESSAGES = {
+    calendar: "סנכרון Google Calendar זמין במסלול עסקי בלבד.",
+    automaticEmailReminders: "תזכורות אימייל אוטומטיות זמינות במסלולים בסיסי ועסקי בלבד.",
+    automaticMonthlyReports: "דוחות חודשיים אוטומטיים זמינים במסלולים בסיסי ועסקי בלבד.",
+    excelExport: "ייצוא לאקסל זמין במסלולים בסיסי ועסקי בלבד.",
+    extraUsers: "הוספת משתמשים זמינה במסלולים בסיסי ועסקי בלבד.",
+    extraEmailAccounts: "חיבור חשבונות דוא״ל נוספים זמין במסלולים בסיסי ועסקי בלבד.",
+} as const;
+
+export const PRICING_PAGE_URL = "https://remindocr.com/pricing";
 
 export const PRICING_PLANS: PricingPlan[] = [
     {
@@ -129,6 +167,23 @@ export function planAllowsGoogleDrive(planId: PlanId | string | null | undefined
     return tierFeatureFlags(planId).googleDriveSync;
 }
 
+/** Google Calendar sync is a business-plan feature. */
+export function planAllowsGoogleCalendar(planId: PlanId | string | null | undefined): boolean {
+    return tierFeatureFlags(planId).googleCalendarSync;
+}
+
+export function planAllowsAutomaticEmailReminders(planId: PlanId | string | null | undefined): boolean {
+    return tierFeatureFlags(planId).automaticEmailReminders;
+}
+
+export function planAllowsAutomaticMonthlyReports(planId: PlanId | string | null | undefined): boolean {
+    return tierFeatureFlags(planId).automaticMonthlyReports;
+}
+
+export function planAllowsExcelExport(planId: PlanId | string | null | undefined): boolean {
+    return tierFeatureFlags(planId).excelExport;
+}
+
 export function normalizePlanId(planId: PlanId | string | null | undefined): PlanId {
     const plan = String(planId ?? "").trim().toLowerCase();
     if (plan === "business" || plan === "admin") return "business";
@@ -162,8 +217,6 @@ export function formatPlanPrice(plan: PricingPlan): string {
     if (plan.price === 0) return "חינם";
     return `₪${plan.price}${plan.period ? ` ${plan.period}` : ""}`;
 }
-
-export type QuotaScope = "monthly" | "lifetime" | "unlimited";
 
 export function formatQuotaScope(scope: QuotaScope): string {
     if (scope === "monthly") return "מכסה חודשית";

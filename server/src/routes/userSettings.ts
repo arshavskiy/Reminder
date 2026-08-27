@@ -1,7 +1,10 @@
 import express from "express";
+import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
 import {DEFAULT_FEATURES, DEFAULT_FEATURES_NESTED, featuresToNested, normalizeFeatures} from "../features";
+import {buildPlanEntitlements, persistPlanEntitlements} from "../plans/planEntitlements";
+import {PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 
 const DEFAULT_REPORT_CONFIG = {
   all_fields: [
@@ -53,6 +56,13 @@ export function registerUserSettingsRoutes(app: express.Application) {
       return;
     }
 
+    let user: { plan?: string | null; role?: string | null } | null = null;
+    try {
+      user = await col("users").findOne({ _id: new ObjectId(auth.userId) }) as any;
+    } catch {
+      user = null;
+    }
+    const plan_entitlements = buildPlanEntitlements(user);
     const row = await col("user_settings").findOne({ user_id: auth.userId });
     if (!row) {
       const defaults = {
@@ -74,6 +84,8 @@ export function registerUserSettingsRoutes(app: express.Application) {
         // so opting out has to be a deliberate choice rather than the default.
         s3_store_invoices: true,
         s3_store_inspection_reports: true,
+        plan_entitlements,
+        plan_entitlements_updated_at: new Date(),
       };
       await col("user_settings").updateOne(
         { user_id: auth.userId },
@@ -109,8 +121,9 @@ export function registerUserSettingsRoutes(app: express.Application) {
       );
       (row as any).report_config = DEFAULT_REPORT_CONFIG;
     }
+    await persistPlanEntitlements(auth.userId);
     const { _id, ...rest } = row as any;
-    res.json({ id: _id?.toString(), ...rest });
+    res.json({ id: _id?.toString(), ...rest, plan_entitlements });
   });
 
   app.put("/api/user-settings", async (req, res) => {
@@ -146,7 +159,17 @@ export function registerUserSettingsRoutes(app: express.Application) {
     if (body.email_from_name !== undefined)        patch.email_from_name = body.email_from_name ?? null;
     if (body.reminder_advance_days !== undefined)  patch.reminder_advance_days = body.reminder_advance_days;
     if (body.ocr_language !== undefined)           patch.ocr_language = body.ocr_language;
-    if (body.monthly_report_enabled !== undefined) patch.monthly_report_enabled = Boolean(body.monthly_report_enabled);
+    if (body.monthly_report_enabled !== undefined) {
+      const entitlements = await persistPlanEntitlements(auth.userId);
+      if (Boolean(body.monthly_report_enabled) && !entitlements.automaticMonthlyReports) {
+        res.status(403).json({
+          error: "automatic_reports_plan_required",
+          message: PLAN_GATE_MESSAGES.automaticMonthlyReports,
+        });
+        return;
+      }
+      patch.monthly_report_enabled = Boolean(body.monthly_report_enabled);
+    }
     if (body.monthly_report_recipients !== undefined) patch.monthly_report_recipients = String(body.monthly_report_recipients ?? "");
     if (body.monthly_report_day !== undefined) patch.monthly_report_day = Math.min(28, Math.max(1, Number(body.monthly_report_day)));
     if (body.monthly_report_hour !== undefined) patch.monthly_report_hour = Math.min(23, Math.max(0, Number(body.monthly_report_hour)));
@@ -183,8 +206,9 @@ export function registerUserSettingsRoutes(app: express.Application) {
       { upsert: true }
     );
 
+    const plan_entitlements = await persistPlanEntitlements(auth.userId);
     const row = await col("user_settings").findOne({ user_id: auth.userId });
     const { _id, ...rest } = (row ?? {}) as any;
-    res.json({ id: _id?.toString(), ...rest });
+    res.json({ id: _id?.toString(), ...rest, plan_entitlements });
   });
 }

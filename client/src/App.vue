@@ -466,11 +466,7 @@ const allNav = [
   {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment},
-  {label: "חשבוניות", key: "invoices", minRole: "user", feature: FEATURES.pages.invoices},
-  // {label: "פרופיל", key: "profile", minRole: "user", feature: FEATURES.pages.profile},
-  // Print templates are reached from the contracts page, next to "תסקיר חדש".
-  // {label: "הדפסת תסקיר", key: "compose", minRole: "user", feature: FEATURES.pages.printTemplates},
-  {label: "Gmail", key: "gmail-inbox", minRole: "admin"},
+  {label: "חשבוניות", key: "invoices", minRole: "admin"},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];

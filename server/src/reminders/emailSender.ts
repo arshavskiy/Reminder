@@ -8,6 +8,7 @@ import {loadReminderTemplate} from "../email-templates/loader";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {prepareGroupedTemplateHtml, sampleGroupedItemsTable} from "./groupedReminderEmail.js";
+import type {ReminderTemplateSource} from "./reminderTemplateResolve.js";
 
 const FALLBACK_TEST_HTML = `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -443,19 +444,22 @@ function renderFallbackInspectionEmail(vars: EmailVars, reminder: ReminderWithCo
 }
 
 async function resolveReminderTemplate(reminder: ReminderWithContext) {
+  // Order must match resolveReminderTemplateSource: reminder → user default → doc/global.
+  let source: ReminderTemplateSource = "none";
   let tpl = null as Awaited<ReturnType<typeof loadEmailTemplate>>;
 
   if (reminder.email_template_id) {
     tpl = await loadEmailTemplate(reminder.email_template_id);
+    if (tpl) source = "reminder";
   }
 
   if (!tpl) {
-    // Check user's personal default template before falling back to global default
     const userId = String((reminder as any).user_id ?? "");
     if (userId) {
       const userSettings = await col("user_settings").findOne({ user_id: userId }) as any;
       if (userSettings?.default_email_template_id) {
         tpl = await loadEmailTemplate(userSettings.default_email_template_id);
+        if (tpl) source = "user_default";
       }
     }
   }
@@ -467,7 +471,16 @@ async function resolveReminderTemplate(reminder: ReminderWithContext) {
       docTemplateId = row?.template_id ?? null;
     }
     tpl = await pickEmailTemplate(docTemplateId);
+    if (tpl) source = docTemplateId && tpl.doc_template_id && String(tpl.doc_template_id) === String(docTemplateId)
+      ? "doc_bound"
+      : "global_default";
   }
+
+  logger.debug("reminder_template_resolved", {
+    reminder_id: (reminder as any).id ?? null,
+    template_id: tpl?.id ?? null,
+    source,
+  });
 
   return tpl;
 }
@@ -579,7 +592,9 @@ export async function sendReminderEmail(
     if (userId && !opts.skipCc && process.env.SKIP_CC !== "true") {
       const u = await col("users").findOne({ _id: tryObjectId(userId) } as any) as any;
       const userEmail = u?.email ?? null;
-      if (userEmail && !recipients.includes(userEmail)) ccEmail.push(userEmail);
+      if (userEmail && !recipients.map((r) => r.toLowerCase()).includes(String(userEmail).toLowerCase())) {
+        ccEmail.push(userEmail);
+      }
     }
 
     const text = `תזכורת: ${reminder.title}\nלקוח: ${reminder.client_name ?? ""}\nתאריך: ${reminder.trigger_date}`;
@@ -594,7 +609,7 @@ export async function sendReminderEmail(
     });
     let providerMessageId: string | null = null;
     if (useResend()) {
-      providerMessageId = await sendViaResend({ from, to: recipients, cc: ccEmail, subject, html, text });
+      providerMessageId = await sendViaResend({ from, to: recipients, cc: ccEmail.length ? ccEmail : undefined, subject, html, text });
     } else {
       await buildTransport().sendMail({ from, to: recipients.join(", "), cc: ccEmail.join(", ") || undefined, subject, html, text });
     }
@@ -711,15 +726,18 @@ export async function sendGroupedReminderEmail(opts: {
     const rendered = await renderGroupedReminderEmail(opts);
     const html = rendered.html;
     const text = `תזכורת בדיקה עבור ${opts.clientName}: ${opts.reminders.length} פריטים למועד ${opts.triggerDate}`;
+    // CC the app user (SKIP_CC=true to disable).
     const ccEmail: string[] = [];
     if (userId && process.env.SKIP_CC !== "true") {
       const u = await col("users").findOne({ _id: tryObjectId(userId) } as any) as any;
       const userEmail = u?.email ?? null;
-      if (userEmail && !opts.recipients.includes(userEmail)) ccEmail.push(userEmail);
+      if (userEmail && !opts.recipients.map((r) => r.toLowerCase()).includes(String(userEmail).toLowerCase())) {
+        ccEmail.push(userEmail);
+      }
     }
     let providerMessageId: string | null = null;
     if (useResend()) {
-      providerMessageId = await sendViaResend({ from, to: opts.recipients, cc: ccEmail, subject: rendered.subject, html, text });
+      providerMessageId = await sendViaResend({ from, to: opts.recipients, cc: ccEmail.length ? ccEmail : undefined, subject: rendered.subject, html, text });
     } else {
       await buildTransport().sendMail({ from, to: opts.recipients.join(", "), cc: ccEmail.join(", ") || undefined, subject: rendered.subject, html, text });
     }

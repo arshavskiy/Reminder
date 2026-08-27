@@ -41,7 +41,7 @@ export default defineConfig({
       manifest: {
         name: "RemindOCR",
         short_name: "RemindOCR",
-        description: "מערכת לניהול תסקירי בדיקה, מסמכים, לקוחות ותזכורות",
+        description: "מערכת לניהול תסקירי בדיקה, מסמכים, לקוחות ותזכורות — עם Gmail, Google Calendar ו-Google Drive",
         theme_color: "#18a058",
         background_color: "#ffffff",
         display: "standalone",

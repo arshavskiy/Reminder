@@ -402,6 +402,7 @@ const statusOptions = [
   { label: "נשלח", value: "sent" },
   { label: "נדחה", value: "snoozed" },
   { label: "בוטל", value: "dismissed" },
+  { label: "חסר אימייל", value: "no_email" },
   { label: "שגיאה", value: "error" },
 ];
 
@@ -425,7 +426,7 @@ function reminderMatchesDueFilter(row: ReminderWithContext, filter: DueFilter): 
     return Boolean(trigger && trigger >= range.from && trigger <= range.to);
   }
   if (filter === "sent") return row.status === "sent";
-  if (filter === "no_email") return !effectiveEmailTo(row);
+  if (filter === "no_email") return row.status === "no_email" || !effectiveEmailTo(row);
   return true;
 }
 

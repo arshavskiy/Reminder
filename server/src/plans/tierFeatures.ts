@@ -7,6 +7,10 @@ export interface TierFeatureFlags {
   automaticEmailReminders: boolean;
   automaticMonthlyReports: boolean;
   excelExport: boolean;
+  /** null = unlimited */
+  maxUsers: number | null;
+  /** null = unlimited */
+  maxEmailAccounts: number | null;
 }
 
 export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
@@ -17,14 +21,18 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     automaticEmailReminders: false,
     automaticMonthlyReports: false,
     excelExport: false,
+    maxUsers: 1,
+    maxEmailAccounts: 1,
   },
   basic: {
     gmailInvoiceHistoryMonths: 12,
     googleDriveSync: true,
-    googleCalendarSync: true,
+    googleCalendarSync: false,
     automaticEmailReminders: true,
     automaticMonthlyReports: true,
     excelExport: true,
+    maxUsers: 2,
+    maxEmailAccounts: 2,
   },
   business: {
     gmailInvoiceHistoryMonths: 48,
@@ -33,8 +41,19 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     automaticEmailReminders: true,
     automaticMonthlyReports: true,
     excelExport: true,
+    maxUsers: null,
+    maxEmailAccounts: null,
   },
 };
+
+export const PLAN_GATE_MESSAGES = {
+  calendar: "סנכרון Google Calendar זמין במסלול עסקי בלבד.",
+  automaticEmailReminders: "תזכורות אימייל אוטומטיות זמינות במסלולים בסיסי ועסקי בלבד.",
+  automaticMonthlyReports: "דוחות חודשיים אוטומטיים זמינים במסלולים בסיסי ועסקי בלבד.",
+  excelExport: "ייצוא לאקסל זמין במסלולים בסיסי ועסקי בלבד.",
+  extraUsers: "הוספת משתמשים זמינה במסלולים בסיסי ועסקי בלבד.",
+  extraEmailAccounts: "חיבור חשבונות דוא״ל נוספים זמין במסלולים בסיסי ועסקי בלבד.",
+} as const;
 
 export function normalizePlanId(planOrRole: string | null | undefined): PlanId {
   const value = String(planOrRole ?? "").trim().toLowerCase();
@@ -48,6 +67,22 @@ export function featureFlagsForUser(user: { plan?: string | null; role?: string 
     return { ...TIER_FEATURE_FLAGS.business, gmailInvoiceHistoryMonths: null };
   }
   return tierFeatureFlags(user?.plan ?? user?.role);
+}
+
+export function planAllowsGoogleCalendar(planOrRole: string | null | undefined): boolean {
+  return tierFeatureFlags(planOrRole).googleCalendarSync;
+}
+
+export function planAllowsAutomaticEmailReminders(planOrRole: string | null | undefined): boolean {
+  return tierFeatureFlags(planOrRole).automaticEmailReminders;
+}
+
+export function planAllowsAutomaticMonthlyReports(planOrRole: string | null | undefined): boolean {
+  return tierFeatureFlags(planOrRole).automaticMonthlyReports;
+}
+
+export function planAllowsExcelExport(planOrRole: string | null | undefined): boolean {
+  return tierFeatureFlags(planOrRole).excelExport;
 }
 
 export function tierFeatureFlags(planOrRole: string | null | undefined): TierFeatureFlags {

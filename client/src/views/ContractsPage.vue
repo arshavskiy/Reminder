@@ -320,11 +320,14 @@
             <div class="format-card__name">CSV</div>
             <div class="format-card__desc">קובץ נתונים פשוט לפתיחה בכל מערכת</div>
           </div>
-          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'xlsx' }"
-               @click="exportFormat = 'xlsx'">
+          <div
+            class="format-card"
+            :class="{ 'format-card--active': exportFormat === 'xlsx', 'format-card--disabled': !excelAllowed }"
+            @click="selectExportFormat('xlsx')"
+          >
             <div class="format-card__icon">📊</div>
             <div class="format-card__name">Excel (.xlsx)</div>
-            <div class="format-card__desc">גיליון Excel עם כיוון מימין לשמאל</div>
+            <div class="format-card__desc">{{ excelAllowed ? "גיליון Excel עם כיוון מימין לשמאל" : "זמין במסלולים בסיסי ועסקי בלבד" }}</div>
           </div>
           <div class="format-card" :class="{ 'format-card--active': exportFormat === 'pdf' }"
                @click="exportFormat = 'pdf'">
@@ -689,6 +692,7 @@ import {useContractsStore} from "../stores/contracts.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {storeToRefs} from "pinia";
 import {useAuthStore} from "../stores/auth.js";
+import {planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
 import {useHydraulicCheckDraftStore} from "../stores/hydraulicCheckDraft.js";
 import {useEngineerStore} from "../stores/engineer.js";
 import type {HydraulicCheckRequest, PrintTemplateDraftSummary} from "../services/apiService.js";
@@ -722,6 +726,7 @@ const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
 const featuresStore = useFeaturesStore();
 const authStore = useAuthStore();
+const excelAllowed = computed(() => planAllowsExcelExport(resolveUserPlan(authStore.user)));
 const engineerStore = useEngineerStore();
 const {profile: engineerProfile} = storeToRefs(engineerStore);
 const isAdmin = computed(() => authStore.isAdmin);
@@ -1197,7 +1202,19 @@ function expandRows(rows: any[], mainCols: typeof exportColumns.value) {
   return result;
 }
 
+function selectExportFormat(format: "csv" | "xlsx" | "pdf") {
+  if (format === "xlsx" && !excelAllowed.value) {
+    message.warning(PLAN_GATE_MESSAGES.excelExport);
+    return;
+  }
+  exportFormat.value = format;
+}
+
 function doExport() {
+  if (exportFormat.value === "xlsx" && !excelAllowed.value) {
+    message.warning(PLAN_GATE_MESSAGES.excelExport);
+    return;
+  }
   const rows = exportedRows.value;
   const cols = selectedExportColumns.value;
   const allCols = [...cols, ...EQUIPMENT_COLS];
@@ -3932,6 +3949,11 @@ html[data-theme="dark"] .tag--info {
 
 .format-card--active {
   border-color: var(--brand-color, #18a058);
+}
+
+.format-card--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .format-card__icon {

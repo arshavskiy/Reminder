@@ -67,7 +67,8 @@ export type UserPlan = "free" | "basic" | "business";
 export interface User {
   id: number;
   google_sub: string;
-  email: string;
+  email: string | null;
+  username?: string | null;
   name: string | null;
   phone: string | null;
   picture_url: string | null;
@@ -106,11 +107,34 @@ export interface UserSettings {
   } | null;
   calendar_next_tests_only?: boolean;
   features?: Record<string, boolean> | null;
+  plan_entitlements?: {
+    plan: "free" | "basic" | "business";
+    gmailInvoiceHistoryMonths: number | null;
+    googleDriveSync: boolean;
+    googleCalendarSync: boolean;
+    automaticEmailReminders: boolean;
+    automaticMonthlyReports: boolean;
+    excelExport: boolean;
+    maxUsers: number | null;
+    maxEmailAccounts: number | null;
+    ocr: true;
+    previewAndExtraction: true;
+    documents: {
+      scope: "monthly" | "lifetime" | "unlimited";
+      invoices: number | null;
+      contracts: number | null;
+    };
+    reminders: {
+      scope: "monthly" | "lifetime" | "unlimited";
+      limit: number | null;
+    };
+  };
+  plan_entitlements_updated_at?: string | Date | null;
 }
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
 export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error" | "not_applicable";
-export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error";
+export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error" | "no_email";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
 export type EntityType = "person" | "company";
 export type TaskStatus = "open" | "done" | "cancelled";

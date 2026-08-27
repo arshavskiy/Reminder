@@ -54,16 +54,23 @@
           <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
           רענן
         </button>
-        <button
-          :class="{ 'rbtn--loading': exporting }"
-          :disabled="loading || total === 0 || exporting"
-          class="rbtn rbtn--ghost"
-          type="button"
-          @click="exportInvoicesToExcel"
-        >
-          <n-icon :component="DownloadOutline" class="btn-icon" />
-          ייצוא לאקסל
-        </button>
+        <n-tooltip placement="top">
+          <template #trigger>
+            <span>
+              <button
+                :class="{ 'rbtn--loading': exporting }"
+                :disabled="!excelAllowed || loading || total === 0 || exporting"
+                class="rbtn rbtn--ghost"
+                type="button"
+                @click="exportInvoicesToExcel"
+              >
+                <n-icon :component="DownloadOutline" class="btn-icon" />
+                ייצוא לאקסל
+              </button>
+            </span>
+          </template>
+          {{ excelAllowed ? "הורדת החשבוניות לקובץ Excel" : excelExportLockedMessage }}
+        </n-tooltip>
         <button
             v-if="driveAllowed"
             :class="{ 'rbtn--loading': exportingToDrive }"
@@ -521,7 +528,7 @@ import DriveExportJobStatus from "../components/DriveExportJobStatus.vue";
 import { api, type DriveExportJob, type GmailImportJob, type ImportedInvoice } from "../services/apiService.js";
 import type { DocTemplate } from "../shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
-import {planAllowsGoogleDrive, resolveUserPlan} from "../shared/pricingPlans.js";
+import {planAllowsGoogleDrive, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
 import {useConfirm} from "../composables/useConfirm.js";
 
 const router = useRouter();
@@ -529,6 +536,8 @@ const message = useMessage();
 const {confirm} = useConfirm();
 const authStore = useAuthStore();
 const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
+const excelAllowed = computed(() => planAllowsExcelExport(resolveUserPlan(authStore.user)));
+const excelExportLockedMessage = PLAN_GATE_MESSAGES.excelExport;
 
 const rows = ref<ImportedInvoice[]>([]);
 const total = ref(0);
@@ -975,6 +984,10 @@ function download(row: ImportedInvoice) {
 }
 
 async function exportInvoicesToExcel() {
+  if (!excelAllowed.value) {
+    message.warning(PLAN_GATE_MESSAGES.excelExport);
+    return;
+  }
   exporting.value = true;
   try {
     const [dateFrom, dateTo] = dateRange.value ?? [];
@@ -991,6 +1004,7 @@ async function exportInvoicesToExcel() {
       dateTo: dateTo ? new Date(dateTo).toISOString().slice(0, 10) : undefined,
       limit: Math.max(total.value, 1),
       offset: 0,
+      export: true,
     }, true);
     const { utils, writeFile } = await import("xlsx");
     const data = result.rows.map((row) => ({
