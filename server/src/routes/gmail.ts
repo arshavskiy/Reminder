@@ -1500,7 +1500,8 @@ function isInspectionTemplate(template: Awaited<ReturnType<typeof loadTemplate>>
   return template.document_kind === "inspection_report" || /תסקיר|בדיקה/.test(template.name);
 }
 
-const INSPECTION_GMAIL_QUERY = "has:attachment filename:pdf תסקיר";
+const INSPECTION_GMAIL_QUERY = "has:attachment {filename:pdf filename:doc filename:docx} תסקיר";
+const INSPECTION_HISTORY_MONTHS = 18;
 const INVOICE_GMAIL_QUERY = `has:attachment {${[
   "חשבונית",
   "invoice",
@@ -1519,8 +1520,9 @@ export function buildGmailQuery(
 ): string {
   const defaultQuery = "has:attachment filename:pdf";
   const q = userQuery || (isInvoiceTemplate(template) ? INVOICE_GMAIL_QUERY : defaultQuery);
-  if (isInspectionTemplate(template) && q === defaultQuery) {
-    return INSPECTION_GMAIL_QUERY;
+    if (isInspectionTemplate(template)) {
+        const base = (!userQuery || q === defaultQuery) ? INSPECTION_GMAIL_QUERY : q;
+        return applyFixedHistoryWindow(base, INSPECTION_HISTORY_MONTHS);
   }
   if (isInvoiceTemplate(template)) {
     return applyInvoiceHistoryWindow(normalizeInvoiceAttachmentQuery(q), planOrRole);
@@ -1532,14 +1534,18 @@ function formatGmailSearchTerm(term: string): string {
   return `"${term.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
 }
 
-function applyInvoiceHistoryWindow(query: string, planOrRole: string | null | undefined): string {
-  const months = tierFeatureFlags(planOrRole).gmailInvoiceHistoryMonths;
+function applyFixedHistoryWindow(query: string, months: number): string {
   const withoutExistingHistory = query
     .replace(/\bnewer_than:\S+/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
   if (!months || months < 1) return withoutExistingHistory;
   return `${withoutExistingHistory} newer_than:${months}m`;
+}
+
+function applyInvoiceHistoryWindow(query: string, planOrRole: string | null | undefined): string {
+    const months = tierFeatureFlags(planOrRole).gmailInvoiceHistoryMonths;
+    return applyFixedHistoryWindow(query, months ?? 0);
 }
 
 function gmailFeatureKey(user: { plan?: string | null; role?: string | null }): string {

@@ -377,7 +377,7 @@ async function findInspectionTemplate(): Promise<DocTemplate | null> {
 function inspectionGmailQuery(template: DocTemplate | null): string {
   const parts = [
     "has:attachment",
-    "{filename:pdf filename:doc filename:docx filename:jpg filename:jpeg filename:png}",
+    "{filename:pdf filename:doc filename:docx}",
   ];
   const terms = inspectionTemplateTerms(template);
   if (terms.length === 1) {
@@ -385,7 +385,7 @@ function inspectionGmailQuery(template: DocTemplate | null): string {
   } else if (terms.length > 1) {
     parts.push(`{${terms.map(formatGmailSearchTerm).join(" ")}}`);
   }
-  parts.push(`-${formatGmailSearchTerm("דוח חודשי")}`, `-${formatGmailSearchTerm("monthly report")}`);
+  parts.push("newer_than:18m");
   return parts.join(" ");
 }
 

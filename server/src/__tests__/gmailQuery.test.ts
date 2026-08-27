@@ -57,7 +57,16 @@ describe("Gmail query tier limits", () => {
     );
   });
 
-  it("does not apply invoice history limits to inspection searches", () => {
-    expect(buildGmailQuery(undefined, inspectionTemplate, "basic")).toBe("has:attachment filename:pdf תסקיר");
+    it("caps inspection searches at 18 months", () => {
+        expect(buildGmailQuery(undefined, inspectionTemplate, "basic")).toBe(
+            "has:attachment {filename:pdf filename:doc filename:docx} תסקיר newer_than:18m",
+        );
+        expect(buildGmailQuery(
+            "has:attachment {filename:pdf filename:doc filename:docx} {\"תסקיר\"} newer_than:6m",
+            inspectionTemplate,
+            "business",
+        )).toBe(
+            'has:attachment {filename:pdf filename:doc filename:docx} {"תסקיר"} newer_than:18m',
+        );
   });
 });

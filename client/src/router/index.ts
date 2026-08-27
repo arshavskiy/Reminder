@@ -20,6 +20,9 @@ import {applySeo} from "../seo.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {type FeatureKey, FEATURES} from "../shared/features.js";
+import {normalizePlanId, resolveUserPlan, type PlanId} from "../shared/pricingPlans.js";
+
+const PLAN_RANK: Record<PlanId, number> = {free: 0, basic: 1, business: 2};
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -110,7 +113,12 @@ export const router = createRouter({
     { path: "/doc-templates", redirect: "/settings/doc-templates", meta: { feature: FEATURES.pages.docTemplates } },
     { path: "/email-templates", redirect: "/settings/email-templates", meta: { feature: FEATURES.pages.emailTemplates } },
       {path: "/compose", redirect: "/print-templates", meta: {feature: FEATURES.pages.printTemplates}},
-    { path: "/gmail-inbox", redirect: "/admin?section=gmail" },
+      {
+          path: "/gmail",
+          component: () => import("../views/GmailInboxPage.vue"),
+          meta: {feature: FEATURES.pages.gmail, requirePlan: "business"},
+      },
+      {path: "/gmail-inbox", redirect: "/gmail"},
     { path: "/admin", component: AdminPage, meta: { requireRole: "admin" } },
     { path: "/403", component: () => import("../views/ForbiddenPage.vue") },
   ],
@@ -152,6 +160,14 @@ router.beforeEach(async (to) => {
       return { path: "/403" };
     }
   }
+
+    const requiredPlan = to.meta.requirePlan as PlanId | undefined;
+    if (requiredPlan) {
+        const userPlan = resolveUserPlan(authStore.user);
+        if ((PLAN_RANK[userPlan] ?? 0) < (PLAN_RANK[normalizePlanId(requiredPlan)] ?? 0)) {
+            return {path: "/403"};
+        }
+    }
 
   return true;
 });

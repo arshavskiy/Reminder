@@ -222,6 +222,7 @@ import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
 import {dateHeIL, heIL} from "./locales/heIL.js";
 import {type FeatureKey, FEATURES} from "./shared/features.js";
+import {normalizePlanId, resolveUserPlan, type PlanId} from "./shared/pricingPlans.js";
 
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
@@ -359,24 +360,17 @@ const isDark = computed(() => darkPref.value);
 const theme = computed(() => (isDark.value ? darkTheme : null));
 const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
 
-const PLAN_SHORT: Record<string, string> = {
+const PLAN_SHORT: Record<PlanId, string> = {
   free: "חינמי",
   basic: "בסיסי",
   business: "עסקי",
 };
 
-function resolveUserPlan(): string {
-  const user = authStore.user;
-  if (!user) return "free";
-  if (user.plan) return user.plan;
-  if (user.role === "admin") return "business";
-  if (user.role === "pro") return "basic";
-  return "free";
-}
+const PLAN_RANK: Record<PlanId, number> = {free: 0, basic: 1, business: 2};
 
 const subscriptionPlanLabel = computed(() => {
   if (!authStore.user) return "";
-  return PLAN_SHORT[resolveUserPlan()] ?? "";
+  return PLAN_SHORT[resolveUserPlan(authStore.user)] ?? "";
 });
 
 const subscriptionTooltip = computed(() => {
@@ -458,7 +452,13 @@ watch(isDark, (dark) => {
 // primary bar to keep it sparse (matches the spec which shows ~6 items).
 const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
 
-const allNav = [
+const allNav: Array<{
+  label: string;
+  key: string;
+  minRole: string;
+  minPlan?: PlanId;
+  feature?: FeatureKey;
+}> = [
   {label: "ראשי", key: "dashboard", minRole: "user", feature: FEATURES.pages.dashboard},
   {label: "מסמכים", key: "documents", minRole: "user", feature: FEATURES.pages.documents},
   {label: "תסקירים", key: "contracts", minRole: "user", feature: FEATURES.pages.contracts},
@@ -467,6 +467,7 @@ const allNav = [
   {label: "לקוחות", key: "clients", minRole: "user", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minRole: "user", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minRole: "user", feature: FEATURES.pages.equipment},
+  {label: "Gmail", key: "gmail", minRole: "user", minPlan: "business", feature: FEATURES.pages.gmail},
   {label: "חשבוניות", key: "invoices", minRole: "admin"},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
@@ -474,9 +475,11 @@ const allNav = [
 
 const primaryNav = computed(() => {
   const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
+  const userPlan = resolveUserPlan(authStore.user);
   return allNav.filter((item) =>
     userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
-    (!item.feature || featuresStore.hasFeature(item.feature as FeatureKey))
+      (!item.minPlan || (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[normalizePlanId(item.minPlan)] ?? 0)) &&
+      (!item.feature || featuresStore.hasFeature(item.feature))
   );
 });
 

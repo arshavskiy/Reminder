@@ -103,7 +103,7 @@ Primary nav + router. Feature flags in `user_settings.features` can still hide a
 | תבניות מסמכים / אימייל / הדפסה | ✓* | ✓* | ✓* | `pages.doc_templates`, `pages.email_templates`, `pages.print_templates` | Often via contracts / settings |
 | הגדרות מערכת | — | — | ✓ | `pages.settings` | Admin |
 | **חשבוניות** | — | — | ✓ | `pages.invoices` (default **off**) | **Admin role only** (nav + router + `/api/invoices`) |
-| **Gmail** | — | — | ✓ | `pages.gmail` (default **off**) | **Admin role only** |
+| **Gmail** | — | — | ✓* | `pages.gmail` (default **on**) | **Business plan** (nav + `/gmail`); admin role maps to business |
 | Admin console | — | — | ✓ | (admin routes) | `/admin` |
 
 \* Defaults enabled in feature catalog; can be disabled per user in admin feature toggles.
@@ -162,7 +162,7 @@ High-level (`server/src/index.ts`): most `/api/*` trees use `requireAnyFeature([
 | Downgrade to free | Set `users.plan` = `free` |
 | Hide a page for one user | Admin feature toggles on `user_settings.features` |
 | Show invoices | User must be `role: admin` |
-| Show Gmail inbox | User must be `role: admin` (+ typically enable `pages.gmail`) |
+| Show Gmail inbox | User must be on **business** plan (or `role: admin`) + `pages.gmail` |
 
 ---
 

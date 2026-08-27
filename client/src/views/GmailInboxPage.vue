@@ -974,8 +974,8 @@ function buildSearchQuery() {
   } else if (templateTerms.length > 1) {
     parts.push(`{${templateTerms.map(formatGmailSearchTerm).join(" ")}}`);
   }
-  if (selectedGuidedFlow.value === "inspection") {
-    parts.push(`-${formatGmailSearchTerm("דוח חודשי")}`, `-${formatGmailSearchTerm("monthly report")}`);
+  if (selectedGuidedFlow.value === "inspection" && filterType.value !== "date") {
+    parts.push("newer_than:18m");
   }
 
   searchQuery.value = parts.join(" ");
@@ -995,7 +995,7 @@ function configureGuidedFlow(flow: "invoice" | "inspection") {
   searchTemplateId.value = templateId;
   fileTypes.value = flow === "invoice"
     ? { pdf: true, doc: true, xls: true, img: false }
-    : { pdf: true, doc: true, xls: false, img: true };
+      : {pdf: true, doc: true, xls: false, img: false};
   filterType.value = "none";
   filterSender.value = null;
   filterDateRange.value = null;
@@ -1145,7 +1145,7 @@ async function connectGmail() {
     window.location.href = url;
   } catch (err: any) {
     if (err?.status === 403 || err?.message === "forbidden") {
-      message.error("חיבור Gmail זמין למשתמשי Pro ומנהלים בלבד");
+      message.error("חיבור Gmail זמין במסלול עסקי בלבד");
     } else {
       message.error("שגיאה בהתחברות ל-Gmail");
     }
