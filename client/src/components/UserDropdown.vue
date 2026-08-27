@@ -36,13 +36,18 @@ import {NDropdown, NIcon} from "naive-ui";
 import {
   ConstructOutline,
   DiamondOutline,
+  DocumentTextOutline,
   LogOutOutline,
+  MailOutline,
   MapOutline,
   PersonOutline,
+  PrintOutline,
   SettingsOutline,
   ShieldCheckmarkOutline,
 } from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
+import {useFeaturesStore} from "../stores/features.js";
+import {FEATURES} from "../shared/features.js";
 import {useWalkthrough} from "../composables/useWalkthrough.js";
 
 interface Props {
@@ -56,6 +61,7 @@ const props = defineProps<Props>();
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const featuresStore = useFeaturesStore();
 const walkthrough = useWalkthrough();
 
 // Create avatar from email / name
@@ -90,10 +96,27 @@ const menuIcons: Record<string, typeof PersonOutline> = {
   engineer: ConstructOutline,
   settings: SettingsOutline,
   subscription: DiamondOutline,
+  "print-templates": PrintOutline,
+  "email-templates": MailOutline,
+  "doc-templates": DocumentTextOutline,
   admin: ShieldCheckmarkOutline,
   tour: MapOutline,
   logout: LogOutOutline,
 };
+
+const templateMenuItems = computed(() => {
+  const items: Array<{ label: string; key: string }> = [];
+  if (featuresStore.hasFeature(FEATURES.pages.printTemplates)) {
+    items.push({label: "תבניות הדפסה", key: "print-templates"});
+  }
+  if (featuresStore.hasFeature(FEATURES.pages.emailTemplates)) {
+    items.push({label: "תבניות אימייל", key: "email-templates"});
+  }
+  if (featuresStore.hasFeature(FEATURES.pages.docTemplates)) {
+    items.push({label: "תבניות מסמך", key: "doc-templates"});
+  }
+  return items;
+});
 
 const dropdownItems = computed(() => [
   {
@@ -112,6 +135,7 @@ const dropdownItems = computed(() => [
     label: "מנוי ותשלומים",
     key: "subscription",
   },
+  ...templateMenuItems.value,
   ...(props.userRole === "admin"
       ? [
         {label: "פאנל ניהול", key: "admin"},
@@ -131,6 +155,10 @@ const dropdownItems = computed(() => [
 ]);
 
 const activeMenuKey = computed(() => {
+  if (route.path.startsWith("/print-templates") || route.path.includes("/print-templates")) return "print-templates";
+  if (route.path.includes("/email-templates")) return "email-templates";
+  if (route.path.includes("/doc-templates")) return "doc-templates";
+  if (route.path === "/admin" || route.path.startsWith("/admin")) return "admin";
   if (route.path !== "/profile") return "";
   const section = String(route.query.section ?? "personal");
   if (section === "personal") return "profile";
@@ -139,7 +167,8 @@ const activeMenuKey = computed(() => {
 });
 
 function renderDropdownLabel(option: any) {
-  const key = String(option.key);
+  const key = String(option.key ?? "");
+  if (!key || option.type === "divider") return option.label;
   const icon = menuIcons[key];
   const isActive = key === activeMenuKey.value;
   return h("span", {class: ["user-menu-label", {"user-menu-label--active": isActive}], dir: "rtl"}, [
@@ -160,6 +189,12 @@ async function handleSelect(key: string) {
     router.push({path: "/profile", query: {section: "settings"}});
   } else if (key === "subscription") {
     router.push({path: "/profile", query: {section: "subscription"}});
+  } else if (key === "print-templates") {
+    router.push("/print-templates");
+  } else if (key === "email-templates") {
+    router.push("/settings/email-templates");
+  } else if (key === "doc-templates") {
+    router.push("/settings/doc-templates");
   } else if (key === "admin") {
     router.push("/admin");
   } else if (key === "tour") {
