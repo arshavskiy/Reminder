@@ -90,11 +90,16 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
   });
 }
 
-export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string) {
+export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string, userName?: string) {
   const s = getSettings();
   const resetUrl = `${baseUrl}/reset-password?token=${token}`;
   const appName = s.emailFromName ?? "RemindOCR";
-  const html = renderHtml(loadAuthTemplate("reset-password"), { reset_url: resetUrl, app_name: appName });
+  // No provider guard here: sendAuthEmail already skips when neither Resend nor
+  // SMTP is configured, and checking smtpHost alone would drop the mail for
+  // Resend-only deployments.
+  const vars: Record<string, string> = { reset_url: resetUrl, app_name: appName };
+  if (userName) vars.name = userName;
+  const html = renderHtml(loadAuthTemplate("reset-password"), vars);
 
   await sendAuthEmail({
     to: email,
