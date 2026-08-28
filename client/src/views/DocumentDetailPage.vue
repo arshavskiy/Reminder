@@ -26,17 +26,6 @@
             הורד
           </button>
           <button
-              v-if="canExtractDocument"
-              :class="{ 'rbtn--loading': extracting }"
-              :disabled="extracting"
-              class="rbtn rbtn--primary"
-              type="button"
-              @click="openExtractModal"
-          >
-            <n-icon :component="FlashOutline" class="btn-icon"/>
-            חלץ AI
-          </button>
-          <button
               :class="{ 'rbtn--loading': deleting }"
               :disabled="deleting"
               class="rbtn rbtn--danger"
@@ -130,17 +119,6 @@
             </div>
             <div v-else-if="isSpreadsheet" class="preview-empty">
               <span>אין עדיין טקסט טבלאי להצגה</span>
-              <button
-                  v-if="canExtractDocument"
-                  :class="{ 'rbtn--loading': extracting }"
-                  :disabled="extracting"
-                  class="rbtn rbtn--primary mt-3"
-                  type="button"
-                  @click="rerunExtract"
-              >
-                <n-icon :component="FlashOutline" class="btn-icon"/>
-                עבד את הקובץ מחדש
-              </button>
             </div>
             <div v-else class="preview-empty">
               <span>אין תצוגה מקדימה זמינה לסוג קובץ זה</span>

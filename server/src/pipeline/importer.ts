@@ -101,6 +101,25 @@ function parseJsonObject(raw: unknown, fallback: unknown = null): Record<string,
   return {};
 }
 
+function mergePreservingManualDocumentFields(
+    doc: { extracted_fields?: unknown; manual_field_keys?: unknown } | null | undefined,
+    extractedFields: Record<string, unknown>,
+): Record<string, unknown> {
+  const manualKeys = Array.isArray(doc?.manual_field_keys)
+      ? doc.manual_field_keys.filter((key): key is string => typeof key === "string" && key.trim() !== "")
+      : [];
+  if (!manualKeys.length) return {...extractedFields};
+
+  const previousFields = parseJsonObject(doc?.extracted_fields);
+  const merged = {...extractedFields};
+  for (const key of manualKeys) {
+    if (Object.prototype.hasOwnProperty.call(previousFields, key)) {
+      merged[key] = previousFields[key];
+    }
+  }
+  return merged;
+}
+
 function getMimeType(ext: string): string {
   const map: Record<string, string> = {
     ".pdf": "application/pdf",
@@ -1049,6 +1068,7 @@ export async function processDocument(
   const docRowForKnownInvoice = await col("documents").findOne(docFilter) as any;
   const knownInvoiceFields = extractKnownInvoiceFields(rawText, docRowForKnownInvoice?.file_name);
   if (knownInvoiceFields) {
+    const preservedKnownInvoiceFields = mergePreservingManualDocumentFields(docRowForKnownInvoice, knownInvoiceFields);
     logger.info("known_invoice_extracted", {
       document_id: documentId,
       user_id: userId ?? null,
@@ -1068,7 +1088,7 @@ export async function processDocument(
     } as any);
     await col("documents").updateOne(docFilter, {
       $set: {
-        extracted_fields: JSON.stringify(knownInvoiceFields),
+        extracted_fields: JSON.stringify(preservedKnownInvoiceFields),
         document_type: "invoice",
         document_kind: "invoice",
         updated_at: new Date(),
@@ -1076,7 +1096,7 @@ export async function processDocument(
     });
     if (!pipeline?.skipEntities) {
       push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-      const invoiceSaved = await saveInvoiceRecord(documentId, knownInvoiceFields, {
+      const invoiceSaved = await saveInvoiceRecord(documentId, preservedKnownInvoiceFields, {
         userId,
         clientId: null,
         documentType: "חשבונית",
@@ -1109,6 +1129,11 @@ export async function processDocument(
   if (rawText.trim().length > 0) {
     const ocr = extractFromOcr(rawText);
     normalizeNextActionDateFields(ocr as unknown as Record<string, unknown>);
+    const docRowBeforeOcrSave = await col("documents").findOne(docFilter) as any;
+    const preservedOcr = mergePreservingManualDocumentFields(
+        docRowBeforeOcrSave,
+        ocr as unknown as Record<string, unknown>,
+    );
     const documentKind = classifyDocumentKind(rawText);
     logger.debug("document_ocr_extracted", {
       document_id: documentId,
@@ -1122,7 +1147,7 @@ export async function processDocument(
       $set: {
         document_kind: documentKind,
         document_type: ocr.document_type,
-        extracted_fields: JSON.stringify(ocr),
+        extracted_fields: JSON.stringify(preservedOcr),
         updated_at: new Date(),
       },
     });
@@ -1141,15 +1166,15 @@ export async function processDocument(
     } as any);
 
     // Create client / contract / reminders from OCR data only as a fallback.
-    if (!aiWillRun && !pipeline?.skipEntities && (ocr.expiry_date || ocr.contact_name || ocr.contact_phone)) {
+    if (!aiWillRun && !pipeline?.skipEntities && (preservedOcr.expiry_date || preservedOcr.contact_name || preservedOcr.contact_phone)) {
       let clientId: string | null = null;
-      if (ocr.contact_name || ocr.contact_phone || ocr.contact_email) {
+      if (preservedOcr.contact_name || preservedOcr.contact_phone || preservedOcr.contact_email) {
         clientId = await findOrCreateClient({
-          displayName: ocr.contact_name ?? ocr.contact_phone ?? "לא ידוע",
+          displayName: String(preservedOcr.contact_name ?? preservedOcr.contact_phone ?? "לא ידוע"),
           entityType: "person",
-          contactPerson: ocr.contact_name,
-          email: ocr.contact_email,
-          phone: ocr.contact_phone,
+          contactPerson: firstInvoiceString(preservedOcr, ["contact_name"]),
+          email: firstInvoiceString(preservedOcr, ["contact_email"]),
+          phone: firstInvoiceString(preservedOcr, ["contact_phone"]),
           userId,
         });
         await col("document_clients").updateOne(
@@ -1159,16 +1184,17 @@ export async function processDocument(
         );
       }
 
-      if (ocr.expiry_date) {
+      const ocrExpiryDate = firstInvoiceString(preservedOcr, ["expiry_date"]);
+      if (ocrExpiryDate) {
         const upsertResult = await col("contracts").findOneAndUpdate(
           { document_id: documentId },
           {
             $set: {
               ...(userId && { user_id: userId }),
               client_id: clientId,
-              contract_type: ocr.document_type,
+              contract_type: firstInvoiceString(preservedOcr, ["document_type"]),
               start_date: null,
-              expiry_date: ocr.expiry_date,
+              expiry_date: ocrExpiryDate,
               confidence: "low",
               updated_at: new Date(),
             },
@@ -1178,16 +1204,16 @@ export async function processDocument(
         );
         const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
         if (!pipeline?.skipReminders) {
-          await generateContractReminders(contractId, clientId, documentId, ocr.expiry_date, userId, ocr.contact_email ?? null);
+          await generateContractReminders(contractId, clientId, documentId, ocrExpiryDate, userId, firstInvoiceString(preservedOcr, ["contact_email"]));
         }
       }
 
       logger.info("document_ocr_entities_saved", {
         document_id: documentId,
         user_id: userId ?? null,
-        has_expiry_date: Boolean(ocr.expiry_date),
-        has_contact: Boolean(ocr.contact_name || ocr.contact_phone),
-        reminders_queued: Boolean(ocr.expiry_date && !pipeline?.skipReminders),
+        has_expiry_date: Boolean(preservedOcr.expiry_date),
+        has_contact: Boolean(preservedOcr.contact_name || preservedOcr.contact_phone),
+        reminders_queued: Boolean(preservedOcr.expiry_date && !pipeline?.skipReminders),
       });
     } else if (aiWillRun && !pipeline?.skipEntities && (ocr.expiry_date || ocr.contact_name || ocr.contact_phone)) {
       logger.info("document_ocr_entities_skipped", {
@@ -1370,8 +1396,9 @@ export async function processDocument(
         } as any);
 
         if (normalizedFields) {
-          const keyCount = Object.keys(normalizedFields).length;
-          const expiryVal = template.expiry_field ? (normalizedFields[template.expiry_field] ?? null) : null;
+          const preservedFields = mergePreservingManualDocumentFields(docRow, normalizedFields);
+          const keyCount = Object.keys(preservedFields).length;
+          const expiryVal = template.expiry_field ? (preservedFields[template.expiry_field] ?? null) : null;
           logger.info("template_extraction_completed", {
             document_id: documentId,
             user_id: userId ?? null,
@@ -1383,7 +1410,7 @@ export async function processDocument(
           });
           await col("documents").updateOne(docFilter, {
             $set: {
-              extracted_fields: JSON.stringify(normalizedFields),
+              extracted_fields: JSON.stringify(preservedFields),
               template_id: template.id,
               document_type: documentTypeFromTemplate(template),
               document_kind: documentTypeFromTemplate(template),
@@ -1394,7 +1421,14 @@ export async function processDocument(
 
           if (!pipeline?.skipEntities) {
             push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-            await saveTemplateEntities(documentId, template, normalizedFields, userId, pipeline?.skipReminders, extractionText);
+            await saveTemplateEntities(
+                documentId,
+                template,
+                preservedFields as unknown as DynamicExtraction,
+                userId,
+                pipeline?.skipReminders,
+                extractionText,
+            );
             const invoiceWasSaved = pipeline?.gmailImport && isInvoiceTemplate(template)
               ? await gmailInvoiceWasSaved(documentId)
               : true;
@@ -1457,6 +1491,11 @@ export async function processDocument(
         } as any);
 
         if (extraction.result) {
+          const preservedGenericResult = mergePreservingManualDocumentFields(
+              docRow,
+              extraction.result as unknown as Record<string, unknown>,
+          ) as unknown as typeof extraction.result;
+          Object.assign(extraction.result, preservedGenericResult);
           logger.info("generic_extraction_completed", {
             document_id: documentId,
             user_id: userId ?? null,
@@ -3465,7 +3504,8 @@ async function saveInvoiceRecord(
     fields,
     updated_at: now,
   };
-  if (clientName) {
+  const receiptLikeInvoice = isReceiptLikeInvoiceDocument(invoiceFields.document_subtype, fields);
+  if (clientName && !receiptLikeInvoice) {
     invoiceFields.client_company = clientName;
     invoiceFields.fields = {
       ...fields,
@@ -3518,6 +3558,11 @@ async function saveInvoiceRecord(
     },
   );
   return true;
+}
+
+function isReceiptLikeInvoiceDocument(documentSubtype: unknown, fields?: Record<string, unknown>): boolean {
+  const text = String(documentSubtype ?? fields?.document_subtype ?? fields?.invoice_type ?? fields?.receipt_type ?? "").toLowerCase();
+  return /receipt|קבלה/.test(text);
 }
 
 function invoiceRejectionLabel(reason: string, missingFields: string[] = []): string {

@@ -118,16 +118,17 @@
               </label>
               <label>
                 <span>{{ form.cash_flow === "income" ? "קטגוריית הכנסה" : "קטגוריית הוצאה" }}</span>
-                <div class="field-stack">
-                  <n-select v-model:value="form.expense_category" :options="categoryOptions" size="large" />
-                  <n-input
+                <n-select
                     v-model:value="form.expense_category"
+                    :options="categoryOptions"
+                    :placeholder="form.cash_flow === 'income' ? 'בחר או הקלד קטגוריית הכנסה' : 'בחר או הקלד קטגוריית הוצאה'"
+                    clearable
+                    filterable
                     size="large"
-                    :placeholder="form.cash_flow === 'income' ? 'קטגוריית הכנסה חדשה' : 'קטגוריית הוצאה חדשה'"
-                  />
-                </div>
+                    tag
+                />
               </label>
-              <label>
+              <label v-if="!isReceiptDocument">
                 <span>לקוח</span>
                 <n-input v-model:value="form.client_name" size="large" />
               </label>
@@ -239,7 +240,7 @@ const form = reactive({
   currency: "ILS" as string | null,
   cash_flow: "expense" as "income" | "expense",
   client_name: "",
-  expense_category: "General and Administrative" as string | null,
+  expense_category: "כללי וניהול" as string | null,
   provider_category: null as ImportedInvoice["provider_category"] | null,
   note: "",
   issue_date: null as string | null,
@@ -261,7 +262,7 @@ const currencyOptions: SelectOption[] = [
   { label: "€ EUR - Euro", value: "EUR" },
 ];
 const categoryOptions: SelectOption[] = [
-  { label: "General and Administrative", value: "General and Administrative" },
+  {label: "כללי וניהול", value: "כללי וניהול"},
   { label: "חשבוניות", value: "חשבוניות" },
   { label: "קבלות", value: "קבלות" },
   { label: "ציוד", value: "ציוד" },
@@ -321,6 +322,7 @@ const extractedFields = computed(() => {
   const fields = invoice.value?.fields ?? {};
   const existingKeys = new Set(Object.keys(fields));
   const rows = Object.entries(fields)
+      .filter(([key]) => !(isReceiptDocument.value && isClientFieldKey(key)))
     .filter(([key]) => !key.startsWith("_"))
     .map(([key, value]) => ({
       key,
@@ -333,6 +335,7 @@ const extractedFields = computed(() => {
 
   for (const rawKey of invoice.value?.missing_required_fields ?? []) {
     const key = normalizeMissingFieldKey(rawKey);
+    if (isReceiptDocument.value && isClientFieldKey(key)) continue;
     if (!key || existingKeys.has(key)) continue;
     rows.push({
       key,
@@ -355,6 +358,9 @@ const visibleExtractedFields = computed(() =>
 const probablyContractDocument = computed(() =>
   hasMissingField("invoice_number") && hasMissingField("amount")
 );
+const isReceiptDocument = computed(() =>
+    invoice.value ? isReceiptRow(invoice.value) : false
+);
 
 watch(() => route.params.id, () => load(true));
 
@@ -373,8 +379,8 @@ async function load(force = false) {
     form.payment_status = normalizePaymentStatus(row.payment_status);
     form.currency = row.currency || "ILS";
     form.cash_flow = row.cash_flow === "income" ? "income" : "expense";
-    form.client_name = row.client_name || clientFromFields(row) || "";
-    form.expense_category = row.expense_category || "General and Administrative";
+    form.client_name = isReceiptRow(row) ? "" : row.client_name || clientFromFields(row) || "";
+    form.expense_category = normalizeExpenseCategory(row.expense_category);
     form.provider_category = row.provider_category ?? null;
     form.note = row.note || "";
     form.issue_date = normalizeDate(row.issue_date);
@@ -396,7 +402,7 @@ async function save() {
       payment_status: form.payment_status,
       currency: form.currency,
       cash_flow: form.cash_flow,
-      client_name: form.client_name,
+      client_name: isReceiptDocument.value ? null : form.client_name,
       expense_category: form.expense_category,
       provider_category: form.provider_category,
       issue_date: form.issue_date,
@@ -448,12 +454,23 @@ function openDocumentPage() {
 }
 
 function clientFromFields(row: ImportedInvoice): string | null {
+  if (isReceiptRow(row)) return null;
   const keys = ["client_company", "client_name", "customer_name", "bill_to"];
   for (const key of keys) {
     const value = row.fields?.[key];
     if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
   }
   return null;
+}
+
+function isReceiptRow(row: ImportedInvoice): boolean {
+  return row.document_category === "receipt" || /receipt|קבלה/i.test(String(row.type ?? ""));
+}
+
+function normalizeExpenseCategory(value: string | null | undefined): string | null {
+  const text = String(value ?? "").trim();
+  if (!text || text === "General and Administrative") return "כללי וניהול";
+  return text;
 }
 
 function normalizePaymentStatus(value: string | null): string {
@@ -553,6 +570,14 @@ const extractedFieldOrder = [
   "items",
   "notes",
 ];
+
+function isClientFieldKey(key: string): boolean {
+  const normalized = normalizeMissingFieldKey(key);
+  return normalized === "client_company" ||
+      normalized === "client_name" ||
+      normalized === "customer_name" ||
+      normalized === "bill_to";
+}
 
 function extractedFieldLabel(key: string): string {
   const normalized = normalizeMissingFieldKey(key);
@@ -806,7 +831,6 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
 }
 
 .form-grid label { min-width: 0; }
-.field-stack { display: flex; flex-direction: column; gap: 8px; }
 
 .invoice-side__actions {
   display: flex;

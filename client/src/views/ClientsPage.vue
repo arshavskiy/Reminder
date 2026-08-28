@@ -110,31 +110,31 @@
               <th class="col-name">
                 <button class="th-sort" type="button" @click="toggleSort('display_name')">
                   שם הלקוח
-                  <span class="th-sort__mark">{{ sortMark('display_name') }}</span>
+                  <span class="th-sort__mark">{{ sortLabel('display_name') }}</span>
                 </button>
               </th>
               <th class="col-contact">
                 <button class="th-sort" type="button" @click="toggleSort('contact_person')">
                   איש קשר
-                  <span class="th-sort__mark">{{ sortMark('contact_person') }}</span>
+                  <span class="th-sort__mark">{{ sortLabel('contact_person') }}</span>
                 </button>
               </th>
               <th class="col-email">
                 <button class="th-sort" type="button" @click="toggleSort('email')">
                   אימייל
-                  <span class="th-sort__mark">{{ sortMark('email') }}</span>
+                  <span class="th-sort__mark">{{ sortLabel('email') }}</span>
                 </button>
               </th>
               <th class="col-phone">
                 <button class="th-sort" type="button" @click="toggleSort('phone')">
                   נייד
-                  <span class="th-sort__mark">{{ sortMark('phone') }}</span>
+                  <span class="th-sort__mark">{{ sortLabel('phone') }}</span>
                 </button>
               </th>
               <th class="col-docs">
                 <button class="th-sort" type="button" @click="toggleSort('doc_count')">
                   מסמכים
-                  <span class="th-sort__mark">{{ sortMark('doc_count') }}</span>
+                  <span class="th-sort__mark">{{ sortLabel('doc_count') }}</span>
                 </button>
               </th>
             </tr>
@@ -210,9 +210,10 @@
       </div>
     </n-spin>
 
-    <p v-if="filteredRows.length" class="clients-foot">
-      מציג {{ filteredRows.length }} מתוך {{ store.total }} לקוחות
-    </p>
+    <div v-if="filteredRows.length" class="clients-foot">
+      <span>מציג {{ filteredRows.length }} מתוך {{ store.total }} לקוחות</span>
+      <span class="clients-foot__sum">סה״כ מסמכים: <b class="ltr">{{ visibleDocumentTotal }}</b></span>
+    </div>
 
     <!-- Create / Edit -->
     <n-modal
@@ -387,9 +388,10 @@ function toggleSort(key: ClientSortKey) {
   sortDir.value = key === "doc_count" ? "desc" : "asc";
 }
 
-function sortMark(key: ClientSortKey): string {
-  if (sortKey.value !== key) return "↕";
-  return sortDir.value === "asc" ? "↑" : "↓";
+function sortLabel(key: ClientSortKey): string {
+  if (sortKey.value !== key) return "מיון";
+  if (key === "doc_count") return sortDir.value === "asc" ? "0-9" : "9-0";
+  return sortDir.value === "asc" ? "א-ת" : "ת-א";
 }
 
 const filteredRows = computed(() => {
@@ -405,6 +407,10 @@ const filteredRows = computed(() => {
   });
   return rows;
 });
+
+const visibleDocumentTotal = computed(() =>
+    filteredRows.value.reduce((sum, row) => sum + Number(row.doc_count ?? 0), 0),
+);
 
 const typeFilters = computed(() => {
   const person = store.rows.filter((r) => r.entity_type === "person").length;
@@ -1046,9 +1052,18 @@ function bulkDeleteSelected() {
 }
 
 .clients-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   margin: 10px 0 0;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.clients-foot__sum {
+  color: var(--text-secondary);
 }
 
 .client-form__grid {

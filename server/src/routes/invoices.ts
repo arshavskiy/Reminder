@@ -439,7 +439,17 @@ export function registerInvoiceRoutes(app: express.Application) {
 
     const business = stringOrNull(req.body?.business);
     if (business !== undefined) updates.business = business;
-    const clientName = stringOrNull(req.body?.client_name);
+      const existingInvoice = await col("invoices").findOne(
+          {_id: new ObjectId(id), user_id: userId} as any,
+          {projection: {document_subtype: 1, template_name: 1, fields: 1}} as any,
+      ) as InvoiceRow | null;
+      if (!existingInvoice) {
+          res.status(404).json({error: "Invoice not found"});
+          return;
+      }
+      const isReceipt = invoiceDocumentCategory(existingInvoice.document_subtype ?? existingInvoice.template_name ?? existingInvoice.fields?.document_subtype) === "receipt";
+
+      const clientName = isReceipt ? null : stringOrNull(req.body?.client_name);
     if (clientName !== undefined) {
       updates.client_company = clientName;
       updates.client_name = clientName;
@@ -565,7 +575,9 @@ function presentInvoice(
       notes: invoice.notes ?? invoice.fields?.notes,
       fields: invoice.fields,
     }),
-    client_name: invoice.client_company ?? invoice.client_name ?? invoice.fields?.client_company ?? invoice.fields?.client_name ?? null,
+      client_name: invoiceDocumentCategory(invoice.document_subtype ?? invoice.template_name ?? invoice.fields?.document_subtype) === "receipt"
+          ? null
+          : invoice.client_company ?? invoice.client_name ?? invoice.fields?.client_company ?? invoice.fields?.client_name ?? null,
     business: invoice.business ?? invoice.fields?.business ?? invoice.fields?.business_name ?? null,
     expense_category: invoice.expense_category ?? invoice.fields?.expense_category ?? null,
     provider_id: invoice.provider_id ?? provider?.id ?? null,

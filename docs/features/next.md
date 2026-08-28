@@ -1,6 +1,6 @@
 # Roadmap & Next Steps
 
-**Updated**: 2026-08-19
+**Updated**: 2026-08-28
 
 ---
 
@@ -58,6 +58,7 @@ DB-backed extraction config with per-template prompt/schema overrides and AI pro
 | Report last-sent datetime | `monthly_report_last_sent` stores period key + ISO timestamp |
 | Admin page spacing | Roomier nav, cards, and table columns for admin pages |
 | Node.js 22 engine | Railway compat; removed `--disable-warning` flag for Node <21 |
+| Pricing rollout follow-up fixes | Clients table sort labels + document totals; removed document-detail AI trigger; manual extraction edits survive reprocessing; invoice category editor simplified; receipts hide client/company extraction; Hebrew category default |
 
 ## Recently Shipped (2026-07)
 
