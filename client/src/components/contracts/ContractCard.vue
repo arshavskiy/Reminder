@@ -51,6 +51,73 @@
     <div class="card__reminders">
       <div class="reminders-header">
         <span class="reminders-title">🔔 תזכורות</span>
+        <div v-if="showActions" class="card__actions" @click.stop>
+          <button
+              :disabled="!row.document_id"
+              :title="row.document_id ? 'צפה במסמך' : 'אין מסמך מקושר'"
+              class="btn btn--ghost btn--xs icon-btn"
+              type="button"
+              @click.stop="emit('open-document', row)"
+          >
+            <n-icon :component="EyeOutline" class="btn-icon"/>
+          </button>
+          <button
+              class="btn btn--ghost btn--xs icon-btn"
+              title="ערוך"
+              type="button"
+              @click.stop="emit('edit', row)"
+          >
+            <n-icon :component="CreateOutline" class="btn-icon"/>
+          </button>
+          <button
+              v-if="showTemplateActions"
+              class="btn btn--ghost btn--xs icon-btn"
+              title="פתח בתבנית"
+              type="button"
+              @click.stop="emit('open-template', row)"
+          >
+            <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+          </button>
+          <button
+              v-if="showTemplateActions && !row.document_id"
+              class="btn btn--warn-ghost btn--xs icon-btn"
+              title="הפק PDF"
+              type="button"
+              @click.stop="emit('open-template', row)"
+          >
+            <n-icon :component="DownloadOutline" class="btn-icon"/>
+          </button>
+          <button
+              v-if="showReminderActions"
+              :class="{ 'btn--loading': creatingReminder === row.id }"
+              :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"
+              :title="reminders.length ? 'הוסף תזכורת' : reminderButtonTitle"
+              class="btn btn--ghost btn--xs icon-btn"
+              type="button"
+              @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"
+          >
+            <n-icon :component="NotificationsOutline" class="btn-icon"/>
+          </button>
+          <button
+              v-if="showReminderActions"
+              :class="{ 'btn--loading': sendingThisCard }"
+              :disabled="!canSendReminder || sendingThisCard"
+              :title="sendReminderTitle"
+              class="btn btn--ghost btn--xs icon-btn"
+              type="button"
+              @click.stop="emit('send-card', row)"
+          >
+            <n-icon :component="PaperPlaneOutline" class="btn-icon"/>
+          </button>
+          <button
+              class="btn btn--danger-ghost btn--xs icon-btn"
+              title="מחק"
+              type="button"
+              @click.stop="emit('delete', row)"
+          >
+            <n-icon :component="TrashOutline" class="btn-icon"/>
+          </button>
+        </div>
 <!--        <button-->
 <!--            v-if="showReminderActions"-->
 <!--            :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"-->
@@ -105,73 +172,6 @@
               <n-icon :component="TrashOutline" class="btn-icon"/>
             </button>
           </div>
-          <div v-if="showActions" class="card__actions" @click.stop>
-            <button
-                :disabled="!row.document_id"
-                :title="row.document_id ? 'צפה במסמך' : 'אין מסמך מקושר'"
-                class="btn btn--ghost btn--xs icon-btn"
-                type="button"
-                @click.stop="emit('open-document', row)"
-            >
-              <n-icon :component="EyeOutline" class="btn-icon"/>
-            </button>
-            <button
-                class="btn btn--ghost btn--xs icon-btn"
-                title="ערוך"
-                type="button"
-                @click.stop="emit('edit', row)"
-            >
-              <n-icon :component="CreateOutline" class="btn-icon"/>
-            </button>
-            <button
-                class="btn btn--ghost btn--xs icon-btn"
-                title="פתח בתבנית"
-                type="button"
-                @click.stop="emit('open-template', row)"
-            >
-              <n-icon :component="DocumentTextOutline" class="btn-icon"/>
-            </button>
-            <button
-                v-if="!row.document_id"
-                class="btn btn--warn-ghost btn--xs icon-btn"
-                title="הפק PDF"
-                type="button"
-                @click.stop="emit('open-template', row)"
-            >
-              <n-icon :component="DownloadOutline" class="btn-icon"/>
-            </button>
-            <button
-                v-if="showReminderActions"
-                :class="{ 'btn--loading': creatingReminder === row.id }"
-                :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"
-                :title="reminders.length ? 'הוסף תזכורת' : reminderButtonTitle"
-                class="btn btn--ghost btn--xs icon-btn"
-                type="button"
-                @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"
-            >
-              <n-icon :component="NotificationsOutline" class="btn-icon"/>
-            </button>
-            <button
-                v-if="showReminderActions"
-                :class="{ 'btn--loading': sendingThisCard }"
-                :disabled="!canSendReminder || sendingThisCard"
-                :title="sendReminderTitle"
-                class="btn btn--ghost btn--xs icon-btn"
-                type="button"
-                @click.stop="emit('send-card', row)"
-            >
-              <n-icon :component="PaperPlaneOutline" class="btn-icon"/>
-            </button>
-            <button
-                class="btn btn--danger-ghost btn--xs icon-btn"
-                title="מחק"
-                type="button"
-                @click.stop="emit('delete', row)"
-            >
-              <n-icon :component="TrashOutline" class="btn-icon"/>
-            </button>
-          </div>
-
         </div>
       </div>
       <p v-else class="reminders-empty">אין תזכורות לתסקיר זה</p>
@@ -201,6 +201,7 @@ const props = defineProps<{
   creatingReminder?: string | null;
   showActions?: boolean;
   showReminderActions?: boolean;
+  showTemplateActions?: boolean;
   issues?: RowIssue[];
 }>();
 
@@ -272,6 +273,7 @@ const emit = defineEmits<{
 
 const showActions = computed(() => props.showActions ?? true);
 const showReminderActions = computed(() => props.showReminderActions ?? true);
+const showTemplateActions = computed(() => props.showTemplateActions ?? true);
 
 const subtitle = computed(() =>
     props.row.summary ??

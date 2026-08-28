@@ -76,8 +76,12 @@
         :selected="false"
         :sending-reminder="sendingReminderId"
         :show-actions="true"
+        :show-template-actions="false"
+        @delete="deleteLinkedContract"
         @delete-reminder="deleteLinkedReminder"
         @dismiss-reminder="dismissLinkedReminder"
+        @edit="editLinkedContract"
+        @open-document="openContractDocument"
         @send-reminder="sendLinkedReminder"
       />
     </section>
@@ -1159,6 +1163,34 @@ async function loadLinkedReminders() {
   } catch {
     linkedReminders.value = [];
   }
+}
+
+function editLinkedContract(contract: ContractWithClient) {
+  router.push(`/contracts?edit=${encodeURIComponent(String(contract.id))}&returnTo=${encodeURIComponent(route.fullPath)}`);
+}
+
+function openContractDocument(contract: ContractWithClient) {
+  if (!contract.document_id) return;
+  if (String(contract.document_id) === String(route.params.id)) return;
+  router.push(`/documents/${contract.document_id}`);
+}
+
+function deleteLinkedContract(contract: ContractWithClient) {
+  confirm({
+    title: "מחיקת תסקיר",
+    content: `למחוק את התסקיר "${contract.contract_number ?? contract.id}"? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await api.contracts.delete(String(contract.id), { deleteRelatedReminders: true });
+        linkedContracts.value = linkedContracts.value.filter((row) => String(row.id) !== String(contract.id));
+        linkedReminders.value = linkedReminders.value.filter((row) => String(row.source_id) !== String(contract.id));
+        message.success("התסקיר נמחק");
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
 }
 
 function remindersForContract(contractId: string | number): ReminderWithContext[] {
