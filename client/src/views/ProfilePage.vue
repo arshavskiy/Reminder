@@ -535,7 +535,7 @@
                   </div>
                   <div class="settings-row__actions">
                     <n-button
-                      v-if="!gmailStatus?.connected"
+                      v-if="!gmailStatus?.connected && gmailAllowed"
                       :loading="gmailLoading"
                       size="small"
                       ghost
@@ -543,6 +543,15 @@
                       @click="connectGmailFromProfile"
                     >
                       חבר Gmail
+                    </n-button>
+                    <n-button
+                      v-else-if="!gmailStatus?.connected"
+                      size="small"
+                      ghost
+                      tag="a"
+                      href="https://remindocr.com/pricing"
+                    >
+                      שדרוג מנוי
                     </n-button>
                     <template v-else>
                       <n-button
@@ -968,11 +977,15 @@
                   </span>
                   <div class="settings-row__text">
                     <span class="settings-row__title">חשבוניות</span>
-                    <span class="settings-row__desc">שמירת קבצי חשבוניות באחסון ענן</span>
+                    <span class="settings-row__desc">
+                      <template v-if="!cloudStorageAllowed">זמין במסלולים בסיסי ועסקי בלבד.</template>
+                      <template v-else>שמירת קבצי חשבוניות באחסון ענן</template>
+                    </span>
                   </div>
                   <div class="settings-row__actions">
                     <n-switch
                       :value="s3StoreInvoices"
+                      :disabled="!cloudStorageAllowed"
                       :loading="savingCloudStorage === 'invoices'"
                       aria-label="שמירת חשבוניות בענן"
                       @update:value="(v: boolean) => saveCloudStorage('invoices', v)"
@@ -985,11 +998,15 @@
                   </span>
                   <div class="settings-row__text">
                     <span class="settings-row__title">תסקירי בדיקה</span>
-                    <span class="settings-row__desc">שמירת קבצי תסקירים באחסון ענן</span>
+                    <span class="settings-row__desc">
+                      <template v-if="!cloudStorageAllowed">זמין במסלולים בסיסי ועסקי בלבד.</template>
+                      <template v-else>שמירת קבצי תסקירים באחסון ענן</template>
+                    </span>
                   </div>
                   <div class="settings-row__actions">
                     <n-switch
                       :value="s3StoreInspections"
+                      :disabled="!cloudStorageAllowed"
                       :loading="savingCloudStorage === 'inspections'"
                       aria-label="שמירת תסקירים בענן"
                       @update:value="(v: boolean) => saveCloudStorage('inspections', v)"
@@ -1408,8 +1425,12 @@ const userSettings = ref<UserSettings | null>(null);
 // Unset means enabled: the settings row predates these fields for existing
 // users, and the server applies the same default.
 const savingCloudStorage = ref<"invoices" | "inspections" | null>(null);
-const s3StoreInvoices = computed(() => userSettings.value?.s3_store_invoices !== false);
-const s3StoreInspections = computed(() => userSettings.value?.s3_store_inspection_reports !== false);
+// Cloud storage is a paid feature — free accounts see the rows locked with an upsell.
+const cloudStorageAllowed = computed(() => currentPlanId.value !== "free");
+const s3StoreInvoices = computed(() =>
+    cloudStorageAllowed.value && userSettings.value?.s3_store_invoices !== false);
+const s3StoreInspections = computed(() =>
+    cloudStorageAllowed.value && userSettings.value?.s3_store_inspection_reports !== false);
 
 async function saveCloudStorage(target: "invoices" | "inspections", value: boolean) {
   savingCloudStorage.value = target;
@@ -1828,6 +1849,9 @@ const emailAccountLimit = computed(() =>
   userSettings.value?.plan_entitlements?.maxEmailAccounts
   ?? (currentPlanId.value === "business" ? null : currentPlanId.value === "basic" ? 2 : 1),
 );
+// maxEmailAccounts: 0 means the plan gets no mailbox connection at all.
+const gmailAllowed = computed(() => emailAccountLimit.value === null || emailAccountLimit.value > 0);
+
 const seatsUsageLabel = computed(() =>
   seatLimit.value === null ? "1 · ללא הגבלה" : `1 מתוך ${seatLimit.value}`,
 );

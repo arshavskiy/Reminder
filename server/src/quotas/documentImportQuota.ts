@@ -73,10 +73,9 @@ export function documentImportLimit(
         scope: "lifetime",
       };
     }
+    // One shared pool for manual + email, so both categories report the same limit.
     return {
-      limit: category === "emailDocuments"
-        ? readPositiveIntEnv("FREE_LIFETIME_EMAIL_DOCUMENT_LIMIT", readPositiveIntEnv("FREE_LIFETIME_GMAIL_DOCUMENT_LIMIT", 10))
-        : readPositiveIntEnv("FREE_LIFETIME_MANUAL_DOCUMENT_LIMIT", 10),
+      limit: readPositiveIntEnv("FREE_LIFETIME_MANUAL_DOCUMENT_LIMIT", 10),
       scope: "lifetime",
     };
   }
@@ -114,10 +113,10 @@ export async function getDocumentImportQuota(
     if (scope === "lifetime") {
       // Lifetime free-tier usage is stored on the user and never decreases on delete.
       const usage = await getStoredUserUsage(userId);
-      if (category === "manualDocuments") {
-        used = usage.scannedDocuments;
-      } else if (category === "emailDocuments") {
-        used = usage.gmailDocuments + usage.gmailInvoices;
+      if (category === "manualDocuments" || category === "emailDocuments") {
+        // Free tier gets ONE shared lifetime pool: manual uploads and Gmail imports
+        // draw from the same budget, so importing cannot hand out a second allowance.
+        used = usage.scannedDocuments + usage.gmailDocuments + usage.gmailInvoices;
       } else {
         used = usage.documents;
       }
@@ -141,6 +140,22 @@ export async function getDocumentImportQuota(
   };
 }
 
+/**
+ * The category a request is actually charged against. Free tier collapses every
+ * category into the manual/email lifetime buckets, so callers that only want to
+ * *report* the quota must ask for the same category enforcement will use, or the
+ * UI shows a different limit than the one that blocks the upload.
+ */
+export function effectiveQuotaCategory(
+  role: string | null | undefined,
+  category: DocumentImportQuotaCategory = "documents",
+  source: DocumentImportSource = "manual",
+): DocumentImportQuotaCategory {
+  const plan = normalizePlan(role ?? "user");
+  if (plan !== "free") return category;
+  return source === "email" ? "emailDocuments" : "manualDocuments";
+}
+
 export async function assertDocumentImportQuota(
   userId: string,
   role: string | null | undefined,
@@ -148,10 +163,7 @@ export async function assertDocumentImportQuota(
   category: DocumentImportQuotaCategory = "documents",
   source: DocumentImportSource = "manual",
 ): Promise<DocumentImportQuota> {
-  const plan = normalizePlan(role ?? "user");
-  const effectiveCategory = plan === "free"
-    ? source === "email" ? "emailDocuments" : "manualDocuments"
-    : category;
+  const effectiveCategory = effectiveQuotaCategory(role, category, source);
   const quota = await getDocumentImportQuota(userId, role, effectiveCategory);
   if (quota.limit !== null && quota.used + requested > quota.limit) {
     throw new DocumentImportQuotaError(quota);

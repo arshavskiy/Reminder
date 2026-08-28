@@ -66,7 +66,12 @@ export function freePlanEntitlements(): PlanEntitlements {
 }
 
 /** Defaults used when creating user_settings for a brand-new account (no entitlements — those go in $set). */
-export function newUserSettingsBase(userId: string): Record<string, unknown> {
+export function newUserSettingsBase(
+  userId: string,
+  user?: {plan?: string | null; role?: string | null} | null,
+): Record<string, unknown> {
+  // Cloud storage is a paid feature — free accounts start with it off.
+  const cloudStorage = normalizePlanId(user?.plan ?? user?.role) !== "free";
   return {
     user_id: userId,
     theme: "light",
@@ -81,8 +86,8 @@ export function newUserSettingsBase(userId: string): Record<string, unknown> {
     monthly_report_hour: 8,
     monthly_report_formats: JSON.stringify(["docx", "xlsx"]),
     monthly_report_last_sent: null,
-    s3_store_invoices: true,
-    s3_store_inspection_reports: true,
+    s3_store_invoices: cloudStorage,
+    s3_store_inspection_reports: cloudStorage,
   };
 }
 
@@ -91,7 +96,7 @@ export function newUserSettingsDefaults(
   user: {plan?: string | null; role?: string | null} | null | undefined = {plan: DEFAULT_NEW_USER_PLAN, role: "user"},
 ): Record<string, unknown> {
   return {
-    ...newUserSettingsBase(userId),
+    ...newUserSettingsBase(userId, user),
     plan_entitlements: buildPlanEntitlements(user ?? {plan: DEFAULT_NEW_USER_PLAN, role: "user"}),
     plan_entitlements_updated_at: new Date(),
   };
@@ -124,7 +129,7 @@ export async function ensureUserSettingsWithEntitlements(
         plan_entitlements,
         plan_entitlements_updated_at: now,
       },
-      $setOnInsert: newUserSettingsBase(userId),
+      $setOnInsert: newUserSettingsBase(userId, resolved),
     },
     {upsert: true},
   );

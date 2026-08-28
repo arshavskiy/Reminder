@@ -9,6 +9,11 @@ import {type EquipmentInput, upsertEquipmentForClient} from "../reminders/equipm
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {printTemplateVisibleFilter} from "../templates/printTemplateAccess.js";
 import {parseObjectRecord, pickContractEmail} from "../contracts/contractEmail.js";
+import {
+  assertDocumentImportQuota,
+  DocumentImportQuotaError,
+  documentImportQuotaErrorPayload,
+} from "../quotas/documentImportQuota";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HEBREW_FONT = join(__dirname, "../../../scripts/NotoSansHebrew.ttf");
@@ -17,13 +22,25 @@ export function registerContractRoutes(app: express.Application) {
   // POST /api/contracts — create a contract manually
   app.post("/api/contracts", async (req, res) => {
     let userId: string;
+    let userPlan: string;
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
+      userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
       return;
+    }
+
+    try {
+      await assertDocumentImportQuota(userId, userPlan, 1, "contracts");
+    } catch (err) {
+      if (err instanceof DocumentImportQuotaError) {
+        res.status(403).json(documentImportQuotaErrorPayload(err));
+        return;
+      }
+      throw err;
     }
 
     try {

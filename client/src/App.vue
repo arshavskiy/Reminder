@@ -484,11 +484,11 @@ const allNav: Array<{
   {label: "מסמכים", key: "documents", minPlan: "free", feature: FEATURES.pages.documents},
   {label: "תסקירים", key: "contracts", minPlan: "free", feature: FEATURES.pages.contracts},
   {label: "תזכורות", key: "reminders", minPlan: "basic", feature: FEATURES.pages.reminders},
-  {label: "דוחות", key: "reports", minPlan: "basic", feature: FEATURES.pages.reports},
+  {label: "דוחות", key: "reports", minPlan: "free", feature: FEATURES.pages.reports},
   {label: "לקוחות", key: "clients", minPlan: "basic", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minPlan: "business", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minPlan: "business", feature: FEATURES.pages.equipment},
-  {label: "חשבוניות", key: "invoices", minRole: "admin", minPlan: "business", feature: FEATURES.pages.invoices},
+  {label: "חשבוניות", key: "invoices", minPlan: "business", feature: FEATURES.pages.invoices},
   {label: "Gmail", key: "gmail", minRole: "admin", feature: FEATURES.pages.gmail},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},

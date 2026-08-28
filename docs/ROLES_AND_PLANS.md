@@ -1,7 +1,7 @@
 # Roles, Plans & Features
 
 Canonical matrix for who can use what in RemindOCR.  
-**Updated:** 2026-08-27
+**Updated:** 2026-08-28
 
 Related code:
 
@@ -50,8 +50,8 @@ Admin role **does not** change the product plan field by itself if `users.plan` 
 
 | Plan | Price (marketing) | Seats | Email accounts | Documents | Reminders |
 |------|-------------------|-------|----------------|-----------|-----------|
-| `free` | ₪0 | 1 | 1 | 30 lifetime (all kinds) | 25 lifetime |
-| `basic` | ₪69 / month | 2 | 2 | 50 invoices/mo + 40 contracts/mo | Unlimited |
+| `free` | ₪0 | 1 | 0 | **10 lifetime, shared** across manual + email | **0** |
+| `basic` | ₪69 / month | 2 | 2 | 50/mo (50 contracts/mo) | Unlimited |
 | `business` | ₪179 / month | Unlimited | Unlimited | Unlimited | Unlimited |
 
 Seat / extra-mailbox product is not built yet; limits are stored on `plan_entitlements` and shown as locked UI.
@@ -67,12 +67,14 @@ Enforced in server code (+ matching disabled UI). Source: `TIER_FEATURE_FLAGS`.
 | OCR / preview / extraction | ✓ | ✓ | ✓ | All plans |
 | Google Drive sync / export | — | ✓ | ✓ | `googleDriveSync` |
 | Google Calendar sync | — | — | ✓ | Marketing + flags: **business only** |
-| Automatic email reminders (scheduler) | — | ✓ | ✓ | Manual send still allowed on free (quota) |
+| Cloud storage (S3) of files | — | ✓ | ✓ | `s3_store_invoices` / `s3_store_inspection_reports` default **off** on free; toggles disabled in UI |
+| Templates menu (print / email / doc) | — | ✓ | ✓ | Account dropdown submenu hidden on free |
+| Automatic email reminders (scheduler) | — | ✓ | ✓ | Free cannot create reminders at all (quota 0) |
 | Automatic monthly reports | — | ✓ | ✓ | Free can still download DOCX |
 | Excel export (invoices / reports / contracts) | — | ✓ | ✓ | |
 | Gmail invoice history window | — | 12 months | 48 months | Free blocked for invoice Gmail import |
 | Max users (seats) | 1 | 2 | ∞ | UI only until invite model exists |
-| Max email accounts | 1 | 2 | ∞ | One Gmail connect today; extras locked |
+| Max email accounts | **0** | 2 | ∞ | Free cannot connect Gmail — connect button shows an upgrade link |
 
 `user_settings.plan_entitlements` is written/refreshed on:
 
@@ -102,22 +104,40 @@ Primary nav + router. Feature flags in `user_settings.features` can still hide a
 | חיפוש | ✓ | ✓ | ✓ | `pages.search` | |
 | תבניות מסמכים / אימייל / הדפסה | ✓* | ✓* | ✓* | `pages.doc_templates`, `pages.email_templates`, `pages.print_templates` | Often via contracts / settings |
 | הגדרות מערכת | — | — | ✓ | `pages.settings` | Admin |
-| **חשבוניות** | — | — | ✓ | `pages.invoices` (default **off**) | **Admin role only** (nav + router + `/api/invoices`) |
+| **חשבוניות** | — | — | ✓ | `pages.invoices` (default **on**) | **Business plan** (nav + router); no server-side guard yet |
 | **Gmail** | — | — | ✓* | `pages.gmail` (default **on**) | **Business plan** (nav + `/gmail`); admin role maps to business |
 | Admin console | — | — | ✓ | (admin routes) | `/admin` |
 
 \* Defaults enabled in feature catalog; can be disabled per user in admin feature toggles.
 
-### Invoices (admin-only)
+### Nav plan gates (`allNav` in `client/src/App.vue`)
 
-As of 2026-08-27:
+The table above is by **role**. Primary nav is additionally gated by **plan** via `minPlan`.
+`minPlan` *locks* an item (visible, greyed, "זמין במסלול … ומעלה"); `minRole` *hides* it.
 
-- Nav: `minRole: "admin"` (same pattern as Gmail)
-- Router: `requireRole: "admin"` on `/invoices`, `/invoices/expenses`, `/invoices/:id`
-- API: `requireMinRole("admin")` on `/api/invoices`
-- Catalog default: `pages.invoices` = `false` (optional toggle later; role is the hard gate)
+| Nav item | `minPlan` |
+|----------|-----------|
+| ראשי / מסמכים / תסקירים / דוחות | `free` |
+| תזכורות / לקוחות | `basic` |
+| שטח / ציוד / חשבוניות | `business` |
+| Gmail | `minRole: "admin"` |
 
-Non-admins are redirected to `/403` if they open invoice URLs directly.
+Router `meta.requirePlan` mirrors these; mismatches send the user to `/403` after the nav
+already showed the item, so keep the two in sync.
+
+### Invoices (business plan)
+
+As of 2026-08-28 invoices are gated by **plan**, not by admin role:
+
+- Nav: `minPlan: "business"` — sub-business users see the item locked with an upgrade hint
+  rather than hidden (`minPlan` locks; `minRole` would remove it)
+- Router: `requirePlan: "business"` on `/invoices`, `/invoices/expenses`, `/invoices/:id`
+- Catalog default: `pages.invoices` = `true` (the plan gate is the hard gate)
+- API: **no role or plan guard** on `/api/invoices` — only `requireAuth`. The routes are
+  scoped per `user_id`, so a sub-business user cannot read another account's invoices, but
+  they can still reach their own via direct API calls. Server-side enforcement is a known gap.
+
+Sub-business users are redirected to `/403` if they open invoice URLs directly.
 
 ---
 
@@ -141,13 +161,42 @@ Stored under `user_settings.features.dashboard.*` (all default **on**):
 
 ---
 
+## Quotas
+
+Source: `server/src/quotas/documentImportQuota.ts`, `server/src/quotas/reminderQuota.ts`.
+
+| Quota | Free | Basic | Business |
+|-------|------|-------|----------|
+| Documents | 10 lifetime, **shared** across manual upload + Gmail import | 50 / month | ∞ |
+| Contracts (תסקירים) | draws from the same 10 | 50 / month | ∞ |
+| Reminders | **0** | ∞ | ∞ |
+
+Key behaviours:
+
+- **Free collapses every category** into `manualDocuments` / `emailDocuments`
+  (`effectiveQuotaCategory`), and both read one shared counter
+  (`scannedDocuments + gmailDocuments + gmailInvoices`). Gmail import therefore cannot
+  hand out a second allowance on top of the manual cap.
+- Anything that only *reports* a quota must call `effectiveQuotaCategory` too, or the UI
+  shows a limit different from the one that blocks the upload.
+- Free usage is **lifetime** and stored on the user; deleting documents does not free it.
+- Enforcement points: `POST /api/documents/upload`, `POST /api/contracts`,
+  `POST /api/reminders`.
+
+Env overrides: `FREE_LIFETIME_MANUAL_DOCUMENT_LIMIT` (10), `FREE_LIFETIME_REMINDER_LIMIT`
+(0), `BASIC_MONTHLY_DOCUMENT_LIMIT` / `BASIC_MONTHLY_CONTRACT_DOCUMENT_LIMIT` (50).
+`FREE_LIFETIME_DOCUMENT_LIMIT` (20) applies only to the `documents` category, which free
+users never hit — effectively dead config.
+
+---
+
 ## Server API feature mounts
 
 High-level (`server/src/index.ts`): most `/api/*` trees use `requireAnyFeature([...])`. Exceptions:
 
 | Mount | Gate |
 |-------|------|
-| `/api/invoices` | **Admin role** only |
+| `/api/invoices` | Auth only — **no role/plan guard** (client-side gate only; known gap) |
 | `/api/gmail` | `pages.gmail` |
 | `/api/admin` | `pages.settings` (+ admin handlers) |
 | Calendar / Drive | Auth + **plan** flags (not page features) |
@@ -161,7 +210,7 @@ High-level (`server/src/index.ts`): most `/api/*` trees use `requireAnyFeature([
 | Upgrade plan (after Visa) | Set `users.plan` to `basic` / `business` (admin UI or payment webhook later) → entitlements refresh |
 | Downgrade to free | Set `users.plan` = `free` |
 | Hide a page for one user | Admin feature toggles on `user_settings.features` |
-| Show invoices | User must be `role: admin` |
+| Show invoices | User must be on **business** plan |
 | Show Gmail inbox | User must be on **business** plan (or `role: admin`) + `pages.gmail` |
 
 ---

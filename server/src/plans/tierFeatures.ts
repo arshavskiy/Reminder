@@ -24,7 +24,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     automaticMonthlyReports: false,
     excelExport: false,
     maxUsers: 1,
-    maxEmailAccounts: 1,
+    maxEmailAccounts: 0,
   },
   basic: {
     gmailInspectionHistoryMonths: 16,

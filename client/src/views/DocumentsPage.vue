@@ -186,7 +186,7 @@
     <div v-if="isRegularUser" class="quota-bar">
       <div class="quota-bar__text">
         <span>מסמכים: {{ store.documentQuotaUsed }} / {{ store.documentLimit ?? "∞" }}</span>
-        <span v-if="limitReached" class="quota-bar__limit">הגעת למגבלת סריקות — שדרג ל-Pro</span>
+        <span v-if="limitReached" class="quota-bar__limit">הגעת למגבלת סריקות — שדרג ל-Basic</span>
       </div>
       <n-progress
         type="line"
@@ -202,7 +202,7 @@
     <div v-if="limitReached" class="drop-strip drop-strip--disabled">
       <span>הגעת למגבלת {{ store.documentLimit }} סריקות</span>
     </div>
-    <DocumentDropStrip v-else @uploaded="store.fetch(undefined, true)" />
+    <DocumentDropStrip v-else @quota-reached="onQuotaReached" @uploaded="store.fetch(undefined, true)" />
 
     <n-alert
       v-if="rescanStore.hasSession && !showUploadModal"
@@ -537,10 +537,10 @@
       v-model:show="showLimitModal"
       :class="confirmDialogClass"
       :negative-button-props="confirmCancelButtonProps"
-      :positive-button-props="confirmActionButtonProps('warning')"
+      :positive-button-props="confirmActionButtonProps('success')"
       :show-icon="false"
       negative-text="סגור"
-      positive-text="שדרג ל-Pro"
+      positive-text="שדרג ל-Business "
       preset="dialog"
       type="warning"
       @positive-click="showLimitModal = false"
@@ -550,7 +550,7 @@
         <ConfirmDialogHead title="הגעת למגבלת המסמכים" type="warning"/>
       </template>
       <p>הגעת למגבלת <strong>{{ store.documentLimit }}</strong> המסמכים בחשבון החינמי.</p>
-      <p class="text-sm text-[var(--text-secondary)]">שדרג לחשבון Pro להעלאה בלתי מוגבלת.</p>
+      <p class="text-sm text-[var(--text-secondary)]">שדרג לחשבון Business להעלאה בלתי מוגבלת.</p>
     </n-modal>
 
     <n-modal
@@ -704,6 +704,11 @@ const bulkDownloading = ref(false);
 const bulkExtracting = ref(false);
 const showRescanAllConfirm = ref(false);
 const showLimitModal = ref(false);
+
+function onQuotaReached() {
+  showLimitModal.value = true;
+  store.fetch(undefined, true);
+}
 const viewMode = ref<"grid" | "list">("list");
 const rescanAlertTitle = computed(() => {
   const action = rescanStore.kind === "upload" ? "העלאה" : "סריקה מחדש";

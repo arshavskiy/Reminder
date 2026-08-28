@@ -24,6 +24,7 @@ import {
   assertDocumentImportQuota,
   DocumentImportQuotaError,
   documentImportQuotaErrorPayload,
+  effectiveQuotaCategory,
   getDocumentImportQuota,
     quotaCategoryFromTemplate,
 } from "../quotas/documentImportQuota";
@@ -94,7 +95,7 @@ export function registerDocumentRoutes(app: express.Application) {
         .toArray();
       const docIds = links.map((l: any) => String(l.document_id)).filter(Boolean);
       if (!docIds.length) {
-        const documentQuota = await getDocumentImportQuota(userId, userPlan, "documents");
+        const documentQuota = await getDocumentImportQuota(userId, userPlan, effectiveQuotaCategory(userPlan));
         res.json({
           rows: [],
           total: 0,
@@ -129,7 +130,7 @@ export function registerDocumentRoutes(app: express.Application) {
         { $match: baseFilter },
         { $group: { _id: "$processing_status", count: { $sum: 1 } } },
       ]).toArray(),
-      getDocumentImportQuota(userId, userPlan, "documents"),
+      getDocumentImportQuota(userId, userPlan, effectiveQuotaCategory(userPlan)),
     ]);
 
     // Enrich with linked client + reminder status so the documents list can

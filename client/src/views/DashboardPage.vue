@@ -39,7 +39,7 @@
         <!--            {{ gmailInspectionLoading ? "מייבא מ-Gmail…" : "חפש וייבא תסקירים מ-Gmail" }}-->
         <!--          </span>-->
         <!--        </button>-->
-        <DocumentDropStrip class="dash__drop" @uploaded="store.fetch(true)" />
+        <DocumentDropStrip class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
       </div>
 
       <!-- Quick stats — small chips line, easy to scan -->
@@ -240,6 +240,10 @@ const featuresStore = useFeaturesStore();
 const userSettingsStore = useUserSettingsStore();
 const router = useRouter();
 const message = useMessage();
+
+function onQuotaReached() {
+  message.warning("הגעת למגבלת המסמכים בחשבון החינמי. שדרג את המסלול כדי להעלות עוד.");
+}
 const stats = computed(() => store.stats);
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
 const loadingExpiryItems = ref(false);

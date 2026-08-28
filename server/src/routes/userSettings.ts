@@ -3,7 +3,7 @@ import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
 import {DEFAULT_FEATURES, DEFAULT_FEATURES_NESTED, featuresToNested, normalizeFeatures} from "../features";
-import {buildPlanEntitlements, persistPlanEntitlements} from "../plans/planEntitlements";
+import {buildPlanEntitlements, newUserSettingsBase, persistPlanEntitlements} from "../plans/planEntitlements";
 import {PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 
 const DEFAULT_REPORT_CONFIG = {
@@ -65,25 +65,11 @@ export function registerUserSettingsRoutes(app: express.Application) {
     const plan_entitlements = buildPlanEntitlements(user);
     const row = await col("user_settings").findOne({ user_id: auth.userId });
     if (!row) {
+      // Single source of truth for new-account defaults — newUserSettingsBase is
+      // plan-aware (free tier starts with cloud storage off).
       const defaults = {
-        user_id: auth.userId,
-        theme: "light",
-        email_from_name: null,
-        reminder_advance_days: "[90,60,30]",
-        ocr_language: "heb+eng",
-        features: DEFAULT_FEATURES_NESTED,
-        calendar_next_tests_only: false,
-        monthly_report_enabled: false,
-        monthly_report_recipients: "",
-        monthly_report_day: 1,
-        monthly_report_hour: 8,
-        monthly_report_formats: JSON.stringify(["docx", "xlsx"]),
-        monthly_report_last_sent: null,
+        ...newUserSettingsBase(auth.userId, user),
         report_config: DEFAULT_REPORT_CONFIG,
-        // Default on: cloud storage is what makes a document survive a redeploy,
-        // so opting out has to be a deliberate choice rather than the default.
-        s3_store_invoices: true,
-        s3_store_inspection_reports: true,
         plan_entitlements,
         plan_entitlements_updated_at: new Date(),
       };

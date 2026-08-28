@@ -165,7 +165,7 @@ interface UploadResultRow {
   remindersCreated: number | null;
 }
 
-const emit = defineEmits<{ (e: "uploaded"): void }>();
+const emit = defineEmits<{ (e: "uploaded"): void; (e: "quota-reached"): void }>();
 
 const router = useRouter();
 const message = useMessage();
@@ -304,12 +304,23 @@ async function uploadFiles(
         idx === i ? { ...r, id, duplicate, status: "processing" } : r,
       );
     } catch (err) {
+      const e = err as any;
+      const quotaReached = e.remaining != null
+        || String(e.message ?? "").includes("limit_reached")
+        || String(e.message ?? "").includes("quota_exceeded");
+      // Quota is account-wide: once it is hit every remaining file fails the same
+      // way, so stop here and surface one upgrade prompt instead of N toasts.
+      if (quotaReached) {
+        uploadResultRows.value = uploadResultRows.value.map((r, idx) =>
+          idx >= i ? { ...r, status: "error" } : r,
+        );
+        emit("quota-reached");
+        break;
+      }
       uploadResultRows.value = uploadResultRows.value.map((r, idx) =>
         idx === i ? { ...r, status: "error" } : r,
       );
-      // Show error only for quota/auth failures (not per-file OCR errors)
-      const e = err as any;
-      if (e.remaining != null || e.status === 401 || e.status === 403) {
+      if (e.status === 401 || e.status === 403) {
         message.error(e.message ?? "שגיאה בהעלאת הקבצים");
       }
     }

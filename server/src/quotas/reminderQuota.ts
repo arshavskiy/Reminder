@@ -26,8 +26,10 @@ export function reminderLimit(role: string | null | undefined): {
 } {
   const plan = normalizePlan(role);
   if (plan === "business" || plan === "basic") return {limit: null, scope: "unlimited"};
+  // Free tier gets no reminders at all. readPositiveIntEnv rejects 0, so read the
+  // override directly to keep an explicit FREE_LIFETIME_REMINDER_LIMIT=0 working.
   return {
-    limit: readPositiveIntEnv("FREE_LIFETIME_REMINDER_LIMIT", readPositiveIntEnv("USER_REMINDER_LIMIT", 25)),
+    limit: readNonNegativeIntEnv("FREE_LIFETIME_REMINDER_LIMIT", readNonNegativeIntEnv("USER_REMINDER_LIMIT", 0)),
     scope: "lifetime",
   };
 }
@@ -105,8 +107,8 @@ function normalizePlan(role: string | null | undefined): "free" | "basic" | "bus
   return "free";
 }
 
-function readPositiveIntEnv(name: string, fallback: number): number {
+function readNonNegativeIntEnv(name: string, fallback: number): number {
   const value = Number(process.env[name]);
-  if (!Number.isFinite(value) || value <= 0) return fallback;
+  if (!Number.isFinite(value) || value < 0) return fallback;
   return Math.floor(value);
 }
