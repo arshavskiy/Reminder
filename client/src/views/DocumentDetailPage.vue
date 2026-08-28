@@ -75,7 +75,7 @@
         :row="contract"
         :selected="false"
         :sending-reminder="sendingReminderId"
-        :show-actions="false"
+        :show-actions="true"
         @delete-reminder="deleteLinkedReminder"
         @dismiss-reminder="dismissLinkedReminder"
         @send-reminder="sendLinkedReminder"

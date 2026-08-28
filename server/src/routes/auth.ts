@@ -594,7 +594,7 @@ export function registerAuthRoutes(app: express.Application) {
     // route, so it must not be built from the API host.
     const base = frontendBaseUrl(req);
     try {
-      await sendPasswordResetEmail(emailLower, resetToken, base);
+      await sendPasswordResetEmail(emailLower, resetToken, base, user.name);
       notifyPasswordResetRequested({email: emailLower});
       logger.info("password_reset_requested", { user_id: user._id.toString(), email: emailLower, user_found: true, ip: clientIp(req) ?? null });
     } catch (err) {

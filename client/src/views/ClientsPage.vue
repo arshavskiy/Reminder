@@ -110,31 +110,31 @@
               <th class="col-name">
                 <button class="th-sort" type="button" @click="toggleSort('display_name')">
                   שם הלקוח
-                  <span class="th-sort__mark">{{ sortLabel('display_name') }}</span>
+                  <n-icon :component="sortIcon('display_name')" :size="13" :title="sortTitle('display_name')" class="th-sort__mark" />
                 </button>
               </th>
               <th class="col-contact">
                 <button class="th-sort" type="button" @click="toggleSort('contact_person')">
                   איש קשר
-                  <span class="th-sort__mark">{{ sortLabel('contact_person') }}</span>
+                  <n-icon :component="sortIcon('contact_person')" :size="13" :title="sortTitle('contact_person')" class="th-sort__mark" />
                 </button>
               </th>
               <th class="col-email">
                 <button class="th-sort" type="button" @click="toggleSort('email')">
                   אימייל
-                  <span class="th-sort__mark">{{ sortLabel('email') }}</span>
+                  <n-icon :component="sortIcon('email')" :size="13" :title="sortTitle('email')" class="th-sort__mark" />
                 </button>
               </th>
               <th class="col-phone">
                 <button class="th-sort" type="button" @click="toggleSort('phone')">
                   נייד
-                  <span class="th-sort__mark">{{ sortLabel('phone') }}</span>
+                  <n-icon :component="sortIcon('phone')" :size="13" :title="sortTitle('phone')" class="th-sort__mark" />
                 </button>
               </th>
               <th class="col-docs">
                 <button class="th-sort" type="button" @click="toggleSort('doc_count')">
                   מסמכים
-                  <span class="th-sort__mark">{{ sortLabel('doc_count') }}</span>
+                  <n-icon :component="sortIcon('doc_count')" :size="13" :title="sortTitle('doc_count')" class="th-sort__mark" />
                 </button>
               </th>
             </tr>
@@ -331,6 +331,8 @@ import {
 } from "naive-ui";
 import {
   AddOutline,
+  ArrowDownOutline,
+  ArrowUpOutline,
   BriefcaseOutline,
   BusinessOutline,
   CheckboxOutline,
@@ -338,6 +340,7 @@ import {
   PersonOutline,
   RefreshOutline,
   SearchOutline,
+  SwapVerticalOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
 import { useClientsStore } from "../stores/clients.js";
@@ -388,7 +391,12 @@ function toggleSort(key: ClientSortKey) {
   sortDir.value = key === "doc_count" ? "desc" : "asc";
 }
 
-function sortLabel(key: ClientSortKey): string {
+function sortIcon(key: ClientSortKey) {
+  if (sortKey.value !== key) return SwapVerticalOutline;
+  return sortDir.value === "asc" ? ArrowUpOutline : ArrowDownOutline;
+}
+
+function sortTitle(key: ClientSortKey): string {
   if (sortKey.value !== key) return "מיון";
   if (key === "doc_count") return sortDir.value === "asc" ? "0-9" : "9-0";
   return sortDir.value === "asc" ? "א-ת" : "ת-א";
@@ -854,8 +862,12 @@ function bulkDeleteSelected() {
 }
 
 .th-sort__mark {
-  font-size: 10px;
-  opacity: 0.7;
+  opacity: 0.45;
+  transition: opacity 0.12s;
+}
+
+.th-sort:hover .th-sort__mark {
+  opacity: 0.9;
 }
 
 .clients-table tbody tr:last-child td {
