@@ -22,6 +22,11 @@ import {
   reportNumberFromFields,
   reportNumberFromFileName,
 } from "../documents/generatedPdfReplace.js";
+import {normalizePlanId} from "../plans/tierFeatures.js";
+
+function assertExportAllowed(auth: Awaited<ReturnType<typeof requireAuth>>): boolean {
+  return normalizePlanId(auth.user.plan ?? auth.user.role) !== "free";
+}
 
 async function getEngineerData(userId: string): Promise<Record<string, string>> {
     try {
@@ -278,6 +283,10 @@ export function registerPrintTemplateRoutes(app: Express) {
   app.post("/api/print-templates/:id/pdf", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
+    if (!assertExportAllowed(auth)) {
+      res.status(403).json({error: "export_plan_required", message: "ייצוא PDF זמין במסלולים בסיסי ועסקי בלבד."});
+      return;
+    }
       const t = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId)) as any;
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
       const clientData: Record<string, unknown> = req.body.data ?? {};
@@ -296,6 +305,10 @@ export function registerPrintTemplateRoutes(app: Express) {
   app.post("/api/print-templates/:id/pdf/save", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
+    if (!assertExportAllowed(auth)) {
+      res.status(403).json({error: "export_plan_required", message: "ייצוא PDF זמין במסלולים בסיסי ועסקי בלבד."});
+      return;
+    }
       const t = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId)) as any;
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
       const clientData: Record<string, unknown> = req.body.data ?? {};

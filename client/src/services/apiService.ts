@@ -233,7 +233,7 @@ export interface InvoiceExpenseMonthlyResponse {
 }
 
 export interface ProfileSubscriptionQuota {
-  category: "invoices" | "contracts" | "documents" | "reminders";
+  category: "invoices" | "contracts" | "documents" | "manualDocuments" | "emailDocuments" | "reminders";
   scope: "monthly" | "lifetime" | "unlimited";
   limit: number | null;
   used: number;
@@ -250,7 +250,7 @@ export interface ProfileImportCounters {
 
 export interface ProfileSubscription {
   plan: string;
-  quotas: Record<ProfileSubscriptionQuota["category"], ProfileSubscriptionQuota>;
+  quotas: Partial<Record<ProfileSubscriptionQuota["category"], ProfileSubscriptionQuota>>;
   counters: ProfileImportCounters;
 }
 
@@ -800,6 +800,8 @@ export const api = {
       is_active?: boolean | number;
       email_verified?: boolean | number;
     }) => adminPut<any>(`/admin/users/${id}`, body),
+    updateUserTier: (id: string, plan: "free" | "basic" | "business") =>
+      adminPost<any>(`/admin/users/${id}/tier`, {plan}),
     createMagicLink: (body: {
       email?: string | null;
       username?: string | null;

@@ -263,6 +263,9 @@ export function registerAuthRoutes(app: express.Application) {
     const { user, actingAs } = identity;
 
     const userDoc = await col("users").findOne({ _id: new ObjectId((user as any).id) }) as any;
+    if (userDoc) {
+      await ensureUserSettingsWithEntitlements(String(userDoc._id), userDoc);
+    }
     res.json({
       user: {
         id: (user as any).id,
@@ -466,6 +469,7 @@ export function registerAuthRoutes(app: express.Application) {
     }
 
     await col("users").updateOne({ _id: user._id }, { $set: { last_login_at: new Date() } });
+    await ensureUserSettingsWithEntitlements(user._id.toString(), user);
 
     const ua = req.headers["user-agent"] ?? undefined;
     const ip = clientIp(req);

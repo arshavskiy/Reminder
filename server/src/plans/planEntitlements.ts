@@ -18,6 +18,8 @@ export interface PlanEntitlements extends TierFeatureFlags {
     scope: "monthly" | "lifetime" | "unlimited";
     invoices: number | null;
     contracts: number | null;
+    manualDocuments: number | null;
+    emailDocuments: number | null;
   };
   reminders: {
     scope: "monthly" | "lifetime" | "unlimited";
@@ -35,6 +37,8 @@ export function buildPlanEntitlements(
   const flags = featureFlagsForUser(user);
   const invoices = documentImportLimit(planKey, "invoices");
   const contracts = documentImportLimit(planKey, "contracts");
+  const manualDocuments = documentImportLimit(planKey, "manualDocuments");
+  const emailDocuments = documentImportLimit(planKey, "emailDocuments");
   const reminders = reminderLimit(planKey);
   return {
     plan: String(user?.role ?? "").trim().toLowerCase() === "admin"
@@ -47,6 +51,8 @@ export function buildPlanEntitlements(
       scope: invoices.scope,
       invoices: invoices.limit,
       contracts: contracts.limit,
+      manualDocuments: manualDocuments.limit,
+      emailDocuments: emailDocuments.limit,
     },
     reminders: {
       scope: reminders.scope,

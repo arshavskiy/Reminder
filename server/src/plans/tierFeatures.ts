@@ -1,6 +1,7 @@
 export type PlanId = "free" | "basic" | "business";
 
 export interface TierFeatureFlags {
+  gmailInspectionHistoryMonths: number | null;
   gmailInvoiceHistoryMonths: number | null;
   googleDriveSync: boolean;
   googleCalendarSync: boolean;
@@ -15,6 +16,7 @@ export interface TierFeatureFlags {
 
 export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
   free: {
+    gmailInspectionHistoryMonths: 16,
     gmailInvoiceHistoryMonths: 0,
     googleDriveSync: false,
     googleCalendarSync: false,
@@ -25,6 +27,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     maxEmailAccounts: 1,
   },
   basic: {
+    gmailInspectionHistoryMonths: 16,
     gmailInvoiceHistoryMonths: 12,
     googleDriveSync: true,
     googleCalendarSync: false,
@@ -35,7 +38,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     maxEmailAccounts: 2,
   },
   business: {
-    gmailInvoiceHistoryMonths: 48,
+    gmailInspectionHistoryMonths: 24,
+    gmailInvoiceHistoryMonths: 24,
     googleDriveSync: true,
     googleCalendarSync: true,
     automaticEmailReminders: true,
@@ -64,7 +68,11 @@ export function normalizePlanId(planOrRole: string | null | undefined): PlanId {
 
 export function featureFlagsForUser(user: { plan?: string | null; role?: string | null } | null | undefined): TierFeatureFlags {
   if (String(user?.role ?? "").trim().toLowerCase() === "admin") {
-    return { ...TIER_FEATURE_FLAGS.business, gmailInvoiceHistoryMonths: null };
+    return {
+      ...TIER_FEATURE_FLAGS.business,
+      gmailInspectionHistoryMonths: null,
+      gmailInvoiceHistoryMonths: null,
+    };
   }
   return tierFeatureFlags(user?.plan ?? user?.role);
 }
@@ -88,7 +96,11 @@ export function planAllowsExcelExport(planOrRole: string | null | undefined): bo
 export function tierFeatureFlags(planOrRole: string | null | undefined): TierFeatureFlags {
   const value = String(planOrRole ?? "").trim().toLowerCase();
   if (value === "admin") {
-    return { ...TIER_FEATURE_FLAGS.business, gmailInvoiceHistoryMonths: null };
+    return {
+      ...TIER_FEATURE_FLAGS.business,
+      gmailInspectionHistoryMonths: null,
+      gmailInvoiceHistoryMonths: null,
+    };
   }
   return TIER_FEATURE_FLAGS[normalizePlanId(planOrRole)];
 }

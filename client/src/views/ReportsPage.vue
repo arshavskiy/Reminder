@@ -52,14 +52,22 @@
           </n-checkbox-group>
         </div>
         <div class="reports-actions reports-actions--generator">
-          <n-button :loading="downloading === 'docx'" :disabled="!hasFields" type="primary" @click="downloadReport('docx')">הורד DOCX</n-button>
-          <n-tooltip v-if="!excelAllowed">
+          <n-tooltip v-if="!exportAllowed">
+            <template #trigger>
+              <span>
+                <n-button :disabled="true" type="primary">הורד DOCX</n-button>
+              </span>
+            </template>
+            {{ exportLockedMessage }}
+          </n-tooltip>
+          <n-button v-else :loading="downloading === 'docx'" :disabled="!hasFields" type="primary" @click="downloadReport('docx')">הורד DOCX</n-button>
+          <n-tooltip v-if="!excelAllowed || !exportAllowed">
             <template #trigger>
               <span>
                 <n-button :disabled="true" type="primary">הורד XLSX</n-button>
               </span>
             </template>
-            {{ excelLockedMessage }}
+            {{ exportAllowed ? excelLockedMessage : exportLockedMessage }}
           </n-tooltip>
           <n-button v-else :loading="downloading === 'xlsx'" :disabled="!hasFields" type="primary" @click="downloadReport('xlsx')">הורד XLSX</n-button>
           <n-tooltip v-if="!autoReportsAllowed">
@@ -108,7 +116,7 @@
             <n-form-item label="קבצים מצורפים">
               <n-space>
                 <n-checkbox v-model:checked="form.docx">DOCX</n-checkbox>
-                <n-checkbox v-model:checked="form.xlsx" :disabled="!excelAllowed">XLSX</n-checkbox>
+                <n-checkbox v-model:checked="form.xlsx" :disabled="!excelAllowed || !exportAllowed">XLSX</n-checkbox>
               </n-space>
             </n-form-item>
           </n-gi>
@@ -182,8 +190,10 @@ const excelAllowed = computed(() =>
   userSettingsStore.settings?.plan_entitlements?.excelExport
   ?? planAllowsExcelExport(resolveUserPlan(authStore.user)),
 );
+const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
 const autoReportsLockedMessage = PLAN_GATE_MESSAGES.automaticMonthlyReports;
 const excelLockedMessage = PLAN_GATE_MESSAGES.excelExport;
+const exportLockedMessage = "ייצוא דוחות זמין במסלולים בסיסי ועסקי בלבד.";
 const loading = ref(true);
 const saving = ref(false);
 const sending = ref(false);
@@ -368,6 +378,10 @@ async function saveSettings() {
 }
 
 async function downloadReport(format: "docx" | "xlsx") {
+  if (!exportAllowed.value) {
+    message.warning(exportLockedMessage);
+    return;
+  }
   if (format === "xlsx" && !excelAllowed.value) {
     message.warning(PLAN_GATE_MESSAGES.excelExport);
     return;

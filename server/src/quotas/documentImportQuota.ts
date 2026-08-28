@@ -14,7 +14,14 @@ export type DocumentImportQuota = {
   periodEnd: Date | null;
 };
 
-export type DocumentImportQuotaCategory = "invoices" | "contracts" | "documents";
+export type DocumentImportQuotaCategory =
+  | "invoices"
+  | "contracts"
+  | "documents"
+  | "manualDocuments"
+  | "emailDocuments";
+
+export type DocumentImportSource = "manual" | "email";
 
 export type QuotaTemplateLike = {
     document_kind?: string | null;
@@ -59,18 +66,29 @@ export function documentImportLimit(
 ): { limit: number | null; scope: DocumentImportQuota["scope"] } {
   const plan = normalizePlan(role);
   if (plan === "business") return { limit: null, scope: "unlimited" };
+  if (plan === "free") {
+    if (category === "documents") {
+      return {
+        limit: readPositiveIntEnv("FREE_LIFETIME_DOCUMENT_LIMIT", 20),
+        scope: "lifetime",
+      };
+    }
+    return {
+      limit: category === "emailDocuments"
+        ? readPositiveIntEnv("FREE_LIFETIME_EMAIL_DOCUMENT_LIMIT", readPositiveIntEnv("FREE_LIFETIME_GMAIL_DOCUMENT_LIMIT", 10))
+        : readPositiveIntEnv("FREE_LIFETIME_MANUAL_DOCUMENT_LIMIT", 10),
+      scope: "lifetime",
+    };
+  }
   if (plan === "basic") {
     return {
       limit: category === "contracts"
-        ? readPositiveIntEnv("BASIC_MONTHLY_CONTRACT_DOCUMENT_LIMIT", readPositiveIntEnv("PRO_MONTHLY_CONTRACT_DOCUMENT_LIMIT", 40))
+        ? readPositiveIntEnv("BASIC_MONTHLY_CONTRACT_DOCUMENT_LIMIT", readPositiveIntEnv("PRO_MONTHLY_CONTRACT_DOCUMENT_LIMIT", 50))
         : readPositiveIntEnv("BASIC_MONTHLY_DOCUMENT_LIMIT", readPositiveIntEnv("PRO_MONTHLY_DOCUMENT_LIMIT", 50)),
       scope: "monthly",
     };
   }
-  return {
-    limit: readPositiveIntEnv("FREE_LIFETIME_DOCUMENT_LIMIT", readPositiveIntEnv("USER_DOCUMENT_LIMIT", 30)),
-    scope: "lifetime",
-  };
+  return { limit: null, scope: "unlimited" };
 }
 
 export function currentUtcMonthWindow(now = new Date()): { periodStart: Date; periodEnd: Date } {
@@ -95,7 +113,14 @@ export async function getDocumentImportQuota(
   if (limit !== null) {
     if (scope === "lifetime") {
       // Lifetime free-tier usage is stored on the user and never decreases on delete.
-      used = (await getStoredUserUsage(userId)).documents;
+      const usage = await getStoredUserUsage(userId);
+      if (category === "manualDocuments") {
+        used = usage.scannedDocuments;
+      } else if (category === "emailDocuments") {
+        used = usage.gmailDocuments + usage.gmailInvoices;
+      } else {
+        used = usage.documents;
+      }
     } else {
       const countFilter = plan === "free"
         ? freeDocumentQuotaCountFilter(userId)
@@ -121,9 +146,12 @@ export async function assertDocumentImportQuota(
   role: string | null | undefined,
   requested = 1,
   category: DocumentImportQuotaCategory = "documents",
+  source: DocumentImportSource = "manual",
 ): Promise<DocumentImportQuota> {
   const plan = normalizePlan(role ?? "user");
-  const effectiveCategory = plan === "free" ? "documents" : category;
+  const effectiveCategory = plan === "free"
+    ? source === "email" ? "emailDocuments" : "manualDocuments"
+    : category;
   const quota = await getDocumentImportQuota(userId, role, effectiveCategory);
   if (quota.limit !== null && quota.used + requested > quota.limit) {
     throw new DocumentImportQuotaError(quota);

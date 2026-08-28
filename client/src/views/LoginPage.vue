@@ -195,7 +195,7 @@
         </article>
         <article class="feature-card feature-card--accent">
           <h3>ייבוא חשבוניות לפי מנוי</h3>
-          <p>מסלול חינמי כולל 25 מסמכים חד פעמי, בסיסי כולל 50 מסמכים בחודש, ועסקי ללא הגבלה.</p>
+          <p>מסלול חינמי כולל 10 מסמכים ועוד 10 ייבואי אימייל, בסיסי כולל 50 קבלות ו-50 תסקירים בחודש, ועסקי ללא הגבלה.</p>
         </article>
 <!--        <article class="feature-card">-->
 <!--          &lt;!&ndash;          <div class="feature-icon">✉️</div>&ndash;&gt;-->

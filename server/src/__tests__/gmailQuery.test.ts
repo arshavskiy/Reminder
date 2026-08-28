@@ -30,17 +30,17 @@ describe("Gmail query tier limits", () => {
     );
   });
 
-  it("limits business invoice searches to 48 months", () => {
+  it("limits business invoice searches to 24 months", () => {
     expect(buildGmailQuery("has:attachment HOT", invoiceTemplate, "business")).toBe(
-      "has:attachment HOT newer_than:48m",
+      "has:attachment HOT newer_than:24m",
     );
   });
 
-  it("does not cap admin invoice searches with newer_than:48m", () => {
+  it("does not cap admin invoice searches with newer_than:24m", () => {
     expect(buildGmailQuery("has:attachment HOT", invoiceTemplate, "admin")).toBe(
       "has:attachment HOT",
     );
-    expect(buildGmailQuery("has:attachment HOT newer_than:48m", invoiceTemplate, "admin")).toBe(
+    expect(buildGmailQuery("has:attachment HOT newer_than:24m", invoiceTemplate, "admin")).toBe(
       "has:attachment HOT",
     );
   });
@@ -57,16 +57,16 @@ describe("Gmail query tier limits", () => {
     );
   });
 
-    it("caps inspection searches at 18 months", () => {
+    it("caps inspection searches by tier", () => {
         expect(buildGmailQuery(undefined, inspectionTemplate, "basic")).toBe(
-            "has:attachment {filename:pdf filename:doc filename:docx} תסקיר newer_than:18m",
+            "has:attachment {filename:pdf filename:doc filename:docx} תסקיר newer_than:16m",
         );
         expect(buildGmailQuery(
             "has:attachment {filename:pdf filename:doc filename:docx} {\"תסקיר\"} newer_than:6m",
             inspectionTemplate,
             "business",
         )).toBe(
-            'has:attachment {filename:pdf filename:doc filename:docx} {"תסקיר"} newer_than:18m',
+            'has:attachment {filename:pdf filename:doc filename:docx} {"תסקיר"} newer_than:24m',
         );
   });
 });

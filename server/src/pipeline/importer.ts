@@ -279,7 +279,13 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
         {projection: {role: 1, plan: 1}} as any,
     );
     const category = await resolveImportQuotaCategory(pipeline);
-    await assertDocumentImportQuota(userId, user?.plan ?? user?.role, 1, category);
+    await assertDocumentImportQuota(
+      userId,
+      user?.plan ?? user?.role,
+      1,
+      category,
+      pipeline?.gmailImport ? "email" : "manual",
+    );
   }
 
   // Copy to managed documents folder

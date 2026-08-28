@@ -2,7 +2,7 @@ import express from "express";
 import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {HTTPException, requireAuth} from "../auth/middleware";
-import {featureFlagsForUser, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
+import {featureFlagsForUser, normalizePlanId, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 import {
     generateMonthlyContractReports,
     generateMonthlyTrackingReport,
@@ -33,8 +33,12 @@ export function registerReportRoutes(app: express.Application) {
           ? undefined
           : Number(req.query.month);
       const format = String(req.query.format ?? "docx");
+      const user = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
+      if (normalizePlanId(user?.plan ?? user?.role) === "free") {
+        res.status(403).json({ error: "export_plan_required", message: "ייצוא דוחות זמין במסלולים בסיסי ועסקי בלבד." });
+        return;
+      }
       if (format === "xlsx") {
-        const user = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
         if (!featureFlagsForUser(user).excelExport) {
           res.status(403).json({ error: "excel_export_plan_required", message: PLAN_GATE_MESSAGES.excelExport });
           return;

@@ -75,7 +75,13 @@ export function registerProfileRoutes(app: express.Application) {
 
         const userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
         const normalizedPlan = normalizeSubscriptionPlan(userPlan);
-        const categories: DocumentImportQuotaCategory[] = ["invoices", "contracts", "documents"];
+        const categories: DocumentImportQuotaCategory[] = [
+            "invoices",
+            "contracts",
+            "documents",
+            "manualDocuments",
+            "emailDocuments",
+        ];
         const [quotas, counters, reminderQuota] = await Promise.all([
             Promise.all(
                 categories.map(async (category) => {

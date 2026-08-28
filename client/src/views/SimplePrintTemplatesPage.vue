@@ -87,11 +87,11 @@
         </template>
         <template #actions>
           <button class="btn btn--ghost" :disabled="draftSaving" @click="saveDraft">שמור טיוטה</button>
-          <button :disabled="printing" class="btn btn--primary" @click="printPdf">
+          <button :disabled="!exportAllowed || printing" class="btn btn--primary" @click="printPdf">
             <n-icon :component="PrintOutline"/>
             הדפס PDF
           </button>
-          <button class="btn btn--primary" :disabled="savingPdf" @click="savePdf">הורד PDF</button>
+          <button class="btn btn--primary" :disabled="!exportAllowed || savingPdf" @click="savePdf">הורד PDF</button>
         </template>
       </PageHeader>
       <div class="compose-grid">
@@ -130,6 +130,7 @@ import {api} from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import {useEngineerStore} from "../stores/engineer.js";
+import {resolveUserPlan} from "../shared/pricingPlans.js";
 import type {PrintTemplate} from "@shared/types.js";
 import {
   clonePrintTemplateLayout,
@@ -172,6 +173,7 @@ const composeData = ref<Record<string, string>>({});
 const draftSaving = ref(false);
 const printing = ref(false);
 const savingPdf = ref(false);
+const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
 
 const composeFields = computed(() => {
   if (!composing.value?.layout) return [];
@@ -354,6 +356,10 @@ async function saveDraft() {
 
 async function printPdf() {
   if (!composing.value) return;
+  if (!exportAllowed.value) {
+    message.warning("ייצוא PDF זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
   printing.value = true;
   try {
     const blob = await api.printTemplates.renderPdf(composing.value._id, composeData.value);
@@ -369,6 +375,10 @@ async function printPdf() {
 
 async function savePdf() {
   if (!composing.value) return;
+  if (!exportAllowed.value) {
+    message.warning("ייצוא PDF זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
   savingPdf.value = true;
   try {
     const meta = composeContractId.value ? { contract_id: composeContractId.value } : {};

@@ -59,7 +59,7 @@
             <span>
               <button
                 :class="{ 'rbtn--loading': exporting }"
-                :disabled="!excelAllowed || loading || total === 0 || exporting"
+                :disabled="!exportAllowed || !excelAllowed || loading || total === 0 || exporting"
                 class="rbtn rbtn--ghost"
                 type="button"
                 @click="exportInvoicesToExcel"
@@ -72,9 +72,8 @@
           {{ excelAllowed ? "הורדת החשבוניות לקובץ Excel" : excelExportLockedMessage }}
         </n-tooltip>
         <button
-            v-if="driveAllowed"
             :class="{ 'rbtn--loading': exportingToDrive }"
-            :disabled="exportingToDrive"
+            :disabled="!driveAllowed || exportingToDrive"
             class="rbtn rbtn--ghost"
             type="button"
             @click="handleDriveExport"
@@ -82,7 +81,7 @@
           <GoogleDriveLogo :size="16" />
           ייצוא ל-Drive
         </button>
-        <button class="rbtn rbtn--ghost" type="button" @click="showMonthlyReport = true">
+        <button class="rbtn rbtn--ghost" type="button" :disabled="!exportAllowed" @click="openMonthlyReport">
           <n-icon :component="DocumentTextOutline" class="btn-icon"/>
           דוח חודשי
         </button>
@@ -537,6 +536,7 @@ const {confirm} = useConfirm();
 const authStore = useAuthStore();
 const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
 const excelAllowed = computed(() => planAllowsExcelExport(resolveUserPlan(authStore.user)));
+const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
 const excelExportLockedMessage = PLAN_GATE_MESSAGES.excelExport;
 
 const rows = ref<ImportedInvoice[]>([]);
@@ -988,6 +988,10 @@ function download(row: ImportedInvoice) {
 }
 
 async function exportInvoicesToExcel() {
+  if (!exportAllowed.value) {
+    message.warning("ייצוא זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
   if (!excelAllowed.value) {
     message.warning(PLAN_GATE_MESSAGES.excelExport);
     return;
@@ -1055,6 +1059,14 @@ async function exportInvoicesToExcel() {
   } finally {
     exporting.value = false;
   }
+}
+
+function openMonthlyReport() {
+  if (!exportAllowed.value) {
+    message.warning("ייצוא דוחות זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
+  showMonthlyReport.value = true;
 }
 
 async function handleDriveExport() {

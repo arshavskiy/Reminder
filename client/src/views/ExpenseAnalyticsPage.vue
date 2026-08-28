@@ -7,7 +7,7 @@
     >
       <template #hero>
         <n-dropdown
-          :disabled="loading || exporting || !suppliers.length"
+          :disabled="!exportAllowed || loading || exporting || !suppliers.length"
           :options="exportMenuOptions"
           placement="bottom-start"
           trigger="click"
@@ -15,7 +15,7 @@
         >
           <button
             :class="{ 'rbtn--loading': exporting }"
-            :disabled="loading || exporting || !suppliers.length"
+            :disabled="!exportAllowed || loading || exporting || !suppliers.length"
             class="rbtn rbtn--ghost"
             type="button"
           >
@@ -229,12 +229,15 @@ import { CanvasRenderer } from "echarts/renderers";
 import PageHeader from "../components/PageHeader.vue";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import { api, type InvoiceExpenseCategorySeries, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
+import {useAuthStore} from "../stores/auth.js";
+import {resolveUserPlan} from "../shared/pricingPlans.js";
 
 echarts.use([BarChart, LineChart, PieChart, TreemapChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
 type ExpenseChartType = "stacked" | "grouped" | "line" | "pie" | "map";
 
 const message = useMessage();
+const authStore = useAuthStore();
 const chartEl = ref<HTMLDivElement | null>(null);
 const loading = ref(false);
 const dateBasis = ref<"invoice" | "import">("invoice");
@@ -250,6 +253,7 @@ const chartSeries = ref<InvoiceExpenseMonthlySeries[]>([]);
 const totalAmount = ref(0);
 const totalInvoices = ref(0);
 const exporting = ref(false);
+const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
 const themeTick = ref(0);
 const chartType = ref<ExpenseChartType>("stacked");
 const supplierColorIndex = ref<Record<string, number>>({});
@@ -583,6 +587,10 @@ function monthlyExportRows(): (string | number)[][] {
 
 async function exportTotals(format: string | number) {
   if (format !== "xlsx" && format !== "csv") return;
+  if (!exportAllowed.value) {
+    message.warning("ייצוא זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
   if (!suppliers.value.length) {
     message.info("אין סכומים לייצוא");
     return;

@@ -108,12 +108,12 @@
             <span v-if="creatingContract" class="xl-loader" aria-hidden="true"></span>
             <span>צור חוזה</span>
           </button>
-          <button :disabled="printing" :class="{ 'xl-btn--loading': printing }" class="xl-btn xl-btn--primary" @click="printPdf">
+          <button :disabled="!exportAllowed || printing" :class="{ 'xl-btn--loading': printing }" class="xl-btn xl-btn--primary" @click="printPdf">
             <span v-if="printing" class="xl-loader" aria-hidden="true"></span>
             <n-icon :component="PrintOutline"/>
             <span>הדפס</span>
           </button>
-          <button :disabled="savingPdf" :class="{ 'xl-btn--loading': savingPdf }" class="xl-btn xl-btn--primary" @click="savePdf">
+          <button :disabled="!exportAllowed || savingPdf" :class="{ 'xl-btn--loading': savingPdf }" class="xl-btn xl-btn--primary" @click="savePdf">
             <span v-if="savingPdf" class="xl-loader" aria-hidden="true"></span>
             <span>הורד</span>
           </button>
@@ -565,6 +565,7 @@ import {useEngineerStore} from "../stores/engineer.js";
 import {useAuthStore} from "../stores/auth.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useConfirm} from "../composables/useConfirm.js";
+import {resolveUserPlan} from "../shared/pricingPlans.js";
 import type {PrintCellBorderSides, PrintCellBorderStyle, PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
 type BorderSide = "top" | "right" | "bottom" | "left";
@@ -607,6 +608,7 @@ const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const engineerStore = useEngineerStore();
 const authStore = useAuthStore();
 const {profile: engineerProfile} = storeToRefs(engineerStore);
+const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
 
 function canMutateTemplate(_t: PrintTemplate) {
   return true;
@@ -1167,6 +1169,10 @@ function composeCellStyle(r:number,c:number){
 
 async function printPdf() {
   if(!composing.value?._id) return;
+  if(!exportAllowed.value) {
+    message.warning("ייצוא PDF זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
   if(!validateComposeBeforeAction("להדפיס PDF")) return;
   printing.value=true;
   try {
@@ -1180,6 +1186,10 @@ async function printPdf() {
 
 async function savePdf() {
   if(!composing.value?._id) return;
+  if(!exportAllowed.value) {
+    message.warning("ייצוא PDF זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
   if(!validateComposeBeforeAction("לשמור PDF")) return;
   savingPdf.value=true;
   try {

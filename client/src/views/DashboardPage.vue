@@ -385,7 +385,7 @@ function inspectionGmailQuery(template: DocTemplate | null): string {
   } else if (terms.length > 1) {
     parts.push(`{${terms.map(formatGmailSearchTerm).join(" ")}}`);
   }
-  parts.push("newer_than:18m");
+  parts.push("newer_than:16m");
   return parts.join(" ");
 }
 

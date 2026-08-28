@@ -36,6 +36,7 @@ import {registerInvoiceRoutes} from "./routes/invoices";
 import {registerUserSettingsRoutes} from "./routes/userSettings";
 import {registerProfileRoutes} from "./routes/profile";
 import {registerAdminRoutes} from "./routes/admin";
+import {registerBillingRoutes} from "./routes/billing";
 import {initPush} from "./push/pushService";
 import {registerExtractRemindersRoutes} from "./routes/extractReminders";
 import {registerPrintTemplateRoutes} from "./routes/printTemplates";
@@ -179,6 +180,7 @@ app.use("/api/equipment", (req, res, next) => {
 });
 
 registerAuthRoutes(app);
+registerBillingRoutes(app);
 app.use("/api/gmail", requireAnyFeature(["pages.gmail"]));
 app.use("/api/invoices", requireMinRole("admin"));
 registerGmailRoutes(app);

@@ -23,6 +23,7 @@ export interface PricingPlan {
 }
 
 export interface TierFeatureFlags {
+    gmailInspectionHistoryMonths: number | null;
     gmailInvoiceHistoryMonths: number | null;
     googleDriveSync: boolean;
     googleCalendarSync: boolean;
@@ -43,6 +44,8 @@ export interface PlanEntitlements extends TierFeatureFlags {
         scope: QuotaScope;
         invoices: number | null;
         contracts: number | null;
+        manualDocuments: number | null;
+        emailDocuments: number | null;
     };
     reminders: {
         scope: QuotaScope;
@@ -52,6 +55,7 @@ export interface PlanEntitlements extends TierFeatureFlags {
 
 export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     free: {
+        gmailInspectionHistoryMonths: 16,
         gmailInvoiceHistoryMonths: 0,
         googleDriveSync: false,
         googleCalendarSync: false,
@@ -62,6 +66,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         maxEmailAccounts: 1,
     },
     basic: {
+        gmailInspectionHistoryMonths: 16,
         gmailInvoiceHistoryMonths: 12,
         googleDriveSync: true,
         googleCalendarSync: false,
@@ -72,7 +77,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         maxEmailAccounts: 2,
     },
     business: {
-        gmailInvoiceHistoryMonths: 48,
+        gmailInspectionHistoryMonths: 24,
+        gmailInvoiceHistoryMonths: 24,
         googleDriveSync: true,
         googleCalendarSync: true,
         automaticEmailReminders: true,
@@ -102,28 +108,31 @@ export const PRICING_PLANS: PricingPlan[] = [
         period: "חד פעמי",
         blurb: "להתחלה מהירה ובדיקת התהליך עם כמות מסמכים מוגבלת.",
         features: [
-            "משתמש אחד",
-            "30 מסמכים חד פעמי",
-            "25 תזכורות אימייל",
-            "OCR מתקדם",
-            "תצוגה מקדימה וחילוץ נתונים",
+            "יבוא 10 מסמכים",
+            "יבוא 10 מסמכים מאימייל",
+            "תצוגה מקדימה וחילוץ נתונים AI",
+            "דוח חודשי ידני",
         ],
     },
     {
         id: "basic",
         name: "בסיסי",
-        price: 125,
-        oldPrice: 150,
+        price: 110,
+        oldPrice: 165,
         period: "/ חודש",
-        yearlyPrice: 125 * 12,
+        yearlyPrice: 1320,
         blurb: "מתאים לעסק קטן שמייבא מסמכים בכל חודש.",
         features: [
-            'חיבור 2 חשבונות דוא"ל',
-            "100 מסמכי תסקירים/חוזים בחודש",
-            "ייבוא חשבוניות מ-Gmail עד 12 חודשים אחורה",
+            "יבוא תסקירים של 16 חודשים האחרונים",
+            "50 מסמכי תסקירים בחודש",
+            "יבוא תסקירים במאמייל בחודש",
             "ניהול תסקירים ושליחת תזכורות ללקוחות",
-            "דוחות חודשיים אוטומטיים",
-            "סנכרון Google Drive ",
+            "יבוא 50 קבלות במאמייל בחודש",
+            "יצוא קבלות לקובץ אקסל",
+            "ייבוא קבלות מ-Gmail עד 12 חודשים אחורה",
+            "הפקת דוחות חודשיים",
+            "קבלת דוחות אוטומטיים",
+            "סנכרון Google Drive",
         ],
     },
     {
@@ -133,12 +142,14 @@ export const PRICING_PLANS: PricingPlan[] = [
         oldPrice: 224,
         period: "/ חודש",
         yearlyPrice: 2148,
-        blurb: "לצוותים ועסקים שמייבאים מסמכים באופן שוטף, עובדים עם כמה משתמשים ורוצים יומן Google מסונכרן.",
+        blurb: "לבוסקים שמייבאים מסמכים באופן שוטף, עובדים עם כמה מאיילים ורוצים יומן Google מסונכרן.",
         highlighted: true,
         features: [
-            'חיבור 4 חשבונות דוא"ל',
-            "תסקירים וחוזים ללא הגבלה",
+            "כל מה שיש בבסיסי",
+            "יבוא תסקירים ללא הגבלה",
+            "יבוא חשבונות וקבלות ללא הגבלה",
             "סנכרון היסטורי של שנתיים",
+            "ניהול ללקוחות וציוד",
             "סנכרון Google Calendar לתסקירים עתידיים",
         ],
     },
@@ -188,7 +199,11 @@ export function normalizePlanId(planId: PlanId | string | null | undefined): Pla
 export function tierFeatureFlags(planId: PlanId | string | null | undefined): TierFeatureFlags {
     const value = String(planId ?? "").trim().toLowerCase();
     if (value === "admin") {
-        return { ...TIER_FEATURE_FLAGS.business, gmailInvoiceHistoryMonths: null };
+        return {
+            ...TIER_FEATURE_FLAGS.business,
+            gmailInspectionHistoryMonths: null,
+            gmailInvoiceHistoryMonths: null,
+        };
     }
     return TIER_FEATURE_FLAGS[normalizePlanId(planId)];
 }

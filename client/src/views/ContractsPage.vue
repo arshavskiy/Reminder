@@ -71,7 +71,7 @@
               </button>
             </div>
           </div>
-          <button class="btn btn--ghost" @click="openMonthlyReport" title="הורדת דוח חודשי">
+          <button class="btn btn--ghost" :disabled="!exportAllowed" @click="openMonthlyReport" title="הורדת דוח חודשי">
             <n-icon :component="DocumentTextOutline" class="btn-icon"/>
             דוח חודשי
           </button>
@@ -314,23 +314,23 @@
       <div v-if="exportStep === 2" class="export-body">
         <h3 class="export-section-title">בחר פורמט ייצוא</h3>
         <div class="format-cards">
-          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'csv' }"
-               @click="exportFormat = 'csv'">
+          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'csv', 'format-card--disabled': !exportAllowed }"
+               @click="selectExportFormat('csv')">
             <div class="format-card__icon">🧾</div>
             <div class="format-card__name">CSV</div>
             <div class="format-card__desc">קובץ נתונים פשוט לפתיחה בכל מערכת</div>
           </div>
           <div
             class="format-card"
-            :class="{ 'format-card--active': exportFormat === 'xlsx', 'format-card--disabled': !excelAllowed }"
+            :class="{ 'format-card--active': exportFormat === 'xlsx', 'format-card--disabled': !exportAllowed || !excelAllowed }"
             @click="selectExportFormat('xlsx')"
           >
             <div class="format-card__icon">📊</div>
             <div class="format-card__name">Excel (.xlsx)</div>
             <div class="format-card__desc">{{ excelAllowed ? "גיליון Excel עם כיוון מימין לשמאל" : "זמין במסלולים בסיסי ועסקי בלבד" }}</div>
           </div>
-          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'pdf' }"
-               @click="exportFormat = 'pdf'">
+          <div class="format-card" :class="{ 'format-card--active': exportFormat === 'pdf', 'format-card--disabled': !exportAllowed }"
+               @click="selectExportFormat('pdf')">
             <div class="format-card__icon">📄</div>
             <div class="format-card__name">PDF</div>
             <div class="format-card__desc">דף מודפס בעברית</div>
@@ -357,7 +357,7 @@
           <n-space>
             <n-button v-if="exportStep > 0 && exportStep < 3" @click="exportStep--">חזור</n-button>
             <n-button v-if="exportStep < 2" type="primary" @click="exportStep++">המשך ›</n-button>
-            <n-button v-if="exportStep === 2" type="primary" @click="doExport">ייצא</n-button>
+            <n-button v-if="exportStep === 2" type="primary" :disabled="!exportAllowed" @click="doExport">ייצא</n-button>
             <n-button v-if="exportStep === 3" type="primary" @click="showExport = false">סגור</n-button>
           </n-space>
         </n-space>
@@ -727,6 +727,7 @@ const store = useContractsStore();
 const featuresStore = useFeaturesStore();
 const authStore = useAuthStore();
 const excelAllowed = computed(() => planAllowsExcelExport(resolveUserPlan(authStore.user)));
+const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
 const engineerStore = useEngineerStore();
 const {profile: engineerProfile} = storeToRefs(engineerStore);
 const isAdmin = computed(() => authStore.isAdmin);
@@ -1107,6 +1108,10 @@ const showExport = ref(false);
 const showMonthlyReport = ref(false);
 
 function openMonthlyReport() {
+  if (!exportAllowed.value) {
+    message.warning("ייצוא דוחות זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
   showMonthlyReport.value = true;
 }
 
@@ -1159,6 +1164,10 @@ const exportedRows = computed(() => filteredRows.value.filter((r) => {
 }));
 
 function openExport() {
+  if (!exportAllowed.value) {
+    message.warning("ייצוא זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
   exportStep.value = 0;
   exportFormat.value = "csv";
   exportFilter.value = {client_id: null, status: null, contract_type: null, dateRange: null};
@@ -1203,6 +1212,10 @@ function expandRows(rows: any[], mainCols: typeof exportColumns.value) {
 }
 
 function selectExportFormat(format: "csv" | "xlsx" | "pdf") {
+  if (!exportAllowed.value) {
+    message.warning("ייצוא זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
   if (format === "xlsx" && !excelAllowed.value) {
     message.warning(PLAN_GATE_MESSAGES.excelExport);
     return;
@@ -1211,6 +1224,10 @@ function selectExportFormat(format: "csv" | "xlsx" | "pdf") {
 }
 
 function doExport() {
+  if (!exportAllowed.value) {
+    message.warning("ייצוא זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
   if (exportFormat.value === "xlsx" && !excelAllowed.value) {
     message.warning(PLAN_GATE_MESSAGES.excelExport);
     return;

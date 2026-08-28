@@ -6,9 +6,16 @@ describe("plan entitlements", () => {
   it("gives free the lifetime document and reminder caps", () => {
     const entitlements = buildPlanEntitlements({ plan: "free", role: "user" });
     expect(entitlements.plan).toBe("free");
-    expect(entitlements.documents).toEqual({ scope: "lifetime", invoices: 30, contracts: 30 });
+    expect(entitlements.documents).toEqual({
+      scope: "lifetime",
+      invoices: 10,
+      contracts: 10,
+      manualDocuments: 10,
+      emailDocuments: 10,
+    });
     expect(entitlements.reminders).toEqual({ scope: "lifetime", limit: 25 });
     expect(entitlements.gmailInvoiceHistoryMonths).toBe(0);
+    expect(entitlements.gmailInspectionHistoryMonths).toBe(16);
     expect(entitlements.googleDriveSync).toBe(false);
     expect(entitlements.googleCalendarSync).toBe(false);
     expect(entitlements.automaticEmailReminders).toBe(false);
@@ -21,9 +28,16 @@ describe("plan entitlements", () => {
 
   it("gives basic monthly document caps and paid feature flags", () => {
     const entitlements = buildPlanEntitlements({ plan: "basic" });
-    expect(entitlements.documents).toEqual({ scope: "monthly", invoices: 50, contracts: 40 });
+    expect(entitlements.documents).toEqual({
+      scope: "monthly",
+      invoices: 50,
+      contracts: 50,
+      manualDocuments: 50,
+      emailDocuments: 50,
+    });
     expect(entitlements.reminders).toEqual({ scope: "unlimited", limit: null });
     expect(entitlements.gmailInvoiceHistoryMonths).toBe(12);
+    expect(entitlements.gmailInspectionHistoryMonths).toBe(16);
     expect(entitlements.googleDriveSync).toBe(true);
     expect(entitlements.googleCalendarSync).toBe(false);
     expect(entitlements.automaticEmailReminders).toBe(true);
@@ -35,9 +49,16 @@ describe("plan entitlements", () => {
 
   it("gives business unlimited quotas and calendar", () => {
     const entitlements = buildPlanEntitlements({ plan: "business" });
-    expect(entitlements.documents).toEqual({ scope: "unlimited", invoices: null, contracts: null });
+    expect(entitlements.documents).toEqual({
+      scope: "unlimited",
+      invoices: null,
+      contracts: null,
+      manualDocuments: null,
+      emailDocuments: null,
+    });
     expect(entitlements.reminders.scope).toBe("unlimited");
-    expect(entitlements.gmailInvoiceHistoryMonths).toBe(48);
+    expect(entitlements.gmailInvoiceHistoryMonths).toBe(24);
+    expect(entitlements.gmailInspectionHistoryMonths).toBe(24);
     expect(entitlements.googleCalendarSync).toBe(true);
     expect(entitlements.maxUsers).toBeNull();
     expect(entitlements.maxEmailAccounts).toBeNull();
@@ -47,6 +68,7 @@ describe("plan entitlements", () => {
     const flags = featureFlagsForUser({ role: "admin", plan: "free" });
     expect(flags.googleCalendarSync).toBe(true);
     expect(flags.gmailInvoiceHistoryMonths).toBeNull();
+    expect(flags.gmailInspectionHistoryMonths).toBeNull();
     expect(flags).toMatchObject({
       googleDriveSync: true,
       automaticEmailReminders: true,

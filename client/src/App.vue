@@ -15,13 +15,23 @@
 
             <!-- Center nav -->
             <nav class="appbar__nav">
-              <a
+              <n-tooltip
                 v-for="item in primaryNav"
                 :key="item.key"
-                class="navlink"
-                :class="{ 'navlink--active': isActiveNav(item.key) }"
-                @click="navigate(item.key)"
-              >{{ item.label }}</a>
+                placement="bottom"
+                :disabled="!isPlanLocked(item)"
+                :keep-alive-on-hover="false"
+              >
+                <template #trigger>
+                  <a
+                    class="navlink"
+                    :class="{ 'navlink--active': isActiveNav(item.key), 'navlink--locked': isPlanLocked(item) }"
+                    :aria-disabled="isPlanLocked(item) ? 'true' : undefined"
+                    @click="navigate(item)"
+                  >{{ item.label }}</a>
+                </template>
+                {{ navLockLabel(item) }}
+              </n-tooltip>
             </nav>
 
             <button class="nav-menu-btn" type="button" aria-label="פתח ניווט" @click="mobileNavOpen = true">
@@ -116,16 +126,27 @@
           <n-drawer v-model:show="mobileNavOpen" :width="280" placement="right">
             <n-drawer-content title="ניווט" closable>
               <nav class="mobile-nav-list">
-                <button
+                <n-tooltip
                   v-for="item in primaryNav"
                   :key="item.key"
-                  :class="{ 'mobile-nav-list__item--active': isActiveNav(item.key) }"
-                  class="mobile-nav-list__item"
-                  type="button"
-                  @click="navigate(item.key)"
+                  placement="left"
+                  :disabled="!isPlanLocked(item)"
                 >
-                  {{ item.label }}
-                </button>
+                  <template #trigger>
+                    <span class="mobile-nav-list__trigger">
+                      <button
+                        :class="{ 'mobile-nav-list__item--active': isActiveNav(item.key), 'mobile-nav-list__item--locked': isPlanLocked(item) }"
+                        class="mobile-nav-list__item"
+                        type="button"
+                        :disabled="isPlanLocked(item)"
+                        @click="navigate(item)"
+                      >
+                        {{ item.label }}
+                      </button>
+                    </span>
+                  </template>
+                  {{ navLockLabel(item) }}
+                </n-tooltip>
               </nav>
             </n-drawer-content>
           </n-drawer>
@@ -455,7 +476,7 @@ const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
 const allNav: Array<{
   label: string;
   key: string;
-  minRole: string;
+  minRole?: string;
   minPlan?: PlanId;
   feature?: FeatureKey;
 }> = [
@@ -467,7 +488,7 @@ const allNav: Array<{
   {label: "לקוחות", key: "clients", minPlan: "basic", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minPlan: "business", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minPlan: "business", feature: FEATURES.pages.equipment},
-  {label: "חשבוניות", key: "invoices", minPlan: "business", feature: FEATURES.pages.invoices},
+  {label: "חשבוניות", key: "invoices", minRole: "admin", minPlan: "business", feature: FEATURES.pages.invoices},
   {label: "Gmail", key: "gmail", minRole: "admin", feature: FEATURES.pages.gmail},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
@@ -475,13 +496,22 @@ const allNav: Array<{
 
 const primaryNav = computed(() => {
   const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
-  const userPlan = resolveUserPlan(authStore.user);
   return allNav.filter((item) =>
     userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
-      (!item.minPlan || (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[normalizePlanId(item.minPlan)] ?? 0)) &&
       (!item.feature || featuresStore.hasFeature(item.feature))
   );
 });
+
+function isPlanLocked(item: {minPlan?: PlanId}): boolean {
+  if (!item.minPlan) return false;
+  const userPlan = resolveUserPlan(authStore.user);
+  return (PLAN_RANK[userPlan] ?? 0) < (PLAN_RANK[normalizePlanId(item.minPlan)] ?? 0);
+}
+
+function navLockLabel(item: {minPlan?: PlanId}): string {
+  const label = item.minPlan ? PLAN_SHORT[normalizePlanId(item.minPlan)] : "";
+  return label ? `זמין במסלול ${label} ומעלה` : "";
+}
 
 const activeKey = computed(() => {
   const seg = route.path.split("/")[1] || "dashboard";
@@ -493,9 +523,11 @@ function isActiveNav(key: string): boolean {
   return activeKey.value === key;
 }
 
-function navigate(key: string) {
+function navigate(itemOrKey: string | {key: string; minPlan?: PlanId}) {
+  const item = typeof itemOrKey === "string" ? allNav.find((nav) => nav.key === itemOrKey) : itemOrKey;
+  if (!item || isPlanLocked(item)) return;
   mobileNavOpen.value = false;
-  router.push(key === "dashboard" ? "/dashboard" : `/${key}`);
+  router.push(item.key === "dashboard" ? "/dashboard" : `/${item.key}`);
 }
 </script>
 
@@ -573,6 +605,14 @@ function navigate(key: string) {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+.navlink--locked {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+.navlink--locked:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
 .navlink--active {
   background: rgba(99, 226, 183, 0.14); /* tinted with brand */
   color: var(--brand-color);
@@ -612,6 +652,9 @@ html[data-theme="light"] .navlink--active {
   flex-direction: column;
   gap: 6px;
 }
+.mobile-nav-list__trigger {
+  display: block;
+}
 .mobile-nav-list__item {
   border: 1px solid transparent;
   border-radius: 10px;
@@ -624,9 +667,19 @@ html[data-theme="light"] .navlink--active {
   padding: 12px 14px;
   text-align: right;
   transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  width: 100%;
 }
 .mobile-nav-list__item:hover {
   background: var(--bg-hover);
+}
+.mobile-nav-list__item--locked,
+.mobile-nav-list__item:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+.mobile-nav-list__item--locked:hover,
+.mobile-nav-list__item:disabled:hover {
+  background: transparent;
 }
 .mobile-nav-list__item--active {
   border-color: rgba(99, 226, 183, 0.24);

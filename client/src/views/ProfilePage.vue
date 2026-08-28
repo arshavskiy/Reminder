@@ -319,7 +319,20 @@
         <section v-if="activeSection === 'stats'">
           <div class="section-header">
             <h2 class="section-title">סטטיסטיקות</h2>
-            <n-button size="small" @click="exportStatsCsv">
+            <n-tooltip v-if="!exportAllowed">
+              <template #trigger>
+                <span>
+                  <n-button size="small" :disabled="true">
+                    <template #icon>
+                      <n-icon :component="DownloadOutline" />
+                    </template>
+                    יצוא CSV
+                  </n-button>
+                </span>
+              </template>
+              ייצוא זמין במסלולים בסיסי ועסקי בלבד.
+            </n-tooltip>
+            <n-button v-else size="small" @click="exportStatsCsv">
               <template #icon>
                 <n-icon :component="DownloadOutline" />
               </template>
@@ -1480,6 +1493,7 @@ const PLAN_TAG_TYPES: Record<PlanId, "success" | "info" | "default"> = {
   business: "success",
 };
 const currentPlanId = computed(() => resolveUserPlan(user.value));
+const exportAllowed = computed(() => currentPlanId.value !== "free");
 const currentPricingPlan = computed(() => getPricingPlan(currentPlanId.value));
 const planTag = computed(() => ({
   label: PLAN_LABELS[currentPlanId.value],
@@ -1652,6 +1666,10 @@ const pendingPct = computed(() =>
 );
 
 function exportStatsCsv() {
+  if (!exportAllowed.value) {
+    message.warning("ייצוא זמין במסלולים בסיסי ועסקי בלבד.");
+    return;
+  }
   const rows = [
     ["סטטיסטיקה", "ערך"],
     ["סה״כ תסקירים", inspectionStats.value.total],
@@ -2132,7 +2150,7 @@ const quotaScopeLabel = computed(() => {
   if (!subscriptionData.value) return "—";
   const plan = subscriptionData.value.plan;
   if (plan === "free") {
-    return formatQuotaScope(subscriptionData.value.quotas.documents?.scope ?? "lifetime");
+    return formatQuotaScope(subscriptionData.value.quotas.manualDocuments?.scope ?? "lifetime");
   }
   const scope = subscriptionData.value.quotas.invoices?.scope
       ?? subscriptionData.value.quotas.contracts?.scope;
@@ -2143,7 +2161,7 @@ const quotaPeriodLabel = computed(() => {
   if (!subscriptionData.value) return "";
   const plan = subscriptionData.value.plan;
   const quota = plan === "free"
-      ? subscriptionData.value.quotas.documents
+      ? subscriptionData.value.quotas.manualDocuments
       : subscriptionData.value.quotas.invoices ?? subscriptionData.value.quotas.contracts;
   const periodStart = quota?.periodStart;
   const periodEnd = quota?.periodEnd;
@@ -2156,7 +2174,8 @@ const quotaUsageRows = computed(() => {
   const plan = subscriptionData.value.plan;
   const defs = plan === "free"
       ? [
-        {key: "documents" as const, label: "מסמכים (סה״כ)"},
+        {key: "manualDocuments" as const, label: "יבוא מסמכים"},
+        {key: "emailDocuments" as const, label: "יבוא מסמכים מאימייל"},
         {key: "reminders" as const, label: "תזכורות אימייל"},
       ]
       : [
@@ -2252,6 +2271,10 @@ function buildProfileHtml(): string {
 }
 
 function exportPdf() {
+  if (!exportAllowed.value) {
+    message.warning("ייצוא זמין במסלולים בסיסי ועסקי בלבד.");
+    return;
+  }
   const win = window.open("", "_blank");
   if (!win) return;
   win.document.write(buildProfileHtml());
@@ -2263,6 +2286,10 @@ function exportPdf() {
 }
 
 function exportWord() {
+  if (!exportAllowed.value) {
+    message.warning("ייצוא זמין במסלולים בסיסי ועסקי בלבד.");
+    return;
+  }
   const html = buildProfileHtml();
   const blob = new Blob(["﻿", html], { type: "application/msword" });
   const a = document.createElement("a");

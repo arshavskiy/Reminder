@@ -28,9 +28,8 @@
           ייבוא תסקיר בדיקה
         </button>
         <button
-            v-if="driveAllowed"
             :class="{ 'rbtn--loading': exportingToDrive }"
-            :disabled="exportingToDrive"
+            :disabled="!driveAllowed || exportingToDrive"
             class="rbtn rbtn--ghost"
             type="button"
             @click="handleDriveExport"
@@ -38,7 +37,7 @@
           <GoogleDriveLogo :size="16" />
           ייצוא ל-Drive
         </button>
-        <button class="rbtn rbtn--ghost" type="button" @click="showMonthlyReport = true">
+        <button class="rbtn rbtn--ghost" type="button" :disabled="!exportAllowed" @click="openMonthlyReport">
           <n-icon :component="DocumentTextOutline" class="btn-icon"/>
           דוח חודשי
         </button>
@@ -679,6 +678,7 @@ const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 
 const isRegularUser = computed(() => authStore.user?.role === "user");
 const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
+const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
 const quotaPercent = computed(() => {
   const limit = store.documentLimit;
   if (limit === null || limit <= 0) return 0;
@@ -811,6 +811,14 @@ async function handleDriveExport() {
       message.error("שגיאה בייצוא ל-Drive");
     }
   }
+}
+
+function openMonthlyReport() {
+  if (!exportAllowed.value) {
+    message.warning("ייצוא דוחות זמין במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
+  showMonthlyReport.value = true;
 }
 
 async function runDriveExport() {

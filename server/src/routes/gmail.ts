@@ -382,7 +382,7 @@ export function registerGmailRoutes(app: express.Application) {
         res.status(422).json({ error: "monthly_report_not_imported" });
         return;
       }
-      await assertDocumentImportQuota(ctx.userId, ctx.user.plan ?? ctx.user.role, 1, quotaCategoryFromTemplate(template));
+      await assertDocumentImportQuota(ctx.userId, ctx.user.plan ?? ctx.user.role, 1, quotaCategoryFromTemplate(template), "email");
       const pipeline = await gmailImportPipelineOptions(templateId, meta, filename);
       const result = await downloadAndImportAttachment(accessToken, messageId, attachmentId, filename ?? "attachment.pdf", ctx.userId, pipeline);
       await col("gmail_imports").updateOne(
@@ -440,6 +440,7 @@ export function registerGmailRoutes(app: express.Application) {
             ctx.user.plan ?? ctx.user.role,
             1,
             quotaCategoryFromTemplate(template),
+            "email",
         );
       const now = new Date();
       const insert = await col<GmailImportJob>("gmail_import_jobs").insertOne({
@@ -564,6 +565,7 @@ export function registerGmailRoutes(app: express.Application) {
             ctx.user.plan ?? ctx.user.role,
             1,
             quotaCategoryFromTemplate(template),
+            "email",
         );
       const now = new Date();
       const insert = await col<GmailImportJob>("gmail_import_jobs").insertOne({
@@ -848,7 +850,7 @@ async function runGmailImportJob(job: GmailImportJob) {
       }
       try {
         const user = await col<any>("users").findOne({ _id: new ObjectId(job.user_id) } as any, { projection: { role: 1, plan: 1 } } as any);
-        await assertDocumentImportQuota(job.user_id, user?.plan ?? user?.role, 1, quotaCategory);
+        await assertDocumentImportQuota(job.user_id, user?.plan ?? user?.role, 1, quotaCategory, "email");
         const basePipeline = await gmailImportPipelineOptions(job.template_id ?? undefined, meta, att.filename);
         const pipeline: PipelineOptions | undefined = basePipeline
           ? {
@@ -1521,7 +1523,6 @@ function isInspectionTemplate(template: Awaited<ReturnType<typeof loadTemplate>>
 }
 
 const INSPECTION_GMAIL_QUERY = "has:attachment {filename:pdf filename:doc filename:docx} תסקיר";
-const INSPECTION_HISTORY_MONTHS = 18;
 const INVOICE_GMAIL_QUERY = `has:attachment {${[
   "חשבונית",
   "invoice",
@@ -1542,7 +1543,7 @@ export function buildGmailQuery(
   const q = userQuery || (isInvoiceTemplate(template) ? INVOICE_GMAIL_QUERY : defaultQuery);
     if (isInspectionTemplate(template)) {
         const base = (!userQuery || q === defaultQuery) ? INSPECTION_GMAIL_QUERY : q;
-        return applyFixedHistoryWindow(base, INSPECTION_HISTORY_MONTHS);
+        return applyInspectionHistoryWindow(base, planOrRole);
   }
   if (isInvoiceTemplate(template)) {
     return applyInvoiceHistoryWindow(normalizeInvoiceAttachmentQuery(q), planOrRole);
@@ -1565,6 +1566,11 @@ function applyFixedHistoryWindow(query: string, months: number): string {
 
 function applyInvoiceHistoryWindow(query: string, planOrRole: string | null | undefined): string {
     const months = tierFeatureFlags(planOrRole).gmailInvoiceHistoryMonths;
+    return applyFixedHistoryWindow(query, months ?? 0);
+}
+
+function applyInspectionHistoryWindow(query: string, planOrRole: string | null | undefined): string {
+    const months = tierFeatureFlags(planOrRole).gmailInspectionHistoryMonths;
     return applyFixedHistoryWindow(query, months ?? 0);
 }
 

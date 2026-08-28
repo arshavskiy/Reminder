@@ -110,6 +110,7 @@ export interface UserSettings {
   plan_entitlements?: {
     plan: "free" | "basic" | "business";
     gmailInvoiceHistoryMonths: number | null;
+    gmailInspectionHistoryMonths: number | null;
     googleDriveSync: boolean;
     googleCalendarSync: boolean;
     automaticEmailReminders: boolean;
@@ -123,6 +124,8 @@ export interface UserSettings {
       scope: "monthly" | "lifetime" | "unlimited";
       invoices: number | null;
       contracts: number | null;
+      manualDocuments: number | null;
+      emailDocuments: number | null;
     };
     reminders: {
       scope: "monthly" | "lifetime" | "unlimited";

@@ -8,6 +8,7 @@ import {getSettings} from "../settings.js";
 import {sendPushToAdmins} from "../push/pushService.js";
 import {DEFAULT_FEATURES, normalizeFeatures} from "../features.js";
 import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
+import {parsePlanId, updateUserTier} from "../plans/updateUserTier";
 import {createMagicLinkToken} from "../auth/session";
 import {hashPassword} from "../auth/emailAuth";
 import {logger} from "../logger";
@@ -570,6 +571,29 @@ export function registerAdminRoutes(app: express.Application) {
       await ensureUserSettingsWithEntitlements(String(updated._id), updated as any);
     }
     res.json(flatUser(updated));
+  });
+
+  // POST /api/admin/users/:id/tier — manual subscription correction after payment/support.
+  app.post("/api/admin/users/:id/tier", async (req, res) => {
+    const auth = await adminAuth(req, res);
+    if (!auth) return;
+
+    const plan = parsePlanId((req.body as {plan?: string; tier?: string}).plan ?? (req.body as {tier?: string}).tier);
+    if (!plan) {
+      res.status(400).json({ error: `Invalid plan. Must be one of: ${VALID_PLANS.join(", ")}` });
+      return;
+    }
+
+    const result = await updateUserTier(
+      {userId: req.params.id},
+      plan,
+      {source: "admin", admin_user_id: auth.userId},
+    );
+    if (!result) {
+      res.status(404).json({error: "User not found"});
+      return;
+    }
+    res.json({ok: true, ...result});
   });
 
 

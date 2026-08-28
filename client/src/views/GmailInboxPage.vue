@@ -975,7 +975,7 @@ function buildSearchQuery() {
     parts.push(`{${templateTerms.map(formatGmailSearchTerm).join(" ")}}`);
   }
   if (selectedGuidedFlow.value === "inspection" && filterType.value !== "date") {
-    parts.push("newer_than:18m");
+    parts.push("newer_than:16m");
   }
 
   searchQuery.value = parts.join(" ");
