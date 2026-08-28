@@ -270,7 +270,7 @@ const emit = defineEmits<{
 }>();
 
 const showActions = computed(() => props.showActions ?? true);
-const showReminderActions = computed(() => true);
+const showReminderActions = computed(() => props.showReminderActions ?? true);
 
 const subtitle = computed(() =>
     props.row.summary ??

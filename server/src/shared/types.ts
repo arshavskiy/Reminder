@@ -191,6 +191,7 @@ export interface Client {
   client_zipcode?: string | null;
   notes: string | null;
   tags: string | null; // JSON array string
+    doc_count?: number;
   created_at: string;
   updated_at: string;
 }

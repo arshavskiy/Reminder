@@ -23,9 +23,9 @@ import {firstTrimmedEmail} from "../contracts/contractEmail.js";
 import {
   assertDocumentImportQuota,
   DocumentImportQuotaError,
-  type DocumentImportQuotaCategory,
   documentImportQuotaErrorPayload,
   getDocumentImportQuota,
+    quotaCategoryFromTemplate,
 } from "../quotas/documentImportQuota";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -322,10 +322,9 @@ export function registerDocumentRoutes(app: express.Application) {
           skipReminders,
           templateId: templateId || undefined,
           reprocessDuplicate: reprocessDuplicates,
+            quotaCategory,
           ...(quotaCategory === "invoices" ? {storageKeyPrefix: "invoices/uploaded"} : {}),
         };
-
-      await assertDocumentImportQuota(userId, userPlan, files.length, quotaCategory);
 
       const uploadDir = join(getDataDir(), "uploads");
       mkdirSync(uploadDir, { recursive: true });
@@ -333,6 +332,19 @@ export function registerDocumentRoutes(app: express.Application) {
       const ids: string[] = [];
       const duplicates: string[] = [];
       for (const [index, file] of files.entries()) {
+          try {
+              await assertDocumentImportQuota(userId, userPlan, 1, quotaCategory);
+          } catch (err) {
+              if (err instanceof DocumentImportQuotaError) {
+                  if (ids.length === 0 && duplicates.length === 0) {
+                      res.status(403).json(documentImportQuotaErrorPayload(err));
+                      return;
+                  }
+                  res.json({ids, duplicates, quotaReached: true, quota: documentImportQuotaErrorPayload(err)});
+                  return;
+              }
+              throw err;
+          }
         const ext = extname(file.originalname) || "";
         const destPath = join(uploadDir, `${Date.now()}${ext}`);
         writeFileSync(destPath, file.buffer);
@@ -763,13 +775,14 @@ export function registerDocumentRoutes(app: express.Application) {
         return;
       }
 
+        const preservedInvoiceFields = mergePreservingManualFields(doc, knownInvoiceFields);
       await col("extractions").insertOne({
         document_id: id,
         template_id: invoiceTemplate.id ?? null,
         template_name: invoiceTemplate.name,
         backend: "deterministic",
         model: "known-invoice-parser",
-        fields: knownInvoiceFields,
+          fields: preservedInvoiceFields,
         raw_json: knownInvoiceFields,
         error: null,
         usage: null,
@@ -778,7 +791,7 @@ export function registerDocumentRoutes(app: express.Application) {
       } as any);
       await col("documents").updateOne(idFilter(id), {
         $set: {
-          extracted_fields: JSON.stringify(knownInvoiceFields),
+            extracted_fields: JSON.stringify(preservedInvoiceFields),
           template_id: invoiceTemplate.id,
           document_type: documentTypeFromTemplate(invoiceTemplate),
           document_kind: documentTypeFromTemplate(invoiceTemplate),
@@ -789,12 +802,17 @@ export function registerDocumentRoutes(app: express.Application) {
       });
       try {
         await clearDerivedDocumentData(id, userId);
-        await saveTemplateEntitiesForDoc(id, invoiceTemplate, knownInvoiceFields as any, userId);
+          await saveTemplateEntitiesForDoc(id, invoiceTemplate, preservedInvoiceFields as any, userId);
       } catch (e) {
         logger.error("document_known_invoice_entities_failed", { document_id: id, user_id: userId, error: e });
       }
       const updated = await col("documents").findOne(idFilter(id));
-      res.json({ ok: true, fields: knownInvoiceFields, template: invoiceTemplate.name, document: flatDoc(updated) });
+        res.json({
+            ok: true,
+            fields: preservedInvoiceFields,
+            template: invoiceTemplate.name,
+            document: flatDoc(updated)
+        });
       return;
     }
     if (!template) template = await pickTemplate(rawText, userId);
@@ -834,9 +852,10 @@ export function registerDocumentRoutes(app: express.Application) {
 
     if (normalizedFields) {
       const typeLabel = documentTypeFromTemplate(template);
+        const preservedFields = mergePreservingManualFields(doc, normalizedFields);
       await col("documents").updateOne(idFilter(id), {
         $set: {
-          extracted_fields: JSON.stringify(normalizedFields),
+            extracted_fields: JSON.stringify(preservedFields),
           template_id: template.id,
           document_type: typeLabel,
           document_kind: typeLabel,
@@ -849,15 +868,18 @@ export function registerDocumentRoutes(app: express.Application) {
       // client, contract number, dates, or reminder schedule.
       try {
         await clearDerivedDocumentData(id, userId);
-        await saveTemplateEntitiesForDoc(id, template, normalizedFields, userId);
+          await saveTemplateEntitiesForDoc(id, template, preservedFields as any, userId);
       } catch (e) {
         logger.error("document_extract_entities_failed", { document_id: id, user_id: userId, error: e });
       }
     }
 
     // Return updated document so client can refresh in one round-trip
-    const updated = await col("documents").findOne(idFilter(id));
-    res.json({ ok: true, fields: normalizedFields ?? null, template: template.name, document: flatDoc(updated) });
+      const updated = await col("documents").findOne(idFilter(id)) as any;
+      const responseFields = updated?.extracted_fields
+          ? (parseObjectJson(updated.extracted_fields) ?? normalizedFields ?? null)
+          : (normalizedFields ?? null);
+      res.json({ok: true, fields: responseFields, template: template.name, document: flatDoc(updated)});
   });
 
   // GET /api/documents/:id/extractions
@@ -1005,9 +1027,17 @@ export function registerDocumentRoutes(app: express.Application) {
       try { existing = JSON.parse(doc.extracted_fields); } catch {}
     }
     const merged = { ...existing, ...sanitized };
+      const previousManualKeys = Array.isArray(doc.manual_field_keys)
+          ? doc.manual_field_keys.filter((key: unknown): key is string => typeof key === "string" && key.trim() !== "")
+          : [];
+      const manualFieldKeys = [...new Set([...previousManualKeys, ...Object.keys(sanitized)])];
 
     await col("documents").updateOne(idFilter(id), {
-      $set: { extracted_fields: JSON.stringify(merged), updated_at: new Date() },
+        $set: {
+            extracted_fields: JSON.stringify(merged),
+            manual_field_keys: manualFieldKeys,
+            updated_at: new Date(),
+        },
     });
 
     // Keep the audit row roughly in sync for diagnostics; the client reads documents.extracted_fields.
@@ -1238,13 +1268,6 @@ function flatDoc(doc: any) {
   };
 }
 
-function quotaCategoryFromTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): DocumentImportQuotaCategory {
-  if (!template) return "documents";
-  if (template.document_kind === "contract" || template.document_kind === "inspection_report") return "contracts";
-  if (template.document_kind === "invoice" || /חשבונית|קבלה|invoice|receipt|bill/i.test(template.name)) return "invoices";
-  return "documents";
-}
-
 function getDocumentReminderStatus(doc: any, reminders: any[]): "pending" | "assigned" | "missing" | "error" | "not_applicable" {
   if (doc.processing_status === "queued" || doc.processing_status === "processing") return "pending";
   if (doc.processing_status === "error") return "error";
@@ -1287,15 +1310,35 @@ async function resolveCurrentExtractionFields(doc: any, _userId: string): Promis
 }
 
 function parseObjectJson(value: unknown): Record<string, unknown> | null {
-  if (!value) return null;
+    if (value == null || value === "") return null;
   if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
   if (typeof value !== "string") return null;
   try {
     const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
   } catch {
-    return null;
+      /* ignore */
   }
+    return null;
+}
+
+/** Keep user-edited field values when AI re-extracts the document. */
+function mergePreservingManualFields(
+    doc: { extracted_fields?: unknown; manual_field_keys?: unknown },
+    aiFields: Record<string, unknown>,
+): Record<string, unknown> {
+    const keys = Array.isArray(doc.manual_field_keys)
+        ? doc.manual_field_keys.filter((key): key is string => typeof key === "string" && key.trim() !== "")
+        : [];
+    if (!keys.length) return {...aiFields};
+    const previous = parseObjectJson(doc.extracted_fields) ?? {};
+    const merged = {...aiFields};
+    for (const key of keys) {
+        if (Object.prototype.hasOwnProperty.call(previous, key)) {
+            merged[key] = previous[key];
+        }
+    }
+    return merged;
 }
 
 const EXTRACTED_CLIENT_NAME_KEYS = [

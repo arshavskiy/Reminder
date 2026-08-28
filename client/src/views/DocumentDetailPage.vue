@@ -85,9 +85,11 @@
         :reminders="remindersForContract(contract.id)"
         :row="contract"
         :selected="false"
-        :sending-reminder="null"
+        :sending-reminder="sendingReminderId"
         :show-actions="false"
-        :show-reminder-actions="false"
+        @delete-reminder="deleteLinkedReminder"
+        @dismiss-reminder="dismissLinkedReminder"
+        @send-reminder="sendLinkedReminder"
       />
     </section>
 
@@ -314,17 +316,6 @@
           <div class="data-card__body">
             <div v-if="!extractionRaw" class="data-empty">
               <span>עדיין לא חולצו נתונים מהמסמך</span>
-              <button
-                  v-if="canExtractDocument"
-                  :class="{ 'rbtn--loading': extracting }"
-                  :disabled="extracting"
-                  class="rbtn rbtn--primary mt-3"
-                  type="button"
-                  @click="openExtractModal"
-              >
-                <n-icon :component="FlashOutline" class="btn-icon"/>
-                הרץ חילוץ AI
-              </button>
             </div>
             <div v-else class="fields-table">
               <div
@@ -495,6 +486,7 @@ const extracting = ref(false);
 const deleting = ref(false);
 const linkedContracts = ref<ContractWithClient[]>([]);
 const linkedReminders = ref<ReminderWithContext[]>([]);
+const sendingReminderId = ref<number | null>(null);
 const docTemplate = ref<DocTemplate | null>(null);
 const documentTypeDisplay = computed(() => {
   const fromTpl = documentTypeFromTemplate(docTemplate.value);
@@ -1193,6 +1185,54 @@ async function loadLinkedReminders() {
 
 function remindersForContract(contractId: string | number): ReminderWithContext[] {
   return linkedReminders.value.filter((reminder) => String(reminder.source_id) === String(contractId));
+}
+
+function deleteLinkedReminder(reminder: ReminderWithContext) {
+  confirm({
+    title: "מחיקת תזכורת",
+    content: `למחוק את התזכורת "${reminder.title}"? פעולה זו אינה הפיכה.`,
+    confirmText: "מחק",
+    onConfirm: async () => {
+      try {
+        await api.reminders.delete(reminder.id);
+        linkedReminders.value = linkedReminders.value.filter((row) => row.id !== reminder.id);
+        message.success("התזכורת נמחקה");
+      } catch (e) {
+        message.error(String(e));
+      }
+    },
+  });
+}
+
+async function dismissLinkedReminder(reminder: ReminderWithContext) {
+  try {
+    await api.reminders.dismiss(reminder.id);
+    linkedReminders.value = linkedReminders.value.map((row) =>
+        row.id === reminder.id ? {...row, status: "dismissed"} : row,
+    );
+    message.success("התזכורת בוטלה");
+  } catch (e) {
+    message.error(String(e));
+  }
+}
+
+async function sendLinkedReminder(reminder: ReminderWithContext) {
+  sendingReminderId.value = reminder.id;
+  try {
+    const res = await api.reminders.sendNow(reminder.id);
+    if (res.success) {
+      linkedReminders.value = linkedReminders.value.map((row) =>
+          row.id === reminder.id ? {...row, status: "sent"} : row,
+      );
+      message.success("התזכורת נשלחה");
+    } else {
+      message.error(res.error ?? "שגיאה בשליחה");
+    }
+  } catch (e) {
+    message.error(String(e));
+  } finally {
+    sendingReminderId.value = null;
+  }
 }
 
 function contractKind(contract: ContractWithClient): "contract" | "inspection" | "all" {

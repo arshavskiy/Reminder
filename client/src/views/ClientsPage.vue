@@ -107,12 +107,36 @@
                   @update:checked="toggleSelectAll"
                 />
               </th>
-              <th class="col-name">שם הלקוח</th>
-              <th class="col-contact">איש קשר</th>
-              <th class="col-email">אימייל</th>
-              <th class="col-phone">נייד</th>
-              <th class="col-id">מזהה</th>
-              <th class="col-actions">פעולות</th>
+              <th class="col-name">
+                <button class="th-sort" type="button" @click="toggleSort('display_name')">
+                  שם הלקוח
+                  <span class="th-sort__mark">{{ sortMark('display_name') }}</span>
+                </button>
+              </th>
+              <th class="col-contact">
+                <button class="th-sort" type="button" @click="toggleSort('contact_person')">
+                  איש קשר
+                  <span class="th-sort__mark">{{ sortMark('contact_person') }}</span>
+                </button>
+              </th>
+              <th class="col-email">
+                <button class="th-sort" type="button" @click="toggleSort('email')">
+                  אימייל
+                  <span class="th-sort__mark">{{ sortMark('email') }}</span>
+                </button>
+              </th>
+              <th class="col-phone">
+                <button class="th-sort" type="button" @click="toggleSort('phone')">
+                  נייד
+                  <span class="th-sort__mark">{{ sortMark('phone') }}</span>
+                </button>
+              </th>
+              <th class="col-docs">
+                <button class="th-sort" type="button" @click="toggleSort('doc_count')">
+                  מסמכים
+                  <span class="th-sort__mark">{{ sortMark('doc_count') }}</span>
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -165,36 +189,8 @@
                 >{{ row.mobile || row.phone }}</span>
                 <span v-else class="muted">—</span>
               </td>
-              <td class="col-id">
-                <span class="ltr" :class="row.id_number ? '' : 'muted'">{{ row.id_number || "—" }}</span>
-              </td>
-              <td class="col-actions" @click.stop>
-                <div class="row-actions">
-                  <n-tooltip placement="top">
-                    <template #trigger>
-                      <button class="btn btn--ghost btn--xs icon-btn" type="button" @click="goDetail(row)">
-                        <n-icon :component="EyeOutline" :size="14" class="btn-icon" />
-                      </button>
-                    </template>
-                    פרטים
-                  </n-tooltip>
-                  <n-tooltip placement="top">
-                    <template #trigger>
-                      <button class="btn btn--ghost btn--xs icon-btn" type="button" @click="openEdit(row)">
-                        <n-icon :component="CreateOutline" :size="14" class="btn-icon" />
-                      </button>
-                    </template>
-                    עריכה
-                  </n-tooltip>
-                  <n-tooltip placement="top">
-                    <template #trigger>
-                      <button class="btn btn--danger-ghost btn--xs icon-btn" type="button" @click="doDelete(row)">
-                        <n-icon :component="TrashOutline" :size="14" class="btn-icon" />
-                      </button>
-                    </template>
-                    מחיקה
-                  </n-tooltip>
-                </div>
+              <td class="col-docs">
+                <span class="ltr">{{ row.doc_count ?? 0 }}</span>
               </td>
             </tr>
           </tbody>
@@ -329,7 +325,6 @@ import {
   NRadioGroup,
   NSelect,
   NSpin,
-  NTooltip,
   useMessage,
   type SelectOption,
 } from "naive-ui";
@@ -338,8 +333,6 @@ import {
   BriefcaseOutline,
   BusinessOutline,
   CheckboxOutline,
-  CreateOutline,
-  EyeOutline,
   PeopleOutline,
   PersonOutline,
   RefreshOutline,
@@ -374,9 +367,43 @@ onMounted(() => {
 type EntityFilter = "all" | "person" | "company";
 const entityFilter = ref<EntityFilter>("all");
 
+type ClientSortKey = "display_name" | "contact_person" | "email" | "phone" | "doc_count";
+const sortKey = ref<ClientSortKey>("display_name");
+const sortDir = ref<"asc" | "desc">("asc");
+
+function clientSortValue(row: Client, key: ClientSortKey): string | number {
+  if (key === "doc_count") return Number(row.doc_count ?? 0);
+  if (key === "phone") return String(row.mobile || row.phone || "").trim().toLowerCase();
+  if (key === "display_name") return displayClientName(row.display_name).toLowerCase();
+  return String(row[key] ?? "").trim().toLowerCase();
+}
+
+function toggleSort(key: ClientSortKey) {
+  if (sortKey.value === key) {
+    sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
+    return;
+  }
+  sortKey.value = key;
+  sortDir.value = key === "doc_count" ? "desc" : "asc";
+}
+
+function sortMark(key: ClientSortKey): string {
+  if (sortKey.value !== key) return "↕";
+  return sortDir.value === "asc" ? "↑" : "↓";
+}
+
 const filteredRows = computed(() => {
-  if (entityFilter.value === "all") return store.rows;
-  return store.rows.filter((r) => r.entity_type === entityFilter.value);
+  const rows = entityFilter.value === "all"
+      ? [...store.rows]
+      : store.rows.filter((r) => r.entity_type === entityFilter.value);
+  const dir = sortDir.value === "asc" ? 1 : -1;
+  rows.sort((a, b) => {
+    const av = clientSortValue(a, sortKey.value);
+    const bv = clientSortValue(b, sortKey.value);
+    if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+    return String(av).localeCompare(String(bv), "he") * dir;
+  });
+  return rows;
 });
 
 const typeFilters = computed(() => {
@@ -487,7 +514,7 @@ async function saveClientMerge() {
 
 function onRowClick(row: Client, event: MouseEvent) {
   const target = event.target as HTMLElement | null;
-  if (target?.closest("button, a, .n-checkbox, .col-actions, .col-check")) return;
+  if (target?.closest("button, a, .n-checkbox, .col-check")) return;
   if (bulkMode.value) {
     toggleClientSelection(row);
     return;
@@ -803,6 +830,28 @@ function bulkDeleteSelected() {
   white-space: nowrap;
 }
 
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.th-sort:hover {
+  color: var(--text-primary);
+}
+
+.th-sort__mark {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
 .clients-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -825,35 +874,31 @@ function bulkDeleteSelected() {
 }
 
 .col-name {
-  width: 28%;
+  width: 30%;
 }
 
 .col-contact {
-  width: 14%;
+  width: 16%;
 }
 
 .col-email {
-  width: 20%;
+  width: 24%;
 }
 
 .col-phone {
-  width: 14%;
+  width: 16%;
 }
 
-.col-id {
-  width: 12%;
-}
-
-.col-actions {
-  width: 112px;
-  white-space: nowrap;
+.col-docs {
+  width: 10%;
+  text-align: center;
 }
 
 .col-name,
 .col-contact,
 .col-email,
 .col-phone,
-.col-id {
+.col-docs {
   overflow: hidden;
 }
 
@@ -911,7 +956,7 @@ function bulkDeleteSelected() {
 
 .col-contact span,
 .col-email span,
-.col-id span {
+.col-docs span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1029,8 +1074,7 @@ function bulkDeleteSelected() {
 }
 
 @media (max-width: 860px) {
-  .col-contact,
-  .col-id {
+  .col-contact {
     display: none;
   }
 
@@ -1044,6 +1088,10 @@ function bulkDeleteSelected() {
 
   .col-phone {
     width: 18%;
+  }
+
+  .col-docs {
+    width: 14%;
   }
 }
 
@@ -1071,8 +1119,8 @@ function bulkDeleteSelected() {
     width: auto;
   }
 
-  .col-actions {
-    width: 100px;
+  .col-docs {
+    width: 72px;
   }
 }
 </style>

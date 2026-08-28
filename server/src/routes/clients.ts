@@ -40,7 +40,22 @@ export function registerClientRoutes(app: express.Application) {
       col("clients").countDocuments(filter),
     ]);
 
-    res.json({ rows: rows.map(flatClient), total });
+    const clientIds = rows.map((row) => String(row._id));
+    const docCounts = clientIds.length
+        ? await col("document_clients").aggregate([
+          {$match: {client_id: {$in: clientIds}}},
+          {$group: {_id: "$client_id", n: {$sum: 1}}},
+        ]).toArray()
+        : [];
+    const docCountById = new Map(docCounts.map((row: any) => [String(row._id), Number(row.n) || 0]));
+
+    res.json({
+      rows: rows.map((row) => ({
+        ...flatClient(row),
+        doc_count: docCountById.get(String(row._id)) ?? 0,
+      })),
+      total,
+    });
   });
 
   app.post("/api/clients/merge", async (req, res) => {

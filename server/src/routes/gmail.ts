@@ -15,8 +15,8 @@ import {
   assertDocumentImportQuota,
   DOCUMENT_MONTHLY_QUOTA_ERROR,
   DocumentImportQuotaError,
-  type DocumentImportQuotaCategory,
   documentImportQuotaErrorPayload,
+    quotaCategoryFromTemplate,
 } from "../quotas/documentImportQuota";
 
 const GOOGLE_IDENTITY_SCOPE = "openid profile email";
@@ -435,6 +435,12 @@ export function registerGmailRoutes(app: express.Application) {
     const maxResults = gmailPageSize(req.body.limit);
 
     try {
+        await assertDocumentImportQuota(
+            ctx.userId,
+            ctx.user.plan ?? ctx.user.role,
+            1,
+            quotaCategoryFromTemplate(template),
+        );
       const now = new Date();
       const insert = await col<GmailImportJob>("gmail_import_jobs").insertOne({
         user_id: ctx.userId,
@@ -483,6 +489,10 @@ export function registerGmailRoutes(app: express.Application) {
         results: [],
       });
     } catch (err: any) {
+        if (err instanceof DocumentImportQuotaError) {
+            res.status(403).json(documentImportQuotaErrorPayload(err));
+            return;
+        }
       logger.error("gmail_import_all_failed", { user_id: ctx.userId, error: err.message });
       res.status(500).json({ error: err.message });
     }
@@ -549,6 +559,12 @@ export function registerGmailRoutes(app: express.Application) {
     }
 
     try {
+        await assertDocumentImportQuota(
+            ctx.userId,
+            ctx.user.plan ?? ctx.user.role,
+            1,
+            quotaCategoryFromTemplate(template),
+        );
       const now = new Date();
       const insert = await col<GmailImportJob>("gmail_import_jobs").insertOne({
         user_id: ctx.userId,
@@ -601,6 +617,10 @@ export function registerGmailRoutes(app: express.Application) {
         explanationSummary: { retryable: retryMessageIds.length },
       });
     } catch (err: any) {
+        if (err instanceof DocumentImportQuotaError) {
+            res.status(403).json(documentImportQuotaErrorPayload(err));
+            return;
+        }
       logger.error("gmail_import_retry_failed", { user_id: ctx.userId, mode, error: err.message });
       res.status(500).json({ error: err.message });
     }
@@ -1563,12 +1583,6 @@ function normalizeInvoiceAttachmentQuery(query: string): string {
   if (!withoutAttachmentTypes) return "has:attachment";
   if (/\bhas:attachment\b/i.test(withoutAttachmentTypes)) return withoutAttachmentTypes;
   return `has:attachment ${withoutAttachmentTypes}`;
-}
-
-function quotaCategoryFromTemplate(template: Awaited<ReturnType<typeof loadTemplate>>): DocumentImportQuotaCategory {
-  if (isInspectionTemplate(template) || template?.document_kind === "contract") return "contracts";
-  if (isInvoiceTemplate(template)) return "invoices";
-  return "documents";
 }
 
 function isMonthlyReportGmailItem(meta: GmailMessageHeaders | null, filename = ""): boolean {

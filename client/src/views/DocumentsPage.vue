@@ -761,7 +761,10 @@ async function handleGmailImport() {
     const code = String(err?.message ?? "");
     if (code.includes("gmail_not_connected")) {
       message.error("Gmail לא מחובר. לחץ שוב כדי להתחבר.");
-    } else if (code.includes("document_monthly_quota_exceeded")) {
+    } else if (
+        code.includes("document_monthly_limit_reached")
+        || code.includes("document_monthly_quota_exceeded")
+    ) {
       message.error("הגעת למגבלת הייבוא החודשית של המנוי.");
     } else {
       message.error("שגיאה בייבוא מ-Gmail");
@@ -1456,7 +1459,10 @@ async function uploadFiles(
     await openRescanModal();
     startBatchPolling(ids);
   } catch (e: any) {
-    if (e?.message === "document_limit_reached") {
+    if (
+        e?.message === "document_limit_reached"
+        || e?.message === "document_monthly_limit_reached"
+    ) {
       showLimitModal.value = true;
       store.fetch(undefined, true);
     } else {

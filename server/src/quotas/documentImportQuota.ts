@@ -16,6 +16,29 @@ export type DocumentImportQuota = {
 
 export type DocumentImportQuotaCategory = "invoices" | "contracts" | "documents";
 
+export type QuotaTemplateLike = {
+    document_kind?: string | null;
+    name?: string | null;
+} | null | undefined;
+
+export function quotaCategoryFromTemplate(template: QuotaTemplateLike): DocumentImportQuotaCategory {
+    if (!template) return "documents";
+    if (
+        template.document_kind === "contract" ||
+        template.document_kind === "inspection_report" ||
+        /תסקיר|בדיקה/.test(String(template.name ?? ""))
+    ) {
+        return "contracts";
+    }
+    if (
+        template.document_kind === "invoice" ||
+        /חשבונית|קבלה|invoice|receipt|bill/i.test(String(template.name ?? ""))
+    ) {
+        return "invoices";
+    }
+    return "documents";
+}
+
 export class DocumentImportQuotaError extends Error {
   quota: DocumentImportQuota;
 

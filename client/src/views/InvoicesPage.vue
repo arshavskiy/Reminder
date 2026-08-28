@@ -785,7 +785,11 @@ async function uploadInvoiceFiles(files: File[]) {
     await load(true);
   } catch (err: any) {
     const code = String(err?.message ?? "");
-    if (code.includes("document_limit_reached") || code.includes("document_monthly_quota_exceeded")) {
+    if (
+        code.includes("document_limit_reached")
+        || code.includes("document_monthly_limit_reached")
+        || code.includes("document_monthly_quota_exceeded")
+    ) {
       message.error("הגעת למגבלת הייבוא של המנוי.");
     } else {
       message.error("שגיאה בהעלאת החשבוניות");

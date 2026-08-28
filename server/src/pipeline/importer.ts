@@ -21,6 +21,11 @@ import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotif
 import {generatePdfThumbnailForDocument} from "../documents/pdfThumbnail";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {incrementDocumentUsage, type DocumentUsageKind} from "../quotas/userUsageCounters";
+import {
+  assertDocumentImportQuota,
+  type DocumentImportQuotaCategory,
+  quotaCategoryFromTemplate,
+} from "../quotas/documentImportQuota";
 import {inferInvoiceCashFlow} from "../invoices/cashFlow";
 
 type PushFn = (event: Record<string, unknown>) => void;
@@ -45,6 +50,8 @@ export interface PipelineOptions {
     gmailMessageId?: string;
     gmailFilename?: string;
   };
+  quotaCategory?: DocumentImportQuotaCategory;
+  skipQuotaCheck?: boolean;
 }
 
 type DocumentProcessingJobStatus = "queued" | "running" | "completed" | "failed" | "retry_wait";
@@ -266,6 +273,15 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
     return existingDocumentId;
   }
 
+  if (userId && !pipeline?.skipQuotaCheck) {
+    const user = await col<any>("users").findOne(
+        {_id: new ObjectId(userId)} as any,
+        {projection: {role: 1, plan: 1}} as any,
+    );
+    const category = await resolveImportQuotaCategory(pipeline);
+    await assertDocumentImportQuota(userId, user?.plan ?? user?.role, 1, category);
+  }
+
   // Copy to managed documents folder
   mkdirSync(docsDir, { recursive: true });
   if (!existsSync(managedPath)) {
@@ -448,6 +464,18 @@ async function userAllowsCloudStorage(userId: string | undefined, kind: string |
     ? settings.s3_store_invoices
     : settings.s3_store_inspection_reports;
   return flag !== false;
+}
+
+async function resolveImportQuotaCategory(pipeline?: PipelineOptions): Promise<DocumentImportQuotaCategory> {
+  if (pipeline?.quotaCategory) return pipeline.quotaCategory;
+  if (pipeline?.templateId) {
+    const template = await loadTemplate(pipeline.templateId).catch(() => null);
+    return quotaCategoryFromTemplate(template);
+  }
+  const kind = await intendedDocumentKind(pipeline);
+  if (kind === "invoice") return "invoices";
+  if (kind === "inspection_report") return "contracts";
+  return "documents";
 }
 
 async function intendedDocumentKind(pipeline?: PipelineOptions): Promise<string | null> {
