@@ -35,7 +35,7 @@
         <p v-if="selectedClientEmail" class="generator-recipient">דוח לקוח {{ selectedPeriodLabel }} יישלח ללקוח: {{ selectedClientEmail }} וגם לנמענים/כתובת החשבון.</p>
         <p v-else-if="selectedReportClientId" class="generator-recipient generator-recipient--warning">ללקוח הנבחר לא מוגדר אימייל. דוח הלקוח {{ selectedPeriodLabel }} יישלח רק לנמענים/כתובת החשבון.</p>
         <p v-else class="generator-recipient">דוח כולל לכל הלקוחות יישלח רק לנמענים או לכתובת החשבון שלך.</p>
-        <div class="field-selector">
+        <div :class="{ 'field-selector--collapsed': !fieldsOpen }" class="field-selector">
           <div class="field-selector__head">
             <button
                 :aria-expanded="fieldsOpen"
@@ -617,6 +617,16 @@ onMounted(loadSettings);
   margin-bottom: 12px;
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+/* Collapsed the panel is just its header, so drop the padding and the head's
+   bottom margin that would otherwise leave an empty framed box. */
+.field-selector--collapsed {
+  padding: 8px 12px;
+}
+
+.field-selector--collapsed .field-selector__head {
+  margin-bottom: 0;
 }
 
 .field-selector__grid {
