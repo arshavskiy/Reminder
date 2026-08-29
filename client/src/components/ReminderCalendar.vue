@@ -181,6 +181,7 @@
             </n-popover>
             <button
               v-if="hiddenItemCount(cell) > 0"
+              :title="`עוד ${hiddenItemCount(cell)} פריטים — לחץ להצגת כל היום`"
               class="rcal__more"
               type="button"
               @click.stop="openDay(cell)"
@@ -264,6 +265,7 @@
             :class="`rcal__day-row--${reminderVisualStatus(r)}`"
             class="rcal__day-row"
             type="button"
+            :title="reminderDisplayTitle(r)"
             @click="onNavigate({ type: 'reminder', id: r.id })"
           >
             <span class="rcal__day-dot" />
@@ -283,6 +285,7 @@
             :class="`rcal__day-row--expiry-${expiryVisualStatus(e)}`"
             class="rcal__day-row"
             type="button"
+            :title="expiryCalendarTitle(e)"
             @click="onExpiryNavigate(e)"
           >
             <span class="rcal__day-dot rcal__day-dot--expiry" />
@@ -902,11 +905,15 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
 /* ── Grid ──────────────────────────────────────────────────────────────── */
 .rcal__grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  /* minmax(0, 1fr) keeps all seven columns equal: a bare 1fr floors at the
+     content's min-width, so one long event title widens its column. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
 }
 .rcal__cell {
   min-height: 106px;
+  min-width: 0;
+  overflow: hidden;
   padding: 6px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
