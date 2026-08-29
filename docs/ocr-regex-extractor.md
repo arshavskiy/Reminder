@@ -13,7 +13,7 @@ A lightweight, zero-LLM extraction pass that runs on every document immediately 
 | `expiry_date` | `YYYY-MM-DD \| null` | Next action date (inspection, contract expiry, payment due) |
 | `contact_name` | `string \| null` | Client or company name |
 | `contact_phone` | `string \| null` | Normalised to `XXX-XXXXXXX` format |
-| `contact_email` | `string \| null` | Bidi-reversed emails are auto-corrected |
+| `contact_email` | `string \| null` | Bidi-reversed emails are auto-corrected (see [known gaps](#known-gaps)) |
 | `client_address` | `string \| null` | Street, city, or full address |
 | `po_box` | `string \| null` | P.O. Box (`ת.ד`) number |
 | `document_type` | `string \| null` | One of: `תסקיר בדיקה`, `חוזה`, `הסכם`, `חשבונית`, `תעודה` |
@@ -85,14 +85,65 @@ Output normalised: 10-digit `0XXXXXXXXX` → `0XX-XXXXXXX`.
 
 ### `contact_email`
 
-Matches any `user@domain` pattern, then applies bidi detection:
+Matches any `user@domain` pattern, then runs `normalizeEmail`
+(`server/src/pipeline/importer.ts`). Hebrew inspection PDFs are laid out
+right-to-left, so the text layer often captures an address out of order. The rules
+below are applied in sequence — the **first** one that matches wins.
 
-**Bidi reversal rule**: if the part before `@` contains a dot AND the part after `@` does not, the address is stored in visual order (domain before `@`, username after). It is returned as `username@domain`.
+**0. Always: trim, strip trailing punctuation, lowercase**
 
-Examples:
-- Normal: `david@cohen.co.il` → `david@cohen.co.il`
-- Reversed: `il.co1945.shelev@klodin` → `klodin@il.co1945.shelev`
-- Reversed (standard TLD): `il.co.example@user` → `user@example.co.il`
+| Input | Output |
+|---|---|
+| `"  Info@Example.COM  "` | `info@example.com` |
+| `user@gmail.com.` | `user@gmail.com` |
+
+**1. Fully reversed** — when the local part's dot-segments reversed end in a known
+TLD and the domain's last segment does not. Both sides swap and each has its dot
+segments reversed.
+
+| Input | Output |
+|---|---|
+| `com.gmail@mezeg.car` | `car.mezeg@gmail.com` |
+
+**2. Domain in local part** — local contains a dot, domain does not.
+
+| Input | Output |
+|---|---|
+| `com.gmail@username` | `username@gmail.com` |
+
+**3. Digit glue on the local part** — a trailing digit in an RTL line renders at the
+visual start, so `rampa2@` is captured as `2rampa@`. Any leading digit run moves back
+to the end. Single digits count: they are the common case (9 of 11 observed records).
+
+| Input | Output |
+|---|---|
+| `2rampa@yasca.co.il` | `rampa2@yasca.co.il` |
+| `7760yair.yo@gmail.com` | `yair.yo7760@gmail.com` |
+
+**4. Otherwise unchanged** — `normal@gmail.com`, `info@012.net.il`, `noatsign`.
+
+#### Known gaps
+
+These are **not** repaired, and have caused real bounces:
+
+| Input | Actual | Should be | Why |
+|---|---|---|---|
+| `klodin@1945shelev.co.il` | unchanged | `klodin@shelev1945.co.il` | rule 3 only inspects the local part, never the domain |
+| `uri@guy-s.co.il` | unchanged | `uri@s-guy.co.il` | reversed hyphen segments in a domain are not handled |
+
+Rule 1 is also weaker than it looks: `li.oc.allaw@8yale` returns
+`8yale@allaw.oc.li` rather than the intended `elay8@walla.co.il`, because segment
+reversal alone does not un-reverse the characters inside each segment.
+
+#### Rule 3 is a heuristic, not a certainty
+
+A leading digit can be legitimate. `155david@012.net.il` is rewritten to
+`david155@012.net.il`, but `012.net.il` is a real Israeli ISP and the original may
+well be correct. Treat rule-3 rewrites on existing records as candidates for review
+against the source PDF, not as safe bulk corrections.
+
+**Validating with MX** would have caught both known gaps — `1945shelev.co.il` and
+`guy-s.co.il` have no MX records, while the corrected domains resolve.
 
 ---
 
