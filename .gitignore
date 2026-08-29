@@ -21,3 +21,6 @@ dist/
 *.bson
 mongodump-atlas/**
 docs/google-oauth-demo-video/
+
+# Separate repository, not a submodule of this one
+tools/inspector-lead-finder/
