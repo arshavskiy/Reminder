@@ -1,5 +1,5 @@
 import express from "express";
-import {ObjectId} from "mongodb";
+import {Collection, Db, MongoClient, ObjectId} from "mongodb";
 import {extname} from "path";
 import {col, enterAdminDbTarget, getDbTargetStatus, parseAdminDbTarget, runWithPrimaryDb} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
@@ -17,6 +17,45 @@ const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 const VALID_PLANS: UserPlan[] = ["free", "basic", "business"];
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
 const VALID_LEAD_STATUSES = new Set(["NEW", "CONTACTED", "DEMO", "TRIAL", "CUSTOMER", "NOT_RELEVANT"]);
+
+let inspectorLeadsClient: MongoClient | null = null;
+let inspectorLeadsDb: Db | null = null;
+
+function env(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value || undefined;
+}
+
+function redactUri(uri: string): string {
+  return uri.replace(/\/\/[^:]+:[^@]+@/, "//***:***@");
+}
+
+async function inspectorLeadsCollection(): Promise<Collection> {
+  const uri = env("MONGODB_URI");
+  if (!uri) return col("inspector_leads");
+  if (!inspectorLeadsDb) {
+    const dbName = env("INSPECTOR_LEADS_DB") ?? "reminder";
+    inspectorLeadsClient = new MongoClient(uri);
+    await inspectorLeadsClient.connect();
+    inspectorLeadsDb = inspectorLeadsClient.db(dbName);
+    await inspectorLeadsDb.createCollection("inspector_leads").catch((err: any) => {
+      if (err?.codeName !== "NamespaceExists") throw err;
+    });
+    await Promise.all([
+      inspectorLeadsDb.collection("inspector_leads").createIndex({ email: 1 }, { sparse: true }),
+      inspectorLeadsDb.collection("inspector_leads").createIndex({ phone: 1 }, { sparse: true }),
+      inspectorLeadsDb.collection("inspector_leads").createIndex({ website: 1 }, { sparse: true }),
+      inspectorLeadsDb.collection("inspector_leads").createIndex({ source: 1 }),
+      inspectorLeadsDb.collection("inspector_leads").createIndex({ contactStatus: 1, leadScore: -1 }),
+      inspectorLeadsDb.collection("inspector_leads").createIndex({ leadScore: -1 }),
+    ]);
+    logger.info("inspector_leads_db_connected", {
+      db_name: dbName,
+      uri: redactUri(uri),
+    });
+  }
+  return inspectorLeadsDb.collection("inspector_leads");
+}
 
 function normalizeUsername(raw: unknown): string | null {
   const value = String(raw ?? "").trim().toLowerCase();
@@ -418,7 +457,7 @@ export function registerAdminRoutes(app: express.Application) {
       ];
     }
 
-    const leads = col("inspector_leads");
+    const leads = await inspectorLeadsCollection();
     const [rows, total, bySource, byStatus] = await Promise.all([
       leads
         .find(filter)
@@ -463,7 +502,8 @@ export function registerAdminRoutes(app: express.Application) {
       return;
     }
 
-    const result = await col("inspector_leads").findOneAndUpdate(
+    const leads = await inspectorLeadsCollection();
+    const result = await leads.findOneAndUpdate(
       { _id: new ObjectId(req.params.id) },
       { $set: { contactStatus, updated_at: new Date() } },
       { returnDocument: "after" },

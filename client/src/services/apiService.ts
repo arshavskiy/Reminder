@@ -878,10 +878,10 @@ export const api = {
       if (params?.status) qs.set("status", params.status);
       if (params?.q) qs.set("q", params.q);
       const query = qs.toString();
-      return adminGet<InspectorLeadsResponse>(`/admin/inspector-leads${query ? "?" + query : ""}`, "production");
+      return adminGet<InspectorLeadsResponse>(`/admin/inspector-leads${query ? "?" + query : ""}`);
     },
     updateInspectorLeadStatus: (id: string, contactStatus: InspectorLeadStatus) =>
-      adminPut<InspectorLead>(`/admin/inspector-leads/${id}/status`, { contactStatus }, "production"),
+      adminPut<InspectorLead>(`/admin/inspector-leads/${id}/status`, { contactStatus }),
     getDocument: (id: string) => adminGet<any>(`/admin/documents/${id}`),
     monitorDocuments: () => adminGet<any>("/admin/monitor/documents"),
     monitorExtractions: (params?: { user_id?: string; page?: number; limit?: number }) => {
