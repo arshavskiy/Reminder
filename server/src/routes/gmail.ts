@@ -265,7 +265,14 @@ export function registerGmailRoutes(app: express.Application) {
       }
     }
 
-    res.json({ connected, source, email });
+    // How many documents actually came in from Gmail, so the card can show the
+    // result of the connection rather than only its state.
+    const importedCount = await col("documents").countDocuments({
+      user_id: ctx.userId,
+      import_source: "gmail",
+    } as any);
+
+    res.json({ connected, source, email, importedCount });
   });
 
   // GET /api/gmail/inbox — list emails with PDF attachments

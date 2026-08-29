@@ -264,6 +264,7 @@ export interface DriveStatus {
   folderUrl: string | null;
   folderState?: DriveFolderState | null;
   syncedFileCount?: number;
+  totalFileCount?: number;
     pendingFileCount?: number;
     missingFileCount?: number;
     latestJob?: DriveExportJob | null;

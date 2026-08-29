@@ -531,6 +531,9 @@
                             ? "טוען..."
                             : "קריאת מיילים וייבוא קבצים מצורפים"
                       }}
+                      <template v-if="gmailStatus?.connected && gmailStatus.importedCount != null">
+                        · {{ gmailStatus.importedCount }} מסמכים יובאו
+                      </template>
                     </span>
                   </div>
                   <div class="settings-row__actions">
@@ -786,7 +789,9 @@
               >
                 <div aria-label="סטטוס סנכרון Drive" class="drive-dashboard">
                   <div class="drive-dashboard__item">
-                    <strong>{{ driveStatus.syncedFileCount ?? 0 }}</strong>
+                    <strong>
+                      {{ driveStatus.syncedFileCount ?? 0 }}<template v-if="driveStatus.totalFileCount != null"><span class="drive-dashboard__of">/ {{ driveStatus.totalFileCount }}</span></template>
+                    </strong>
                     <span>מסונכרנים</span>
                   </div>
                   <div class="drive-dashboard__item">
@@ -953,6 +958,62 @@
                       שדרוג מנוי
                     </n-button>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="NotificationsOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">מועדי תזכורת</h3>
+                  <p class="settings-group__desc">
+                    כמה ימים לפני פקיעת התוקף תישלח תזכורת. אפשר להגדיר עד שישה מועדים;
+                    תזכורת נוצרת בכל אחד מהם. השינוי חל על תסקירים חדשים שייווצרו מכאן והלאה.
+                  </p>
+                </div>
+              </div>
+              <div class="advance-days">
+                <div class="advance-days__list">
+                  <span v-for="d in advanceDays" :key="d" class="advance-days__chip">
+                    {{ d }} ימים
+                    <button
+                      :aria-label="`הסר ${d} ימים`"
+                      class="advance-days__remove"
+                      type="button"
+                      @click="removeAdvanceDay(d)"
+                    >✕</button>
+                  </span>
+                  <span v-if="!advanceDays.length" class="advance-days__empty">
+                    לא הוגדרו מועדים — ישמש ברירת המחדל של המערכת.
+                  </span>
+                </div>
+                <div class="advance-days__add">
+                  <n-input-number
+                    v-model:value="newAdvanceDay"
+                    :min="0"
+                    :max="365"
+                    :disabled="advanceDays.length >= 6"
+                    placeholder="מספר ימים"
+                    size="small"
+                    style="width: 140px"
+                    @keyup.enter="addAdvanceDay"
+                  />
+                  <n-button
+                    :disabled="!canAddAdvanceDay"
+                    :loading="savingAdvanceDays"
+                    size="small"
+                    type="primary"
+                    ghost
+                    @click="addAdvanceDay"
+                  >
+                    הוסף מועד
+                  </n-button>
+                  <span v-if="advanceDays.length >= 6" class="advance-days__hint">
+                    הגעת למקסימום שישה מועדים.
+                  </span>
                 </div>
               </div>
             </div>
@@ -1341,6 +1402,7 @@ import {
   NFormItem,
   NIcon,
   NInput,
+  NInputNumber,
   NModal,
   NProgress,
   NSelect,
@@ -1431,6 +1493,54 @@ const s3StoreInvoices = computed(() =>
     cloudStorageAllowed.value && userSettings.value?.s3_store_invoices !== false);
 const s3StoreInspections = computed(() =>
     cloudStorageAllowed.value && userSettings.value?.s3_store_inspection_reports !== false);
+
+// ── Reminder advance days ───────────────────────────────────────────────────
+const newAdvanceDay = ref<number | null>(null);
+const savingAdvanceDays = ref(false);
+
+const advanceDays = computed<number[]>(() => {
+  const raw = userSettings.value?.reminder_advance_days;
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(String(raw));
+    return Array.isArray(parsed)
+      ? parsed.map(Number).filter((n) => Number.isFinite(n)).sort((a, b) => b - a)
+      : [];
+  } catch {
+    return [];
+  }
+});
+
+const canAddAdvanceDay = computed(() => {
+  const v = newAdvanceDay.value;
+  return v != null && Number.isInteger(v) && v >= 0 && v <= 365
+    && !advanceDays.value.includes(v) && advanceDays.value.length < 6;
+});
+
+async function persistAdvanceDays(days: number[]) {
+  savingAdvanceDays.value = true;
+  const patch = {reminder_advance_days: JSON.stringify(days)};
+  try {
+    await userSettingsStore.save(patch as Partial<UserSettings>);
+    if (userSettings.value) Object.assign(userSettings.value, patch);
+    message.success("מועדי התזכורת נשמרו");
+  } catch {
+    message.error("שגיאה בשמירת מועדי התזכורת");
+  } finally {
+    savingAdvanceDays.value = false;
+  }
+}
+
+async function addAdvanceDay() {
+  if (!canAddAdvanceDay.value) return;
+  const next = [...advanceDays.value, Number(newAdvanceDay.value)].sort((a, b) => b - a);
+  newAdvanceDay.value = null;
+  await persistAdvanceDays(next);
+}
+
+async function removeAdvanceDay(day: number) {
+  await persistAdvanceDays(advanceDays.value.filter((d) => d !== day));
+}
 
 async function saveCloudStorage(target: "invoices" | "inspections", value: boolean) {
   savingCloudStorage.value = target;
@@ -1807,7 +1917,7 @@ async function confirmDeleteAccount() {
     deletingAccount.value = false;
   }
 }
-const gmailStatus = ref<{ connected: boolean; source: string | null; email: string | null } | null>(null);
+const gmailStatus = ref<{ connected: boolean; source: string | null; email: string | null; importedCount?: number | null } | null>(null);
 const gmailLoading = ref(false);
 const gmailDisconnecting = ref(false);
 const calendarStatus = ref<{
@@ -2757,6 +2867,62 @@ function showGoogleConnectionErrorFromRoute() {
   background: color-mix(in srgb, var(--color-error) 12%, transparent);
   color: var(--color-error);
 }
+.drive-dashboard__of {
+  font-size: 0.7em;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-inline-start: 3px;
+}
+
+.advance-days {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.advance-days__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.advance-days__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-elevated);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.advance-days__remove {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+}
+
+.advance-days__remove:hover { color: var(--color-error, #d03050); }
+
+.advance-days__empty,
+.advance-days__hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.advance-days__add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .settings-group__title {
   margin: 0;
   font-size: 15px;

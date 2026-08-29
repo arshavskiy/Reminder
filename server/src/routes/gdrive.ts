@@ -237,7 +237,7 @@ export function registerGdriveRoutes(app: express.Express) {
         const folderId = user?.drive_folder_id ?? null;
         const folderName = user?.drive_folder_name ?? "RemindOCR";
         const allowed = planAllowsGoogleDrive(user?.plan ?? ctx.user.plan ?? ctx.user.role);
-        const [syncedFileCount, pendingFileCount, missingFileCount, latestJob] = await Promise.all([
+        const [syncedFileCount, pendingFileCount, missingFileCount, latestJob, totalFileCount] = await Promise.all([
             col("documents").countDocuments({
                 user_id: ctx.userId,
                 drive_file_id: {$exists: true, $nin: [null, ""]},
@@ -256,6 +256,12 @@ export function registerGdriveRoutes(app: express.Express) {
                 {user_id: ctx.userId} as any,
                 {sort: {created_at: -1}} as any,
             ),
+            // Everything eligible for Drive, so the UI can show synced out of total
+            // instead of two counts the user has to add up.
+            col("documents").countDocuments({
+                user_id: ctx.userId,
+                ...EXPORTABLE_FILE_FILTER,
+            } as any),
         ]);
 
         let folderState: "ok" | "trashed" | "missing" | "unknown" | null = folderId ? "unknown" : null;
@@ -275,6 +281,7 @@ export function registerGdriveRoutes(app: express.Express) {
             folderUrl: folderHealthy && folderId ? driveFolderWebUrl(folderId) : null,
             folderState,
             syncedFileCount,
+            totalFileCount,
             pendingFileCount,
             missingFileCount,
             latestJob: latestJob ? presentDriveExportJob(latestJob) : null,

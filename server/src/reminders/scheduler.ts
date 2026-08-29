@@ -2,6 +2,7 @@ import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {getSettings} from "../settings";
 import {sendGroupedReminderEmail, sendReminderEmail} from "./emailSender";
+import {advanceDaysForUser} from "./advanceDays";
 import {sendMonthlyReportToRecipients} from "../reports/monthlyReports";
 import {
   isMonthlyReportDue,
@@ -684,7 +685,7 @@ export async function generateTaskReminders(
 
   const label = description.trim().slice(0, 60) || "משימה";
 
-  for (const days of settings.reminderAdvanceDays) {
+  for (const days of await advanceDaysForUser(userId)) {
     const existing = await col("reminders").findOne({
       source_type: "task",
       source_id: taskId,
@@ -824,7 +825,7 @@ export async function generateContractReminders(
     return "פקיעת תוקף";
   })();
 
-  for (const days of settings.reminderAdvanceDays) {
+  for (const days of await advanceDaysForUser(userId)) {
     const expiry = new Date(expiryDate);
     expiry.setDate(expiry.getDate() - days);
     const calculatedTrigger = expiry.toISOString().slice(0, 10);
