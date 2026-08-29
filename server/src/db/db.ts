@@ -184,6 +184,7 @@ const ALL_COLLECTIONS = [
   "document_processing_jobs",
   "drive_export_jobs",
   "calendar_links",
+  "inspector_leads",
 ];
 
 async function ensureCollections(db: Db): Promise<void> {
@@ -375,6 +376,14 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("document_processing_jobs").createIndex({ document_id: 1 });
   await db.collection("document_processing_jobs").createIndex({ user_id: 1, status: 1, created_at: -1 });
   await db.collection("document_processing_jobs").createIndex({ locked_at: 1 });
+
+  // inspector_leads
+  await db.collection("inspector_leads").createIndex({ email: 1 }, { sparse: true });
+  await db.collection("inspector_leads").createIndex({ phone: 1 }, { sparse: true });
+  await db.collection("inspector_leads").createIndex({ website: 1 }, { sparse: true });
+  await db.collection("inspector_leads").createIndex({ source: 1 });
+  await db.collection("inspector_leads").createIndex({ contactStatus: 1, leadScore: -1 });
+  await db.collection("inspector_leads").createIndex({ leadScore: -1 });
 }
 
 // Typed collection helper

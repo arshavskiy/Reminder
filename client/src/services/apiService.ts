@@ -413,6 +413,40 @@ const ADMIN_BASE = `${ADMIN_SERVER}/api`;
 export type AdminDbTarget = "local" | "production";
 const ADMIN_DB_TARGET_KEY = "remindocr_admin_db_target";
 
+export type InspectorLeadStatus = "NEW" | "CONTACTED" | "DEMO" | "TRIAL" | "CUSTOMER" | "NOT_RELEVANT";
+
+export interface InspectorLead {
+  id: string;
+  name: string;
+  company?: string | null;
+  certificationType?: string | null;
+  city?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  website?: string | null;
+  source?: string | null;
+  sourceUrl?: string | null;
+  licenseNumber?: string | null;
+  notes?: string | null;
+  leadScore: number;
+  contactStatus: InspectorLeadStatus;
+  foundAt?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface InspectorLeadsResponse {
+  rows: InspectorLead[];
+  total: number;
+  page: number;
+  limit: number;
+  summary: {
+    bySource: { source: string; count: number }[];
+    byStatus: { status: InspectorLeadStatus; count: number }[];
+  };
+}
+
 export function getAdminDbTarget(): AdminDbTarget {
   try {
     const raw = localStorage.getItem(ADMIN_DB_TARGET_KEY);
@@ -836,6 +870,18 @@ export const api = {
         sameAsLocal: boolean;
       };
     }>("/admin/db-targets"),
+    listInspectorLeads: (params?: { page?: number; limit?: number; source?: string | null; status?: string | null; q?: string | null }) => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.source) qs.set("source", params.source);
+      if (params?.status) qs.set("status", params.status);
+      if (params?.q) qs.set("q", params.q);
+      const query = qs.toString();
+      return adminGet<InspectorLeadsResponse>(`/admin/inspector-leads${query ? "?" + query : ""}`);
+    },
+    updateInspectorLeadStatus: (id: string, contactStatus: InspectorLeadStatus) =>
+      adminPut<InspectorLead>(`/admin/inspector-leads/${id}/status`, { contactStatus }),
     getDocument: (id: string) => adminGet<any>(`/admin/documents/${id}`),
     monitorDocuments: () => adminGet<any>("/admin/monitor/documents"),
     monitorExtractions: (params?: { user_id?: string; page?: number; limit?: number }) => {

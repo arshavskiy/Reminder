@@ -16,6 +16,7 @@ import {logger} from "../logger";
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 const VALID_PLANS: UserPlan[] = ["free", "basic", "business"];
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
+const VALID_LEAD_STATUSES = new Set(["NEW", "CONTACTED", "DEMO", "TRIAL", "CUSTOMER", "NOT_RELEVANT"]);
 
 function normalizeUsername(raw: unknown): string | null {
   const value = String(raw ?? "").trim().toLowerCase();
@@ -92,6 +93,17 @@ function planFromRole(role: string | null | undefined): UserPlan {
   if (role === "admin") return "business";
   if (role === "pro") return "basic";
   return "free";
+}
+
+function flatInspectorLead(doc: any) {
+  if (!doc) return doc;
+  const { _id, ...rest } = doc;
+  return {
+    id: _id?.toString(),
+    ...rest,
+    contactStatus: doc.contactStatus ?? "NEW",
+    leadScore: doc.leadScore ?? 0,
+  };
 }
 
 /** Magic links hit the API `/auth/magic` handler, so use the server origin. */
@@ -378,6 +390,91 @@ export function registerAdminRoutes(app: express.Application) {
       magicLink,
       user: flatUser(fresh ?? user),
     });
+  });
+
+  // GET /api/admin/inspector-leads — marketing leads collected by the lead finder
+  app.get("/api/admin/inspector-leads", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+
+    const page = Math.max(1, Number(req.query.page ?? 1) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 50) || 50));
+    const source = String(req.query.source ?? "").trim();
+    const status = String(req.query.status ?? "").trim();
+    const q = String(req.query.q ?? "").trim();
+
+    const filter: Record<string, any> = {};
+    if (source) filter.source = source;
+    if (status) filter.contactStatus = status;
+    if (q) {
+      const safe = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const rx = new RegExp(safe, "i");
+      filter.$or = [
+        { name: rx },
+        { company: rx },
+        { email: rx },
+        { phone: rx },
+        { website: rx },
+        { certificationType: rx },
+      ];
+    }
+
+    const leads = col("inspector_leads");
+    const [rows, total, bySource, byStatus] = await Promise.all([
+      leads
+        .find(filter)
+        .sort({ leadScore: -1, updated_at: -1, created_at: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .toArray(),
+      leads.countDocuments(filter),
+      leads.aggregate([
+        { $group: { _id: "$source", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]).toArray(),
+      leads.aggregate([
+        { $group: { _id: { $ifNull: ["$contactStatus", "NEW"] }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]).toArray(),
+    ]);
+
+    res.json({
+      rows: rows.map(flatInspectorLead),
+      total,
+      page,
+      limit,
+      summary: {
+        bySource: bySource.map((row: any) => ({ source: row._id ?? "unknown", count: row.count })),
+        byStatus: byStatus.map((row: any) => ({ status: row._id ?? "NEW", count: row.count })),
+      },
+    });
+  });
+
+  // PUT /api/admin/inspector-leads/:id/status
+  app.put("/api/admin/inspector-leads/:id/status", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    if (!ObjectId.isValid(req.params.id)) {
+      res.status(400).json({ error: "invalid_lead_id" });
+      return;
+    }
+
+    const contactStatus = String(req.body?.contactStatus ?? "").trim().toUpperCase();
+    if (!VALID_LEAD_STATUSES.has(contactStatus)) {
+      res.status(400).json({ error: "invalid_contact_status" });
+      return;
+    }
+
+    const result = await col("inspector_leads").findOneAndUpdate(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { contactStatus, updated_at: new Date() } },
+      { returnDocument: "after" },
+    );
+
+    if (!result) {
+      res.status(404).json({ error: "lead_not_found" });
+      return;
+    }
+
+    res.json(flatInspectorLead(result));
   });
 
   // ── Web Push subscription (admin notifications) ───────────────────────────

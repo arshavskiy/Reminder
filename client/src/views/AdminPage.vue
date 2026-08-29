@@ -109,6 +109,95 @@
         <AdminMagicLinkPanel :key="adminDbTarget" @created="onMagicLinkUserCreated" />
       </section>
 
+      <section v-if="activeSection === 'inspector_leads'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else>
+          <div class="admin-stats-grid">
+            <AdminStatCard
+              title="Total Leads"
+              :primary="inspectorLeadsTotal"
+              primary-label="Collected"
+              :secondary="inspectorLeadsRows.length"
+              secondary-label="Shown"
+              :icon="PeopleOutline"
+            />
+            <AdminStatCard
+              title="With Email"
+              :primary="inspectorLeadEmailCount"
+              primary-label="Direct emails"
+              :secondary="inspectorLeadPhoneCount"
+              secondary-label="Phones"
+              :status="inspectorLeadEmailCount > 0 ? 'success' : 'warning'"
+              :icon="MailOutline"
+            />
+            <AdminStatCard
+              title="Best Score"
+              :primary="inspectorLeadBestScore"
+              primary-label="Lead score"
+              :secondary="inspectorLeadSourceText"
+              secondary-label="Top sources"
+              :status="inspectorLeadBestScore >= 80 ? 'success' : 'default'"
+            />
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__title">Inspector Leads</div>
+            <div class="admin-section__toolbar leads-toolbar">
+              <n-input
+                v-model:value="inspectorLeadSearch"
+                clearable
+                size="small"
+                placeholder="Search name, email, phone, website..."
+                style="max-width: 320px"
+                @keyup.enter="loadInspectorLeads(1)"
+              >
+                <template #prefix><n-icon :component="SearchOutline" /></template>
+              </n-input>
+              <n-select
+                v-model:value="inspectorLeadSourceFilter"
+                clearable
+                size="small"
+                placeholder="Source"
+                :options="inspectorLeadSourceOptions"
+                style="width: 160px"
+                @update:value="loadInspectorLeads(1)"
+              />
+              <n-select
+                v-model:value="inspectorLeadStatusFilter"
+                clearable
+                size="small"
+                placeholder="Status"
+                :options="inspectorLeadStatusOptions"
+                style="width: 170px"
+                @update:value="loadInspectorLeads(1)"
+              />
+              <n-button size="small" :loading="inspectorLeadsLoading" @click="loadInspectorLeads(1)">
+                <template #icon><n-icon :component="RefreshOutline" /></template>
+                Refresh
+              </n-button>
+            </div>
+
+            <n-data-table
+              :columns="inspectorLeadColumns"
+              :data="inspectorLeadsRows"
+              :bordered="false"
+              :loading="inspectorLeadsLoading"
+              :pagination="false"
+              :max-height="560"
+              size="small"
+              style="margin-top:12px"
+            />
+            <div class="leads-pagination">
+              <span>{{ inspectorLeadRangeText }}</span>
+              <div class="leads-pagination__actions">
+                <n-button size="tiny" :disabled="inspectorLeadPage <= 1 || inspectorLeadsLoading" @click="loadInspectorLeads(inspectorLeadPage - 1)">Prev</n-button>
+                <n-button size="tiny" :disabled="inspectorLeadPage * inspectorLeadLimit >= inspectorLeadsTotal || inspectorLeadsLoading" @click="loadInspectorLeads(inspectorLeadPage + 1)">Next</n-button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </section>
+
       <section v-if="activeSection === 'gmail'" class="admin-section admin-section--gmail">
         <GmailInboxPage />
       </section>
@@ -1438,7 +1527,7 @@ import {
   TimerOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
-import {api, getAdminDbTarget, setAdminDbTarget, type AdminDbTarget} from "../services/apiService.js";
+import {api, getAdminDbTarget, setAdminDbTarget, type AdminDbTarget, type InspectorLead, type InspectorLeadStatus} from "../services/apiService.js";
 import DocumentDetailPage from "./DocumentDetailPage.vue";
 import AdminStatCard from "../components/AdminStatCard.vue";
 import AdminReportModal from "../components/AdminReportModal.vue";
@@ -1518,6 +1607,8 @@ async function onAdminDbTargetChange(next: AdminDbTarget) {
     adminDbTarget.value = next;
     users.value = [];
     docMonitor.value = null;
+    inspectorLeadsRows.value = [];
+    inspectorLeadsTotal.value = 0;
     await refreshDbTargetMeta();
     await loadSectionData(activeSection.value);
     message.success(next === "production" ? "Admin data: production Mongo" : "Admin data: local Mongo");
@@ -1531,6 +1622,7 @@ async function onAdminDbTargetChange(next: AdminDbTarget) {
 const adminSections = [
   { key: "users",              label: "Users",                  icon: PeopleOutline },
   { key: "magic_links",        label: "Magic Links",            icon: KeyOutline },
+  { key: "inspector_leads",    label: "Inspector Leads",        icon: SearchOutline },
   { key: "gmail",              label: "Gmail Inbox",            icon: MailOutline },
   { key: "documents",          label: "Documents & Extraction", icon: DocumentOutline },
   { key: "extraction_quality", label: "Extraction Quality",     icon: FlashOutline },
@@ -1586,6 +1678,163 @@ function resolveUserEmail(userId: string) {
     ?? users.value.find((u) => u.id === userId)?.username
     ?? userId?.slice(-6)
     ?? "—";
+}
+
+// ── Inspector leads ───────────────────────────────────────────────────────
+const inspectorLeadsRows = ref<InspectorLead[]>([]);
+const inspectorLeadsTotal = ref(0);
+const inspectorLeadsLoading = ref(false);
+const inspectorLeadPage = ref(1);
+const inspectorLeadLimit = 50;
+const inspectorLeadSearch = ref("");
+const inspectorLeadSourceFilter = ref<string | null>(null);
+const inspectorLeadStatusFilter = ref<InspectorLeadStatus | null>(null);
+const inspectorLeadSummary = ref<{
+  bySource: { source: string; count: number }[];
+  byStatus: { status: InspectorLeadStatus; count: number }[];
+}>({ bySource: [], byStatus: [] });
+
+const inspectorLeadStatuses: InspectorLeadStatus[] = ["NEW", "CONTACTED", "DEMO", "TRIAL", "CUSTOMER", "NOT_RELEVANT"];
+const inspectorLeadStatusOptions = inspectorLeadStatuses.map((status) => ({
+  label: leadStatusLabel(status),
+  value: status,
+}));
+const inspectorLeadSourceOptions = computed(() =>
+  inspectorLeadSummary.value.bySource.map((row) => ({
+    label: `${row.source} (${row.count})`,
+    value: row.source,
+  })),
+);
+const inspectorLeadEmailCount = computed(() => inspectorLeadsRows.value.filter((lead) => lead.email).length);
+const inspectorLeadPhoneCount = computed(() => inspectorLeadsRows.value.filter((lead) => lead.phone || lead.whatsapp).length);
+const inspectorLeadBestScore = computed(() => Math.max(0, ...inspectorLeadsRows.value.map((lead) => Number(lead.leadScore) || 0)));
+const inspectorLeadSourceText = computed(() =>
+  inspectorLeadSummary.value.bySource.slice(0, 2).map((row) => `${row.source}: ${row.count}`).join(" · ") || "—",
+);
+const inspectorLeadRangeText = computed(() => {
+  if (!inspectorLeadsTotal.value) return "No leads";
+  const start = (inspectorLeadPage.value - 1) * inspectorLeadLimit + 1;
+  const end = Math.min(inspectorLeadPage.value * inspectorLeadLimit, inspectorLeadsTotal.value);
+  return `${start}-${end} of ${inspectorLeadsTotal.value}`;
+});
+
+const inspectorLeadColumns: DataTableColumns<InspectorLead> = [
+  {
+    title: "Lead", key: "name", align: "left", minWidth: 260, ellipsis: { tooltip: true },
+    render: (row) => h("div", { class: "lead-cell" }, [
+      h("span", { class: "lead-cell__name" }, row.name || row.company || "—"),
+      h("span", { class: "lead-cell__meta" }, [row.certificationType, row.city].filter(Boolean).join(" · ") || row.source || "—"),
+    ]),
+  },
+  {
+    title: "Score", key: "leadScore", align: "center", width: 82,
+    render: (row) => h(NTag, {
+      size: "small",
+      round: true,
+      type: row.leadScore >= 80 ? "success" : row.leadScore >= 60 ? "warning" : "default",
+    }, { default: () => String(row.leadScore ?? 0) }),
+  },
+  {
+    title: "Status", key: "contactStatus", align: "left", width: 155,
+    render: (row) => h(NSelect, {
+      size: "tiny",
+      value: row.contactStatus ?? "NEW",
+      options: inspectorLeadStatusOptions,
+      renderLabel: (option: any) => h(NTag, {
+        size: "small",
+        round: true,
+        type: leadStatusTagType(String(option.value)) as any,
+      }, { default: () => option.label }),
+      onUpdateValue: (value: InspectorLeadStatus) => updateInspectorLeadStatus(row, value),
+    }),
+  },
+  {
+    title: "Phone", key: "phone", align: "left", width: 130,
+    render: (row) => leadContactLink("phone", row.phone || row.whatsapp),
+  },
+  {
+    title: "Email", key: "email", align: "left", minWidth: 210, ellipsis: { tooltip: true },
+    render: (row) => leadContactLink("email", row.email),
+  },
+  {
+    title: "Website", key: "website", align: "left", minWidth: 260, ellipsis: { tooltip: true },
+    render: (row) => leadContactLink("website", row.website),
+  },
+  {
+    title: "Source", key: "source", align: "left", width: 100,
+    render: (row) => h(NTag, { size: "small", round: true }, { default: () => row.source || "—" }),
+  },
+  {
+    title: "Updated", key: "updated_at", align: "left", width: 120,
+    render: (row) => h("span", { style: "font-size:12px;color:var(--text-secondary)" }, formatDate(row.updated_at ?? row.foundAt ?? row.created_at ?? null)),
+  },
+];
+
+async function loadInspectorLeads(page = inspectorLeadPage.value) {
+  inspectorLeadsLoading.value = true;
+  try {
+    const res = await api.admin.listInspectorLeads({
+      page,
+      limit: inspectorLeadLimit,
+      source: inspectorLeadSourceFilter.value,
+      status: inspectorLeadStatusFilter.value,
+      q: inspectorLeadSearch.value.trim() || null,
+    });
+    inspectorLeadsRows.value = res.rows;
+    inspectorLeadsTotal.value = res.total;
+    inspectorLeadPage.value = res.page;
+    inspectorLeadSummary.value = res.summary;
+    lastRefreshed.value.set("inspector_leads", new Date());
+  } catch (err: any) {
+    message.error(err?.message ?? "Error loading inspector leads");
+  } finally {
+    inspectorLeadsLoading.value = false;
+  }
+}
+
+async function updateInspectorLeadStatus(lead: InspectorLead, contactStatus: InspectorLeadStatus) {
+  try {
+    const updated = await api.admin.updateInspectorLeadStatus(lead.id, contactStatus);
+    inspectorLeadsRows.value = inspectorLeadsRows.value.map((row) => row.id === updated.id ? updated : row);
+    message.success("Lead status updated");
+  } catch (err: any) {
+    message.error(err?.message ?? "Failed to update lead");
+  }
+}
+
+function leadStatusLabel(status: string | null | undefined) {
+  const labels: Record<string, string> = {
+    NEW: "New",
+    CONTACTED: "Contacted",
+    DEMO: "Demo",
+    TRIAL: "Trial",
+    CUSTOMER: "Customer",
+    NOT_RELEVANT: "Not relevant",
+  };
+  return labels[status || ""] ?? "New";
+}
+
+function leadStatusTagType(status: string | null | undefined) {
+  if (status === "CUSTOMER") return "success";
+  if (status === "DEMO" || status === "TRIAL") return "info";
+  if (status === "NOT_RELEVANT") return "default";
+  if (status === "CONTACTED") return "warning";
+  return "default";
+}
+
+function leadContactLink(kind: "email" | "phone" | "website", value: string | null | undefined) {
+  if (!value) return "—";
+  const href = kind === "email"
+    ? `mailto:${value}`
+    : kind === "phone"
+      ? `tel:${value}`
+      : value;
+  return h("a", {
+    href,
+    target: kind === "website" ? "_blank" : undefined,
+    rel: kind === "website" ? "noopener noreferrer" : undefined,
+    class: "admin-link",
+  }, value);
 }
 
 const showDocModal = ref(false);
@@ -2608,6 +2857,8 @@ async function loadSectionData(key: string) {
       const [monitor, gaps] = await Promise.all([api.admin.monitorDocuments(), api.admin.monitorPipelineGaps(), loadExtractions(1)]);
       docMonitor.value = monitor;
       pipelineGaps.value = gaps;
+    } else if (key === "inspector_leads") {
+      await loadInspectorLeads(1);
     } else if (key === "extraction_quality") {
       extractionQuality.value = await api.admin.monitorExtractionQuality();
     } else if (key === "reminders") {
@@ -2937,6 +3188,59 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.leads-toolbar {
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.lead-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.lead-cell__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lead-cell__meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-link {
+  color: var(--brand-color);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.admin-link:hover {
+  text-decoration: underline;
+}
+
+.leads-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.leads-pagination__actions {
+  display: flex;
+  gap: 8px;
 }
 
 /* ── Stats grid ──────────────────────────────────────────────────────────── */
