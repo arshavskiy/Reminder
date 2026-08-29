@@ -980,12 +980,13 @@ onMounted(async () => {
 }
 
 .landing-footer__legal a {
-  color: var(--text-muted);
+  color: var(--brand-color);
   text-decoration: none;
 }
 
 .landing-footer__legal a:hover {
-  color: var(--text-secondary);
+  color: var(--brand-color-hover);
+  text-decoration: underline;
 }
 
 :deep(.n-tabs) {
