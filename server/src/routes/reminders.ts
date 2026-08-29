@@ -811,19 +811,27 @@ export function registerReminderRoutes(app: express.Application) {
     }
 
     const result = await sendReminderEmail(reminder, recipients);
+    const settings = getSettings();
+
+    await col("email_log").insertOne({
+      reminder_id: req.params.id,
+      user_id: userId,
+      log_type: "send",
+      to_address: recipients.join(", "),
+      recipient: recipients.join(", "),
+      subject: `[תזכורת] ${reminder.title}`,
+      sent_at: new Date(),
+      success: result.success ? 1 : 0,
+      error: result.error ?? null,
+      smtp_host: settings.smtpHost || "manual",
+      via: (process.env.RESEND_API_KEY ? "resend" : "smtp"),
+      provider_message_id: result.providerMessageId ?? null,
+    } as any);
 
     if (result.success) {
       await col("reminders").updateOne(filter, {
         $set: { status: "sent", updated_at: new Date() },
       });
-      await col("email_log").insertOne({
-        reminder_id: req.params.id,
-        to_address: recipients.join(", "),
-        subject: `[תזכורת] ${reminder.title}`,
-        sent_at: new Date(),
-        success: 1,
-        smtp_host: "manual",
-      } as any);
     }
 
     res.json(result);

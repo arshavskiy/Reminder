@@ -400,7 +400,6 @@ export function registerAuthRoutes(app: express.Application) {
       email: emailLower,
       name: name?.trim() ?? null,
       picture_url: null,
-      google_sub: null,
       password_hash: passwordHash,
       email_verified: 0,
       verification_token: verificationToken,
@@ -422,13 +421,17 @@ export function registerAuthRoutes(app: express.Application) {
     });
 
     const base = serverBaseUrl(req);
+    // The account is created either way; only report emailSent when it really went out,
+    // so the client does not tell the user to check an inbox that will stay empty.
+    let emailSent = true;
     try {
       await sendVerificationEmail(emailLower, verificationToken, base);
     } catch (err) {
+      emailSent = false;
       logger.error("verification_email_failed", { email: emailLower, error: err, ip: clientIp(req) ?? null });
     }
 
-    res.status(201).json({ ok: true, emailSent: true });
+    res.status(201).json({ ok: true, emailSent });
   });
 
   // POST /api/auth/login — email/password sign-in

@@ -157,6 +157,14 @@ export type EventType =
   | "reminder_fired"
   | "note";
 
+export interface EmailDeliverySummary {
+  status: "bounced" | "complained";
+  recipient: string | null;
+  reason: string | null;
+  at: string | null;
+  reminder_id: string | null;
+}
+
 export interface Document {
   id: number;
   file_name: string;
@@ -191,6 +199,7 @@ export interface Document {
   drive_web_link?: string | null;
   download_url?: string | null;
   thumbnail_url?: string | null;
+  email_delivery?: EmailDeliverySummary | null;
 }
 
 export interface Client {
@@ -370,6 +379,7 @@ export interface ContractWithClient extends Contract {
     load_radius: string[];
     category: string;
   }>;
+  email_delivery?: EmailDeliverySummary | null;
 }
 
 export interface ReminderWithContext extends Reminder {

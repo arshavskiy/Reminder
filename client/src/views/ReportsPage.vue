@@ -37,13 +37,21 @@
         <p v-else class="generator-recipient">דוח כולל לכל הלקוחות יישלח רק לנמענים או לכתובת החשבון שלך.</p>
         <div class="field-selector">
           <div class="field-selector__head">
-            <span>שדות בדוח: {{ selectedFields.length }} נבחרו</span>
-            <n-space size="small">
+            <button
+                :aria-expanded="fieldsOpen"
+                class="field-selector__toggle"
+                type="button"
+                @click="fieldsOpen = !fieldsOpen"
+            >
+              <span :class="{ 'field-selector__caret--open': fieldsOpen }" class="field-selector__caret">▾</span>
+              <span>שדות בדוח: {{ selectedFields.length }} נבחרו</span>
+            </button>
+            <n-space v-if="fieldsOpen" size="small">
               <n-button text size="small" @click="selectedFields = [...defaultReportFields]">בחר הכל</n-button>
               <n-button text size="small" @click="selectedFields = []">נקה</n-button>
             </n-space>
           </div>
-          <n-checkbox-group v-model:value="selectedFields">
+          <n-checkbox-group v-if="fieldsOpen" v-model:value="selectedFields">
             <div class="field-selector__grid">
               <n-checkbox v-for="field in activeReportFieldOptions" :key="field.key" :value="field.key">
                 {{ field.label }}
@@ -240,6 +248,8 @@ const selectedReportClientId = computed(() => selectedClientId.value === allClie
 const activeReportFieldOptions = computed(() => selectedReportClientId.value ? clientReportFieldOptions : allClientReportFieldOptions);
 const defaultReportFields = computed(() => selectedReportClientId.value ? defaultClientReportFields : defaultAllReportFields);
 const selectedFields = ref<string[]>([...defaultAllReportFields]);
+// Collapsed by default — the preselected defaults still apply, the list is just hidden.
+const fieldsOpen = ref(false);
 const form = reactive({
   enabled: false,
   recipients: "",
@@ -575,6 +585,28 @@ onMounted(loadSettings);
   border-radius: 8px;
   padding: 12px;
   background: var(--bg-elevated);
+}
+
+.field-selector__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.field-selector__caret {
+  display: inline-block;
+  transition: transform 0.15s;
+  font-size: 11px;
+}
+
+.field-selector__caret--open {
+  transform: rotate(180deg);
 }
 
 .field-selector__head {

@@ -21,6 +21,10 @@ import multer from "multer";
 import {logger} from "../logger";
 import {firstTrimmedEmail} from "../contracts/contractEmail.js";
 import {
+  latestFailedDeliveryByReminderIds,
+  latestFailedDeliveryForReminderIds,
+} from "../reminders/emailDeliveryStatus.js";
+import {
   assertDocumentImportQuota,
   DocumentImportQuotaError,
   documentImportQuotaErrorPayload,
@@ -191,6 +195,9 @@ export function registerDocumentRoutes(app: express.Application) {
       list.push(reminder);
       reminderMap.set(key, list);
     }
+    const failedDeliveryByReminderId = await latestFailedDeliveryByReminderIds(
+      (reminders as any[]).map((reminder) => String(reminder._id ?? "")).filter(Boolean),
+    );
     const contractMap = new Map<string, any>();
     for (const contract of contracts as any[]) {
       const documentId = contract.document_id?.toString?.() ?? contract.document_id;
@@ -209,6 +216,10 @@ export function registerDocumentRoutes(app: express.Application) {
         reminder_status: getDocumentReminderStatus(r, documentReminders),
         reminder_date: getDocumentReminderDate(r, contract, documentReminders),
         contract_status: contract?.status ?? null,
+        email_delivery: latestFailedDeliveryForReminderIds(
+          documentReminders.map((reminder: any) => String(reminder._id ?? "")).filter(Boolean),
+          failedDeliveryByReminderId,
+        ),
       };
     });
 

@@ -80,7 +80,6 @@ async function main() {
       username,
       name: name ?? null,
       picture_url: null,
-      google_sub: null,
       password_hash: null,
       email_verified: email ? 1 : 0,
       role,

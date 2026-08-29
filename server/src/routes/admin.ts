@@ -301,7 +301,6 @@ export function registerAdminRoutes(app: express.Application) {
           username,
           name,
           picture_url: pictureUrl,
-          google_sub: null,
           password_hash: passwordHash,
           email_verified: emailVerified,
           role,

@@ -6,29 +6,43 @@
   <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; background: #f5f7fa; padding: 24px; color: #2c3e50; margin: 0; }
     .card { background: #ffffff; border-radius: 12px; padding: 40px 32px; max-width: 520px; margin: 0 auto; box-shadow: 0 4px 16px rgba(0,0,0,0.08); text-align: right; }
+    .brand { text-align: center; margin-bottom: 24px; }
+    .brand__name { font-size: 20px; font-weight: 800; color: #18a058; letter-spacing: 0.3px; }
+    .brand__tag { font-size: 12px; color: #9ca3af; margin-top: 4px; }
     .icon { text-align: center; margin-bottom: 20px; font-size: 48px; }
-    h1 { color: #2563eb; margin: 0 0 12px; font-size: 22px; text-align: center; }
+    h1 { color: #18a058; margin: 0 0 12px; font-size: 22px; text-align: center; }
     p { color: #5a6c7d; font-size: 15px; line-height: 1.6; margin: 0 0 20px; }
     .btn-wrap { text-align: center; margin: 28px 0; }
-    a.cta { display: inline-block; background: #2563eb; color: #fff !important; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 700; font-size: 16px; letter-spacing: 0.3px; }
-    a.cta:hover { background: #1d4ed8; }
+    a.cta { display: inline-block; background: #18a058; color: #fff !important; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 700; font-size: 16px; letter-spacing: 0.3px; }
+    a.cta:hover { background: #36ad6a; }
+    .fallback { font-size: 12px; color: #9ca3af; text-align: center; word-break: break-all; margin: 0 0 20px; }
+    .fallback a { color: #18a058; }
     .note { color: #9ca3af; font-size: 13px; line-height: 1.5; text-align: center; }
     hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
-    .footer { font-size: 12px; color: #9ca3af; text-align: center; }
+    .footer { font-size: 12px; color: #9ca3af; text-align: center; line-height: 1.7; }
+    .footer a { color: #18a058; text-decoration: none; }
   </style>
 </head>
 <body>
   <div class="card">
+    <div class="brand">
+      <div class="brand__name">{{app_name|RemindOCR}}</div>
+      <div class="brand__tag">מערכת ניהול תסקירים ותזכורות</div>
+    </div>
     <div class="icon">✉️</div>
     <h1>אימות כתובת אימייל</h1>
     <p>שלום {{name|משתמש יקר}},&#x200F;</p>
-    <p>תודה שנרשמת ל-{{app_name| ReminderOCR }}.&#x200F; לחץ על הכפתור הבא כדי לאמת את כתובת האימייל שלך ולהשלים את תהליך ההרשמה:&#x200F;</p>
+    <p>תודה שנרשמת ל-{{app_name|RemindOCR}}.&#x200F; לחץ על הכפתור הבא כדי לאמת את כתובת האימייל שלך ולהשלים את תהליך ההרשמה:&#x200F;</p>
     <div class="btn-wrap">
       <a class="cta" href="{{verify_url}}">אמת כתובת אימייל</a>
     </div>
+    <p class="fallback">אם הכפתור לא עובד, העתק את הקישור לדפדפן:<br><a href="{{verify_url}}">{{verify_url}}</a></p>
     <p class="note">הקישור תקף ל-24 שעות.<br>אם לא נרשמת למערכת, התעלם מהודעה זו.</p>
     <hr/>
-    <div class="footer">{{app_name| ReminderOCR }} — מערכת ניהול תסקירים ותזכורות</div>
+    <div class="footer">
+      {{app_name|RemindOCR}} — מערכת ניהול תסקירים ותזכורות<br>
+      <a href="https://www.remindocr.com">www.remindocr.com</a>
+    </div>
   </div>
 </body>
 </html>

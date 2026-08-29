@@ -74,6 +74,7 @@ export function countDuplicateReportRows<T>(rows: T[], pick: (row: T) => string 
 type DocumentIssueRow = Pick<Document, "processing_status" | "extracted_fields"> & {
   reminder_status?: string | null;
   contract_status?: string | null;
+  email_delivery?: unknown;
 };
 
 export function listDocumentRowIssues(doc: DocumentIssueRow, dupes: Set<string>): RowIssue[] {
@@ -100,6 +101,9 @@ export function listDocumentRowIssues(doc: DocumentIssueRow, dupes: Set<string>)
   if (doc.contract_status === "expired" || doc.contract_status === "overdue") {
     issues.push({ kind: "expired", label: "פג תוקף", tagClass: "tag--bad" });
   }
+  if (doc.email_delivery) {
+    issues.push({ kind: "email_bounced", label: "אימייל חזר", tagClass: "tag--bad" });
+  }
   return issues;
 }
 
@@ -118,6 +122,9 @@ export function listContractRowIssues(
   }
   if (!hasReminders && row.status === "active") {
     issues.push({ kind: "no_reminder", label: "ללא תזכורת", tagClass: "tag--warn" });
+  }
+  if (row.email_delivery) {
+    issues.push({ kind: "email_bounced", label: "אימייל חזר", tagClass: "tag--bad" });
   }
   return issues;
 }

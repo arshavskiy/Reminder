@@ -373,6 +373,7 @@
                 round
                 size="small"
                 :type="issue.tagClass === 'tag--bad' ? 'error' : 'warning'"
+                :title="issue.kind === 'email_bounced' ? emailDeliveryTitle(row) : undefined"
               >
                 {{ issue.label }}
               </n-tag>
@@ -465,7 +466,18 @@
                 </span>
               </td>
               <td class="document-col document-col--status">
-                <StatusBadge :status="row.processing_status" />
+                <div class="document-status-cell">
+                  <StatusBadge :status="row.processing_status" />
+                  <n-tag
+                    v-if="emailDelivery(row)"
+                    round
+                    size="small"
+                    type="error"
+                    :title="emailDeliveryTitle(row)"
+                  >
+                    אימייל חזר
+                  </n-tag>
+                </div>
               </td>
               <td class="document-col document-col--date">
                 <span v-if="documentExpiryDate(row)" class="document-expiry">
@@ -905,10 +917,10 @@ async function onModalUpload(
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────
-type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder" | "no_email" | "contract_expired" | "duplicate_report_number";
+type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder" | "no_email" | "email_bounced" | "contract_expired" | "duplicate_report_number";
 
 const DOCUMENT_FILTER_KEYS = new Set<DocumentStatusFilter>([
-  "all", "done", "in_progress", "error", "no_reminder", "no_email", "contract_expired", "duplicate_report_number",
+  "all", "done", "in_progress", "error", "no_reminder", "no_email", "email_bounced", "contract_expired", "duplicate_report_number",
 ]);
 function initialDocumentFilter(): DocumentStatusFilter {
   const stored = readRememberedFilter("documents");
@@ -972,6 +984,7 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
     { key: "error",       label: "שגיאה",       count: c.error,        statusValue: "error" },
     { key: "no_reminder",       label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing" && !isPayslipDocument(row)).length, statusValue: "no_reminder" },
     { key: "no_email",          label: "חסר אימייל", count: rows.filter((row) => !documentHasEmail(row)).length, statusValue: "no_email" },
+    { key: "email_bounced",     label: "אימייל חזר", count: rows.filter((row) => Boolean((row as any).email_delivery)).length, statusValue: "email_bounced" },
     { key: "contract_expired",  label: "פג תוקף",   count: rows.filter((row) => (row as any).contract_status === "expired" || (row as any).contract_status === "overdue").length, statusValue: "contract_expired" },
     { key: "duplicate_report_number", label: "כפילות מספר", count: duplicateCount, statusValue: "duplicate_report_number" },
   ];
@@ -1281,6 +1294,17 @@ function documentHasEmail(row: Document): boolean {
   } catch { return false; }
 }
 
+function emailDelivery(row: Document) {
+  return (row as any).email_delivery ?? null;
+}
+
+function emailDeliveryTitle(row: Document): string {
+  const delivery = emailDelivery(row);
+  const recipient = delivery?.recipient ? `: ${delivery.recipient}` : "";
+  const reason = delivery?.reason ? ` - ${delivery.reason}` : "";
+  return `אימייל חזר${recipient}${reason}`;
+}
+
 function matchesStatusFilter(row: Document, filter: DocumentStatusFilter) {
   if (filter === "all") return true;
   if (filter === "done") return row.processing_status === "done";
@@ -1290,6 +1314,7 @@ function matchesStatusFilter(row: Document, filter: DocumentStatusFilter) {
     return (row as any).reminder_status === "missing" && !isPayslipDocument(row);
   }
   if (filter === "no_email") return !documentHasEmail(row);
+  if (filter === "email_bounced") return Boolean((row as any).email_delivery);
   if (filter === "contract_expired") return (row as any).contract_status === "expired" || (row as any).contract_status === "overdue";
   if (filter === "duplicate_report_number") {
     return isDuplicateReportNumber(documentReportNumber(row), duplicateDocumentNumbers.value);
@@ -2373,6 +2398,14 @@ async function bulkExtractAi() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.document-status-cell {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
 
 .client-link {

@@ -20,9 +20,14 @@
           <span :class="statusTagClass(row.status)">{{ statusLabel(row.status) }}</span>
           <span class="tag tag--neutral">{{ row.contract_type ?? "-" }}</span>
           <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
-          <span v-if="!row.document_id" class="tag tag--warn">⚠ חסר PDF</span>
-          <span v-if="!hasEmail" class="tag tag--warn">⚠ חסר אימייל</span>
-          <span v-for="issue in (issues ?? [])" :key="issue.kind" :class="['tag', issue.tagClass]">{{ issue.label }}</span>
+          <span v-if="!row.document_id" class="tag tag--warn">חסר PDF</span>
+          <span v-if="!hasEmail" class="tag tag--warn">חסר אימייל</span>
+          <span
+            v-for="issue in (issues ?? [])"
+            :key="issue.kind"
+            :class="['tag', issue.tagClass]"
+            :title="issue.kind === 'email_bounced' ? emailDeliveryTitle : undefined"
+          >{{ issue.label }}</span>
         </div>
       </div>
     </div>
@@ -50,7 +55,10 @@
 
     <div class="card__reminders">
       <div class="reminders-header">
-        <span class="reminders-title">🔔 תזכורות</span>
+        <span class="reminders-title">
+          <n-icon :component="NotificationsOutline" :size="14" />
+          תזכורות
+        </span>
         <div v-if="showActions" class="card__actions" @click.stop>
           <button
               :disabled="!row.document_id"
@@ -232,6 +240,12 @@ const reminderButtonTitle = computed(() => {
   if (!props.row.expiry_date) return "חסר תאריך תוקף — לא ניתן ליצור תזכורת";
   if (!hasEmail.value) return "צור תזכורת (חסר אימייל — לא תישלח עד שיתווסף)";
   return "צור תזכורת לתסקיר זה";
+});
+const emailDeliveryTitle = computed(() => {
+  const delivery = props.row.email_delivery;
+  const recipient = delivery?.recipient ? `: ${delivery.recipient}` : "";
+  const reason = delivery?.reason ? ` - ${delivery.reason}` : "";
+  return `אימייל חזר${recipient}${reason}`;
 });
 
 function reminderHasEmail(reminder: ReminderWithContext): boolean {
@@ -704,6 +718,9 @@ html[data-theme="dark"] .expiry--bad {
 }
 
 .reminders-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);

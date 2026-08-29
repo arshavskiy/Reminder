@@ -10,6 +10,10 @@ import {HTTPException, requireAuth} from "../auth/middleware";
 import {printTemplateVisibleFilter} from "../templates/printTemplateAccess.js";
 import {parseObjectRecord, pickContractEmail} from "../contracts/contractEmail.js";
 import {
+  latestFailedDeliveryByReminderIds,
+  latestFailedDeliveryForReminderIds,
+} from "../reminders/emailDeliveryStatus.js";
+import {
   assertDocumentImportQuota,
   DocumentImportQuotaError,
   documentImportQuotaErrorPayload,
@@ -182,7 +186,7 @@ export function registerContractRoutes(app: express.Application) {
           c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
           c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
         ]);
-        return presentContractRow(c, client, document);
+        return enrichContractDelivery(userId, presentContractRow(c, client, document));
       })
     );
 
@@ -445,7 +449,7 @@ export function registerContractRoutes(app: express.Application) {
       c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
       c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
     ]);
-    res.json(presentContractRow(c, client, document));
+    res.json(await enrichContractDelivery(userId, presentContractRow(c, client, document)));
   });
 
   app.post("/api/contracts/:id/reminder", async (req, res) => {
@@ -626,7 +630,7 @@ export function registerContractRoutes(app: express.Application) {
           c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
           c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
         ]);
-        return presentContractRow(c, client, document);
+        return enrichContractDelivery(userId, presentContractRow(c, client, document));
       })
     );
 
@@ -740,6 +744,28 @@ function presentContractRow(contract: any, client: any, document: any) {
     equipment_description: mergedFields.equipment_description ?? null,
     _confidence: mergedFields._confidence ?? null,
     _equipment: Array.isArray(mergedFields._equipment) ? mergedFields._equipment : [],
+  };
+}
+
+async function enrichContractDelivery(userId: string, row: ReturnType<typeof presentContractRow>) {
+  const or: Array<Record<string, unknown>> = [];
+  if (row.id != null) or.push({ source_id: String(row.id) });
+  if (row.document_id) or.push({ document_id: row.document_id });
+  if (!or.length) return { ...row, email_delivery: null };
+
+  const reminders = await col("reminders").find(
+    {
+      user_id: userId,
+      source_type: "contract_expiry",
+      $or: or,
+    } as any,
+    { projection: { _id: 1 } } as any,
+  ).sort({ trigger_date: 1 }).toArray();
+  const reminderIds = reminders.map((reminder: any) => String(reminder._id ?? "")).filter(Boolean);
+  const failedDeliveryByReminderId = await latestFailedDeliveryByReminderIds(reminderIds);
+  return {
+    ...row,
+    email_delivery: latestFailedDeliveryForReminderIds(reminderIds, failedDeliveryByReminderId),
   };
 }
 

@@ -444,7 +444,9 @@ async function handleRegister() {
       routeError.value = data.error ?? "auth_failed";
       return;
     }
-    successMsg.value = "נשלח אימייל לאימות הכתובת. אנא בדוק את תיבת הדואר ולחץ על הקישור.";
+    successMsg.value = data.emailSent === false
+        ? "החשבון נוצר, אך שליחת אימייל האימות נכשלה. פנה לתמיכה כדי להשלים את האימות."
+        : "נשלח אימייל לאימות הכתובת. אנא בדוק את תיבת הדואר ולחץ על הקישור.";
     trackConversion("CompleteRegistration", {method: "email"});
     regEmail.value = "";
     regPassword.value = "";
