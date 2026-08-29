@@ -279,7 +279,7 @@ export function registerAdminRoutes(app: express.Application) {
       updated_at: now,
     };
     if (body.email !== undefined) profileSet.email = email;
-    if (body.username !== undefined) profileSet.username = username;
+    if (body.username !== undefined && username) profileSet.username = username;
     if (body.company_name !== undefined) profileSet.company_name = companyName;
     if (body.phone !== undefined) profileSet.phone = phone;
     if (body.picture_url !== undefined) profileSet.picture_url = pictureUrl;
@@ -298,7 +298,9 @@ export function registerAdminRoutes(app: express.Application) {
       try {
         const insert = await col("users").insertOne({
           email,
-          username,
+          // Omit rather than write null: the unique index is sparse, which skips
+          // missing fields but still indexes explicit nulls.
+          ...(username ? { username } : {}),
           name,
           picture_url: pictureUrl,
           password_hash: passwordHash,
@@ -442,6 +444,7 @@ export function registerAdminRoutes(app: express.Application) {
     };
 
     const updates: Record<string, any> = { updated_at: new Date() };
+    const unsets: Record<string, any> = {};
 
     if (body.email !== undefined) {
       const email = normalizeEmail(body.email);
@@ -461,7 +464,11 @@ export function registerAdminRoutes(app: express.Application) {
         });
         return;
       }
-      updates.username = username;
+      // A sparse unique index skips MISSING fields but still indexes explicit nulls,
+      // so writing username:null collides with any other null-username user.
+      // Clearing the username has to remove the field instead.
+      if (username) updates.username = username;
+      else unsets.username = "";
     }
 
     if (body.password != null && String(body.password).length > 0) {
@@ -564,7 +571,10 @@ export function registerAdminRoutes(app: express.Application) {
       }
     }
 
-    await col("users").updateOne(filter, { $set: updates });
+    await col("users").updateOne(filter, {
+      $set: updates,
+      ...(Object.keys(unsets).length ? { $unset: unsets } : {}),
+    });
     const updated = await col("users").findOne(filter);
     if (updated && (body.plan !== undefined || body.role !== undefined)) {
       await ensureUserSettingsWithEntitlements(String(updated._id), updated as any);
