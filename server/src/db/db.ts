@@ -4,26 +4,37 @@ import {logger} from "../logger";
 
 export type AdminDbTarget = "local" | "production";
 
+function env(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value || undefined;
+}
+
+const MONGODB_URI = env("MONGODB_URI");
+const MONGODB_LOCAL_URI = env("MONGODB_LOCAL_URI");
+const MONGODB_PRODUCTION_URI = env("MONGODB_PRODUCTION_URI");
+const MONGODB_DB = env("MONGODB_DB");
+const MONGODB_PRODUCTION_DB = env("MONGODB_PRODUCTION_DB");
+
 const LOCAL_URI =
-  process.env.MONGODB_LOCAL_URI
-  ?? ((process.env.MONGODB_URI && !process.env.MONGODB_PRODUCTION_URI)
-    ? process.env.MONGODB_URI
+  MONGODB_LOCAL_URI
+  ?? ((MONGODB_URI && !MONGODB_PRODUCTION_URI)
+    ? MONGODB_URI
     : "mongodb://127.0.0.1:27017");
 
 /** Atlas / production URI when distinct from local. */
 const PRODUCTION_URI =
-  process.env.MONGODB_PRODUCTION_URI
-  ?? (process.env.MONGODB_LOCAL_URI ? process.env.MONGODB_URI : undefined);
+  MONGODB_PRODUCTION_URI
+  ?? (MONGODB_LOCAL_URI ? MONGODB_URI : undefined);
 
-const LOCAL_DB_NAME = process.env.MONGODB_DB ?? "reminder-app";
+const LOCAL_DB_NAME = MONGODB_DB ?? "reminder-app";
 const PRODUCTION_DB_NAME =
-  process.env.MONGODB_PRODUCTION_DB
-  ?? process.env.MONGODB_DB
+  MONGODB_PRODUCTION_DB
+  ?? MONGODB_DB
   ?? "reminder-app";
 
 /** Startup / non-admin default: prefer local when both are configured. */
 const PRIMARY_TARGET: AdminDbTarget =
-  process.env.MONGODB_LOCAL_URI && PRODUCTION_URI ? "local" : "local";
+  MONGODB_LOCAL_URI && PRODUCTION_URI ? "local" : "local";
 
 type DbSlot = {
   target: AdminDbTarget;

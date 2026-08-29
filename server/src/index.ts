@@ -1,6 +1,4 @@
-import dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
-dotenv.config();
+import "./loadEnv";
 import express from "express";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
