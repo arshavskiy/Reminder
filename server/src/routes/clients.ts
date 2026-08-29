@@ -6,6 +6,7 @@ import {normalizeClientDisplayName, normalizePhoneIdentityKey} from "../utils/cl
 import {logger} from "../logger";
 import {readExpiryDateValue} from "../shared/expiryField.js";
 import {MergeClientsError, mergeClientsForUser, uniqueClientIds} from "../clients/mergeClients";
+import {propagateClientEmailChange} from "../clients/propagateClientEmail";
 
 export function registerClientRoutes(app: express.Application) {
   // GET /api/clients
@@ -242,9 +243,33 @@ export function registerClientRoutes(app: express.Application) {
     if (body.notes !== undefined) updates.notes = body.notes;
     if (body.tags !== undefined) updates.tags = body.tags;
 
+    // Capture the pre-update email so a change can be pushed to the denormalized
+    // copies on reminders/contracts, which are what actually get mailed.
+    const before = body.email !== undefined ? await col("clients").findOne(filter) : null;
+
     await col("clients").updateOne(filter, { $set: updates });
     const updated = await col("clients").findOne(filter);
-    res.json(flatClient(updated));
+
+    let propagated: { reminders: number; contracts: number } | undefined;
+    if (before && updated) {
+      try {
+        propagated = await propagateClientEmailChange({
+          userId,
+          clientId: String((updated as any)._id),
+          oldEmail: (before as any).email,
+          newEmail: (updated as any).email,
+        });
+      } catch (err) {
+        // The client edit itself succeeded; a propagation failure must not undo it.
+        logger.error("client_email_propagation_failed", {
+          client_id: String((updated as any)._id),
+          user_id: userId,
+          error: err,
+        });
+      }
+    }
+
+    res.json({ ...flatClient(updated), propagated });
   });
 
   // DELETE /api/clients/:id
