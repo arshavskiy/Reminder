@@ -2104,8 +2104,11 @@ export function normalizeEmail(value: string): string {
     return `${afterAt}@${reverseDotSegments(beforeAt)}`;
   }
 
-  // Local part has digits prepended from RTL number glue
-  const rtlLocal = beforeAt.match(/^(\d{2,})([a-z][a-z0-9._%+-]*)$/i);
+  // Local part has digits prepended from RTL number glue. A trailing digit in an
+  // RTL line renders at the visual start, so "rampa2@" is captured as "2rampa@".
+  // Single digits count: they are the common case (9 of 11 observed), and \d{2,}
+  // silently let them through.
+  const rtlLocal = beforeAt.match(/^(\d+)([a-z][a-z0-9._%+-]*)$/i);
   const local = rtlLocal ? `${rtlLocal[2]}${rtlLocal[1]}` : beforeAt;
   return `${local}@${afterAt}`;
 }
