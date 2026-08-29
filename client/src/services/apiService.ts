@@ -461,9 +461,9 @@ export function setAdminDbTarget(target: AdminDbTarget): void {
   } catch { /* ignore */ }
 }
 
-function adminHeaders(extra?: HeadersInit): Headers {
+function adminHeaders(extra?: HeadersInit, target: AdminDbTarget = getAdminDbTarget()): Headers {
   const headers = new Headers(extra);
-  headers.set("X-Admin-Db-Target", getAdminDbTarget());
+  headers.set("X-Admin-Db-Target", target);
   return headers;
 }
 
@@ -530,10 +530,10 @@ async function responseErrorMessage(res: Response, fallback: string): Promise<st
   return text.trim() || fallback;
 }
 
-async function adminGet<T>(path: string): Promise<T> {
+async function adminGet<T>(path: string, target?: AdminDbTarget): Promise<T> {
   const res = await fetch(ADMIN_BASE + path, {
     credentials: "include",
-    headers: adminHeaders(),
+    headers: adminHeaders(undefined, target),
   });
   if (!res.ok) {
     const err = new Error(`GET ${path} failed: ${res.status}`) as any;
@@ -543,10 +543,10 @@ async function adminGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function adminPut<T>(path: string, body: unknown): Promise<T> {
+async function adminPut<T>(path: string, body: unknown, target?: AdminDbTarget): Promise<T> {
   const res = await fetch(ADMIN_BASE + path, {
     method: "PUT",
-    headers: adminHeaders({ "Content-Type": "application/json" }),
+    headers: adminHeaders({ "Content-Type": "application/json" }, target),
     credentials: "include",
     body: JSON.stringify(body),
   });
@@ -878,10 +878,10 @@ export const api = {
       if (params?.status) qs.set("status", params.status);
       if (params?.q) qs.set("q", params.q);
       const query = qs.toString();
-      return adminGet<InspectorLeadsResponse>(`/admin/inspector-leads${query ? "?" + query : ""}`);
+      return adminGet<InspectorLeadsResponse>(`/admin/inspector-leads${query ? "?" + query : ""}`, "production");
     },
     updateInspectorLeadStatus: (id: string, contactStatus: InspectorLeadStatus) =>
-      adminPut<InspectorLead>(`/admin/inspector-leads/${id}/status`, { contactStatus }),
+      adminPut<InspectorLead>(`/admin/inspector-leads/${id}/status`, { contactStatus }, "production"),
     getDocument: (id: string) => adminGet<any>(`/admin/documents/${id}`),
     monitorDocuments: () => adminGet<any>("/admin/monitor/documents"),
     monitorExtractions: (params?: { user_id?: string; page?: number; limit?: number }) => {
