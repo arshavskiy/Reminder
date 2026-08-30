@@ -45,6 +45,8 @@
     "gmail:cleanup-rejected:dry": "tsx src/scripts/cleanupRejectedGmailImports.ts",
     "users:plans": "tsx src/scripts/backfillUserPlans.ts --apply",
     "users:plans:dry": "tsx src/scripts/backfillUserPlans.ts",
+    "users:free-to-trial": "tsx src/scripts/migrateFreeUsersToTrial.ts --apply",
+    "users:free-to-trial:dry": "tsx src/scripts/migrateFreeUsersToTrial.ts",
     "contracts:revert-reminder-advances": "tsx src/scripts/revertContractReminderAdvances.ts --apply",
     "contracts:revert-reminder-advances:dry": "tsx src/scripts/revertContractReminderAdvances.ts"
   },
