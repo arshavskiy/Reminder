@@ -8,7 +8,9 @@ interface AuthUser {
   phone?: string | null;
   picture_url: string | null;
   role: "admin" | "pro" | "user";
-  plan?: "free" | "basic" | "business";
+  plan?: "free" | "trial" | "basic" | "business";
+  /** Set while an account has ever been on trial; null on legacy accounts. */
+  trial_ends_at?: string | null;
   onboarding_completed?: boolean;
 }
 

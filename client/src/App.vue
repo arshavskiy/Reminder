@@ -506,8 +506,21 @@ const primaryNav = computed(() => {
   );
 });
 
+/**
+ * A lapsed trial keeps read access to everything it could reach while running.
+ *
+ * The nav gate controls whether a page opens at all, and the server puts no plan
+ * check on reads — so locking these would hide the user's own reminders and
+ * clients behind an upgrade wall rather than pausing the account. Writes stay
+ * blocked by the entitlement flags, which is where the paywall actually belongs.
+ */
+const isLapsedTrial = computed(
+  () => resolveUserPlan(authStore.user) === "free" && !!authStore.user?.trial_ends_at,
+);
+
 function isPlanLocked(item: {minPlan?: PlanId}): boolean {
   if (!item.minPlan) return false;
+  if (isLapsedTrial.value) return false;
   const userPlan = resolveUserPlan(authStore.user);
   return (PLAN_RANK[userPlan] ?? 0) < (PLAN_RANK[normalizePlanId(item.minPlan)] ?? 0);
 }
