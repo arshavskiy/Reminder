@@ -1267,8 +1267,41 @@
                 <span>{{ feature }}</span>
               </li>
             </ul>
-            <a class="sub-plan-card__link" href="https://remindocr.com/pricing">צפייה בכל המסלולים והמחירים</a>
+
           </article>
+
+          <div v-if="upgradePlans.length" class="upgrade-grid">
+            <article
+                v-for="plan in upgradePlans"
+                :key="plan.id"
+                class="upgrade-card"
+                :class="{ 'upgrade-card--highlighted': plan.highlighted }"
+            >
+              <span v-if="plan.highlighted" class="upgrade-card__badge">הכי פופולרי</span>
+              <h3 class="upgrade-card__name">{{ plan.name }}</h3>
+              <p class="upgrade-card__blurb">{{ plan.blurb }}</p>
+              <div class="upgrade-card__price">
+                <span v-if="plan.yearlyPrice" class="upgrade-card__old">₪{{ plan.price }}</span>
+                <strong>₪{{ yearlyMonthly(plan) }}</strong>
+                <span class="upgrade-card__period">/ חודש</span>
+              </div>
+              <p v-if="plan.yearlyPrice" class="upgrade-card__terms">
+                בתשלום שנתי — ₪{{ plan.yearlyPrice.toLocaleString() }} לשנה · או ₪{{ plan.price }} בחיוב חודשי
+              </p>
+              <p class="upgrade-card__vat">המחירים אינם כוללים מע״מ (18%)</p>
+              <ul class="upgrade-card__features">
+                <li v-for="feature in plan.features" :key="feature">
+                  <n-icon :component="CheckmarkCircleOutline" :size="14" />
+                  <span>{{ feature }}</span>
+                </li>
+              </ul>
+              <a class="upgrade-card__cta" :href="whatsappHref(plan)" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1s-.7 1-.9 1.2c-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4-.1-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2A10 10 0 0 0 3.5 17.2L2 22l4.9-1.5A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-2.9.9.9-2.8-.2-.3a8.2 8.2 0 1 1 6.9 3.6z"/></svg>
+                לרכישה ב-WhatsApp
+              </a>
+              <p class="upgrade-card__note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>
+            </article>
+          </div>
 
           <div class="info-card sub-usage-card">
             <div class="info-row">
@@ -1457,6 +1490,7 @@ import {
   formatQuotaScope,
   formatQuotaUsage,
   getPricingPlan,
+  PRICING_PLANS,
   quotaPercent,
   resolveUserPlan,
   planAllowsGoogleDrive,
@@ -1626,6 +1660,28 @@ const PLAN_TAG_TYPES: Record<PlanId, "success" | "info" | "default"> = {
 const currentPlanId = computed(() => resolveUserPlan(user.value));
 const exportAllowed = computed(() => currentPlanId.value !== "free");
 const currentPricingPlan = computed(() => getPricingPlan(currentPlanId.value));
+
+/** Paid plans the user is not already on. Nothing to upsell to a business user. */
+const upgradePlans = computed(
+    () => PRICING_PLANS.filter((plan) => plan.yearlyPrice != null && plan.id !== currentPlanId.value),
+);
+
+/** The yearly price expressed per month, which is how the cards compare. */
+function yearlyMonthly(plan: {price: number; yearlyPrice?: number}): number {
+  return plan.yearlyPrice ? Math.round(plan.yearlyPrice / 12) : plan.price;
+}
+
+/**
+ * Checkout is manual until Green Invoice payment links exist, so the CTA opens
+ * WhatsApp with the plan and its price already written into the message.
+ */
+function whatsappHref(plan: {name: string; price: number; yearlyPrice?: number}): string {
+  const price = plan.yearlyPrice
+      ? `₪${yearlyMonthly(plan)} לחודש בתשלום שנתי או ₪${plan.price} בחיוב חודשי`
+      : `₪${plan.price} לחודש`;
+  const message = `שלום, אני מעוניין לרכוש את המסלול ${plan.name} של RemindOCR (${price}).`;
+  return `https://wa.me/972586281637?text=${encodeURIComponent(message)}`;
+}
 const planTag = computed(() => ({
   label: PLAN_LABELS[currentPlanId.value],
   type: PLAN_TAG_TYPES[currentPlanId.value],
@@ -3261,6 +3317,152 @@ function showGoogleConnectionErrorFromRoute() {
   flex: 0 0 auto;
   margin-top: 1px;
   color: var(--brand-color);
+}
+
+/* The landing pricing cards, scaled down: this sits inside a settings panel
+   rather than a full-width marketing page, so the type and padding come down a
+   step and the feature list carries no minimum height. */
+.upgrade-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.upgrade-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+
+.upgrade-card--highlighted {
+  border-color: var(--brand-color);
+}
+
+.upgrade-card__badge {
+  position: absolute;
+  top: -10px;
+  inset-inline-start: 18px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--brand-color);
+  color: var(--text-inverse);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.upgrade-card__name {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.upgrade-card__blurb {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.upgrade-card__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.upgrade-card__price strong {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.upgrade-card__old {
+  font-size: 14px;
+  text-decoration: line-through;
+  opacity: 0.7;
+  color: var(--text-secondary);
+}
+
+.upgrade-card__period {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.upgrade-card__terms {
+  margin: 0 0 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.upgrade-card__vat {
+  margin: 0 0 14px;
+  font-size: 11px;
+  opacity: 0.8;
+  color: var(--text-secondary);
+}
+
+.upgrade-card__features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  flex: 1;
+}
+
+.upgrade-card__features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 7px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.upgrade-card__features :deep(.n-icon) {
+  flex: none;
+  margin-top: 2px;
+  color: var(--brand-color);
+}
+
+.upgrade-card__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  background: #25d366;
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.upgrade-card__cta:hover {
+  background: #1da851;
+}
+
+.upgrade-card__cta svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex: none;
+}
+
+.upgrade-card__note {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .sub-plan-card__link {

@@ -44,7 +44,8 @@
                  <template #trigger>
                    <a
                      class="subscription-btn"
-                     href="https://remindocr.com/pricing"
+                     href="/profile?section=subscription"
+                     @click.prevent="router.push({path: '/profile', query: {section: 'subscription'}})"
                    >
                      <n-icon :component="DiamondOutline" :size="15" class="subscription-btn__icon" />
                      <span class="subscription-btn__label">מנוי</span>
@@ -400,7 +401,7 @@ const subscriptionPlanLabel = computed(() => {
 
 const subscriptionTooltip = computed(() => {
   const plan = subscriptionPlanLabel.value;
-  return plan ? `מנוי נוכחי: ${plan} — לחצו לצפייה במסלולים` : "מסלולי מנוי ומחירים";
+  return plan ? `מנוי נוכחי: ${plan} — לחצו לניהול המנוי` : "מנוי ותשלומים";
 });
 
 const themeOverrides = computed(() => ({
