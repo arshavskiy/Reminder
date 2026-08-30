@@ -2,13 +2,17 @@ import "dotenv/config";
 import {closeDb, col, connectDb} from "../db/db";
 import {createMagicLinkToken} from "../auth/session";
 import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
+import {TRIAL_DAYS} from "../plans/tierFeatures";
 
 /**
  * Creates (or reuses) a user and prints a one-time magic-link sign-in URL.
  *
  * Usage:
- *   npm run auth:magic-link -- --email=someone@example.com [--name="Someone"] [--role=admin] [--plan=free|basic|business]
- *   npm run auth:magic-link -- --username=demo [--name="Demo"] [--role=user] [--plan=free]
+ *   npm run auth:magic-link -- --email=someone@example.com [--name="Someone"] [--role=admin] [--plan=trial|basic|business]
+ *   npm run auth:magic-link -- --username=demo [--name="Demo"] [--role=user] [--plan=trial]
+ *
+ * Plan defaults to trial. --trial-days=0 creates an already-lapsed trial, for
+ * testing the read-only state a user lands in when the 14 days run out.
  */
 
 function parseArg(name: string): string | undefined {
@@ -42,10 +46,22 @@ async function main() {
   }
 
   const planArg = parseArg("plan") ?? DEFAULT_NEW_USER_PLAN;
-  if (!["free", "basic", "business"].includes(planArg)) {
-    throw new Error(`Invalid plan "${planArg}". Use free, basic, or business.`);
+  if (!["free", "trial", "basic", "business"].includes(planArg)) {
+    throw new Error(`Invalid plan "${planArg}". Use free, trial, basic, or business.`);
   }
-  const plan = planArg as "free" | "basic" | "business";
+  const plan = planArg as "free" | "trial" | "basic" | "business";
+
+  // Trial accounts are only usable while trial_ends_at is in the future, so a
+  // magic-link user created on the trial needs one or every gate reads expired.
+  // --trial-days=0 makes a lapsed trial, which is how to test read-only mode.
+  const trialDaysArg = parseArg("trial-days");
+  const trialDays = trialDaysArg == null ? TRIAL_DAYS : Number(trialDaysArg);
+  if (!Number.isFinite(trialDays)) {
+    throw new Error(`Invalid --trial-days "${trialDaysArg}". Use a number, e.g. 14 or 0.`);
+  }
+  const trialEndsAt = plan === "trial"
+    ? new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000)
+    : null;
 
   await connectDb();
 
@@ -68,6 +84,7 @@ async function main() {
           ...(name != null ? { name } : {}),
           role,
           plan,
+          trial_ends_at: trialEndsAt,
           is_active: 1,
           email_verified: email ? 1 : (existing.email_verified ?? 0),
           updated_at: now,
@@ -77,13 +94,16 @@ async function main() {
   } else {
     await col("users").insertOne({
       email,
-      username,
+      // Omit username entirely rather than storing null: the unique index counts
+      // nulls as duplicates, so a second email-only user would be rejected.
+      ...(username ? { username } : {}),
       name: name ?? null,
       picture_url: null,
       password_hash: null,
       email_verified: email ? 1 : 0,
       role,
       plan,
+      trial_ends_at: trialEndsAt,
       is_active: 1,
       company_name: null,
       phone: null,
@@ -95,14 +115,17 @@ async function main() {
   const user = await col("users").findOne(identityQuery as any) as any;
   if (!user) throw new Error("User not found after upsert");
 
-  await ensureUserSettingsWithEntitlements(user._id.toString(), { ...user, role, plan });
+  await ensureUserSettingsWithEntitlements(user._id.toString(), { ...user, role, plan, trial_ends_at: trialEndsAt });
 
   const token = await createMagicLinkToken(user._id.toString());
   const baseUrl = process.env.SERVER_URL ?? "http://localhost:3737";
   const magicLink = `${baseUrl}/auth/magic?token=${token}`;
 
   const label = user.email || user.username || user._id.toString();
-  console.log(`[magic-link] User: ${label} (role: ${role}, plan: ${plan}, id: ${user._id.toString()})`);
+  const trialNote = trialEndsAt
+    ? `, trial ${trialEndsAt > new Date() ? "ends" : "ended"} ${trialEndsAt.toISOString().slice(0, 10)}`
+    : "";
+  console.log(`[magic-link] User: ${label} (role: ${role}, plan: ${plan}${trialNote}, id: ${user._id.toString()})`);
   console.log(`[magic-link] Link expires in 15 minutes and can be used once:`);
   console.log(magicLink);
 }
