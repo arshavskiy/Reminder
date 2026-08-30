@@ -191,11 +191,11 @@
         <article class="feature-card">
           <!--          <div class="feature-icon">📄</div>-->
           <h3>ייבוא מסמכים חכם</h3>
-          <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך.</p>
+          <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך. ייבוא קבלות עד 6 חודשים אחורה בניסיון, 12 בבסיסי.</p>
         </article>
         <article class="feature-card feature-card--accent">
-          <h3>ייבוא חשבוניות לפי מנוי</h3>
-          <p>מסלול חינמי כולל 10 מסמכים ועוד 10 ייבואי אימייל, בסיסי כולל 50 קבלות ו-50 תסקירים בחודש, ועסקי ללא הגבלה.</p>
+          <h3>ניסיון של 14 יום</h3>
+          <p>כל היכולות של המסלול הבסיסי, עד 25 מסמכים — ידני ומאימייל יחד. ללא כרטיס אשראי. בסיסי כולל 50 קבלות ו-50 תסקירים בחודש, ועסקי ללא הגבלה.</p>
         </article>
 <!--        <article class="feature-card">-->
 <!--          &lt;!&ndash;          <div class="feature-icon">✉️</div>&ndash;&gt;-->
@@ -209,7 +209,7 @@
         </article>
         <article class="feature-card feature-card--accent">
           <h3>סנכרון Google Calendar</h3>
-          <p>חבר יומן Google וקבל תסקירים עתידיים ביומן ייעודי בשם ״תסקירים״, עם פרטי לקוח, איש קשר וציוד בתוך האירוע.</p>
+          <p>חבר יומן Google וקבל תסקירים עתידיים ביומן ייעודי בשם ״תסקירים״, עם פרטי לקוח, איש קשר וציוד בתוך האירוע. במסלול עסקי.</p>
         </article>
         <article class="feature-card">
           <!--          <div class="feature-icon">👥</div>-->
@@ -233,7 +233,7 @@
         </article>
         <article class="feature-card">
           <h3>סנכרון Google Drive</h3>
-          <p>במסלולים בסיסי ועסקי — שמירת מסמכים בתיקיית RemindOCR ב-Google Drive, כולל סנכרון אוטומטי וייצוא.</p>
+          <p>שמירת מסמכים בתיקיית RemindOCR ב-Google Drive, כולל סנכרון אוטומטי וייצוא. זמין כבר בניסיון.</p>
         </article>
       </div>
     </section>
@@ -287,9 +287,7 @@
               <li>יצוא לאקסל ודוחות חודשיים</li>
               <li>סנכרון Google Drive</li>
             </ul>
-            <div class="plan__ctas">
-              <a class="plan__cta plan__cta--ghost" href="#login-card">התחל בחינם</a>
-            </div>
+            <a class="plan__cta plan__cta--ghost plan__cta--solo" href="#login-card">התחל בחינם</a>
           </div>
 
           <div class="plan">
@@ -312,10 +310,10 @@
               <li>סנכרון Google Drive</li>
             </ul>
             <div class="plan__ctas">
-              <a class="plan__cta plan__cta--ghost" href="#login-card">שנתי — ₪950
-                <span class="plan__cta-note">חיסכון של 10%</span>
+              <a class="plan__cta plan__cta--primary" href="#login-card">
+                שנתי — ₪950<span class="plan__cta-save">חסכון 10%</span>
               </a>
-              <a class="plan__cta plan__cta--ghost" href="#login-card">חודשי — ₪88 / חודש</a>
+              <a class="plan__cta plan__cta--ghost" href="#login-card">או חודשי — ₪88 / חודש</a>
             </div>
           </div>
 
@@ -338,11 +336,11 @@
               <li>ניהול לקוחות וציוד</li>
               <li>סנכרון Google Calendar לתסקירים עתידיים</li>
             </ul>
-            <div class="plan__ctas">
-              <a class="plan__cta plan__cta--primary" href="#login-card">שנתי — ₪1,544
-                <span class="plan__cta-note">חיסכון של 10%</span>
+            <div class="plan__ctas plan__ctas--accent">
+              <a class="plan__cta plan__cta--primary" href="#login-card">
+                שנתי — ₪1,544<span class="plan__cta-save">חסכון 10%</span>
               </a>
-              <a class="plan__cta plan__cta--ghost" href="#login-card">חודשי — ₪143 / חודש</a>
+              <a class="plan__cta plan__cta--ghost" href="#login-card">או חודשי — ₪143 / חודש</a>
             </div>
           </div>
 
@@ -1084,9 +1082,50 @@ onMounted(async () => {
   font-weight: 700;
 }
 
+/* One bordered control with two rows, so yearly and monthly read as a billing
+   choice rather than as a live button next to a disabled one. */
 .plan__ctas {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.plan__ctas--accent {
+  border-color: var(--brand-color);
+}
+
+.plan__ctas .plan__cta {
+  border-radius: 0;
+}
+
+.plan__ctas .plan__cta + .plan__cta {
+  border-top: 1px solid var(--border-color);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 18px;
+}
+
+.plan__cta--solo {
+  display: block;
+  border: 1px solid var(--border-color);
+}
+
+.plan__cta-save {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 22%);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.plan__cta--ghost .plan__cta-save {
+  background: color-mix(in srgb, var(--brand-color) 14%, transparent);
+  color: var(--brand-color);
 }
 
 .plan__cta {
@@ -1107,18 +1146,16 @@ onMounted(async () => {
 
 .plan__cta--primary:hover {
   background: var(--brand-color-pressed);
-  transform: translateY(-1px);
 }
 
 .plan__cta--ghost {
-  background: var(--bg-app);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   color: var(--text-primary);
 }
 
 .plan__cta--ghost:hover {
-  border-color: var(--brand-color);
-  transform: translateY(-1px);
+  background: var(--bg-hover);
+  color: var(--brand-color);
 }
 
 .plan__cta-note {
