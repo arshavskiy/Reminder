@@ -82,10 +82,12 @@ export function documentImportLimit(
     };
   }
   if (plan === "basic") {
+    // One shared monthly pool across every category: inspections, contracts and
+    // invoices all draw from the same 50, so the plan is "50 documents a month"
+    // rather than 50 of each. Every category reports the same limit, which is
+    // what makes the shared pool legible in the UI.
     return {
-      limit: category === "contracts"
-        ? readPositiveIntEnv("BASIC_MONTHLY_CONTRACT_DOCUMENT_LIMIT", readPositiveIntEnv("PRO_MONTHLY_CONTRACT_DOCUMENT_LIMIT", 50))
-        : readPositiveIntEnv("BASIC_MONTHLY_DOCUMENT_LIMIT", readPositiveIntEnv("PRO_MONTHLY_DOCUMENT_LIMIT", 50)),
+      limit: readPositiveIntEnv("BASIC_MONTHLY_DOCUMENT_LIMIT", readPositiveIntEnv("PRO_MONTHLY_DOCUMENT_LIMIT", 50)),
       scope: "monthly",
     };
   }
@@ -123,8 +125,8 @@ export async function getDocumentImportQuota(
         used = usage.documents;
       }
     } else {
-      const countFilter = plan === "free"
-        ? freeDocumentQuotaCountFilter(userId)
+      const countFilter = plan === "basic"
+        ? sharedDocumentQuotaCountFilter(userId, periodStart, periodEnd)
         : documentQuotaCountFilter(userId, category, scope, periodStart, periodEnd);
       used = await col("documents").countDocuments(countFilter as any);
     }
@@ -154,8 +156,13 @@ export function effectiveQuotaCategory(
   source: DocumentImportSource = "manual",
 ): DocumentImportQuotaCategory {
   const plan = normalizePlan(role ?? "user");
-  if (plan !== "free") return category;
-  return source === "email" ? "emailDocuments" : "manualDocuments";
+  if (plan === "free" || plan === "trial") {
+    return source === "email" ? "emailDocuments" : "manualDocuments";
+  }
+  // Basic pools every category into one monthly budget, so report and enforce
+  // against a single category rather than the caller's guess.
+  if (plan === "basic") return "documents";
+  return category;
 }
 
 export async function assertDocumentImportQuota(
@@ -186,11 +193,26 @@ export function documentImportQuotaErrorPayload(error: DocumentImportQuotaError)
   };
 }
 
-function freeDocumentQuotaCountFilter(userId: string): Record<string, unknown> {
-  return {
+/**
+ * Every document the user imported this month, whatever its kind.
+ *
+ * Mirrors the free tier's shared pool but bounded by the monthly window instead
+ * of lifetime. Certificates are excluded here too: they are produced by the app
+ * rather than imported, so charging them would bill the user for its own output.
+ */
+function sharedDocumentQuotaCountFilter(
+  userId: string,
+  periodStart: Date | null,
+  periodEnd: Date | null,
+): Record<string, unknown> {
+  const filter: Record<string, unknown> = {
     user_id: userId,
     document_kind: {$ne: "certificate"},
   };
+  if (periodStart && periodEnd) {
+    filter.created_at = { $gte: periodStart, $lt: periodEnd };
+  }
+  return filter;
 }
 
 function documentQuotaCountFilter(

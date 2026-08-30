@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentUtcMonthWindow, documentImportLimit, documentImportMonthlyLimit } from "../quotas/documentImportQuota";
+import { currentUtcMonthWindow, documentImportLimit, documentImportMonthlyLimit, effectiveQuotaCategory } from "../quotas/documentImportQuota";
 import {reminderLimit} from "../quotas/reminderQuota";
 
 describe("document monthly import quota", () => {
@@ -16,13 +16,20 @@ describe("document monthly import quota", () => {
     expect(documentImportMonthlyLimit("trial")).toBe(25);
   });
 
-  it("limits basic users to 50 invoice documents per month", () => {
+  it("limits basic users to 50 documents per month", () => {
     expect(documentImportLimit("basic", "invoices")).toEqual({ limit: 50, scope: "monthly" });
     expect(documentImportMonthlyLimit("basic")).toBe(50);
   });
 
-  it("limits basic contract documents separately", () => {
-    expect(documentImportLimit("basic", "contracts")).toEqual({ limit: 50, scope: "monthly" });
+  it("pools every basic category into the same monthly 50", () => {
+    for (const category of ["invoices", "contracts", "documents"] as const) {
+      expect(documentImportLimit("basic", category)).toEqual({ limit: 50, scope: "monthly" });
+    }
+  });
+
+  it("charges every basic import against one category so the pool is shared", () => {
+    expect(effectiveQuotaCategory("basic", "invoices", "email")).toBe("documents");
+    expect(effectiveQuotaCategory("basic", "contracts", "manual")).toBe("documents");
   });
 
   it("does not limit business users", () => {
