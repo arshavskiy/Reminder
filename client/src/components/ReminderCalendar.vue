@@ -320,7 +320,7 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, ref} from "vue";
+import {computed, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NButton, NIcon, NModal, NPopover, useMessage} from "naive-ui";
 import {CalendarOutline} from "@vicons/ionicons5";
@@ -345,6 +345,7 @@ const props = withDefaults(defineProps<Props>(), { loading: false, expiryItems: 
 const emit = defineEmits<{
   (e: "refresh"): void;
   (e: "open-monthly-report", monthMs: number): void;
+  (e: "month-change", range: { from: string; to: string }): void;
 }>();
 
 const router = useRouter();
@@ -691,12 +692,34 @@ function shiftMonth(delta: number) {
   c.setMonth(c.getMonth() + delta);
   cursor.value = c;
   saveCursor(c);
+  emitMonthChange();
 }
 function goToday() {
   const d = new Date();
   cursor.value = d;
   saveCursor(d);
+  emitMonthChange();
 }
+
+/**
+ * The month currently on screen, widened by one month either side.
+ *
+ * The grid shows trailing and leading days from the neighbouring months, so a
+ * strict month range would leave those cells looking empty.
+ */
+function emitMonthChange() {
+  const start = new Date(cursor.value.getFullYear(), cursor.value.getMonth() - 1, 1);
+  const end = new Date(cursor.value.getFullYear(), cursor.value.getMonth() + 2, 0);
+  emit("month-change", { from: isoDate(start), to: isoDate(end) });
+}
+
+function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// The cursor can be restored from storage, so the first load has to announce the
+// month too — otherwise it would fetch unbounded until the user navigates.
+onMounted(emitMonthChange);
 
 function printCalendar() {
   window.print();

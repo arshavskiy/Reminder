@@ -95,6 +95,7 @@
         :expiry-items="expiryItems"
         :tests-only="calendarNextTestsOnly"
         @open-monthly-report="openMonthlyReport"
+        @month-change="onCalendarMonthChange"
         @refresh="refreshCalendar(true)"
       />
       <MonthlyReportModal
@@ -314,15 +315,30 @@ async function saveCalendarPreference(value: boolean) {
   }
 }
 
+/**
+ * The month the calendar is showing, so the request covers that window rather
+ * than every contract on the account. Null until the calendar reports one, which
+ * keeps the very first load working before any month has been announced.
+ */
+const calendarRange = ref<{ from: string; to: string } | null>(null);
+
+function onCalendarMonthChange(range: { from: string; to: string }) {
+  calendarRange.value = range;
+  refreshCalendar(true);
+}
+
 async function refreshCalendar(force: boolean) {
   if (!calendarNextTestsOnly.value && (force || !remindersStore.rows.length)) {
     remindersStore.fetch({ limit: 500 }, force);
   }
   loadingExpiryItems.value = true;
   try {
-    expiryItems.value = await api.equipment.expiryCalendar(
-      calendarNextTestsOnly.value ? { from: todayIso() } : undefined,
-    );
+    // "Next tests only" is an open-ended forward look, so it keeps its own
+    // from-today filter; otherwise fetch just the visible month.
+    const params = calendarNextTestsOnly.value
+      ? { from: todayIso() }
+      : calendarRange.value ?? undefined;
+    expiryItems.value = await api.equipment.expiryCalendar(params);
   } catch {
     expiryItems.value = [];
   } finally {
@@ -540,7 +556,7 @@ const data_cards = computed(() =>
 
 <style scoped>
 .dash {
-  max-width: 80vw;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
