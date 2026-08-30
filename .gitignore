@@ -8,6 +8,14 @@ data/
 *.db-wal
 .idea/
 .claude
+
+# Ignore every dot-directory by default, then keep back the ones that carry real
+# project config. Tool directories appear faster than they can be listed here,
+# and each new one would otherwise show up as untracked noise.
+.*/
+!.github/
+!.agents/
+!.cursor/
 spects/
 dist/
 uploads/
