@@ -1,4 +1,5 @@
 import express from "express";
+import ExcelJS from "exceljs";
 import { ObjectId } from "mongodb";
 import { col } from "../db/db";
 import { HTTPException, requireAuth } from "../auth/middleware";
@@ -7,6 +8,7 @@ import { featureFlagsForUser, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
 import { inferInvoiceCashFlow, normalizeCashFlow, resolveVatAmount } from "../invoices/cashFlow";
 import { matchesExpenseProofFilter, normalizeExpenseProofFilter } from "../invoices/documentProof";
+import {sendEmailWithAttachments} from "../reminders/emailSender";
 
 type InvoiceRow = Record<string, any>;
 const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
@@ -268,6 +270,135 @@ export function registerInvoiceRoutes(app: express.Application) {
       categories: uniqueSorted(categorySeries.map((item) => item.category).filter(isNonEmptyString)),
       categorySeries,
       series,
+    });
+  });
+
+  app.post("/api/invoices/reports/six-months/send", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const user = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
+    if (!featureFlagsForUser(user).excelExport) {
+      res.status(403).json({ error: "excel_export_plan_required", message: PLAN_GATE_MESSAGES.excelExport });
+      return;
+    }
+
+    const recipients = uniqueEmails(
+      Array.isArray(req.body?.recipients)
+        ? req.body.recipients
+        : [user?.email],
+    );
+    if (!recipients.length) {
+      res.status(400).json({ error: "missing_report_recipient" });
+      return;
+    }
+
+    const period = lastSixMonthPeriod();
+    const invoices = await col("invoices")
+      .find({ user_id: userId } as any)
+      .sort({ issue_date: -1, created_at: -1 } as any)
+      .limit(5000)
+      .toArray() as InvoiceRow[];
+
+    const documentIds = [...new Set(invoices.map((invoice) => String(invoice.document_id ?? "")).filter(ObjectId.isValid))];
+    const documents = documentIds.length
+      ? await col("documents")
+        .find({ _id: { $in: documentIds.map((id) => new ObjectId(id)) }, user_id: userId } as any, { projection: { raw_text: 0 } } as any)
+        .toArray() as InvoiceRow[]
+      : [];
+    const documentMap = new Map(documents.map((doc) => [doc._id.toString(), doc]));
+    const providers = await loadGmailSearchProviders();
+    const rows = invoices
+      .filter((invoice) => invoiceIsVisible(invoice, documentMap.get(String(invoice.document_id))))
+      .map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers))
+      .filter((row) => {
+        const ts = invoiceDateTs(row);
+        return ts !== null && ts >= period.from.getTime() && ts <= period.to.getTime();
+      })
+      .sort((left, right) => compareInvoiceRows(left, right, "date", "desc"));
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "RemindOCR";
+    workbook.created = new Date();
+    workbook.views = [{ rightToLeft: true } as any];
+    const sheet = workbook.addWorksheet("חשבוניות", { views: [{ rightToLeft: true }] });
+    sheet.columns = [
+      { header: "ספק", key: "supplier", width: 28 },
+      { header: "סטטוס", key: "status", width: 12 },
+      { header: "תאריך חשבונית", key: "issueDate", width: 16 },
+      { header: "תאריך לתשלום", key: "dueDate", width: 16 },
+      { header: "לקוח", key: "client", width: 24 },
+      { header: "סוג", key: "type", width: 18 },
+      { header: "תנועה", key: "cashFlow", width: 12 },
+      { header: "סכום", key: "amount", width: 12 },
+      { header: "מטבע", key: "currency", width: 10 },
+      { header: "מספר חשבונית", key: "invoiceNumber", width: 20 },
+      { header: "מספר לקוח", key: "customerNumber", width: 16 },
+      { header: "תקופת חיוב", key: "billingPeriod", width: 24 },
+      { header: "קטגוריית ספק", key: "providerCategory", width: 22 },
+      { header: "ספק מזוהה", key: "providerLabel", width: 26 },
+      { header: "קובץ", key: "fileName", width: 36 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { horizontal: "right", readingOrder: "rtl", wrapText: true };
+
+    for (const row of rows) {
+      sheet.addRow({
+        supplier: row.supplier_name,
+        status: invoiceStatusLabel(row.status),
+        issueDate: isoDate(row.issue_date),
+        dueDate: isoDate(row.payment_due_date),
+        client: invoiceClientLabel(row),
+        type: invoiceTypeLabel(row),
+        cashFlow: row.cash_flow === "income" ? "הכנסה" : "הוצאה",
+        amount: row.amount ?? "",
+        currency: row.currency,
+        invoiceNumber: row.invoice_number ?? "",
+        customerNumber: row.customer_number ?? "",
+        billingPeriod: row.billing_period ?? "",
+        providerCategory: providerCategoryLabel(row.provider_category),
+        providerLabel: row.provider_label ?? "",
+        fileName: row.file_name,
+      });
+    }
+    sheet.eachRow((row) => {
+      row.alignment = { horizontal: "right", readingOrder: "rtl", wrapText: true };
+    });
+    sheet.getColumn("amount").numFmt = '#,##0.00';
+    sheet.autoFilter = "A1:O1";
+
+    const content = Buffer.from(await workbook.xlsx.writeBuffer());
+    const periodLabel = `${isoDate(period.from)} עד ${isoDate(period.to)}`;
+    const subject = `דוח חשבוניות 6 חודשים - RemindOCR`;
+    const text = `מצורף דוח חשבוניות Excel עבור התקופה ${periodLabel}. מספר רשומות: ${rows.length}.`;
+    const html = `<div dir="rtl"><h2>דוח חשבוניות</h2><p>מצורף דוח Excel עבור ששת החודשים האחרונים.</p><p>תקופה: ${escapeHtml(periodLabel)}</p><p>מספר רשומות: ${rows.length}</p></div>`;
+    const result = await sendEmailWithAttachments(
+      recipients,
+      subject,
+      text,
+      [{
+        filename: `invoices-six-months-${isoDate(period.to)}.xlsx`,
+        content,
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }],
+      html,
+    );
+    if (!result.success) {
+      res.status(500).json({ error: result.error ?? "invoice_report_email_failed" });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      recipients,
+      count: rows.length,
+      period: { from: isoDate(period.from), to: isoDate(period.to) },
     });
   });
 
@@ -879,4 +1010,90 @@ function normalize(value: string): string {
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "he"));
+}
+
+function uniqueEmails(values: unknown[]): string[] {
+  return [...new Set(values
+    .map((value) => String(value ?? "").trim().toLowerCase())
+    .filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)))];
+}
+
+function lastSixMonthPeriod(): { from: Date; to: Date } {
+  const now = new Date();
+  const to = new Date(now);
+  to.setHours(23, 59, 59, 999);
+  const from = new Date(now);
+  from.setMonth(from.getMonth() - 6);
+  from.setHours(0, 0, 0, 0);
+  return { from, to };
+}
+
+function isoDate(value: Date | string | null): string {
+  if (!value) return "";
+  const ts = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isFinite(ts) ? new Date(ts).toISOString().slice(0, 10) : String(value);
+}
+
+function invoiceStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    new: "חדש",
+    reviewed: "נבדק",
+    outgoing: "יוצא",
+    archived: "ארכיון",
+    done: "חדש",
+  };
+  return labels[status] ?? status;
+}
+
+function invoiceClientLabel(row: ReturnType<typeof presentInvoice>): string {
+  return row.client_name ?? firstString(row.fields, ["client_company", "client_name", "customer_name", "bill_to"]) ?? "";
+}
+
+function invoiceTypeLabel(row: ReturnType<typeof presentInvoice>): string {
+  if (row.document_category === "receipt") return "קבלה";
+  if (row.document_category === "bill") return "חשבון";
+  if (row.document_category === "payment_request") return "דרישת תשלום";
+  const value = String(row.type || firstString(row.fields, ["document_subtype", "invoice_type", "receipt_type"]) || "").trim();
+  const normalized = value.toLowerCase();
+  if (/receipt|קבלה/.test(normalized)) return "קבלה";
+  if (/order|הזמנה/.test(normalized)) return "אישור הזמנה";
+  if (/payment|תשלום/.test(normalized)) return "אישור תשלום";
+  return "חשבונית";
+}
+
+function providerCategoryLabel(category: string | null): string {
+  const labels: Record<string, string> = {
+    electricity: "חשמל",
+    telecom: "תקשורת",
+    water: "מים",
+    transport: "תחבורה",
+    parking: "חניה",
+    fuel: "דלק",
+    gas: "גז",
+    tv: "טלוויזיה וסטרימינג",
+    marketplace: "קניות",
+    food: "מזון",
+    payment: "תשלומים וחשבוניות",
+    government: "ממשלה",
+    municipality: "עירייה",
+    insurance: "ביטוח",
+    finance: "פיננסים",
+    travel: "תיירות",
+    healthcare: "בריאות",
+    education: "לימודים",
+    retail: "קמעונאות",
+    nonprofit: "עמותות",
+    digital: "דיגיטל",
+    development: "פיתוח",
+    general: "כללי",
+  };
+  return category ? labels[category] ?? category : "";
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

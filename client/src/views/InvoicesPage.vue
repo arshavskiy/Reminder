@@ -71,6 +71,23 @@
           </template>
           {{ excelAllowed ? "הורדת החשבוניות לקובץ Excel" : excelExportLockedMessage }}
         </n-tooltip>
+        <n-tooltip placement="top">
+          <template #trigger>
+            <span>
+              <button
+                :class="{ 'rbtn--loading': sendingSixMonthReport }"
+                :disabled="!exportAllowed || !excelAllowed || loading || sendingSixMonthReport"
+                class="rbtn rbtn--ghost"
+                type="button"
+                @click="sendSixMonthInvoiceReport"
+              >
+                <n-icon :component="MailOutline" class="btn-icon" />
+                שלח דוח 6 חודשים
+              </button>
+            </span>
+          </template>
+          {{ excelAllowed ? "שליחת קובץ Excel של החשבוניות מששת החודשים האחרונים למייל שלך" : excelExportLockedMessage }}
+        </n-tooltip>
         <button
             :class="{ 'rbtn--loading': exportingToDrive }"
             :disabled="!driveAllowed || exportingToDrive"
@@ -511,6 +528,7 @@ import {
   EyeOutline,
   GridOutline,
   ListOutline,
+  MailOutline,
   PricetagOutline,
   RefreshOutline,
   SwapVerticalOutline,
@@ -547,6 +565,7 @@ const loading = ref(false);
 const exporting = ref(false);
 const deletingSelected = ref(false);
 const uploadingInvoices = ref(false);
+const sendingSixMonthReport = ref(false);
 const showMonthlyReport = ref(false);
 const exportingToDrive = ref(false);
 const importingFromGmail = ref(false);
@@ -1058,6 +1077,34 @@ async function exportInvoicesToExcel() {
     message.error("שגיאה בייצוא לאקסל");
   } finally {
     exporting.value = false;
+  }
+}
+
+async function sendSixMonthInvoiceReport() {
+  if (!exportAllowed.value) {
+    message.warning("שליחת דוחות זמינה במסלולים בסיסי ועסקי בלבד");
+    return;
+  }
+  if (!excelAllowed.value) {
+    message.warning(PLAN_GATE_MESSAGES.excelExport);
+    return;
+  }
+  sendingSixMonthReport.value = true;
+  try {
+    const result = await api.invoices.sendSixMonthReport();
+    const recipient = result.recipients[0] ?? "המייל שלך";
+    message.success(`דוח 6 חודשים נשלח אל ${recipient} (${result.count} רשומות)`);
+  } catch (err: any) {
+    const code = String(err?.message ?? "");
+    if (code.includes("excel_export_plan_required")) {
+      message.warning(PLAN_GATE_MESSAGES.excelExport);
+    } else if (code.includes("missing_report_recipient")) {
+      message.error("לא נמצא מייל לשליחת הדוח");
+    } else {
+      message.error("שגיאה בשליחת דוח החשבוניות");
+    }
+  } finally {
+    sendingSixMonthReport.value = false;
   }
 }
 
