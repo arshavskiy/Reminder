@@ -183,14 +183,12 @@ router.beforeEach(async (to) => {
     await featuresStore.fetchFeatures();
     const requiredFeature = to.meta.feature as FeatureKey | undefined;
     if (requiredFeature && !featuresStore.hasFeature(requiredFeature)) {
-        debugger
         return {path: "/403"};
     }
 
     // Role-based route guard — must run for every navigation, even cached users
     const requiredRole = to.meta.requireRole as string | undefined;
     if (requiredRole) {
-        debugger
         const RANK: Record<string, number> = {user: 0, pro: 1, admin: 2};
         const userRank = RANK[authStore.user.role] ?? 0;
         const minRank = RANK[requiredRole] ?? 0;
