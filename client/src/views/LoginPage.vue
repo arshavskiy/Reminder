@@ -194,7 +194,7 @@
           <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך. ייבוא קבלות עד 6 חודשים אחורה בניסיון, 12 בבסיסי.</p>
         </article>
         <article class="feature-card feature-card--accent">
-          <h3>ניסיון של 14 יום</h3>
+          <h3>ניסיון של 30 יום</h3>
           <p>כל היכולות של המסלול הבסיסי, עד 25 מסמכים — ידני ומאימייל יחד. ללא כרטיס אשראי. בסיסי כולל 50 קבלות ו-50 תסקירים בחודש, ועסקי ללא הגבלה.</p>
         </article>
 <!--        <article class="feature-card">-->
@@ -268,16 +268,16 @@
       <div class="content-section">
         <div class="section-header">
           <h2>מסלולים ומחירים</h2>
-          <p>בחר את המסלול שמתאים לנפח העבודה שלך. אפשר להתחיל בחינם ולשדרג בכל שלב.</p>
+          <p>הניסיון כולל את כל יכולות המערכת למשך 30 יום, ללא כרטיס אשראי. מסלולי התשלום ייפתחו בקרוב.</p>
         </div>
         <div class="plans-grid">
 
           <div class="plan">
-            <div class="plan__name">ניסיון · 14 יום</div>
+            <div class="plan__name">ניסיון · 30 יום</div>
             <p class="plan__blurb">כל היכולות של המסלול הבסיסי, ללא כרטיס אשראי.</p>
             <div class="plan__price">
               <strong>₪0</strong>
-              <span class="plan__price-period">/ 14 יום</span>
+              <span class="plan__price-period">/ 30 יום</span>
             </div>
             <p class="plan__price-year">עד 25 מסמכים — ידני ומאימייל יחד</p>
             <ul class="plan__features">
@@ -291,7 +291,7 @@
             <a class="plan__cta plan__cta--ghost plan__cta--solo" href="#login-card">התחל בחינם</a>
           </div>
 
-          <div class="plan">
+          <div class="plan plan--hidden">
             <div class="plan__name">בסיסי</div>
             <p class="plan__blurb">מתאים לעסק קטן שמייבא מסמכים בכל חודש.</p>
             <div class="plan__price">
@@ -318,7 +318,7 @@
             </div>
           </div>
 
-          <div class="plan plan--highlighted">
+          <div class="plan plan--highlighted plan--hidden">
             <span class="plan__badge">הכי פופולרי</span>
             <div class="plan__name">עסקי</div>
             <p class="plan__blurb">לבודקים מוסמכים שמייבאים מסמכים באופן שוטף ורוצים יומן Google מסונכרן.</p>
@@ -507,6 +507,31 @@ async function handleLogin() {
   }
 }
 
+const INTENT_KEY = "signup_intent";
+
+type SignupIntent = {plan: "basic" | "business"; billing: "monthly" | "yearly"};
+
+/** Both halves must be recognised, or there is no intent — never a partial one. */
+function parseIntent(plan: unknown, billing: unknown): SignupIntent | null {
+  const p = String(plan ?? "").trim().toLowerCase();
+  const b = String(billing ?? "").trim().toLowerCase();
+  if (p !== "basic" && p !== "business") return null;
+  if (b !== "monthly" && b !== "yearly") return null;
+  return {plan: p, billing: b};
+}
+
+/** The stored intent, spread into a signup body. Empty when there is none. */
+function readIntent(): Partial<SignupIntent> {
+  try {
+    const raw = sessionStorage.getItem(INTENT_KEY);
+    if (!raw) return {};
+    const stored = JSON.parse(raw);
+    return parseIntent(stored?.plan, stored?.billing) ?? {};
+  } catch {
+    return {};
+  }
+}
+
 async function handleRegister() {
   loading.value = true;
   gisError.value = null;
@@ -517,7 +542,12 @@ async function handleRegister() {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       credentials: "include",
-      body: JSON.stringify({email: regEmail.value, password: regPassword.value, name: regName.value}),
+      body: JSON.stringify({
+        email: regEmail.value,
+        password: regPassword.value,
+        name: regName.value,
+        ...readIntent(),
+      }),
     });
     const data = await res.json() as any;
     if (!res.ok) {
@@ -564,6 +594,17 @@ onMounted(async () => {
   if (e) routeError.value = e;
 
   if (route.query.tab === "register") activeTab.value = "register";
+
+  // Remember which plan the visitor came in for. Held in sessionStorage because
+  // Google sign-in leaves the page entirely and returns without the query string.
+  // It is attribution only — the server records it and never grants a plan from it.
+  const intent = parseIntent(route.query.plan, route.query.billing);
+  if (intent) {
+    try {
+      sessionStorage.setItem(INTENT_KEY, JSON.stringify(intent));
+    } catch { /* private mode: the intent is simply not carried */ }
+    activeTab.value = "register";
+  }
 
   if (!authStore.initialized) await authStore.fetchMe();
   if (authStore.user) router.replace("/dashboard");
@@ -969,6 +1010,17 @@ onMounted(async () => {
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
   align-items: stretch;
+}
+
+/* Paid plans are hidden until Green Invoice payment links are live. Delete this
+   rule and the plan--hidden classes to bring them back. */
+.plan.plan--hidden {
+  display: none;
+}
+
+.plans-grid:has(.plan--hidden) {
+  grid-template-columns: minmax(0, 420px);
+  justify-content: center;
 }
 
 .plan {

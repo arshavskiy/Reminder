@@ -30,6 +30,7 @@ import {
 import {clientIp, logger} from "../logger";
 import {notifyPasswordResetRequested} from "../push/adminNotify";
 import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements, newTrialEndsAt} from "../plans/planEntitlements";
+import {parseSignupIntent, signupIntentFields} from "../plans/signupIntent";
 
 export function registerAuthRoutes(app: express.Application) {
   // GET /auth/google — kick off OAuth flow
@@ -50,6 +51,8 @@ export function registerAuthRoutes(app: express.Application) {
       state,
       code_verifier: codeVerifier,
       expires_at: expiresAt,
+      // Stored server-side so it cannot be swapped between redirect and callback.
+      ...signupIntentFields(parseSignupIntent(req.query.plan, req.query.billing)),
     } as any);
 
     // Prune expired states
@@ -93,6 +96,10 @@ export function registerAuthRoutes(app: express.Application) {
       res.redirect(`/auth/gmail/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
       return;
     }
+    const oauthSignupIntent = signupIntentFields(parseSignupIntent(
+      (pkce as any).signup_intent_plan,
+      (pkce as any).signup_intent_billing,
+    ));
     await col("oauth_states").deleteOne({ state });
 
     try {
@@ -125,6 +132,7 @@ export function registerAuthRoutes(app: express.Application) {
             role: "user",
             plan: DEFAULT_NEW_USER_PLAN,
             trial_ends_at: newTrialEndsAt(),
+            ...oauthSignupIntent,
             is_active: 1,
             created_at: new Date(),
           },
@@ -157,11 +165,13 @@ export function registerAuthRoutes(app: express.Application) {
 
   // POST /api/auth/google — GIS credential (ID token) sign-in
   app.post("/api/auth/google", async (req, res) => {
-    const body = req.body as { credential?: string };
+    const body = req.body as { credential?: string; plan?: string; billing?: string };
     if (!body.credential) {
       res.status(400).json({ error: "missing_credential" });
       return;
     }
+    // No PKCE row on this path — the client posts the intent with the credential.
+    const oauthSignupIntent = signupIntentFields(parseSignupIntent(body.plan, body.billing));
 
     try {
       const profile = await verifyIdToken(body.credential);
@@ -190,6 +200,7 @@ export function registerAuthRoutes(app: express.Application) {
             role: "user",
             plan: DEFAULT_NEW_USER_PLAN,
             trial_ends_at: newTrialEndsAt(),
+            ...oauthSignupIntent,
             is_active: 1,
             created_at: new Date(),
           },
@@ -359,7 +370,11 @@ export function registerAuthRoutes(app: express.Application) {
 
   // POST /api/auth/register — email/password registration
   app.post("/api/auth/register", async (req, res) => {
-    const { email, password, name } = req.body as { email?: string; password?: string; name?: string };
+    const { email, password, name, plan: intentPlan, billing: intentBilling } = req.body as {
+      email?: string; password?: string; name?: string; plan?: string; billing?: string;
+    };
+    // Recorded for attribution only — it never grants the plan. See signupIntent.ts.
+    const signupIntent = parseSignupIntent(intentPlan, intentBilling);
 
     if (!email || !password) {
       res.status(400).json({ error: "email_and_password_required" });
@@ -409,6 +424,7 @@ export function registerAuthRoutes(app: express.Application) {
       role: "user",
       plan: DEFAULT_NEW_USER_PLAN,
       trial_ends_at: newTrialEndsAt(),
+      ...signupIntentFields(signupIntent),
       is_active: 1,
       created_at: new Date(),
       last_login_at: null,

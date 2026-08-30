@@ -26,7 +26,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     maxUsers: 1,
     maxEmailAccounts: 0,
   },
-  // 14-day trial: basic entitlements, but invoice history is cut to 6 months so a
+  // 30-day trial: basic entitlements, but invoice history is cut to 6 months so a
   // trial cannot be used to backfill years of invoices and then lapse.
   trial: {
     gmailInspectionHistoryMonths: 16,
@@ -81,7 +81,7 @@ export function normalizePlanId(planOrRole: string | null | undefined): PlanId {
 }
 
 /** Trial length for new signups. */
-export const TRIAL_DAYS = 14;
+export const TRIAL_DAYS = 30;
 
 /**
  * A trial only counts while it has not run out.

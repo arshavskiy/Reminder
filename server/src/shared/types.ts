@@ -74,7 +74,7 @@ export interface User {
   picture_url: string | null;
   role: UserRole;
   plan?: UserPlan;
-  /** When the 14-day trial lapses. Null on paid plans and on legacy accounts. */
+  /** When the trial lapses. Null on paid plans and on legacy accounts. */
   trial_ends_at?: string | Date | null;
   is_active: number;
   created_at: string;

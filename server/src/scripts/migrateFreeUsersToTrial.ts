@@ -1,11 +1,11 @@
 /**
- * Move legacy free-tier accounts onto the 14-day trial.
+ * Move legacy free-tier accounts onto the trial.
  *
  * The free tier no longer exists as something you can sign up to: it is now the
  * lapsed state of a trial. Leaving these accounts on plan "free" would strand
  * them there permanently, with no trial to run and no way to reach the paid
  * plans except by buying blind. This gives each one a full trial window from the
- * moment the migration runs, so they get the same 14 days a new signup gets.
+ * moment the migration runs, so they get the same window a new signup gets.
  *
  * Dry run by default; pass --apply to write.
  */

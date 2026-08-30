@@ -29,7 +29,7 @@ export interface PlanEntitlements extends TierFeatureFlags {
 }
 
 /**
- * New signups start on a 14-day trial with basic entitlements.
+ * New signups start on a 30-day trial with basic entitlements.
  *
  * There is no free tier to sign up to any more: once the trial lapses the plan
  * still reads "trial", but featureFlagsForUser resolves it to free entitlements,

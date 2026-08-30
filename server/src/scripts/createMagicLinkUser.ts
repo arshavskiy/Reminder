@@ -12,7 +12,7 @@ import {TRIAL_DAYS} from "../plans/tierFeatures";
  *   npm run auth:magic-link -- --username=demo [--name="Demo"] [--role=user] [--plan=trial]
  *
  * Plan defaults to trial. --trial-days=0 creates an already-lapsed trial, for
- * testing the read-only state a user lands in when the 14 days run out.
+ * testing the read-only state a user lands in when the trial runs out.
  */
 
 function parseArg(name: string): string | undefined {
