@@ -8,7 +8,7 @@
       <div class="nav-links">
         <a href="#features">תכונות</a>
         <a href="#how">איך זה עובד</a>
-        <a href="https://remindocr.com/pricing">מחירים</a>
+        <a href="#pricing">מחירים</a>
         <n-tooltip placement="bottom" :keep-alive-on-hover="false">
           <template #trigger>
             <button
@@ -264,10 +264,88 @@
       </div>
     </section>
 
-    <!--    <section class="cta-section">-->
-    <!--      <h2>מוכן להתחיל?</h2>-->
-    <!--      <a class="btn-white" href="#login-card">כנס למערכת</a>-->
-    <!--    </section>-->
+    <section id="pricing" class="pricing-section">
+      <div class="content-section">
+        <div class="section-header">
+          <h2>מסלולים ומחירים</h2>
+          <p>בחר את המסלול שמתאים לנפח העבודה שלך. אפשר להתחיל בחינם ולשדרג בכל שלב.</p>
+        </div>
+        <div class="plans-grid">
+
+          <div class="plan">
+            <div class="plan__name">חינמי</div>
+            <p class="plan__blurb">להתחלה מהירה ובדיקת התהליך עם כמות מסמכים מוגבלת.</p>
+            <div class="plan__price">
+              <strong>₪0</strong>
+            </div>
+            <ul class="plan__features">
+              <li>יבוא 10 מסמכים</li>
+              <li>יבוא 10 מסמכים מאימייל</li>
+              <li>תצוגה מקדימה וחילוץ נתונים AI</li>
+              <li>דוח חודשי ידני</li>
+            </ul>
+            <div class="plan__ctas">
+              <a class="plan__cta plan__cta--ghost" href="#login-card">התחל בחינם</a>
+            </div>
+          </div>
+
+          <div class="plan">
+            <div class="plan__name">בסיסי</div>
+            <p class="plan__blurb">מתאים לעסק קטן שמייבא מסמכים בכל חודש.</p>
+            <div class="plan__price">
+              <span class="plan__price-old">₪110</span>
+              <strong>₪88</strong>
+              <span class="plan__price-period">/ חודש</span>
+            </div>
+            <p class="plan__price-year">₪950 לשנה בתשלום שנתי · חיסכון של 10%</p>
+            <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>
+            <ul class="plan__features">
+              <li>יבוא תסקירים של 16 חודשים האחרונים</li>
+              <li>50 מסמכי תסקירים בחודש</li>
+              <li>ניהול תסקירים ושליחת תזכורות ללקוחות</li>
+              <li>יבוא 50 קבלות מאימייל בחודש</li>
+              <li>יצוא קבלות לקובץ אקסל</li>
+              <li>הפקת דוחות חודשיים</li>
+              <li>סנכרון Google Drive</li>
+            </ul>
+            <div class="plan__ctas">
+              <a class="plan__cta plan__cta--ghost" href="#login-card">שנתי — ₪950
+                <span class="plan__cta-note">חיסכון של 10%</span>
+              </a>
+              <a class="plan__cta plan__cta--ghost" href="#login-card">חודשי — ₪88 / חודש</a>
+            </div>
+          </div>
+
+          <div class="plan plan--highlighted">
+            <span class="plan__badge">הכי פופולרי</span>
+            <div class="plan__name">עסקי</div>
+            <p class="plan__blurb">לבודקים מוסמכים שמייבאים מסמכים באופן שוטף ורוצים יומן Google מסונכרן.</p>
+            <div class="plan__price">
+              <span class="plan__price-old">₪179</span>
+              <strong>₪143</strong>
+              <span class="plan__price-period">/ חודש</span>
+            </div>
+            <p class="plan__price-year">₪1,544 לשנה בתשלום שנתי · חיסכון של 10%</p>
+            <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>
+            <p class="plan__additional">כל מה שיש בבסיסי, ובנוסף</p>
+            <ul class="plan__features">
+              <li>יבוא תסקירים ללא הגבלה</li>
+              <li>יבוא חשבונות וקבלות ללא הגבלה</li>
+              <li>סנכרון היסטורי של שנתיים</li>
+              <li>ניהול לקוחות וציוד</li>
+              <li>סנכרון Google Calendar לתסקירים עתידיים</li>
+            </ul>
+            <div class="plan__ctas">
+              <a class="plan__cta plan__cta--primary" href="#login-card">שנתי — ₪1,544
+                <span class="plan__cta-note">חיסכון של 10%</span>
+              </a>
+              <a class="plan__cta plan__cta--ghost" href="#login-card">חודשי — ₪143 / חודש</a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
 
     <!-- Forgot password modal -->
     <n-modal v-model:show="showForgot" preset="card" title="שחזור סיסמה" style="max-width:380px;direction:rtl">
@@ -882,6 +960,176 @@ onMounted(async () => {
 
 .how-section {
   background: var(--bg-card);
+}
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 26px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-card);
+}
+
+.plan--highlighted {
+  border-color: var(--brand-color);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 8%);
+}
+
+.plan__badge {
+  position: absolute;
+  top: -12px;
+  inset-inline-start: 26px;
+  background: var(--brand-color);
+  color: var(--text-inverse);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 999px;
+}
+
+.plan__name {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+
+.plan__blurb {
+  color: var(--text-secondary);
+  font-size: 14px;
+  min-height: 44px;
+  margin-bottom: 18px;
+}
+
+.plan__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.plan__price strong {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.plan__price-old {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  font-size: 17px;
+  opacity: 0.75;
+}
+
+.plan__price-period {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.plan__price-year {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.plan__vat {
+  margin: 0 0 18px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.plan__additional {
+  margin: 0 0 10px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plan__features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 26px;
+  flex: 1;
+}
+
+.plan__features li {
+  position: relative;
+  padding-right: 26px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.plan__features li::before {
+  content: "✓";
+  position: absolute;
+  right: 0;
+  color: var(--brand-color);
+  font-weight: 700;
+}
+
+.plan__ctas {
+  display: grid;
+  gap: 8px;
+}
+
+.plan__cta {
+  display: block;
+  text-align: center;
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.plan__cta--primary {
+  background: var(--brand-color);
+  color: var(--text-inverse);
+}
+
+.plan__cta--primary:hover {
+  background: var(--brand-color-pressed);
+  transform: translateY(-1px);
+}
+
+.plan__cta--ghost {
+  background: var(--bg-app);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.plan__cta--ghost:hover {
+  border-color: var(--brand-color);
+  transform: translateY(-1px);
+}
+
+.plan__cta-note {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .steps {
