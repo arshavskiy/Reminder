@@ -323,6 +323,11 @@ async function saveCalendarPreference(value: boolean) {
 const calendarRange = ref<{ from: string; to: string } | null>(null);
 
 function onCalendarMonthChange(range: { from: string; to: string }) {
+  // The calendar re-announces its month on mount and on every navigation, and
+  // other things refresh it too, so without this guard the same window is
+  // fetched repeatedly — ten calls in eight seconds in production.
+  const current = calendarRange.value;
+  if (current && current.from === range.from && current.to === range.to) return;
   calendarRange.value = range;
   refreshCalendar(true);
 }
