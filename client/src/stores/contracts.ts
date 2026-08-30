@@ -10,7 +10,18 @@ export const useContractsStore = defineStore("contracts", () => {
   const loading = ref(false);
   const expiringSoon = ref<ContractWithClient[]>([]);
 
-  async function fetch(params?: { clientId?: string; status?: string; limit?: number; offset?: number; kind?: "contract" | "inspection" | "all" }, force = false) {
+  async function fetch(params?: {
+    clientId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+    kind?: "contract" | "inspection" | "all";
+    search?: string;
+    expiryFrom?: string;
+    expiryTo?: string;
+    due?: string;
+    sort?: "serial" | "expiry";
+  }, force = false) {
     loading.value = true;
     try {
       const r = await api.contracts.list(params, force);

@@ -179,6 +179,7 @@
                 @delete-reminder="deleteReminderFromCard"
                 @open-template="openContractInTemplate"
                 @open-document="openDoc"
+                @preview-reminder="openReminderPreview"
                 @send-reminder="sendReminderNow"
                 @send-card="sendFromCard"
                 @toggle-select="toggleSelect"
@@ -229,12 +230,12 @@
 
       <div v-if="visibleItems.length" class="pagination-bar">
         <span class="pagination-summary">
-          מציג {{ pageStart + 1 }}-{{ pageEnd }} מתוך {{ visibleItems.length }}
+          מציג {{ pageStart + 1 }}-{{ pageStart + visibleItems.length }} מתוך {{ resultTotal }}
         </span>
         <n-pagination
             v-model:page="page"
             v-model:page-size="pageSize"
-            :item-count="visibleItems.length"
+            :item-count="resultTotal"
             :page-sizes="[5, 10, 20, 50]"
             show-size-picker
         />
@@ -654,6 +655,11 @@
         @created="store.fetch(true)"
         @updated="store.fetch(true)"
     />
+    <ReminderPreviewModal
+      v-model:show="showReminderPreview"
+      :reminder-id="previewReminderId"
+      :reminder-title="previewReminderTitle"
+    />
   </div>
 </template>
 
@@ -700,6 +706,7 @@ import {api} from "../services/apiService.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
+import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import {FEATURES} from "../shared/features.js";
 import type {
   ContractWithClient,
@@ -983,9 +990,18 @@ async function loadReminders() {
 }
 
 const sendingReminder = ref<number | null>(null);
+const showReminderPreview = ref(false);
+const previewReminderId = ref<number | string | null>(null);
+const previewReminderTitle = ref<string | null>(null);
 const message2 = useMessage();
 const {confirm} = useConfirm();
 const confirmDialogClass = CONFIRM_DIALOG_CLASS;
+
+function openReminderPreview(reminder: ReminderWithContext) {
+  previewReminderId.value = reminder.id;
+  previewReminderTitle.value = reminder.title ?? null;
+  showReminderPreview.value = true;
+}
 
 async function sendReminderNow(r: ReminderWithContext) {
   sendingReminder.value = r.id;
@@ -2592,24 +2608,72 @@ function contractMatchesDueFilter(row: ContractWithClient, filter: DueFilter): b
   return true;
 }
 
-const duplicateContractNumbers = computed(() =>
-  duplicateReportNumberSet(store.rows ?? [], contractReportNumber),
-);
+// From the server: a duplicate is defined against the whole account, and the
+// page now holds only the rows it is showing.
+const duplicateContractNumbers = computed(() => duplicateNumbersFromServer.value);
 
 function contractIssues(row: ContractWithClient) {
   return listContractRowIssues(row, duplicateContractNumbers.value, remindersFor(String(row.id)).length > 0);
 }
 
 
+/**
+ * The current filters as server query params.
+ *
+ * Filtering and paging both happen server-side now, so the page holds one page
+ * of rows rather than the whole account. Anything that narrows the list has to
+ * be expressed here — a filter left on the client would only ever see the
+ * twenty rows in memory and silently return the wrong answer.
+ */
+function listParams() {
+  const [from, to] = filterDateRange.value ?? [];
+  return {
+    status: statusFilter.value ?? undefined,
+    kind: kind.value,
+    clientId: filterClientId.value ?? undefined,
+    search: search.value.trim() || undefined,
+    expiryFrom: from ? isoFromMs(from) : undefined,
+    expiryTo: to ? isoFromMs(to) : undefined,
+    // Only the date-based modes are server-side; the rest still need the joins
+    // the list already carries, so they stay client-side over the page.
+    due: dueFilter.value === "overdue" || dueFilter.value === "month" ? dueFilter.value : undefined,
+    limit: pageSize.value,
+    offset: (page.value - 1) * pageSize.value,
+  };
+}
+
+function isoFromMs(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function load() {
-  store.fetch({status: statusFilter.value ?? undefined, kind: kind.value});
+  store.fetch(listParams());
 }
 
 async function refresh() {
   await Promise.all([
-    store.fetch({status: statusFilter.value ?? undefined, kind: kind.value}, true),
+    store.fetch(listParams(), true),
     loadTemplateDrafts(),
+    loadDuplicateNumbers(),
   ]);
+}
+
+/**
+ * Duplicate report numbers across the whole account.
+ *
+ * Cannot be derived from the rows on screen: a number is only a duplicate
+ * relative to the full set, which the page no longer holds.
+ */
+const duplicateNumbersFromServer = ref<Set<string>>(new Set());
+
+async function loadDuplicateNumbers() {
+  try {
+    const r = await api.contracts.duplicateReportNumbers(true);
+    duplicateNumbersFromServer.value = new Set(r.numbers);
+  } catch {
+    duplicateNumbersFromServer.value = new Set();
+  }
 }
 
 async function loadTemplateDrafts() {
@@ -2685,33 +2749,23 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", updateViewport);
 });
 
+/**
+ * The page as returned by the server, plus the few filters that cannot be.
+ *
+ * Search, client, expiry range, overdue and month are query conditions now, so
+ * they are not reapplied here. The remaining due modes depend on joined
+ * reminder and email data, so they still run over the rows on screen — which
+ * means they filter within the page rather than across the account, and the
+ * count beside them reflects that.
+ */
 const filteredRows = computed(() => {
-  let rows = store.rows ?? [];
-  const q = search.value.trim().toLowerCase();
-  if (q) {
-    rows = rows.filter((r) =>
-        (r.contract_number ?? "").toLowerCase().includes(q) ||
-        (contractReportNumber(r)?.includes(q) ?? false) ||
-        (r.client_name ?? "").toLowerCase().includes(q) ||
-        (r.contract_type ?? "").toLowerCase().includes(q) ||
-        (r.summary ?? "").toLowerCase().includes(q)
-    );
-  }
-  if (filterClientId.value) {
-    rows = rows.filter((r) => String(r.client_id) === filterClientId.value);
-  }
-  if (filterDateRange.value) {
-    const [from, to] = filterDateRange.value;
-    rows = rows.filter((r) => {
-      if (!r.expiry_date) return false;
-      const d = new Date(r.expiry_date).getTime();
-      return d >= from && d <= to;
-    });
-  }
-  if (dueFilter.value !== "all") {
-    rows = rows.filter((row) => contractMatchesDueFilter(row, dueFilter.value));
-  }
-  return [...rows].sort(compareBySerialLastFirst);
+  const rows = store.rows ?? [];
+  const clientSideDue = dueFilter.value !== "all"
+    && dueFilter.value !== "overdue"
+    && dueFilter.value !== "month";
+  return clientSideDue
+    ? rows.filter((row) => contractMatchesDueFilter(row, dueFilter.value))
+    : rows;
 });
 
 const visibleItems = computed<ListItem[]>(() => {
@@ -2749,13 +2803,23 @@ const filteredDrafts = computed(() => {
   return [...rows].sort((a, b) => Date.parse(b.updated_at ?? "") - Date.parse(a.updated_at ?? ""));
 });
 
-const pageCount = computed(() => Math.max(1, Math.ceil(visibleItems.value.length / pageSize.value)));
+// Counted from the server total: visibleItems is one page, so paging off its
+// length would always say there is a single page.
+const resultTotal = computed(() => store.total ?? visibleItems.value.length);
+const pageCount = computed(() => Math.max(1, Math.ceil(resultTotal.value / pageSize.value)));
 const pageStart = computed(() => (page.value - 1) * pageSize.value);
 const pageEnd = computed(() => Math.min(visibleItems.value.length, pageStart.value + pageSize.value));
-const pagedItems = computed(() => visibleItems.value.slice(pageStart.value, pageEnd.value));
+// The server returns exactly this page, so slicing again would blank it.
+const pagedItems = computed(() => visibleItems.value);
 
 watch([search, filterClientId, filterDateRange, statusFilter, dueFilter, kind, pageSize, showDraftsOnly], () => {
   page.value = 1;
+  load();
+});
+
+// Paging is a server round-trip now rather than a slice of what is in memory.
+watch(page, () => {
+  load();
 });
 
 watch(pageCount, (count) => {

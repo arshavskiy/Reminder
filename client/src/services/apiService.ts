@@ -726,9 +726,25 @@ export const api = {
   },
 
   contracts: {
-    list: (params?: { clientId?: string; status?: string; limit?: number; offset?: number; kind?: "contract" | "inspection" | "all" }, force = false) => {
+    list: (params?: {
+      clientId?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+      kind?: "contract" | "inspection" | "all";
+      search?: string;
+      expiryFrom?: string;
+      expiryTo?: string;
+      due?: string;
+      sort?: "serial" | "expiry";
+    }, force = false) => {
       return get<{ rows: ContractWithClient[]; total: number; counts: { all: number; draft: number; active: number; expired: number; cancelled: number } }>(`/contracts${qs(params)}`, force);
     },
+    duplicateReportNumbers: (force = false) =>
+      get<{ numbers: string[]; rows: Array<{ number: string; count: number }> }>(
+        "/contracts/duplicate-report-numbers",
+        force,
+      ),
     expiring: (days = 30) => get<ContractWithClient[]>(`/contracts/expiring?days=${days}`),
     get: (id: string) => get<ContractWithClient>(`/contracts/${id}`),
     byDocument: (documentId: string, force = false) => get<ContractWithClient[]>(`/contracts/by-document/${documentId}`, force),
@@ -751,6 +767,7 @@ export const api = {
     dismiss: (id: number) => post(`/reminders/${id}/dismiss`),
     snooze: (id: number, until: string) => post(`/reminders/${id}/snooze`, { until }),
     sendNow: (id: number) => post<{ success: boolean; error?: string }>(`/reminders/${id}/send-now`),
+    previewEmail: (id: number | string) => get<{ subject: string; html: string }>(`/reminders/${id}/preview-email`, true),
     createHydraulicCheck: (body: HydraulicCheckRequest) =>
       post<HydraulicCheckResult>("/reminders/hydraulic-check", body),
   },
