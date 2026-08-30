@@ -40,13 +40,13 @@
             שלח נראות ({{ sendableVisibleReminders.length }})
           </n-button>
           <n-button
-            :loading="loading"
+            :disabled="loading"
             size="small"
             class="rcal__refresh-btn"
             aria-label="רענן"
             @click="$emit('refresh')"
           >
-            <span v-if="!loading" aria-hidden="true">↻</span>
+            <span :class="{ 'rcal__refresh-icon--spin': loading }" aria-hidden="true">↻</span>
           </n-button>
         </div>
       </div>
@@ -824,6 +824,16 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
 .rcal__refresh-btn {
   min-width: 34px;
   padding-inline: 0;
+}
+.rcal__refresh-icon--spin {
+  display: inline-block;
+  animation: rcal-spin 0.8s linear infinite;
+}
+
+@keyframes rcal-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .rcal__summary,
 .rcal__filters {
