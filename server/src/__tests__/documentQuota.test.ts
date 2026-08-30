@@ -13,7 +13,21 @@ describe("document monthly import quota", () => {
 
   it("gives the trial the same 50-document allowance as free", () => {
     expect(documentImportLimit("trial", "manualDocuments")).toEqual({limit: 50, scope: "lifetime"});
-    expect(documentImportMonthlyLimit("trial")).toBe(50);
+      expect(documentImportLimit("trial", "documents")).toEqual({limit: 50, scope: "lifetime"});
+  });
+
+    it("meters trial invoices separately from the document pool", () => {
+        // Invoices arrive in bulk from a Gmail sync, so they get their own smaller
+        // allowance rather than consuming the documents budget.
+        expect(documentImportLimit("trial", "invoices")).toEqual({limit: 20, scope: "lifetime"});
+        expect(documentImportMonthlyLimit("trial")).toBe(20);
+    });
+
+    it("charges a trial invoice import against the invoice category", () => {
+        // Without this the import would be folded into the shared manual/email pool
+        // and the 20-invoice cap would never apply.
+        expect(effectiveQuotaCategory("trial", "invoices", "email")).toBe("invoices");
+        expect(effectiveQuotaCategory("trial", "contracts", "email")).toBe("emailDocuments");
   });
 
   it("limits basic users to 50 documents per month", () => {

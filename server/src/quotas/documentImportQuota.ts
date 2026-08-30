@@ -66,8 +66,19 @@ export function documentImportLimit(
 ): { limit: number | null; scope: DocumentImportQuota["scope"] } {
   const plan = normalizePlan(role);
   if (plan === "business") return { limit: null, scope: "unlimited" };
-  // The trial shares the free tier's lifetime import cap: it unlocks automation,
-  // not volume, so it cannot be used to bulk-import a backlog and then lapse.
+  // Invoices get their own smaller lifetime allowance on trial. They arrive in
+  // bulk from a Gmail sync, so without a separate cap a single import would
+  // consume the whole document budget and leave no room for the inspections the
+  // trial is meant to demonstrate.
+  if (plan === "trial" && category === "invoices") {
+    return {
+      limit: readPositiveIntEnv("TRIAL_LIFETIME_INVOICE_LIMIT", 20),
+      scope: "lifetime",
+    };
+  }
+  // The trial otherwise shares the free tier's lifetime import cap: it unlocks
+  // automation, not volume, so it cannot be used to bulk-import a backlog and
+  // then lapse.
   if (plan === "free" || plan === "trial") {
     if (category === "documents") {
       return {
@@ -117,7 +128,11 @@ export async function getDocumentImportQuota(
     if (scope === "lifetime") {
       // Lifetime free-tier usage is stored on the user and never decreases on delete.
       const usage = await getStoredUserUsage(userId);
-      if (category === "manualDocuments" || category === "emailDocuments") {
+      if (category === "invoices") {
+        // Metered against its own counter, which is what makes the trial's
+        // separate invoice allowance independent of the document pool.
+        used = usage.gmailInvoices;
+      } else if (category === "manualDocuments" || category === "emailDocuments") {
         // Free tier gets ONE shared lifetime pool: manual uploads and Gmail imports
         // draw from the same budget, so importing cannot hand out a second allowance.
         used = usage.scannedDocuments + usage.gmailDocuments + usage.gmailInvoices;
@@ -156,6 +171,10 @@ export function effectiveQuotaCategory(
   source: DocumentImportSource = "manual",
 ): DocumentImportQuotaCategory {
   const plan = normalizePlan(role ?? "user");
+  // Invoices are metered separately on trial, so they must not be folded into
+  // the shared manual/email pool — doing so would charge them against the
+  // document budget and the 20-invoice cap would never be reached.
+  if (plan === "trial" && category === "invoices") return "invoices";
   if (plan === "free" || plan === "trial") {
     return source === "email" ? "emailDocuments" : "manualDocuments";
   }
