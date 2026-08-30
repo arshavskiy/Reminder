@@ -493,7 +493,7 @@ const allNav: Array<{
   {label: "לקוחות", key: "clients", minPlan: "basic", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minPlan: "business", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minPlan: "basic", feature: FEATURES.pages.equipment},
-  {label: "חשבוניות", key: "invoices", minPlan: "business", feature: FEATURES.pages.invoices},
+  {label: "חשבוניות", key: "invoices", minPlan: "trial", feature: FEATURES.pages.invoices},
   {label: "Gmail", key: "gmail", minRole: "admin", feature: FEATURES.pages.gmail},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
