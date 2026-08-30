@@ -205,6 +205,11 @@ export function normalizePlanId(planId: PlanId | string | null | undefined): Pla
     const plan = String(planId ?? "").trim().toLowerCase();
     if (plan === "business" || plan === "admin") return "business";
     if (plan === "basic" || plan === "pro") return "basic";
+    // Without this a trial resolved to "free", so every client-side plan check
+    // treated a paying-in-waiting account as a lapsed one — and a minPlan list
+    // containing "trial" collapsed to "free", admitting exactly the users it was
+    // meant to exclude. The server copy has always had it.
+    if (plan === "trial") return "trial";
     return "free";
 }
 

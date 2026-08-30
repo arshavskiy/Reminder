@@ -482,7 +482,8 @@ const allNav: Array<{
   label: string;
   key: string;
   minRole?: string;
-  minPlan?: PlanId;
+  /** A minimum plan, or an explicit list for pages that do not sit on a ladder. */
+  minPlan?: PlanId | PlanId[];
   feature?: FeatureKey;
 }> = [
   {label: "ראשי", key: "dashboard", minPlan: "free", feature: FEATURES.pages.dashboard},
@@ -493,16 +494,34 @@ const allNav: Array<{
   {label: "לקוחות", key: "clients", minPlan: "basic", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minPlan: "business", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minPlan: "basic", feature: FEATURES.pages.equipment},
-  {label: "חשבוניות", key: "invoices", minPlan: "trial", feature: FEATURES.pages.invoices},
+  // Trial and business only: a rank threshold cannot express this, since basic
+  // ranks alongside trial and would be admitted by any minimum that lets trial in.
+  {label: "חשבוניות", key: "invoices", minPlan: ["trial", "business"], feature: FEATURES.pages.invoices},
   {label: "Gmail", key: "gmail", minRole: "admin", feature: FEATURES.pages.gmail},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
 ];
 
+/**
+ * Whether the account's plan satisfies a nav item's minPlan.
+ *
+ * An array is membership, a single value is a minimum. Kept in step with the
+ * router guard: an item the nav shows but the router refuses sends the user to
+ * /403, and one the nav hides but the router allows is unreachable except by
+ * typing the URL.
+ */
+function planAllowsNav(minPlan: PlanId | PlanId[] | undefined): boolean {
+  if (!minPlan) return true;
+  const userPlan = resolveUserPlan(authStore.user);
+  if (Array.isArray(minPlan)) return minPlan.map((plan) => normalizePlanId(plan)).includes(userPlan);
+  return (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[normalizePlanId(minPlan)] ?? 0);
+}
+
 const primaryNav = computed(() => {
   const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
   return allNav.filter((item) =>
     userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
+      planAllowsNav(item.minPlan) &&
       (!item.feature || featuresStore.hasFeature(item.feature))
   );
 });
@@ -519,15 +538,24 @@ const isLapsedTrial = computed(
   () => resolveUserPlan(authStore.user) === "free" && !!authStore.user?.trial_ends_at,
 );
 
-function isPlanLocked(item: {minPlan?: PlanId}): boolean {
+function isPlanLocked(item: {minPlan?: PlanId | PlanId[]}): boolean {
   if (!item.minPlan) return false;
   if (isLapsedTrial.value) return false;
-  const userPlan = resolveUserPlan(authStore.user);
-  return (PLAN_RANK[userPlan] ?? 0) < (PLAN_RANK[normalizePlanId(item.minPlan)] ?? 0);
+  // Shares planAllowsNav so a locked item and a hidden one never disagree.
+  return !planAllowsNav(item.minPlan);
 }
 
-function navLockLabel(item: {minPlan?: PlanId}): string {
-  const label = item.minPlan ? PLAN_SHORT[normalizePlanId(item.minPlan)] : "";
+function navLockLabel(item: {minPlan?: PlanId | PlanId[]}): string {
+  if (!item.minPlan) return "";
+  // A list has no "and above" — naming the plans is the only accurate phrasing,
+  // and normalizePlanId on an array would have yielded "free" and read as
+  // "available on הסתיים and above".
+  if (Array.isArray(item.minPlan)) {
+    const names = item.minPlan.map((plan) => PLAN_SHORT[normalizePlanId(plan)]).filter(Boolean);
+    if (!names.length) return "";
+    return `זמין במסלולים ${names.join(" ו")} בלבד`;
+  }
+  const label = PLAN_SHORT[normalizePlanId(item.minPlan)];
   return label ? `זמין במסלול ${label} ומעלה` : "";
 }
 

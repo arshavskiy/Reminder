@@ -199,11 +199,20 @@ router.beforeEach(async (to) => {
         }
     }
 
-    const requiredPlan = to.meta.requirePlan as PlanId | undefined;
+    // requirePlan takes either a minimum plan or an explicit list.
+    //
+    // A minimum ("basic") is a rank comparison, so anything above it passes. A
+    // list is membership, for pages that do not sit on a ladder — invoices are
+    // open to trial and business but not basic, which no single threshold can
+    // express. Passing an array to normalizePlanId would have yielded "free"
+    // and silently let everyone through.
+    const requiredPlan = to.meta.requirePlan as PlanId | PlanId[] | undefined;
     if (requiredPlan) {
         const userPlan = resolveUserPlan(authStore.user);
-        if ((PLAN_RANK[userPlan] ?? 0) < (PLAN_RANK[normalizePlanId(requiredPlan)] ?? 0)) {
-            debugger
+        const allowed = Array.isArray(requiredPlan)
+            ? requiredPlan.map((plan) => normalizePlanId(plan)).includes(userPlan)
+            : (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[normalizePlanId(requiredPlan)] ?? 0);
+        if (!allowed) {
             return {path: "/403"};
         }
     }
