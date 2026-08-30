@@ -113,7 +113,7 @@ describe("updateUserTier", () => {
         emailDocuments: null,
       },
       gmailInspectionHistoryMonths: 24,
-      gmailInvoiceHistoryMonths: 24,
+      gmailInvoiceHistoryMonths: 36,
       googleCalendarSync: true,
     });
   });

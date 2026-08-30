@@ -54,7 +54,10 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
   },
   business: {
     gmailInspectionHistoryMonths: 24,
-    gmailInvoiceHistoryMonths: 24,
+    // Invoices reach further back than inspections: a business importing its
+    // expense history wants full tax years, and three of them covers the period
+    // records have to be kept for.
+    gmailInvoiceHistoryMonths: 36,
     googleDriveSync: true,
     googleCalendarSync: true,
     automaticEmailReminders: true,

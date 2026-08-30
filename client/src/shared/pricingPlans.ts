@@ -58,7 +58,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     // Mirrors server/src/plans/tierFeatures.ts — keep the two in step.
     trial: {
         gmailInspectionHistoryMonths: 16,
-        gmailInvoiceHistoryMonths: 6,
+        gmailInvoiceHistoryMonths: 1,
         googleDriveSync: true,
         googleCalendarSync: false,
         automaticEmailReminders: true,
@@ -66,17 +66,6 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         excelExport: true,
         maxUsers: 2,
         maxEmailAccounts: 2,
-    },
-    free: {
-        gmailInspectionHistoryMonths: 16,
-        gmailInvoiceHistoryMonths: 0,
-        googleDriveSync: false,
-        googleCalendarSync: false,
-        automaticEmailReminders: false,
-        automaticMonthlyReports: false,
-        excelExport: false,
-        maxUsers: 1,
-        maxEmailAccounts: 0,
     },
     basic: {
         gmailInspectionHistoryMonths: 16,
@@ -91,7 +80,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     },
     business: {
         gmailInspectionHistoryMonths: 24,
-        gmailInvoiceHistoryMonths: 24,
+        gmailInvoiceHistoryMonths: 36,
         googleDriveSync: true,
         googleCalendarSync: true,
         automaticEmailReminders: true,
@@ -157,19 +146,20 @@ export const PRICING_PLANS: PricingPlan[] = [
         highlighted: true,
         features: [
             "כל מה שיש בבסיסי",
-            "יבוא תסקירים ללא הגבלה",
-            "עמוד חשבוניות והוצאות פתוח במסלול העסקי",
-            "יבוא חשבונות וקבלות ללא הגבלה",
-            "יבוא קבלות מ-Gmail עד 24 חודשים אחורה",
-            "סנכרון היסטורי של שנתיים",
+            "יבוא תסקירים וחשבוניות ללא הגבלה",
+            "יבוא תסקירים מ-Gmail עד 24 חודשים אחורה",
+            "יבוא חשבוניות וקבלות מ-Gmail עד 36 חודשים אחורה",
+            "ניהול לקוחות וציוד",
             "סנכרון Google Calendar לתסקירים עתידיים",
         ],
     },
 ];
 
 export function planFromRole(role: string | null | undefined): PlanId {
+    // Only a fallback for accounts with no plan stored. Roles no longer imply a
+    // tier — admin administers, everyone else is a user, and what an account can
+    // do comes from its plan.
     if (role === "admin") return "business";
-    if (role === "pro") return "basic";
     return "free";
 }
 

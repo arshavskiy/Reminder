@@ -140,8 +140,9 @@ function toUser(doc: any): User {
 }
 
 function planFromRole(role: string | null | undefined): UserPlan {
+  // Fallback only, for rows predating the plan field. Roles no longer map to
+  // tiers: admin administers, everyone else is a user.
   if (role === "admin") return "business";
-  if (role === "pro") return "basic";
   return "free";
 }
 

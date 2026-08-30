@@ -716,8 +716,8 @@ function frontendBaseUrl(req: express.Request): string {
 }
 
 function planFromRole(role: string | null | undefined): "free" | "basic" | "business" {
+  // Fallback only. Roles no longer imply a tier.
   if (role === "admin") return "business";
-  if (role === "pro") return "basic";
   return "free";
 }
 

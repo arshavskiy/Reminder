@@ -57,7 +57,7 @@ describe("plan entitlements", () => {
       emailDocuments: null,
     });
     expect(entitlements.reminders.scope).toBe("unlimited");
-    expect(entitlements.gmailInvoiceHistoryMonths).toBe(24);
+    expect(entitlements.gmailInvoiceHistoryMonths).toBe(36);
     expect(entitlements.gmailInspectionHistoryMonths).toBe(24);
     expect(entitlements.googleCalendarSync).toBe(true);
     expect(entitlements.maxUsers).toBeNull();

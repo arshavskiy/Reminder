@@ -39,9 +39,11 @@ describe("Gmail query tier limits", () => {
     );
   });
 
-  it("limits business invoice searches to 24 months", () => {
+  it("limits business invoice searches to 36 months", () => {
+    // Invoices reach further back than inspections: three tax years of expense
+    // history, against 24 months for inspections.
     expect(buildGmailQuery("has:attachment HOT", invoiceTemplate, "business")).toBe(
-      "has:attachment HOT newer_than:24m",
+      "has:attachment HOT newer_than:36m",
     );
   });
 
