@@ -1,10 +1,8 @@
-// .env.local first: "dotenv/config" reads only .env, so every MONGODB_* value
-// set in .env.local was invisible here and the script silently fell back to
-// localhost — including when it was meant to be writing to production.
-import dotenv from "dotenv";
-
-dotenv.config({path: ".env.local"});
-dotenv.config();
+// Must come first: db.ts reads MONGODB_* into top-level consts at import time,
+// and ESM hoists imports above statement code — so calling dotenv.config() in
+// the body here ran after db.ts had already evaluated, leaving it on its
+// localhost fallback while .env.local pointed somewhere else entirely.
+import "./loadEnv";
 import {closeDb, col, connectDb} from "../db/db";
 import {createMagicLinkToken} from "../auth/session";
 import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
