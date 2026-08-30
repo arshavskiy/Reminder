@@ -8,12 +8,12 @@ describe("plan entitlements", () => {
     expect(entitlements.plan).toBe("free");
     expect(entitlements.documents).toEqual({
       scope: "lifetime",
-      invoices: 10,
-      contracts: 10,
-      manualDocuments: 10,
-      emailDocuments: 10,
+        invoices: 50,
+        contracts: 50,
+        manualDocuments: 50,
+        emailDocuments: 50,
     });
-    expect(entitlements.reminders).toEqual({ scope: "lifetime", limit: 25 });
+      expect(entitlements.reminders).toEqual({scope: "lifetime", limit: 0});
     expect(entitlements.gmailInvoiceHistoryMonths).toBe(0);
     expect(entitlements.gmailInspectionHistoryMonths).toBe(16);
     expect(entitlements.googleDriveSync).toBe(false);
@@ -22,7 +22,7 @@ describe("plan entitlements", () => {
     expect(entitlements.automaticMonthlyReports).toBe(false);
     expect(entitlements.excelExport).toBe(false);
     expect(entitlements.maxUsers).toBe(1);
-    expect(entitlements.maxEmailAccounts).toBe(1);
+      expect(entitlements.maxEmailAccounts).toBe(0);
     expect(entitlements.ocr).toBe(true);
   });
 
@@ -36,7 +36,7 @@ describe("plan entitlements", () => {
       emailDocuments: 50,
     });
     expect(entitlements.reminders).toEqual({ scope: "unlimited", limit: null });
-    expect(entitlements.gmailInvoiceHistoryMonths).toBe(12);
+      expect(entitlements.gmailInvoiceHistoryMonths).toBe(0);
     expect(entitlements.gmailInspectionHistoryMonths).toBe(16);
     expect(entitlements.googleDriveSync).toBe(true);
     expect(entitlements.googleCalendarSync).toBe(false);

@@ -492,7 +492,7 @@ const allNav: Array<{
   {label: "דוחות", key: "reports", minPlan: "free", feature: FEATURES.pages.reports},
   {label: "לקוחות", key: "clients", minPlan: "basic", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minPlan: "business", feature: FEATURES.pages.field},
-  {label: "ציוד", key: "equipment", minPlan: "business", feature: FEATURES.pages.equipment},
+  {label: "ציוד", key: "equipment", minPlan: "basic", feature: FEATURES.pages.equipment},
   {label: "חשבוניות", key: "invoices", minPlan: "business", feature: FEATURES.pages.invoices},
   {label: "Gmail", key: "gmail", minRole: "admin", feature: FEATURES.pages.gmail},
   // Template management lives under the account dropdown.

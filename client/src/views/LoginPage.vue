@@ -141,13 +141,23 @@
                    style="color:var(--color-warning);font-size:12px;margin:4px 0 12px">
                   הסיסמה חייבת להכיל לפחות 8 תווים</p>
                 <div style="height:12px" v-else/>
+                <n-checkbox
+                    v-model:checked="regTermsAccepted"
+                    :disabled="loading"
+                    class="register-terms"
+                >
+                  אני מאשר/ת שקראתי ואני מסכים/ה ל
+                  <a href="https://remindocr.com/terms" rel="noopener" target="_blank">תנאי השימוש</a>
+                  ול
+                  <a href="https://remindocr.com/privacy" rel="noopener" target="_blank">מדיניות הפרטיות</a>
+                </n-checkbox>
                 <n-button
                     type="primary"
                     size="large"
                     style="width:100%"
                     attr-type="submit"
                     :loading="loading"
-                    :disabled="!regEmail || !regPassword || regPassword.length < 8"
+                    :disabled="!regEmail || !regPassword || regPassword.length < 8 || !regTermsAccepted"
                 >
                   הרשמה
                 </n-button>
@@ -191,7 +201,7 @@
     <!--          &lt;!&ndash;          <div class="feature-icon">📄</div>&ndash;&gt;-->
     <!--          <h3>ייבוא מסמכים חכם</h3>-->
     <!--          <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך. ייבוא קבלות עד-->
-    <!--            6 חודשים אחורה בניסיון, 12 בבסיסי.</p>-->
+    <!--            יבוא קבלות היסטורי מ-Gmail שמור למסלול עסקי.</p>-->
     <!--        </article>-->
     <!--        <article class="feature-card feature-card&#45;&#45;accent">-->
     <!--          <h3>ניסיון של 30 יום</h3>-->
@@ -286,7 +296,6 @@
     <!--              <li>תצוגה מקדימה וחילוץ נתונים AI</li>-->
     <!--              <li>תזכורות אימייל אוטומטיות ללקוחות</li>-->
     <!--              <li>יבוא תסקירים של 16 חודשים האחרונים</li>-->
-    <!--              <li>יבוא קבלות מ-Gmail עד 6 חודשים אחורה</li>-->
     <!--              <li>יצוא לאקסל ודוחות חודשיים</li>-->
     <!--              <li>סנכרון Google Drive</li>-->
     <!--            </ul>-->
@@ -306,7 +315,6 @@
     <!--            <ul class="plan__features">-->
     <!--              <li>50 מסמכים בחודש — תסקירים וקבלות יחד</li>-->
     <!--              <li>יבוא תסקירים של 16 חודשים האחרונים</li>-->
-    <!--              <li>יבוא קבלות מ-Gmail עד 12 חודשים אחורה</li>-->
     <!--              <li>ניהול תסקירים ושליחת תזכורות ללקוחות</li>-->
     <!--              <li>יצוא קבלות לקובץ אקסל</li>-->
     <!--              <li>הפקת דוחות חודשיים אוטומטיים</li>-->
@@ -351,6 +359,7 @@
     <!--            <ul class="plan__features">-->
     <!--              <li>יבוא תסקירים ללא הגבלה</li>-->
     <!--              <li>יבוא חשבונות וקבלות ללא הגבלה</li>-->
+    <!--              <li>יבוא קבלות מ-Gmail עד 24 חודשים אחורה</li>-->
     <!--              <li>סנכרון היסטורי של שנתיים</li>-->
     <!--              <li>ניהול לקוחות וציוד</li>-->
     <!--              <li>סנכרון Google Calendar לתסקירים עתידיים</li>-->
@@ -418,7 +427,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NAlert, NButton, NForm, NFormItem, NIcon, NInput, NModal, NTabPane, NTabs, NTooltip} from "naive-ui";
+import {NAlert, NButton, NCheckbox, NForm, NFormItem, NIcon, NInput, NModal, NTabPane, NTabs, NTooltip} from "naive-ui";
 import {MoonOutline, SunnyOutline} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
 import {useDashboardStore} from "../stores/dashboard.js";
@@ -457,6 +466,7 @@ const loginPassword = ref("");
 const regName = ref("");
 const regEmail = ref("");
 const regPassword = ref("");
+const regTermsAccepted = ref(false);
 
 // Forgot password
 const showForgot = ref(false);
@@ -473,6 +483,7 @@ const errorMessages: Record<string, string> = {
   email_taken: "כתובת האימייל כבר רשומה במערכת",
   invalid_email: "כתובת האימייל אינה תקינה",
   password_too_short: "הסיסמה חייבת להכיל לפחות 8 תווים",
+  terms_required: "יש לאשר את תנאי השימוש ומדיניות הפרטיות לפני ההרשמה",
   invalid_token: "קישור האימות אינו תקין",
   token_expired: "קישור האימות פג תוקף — אנא הירשם מחדש",
 };
@@ -567,6 +578,10 @@ function readIntent(): Partial<SignupIntent> {
 }
 
 async function handleRegister() {
+  if (!regTermsAccepted.value) {
+    routeError.value = "terms_required";
+    return;
+  }
   loading.value = true;
   gisError.value = null;
   routeError.value = null;
@@ -595,6 +610,7 @@ async function handleRegister() {
     regEmail.value = "";
     regPassword.value = "";
     regName.value = "";
+    regTermsAccepted.value = false;
     activeTab.value = "login";
   } catch {
     routeError.value = "auth_failed";
@@ -739,6 +755,24 @@ onMounted(async () => {
 .nav-links a:hover {
   background: var(--login-brand-tint);
   color: var(--brand-color);
+}
+
+.register-terms {
+  display: block;
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.register-terms a {
+  color: var(--brand-color);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.register-terms a:hover {
+  text-decoration: underline;
 }
 
 .nav-links .nav-cta {

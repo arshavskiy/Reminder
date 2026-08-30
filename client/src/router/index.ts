@@ -61,9 +61,21 @@ export const router = createRouter({
     { path: "/dashboard", component: DashboardPage, meta: { feature: FEATURES.pages.dashboard } },
     { path: "/documents", component: DocumentsPage, meta: { feature: FEATURES.pages.documents } },
     { path: "/documents/:id", component: DocumentDetailPage, meta: { feature: FEATURES.pages.documents } },
-    { path: "/invoices", component: () => import("../views/InvoicesPage.vue"), meta: { requirePlan: "business" } },
-    { path: "/invoices/expenses", component: () => import("../views/ExpenseAnalyticsPage.vue"), meta: { requirePlan: "business" } },
-    { path: "/invoices/:id", component: () => import("../views/InvoiceDetailPage.vue"), meta: { requirePlan: "business" } },
+      {
+          path: "/invoices",
+          component: () => import("../views/InvoicesPage.vue"),
+          meta: {feature: FEATURES.pages.invoices, requirePlan: "business"}
+      },
+      {
+          path: "/invoices/expenses",
+          component: () => import("../views/ExpenseAnalyticsPage.vue"),
+          meta: {feature: FEATURES.pages.invoices, requirePlan: "business"}
+      },
+      {
+          path: "/invoices/:id",
+          component: () => import("../views/InvoiceDetailPage.vue"),
+          meta: {feature: FEATURES.pages.invoices, requirePlan: "business"}
+      },
     { path: "/clients", component: ClientsPage, meta: { feature: FEATURES.pages.clients, requirePlan: "basic" } },
     { path: "/clients/:id", component: ClientDetailPage, meta: { feature: FEATURES.pages.clients, requirePlan: "basic" } },
     { path: "/contracts", component: ContractsPage, meta: { feature: FEATURES.pages.contracts } },
@@ -73,7 +85,7 @@ export const router = createRouter({
     { path: "/profile", component: ProfilePage, meta: { feature: FEATURES.pages.profile } },
     { path: "/settings/doc-templates", component: DocTemplatesPage, meta: { feature: FEATURES.pages.docTemplates } },
     { path: "/settings/email-templates", component: EmailTemplatesPage, meta: { feature: FEATURES.pages.emailTemplates } },
-    { path: "/equipment", component: EquipmentPage, meta: { feature: FEATURES.pages.equipment, requirePlan: "business" } },
+      {path: "/equipment", component: EquipmentPage, meta: {feature: FEATURES.pages.equipment, requirePlan: "basic"}},
     { path: "/reports", component: ReportsPage, meta: { feature: FEATURES.pages.reports } },
     { path: "/reports/expenses", redirect: "/invoices/expenses" },
     { path: "/field", component: () => import("../views/FieldPage.vue"), meta: { feature: FEATURES.pages.field, requirePlan: "business" } },

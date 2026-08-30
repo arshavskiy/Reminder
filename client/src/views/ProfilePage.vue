@@ -1246,132 +1246,189 @@
         </section>
 
         <section v-if="activeSection === 'subscription'">
-          <h2 class="section-title">מנוי ותשלומים</h2>
+          <div class="section-header subscription-header">
+            <div>
+              <h2 class="section-title">מנוי ותשלומים</h2>
+              <p class="subscription-header__desc">ניהול המסלול, מכסות השימוש והחיובים של החשבון.</p>
+            </div>
+            <n-tag :type="planTag.type" size="small">{{ planTag.label }}</n-tag>
+          </div>
 
-          <article v-if="currentPricingPlan" class="sub-plan-card">
-            <div class="sub-plan-card__head">
-              <div>
-                <p class="sub-plan-card__eyebrow">המסלול שלכם</p>
-                <h3 class="sub-plan-card__title">{{ currentPricingPlan.name }}</h3>
-                <p class="sub-plan-card__blurb">{{ currentPricingPlan.blurb }}</p>
+          <div class="subscription-layout">
+            <article v-if="currentPricingPlan" class="sub-plan-card">
+              <div class="sub-plan-card__head">
+                <div>
+                  <p class="sub-plan-card__eyebrow">המסלול שלכם</p>
+                  <h3 class="sub-plan-card__title">{{ currentPricingPlan.name }}</h3>
+                  <p class="sub-plan-card__blurb">{{ currentPricingPlan.blurb }}</p>
+                </div>
+                <div class="sub-plan-card__price">
+                  <strong>{{ currentPricingPlan.price === 0 ? "חינם" : `₪${currentPricingPlan.price}` }}</strong>
+                  <span v-if="currentPricingPlan.period">{{ currentPricingPlan.period }}</span>
+                  <span v-if="planYearlyLabel" class="sub-plan-card__yearly">{{ planYearlyLabel }}</span>
+                </div>
               </div>
-              <div class="sub-plan-card__price">
-                <strong>{{ currentPricingPlan.price === 0 ? "חינם" : `₪${currentPricingPlan.price}` }}</strong>
-                <span v-if="currentPricingPlan.period">{{ currentPricingPlan.period }}</span>
-                <span v-if="planYearlyLabel" class="sub-plan-card__yearly">{{ planYearlyLabel }}</span>
+              <ul class="sub-plan-card__features">
+                <li v-for="feature in currentPricingPlan.features" :key="feature">
+                  <n-icon :component="CheckmarkCircleOutline" :size="16"/>
+                  <span>{{ feature }}</span>
+                </li>
+              </ul>
+            </article>
+
+            <aside aria-label="פרטי המנוי" class="sub-summary-card">
+              <div class="sub-summary-card__row">
+                <span aria-hidden="true" class="sub-summary-card__icon">
+                  <n-icon :component="CardOutline" :size="18"/>
+                </span>
+                <div>
+                  <span class="sub-summary-card__label">מחיר</span>
+                  <strong>{{ planPriceLabel }}</strong>
+                </div>
+              </div>
+              <div class="sub-summary-card__row">
+                <span aria-hidden="true" class="sub-summary-card__icon">
+                  <n-icon :component="WalletOutline" :size="18"/>
+                </span>
+                <div>
+                  <span class="sub-summary-card__label">סוג מכסה</span>
+                  <strong>{{ quotaScopeLabel }}</strong>
+                </div>
+              </div>
+              <div v-if="quotaPeriodLabel" class="sub-summary-card__row">
+                <span aria-hidden="true" class="sub-summary-card__icon">
+                  <n-icon :component="CalendarOutline" :size="18"/>
+                </span>
+                <div>
+                  <span class="sub-summary-card__label">תקופת מכסה</span>
+                  <strong>{{ quotaPeriodLabel }}</strong>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <div class="subscription-panels">
+            <section class="sub-panel">
+              <div class="sub-panel__head">
+                <div>
+                  <h3>שימוש במכסה</h3>
+                  <p>מעקב אחרי מסמכים ותזכורות לפי המסלול.</p>
+                </div>
+              </div>
+              <div v-if="quotaUsageRows.length" class="sub-quota-list">
+                <div v-for="item in quotaUsageRows" :key="item.key" class="sub-quota">
+                  <div class="sub-quota__head">
+                    <span class="sub-quota__label">{{ item.label }}</span>
+                    <span class="sub-quota__value">{{ item.usageLabel }}</span>
+                  </div>
+                  <n-progress
+                      v-if="item.limit !== null"
+                      :color="item.percent >= 100 ? 'var(--color-error)' : item.percent >= 80 ? 'var(--color-warning)' : 'var(--brand-color)'"
+                      :height="8"
+                      :percentage="item.percent"
+                      :show-indicator="false"
+                      type="line"
+                  />
+                  <p v-else class="sub-quota__unlimited">ללא הגבלה</p>
+                </div>
+              </div>
+              <div v-else class="sub-billing-empty sub-billing-empty--compact">
+                נתוני השימוש יופיעו לאחר טעינת פרטי המנוי.
+              </div>
+            </section>
+
+            <section class="sub-panel">
+              <div class="sub-panel__head">
+                <div>
+                  <h3>פירוט שימוש</h3>
+                  <p>סיכום יבוא מסמכים מהעלאה ידנית ומ-Gmail.</p>
+                </div>
+              </div>
+              <div v-if="importCounterRows.length" class="sub-counter-list">
+                <div v-for="item in importCounterRows" :key="item.key" class="sub-counter">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.value }}</strong>
+                </div>
+              </div>
+              <div v-else class="sub-billing-empty sub-billing-empty--compact">
+                עדיין אין נתוני שימוש להצגה.
+              </div>
+            </section>
+          </div>
+
+          <div v-if="upgradePlans.length" class="subscription-upgrades">
+            <div class="sub-panel__head">
+              <div>
+                <h3>שדרוג מסלול</h3>
+                <p>בחרו מסלול מתאים ונמשיך את הרכישה ב-WhatsApp.</p>
               </div>
             </div>
-            <ul class="sub-plan-card__features">
-              <li v-for="feature in currentPricingPlan.features.slice(0, 4)" :key="feature">
-                <n-icon :component="CheckmarkCircleOutline" :size="16" />
-                <span>{{ feature }}</span>
-              </li>
-            </ul>
-
-          </article>
-
-          <div v-if="upgradePlans.length" class="upgrade-grid">
-            <article
+            <div class="upgrade-grid">
+              <article
                 v-for="plan in upgradePlans"
                 :key="plan.id"
                 class="upgrade-card"
                 :class="{ 'upgrade-card--highlighted': plan.highlighted }"
-            >
-              <span v-if="plan.highlighted" class="upgrade-card__badge">הכי פופולרי</span>
-              <h3 class="upgrade-card__name">{{ plan.name }}</h3>
-              <p class="upgrade-card__blurb">{{ plan.blurb }}</p>
-              <div class="upgrade-card__price">
-                <span v-if="plan.yearlyPrice" class="upgrade-card__old">₪{{ plan.price }}</span>
-                <strong>₪{{ yearlyMonthly(plan) }}</strong>
-                <span class="upgrade-card__period">/ חודש</span>
+              >
+                <span v-if="plan.highlighted" class="upgrade-card__badge">הכי פופולרי</span>
+                <h3 class="upgrade-card__name">{{ plan.name }}</h3>
+                <p class="upgrade-card__blurb">{{ plan.blurb }}</p>
+                <div class="upgrade-card__price">
+                  <span v-if="plan.yearlyPrice" class="upgrade-card__old">₪{{ plan.price }}</span>
+                  <strong>₪{{ yearlyMonthly(plan) }}</strong>
+                  <span class="upgrade-card__period">/ חודש</span>
+                </div>
+                <p v-if="plan.yearlyPrice" class="upgrade-card__terms">
+                  בתשלום שנתי: ₪{{ plan.yearlyPrice.toLocaleString() }} לשנה · או ₪{{ plan.price }} בחיוב חודשי
+                </p>
+                <p class="upgrade-card__vat">המחירים אינם כוללים מע״מ (18%)</p>
+                <ul class="upgrade-card__features">
+                  <li v-for="feature in plan.features" :key="feature">
+                    <n-icon :component="CheckmarkCircleOutline" :size="14"/>
+                    <span>{{ feature }}</span>
+                  </li>
+                </ul>
+                <a :href="whatsappHref(plan)" class="upgrade-card__cta" rel="noopener" target="_blank">
+                  <n-icon :component="LogoWhatsapp" :size="16"/>
+                  לרכישה ב-WhatsApp
+                </a>
+                <p class="upgrade-card__note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>
+              </article>
+            </div>
+          </div>
+
+          <section class="sub-panel sub-billing-panel">
+            <div class="sub-panel__head">
+              <div>
+                <h3>היסטוריית חיוב</h3>
+                <p>חשבוניות ותשלומים יוצגו כאן לאחר חיבור מערכת התשלומים.</p>
               </div>
-              <p v-if="plan.yearlyPrice" class="upgrade-card__terms">
-                בתשלום שנתי — ₪{{ plan.yearlyPrice.toLocaleString() }} לשנה · או ₪{{ plan.price }} בחיוב חודשי
-              </p>
-              <p class="upgrade-card__vat">המחירים אינם כוללים מע״מ (18%)</p>
-              <ul class="upgrade-card__features">
-                <li v-for="feature in plan.features" :key="feature">
-                  <n-icon :component="CheckmarkCircleOutline" :size="14" />
-                  <span>{{ feature }}</span>
-                </li>
-              </ul>
-              <a class="upgrade-card__cta" :href="whatsappHref(plan)" target="_blank" rel="noopener">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1s-.7 1-.9 1.2c-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4-.1-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2A10 10 0 0 0 3.5 17.2L2 22l4.9-1.5A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-2.9.9.9-2.8-.2-.3a8.2 8.2 0 1 1 6.9 3.6z"/></svg>
-                לרכישה ב-WhatsApp
-              </a>
-              <p class="upgrade-card__note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>
-            </article>
-          </div>
-
-          <div class="info-card sub-usage-card">
-            <div class="info-row">
-              <span class="info-label">תוכנית נוכחית</span>
-              <span class="info-val">
-                <n-tag :type="planTag.type" size="small">{{ planTag.label }}</n-tag>
-              </span>
+              <n-icon :component="ReceiptOutline" :size="20"/>
             </div>
-            <div class="info-row">
-              <span class="info-label">מחיר</span>
-              <span class="info-val">{{ planPriceLabel }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">סוג מכסה</span>
-              <span class="info-val">{{ quotaScopeLabel }}</span>
-            </div>
-            <div v-if="quotaPeriodLabel" class="info-row">
-              <span class="info-label">תקופת מכסה</span>
-              <span class="info-val">{{ quotaPeriodLabel }}</span>
-            </div>
-
-            <div v-for="item in quotaUsageRows" :key="item.key" class="sub-quota">
-              <div class="sub-quota__head">
-                <span class="sub-quota__label">{{ item.label }}</span>
-                <span class="sub-quota__value">{{ item.usageLabel }}</span>
-              </div>
-              <n-progress
-                  v-if="item.limit !== null"
-                  :color="item.percent >= 100 ? 'var(--color-error)' : item.percent >= 80 ? 'var(--color-warning)' : 'var(--brand-color)'"
-                  :height="8"
-                  :percentage="item.percent"
-                  :show-indicator="false"
-                  type="line"
-              />
-              <p v-else class="sub-quota__unlimited">ללא הגבלה</p>
-            </div>
-          </div>
-
-          <div v-if="importCounterRows.length" class="info-card sub-usage-card sub-counters-card">
-            <h3 class="settings-group__title sub-counters-card__title">פירוט שימוש</h3>
-            <div v-for="item in importCounterRows" :key="item.key" class="info-row">
-              <span class="info-label">{{ item.label }}</span>
-              <span class="info-val">{{ item.value }}</span>
-            </div>
-          </div>
-
-          <h3 class="billing-title">היסטוריית חיוב</h3>
-          <div v-if="billingHistory.length" class="billing-table-wrap">
-            <table class="billing-table">
-              <thead>
+            <div v-if="billingHistory.length" class="billing-table-wrap">
+              <table class="billing-table">
+                <thead>
                 <tr>
                   <th>תאריך</th>
                   <th>סכום</th>
                   <th>סטטוס</th>
                   <th>תיאור</th>
                 </tr>
-              </thead>
-              <tbody>
+                </thead>
+                <tbody>
                 <tr v-for="(row, index) in billingHistory" :key="index">
                   <td>{{ formatDate(row.date) }}</td>
                   <td>₪{{ row.amount }}</td>
                   <td>{{ row.status }}</td>
                   <td>{{ row.description }}</td>
                 </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-else class="sub-billing-empty">
-            אין חיובים עדיין. תשלומים יופיעו כאן לאחר חיבור מערכת התשלומים.
-          </div>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="sub-billing-empty">
+              אין חיובים עדיין.
+            </div>
+          </section>
         </section>
       </n-spin>
     </main>
@@ -1449,6 +1506,7 @@ import {
 import {
   CalendarOutline,
   CameraOutline,
+  CardOutline,
   CheckmarkCircleOutline,
   CloudUploadOutline,
   ColorPaletteOutline,
@@ -1461,6 +1519,7 @@ import {
   LockClosedOutline,
   LogOutOutline,
   LogoGoogle,
+  LogoWhatsapp,
   MailOutline,
   MoonOutline,
   NotificationsOutline,
@@ -1471,6 +1530,8 @@ import {
   StatsChartOutline,
   SunnyOutline,
   TrashOutline,
+  ReceiptOutline,
+  WalletOutline,
 } from "@vicons/ionicons5";
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
@@ -3233,16 +3294,38 @@ function showGoogleConnectionErrorFromRoute() {
   border-top: 1px solid var(--border-color);
 }
 
+.subscription-header {
+  align-items: flex-start;
+}
+
+.subscription-header__desc {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.subscription-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(220px, 0.9fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.sub-plan-card,
+.sub-summary-card,
+.sub-panel,
+.upgrade-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
 .sub-plan-card {
-  margin-bottom: 20px;
   padding: 18px 20px;
-  border: 1px solid color-mix(in srgb, var(--brand-color) 28%, var(--border-color));
-  border-radius: 16px;
-  background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--brand-color) 8%, var(--bg-card)) 0%,
-      var(--bg-card) 72%
-  );
+  border-color: color-mix(in srgb, var(--brand-color) 30%, var(--border-color));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--brand-color) 8%, transparent), transparent 70%),
+  var(--bg-card);
 }
 
 .sub-plan-card__head {
@@ -3300,7 +3383,7 @@ function showGoogleConnectionErrorFromRoute() {
 }
 
 .sub-plan-card__features {
-  margin: 0 0 14px;
+  margin: 0;
   padding: 0;
   list-style: none;
   display: grid;
@@ -3308,25 +3391,171 @@ function showGoogleConnectionErrorFromRoute() {
   font-size: 13px;
   color: var(--text-secondary);
 }
-.sub-plan-card__features li {
+
+.sub-plan-card__features li,
+.upgrade-card__features li {
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
-.sub-plan-card__features :deep(.n-icon) {
+
+.sub-plan-card__features :deep(.n-icon),
+.upgrade-card__features :deep(.n-icon) {
   flex: 0 0 auto;
-  margin-top: 1px;
+  margin-top: 2px;
   color: var(--brand-color);
 }
 
-/* The landing pricing cards, scaled down: this sits inside a settings panel
-   rather than a full-width marketing page, so the type and padding come down a
-   step and the feature list carries no minimum height. */
+.sub-summary-card {
+  display: grid;
+  gap: 0;
+  padding: 4px 16px;
+}
+
+.sub-summary-card__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sub-summary-card__row:last-child {
+  border-bottom: none;
+}
+
+.sub-summary-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: var(--brand-color);
+  background: color-mix(in srgb, var(--brand-color) 12%, transparent);
+  flex: 0 0 auto;
+}
+
+.sub-summary-card__label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sub-summary-card strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.subscription-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.sub-panel {
+  padding: 18px 20px;
+}
+
+.sub-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.sub-panel__head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sub-panel__head p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.sub-panel__head :deep(.n-icon) {
+  flex: 0 0 auto;
+  color: var(--brand-color);
+}
+
+.sub-quota-list {
+  display: grid;
+  gap: 14px;
+}
+
+.sub-quota__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.sub-quota__label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.sub-quota__value {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.sub-quota__unlimited {
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--brand-color);
+  background: color-mix(in srgb, var(--brand-color) 10%, transparent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sub-counter-list {
+  display: grid;
+  gap: 8px;
+}
+
+.sub-counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.sub-counter:last-child {
+  border-bottom: none;
+}
+
+.sub-counter strong {
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.subscription-upgrades {
+  margin-bottom: 14px;
+}
+
 .upgrade-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 14px;
-  margin-bottom: 18px;
 }
 
 .upgrade-card {
@@ -3334,9 +3563,6 @@ function showGoogleConnectionErrorFromRoute() {
   display: flex;
   flex-direction: column;
   padding: 20px 18px;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--bg-card);
 }
 
 .upgrade-card--highlighted {
@@ -3391,15 +3617,14 @@ function showGoogleConnectionErrorFromRoute() {
   color: var(--text-secondary);
 }
 
-.upgrade-card__period {
+.upgrade-card__period,
+.upgrade-card__terms {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
 .upgrade-card__terms {
   margin: 0 0 2px;
-  font-size: 12px;
-  color: var(--text-secondary);
 }
 
 .upgrade-card__vat {
@@ -3417,19 +3642,10 @@ function showGoogleConnectionErrorFromRoute() {
 }
 
 .upgrade-card__features li {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
   margin-bottom: 7px;
   font-size: 12.5px;
   line-height: 1.45;
   color: var(--text-secondary);
-}
-
-.upgrade-card__features :deep(.n-icon) {
-  flex: none;
-  margin-top: 2px;
-  color: var(--brand-color);
 }
 
 .upgrade-card__cta {
@@ -3437,8 +3653,9 @@ function showGoogleConnectionErrorFromRoute() {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 10px 14px;
-  border-radius: 9px;
+  min-height: 38px;
+  padding: 9px 14px;
+  border-radius: 8px;
   background: #25d366;
   color: #fff;
   font-size: 13.5px;
@@ -3451,13 +3668,6 @@ function showGoogleConnectionErrorFromRoute() {
   background: #1da851;
 }
 
-.upgrade-card__cta svg {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-  flex: none;
-}
-
 .upgrade-card__note {
   margin: 8px 0 0;
   text-align: center;
@@ -3465,73 +3675,14 @@ function showGoogleConnectionErrorFromRoute() {
   color: var(--text-secondary);
 }
 
-.sub-plan-card__link {
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--brand-color);
-  text-decoration: none;
-}
-
-.sub-plan-card__link:hover {
-  text-decoration: underline;
-}
-
-.sub-usage-card {
-  margin-bottom: 24px;
-}
-
-.sub-quota {
-  padding-top: 14px;
-  margin-top: 14px;
-  border-top: 1px solid var(--border-color);
-}
-
-.sub-quota__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
-.sub-quota__label {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.sub-quota__value {
-  color: var(--text-secondary);
-  font-weight: 700;
-}
-
-.sub-quota__unlimited {
-  margin: 0;
-  font-size: 12px;
-  color: var(--brand-color);
-  font-weight: 600;
-}
-
-.sub-counters-card {
-  margin-top: 12px;
-}
-
-.sub-counters-card__title {
-  margin: 0 0 8px;
-}
-
-.billing-title {
-  margin: 0 0 12px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
+.sub-billing-panel {
+  margin-bottom: 0;
 }
 
 .billing-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--bg-card);
 }
 
@@ -3559,13 +3710,17 @@ function showGoogleConnectionErrorFromRoute() {
 }
 
 .sub-billing-empty {
-  padding: 24px;
+  padding: 22px;
   border: 1px dashed var(--border-color);
-  border-radius: 12px;
+  border-radius: 8px;
   text-align: center;
   color: var(--text-secondary);
   font-size: 13px;
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+}
+
+.sub-billing-empty--compact {
+  padding: 18px;
 }
 
 @media (max-width: 820px) {
@@ -3605,6 +3760,11 @@ function showGoogleConnectionErrorFromRoute() {
 
   .profile-content {
     width: 100%;
+  }
+
+  .subscription-layout,
+  .subscription-panels {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -3688,12 +3848,34 @@ function showGoogleConnectionErrorFromRoute() {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .subscription-header :deep(.n-tag) {
+    align-self: flex-start;
+  }
+
+  .sub-plan-card,
+  .sub-panel,
+  .upgrade-card {
+    padding: 16px;
+  }
+
   .sub-plan-card__head {
     flex-direction: column;
   }
 
   .sub-plan-card__price {
     align-items: flex-start;
+  }
+
+  .sub-plan-card__yearly {
+    text-align: start;
+  }
+
+  .sub-summary-card {
+    padding-inline: 14px;
+  }
+
+  .sub-panel__head {
+    flex-direction: column;
   }
 }
 </style>

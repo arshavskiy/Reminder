@@ -17,11 +17,11 @@ describe("trial plan", () => {
     expect(isTrialActive({plan: "trial", trial_ends_at: null})).toBe(false);
   });
 
-  it("gives an active trial basic-level automation with 6 months of invoice history", () => {
+    it("gives an active trial basic-level automation without Gmail invoice history", () => {
     const flags = featureFlagsForUser({plan: "trial", trial_ends_at: new Date(Date.now() + DAY)});
     expect(flags.automaticEmailReminders).toBe(true);
     expect(flags.excelExport).toBe(true);
-    expect(flags.gmailInvoiceHistoryMonths).toBe(6);
+        expect(flags.gmailInvoiceHistoryMonths).toBe(0);
     expect(flags.googleCalendarSync).toBe(false);
   });
 

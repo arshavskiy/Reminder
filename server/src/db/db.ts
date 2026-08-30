@@ -37,9 +37,18 @@ const PRODUCTION_DB_NAME =
   ?? MONGODB_DB
   ?? "reminder-app";
 
-/** Startup / non-admin default: prefer local when both are configured. */
+/**
+ * Which database the app and scripts actually use.
+ *
+ * Local by default, so day-to-day work cannot touch customer data by accident.
+ * Set MONGODB_TARGET=production to point a script or a one-off run at Atlas —
+ * it is ignored unless a production URI is configured, so a stray value cannot
+ * silently leave you connected to nothing.
+ */
 const PRIMARY_TARGET: AdminDbTarget =
-  MONGODB_LOCAL_URI && PRODUCTION_URI ? "local" : "local";
+    String(process.env.MONGODB_TARGET ?? "").trim().toLowerCase() === "production" && PRODUCTION_URI
+        ? "production"
+        : "local";
 
 type DbSlot = {
   target: AdminDbTarget;
@@ -97,7 +106,14 @@ async function openSlot(target: AdminDbTarget, uri: string, dbName: string): Pro
 export async function connectDb(): Promise<Db> {
   if (_primary) return _primary.db;
 
-  _local = await openSlot("local", LOCAL_URI, LOCAL_DB_NAME);
+  // Labelled by what the URI actually points at, not by slot name: MONGODB_LOCAL_URI
+  // is often an Atlas string, and logging that connection as "local" made it look
+  // like a localhost database when it was the customer one.
+  _local = await openSlot(
+      /mongodb\+srv:|mongodb\.net/i.test(LOCAL_URI) ? "production" : "local",
+      LOCAL_URI,
+      LOCAL_DB_NAME,
+  );
 
   if (PRODUCTION_URI && PRODUCTION_URI !== LOCAL_URI) {
     try {

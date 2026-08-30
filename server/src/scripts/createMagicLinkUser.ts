@@ -1,4 +1,10 @@
-import "dotenv/config";
+// .env.local first: "dotenv/config" reads only .env, so every MONGODB_* value
+// set in .env.local was invisible here and the script silently fell back to
+// localhost — including when it was meant to be writing to production.
+import dotenv from "dotenv";
+
+dotenv.config({path: ".env.local"});
+dotenv.config();
 import {closeDb, col, connectDb} from "../db/db";
 import {createMagicLinkToken} from "../auth/session";
 import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
@@ -13,6 +19,11 @@ import {TRIAL_DAYS} from "../plans/tierFeatures";
  *
  * Plan defaults to trial. --trial-days=0 creates an already-lapsed trial, for
  * testing the read-only state a user lands in when the trial runs out.
+ *
+ * Writes to the local database unless --target=production is passed, which
+ * creates a real account in the customer database and prints a link against
+ * SERVER_URL. That combination is refused unless SERVER_URL is set, so a
+ * production account cannot be created with an unusable localhost link.
  */
 
 function parseArg(name: string): string | undefined {
@@ -22,6 +33,21 @@ function parseArg(name: string): string | undefined {
 }
 
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
+
+if (parseArg("target") === "production") {
+    if (!process.env.MONGODB_PRODUCTION_URI) {
+        throw new Error("--target=production needs MONGODB_PRODUCTION_URI to be set");
+    }
+    if (!process.env.SERVER_URL) {
+        throw new Error(
+            "--target=production needs SERVER_URL (e.g. https://api.remindocr.com), " +
+            "otherwise the printed link points at localhost and cannot be used.",
+        );
+    }
+    // db.ts reads this when it picks the primary slot.
+    process.env.MONGODB_TARGET = "production";
+    console.log("[magic-link] TARGET: production — this creates a real account in the customer database.");
+}
 
 async function main() {
   const emailRaw = parseArg("email")?.trim().toLowerCase() || null;

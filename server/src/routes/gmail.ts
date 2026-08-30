@@ -293,7 +293,7 @@ export function registerGmailRoutes(app: express.Application) {
       if (isInvoiceTemplate(template) && invoiceHistoryMonths === 0) {
         res.status(403).json({
           error: "gmail_invoice_plan_required",
-          message: "ייבוא חשבוניות מ-Gmail זמין במסלולים בסיסי ועסקי בלבד",
+            message: "ייבוא חשבוניות וקבלות מ-Gmail זמין במסלול עסקי בלבד",
         });
         return;
       }
@@ -428,7 +428,7 @@ export function registerGmailRoutes(app: express.Application) {
     if (isInvoiceTemplate(template) && invoiceHistoryMonths === 0) {
       res.status(403).json({
         error: "gmail_invoice_plan_required",
-        message: "ייבוא חשבוניות מ-Gmail זמין במסלולים בסיסי ועסקי בלבד",
+          message: "ייבוא חשבוניות וקבלות מ-Gmail זמין במסלול עסקי בלבד",
       });
       return;
     }
@@ -528,7 +528,7 @@ export function registerGmailRoutes(app: express.Application) {
     if (isInvoiceTemplate(template) && invoiceHistoryMonths === 0) {
       res.status(403).json({
         error: "gmail_invoice_plan_required",
-        message: "ייבוא חשבוניות מ-Gmail זמין במסלולים בסיסי ועסקי בלבד",
+          message: "ייבוא חשבוניות וקבלות מ-Gmail זמין במסלול עסקי בלבד",
       });
       return;
     }
