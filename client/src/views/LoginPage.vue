@@ -299,7 +299,7 @@
               <strong>₪88</strong>
               <span class="plan__price-period">/ חודש</span>
             </div>
-            <p class="plan__price-year">₪950 לשנה בתשלום שנתי · חיסכון של 10%</p>
+            <p class="plan__price-year">₪948 לשנה (₪79 / חודש) · חיסכון של 10%</p>
             <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>
             <ul class="plan__features">
               <li>50 מסמכים בחודש — תסקירים וקבלות יחד</li>
@@ -312,7 +312,7 @@
             </ul>
             <div class="plan__ctas">
               <a class="plan__cta plan__cta--primary" href="#login-card">
-                שנתי — ₪950<span class="plan__cta-save">חסכון 10%</span>
+                שנתי — ₪79 / חודש<span class="plan__cta-save">חסכון 10%</span>
               </a>
               <a class="plan__cta plan__cta--ghost" href="#login-card">או חודשי — ₪88 / חודש</a>
             </div>
@@ -327,7 +327,7 @@
               <strong>₪143</strong>
               <span class="plan__price-period">/ חודש</span>
             </div>
-            <p class="plan__price-year">₪1,544 לשנה בתשלום שנתי · חיסכון של 10%</p>
+            <p class="plan__price-year">₪1,536 לשנה (₪128 / חודש) · חיסכון של 10%</p>
             <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>
             <p class="plan__additional">כל מה שיש בבסיסי, ובנוסף</p>
             <ul class="plan__features">
@@ -339,7 +339,7 @@
             </ul>
             <div class="plan__ctas plan__ctas--accent">
               <a class="plan__cta plan__cta--primary" href="#login-card">
-                שנתי — ₪1,544<span class="plan__cta-save">חסכון 10%</span>
+                שנתי — ₪128 / חודש<span class="plan__cta-save">חסכון 10%</span>
               </a>
               <a class="plan__cta plan__cta--ghost" href="#login-card">או חודשי — ₪143 / חודש</a>
             </div>
