@@ -604,6 +604,11 @@
       @create-template="onCreateTemplate"
     />
     <MonthlyReportModal v-model:show="showMonthlyReport"/>
+    <ReminderPreviewModal
+      v-model:show="showReminderPreview"
+      :reminder-id="previewReminderId"
+      :reminder-title="previewReminderTitle"
+    />
   </div>
 </template>
 
@@ -661,6 +666,7 @@ import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
 import DriveExportJobStatus from "../components/DriveExportJobStatus.vue";
 import StorageSyncIcons from "../components/StorageSyncIcons.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
+import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import type {DocTemplate, Document} from "@shared/types.js";
 import {
   countDuplicateReportRows,
@@ -705,6 +711,9 @@ const activeDriveExportJob = ref<DriveExportJob | null>(null);
 const lastDriveExportJob = ref<DriveExportJob | null>(null);
 const visibleDriveExportJob = computed(() => activeDriveExportJob.value ?? lastDriveExportJob.value);
 const showMonthlyReport = ref(false);
+const showReminderPreview = ref(false);
+const previewReminderId = ref<number | string | null>(null);
+const previewReminderTitle = ref<string | null>(null);
 let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
 const rescanning = ref(false);
 const rescanningAll = ref(false);
@@ -1390,6 +1399,7 @@ function rowActions() {
     {label: "צפה", key: "view", icon: renderActionIcon(EyeOutline)},
     {label: "הורד", key: "download", icon: renderActionIcon(DownloadOutline)},
     {label: "חלץ AI", key: "extract", icon: renderActionIcon(FlashOutline)},
+    {label: "תצוגת תזכורת", key: "preview-reminder", icon: renderActionIcon(EyeOutline)},
     { type: "divider", key: "d1" },
     {
       label: "מחק",
@@ -1406,7 +1416,24 @@ function handleRowAction(key: string, row: Document) {
   if (key === "view") router.push(`/documents/${row.id}`);
   if (key === "download") openDownload(row);
   if (key === "extract") openExtractModal(String(row.id));
+  if (key === "preview-reminder") openDocumentReminderPreview(row);
   if (key === "delete") confirmDeleteDocument(row);
+}
+
+async function openDocumentReminderPreview(row: Document) {
+  try {
+    const result = await api.reminders.list({documentId: String(row.id), limit: 1}, true);
+    const reminder = result.rows[0];
+    if (!reminder) {
+      message.info("לא נמצאה תזכורת למסמך הזה");
+      return;
+    }
+    previewReminderId.value = reminder.id;
+    previewReminderTitle.value = reminder.title ?? row.file_name ?? null;
+    showReminderPreview.value = true;
+  } catch {
+    message.error("שגיאה בטעינת התזכורת של המסמך");
+  }
 }
 
 function canExtractDocument(row: Document): boolean {

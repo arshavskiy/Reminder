@@ -118,6 +118,16 @@
             <n-icon :component="PaperPlaneOutline" class="btn-icon"/>
           </button>
           <button
+              v-if="showReminderActions"
+              :disabled="!sendableReminder"
+              :title="sendableReminder ? 'תצוגת תזכורת' : 'אין תזכורת להצגה'"
+              class="btn btn--ghost btn--xs icon-btn"
+              type="button"
+              @click.stop="sendableReminder && emit('preview-reminder', sendableReminder)"
+          >
+            <n-icon :component="EyeOutline" class="btn-icon"/>
+          </button>
+          <button
               class="btn btn--danger-ghost btn--xs icon-btn"
               title="מחק"
               type="button"
@@ -161,6 +171,14 @@
                 @click.stop="emit('send-reminder', reminder)"
             >
               <n-icon :component="PaperPlaneOutline" class="btn-icon"/>
+            </button>
+            <button
+                class="btn btn--ghost btn--xs icon-btn"
+                title="תצוגת תזכורת"
+                type="button"
+                @click.stop="emit('preview-reminder', reminder)"
+            >
+              <n-icon :component="EyeOutline" class="btn-icon"/>
             </button>
             <button
                 v-if="reminder.status === 'pending'"
@@ -281,6 +299,7 @@ const emit = defineEmits<{
   "create-reminder": [row: ContractWithClient];
   "send-reminder": [reminder: ReminderWithContext];
   "send-card": [row: ContractWithClient];
+  "preview-reminder": [reminder: ReminderWithContext];
   "dismiss-reminder": [reminder: ReminderWithContext];
   "delete-reminder": [reminder: ReminderWithContext];
 }>();

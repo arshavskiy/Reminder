@@ -496,7 +496,14 @@ export function registerTemplateRoutes(app: express.Application) {
 
   // Render a real reminder's email HTML for preview (no send)
   app.get("/api/reminders/:id/preview-email", async (req, res) => {
-    const filter = idFilter(req.params.id);
+    let userId: string | undefined;
+    try {
+      userId = await currentUserId(req);
+    } catch {
+      res.status(401).json({ error: "No session cookie" });
+      return;
+    }
+    const filter = {...idFilter(req.params.id), user_id: userId};
     const r = (await col("reminders").findOne(filter)) as any;
     if (!r) {
       res.status(404).json({ error: "Not found" });

@@ -21,6 +21,7 @@
     "report:send-client-links": "npm --prefix server run report:send-client-links --",
     "report:send-client-future-links": "npm --prefix server run report:send-client-future-links --",
     "typecheck": "npm --prefix server run build",
+    "backup:mongo": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup-mongo.ps1",
     "prepare": "node scripts/install-git-hooks.mjs",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

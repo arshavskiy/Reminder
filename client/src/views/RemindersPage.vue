@@ -255,6 +255,11 @@
         <n-button type="primary" :loading="savingDate" @click="doSaveDate">שמור</n-button>
       </template>
     </n-modal>
+    <ReminderPreviewModal
+      v-model:show="showReminderPreview"
+      :reminder-id="previewReminderId"
+      :reminder-title="previewReminderTitle"
+    />
   </div>
 </template>
 
@@ -262,7 +267,7 @@
 import {computed, h, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NAlert, NDataTable, NDatePicker, NForm, NFormItem, NIcon, NInput, NModal, NSelect, useMessage,} from "naive-ui";
-import {CheckboxOutline, CloseCircleOutline, CreateOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
+import {CheckboxOutline, CloseCircleOutline, CreateOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";
@@ -271,6 +276,7 @@ import {useFeaturesStore} from "../stores/features.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import StatusBadge from "../components/StatusBadge.vue";
+import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import {FEATURES} from "../shared/features.js";
 import type {Client, ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
@@ -730,6 +736,9 @@ async function doCreate() {
 
 // ── Edit reminder (trigger_date + email_to) ─────────────────────────────────
 const showEditDate = ref(false);
+const showReminderPreview = ref(false);
+const previewReminderId = ref<number | string | null>(null);
+const previewReminderTitle = ref<string | null>(null);
 const savingDate = ref(false);
 const editingReminder = ref<ReminderWithContext | null>(null);
 const editDateMs = ref<number | null>(null);
@@ -972,6 +981,12 @@ async function doQuickTest() {
   }
 }
 
+function openReminderPreview(row: ReminderWithContext) {
+  previewReminderId.value = row.id;
+  previewReminderTitle.value = row.title ?? null;
+  showReminderPreview.value = true;
+}
+
 // ── Table columns ───────────────────────────────────────────────────────────
 function formatReminderDate(value: string | null | undefined): string {
   if (!value) return "—";
@@ -1079,6 +1094,15 @@ const baseColumns = [
           },
         }, [h(NIcon, { component: PaperPlaneOutline, class: "btn-icon" })]));
       }
+      buttons.push(h("button", {
+        class: "btn btn--ghost btn--xs icon-btn",
+        title: "תצוגה מקדימה",
+        type: "button",
+        onClick: (event: MouseEvent) => {
+          event.stopPropagation();
+          openReminderPreview(row);
+        },
+      }, [h(NIcon, { component: EyeOutline, class: "btn-icon" })]));
       buttons.push(h("button", {
         class: "btn btn--ghost btn--xs icon-btn",
         title: "ערוך תזכורת",
