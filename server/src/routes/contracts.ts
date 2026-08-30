@@ -756,12 +756,15 @@ async function presentContractRows(userId: string, contractDocs: any[]) {
   const clientIds = uniqueObjectIds(contractDocs.map((c) => c.client_id));
   const documentIds = uniqueObjectIds(contractDocs.map((c) => c.document_id));
 
+  // Scoped to the user even though the ids come from contracts already filtered
+  // by user_id: a stale or cross-tenant client_id on a contract would otherwise
+  // pull another account's record into the response.
   const [clients, documents] = await Promise.all([
     clientIds.length
-      ? col("clients").find({ _id: { $in: clientIds } } as any).toArray()
+      ? col("clients").find({ _id: { $in: clientIds }, user_id: userId } as any).toArray()
       : Promise.resolve([]),
     documentIds.length
-      ? col("documents").find({ _id: { $in: documentIds } } as any).toArray()
+      ? col("documents").find({ _id: { $in: documentIds }, user_id: userId } as any).toArray()
       : Promise.resolve([]),
   ]);
   const clientById = new Map(clients.map((c: any) => [String(c._id), c]));

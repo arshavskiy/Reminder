@@ -137,7 +137,7 @@ export function registerEquipmentRoutes(app: express.Application) {
         ? col("documents").find({ _id: { $in: docObjectIds }, user_id: userId } as any).toArray()
         : Promise.resolve([]),
       clientObjectIds.length
-        ? col("clients").find({ _id: { $in: clientObjectIds } } as any).toArray()
+        ? col("clients").find({ _id: { $in: clientObjectIds }, user_id: userId } as any).toArray()
         : Promise.resolve([]),
       docIdStrings.length
         ? col("equipment").find({ document_id: { $in: docIdStrings }, user_id: userId } as any).toArray()
