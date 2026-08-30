@@ -2,19 +2,19 @@
   <div class="login-page" dir="rtl">
     <nav class="landing-nav">
       <a class="nav-brand" href="#top" aria-label="RemindOCR">
-        <img class="nav-brand__logo" :src="logoSrc" alt="" />
+        <img :src="logoSrc" alt="" class="nav-brand__logo"/>
         <span class="nav-brand__text">RemindOCR</span>
       </a>
       <div class="nav-links">
         <n-tooltip placement="bottom" :keep-alive-on-hover="false">
           <template #trigger>
             <button
-              class="iconbtn"
-              type="button"
-              :aria-label="isDark ? 'החלף למצב בהיר' : 'החלף למצב כהה'"
-              @click="toggleTheme"
+                :aria-label="isDark ? 'החלף למצב בהיר' : 'החלף למצב כהה'"
+                class="iconbtn"
+                type="button"
+                @click="toggleTheme"
             >
-              <n-icon :component="isDark ? SunnyOutline : MoonOutline" :size="18" />
+              <n-icon :component="isDark ? SunnyOutline : MoonOutline" :size="18"/>
             </button>
           </template>
           {{ isDark ? "מצב בהיר" : "מצב כהה" }}
@@ -33,7 +33,8 @@
           <h2 style="font-size: 24px; line-height: 52px">EXTRACT • TRACK • AUTOMATE</h2>
           <p class="hero-desc">
             RemindOCR היא מערכת לניהול תסקירי בדיקה, מסמכים, לקוחות וחוזים. המערכת מאפשרת להעלות או לייבא מסמכים,
-            לחלץ מהם תאריכים ופרטי לקוח בעזרת OCR ו-AI, ולעקוב אחרי תוקף מסמכים באמצעות תזכורות אוטומטיות וסנכרון ל-Google Calendar.
+            לחלץ מהם תאריכים ופרטי לקוח בעזרת OCR ו-AI, ולעקוב אחרי תוקף מסמכים באמצעות תזכורות אוטומטיות וסנכרון
+            ל-Google Calendar.
           </p>
           <!--          <p class="hero-purpose">-->
           <!--            חיבור Gmail הוא אופציונלי ומשמש רק להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר להכניס למערכת.-->
@@ -46,7 +47,7 @@
 
         <div id="login-card" class="login-card">
           <div class="login-brand">
-            <img class="login-brand__logo" :src="logoSrc" alt="" />
+            <img :src="logoSrc" alt="" class="login-brand__logo"/>
             <h2 class="login-brand__title">RemindOCR</h2>
             <p class="login-brand__sub">מערכת ניהול תסקירים ותזכורות</p>
           </div>
@@ -136,7 +137,8 @@
                       :disabled="loading"
                   />
                 </n-form-item>
-                <p v-if="regPassword && regPassword.length < 8" style="color:var(--color-warning);font-size:12px;margin:4px 0 12px">
+                <p v-if="regPassword && regPassword.length < 8"
+                   style="color:var(--color-warning);font-size:12px;margin:4px 0 12px">
                   הסיסמה חייבת להכיל לפחות 8 תווים</p>
                 <div style="height:12px" v-else/>
                 <n-button
@@ -179,192 +181,207 @@
     <!--      </div>-->
     <!--    </section>-->
 
-    <section id="features" class="content-section">
-      <div class="section-header">
-        <h2>כל מה שצריך במקום אחד</h2>
-        <p>מתוכנן עבור עסקים שצריכים לעקוב אחר מסמכים, חוזים ותסקירים בזמן אמת</p>
-      </div>
-      <div class="features-grid">
-        <article class="feature-card">
-          <!--          <div class="feature-icon">📄</div>-->
-          <h3>ייבוא מסמכים חכם</h3>
-          <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך. ייבוא קבלות עד 6 חודשים אחורה בניסיון, 12 בבסיסי.</p>
-        </article>
-        <article class="feature-card feature-card--accent">
-          <h3>ניסיון של 30 יום</h3>
-          <p>כל היכולות של המסלול הבסיסי, עד 50 מסמכים — ידני ומאימייל יחד. ללא כרטיס אשראי. בסיסי כולל 50 קבלות ו-50 תסקירים בחודש, ועסקי ללא הגבלה.</p>
-        </article>
+    <!--    <section id="features" class="content-section">-->
+    <!--      <div class="section-header">-->
+    <!--        <h2>כל מה שצריך במקום אחד</h2>-->
+    <!--        <p>מתוכנן עבור עסקים שצריכים לעקוב אחר מסמכים, חוזים ותסקירים בזמן אמת</p>-->
+    <!--      </div>-->
+    <!--      <div class="features-grid">-->
+    <!--        <article class="feature-card">-->
+    <!--          &lt;!&ndash;          <div class="feature-icon">📄</div>&ndash;&gt;-->
+    <!--          <h3>ייבוא מסמכים חכם</h3>-->
+    <!--          <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך. ייבוא קבלות עד-->
+    <!--            6 חודשים אחורה בניסיון, 12 בבסיסי.</p>-->
+    <!--        </article>-->
+    <!--        <article class="feature-card feature-card&#45;&#45;accent">-->
+    <!--          <h3>ניסיון של 30 יום</h3>-->
+    <!--          <p>כל היכולות של המסלול הבסיסי, עד 50 מסמכים — ידני ומאימייל יחד. ללא כרטיס אשראי. בסיסי כולל 50 קבלות ו-50-->
+    <!--            תסקירים בחודש, ועסקי ללא הגבלה.</p>-->
+    <!--        </article>-->
+    <!--        &lt;!&ndash;        <article class="feature-card">&ndash;&gt;-->
+    <!--        &lt;!&ndash;          <div class="feature-icon">✉️</div>&ndash;&gt;&ndash;&gt;-->
+    <!--        &lt;!&ndash;          <h3>ייבוא PDF מ-Gmail</h3>&ndash;&gt;-->
+    <!--        &lt;!&ndash;          <p>חיבור Gmail הוא אופציונלי, לקריאה בלבד, ומשמש להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר.</p>&ndash;&gt;-->
+    <!--        &lt;!&ndash;        </article>&ndash;&gt;-->
+    <!--        <article class="feature-card">-->
+    <!--          &lt;!&ndash;          <div class="feature-icon">⏰</div>&ndash;&gt;-->
+    <!--          <h3>תזכורות אוטומטיות</h3>-->
+    <!--          <p>קבל אימייל 90, 60 ו-30 יום לפני שחוזה או תסקיר פג תוקף. לא עוד הפתעות.</p>-->
+    <!--        </article>-->
+    <!--        <article class="feature-card feature-card&#45;&#45;accent">-->
+    <!--          <h3>סנכרון Google Calendar</h3>-->
+    <!--          <p>חבר יומן Google וקבל תסקירים עתידיים ביומן ייעודי בשם ״תסקירים״, עם פרטי לקוח, איש קשר וציוד בתוך האירוע.-->
+    <!--            במסלול עסקי.</p>-->
+    <!--        </article>-->
+    <!--        <article class="feature-card">-->
+    <!--          &lt;!&ndash;          <div class="feature-icon">👥</div>&ndash;&gt;-->
+    <!--          <h3>ניהול לקוחות</h3>-->
+    <!--          <p>כרטיס לקוח מלא עם היסטוריית חוזים, תזכורות ומשימות. כולל חיפוש מהיר.</p>-->
+    <!--        </article>-->
+    <!--        <article class="feature-card">-->
+    <!--          &lt;!&ndash;          <div class="feature-icon">🔍</div>&ndash;&gt;-->
+    <!--          <h3>חיפוש מלא בתוך המסמכים</h3>-->
+    <!--          <p>חפש לפי שם לקוח, מספר חוזה, תאריך ועוד — גם בתוכן המסמך עצמו.</p>-->
+    <!--        </article>-->
 <!--        <article class="feature-card">-->
-<!--          <!--          <div class="feature-icon">✉️</div>-->-->
-<!--          <h3>ייבוא PDF מ-Gmail</h3>-->
-<!--          <p>חיבור Gmail הוא אופציונלי, לקריאה בלבד, ומשמש להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר.</p>-->
+    <!--          &lt;!&ndash;          <div class="feature-icon">🏭</div>&ndash;&gt;-->
+    <!--          <h3>קטלוג ציוד</h3>-->
+    <!--          <p>נהל מלאי ציוד — מנופים, פיגומים, מעליות ועוד — מקושר לתסקירי הבדיקה.</p>-->
 <!--        </article>-->
-        <article class="feature-card">
-          <!--          <div class="feature-icon">⏰</div>-->
-          <h3>תזכורות אוטומטיות</h3>
-          <p>קבל אימייל 90, 60 ו-30 יום לפני שחוזה או תסקיר פג תוקף. לא עוד הפתעות.</p>
-        </article>
-        <article class="feature-card feature-card--accent">
-          <h3>סנכרון Google Calendar</h3>
-          <p>חבר יומן Google וקבל תסקירים עתידיים ביומן ייעודי בשם ״תסקירים״, עם פרטי לקוח, איש קשר וציוד בתוך האירוע. במסלול עסקי.</p>
-        </article>
-        <article class="feature-card">
-          <!--          <div class="feature-icon">👥</div>-->
-          <h3>ניהול לקוחות</h3>
-          <p>כרטיס לקוח מלא עם היסטוריית חוזים, תזכורות ומשימות. כולל חיפוש מהיר.</p>
-        </article>
-        <article class="feature-card">
-          <!--          <div class="feature-icon">🔍</div>-->
-          <h3>חיפוש מלא בתוך המסמכים</h3>
-          <p>חפש לפי שם לקוח, מספר חוזה, תאריך ועוד — גם בתוכן המסמך עצמו.</p>
-        </article>
-        <article class="feature-card">
-          <!--          <div class="feature-icon">🏭</div>-->
-          <h3>קטלוג ציוד</h3>
-          <p>נהל מלאי ציוד — מנופים, פיגומים, מעליות ועוד — מקושר לתסקירי הבדיקה.</p>
-        </article>
-        <article class="feature-card">
-          <!--          <div class="feature-icon">📊</div>-->
-          <h3>דוחות חודשיים</h3>
-          <p>הפק דוחות לפי לקוח, שדות וסדר עמודות שנשמרים לכל משתמש.</p>
-        </article>
-        <article class="feature-card">
-          <h3>סנכרון Google Drive</h3>
-          <p>שמירת מסמכים בתיקיית RemindOCR ב-Google Drive, כולל סנכרון אוטומטי וייצוא. זמין כבר בניסיון.</p>
-        </article>
-      </div>
-    </section>
+    <!--        <article class="feature-card">-->
+    <!--          &lt;!&ndash;          <div class="feature-icon">📊</div>&ndash;&gt;-->
+    <!--          <h3>דוחות חודשיים</h3>-->
+    <!--          <p>הפק דוחות לפי לקוח, שדות וסדר עמודות שנשמרים לכל משתמש.</p>-->
+    <!--        </article>-->
+    <!--        <article class="feature-card">-->
+    <!--          <h3>סנכרון Google Drive</h3>-->
+    <!--          <p>שמירת מסמכים בתיקיית RemindOCR ב-Google Drive, כולל סנכרון אוטומטי וייצוא. זמין כבר בניסיון.</p>-->
+    <!--        </article>-->
+    <!--      </div>-->
+    <!--    </section>-->
 
-    <section id="how" class="how-section">
-      <div class="content-section">
-        <div class="section-header">
-          <h2>איך זה עובד?</h2>
-          <p>תהליך פשוט בשלושה שלבים</p>
-        </div>
-        <div class="steps">
-          <div class="step">
-            <div class="step__num">1</div>
-            <h3>ייבא מסמך</h3>
-            <p>גרור קבצים. המערכת מטפלת ב- Word, Excel ותמונות.</p>
-          </div>
-          <div class="step">
-            <div class="step__num">2</div>
-            <h3>AI מחלץ נתונים</h3>
-            <p>המערכת קוראת את המסמך ומחלצת שם לקוח, תאריך פקיעה, סכום ועוד.</p>
-          </div>
-          <div class="step">
-            <div class="step__num">3</div>
-            <h3>סנכרן ושלח תזכורות</h3>
-            <p>המערכת מתזמנת התרעות אימייל ומסנכרנת את התסקירים ל-Google Calendar עם כל פרטי הלקוח והציוד.</p>
-          </div>
-        </div>
-      </div>
-    </section>
+    <!--    <section id="how" class="how-section">-->
+    <!--      <div class="content-section">-->
+    <!--        <div class="section-header">-->
+    <!--          <h2>איך זה עובד?</h2>-->
+    <!--          <p>תהליך פשוט בשלושה שלבים</p>-->
+    <!--        </div>-->
+    <!--        <div class="steps">-->
+    <!--          <div class="step">-->
+    <!--            <div class="step__num">1</div>-->
+    <!--            <h3>ייבא מסמך</h3>-->
+    <!--            <p>גרור קבצים. המערכת מטפלת ב- Word, Excel ותמונות.</p>-->
+    <!--          </div>-->
+    <!--          <div class="step">-->
+    <!--            <div class="step__num">2</div>-->
+    <!--            <h3>AI מחלץ נתונים</h3>-->
+    <!--            <p>המערכת קוראת את המסמך ומחלצת שם לקוח, תאריך פקיעה, סכום ועוד.</p>-->
+    <!--          </div>-->
+    <!--          <div class="step">-->
+    <!--            <div class="step__num">3</div>-->
+    <!--            <h3>סנכרן ושלח תזכורות</h3>-->
+    <!--            <p>המערכת מתזמנת התרעות אימייל ומסנכרנת את התסקירים ל-Google Calendar עם כל פרטי הלקוח והציוד.</p>-->
+    <!--          </div>-->
+    <!--        </div>-->
+    <!--      </div>-->
+    <!--    </section>-->
 
-    <section id="pricing" class="pricing-section">
-      <div class="content-section">
-        <div class="section-header">
-          <h2>מסלולים ומחירים</h2>
-          <p>הניסיון כולל את כל יכולות המערכת למשך 30 יום, ללא כרטיס אשראי. מסלולי התשלום ייפתחו לרכישה בקרוב.</p>
-        </div>
-        <div class="plans-grid">
+    <!--    <section id="pricing" class="pricing-section">-->
+    <!--      <div class="content-section">-->
+    <!--        <div class="section-header">-->
+    <!--          <h2>מסלולים ומחירים</h2>-->
+    <!--          <p>הניסיון כולל את כל יכולות המערכת למשך 30 יום, ללא כרטיס אשראי. מסלולי התשלום ייפתחו לרכישה בקרוב.</p>-->
+    <!--        </div>-->
+    <!--        <div class="plans-grid">-->
 
-          <div class="plan">
-            <div class="plan__name">ניסיון · 30 יום</div>
-            <p class="plan__blurb">כל היכולות של המסלול הבסיסי, ללא כרטיס אשראי.</p>
-            <div class="plan__price">
-              <strong>₪0</strong>
-              <span class="plan__price-period">/ 30 יום</span>
-            </div>
-            <p class="plan__price-year">עד 50 מסמכים — ידני ומאימייל יחד</p>
-            <ul class="plan__features">
-              <li>תצוגה מקדימה וחילוץ נתונים AI</li>
-              <li>תזכורות אימייל אוטומטיות ללקוחות</li>
-              <li>יבוא תסקירים של 16 חודשים האחרונים</li>
-              <li>יבוא קבלות מ-Gmail עד 6 חודשים אחורה</li>
-              <li>יצוא לאקסל ודוחות חודשיים</li>
-              <li>סנכרון Google Drive</li>
-            </ul>
-            <a class="plan__cta plan__cta--ghost plan__cta--solo" href="#login-card">התחל בחינם</a>
-          </div>
+    <!--          <div class="plan">-->
+    <!--            <div class="plan__name">ניסיון · 30 יום</div>-->
+    <!--            <p class="plan__blurb">כל היכולות של המסלול הבסיסי, ללא כרטיס אשראי.</p>-->
+    <!--            <div class="plan__price">-->
+    <!--              <strong>₪0</strong>-->
+    <!--              <span class="plan__price-period">/ 30 יום</span>-->
+    <!--            </div>-->
+    <!--            <p class="plan__price-year">עד 50 מסמכים — ידני ומאימייל יחד</p>-->
+    <!--            <ul class="plan__features">-->
+    <!--              <li>תצוגה מקדימה וחילוץ נתונים AI</li>-->
+    <!--              <li>תזכורות אימייל אוטומטיות ללקוחות</li>-->
+    <!--              <li>יבוא תסקירים של 16 חודשים האחרונים</li>-->
+    <!--              <li>יבוא קבלות מ-Gmail עד 6 חודשים אחורה</li>-->
+    <!--              <li>יצוא לאקסל ודוחות חודשיים</li>-->
+    <!--              <li>סנכרון Google Drive</li>-->
+    <!--            </ul>-->
+    <!--            <a class="plan__cta plan__cta&#45;&#45;ghost plan__cta&#45;&#45;solo" href="#login-card">התחל בחינם</a>-->
+    <!--          </div>-->
 
-          <div class="plan plan--soon">
-            <div class="plan__name">בסיסי</div>
-            <p class="plan__blurb">מתאים לעסק קטן שמייבא מסמכים בכל חודש.</p>
-            <div class="plan__price">
-              <span class="plan__price-old">₪88</span>
-              <strong>₪79</strong>
-              <span class="plan__price-period">/ חודש</span>
-            </div>
-            <p class="plan__price-year">בתשלום שנתי — ₪948 לשנה · או ₪88 בחיוב חודשי</p>
-            <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>
-            <ul class="plan__features">
-              <li>50 מסמכים בחודש — תסקירים וקבלות יחד</li>
-              <li>יבוא תסקירים של 16 חודשים האחרונים</li>
-              <li>יבוא קבלות מ-Gmail עד 12 חודשים אחורה</li>
-              <li>ניהול תסקירים ושליחת תזכורות ללקוחות</li>
-              <li>יצוא קבלות לקובץ אקסל</li>
-              <li>הפקת דוחות חודשיים אוטומטיים</li>
-              <li>סנכרון Google Drive</li>
-            </ul>
-            <div class="plan__ctas">
-              <a class="plan__cta plan__cta--primary" role="link" aria-disabled="true" tabindex="-1">
-                שנתי — ₪79 / חודש<span class="plan__cta-save">חסכון 10%</span>
-              </a>
-              <a class="plan__cta plan__cta--ghost" role="link" aria-disabled="true" tabindex="-1">או חודשי — ₪88 / חודש</a>
-            </div>
-            <a class="plan__cta plan__cta--wa" href="https://wa.me/972586281637?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%20%D7%9C%D7%A8%D7%9B%D7%95%D7%A9%20%D7%90%D7%AA%20%D7%94%D7%9E%D7%A1%D7%9C%D7%95%D7%9C%20%D7%94%D7%91%D7%A1%D7%99%D7%A1%D7%99%20%D7%A9%D7%9C%20RemindOCR%20%28%E2%82%AA79%20%D7%9C%D7%97%D7%95%D7%93%D7%A9%20%D7%91%D7%AA%D7%A9%D7%9C%D7%95%D7%9D%20%D7%A9%D7%A0%D7%AA%D7%99%20%D7%90%D7%95%20%E2%82%AA88%20%D7%91%D7%97%D7%99%D7%95%D7%91%20%D7%97%D7%95%D7%93%D7%A9%D7%99%29." target="_blank" rel="noopener">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1s-.7 1-.9 1.2c-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4-.1-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2A10 10 0 0 0 3.5 17.2L2 22l4.9-1.5A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-2.9.9.9-2.8-.2-.3a8.2 8.2 0 1 1 6.9 3.6z"/></svg>
-              לרכישה ב-WhatsApp
-            </a>
-            <p class="plan__soon-note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>
-<!--            <a class="plan__cta plan__cta--wa" href="https://wa.me/972586281637?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%20%D7%9C%D7%A8%D7%9B%D7%95%D7%A9%20%D7%90%D7%AA%20%D7%94%D7%9E%D7%A1%D7%9C%D7%95%D7%9C%20%D7%94%D7%91%D7%A1%D7%99%D7%A1%D7%99%20%D7%A9%D7%9C%20RemindOCR%20%28%E2%82%AA79%20%D7%9C%D7%97%D7%95%D7%93%D7%A9%20%D7%91%D7%AA%D7%A9%D7%9C%D7%95%D7%9D%20%D7%A9%D7%A0%D7%AA%D7%99%20%D7%90%D7%95%20%E2%82%AA88%20%D7%91%D7%97%D7%99%D7%95%D7%91%20%D7%97%D7%95%D7%93%D7%A9%D7%99%29." target="_blank" rel="noopener">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1s-.7 1-.9 1.2c-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4-.1-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2A10 10 0 0 0 3.5 17.2L2 22l4.9-1.5A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-2.9.9.9-2.8-.2-.3a8.2 8.2 0 1 1 6.9 3.6z"/></svg>
-              לרכישה ב-WhatsApp
-            </a>
-            <p class="plan__soon-note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>-->
-          </div>
+    <!--          <div class="plan plan&#45;&#45;soon">-->
+    <!--            <div class="plan__name">בסיסי</div>-->
+    <!--            <p class="plan__blurb">מתאים לעסק קטן שמייבא מסמכים בכל חודש.</p>-->
+    <!--            <div class="plan__price">-->
+    <!--              <span class="plan__price-old">₪88</span>-->
+    <!--              <strong>₪79</strong>-->
+    <!--              <span class="plan__price-period">/ חודש</span>-->
+    <!--            </div>-->
+    <!--            <p class="plan__price-year">בתשלום שנתי — ₪948 לשנה · או ₪88 בחיוב חודשי</p>-->
+    <!--            <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>-->
+    <!--            <ul class="plan__features">-->
+    <!--              <li>50 מסמכים בחודש — תסקירים וקבלות יחד</li>-->
+    <!--              <li>יבוא תסקירים של 16 חודשים האחרונים</li>-->
+    <!--              <li>יבוא קבלות מ-Gmail עד 12 חודשים אחורה</li>-->
+    <!--              <li>ניהול תסקירים ושליחת תזכורות ללקוחות</li>-->
+    <!--              <li>יצוא קבלות לקובץ אקסל</li>-->
+    <!--              <li>הפקת דוחות חודשיים אוטומטיים</li>-->
+    <!--              <li>סנכרון Google Drive</li>-->
+    <!--            </ul>-->
+    <!--            <div class="plan__ctas">-->
+    <!--              <a class="plan__cta plan__cta&#45;&#45;primary" role="link" aria-disabled="true" tabindex="-1">-->
+    <!--                שנתי — ₪79 / חודש<span class="plan__cta-save">חסכון 10%</span>-->
+    <!--              </a>-->
+    <!--              <a class="plan__cta plan__cta&#45;&#45;ghost" role="link" aria-disabled="true" tabindex="-1">או חודשי — ₪88 /-->
+    <!--                חודש</a>-->
+    <!--            </div>-->
+    <!--            <a class="plan__cta plan__cta&#45;&#45;wa"-->
+    <!--               href="https://wa.me/972586281637?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%20%D7%9C%D7%A8%D7%9B%D7%95%D7%A9%20%D7%90%D7%AA%20%D7%94%D7%9E%D7%A1%D7%9C%D7%95%D7%9C%20%D7%94%D7%91%D7%A1%D7%99%D7%A1%D7%99%20%D7%A9%D7%9C%20RemindOCR%20%28%E2%82%AA79%20%D7%9C%D7%97%D7%95%D7%93%D7%A9%20%D7%91%D7%AA%D7%A9%D7%9C%D7%95%D7%9D%20%D7%A9%D7%A0%D7%AA%D7%99%20%D7%90%D7%95%20%E2%82%AA88%20%D7%91%D7%97%D7%99%D7%95%D7%91%20%D7%97%D7%95%D7%93%D7%A9%D7%99%29."-->
+    <!--               target="_blank" rel="noopener">-->
+    <!--              <svg viewBox="0 0 24 24" aria-hidden="true">-->
+    <!--                <path-->
+    <!--                    d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1s-.7 1-.9 1.2c-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4-.1-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2A10 10 0 0 0 3.5 17.2L2 22l4.9-1.5A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-2.9.9.9-2.8-.2-.3a8.2 8.2 0 1 1 6.9 3.6z"/>-->
+    <!--              </svg>-->
+    <!--              לרכישה ב-WhatsApp-->
+    <!--            </a>-->
+    <!--            <p class="plan__soon-note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>-->
+    <!--            &lt;!&ndash;            <a class="plan__cta plan__cta&#45;&#45;wa" href="https://wa.me/972586281637?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%20%D7%9C%D7%A8%D7%9B%D7%95%D7%A9%20%D7%90%D7%AA%20%D7%94%D7%9E%D7%A1%D7%9C%D7%95%D7%9C%20%D7%94%D7%91%D7%A1%D7%99%D7%A1%D7%99%20%D7%A9%D7%9C%20RemindOCR%20%28%E2%82%AA79%20%D7%9C%D7%97%D7%95%D7%93%D7%A9%20%D7%91%D7%AA%D7%A9%D7%9C%D7%95%D7%9D%20%D7%A9%D7%A0%D7%AA%D7%99%20%D7%90%D7%95%20%E2%82%AA88%20%D7%91%D7%97%D7%99%D7%95%D7%91%20%D7%97%D7%95%D7%93%D7%A9%D7%99%29." target="_blank" rel="noopener">-->
+    <!--                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1s-.7 1-.9 1.2c-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4-.1-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2A10 10 0 0 0 3.5 17.2L2 22l4.9-1.5A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-2.9.9.9-2.8-.2-.3a8.2 8.2 0 1 1 6.9 3.6z"/></svg>-->
+    <!--                          לרכישה ב-WhatsApp-->
+    <!--                        </a>-->
+    <!--                        <p class="plan__soon-note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>&ndash;&gt;-->
+    <!--          </div>-->
 
-          <div class="plan plan--highlighted plan--soon">
-            <span class="plan__badge">הכי פופולרי</span>
-            <div class="plan__name">עסקי</div>
-            <p class="plan__blurb">לבודקים מוסמכים שמייבאים מסמכים באופן שוטף ורוצים יומן Google מסונכרן.</p>
-            <div class="plan__price">
-              <span class="plan__price-old">₪143</span>
-              <strong>₪128</strong>
-              <span class="plan__price-period">/ חודש</span>
-            </div>
-            <p class="plan__price-year">בתשלום שנתי — ₪1,536 לשנה · או ₪143 בחיוב חודשי</p>
-            <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>
-            <p class="plan__additional">כל מה שיש בבסיסי, ובנוסף</p>
-            <ul class="plan__features">
-              <li>יבוא תסקירים ללא הגבלה</li>
-              <li>יבוא חשבונות וקבלות ללא הגבלה</li>
-              <li>סנכרון היסטורי של שנתיים</li>
-              <li>ניהול לקוחות וציוד</li>
-              <li>סנכרון Google Calendar לתסקירים עתידיים</li>
-            </ul>
-            <div class="plan__ctas plan__ctas--accent">
-              <a class="plan__cta plan__cta--primary" role="link" aria-disabled="true" tabindex="-1">
-                שנתי — ₪128 / חודש<span class="plan__cta-save">חסכון 10%</span>
-              </a>
-              <a class="plan__cta plan__cta--ghost" role="link" aria-disabled="true" tabindex="-1">או חודשי — ₪143 / חודש</a>
-            </div>
-            <a class="plan__cta plan__cta--wa" href="https://wa.me/972586281637?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%20%D7%9C%D7%A8%D7%9B%D7%95%D7%A9%20%D7%90%D7%AA%20%D7%94%D7%9E%D7%A1%D7%9C%D7%95%D7%9C%20%D7%94%D7%A2%D7%A1%D7%A7%D7%99%20%D7%A9%D7%9C%20RemindOCR%20%28%E2%82%AA128%20%D7%9C%D7%97%D7%95%D7%93%D7%A9%20%D7%91%D7%AA%D7%A9%D7%9C%D7%95%D7%9D%20%D7%A9%D7%A0%D7%AA%D7%99%20%D7%90%D7%95%20%E2%82%AA143%20%D7%91%D7%97%D7%99%D7%95%D7%91%20%D7%97%D7%95%D7%93%D7%A9%D7%99%29." target="_blank" rel="noopener">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1s-.7 1-.9 1.2c-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4-.1-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2A10 10 0 0 0 3.5 17.2L2 22l4.9-1.5A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-2.9.9.9-2.8-.2-.3a8.2 8.2 0 1 1 6.9 3.6z"/></svg>
-              לרכישה ב-WhatsApp
-            </a>
-            <p class="plan__soon-note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>
-<!--            <a class="plan__cta plan__cta--wa" href="https://wa.me/972586281637?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%20%D7%9C%D7%A8%D7%9B%D7%95%D7%A9%20%D7%90%D7%AA%20%D7%94%D7%9E%D7%A1%D7%9C%D7%95%D7%9C%20%D7%94%D7%A2%D7%A1%D7%A7%D7%99%20%D7%A9%D7%9C%20RemindOCR%20%28%E2%82%AA128%20%D7%9C%D7%97%D7%95%D7%93%D7%A9%20%D7%91%D7%AA%D7%A9%D7%9C%D7%95%D7%9D%20%D7%A9%D7%A0%D7%AA%D7%99%20%D7%90%D7%95%20%E2%82%AA143%20%D7%91%D7%97%D7%99%D7%95%D7%91%20%D7%97%D7%95%D7%93%D7%A9%D7%99%29." target="_blank" rel="noopener">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1s-.7 1-.9 1.2c-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4-.1-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2A10 10 0 0 0 3.5 17.2L2 22l4.9-1.5A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-2.9.9.9-2.8-.2-.3a8.2 8.2 0 1 1 6.9 3.6z"/></svg>
-              לרכישה ב-WhatsApp
-            </a>
-            <p class="plan__soon-note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>-->
-          </div>
+    <!--          <div class="plan plan&#45;&#45;highlighted plan&#45;&#45;soon">-->
+    <!--            <span class="plan__badge">הכי פופולרי</span>-->
+    <!--            <div class="plan__name">עסקי</div>-->
+    <!--            <p class="plan__blurb">לבודקים מוסמכים שמייבאים מסמכים באופן שוטף ורוצים יומן Google מסונכרן.</p>-->
+    <!--            <div class="plan__price">-->
+    <!--              <span class="plan__price-old">₪143</span>-->
+    <!--              <strong>₪128</strong>-->
+    <!--              <span class="plan__price-period">/ חודש</span>-->
+    <!--            </div>-->
+    <!--            <p class="plan__price-year">בתשלום שנתי — ₪1,536 לשנה · או ₪143 בחיוב חודשי</p>-->
+    <!--            <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>-->
+    <!--            <p class="plan__additional">כל מה שיש בבסיסי, ובנוסף</p>-->
+    <!--            <ul class="plan__features">-->
+    <!--              <li>יבוא תסקירים ללא הגבלה</li>-->
+    <!--              <li>יבוא חשבונות וקבלות ללא הגבלה</li>-->
+    <!--              <li>סנכרון היסטורי של שנתיים</li>-->
+    <!--              <li>ניהול לקוחות וציוד</li>-->
+    <!--              <li>סנכרון Google Calendar לתסקירים עתידיים</li>-->
+    <!--            </ul>-->
+    <!--            <div class="plan__ctas plan__ctas&#45;&#45;accent">-->
+    <!--              <a class="plan__cta plan__cta&#45;&#45;primary" role="link" aria-disabled="true" tabindex="-1">-->
+    <!--                שנתי — ₪128 / חודש<span class="plan__cta-save">חסכון 10%</span>-->
+    <!--              </a>-->
+    <!--              <a class="plan__cta plan__cta&#45;&#45;ghost" role="link" aria-disabled="true" tabindex="-1">או חודשי — ₪143 /-->
+    <!--                חודש</a>-->
+    <!--            </div>-->
+    <!--            <a class="plan__cta plan__cta&#45;&#45;wa"-->
+    <!--               href="https://wa.me/972586281637?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%20%D7%9C%D7%A8%D7%9B%D7%95%D7%A9%20%D7%90%D7%AA%20%D7%94%D7%9E%D7%A1%D7%9C%D7%95%D7%9C%20%D7%94%D7%A2%D7%A1%D7%A7%D7%99%20%D7%A9%D7%9C%20RemindOCR%20%28%E2%82%AA128%20%D7%9C%D7%97%D7%95%D7%93%D7%A9%20%D7%91%D7%AA%D7%A9%D7%9C%D7%95%D7%9D%20%D7%A9%D7%A0%D7%AA%D7%99%20%D7%90%D7%95%20%E2%82%AA143%20%D7%91%D7%97%D7%99%D7%95%D7%91%20%D7%97%D7%95%D7%93%D7%A9%D7%99%29."-->
+    <!--               target="_blank" rel="noopener">-->
+    <!--              <svg viewBox="0 0 24 24" aria-hidden="true">-->
+    <!--                <path-->
+    <!--                    d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1s-.7 1-.9 1.2c-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4-.1-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2A10 10 0 0 0 3.5 17.2L2 22l4.9-1.5A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-2.9.9.9-2.8-.2-.3a8.2 8.2 0 1 1 6.9 3.6z"/>-->
+    <!--              </svg>-->
+    <!--              לרכישה ב-WhatsApp-->
+    <!--            </a>-->
+    <!--            <p class="plan__soon-note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>-->
+    <!--            &lt;!&ndash;            <a class="plan__cta plan__cta&#45;&#45;wa" href="https://wa.me/972586281637?text=%D7%A9%D7%9C%D7%95%D7%9D%2C%20%D7%90%D7%A0%D7%99%20%D7%9E%D7%A2%D7%95%D7%A0%D7%99%D7%99%D7%9F%20%D7%9C%D7%A8%D7%9B%D7%95%D7%A9%20%D7%90%D7%AA%20%D7%94%D7%9E%D7%A1%D7%9C%D7%95%D7%9C%20%D7%94%D7%A2%D7%A1%D7%A7%D7%99%20%D7%A9%D7%9C%20RemindOCR%20%28%E2%82%AA128%20%D7%9C%D7%97%D7%95%D7%93%D7%A9%20%D7%91%D7%AA%D7%A9%D7%9C%D7%95%D7%9D%20%D7%A9%D7%A0%D7%AA%D7%99%20%D7%90%D7%95%20%E2%82%AA143%20%D7%91%D7%97%D7%99%D7%95%D7%91%20%D7%97%D7%95%D7%93%D7%A9%D7%99%29." target="_blank" rel="noopener">-->
+    <!--                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1s-.7 1-.9 1.2c-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4-.1-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2A10 10 0 0 0 3.5 17.2L2 22l4.9-1.5A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-2.9.9.9-2.8-.2-.3a8.2 8.2 0 1 1 6.9 3.6z"/></svg>-->
+    <!--                          לרכישה ב-WhatsApp-->
+    <!--                        </a>-->
+    <!--                        <p class="plan__soon-note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>&ndash;&gt;-->
+    <!--          </div>-->
 
-        </div>
-      </div>
-    </section>
+    <!--        </div>-->
+    <!--      </div>-->
+    <!--    </section>-->
 
     <!-- Forgot password modal -->
     <n-modal v-model:show="showForgot" preset="card" title="שחזור סיסמה" style="max-width:380px;direction:rtl">
@@ -481,7 +498,7 @@ function toggleTheme() {
   darkPref.value = next === "dark";
   localStorage.setItem("theme", next);
   document.documentElement.setAttribute("data-theme", next);
-  window.dispatchEvent(new CustomEvent("remindocr:theme-change", { detail: next }));
+  window.dispatchEvent(new CustomEvent("remindocr:theme-change", {detail: next}));
 }
 
 async function handleLogin() {
@@ -526,7 +543,7 @@ async function handleLogin() {
 
 const INTENT_KEY = "signup_intent";
 
-type SignupIntent = {plan: "basic" | "business"; billing: "monthly" | "yearly"};
+type SignupIntent = { plan: "basic" | "business"; billing: "monthly" | "yearly" };
 
 /** Both halves must be recognised, or there is no intent — never a partial one. */
 function parseIntent(plan: unknown, billing: unknown): SignupIntent | null {
@@ -619,7 +636,8 @@ onMounted(async () => {
   if (intent) {
     try {
       sessionStorage.setItem(INTENT_KEY, JSON.stringify(intent));
-    } catch { /* private mode: the intent is simply not carried */ }
+    } catch { /* private mode: the intent is simply not carried */
+    }
     activeTab.value = "register";
   }
 
