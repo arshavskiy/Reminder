@@ -3,17 +3,17 @@ import { currentUtcMonthWindow, documentImportLimit, documentImportMonthlyLimit,
 import {reminderLimit} from "../quotas/reminderQuota";
 
 describe("document monthly import quota", () => {
-  it("limits free users to separate 25-document lifetime import buckets", () => {
-    expect(documentImportLimit("free", "manualDocuments")).toEqual({limit: 25, scope: "lifetime"});
-    expect(documentImportLimit("free", "emailDocuments")).toEqual({limit: 25, scope: "lifetime"});
-    expect(documentImportLimit("free", "invoices")).toEqual({limit: 25, scope: "lifetime"});
-    expect(documentImportLimit("free", "contracts")).toEqual({limit: 25, scope: "lifetime"});
-    expect(documentImportMonthlyLimit("free")).toBe(25);
+  it("limits free users to separate 50-document lifetime import buckets", () => {
+    expect(documentImportLimit("free", "manualDocuments")).toEqual({limit: 50, scope: "lifetime"});
+    expect(documentImportLimit("free", "emailDocuments")).toEqual({limit: 50, scope: "lifetime"});
+    expect(documentImportLimit("free", "invoices")).toEqual({limit: 50, scope: "lifetime"});
+    expect(documentImportLimit("free", "contracts")).toEqual({limit: 50, scope: "lifetime"});
+    expect(documentImportMonthlyLimit("free")).toBe(50);
   });
 
-  it("gives the trial the same 25-document allowance as free", () => {
-    expect(documentImportLimit("trial", "manualDocuments")).toEqual({limit: 25, scope: "lifetime"});
-    expect(documentImportMonthlyLimit("trial")).toBe(25);
+  it("gives the trial the same 50-document allowance as free", () => {
+    expect(documentImportLimit("trial", "manualDocuments")).toEqual({limit: 50, scope: "lifetime"});
+    expect(documentImportMonthlyLimit("trial")).toBe(50);
   });
 
   it("limits basic users to 50 documents per month", () => {
@@ -37,11 +37,11 @@ describe("document monthly import quota", () => {
   });
 
   it("keeps legacy roles mapped to equivalent plans", () => {
-    expect(documentImportMonthlyLimit("user")).toBe(25);
+    expect(documentImportMonthlyLimit("user")).toBe(50);
     expect(documentImportMonthlyLimit("pro")).toBe(50);
     expect(documentImportMonthlyLimit("admin")).toBeNull();
-    expect(documentImportMonthlyLimit(null)).toBe(25);
-    expect(documentImportMonthlyLimit("")).toBe(25);
+    expect(documentImportMonthlyLimit(null)).toBe(50);
+    expect(documentImportMonthlyLimit("")).toBe(50);
   });
 
   it("uses a UTC calendar month window", () => {
@@ -53,8 +53,8 @@ describe("document monthly import quota", () => {
 
 describe("reminder quota", () => {
   it("limits free users to 25 reminders for their lifetime", () => {
-    expect(reminderLimit("free")).toEqual({limit: 25, scope: "lifetime"});
-    expect(reminderLimit("user")).toEqual({limit: 25, scope: "lifetime"});
+    expect(reminderLimit("free")).toEqual({limit: 50, scope: "lifetime"});
+    expect(reminderLimit("user")).toEqual({limit: 50, scope: "lifetime"});
   });
 
   it("does not limit paid plans", () => {

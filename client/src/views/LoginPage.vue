@@ -182,172 +182,174 @@
     <!--      </div>-->
     <!--    </section>-->
 
-    <section id="features" class="content-section">
-      <div class="section-header">
-        <h2>כל מה שצריך במקום אחד</h2>
-        <p>מתוכנן עבור עסקים שצריכים לעקוב אחר מסמכים, חוזים ותסקירים בזמן אמת</p>
-      </div>
-      <div class="features-grid">
-        <article class="feature-card">
-          <!--          <div class="feature-icon">📄</div>-->
-          <h3>ייבוא מסמכים חכם</h3>
-          <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך. ייבוא קבלות עד 6 חודשים אחורה בניסיון, 12 בבסיסי.</p>
-        </article>
-        <article class="feature-card feature-card--accent">
-          <h3>ניסיון של 30 יום</h3>
-          <p>כל היכולות של המסלול הבסיסי, עד 25 מסמכים — ידני ומאימייל יחד. ללא כרטיס אשראי. בסיסי כולל 50 קבלות ו-50 תסקירים בחודש, ועסקי ללא הגבלה.</p>
-        </article>
+<!--    <section id="features" class="content-section">-->
+<!--      <div class="section-header">-->
+<!--        <h2>כל מה שצריך במקום אחד</h2>-->
+<!--        <p>מתוכנן עבור עסקים שצריכים לעקוב אחר מסמכים, חוזים ותסקירים בזמן אמת</p>-->
+<!--      </div>-->
+<!--      <div class="features-grid">-->
 <!--        <article class="feature-card">-->
-<!--          &lt;!&ndash;          <div class="feature-icon">✉️</div>&ndash;&gt;-->
-<!--          <h3>ייבוא PDF מ-Gmail</h3>-->
-<!--          <p>חיבור Gmail הוא אופציונלי, לקריאה בלבד, ומשמש להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר.</p>-->
+<!--          &lt;!&ndash;          <div class="feature-icon">📄</div>&ndash;&gt;-->
+<!--          <h3>ייבוא מסמכים חכם</h3>-->
+<!--          <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך. ייבוא קבלות עד 6 חודשים אחורה בניסיון, 12 בבסיסי.</p>-->
 <!--        </article>-->
-        <article class="feature-card">
-          <!--          <div class="feature-icon">⏰</div>-->
-          <h3>תזכורות אוטומטיות</h3>
-          <p>קבל אימייל 90, 60 ו-30 יום לפני שחוזה או תסקיר פג תוקף. לא עוד הפתעות.</p>
-        </article>
-        <article class="feature-card feature-card--accent">
-          <h3>סנכרון Google Calendar</h3>
-          <p>חבר יומן Google וקבל תסקירים עתידיים ביומן ייעודי בשם ״תסקירים״, עם פרטי לקוח, איש קשר וציוד בתוך האירוע. במסלול עסקי.</p>
-        </article>
-        <article class="feature-card">
-          <!--          <div class="feature-icon">👥</div>-->
-          <h3>ניהול לקוחות</h3>
-          <p>כרטיס לקוח מלא עם היסטוריית חוזים, תזכורות ומשימות. כולל חיפוש מהיר.</p>
-        </article>
-        <article class="feature-card">
-          <!--          <div class="feature-icon">🔍</div>-->
-          <h3>חיפוש מלא בתוך המסמכים</h3>
-          <p>חפש לפי שם לקוח, מספר חוזה, תאריך ועוד — גם בתוכן המסמך עצמו.</p>
-        </article>
-        <article class="feature-card">
-          <!--          <div class="feature-icon">🏭</div>-->
-          <h3>קטלוג ציוד</h3>
-          <p>נהל מלאי ציוד — מנופים, פיגומים, מעליות ועוד — מקושר לתסקירי הבדיקה.</p>
-        </article>
-        <article class="feature-card">
-          <!--          <div class="feature-icon">📊</div>-->
-          <h3>דוחות חודשיים</h3>
-          <p>הפק דוחות לפי לקוח, שדות וסדר עמודות שנשמרים לכל משתמש.</p>
-        </article>
-        <article class="feature-card">
-          <h3>סנכרון Google Drive</h3>
-          <p>שמירת מסמכים בתיקיית RemindOCR ב-Google Drive, כולל סנכרון אוטומטי וייצוא. זמין כבר בניסיון.</p>
-        </article>
-      </div>
-    </section>
+<!--        <article class="feature-card feature-card&#45;&#45;accent">-->
+<!--          <h3>ניסיון של 30 יום</h3>-->
+<!--          <p>כל היכולות של המסלול הבסיסי, עד 50 מסמכים — ידני ומאימייל יחד. ללא כרטיס אשראי. בסיסי כולל 50 קבלות ו-50 תסקירים בחודש, ועסקי ללא הגבלה.</p>-->
+<!--        </article>-->
+<!--&lt;!&ndash;        <article class="feature-card">&ndash;&gt;-->
+<!--&lt;!&ndash;          &lt;!&ndash;          <div class="feature-icon">✉️</div>&ndash;&gt;&ndash;&gt;-->
+<!--&lt;!&ndash;          <h3>ייבוא PDF מ-Gmail</h3>&ndash;&gt;-->
+<!--&lt;!&ndash;          <p>חיבור Gmail הוא אופציונלי, לקריאה בלבד, ומשמש להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר.</p>&ndash;&gt;-->
+<!--&lt;!&ndash;        </article>&ndash;&gt;-->
+<!--        <article class="feature-card">-->
+<!--          &lt;!&ndash;          <div class="feature-icon">⏰</div>&ndash;&gt;-->
+<!--          <h3>תזכורות אוטומטיות</h3>-->
+<!--          <p>קבל אימייל 90, 60 ו-30 יום לפני שחוזה או תסקיר פג תוקף. לא עוד הפתעות.</p>-->
+<!--        </article>-->
+<!--        <article class="feature-card feature-card&#45;&#45;accent">-->
+<!--          <h3>סנכרון Google Calendar</h3>-->
+<!--          <p>חבר יומן Google וקבל תסקירים עתידיים ביומן ייעודי בשם ״תסקירים״, עם פרטי לקוח, איש קשר וציוד בתוך האירוע. במסלול עסקי.</p>-->
+<!--        </article>-->
+<!--        <article class="feature-card">-->
+<!--          &lt;!&ndash;          <div class="feature-icon">👥</div>&ndash;&gt;-->
+<!--          <h3>ניהול לקוחות</h3>-->
+<!--          <p>כרטיס לקוח מלא עם היסטוריית חוזים, תזכורות ומשימות. כולל חיפוש מהיר.</p>-->
+<!--        </article>-->
+<!--        <article class="feature-card">-->
+<!--          &lt;!&ndash;          <div class="feature-icon">🔍</div>&ndash;&gt;-->
+<!--          <h3>חיפוש מלא בתוך המסמכים</h3>-->
+<!--          <p>חפש לפי שם לקוח, מספר חוזה, תאריך ועוד — גם בתוכן המסמך עצמו.</p>-->
+<!--        </article>-->
+<!--        <article class="feature-card">-->
+<!--          &lt;!&ndash;          <div class="feature-icon">🏭</div>&ndash;&gt;-->
+<!--          <h3>קטלוג ציוד</h3>-->
+<!--          <p>נהל מלאי ציוד — מנופים, פיגומים, מעליות ועוד — מקושר לתסקירי הבדיקה.</p>-->
+<!--        </article>-->
+<!--        <article class="feature-card">-->
+<!--          &lt;!&ndash;          <div class="feature-icon">📊</div>&ndash;&gt;-->
+<!--          <h3>דוחות חודשיים</h3>-->
+<!--          <p>הפק דוחות לפי לקוח, שדות וסדר עמודות שנשמרים לכל משתמש.</p>-->
+<!--        </article>-->
+<!--        <article class="feature-card">-->
+<!--          <h3>סנכרון Google Drive</h3>-->
+<!--          <p>שמירת מסמכים בתיקיית RemindOCR ב-Google Drive, כולל סנכרון אוטומטי וייצוא. זמין כבר בניסיון.</p>-->
+<!--        </article>-->
+<!--      </div>-->
+<!--    </section>-->
 
-    <section id="how" class="how-section">
-      <div class="content-section">
-        <div class="section-header">
-          <h2>איך זה עובד?</h2>
-          <p>תהליך פשוט בשלושה שלבים</p>
-        </div>
-        <div class="steps">
-          <div class="step">
-            <div class="step__num">1</div>
-            <h3>ייבא מסמך</h3>
-            <p>גרור קבצים. המערכת מטפלת ב- Word, Excel ותמונות.</p>
-          </div>
-          <div class="step">
-            <div class="step__num">2</div>
-            <h3>AI מחלץ נתונים</h3>
-            <p>המערכת קוראת את המסמך ומחלצת שם לקוח, תאריך פקיעה, סכום ועוד.</p>
-          </div>
-          <div class="step">
-            <div class="step__num">3</div>
-            <h3>סנכרן ושלח תזכורות</h3>
-            <p>המערכת מתזמנת התרעות אימייל ומסנכרנת את התסקירים ל-Google Calendar עם כל פרטי הלקוח והציוד.</p>
-          </div>
-        </div>
-      </div>
-    </section>
+<!--    <section id="how" class="how-section">-->
+<!--      <div class="content-section">-->
+<!--        <div class="section-header">-->
+<!--          <h2>איך זה עובד?</h2>-->
+<!--          <p>תהליך פשוט בשלושה שלבים</p>-->
+<!--        </div>-->
+<!--        <div class="steps">-->
+<!--          <div class="step">-->
+<!--            <div class="step__num">1</div>-->
+<!--            <h3>ייבא מסמך</h3>-->
+<!--            <p>גרור קבצים. המערכת מטפלת ב- Word, Excel ותמונות.</p>-->
+<!--          </div>-->
+<!--          <div class="step">-->
+<!--            <div class="step__num">2</div>-->
+<!--            <h3>AI מחלץ נתונים</h3>-->
+<!--            <p>המערכת קוראת את המסמך ומחלצת שם לקוח, תאריך פקיעה, סכום ועוד.</p>-->
+<!--          </div>-->
+<!--          <div class="step">-->
+<!--            <div class="step__num">3</div>-->
+<!--            <h3>סנכרן ושלח תזכורות</h3>-->
+<!--            <p>המערכת מתזמנת התרעות אימייל ומסנכרנת את התסקירים ל-Google Calendar עם כל פרטי הלקוח והציוד.</p>-->
+<!--          </div>-->
+<!--        </div>-->
+<!--      </div>-->
+<!--    </section>-->
 
-    <section id="pricing" class="pricing-section">
-      <div class="content-section">
-        <div class="section-header">
-          <h2>מסלולים ומחירים</h2>
-          <p>הניסיון כולל את כל יכולות המערכת למשך 30 יום, ללא כרטיס אשראי. מסלולי התשלום ייפתחו בקרוב.</p>
-        </div>
-        <div class="plans-grid">
+<!--    <section id="pricing" class="pricing-section">-->
+<!--      <div class="content-section">-->
+<!--        <div class="section-header">-->
+<!--          <h2>מסלולים ומחירים</h2>-->
+<!--          <p>הניסיון כולל את כל יכולות המערכת למשך 30 יום, ללא כרטיס אשראי. מסלולי התשלום ייפתחו לרכישה בקרוב.</p>-->
+<!--        </div>-->
+<!--        <div class="plans-grid">-->
 
-          <div class="plan">
-            <div class="plan__name">ניסיון · 30 יום</div>
-            <p class="plan__blurb">כל היכולות של המסלול הבסיסי, ללא כרטיס אשראי.</p>
-            <div class="plan__price">
-              <strong>₪0</strong>
-              <span class="plan__price-period">/ 30 יום</span>
-            </div>
-            <p class="plan__price-year">עד 25 מסמכים — ידני ומאימייל יחד</p>
-            <ul class="plan__features">
-              <li>תצוגה מקדימה וחילוץ נתונים AI</li>
-              <li>תזכורות אימייל אוטומטיות ללקוחות</li>
-              <li>יבוא תסקירים של 16 חודשים האחרונים</li>
-              <li>יבוא קבלות מ-Gmail עד 6 חודשים אחורה</li>
-              <li>יצוא לאקסל ודוחות חודשיים</li>
-              <li>סנכרון Google Drive</li>
-            </ul>
-            <a class="plan__cta plan__cta--ghost plan__cta--solo" href="#login-card">התחל בחינם</a>
-          </div>
+<!--          <div class="plan">-->
+<!--            <div class="plan__name">ניסיון · 30 יום</div>-->
+<!--            <p class="plan__blurb">כל היכולות של המסלול הבסיסי, ללא כרטיס אשראי.</p>-->
+<!--            <div class="plan__price">-->
+<!--              <strong>₪0</strong>-->
+<!--              <span class="plan__price-period">/ 30 יום</span>-->
+<!--            </div>-->
+<!--            <p class="plan__price-year">עד 50 מסמכים — ידני ומאימייל יחד</p>-->
+<!--            <ul class="plan__features">-->
+<!--              <li>תצוגה מקדימה וחילוץ נתונים AI</li>-->
+<!--              <li>תזכורות אימייל אוטומטיות ללקוחות</li>-->
+<!--              <li>יבוא תסקירים של 16 חודשים האחרונים</li>-->
+<!--              <li>יבוא קבלות מ-Gmail עד 6 חודשים אחורה</li>-->
+<!--              <li>יצוא לאקסל ודוחות חודשיים</li>-->
+<!--              <li>סנכרון Google Drive</li>-->
+<!--            </ul>-->
+<!--            <a class="plan__cta plan__cta&#45;&#45;ghost plan__cta&#45;&#45;solo" href="#login-card">התחל בחינם</a>-->
+<!--          </div>-->
 
-          <div class="plan plan--hidden">
-            <div class="plan__name">בסיסי</div>
-            <p class="plan__blurb">מתאים לעסק קטן שמייבא מסמכים בכל חודש.</p>
-            <div class="plan__price">
-              <span class="plan__price-old">₪88</span>
-              <strong>₪79</strong>
-              <span class="plan__price-period">/ חודש</span>
-            </div>
-            <p class="plan__price-year">בתשלום שנתי — ₪948 לשנה · או ₪88 בחיוב חודשי</p>
-            <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>
-            <ul class="plan__features">
-              <li>50 מסמכים בחודש — תסקירים וקבלות יחד</li>
-              <li>יבוא תסקירים של 16 חודשים האחרונים</li>
-              <li>יבוא קבלות מ-Gmail עד 12 חודשים אחורה</li>
-              <li>ניהול תסקירים ושליחת תזכורות ללקוחות</li>
-              <li>יצוא קבלות לקובץ אקסל</li>
-              <li>הפקת דוחות חודשיים אוטומטיים</li>
-              <li>סנכרון Google Drive</li>
-            </ul>
-            <div class="plan__ctas">
-              <a class="plan__cta plan__cta--primary" href="#login-card">
-                שנתי — ₪79 / חודש<span class="plan__cta-save">חסכון 10%</span>
-              </a>
-              <a class="plan__cta plan__cta--ghost" href="#login-card">או חודשי — ₪88 / חודש</a>
-            </div>
-          </div>
+<!--          <div class="plan plan&#45;&#45;soon">-->
+<!--            <div class="plan__name">בסיסי</div>-->
+<!--            <p class="plan__blurb">מתאים לעסק קטן שמייבא מסמכים בכל חודש.</p>-->
+<!--            <div class="plan__price">-->
+<!--              <span class="plan__price-old">₪88</span>-->
+<!--              <strong>₪79</strong>-->
+<!--              <span class="plan__price-period">/ חודש</span>-->
+<!--            </div>-->
+<!--            <p class="plan__price-year">בתשלום שנתי — ₪948 לשנה · או ₪88 בחיוב חודשי</p>-->
+<!--            <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>-->
+<!--            <ul class="plan__features">-->
+<!--              <li>50 מסמכים בחודש — תסקירים וקבלות יחד</li>-->
+<!--              <li>יבוא תסקירים של 16 חודשים האחרונים</li>-->
+<!--              <li>יבוא קבלות מ-Gmail עד 12 חודשים אחורה</li>-->
+<!--              <li>ניהול תסקירים ושליחת תזכורות ללקוחות</li>-->
+<!--              <li>יצוא קבלות לקובץ אקסל</li>-->
+<!--              <li>הפקת דוחות חודשיים אוטומטיים</li>-->
+<!--              <li>סנכרון Google Drive</li>-->
+<!--            </ul>-->
+<!--            <div class="plan__ctas">-->
+<!--              <a class="plan__cta plan__cta&#45;&#45;primary" role="link" aria-disabled="true" tabindex="-1">-->
+<!--                שנתי — ₪79 / חודש<span class="plan__cta-save">חסכון 10%</span>-->
+<!--              </a>-->
+<!--              <a class="plan__cta plan__cta&#45;&#45;ghost" role="link" aria-disabled="true" tabindex="-1">או חודשי — ₪88 / חודש</a>-->
+<!--            </div>-->
+<!--            <p class="plan__soon-note">המסלול ייפתח לרכישה בקרוב</p>-->
+<!--          </div>-->
 
-          <div class="plan plan--highlighted plan--hidden">
-            <span class="plan__badge">הכי פופולרי</span>
-            <div class="plan__name">עסקי</div>
-            <p class="plan__blurb">לבודקים מוסמכים שמייבאים מסמכים באופן שוטף ורוצים יומן Google מסונכרן.</p>
-            <div class="plan__price">
-              <span class="plan__price-old">₪143</span>
-              <strong>₪128</strong>
-              <span class="plan__price-period">/ חודש</span>
-            </div>
-            <p class="plan__price-year">בתשלום שנתי — ₪1,536 לשנה · או ₪143 בחיוב חודשי</p>
-            <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>
-            <p class="plan__additional">כל מה שיש בבסיסי, ובנוסף</p>
-            <ul class="plan__features">
-              <li>יבוא תסקירים ללא הגבלה</li>
-              <li>יבוא חשבונות וקבלות ללא הגבלה</li>
-              <li>סנכרון היסטורי של שנתיים</li>
-              <li>ניהול לקוחות וציוד</li>
-              <li>סנכרון Google Calendar לתסקירים עתידיים</li>
-            </ul>
-            <div class="plan__ctas plan__ctas--accent">
-              <a class="plan__cta plan__cta--primary" href="#login-card">
-                שנתי — ₪128 / חודש<span class="plan__cta-save">חסכון 10%</span>
-              </a>
-              <a class="plan__cta plan__cta--ghost" href="#login-card">או חודשי — ₪143 / חודש</a>
-            </div>
-          </div>
+<!--          <div class="plan plan&#45;&#45;highlighted plan&#45;&#45;soon">-->
+<!--            <span class="plan__badge">הכי פופולרי</span>-->
+<!--            <div class="plan__name">עסקי</div>-->
+<!--            <p class="plan__blurb">לבודקים מוסמכים שמייבאים מסמכים באופן שוטף ורוצים יומן Google מסונכרן.</p>-->
+<!--            <div class="plan__price">-->
+<!--              <span class="plan__price-old">₪143</span>-->
+<!--              <strong>₪128</strong>-->
+<!--              <span class="plan__price-period">/ חודש</span>-->
+<!--            </div>-->
+<!--            <p class="plan__price-year">בתשלום שנתי — ₪1,536 לשנה · או ₪143 בחיוב חודשי</p>-->
+<!--            <p class="plan__vat">המחירים אינם כוללים מע״מ (18%)</p>-->
+<!--            <p class="plan__additional">כל מה שיש בבסיסי, ובנוסף</p>-->
+<!--            <ul class="plan__features">-->
+<!--              <li>יבוא תסקירים ללא הגבלה</li>-->
+<!--              <li>יבוא חשבונות וקבלות ללא הגבלה</li>-->
+<!--              <li>סנכרון היסטורי של שנתיים</li>-->
+<!--              <li>ניהול לקוחות וציוד</li>-->
+<!--              <li>סנכרון Google Calendar לתסקירים עתידיים</li>-->
+<!--            </ul>-->
+<!--            <div class="plan__ctas plan__ctas&#45;&#45;accent">-->
+<!--              <a class="plan__cta plan__cta&#45;&#45;primary" role="link" aria-disabled="true" tabindex="-1">-->
+<!--                שנתי — ₪128 / חודש<span class="plan__cta-save">חסכון 10%</span>-->
+<!--              </a>-->
+<!--              <a class="plan__cta plan__cta&#45;&#45;ghost" role="link" aria-disabled="true" tabindex="-1">או חודשי — ₪143 / חודש</a>-->
+<!--            </div>-->
+<!--            <p class="plan__soon-note">המסלול ייפתח לרכישה בקרוב</p>-->
+<!--          </div>-->
 
-        </div>
-      </div>
-    </section>
+<!--        </div>-->
+<!--      </div>-->
+<!--    </section>-->
 
     <!-- Forgot password modal -->
     <n-modal v-model:show="showForgot" preset="card" title="שחזור סיסמה" style="max-width:380px;direction:rtl">
@@ -1012,15 +1014,21 @@ onMounted(async () => {
   align-items: stretch;
 }
 
-/* Paid plans are hidden until Green Invoice payment links are live. Delete this
-   rule and the plan--hidden classes to bring them back. */
-.plan.plan--hidden {
-  display: none;
+/* Paid plans are shown in full but cannot be bought until Green Invoice payment
+   links exist. Delete this block and the plan--soon classes, and restore the
+   hrefs, to reopen them. */
+.plan--soon .plan__ctas {
+  opacity: 0.55;
+  filter: grayscale(1);
+  pointer-events: none;
 }
 
-.plans-grid:has(.plan--hidden) {
-  grid-template-columns: minmax(0, 420px);
-  justify-content: center;
+.plan__soon-note {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-color);
 }
 
 .plan {

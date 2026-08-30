@@ -71,13 +71,13 @@ export function documentImportLimit(
   if (plan === "free" || plan === "trial") {
     if (category === "documents") {
       return {
-        limit: readPositiveIntEnv("FREE_LIFETIME_DOCUMENT_LIMIT", 25),
+        limit: readPositiveIntEnv("FREE_LIFETIME_DOCUMENT_LIMIT", 50),
         scope: "lifetime",
       };
     }
     // One shared pool for manual + email, so both categories report the same limit.
     return {
-      limit: readPositiveIntEnv("FREE_LIFETIME_MANUAL_DOCUMENT_LIMIT", 25),
+      limit: readPositiveIntEnv("FREE_LIFETIME_MANUAL_DOCUMENT_LIMIT", 50),
       scope: "lifetime",
     };
   }
