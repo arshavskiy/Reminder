@@ -29,7 +29,7 @@ import {
 } from "../auth/emailAuth";
 import {clientIp, logger} from "../logger";
 import {notifyPasswordResetRequested} from "../push/adminNotify";
-import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
+import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements, newTrialEndsAt} from "../plans/planEntitlements";
 
 export function registerAuthRoutes(app: express.Application) {
   // GET /auth/google — kick off OAuth flow
@@ -124,6 +124,7 @@ export function registerAuthRoutes(app: express.Application) {
           $setOnInsert: {
             role: "user",
             plan: DEFAULT_NEW_USER_PLAN,
+            trial_ends_at: newTrialEndsAt(),
             is_active: 1,
             created_at: new Date(),
           },
@@ -188,6 +189,7 @@ export function registerAuthRoutes(app: express.Application) {
           $setOnInsert: {
             role: "user",
             plan: DEFAULT_NEW_USER_PLAN,
+            trial_ends_at: newTrialEndsAt(),
             is_active: 1,
             created_at: new Date(),
           },
@@ -406,6 +408,7 @@ export function registerAuthRoutes(app: express.Application) {
       verification_token_expires: tokenExpiry,
       role: "user",
       plan: DEFAULT_NEW_USER_PLAN,
+      trial_ends_at: newTrialEndsAt(),
       is_active: 1,
       created_at: new Date(),
       last_login_at: null,

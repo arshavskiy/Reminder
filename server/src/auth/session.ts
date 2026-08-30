@@ -1,7 +1,7 @@
 import {randomBytes} from "crypto";
 import {ObjectId} from "mongodb";
 import {getDb} from "../db/db";
-import type {User} from "../../src/shared/types.js";
+import type {User, UserPlan} from "../../src/shared/types.js";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 
@@ -132,22 +132,26 @@ function toUser(doc: any): User {
     picture_url: doc.picture_url,
     role: doc.role,
     plan: normalizeUserPlan(doc.plan ?? planFromRole(doc.role)),
+    trial_ends_at: doc.trial_ends_at ?? null,
     is_active: doc.is_active,
     created_at: doc.created_at?.toISOString() ?? "",
     last_login_at: doc.last_login_at?.toISOString() ?? null,
   } as any;
 }
 
-function planFromRole(role: string | null | undefined): "free" | "basic" | "business" {
+function planFromRole(role: string | null | undefined): UserPlan {
   if (role === "admin") return "business";
   if (role === "pro") return "basic";
   return "free";
 }
 
-function normalizeUserPlan(value: unknown): "free" | "basic" | "business" {
+function normalizeUserPlan(value: unknown): UserPlan {
   const text = String(value ?? "").trim().toLowerCase();
   if (text === "business") return "business";
   if (text === "basic") return "basic";
+  // "trial" must survive here: the gates read plan off the session user, and
+  // collapsing it to free would expire every trial the moment it is loaded.
+  if (text === "trial") return "trial";
   return "free";
 }
 

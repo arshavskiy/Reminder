@@ -62,7 +62,7 @@ export interface AppSettings {
 
 // Phase 2: Authentication types
 export type UserRole = "admin" | "pro" | "user";
-export type UserPlan = "free" | "basic" | "business";
+export type UserPlan = "free" | "trial" | "basic" | "business";
 
 export interface User {
   id: number;
@@ -74,6 +74,8 @@ export interface User {
   picture_url: string | null;
   role: UserRole;
   plan?: UserPlan;
+  /** When the 14-day trial lapses. Null on paid plans and on legacy accounts. */
+  trial_ends_at?: string | Date | null;
   is_active: number;
   created_at: string;
   last_login_at: string | null;

@@ -66,16 +66,18 @@ export function documentImportLimit(
 ): { limit: number | null; scope: DocumentImportQuota["scope"] } {
   const plan = normalizePlan(role);
   if (plan === "business") return { limit: null, scope: "unlimited" };
-  if (plan === "free") {
+  // The trial shares the free tier's lifetime import cap: it unlocks automation,
+  // not volume, so it cannot be used to bulk-import a backlog and then lapse.
+  if (plan === "free" || plan === "trial") {
     if (category === "documents") {
       return {
-        limit: readPositiveIntEnv("FREE_LIFETIME_DOCUMENT_LIMIT", 20),
+        limit: readPositiveIntEnv("FREE_LIFETIME_DOCUMENT_LIMIT", 25),
         scope: "lifetime",
       };
     }
     // One shared pool for manual + email, so both categories report the same limit.
     return {
-      limit: readPositiveIntEnv("FREE_LIFETIME_MANUAL_DOCUMENT_LIMIT", 10),
+      limit: readPositiveIntEnv("FREE_LIFETIME_MANUAL_DOCUMENT_LIMIT", 25),
       scope: "lifetime",
     };
   }
@@ -214,10 +216,11 @@ function documentQuotaCountFilter(
   return filter;
 }
 
-function normalizePlan(role: string | null | undefined): "free" | "basic" | "business" {
+function normalizePlan(role: string | null | undefined): "free" | "trial" | "basic" | "business" {
   const value = String(role ?? "").trim().toLowerCase();
   if (value === "admin" || value === "business") return "business";
   if (value === "pro" || value === "basic") return "basic";
+  if (value === "trial") return "trial";
   return "free";
 }
 

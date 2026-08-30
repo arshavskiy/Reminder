@@ -15,7 +15,7 @@ try {
     .project({ _id: 1, email: 1, role: 1, plan: 1 })
     .toArray() as Array<Record<string, any>>;
 
-  const counts: Record<UserPlan, number> = { free: 0, basic: 0, business: 0 };
+  const counts: Record<UserPlan, number> = { free: 0, trial: 0, basic: 0, business: 0 };
   let updated = 0;
 
   for (const user of users) {

@@ -273,19 +273,22 @@
         <div class="plans-grid">
 
           <div class="plan">
-            <div class="plan__name">חינמי</div>
-            <p class="plan__blurb">להתחלה מהירה ובדיקת התהליך עם כמות מסמכים מוגבלת.</p>
+            <div class="plan__name">ניסיון · 14 יום</div>
+            <p class="plan__blurb">כל היכולות של המסלול הבסיסי, ללא כרטיס אשראי.</p>
             <div class="plan__price">
               <strong>₪0</strong>
+              <span class="plan__price-period">/ 14 יום</span>
             </div>
+            <p class="plan__price-year">עד 25 מסמכים — ידני ומאימייל יחד</p>
             <ul class="plan__features">
-              <li>יבוא 10 מסמכים</li>
-              <li>יבוא 10 מסמכים מאימייל</li>
               <li>תצוגה מקדימה וחילוץ נתונים AI</li>
-              <li>דוח חודשי ידני</li>
+              <li>תזכורות אימייל אוטומטיות ללקוחות</li>
+              <li>יבוא קבלות מ-Gmail עד 6 חודשים אחורה</li>
+              <li>יצוא לאקסל ודוחות חודשיים</li>
+              <li>סנכרון Google Drive</li>
             </ul>
             <div class="plan__ctas">
-              <a class="plan__cta plan__cta--ghost" href="#login-card">התחל בחינם</a>
+              <a class="plan__cta plan__cta--ghost" href="#login-card">התחל ניסיון של 14 יום</a>
             </div>
           </div>
 

@@ -3,12 +3,17 @@ import { currentUtcMonthWindow, documentImportLimit, documentImportMonthlyLimit 
 import {reminderLimit} from "../quotas/reminderQuota";
 
 describe("document monthly import quota", () => {
-  it("limits free users to separate 10-document lifetime import buckets", () => {
-    expect(documentImportLimit("free", "manualDocuments")).toEqual({limit: 10, scope: "lifetime"});
-    expect(documentImportLimit("free", "emailDocuments")).toEqual({limit: 10, scope: "lifetime"});
-    expect(documentImportLimit("free", "invoices")).toEqual({limit: 10, scope: "lifetime"});
-    expect(documentImportLimit("free", "contracts")).toEqual({limit: 10, scope: "lifetime"});
-    expect(documentImportMonthlyLimit("free")).toBe(10);
+  it("limits free users to separate 25-document lifetime import buckets", () => {
+    expect(documentImportLimit("free", "manualDocuments")).toEqual({limit: 25, scope: "lifetime"});
+    expect(documentImportLimit("free", "emailDocuments")).toEqual({limit: 25, scope: "lifetime"});
+    expect(documentImportLimit("free", "invoices")).toEqual({limit: 25, scope: "lifetime"});
+    expect(documentImportLimit("free", "contracts")).toEqual({limit: 25, scope: "lifetime"});
+    expect(documentImportMonthlyLimit("free")).toBe(25);
+  });
+
+  it("gives the trial the same 25-document allowance as free", () => {
+    expect(documentImportLimit("trial", "manualDocuments")).toEqual({limit: 25, scope: "lifetime"});
+    expect(documentImportMonthlyLimit("trial")).toBe(25);
   });
 
   it("limits basic users to 50 invoice documents per month", () => {
@@ -25,11 +30,11 @@ describe("document monthly import quota", () => {
   });
 
   it("keeps legacy roles mapped to equivalent plans", () => {
-    expect(documentImportMonthlyLimit("user")).toBe(10);
+    expect(documentImportMonthlyLimit("user")).toBe(25);
     expect(documentImportMonthlyLimit("pro")).toBe(50);
     expect(documentImportMonthlyLimit("admin")).toBeNull();
-    expect(documentImportMonthlyLimit(null)).toBe(10);
-    expect(documentImportMonthlyLimit("")).toBe(10);
+    expect(documentImportMonthlyLimit(null)).toBe(25);
+    expect(documentImportMonthlyLimit("")).toBe(25);
   });
 
   it("uses a UTC calendar month window", () => {

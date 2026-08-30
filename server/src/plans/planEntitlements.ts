@@ -6,6 +6,7 @@ import {reminderLimit} from "../quotas/reminderQuota";
 import {
   featureFlagsForUser,
   normalizePlanId,
+  TRIAL_DAYS,
   type PlanId,
   type TierFeatureFlags,
 } from "./tierFeatures";
@@ -27,8 +28,19 @@ export interface PlanEntitlements extends TierFeatureFlags {
   };
 }
 
-/** New signups stay on free until a paid plan is assigned (Visa payment later). */
-export const DEFAULT_NEW_USER_PLAN: PlanId = "free";
+/**
+ * New signups start on a 14-day trial with basic entitlements.
+ *
+ * There is no free tier to sign up to any more: once the trial lapses the plan
+ * still reads "trial", but featureFlagsForUser resolves it to free entitlements,
+ * which leaves the account readable while stopping imports and automation.
+ */
+export const DEFAULT_NEW_USER_PLAN: PlanId = "trial";
+
+/** trial_ends_at for an account created now. */
+export function newTrialEndsAt(now: Date = new Date()): Date {
+  return new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+}
 
 export function buildPlanEntitlements(
   user: {plan?: string | null; role?: string | null} | null | undefined,

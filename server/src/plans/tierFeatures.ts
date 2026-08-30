@@ -1,4 +1,4 @@
-export type PlanId = "free" | "basic" | "business";
+export type PlanId = "free" | "trial" | "basic" | "business";
 
 export interface TierFeatureFlags {
   gmailInspectionHistoryMonths: number | null;
@@ -25,6 +25,19 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     excelExport: false,
     maxUsers: 1,
     maxEmailAccounts: 0,
+  },
+  // 14-day trial: basic entitlements, but invoice history is cut to 6 months so a
+  // trial cannot be used to backfill years of invoices and then lapse.
+  trial: {
+    gmailInspectionHistoryMonths: 16,
+    gmailInvoiceHistoryMonths: 6,
+    googleDriveSync: true,
+    googleCalendarSync: false,
+    automaticEmailReminders: true,
+    automaticMonthlyReports: true,
+    excelExport: true,
+    maxUsers: 2,
+    maxEmailAccounts: 2,
   },
   basic: {
     gmailInspectionHistoryMonths: 16,
@@ -63,16 +76,45 @@ export function normalizePlanId(planOrRole: string | null | undefined): PlanId {
   const value = String(planOrRole ?? "").trim().toLowerCase();
   if (value === "business" || value === "admin") return "business";
   if (value === "basic" || value === "pro") return "basic";
+  if (value === "trial") return "trial";
   return "free";
 }
 
-export function featureFlagsForUser(user: { plan?: string | null; role?: string | null } | null | undefined): TierFeatureFlags {
+/** Trial length for new signups. */
+export const TRIAL_DAYS = 14;
+
+/**
+ * A trial only counts while it has not run out.
+ *
+ * Resolved from trial_ends_at rather than from the plan alone, so an expired
+ * trial degrades to free entitlements the moment the date passes — no cron job
+ * has to rewrite the row for the gates to close.
+ */
+export function isTrialActive(
+  user: { plan?: string | null; trial_ends_at?: Date | string | null } | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (normalizePlanId(user?.plan) !== "trial") return false;
+  const endsAt = user?.trial_ends_at;
+  if (!endsAt) return false;
+  const parsed = endsAt instanceof Date ? endsAt : new Date(endsAt);
+  return !Number.isNaN(parsed.getTime()) && parsed.getTime() > now.getTime();
+}
+
+export function featureFlagsForUser(
+  user: { plan?: string | null; role?: string | null; trial_ends_at?: Date | string | null } | null | undefined,
+): TierFeatureFlags {
   if (String(user?.role ?? "").trim().toLowerCase() === "admin") {
     return {
       ...TIER_FEATURE_FLAGS.business,
       gmailInspectionHistoryMonths: null,
       gmailInvoiceHistoryMonths: null,
     };
+  }
+  // Every gate in the app reads its flags from here, so expiring the trial in this
+  // one place closes calendar, reminders, reports and export together.
+  if (normalizePlanId(user?.plan) === "trial") {
+    return isTrialActive(user) ? TIER_FEATURE_FLAGS.trial : TIER_FEATURE_FLAGS.free;
   }
   return tierFeatureFlags(user?.plan ?? user?.role);
 }
