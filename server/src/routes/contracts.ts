@@ -131,6 +131,11 @@ export function registerContractRoutes(app: express.Application) {
     const clientId = req.query.clientId as string | undefined;
     const status = req.query.status as string | undefined;
     const kind = req.query.kind as string | undefined;
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const expiryFrom = typeof req.query.expiryFrom === "string" ? req.query.expiryFrom.trim() : "";
+    const expiryTo = typeof req.query.expiryTo === "string" ? req.query.expiryTo.trim() : "";
+    const due = typeof req.query.due === "string" ? req.query.due.trim() : "";
+    const sort = req.query.sort === "expiry" ? "expiry" : "serial";
     const limit = parseInt((req.query.limit as string) ?? "0");
     const offset = parseInt((req.query.offset as string) ?? "0");
 
@@ -156,13 +161,56 @@ export function registerContractRoutes(app: express.Application) {
       baseFilter.contract_type = { $regex: /תסקיר|בדיקה/ };
     }
 
+    // Conditions that narrow the page but must not narrow the status tab counts:
+    // those are computed from baseFilter so a tab still shows how many exist,
+    // not how many survive the current text search.
+    const extraConditions: Array<Record<string, any>> = [];
+
+    if (search) {
+      // Substring, case-insensitive, matching what the client used to do in the
+      // browser with .includes(). Escaped so a user typing "(" cannot inject a
+      // pattern or build one that backtracks pathologically.
+      const rx = { $regex: escapeRegExp(search), $options: "i" };
+      extraConditions.push({
+        $or: [
+          { contract_number: rx },
+          { contract_type: rx },
+          { summary: rx },
+          { client_name: rx },
+        ],
+      });
+    }
+
+    if (expiryFrom || expiryTo) {
+      const range: Record<string, string> = {};
+      if (expiryFrom) range.$gte = expiryFrom;
+      if (expiryTo) range.$lte = expiryTo;
+      extraConditions.push({ expiry_date: range });
+    }
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    if (due === "overdue") {
+      extraConditions.push({
+        $or: [{ status: "expired" }, { expiry_date: { $ne: null, $lt: todayIso } }],
+      });
+    } else if (due === "month") {
+      const now = new Date();
+      const monthFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      const monthTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      extraConditions.push({ expiry_date: { $ne: null, $gte: monthFrom, $lte: monthTo } });
+    }
+
     const filter: Record<string, any> = { ...baseFilter };
     if (status) filter.status = status;
+    if (extraConditions.length) {
+      // Appended rather than assigned: `kind` may already have put an $and here.
+      filter.$and = [...((filter.$and as any[]) ?? []), ...extraConditions];
+    }
 
     const [contractDocs, total, totalAll, statusCounts] = await Promise.all([
       col("contracts")
         .find(filter)
-        .sort({ expiry_date: 1 })
+        .sort(sort === "expiry" ? { expiry_date: 1 } : { contract_number: -1, _id: -1 })
         .skip(offset)
         .limit(limit)
         .toArray(),
@@ -344,6 +392,58 @@ export function registerContractRoutes(app: express.Application) {
     }
   });
   // GET /api/contracts/expiring
+  // GET /api/contracts/duplicate-report-numbers
+  //
+  // Which report numbers appear more than once across the whole account.
+  //
+  // Duplicate detection cannot be answered from a page: it is a property of the
+  // full set, so with server-side pagination the client can no longer compute it
+  // by scanning the rows it holds. The set is small — only the numbers that
+  // actually repeat — so it is cheap to send and cache.
+  app.get("/api/contracts/duplicate-report-numbers", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    // Mirrors normalizeReportNumber on the client: trim, strip whitespace,
+    // lowercase, with contract_number falling back to the manual fields.
+    const rows = await col("contracts").aggregate([
+      { $match: { user_id: userId } },
+      {
+        $project: {
+          raw: {
+            $ifNull: [
+              "$contract_number",
+              { $ifNull: ["$manual_fields.report_number", "$manual_fields.document_number"] },
+            ],
+          },
+        },
+      },
+      { $match: { raw: { $ne: null } } },
+      {
+        $project: {
+          key: {
+            $toLower: {
+              $replaceAll: { input: { $trim: { input: { $toString: "$raw" } } }, find: " ", replacement: "" },
+            },
+          },
+        },
+      },
+      { $match: { key: { $ne: "" } } },
+      { $group: { _id: "$key", count: { $sum: 1 } } },
+      { $match: { count: { $gt: 1 } } },
+      { $project: { _id: 0, number: "$_id", count: 1 } },
+    ]).toArray();
+
+    res.json({ numbers: rows.map((r: any) => r.number), rows });
+  });
+
   app.get("/api/contracts/expiring", async (req, res) => {
     let userId: string;
     try {
@@ -750,6 +850,11 @@ function presentContractRow(contract: any, client: any, document: any) {
  * difference between 80ms and a request slow enough for the healthcheck to kill
  * the container.
  */
+/** Escape a user string so it is matched literally inside a $regex. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 async function presentContractRows(userId: string, contractDocs: any[]) {
   if (!contractDocs.length) return [];
 
