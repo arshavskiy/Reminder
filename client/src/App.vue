@@ -382,12 +382,16 @@ const theme = computed(() => (isDark.value ? darkTheme : null));
 const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
 
 const PLAN_SHORT: Record<PlanId, string> = {
-  free: "חינמי",
+  free: "הסתיים",
+  trial: "ניסיון",
   basic: "בסיסי",
   business: "עסקי",
 };
 
-const PLAN_RANK: Record<PlanId, number> = {free: 0, basic: 1, business: 2};
+// Trial ranks alongside basic, not between free and basic: it grants basic's
+// entitlements server-side, so ranking it lower would lock a trial user out of
+// reminders and clients — the very features the trial exists to demonstrate.
+const PLAN_RANK: Record<PlanId, number> = {free: 0, trial: 1, basic: 1, business: 2};
 
 const subscriptionPlanLabel = computed(() => {
   if (!authStore.user) return "";

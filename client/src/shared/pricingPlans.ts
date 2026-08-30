@@ -1,7 +1,8 @@
-export type PlanId = "free" | "basic" | "business";
+export type PlanId = "free" | "trial" | "basic" | "business";
 
 export const PLAN_LABELS: Record<PlanId, string> = {
-    free: "חינמי",
+    free: "הסתיים",
+    trial: "ניסיון",
     basic: "בסיסי",
     business: "עסקי",
 };
@@ -54,6 +55,18 @@ export interface PlanEntitlements extends TierFeatureFlags {
 }
 
 export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
+    // Mirrors server/src/plans/tierFeatures.ts — keep the two in step.
+    trial: {
+        gmailInspectionHistoryMonths: 16,
+        gmailInvoiceHistoryMonths: 6,
+        googleDriveSync: true,
+        googleCalendarSync: false,
+        automaticEmailReminders: true,
+        automaticMonthlyReports: true,
+        excelExport: true,
+        maxUsers: 2,
+        maxEmailAccounts: 2,
+    },
     free: {
         gmailInspectionHistoryMonths: 16,
         gmailInvoiceHistoryMonths: 0,
@@ -163,7 +176,7 @@ export function planFromRole(role: string | null | undefined): PlanId {
 
 export function resolveUserPlan(user: { plan?: string | null; role?: string | null } | null | undefined): PlanId {
     const raw = String(user?.plan ?? "").trim().toLowerCase();
-    if (raw === "free" || raw === "basic" || raw === "business") return raw;
+    if (raw === "free" || raw === "trial" || raw === "basic" || raw === "business") return raw;
     return planFromRole(user?.role);
 }
 

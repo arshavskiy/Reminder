@@ -288,7 +288,7 @@
               <li>סנכרון Google Drive</li>
             </ul>
             <div class="plan__ctas">
-              <a class="plan__cta plan__cta--ghost" href="#login-card">התחל ניסיון של 14 יום</a>
+              <a class="plan__cta plan__cta--ghost" href="#login-card">התחל בחינם</a>
             </div>
           </div>
 
