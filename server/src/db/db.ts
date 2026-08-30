@@ -55,12 +55,33 @@ let _primary: DbSlot | null = null;
 let _local: DbSlot | null = null;
 let _production: DbSlot | null = null;
 
+/** Positive integer from the environment, or the fallback when unset or invalid. */
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.floor(value);
+}
+
 function redactUri(uri: string): string {
   return uri.replace(/\/\/[^:]+:[^@]+@/, "//***:***@");
 }
 
 async function openSlot(target: AdminDbTarget, uri: string, dbName: string): Promise<DbSlot> {
-  const client = new MongoClient(uri);
+  // Pool sizing is explicit because the driver default of 100 per client, across
+  // the local and production slots, let a burst of small queries saturate the
+  // pool: connections plateaued while every later request queued for a free one,
+  // which reads as a slow database but is really waiting for a turn.
+  //
+  // waitQueueTimeoutMS matters as much as the size. Without it a saturated pool
+  // makes requests wait indefinitely, so a slow patch stops the healthcheck
+  // answering and the container is killed; failing fast keeps the process alive
+  // and surfaces the real problem.
+  const client = new MongoClient(uri, {
+    maxPoolSize: readPositiveIntEnv("MONGODB_MAX_POOL_SIZE", 50),
+    minPoolSize: readPositiveIntEnv("MONGODB_MIN_POOL_SIZE", 5),
+    waitQueueTimeoutMS: readPositiveIntEnv("MONGODB_WAIT_QUEUE_TIMEOUT_MS", 10_000),
+    maxIdleTimeMS: readPositiveIntEnv("MONGODB_MAX_IDLE_TIME_MS", 60_000),
+  });
   await client.connect();
   const db = client.db(dbName);
   await ensureCollections(db);
