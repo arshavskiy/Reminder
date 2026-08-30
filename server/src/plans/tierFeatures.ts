@@ -26,11 +26,12 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     maxUsers: 1,
     maxEmailAccounts: 0,
   },
-    // 30-day trial: basic entitlements. Gmail invoice backfill is reserved for
-    // business plans so trial/basic users cannot use it for historical receipts.
+  // 30-day trial: basic entitlements, plus one month of Gmail invoice history —
+  // enough to demonstrate the import on recent receipts without offering the
+  // historical backfill that business pays for.
   trial: {
     gmailInspectionHistoryMonths: 16,
-      gmailInvoiceHistoryMonths: 0,
+    gmailInvoiceHistoryMonths: 1,
     googleDriveSync: true,
     googleCalendarSync: false,
     automaticEmailReminders: true,
@@ -39,9 +40,10 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     maxUsers: 2,
     maxEmailAccounts: 2,
   },
+  // Invoice backfill stays a business feature, so basic gets none.
   basic: {
     gmailInspectionHistoryMonths: 16,
-      gmailInvoiceHistoryMonths: 0,
+    gmailInvoiceHistoryMonths: 0,
     googleDriveSync: true,
     googleCalendarSync: false,
     automaticEmailReminders: true,

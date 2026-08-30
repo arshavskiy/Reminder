@@ -13,8 +13,9 @@ const inspectionTemplate = {
 
 describe("Gmail query tier limits", () => {
   it("builds the default invoice import query on the server", () => {
+    // Basic has no invoice backfill, so no time window is appended.
     expect(buildGmailQuery(undefined, invoiceTemplate, "basic")).toBe(
-      'has:attachment {"חשבונית" "invoice" "receipt" "bill" "חשבונית מס" "קבלה" "דרישת תשלום" "חשבון תקופתי"} newer_than:12m',
+      'has:attachment {"חשבונית" "invoice" "receipt" "bill" "חשבונית מס" "קבלה" "דרישת תשלום" "חשבון תקופתי"}',
     );
   });
 
@@ -24,9 +25,17 @@ describe("Gmail query tier limits", () => {
     );
   });
 
-  it("limits basic invoice searches to 12 months", () => {
+  it("gives basic no invoice history, since backfill is a business feature", () => {
     expect(buildGmailQuery("has:attachment HOT", invoiceTemplate, "basic")).toBe(
-      "has:attachment HOT newer_than:12m",
+      "has:attachment HOT",
+    );
+  });
+
+  it("limits trial invoice searches to one month", () => {
+    // Enough to demonstrate the import on recent receipts, without offering the
+    // historical backfill that business pays for.
+    expect(buildGmailQuery("has:attachment HOT", invoiceTemplate, "trial")).toBe(
+      "has:attachment HOT newer_than:1m",
     );
   });
 
@@ -46,14 +55,21 @@ describe("Gmail query tier limits", () => {
   });
 
   it("replaces client-provided invoice history windows with the tier window", () => {
+    // A client asking for 36 months gets its tier's window, not what it asked for.
+    expect(buildGmailQuery("has:attachment HOT newer_than:36m", invoiceTemplate, "trial")).toBe(
+      "has:attachment HOT newer_than:1m",
+    );
+  });
+
+  it("strips a client-provided window entirely when the tier has no backfill", () => {
     expect(buildGmailQuery("has:attachment HOT newer_than:36m", invoiceTemplate, "basic")).toBe(
-      "has:attachment HOT newer_than:12m",
+      "has:attachment HOT",
     );
   });
 
   it("removes invoice file-type filters without adding them back", () => {
     expect(buildGmailQuery("has:attachment {filename:pdf filename:docx} invoice", invoiceTemplate, "basic")).toBe(
-      "has:attachment invoice newer_than:12m",
+      "has:attachment invoice",
     );
   });
 

@@ -45,7 +45,7 @@ import {importFile, startDocumentProcessingJobWorker} from "./pipeline/importer"
 import {applyScannedKeys, scanFileForKeys, shouldScanFile} from "./pipeline/keyScanner";
 import {logger, requestLogger} from "./logger";
 import {registerResendWebhook} from "./reminders/resendDelivery";
-import {requireAnyFeature, requireMinRole} from "./auth/middleware";
+import {requireAnyFeature, requireMinRole, requirePlans} from "./auth/middleware";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -180,7 +180,9 @@ app.use("/api/equipment", (req, res, next) => {
 registerAuthRoutes(app);
 registerBillingRoutes(app);
 app.use("/api/gmail", requireAnyFeature(["pages.gmail"]));
-app.use("/api/invoices", requireMinRole("admin"));
+// Invoices are a plan feature, not an admin one. This was requireMinRole("admin"),
+// which refused every non-admin account regardless of what it had paid for.
+app.use("/api/invoices", requirePlans(["trial", "business"]));
 registerGmailRoutes(app);
 registerCalendarRoutes(app);
 registerGdriveRoutes(app);

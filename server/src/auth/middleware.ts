@@ -1,6 +1,7 @@
 import {extractSessionFromCookie, verifySessionIdentity} from "./session";
 import type {User, UserRole} from "../../src/shared/types.js";
 import {isAnyFeatureEnabledForUser} from "../features";
+import {normalizePlanId} from "../plans/tierFeatures";
 import type {NextFunction, Request, Response} from "express";
 
 export interface AuthContext {
@@ -110,5 +111,50 @@ export function requireMinRole(minRole: UserRole) {
       const err = e as HTTPException;
       res.status(err.status ?? 403).json({error: err.message, status: err.status ?? 403});
     }
+  };
+}
+
+/**
+ * Restrict a route tree to an explicit set of plans.
+ *
+ * Distinct from requireMinRole: role is who the person is (admin, support),
+ * plan is what the account bought. Gating a paid feature on role meant the plan
+ * could not open it — an account on the right plan was still refused unless it
+ * also happened to be an admin.
+ *
+ * A list rather than a minimum, because plans do not always form a ladder:
+ * invoices are open to trial and business but not basic, which no threshold can
+ * express.
+ */
+export function requirePlans(allowed: string[]) {
+  const permitted = new Set(allowed.map((plan) => normalizePlanId(plan)));
+  return async (req: Request, res: Response, next: NextFunction) => {
+    let context: AuthContext;
+    try {
+      context = await requireAuth(req.headers.cookie);
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({error: err.message});
+      return;
+    }
+
+    // Admins are not a plan, but they administer every account and would
+    // otherwise be locked out of the pages they support.
+    if (String(context.user.role ?? "").trim().toLowerCase() === "admin") {
+      next();
+      return;
+    }
+
+    const plan = normalizePlanId(context.user.plan ?? context.user.role);
+    if (!permitted.has(plan)) {
+      res.status(403).json({
+        error: `This feature is available on the ${allowed.join(" and ")} plans`,
+        status: 403,
+        required_plans: allowed,
+        current_plan: plan,
+      });
+      return;
+    }
+    next();
   };
 }
