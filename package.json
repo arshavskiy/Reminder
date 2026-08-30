@@ -10,6 +10,8 @@
     "dev": "npm --prefix client run dev:all",
     "dev:client": "npm --prefix client run dev",
     "dev:server": "npm --prefix server run dev:watch",
+    "build": "npm --prefix server install && npm --prefix server run build",
+    "start": "npm --prefix server start",
     "report:send-all": "npm --prefix server run report:send-all --",
     "report:send-both": "npm --prefix server run report:send-both --",
     "report:send-client": "npm --prefix server run report:send-client --",
