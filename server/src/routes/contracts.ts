@@ -180,15 +180,10 @@ export function registerContractRoutes(app: express.Application) {
     }
     const allCount = totalAll === -1 ? total : totalAll;
 
-    const rows = await Promise.all(
-      contractDocs.map(async (c: any) => {
-        const [client, document] = await Promise.all([
-          c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
-          c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
-        ]);
-        return enrichContractDelivery(userId, presentContractRow(c, client, document));
-      })
-    );
+    // Batched rather than per row: this used to issue four round-trips for every
+    // contract on the page — client, document, reminders, delivery logs — which
+    // is fine against an idle database and collapses the moment it is not.
+    const rows = await presentContractRows(userId, contractDocs as any[]);
 
     res.json({
       rows,
@@ -745,6 +740,94 @@ function presentContractRow(contract: any, client: any, document: any) {
     _confidence: mergedFields._confidence ?? null,
     _equipment: Array.isArray(mergedFields._equipment) ? mergedFields._equipment : [],
   };
+}
+
+/**
+ * Present a page of contracts, resolving every join in one query per collection.
+ *
+ * The per-row version multiplied page size by four round-trips, so a 50-row page
+ * cost ~200 sequential queries; under any database latency that is the
+ * difference between 80ms and a request slow enough for the healthcheck to kill
+ * the container.
+ */
+async function presentContractRows(userId: string, contractDocs: any[]) {
+  if (!contractDocs.length) return [];
+
+  const clientIds = uniqueObjectIds(contractDocs.map((c) => c.client_id));
+  const documentIds = uniqueObjectIds(contractDocs.map((c) => c.document_id));
+
+  const [clients, documents] = await Promise.all([
+    clientIds.length
+      ? col("clients").find({ _id: { $in: clientIds } } as any).toArray()
+      : Promise.resolve([]),
+    documentIds.length
+      ? col("documents").find({ _id: { $in: documentIds } } as any).toArray()
+      : Promise.resolve([]),
+  ]);
+  const clientById = new Map(clients.map((c: any) => [String(c._id), c]));
+  const documentById = new Map(documents.map((d: any) => [String(d._id), d]));
+
+  // One reminders query for the whole page, then group by the contract it came
+  // from. A reminder matches either the contract id or the document id, so both
+  // are collected and the row picks up whichever applies to it.
+  const sourceIds = contractDocs.map((c) => String(c._id ?? "")).filter(Boolean);
+  const docIdStrings = contractDocs.map((c) => (c.document_id ? String(c.document_id) : "")).filter(Boolean);
+  const reminderOr: Array<Record<string, unknown>> = [];
+  if (sourceIds.length) reminderOr.push({ source_id: { $in: sourceIds } });
+  if (docIdStrings.length) reminderOr.push({ document_id: { $in: docIdStrings } });
+
+  const reminders = reminderOr.length
+    ? await col("reminders").find(
+        { user_id: userId, source_type: "contract_expiry", $or: reminderOr } as any,
+        { projection: { _id: 1, source_id: 1, document_id: 1 } } as any,
+      ).sort({ trigger_date: 1 }).toArray() as any[]
+    : [];
+
+  const remindersBySource = new Map<string, string[]>();
+  for (const reminder of reminders) {
+    const id = String(reminder._id ?? "");
+    if (!id) continue;
+    for (const key of [reminder.source_id, reminder.document_id]) {
+      const k = key == null ? "" : String(key);
+      if (!k) continue;
+      const list = remindersBySource.get(k) ?? [];
+      list.push(id);
+      remindersBySource.set(k, list);
+    }
+  }
+
+  const failedDeliveryByReminderId = await latestFailedDeliveryByReminderIds(
+    reminders.map((reminder: any) => String(reminder._id ?? "")).filter(Boolean),
+  );
+
+  return contractDocs.map((c: any) => {
+    const client = c.client_id ? clientById.get(String(c.client_id)) ?? null : null;
+    const document = c.document_id ? documentById.get(String(c.document_id)) ?? null : null;
+    const row = presentContractRow(c, client, document);
+    const reminderIds = [
+      ...(row.id != null ? remindersBySource.get(String(row.id)) ?? [] : []),
+      ...(row.document_id ? remindersBySource.get(String(row.document_id)) ?? [] : []),
+    ];
+    return {
+      ...row,
+      email_delivery: latestFailedDeliveryForReminderIds(reminderIds, failedDeliveryByReminderId),
+    };
+  });
+}
+
+/** ObjectIds for an id list, skipping blanks and values that are not ObjectIds. */
+function uniqueObjectIds(values: unknown[]): ObjectId[] {
+  const seen = new Set<string>();
+  const ids: ObjectId[] = [];
+  for (const value of values) {
+    if (value == null) continue;
+    const key = String(value);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const objectId = tryObjectId(key);
+    if (objectId instanceof ObjectId) ids.push(objectId);
+  }
+  return ids;
 }
 
 async function enrichContractDelivery(userId: string, row: ReturnType<typeof presentContractRow>) {

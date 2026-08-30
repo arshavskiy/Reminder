@@ -18,6 +18,20 @@ type EquipmentDoc = Partial<Equipment> & {
   document_id?: string | null;
 };
 
+/** ObjectIds for an id list, skipping blanks, duplicates and non-ObjectId values. */
+function uniqueObjectIdList(values: unknown[]): ObjectId[] {
+  const seen = new Set<string>();
+  const ids: ObjectId[] = [];
+  for (const value of values) {
+    if (value == null) continue;
+    const key = String(value);
+    if (!key || seen.has(key) || !ObjectId.isValid(key)) continue;
+    seen.add(key);
+    ids.push(new ObjectId(key));
+  }
+  return ids;
+}
+
 export function registerEquipmentRoutes(app: express.Application) {
   // GET /api/equipment  — optional ?category=lift and ?q= filters
   app.get("/api/equipment", async (req, res) => {
@@ -109,13 +123,34 @@ export function registerEquipmentRoutes(app: express.Application) {
 
     const today = new Date().toISOString().slice(0, 10);
 
-    const enriched = await Promise.all(contracts.map(async (c: any) => {
+    // Resolved up front, one query per collection: this endpoint has no limit, so
+    // enriching row by row cost three round-trips for every contract the user
+    // owns and grew linearly with the account.
+    const docObjectIds = uniqueObjectIdList(contracts.map((c: any) => c.document_id));
+    const clientObjectIds = uniqueObjectIdList(contracts.map((c: any) => c.client_id));
+    const docIdStrings = [...new Set(
+      contracts.map((c: any) => (c.document_id ? String(c.document_id) : "")).filter(Boolean),
+    )];
+
+    const [docRows, clientRows, equipmentRows] = await Promise.all([
+      docObjectIds.length
+        ? col("documents").find({ _id: { $in: docObjectIds }, user_id: userId } as any).toArray()
+        : Promise.resolve([]),
+      clientObjectIds.length
+        ? col("clients").find({ _id: { $in: clientObjectIds } } as any).toArray()
+        : Promise.resolve([]),
+      docIdStrings.length
+        ? col("equipment").find({ document_id: { $in: docIdStrings }, user_id: userId } as any).toArray()
+        : Promise.resolve([]),
+    ]);
+    const docById = new Map(docRows.map((d: any) => [String(d._id), d]));
+    const clientById = new Map(clientRows.map((c: any) => [String(c._id), c]));
+    const equipmentByDocId = new Map(equipmentRows.map((e: any) => [String(e.document_id), e]));
+
+    const enriched = contracts.map((c: any) => {
       let documentFields: Record<string, unknown> | null = null;
       if (c.document_id) {
-        try {
-          const doc = await col("documents").findOne({ _id: new ObjectId(String(c.document_id)), user_id: userId }) as any;
-          documentFields = parseManualFields(doc?.extracted_fields);
-        } catch { /* ignore */ }
+        documentFields = parseManualFields(docById.get(String(c.document_id))?.extracted_fields);
       }
       const contactFields = contactFieldsFromContract(c, documentFields);
       let client_name: string | null = null;
@@ -125,19 +160,17 @@ export function registerEquipmentRoutes(app: express.Application) {
       let equipment_name: string | null = null;
 
       if (c.client_id) {
-        try {
-          const client = await col("clients").findOne({ _id: new ObjectId(String(c.client_id)) }) as any;
+        const client = clientById.get(String(c.client_id)) as any;
+        if (client) {
           client_name = textField(client?.display_name) ?? null;
           contact_person = textField(client?.contact_person) ?? contact_person ?? extractContactPersonFromNotes(client?.notes);
           contact_email = textField(client?.email) ?? contact_email;
           contact_phone = textField(client?.phone) ?? contact_phone;
-        } catch { /* ignore */ }
+        }
       }
       if (c.document_id) {
-        try {
-          const eq = await col("equipment").findOne({ document_id: String(c.document_id), user_id: userId }) as any;
-          if (eq) equipment_name = eq.name ?? null;
-        } catch { /* ignore */ }
+        const eq = equipmentByDocId.get(String(c.document_id)) as any;
+        if (eq) equipment_name = eq.name ?? null;
       }
 
       const expiry = c.expiry_date as string;
@@ -161,7 +194,7 @@ export function registerEquipmentRoutes(app: express.Application) {
         days_until: daysUntil,
         urgency,
       };
-    }));
+    });
 
     res.json(enriched);
   });
