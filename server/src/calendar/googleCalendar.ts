@@ -47,6 +47,19 @@ async function refreshCalendarToken(user: any, userId: string): Promise<string |
   });
   if (!r.ok) {
     logger.warn("calendar_token_refresh_failed", { user_id: userId, status: r.status });
+    // 400 invalid_grant / 401 mean the refresh token itself is dead — revoked in
+    // the Google account, or expired. Retrying will never succeed, so record the
+    // connection as broken: resolveCalendarToken and /api/calendar/status both
+    // read this flag, so the app stops reporting a calendar that cannot sync and
+    // can prompt the user to reconnect. Other statuses are left alone, since a
+    // 5xx or a network blip is worth retrying.
+    if (r.status === 400 || r.status === 401) {
+      await col("users").updateOne(
+        { _id: new ObjectId(userId) } as any,
+        { $set: { calendar_scope_granted: false, calendar_token_revoked_at: new Date() } },
+      );
+      logger.warn("calendar_connection_revoked", { user_id: userId, status: r.status });
+    }
     return null;
   }
   const data = await r.json() as { access_token: string; expires_in: number };

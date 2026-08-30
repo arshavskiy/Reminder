@@ -161,7 +161,12 @@ export function registerCalendarRoutes(app: express.Express) {
       updated_at: new Date(),
     };
     if (tokens.refresh_token) setFields.calendar_refresh_token = tokens.refresh_token;
-    await col("users").updateOne({ _id: userObjectId } as any, { $set: setFields });
+    // Clear the revoked marker, or a successful reconnect would still report
+    // needs_reconnect and keep telling the user to do what they just did.
+    await col("users").updateOne(
+      { _id: userObjectId } as any,
+      { $set: setFields, $unset: { calendar_token_revoked_at: "" } },
+    );
 
     logger.info("calendar_connected", {
       user_id: String(pkce.user_id),
@@ -204,6 +209,10 @@ export function registerCalendarRoutes(app: express.Express) {
     res.json({
       allowed,
       connected,
+      // True when a connection existed and Google later rejected the refresh —
+      // the user has to reconnect, and without this the UI can only say
+      // "not connected", which reads as if they never connected at all.
+      needs_reconnect: Boolean(user?.calendar_token_revoked_at) && !connected,
       calendar_id: calendarId,
       calendar_url: calendarId ? googleCalendarUrl(calendarId) : null,
       email: user?.calendar_email ?? user?.email ?? null,
