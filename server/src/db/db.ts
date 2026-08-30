@@ -14,17 +14,22 @@ const MONGODB_LOCAL_URI = env("MONGODB_LOCAL_URI");
 const MONGODB_PRODUCTION_URI = env("MONGODB_PRODUCTION_URI");
 const MONGODB_DB = env("MONGODB_DB");
 const MONGODB_PRODUCTION_DB = env("MONGODB_PRODUCTION_DB");
+const IS_PRODUCTION_RUNTIME =
+  env("NODE_ENV") === "production"
+  || env("APP_ENV") === "production"
+  || Boolean(env("RAILWAY_ENVIRONMENT"));
 
-const LOCAL_URI =
-  MONGODB_LOCAL_URI
-  ?? ((MONGODB_URI && !MONGODB_PRODUCTION_URI)
-    ? MONGODB_URI
-    : "mongodb://127.0.0.1:27017");
+const LOCAL_URI = IS_PRODUCTION_RUNTIME
+  ? (MONGODB_URI ?? MONGODB_PRODUCTION_URI ?? "mongodb://127.0.0.1:27017")
+  : (MONGODB_LOCAL_URI
+    ?? ((MONGODB_URI && !MONGODB_PRODUCTION_URI)
+      ? MONGODB_URI
+      : "mongodb://127.0.0.1:27017"));
 
 /** Atlas / production URI when distinct from local. */
 const PRODUCTION_URI =
   MONGODB_PRODUCTION_URI
-  ?? (MONGODB_LOCAL_URI ? MONGODB_URI : undefined);
+  ?? (MONGODB_LOCAL_URI && !IS_PRODUCTION_RUNTIME ? MONGODB_URI : undefined);
 
 const LOCAL_DB_NAME = MONGODB_DB ?? "reminder-app";
 const PRODUCTION_DB_NAME =
