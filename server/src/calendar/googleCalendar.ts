@@ -11,8 +11,30 @@ import { logger } from "../logger";
 // it does NOT grant calendarList.list, so the app calendar is found by the id
 // we persist rather than by enumerating the user's calendars.
 export const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.app.created";
-/** Secondary calendar the app owns, so we never write into the user's primary. */
+/** Default name for the secondary calendar the app owns, so we never write into
+ * the user's primary. Users can override it per-account from profile settings —
+ * see calendarNameForUser. */
 export const APP_CALENDAR_SUMMARY = "תסקירים";
+
+/** Longest name we accept, matching what Google's UI shows without truncating. */
+export const MAX_CALENDAR_NAME_LENGTH = 100;
+
+/**
+ * Normalize a user-supplied calendar name. Returns null when the input is not a
+ * usable name, so callers can fall back to the default rather than pushing an
+ * empty summary to Google.
+ */
+export function normalizeCalendarName(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, MAX_CALENDAR_NAME_LENGTH);
+}
+
+/** The calendar name for a user: their override, else the app default. */
+export function calendarNameForUser(user: { calendar_name?: unknown } | null | undefined): string {
+  return normalizeCalendarName(user?.calendar_name) ?? APP_CALENDAR_SUMMARY;
+}
 
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 
@@ -110,6 +132,7 @@ export async function calendarFetch(
 export async function ensureAppCalendar(userId: string, accessToken: string): Promise<string | null> {
   const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
   const storedId = user?.calendar_id ? String(user.calendar_id) : null;
+  const calendarName = calendarNameForUser(user);
 
   // Confirm the stored calendar still exists — the user may have deleted it in
   // Google, in which case we create a fresh one rather than 404 on every push.
@@ -117,10 +140,11 @@ export async function ensureAppCalendar(userId: string, accessToken: string): Pr
     const getRes = await calendarFetch(accessToken, `calendars/${encodeURIComponent(storedId)}`);
     if (getRes.ok) {
       const current = await getRes.json().catch(() => null) as { summary?: string } | null;
-      if (current?.summary !== APP_CALENDAR_SUMMARY) {
-        await updateCalendarSummary(accessToken, storedId, APP_CALENDAR_SUMMARY);
+      // Also the path that applies a rename from settings: the stored name is
+      // the source of truth, so any drift from it is pushed back to Google.
+      if (current?.summary !== calendarName) {
+        await renameCalendar(accessToken, storedId, calendarName);
       }
-      await updateCalendarListName(accessToken, storedId, APP_CALENDAR_SUMMARY);
       return storedId;
     }
     if (getRes.status !== 404 && getRes.status !== 410) {
@@ -132,7 +156,7 @@ export async function ensureAppCalendar(userId: string, accessToken: string): Pr
 
   const createRes = await calendarFetch(accessToken, "calendars", {
     method: "POST",
-    body: JSON.stringify({ summary: APP_CALENDAR_SUMMARY, timeZone: "Asia/Jerusalem" }),
+    body: JSON.stringify({ summary: calendarName, timeZone: "Asia/Jerusalem" }),
   });
   if (!createRes.ok) {
     logger.warn("calendar_create_failed", { user_id: userId, status: createRes.status });
@@ -150,24 +174,21 @@ export async function ensureAppCalendar(userId: string, accessToken: string): Pr
   return created.id;
 }
 
-async function updateCalendarSummary(accessToken: string, calendarId: string, summary: string): Promise<void> {
+/** Push a new title to Google. Returns whether the rename landed. */
+export async function renameCalendar(
+  accessToken: string,
+  calendarId: string,
+  summary: string,
+): Promise<boolean> {
   const res = await calendarFetch(accessToken, `calendars/${encodeURIComponent(calendarId)}`, {
     method: "PATCH",
     body: JSON.stringify({ summary }),
   });
   if (!res.ok) {
     logger.warn("calendar_rename_failed", { calendar_id: calendarId, status: res.status });
+    return false;
   }
-}
-
-async function updateCalendarListName(accessToken: string, calendarId: string, summary: string): Promise<void> {
-  const res = await calendarFetch(accessToken, `users/me/calendarList/${encodeURIComponent(calendarId)}`, {
-    method: "PATCH",
-    body: JSON.stringify({ summaryOverride: summary }),
-  });
-  if (!res.ok) {
-    logger.warn("calendar_list_rename_failed", { calendar_id: calendarId, status: res.status });
-  }
+  return true;
 }
 
 export async function insertEvent(accessToken: string, calendarId: string, event: GoogleCalendarEvent) {

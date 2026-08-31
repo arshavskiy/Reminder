@@ -1098,6 +1098,7 @@ export const api = {
       connected: boolean;
       calendar_id: string | null;
       calendar_url: string | null;
+      calendar_name: string;
       email: string | null;
       synced_count: number;
       last_synced_at: string | null;
@@ -1105,6 +1106,7 @@ export const api = {
     authUrl: (returnTo?: string) => get<{ url: string }>(`/calendar/auth-url${qs({ returnTo })}`),
     sync: () => post<{ pushed: number; updated: number; cancelled: number }>("/calendar/sync", {}),
     disconnect: () => post<{ ok: boolean }>("/calendar/disconnect", {}),
+    rename: (name: string) => post<{ ok: boolean; name: string; synced: boolean }>("/calendar/name", {name}),
   },
 
   drive: {

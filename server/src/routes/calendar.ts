@@ -5,7 +5,13 @@ import { getSettings } from "../settings";
 import { requireAuth } from "../auth/middleware";
 import { generateState, generateCodeVerifier, generateCodeChallenge, verifyIdToken } from "../auth/google";
 import { logger } from "../logger";
-import { CALENDAR_SCOPE, resolveCalendarToken } from "../calendar/googleCalendar";
+import {
+  CALENDAR_SCOPE,
+  calendarNameForUser,
+  normalizeCalendarName,
+  renameCalendar,
+  resolveCalendarToken,
+} from "../calendar/googleCalendar";
 import { pullCalendarChanges, pushAllReminders } from "../calendar/sync";
 import { featureFlagsForUser, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
 
@@ -215,6 +221,7 @@ export function registerCalendarRoutes(app: express.Express) {
       needs_reconnect: Boolean(user?.calendar_token_revoked_at) && !connected,
       calendar_id: calendarId,
       calendar_url: calendarId ? googleCalendarUrl(calendarId) : null,
+      calendar_name: calendarNameForUser(user),
       email: user?.calendar_email ?? user?.email ?? null,
       synced_count: syncedCount,
       last_synced_at: user?.calendar_last_synced_at ?? null,
@@ -286,6 +293,54 @@ export function registerCalendarRoutes(app: express.Express) {
     const removed = await col("calendar_links").deleteMany({ user_id: userId });
     logger.info("calendar_disconnected", { user_id: userId, links_removed: removed.deletedCount });
     res.json({ ok: true });
+  });
+
+  // POST /api/calendar/name — rename the app's calendar. The stored name is the
+  // source of truth; pushing to Google is best-effort, since ensureAppCalendar
+  // reconciles any drift on the next sync.
+  app.post("/api/calendar/name", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
+    if (!featureFlagsForUser(user).googleCalendarSync) {
+      res.status(403).json({
+        error: "calendar_plan_required",
+        message: PLAN_GATE_MESSAGES.calendar,
+      });
+      return;
+    }
+
+    const name = normalizeCalendarName(req.body?.name);
+    if (!name) {
+      res.status(400).json({ error: "missing_name" });
+      return;
+    }
+
+    await col("users").updateOne(
+      { _id: new ObjectId(userId) } as any,
+      { $set: { calendar_name: name, updated_at: new Date() } },
+    );
+
+    // Push immediately so the change shows in Google without waiting for the
+    // hourly sync. A failure here is not fatal — the name is already persisted.
+    let synced = false;
+    const calendarId = user?.calendar_id ? String(user.calendar_id) : null;
+    if (calendarId) {
+      const accessToken = await resolveCalendarToken(userId);
+      if (accessToken) {
+        synced = await renameCalendar(accessToken, calendarId, name);
+      }
+    }
+
+    logger.info("calendar_renamed", { user_id: userId, synced });
+    res.json({ ok: true, name, synced });
   });
 }
 

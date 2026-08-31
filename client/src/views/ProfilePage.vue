@@ -734,6 +734,30 @@
                     </template>
                   </div>
                 </div>
+
+                <div v-if="calendarAllowed && calendarStatus?.connected" class="settings-subrow">
+                  <label class="settings-panel__label" for="calendar-name">שם היומן ב-Google</label>
+                  <div class="inline-field__row">
+                    <n-input
+                      id="calendar-name"
+                      v-model:value="calendarName"
+                      class="inline-field__input"
+                      :placeholder="DEFAULT_CALENDAR_NAME"
+                      :maxlength="100"
+                      size="small"
+                    />
+                    <n-button
+                      :disabled="!calendarName?.trim() || calendarName.trim() === calendarStatus.calendar_name"
+                      :loading="renamingCalendar"
+                      size="small"
+                      ghost
+                      type="primary"
+                      @click="renameCalendar"
+                    >
+                      שמור
+                    </n-button>
+                  </div>
+                </div>
               </div>
 
               <div
@@ -2042,6 +2066,7 @@ const calendarStatus = ref<{
   connected: boolean;
   calendar_id: string | null;
   calendar_url: string | null;
+  calendar_name?: string;
   email: string | null;
   synced_count: number;
   last_synced_at: string | null;
@@ -2049,6 +2074,10 @@ const calendarStatus = ref<{
 const calendarLoading = ref(false);
 const calendarSyncing = ref(false);
 const calendarDisconnecting = ref(false);
+/** Mirrors APP_CALENDAR_SUMMARY on the server. */
+const DEFAULT_CALENDAR_NAME = "תסקירים";
+const calendarName = ref(DEFAULT_CALENDAR_NAME);
+const renamingCalendar = ref(false);
 const driveStatus = ref<DriveStatus | null>(null);
 const driveToggling = ref(false);
 const driveNeedsReauth = ref(false);
@@ -2121,10 +2150,29 @@ async function loadCalendarStatus() {
   calendarLoading.value = true;
   try {
     calendarStatus.value = await api.calendar.status();
+    calendarName.value = calendarStatus.value?.calendar_name || DEFAULT_CALENDAR_NAME;
   } catch {
     calendarStatus.value = null;
   } finally {
     calendarLoading.value = false;
+  }
+}
+
+async function renameCalendar() {
+  const name = calendarName.value?.trim();
+  if (!name) return;
+  renamingCalendar.value = true;
+  try {
+    const result = await api.calendar.rename(name);
+    // The name is stored either way; only the push to Google can fail, and the
+    // next sync reconciles it, so say so rather than reporting an error.
+    if (result.synced) message.success("שם היומן עודכן");
+    else message.info("שם היומן נשמר ויתעדכן בסנכרון הבא");
+    await loadCalendarStatus();
+  } catch {
+    message.error("שגיאה בשינוי שם היומן");
+  } finally {
+    renamingCalendar.value = false;
   }
 }
 
@@ -3220,15 +3268,23 @@ function showGoogleConnectionErrorFromRoute() {
 .drive-dashboard__item--warn strong {
   color: var(--color-warning);
 }
-.drive-folder__row {
+.drive-folder__row,
+.inline-field__row {
   display: flex;
   gap: 8px;
   align-items: center;
   width: 100%;
 }
-.drive-folder__input {
+.drive-folder__input,
+.inline-field__input {
   max-width: 280px;
   flex: 1;
+}
+.settings-subrow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0 2px;
 }
 
 /* ── Theme ───────────────────────────────────────────────────────────────── */
@@ -3839,7 +3895,9 @@ function showGoogleConnectionErrorFromRoute() {
   }
 
   .drive-folder__row,
-  .drive-folder__input {
+  .drive-folder__input,
+  .inline-field__row,
+  .inline-field__input {
     width: 100%;
     max-width: none;
   }
