@@ -1591,7 +1591,7 @@ export function registerAdminRoutes(app: express.Application) {
     const patch: Record<string, any> = { updated_at: new Date() };
     if (body.theme !== undefined) patch.theme = body.theme === "dark" ? "dark" : "light";
     if (body.email_from_name !== undefined) patch.email_from_name = body.email_from_name ?? null;
-    if (body.reminder_advance_days !== undefined) patch.reminder_advance_days = String(body.reminder_advance_days ?? "[90,60,30]");
+    if (body.reminder_advance_days !== undefined) patch.reminder_advance_days = String(body.reminder_advance_days ?? "[30]");
     if (body.ocr_language !== undefined) patch.ocr_language = String(body.ocr_language ?? "heb+eng");
     if (body.pipeline_ocr !== undefined) patch.pipeline_ocr = Boolean(body.pipeline_ocr);
     if (body.pipeline_ai !== undefined) patch.pipeline_ai = Boolean(body.pipeline_ai);

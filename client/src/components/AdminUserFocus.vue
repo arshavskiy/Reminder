@@ -573,7 +573,7 @@
                   <div class="uf-settings__grid">
                     <label class="uf-control"><span>Theme</span><n-select v-model:value="settingsForm.theme" :options="themeOptions" size="small" /></label>
                     <label class="uf-control"><span>Email sender name</span><n-input v-model:value="settingsForm.email_from_name" size="small" placeholder="RemindOCR" /></label>
-                    <label class="uf-control"><span>Reminder advance days</span><n-input v-model:value="settingsForm.reminder_advance_days" size="small" placeholder="[90,60,30]" /></label>
+                    <label class="uf-control"><span>Reminder advance days</span><n-input v-model:value="settingsForm.reminder_advance_days" size="small" placeholder="[30]" /></label>
                     <label class="uf-control"><span>OCR language</span><n-input v-model:value="settingsForm.ocr_language" size="small" placeholder="heb+eng" /></label>
                   </div>
                   <div class="uf-switches">
@@ -947,7 +947,7 @@ function makeSettingsForm(settings: any) {
   return {
     theme: settings?.theme ?? "system",
     email_from_name: settings?.email_from_name ?? "",
-    reminder_advance_days: settings?.reminder_advance_days ?? "[90,60,30]",
+    reminder_advance_days: settings?.reminder_advance_days ?? "[30]",
     ocr_language: settings?.ocr_language ?? "heb+eng",
     pipeline_ocr: settings?.pipeline_ocr ?? true,
     pipeline_ai: settings?.pipeline_ai ?? true,
@@ -1122,7 +1122,7 @@ async function saveSettings() {
     await api.admin.saveUserSettings(selectedUser.value.id, {
       theme: form.theme,
       email_from_name: form.email_from_name || null,
-      reminder_advance_days: form.reminder_advance_days || "[90,60,30]",
+      reminder_advance_days: form.reminder_advance_days || "[30]",
       ocr_language: form.ocr_language || "heb+eng",
       pipeline_ocr: Boolean(form.pipeline_ocr),
       pipeline_ai: Boolean(form.pipeline_ai),

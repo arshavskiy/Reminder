@@ -95,7 +95,7 @@
               <n-input
                 :value="form.reminderAdvanceDays.join(', ')"
                 @update:value="v => form!.reminderAdvanceDays = v.split(',').map(x => parseInt(x.trim())).filter(Boolean)"
-                placeholder="90, 60, 30"
+                placeholder="30"
               />
             </n-form-item>
             <n-form-item label="אימייל הסלמה (supervisor)">

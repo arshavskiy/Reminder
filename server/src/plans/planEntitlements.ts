@@ -88,7 +88,7 @@ export function newUserSettingsBase(
     user_id: userId,
     theme: "light",
     email_from_name: null,
-    reminder_advance_days: "[90,60,30]",
+    reminder_advance_days: "[30]",
     ocr_language: "heb+eng",
     features: DEFAULT_FEATURES_NESTED,
     calendar_next_tests_only: false,
