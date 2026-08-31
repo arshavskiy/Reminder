@@ -27,7 +27,7 @@ const now = new Date();
 const result = await db.collection("email_templates").findOneAndUpdate(
   { name },
   {
-    $set: { html, poster_url: posterUrl, subject:`תזכורת בדיקה תקופתית — M.A.D הנדסה וניהול בע"מ`, updated_at: now },
+    $set: { html, poster_url: posterUrl, subject:`תזכורת בדיקה תקופתית — {{engineer_company|חברה בע"מ}}`, updated_at: now },
     $setOnInsert: { name, is_default: 0, doc_template_id: null, logo_path: null, example_document_url: null, created_at: now },
   },
   { upsert: true, returnDocument: "after" },

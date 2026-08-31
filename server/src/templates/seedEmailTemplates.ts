@@ -128,8 +128,12 @@ export async function pickEmailTemplate(docTemplateId: string | number | null): 
     }
   }
 
+  // The seeds write is_default as 0/1, but rows edited through the template UI
+  // store it as a boolean, and { is_default: 1 } does not match true in Mongo.
+  // Matching both stops the lookup silently falling through to "first row by
+  // _id", which picked an arbitrary template rather than the marked default.
   const def = await col("email_templates").findOne(
-    { is_default: 1 },
+    { is_default: { $in: [1, true] } },
     { sort: { _id: 1 } }
   ) as any;
   if (def) {

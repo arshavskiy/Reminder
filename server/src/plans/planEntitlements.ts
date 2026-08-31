@@ -77,6 +77,13 @@ export function freePlanEntitlements(): PlanEntitlements {
   return buildPlanEntitlements({plan: DEFAULT_NEW_USER_PLAN, role: "user"});
 }
 
+/**
+ * Reminder email template new accounts start on ("ברירת מחדל", seeded from
+ * email-templates/reminders/default.html). Pinned explicitly so a new account's
+ * default does not depend on which row happens to carry the is_default flag.
+ */
+export const DEFAULT_EMAIL_TEMPLATE_ID = "6a11a1ec0c05f49738b08bfc";
+
 /** Defaults used when creating user_settings for a brand-new account (no entitlements — those go in $set). */
 export function newUserSettingsBase(
   userId: string,
@@ -90,6 +97,7 @@ export function newUserSettingsBase(
     email_from_name: null,
     reminder_advance_days: "[30]",
     ocr_language: "heb+eng",
+    default_email_template_id: DEFAULT_EMAIL_TEMPLATE_ID,
     features: DEFAULT_FEATURES_NESTED,
     calendar_next_tests_only: false,
     monthly_report_enabled: false,
