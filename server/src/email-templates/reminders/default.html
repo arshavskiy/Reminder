@@ -1,66 +1,299 @@
-<!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html dir="rtl" lang="he">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta content="IE=edge" http-equiv="X-UA-Compatible">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta content="light" name="color-scheme">
+  <meta content="light" name="supported-color-schemes">
+  <title>תזכורת — בדיקה תקופתית</title>
+  <!--[if mso]>
+  <xml>
+    <o:OfficeDocumentSettings>
+      <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings>
+  </xml>
+  <![endif]-->
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; background: #f5f7fa; padding: 24px; color: #2c3e50; margin: 0; }
-    .card { background: #ffffff; border-radius: 12px; padding: 32px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: right; }
-    .logo { text-align: center; margin-bottom: 16px; }
-    .logo img { max-height: 56px; }
-    h1 { color: #18a058; margin: 0 0 8px; font-size: 22px; }
-    .lead { color: #5a6c7d; margin: 0 0 24px; font-size: 14px; }
-    .badge { display: inline-block; background: #fff3cd; color: #856404; border: 1px solid #ffc107; border-radius: 999px; padding: 4px 14px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
-    .fields { background: #fafbfc; border-radius: 8px; padding: 16px 20px; margin: 16px 0; width: 100%; border-collapse: collapse; }
-    .field td { padding: 6px 0; border-bottom: 1px solid #eef0f3; font-size: 14px; }
-    .field:last-child td { border-bottom: none; }
-    .field .label { color: #5a6c7d; text-align: right; }
-    .field .value { color: #2c3e50; font-weight: 600; text-align: left; }
-    .body-text { background: #f0fdf4; border-right: 3px solid #18a058; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 14px; color: #166534; margin: 16px 0; }
-    .section-title { font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 8px; }
-    .items { width: 100%; border-collapse: collapse; background: #fafbfc; border: 1px solid #e5e9ef; border-radius: 8px; margin: 8px 0 16px; }
-    .items th { background: #fff8e1; color: #7c4a00; font-size: 12px; font-weight: 700; padding: 10px 12px; text-align: right; border-bottom: 1px solid #f3e8c8; }
-    .items td { padding: 10px 12px; border-bottom: 1px solid #eef0f3; font-size: 13px; color: #2c3e50; text-align: right; }
-    .items tr:last-child td { border-bottom: none; }
-    .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #eef0f3; font-size: 12px; color: #95a5a6; text-align: center; }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+    }
+
+    body {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+
+    table {
+      border-collapse: collapse !important;
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+
+    img {
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+
+    a {
+      color: #2f6f60;
+    }
+
+    a[x-apple-data-detectors] {
+      color: inherit !important;
+      text-decoration: none !important;
+      font-size: inherit !important;
+      font-family: inherit !important;
+      font-weight: inherit !important;
+      line-height: inherit !important;
+    }
+
+    @media only screen and (max-width: 600px) {
+      .sheet {
+        width: 100% !important;
+      }
+
+      .pad {
+        padding-right: 24px !important;
+        padding-left: 24px !important;
+      }
+
+      .days-num {
+        font-size: 34px !important;
+      }
+
+      .phone {
+        font-size: 22px !important;
+      }
+
+      .stack {
+        display: block !important;
+        width: 100% !important;
+        text-align: right !important;
+      }
+
+      .stack-gap {
+        height: 16px !important;
+        line-height: 16px !important;
+        font-size: 16px !important;
+      }
+    }
   </style>
 </head>
-<body>
-  <div class="card">
-    {{#if logo_url}}
-    <div class="logo"><img src="{{logo_url}}" alt="לוגו"/></div>
-    {{/if}}
 
-    <h1>🔔 תזכורת: {{title}}</h1>
-    <p class="lead">שלום {{contact_person|רב}}, {{document_type|מסמך}} עבור {{client_company|הלקוח}}</p>
+<body style="margin:0; padding:0; background-color:#eef1f0; color:#24312f; font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+<!-- preheader -->
+<div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all; font-size:1px; line-height:1px; color:#eef1f0;">
+  נותרו {{advance_days|30}} ימים לתוקף התסקיר — נשמח לתאם מועד שנוח לכם.
+  &#xFEFF; &#xFEFF; &#xFEFF; &#xFEFF; &#xFEFF; &#xFEFF; &#xFEFF; &#xFEFF;
+</div>
 
-    <div class="badge">{{advance_days}} ימים לפני תאריך היעד</div>
+<table border="0" cellpadding="0" cellspacing="0" dir="rtl" role="presentation" style="background-color:#eef1f0;"
+       width="100%">
+  <tbody>
+  <tr>
+    <td align="center" style="padding:40px 12px;">
 
-    <table cellpadding="0" cellspacing="0" class="fields" role="presentation">
-      {{#if client_company}}<tr class="field"><td class="label">לקוח / חברה</td><td class="value">{{client_company}}</td></tr>{{/if}}
-      {{#if contact_person}}<tr class="field"><td class="label">איש קשר</td><td class="value">{{contact_person}}</td></tr>{{/if}}
-      {{#if contact_phone}}<tr class="field"><td class="label">טלפון</td><td class="value">{{contact_phone}}</td></tr>{{/if}}
-      {{#if contract_number}}<tr class="field"><td class="label">מספר חוזה</td><td class="value">{{contract_number}}</td></tr>{{/if}}
-      {{#if document_number}}<tr class="field"><td class="label">מספר מסמך</td><td class="value">{{document_number}}</td></tr>{{/if}}
-      {{#if expiry_date}}<tr class="field"><td class="label">תאריך פקיעה</td><td class="value">{{expiry_date}}</td></tr>{{/if}}
-      {{#if trigger_date}}<tr class="field"><td class="label">תאריך התזכורת</td><td class="value">{{trigger_date}}</td></tr>{{/if}}
-      {{#if amount}}<tr class="field"><td class="label">סכום</td><td class="value">{{amount}} {{currency}}</td></tr>{{/if}}
-      {{#if equipment_type}}<tr class="field"><td class="label">סוג ציוד</td><td class="value">{{equipment_type}}</td></tr>{{/if}}
-      {{#if manufacturer}}<tr class="field"><td class="label">יצרן</td><td class="value">{{manufacturer}}</td></tr>{{/if}}
-      {{#if model}}<tr class="field"><td class="label">דגם</td><td class="value">{{model}}</td></tr>{{/if}}
-      {{#if serial_number}}<tr class="field"><td class="label">מס"ד סידורי</td><td class="value">{{serial_number}}</td></tr>{{/if}}
-    </table>
+      <table border="0" cellpadding="0" cellspacing="0" class="sheet" dir="rtl" role="presentation" style="width:600px; max-width:600px; background-color:#ffffff; border-radius:14px;"
+             width="600">
 
-    {{#if items_table}}
-    <div class="section-title">פריטים לבדיקה</div>
-    {{items_table}}
-    {{/if}}
+        <!-- ── header ── -->
+        <tbody>
+        <tr>
+          <td class="pad" style="padding:34px 40px 0;">
+            <table border="0" cellpadding="0" cellspacing="0" dir="rtl" role="presentation" width="100%">
+              <tbody>
+              <tr>
+                {{#if comp_logo}}
+                <td align="center" style="padding-left:16px;" valign="middle" width="64">
+                  <img alt="לוגו" src="{{comp_logo}}" style="display:block; max-height:56px; width:auto; max-width:56px; object-fit:contain;"
+                       width="56"/>
+                </td>
+                {{/if}}
+                <td align="right" style="font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+                  <div style="font-size:18px; font-weight:800; color:#24312f; line-height:1.4;">{{engineer_company|חברה
+                    בע"מ}}
+                  </div>
+                  <div style="font-size:13px; font-weight:700; color:#5a6866; line-height:1.6; margin-top:4px;">
+                    {{company_exp|תחומי התמחות}}
+                  </div>
+                </td>
+              </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
 
-    {{#if body}}<div class="body-text"> {{body}} </div>{{/if}}
+        <!-- ── opening ── -->
+        <tr>
+          <td class="pad" style="padding:30px 40px 0;">
+            <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.14em; color:#7fa79a;">
+              תזכורת ידידותית
+            </div>
+            <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:25px; font-weight:600; line-height:1.4; color:#24312f; margin-top:12px;">
+              מתקרב מועד הבדיקה התקופתית
+            </div>
+            <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:15px; line-height:1.8; color:#5a6866; margin-top:12px;">
+              שלום, רצינו רק לעדכן מבעוד מועד. אין צורך למהר — אבל אם נתאם עכשיו, נוכל למצוא מועד שנוח לכם ותוקף התסקיר
+              יימשך ברצף.
+            </div>
+          </td>
+        </tr>
 
-    <div class="footer">
-      {{from_name| RemindOCR }} — תזכורת אוטומטית, אין צורך להשיב
-    </div>
-  </div>
+        <!-- ── countdown ── -->
+        <tr>
+          <td class="pad" style="padding:24px 40px 0;">
+            <table border="0" cellpadding="0" cellspacing="0" dir="rtl" role="presentation" style="background-color:#f2f7f5; border-radius:12px;"
+                   width="100%">
+              <tbody>
+              <tr>
+                <td style="padding:20px 24px;">
+                  <table border="0" cellpadding="0" cellspacing="0" dir="rtl" role="presentation">
+                    <tbody>
+                    <tr>
+                      <td align="right" class="days-num" style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:38px; font-weight:600; line-height:1.1; color:#2f6f60; padding-left:16px;"
+                          valign="middle">
+                        {{advance_days|30}}
+                      </td>
+                      <td align="right" style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:15px; font-weight:600; color:#24312f; line-height:1.5;"
+                          valign="middle">
+                        ימים לתוקף התסקיר הנוכחי
+                        <div style="font-size:13px; font-weight:400; color:#7c8b88; margin-top:4px;">מספיק זמן לתאם
+                          בנחת
+                        </div>
+                      </td>
+                    </tr>
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── details ── -->
+        {{#if checked_equipment}}
+        <tr>
+          <td class="pad" style="padding:26px 40px 0;">
+            <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.12em; color:#9aa5a2;">
+              ציוד שנבדק
+            </div>
+            <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:16px; color:#24312f; line-height:1.6; margin-top:5px;">
+              {{checked_equipment}}
+            </div>
+          </td>
+        </tr>
+        {{/if}}
+
+        <!-- ── למה זה חשוב ── -->
+        <tr>
+          <td class="pad" style="padding:26px 40px 0;">
+            <table border="0" cellpadding="0" cellspacing="0" dir="rtl" role="presentation" style="border-top:1px solid #e6ebe9;"
+                   width="100%">
+              <tbody>
+              <tr>
+                <td style="padding:20px 0 0;">
+                  <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:15px; font-weight:700; color:#24312f; margin-bottom:8px;">
+                    למה זה חשוב?
+                  </div>
+                  <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:14px; line-height:1.8; color:#5a6866;">
+                    שמירה על בטיחות העובדים, מניעת תקלות, עמידה בדרישות החוק והימנעות מקנסות והפסקות עבודה.
+                  </div>
+                </td>
+              </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── document ── -->
+        {{#if document_url}}
+        <tr>
+          <td align="right" class="pad" style="padding:26px 40px 0;">
+            <!--[if mso]>
+            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                         href="{{document_url}}" style="height:46px;v-text-anchor:middle;width:210px;" arcsize="50%"
+                         stroke="f" fillcolor="#2f6f60">
+              <w:anchorlock/>
+              <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">מסמך הבדיקה
+                האחרון
+              </center>
+            </v:roundrect>
+            <![endif]-->
+            <!--[if !mso]><!-- -->
+            <a href="{{document_url}}"
+               style="display:inline-block; background-color:#2f6f60; color:#ffffff; font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:15px; font-weight:600; line-height:1; text-decoration:none; padding:15px 28px; border-radius:24px;">מסמך
+              הבדיקה האחרון</a>
+            <!--<![endif]-->
+          </td>
+        </tr>
+        {{/if}}
+
+        <!-- ── inspector ── -->
+        <tr>
+          <td class="pad" style="padding:26px 40px 0;">
+            <table border="0" cellpadding="0" cellspacing="0" dir="rtl" role="presentation" style="border-radius:12px;"
+                   width="100%">
+              <tbody>
+              <tr>
+                <!-- phone left -->
+                <td align="center" class="stack" style="padding:22px 20px; border-right:1px solid #2e4455;"
+                    valign="middle">
+                  <a class="phone" dir="ltr" href="tel:{{engineer_phone|טלפון}}"
+                     style="display:inline-block; direction:ltr; font-size:24px; font-weight:700; color:#24312f; text-decoration:none; letter-spacing:0.02em;">{{engineer_phone|טלפון}}</a>
+                </td>
+                <!-- name + license right -->
+                <td align="right" class="stack" style="padding:22px 24px;" valign="middle">
+                  <div class="stack-gap" style="font-size:1px; line-height:1px;">&nbsp;</div>
+                  <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:11px; color:#8b9794; margin-bottom:3px;">
+                    מהנדס בודק
+                  </div>
+                  <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:16px; font-weight:700; color:#24312f; line-height:1.4;">
+                    {{engineer_name|שם הבודק}}
+                  </div>
+                  {{#if inspector_number}}
+                  <div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:11px; color:#8b9794; margin-top:10px; margin-bottom:3px;">
+                    מספר רישיון
+                  </div>
+                  <div dir="ltr"
+                       style="direction:ltr; text-align:right; font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:15px; font-weight:700; color:#24312f; letter-spacing:0.05em;">
+                    {{inspector_number|מספר בודק}}
+                  </div>
+                  {{/if}}
+                </td>
+              </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── footer ── -->
+        <tr>
+          <td class="pad" style="padding:26px 40px 34px;">
+            <table border="0" cellpadding="0" cellspacing="0" dir="rtl" role="presentation" style="border-top:1px solid #e6ebe9;"
+                   width="100%">
+              <tbody>
+              <tr>
+                <td style="padding:16px 0 0; font-family:'Segoe UI',Arial,Helvetica,sans-serif; font-size:12px; line-height:1.7; color:#95a09d;">
+                  {{from_name|חברה בע"מ}} · הודעה אוטומטית, אין צורך להשיב.
+                </td>
+              </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+
+        </tbody>
+      </table>
+
+    </td>
+  </tr>
+  </tbody>
+</table>
+
 </body>
 </html>
