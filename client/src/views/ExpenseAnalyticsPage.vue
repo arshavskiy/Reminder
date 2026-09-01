@@ -249,6 +249,7 @@ const months = ref<string[]>([]);
 const suppliers = ref<{ name: string; total: number; count?: number }[]>([]);
 const categories = ref<string[]>([]);
 const categorySeries = ref<InvoiceExpenseCategorySeries[]>([]);
+const supplierNames = ref<string[]>([]);
 const chartSeries = ref<InvoiceExpenseMonthlySeries[]>([]);
 const totalAmount = ref(0);
 const totalInvoices = ref(0);
@@ -283,12 +284,22 @@ const chartTypeOptions = [
 ];
 const activeChartType = computed(() => chartTypeOptions.find((item) => item.id === chartType.value) ?? chartTypeOptions[0]);
 
-const supplierOptions = computed<SelectOption[]>(() =>
-  suppliers.value.map((supplier) => ({
-    label: `${supplier.name} · ${formatMoney(supplier.total)}`,
-    value: supplier.name,
-  })),
-);
+// `suppliers` is narrowed by the active supplier filter, so it cannot drive the
+// picker on its own — selecting one supplier would hide all the others.
+// `supplierNames` carries the unnarrowed list; totals are shown where known.
+const supplierOptions = computed<SelectOption[]>(() => {
+  const totals = new Map(suppliers.value.map((supplier) => [supplier.name, supplier.total]));
+  const names = supplierNames.value.length
+    ? supplierNames.value
+    : suppliers.value.map((supplier) => supplier.name);
+  return names.map((name) => {
+    const total = totals.get(name);
+    return {
+      label: total === undefined ? name : `${name} · ${formatMoney(total)}`,
+      value: name,
+    };
+  });
+});
 
 const categoryOptions = computed<SelectOption[]>(() =>
   categories.value.map((value) => ({ label: providerCategoryLabel(value), value })),
@@ -513,6 +524,7 @@ async function load(force = false) {
     }, force);
     months.value = result.months;
     suppliers.value = result.suppliers;
+    supplierNames.value = result.supplierNames ?? [];
     categories.value = result.categories;
     categorySeries.value = (result.categorySeries ?? []).filter((row) => row.total > 0);
     chartSeries.value = result.series.filter((series) => series.total > 0);

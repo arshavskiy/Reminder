@@ -227,6 +227,8 @@ export interface InvoiceExpenseMonthlyResponse {
   totalInvoices: number;
   totalAmount: number;
   suppliers: { name: string; total: number; count?: number }[];
+  /** Every supplier available under the current filters minus the supplier filter itself. */
+  supplierNames?: string[];
   categories: GmailSearchProvider["category"][];
   categorySeries?: InvoiceExpenseCategorySeries[];
   series: InvoiceExpenseMonthlySeries[];

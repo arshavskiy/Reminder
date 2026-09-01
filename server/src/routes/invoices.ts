@@ -6,6 +6,12 @@ import { HTTPException, requireAuth } from "../auth/middleware";
 import { documentImportMonthlyLimit } from "../quotas/documentImportQuota";
 import { featureFlagsForUser, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
+import {
+  categoryFacetRows,
+  categoryFacetValues,
+  supplierFacetRows,
+  supplierFacetValues,
+} from "../invoices/expenseFacets";
 import { inferInvoiceCashFlow, normalizeCashFlow, resolveVatAmount } from "../invoices/cashFlow";
 import { matchesExpenseProofFilter, normalizeExpenseProofFilter } from "../invoices/documentProof";
 import {sendEmailWithAttachments} from "../reminders/emailSender";
@@ -146,19 +152,28 @@ export function registerInvoiceRoutes(app: express.Application) {
       : [];
     const documentMap = new Map(documents.map((doc) => [doc._id.toString(), doc]));
     const providers = await loadGmailSearchProviders();
-    const rows = invoices
+    const expenseRows = invoices
       .filter((invoice) => invoiceIsVisible(invoice, documentMap.get(String(invoice.document_id))))
       .map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers))
       .filter((row) => {
         if (row.cash_flow === "income") return false;
         if (!matchesExpenseProofFilter(row.type, proofFilter)) return false;
-        if (category && row.provider_category !== category) return false;
-        if (suppliers.length && !suppliers.includes(row.supplier_name)) return false;
         const rowTs = chartDateTs(row, dateBasis);
         if (fromTs && (!rowTs || rowTs < fromTs)) return false;
         if (toTs && (!rowTs || rowTs > toTs)) return false;
         return Boolean(rowTs) && typeof row.amount === "number" && Number.isFinite(row.amount);
       });
+
+    // Facet options must not be narrowed by the facet they populate, or the
+    // active selection becomes the only option the user can ever pick.
+    const categoryOptionRows = categoryFacetRows(expenseRows, suppliers);
+    const supplierOptionRows = supplierFacetRows(expenseRows, category);
+
+    const rows = expenseRows.filter((row) => {
+      if (category && row.provider_category !== category) return false;
+      if (suppliers.length && !suppliers.includes(row.supplier_name)) return false;
+      return true;
+    });
 
     const monthSet = new Set<string>();
     const totals = new Map<string, number>();
@@ -267,7 +282,11 @@ export function registerInvoiceRoutes(app: express.Application) {
       totalInvoices: rows.length,
       totalAmount: roundMoney(rows.reduce((sum, row) => sum + (row.amount ?? 0), 0)),
       suppliers: supplierTotals,
-      categories: uniqueSorted(categorySeries.map((item) => item.category).filter(isNonEmptyString)),
+      // Same reasoning as `categories`: not narrowed by the supplier filter.
+      supplierNames: supplierFacetValues(supplierOptionRows),
+      // Built from rows not narrowed by the category filter, so selecting a
+      // category never removes the other categories from the dropdown.
+      categories: categoryFacetValues(categoryOptionRows),
       categorySeries,
       series,
     });
