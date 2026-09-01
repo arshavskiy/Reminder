@@ -77,6 +77,7 @@
         class="toolbar__supplier"
         @update:value="load(true)"
       />
+      <DateRangePresets v-model="dateRange" @change="load(true)" />
       <n-date-picker
         v-model:value="dateRange"
         type="daterange"
@@ -228,6 +229,7 @@ import { GridComponent, TooltipComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import PageHeader from "../components/PageHeader.vue";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
+import DateRangePresets from "../components/DateRangePresets.vue";
 import { api, type InvoiceExpenseCategorySeries, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
 import {resolveUserPlan} from "../shared/pricingPlans.js";

@@ -216,6 +216,7 @@
         <n-icon :component="BriefcaseOutline" class="btn-icon" />
         מזג ספקים
       </button>
+      <DateRangePresets v-model="dateRange" @change="load(true)" />
       <n-date-picker
         v-model:value="dateRange"
         type="daterange"
@@ -536,6 +537,7 @@ import {
 } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
+import DateRangePresets from "../components/DateRangePresets.vue";
 import GmailLogo from "../components/GmailLogo.vue";
 import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
 import StorageSyncIcons from "../components/StorageSyncIcons.vue";
