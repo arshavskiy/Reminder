@@ -2,7 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "nixpacksAptPkgs": ["poppler-utils", "tesseract-ocr", "tesseract-ocr-heb"]
+    "nixpacksConfigPath": "nixpacks.toml"
   },
   "deploy": {
     "startCommand": "npm start",

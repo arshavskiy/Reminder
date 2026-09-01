@@ -89,7 +89,7 @@ function renderedPages(dir: string, prefix: string): string[] {
     .map((name) => join(dir, name));
 }
 
-function resolvePdftoppm(): { command: string; shell: boolean; env: NodeJS.ProcessEnv } {
+export function resolvePdftoppm(): { command: string; shell: boolean; env: NodeJS.ProcessEnv } {
   const configured = process.env.PDF_THUMBNAIL_PDFTOPPM?.trim();
   if (configured) return { command: configured, shell: false, env: process.env };
 

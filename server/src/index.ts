@@ -36,6 +36,7 @@ import {registerProfileRoutes} from "./routes/profile";
 import {registerAdminRoutes} from "./routes/admin";
 import {registerBillingRoutes} from "./routes/billing";
 import {initPush} from "./push/pushService";
+import {checkSystemDeps, logSystemDepsOnStartup} from "./pipeline/systemDeps";
 import {registerExtractRemindersRoutes} from "./routes/extractReminders";
 import {registerPrintTemplateRoutes} from "./routes/printTemplates";
 import {registerFeatureRoutes} from "./routes/features";
@@ -113,6 +114,13 @@ app.use(requestLogger);
 // Railway health check — must return 200 before traffic is routed
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", ts: Date.now() });
+});
+
+// Live probe for OS-level binaries (Poppler, Tesseract) that PDF OCR shells
+// out to. Kept off /health so a missing OCR binary never fails the deploy.
+app.get("/health/deps", async (_req, res) => {
+  const report = await checkSystemDeps();
+  res.status(report.ok ? 200 : 503).json(report);
 });
 
 // Swagger UI — API documentation
@@ -220,6 +228,7 @@ async function main() {
   const settings = getSettings();
   await connectDb();
   initPush();
+  await logSystemDepsOnStartup();
   await seedFeatureDefinitions();
   await seedBuiltinTemplates();
   await seedDefaultEmailTemplate();

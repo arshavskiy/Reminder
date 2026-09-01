@@ -34,28 +34,44 @@ MongoDB Atlas → database
 
 ### Git source
 
-This project has two Git repositories:
-
-- The parent repo at `E:\Projects\Reminder` pushes to `arshavskiy/Reminder`.
-- The nested server repo at `E:\Projects\Reminder\server` pushes to `arshavskiy/reminder-server`.
-
-Railway production is connected to `arshavskiy/reminder-server` on branch `master`. Backend changes only trigger Railway after they are committed and pushed from inside `server/`:
+Railway production is connected to `arshavskiy/Reminder` on branch `master`. Both client and server live in this single repo; there is no separate `reminder-server` repo.
 
 ```bash
-cd server
 git status
-git add <server files>
+git add <files>
 git commit -m "..."
 git push origin master
 ```
 
-Pushing only the parent repo (`arshavskiy/Reminder`) will not trigger the `reminder-server` Railway service.
-
 ### Deploy
 1. Create new Railway project → **Deploy from GitHub repo**
-2. Connect `arshavskiy/reminder-server`
+2. Connect `arshavskiy/Reminder`
 3. Use branch `master`
 4. Railway auto-detects Nixpacks and runs `npm start`
+
+### System packages (Poppler / Tesseract)
+
+PDF OCR shells out to `pdftoppm` (Poppler) and `tesseract`. These are **not** npm packages — they must be installed into the build image by Nixpacks, or invoice import fails with:
+
+```
+Error: Could not render PDF for OCR. Install Poppler/pdftoppm or set PDF_THUMBNAIL_PDFTOPPM. Details: Error: spawn pdftoppm ENOENT
+```
+
+`nixpacks.toml` declares them:
+
+```toml
+[phases.setup]
+nixPkgs = ["nodejs_22", "chromium"]
+aptPkgs = ["poppler-utils", "tesseract-ocr", "tesseract-ocr-heb"]
+```
+
+Notes:
+- The file must be named `nixpacks.toml`, **not** `.nixpacks.toml` — Nixpacks ignores the dotfile form.
+- It must sit in the Railway service's **root directory**, which is set to `server`. That is why the file lives at `server/nixpacks.toml`; a copy at the repo root would be ignored.
+- Poppler/Tesseract go in `aptPkgs`, not `nixPkgs` — apt puts the binaries on `PATH`; the nix store paths are not reliably exported.
+- `nixpacksAptPkgs` is **not** a valid key in `railway.json` (confirmed against `railway.schema.json`); Railway silently ignores it. The valid build keys are `builder`, `watchPatterns`, `buildCommand`, `dockerfilePath`, `nixpacksConfigPath`, `nixpacksPlan`, `nixpacksVersion`, `railpackVersion`. `railway.json` sets `nixpacksConfigPath` so the toml cannot be missed.
+- Railway now marks Nixpacks **deprecated** in favour of Railpack. `railway.json` pins `"builder": "NIXPACKS"`, so `nixpacks.toml` still applies. If the service is ever moved to Railpack, these packages must be redeclared in Railpack's own config — `nixpacks.toml` would be ignored and OCR would break again.
+- Verify after deploy from the Railway shell: `pdftoppm -v && tesseract --list-langs`.
 
 ### Environment variables (set in Railway dashboard)
 ```
