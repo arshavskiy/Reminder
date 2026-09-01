@@ -47,31 +47,42 @@ git push origin master
 1. Create new Railway project → **Deploy from GitHub repo**
 2. Connect `arshavskiy/Reminder`
 3. Use branch `master`
-4. Railway auto-detects Nixpacks and runs `npm start`
+4. Set the service **root directory** to `server`
+5. The builder is pinned to Railpack in `server/railway.json`; the start command is `npm start`
 
 ### System packages (Poppler / Tesseract)
 
-PDF OCR shells out to `pdftoppm` (Poppler) and `tesseract`. These are **not** npm packages — they must be installed into the build image by Nixpacks, or invoice import fails with:
+PDF OCR shells out to `pdftoppm` (Poppler) and `tesseract`. These are **not** npm packages — they must be installed into the image by the builder, or invoice import fails with:
 
 ```
 Error: Could not render PDF for OCR. Install Poppler/pdftoppm or set PDF_THUMBNAIL_PDFTOPPM. Details: Error: spawn pdftoppm ENOENT
 ```
 
-`nixpacks.toml` declares them:
+The service builds with **Railpack** (`"builder": "RAILPACK"` in `railway.json`), configured by `server/railpack.json`:
 
-```toml
-[phases.setup]
-nixPkgs = ["nodejs_22", "chromium"]
-aptPkgs = ["poppler-utils", "tesseract-ocr", "tesseract-ocr-heb"]
+```json
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "node",
+  "packages": { "node": "22" },
+  "deploy": {
+    "aptPackages": ["poppler-utils", "tesseract-ocr", "tesseract-ocr-heb"]
+  }
+}
 ```
 
 Notes:
-- The file must be named `nixpacks.toml`, **not** `.nixpacks.toml` — Nixpacks ignores the dotfile form.
-- It must sit in the Railway service's **root directory**, which is set to `server`. That is why the file lives at `server/nixpacks.toml`; a copy at the repo root would be ignored.
-- Poppler/Tesseract go in `aptPkgs`, not `nixPkgs` — apt puts the binaries on `PATH`; the nix store paths are not reliably exported.
-- `nixpacksAptPkgs` is **not** a valid key in `railway.json` (confirmed against `railway.schema.json`); Railway silently ignores it. The valid build keys are `builder`, `watchPatterns`, `buildCommand`, `dockerfilePath`, `nixpacksConfigPath`, `nixpacksPlan`, `nixpacksVersion`, `railpackVersion`. `railway.json` sets `nixpacksConfigPath` so the toml cannot be missed.
-- Railway now marks Nixpacks **deprecated** in favour of Railpack. `railway.json` pins `"builder": "NIXPACKS"`, so `nixpacks.toml` still applies. If the service is ever moved to Railpack, these packages must be redeclared in Railpack's own config — `nixpacks.toml` would be ignored and OCR would break again.
-- Verify after deploy from the Railway shell: `pdftoppm -v && tesseract --list-langs`.
+- The packages go under **`deploy.aptPackages`**, not the root `buildAptPackages`. Railpack's own schema describes `deploy.aptPackages` as packages "to include at runtime", while `buildAptPackages` installs "during the build step" only. OCR shells out at request time, so build-only packages would not be there when it runs.
+- Railpack has no config-path setting, so `railpack.json` must sit in the Railway service's **root directory**, which is set to `server`.
+- Railway's schema marks the Railpack builder **EXPERIMENTAL**. To fall back, set `"builder": "NIXPACKS"` in `railway.json` and restore a `server/nixpacks.toml` declaring the same packages under `aptPkgs` (see git history for the previous file).
+- The start command comes from `railway.json`. Railpack's node provider would otherwise infer `npm start` from `package.json` anyway.
+- Verify after deploy — either from the Railway shell, or over HTTP against the running service:
+
+```bash
+curl -s https://<your-railway-domain>/health/deps
+```
+
+  `ok: true` means both binaries resolved; the response names the exact missing one otherwise. Boot logs carry the same result as `system_dep_ok` / `system_dep_missing`.
 
 ### Environment variables (set in Railway dashboard)
 ```
