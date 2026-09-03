@@ -281,15 +281,42 @@ export function registerContractRoutes(app: express.Application) {
       }
 
       const contracts = await col("contracts").find(filter).sort({ start_date: 1, contract_number: 1 }).toArray();
-      const rows = await Promise.all(contracts.map(async (contract: any) => {
-        const [client, document, reminders] = await Promise.all([
-          contract.client_id ? col("clients").findOne({ _id: tryObjectId(String(contract.client_id)) }) : null,
-          contract.document_id ? col("documents").findOne({ _id: tryObjectId(String(contract.document_id)) }) : null,
-          col("reminders").find({ user_id: userId, source_id: String(contract._id) }).sort({ trigger_date: 1 }).toArray(),
-        ]);
+
+      // Batched: this report is not paged, so the per-contract version issued three
+      // queries for every contract in the month and fired them all at once.
+      const reportClientIds = uniqueObjectIds(contracts.map((c: any) => c.client_id));
+      const reportDocumentIds = uniqueObjectIds(contracts.map((c: any) => c.document_id));
+      const reportSourceIds = contracts.map((c: any) => String(c._id ?? "")).filter(Boolean);
+      const [reportClients, reportDocuments, reportReminders] = await Promise.all([
+        reportClientIds.length
+          ? col("clients").find({ _id: { $in: reportClientIds }, user_id: userId } as any).toArray()
+          : Promise.resolve([]),
+        reportDocumentIds.length
+          ? col("documents").find({ _id: { $in: reportDocumentIds }, user_id: userId } as any).toArray()
+          : Promise.resolve([]),
+        reportSourceIds.length
+          ? col("reminders").find({ user_id: userId, source_id: { $in: reportSourceIds } } as any)
+              .sort({ trigger_date: 1 }).toArray()
+          : Promise.resolve([]),
+      ]);
+      const reportClientById = new Map(reportClients.map((c: any) => [String(c._id), c]));
+      const reportDocumentById = new Map(reportDocuments.map((d: any) => [String(d._id), d]));
+      const reportRemindersBySource = new Map<string, any[]>();
+      for (const reminder of reportReminders as any[]) {
+        const key = String(reminder.source_id ?? "");
+        if (!key) continue;
+        const list = reportRemindersBySource.get(key) ?? [];
+        list.push(reminder);
+        reportRemindersBySource.set(key, list);
+      }
+
+      const rows = contracts.map((contract: any) => {
+        const client = contract.client_id ? reportClientById.get(String(contract.client_id)) ?? null : null;
+        const document = contract.document_id ? reportDocumentById.get(String(contract.document_id)) ?? null : null;
+        const reminders = reportRemindersBySource.get(String(contract._id)) ?? [];
         const fields = mergeContractFields(contract, parseObjectRecord((document as any)?.extracted_fields));
         return { contract, client: client as any, document: document as any, fields, reminders };
-      }));
+      });
 
       const PDFDocument = (await import("pdfkit")).default;
       const pdfBuffer: Buffer = await new Promise((resolve, reject) => {
@@ -471,19 +498,25 @@ export function registerContractRoutes(app: express.Application) {
       .sort({ expiry_date: 1 })
       .toArray();
 
-    const rows = await Promise.all(
-      contractDocs.map(async (c: any) => {
-        const [client, document] = await Promise.all([
-          c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
-          c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
-        ]);
-        return {
-          ...flatDoc(c),
-          client_name: (client as any)?.display_name ?? null,
-          document_name: (document as any)?.file_name ?? null,
-        };
-      })
-    );
+    // Two lookups for the page rather than two per contract.
+    const expiringClientIds = uniqueObjectIds(contractDocs.map((c: any) => c.client_id));
+    const expiringDocumentIds = uniqueObjectIds(contractDocs.map((c: any) => c.document_id));
+    const [expiringClients, expiringDocuments] = await Promise.all([
+      expiringClientIds.length
+        ? col("clients").find({ _id: { $in: expiringClientIds }, user_id: userId } as any).toArray()
+        : Promise.resolve([]),
+      expiringDocumentIds.length
+        ? col("documents").find({ _id: { $in: expiringDocumentIds }, user_id: userId } as any).toArray()
+        : Promise.resolve([]),
+    ]);
+    const expiringClientById = new Map(expiringClients.map((c: any) => [String(c._id), c]));
+    const expiringDocumentById = new Map(expiringDocuments.map((d: any) => [String(d._id), d]));
+
+    const rows = contractDocs.map((c: any) => ({
+      ...flatDoc(c),
+      client_name: (c.client_id ? expiringClientById.get(String(c.client_id)) : null)?.display_name ?? null,
+      document_name: (c.document_id ? expiringDocumentById.get(String(c.document_id)) : null)?.file_name ?? null,
+    }));
 
     res.json(rows);
   });
@@ -719,15 +752,7 @@ export function registerContractRoutes(app: express.Application) {
       .sort({ expiry_date: 1 })
       .toArray();
 
-    const rows = await Promise.all(
-      contractDocs.map(async (c: any) => {
-        const [client, document] = await Promise.all([
-          c.client_id ? col("clients").findOne({ _id: tryObjectId(c.client_id) }) : null,
-          c.document_id ? col("documents").findOne({ _id: tryObjectId(c.document_id) }) : null,
-        ]);
-        return enrichContractDelivery(userId, presentContractRow(c, client, document));
-      })
-    );
+    const rows = await presentContractRows(userId, contractDocs as any[]);
 
     res.json(rows);
   });

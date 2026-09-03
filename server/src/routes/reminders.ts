@@ -264,27 +264,25 @@ export function registerReminderRoutes(app: express.Application) {
     const clientById = new Map(clientDocs.map((c: any) => [String(c._id), c]));
 
     const rows = reminderDocs.map((r: any) => {
-      {
-        const document = r.document_id ? documentById.get(String(r.document_id)) ?? null : null;
-        const contract = contractForReminder(r);
-        const clientId = r.client_id ?? contract?.client_id;
-        const client = clientId ? clientById.get(String(clientId)) ?? null : null;
-        const contactFields = contactFieldsFromSources(contract, document);
-        const calendarLink = calendarLinkByReminderId.get(String(r._id));
-        return {
-          ...flatDoc(r),
-          client_name: normalizeClientNameForDisplay((client as any)?.display_name),
-          contact_person: textField((client as any)?.contact_person) ?? contactFields.contact_person ?? extractContactPersonFromNotes((client as any)?.notes),
-          client_email: textField((client as any)?.email) ?? contactFields.contact_email ?? firstReminderEmail(r.email_to),
-          client_phone: textField((client as any)?.phone) ?? contactFields.contact_phone ?? null,
-          document_name: (document as any)?.file_name ?? null,
-          contract_number: (contract as any)?.contract_number ?? null,
-          contract_type: (contract as any)?.contract_type ?? null,
-          calendar_synced: Boolean(calendarLink?.gcal_event_id),
-          calendar_event_id: calendarLink?.gcal_event_id ?? null,
-          calendar_last_synced_at: calendarLink?.last_synced_at ?? null,
-        };
-      }
+      const document = r.document_id ? documentById.get(String(r.document_id)) ?? null : null;
+      const contract = contractForReminder(r);
+      const clientId = r.client_id ?? contract?.client_id;
+      const client = clientId ? clientById.get(String(clientId)) ?? null : null;
+      const contactFields = contactFieldsFromSources(contract, document);
+      const calendarLink = calendarLinkByReminderId.get(String(r._id));
+      return {
+        ...flatDoc(r),
+        client_name: normalizeClientNameForDisplay((client as any)?.display_name),
+        contact_person: textField((client as any)?.contact_person) ?? contactFields.contact_person ?? extractContactPersonFromNotes((client as any)?.notes),
+        client_email: textField((client as any)?.email) ?? contactFields.contact_email ?? firstReminderEmail(r.email_to),
+        client_phone: textField((client as any)?.phone) ?? contactFields.contact_phone ?? null,
+        document_name: (document as any)?.file_name ?? null,
+        contract_number: (contract as any)?.contract_number ?? null,
+        contract_type: (contract as any)?.contract_type ?? null,
+        calendar_synced: Boolean(calendarLink?.gcal_event_id),
+        calendar_event_id: calendarLink?.gcal_event_id ?? null,
+        calendar_last_synced_at: calendarLink?.last_synced_at ?? null,
+      };
     });
 
     res.json({ rows, total });

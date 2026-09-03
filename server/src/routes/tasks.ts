@@ -26,15 +26,23 @@ export function registerTaskRoutes(app: express.Application) {
 
     const tasks = await col("tasks").find(filter).sort({ due_date: 1 }).toArray();
 
-    const rows = await Promise.all(
-      tasks.map(async (t: any) => {
-        const client = t.client_id ? await col("clients").findOne({ _id: tryObjectId(t.client_id) }) : null;
-        return {
-          ...flatDoc(t),
-          client_name: (client as any)?.display_name ?? null,
-        };
-      })
-    );
+    // One clients lookup for the whole list. The task list is not paged, so a
+    // findOne per task meant a round-trip per row for every task the user owns.
+    const taskClientIds = [...new Set(
+      tasks.map((t: any) => t.client_id).filter(Boolean).map(String)
+    )];
+    const taskClients = taskClientIds.length
+      ? await col("clients").find({
+          _id: { $in: taskClientIds.map(tryObjectId) },
+          user_id: userId,
+        } as any).toArray()
+      : [];
+    const taskClientById = new Map(taskClients.map((c: any) => [String(c._id), c]));
+
+    const rows = tasks.map((t: any) => ({
+      ...flatDoc(t),
+      client_name: (t.client_id ? taskClientById.get(String(t.client_id)) : null)?.display_name ?? null,
+    }));
 
     res.json(rows);
   });

@@ -80,26 +80,64 @@ export function registerDashboardRoutes(app: express.Application) {
       : [];
     const calendarLinkByReminderId = new Map(calendarLinks.map((link: any) => [String(link.source_id), link]));
 
-    const upcoming_reminders = await Promise.all(
-      upcoming_reminders_raw.map(async (r: any) => {
-        const [client, document, contract] = await Promise.all([
-          r.client_id ? col("clients").findOne({ _id: r.client_id }) : null,
-          r.document_id ? col("documents").findOne({ _id: r.document_id }) : null,
-          resolveReminderContract(r, userId),
-        ]);
-        const calendarLink = calendarLinkByReminderId.get(String(r._id));
-        return {
-          ...flatDoc(r),
-          client_name: (client as any)?.display_name ?? null,
-          document_name: (document as any)?.file_name ?? null,
-          contract_number: (contract as any)?.contract_number ?? null,
-          contract_type: (contract as any)?.contract_type ?? null,
-          calendar_synced: Boolean(calendarLink?.gcal_event_id),
-          calendar_event_id: calendarLink?.gcal_event_id ?? null,
-          calendar_last_synced_at: calendarLink?.last_synced_at ?? null,
-        };
-      })
-    );
+    // Batched like the calendar links above. The page caps this at ten reminders,
+    // so the per-row version was survivable, but it is the same shape that made
+    // the reminders list saturate the connection pool.
+    const dashClientIds = [...new Set(
+      upcoming_reminders_raw.map((r: any) => r.client_id).filter(Boolean).map(String)
+    )];
+    const dashDocumentIds = [...new Set(
+      upcoming_reminders_raw.map((r: any) => r.document_id).filter(Boolean).map(String)
+    )];
+    const dashContractSourceIds = [...new Set(
+      upcoming_reminders_raw
+        .filter((r: any) => r.source_id && r.source_type === "contract_expiry")
+        .map((r: any) => String(r.source_id))
+    )];
+
+    const [dashClients, dashDocuments, dashContracts] = await Promise.all([
+      dashClientIds.length
+        ? col<any>("clients").find({ _id: { $in: dashClientIds.map(tryObjectId) } } as any).toArray()
+        : Promise.resolve([]),
+      dashDocumentIds.length
+        ? col<any>("documents").find({ _id: { $in: dashDocumentIds.map(tryObjectId) } } as any).toArray()
+        : Promise.resolve([]),
+      dashContractSourceIds.length
+        ? col<any>("contracts").find({
+            user_id: userId,
+            $or: [
+              { _id: { $in: dashContractSourceIds.map(tryObjectId) } },
+              { id: { $in: dashContractSourceIds } },
+            ],
+          } as any).toArray()
+        : Promise.resolve([]),
+    ]);
+    const dashClientById = new Map(dashClients.map((c: any) => [String(c._id), c]));
+    const dashDocumentById = new Map(dashDocuments.map((d: any) => [String(d._id), d]));
+    const dashContractBySourceId = new Map<string, any>();
+    for (const c of dashContracts as any[]) {
+      dashContractBySourceId.set(String(c._id), c);
+      if (c.id != null) dashContractBySourceId.set(String(c.id), c);
+    }
+
+    const upcoming_reminders = upcoming_reminders_raw.map((r: any) => {
+      const client = r.client_id ? dashClientById.get(String(r.client_id)) ?? null : null;
+      const document = r.document_id ? dashDocumentById.get(String(r.document_id)) ?? null : null;
+      const contract = r.source_id && r.source_type === "contract_expiry"
+        ? dashContractBySourceId.get(String(r.source_id)) ?? null
+        : null;
+      const calendarLink = calendarLinkByReminderId.get(String(r._id));
+      return {
+        ...flatDoc(r),
+        client_name: (client as any)?.display_name ?? null,
+        document_name: (document as any)?.file_name ?? null,
+        contract_number: (contract as any)?.contract_number ?? null,
+        contract_type: (contract as any)?.contract_type ?? null,
+        calendar_synced: Boolean(calendarLink?.gcal_event_id),
+        calendar_event_id: calendarLink?.gcal_event_id ?? null,
+        calendar_last_synced_at: calendarLink?.last_synced_at ?? null,
+      };
+    });
 
     res.json({
       total_documents,
@@ -134,14 +172,3 @@ function tryObjectId(id: string): any {
   }
 }
 
-async function resolveReminderContract(reminder: any, userId: string): Promise<any | null> {
-  if (reminder.source_type !== "contract_expiry" || !reminder.source_id) return null;
-  const sourceId = String(reminder.source_id);
-  return col("contracts").findOne({
-    user_id: userId,
-    $or: [
-      { _id: tryObjectId(sourceId) },
-      { id: sourceId },
-    ],
-  });
-}
