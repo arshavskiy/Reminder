@@ -70,24 +70,31 @@ export function registerEquipmentRoutes(app: express.Application) {
       .sort({ name: 1 })
       .toArray();
 
-    const enriched = await Promise.all(rows.map(async (row: any) => {
+    // Two lookups for the whole list rather than two per row. The list is not
+    // paged, so this scaled with everything the user owns.
+    const equipmentClientIds = toObjectIds(rows.map((r: any) => r.client_id));
+    const equipmentDocumentIds = toObjectIds(rows.map((r: any) => r.document_id));
+    const [equipmentClients, equipmentDocuments] = await Promise.all([
+      equipmentClientIds.length
+        ? col("clients").find({ _id: { $in: equipmentClientIds }, user_id: userId } as any).toArray()
+        : Promise.resolve([]),
+      equipmentDocumentIds.length
+        ? col("documents").find({ _id: { $in: equipmentDocumentIds }, user_id: userId } as any).toArray()
+        : Promise.resolve([]),
+    ]);
+    const equipmentClientById = new Map(equipmentClients.map((c: any) => [String(c._id), c]));
+    const equipmentDocumentById = new Map(equipmentDocuments.map((d: any) => [String(d._id), d]));
+
+    const enriched = rows.map((row: any) => {
       const flat = flatDoc(row) as any;
       if (row.client_id) {
-        try {
-          const clientOid = new ObjectId(String(row.client_id));
-          const client = await col("clients").findOne({ _id: clientOid }) as any;
-          flat.client_name = client?.display_name ?? null;
-        } catch { flat.client_name = null; }
+        flat.client_name = equipmentClientById.get(String(row.client_id))?.display_name ?? null;
       }
       if (row.document_id) {
-        try {
-          const docOid = new ObjectId(String(row.document_id));
-          const doc = await col("documents").findOne({ _id: docOid }) as any;
-          flat.document_name = doc?.file_name ?? null;
-        } catch { flat.document_name = null; }
+        flat.document_name = equipmentDocumentById.get(String(row.document_id))?.file_name ?? null;
       }
       return flat;
-    }));
+    });
 
     res.json(enriched);
   });
@@ -354,21 +361,11 @@ export function registerEquipmentRoutes(app: express.Application) {
       : [];
 
     // Fetch documents for extra metadata
-    const events = await Promise.all(contracts.map(async (c: any) => {
-      let document_name: string | null = null;
-      let inspector: string | null = null;
-      let extracted: Record<string, any> = {};
-
-      if (c.document_id) {
-        try {
-          const doc = await col("documents").findOne({ _id: new ObjectId(String(c.document_id)) }) as any;
-          document_name = doc?.file_name ?? null;
-          if (doc?.extracted_fields) {
-            try { extracted = JSON.parse(doc.extracted_fields); } catch {}
-          }
-          inspector = extracted.inspector ?? extracted.contact_person ?? null;
-        } catch {}
-      }
+    const documentById = await documentsByIdForContracts(contracts as any[], userId);
+    const events = (contracts as any[]).map((c: any) => {
+      const { document_name, inspector, extracted } = contractDocumentFields(
+        c.document_id ? documentById.get(String(c.document_id)) : null
+      );
 
       const today = new Date().toISOString().slice(0, 10);
       const expiry = c.expiry_date as string | null;
@@ -391,7 +388,7 @@ export function registerEquipmentRoutes(app: express.Application) {
         pass_fail: extracted.pass_fail ?? extracted.result ?? null,
         days_until: daysUntil,
       };
-    }));
+    });
 
     res.json(events);
   });
@@ -424,23 +421,16 @@ export function registerEquipmentRoutes(app: express.Application) {
     const contracts = docIds.length
       ? await col("contracts").find({ document_id: { $in: docIds }, user_id: userId }).sort({ start_date: -1 }).toArray()
       : [];
-    const events = await Promise.all(contracts.map(async (c: any) => {
-      let document_name: string | null = null;
-      let inspector: string | null = null;
-      let extracted: Record<string, any> = {};
-      if (c.document_id) {
-        try {
-          const doc = await col("documents").findOne({ _id: new ObjectId(String(c.document_id)) }) as any;
-          document_name = doc?.file_name ?? null;
-          if (doc?.extracted_fields) { try { extracted = JSON.parse(doc.extracted_fields); } catch {} }
-          inspector = extracted.inspector ?? extracted.contact_person ?? null;
-        } catch {}
-      }
+    const documentById = await documentsByIdForContracts(contracts as any[], userId);
+    const events = (contracts as any[]).map((c: any) => {
+      const { document_name, inspector, extracted } = contractDocumentFields(
+        c.document_id ? documentById.get(String(c.document_id)) : null
+      );
       const today = new Date().toISOString().slice(0, 10);
       const expiry = c.expiry_date as string | null;
       const daysUntil = expiry ? Math.ceil((new Date(expiry).getTime() - new Date(today).getTime()) / 86400000) : null;
       return { contract_type: c.contract_type ?? null, contract_number: c.contract_number ?? null, start_date: c.start_date ?? null, expiry_date: expiry, status: c.status ?? null, document_name, inspector, load_capacity_test: extracted.load_capacity_test ?? null, pass_fail: extracted.pass_fail ?? extracted.result ?? null, days_until: daysUntil };
-    }));
+    });
 
     // Build PDF — buffer entirely before sending so errors can return proper HTTP status
     try {
@@ -1146,4 +1136,39 @@ function parseManualFields(value: unknown): Record<string, unknown> | null {
 
 function textField(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/** Documents for a contract list, fetched once and keyed by id. */
+async function documentsByIdForContracts(contracts: any[], userId: string): Promise<Map<string, any>> {
+  const ids = [...new Set(contracts.map((c: any) => c.document_id).filter(Boolean).map(String))];
+  if (!ids.length) return new Map();
+  const objectIds: ObjectId[] = [];
+  for (const id of ids) {
+    try { objectIds.push(new ObjectId(id)); } catch { /* not an ObjectId-shaped id */ }
+  }
+  if (!objectIds.length) return new Map();
+  const docs = await col("documents").find({ _id: { $in: objectIds }, user_id: userId } as any).toArray();
+  return new Map(docs.map((d: any) => [String(d._id), d]));
+}
+
+/** The document-derived fields both expiry calendars present per contract. */
+function contractDocumentFields(doc: any): { document_name: string | null; inspector: string | null; extracted: Record<string, any> } {
+  let extracted: Record<string, any> = {};
+  if (doc?.extracted_fields) {
+    try { extracted = JSON.parse(doc.extracted_fields); } catch { extracted = {}; }
+  }
+  return {
+    document_name: doc?.file_name ?? null,
+    inspector: extracted.inspector ?? extracted.contact_person ?? null,
+    extracted,
+  };
+}
+
+/** ObjectIds for a raw id list, skipping blanks and non-ObjectId values. */
+function toObjectIds(values: unknown[]): ObjectId[] {
+  const ids: ObjectId[] = [];
+  for (const key of new Set(values.filter(Boolean).map(String))) {
+    try { ids.push(new ObjectId(key)); } catch { /* not an ObjectId-shaped id */ }
+  }
+  return ids;
 }

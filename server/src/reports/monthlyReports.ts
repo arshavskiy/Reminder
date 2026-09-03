@@ -128,12 +128,41 @@ export async function loadFutureReportRows(userId: string, clientId?: string): P
 }
 
 async function hydrateReportRows(userId: string, contracts: any[]): Promise<MonthlyReportRow[]> {
-  return Promise.all(contracts.map(async (contract: any) => {
-    const [client, document, reminders] = await Promise.all([
-      contract.client_id ? col("clients").findOne({_id: tryObjectId(String(contract.client_id))}) : null,
-      contract.document_id ? col("documents").findOne({_id: tryObjectId(String(contract.document_id))}) : null,
-      col("reminders").find({user_id: userId, source_id: String(contract._id)}).sort({trigger_date: 1}).toArray(),
-    ]);
+  if (!contracts.length) return [];
+
+  // Batched: the report is not paged, so resolving the client, document and
+  // reminders per contract issued three queries for every contract in the month
+  // and fired them all concurrently.
+  const clientIds = uniqueIdStrings(contracts.map((c: any) => c.client_id));
+  const documentIds = uniqueIdStrings(contracts.map((c: any) => c.document_id));
+  const sourceIds = contracts.map((c: any) => String(c._id ?? "")).filter(Boolean);
+
+  const [clients, documents, allReminders] = await Promise.all([
+    clientIds.length
+      ? col("clients").find({_id: {$in: clientIds.map(tryObjectId)}, user_id: userId} as any).toArray()
+      : Promise.resolve([]),
+    documentIds.length
+      ? col("documents").find({_id: {$in: documentIds.map(tryObjectId)}, user_id: userId} as any).toArray()
+      : Promise.resolve([]),
+    sourceIds.length
+      ? col("reminders").find({user_id: userId, source_id: {$in: sourceIds}} as any).sort({trigger_date: 1}).toArray()
+      : Promise.resolve([]),
+  ]);
+  const clientById = new Map(clients.map((c: any) => [String(c._id), c]));
+  const documentById = new Map(documents.map((d: any) => [String(d._id), d]));
+  const remindersBySource = new Map<string, any[]>();
+  for (const reminder of allReminders as any[]) {
+    const key = String(reminder.source_id ?? "");
+    if (!key) continue;
+    const list = remindersBySource.get(key) ?? [];
+    list.push(reminder);
+    remindersBySource.set(key, list);
+  }
+
+  return contracts.map((contract: any) => {
+    const client = contract.client_id ? clientById.get(String(contract.client_id)) ?? null : null;
+    const document = contract.document_id ? documentById.get(String(contract.document_id)) ?? null : null;
+    const reminders = remindersBySource.get(String(contract._id)) ?? [];
     let extracted: Record<string, any> = {};
     if ((document as any)?.extracted_fields) {
       try { extracted = JSON.parse((document as any).extracted_fields); } catch { extracted = {}; }
@@ -141,7 +170,12 @@ async function hydrateReportRows(userId: string, contracts: any[]): Promise<Mont
     const manual = contract?.manual_fields && typeof contract.manual_fields === "object" ? contract.manual_fields : {};
     const fields = {...manual, ...Object.fromEntries(Object.entries(extracted).filter(([, value]) => value !== undefined && value !== null && value !== ""))};
     return {contract, client, document, fields, reminders};
-  }));
+  });
+}
+
+/** Distinct, non-empty id strings from a raw id list. */
+function uniqueIdStrings(values: unknown[]): string[] {
+  return [...new Set(values.filter(Boolean).map(String))];
 }
 
 export function normalizeMonthlyReportFields(raw?: unknown): MonthlyReportField[] {
