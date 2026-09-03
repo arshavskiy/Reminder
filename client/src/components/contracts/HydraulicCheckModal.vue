@@ -645,107 +645,66 @@ type ReportTypePreset = {
   equipmentPlaceholder: string;
   descriptionPlaceholder: string;
 };
-const reportTypePresets: ReportTypePreset[] = [
-  {
-    value: "lifting_machine",
-    label: "תסקיר מכונות הרמה",
-    contractType: "תסקיר בדיקה וניסוי מכונות הרמה",
-    category: "lift",
-    intervalMonths: 14,
+// The legal/statutory data (contract type, category, interval) comes from
+// INSPECTION_PRINT_TEMPLATE_PRESETS — the same source the print template uses — so
+// an interval or contract-type change only has to happen in one place instead of
+// drifting between the modal and the generated document. Only the form's own
+// placeholder copy stays local, since the shared preset has no use for it.
+const REPORT_TYPE_FORM_TEXT: Record<string, { equipmentPlaceholder: string; descriptionPlaceholder: string }> = {
+  lifting_machine: {
     equipmentPlaceholder: "מלגזה / מנוף משאית / כננת / במה",
     descriptionPlaceholder: "תיאור מכונת ההרמה, מיקום, מספר פנימי וממצאים",
   },
-  {
-    value: "lifting_accessory",
-    label: "תסקיר אביזרי הרמה",
-    contractType: "תסקיר בדיקה וניסוי אביזרי הרמה",
-    category: "accessory",
-    intervalMonths: 6,
+  lifting_accessory: {
     equipmentPlaceholder: "שרשרת / רצועה / שאקל / אונקל / מענב",
     descriptionPlaceholder: "רשימת האביזרים, עומס עבודה בטוח, זיהוי פריט וממצאים",
   },
-  {
-    value: "elevator",
-    label: "תסקיר מעלית",
-    contractType: "תסקיר בדיקה תקופתית למעלית",
-    category: "elevator",
-    intervalMonths: 6,
+  elevator: {
     equipmentPlaceholder: "מעלית נוסעים / מעלית משא",
     descriptionPlaceholder: "פרטי המעלית, פיר, חדר מכונות, דלתות ומערכות בטיחות",
   },
-  {
-    value: "escalator",
-    label: "תסקיר דרגנוע",
-    contractType: "תסקיר בדיקה תקופתית לדרגנוע",
-    category: "escalator",
-    intervalMonths: 6,
+  escalator: {
     equipmentPlaceholder: "דרגנוע / מסוע נוסעים",
     descriptionPlaceholder: "פרטי הדרגנוע, מערכות עצירה, מדרגות, מעקות וממצאים",
   },
-  {
-    value: "tower_crane",
-    label: "תסקיר עגורן צריח באתר בנייה",
-    contractType: "תסקיר בדיקה תקופתית לעגורן צריח",
-    category: "tower_crane",
-    intervalMonths: 6,
+  tower_crane: {
     equipmentPlaceholder: "עגורן צריח",
     descriptionPlaceholder: "פרטי העגורן, תא מפעיל, מנגנוני סיבוב, בלמים, חשמל וממצאים",
   },
-  {
-    value: "work_platform",
-    label: "תסקיר במת הרמה באתר בנייה",
-    contractType: "תסקיר בדיקה תקופתית לבמת הרמה",
-    category: "work_platform",
-    intervalMonths: 6,
+  work_platform: {
     equipmentPlaceholder: "במת הרמה",
     descriptionPlaceholder: "פרטי הבמה, מערכת הרמה, מעקות, בלמים וממצאים",
   },
-  {
-    value: "powered_scaffold",
-    label: "תסקיר פיגום ממוכן",
-    contractType: "תסקיר בדיקה תקופתית לפיגום ממוכן",
-    category: "powered_scaffold",
-    intervalMonths: 6,
+  powered_scaffold: {
     equipmentPlaceholder: "פיגום ממוכן",
     descriptionPlaceholder: "פרטי הפיגום, עיגון, מנגנון הרמה, בלמים וממצאים",
   },
-  {
-    value: "air_receiver",
-    label: "תסקיר קולט אוויר / קומפרסור",
-    contractType: "תסקיר בדיקה לקולט אוויר",
-    category: "air_receiver",
-    intervalMonths: 26,
+  air_receiver: {
     equipmentPlaceholder: "קולט אוויר / קומפרסור",
     descriptionPlaceholder: "פרטי קולט האוויר, נפח, לחץ עבודה מותר, שסתומים וממצאים",
   },
-  {
-    value: "steam_receiver",
-    label: "תסקיר קולט קיטור",
-    contractType: "תסקיר בדיקה לקולט קיטור",
-    category: "steam_receiver",
-    intervalMonths: 26,
+  steam_receiver: {
     equipmentPlaceholder: "קולט קיטור",
     descriptionPlaceholder: "פרטי קולט הקיטור, לחץ עבודה מותר, אבזרים וניסויים",
   },
-  {
-    value: "steam_boiler",
-    label: "תסקיר דוד קיטור",
-    contractType: "תסקיר בדיקה לדוד קיטור",
-    category: "steam_boiler",
-    intervalMonths: 14,
+  steam_boiler: {
     equipmentPlaceholder: "דוד קיטור",
     descriptionPlaceholder: "פרטי דוד הקיטור, בדיקה קרה/בלחץ, שסתומים ולחץ עבודה מותר",
   },
-  {
-    value: "pressure_vessel",
-    label: "תסקיר כלי לחץ",
-    contractType: "תסקיר בדיקה לכלי לחץ",
-    category: "pressure_vessel",
-    intervalMonths: 26,
+  pressure_vessel: {
     equipmentPlaceholder: "כלי לחץ",
     descriptionPlaceholder: "פרטי מתקן הלחץ, לחץ עבודה מותר, ניסוי הידרולי וממצאים",
   },
-];
+};
+const FALLBACK_FORM_TEXT = {equipmentPlaceholder: "", descriptionPlaceholder: ""};
+const reportTypePresets: ReportTypePreset[] = INSPECTION_PRINT_TEMPLATE_PRESETS.map((preset) => ({
+  value: preset.key,
+  label: preset.name,
+  contractType: preset.contractType,
+  category: preset.category,
+  intervalMonths: preset.intervalMonths,
+  ...(REPORT_TYPE_FORM_TEXT[preset.key] ?? FALLBACK_FORM_TEXT),
+}));
 const reportTypeOptions = reportTypePresets.map((preset) => ({label: preset.label, value: preset.value}));
 const selectedReportType = computed(() =>
     reportTypePresets.find((preset) => preset.value === reportType.value) ?? reportTypePresets[0],
