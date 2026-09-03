@@ -1155,10 +1155,17 @@ function openLinkedContract() {
 
 async function loadLinkedReminders() {
   try {
-    const { rows } = await api.reminders.list({ limit: 1000 });
-    const ids = new Set(linkedContracts.value.map((contract) => String(contract.id)));
+    // Filtered server-side: this used to pull limit=1000 and narrow in the browser,
+    // which made the endpoint resolve context for every reminder the user owns.
+    const ids = linkedContracts.value.map((contract) => String(contract.id));
+    if (!ids.length) {
+      linkedReminders.value = [];
+      return;
+    }
+    const { rows } = await api.reminders.list({ sourceIds: ids.join(","), limit: 200 });
+    const idSet = new Set(ids);
     linkedReminders.value = rows.filter((reminder) =>
-      reminder.source_id != null && ids.has(String(reminder.source_id))
+      reminder.source_id != null && idSet.has(String(reminder.source_id))
     );
   } catch {
     linkedReminders.value = [];

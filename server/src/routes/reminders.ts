@@ -151,13 +151,28 @@ export function registerReminderRoutes(app: express.Application) {
 
     const status = req.query.status as string | undefined;
     const days = req.query.days as string | undefined;
-    const limit = parseInt((req.query.limit as string) ?? "50");
-    const offset = parseInt((req.query.offset as string) ?? "0");
+    // Capped so no caller can ask for an unbounded page. Callers that used to pull
+    // limit=1000 and filter client-side should filter server-side instead
+    // (documentId / sourceIds) rather than raising this.
+    const MAX_LIMIT = 200;
+    const requestedLimit = parseInt((req.query.limit as string) ?? "50");
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_LIMIT)
+      : 50;
+    const parsedOffset = parseInt((req.query.offset as string) ?? "0");
+    const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
 
     const filter: Record<string, any> = { user_id: userId };
     if (status) filter.status = status;
     const documentId = req.query.documentId as string | undefined;
     if (documentId) filter.document_id = documentId;
+    // Lets a caller fetch only the reminders belonging to known contracts instead of
+    // pulling every row and filtering in the browser.
+    const sourceIdsParam = req.query.sourceIds as string | undefined;
+    if (sourceIdsParam) {
+      const sourceIds = sourceIdsParam.split(",").map((v) => v.trim()).filter(Boolean);
+      if (sourceIds.length) filter.source_id = { $in: sourceIds };
+    }
     if (days) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -186,13 +201,74 @@ export function registerReminderRoutes(app: express.Application) {
       : [];
     const calendarLinkByReminderId = new Map(calendarLinks.map((link: any) => [String(link.source_id), link]));
 
-    const rows = await Promise.all(
-      reminderDocs.map(async (r: any) => {
-        const [document, contract] = await Promise.all([
-          r.document_id ? col("documents").findOne({ _id: tryObjectId(r.document_id) }) : null,
-          resolveReminderContract(r, userId),
-        ]);
-        const client = await resolveReminderClient(r, contract, userId);
+    // Batched on purpose. This used to resolve the document, contract and client
+    // per reminder inside Promise.all, so a page of 1000 rows fired ~3000 queries
+    // at once against a pool of 50: most of them queued, hit waitQueueTimeoutMS and
+    // failed the request with "Timed out while checking out a connection from
+    // connection pool" — and starved every other request in the process meanwhile.
+    // Three $in lookups keep it flat regardless of page size, the same way the
+    // calendar links above are already resolved.
+    const documentIds = [...new Set(
+      reminderDocs.map((r: any) => r.document_id).filter(Boolean).map(String)
+    )];
+    const contractSourceIds = [...new Set(
+      reminderDocs
+        .filter((r: any) => r.source_id && ["contract_expiry", "manual"].includes(String(r.source_type)))
+        .map((r: any) => String(r.source_id))
+    )];
+
+    const [documentDocs, contractDocs] = await Promise.all([
+      documentIds.length
+        ? col<any>("documents").find({ _id: { $in: documentIds.map(tryObjectId) } } as any).toArray()
+        : [],
+      // resolveReminderContract matched either the ObjectId _id or a string `id`
+      // field, so both shapes stay in the batch.
+      contractSourceIds.length
+        ? col<any>("contracts").find({
+            user_id: userId,
+            $or: [
+              { _id: { $in: contractSourceIds.map(tryObjectId) } },
+              { id: { $in: contractSourceIds } },
+            ],
+          } as any).toArray()
+        : [],
+    ]);
+
+    const documentById = new Map(documentDocs.map((d: any) => [String(d._id), d]));
+    const contractBySourceId = new Map<string, any>();
+    for (const c of contractDocs) {
+      contractBySourceId.set(String(c._id), c);
+      if (c.id != null) contractBySourceId.set(String(c.id), c);
+    }
+
+    const contractForReminder = (r: any): any | null => {
+      if (!r.source_id) return null;
+      if (!["contract_expiry", "manual"].includes(String(r.source_type))) return null;
+      return contractBySourceId.get(String(r.source_id)) ?? null;
+    };
+
+    // Client ids are only known once contracts are resolved, since a reminder may
+    // inherit its client from its contract.
+    const clientIds = [...new Set(
+      reminderDocs
+        .map((r: any) => r.client_id ?? contractForReminder(r)?.client_id)
+        .filter(Boolean)
+        .map(String)
+    )];
+    const clientDocs = clientIds.length
+      ? await col<any>("clients").find({
+          _id: { $in: clientIds.map(tryObjectId) },
+          user_id: userId,
+        } as any).toArray()
+      : [];
+    const clientById = new Map(clientDocs.map((c: any) => [String(c._id), c]));
+
+    const rows = reminderDocs.map((r: any) => {
+      {
+        const document = r.document_id ? documentById.get(String(r.document_id)) ?? null : null;
+        const contract = contractForReminder(r);
+        const clientId = r.client_id ?? contract?.client_id;
+        const client = clientId ? clientById.get(String(clientId)) ?? null : null;
         const contactFields = contactFieldsFromSources(contract, document);
         const calendarLink = calendarLinkByReminderId.get(String(r._id));
         return {
@@ -208,8 +284,8 @@ export function registerReminderRoutes(app: express.Application) {
           calendar_event_id: calendarLink?.gcal_event_id ?? null,
           calendar_last_synced_at: calendarLink?.last_synced_at ?? null,
         };
-      })
-    );
+      }
+    });
 
     res.json({ rows, total });
   });

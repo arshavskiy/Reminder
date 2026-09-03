@@ -918,7 +918,8 @@ async function doBulkDelete() {
     selectedIds.value = new Set();
     bulkMode.value = false;
     showBulkDeleteConfirm.value = false;
-    await Promise.all([refresh(), loadReminders()]);
+    await refresh();
+    await loadReminders();
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -983,7 +984,15 @@ function reminderToSendForContract(contractId: string): ReminderWithContext | nu
 
 async function loadReminders() {
   try {
-    const {rows} = await api.reminders.list({limit: 1000});
+    // Scoped to the contracts currently loaded rather than every reminder the user
+    // owns: the unbounded limit=1000 fetch made the server resolve context per row
+    // and saturated its database connection pool.
+    const ids = (store.rows ?? []).map((c: any) => String(c.id)).filter(Boolean);
+    if (!ids.length) {
+      allReminders.value = [];
+      return;
+    }
+    const {rows} = await api.reminders.list({sourceIds: ids.join(","), limit: 200});
     allReminders.value = rows;
   } catch { /* non-fatal */
   }
@@ -2048,7 +2057,8 @@ async function doCreateHydraulicCheck() {
     clearHydraulicDraftOnClose.value = true;
     showHydraulicCheck.value = false;
     loadClients(true);
-    await Promise.all([refresh(), loadReminders()]);
+    await refresh();
+    await loadReminders();
     if (returnTo) await router.push(returnTo);
   } catch (e) {
     message.error(String(e));
@@ -2920,7 +2930,8 @@ async function saveForm() {
       message.success("הרשומה נוצרה בהצלחה");
     }
     showForm.value = false;
-    await Promise.all([refresh(), loadReminders()]);
+    await refresh();
+    await loadReminders();
   } catch (e) {
     message.error(String(e));
   } finally {
@@ -2939,7 +2950,8 @@ async function doDelete() {
   try {
     await store.remove(deletingRow.value.id, {deleteRelatedReminders: deleteRelatedReminders.value});
     message.success("הרשומה נמחקה");
-    await Promise.all([refresh(), loadReminders()]);
+    await refresh();
+    await loadReminders();
   } catch (e) {
     message.error(String(e));
   } finally {
