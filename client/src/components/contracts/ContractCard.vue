@@ -216,20 +216,33 @@ import {contractRowHasEmail} from "@shared/contractEmail.js";
 
 const router = useRouter();
 
-const props = defineProps<{
-  row: ContractWithClient;
-  inspectorNumber?: string;
-  kind: "contract" | "inspection" | "all";
-  bulkMode: boolean;
-  selected: boolean;
-  reminders: ReminderWithContext[];
-  sendingReminder: number | null;
-  creatingReminder?: string | null;
-  showActions?: boolean;
-  showReminderActions?: boolean;
-  showTemplateActions?: boolean;
-  issues?: RowIssue[];
-}>();
+// withDefaults is required here: Vue resolves an unpassed optional `boolean` prop
+// to `false`, not `undefined`, when declared through the type-only defineProps
+// macro. The `?? true` fallbacks below never ran — every caller that omitted these
+// props (all three: ContractsPage, DocumentsPage, DocumentDetailPage) silently got
+// every action button hidden, since none of them pass showReminderActions and only
+// DocumentDetailPage happens to pass showActions explicitly.
+const props = withDefaults(
+  defineProps<{
+    row: ContractWithClient;
+    inspectorNumber?: string;
+    kind: "contract" | "inspection" | "all";
+    bulkMode: boolean;
+    selected: boolean;
+    reminders: ReminderWithContext[];
+    sendingReminder: number | null;
+    creatingReminder?: string | null;
+    showActions?: boolean;
+    showReminderActions?: boolean;
+    showTemplateActions?: boolean;
+    issues?: RowIssue[];
+  }>(),
+  {
+    showActions: true,
+    showReminderActions: true,
+    showTemplateActions: true,
+  },
+);
 
 const hasEmail = computed(() => contractRowHasEmail(props.row));
 const sendableReminder = computed(() => {
@@ -304,9 +317,9 @@ const emit = defineEmits<{
   "delete-reminder": [reminder: ReminderWithContext];
 }>();
 
-const showActions = computed(() => props.showActions ?? true);
-const showReminderActions = computed(() => props.showReminderActions ?? true);
-const showTemplateActions = computed(() => props.showTemplateActions ?? true);
+const showActions = computed(() => props.showActions);
+const showReminderActions = computed(() => props.showReminderActions);
+const showTemplateActions = computed(() => props.showTemplateActions);
 
 const subtitle = computed(() =>
     props.row.summary ??

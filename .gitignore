@@ -32,3 +32,9 @@ docs/google-oauth-demo-video/
 
 # Separate repository, not a submodule of this one
 tools/inspector-lead-finder/
+
+# Playwright E2E artifacts and captured session state — never commit a live cookie.
+client/test-results/
+client/playwright-report/
+client/tests/e2e/.auth/
+server/test-results/

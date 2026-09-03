@@ -16,7 +16,7 @@ export default defineConfig({
   reporter: [["html", { open: "never" }], ["line"]],
   globalSetup: "./tests/e2e/global-setup.ts",
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: "http://localhost:4173", // matches vite.config.ts server.port, not the CRA-era 5173 this pointed at
     storageState: "tests/e2e/.auth/user.json",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
