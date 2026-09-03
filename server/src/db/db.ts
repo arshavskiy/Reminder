@@ -91,6 +91,16 @@ async function openSlot(target: AdminDbTarget, uri: string, dbName: string): Pro
     waitQueueTimeoutMS: readPositiveIntEnv("MONGODB_WAIT_QUEUE_TIMEOUT_MS", 10_000),
     maxIdleTimeMS: readPositiveIntEnv("MONGODB_MAX_IDLE_TIME_MS", 60_000),
   });
+  // Pool telemetry: a checkout timeout ("Timed out while checking out a connection
+  // from connection pool") only says the pool was full, not which slot or how full.
+  // Logging the driver's own pool events names the saturating client instead.
+  client.on("connectionCheckOutFailed", (ev: any) => {
+    logger.warn("db_pool_checkout_failed", { target, db_name: dbName, reason: ev?.reason });
+  });
+  client.on("connectionPoolCleared", () => {
+    logger.warn("db_pool_cleared", { target, db_name: dbName });
+  });
+
   await client.connect();
   const db = client.db(dbName);
   await ensureCollections(db);
@@ -131,6 +141,15 @@ export async function connectDb(): Promise<Db> {
 
   _primary = _local;
   return _primary.db;
+}
+
+// The inspector-leads collection in admin routes used to open its own MongoClient
+// against MONGODB_URI. In production that is the same cluster as the primary slot,
+// so it added a second, uncapped pool (driver default 100, no waitQueueTimeoutMS)
+// on top of this one. Exposing the primary URI lets that code reuse this pool when
+// the URI matches instead of doubling the connection count per replica.
+export function getPrimaryUri(): string | null {
+  return _primary?.uri ?? null;
 }
 
 export function getPrimaryDb(): Db {

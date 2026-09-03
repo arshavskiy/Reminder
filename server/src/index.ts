@@ -6,7 +6,7 @@ import YAML from "yaml";
 import {existsSync, readFileSync, watch} from "fs";
 import {dirname, join} from "path";
 import {fileURLToPath} from "url";
-import {connectDb} from "./db/db";
+import {closeDb, connectDb} from "./db/db";
 import {getSettings, validateEnv} from "./settings";
 import {startScheduler} from "./reminders/scheduler";
 import {seedBuiltinTemplates} from "./templates/seedTemplates";
@@ -33,7 +33,7 @@ import {registerGdriveRoutes, startDriveExportJobWorker} from "./routes/gdrive";
 import {registerInvoiceRoutes} from "./routes/invoices";
 import {registerUserSettingsRoutes} from "./routes/userSettings";
 import {registerProfileRoutes} from "./routes/profile";
-import {registerAdminRoutes} from "./routes/admin";
+import {closeInspectorLeadsClient, registerAdminRoutes} from "./routes/admin";
 import {registerBillingRoutes} from "./routes/billing";
 import {initPush} from "./push/pushService";
 import {checkSystemDeps, logSystemDepsOnStartup} from "./pipeline/systemDeps";
@@ -239,13 +239,37 @@ async function main() {
   startDriveExportJobWorker();
   startDocumentProcessingJobWorker();
 
-  app.listen(settings.port, () => {
+  const server = app.listen(settings.port, () => {
     logger.info("server_started", {
       port: settings.port,
       health_url: `http://localhost:${settings.port}/health`,
       api_docs_url: `http://localhost:${settings.port}/api-docs`,
     });
   });
+
+  // Railway sends SIGTERM on every redeploy. Without this the process dies with its
+  // Mongo pools open, so Atlas holds those sockets until its own timeout and a
+  // rolling deploy stacks the old replica's connections on top of the new one's —
+  // which is how the cluster hits its connection cap and requests start failing with
+  // "Timed out while checking out a connection from connection pool".
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info("server_shutdown_started", { signal });
+    server.close();
+    try {
+      await closeInspectorLeadsClient();
+      await closeDb();
+      logger.info("server_shutdown_complete", { signal });
+    } catch (err) {
+      logger.error("server_shutdown_failed", { signal, error: err });
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.on("SIGTERM", () => { void shutdown("SIGTERM"); });
+  process.on("SIGINT", () => { void shutdown("SIGINT"); });
 
   startScheduler();
   startWatchFolder();

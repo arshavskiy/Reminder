@@ -1,7 +1,7 @@
 import express from "express";
 import {Collection, Db, MongoClient, ObjectId} from "mongodb";
 import {extname} from "path";
-import {col, enterAdminDbTarget, getDbTargetStatus, parseAdminDbTarget, runWithPrimaryDb} from "../db/db";
+import {col, enterAdminDbTarget, getDbTargetStatus, getPrimaryUri, parseAdminDbTarget, runWithPrimaryDb} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
 import type {UserPlan, UserRole} from "../../src/shared/types.js";
 import {getSettings} from "../settings.js";
@@ -30,12 +30,30 @@ function redactUri(uri: string): string {
   return uri.replace(/\/\/[^:]+:[^@]+@/, "//***:***@");
 }
 
+export async function closeInspectorLeadsClient(): Promise<void> {
+  const client = inspectorLeadsClient;
+  inspectorLeadsClient = null;
+  inspectorLeadsDb = null;
+  if (client) await client.close();
+}
+
 async function inspectorLeadsCollection(): Promise<Collection> {
   const uri = env("MONGODB_URI");
   if (!uri) return col("inspector_leads");
+  // In production MONGODB_URI is the same cluster the primary slot already holds a
+  // pool on, so opening a second client here doubled the connection count per
+  // replica against the Atlas cap. Reuse the existing pool when the URI matches.
+  if (uri === getPrimaryUri()) return col("inspector_leads");
   if (!inspectorLeadsDb) {
     const dbName = env("INSPECTOR_LEADS_DB") ?? "reminder";
-    inspectorLeadsClient = new MongoClient(uri);
+    // Bounded on purpose: the driver default is 100 with no wait-queue timeout, so a
+    // saturated pool here would hang requests indefinitely instead of failing fast.
+    inspectorLeadsClient = new MongoClient(uri, {
+      maxPoolSize: 10,
+      minPoolSize: 0,
+      waitQueueTimeoutMS: 10_000,
+      maxIdleTimeMS: 60_000,
+    });
     await inspectorLeadsClient.connect();
     inspectorLeadsDb = inspectorLeadsClient.db(dbName);
     await inspectorLeadsDb.createCollection("inspector_leads").catch((err: any) => {
