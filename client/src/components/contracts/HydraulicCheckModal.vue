@@ -87,7 +87,7 @@
                           filterable
                           placeholder="בחר תבנית"
                           style="flex:1"
-                          @update:value="selectTemplate"
+                          @update:value="(id) => selectTemplate(id, {syncReportType: true})"
                       />
                       <n-tooltip trigger="hover">
                         <template #trigger>
@@ -150,6 +150,7 @@
                     <label class="required">בתוקף עד</label>
                     <n-date-picker
                         v-model:value="expiryDateMs"
+                        :disabled="!updatingContractId"
                         style="width: 100%"
                         type="date"
                     />
@@ -483,6 +484,7 @@ import type {Equipment, PrintTemplate} from "@shared/types.js";
 import LayoutPreviewFrame from "../print/LayoutPreviewFrame.vue";
 import {
   extractLayoutFieldBinds,
+  INSPECTION_PRINT_TEMPLATE_PRESETS,
   joinStackedValues,
   LAYOUT_FIELD_PRESETS,
   type PrintTemplateLayout
@@ -634,8 +636,15 @@ const checkDateMs = ref<number>(Date.now());
 const expiryDateMs = ref<number | null>(null);
 const reminderDaysBefore = ref<number>(30);
 const reminderDateMs = ref<number | null>(null);
-const intervalMonths = ref<number>(4);
-const reportType = ref("lifting_machine");
+const DEFAULT_REPORT_TYPE = "lifting_machine";
+// Not a hardcoded literal: the initial interval must match DEFAULT_REPORT_TYPE's
+// legal interval, or the modal opens showing a type/interval pair that was never
+// legally correct together (this previously defaulted to 4 months while
+// lifting_machine's actual interval is 14).
+const intervalMonths = ref<number>(
+    INSPECTION_PRINT_TEMPLATE_PRESETS.find((p) => p.key === DEFAULT_REPORT_TYPE)?.intervalMonths ?? 4,
+);
+const reportType = ref(DEFAULT_REPORT_TYPE);
 type ReportTypePreset = {
   value: string;
   label: string;
@@ -744,8 +753,14 @@ function calculateExpiryFromCheckDate() {
   expiryDateMs.value = checkDate.getTime();
 }
 
+// For a new report, expiry is defined entirely by report type + check date — the
+// field above is disabled and there is no manual override, so it must always track
+// this pair. Editing an existing contract keeps the value that was actually saved
+// (set once in openForUpdate below): a real record's expiry may not match this
+// formula, e.g. an inspector-granted extension, and opening it for editing must not
+// silently rewrite it.
 watch([checkDateMs, intervalMonths], () => {
-  if (checkDateMs.value && !expiryDateMs.value) {
+  if (checkDateMs.value && !updatingContractId.value) {
     calculateExpiryFromCheckDate();
   }
 });
@@ -996,7 +1011,7 @@ function defaultForm(): HydraulicCheckRequest {
   };
 }
 
-function applyReportType(value?: string) {
+function applyReportType(value?: string, options: { syncTemplate?: boolean } = {}) {
   const preset = reportTypePresets.find((item) => item.value === (value ?? reportType.value)) ?? reportTypePresets[0];
   reportType.value = preset.value;
   intervalMonths.value = preset.intervalMonths;
@@ -1008,9 +1023,18 @@ function applyReportType(value?: string) {
     ...row,
     category: preset.category,
   }));
-  calculateExpiryFromCheckDate();
-  const matchingTemplateId = defaultTemplateId();
-  if (matchingTemplateId) selectTemplate(matchingTemplateId);
+  // Not calculateExpiryFromCheckDate() directly: setting intervalMonths above
+  // already runs it through the watch(), which is what gates on updatingContractId
+  // so an edit-in-progress doesn't get its saved expiry silently rewritten.
+  //
+  // syncTemplate defaults on for the report-type dropdown's own change handler, but
+  // selectTemplate() calls this with it off when the causality runs the other way
+  // (picking a template that names its own report type) — without that, picking a
+  // template would re-select a template and the two selectors would fight.
+  if (options.syncTemplate ?? true) {
+    const matchingTemplateId = defaultTemplateId();
+    if (matchingTemplateId) selectTemplate(matchingTemplateId);
+  }
 }
 
 function inferReportTypeValue(contractType?: string | null, category?: string | null): string {
@@ -1116,7 +1140,7 @@ function defaultTemplateId(): string | null {
           : templates.value[0]?._id ?? null);
 }
 
-function selectTemplate(id: string | null) {
+function selectTemplate(id: string | null, options: { syncReportType?: boolean } = {}) {
   templateId.value = id;
   template.value = templates.value.find((t) => t._id === id) ?? null;
   if (!template.value) {
@@ -1129,6 +1153,19 @@ function selectTemplate(id: string | null) {
     nextValues[field.bind] = templateValues.value[field.bind] || defaultValue;
   }
   templateValues.value = nextValues;
+
+  // syncReportType is off when applyReportType() itself called this (the type
+  // already drove the pick, deriving it back would be a no-op at best) and on when
+  // the user picked a template directly — a template that names its own report
+  // type via reportTypeKey should drive the type selector, not just sit next to it
+  // showing the wrong one. A template with no reportTypeKey (a custom layout) is
+  // left alone: it isn't tied to one legal report type, so there's nothing to sync.
+  if ((options.syncReportType ?? false) && template.value.reportTypeKey) {
+    const preset = reportTypePresets.find((p) => p.value === template.value?.reportTypeKey);
+    if (preset && preset.value !== reportType.value) {
+      applyReportType(preset.value, {syncTemplate: false});
+    }
+  }
 }
 
 function openCreatePrintTemplate() {
@@ -2060,6 +2097,7 @@ defineExpose({open, openForUpdate});
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 100px;
 }
 
 .hm-field--full {
