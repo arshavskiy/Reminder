@@ -40,6 +40,8 @@
     "invoices:rejection-labels": "tsx src/scripts/backfillInvoiceRejectionLabels.ts --apply",
     "invoices:rejection-labels:dry": "tsx src/scripts/backfillInvoiceRejectionLabels.ts",
     "doc-templates:seed": "tsx src/scripts/seedDocTemplates.ts",
+    "print-templates:seed-inspections": "tsx src/scripts/seedInspectionPrintTemplates.ts",
+    "print-templates:seed-inspections:apply": "tsx src/scripts/seedInspectionPrintTemplates.ts --apply",
     "templates:sync-prod": "tsx src/scripts/syncEmailTemplateToProduction.ts --apply",
     "templates:sync-prod:dry": "tsx src/scripts/syncEmailTemplateToProduction.ts",
     "gmail:seed-search-providers": "tsx src/scripts/seedGmailSearchProviders.ts",

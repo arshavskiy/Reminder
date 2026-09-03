@@ -26,6 +26,7 @@ export interface HydraulicCheckDraftState {
   reminderMode: "months" | "date";
   reminderDateMs: number | null;
     intervalMonths: number;
+    reportType?: string;
   templateId: string | null;
   templateValues: Record<string, string>;
   savedAt: string;

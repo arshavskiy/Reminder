@@ -330,6 +330,7 @@ export interface EquipmentHistoryEvent {
 export interface HydraulicCheckRequest {
   client_id?: string;
   contract_number?: string;
+    contract_type?: string;
   business: {
     display_name: string;
     entity_type?: string;

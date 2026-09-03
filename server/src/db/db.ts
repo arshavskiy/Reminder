@@ -402,6 +402,8 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("print_templates").createIndex({ user_id: 1 });
   await db.collection("print_templates").createIndex({ user_id: 1, name: 1 });
   await db.collection("print_templates").createIndex({is_shared: 1}, {sparse: true});
+    await db.collection("print_templates").createIndex({system_key: 1}, {unique: true, sparse: true});
+    await db.collection("print_templates").createIndex({reportTypeKey: 1}, {sparse: true});
 
   // print_template_drafts
   try { await db.collection("print_template_drafts").dropIndex("user_id_1_template_id_1"); } catch { /* didn't exist */ }

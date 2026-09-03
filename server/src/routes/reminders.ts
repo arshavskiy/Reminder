@@ -21,7 +21,7 @@ import {
 import {incrementReminderUsage} from "../quotas/userUsageCounters";
 
 const MIN_INSPECTION_INTERVAL_MONTHS = 1;
-const MAX_INSPECTION_INTERVAL_MONTHS = 24;
+const MAX_INSPECTION_INTERVAL_MONTHS = 26;
 
 function clampInspectionIntervalMonths(value: number): number {
     if (!Number.isFinite(value)) return 4;
@@ -411,6 +411,7 @@ export function registerReminderRoutes(app: express.Application) {
       };
       check_date?: string;
       expiry_date?: string;
+        contract_type?: string;
       interval_months?: number;
       skip_reminders?: boolean;
         editor_type?: "grid" | "sections";
@@ -560,6 +561,7 @@ export function registerReminderRoutes(app: express.Application) {
     }
 
     const equipmentName = body.equipment?.name?.trim() || clientDisplayName;
+      const contractType = body.contract_type?.trim() || "תסקיר בדיקה";
     const requestedSerial = body.equipment?.serial_number?.trim() || undefined;
     const licenseNumber = body.equipment?.license_number?.trim() || null;
     const contactPerson = body.business?.contact_person?.trim() || selectedClient?.contact_person || null;
@@ -650,7 +652,7 @@ export function registerReminderRoutes(app: express.Application) {
     const contractDoc = {
       user_id: userId,
       client_id: clientId,
-      contract_type: "בדיקה הידראולית",
+        contract_type: contractType,
       contract_number: reportNumber,
       start_date: startDate,
       expiry_date: expiryDate,
@@ -658,6 +660,7 @@ export function registerReminderRoutes(app: express.Application) {
       summary: equipmentDescription,
       manual_fields: {
         inspection_interval_months: intervalMonths,
+          contract_type: contractType,
         contact_person: contactPerson,
         contact_phone: contactPhone,
         contact_email: contactEmail,
@@ -709,7 +712,7 @@ export function registerReminderRoutes(app: express.Application) {
             client_email: contactEmail,
             client_phone: contactPhone,
             contract_number: reportNumber,
-            contract_type: "בדיקה הידראולית",
+              contract_type: contractType,
             equipment_type: category,
             manufacturer: body.equipment?.manufacturer?.trim() || null,
             model: body.equipment?.model?.trim() || null,

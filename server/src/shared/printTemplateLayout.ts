@@ -139,8 +139,220 @@ export const DEFAULT_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
     {label: 'עומס עבודה בטוח (ק"ג)', bind: "load_capacity_work"},
 ];
 
-const SECTION4_STATIC_TEXT =
-    'אישור זה מותנה בתנאי שמבצעים שימוש ותחזוקה במכונת הרמה על פי חוקים ותקנות, תקנים רשמיים והוראות יצרן, תסקיר זה מייצג מצב מכונת הרמה ביום הבדיקה. שימוש בציוד אסור במידה ואירע בו ליקוי או פג תוקפו של תסקיר זה. תסקיר זה אינו מהווה תעודת אחריות או ביטוח. יש לעבוד לפי טבלת העומסים של המנוף. לעבודה על קרקע יציבה בלבד. חובה לפתוח מייצבים מקסימאלי בכל עבודה. הפעלת המנוף מותרת למנופאי מוסמך בלבד.';
+const ACCESSORY_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
+    {label: "תיאור האביזר", bind: "description"},
+    {label: "כמות", bind: "quantity"},
+    {label: "יצרן", bind: "manufacturer"},
+    {label: "דגם/סוג", bind: "model"},
+    {label: "מס׳ סידורי/זיהוי", bind: "serial_number"},
+    {label: 'עומס עבודה בטוח (ק"ג)', bind: "load_capacity_work"},
+    {label: "הערות", bind: "equipment_description"},
+];
+
+const PRESSURE_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
+    {label: "תיאור המתקן", bind: "description"},
+    {label: "יצרן", bind: "manufacturer"},
+    {label: "דגם", bind: "model"},
+    {label: "מס׳ סידורי", bind: "serial_number"},
+    {label: "מס׳ רישוי/זיהוי", bind: "license_number"},
+    {label: "לחץ עבודה מותר", bind: "load_capacity_work"},
+    {label: "לחץ בדיקה/ניסוי", bind: "load_capacity_test"},
+];
+
+const ELEVATOR_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
+    {label: "תיאור", bind: "description"},
+    {label: "יצרן", bind: "manufacturer"},
+    {label: "דגם", bind: "model"},
+    {label: "מס׳ סידורי", bind: "serial_number"},
+    {label: "מס׳ רישוי/זיהוי", bind: "license_number"},
+    {label: "מקום ההתקנה", bind: "inspection_location"},
+];
+
+const COMMON_LEGAL_TEXT =
+    "התסקיר מתייחס למצב הציוד ביום הבדיקה בלבד ואינו מחליף תחזוקה שוטפת, הוראות יצרן, תקנים מחייבים או הוראות כל דין. במקרה של ליקוי המסכן את המשתמשים אין להפעיל את הציוד עד לתיקון הליקוי ואישור מתאים.";
+
+export interface InspectionPrintTemplatePreset {
+    key: string;
+    name: string;
+    reportTypeLabel: string;
+    contractType: string;
+    category: string;
+    intervalMonths: number;
+    title: string;
+    subtitle: string;
+    equipmentTitle: string;
+    equipmentFieldsTitle: string;
+    equipmentColumns: PrintTemplateLayoutEquipmentColumn[];
+    legalText: string;
+}
+
+export const INSPECTION_PRINT_TEMPLATE_PRESETS: InspectionPrintTemplatePreset[] = [
+    {
+        key: "lifting_machine",
+        name: "תסקיר מכונות הרמה",
+        reportTypeLabel: "תסקיר מכונות הרמה",
+        contractType: "תסקיר בדיקה וניסוי מכונות הרמה",
+        category: "lift",
+        intervalMonths: 14,
+        title: "תסקיר ניסוי ובדיקה של מכונת הרמה",
+        subtitle: 'פקודת הבטיחות בעבודה (נוסח חדש) תש"ל-1970 סעיפים 81 ו-86',
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור מכונת הרמה",
+        equipmentColumns: DEFAULT_EQUIPMENT_COLUMNS,
+        legalText:
+            "התסקיר נערך לבדיקת מכונת הרמה בהתאם לפקודת הבטיחות בעבודה (נוסח חדש), תש\"ל-1970, ובכלל זה סעיפים 81 ו-86. בדיקה תקופתית נדרשת לכל היותר אחת ל-14 חודשים, אלא אם נקבעה דרישה מחמירה יותר לפי דין, הוראות יצרן או החלטת הבודק. יש להפעיל את הציוד לפי עומסי העבודה המאושרים, טבלת העומסים, תנאי האתר והוראות היצרן. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "lifting_accessory",
+        name: "תסקיר אביזרי הרמה",
+        reportTypeLabel: "תסקיר אביזרי הרמה",
+        contractType: "תסקיר בדיקה וניסוי אביזרי הרמה",
+        category: "accessory",
+        intervalMonths: 6,
+        title: "תסקיר ניסוי ובדיקה של אביזרי הרמה",
+        subtitle: 'פקודת הבטיחות בעבודה (נוסח חדש) תש"ל-1970 סעיפים 75 ו-76',
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור אביזרי הרמה",
+        equipmentColumns: ACCESSORY_EQUIPMENT_COLUMNS,
+        legalText:
+            "התסקיר נערך לבדיקת אביזרי הרמה לפי פקודת הבטיחות בעבודה (נוסח חדש), תש\"ל-1970, סעיפים 75 ו-76. אביזרי הרמה יישאו זיהוי וסימון עומס עבודה בטוח, וייבדקו לפחות אחת ל-6 חודשים. אין להשתמש באביזר שחסר זיהוי/סימון, שפג תוקף בדיקתו או שנמצא בו ליקוי. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "elevator",
+        name: "תסקיר מעלית",
+        reportTypeLabel: "תסקיר מעלית",
+        contractType: "תסקיר בדיקה תקופתית למעלית",
+        category: "elevator",
+        intervalMonths: 6,
+        title: "תסקיר בדיקה תקופתית למעלית",
+        subtitle: "בדיקה תקופתית על ידי בודק מוסמך למעליות",
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור המעלית",
+        equipmentColumns: ELEVATOR_EQUIPMENT_COLUMNS,
+        legalText:
+            "התסקיר נערך לבדיקת מעלית תקופתית על ידי בודק מוסמך. מעלית מחויבת בבדיקה תקופתית אחת ל-6 חודשים. אם נמצאו ליקויים העלולים לסכן משתמשים, יש להשבית את המעלית עד לתיקון הליקויים ולקבלת אישור מתאים. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "escalator",
+        name: "תסקיר דרגנוע",
+        reportTypeLabel: "תסקיר דרגנוע",
+        contractType: "תסקיר בדיקה תקופתית לדרגנוע",
+        category: "escalator",
+        intervalMonths: 6,
+        title: "תסקיר בדיקה תקופתית לדרגנוע",
+        subtitle: "בדיקה תקופתית על ידי בודק מוסמך לדרגנועים",
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור הדרגנוע",
+        equipmentColumns: ELEVATOR_EQUIPMENT_COLUMNS,
+        legalText:
+            "התסקיר נערך לבדיקת דרגנוע או מסוע נוסעים על ידי בודק מוסמך בהתאם להסמכתו ולדרישות הדין. יש לבדוק מערכות עצירה, מדרגות, מעקות, מסרקים, שילוט והגנות, ולפעול לפי הוראות היצרן והוראות מינהל הבטיחות. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "tower_crane",
+        name: "תסקיר עגורן צריח",
+        reportTypeLabel: "תסקיר עגורן צריח באתר בנייה",
+        contractType: "תסקיר בדיקה תקופתית לעגורן צריח",
+        category: "tower_crane",
+        intervalMonths: 6,
+        title: "תסקיר בדיקה תקופתית לעגורן צריח",
+        subtitle: 'פקודת הבטיחות בעבודה (נוסח חדש) תש"ל-1970 והוראות בטיחות בעגורני צריח',
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור עגורן הצריח",
+        equipmentColumns: DEFAULT_EQUIPMENT_COLUMNS,
+        legalText:
+            "עגורן צריח באתר בנייה נדרש בבדיקה תקופתית אחת ל-6 חודשים. יש לוודא התאמה להוראות היצרן, טבלת עומסים, מצב השירות, עיגונים/יסודות, מערכות חשמל, בלמים ותנאי מזג אוויר. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "work_platform",
+        name: "תסקיר במת הרמה",
+        reportTypeLabel: "תסקיר במת הרמה באתר בנייה",
+        contractType: "תסקיר בדיקה תקופתית לבמת הרמה",
+        category: "work_platform",
+        intervalMonths: 6,
+        title: "תסקיר בדיקה תקופתית לבמת הרמה",
+        subtitle: "בדיקת מתקן הרמה באתר בנייה על ידי בודק מוסמך",
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור במת ההרמה",
+        equipmentColumns: DEFAULT_EQUIPMENT_COLUMNS,
+        legalText:
+            "במת הרמה באתר בנייה נדרשת בבדיקה תקופתית אחת ל-6 חודשים. אין להפעיל את הבמה במקרה של ליקוי בטיחותי, חריגה מעומס, חסר במעקות/מייצבים או אי התאמה להוראות היצרן. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "powered_scaffold",
+        name: "תסקיר פיגום ממוכן",
+        reportTypeLabel: "תסקיר פיגום ממוכן",
+        contractType: "תסקיר בדיקה תקופתית לפיגום ממוכן",
+        category: "powered_scaffold",
+        intervalMonths: 6,
+        title: "תסקיר בדיקה תקופתית לפיגום ממוכן",
+        subtitle: "בדיקת פיגום ממוכן על ידי בודק מוסמך",
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור הפיגום הממוכן",
+        equipmentColumns: DEFAULT_EQUIPMENT_COLUMNS,
+        legalText:
+            "פיגום ממוכן נדרש בבדיקה תקופתית אחת ל-6 חודשים. יש לבדוק עיגון, מנגנוני הרמה, בלמים, גידור, משטחי עבודה ומערכות בטיחות לפי הוראות היצרן והדין. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "air_receiver",
+        name: "תסקיר קולט אוויר",
+        reportTypeLabel: "תסקיר קולט אוויר / קומפרסור",
+        contractType: "תסקיר בדיקה לקולט אוויר",
+        category: "air_receiver",
+        intervalMonths: 26,
+        title: "תסקיר בדיקה לקולט אוויר",
+        subtitle: 'תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ"ז-1967',
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור קולט האוויר",
+        equipmentColumns: PRESSURE_EQUIPMENT_COLUMNS,
+        legalText:
+            "קולט אוויר/קומפרסור הוא מיתקן לחץ לפי תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ\"ז-1967. התסקיר לקולט אוויר נערך לפי תקנה 5 והתוספת הרביעית. יש לציין לחץ עבודה מותר, ניסויים/בדיקות שנעשו, מצב האבזרים ושסתומי הבטיחות. התסקיר יימסר לתופש המקום והעתק למפקח עבודה אזורי בתוך 21 ימים. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "steam_receiver",
+        name: "תסקיר קולט קיטור",
+        reportTypeLabel: "תסקיר קולט קיטור",
+        contractType: "תסקיר בדיקה לקולט קיטור",
+        category: "steam_receiver",
+        intervalMonths: 26,
+        title: "תסקיר בדיקה לקולט קיטור",
+        subtitle: 'תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ"ז-1967',
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור קולט הקיטור",
+        equipmentColumns: PRESSURE_EQUIPMENT_COLUMNS,
+        legalText:
+            "קולט קיטור הוא מיתקן לחץ לפי תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ\"ז-1967. התסקיר לקולט קיטור נערך לפי תקנה 5 והתוספת הרביעית. יש לציין לחץ עבודה מותר, ניסויים/בדיקות שנעשו, מצב האבזרים ושסתומי הבטיחות. התסקיר יימסר לתופש המקום והעתק למפקח עבודה אזורי בתוך 21 ימים. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "steam_boiler",
+        name: "תסקיר דוד קיטור",
+        reportTypeLabel: "תסקיר דוד קיטור",
+        contractType: "תסקיר בדיקה לדוד קיטור",
+        category: "steam_boiler",
+        intervalMonths: 14,
+        title: "תסקיר בדיקה לדוד קיטור",
+        subtitle: 'תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ"ז-1967',
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור דוד הקיטור",
+        equipmentColumns: PRESSURE_EQUIPMENT_COLUMNS,
+        legalText:
+            "דוד קיטור הוא מיתקן לחץ. תקנה 4 מבחינה בין תסקיר בדיקה כשהדוד קר לבין בדיקה בלחץ קיטור רגיל. יש לציין לחץ עבודה מותר, טיב הניסויים, שסתומי בטיחות ותנאי הפעלה שנקבעו בתסקיר. התסקיר יימסר לתופש המקום והעתק למפקח עבודה אזורי בתוך 21 ימים. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "pressure_vessel",
+        name: "תסקיר כלי לחץ",
+        reportTypeLabel: "תסקיר כלי לחץ",
+        contractType: "תסקיר בדיקה לכלי לחץ",
+        category: "pressure_vessel",
+        intervalMonths: 26,
+        title: "תסקיר בדיקה למיתקן לחץ",
+        subtitle: 'תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ"ז-1967',
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור מיתקן הלחץ",
+        equipmentColumns: PRESSURE_EQUIPMENT_COLUMNS,
+        legalText:
+            "התסקיר נערך למיתקן לחץ לפי תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ\"ז-1967. יש לציין את פרטי המתקן, לחץ העבודה המותר, הניסויים והבדיקות שבוצעו, תוצאות הבדיקה והוראות הפעלה או תיקון. התסקיר יימסר לתופש המקום והעתק למפקח עבודה אזורי בתוך 21 ימים. " + COMMON_LEGAL_TEXT,
+    },
+];
 
 export const DEFAULT_SIGNATURE_CERTIFICATION =
     "אני: {{engineer_name}} בעל תעודה מס': {{inspector_number}}\n" +
@@ -149,13 +361,23 @@ export const DEFAULT_SIGNATURE_CERTIFICATION =
     "פרטים מלאים: {{engineer_address}} טלפון: {{engineer_phone}}";
 
 export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
+    return createInspectionPrintTemplateLayout("lifting_machine");
+}
+
+export function getInspectionPrintTemplatePreset(key: string): InspectionPrintTemplatePreset {
+    return INSPECTION_PRINT_TEMPLATE_PRESETS.find((preset) => preset.key === key)
+        ?? INSPECTION_PRINT_TEMPLATE_PRESETS[0];
+}
+
+export function createInspectionPrintTemplateLayout(keyOrPreset: string | InspectionPrintTemplatePreset): PrintTemplateLayout {
+    const preset = typeof keyOrPreset === "string" ? getInspectionPrintTemplatePreset(keyOrPreset) : keyOrPreset;
     return {
         styles: {borderColor: "#111111", borderWidth: "thin"},
         sections: [
             {
                 type: "header",
-                title: "תסקיר ניסוי ובדיקה של מכונות הרמה ואביזריהן",
-                subtitle: 'פקודת הבטיחות בעבודה (נוסח חדש) תש"ל-1970 סעיפים 75,76,81,86',
+                title: preset.title,
+                subtitle: preset.subtitle,
                 fields: [
                     {bind: "document_number", label: "מספר תסקיר בדיקה"},
                     {bind: "prev_report_number", label: "מספר תסקיר קודם"},
@@ -184,7 +406,7 @@ export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
             },
             {
                 type: "fields",
-                title: "2. תיאור מכונת הרמה",
+                title: preset.equipmentFieldsTitle,
                 columns: 2,
                 fields: [
                     {bind: "name", label: "שם הציוד"},
@@ -193,14 +415,8 @@ export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
             },
             {
                 type: "equipment_table",
-                title: "",
-                columns: DEFAULT_EQUIPMENT_COLUMNS.map((c) => ({...c})),
-            },
-            {
-                type: "static_text",
-                title: "",
-                text: "יש לשמור תסקיר זה לביקורת מפקח העבודה",
-                style: {noBorder: true},
+                title: preset.equipmentTitle,
+                columns: preset.equipmentColumns.map((c) => ({...c})),
             },
             {
                 type: "findings",
@@ -216,12 +432,36 @@ export function createDefaultPrintTemplateLayout(): PrintTemplateLayout {
             {
                 type: "static_text",
                 title: "4. הערות נוספות",
-                text: SECTION4_STATIC_TEXT,
+                text: preset.legalText,
             },
             {type: "signature", enabled: true, align: "left"},
             createDefaultFooterSection(),
         ],
     };
+}
+
+export function createInspectionPrintTemplateSeeds(now: string = new Date().toISOString()) {
+    return INSPECTION_PRINT_TEMPLATE_PRESETS.map((preset) => ({
+        user_id: null,
+        name: preset.name,
+        page: "A4" as const,
+        dir: "rtl" as const,
+        cols: [],
+        rows: [],
+        cells: [],
+        hasFixedFrame: false,
+        editorType: "sections" as const,
+        layout: createInspectionPrintTemplateLayout(preset),
+        is_shared: true,
+        system_key: `inspection:${preset.key}`,
+        reportTypeKey: preset.key,
+        reportTypeLabel: preset.reportTypeLabel,
+        contractType: preset.contractType,
+        category: preset.category,
+        inspectionIntervalMonths: preset.intervalMonths,
+        created_at: now,
+        updated_at: now,
+    }));
 }
 
 export function createDefaultFooterSection(): PrintTemplateLayoutFooterSection {

@@ -48,6 +48,17 @@
               <!-- Step: Basic -->
               <section v-show="activeStep === 'basic'" class="hm-section">
                 <div class="hm-section__grid hm-section__grid--4">
+                  <div class="hm-field hm-field--span2">
+                    <label class="required">סוג תסקיר</label>
+                    <n-select
+                        v-model:value="reportType"
+                        :options="reportTypeOptions"
+                        :virtual-scroll="false"
+                        filterable
+                        placeholder="בחר סוג תסקיר"
+                        @update:value="applyReportType"
+                    />
+                  </div>
                   <div class="hm-field">
                     <label>מספר תסקיר</label>
                     <n-input
@@ -277,7 +288,7 @@
                     </div>
                     <div class="hm-field">
                       <label>שם הציוד</label>
-                      <n-input v-model:value="equipment.name" placeholder="מלגזה / במה / עגורן"/>
+                      <n-input v-model:value="equipment.name" :placeholder="selectedReportType.equipmentPlaceholder"/>
                     </div>
                     <div class="hm-field">
                       <label>יצרן</label>
@@ -313,7 +324,7 @@
                           v-model:value="equipment.description"
                           :rows="2"
                           type="textarea"
-                          placeholder="תיאור הציוד שנבדק"
+                          :placeholder="selectedReportType.descriptionPlaceholder"
                       />
                     </div>
                   </div>
@@ -591,11 +602,15 @@ const knownCategories = ref<{ id?: string; value: string; label: string }[]>([])
 const categoryDefaults: { label: string; value: string }[] = [
   {label: "מכונות הרמה", value: "lift"},
   {label: "אביזרי הרמה", value: "accessory"},
-  {label: "פיגומים", value: "scaffold"},
-  {label: "מעליות", value: "ladder"},
-  {label: "מעלונים", value: "balloon"},
-  {label: "קולטי אוויר", value: "intake"},
-  {label: "קולטי קיטור", value: "extractor"},
+  {label: "פיגום ממוכן", value: "powered_scaffold"},
+  {label: "עגורן צריח", value: "tower_crane"},
+  {label: "במת הרמה", value: "work_platform"},
+  {label: "מעליות", value: "elevator"},
+  {label: "דרגנועים", value: "escalator"},
+  {label: "דוד קיטור", value: "steam_boiler"},
+  {label: "קולט קיטור", value: "steam_receiver"},
+  {label: "קולט אוויר / קומפרסור", value: "air_receiver"},
+  {label: "כלי לחץ", value: "pressure_vessel"},
   {label: "אחר", value: "other"},
 ];
 const categoryOptions = computed(() => {
@@ -620,6 +635,121 @@ const expiryDateMs = ref<number | null>(null);
 const reminderDaysBefore = ref<number>(30);
 const reminderDateMs = ref<number | null>(null);
 const intervalMonths = ref<number>(4);
+const reportType = ref("lifting_machine");
+type ReportTypePreset = {
+  value: string;
+  label: string;
+  contractType: string;
+  category: string;
+  intervalMonths: number;
+  equipmentPlaceholder: string;
+  descriptionPlaceholder: string;
+};
+const reportTypePresets: ReportTypePreset[] = [
+  {
+    value: "lifting_machine",
+    label: "תסקיר מכונות הרמה",
+    contractType: "תסקיר בדיקה וניסוי מכונות הרמה",
+    category: "lift",
+    intervalMonths: 14,
+    equipmentPlaceholder: "מלגזה / מנוף משאית / כננת / במה",
+    descriptionPlaceholder: "תיאור מכונת ההרמה, מיקום, מספר פנימי וממצאים",
+  },
+  {
+    value: "lifting_accessory",
+    label: "תסקיר אביזרי הרמה",
+    contractType: "תסקיר בדיקה וניסוי אביזרי הרמה",
+    category: "accessory",
+    intervalMonths: 6,
+    equipmentPlaceholder: "שרשרת / רצועה / שאקל / אונקל / מענב",
+    descriptionPlaceholder: "רשימת האביזרים, עומס עבודה בטוח, זיהוי פריט וממצאים",
+  },
+  {
+    value: "elevator",
+    label: "תסקיר מעלית",
+    contractType: "תסקיר בדיקה תקופתית למעלית",
+    category: "elevator",
+    intervalMonths: 6,
+    equipmentPlaceholder: "מעלית נוסעים / מעלית משא",
+    descriptionPlaceholder: "פרטי המעלית, פיר, חדר מכונות, דלתות ומערכות בטיחות",
+  },
+  {
+    value: "escalator",
+    label: "תסקיר דרגנוע",
+    contractType: "תסקיר בדיקה תקופתית לדרגנוע",
+    category: "escalator",
+    intervalMonths: 6,
+    equipmentPlaceholder: "דרגנוע / מסוע נוסעים",
+    descriptionPlaceholder: "פרטי הדרגנוע, מערכות עצירה, מדרגות, מעקות וממצאים",
+  },
+  {
+    value: "tower_crane",
+    label: "תסקיר עגורן צריח באתר בנייה",
+    contractType: "תסקיר בדיקה תקופתית לעגורן צריח",
+    category: "tower_crane",
+    intervalMonths: 6,
+    equipmentPlaceholder: "עגורן צריח",
+    descriptionPlaceholder: "פרטי העגורן, תא מפעיל, מנגנוני סיבוב, בלמים, חשמל וממצאים",
+  },
+  {
+    value: "work_platform",
+    label: "תסקיר במת הרמה באתר בנייה",
+    contractType: "תסקיר בדיקה תקופתית לבמת הרמה",
+    category: "work_platform",
+    intervalMonths: 6,
+    equipmentPlaceholder: "במת הרמה",
+    descriptionPlaceholder: "פרטי הבמה, מערכת הרמה, מעקות, בלמים וממצאים",
+  },
+  {
+    value: "powered_scaffold",
+    label: "תסקיר פיגום ממוכן",
+    contractType: "תסקיר בדיקה תקופתית לפיגום ממוכן",
+    category: "powered_scaffold",
+    intervalMonths: 6,
+    equipmentPlaceholder: "פיגום ממוכן",
+    descriptionPlaceholder: "פרטי הפיגום, עיגון, מנגנון הרמה, בלמים וממצאים",
+  },
+  {
+    value: "air_receiver",
+    label: "תסקיר קולט אוויר / קומפרסור",
+    contractType: "תסקיר בדיקה לקולט אוויר",
+    category: "air_receiver",
+    intervalMonths: 26,
+    equipmentPlaceholder: "קולט אוויר / קומפרסור",
+    descriptionPlaceholder: "פרטי קולט האוויר, נפח, לחץ עבודה מותר, שסתומים וממצאים",
+  },
+  {
+    value: "steam_receiver",
+    label: "תסקיר קולט קיטור",
+    contractType: "תסקיר בדיקה לקולט קיטור",
+    category: "steam_receiver",
+    intervalMonths: 26,
+    equipmentPlaceholder: "קולט קיטור",
+    descriptionPlaceholder: "פרטי קולט הקיטור, לחץ עבודה מותר, אבזרים וניסויים",
+  },
+  {
+    value: "steam_boiler",
+    label: "תסקיר דוד קיטור",
+    contractType: "תסקיר בדיקה לדוד קיטור",
+    category: "steam_boiler",
+    intervalMonths: 14,
+    equipmentPlaceholder: "דוד קיטור",
+    descriptionPlaceholder: "פרטי דוד הקיטור, בדיקה קרה/בלחץ, שסתומים ולחץ עבודה מותר",
+  },
+  {
+    value: "pressure_vessel",
+    label: "תסקיר כלי לחץ",
+    contractType: "תסקיר בדיקה לכלי לחץ",
+    category: "pressure_vessel",
+    intervalMonths: 26,
+    equipmentPlaceholder: "כלי לחץ",
+    descriptionPlaceholder: "פרטי מתקן הלחץ, לחץ עבודה מותר, ניסוי הידרולי וממצאים",
+  },
+];
+const reportTypeOptions = reportTypePresets.map((preset) => ({label: preset.label, value: preset.value}));
+const selectedReportType = computed(() =>
+    reportTypePresets.find((preset) => preset.value === reportType.value) ?? reportTypePresets[0],
+);
 const reminderDaysOptions = [
   {label: "7 ימים לפני", value: 7},
   {label: "14 ימים לפני", value: 14},
@@ -633,7 +763,7 @@ const inspectionTypeOptions = [
   {label: "חוזרת", value: "חוזרת"},
   {label: "לאחר תיקון", value: "לאחר תיקון"},
 ];
-const intervalOptions = Array.from({length: 24}, (_, i) => {
+const intervalOptions = Array.from({length: 26}, (_, i) => {
   const months = i + 1;
   return {
     label: months === 1 ? "חודש אחד" : `${months} חודשים`,
@@ -643,8 +773,8 @@ const intervalOptions = Array.from({length: 24}, (_, i) => {
 
 function clampIntervalMonths(value: unknown): number {
   const months = Math.round(Number(value));
-  if (!Number.isFinite(months) || months < 1) return 4;
-  return Math.min(24, months);
+  if (!Number.isFinite(months) || months < 1) return selectedReportType.value.intervalMonths;
+  return Math.min(26, months);
 }
 
 function calculateExpiryFromCheckDate() {
@@ -694,7 +824,8 @@ const equipmentOptions = computed(() => {
 const templateKnownFields = new Set([
   "document_number", "contract_number", "report_number", "prev_report_number",
   "start_date", "inspection_date", "check_date", "expiry_date",
-  "valid_until", "inspection_type", "inspection_location", "client_name", "client_company", "client_phone",
+  "valid_until", "inspection_type", "inspection_location", "inspection_interval_months", "report_type",
+  "client_name", "client_company", "client_phone",
   "client_mobile", "client_fax", "client_email", "client_address", "client_city", "client_id", "zip_code", "contact_person",
   "po_box", "chassis", "name", "manufacturer", "model", "serial_number", "license_number",
   "lisence_number", "load_radius", "load_capacity_test", "load_capacity_work",
@@ -859,7 +990,7 @@ function emptyEquipmentRow(): EquipmentRow {
   return {
     id: crypto.randomUUID(),
     selected_equipment_id: null,
-    category: "lift",
+    category: selectedReportType.value.category,
     name: "",
     manufacturer: "",
     models: [],
@@ -891,7 +1022,7 @@ function defaultForm(): HydraulicCheckRequest {
     inspection_type: "תקופתית",
     inspection_location: "",
     equipment: {
-      category: "lift",
+      category: selectedReportType.value.category,
       name: "",
       manufacturer: "",
       model: "",
@@ -901,8 +1032,34 @@ function defaultForm(): HydraulicCheckRequest {
       load_radius: "",
       description: "",
     },
-    interval_months: 4,
+    contract_type: selectedReportType.value.contractType,
+    interval_months: selectedReportType.value.intervalMonths,
   };
+}
+
+function applyReportType(value?: string) {
+  const preset = reportTypePresets.find((item) => item.value === (value ?? reportType.value)) ?? reportTypePresets[0];
+  reportType.value = preset.value;
+  intervalMonths.value = preset.intervalMonths;
+  if (hydraulicForm.value) {
+    hydraulicForm.value.contract_type = preset.contractType;
+    hydraulicForm.value.equipment.category = preset.category as HydraulicCheckRequest["equipment"]["category"];
+  }
+  equipmentRows.value = equipmentRows.value.map((row) => ({
+    ...row,
+    category: preset.category,
+  }));
+  calculateExpiryFromCheckDate();
+  const matchingTemplateId = defaultTemplateId();
+  if (matchingTemplateId) selectTemplate(matchingTemplateId);
+}
+
+function inferReportTypeValue(contractType?: string | null, category?: string | null): string {
+  const contract = String(contractType ?? "");
+  const byContract = reportTypePresets.find((preset) => preset.contractType === contract || contract.includes(preset.label.replace(/^תסקיר\s+/, "")));
+  if (byContract) return byContract.value;
+  const byCategory = reportTypePresets.find((preset) => preset.category === category);
+  return byCategory?.value ?? "lifting_machine";
 }
 
 // ── Data loading ─────────────────────────────────────────────────────────────
@@ -987,6 +1144,13 @@ async function loadPrintTemplates() {
 }
 
 function defaultTemplateId(): string | null {
+  const selected = selectedReportType.value;
+  const exact = templates.value.find((t) => t.editorType === "sections" && t.reportTypeKey === selected.value);
+  if (exact) return exact._id;
+  const byContractType = templates.value.find((t) => t.editorType === "sections" && t.contractType === selected.contractType);
+  if (byContractType) return byContractType._id;
+  const bySystemKey = templates.value.find((t) => t.editorType === "sections" && t.system_key === `inspection:${selected.value}`);
+  if (bySystemKey) return bySystemKey._id;
   return templates.value.find((t) => t.editorType === "sections")?._id
       ?? (templates.value.some((t) => t._id === HYDRAULIC_PRINT_TEMPLATE_ID)
           ? HYDRAULIC_PRINT_TEMPLATE_ID
@@ -1145,6 +1309,7 @@ function saveCurrentDraft() {
     expiryDateMs: expiryDateMs.value,
     reminderDaysBefore: reminderDaysBefore.value,
     intervalMonths: intervalMonths.value,
+    reportType: reportType.value,
     templateId: templateId.value,
     templateValues: templateValues.value,
   });
@@ -1187,7 +1352,8 @@ async function open() {
   checkDateMs.value = draft?.checkDateMs ?? Date.now();
   expiryDateMs.value = draft?.expiryDateMs ?? null;
   reminderDaysBefore.value = draft?.reminderDaysBefore ?? 30;
-  intervalMonths.value = clampIntervalMonths(draft?.intervalMonths ?? 4);
+  reportType.value = draft?.reportType ?? inferReportTypeValue(draft?.form?.contract_type, draft?.equipmentRows?.[0]?.category);
+  intervalMonths.value = clampIntervalMonths(draft?.intervalMonths ?? selectedReportType.value.intervalMonths);
   prevReportNumber.value = draft?.prevReportNumber ?? "";
   equipmentRows.value = draft?.equipmentRows?.length
       ? draft.equipmentRows.map((row: any) => ({
@@ -1204,9 +1370,11 @@ async function open() {
   templateValues.value = {...(draft?.templateValues ?? {})};
   hydraulicForm.value = draft?.form ? {
     ...draft.form,
+    contract_type: draft.form.contract_type ?? selectedReportType.value.contractType,
     business: {...draft.form.business},
     equipment: {...draft.form.equipment}
   } : defaultForm();
+  if (!expiryDateMs.value) calculateExpiryFromCheckDate();
   hydratingDraft.value = false;
   loading.value = false;
   void loadPrintTemplates().then(() => {
@@ -1258,6 +1426,9 @@ function buildTemplateDraft(): Record<string, string> {
     check_date: checkDate,
     expiry_date: expiryDate,
     valid_until: expiryDate,
+    contract_type: selectedReportType.value.contractType,
+    report_type: selectedReportType.value.label,
+    inspection_interval_months: String(intervalMonths.value),
     inspection_type: form.inspection_type || "תקופתית",
     inspection_location: form.inspection_location ?? "",
     client_name: business.contact_person ?? "",
@@ -1356,6 +1527,7 @@ async function createContract() {
   const payload: HydraulicCheckRequest = {
     ...hydraulicForm.value,
     contract_number: contractNumber || undefined,
+    contract_type: selectedReportType.value.contractType,
     client_id: clientId.value ?? undefined,
     interval_months: intervalMonths.value,
     skip_reminders: false,
@@ -1383,7 +1555,7 @@ async function updateContract(contractId: string) {
   await api.contracts.update(contractId, {
     client_id: clientId.value ?? undefined,
     contract_number: contractNumber || undefined,
-    contract_type: "בדיקה הידראולית",
+    contract_type: selectedReportType.value.contractType,
     start_date: checkDate,
     expiry_date: expiryDate,
     summary: data.equipment_description || data.checked_equipment || data.name || undefined,
@@ -1392,6 +1564,8 @@ async function updateContract(contractId: string) {
     manual_fields: {
       ...data,
       inspection_interval_months: intervalMonths.value,
+      contract_type: selectedReportType.value.contractType,
+      report_type: selectedReportType.value.label,
       _equipment: equipmentRows.value.map((eq) => ({
         name: eq.name,
         manufacturer: eq.manufacturer,
@@ -1522,7 +1696,8 @@ async function openForUpdate(contractId: string, returnTo?: string) {
   checkDateMs.value = row.start_date ? new Date(dateOnly(row.start_date)).getTime() : Date.now();
   expiryDateMs.value = row.expiry_date ? new Date(dateOnly(row.expiry_date)).getTime() : null;
   reminderDaysBefore.value = 30;
-  intervalMonths.value = clampIntervalMonths((row as any).inspection_interval_months ?? manual.inspection_interval_months ?? 4);
+  reportType.value = inferReportTypeValue(row.contract_type, firstEquipment?.category);
+  intervalMonths.value = clampIntervalMonths((row as any).inspection_interval_months ?? manual.inspection_interval_months ?? selectedReportType.value.intervalMonths);
   hydraulicForm.value = {
     contract_number: contractNumberInputValue(row.contract_number),
     business: {
@@ -1540,8 +1715,9 @@ async function openForUpdate(contractId: string, returnTo?: string) {
     },
     inspection_type: manual.inspection_type || "תקופתית",
     inspection_location: manual.inspection_location ?? "",
+    contract_type: row.contract_type ?? selectedReportType.value.contractType,
     equipment: {
-      category: (firstEquipment?.category ?? "lift") as HydraulicCheckRequest["equipment"]["category"],
+      category: (firstEquipment?.category ?? selectedReportType.value.category) as HydraulicCheckRequest["equipment"]["category"],
       name: String(firstEquipment?.name ?? manual.name ?? manual.checked_equipment ?? ""),
       manufacturer: String(firstEquipment?.manufacturer ?? manual.manufacturer ?? ""),
       model: String(firstEquipment?.model ?? manual.model ?? ""),
@@ -1556,7 +1732,7 @@ async function openForUpdate(contractId: string, returnTo?: string) {
   equipmentRows.value = (row._equipment?.length ? row._equipment : [firstEquipment].filter(Boolean)).map((eq: any) => ({
     id: crypto.randomUUID(),
     selected_equipment_id: null,
-    category: eq?.category ?? "lift",
+    category: eq?.category ?? selectedReportType.value.category,
     name: String(eq?.name ?? manual.name ?? manual.checked_equipment ?? ""),
     manufacturer: String(eq?.manufacturer ?? manual.manufacturer ?? ""),
     models: eq?.models?.length ? eq.models : eq?.model ? [String(eq.model)] : [],

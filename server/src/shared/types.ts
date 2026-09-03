@@ -543,6 +543,12 @@ export interface PrintTemplate {
   layout?: import("./printTemplateLayout.js").PrintTemplateLayout;
   user_id?: string;
   is_shared?: boolean;
+    system_key?: string;
+    reportTypeKey?: string;
+    reportTypeLabel?: string;
+    contractType?: string;
+    category?: string;
+    inspectionIntervalMonths?: number;
   created_at: string;
   updated_at: string;
 }
