@@ -82,6 +82,7 @@
         @dismiss-reminder="dismissLinkedReminder"
         @edit="editLinkedContract"
         @open-document="openContractDocument"
+        @preview-reminder="openReminderPreview"
         @send-reminder="sendLinkedReminder"
       />
     </section>
@@ -396,6 +397,11 @@
         </div>
       </template>
     </n-modal>
+    <ReminderPreviewModal
+      v-model:show="showReminderPreview"
+      :reminder-id="previewReminderId"
+      :reminder-title="previewReminderTitle"
+    />
   </div>
 </template>
 
@@ -431,6 +437,7 @@ import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
 import ContractCard from "../components/contracts/ContractCard.vue";
+import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import MissingFieldsModal from "../components/MissingFieldsModal.vue";
 import type {ContractWithClient, DocTemplate, Document, ReminderWithContext} from "@shared/types.js";
 import {
@@ -469,6 +476,15 @@ const deleting = ref(false);
 const linkedContracts = ref<ContractWithClient[]>([]);
 const linkedReminders = ref<ReminderWithContext[]>([]);
 const sendingReminderId = ref<number | null>(null);
+const showReminderPreview = ref(false);
+const previewReminderId = ref<number | string | null>(null);
+const previewReminderTitle = ref<string | null>(null);
+
+function openReminderPreview(reminder: ReminderWithContext) {
+  previewReminderId.value = reminder.id;
+  previewReminderTitle.value = reminder.title ?? doc.value?.file_name ?? null;
+  showReminderPreview.value = true;
+}
 const docTemplate = ref<DocTemplate | null>(null);
 const documentTypeDisplay = computed(() => {
   const fromTpl = documentTypeFromTemplate(docTemplate.value);
