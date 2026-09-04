@@ -159,6 +159,28 @@ const PRESSURE_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
     {label: "לחץ בדיקה/ניסוי", bind: "load_capacity_test"},
 ];
 
+// Matches Part 2 (תיאור הקולט) of a real inspector-issued air-receiver report,
+// which describes the vessel in far more physical detail than the generic
+// pressure-equipment columns above — this is scoped to air_receiver only for
+// now; the other pressure types (steam_receiver, steam_boiler, pressure_vessel)
+// still use PRESSURE_EQUIPMENT_COLUMNS until confirmed working here first.
+const AIR_RECEIVER_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
+    {label: "מיקום", bind: "equipment_location"},
+    {label: "יצרן", bind: "manufacturer"},
+    {label: "דגם", bind: "model"},
+    {label: "מס״ד פנימי", bind: "serial_number"},
+    {label: "נפח (ליטר)", bind: "volume_liters"},
+    {label: "קוטר (מ״מ)", bind: "diameter_mm"},
+    {label: "חומר", bind: "material"},
+    {label: "מבנה", bind: "construction_type"},
+    {label: "עובי דופן (מ״מ)", bind: "wall_thickness_mm"},
+    {label: "עובי כיפות (מ״מ)", bind: "cap_thickness_mm"},
+    {label: "פתחי בקרה וניקוי", bind: "access_openings"},
+    {label: "פקק", bind: "plug_present"},
+    {label: "כווה", bind: "corrosion_present"},
+    {label: "קוטר שסתום בטחון (מ״מ)", bind: "safety_valve_diameter_mm"},
+];
+
 const ELEVATOR_EQUIPMENT_COLUMNS: PrintTemplateLayoutEquipmentColumn[] = [
     {label: "תיאור", bind: "description"},
     {label: "יצרן", bind: "manufacturer"},
@@ -307,7 +329,7 @@ export const INSPECTION_PRINT_TEMPLATE_PRESETS: InspectionPrintTemplatePreset[] 
         subtitle: 'פקודת הבטיחות בעבודה (נוסח חדש) תש"ל 1970- סעיפים 115,116',
         equipmentTitle: "",
         equipmentFieldsTitle: "2. תיאור קולט האוויר",
-        equipmentColumns: PRESSURE_EQUIPMENT_COLUMNS,
+        equipmentColumns: AIR_RECEIVER_EQUIPMENT_COLUMNS,
         legalText:
             "קולט אוויר/קומפרסור הוא מיתקן לחץ לפי תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ\"ז-1967, ונבדק מכוח סעיפים 115,116 לפקודת הבטיחות בעבודה (נוסח חדש), תש\"ל-1970. התסקיר לקולט אוויר נערך לפי תקנה 5 והתוספת הרביעית. יש לציין לחץ עבודה מותר, ניסויים/בדיקות שנעשו, מצב האבזרים ושסתומי הבטיחות. התסקיר יימסר לתופש המקום והעתק למפקח עבודה אזורי בתוך 21 ימים. " + COMMON_LEGAL_TEXT,
     },
@@ -422,9 +444,42 @@ export function createInspectionPrintTemplateLayout(keyOrPreset: string | Inspec
                 title: preset.equipmentTitle,
                 columns: preset.equipmentColumns.map((c) => ({...c})),
             },
+            // Parts 3, 4 and 6 of a real inspector-issued air-receiver report cover
+            // the last hydraulic test, the test results (including the safety-valve
+            // opening pressure), and the permitted working pressure given the test
+            // outcome — regulatory content this report type needs that a
+            // lifting-machine or elevator report doesn't. Scoped to air_receiver only
+            // for now; the findings/notes section numbering below shifts to match
+            // (5/7 instead of 3/4) only for this type.
+            ...(preset.key === "air_receiver" ? [
+                {
+                    type: "fields" as const,
+                    title: "3. פרטי ניסוי הידראולי אחרון",
+                    columns: 3,
+                    fields: [
+                        {bind: "last_test_performed_by", label: 'בוצע ע"י'},
+                        {bind: "last_test_date", label: "בתאריך"},
+                        {bind: "last_test_pressure_bar", label: "לחץ מבחן (בר)"},
+                    ],
+                },
+                {
+                    type: "fields" as const,
+                    title: "4. תוצאות הבדיקה",
+                    columns: 2,
+                    fields: [
+                        {bind: "inspection_type", label: "סוג בדיקה"},
+                        {bind: "source_pressure_limit_bar", label: "הגבלת לחץ במקור האספקה (בר)"},
+                        {bind: "receiver_condition", label: "מצב הקולט"},
+                        {bind: "accessories_condition", label: "מצב האביזרים"},
+                        {bind: "safety_valve_opening_pressure_bar", label: "לחץ פתיחה שסתום בטחון (בר)"},
+                    ],
+                },
+            ] : []),
             {
                 type: "findings",
-                title: "3. תיאור ליקויים, השיפורים, ואמצעים לתיקונים",
+                title: preset.key === "air_receiver"
+                    ? "5. תיאור ליקויים, השיפורים, ואמצעים לתיקונים"
+                    : "3. תיאור ליקויים, השיפורים, ואמצעים לתיקונים",
                 rows: [
                     {number: "1", subjectLabel: "כללי:", bind: "findings_general"},
                     {number: "2", subjectLabel: "ליקוי:", bind: "findings_remedy"},
@@ -433,9 +488,17 @@ export function createInspectionPrintTemplateLayout(keyOrPreset: string | Inspec
                 deadlineBind: "findings_deadline",
                 deadlineSuffix: "ימים — אסור לעבוד עם הפרק עד להסדרת הליקוי",
             },
+            ...(preset.key === "air_receiver" ? [{
+                type: "fields" as const,
+                title: "6. לחץ עבודה מותר בהתחשב בתנאי העבודה ותוצאות הבדיקה",
+                columns: 1,
+                fields: [
+                    {bind: "permitted_working_pressure_bar", label: "לחץ עבודה מותר (בר)"},
+                ],
+            }] : []),
             {
                 type: "static_text",
-                title: "4. הערות נוספות",
+                title: preset.key === "air_receiver" ? "הערות נוספות" : "4. הערות נוספות",
                 text: preset.legalText,
             },
             {type: "signature", enabled: true, align: "left"},
