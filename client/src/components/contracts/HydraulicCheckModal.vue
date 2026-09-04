@@ -925,8 +925,14 @@ function extractInspectionSequence(contractNumber: string | null | undefined, in
   return null;
 }
 
+// Mirrors resolveInspectorNumber on the server (reminders.ts): an inspector may
+// hold a separate certificate per inspection type, overriding the general
+// inspector_number for that type only — falls back to it when the selected type
+// has no override, same as the number the server will actually allocate.
 function currentInspectorNumber(): string {
-  return engineerProfile.value?.inspector_number?.trim() ?? "";
+  const byType = (engineerProfile.value as any)?.inspector_numbers_by_type;
+  const typed = byType && typeof byType === "object" ? byType[reportType.value] : undefined;
+  return String(typed ?? engineerProfile.value?.inspector_number ?? "").trim();
 }
 
 function formatContractNumber(value: string | null | undefined): string {
@@ -1440,7 +1446,7 @@ function buildTemplateDraft(): Record<string, string> {
     zip_code: business.client_zipcode ?? "",
     po_box: business.po_box ?? "",
     license_number: firstEquipment.license_number,
-    inspector_number: engineerProfile.value?.inspector_number ?? "",
+    inspector_number: currentInspectorNumber(),
     company_name: engineerProfile.value?.company_name ?? "",
     company_registration: engineerProfile.value?.company_registration ?? "",
     engineer_company: engineerProfile.value?.company_name ?? "",
