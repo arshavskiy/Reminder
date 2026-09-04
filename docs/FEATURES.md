@@ -6,7 +6,7 @@ Current feature inventory for ReminderOCR.
 
 Stack: Node.js 22 / Express · MongoDB · Vue 3 + Naive UI + Tailwind v4 · Railway + Vercel  
 
-**Updated**: 2026-08-27
+**Updated**: 2026-09-04
 
 
 
@@ -381,6 +381,18 @@ The `user` role is limited to `USER_DOCUMENT_LIMIT` (default: **25**) AI-extract
 - **Ollama** — any local model via `OLLAMA_URL` + `OLLAMA_MODEL`
 
 - Switchable per-document or globally via Settings
+
+
+
+### Inspection type classification (`inspection_type`)
+
+Distinct from `document_type` (document category: contract, invoice, inspection report, etc.). `inspection_type` records *which of the 11 inspection presets* a תסקיר document is (`lifting_machine`, `lifting_accessory`, `elevator`, `escalator`, `tower_crane`, `work_platform`, `powered_scaffold`, `air_receiver`, `steam_receiver`, `steam_boiler`, `pressure_vessel`).
+
+- AI extraction schema includes `"inspection_type": string | null`, classified against a dynamically-built enum listing (from `INSPECTION_PRINT_TEMPLATE_PRESETS`, not hardcoded, so new presets are picked up automatically)
+- `validInspectionType()` rejects any AI-returned value that isn't a real preset key
+- Written to the `documents` collection alongside `document_type`/`document_number` by `saveExtractionEntities()`
+- Existing documents backfilled via `server/src/scripts/backfillInspectionType.ts` — deterministic Hebrew phrase-matching (not AI re-extraction), dry-run by default (`npm run inspection-type:backfill`, `:apply` to write)
+- Documents page: filter dropdown "סינון לפי סוג תסקיר" and a type badge/subline on each row (tile grid and list view), built from server-side `inspectionTypeCounts` aggregate so options aren't limited to loaded rows
 
 
 
@@ -924,6 +936,16 @@ Route: `/admin` — admin-only console:
 
 
 
+### Engineer profile — inspector license numbers
+
+- `inspector_number` — single legacy license number used as the default/fallback
+- `inspector_numbers_by_type` — optional per-inspection-type override map (`{ [presetKey]: string }`), keys validated against the real `INSPECTION_PRINT_TEMPLATE_PRESETS` list server-side
+- UI: collapsed-by-default "+ הוסף רישוי לפי בדיקה" section under the engineer profile form (ProfilePage and OnboardingWizard) with one input per inspection type
+- Resolution order (`resolveInspectorNumber`, mirrored client/server): per-type override if set for the report's category, else `inspector_number`, else empty
+- Used to: prefix allocated report numbers (`allocateReportNumber`), and resolve the correct signature number in generated PDFs (`getEngineerData`, scoped by `reportTypeKey`)
+
+
+
 ---
 
 
@@ -1109,6 +1131,18 @@ When a non-admin user edits a shared template, the server creates a personal clo
 
 
 **Linkage**: drafts store `meta.client_id` and `meta.equipment_ids`. When a contract is created, `contract_id` is saved back to the draft. Correct binding for `מספר רישוי` is `license_number` (accepts 7-digit values).
+
+
+
+### Pressure-equipment layout (air_receiver, steam_receiver, steam_boiler, pressure_vessel)
+
+These 4 presets report on a single vessel with many physical attributes, matching the real inspector-issued forms' layout instead of the multi-item `equipment_table` used by the other 7 preset types (lifting_machine, elevator, etc.):
+
+- Part 1 (client details) and Part 2 (equipment attributes) render as `fields` sections with `columns: 2` (label:value pairs, 2 per row) instead of the 3-column grid + `equipment_table` used elsewhere
+- `air_receiver` additionally has Parts 3/4/6 (last hydraulic test, test results, permitted working pressure) and a 14-field equipment attribute list (`AIR_RECEIVER_EQUIPMENT_COLUMNS`); the other 3 pressure types keep the shared 7-field list (`PRESSURE_EQUIPMENT_COLUMNS`)
+- Branch logic lives in `createInspectionPrintTemplateLayout()` in `server/src/shared/printTemplateLayout.ts` and its byte-identical client mirror `client/src/shared/printTemplateLayout.ts` (hand-duplicated, no build-time sync — edit both)
+- After editing this file, reseed the shared DB templates: `npm run print-templates:seed-inspections:apply` (local; production needs a separate direct-Mongo script since `connectDb()`'s `MONGODB_TARGET` production switch is currently dead code)
+- `HydraulicCheckModal.vue`'s `loadPrintTemplates()` refetches the template list on every open (not cached) so DB-side template edits appear without a hard page reload
 
 
 

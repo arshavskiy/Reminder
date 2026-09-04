@@ -1,5 +1,21 @@
 # Change Log
 
+## 2026-09-04
+
+### Inspection Reports
+
+- Added `inspection_type` classification: AI extraction now tags which of the 11 inspection presets a תסקיר document is, written to the `documents` collection and backfilled for existing documents via deterministic phrase-matching (`backfillInspectionType.ts`). Distinct from `document_type` (document category).
+- Added a documents-page filter and per-row badge for `inspection_type`; removed the older, unrelated `document_type` filter dropdown.
+- Added per-inspection-type engineer license numbers (`inspector_numbers_by_type`) alongside the existing single `inspector_number` default, with UI in the engineer profile form. Resolution is per-type override else the default, applied consistently to allocated report numbers and PDF signature blocks.
+- Restructured Parts 1/2 of the pressure-equipment print templates (air_receiver, steam_receiver, steam_boiler, pressure_vessel) from a grid + equipment table to a 2-column label:value layout matching the real inspector-issued forms.
+- Fixed report-number extraction (`extractCurrentReportNumber`) capturing a bare `:` when a document's report-number label and value render on separate lines.
+- Fixed `HydraulicCheckModal.vue`'s print-template list being cached in memory for the life of the session with no refetch on reopen, so DB-side template changes silently didn't appear until a hard page reload.
+
+### Bug Fixes
+
+- Fixed an N+1 query fan-out in the reminders list route causing production `MongoWaitQueueTimeoutError` under load; audited and fixed the same pattern elsewhere (contracts, tasks, dashboard, monthly reports, equipment).
+- Fixed `ContractCard.vue` missing `withDefaults()`, which silently disabled reminder action buttons (eye/edit/delete) across every page using the component.
+
 ## 2026-08-09
 
 ### Document Processing

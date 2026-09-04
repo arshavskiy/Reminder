@@ -266,3 +266,50 @@ Common binds used by the תסקיר template:
 
 `license_number` is the correct bind for `מספר רישוי`. Do not use `client_id` for equipment license numbers.
 
+## Pressure-Equipment Layout (air_receiver / steam_receiver / steam_boiler / pressure_vessel)
+
+Unlike the other 7 preset types, these 4 report on one vessel with many attributes rather than a list of equipment items, so Parts 1 and 2 use vertical `columns: 2` `fields` sections (label:value pairs) instead of the 3-column grid + `equipment_table`. `air_receiver` additionally carries Parts 3/4/6 (last hydraulic test, test results, permitted working pressure) and a 14-field attribute list; the other 3 keep the shared 7-field list.
+
+Branch logic: `PRESSURE_TYPE_KEYS` / `isPressureType` inside `createInspectionPrintTemplateLayout()` in `server/src/shared/printTemplateLayout.ts`, mirrored byte-for-byte in `client/src/shared/printTemplateLayout.ts` (no build-time sync — edit both).
+
+Changing this file requires reseeding the shared `print_templates` DB rows (`npm run print-templates:seed-inspections:apply`) for the change to reach existing templates — new template docs don't get created automatically, existing ones are upserted by `system_key`.
+
+## Per-Type Inspector License Numbers
+
+`engineer_profiles` stores `inspector_number` (single, legacy default) plus an optional `inspector_numbers_by_type` map keyed by preset key (`air_receiver`, `lifting_machine`, ...). Resolution (`resolveInspectorNumber`, mirrored client/server): per-type value if present for the report's category, else `inspector_number`, else empty.
+
+Consumers:
+
+- `allocateReportNumber(userId, category)` in `server/src/routes/reminders.ts` — prefixes allocated report numbers
+- `getEngineerData(userId, reportTypeKey)` in `server/src/routes/printTemplates.ts` — resolves the signature number baked into generated PDFs
+- `HydraulicCheckModal.vue`'s `currentInspectorNumber()` and the `previewData` computed — client-side preview must independently mirror the same resolution order; historically these have gone out of sync when only one was updated
+
+## Pressure-Type Reports (air_receiver, steam_receiver, steam_boiler, pressure_vessel)
+
+The 4 pressure-equipment types report on ONE vessel with many physical attributes, so their layout differs from lifting_machine/elevator/etc:
+
+- Section 1 (`פרטי הלקוח/תופש`) and section 2 (equipment description) render as label:value `fields` sections instead of a 3-column grid / `equipment_table` — there's no multi-row equipment table since only one vessel is described per report.
+- Both sections use `columns: 2`, so fields lay out two label:value pairs per row (side by side) instead of one per row.
+- `air_receiver` additionally gets extra sections not present on other types: `3. פרטי ניסוי הידראולי אחרון` (last hydraulic test), `4. תוצאות הבדיקה` (test results incl. safety-valve opening pressure), and `6. לחץ עבודה מותר...` (permitted working pressure) — findings/notes section numbering shifts to 5/הערות accordingly.
+- `air_receiver`'s equipment columns (`AIR_RECEIVER_EQUIPMENT_COLUMNS` in `printTemplateLayout.ts`) have no `license_number` field — pressure vessels are identified by internal serial number, not a license number. `license_number` only appears on the generic (non-pressure) client-details section and on `PRESSURE_EQUIPMENT_COLUMNS`/`ELEVATOR_EQUIPMENT_COLUMNS`.
+- Layout changes to `printTemplateLayout.ts` only affect the shared preset source. Existing DB-seeded templates (`print_templates` collection, `system_key: inspection:<type>`) must be reseeded to pick up changes:
+  ```bash
+  npx tsx src/scripts/seedInspectionPrintTemplates.ts --apply
+  ```
+  A personal copy-on-write clone of a shared template (created when a non-admin edits it) is NOT touched by reseeding and keeps its own layout.
+
+## Inspection Type Classification (`inspection_type`)
+
+Documents get an `inspection_type` field (one of the `INSPECTION_PRINT_TEMPLATE_PRESETS` keys, e.g. `air_receiver`, `elevator`, `lifting_machine`) so they can be filtered/classified by report type on the Documents page.
+
+- Set by the AI extractor going forward (`extractDocument`'s `SYSTEM_PROMPT`, rule 6b) — matched against the document's own title/subtitle/equipment description, not just the word "תסקיר".
+- For documents imported before this field existed, `src/scripts/backfillInspectionType.ts` does a cheap deterministic regex pass (phrase list in `MATCH_PHRASES`) instead of a paid re-extraction. Dry run by default; `--apply` to write. Never overwrites an already-set `inspection_type`.
+
+## Report Number Extraction (`document_number` / `contract_number`)
+
+`extractCurrentReportNumber` (in `importer.ts`) is a regex fallback used when a template declares a `report_number` field — real inspector reports often render "מספר תסקיר:" and its value (`<inspector-id>/<sequence>`, e.g. `153/765097`) on separate lines once the PDF is flattened to plain text, which the LLM sometimes drops.
+
+- Rejects a punctuation-only capture (a lone `:` is truthy in JS and used to slip past the old `if (value)` guard) and, when that happens, scans forward for a line matching the registry's `<id>/<sequence>` shape rather than just the next line with a digit (a nearby date would otherwise be picked up instead).
+- Trust the document's own raw text over its filename — filenames are often typo'd/renamed by the inspector and don't reliably match the report number printed in the document.
+- `src/scripts/backfillAirReceiverReportNumbers.ts` re-derives `document_number`/`contract_number` for existing documents/contracts whose raw_text was already stored but predates this fix, patching only those two fields (no AI call, no contract recreation, no client/reminder side effects). Dry run by default; `--apply` to write.
+
