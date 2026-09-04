@@ -1958,7 +1958,7 @@ function isPunctuationOnly(value: string): boolean {
   return !/[^\s:：\-|]/.test(value);
 }
 
-function extractCurrentReportNumber(rawText: string): string | null {
+export function extractCurrentReportNumber(rawText: string): string | null {
   const lines = rawText.split(/\r?\n/).map((rawLine) => rawLine.replace(/\s+/g, " ").trim());
 
   for (let i = 0; i < lines.length; i++) {
