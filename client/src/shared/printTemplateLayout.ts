@@ -343,12 +343,16 @@ export const INSPECTION_PRINT_TEMPLATE_PRESETS: InspectionPrintTemplatePreset[] 
         category: "air_receiver",
         intervalMonths: 26,
         title: "תסקיר בדיקה לקולט אוויר",
-        subtitle: 'תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ"ז-1967',
+        // Real inspector-issued air-receiver reports header with the safety
+        // ordinance sections (115,116) that authorize the inspection itself, not
+        // just the pressure-equipment regulations that govern how it's carried
+        // out — both citations appear on the actual document.
+        subtitle: 'פקודת הבטיחות בעבודה (נוסח חדש) תש"ל 1970- סעיפים 115,116',
         equipmentTitle: "",
         equipmentFieldsTitle: "2. תיאור קולט האוויר",
         equipmentColumns: PRESSURE_EQUIPMENT_COLUMNS,
         legalText:
-            "קולט אוויר/קומפרסור הוא מיתקן לחץ לפי תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ\"ז-1967. התסקיר לקולט אוויר נערך לפי תקנה 5 והתוספת הרביעית. יש לציין לחץ עבודה מותר, ניסויים/בדיקות שנעשו, מצב האבזרים ושסתומי הבטיחות. התסקיר יימסר לתופש המקום והעתק למפקח עבודה אזורי בתוך 21 ימים. " + COMMON_LEGAL_TEXT,
+            "קולט אוויר/קומפרסור הוא מיתקן לחץ לפי תקנות הבטיחות בעבודה (בדיקת מיתקני לחץ), תשכ\"ז-1967, ונבדק מכוח סעיפים 115,116 לפקודת הבטיחות בעבודה (נוסח חדש), תש\"ל-1970. התסקיר לקולט אוויר נערך לפי תקנה 5 והתוספת הרביעית. יש לציין לחץ עבודה מותר, ניסויים/בדיקות שנעשו, מצב האבזרים ושסתומי הבטיחות. התסקיר יימסר לתופש המקום והעתק למפקח עבודה אזורי בתוך 21 ימים. " + COMMON_LEGAL_TEXT,
     },
     {
         key: "steam_receiver",

@@ -122,6 +122,31 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(fields?.report_number).toBe("484590/8868");
   });
 
+  it("finds report_number on a later line when the label's own line has no inline value", () => {
+    // Pressure-vessel reports (קולט אוויר) render their labels together and the
+    // matching values several lines later as a separate block once the PDF is
+    // flattened to plain text, so "מספר תסקיר:" carries no value on its own line —
+    // the regex used to capture that trailing colon itself as the "value" (":").
+    const rawText = [
+      "מספר תסקיר:",
+      "בתוקף עד:",
+      "מספר תסקיר קודם:",
+      "תאריך בדיקה:",
+      "05/08/2026",
+      "תסקיר על בדיקת קולט אויר",
+      'פקודת הבטיחות בעבודה (נוסח חדש) תש"ל -1970 סעיפים 115,116',
+      "153/765097",
+      "בתוקף עד:",
+      "04/10/2028",
+      "מספר תסקיר קודם:",
+      "125/765097",
+    ].join("\n");
+
+    const fields = normalizeExtractionFieldsForTemplate(rawText, inspectionTemplate, {});
+
+    expect(fields?.report_number).toBe("153/765097");
+  });
+
   it("removes address fields from normalized extraction output", () => {
     const fields = normalizeExtractionFieldsForTemplate("מספר תסקיר: 17924/484590", inspectionTemplate, {
       client_address: "רחוב 1",

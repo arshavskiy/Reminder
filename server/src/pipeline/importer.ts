@@ -1943,9 +1943,16 @@ export function normalizeExtractionFieldsForTemplate(
   return normalized;
 }
 
+/** True once punctuation/whitespace is stripped — i.e. the regex captured the label's own trailing colon rather than a real value, which happens when the label and its value sit on separate lines (common in scanned/tabular layouts where the value cell renders several lines below the label). */
+function isPunctuationOnly(value: string): boolean {
+  return !/[^\s:：\-|]/.test(value);
+}
+
 function extractCurrentReportNumber(rawText: string): string | null {
-  for (const rawLine of rawText.split(/\r?\n/)) {
-    const line = rawLine.replace(/\s+/g, " ").trim();
+  const lines = rawText.split(/\r?\n/).map((rawLine) => rawLine.replace(/\s+/g, " ").trim());
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (!line) continue;
     if (/מספר\s+תסקיר\s+קודם/i.test(line)) continue;
 
@@ -1953,12 +1960,30 @@ function extractCurrentReportNumber(rawText: string): string | null {
       line.match(/^(.+?)\s*[:：]\s*מספר\s+תסקיר(?!\s+קודם)/i);
     if (!match) continue;
 
-    const value = normalizeReportNumberValue(match[1], rawText)
+    let value = normalizeReportNumberValue(match[1], rawText)
       .split(/\t|\s{2,}|\s+\|\s+/)[0]
       .trim()
       .replace(/[|]$/, "");
 
-    if (value) return value;
+    // The label line carried no inline value (its "value" was just the trailing
+    // colon) — this happens when a report's labels are all listed together and
+    // their values render several lines later as a separate block (e.g.
+    // "מספר תסקיר:" / "בתוקף עד:" / "תאריך בדיקה:" / ... / "05/08/2026" / ... /
+    // "153/765097"), so nearest-following-line is not reliable — the next line
+    // with a digit can just as easily be a date. Report numbers in this registry
+    // are consistently "<inspector id>/<sequence>" (e.g. "153/765097"), which a
+    // date never is, so scan forward for that specific shape instead.
+    if (isPunctuationOnly(value)) {
+      for (let j = i + 1; j < Math.min(i + 30, lines.length); j++) {
+        const candidate = lines[j];
+        if (!candidate) continue;
+        if (!/^\d+\s*\/\s*\d+$/.test(candidate)) continue;
+        value = candidate.replace(/\s+/g, "");
+        break;
+      }
+    }
+
+    if (value && !isPunctuationOnly(value)) return value;
   }
 
   return null;
