@@ -69,16 +69,33 @@ function todayDateOnly(): Date {
 }
 
 /**
+ * Some inspectors hold a separate ministry certificate per inspection type
+ * (e.g. a different number for air-receiver reports than for lifting-machine
+ * reports) rather than one number covering everything they're certified for.
+ * inspector_numbers_by_type overrides the general inspector_number for a
+ * specific type key (matching INSPECTION_PRINT_TEMPLATE_PRESETS[].key /
+ * equipment.category); inspector_number is the fallback for any type without
+ * its own entry, and the only number for inspectors who only hold one.
+ */
+function resolveInspectorNumber(profile: any, category: string | undefined | null): string {
+  const byType = profile?.inspector_numbers_by_type;
+  const typed = category && byType && typeof byType === "object" ? byType[category] : undefined;
+  return String(typed ?? profile?.inspector_number ?? "").trim();
+}
+
+/**
  * Atomically allocates the next sequential inspection/report number for this
- * user and combines it with their inspector_number into a report number, e.g.
- * "484590/18168".
+ * user and combines it with their (possibly type-specific) inspector number
+ * into a report number, e.g. "484590/18168". The sequence itself
+ * (next_inspection_seq) is one running count shared across every inspection
+ * type — only the number prefixed to it varies by type.
  * (nextInspectionId), but actually persisted here instead of just displayed.
  * Seeds the counter from engineer_profiles.inspector_id_start on first use,
  * or from this user's existing report numbers if the explicit seed is missing.
  */
-async function allocateReportNumber(userId: string): Promise<string | null> {
+async function allocateReportNumber(userId: string, category?: string | null): Promise<string | null> {
   const profile = await col("engineer_profiles").findOne({ user_id: userId }) as any;
-  const inspectorNumber = String(profile?.inspector_number ?? "").trim();
+  const inspectorNumber = resolveInspectorNumber(profile, category);
   if (!inspectorNumber) return null;
 
   const parsedSeed = parseInt(profile?.inspector_id_start ?? "", 10);
@@ -635,7 +652,7 @@ export function registerReminderRoutes(app: express.Application) {
     }
     const expiryDate = formatIsoDateOnly(dueDate!);
     const startDate = formatIsoDateOnly(checkDate);
-    const reportNumber = body.contract_number?.trim() || await allocateReportNumber(userId);
+    const reportNumber = body.contract_number?.trim() || await allocateReportNumber(userId, body.equipment?.category);
     if (!reportNumber) {
       res.status(400).json({ error: "Enter contract_number manually or set inspector_number and inspector_id_start in the engineer profile" });
       return;

@@ -28,19 +28,27 @@ function assertExportAllowed(auth: Awaited<ReturnType<typeof requireAuth>>): boo
   return normalizePlanId(auth.user.plan ?? auth.user.role) !== "free";
 }
 
-async function getEngineerData(userId: string): Promise<Record<string, string>> {
+/**
+ * reportTypeKey selects the inspector's certificate number for this specific
+ * report type when they hold a different one per type (inspector_numbers_by_type
+ * on the profile); falls back to the general inspector_number otherwise, and to
+ * "" for inspectors who have set neither.
+ */
+async function getEngineerData(userId: string, reportTypeKey?: string | null): Promise<Record<string, string>> {
     try {
         const [engineerProfile, user] = await Promise.all([
             col("engineer_profiles").findOne({user_id: userId}),
             col("users").findOne({_id: tryObjectId(userId)}),
         ]) as [any, any];
         const companyName = engineerProfile?.company_name || user?.company_name || "";
+        const byType = engineerProfile?.inspector_numbers_by_type;
+        const typedNumber = reportTypeKey && byType && typeof byType === "object" ? byType[reportTypeKey] : undefined;
         return {
             engineer_name: engineerProfile?.full_name || user?.name || "",
             engineer_email: engineerProfile?.company_email || user?.email || "",
             engineer_phone: engineerProfile?.company_phone || user?.phone || "",
             engineer_company: companyName,
-            inspector_number: engineerProfile?.inspector_number || "",
+            inspector_number: typedNumber || engineerProfile?.inspector_number || "",
             company_name: companyName,
             company_registration: engineerProfile?.company_registration || "",
             engineer_address: engineerProfile?.address || "",
@@ -296,7 +304,7 @@ export function registerPrintTemplateRoutes(app: Express) {
       const t = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId)) as any;
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
       const clientData: Record<string, unknown> = req.body.data ?? {};
-      const engineerDefaults = await getEngineerData(auth.userId);
+      const engineerDefaults = await getEngineerData(auth.userId, t.reportTypeKey);
       const data: Record<string, unknown> = {...engineerDefaults, ...clientData};
     try {
         const pdf = await renderTemplatePdf(presentPrintTemplate(t, auth.userId), data);
@@ -318,7 +326,7 @@ export function registerPrintTemplateRoutes(app: Express) {
       const t = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId)) as any;
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
       const clientData: Record<string, unknown> = req.body.data ?? {};
-      const engineerDefaults = await getEngineerData(auth.userId);
+      const engineerDefaults = await getEngineerData(auth.userId, t.reportTypeKey);
       const data: Record<string, unknown> = {...engineerDefaults, ...clientData};
     const meta = sanitizeDraftMeta(req.body?.meta ?? {});
     try {

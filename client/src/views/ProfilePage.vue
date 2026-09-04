@@ -139,10 +139,40 @@
                 v-if="editingEngineer"
                 v-model:value="engineerForm.inspector_number"
                 class="info-input"
+                :placeholder="showPerTypeInspectorNumbers ? 'ברירת מחדל לסוגים ללא מספר משלהם' : ''"
               />
               <span v-else class="info-val">{{
                 engineerProfile?.inspector_number || "—"
               }}</span>
+            </div>
+            <template v-if="editingEngineer">
+              <button
+                v-if="!showPerTypeInspectorNumbers"
+                type="button"
+                class="btn btn--ghost btn--xs per-type-toggle"
+                @click="showPerTypeInspectorNumbers = true"
+              >+ הוסף מספר לפי סוג תסקיר</button>
+              <div v-else class="per-type-inspector-numbers">
+                <div class="per-type-inspector-numbers__head">
+                  <span class="info-label">מספר לפי סוג תסקיר</span>
+                  <button type="button" class="btn btn--ghost btn--xs" @click="showPerTypeInspectorNumbers = false; engineerForm.inspector_numbers_by_type = {}">בטל</button>
+                </div>
+                <div v-for="opt in inspectionTypeOptions" :key="opt.value" class="info-row per-type-inspector-numbers__row">
+                  <span class="info-label">{{ opt.label }}</span>
+                  <n-input
+                    v-model:value="engineerForm.inspector_numbers_by_type[opt.value]"
+                    class="info-input"
+                    :placeholder="engineerForm.inspector_number || 'מספר מפקח'"
+                  />
+                </div>
+              </div>
+            </template>
+            <div v-else-if="engineerProfile && Object.keys((engineerProfile as any)?.inspector_numbers_by_type ?? {}).length" class="per-type-inspector-numbers per-type-inspector-numbers--readonly">
+              <span class="info-label">מספר לפי סוג תסקיר</span>
+              <div v-for="[key, num] in Object.entries((engineerProfile as any).inspector_numbers_by_type)" :key="key" class="info-row per-type-inspector-numbers__row">
+                <span class="info-label">{{ inspectionTypeOptions.find((o) => o.value === key)?.label ?? key }}</span>
+                <span class="info-val">{{ num }}</span>
+              </div>
             </div>
             <div class="info-row">
               <span class="info-label">כתובת</span>
@@ -1562,6 +1592,7 @@ import { useAuthStore } from "../stores/auth.js";
 import { useUserSettingsStore } from "../stores/userSettings.js";
 import { useEngineerStore } from "../stores/engineer.js";
 import {api, type DriveExportJob, type DriveStatus, type ProfileSubscription} from "../services/apiService.js";
+import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "@shared/printTemplateLayout.js";
 import type { User, UserSettings } from "@shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
 import GmailLogo from "../components/GmailLogo.vue";
@@ -1847,7 +1878,16 @@ const engineerForm = ref({
   company_subtitle: "",
   company_phone: "",
   company_email: "",
+  inspector_numbers_by_type: {} as Record<string, string>,
 });
+
+// Some inspectors hold a separate ministry certificate per inspection type
+// rather than one number covering everything — this is only shown/editable
+// when a type-specific number has actually been set, or the user opts in via
+// "הוסף מספר לפי סוג תסקיר", so the common single-number case stays a
+// one-line field.
+const showPerTypeInspectorNumbers = ref(false);
+const inspectionTypeOptions = INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => ({label: p.name, value: p.key}));
 
 function startEditEngineer() {
   const p = engineerProfile.value;
@@ -1868,7 +1908,9 @@ function startEditEngineer() {
     company_subtitle: (p as any)?.company_subtitle ?? "",
     company_phone: (p as any)?.company_phone ?? "",
     company_email: (p as any)?.company_email ?? "",
+    inspector_numbers_by_type: {...((p as any)?.inspector_numbers_by_type ?? {})},
   };
+  showPerTypeInspectorNumbers.value = Object.keys(engineerForm.value.inspector_numbers_by_type).length > 0;
   editingEngineer.value = true;
 }
 function cancelEditEngineer() {
@@ -1878,8 +1920,14 @@ async function saveEngineer() {
   savingEngineer.value = true;
   try {
     const {membership_start_ms, ...formFields} = engineerForm.value;
+    const inspectorNumbersByType = showPerTypeInspectorNumbers.value
+      ? Object.fromEntries(
+          Object.entries(formFields.inspector_numbers_by_type).filter(([, v]) => v.trim())
+        )
+      : {};
     await engineerStore.save({
       ...formFields,
+      inspector_numbers_by_type: inspectorNumbersByType,
       membership_start_date: membership_start_ms
         ? new Date(membership_start_ms).toISOString().slice(0, 10)
         : null,
@@ -2860,6 +2908,31 @@ function showGoogleConnectionErrorFromRoute() {
 .info-input {
   flex: 1;
   min-width: 0;
+}
+
+.per-type-toggle {
+  margin: 10px 0;
+}
+.per-type-inspector-numbers {
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+.per-type-inspector-numbers--readonly {
+  padding-top: 14px;
+}
+.per-type-inspector-numbers__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.per-type-inspector-numbers__row {
+  padding: 8px 0;
+  border-bottom: none;
+}
+.per-type-inspector-numbers__row .info-label {
+  min-width: 140px;
+  font-size: 13px;
 }
 .info-stack {
   flex: 1;

@@ -84,6 +84,8 @@ export interface PipelineFlags {
 
 export interface EngineerProfile {
   inspector_number?: string | null;
+  /** Overrides inspector_number for a specific inspection type (key = INSPECTION_PRINT_TEMPLATE_PRESETS[].key), for inspectors who hold a separate certificate per type. */
+  inspector_numbers_by_type?: Record<string, string> | null;
   address?: string | null;
   city?: string | null;
   title?: string | null;

@@ -14,6 +14,21 @@ import {extractCertificate} from "../pipeline/certificateExtractor";
 import {getDocumentImportQuota, type DocumentImportQuotaCategory} from "../quotas/documentImportQuota";
 import {getImportUsageCounters} from "../quotas/importUsageCounters";
 import {getReminderQuota} from "../quotas/reminderQuota";
+import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "../shared/printTemplateLayout.js";
+
+const INSPECTION_TYPE_KEYS = new Set(INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => p.key));
+
+/** Drops unknown keys and non-string/blank values from the per-type inspector-number map before it reaches the database. */
+function sanitizeInspectorNumbersByType(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!INSPECTION_TYPE_KEYS.has(key)) continue;
+    const trimmed = typeof value === "string" ? value.trim() : "";
+    if (trimmed) out[key] = trimmed;
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 const avatarUpload = multer({
   storage: multer.memoryStorage(),
@@ -146,8 +161,8 @@ export function registerProfileRoutes(app: express.Application) {
       inspector_number, address, city, title, expertise,
       mr_number, mg_number, membership_start_date,
       company_name, company_registration, company_subtitle, company_phone, company_email,
-      company_logo_url, inspector_id_start,
-    } = req.body as Record<string, string | null>;
+      company_logo_url, inspector_id_start, inspector_numbers_by_type,
+    } = req.body as Record<string, string | null> & { inspector_numbers_by_type?: unknown };
 
     await col("engineer_profiles").updateOne(
       { user_id: ctx.userId },
@@ -169,6 +184,12 @@ export function registerProfileRoutes(app: express.Application) {
           company_phone: company_phone ?? null,
           company_email: company_email ?? null,
           inspector_id_start: inspector_id_start ?? null,
+          // Some inspectors hold a separate ministry certificate per inspection
+          // type (e.g. a different number for air-receiver vs lifting-machine
+          // reports) rather than one number covering every type — resolveInspectorNumber
+          // in reminders.ts falls back to inspector_number above when a type has
+          // no override here.
+          inspector_numbers_by_type: sanitizeInspectorNumbersByType(inspector_numbers_by_type),
           updated_at: new Date().toISOString(),
         },
       },
