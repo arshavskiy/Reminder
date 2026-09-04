@@ -395,8 +395,17 @@ export function getInspectionPrintTemplatePreset(key: string): InspectionPrintTe
         ?? INSPECTION_PRINT_TEMPLATE_PRESETS[0];
 }
 
+// The 4 pressure-equipment types report on ONE vessel with many physical
+// attributes (location, volume, diameter, material, wall thickness, ...),
+// which the real inspector-issued forms lay out as a vertical label:value
+// list — not a table with attributes as columns and equipment items as rows,
+// which is the right shape for lifting_machine/elevator/etc. reports that can
+// have several equipment items per report.
+const PRESSURE_TYPE_KEYS = new Set(["air_receiver", "steam_receiver", "steam_boiler", "pressure_vessel"]);
+
 export function createInspectionPrintTemplateLayout(keyOrPreset: string | InspectionPrintTemplatePreset): PrintTemplateLayout {
     const preset = typeof keyOrPreset === "string" ? getInspectionPrintTemplatePreset(keyOrPreset) : keyOrPreset;
+    const isPressureType = PRESSURE_TYPE_KEYS.has(preset.key);
     return {
         styles: {borderColor: "#111111", borderWidth: "thin"},
         sections: [
@@ -411,8 +420,22 @@ export function createInspectionPrintTemplateLayout(keyOrPreset: string | Inspec
                     {bind: "expiry_date", label: "בתוקף עד"},
                 ],
             },
-            {
-                type: "fields",
+            isPressureType ? {
+                // Matches a real inspector-issued report's Part 1: label:value
+                // rows, laid out 2 per row (side by side) rather than the
+                // 3-column grid every other report type uses.
+                type: "fields" as const,
+                title: "1. פרטי הלקוח/תופש",
+                columns: 2,
+                fields: [
+                    {bind: "client_company", label: "פרטי הלקוח/תופש"},
+                    {bind: "client_address", label: "כתובת"},
+                    {bind: "client_name", label: "איש קשר"},
+                    {bind: "client_phone", label: "טלפון"},
+                    {bind: "client_mobile", label: "נייד"},
+                ],
+            } : {
+                type: "fields" as const,
                 title: "1. פרטי הלקוח/תופש",
                 columns: 3,
                 fields: [
@@ -430,20 +453,31 @@ export function createInspectionPrintTemplateLayout(keyOrPreset: string | Inspec
                     {bind: "inspection_location", label: "מקום הבדיקה"},
                 ],
             },
-            {
-                type: "fields",
+            ...(isPressureType ? [{
+                // Replaces the equipment_table for this group: a pressure
+                // vessel's attributes rendered as vertical rows (the same
+                // label/bind pairs preset.equipmentColumns already carries),
+                // matching the real form instead of a wide multi-column table.
+                type: "fields" as const,
                 title: preset.equipmentFieldsTitle,
                 columns: 2,
-                fields: [
-                    {bind: "name", label: "שם הציוד"},
-                    {bind: "inspection_location", label: "מקום הבדיקה"},
-                ],
-            },
-            {
-                type: "equipment_table",
-                title: preset.equipmentTitle,
-                columns: preset.equipmentColumns.map((c) => ({...c})),
-            },
+                fields: preset.equipmentColumns.map((c) => ({label: c.label, bind: c.bind})),
+            }] : [
+                {
+                    type: "fields" as const,
+                    title: preset.equipmentFieldsTitle,
+                    columns: 2,
+                    fields: [
+                        {bind: "name", label: "שם הציוד"},
+                        {bind: "inspection_location", label: "מקום הבדיקה"},
+                    ],
+                },
+                {
+                    type: "equipment_table" as const,
+                    title: preset.equipmentTitle,
+                    columns: preset.equipmentColumns.map((c) => ({...c})),
+                },
+            ]),
             // Parts 3, 4 and 6 of a real inspector-issued air-receiver report cover
             // the last hydraulic test, the test results (including the safety-valve
             // opening pressure), and the permitted working pressure given the test

@@ -1115,18 +1115,18 @@ async function queueClientEquipmentLoad() {
 }
 
 async function loadPrintTemplates() {
-  if (templates.value.length) {
-    selectTemplate(templateId.value ?? defaultTemplateId());
-    return;
-  }
-  loadingTemplates.value = true;
+  const hadTemplates = templates.value.length > 0;
+  const previousTemplateId = templateId.value;
+  loadingTemplates.value = !hadTemplates;
   try {
     templates.value = await api.printTemplates.list();
-    selectTemplate(defaultTemplateId());
+    selectTemplate(previousTemplateId ?? defaultTemplateId());
   } catch {
-    templates.value = [];
-    templateId.value = null;
-    template.value = null;
+    if (!hadTemplates) {
+      templates.value = [];
+      templateId.value = null;
+      template.value = null;
+    }
   } finally {
     loadingTemplates.value = false;
   }
