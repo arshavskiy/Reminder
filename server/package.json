@@ -42,6 +42,8 @@
     "doc-templates:seed": "tsx src/scripts/seedDocTemplates.ts",
     "print-templates:seed-inspections": "tsx src/scripts/seedInspectionPrintTemplates.ts",
     "print-templates:seed-inspections:apply": "tsx src/scripts/seedInspectionPrintTemplates.ts --apply",
+    "inspector-leads:seed": "tsx src/scripts/seedInspectorLeads.ts",
+    "inspector-leads:seed:apply": "tsx src/scripts/seedInspectorLeads.ts --apply",
     "templates:sync-prod": "tsx src/scripts/syncEmailTemplateToProduction.ts --apply",
     "templates:sync-prod:dry": "tsx src/scripts/syncEmailTemplateToProduction.ts",
     "gmail:seed-search-providers": "tsx src/scripts/seedGmailSearchProviders.ts",
