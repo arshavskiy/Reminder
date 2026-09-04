@@ -636,14 +636,15 @@ export const api = {
   },
 
   documents: {
-    list: (params?: { status?: string; limit?: number; offset?: number; clientId?: string }, force = false) => {
+    list: (params?: { status?: string; limit?: number; offset?: number; clientId?: string; inspectionType?: string }, force = false) => {
       return get<{
         rows: Document[];
         total: number;
         totalAll: number;
         documentLimit: number | null;
         documentQuotaUsed?: number;
-        counts?: { all: number; done: number; in_progress: number; error: number }
+        counts?: { all: number; done: number; in_progress: number; error: number };
+        inspectionTypeCounts?: { type: string; count: number }[];
       }>(`/documents${qs(params)}`, force);
     },
     get: (id: string) => get<Document>(`/documents/${id}`),

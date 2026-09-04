@@ -184,6 +184,8 @@ export interface Document {
   raw_text: string | null;
   extracted_fields?: string | null;
   document_type?: string | null;
+  /** Which inspection type this document is (one of INSPECTION_PRINT_TEMPLATE_PRESETS[].key), when AI extraction recognized it — null for non-inspection documents or unrecognized types. */
+  inspection_type?: string | null;
   inspection_date?: string | null;
   expiry_date?: string | null;
   reminder_count?: number;
@@ -645,6 +647,7 @@ export interface ExtractionResult {
   client_address: string | null;       // city / full address
   document_type: string | null;        // e.g. "תסקיר בדיקה" | "חוזה" | "חשבונית"
   document_number: string | null;      // generic document/report number (e.g. תסקיר 15935)
+  inspection_type: string | null;      // one of INSPECTION_PRINT_TEMPLATE_PRESETS[].key, only for inspection reports
   contract_number: string | null;
   contract_type: string | null;
   start_date: string | null;           // ISO8601

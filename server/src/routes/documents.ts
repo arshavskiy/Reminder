@@ -61,6 +61,7 @@ export function registerDocumentRoutes(app: express.Application) {
 
     const status = req.query.status as string | undefined;
     const clientIdFilter = req.query.clientId as string | undefined;
+    const inspectionTypeFilter = req.query.inspectionType as string | undefined;
     const limit = parseInt((req.query.limit as string) ?? "0");
     const offset = parseInt((req.query.offset as string) ?? "0");
 
@@ -90,6 +91,7 @@ export function registerDocumentRoutes(app: express.Application) {
     };
     const filter: Record<string, any> = { ...baseFilter };
     if (status) filter.processing_status = status;
+    if (inspectionTypeFilter) filter.inspection_type = inspectionTypeFilter;
 
     // If client filter set, narrow to document_ids linked to that client first.
     if (clientIdFilter) {
@@ -120,7 +122,7 @@ export function registerDocumentRoutes(app: express.Application) {
         : baseFilter._id;
     }
 
-    const [rows, total, totalAll, statusCounts, documentQuota] = await Promise.all([
+    const [rows, total, totalAll, statusCounts, inspectionTypeCounts, documentQuota] = await Promise.all([
       col("documents")
         .find(filter)
         .project({ raw_text: 0 })
@@ -133,6 +135,10 @@ export function registerDocumentRoutes(app: express.Application) {
       col("documents").aggregate([
         { $match: baseFilter },
         { $group: { _id: "$processing_status", count: { $sum: 1 } } },
+      ]).toArray(),
+      col("documents").aggregate([
+        { $match: { ...baseFilter, inspection_type: { $exists: true, $ne: null } } },
+        { $group: { _id: "$inspection_type", count: { $sum: 1 } } },
       ]).toArray(),
       getDocumentImportQuota(userId, userPlan, effectiveQuotaCategory(userPlan)),
     ]);
@@ -239,6 +245,7 @@ export function registerDocumentRoutes(app: express.Application) {
       total,
       totalAll: allCount,
       counts,
+      inspectionTypeCounts: (inspectionTypeCounts as any[]).map((g) => ({ type: g._id, count: g.count })),
       documentLimit: documentQuota.limit,
       documentQuotaUsed: documentQuota.limit === null ? 0 : documentQuota.used,
     });

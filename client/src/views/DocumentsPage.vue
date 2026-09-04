@@ -247,13 +247,14 @@
         @update:value="currentPage = 1"
       />
       <n-select
-        v-model:value="filterDocumentType"
-        :options="[{ label: 'כל הסוגים', value: null }, ...documentTypeOptions]"
+        v-if="inspectionTypeOptions.length"
+        v-model:value="filterInspectionType"
+        :options="[{ label: 'כל סוגי התסקיר', value: null }, ...inspectionTypeOptions]"
         :virtual-scroll="false"
         class="toolbar__type"
         clearable
         filterable
-        placeholder="סינון לפי סוג"
+        placeholder="סינון לפי סוג תסקיר"
         @update:value="currentPage = 1"
       />
       <n-date-picker
@@ -357,6 +358,7 @@
               </span>
               <span v-if="documentHasClient(row)" class="tile__meta-item">{{ documentClientName(row) }}</span>
               <span v-if="documentTypeLabel(row)" class="tile__meta-item">{{ documentTypeLabel(row) }}</span>
+              <span v-if="inspectionTypeLabel(row)" class="tile__meta-item tile__meta-item--inspection">{{ inspectionTypeLabel(row) }}</span>
             </div>
             <div class="tile__pills">
               <n-tag
@@ -434,7 +436,7 @@
                   <n-icon :component="documentSortIcon('number')" :size="14" />
                 </button>
               </th>
-              <th class="document-col document-col--actions">פעולות</th>
+              <th class="document-col document-col--actions"></th>
             </tr>
           </thead>
           <tbody>
@@ -462,7 +464,10 @@
                     :class="['document-file-icon', `file-type-icon--${fileKind(row.mime_type)}`]"
                     :size="16"
                   />
-                  <span class="document-cell-truncate" dir="auto" :title="row.file_name">{{ row.file_name }}</span>
+                  <span class="document-file-cell__text">
+                    <span class="document-cell-truncate" dir="auto" :title="row.file_name">{{ row.file_name }}</span>
+                    <span v-if="inspectionTypeLabel(row)" class="document-file-cell__inspection-type">{{ inspectionTypeLabel(row) }}</span>
+                  </span>
                 </span>
               </td>
               <td class="document-col document-col--status">
@@ -655,6 +660,7 @@ import {useDocumentsStore} from "../stores/documents.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useRescanModalStore} from "../stores/rescanModal.js";
 import {api, type DriveExportJob} from "../services/apiService.js";
+import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "@shared/printTemplateLayout.js";
 import {planAllowsGoogleDrive, resolveUserPlan} from "../shared/pricingPlans.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
@@ -938,7 +944,7 @@ function initialDocumentFilter(): DocumentStatusFilter {
 
 const search = ref("");
 const filterClientId = ref<string | null>(null);
-const filterDocumentType = ref<string | null>(null);
+const filterInspectionType = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
 const statusFilter = ref<DocumentStatusFilter>(initialDocumentFilter());
 type DocumentSortKey = "file" | "status" | "date" | "client" | "number";
@@ -960,19 +966,25 @@ function formatDocumentTypeLabel(raw: string): string {
   return DOCUMENT_TYPE_LABELS[raw] ?? raw;
 }
 
-const documentTypeOptions = computed(() => {
-  const seen = new Set<string>();
-  for (const row of store.rows ?? []) {
-    const label = documentTypeLabel(row);
-    if (label) seen.add(label);
-  }
-  for (const tpl of docTemplates.value) {
-    const label = formatDocumentTypeLabel(documentTypeFromTemplate(tpl));
-    if (label) seen.add(label);
-  }
-  return [...seen]
-    .sort((a, b) => a.localeCompare(b, "he"))
-    .map((value) => ({ label: value, value }));
+const INSPECTION_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => [p.key, p.name]),
+);
+
+function inspectionTypeLabel(row: Document): string | null {
+  const key = row.inspection_type;
+  return key ? (INSPECTION_TYPE_LABELS[key] ?? key) : null;
+}
+
+// Built from the server-side aggregate (counts across the whole filtered
+// dataset) rather than the currently-loaded page, so a type that has documents
+// outside the current page/filter still shows up with an accurate count.
+const inspectionTypeOptions = computed(() => {
+  return store.inspectionTypeCounts
+    .map((c) => ({
+      label: `${INSPECTION_TYPE_LABELS[c.type] ?? c.type} (${c.count})`,
+      value: c.type,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, "he"));
 });
 
 type CombinedFilter = {
@@ -1027,7 +1039,7 @@ async function loadClients() {
 // ── Pagination ─────────────────────────────────────────────────────────────────
 const pageSize = ref(20);
 const currentPage = ref(1);
-watch([search, filterClientId, filterDocumentType, filterDateRange, statusFilter, pageSize, documentSortBy, documentSortDir], () => {
+watch([search, filterClientId, filterInspectionType, filterDateRange, statusFilter, pageSize, documentSortBy, documentSortDir], () => {
   currentPage.value = 1;
 });
 
@@ -1042,8 +1054,8 @@ const filteredRows = computed(() => {
   if (statusFilter.value !== "all") {
     rows = rows.filter((row) => matchesStatusFilter(row, statusFilter.value));
   }
-  if (filterDocumentType.value) {
-    rows = rows.filter((row) => documentTypeLabel(row) === filterDocumentType.value);
+  if (filterInspectionType.value) {
+    rows = rows.filter((row) => row.inspection_type === filterInspectionType.value);
   }
   const q = search.value.trim().toLowerCase();
   if (q) {
@@ -2450,6 +2462,15 @@ async function bulkExtractAi() {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+.document-file-cell__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.document-file-cell__inspection-type {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .document-file-icon {

@@ -11,12 +11,13 @@ export const useDocumentsStore = defineStore("documents", () => {
     const documentQuotaUsed = ref(0);
   const loading = ref(false);
   const counts = ref<{ all: number; done: number; in_progress: number; error: number }>({ all: 0, done: 0, in_progress: 0, error: 0 });
+  const inspectionTypeCounts = ref<{ type: string; count: number }[]>([]);
 
   const hasInProgress = computed(() =>
     rows.value.some(r => r.processing_status === "queued" || r.processing_status === "processing")
   );
 
-  async function fetch(params?: { status?: string; limit?: number; offset?: number; clientId?: string }, force = false) {
+  async function fetch(params?: { status?: string; limit?: number; offset?: number; clientId?: string; inspectionType?: string }, force = false) {
     loading.value = true;
     try {
       const r = await api.documents.list(params, force);
@@ -26,6 +27,7 @@ export const useDocumentsStore = defineStore("documents", () => {
         documentLimit.value = r.documentLimit ?? null;
         documentQuotaUsed.value = r.documentQuotaUsed ?? 0;
       if (r.counts) counts.value = r.counts;
+      inspectionTypeCounts.value = r.inspectionTypeCounts ?? [];
     } finally {
       loading.value = false;
     }
@@ -49,6 +51,7 @@ export const useDocumentsStore = defineStore("documents", () => {
         loading,
         hasInProgress,
         counts,
+        inspectionTypeCounts,
         fetch,
         importFile,
         deleteDoc

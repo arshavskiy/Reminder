@@ -5,6 +5,15 @@ import {getDataDir, getSettings} from "../settings";
 import type {DocTemplate, DynamicExtraction, ExtractionResult} from "../../src/shared/types.js";
 import {buildPromptForTemplate, InspectorProfile} from "../templates/buildPrompt";
 import {logger} from "../logger";
+import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "../shared/printTemplateLayout.js";
+
+// Built from the same preset list the print templates use, so this can't drift
+// from the actual set of inspection types the app knows about — adding a new
+// type to INSPECTION_PRINT_TEMPLATE_PRESETS makes it classifiable here too,
+// with no separate list to keep in sync.
+const INSPECTION_TYPE_ENUM_LINES = INSPECTION_PRINT_TEMPLATE_PRESETS
+  .map((p) => `     - "${p.key}" — ${p.name} (${p.reportTypeLabel})`)
+  .join("\n");
 
 const SYSTEM_PROMPT = `You are a document intelligence assistant specializing in Hebrew business, legal, and technical documents (contracts, invoices, inspection reports / תסקירים, certificates, etc.).
 Extract structured information from the provided document text and return ONLY valid JSON matching the schema below.
@@ -22,6 +31,12 @@ CRITICAL RULES:
    - client_name: the CONTACT PERSON (e.g. "שילה"). Look near "איש קשר".
 5. document_type: classify in Hebrew (e.g. "תסקיר בדיקה", "חוזה", "חשבונית", "אישור", "תעודה").
 6. document_number: the report/document/invoice number (e.g. "תסקיר מספר 15935" → "15935"). Distinct from contract_number.
+6b. inspection_type: ONLY for inspection reports (תסקירים) — which of these exact
+    keys the document's own "סוג תסקיר" (report type) is. Match on the document's
+    title, subtitle, or equipment described, not just the word "תסקיר" alone:
+${INSPECTION_TYPE_ENUM_LINES}
+    Use null if the document isn't an inspection report, or none of the above
+    types clearly fits — never invent a key outside this list.
 7. Phone numbers: keep original Israeli format (e.g. "050-7870067"). If the number appears as 10 consecutive digits with no dash (e.g. "0537285690"), insert the dash after the 3rd digit → "053-7285690".
 8. Email addresses: Hebrew PDFs sometimes output email addresses in reversed visual order, e.g. "il.co1945.shelev@klodin" which is actually "klodin@shelev1945.co.il". Recognize a reversed email by checking whether the part after "@" looks like a name/word and the part before "@" looks like a domain (contains dots and a TLD like .co.il / .com / .org). If reversed, swap the two parts around "@".
 9. The text may have been extracted from a Hebrew PDF; some words can be mis-spaced or have residual bidi artifacts. Use context to determine the correct meaning.
@@ -38,6 +53,7 @@ JSON schema:
   "client_address": string | null,
   "document_type": string | null,
   "document_number": string | null,
+  "inspection_type": string | null,  // one of the keys listed in rule 6b, or null
   "contract_number": string | null,
   "contract_type": string | null,
   "start_date": "YYYY-MM-DD" | null,

@@ -18,6 +18,7 @@ import {syncDocumentToDrive} from "../storage/gdrive";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
+import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "../shared/printTemplateLayout.js";
 import {generatePdfThumbnailForDocument} from "../documents/pdfThumbnail";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {incrementDocumentUsage, type DocumentUsageKind} from "../quotas/userUsageCounters";
@@ -1601,6 +1602,13 @@ async function releaseLocalDocumentCache(
   }
 }
 
+const KNOWN_INSPECTION_TYPE_KEYS = new Set(INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => p.key));
+
+/** Never persist a key the model invented outside the known preset list — a document with an unrecognized value is better left unclassified than mislabeled. */
+function validInspectionType(value: string | null | undefined): string | null {
+  return typeof value === "string" && KNOWN_INSPECTION_TYPE_KEYS.has(value) ? value : null;
+}
+
 async function saveExtractionEntities(
   documentId: string,
   result: import("../../src/shared/types.js").ExtractionResult,
@@ -1610,13 +1618,15 @@ async function saveExtractionEntities(
 ) {
   await stripExcludedClientEmailsForUser(result as unknown as Record<string, unknown>, userId);
 
-  if (result.document_type || result.document_number) {
+  const inspectionType = validInspectionType(result.inspection_type);
+  if (result.document_type || result.document_number || inspectionType) {
     await col("documents").updateOne(
       { _id: new ObjectId(documentId) } as any,
       {
         $set: {
           ...(result.document_type && { document_type: result.document_type }),
           ...(result.document_number && { document_number: result.document_number }),
+          ...(inspectionType && { inspection_type: inspectionType }),
           updated_at: new Date(),
         },
       }
