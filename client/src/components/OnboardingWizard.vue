@@ -69,7 +69,7 @@
           <p class="step-desc">פרטי הרישיון שלך — משמשים לתסקירים, סינון מסמכים ומספור אוטומטי</p>
           <n-form label-placement="top" class="onboarding-form">
             <div class="form-row">
-              <n-form-item label="מספר מפקח" class="form-row__item">
+              <n-form-item label="מספר רישוי" class="form-row__item">
                 <n-input v-model:value="form.inspector_number" placeholder="12345" dir="ltr" />
               </n-form-item>
               <n-form-item label="מספר מ.ג." class="form-row__item">

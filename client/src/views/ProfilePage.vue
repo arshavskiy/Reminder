@@ -134,7 +134,7 @@
           </div>
           <div class="info-card">
             <div class="info-row">
-              <span class="info-label">מספר מפקח</span>
+              <span class="info-label">מספר רישוי</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.inspector_number"
@@ -151,10 +151,10 @@
                 type="button"
                 class="btn btn--ghost btn--xs per-type-toggle"
                 @click="showPerTypeInspectorNumbers = true"
-              >+ הוסף מספר לפי סוג תסקיר</button>
+              >+ הוסף רישוי לפי בדיקה</button>
               <div v-else class="per-type-inspector-numbers">
                 <div class="per-type-inspector-numbers__head">
-                  <span class="info-label">מספר לפי סוג תסקיר</span>
+                  <span class="info-label">רישוי לפי בדיקה</span>
                   <button type="button" class="btn btn--ghost btn--xs" @click="showPerTypeInspectorNumbers = false; engineerForm.inspector_numbers_by_type = {}">בטל</button>
                 </div>
                 <div v-for="opt in inspectionTypeOptions" :key="opt.value" class="info-row per-type-inspector-numbers__row">
@@ -162,13 +162,13 @@
                   <n-input
                     v-model:value="engineerForm.inspector_numbers_by_type[opt.value]"
                     class="info-input"
-                    :placeholder="engineerForm.inspector_number || 'מספר מפקח'"
+                    :placeholder="engineerForm.inspector_number || 'מספר רישוי'"
                   />
                 </div>
               </div>
             </template>
             <div v-else-if="engineerProfile && Object.keys((engineerProfile as any)?.inspector_numbers_by_type ?? {}).length" class="per-type-inspector-numbers per-type-inspector-numbers--readonly">
-              <span class="info-label">מספר לפי סוג תסקיר</span>
+              <span class="info-label">רישוי לפי בדיקה</span>
               <div v-for="[key, num] in Object.entries((engineerProfile as any).inspector_numbers_by_type)" :key="key" class="info-row per-type-inspector-numbers__row">
                 <span class="info-label">{{ inspectionTypeOptions.find((o) => o.value === key)?.label ?? key }}</span>
                 <span class="info-val">{{ num }}</span>
@@ -1884,7 +1884,7 @@ const engineerForm = ref({
 // Some inspectors hold a separate ministry certificate per inspection type
 // rather than one number covering everything — this is only shown/editable
 // when a type-specific number has actually been set, or the user opts in via
-// "הוסף מספר לפי סוג תסקיר", so the common single-number case stays a
+// "הוסף רישוי לפי בדיקה", so the common single-number case stays a
 // one-line field.
 const showPerTypeInspectorNumbers = ref(false);
 const inspectionTypeOptions = INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => ({label: p.name, value: p.key}));
@@ -2595,7 +2595,7 @@ function buildProfileHtml(): string {
     ep
       ? `<h2>פרופיל מהנדס</h2>
   <table>${rows([
-    ["מספר מפקח", ep.inspector_number],
+    ["מספר רישוי", ep.inspector_number],
     ["כתובת", ep.address],
     ["עיר", ep.city],
     ["תואר מקצועי", ep.title],
