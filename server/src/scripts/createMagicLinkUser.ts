@@ -6,7 +6,6 @@ import "./loadEnv";
 import {closeDb, col, connectDb, runWithDbTarget} from "../db/db";
 import {createMagicLinkToken} from "../auth/session";
 import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
-import {TRIAL_DAYS} from "../plans/tierFeatures";
 
 /**
  * Creates (or reuses) a user and prints a one-time magic-link sign-in URL.
@@ -16,8 +15,10 @@ import {TRIAL_DAYS} from "../plans/tierFeatures";
  *   npm run auth:magic-link -- --username=demo [--name="Demo"] [--role=user] [--plan=trial]
  *   npm run auth:magic-link -- --production --email=someone@example.com
  *
- * Plan defaults to trial. --trial-days=0 creates an already-lapsed trial, for
- * testing the read-only state a user lands in when the trial runs out.
+ * Plan defaults to trial. The 30-day window starts when the user clicks the
+ * printed link, not now — pass --trial-days=0 to force an already-lapsed
+ * trial instead, for testing the read-only state a user lands in when the
+ * trial runs out.
  *
  * Writes to the local database unless --production (or --target=production) is passed, which
  * creates a real account in the customer database and prints a link against
@@ -78,15 +79,17 @@ async function main() {
   }
   const plan = planArg as "free" | "trial" | "basic" | "business";
 
-  // Trial accounts are only usable while trial_ends_at is in the future, so a
-  // magic-link user created on the trial needs one or every gate reads expired.
-  // --trial-days=0 makes a lapsed trial, which is how to test read-only mode.
+  // The 30-day trial window starts when the user actually clicks the magic
+  // link (see /auth/magic), not when this script creates the account — a
+  // link that sits unopened for a week shouldn't burn a week of trial.
+  // --trial-days=0 is the one exception: it makes an already-lapsed trial
+  // for testing read-only mode, so it's applied here up front instead.
   const trialDaysArg = parseArg("trial-days");
-  const trialDays = trialDaysArg == null ? TRIAL_DAYS : Number(trialDaysArg);
-  if (!Number.isFinite(trialDays)) {
+  const trialDays = trialDaysArg == null ? null : Number(trialDaysArg);
+  if (trialDaysArg != null && !Number.isFinite(trialDays)) {
     throw new Error(`Invalid --trial-days "${trialDaysArg}". Use a number, e.g. 14 or 0.`);
   }
-  const trialEndsAt = plan === "trial"
+  const trialEndsAt = plan === "trial" && trialDays != null
     ? new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000)
     : null;
 
@@ -102,6 +105,14 @@ async function main() {
   const now = new Date();
 
   if (existing) {
+    // Only touch trial_ends_at when --trial-days was explicitly passed (the
+    // lapsed-trial test case) or the account has never started one — a plain
+    // re-run to reprint the link must not reset an already-running trial.
+    const trialUpdate = trialDaysArg != null
+      ? { trial_ends_at: trialEndsAt }
+      : existing.trial_ends_at
+        ? {}
+        : { trial_ends_at: trialEndsAt };
     await col("users").updateOne(
       { _id: existing._id },
       {
@@ -111,7 +122,7 @@ async function main() {
           ...(name != null ? { name } : {}),
           role,
           plan,
-          trial_ends_at: trialEndsAt,
+          ...trialUpdate,
           is_active: 1,
           email_verified: email ? 1 : (existing.email_verified ?? 0),
           updated_at: now,
@@ -142,7 +153,7 @@ async function main() {
   const user = await col("users").findOne(identityQuery as any) as any;
   if (!user) throw new Error("User not found after upsert");
 
-  await ensureUserSettingsWithEntitlements(user._id.toString(), { ...user, role, plan, trial_ends_at: trialEndsAt });
+  await ensureUserSettingsWithEntitlements(user._id.toString(), user);
 
   const token = await createMagicLinkToken(user._id.toString());
   const baseUrl = (process.env.SERVER_URL?.trim()

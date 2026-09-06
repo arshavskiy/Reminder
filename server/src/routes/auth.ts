@@ -29,7 +29,7 @@ import {
 } from "../auth/emailAuth";
 import {clientIp, logger} from "../logger";
 import {notifyPasswordResetRequested} from "../push/adminNotify";
-import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements, newTrialEndsAt} from "../plans/planEntitlements";
+import {DEFAULT_NEW_USER_PLAN, ensureTrialStartedOnLogin, ensureUserSettingsWithEntitlements, newTrialEndsAt} from "../plans/planEntitlements";
 import {parseSignupIntent, signupIntentFields} from "../plans/signupIntent";
 
 export function registerAuthRoutes(app: express.Application) {
@@ -535,12 +535,14 @@ export function registerAuthRoutes(app: express.Application) {
     }
 
     await col("users").updateOne({ _id: user._id }, { $set: { last_login_at: new Date() } });
-    await ensureUserSettingsWithEntitlements(user._id.toString(), user);
+    await ensureTrialStartedOnLogin(user);
+    const freshUser = await col("users").findOne({ _id: user._id }) as any;
+    await ensureUserSettingsWithEntitlements(user._id.toString(), freshUser);
 
     const ua = req.headers["user-agent"] ?? undefined;
     const ip = clientIp(req);
     const { cookies } = await createSession(user._id.toString(), ua, ip);
-    logAuth("login_success", req, { user, method: "magic_link", is_new_user: false });
+    logAuth("login_success", req, { user: freshUser, method: "magic_link", is_new_user: false });
 
     res.setHeader("Set-Cookie", cookies);
     res.redirect(frontendUrl(POST_LOGIN_PATH));

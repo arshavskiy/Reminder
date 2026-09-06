@@ -42,6 +42,24 @@ export function newTrialEndsAt(now: Date = new Date()): Date {
   return new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
 }
 
+/**
+ * Starts the trial window on first login rather than at registration, so time
+ * spent before a user verifies their email or clicks their magic link isn't
+ * burned off the 30 days. Call on every successful login; a no-op once
+ * trial_ends_at is already set.
+ */
+export async function ensureTrialStartedOnLogin(user: {
+  _id: ObjectId;
+  plan?: string | null;
+  trial_ends_at?: Date | string | null;
+}): Promise<void> {
+  if (user.plan !== DEFAULT_NEW_USER_PLAN || user.trial_ends_at) return;
+  await col("users").updateOne(
+    { _id: user._id, trial_ends_at: null },
+    { $set: { trial_ends_at: newTrialEndsAt() } },
+  );
+}
+
 export function buildPlanEntitlements(
   user: {plan?: string | null; role?: string | null} | null | undefined,
 ): PlanEntitlements {
