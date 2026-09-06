@@ -530,14 +530,15 @@ export function createInspectionPrintTemplateLayout(keyOrPreset: string | Inspec
                     columns: preset.equipmentColumns.map((c) => ({...c})),
                 },
             ]),
-            // Parts 3, 4 and 6 of a real inspector-issued air-receiver report cover
-            // the last hydraulic test, the test results (including the safety-valve
-            // opening pressure), and the permitted working pressure given the test
-            // outcome — regulatory content this report type needs that a
-            // lifting-machine or elevator report doesn't. Scoped to air_receiver only
-            // for now; the findings/notes section numbering below shifts to match
-            // (5/7 instead of 3/4) only for this type.
-            ...(preset.key === "air_receiver" ? [
+            // Parts 3, 4 and 6 of a real inspector-issued pressure-equipment report
+            // cover the last hydraulic test, the test results (including the
+            // safety-valve opening pressure), and the permitted working pressure
+            // given the test outcome — regulatory content shared by all 4
+            // pressure-vessel types (air_receiver, steam_receiver, steam_boiler,
+            // pressure_vessel) under the pressure-vessel testing regulations. The
+            // findings/notes section numbering below shifts to match (5/7 instead
+            // of 3/4) for this group.
+            ...(isPressureType ? [
                 {
                     type: "fields" as const,
                     title: "3. פרטי ניסוי הידראולי אחרון",
@@ -563,7 +564,7 @@ export function createInspectionPrintTemplateLayout(keyOrPreset: string | Inspec
             ] : []),
             {
                 type: "findings",
-                title: preset.key === "air_receiver"
+                title: isPressureType
                     ? "5. תיאור ליקויים, השיפורים, ואמצעים לתיקונים"
                     : "3. תיאור ליקויים, השיפורים, ואמצעים לתיקונים",
                 rows: [
@@ -574,7 +575,7 @@ export function createInspectionPrintTemplateLayout(keyOrPreset: string | Inspec
                 deadlineBind: "findings_deadline",
                 deadlineSuffix: "ימים — אסור לעבוד עם הפרק עד להסדרת הליקוי",
             },
-            ...(preset.key === "air_receiver" ? [{
+            ...(isPressureType ? [{
                 type: "fields" as const,
                 title: "6. לחץ עבודה מותר בהתחשב בתנאי העבודה ותוצאות הבדיקה",
                 columns: 1,
@@ -584,7 +585,7 @@ export function createInspectionPrintTemplateLayout(keyOrPreset: string | Inspec
             }] : []),
             {
                 type: "static_text",
-                title: preset.key === "air_receiver" ? "הערות נוספות" : "4. הערות נוספות",
+                title: isPressureType ? "הערות נוספות" : "4. הערות נוספות",
                 text: preset.legalText,
             },
             {type: "signature", enabled: true, align: "left"},

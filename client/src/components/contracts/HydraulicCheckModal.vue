@@ -81,12 +81,14 @@
                     <div class="hm-field__row">
                       <n-select
                           v-model:value="templateId"
+                          :consistent-menu-width="false"
                           :loading="loadingTemplates"
+                          :menu-props="{style: 'width:100px!important;max-width:100px!important'}"
                           :options="templateOptions"
                           :virtual-scroll="false"
                           filterable
                           placeholder="בחר תבנית"
-                          style="flex:1"
+                          style="width:100px;flex:none"
                           @update:value="(id) => selectTemplate(id, {syncReportType: true})"
                       />
                       <n-tooltip trigger="hover">
@@ -307,18 +309,66 @@
                       <label>מס׳ סידורי</label>
                       <n-dynamic-tags v-model:value="equipment.serial_numbers" input-placeholder="הוסף מספר סידורי"/>
                     </div>
-                    <div class="hm-field hm-field--span2">
-                      <label>עומס עבודה בטוח (ק״ג)</label>
-                      <n-dynamic-tags v-model:value="equipment.load_capacity_work" input-placeholder="הוסף עומס"/>
-                    </div>
-                    <div class="hm-field hm-field--span2">
-                      <label>עומס מבחן (ק״ג)</label>
-                      <n-dynamic-tags v-model:value="equipment.load_capacity_test" input-placeholder="הוסף עומס"/>
-                    </div>
-                    <div class="hm-field hm-field--span2">
-                      <label>רדיוס עומס (מטר)</label>
-                      <n-dynamic-tags v-model:value="equipment.load_radius" input-placeholder="הוסף רדיוס"/>
-                    </div>
+                    <template v-if="isPressureType">
+                      <div class="hm-field">
+                        <label>מיקום</label>
+                        <n-input v-model:value="equipment.equipment_location" placeholder="מיקום המתקן"/>
+                      </div>
+                      <div class="hm-field">
+                        <label>נפח (ליטר)</label>
+                        <n-input v-model:value="equipment.volume_liters" placeholder="נפח"/>
+                      </div>
+                      <div class="hm-field">
+                        <label>קוטר (מ״מ)</label>
+                        <n-input v-model:value="equipment.diameter_mm" placeholder="קוטר"/>
+                      </div>
+                      <div class="hm-field">
+                        <label>חומר</label>
+                        <n-input v-model:value="equipment.material" placeholder="חומר"/>
+                      </div>
+                      <div class="hm-field">
+                        <label>מבנה</label>
+                        <n-input v-model:value="equipment.construction_type" placeholder="מבנה"/>
+                      </div>
+                      <div class="hm-field">
+                        <label>עובי דופן (מ״מ)</label>
+                        <n-input v-model:value="equipment.wall_thickness_mm" placeholder="עובי דופן"/>
+                      </div>
+                      <div class="hm-field">
+                        <label>עובי כיפות (מ״מ)</label>
+                        <n-input v-model:value="equipment.cap_thickness_mm" placeholder="עובי כיפות"/>
+                      </div>
+                      <div class="hm-field">
+                        <label>פתחי בקרה וניקוי</label>
+                        <n-input v-model:value="equipment.access_openings" placeholder="פתחי בקרה וניקוי"/>
+                      </div>
+                      <div class="hm-field">
+                        <label>פקק</label>
+                        <n-input v-model:value="equipment.plug_present" placeholder="פקק"/>
+                      </div>
+                      <div class="hm-field">
+                        <label>כווה</label>
+                        <n-input v-model:value="equipment.corrosion_present" placeholder="כווה"/>
+                      </div>
+                      <div class="hm-field">
+                        <label>קוטר שסתום בטחון (מ״מ)</label>
+                        <n-input v-model:value="equipment.safety_valve_diameter_mm" placeholder="קוטר שסתום בטחון"/>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <div class="hm-field hm-field--span2">
+                        <label>עומס עבודה בטוח (ק״ג)</label>
+                        <n-dynamic-tags v-model:value="equipment.load_capacity_work" input-placeholder="הוסף עומס"/>
+                      </div>
+                      <div class="hm-field hm-field--span2">
+                        <label>עומס מבחן (ק״ג)</label>
+                        <n-dynamic-tags v-model:value="equipment.load_capacity_test" input-placeholder="הוסף עומס"/>
+                      </div>
+                      <div class="hm-field hm-field--span2">
+                        <label>רדיוס עומס (מטר)</label>
+                        <n-dynamic-tags v-model:value="equipment.load_radius" input-placeholder="הוסף רדיוס"/>
+                      </div>
+                    </template>
                     <div class="hm-field hm-field--full">
                       <label>תיאור ציוד</label>
                       <n-input
@@ -580,6 +630,17 @@ type EquipmentRow = {
   load_capacity_test: string[];
   load_radius: string[];
   description: string;
+  equipment_location: string;
+  volume_liters: string;
+  diameter_mm: string;
+  material: string;
+  construction_type: string;
+  wall_thickness_mm: string;
+  cap_thickness_mm: string;
+  access_openings: string;
+  plug_present: string;
+  corrosion_present: string;
+  safety_valve_diameter_mm: string;
 };
 
 const equipmentRows = ref<EquipmentRow[]>([]);
@@ -718,6 +779,8 @@ const reportTypeOptions = reportTypePresets.map((preset) => ({label: preset.labe
 const selectedReportType = computed(() =>
     reportTypePresets.find((preset) => preset.value === reportType.value) ?? reportTypePresets[0],
 );
+const PRESSURE_TYPE_KEYS = new Set(["air_receiver", "steam_receiver", "steam_boiler", "pressure_vessel"]);
+const isPressureType = computed(() => PRESSURE_TYPE_KEYS.has(reportType.value));
 const reminderDaysOptions = [
   {label: "7 ימים לפני", value: 7},
   {label: "14 ימים לפני", value: 14},
@@ -980,6 +1043,17 @@ function emptyEquipmentRow(): EquipmentRow {
     load_capacity_test: [],
     load_radius: [],
     description: "",
+    equipment_location: "",
+    volume_liters: "",
+    diameter_mm: "",
+    material: "",
+    construction_type: "",
+    wall_thickness_mm: "",
+    cap_thickness_mm: "",
+    access_openings: "",
+    plug_present: "",
+    corrosion_present: "",
+    safety_valve_diameter_mm: "",
   };
 }
 
@@ -1472,6 +1546,17 @@ function buildTemplateDraft(): Record<string, string> {
     data[`checked_equipment${suffix}`] = eq.name;
     data[`chassis${suffix}`] = joinStackedValues(eq.serial_numbers);
     data[`quantity${suffix}`] = String(Math.max(eq.serial_numbers.length, 1));
+    data[`equipment_location${suffix}`] = eq.equipment_location;
+    data[`volume_liters${suffix}`] = eq.volume_liters;
+    data[`diameter_mm${suffix}`] = eq.diameter_mm;
+    data[`material${suffix}`] = eq.material;
+    data[`construction_type${suffix}`] = eq.construction_type;
+    data[`wall_thickness_mm${suffix}`] = eq.wall_thickness_mm;
+    data[`cap_thickness_mm${suffix}`] = eq.cap_thickness_mm;
+    data[`access_openings${suffix}`] = eq.access_openings;
+    data[`plug_present${suffix}`] = eq.plug_present;
+    data[`corrosion_present${suffix}`] = eq.corrosion_present;
+    data[`safety_valve_diameter_mm${suffix}`] = eq.safety_valve_diameter_mm;
   });
 
   const templateBinds = new Set(template.value?.cells.map((cell) => cell.bind).filter(Boolean) ?? []);
@@ -1580,6 +1665,19 @@ async function updateContract(contractId: string) {
         load_capacity_test: eq.load_capacity_test,
         load_radius: eq.load_radius,
         category: eq.category,
+        license_number: eq.license_number,
+        description: eq.description,
+        equipment_location: eq.equipment_location,
+        volume_liters: eq.volume_liters,
+        diameter_mm: eq.diameter_mm,
+        material: eq.material,
+        construction_type: eq.construction_type,
+        wall_thickness_mm: eq.wall_thickness_mm,
+        cap_thickness_mm: eq.cap_thickness_mm,
+        access_openings: eq.access_openings,
+        plug_present: eq.plug_present,
+        corrosion_present: eq.corrosion_present,
+        safety_valve_diameter_mm: eq.safety_valve_diameter_mm,
       })),
     },
     skip_reminders: true,
@@ -1744,6 +1842,17 @@ async function openForUpdate(contractId: string, returnTo?: string) {
     load_capacity_test: Array.isArray(eq?.load_capacity_test) ? eq.load_capacity_test.map(String) : manual.load_capacity_test ? [manual.load_capacity_test] : [],
     load_radius: Array.isArray(eq?.load_radius) ? eq.load_radius.map(String) : manual.load_radius ? [manual.load_radius] : [],
     description: String(eq?.description ?? row.equipment_description ?? manual.equipment_description ?? ""),
+    equipment_location: String(eq?.equipment_location ?? manual.equipment_location ?? ""),
+    volume_liters: String(eq?.volume_liters ?? manual.volume_liters ?? ""),
+    diameter_mm: String(eq?.diameter_mm ?? manual.diameter_mm ?? ""),
+    material: String(eq?.material ?? manual.material ?? ""),
+    construction_type: String(eq?.construction_type ?? manual.construction_type ?? ""),
+    wall_thickness_mm: String(eq?.wall_thickness_mm ?? manual.wall_thickness_mm ?? ""),
+    cap_thickness_mm: String(eq?.cap_thickness_mm ?? manual.cap_thickness_mm ?? ""),
+    access_openings: String(eq?.access_openings ?? manual.access_openings ?? ""),
+    plug_present: String(eq?.plug_present ?? manual.plug_present ?? ""),
+    corrosion_present: String(eq?.corrosion_present ?? manual.corrosion_present ?? ""),
+    safety_valve_diameter_mm: String(eq?.safety_valve_diameter_mm ?? manual.safety_valve_diameter_mm ?? ""),
   }));
   if (!equipmentRows.value.length) equipmentRows.value = [emptyEquipmentRow()];
   templateValues.value = {};
@@ -2103,7 +2212,6 @@ defineExpose({open, openForUpdate});
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 100px;
 }
 
 .hm-field--full {

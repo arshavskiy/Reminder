@@ -279,6 +279,18 @@ export interface ContractManualFields {
     load_capacity_test: string[];
     load_radius: string[];
     category: string;
+    description?: string | null;
+    equipment_location?: string | null;
+    volume_liters?: string | null;
+    diameter_mm?: string | null;
+    material?: string | null;
+    construction_type?: string | null;
+    wall_thickness_mm?: string | null;
+    cap_thickness_mm?: string | null;
+    access_openings?: string | null;
+    plug_present?: string | null;
+    corrosion_present?: string | null;
+    safety_valve_diameter_mm?: string | null;
   }>;
 }
 
