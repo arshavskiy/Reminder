@@ -64,17 +64,17 @@ export const router = createRouter({
         {
             path: "/invoices",
             component: () => import("../views/InvoicesPage.vue"),
-            meta: {feature: FEATURES.pages.invoices, requirePlan: ["trial", "business"]}
+            meta: {feature: FEATURES.pages.invoices, requirePlan: "business"}
         },
         {
             path: "/invoices/expenses",
             component: () => import("../views/ExpenseAnalyticsPage.vue"),
-            meta: {feature: FEATURES.pages.invoices, requirePlan: ["trial", "business"]}
+            meta: {feature: FEATURES.pages.invoices, requirePlan: "business"}
         },
         {
             path: "/invoices/:id",
             component: () => import("../views/InvoiceDetailPage.vue"),
-            meta: {feature: FEATURES.pages.invoices, requirePlan: ["trial", "business"]}
+            meta: {feature: FEATURES.pages.invoices, requirePlan: "business"}
         },
         {path: "/clients", component: ClientsPage, meta: {feature: FEATURES.pages.clients, requirePlan: "basic"}},
         {

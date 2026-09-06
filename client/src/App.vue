@@ -494,9 +494,7 @@ const allNav: Array<{
   {label: "לקוחות", key: "clients", minPlan: "basic", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minPlan: "business", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minPlan: "basic", feature: FEATURES.pages.equipment},
-  // Trial and business only: a rank threshold cannot express this, since basic
-  // ranks alongside trial and would be admitted by any minimum that lets trial in.
-  {label: "חשבוניות", key: "invoices", minPlan: ["trial", "business"], feature: FEATURES.pages.invoices},
+  {label: "חשבוניות", key: "invoices", minPlan: "business", feature: FEATURES.pages.invoices},
   {label: "Gmail", key: "gmail", minRole: "admin", feature: FEATURES.pages.gmail},
   // Template management lives under the account dropdown.
   // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
