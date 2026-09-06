@@ -3,7 +3,7 @@
 // the body here ran after db.ts had already evaluated, leaving it on its
 // localhost fallback while .env.local pointed somewhere else entirely.
 import "./loadEnv";
-import {closeDb, col, connectDb} from "../db/db";
+import {closeDb, col, connectDb, runWithDbTarget} from "../db/db";
 import {createMagicLinkToken} from "../auth/session";
 import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
 import {TRIAL_DAYS} from "../plans/tierFeatures";
@@ -14,14 +14,14 @@ import {TRIAL_DAYS} from "../plans/tierFeatures";
  * Usage:
  *   npm run auth:magic-link -- --email=someone@example.com [--name="Someone"] [--role=admin] [--plan=trial|basic|business]
  *   npm run auth:magic-link -- --username=demo [--name="Demo"] [--role=user] [--plan=trial]
+ *   npm run auth:magic-link -- --production --email=someone@example.com
  *
  * Plan defaults to trial. --trial-days=0 creates an already-lapsed trial, for
  * testing the read-only state a user lands in when the trial runs out.
  *
- * Writes to the local database unless --target=production is passed, which
+ * Writes to the local database unless --production (or --target=production) is passed, which
  * creates a real account in the customer database and prints a link against
- * SERVER_URL. That combination is refused unless SERVER_URL is set, so a
- * production account cannot be created with an unusable localhost link.
+ * SERVER_URL, defaulting to https://api.remindocr.com for production.
  */
 
 function parseArg(name: string): string | undefined {
@@ -32,18 +32,21 @@ function parseArg(name: string): string | undefined {
 
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
 
-if (parseArg("target") === "production") {
+const targetArg = parseArg("target");
+if (targetArg !== undefined && !["local", "production"].includes(targetArg)) {
+    throw new Error("Invalid --target. Use local or production.");
+}
+if (process.argv.includes("--production") && targetArg === "local") {
+    throw new Error("--production cannot be combined with --target=local");
+}
+const target = process.argv.includes("--production") || targetArg === "production"
+    ? "production"
+    : "local";
+
+if (target === "production") {
     if (!process.env.MONGODB_PRODUCTION_URI) {
         throw new Error("--target=production needs MONGODB_PRODUCTION_URI to be set");
     }
-    if (!process.env.SERVER_URL) {
-        throw new Error(
-            "--target=production needs SERVER_URL (e.g. https://api.remindocr.com), " +
-            "otherwise the printed link points at localhost and cannot be used.",
-        );
-    }
-    // db.ts reads this when it picks the primary slot.
-    process.env.MONGODB_TARGET = "production";
     console.log("[magic-link] TARGET: production — this creates a real account in the customer database.");
 }
 
@@ -142,7 +145,9 @@ async function main() {
   await ensureUserSettingsWithEntitlements(user._id.toString(), { ...user, role, plan, trial_ends_at: trialEndsAt });
 
   const token = await createMagicLinkToken(user._id.toString());
-  const baseUrl = process.env.SERVER_URL ?? "http://localhost:3737";
+  const baseUrl = (process.env.SERVER_URL?.trim()
+    || (target === "production" ? "https://api.remindocr.com" : "http://localhost:3737"))
+    .replace(/\/+$/, "");
   const magicLink = `${baseUrl}/auth/magic?token=${token}`;
 
   const label = user.email || user.username || user._id.toString();
@@ -154,7 +159,7 @@ async function main() {
   console.log(magicLink);
 }
 
-main()
+runWithDbTarget(target, main)
   .catch((err) => {
     console.error("[magic-link] Failed:", err);
     process.exitCode = 1;
