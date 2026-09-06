@@ -126,7 +126,7 @@ export function registerDocumentRoutes(app: express.Application) {
       col("documents")
         .find(filter)
         .project({ raw_text: 0 })
-        .sort({ created_at: -1 })
+        .sort({ import_date: -1, created_at: -1 } as any)
         .skip(offset)
         .limit(limit)
         .toArray(),
