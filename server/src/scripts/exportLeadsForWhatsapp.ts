@@ -1,8 +1,8 @@
 // One-off export: dumps inspector_leads with an Israeli MOBILE number
 // (landlines can't receive WhatsApp) for building WhatsApp click-to-chat
 // links manually. Generates a fresh magic link per lead that already has an
-// app account (existing links are single-use and expire in 15 minutes, so
-// old ones are dead by the time this runs).
+// app account (links are reusable and expire in 30 days, so old ones are
+// still fine to reuse — rerun only if it's actually been that long).
 //
 // Output format is picked by the output file's extension:
 //   .json  — raw lead data, for scripting your own thing

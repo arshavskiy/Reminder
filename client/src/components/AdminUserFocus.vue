@@ -101,7 +101,7 @@
           <code class="uf-magiclink__value">{{ magicLinkResult.link }}</code>
           <button class="btn btn--ghost btn--xs" type="button" @click="copyMagicLink">Copy</button>
           <button class="btn btn--ghost btn--xs" type="button" @click="magicLinkResult = null">✕</button>
-          <span class="uf-magiclink__note">Single-use, expires in 15 min</span>
+          <span class="uf-magiclink__note">Reusable, expires {{ formatExpiry(magicLinkResult.expiresAt) }}</span>
         </div>
 
         <n-spin :show="busy">
@@ -1066,6 +1066,11 @@ async function reloadAll() {
 
 const magicLinkResult = ref<{ userId: string; link: string; expiresAt: number } | null>(null);
 const issuingMagicLink = ref(false);
+
+function formatExpiry(expiresAt: number): string {
+  const days = Math.round((expiresAt - Date.now()) / (24 * 60 * 60 * 1000));
+  return days >= 1 ? `in ${days} day${days === 1 ? "" : "s"}` : "soon";
+}
 
 async function issueMagicLink() {
   if (!selectedUser.value) return;

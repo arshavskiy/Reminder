@@ -166,7 +166,7 @@ async function main() {
     ? `, trial ${trialEndsAt > new Date() ? "ends" : "ended"} ${trialEndsAt.toISOString().slice(0, 10)}`
     : "";
   console.log(`[magic-link] User: ${label} (role: ${role}, plan: ${plan}${trialNote}, id: ${user._id.toString()})`);
-  console.log(`[magic-link] Link expires in ${magicLinkTtlMinutes(plan)} minutes and can be used once:`);
+  console.log(`[magic-link] Link expires in ${magicLinkTtlMinutes(plan)} minutes and can be used multiple times until then:`);
   console.log(magicLink);
 }
 

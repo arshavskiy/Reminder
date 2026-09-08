@@ -3,33 +3,33 @@ import {ObjectId} from "mongodb";
 import {getDb} from "../db/db";
 import type {User, UserPlan} from "../../src/shared/types.js";
 
-const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
-// Trial accounts are often provisioned in bulk (e.g. from inspector leads) and
-// clicked well after creation, so their link gets a much longer window before
-// going stale unused. Still single-use — consumeMagicLinkToken deletes it on
-// the first successful click regardless of how much of the window is left.
-const TRIAL_MAGIC_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+// Every plan gets the same 30-day window — long enough for bulk-provisioned
+// links (e.g. inspector leads) to still be live whenever the recipient gets
+// around to clicking. Links are reusable within that window: clicking does
+// not consume or delete the token, so the same link can log in more than
+// once until it expires. This trades single-use security for links that
+// keep working after a forward, a shared inbox, or a second device.
+const MAGIC_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** TTL in minutes for the given plan's magic link — for surfacing to callers/UI. */
-export function magicLinkTtlMinutes(plan?: UserPlan | string | null): number {
-  return (plan === "trial" ? TRIAL_MAGIC_LINK_TTL_MS : MAGIC_LINK_TTL_MS) / 60_000;
+/** TTL in minutes for a magic link — for surfacing to callers/UI. */
+export function magicLinkTtlMinutes(_plan?: UserPlan | string | null): number {
+  return MAGIC_LINK_TTL_MS / 60_000;
 }
 
-export async function createMagicLinkToken(userId: string, plan?: UserPlan | string | null): Promise<string> {
+export async function createMagicLinkToken(userId: string, _plan?: UserPlan | string | null): Promise<string> {
   const token = randomBytes(32).toString("hex");
-  const ttl = plan === "trial" ? TRIAL_MAGIC_LINK_TTL_MS : MAGIC_LINK_TTL_MS;
   await getDb().collection("magic_link_tokens").insertOne({
     token,
     user_id: userId,
     created_at: new Date(),
-    expires_at: new Date(Date.now() + ttl),
+    expires_at: new Date(Date.now() + MAGIC_LINK_TTL_MS),
   } as any);
   return token;
 }
 
-/** Verifies and consumes a magic-link token, returning the associated user id. Single-use. */
+/** Verifies a magic-link token and returns the associated user id. Reusable until it expires. */
 export async function consumeMagicLinkToken(token: string): Promise<string | null> {
-  const record = await getDb().collection("magic_link_tokens").findOneAndDelete({
+  const record = await getDb().collection("magic_link_tokens").findOne({
     token,
     expires_at: { $gt: new Date() },
   } as any);
