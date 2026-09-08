@@ -5,7 +5,7 @@ The Inspector Leads admin page supports approved text-template campaigns, per-ph
 ## Meta setup
 
 1. Create a Meta Business portfolio and a Meta developer app with the WhatsApp product. Start with Meta's test phone number and permitted test recipients.
-2. Register the sending business number. To use `+972586281637`, complete Meta's number onboarding; setting the display label alone does not connect that number. If it is already in the WhatsApp Business app, check the account's eligibility for coexistence before migrating it.
+2. Register the sending business number. To use `+972554605328`, complete Meta's number onboarding; setting the display label alone does not connect that number. If it is already in the WhatsApp Business app, check the account's eligibility for coexistence before migrating it.
 3. Create a production system-user access token with access to the WhatsApp assets and `whatsapp_business_messaging` / `whatsapp_business_management` permissions.
 4. Set the environment variables below on the backend. Never put credentials in the Vue client.
 5. Configure the callback URL as `https://<server-host>/api/webhooks/whatsapp`, enter the verification token, and subscribe the app to the WABA's `messages` webhook field. The app secret verifies POST signatures against the raw body.
@@ -22,7 +22,7 @@ WHATSAPP_BUSINESS_ACCOUNT_ID=<WABA-id>
 WHATSAPP_API_VERSION=<supported-version-from-Meta-app>
 WHATSAPP_APP_SECRET=<Meta-app-secret>
 WHATSAPP_VERIFY_TOKEN=<random-verification-secret>
-WHATSAPP_DISPLAY_PHONE=+972586281637
+WHATSAPP_DISPLAY_PHONE=+972554605328
 ```
 
 Choose an API version supported by your Meta app; the server deliberately does not guess one. `WHATSAPP_DISPLAY_PHONE` is informational; `WHATSAPP_PHONE_NUMBER_ID` is the actual sender.

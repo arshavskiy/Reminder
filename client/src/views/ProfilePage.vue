@@ -1796,7 +1796,7 @@ function whatsappHref(plan: {name: string; price: number; yearlyPrice?: number})
       ? `₪${yearlyMonthly(plan)} לחודש בתשלום שנתי או ₪${plan.price} בחיוב חודשי`
       : `₪${plan.price} לחודש`;
   const message = `שלום, אני מעוניין לרכוש את המסלול ${plan.name} של RemindOCR (${price}).`;
-  return `https://wa.me/972586281637?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/972554605328?text=${encodeURIComponent(message)}`;
 }
 const planTag = computed(() => ({
   label: PLAN_LABELS[currentPlanId.value],

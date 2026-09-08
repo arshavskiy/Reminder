@@ -6,7 +6,7 @@ const SITE_FOOTER = `
 <footer style="margin-top:48px;padding:32px 24px;text-align:center;background:#17212b;color:rgba(255,255,255,0.75);font-size:14px;font-family:'Segoe UI',Arial,sans-serif;">
   <strong style="color:#fff;">RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
   <div style="margin-top:8px;color:rgba(255,255,255,0.72);">
-    טלפון: <a href="tel:+972586281637" style="color:#fff;text-decoration:none;font-weight:600;">058-628-1637</a> ·
+    טלפון: <a href="tel:+972554605328" style="color:#fff;text-decoration:none;font-weight:600;">055-4605328</a> ·
     דוא"ל: <a href="mailto:contact@remindocr.com" style="color:#fff;text-decoration:none;font-weight:600;">contact@remindocr.com</a>
   </div>
   <div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.5);">
@@ -95,7 +95,7 @@ const TERMS_HTML = `<!DOCTYPE html>
   <p>שם בית העסק: HandCoded / RemindOCR.</p>
   <p>השירות הנמכר באתר: מנוי לשימוש במערכת RemindOCR, שירות מקוון לניהול מסמכים, תסקירים, חוזים, חשבוניות ותזכורות.</p>
   <p>דוא"ל שירות לקוחות ובקשות ביטול: <a href="mailto:contact@remindocr.com">contact@remindocr.com</a>.</p>
-  <p>טלפון ליצירת קשר: <a href="tel:+972586281637">058-628-1637</a>.</p>
+  <p>טלפון ליצירת קשר: <a href="tel:+972554605328">055-4605328</a>.</p>
   <p>כתובת בית העסק: עפרוני ארבל 32, כפר ורדים, ישראל.</p>
 
   <h2>1. קבלת התנאים</h2>
