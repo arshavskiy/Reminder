@@ -1,0 +1,173 @@
+<title>WhatsApp Leads</title>
+<style>
+  :root {
+    --brand: #18a058;
+    --brand-dark: #0c7a43;
+    --bg: #f8fafb;
+    --white: #ffffff;
+    --border: #e2e8f0;
+    --text: #1a1a2e;
+    --text-2: #4a5568;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171a;
+      --white: #1e2227;
+      --border: #2c3138;
+      --text: #f1f5f4;
+      --text-2: #9aa5ac;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14171a;
+    --white: #1e2227;
+    --border: #2c3138;
+    --text: #f1f5f4;
+    --text-2: #9aa5ac;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; direction: rtl; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--text-2); font-size: 13px; margin: 0 0 16px; }
+  .warn {
+    background: color-mix(in srgb, #f0b429 15%, var(--white));
+    border: 1px solid color-mix(in srgb, #f0b429 40%, var(--border));
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  input[type="search"] {
+    flex: 1;
+    min-width: 160px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--white);
+    color: var(--text);
+    font-size: 14px;
+  }
+  .count { font-size: 12px; color: var(--text-2); white-space: nowrap; }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .row[hidden] { display: none; }
+  .row--sent { opacity: 0.55; }
+  .row__main { flex: 1; min-width: 0; }
+  .row__name { font-weight: 600; font-size: 14px; }
+  .row__meta { font-size: 12px; color: var(--text-2); }
+  .row__nolink { font-size: 11px; color: #b45309; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn--wa { background: #25d366; color: #06210f; }
+  .btn--sent { background: var(--border); color: var(--text-2); }
+  .btn--copy { background: transparent; border: 1px solid var(--border); color: var(--text-2); padding: 7px 10px; }
+</style>
+
+<div class="wrap">
+  <h1>שליחת הודעות WhatsApp ללידים</h1>
+  <p class="sub">כל שורה פותחת WhatsApp עם הודעה מוכנה מראש — עדיין צריך ללחוץ שליחה ידנית שם.</p>
+  <div class="warn">
+    ⚠️ קישורי הכניסה בהודעות תקפים ל-15 דקות בלבד ולשימוש חד-פעמי. אם עברו 15 דקות מרגע הפקת הרשימה — יש להריץ מחדש את הסקריפט לפני שליחה.
+  </div>
+  <div class="controls">
+    <input type="search" id="search" placeholder="חיפוש לפי שם או עיר..." />
+    <span class="count" id="count"></span>
+  </div>
+  <div id="list"></div>
+</div>
+
+<script>
+  const LEADS = __LEADS_JSON__;
+
+  const MESSAGE_TEMPLATE = (lead) => {
+    const intro = "שלום" + (lead.name ? " " + lead.name : "") + ", מדבר פאשה מ-RemindOCR — מערכת לניהול תסקירי בדיקה, מסמכים ותזכורות לבודקים מוסמכים.";
+    const trial = "פתחנו לך 30 יום ניסיון חינם, ללא כרטיס אשראי.";
+    const link = lead.magicLink ? ("כניסה מהירה למערכת: " + lead.magicLink) : "אשמח לשלוח לך קישור כניסה אם תרצה/י להתנסות.";
+    return intro + "\n\n" + trial + "\n" + link;
+  };
+
+  function waLink(lead) {
+    const text = encodeURIComponent(MESSAGE_TEMPLATE(lead));
+    return "https://wa.me/" + lead.waPhone + "?text=" + text;
+  }
+
+  const listEl = document.getElementById("list");
+  const searchEl = document.getElementById("search");
+  const countEl = document.getElementById("count");
+
+  function sentKey(i) { return "wa-lead-sent-" + i; }
+  function isSent(i) {
+    try { return localStorage.getItem(sentKey(i)) === "1"; } catch (e) { return false; }
+  }
+  function markSent(i) {
+    try { localStorage.setItem(sentKey(i), "1"); } catch (e) {}
+  }
+
+  function render() {
+    const q = searchEl.value.trim().toLowerCase();
+    listEl.innerHTML = "";
+    let shown = 0;
+    LEADS.forEach((lead, i) => {
+      const hay = (lead.name + " " + lead.city).toLowerCase();
+      if (q && !hay.includes(q)) return;
+      shown++;
+      const row = document.createElement("div");
+      row.className = "row" + (isSent(i) ? " row--sent" : "");
+      row.innerHTML =
+        '<div class="row__main">' +
+          '<div class="row__name"></div>' +
+          '<div class="row__meta"></div>' +
+        '</div>' +
+        (lead.magicLink ? "" : '<span class="row__nolink">אין קישור כניסה</span>') +
+        '<button class="btn btn--copy" type="button" title="העתק מספר">📋</button>' +
+        '<a class="btn btn--wa" target="_blank" rel="noopener">שלח ב-WhatsApp</a>';
+
+      row.querySelector(".row__name").textContent = lead.name || "(ללא שם)";
+      row.querySelector(".row__meta").textContent = lead.city + " · " + lead.phone;
+
+      const waBtn = row.querySelector(".btn--wa");
+      waBtn.href = waLink(lead);
+      waBtn.addEventListener("click", () => {
+        markSent(i);
+        row.classList.add("row--sent");
+      });
+
+      row.querySelector(".btn--copy").addEventListener("click", () => {
+        navigator.clipboard?.writeText(lead.phone).catch(() => {});
+      });
+
+      listEl.appendChild(row);
+    });
+    countEl.textContent = shown + " / " + LEADS.length;
+  }
+
+  searchEl.addEventListener("input", render);
+  render();
+</script>

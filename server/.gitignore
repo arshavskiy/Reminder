@@ -14,3 +14,9 @@ coverage/
 py_deps/
 __pycache__/
 *.pyc
+
+# Generated lead-export outputs contain real contact info and live
+# sign-in tokens — never commit these, only the script that makes them.
+leads-whatsapp.*
+*-whatsapp.html
+*-whatsapp.json
