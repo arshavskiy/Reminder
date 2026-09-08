@@ -104,7 +104,27 @@ async function openSlot(target: AdminDbTarget, uri: string, dbName: string): Pro
   await client.connect();
   const db = client.db(dbName);
   await ensureCollections(db);
-  await applyIndexes(db);
+
+  // Index maintenance must not be able to stop the server serving. During a
+  // rollout the old and new containers start together and race each other's
+  // index builds, and Mongo fails the loser with "Index build failed ... caused
+  // by :: dropIndexes command". That was aborting startup, so the healthcheck
+  // never answered and Railway killed the deploy — for a collection whose
+  // indexes already existed.
+  //
+  // The indexes are created once and then simply confirmed on every later boot,
+  // so a failure here means "another container is doing it", not "the schema is
+  // wrong". Log it and carry on; the next boot reconciles.
+  try {
+    await applyIndexes(db);
+  } catch (err) {
+    logger.warn("db_index_apply_failed", {
+      target,
+      db_name: dbName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   logger.info("db_connected", {
     target,
     db_name: dbName,

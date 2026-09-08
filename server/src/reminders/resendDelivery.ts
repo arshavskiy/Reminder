@@ -106,8 +106,15 @@ export function registerResendWebhook(app: express.Application): void {
     "/api/webhooks/resend",
     express.raw({ type: "application/json" }),
     async (req, res) => {
-      const secret = process.env.RESEND_WEBHOOK_SECRET;
+      // Trimmed, because a variable set to an empty or whitespace-only string
+      // passed this guard and then failed inside the SDK as "Secret can't be
+      // empty" — a misconfiguration reported as a per-delivery webhook error,
+      // once for every bounce Resend sent, rather than as "not configured".
+      const secret = process.env.RESEND_WEBHOOK_SECRET?.trim();
       if (!secret) {
+        logger.warn("resend_webhook_secret_missing", {
+          configured: process.env.RESEND_WEBHOOK_SECRET !== undefined,
+        });
         res.status(503).json({ error: "RESEND_WEBHOOK_SECRET not configured" });
         return;
       }
