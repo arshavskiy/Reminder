@@ -108,11 +108,13 @@
 
   const MESSAGE_TEMPLATE = (lead) => {
     const intro = "שלום" + (lead.name ? " " + lead.name : "") + ", מדבר פבל מ-RemindOCR.";
+    const site = "www.remindocr.com";
     const body = "בניתי מערכת שחוסכת לבודקים מוסמכים את כל ההקלדה החוזרת: מייבאת תסקירים ומסמכים אוטומטית, מחלצת מהם תאריכי תוקף ופרטי לקוח, ושולחת תזכורת לפני שהתסקיר פג — כדי שלא תרדפו אחרי לקוחות בעצמכם. אפשר גם לבנות תבנית PDF מותאמת אישית לכל סוג בדיקה שאתה עושה, וכן בונה יומן ומסנכרת עם יומן של גוגל.";
     const pricing = "המחיר נוח — החל מ-79 ש\"ח לחודש, ו-30 יום ניסיון חינם, בלי כרטיס אשראי.";
     const link = lead.magicLink ? ("קישור כניסה מהיר: " + lead.magicLink) : "אשמח לשלוח לך קישור כניסה אם תרצה/י להתנסות.";
     const outro = "אני תמיד זמין לשיחה קצרה ולהראות את המערכת בלייב, בלי התחייבות.";
-    return intro + "\n\n" + body + "\n\n" + pricing + "\n" + link + "\n\n" + outro;
+    // return intro + "\n" + site + "\n\n" + body + "\n\n" + pricing + "\n" + link + "\n\n" + outro;
+    return intro + "\n" + site + "\n" + body + "\n" + outro;
   };
 
   function waLink(lead) {
