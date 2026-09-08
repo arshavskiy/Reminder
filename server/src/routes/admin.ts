@@ -9,7 +9,7 @@ import {sendPushToAdmins} from "../push/pushService.js";
 import {DEFAULT_FEATURES, normalizeFeatures} from "../features.js";
 import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
 import {parsePlanId, updateUserTier} from "../plans/updateUserTier";
-import {createMagicLinkToken} from "../auth/session";
+import {createMagicLinkToken, magicLinkTtlMinutes} from "../auth/session";
 import {hashPassword} from "../auth/emailAuth";
 import {logger} from "../logger";
 
@@ -410,14 +410,14 @@ export function registerAdminRoutes(app: express.Application) {
     let magicLink: string | null = null;
     let expiresInMinutes: number | null = null;
     if (issueLink) {
-      const token = await createMagicLinkToken(userId);
+      const token = await createMagicLinkToken(userId, plan);
       const base = adminMagicLinkBase(req);
       if (!base) {
         res.status(500).json({ error: "SERVER_URL_required_for_magic_links" });
         return;
       }
       magicLink = `${base}/auth/magic?token=${token}`;
-      expiresInMinutes = 15;
+      expiresInMinutes = magicLinkTtlMinutes(plan);
       logger.info("admin_magic_link_created", {
         admin_id: auth.userId,
         user_id: userId,
@@ -478,7 +478,7 @@ export function registerAdminRoutes(app: express.Application) {
       return;
     }
 
-    const token = await createMagicLinkToken(String(user._id));
+    const token = await createMagicLinkToken(String(user._id), user.plan);
     const magicLink = `${base}/auth/magic?token=${token}`;
     logger.info("admin_magic_link_created", {
       admin_id: auth.userId,
@@ -487,7 +487,7 @@ export function registerAdminRoutes(app: express.Application) {
       username: user.username ?? null,
     });
 
-    res.json({ ok: true, magicLink, expiresInMinutes: 15 });
+    res.json({ ok: true, magicLink, expiresInMinutes: magicLinkTtlMinutes(user.plan) });
   });
 
   // GET /api/admin/inspector-leads — marketing leads collected by the lead finder

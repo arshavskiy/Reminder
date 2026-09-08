@@ -96,7 +96,7 @@ async function main() {
     const user = await col("users").findOne({email}) as any;
     await ensureUserSettingsWithEntitlements(user._id.toString(), user);
 
-    const token = await createMagicLinkToken(user._id.toString());
+    const token = await createMagicLinkToken(user._id.toString(), user.plan);
     const magicLink = `${baseUrl}/auth/magic?token=${token}`;
 
     await col("inspector_leads").updateOne(

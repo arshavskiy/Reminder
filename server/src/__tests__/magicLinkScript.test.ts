@@ -9,7 +9,7 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock("../scripts/loadEnv", () => ({}));
 vi.mock("../db/db", () => db);
-vi.mock("../auth/session", () => ({createMagicLinkToken: vi.fn()}));
+vi.mock("../auth/session", () => ({createMagicLinkToken: vi.fn(), magicLinkTtlMinutes: vi.fn(() => 15)}));
 vi.mock("../plans/planEntitlements", () => ({
   DEFAULT_NEW_USER_PLAN: "trial",
   ensureUserSettingsWithEntitlements: vi.fn(),

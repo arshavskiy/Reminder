@@ -4,7 +4,7 @@
 // localhost fallback while .env.local pointed somewhere else entirely.
 import "./loadEnv";
 import {closeDb, col, connectDb, runWithDbTarget} from "../db/db";
-import {createMagicLinkToken} from "../auth/session";
+import {createMagicLinkToken, magicLinkTtlMinutes} from "../auth/session";
 import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
 
 /**
@@ -155,7 +155,7 @@ async function main() {
 
   await ensureUserSettingsWithEntitlements(user._id.toString(), user);
 
-  const token = await createMagicLinkToken(user._id.toString());
+  const token = await createMagicLinkToken(user._id.toString(), plan);
   const baseUrl = (process.env.SERVER_URL?.trim()
     || (target === "production" ? "https://api.remindocr.com" : "http://localhost:3737"))
     .replace(/\/+$/, "");
@@ -166,7 +166,7 @@ async function main() {
     ? `, trial ${trialEndsAt > new Date() ? "ends" : "ended"} ${trialEndsAt.toISOString().slice(0, 10)}`
     : "";
   console.log(`[magic-link] User: ${label} (role: ${role}, plan: ${plan}${trialNote}, id: ${user._id.toString()})`);
-  console.log(`[magic-link] Link expires in 15 minutes and can be used once:`);
+  console.log(`[magic-link] Link expires in ${magicLinkTtlMinutes(plan)} minutes and can be used once:`);
   console.log(magicLink);
 }
 

@@ -4,14 +4,25 @@ import {getDb} from "../db/db";
 import type {User, UserPlan} from "../../src/shared/types.js";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
+// Trial accounts are often provisioned in bulk (e.g. from inspector leads) and
+// clicked well after creation, so their link gets a much longer window before
+// going stale unused. Still single-use — consumeMagicLinkToken deletes it on
+// the first successful click regardless of how much of the window is left.
+const TRIAL_MAGIC_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-export async function createMagicLinkToken(userId: string): Promise<string> {
+/** TTL in minutes for the given plan's magic link — for surfacing to callers/UI. */
+export function magicLinkTtlMinutes(plan?: UserPlan | string | null): number {
+  return (plan === "trial" ? TRIAL_MAGIC_LINK_TTL_MS : MAGIC_LINK_TTL_MS) / 60_000;
+}
+
+export async function createMagicLinkToken(userId: string, plan?: UserPlan | string | null): Promise<string> {
   const token = randomBytes(32).toString("hex");
+  const ttl = plan === "trial" ? TRIAL_MAGIC_LINK_TTL_MS : MAGIC_LINK_TTL_MS;
   await getDb().collection("magic_link_tokens").insertOne({
     token,
     user_id: userId,
     created_at: new Date(),
-    expires_at: new Date(Date.now() + MAGIC_LINK_TTL_MS),
+    expires_at: new Date(Date.now() + ttl),
   } as any);
   return token;
 }

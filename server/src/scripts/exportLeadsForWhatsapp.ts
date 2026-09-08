@@ -54,7 +54,8 @@ async function main() {
     if (!wa) continue;
     let magicLink: string | null = null;
     if (l.appUserId) {
-      const token = await createMagicLinkToken(String(l.appUserId));
+      // Leads are provisioned as trial users by createTrialUsersFromInspectorLeads.ts.
+      const token = await createMagicLinkToken(String(l.appUserId), "trial");
       magicLink = `${baseUrl}/auth/magic?token=${token}`;
     }
     rows.push({name: l.name ?? "", city: l.city ?? "", phone: String(l.phone), waPhone: wa, magicLink});
