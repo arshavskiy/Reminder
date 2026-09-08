@@ -16,13 +16,30 @@ export function magicLinkTtlMinutes(_plan?: UserPlan | string | null): number {
   return MAGIC_LINK_TTL_MS / 60_000;
 }
 
+/**
+ * Reuses the user's existing valid token (extending its expiry) when one
+ * exists, rather than minting a new one every call — repeated calls for the
+ * same user (re-running an export, regenerating a WhatsApp message) used to
+ * leave a pile of orphaned tokens behind, all independently valid since
+ * links are reusable. One live token per user keeps that from accumulating.
+ */
 export async function createMagicLinkToken(userId: string, _plan?: UserPlan | string | null): Promise<string> {
+  const col = getDb().collection("magic_link_tokens");
+  const newExpiry = new Date(Date.now() + MAGIC_LINK_TTL_MS);
+
+  const existing = await col.findOneAndUpdate(
+    { user_id: userId, expires_at: { $gt: new Date() } },
+    { $set: { expires_at: newExpiry } },
+    { sort: { created_at: -1 } },
+  );
+  if (existing) return existing.token as string;
+
   const token = randomBytes(32).toString("hex");
-  await getDb().collection("magic_link_tokens").insertOne({
+  await col.insertOne({
     token,
     user_id: userId,
     created_at: new Date(),
-    expires_at: new Date(Date.now() + MAGIC_LINK_TTL_MS),
+    expires_at: newExpiry,
   } as any);
   return token;
 }
