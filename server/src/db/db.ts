@@ -302,7 +302,6 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("user_settings").createIndex({ user_id: 1 }, { unique: true, sparse: true });
 
   // documents
-  try { await db.collection("documents").dropIndex("file_hash_1"); } catch { /* didn't exist */ }
   await db.collection("documents").updateMany(
     { document_source: { $exists: false }, document_kind: "generated_print_template_pdf" },
     { $set: { document_source: "generated" } }
@@ -335,7 +334,6 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("contracts").createIndex({ user_id: 1 });
   await db.collection("contracts").createIndex({ expiry_date: 1 });
   await db.collection("contracts").createIndex({ status: 1 });
-  try { await db.collection("contracts").dropIndex("document_id_1"); } catch { /* didn't exist */ }
   await db.collection("contracts").createIndex(
     { document_id: 1 },
     { unique: true, partialFilterExpression: { document_id: { $type: "string" } } }
