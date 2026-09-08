@@ -1043,7 +1043,7 @@ export function registerAdminRoutes(app: express.Application) {
   app.get("/api/admin/monitor/scheduler", async (req, res) => {
     if (!await adminAuth(req, res)) return;
 
-    const [healthRows, lastRunStats, monthlySettings] = await Promise.all([
+    const [healthRows, lastRunStats, monthlySettings, backupHealth] = await Promise.all([
       // Health records for each named cron job
       col("scheduler_health").find({}).toArray(),
 
@@ -1065,6 +1065,10 @@ export function registerAdminRoutes(app: express.Application) {
           },
         },
       ).toArray(),
+
+      // Last local mongodump run (E:\backup\reminder-app\mongo on the ops
+      // machine), written by backup-mongo.ps1 via reportBackupStatus.cjs.
+      col("backup_health").findOne({ _id: "mongo" } as any) as Promise<any>,
     ]);
 
     const sentLastHour = lastRunStats.find((r: any) => r._id === 1)?.count ?? 0;
@@ -1090,6 +1094,13 @@ export function registerAdminRoutes(app: express.Application) {
         last_error: r.last_error ?? null,
         consecutive_failures: r.consecutive_failures ?? 0,
       })),
+      backup: backupHealth ? {
+        last_run_at: backupHealth.last_run_at ?? null,
+        last_success_at: backupHealth.last_success_at ?? null,
+        size_bytes: backupHealth.size_bytes ?? 0,
+        file_count: backupHealth.file_count ?? 0,
+        path: backupHealth.path ?? null,
+      } : null,
       monthlySchedule: monthlySettings.map((s: any) => ({
         user_id: s.user_id,
         enabled: !!s.monthly_report_enabled,

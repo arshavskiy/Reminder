@@ -675,6 +675,21 @@
               primary-label="Scheduler Period"
               :status="'default'"
             />
+            <AdminStatCard
+              v-if="schedulerMonitor.backup"
+              title="Database Backup"
+              :primary="formatDate(schedulerMonitor.backup.last_run_at)"
+              primary-label="Last Backup"
+              :secondary="formatBytes(schedulerMonitor.backup.size_bytes)"
+              secondary-label="Volume"
+              :status="backupStatus(schedulerMonitor.backup.last_run_at)"
+            />
+            <AdminStatCard
+              v-else
+              title="Database Backup"
+              primary="No backups yet"
+              :status="'warning'"
+            />
           </div>
 
           <!-- Per-job health table -->
@@ -2830,6 +2845,13 @@ function formatInterval(seconds: number): string {
   }
   const h = Math.round(seconds / 3600);
   return h === 1 ? "hour" : `${h} hours`;
+}
+
+/** Backup runs every 8 hours — flag it stale past 10h so a missed run shows up. */
+function backupStatus(lastRunAt: string | null): "success" | "warning" {
+  if (!lastRunAt) return "warning";
+  const ageMs = Date.now() - new Date(lastRunAt).getTime();
+  return ageMs > 10 * 3600 * 1000 ? "warning" : "success";
 }
 
 // ── Section switching & loading ────────────────────────────────────────────
