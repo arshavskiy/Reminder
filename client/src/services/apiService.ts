@@ -450,6 +450,24 @@ export interface InspectorLeadsResponse {
   };
 }
 
+export interface WhatsAppTemplate { name: string; language: string; body: string; parameters: number }
+export interface WhatsAppCampaign { _id: string; status: string; recipientCount: number; createdAt: string; template: WhatsAppTemplate }
+export interface WhatsAppContact { phone: string; optedIn: boolean; source: string }
+export interface WhatsAppStatus { configured: boolean; enabled: boolean; missing: string[]; sender: string; webhookPath: string; contacts: WhatsAppContact[]; campaigns: WhatsAppCampaign[] }
+export interface WhatsAppDraft { leadIds: string[]; templateName: string; language: string; parameters: string[] }
+export interface WhatsAppPreview { template: WhatsAppTemplate; skipped: number; previewHash: string; recipients: { phone: string; name: string; parameters: string[] }[] }
+export interface WhatsAppMessage { _id: string; name: string; phone: string; status: string; error?: string }
+
+export const whatsappApi = {
+  status: () => adminGet<WhatsAppStatus>("/admin/whatsapp/status"),
+  templates: () => adminGet<WhatsAppTemplate[]>("/admin/whatsapp/templates"),
+  consent: (phone: string, optedIn: boolean, source: string) => adminPut("/admin/whatsapp/consent", {phone, optedIn, source}),
+  preview: (draft: WhatsAppDraft) => adminPost<WhatsAppPreview>("/admin/whatsapp/preview", draft),
+  create: (draft: WhatsAppDraft, requestId: string, previewHash: string) => adminPost<WhatsAppCampaign>("/admin/whatsapp/campaigns", {...draft, requestId, previewHash}),
+  campaign: (id: string) => adminGet<{campaign: WhatsAppCampaign; messages: WhatsAppMessage[]}>(`/admin/whatsapp/campaigns/${id}`),
+  cancel: (id: string) => adminPost(`/admin/whatsapp/campaigns/${id}/cancel`, {}),
+};
+
 export function getAdminDbTarget(): AdminDbTarget {
   try {
     const raw = localStorage.getItem(ADMIN_DB_TARGET_KEY);
@@ -881,6 +899,8 @@ export const api = {
         magicLink: string | null;
         user: any;
       }>("/admin/users/magic-link", body),
+    issueMagicLinkForUser: (id: string) =>
+      adminPost<{ ok: boolean; magicLink: string; expiresInMinutes: number }>(`/admin/users/${id}/magic-link`, {}),
     getDbTargets: () => adminGet<{
       active: AdminDbTarget;
       primary: AdminDbTarget;

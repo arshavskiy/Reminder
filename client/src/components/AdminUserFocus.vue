@@ -77,6 +77,15 @@
               Send report
             </button>
             <button
+              class="btn btn--ghost btn--xs"
+              type="button"
+              :disabled="issuingMagicLink || selectedUser.is_active === 0"
+              :title="selectedUser.is_active === 0 ? 'User is inactive' : ''"
+              @click="issueMagicLink"
+            >
+              {{ issuingMagicLink ? "Issuing…" : "Magic link" }}
+            </button>
+            <button
               class="btn btn--xs"
               :class="selectedUser.is_active === 0 ? 'btn--primary' : 'btn--danger-ghost'"
               type="button"
@@ -86,6 +95,14 @@
             </button>
           </div>
         </header>
+
+        <div v-if="magicLinkResult && magicLinkResult.userId === selectedUser.id" class="uf-magiclink">
+          <n-icon :component="KeyOutline" :size="14" class="uf-magiclink__icon" />
+          <code class="uf-magiclink__value">{{ magicLinkResult.link }}</code>
+          <button class="btn btn--ghost btn--xs" type="button" @click="copyMagicLink">Copy</button>
+          <button class="btn btn--ghost btn--xs" type="button" @click="magicLinkResult = null">✕</button>
+          <span class="uf-magiclink__note">Single-use, expires in 15 min</span>
+        </div>
 
         <n-spin :show="busy">
           <!-- Overview stats -->
@@ -650,7 +667,7 @@ import {
   NSelect, NSpace, NSpin, NSwitch, NTabPane, NTabs, NTag, NTooltip, useMessage,
 } from "naive-ui";
 import {
-  DownloadOutline, EyeOutline, PeopleOutline, RefreshOutline, SearchOutline,
+  DownloadOutline, EyeOutline, KeyOutline, PeopleOutline, RefreshOutline, SearchOutline,
 } from "@vicons/ionicons5";
 import { api } from "../services/apiService.js";
 import type { FeatureDefinition } from "@shared/types.js";
@@ -984,6 +1001,7 @@ async function selectUser(user: any) {
   storageSearch.value = "";
   storageStatusFilter.value = null;
   storagePage.value = 1;
+  magicLinkResult.value = null;
   await reloadAll();
 }
 
@@ -1043,6 +1061,36 @@ async function reloadAll() {
     }
   } finally {
     busy.value = false;
+  }
+}
+
+const magicLinkResult = ref<{ userId: string; link: string; expiresAt: number } | null>(null);
+const issuingMagicLink = ref(false);
+
+async function issueMagicLink() {
+  if (!selectedUser.value) return;
+  issuingMagicLink.value = true;
+  try {
+    const res = await api.admin.issueMagicLinkForUser(selectedUser.value.id);
+    magicLinkResult.value = {
+      userId: selectedUser.value.id,
+      link: res.magicLink,
+      expiresAt: Date.now() + res.expiresInMinutes * 60_000,
+    };
+  } catch {
+    message.error("Error issuing magic link");
+  } finally {
+    issuingMagicLink.value = false;
+  }
+}
+
+async function copyMagicLink() {
+  if (!magicLinkResult.value) return;
+  try {
+    await navigator.clipboard.writeText(magicLinkResult.value.link);
+    message.success("Link copied");
+  } catch {
+    message.error("Copy failed — select and copy manually");
   }
 }
 
@@ -1360,6 +1408,29 @@ watch([storageSearch, storageStatusFilter], () => {
   gap: 8px;
   align-items: flex-start;
 }
+
+.uf-magiclink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(127,127,127,0.08));
+  border: 1px solid var(--border-color, rgba(127,127,127,0.2));
+  font-size: 12px;
+}
+.uf-magiclink__icon { flex-shrink: 0; opacity: 0.7; }
+.uf-magiclink__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+  font-size: 11px;
+}
+.uf-magiclink__note { flex-shrink: 0; color: var(--text-secondary); white-space: nowrap; }
 
 .uf-stats {
   display: grid;

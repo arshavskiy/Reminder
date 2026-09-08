@@ -46,6 +46,8 @@ import {importFile, startDocumentProcessingJobWorker} from "./pipeline/importer"
 import {applyScannedKeys, scanFileForKeys, shouldScanFile} from "./pipeline/keyScanner";
 import {logger, requestLogger} from "./logger";
 import {registerResendWebhook} from "./reminders/resendDelivery";
+import {registerWhatsAppRoutes, registerWhatsAppWebhook} from "./whatsapp/routes";
+import {initializeWhatsAppQueue, startWhatsAppWorker} from "./whatsapp/queue";
 import {requireAnyFeature, requireMinRole, requirePlans} from "./auth/middleware";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -103,6 +105,7 @@ app.use(
 );
 
 registerResendWebhook(app);
+registerWhatsAppWebhook(app);
 
 app.use(express.json({ limit: "50mb" }));
 app.use((_req, res, next) => {
@@ -212,6 +215,7 @@ registerFeatureRoutes(app);
 registerLegalRoutes(app);
 registerProfileRoutes(app);
 registerAdminRoutes(app);
+registerWhatsAppRoutes(app);
 registerExtractRemindersRoutes(app);
 registerPrintTemplateRoutes(app);
 
@@ -227,6 +231,8 @@ async function main() {
   validateEnv();
   const settings = getSettings();
   await connectDb();
+  await initializeWhatsAppQueue();
+  const stopWhatsAppWorker = startWhatsAppWorker();
   initPush();
   await logSystemDepsOnStartup();
   await seedFeatureDefinitions();
@@ -259,6 +265,7 @@ async function main() {
     logger.info("server_shutdown_started", { signal });
     server.close();
     try {
+      await stopWhatsAppWorker();
       await closeInspectorLeadsClient();
       await closeDb();
       logger.info("server_shutdown_complete", { signal });

@@ -198,6 +198,8 @@
         </template>
       </section>
 
+      <WhatsAppCampaignPanel v-if="activeSection === 'inspector_leads'" :key="adminDbTarget" :leads="inspectorLeadsRows" />
+
       <section v-if="activeSection === 'gmail'" class="admin-section admin-section--gmail">
         <GmailInboxPage />
       </section>
@@ -1533,6 +1535,7 @@ import AdminStatCard from "../components/AdminStatCard.vue";
 import AdminReportModal from "../components/AdminReportModal.vue";
 import AdminUserFocus from "../components/AdminUserFocus.vue";
 import AdminMagicLinkPanel from "../components/AdminMagicLinkPanel.vue";
+import WhatsAppCampaignPanel from "../components/WhatsAppCampaignPanel.vue";
 import GmailInboxPage from "./GmailInboxPage.vue";
 
 const router = useRouter();

@@ -37,7 +37,7 @@ export async function closeInspectorLeadsClient(): Promise<void> {
   if (client) await client.close();
 }
 
-async function inspectorLeadsCollection(): Promise<Collection> {
+export async function inspectorLeadsCollection(): Promise<Collection> {
   const uri = env("MONGODB_URI");
   if (!uri) return col("inspector_leads");
   // In production MONGODB_URI is the same cluster the primary slot already holds a
@@ -447,6 +447,47 @@ export function registerAdminRoutes(app: express.Application) {
       magicLink,
       user: flatUser(fresh ?? user),
     });
+  });
+
+  // POST /api/admin/users/:id/magic-link — issue a sign-in link for an existing user
+  app.post("/api/admin/users/:id/magic-link", async (req, res) => {
+    const auth = await adminAuth(req, res);
+    if (!auth) return;
+
+    let userId: ObjectId;
+    try {
+      userId = new ObjectId(req.params.id);
+    } catch {
+      res.status(400).json({ error: "invalid_user_id" });
+      return;
+    }
+
+    const user = await col("users").findOne({ _id: userId }) as any;
+    if (!user) {
+      res.status(404).json({ error: "user_not_found" });
+      return;
+    }
+    if (!user.is_active) {
+      res.status(400).json({ error: "cannot_issue_magic_link_for_inactive_user" });
+      return;
+    }
+
+    const base = adminMagicLinkBase(req);
+    if (!base) {
+      res.status(500).json({ error: "SERVER_URL_required_for_magic_links" });
+      return;
+    }
+
+    const token = await createMagicLinkToken(String(user._id));
+    const magicLink = `${base}/auth/magic?token=${token}`;
+    logger.info("admin_magic_link_created", {
+      admin_id: auth.userId,
+      user_id: String(user._id),
+      email: user.email ?? null,
+      username: user.username ?? null,
+    });
+
+    res.json({ ok: true, magicLink, expiresInMinutes: 15 });
   });
 
   // GET /api/admin/inspector-leads — marketing leads collected by the lead finder

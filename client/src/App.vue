@@ -162,7 +162,7 @@
           </div>
 
           <footer v-if="!isPublicMarketingRoute && !isLegalRoute" class="app-footer" dir="rtl">
-            <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
+            <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים
             <div class="app-footer__legal">
               © 2026 HandCoded. כל הזכויות שמורות. |
               <a href="https://remindocr.com/terms">תנאי שימוש</a> |
