@@ -215,6 +215,8 @@ export interface Document {
   download_url?: string | null;
   thumbnail_url?: string | null;
   email_delivery?: EmailDeliverySummary | null;
+  quote_id?: string | null;
+  quote_number?: string | null;
 }
 
 export interface Client {

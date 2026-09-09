@@ -83,6 +83,7 @@ export const router = createRouter({
             meta: {feature: FEATURES.pages.clients, requirePlan: "basic"}
         },
         {path: "/contracts", component: ContractsPage, meta: {feature: FEATURES.pages.contracts}},
+        {path: "/quotes", component: () => import("../views/QuotesPage.vue"), meta: {feature: FEATURES.pages.contracts}},
         {
             path: "/contracts/:contractId/draft",
             component: () => import("../views/ContractDraftPage.vue"),

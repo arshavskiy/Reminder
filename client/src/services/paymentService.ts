@@ -11,7 +11,7 @@ export interface InspectionRate {
   automaticQuantity?: number;
 }
 export interface PaymentRequest {
-  _id: string; number?: string; reportNumber: string; reportType: string; status: string;
+  _id: string; number?: string; documentKind?: "quote" | "payment_request" | "service_specification"; reportNumber: string; reportType: string; status: string;
   customer: {name: string; email: string}; dueDate: string; totalCents: number; paidCents: number;
   storage?: {local: string; object: string; drive: string}; sendState?: string;
   payments: {amountCents: number; method: string; paidDate: string; receiptStatus: string}[];

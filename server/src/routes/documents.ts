@@ -210,11 +210,17 @@ export function registerDocumentRoutes(app: express.Application) {
       const documentId = contract.document_id?.toString?.() ?? contract.document_id;
       if (documentId) contractMap.set(String(documentId), contract);
     }
+    const contractIds = contracts.map((contract: any) => String(contract._id));
+    const quotes = contractIds.length
+      ? await col("payment_requests").find({user_id: userId, documentKind: "quote", contractId: {$in: contractIds}, status: "issued"}).toArray()
+      : [];
+    const quoteByContractId = new Map(quotes.map((quote: any) => [String(quote.contractId), quote]));
 
     const enriched = rows.map((r) => {
       const link = linkMap.get(r._id.toString());
       const documentReminders = reminderMap.get(r._id.toString()) ?? [];
       const contract = contractMap.get(r._id.toString());
+      const quote = contract ? quoteByContractId.get(String(contract._id)) : null;
       return {
         ...flatDoc(r),
         client_id: link?.id ?? null,
@@ -223,6 +229,8 @@ export function registerDocumentRoutes(app: express.Application) {
         reminder_status: getDocumentReminderStatus(r, documentReminders),
         reminder_date: getDocumentReminderDate(r, contract, documentReminders),
         contract_status: contract?.status ?? null,
+        quote_id: quote?._id?.toString() ?? null,
+        quote_number: quote?.number ?? null,
         email_delivery: latestFailedDeliveryForReminderIds(
           documentReminders.map((reminder: any) => String(reminder._id ?? "")).filter(Boolean),
           failedDeliveryByReminderId,

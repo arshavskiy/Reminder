@@ -175,6 +175,12 @@
       </template>
     </PageHeader>
 
+    <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
+      <router-link to="/contracts">תסקירים</router-link>
+      <router-link class="documents-workspace-tabs__active" to="/documents">מסמכים</router-link>
+      <router-link to="/quotes">הצעות מחיר</router-link>
+    </nav>
+
     <DriveExportJobStatus
       v-if="visibleDriveExportJob"
       :job="visibleDriveExportJob"
@@ -515,6 +521,14 @@
                     :download-url="documentDownloadUrl(row)"
                     :from-gmail="isGmailImported(row)"
                   />
+                  <n-tooltip v-if="row.quote_id">
+                    <template #trigger>
+                      <button class="btn btn--ghost btn--xs icon-btn document-row-action" type="button" aria-label="פתח הצעת מחיר" @click="router.push('/quotes')">
+                        <n-icon :component="DocumentTextOutline" class="btn-icon" />
+                      </button>
+                    </template>
+                    פתח הצעת מחיר {{ row.quote_number || "" }}
+                  </n-tooltip>
                   <n-dropdown
                     :options="rowActionsFor(row)"
                     class="document-row-actions-menu"
@@ -1807,6 +1821,9 @@ async function bulkExtractAi() {
 </script>
 
 <style scoped>
+.documents-workspace-tabs { display:flex; gap:8px; margin:0 0 18px; border-bottom:1px solid var(--border-color); }
+.documents-workspace-tabs a { color:var(--text-secondary); padding:9px 14px; text-decoration:none; border-bottom:2px solid transparent; }
+.documents-workspace-tabs a:hover, .documents-workspace-tabs__active { color:var(--brand-color); border-bottom-color:var(--brand-color); font-weight:600; }
 .hidden { display: none; }
 
 .documents-actions {
