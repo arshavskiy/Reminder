@@ -15,8 +15,6 @@ export interface CertificateExtraction {
   // Inspector identity (maps to users)
   inspector_number: string | null;       // "מספר מפקח" / "מספר רישיון"
   title: string | null;                  // "מהנדס בטיחות" / "מהנדס מכונות"
-  mr_number: string | null;              // "מ.ר." — מספר רישום
-  mg_number: string | null;              // "מ.ג." — מספר גישה
   expertise: string | null;              // "בטיחות במכונות הרמה"
   membership_start_date: string | null;  // YYYY-MM-DD
 
@@ -43,15 +41,13 @@ RULES:
 2. expiry_date is the certificate's validity END date (תוקף עד / בתוקף עד / פג תוקף). If the certificate is permanent (אין תאריך פקיעה / לצמיתות), set null.
 3. issued_date is when the certificate was issued (תאריך הנפקה / תאריך הוצאה / ניתן ביום).
 4. inspector_number: look for "מספר מפקח", "מספר רישיון", "מס' רישיון", "Inspector ID", "License No.".
-5. mr_number: "מ.ר." or "מ"ר" (מספר רישום) — registered engineers number.
-6. mg_number: "מ.ג." or "מ"ג" (מספר גישה) — access/grade number.
-7. title: the professional title in Hebrew (e.g. "מהנדס בטיחות בעבודה", "מהנדס מכונות").
-8. expertise: the specific area of practice (e.g. "מכונות הרמה ואביזרי הרמה").
-9. full_name: the person's full name as it appears on the certificate.
-10. Phones: keep Israeli format (e.g. "050-1234567"). Insert dash after 3rd digit if missing.
-11. Emails: if reversed (Hebrew PDF bidi artifact, e.g. "il.co.something@domain"), un-reverse to "domain@something.co.il".
-12. Company name often appears in the letterhead/footer — distinguish from the issuing authority (issuer).
-13. The text may have OCR or bidi artifacts; use context to resolve ambiguities.
+5. title: the professional title in Hebrew (e.g. "מהנדס בטיחות בעבודה", "מהנדס מכונות").
+6. expertise: the specific area of practice (e.g. "מכונות הרמה ואביזרי הרמה").
+7. full_name: the person's full name as it appears on the certificate.
+8. Phones: keep Israeli format (e.g. "050-1234567"). Insert dash after 3rd digit if missing.
+9. Emails: if reversed (Hebrew PDF bidi artifact, e.g. "il.co.something@domain"), un-reverse to "domain@something.co.il".
+10. Company name often appears in the letterhead/footer — distinguish from the issuing authority (issuer).
+11. The text may have OCR or bidi artifacts; use context to resolve ambiguities.
 
 JSON schema:
 {
@@ -62,8 +58,6 @@ JSON schema:
   "expiry_date": "YYYY-MM-DD" | null,
   "inspector_number": string | null,
   "title": string | null,
-  "mr_number": string | null,
-  "mg_number": string | null,
   "expertise": string | null,
   "membership_start_date": "YYYY-MM-DD" | null,
   "full_name": string | null,

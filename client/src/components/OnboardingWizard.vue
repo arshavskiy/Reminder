@@ -68,14 +68,9 @@
           <h3 class="step-title">פרופיל מהנדס</h3>
           <p class="step-desc">פרטי הרישיון שלך — משמשים לתסקירים, סינון מסמכים ומספור אוטומטי</p>
           <n-form label-placement="top" class="onboarding-form">
-            <div class="form-row">
-              <n-form-item label="מספר רישוי" class="form-row__item">
-                <n-input v-model:value="form.inspector_number" placeholder="12345" dir="ltr" />
-              </n-form-item>
-              <n-form-item label="מספר מ.ג." class="form-row__item">
-                <n-input v-model:value="form.mg_number" placeholder="6789" dir="ltr" />
-              </n-form-item>
-            </div>
+            <n-form-item label="מספר רישוי">
+              <n-input v-model:value="form.inspector_number" placeholder="12345" dir="ltr" />
+            </n-form-item>
             <div class="form-row">
               <n-form-item label="כתובת">
                 <n-input v-model:value="form.address" placeholder="רחוב ומספר" />
@@ -220,7 +215,6 @@ const form = ref({
   phone: "",
   company_name: "",
   inspector_number: "",
-  mg_number: "",
   address: "",
   city: "",
   company_registration: "",
@@ -250,7 +244,6 @@ onMounted(async () => {
   const p = authStore.user;
   if (p) {
     form.value.inspector_number = p.inspector_number ?? "";
-    form.value.mg_number = p.mg_number ?? "";
     form.value.address = p.address ?? "";
     form.value.city = p.city ?? "";
     form.value.company_registration = p.company_registration ?? "";
@@ -287,7 +280,6 @@ async function finish() {
       name: form.value.name,
       phone: form.value.phone,
       inspector_number: form.value.inspector_number || null,
-      mg_number: form.value.mg_number || null,
       address: form.value.address || null,
       city: form.value.city || null,
       company_registration: form.value.company_registration || null,

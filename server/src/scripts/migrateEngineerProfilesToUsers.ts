@@ -25,7 +25,7 @@ if (target === "production" && !process.env.MONGODB_PRODUCTION_URI) {
 // (_id, user_id, updated_at) that don't apply to the merged doc.
 const PROFILE_FIELDS = [
   "inspector_number", "inspector_numbers_by_type", "title", "expertise",
-  "mr_number", "mg_number", "membership_start_date", "inspector_id_start",
+  "membership_start_date", "inspector_id_start",
   "next_inspection_seq", "company_name", "company_registration",
   "company_subtitle", "company_phone", "company_email", "company_logo_url",
   "address", "city",

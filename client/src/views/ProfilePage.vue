@@ -159,17 +159,6 @@
               }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">מספר מ.ג.</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.mg_number"
-                class="info-input"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.mg_number || "—"
-              }}</span>
-            </div>
-            <div class="info-row">
               <span class="info-label">מספר התחלת תסקירים</span>
               <div
                 v-if="editingEngineer"
@@ -1784,8 +1773,6 @@ const engineerForm = ref({
   city: "",
   title: "",
   expertise: "",
-  mr_number: "",
-  mg_number: "",
   inspector_id_start: "",
   company_name: "",
   company_registration: "",
@@ -1813,8 +1800,6 @@ function startEditEngineer() {
     city: p?.city ?? "",
     title: p?.title ?? "",
     expertise: p?.expertise ?? "",
-    mr_number: p?.mr_number ?? "",
-    mg_number: p?.mg_number ?? "",
     // New users get a suggested 5-digit starting number rather than a blank
     // field — editable before saving, just a sane default to start from.
     inspector_id_start: p?.inspector_id_start ?? "10001",
@@ -2517,8 +2502,6 @@ function buildProfileHtml(): string {
     ["עיר", ep.city],
     ["תואר מקצועי", ep.title],
     ["התמחות", ep.expertise],
-    ["מספר מ.ר.", ep.mr_number],
-    ["מספר מ.ג.", ep.mg_number],
     ["תחילת חברות", formatDate(ep.membership_start_date)],
   ])}</table>`
       : ""

@@ -104,8 +104,6 @@ export function serializeUser(doc: Record<string, any> | null | undefined) {
     inspector_numbers_by_type: doc.inspector_numbers_by_type ?? null,
     title: doc.title ?? null,
     expertise: doc.expertise ?? null,
-    mr_number: doc.mr_number ?? null,
-    mg_number: doc.mg_number ?? null,
     membership_start_date: doc.membership_start_date ?? null,
     inspector_id_start: doc.inspector_id_start ?? null,
     next_inspection_seq: doc.next_inspection_seq ?? null,

@@ -156,7 +156,7 @@ export function registerProfileRoutes(app: express.Application) {
   const EDITABLE_USER_FIELDS = [
     "name", "phone", "address", "city",
     "inspector_number", "inspector_id_start", "title", "expertise",
-    "mr_number", "mg_number", "membership_start_date",
+    "membership_start_date",
     "company_name", "company_registration", "company_subtitle",
     "company_phone", "company_email", "company_logo_url",
   ] as const;
@@ -404,7 +404,7 @@ export function registerProfileRoutes(app: express.Application) {
         const userPatch: Record<string, unknown> = {};
         const profileFields: Array<keyof typeof result & string> = [
           "inspector_number", "title", "expertise",
-          "mr_number", "mg_number", "membership_start_date",
+          "membership_start_date",
           "company_name", "company_phone", "company_email",
         ];
         for (const k of profileFields) {

@@ -41,8 +41,6 @@ describe("engineer profile — GET", () => {
       address: "123 Main St",
       title: "Engineer",
       expertise: "Structural",
-      mr_number: "MR-42",
-      mg_number: null,
       membership_start_date: "2020-01-01",
     };
     const col = mockCol({ users: [user] });

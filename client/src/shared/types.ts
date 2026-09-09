@@ -86,8 +86,6 @@ export interface User {
   inspector_numbers_by_type?: Record<string, string> | null;
   title?: string | null;
   expertise?: string | null;
-  mr_number?: string | null;
-  mg_number?: string | null;
   membership_start_date?: string | null;
   inspector_id_start?: string | null;
   next_inspection_seq?: number | null;
