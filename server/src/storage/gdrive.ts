@@ -408,6 +408,9 @@ async function refreshDriveToken(refreshToken: string, userId: string, target: "
 }
 
 const SUB_FOLDERS: Record<string, string> = {
+    payment_request: "דרישות תשלום",
+    quote: "הצעות מחיר",
+    service_specification: "מפרטי תשלום",
     invoice: "חשבוניות",
     inspection_report: "תסקירי בדיקה",
 };
@@ -424,6 +427,7 @@ export function driveFolderKindForDocument(doc: {
     const type = String(doc.document_type ?? "").trim();
     const combined = `${kind} ${type}`;
 
+    if (kind === "payment_request" || kind === "quote" || kind === "service_specification") return kind;
     if (kind === "inspection_report") return "inspection_report";
     if (kind === "invoice" || doc.invoice_saved === true || INVOICE_KIND_RE.test(combined)) {
         return "invoice";

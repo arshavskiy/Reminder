@@ -29,6 +29,24 @@ export interface HydraulicCheckDraftState {
     reportType?: string;
   templateId: string | null;
   templateValues: Record<string, string>;
+  billingDocumentKind?: "quote" | "payment_request" | "service_specification" | null;
+  billingRates?: Array<{
+    id: string;
+    reportType: string;
+    section: string;
+    label: string;
+    unitCents: number;
+    source?: "equipment";
+    equipmentId?: string;
+    automaticSection?: string;
+    automaticLabel?: string;
+    automaticQuantity?: number;
+  }>;
+  billingRateAmounts?: Record<string, number>;
+  billingQuantities?: Record<string, number>;
+  billingVatPercent?: number | null;
+  billingDueDate?: string;
+  billingNotes?: string;
   savedAt: string;
 }
 
