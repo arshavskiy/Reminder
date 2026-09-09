@@ -1,5 +1,10 @@
 <template>
   <div class="page2">
+    <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
+      <router-link class="documents-workspace-tabs__active" to="/contracts">תסקירים</router-link>
+      <router-link to="/documents">מסמכים</router-link>
+      <router-link to="/quotes">הצעות מחיר</router-link>
+    </nav>
     <!-- ── Header ──────────────────────────────────────────────────────── -->
     <header class="page__head">
       <div>
@@ -3022,6 +3027,9 @@ function exportToExcel() {
 </script>
 
 <style scoped>
+.documents-workspace-tabs { display:flex; gap:8px; margin:0 0 18px; border-bottom:1px solid var(--border-color); }
+.documents-workspace-tabs a { color:var(--text-secondary); padding:9px 14px; text-decoration:none; border-bottom:2px solid transparent; }
+.documents-workspace-tabs a:hover, .documents-workspace-tabs__active { color:var(--brand-color); border-bottom-color:var(--brand-color); font-weight:600; }
 /* ── Header ─────────────────────────────────────────────────────────────── */
 .page__head {
   display: flex;

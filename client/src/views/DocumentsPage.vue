@@ -1,5 +1,10 @@
 <template>
   <div class="page2">
+    <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
+      <router-link to="/contracts">תסקירים</router-link>
+      <router-link class="documents-workspace-tabs__active" to="/documents">מסמכים</router-link>
+      <router-link to="/quotes">הצעות מחיר</router-link>
+    </nav>
     <PageHeader
       :count="store.total"
       title="מסמכים"
@@ -174,12 +179,6 @@
         </div>
       </template>
     </PageHeader>
-
-    <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
-      <router-link to="/contracts">תסקירים</router-link>
-      <router-link class="documents-workspace-tabs__active" to="/documents">מסמכים</router-link>
-      <router-link to="/quotes">הצעות מחיר</router-link>
-    </nav>
 
     <DriveExportJobStatus
       v-if="visibleDriveExportJob"
