@@ -59,93 +59,6 @@
           <n-icon :component="NotificationsOutline" :size="14" />
           תזכורות
         </span>
-        <div v-if="showActions" class="card__actions" @click.stop>
-          <button
-              :disabled="!row.document_id"
-              :title="row.document_id ? 'צפה במסמך' : 'אין מסמך מקושר'"
-              class="btn btn--ghost btn--xs icon-btn"
-              type="button"
-              @click.stop="emit('open-document', row)"
-          >
-            <n-icon :component="EyeOutline" class="btn-icon"/>
-          </button>
-          <button
-              class="btn btn--ghost btn--xs icon-btn"
-              title="ערוך"
-              type="button"
-              @click.stop="emit('edit', row)"
-          >
-            <n-icon :component="CreateOutline" class="btn-icon"/>
-          </button>
-          <button
-              v-if="showTemplateActions"
-              class="btn btn--ghost btn--xs icon-btn"
-              title="פתח בתבנית"
-              type="button"
-              @click.stop="emit('open-template', row)"
-          >
-            <n-icon :component="DocumentTextOutline" class="btn-icon"/>
-          </button>
-          <button
-              v-if="showTemplateActions && !row.document_id"
-              class="btn btn--warn-ghost btn--xs icon-btn"
-              title="הפק PDF"
-              type="button"
-              @click.stop="emit('open-template', row)"
-          >
-            <n-icon :component="DownloadOutline" class="btn-icon"/>
-          </button>
-          <button
-              v-if="showReminderActions"
-              :class="{ 'btn--loading': creatingReminder === row.id }"
-              :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"
-              :title="reminders.length ? 'הוסף תזכורת' : reminderButtonTitle"
-              class="btn btn--ghost btn--xs icon-btn"
-              type="button"
-              @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"
-          >
-            <n-icon :component="NotificationsOutline" class="btn-icon"/>
-          </button>
-          <button
-              v-if="showReminderActions"
-              :class="{ 'btn--loading': sendingThisCard }"
-              :disabled="!canSendReminder || sendingThisCard"
-              :title="sendReminderTitle"
-              class="btn btn--ghost btn--xs icon-btn"
-              type="button"
-              @click.stop="emit('send-card', row)"
-          >
-            <n-icon :component="PaperPlaneOutline" class="btn-icon"/>
-          </button>
-          <button
-              v-if="showReminderActions"
-              :disabled="!sendableReminder"
-              :title="sendableReminder ? 'תצוגת תזכורת' : 'אין תזכורת להצגה'"
-              class="btn btn--ghost btn--xs icon-btn"
-              type="button"
-              @click.stop="sendableReminder && emit('preview-reminder', sendableReminder)"
-          >
-            <n-icon :component="EyeOutline" class="btn-icon"/>
-          </button>
-          <button
-              class="btn btn--danger-ghost btn--xs icon-btn"
-              title="מחק"
-              type="button"
-              @click.stop="emit('delete', row)"
-          >
-            <n-icon :component="TrashOutline" class="btn-icon"/>
-          </button>
-        </div>
-<!--        <button-->
-<!--            v-if="showReminderActions"-->
-<!--            :disabled="creatingReminder === row.id || (!reminders.length && !canCreateReminder)"-->
-<!--            :title="reminders.length ? 'הוסף תזכורת נוספת' : reminderButtonTitle"-->
-<!--            class="btn btn&#45;&#45;xs btn&#45;&#45;primary"-->
-<!--            :class="{ 'btn&#45;&#45;loading': creatingReminder === row.id }"-->
-<!--            @click.stop="emit(reminders.length ? 'add-reminder' : 'create-reminder', row)"-->
-<!--        >-->
-<!--          {{ reminders.length ? "+ תזכורת חדשה" : "צור תזכורת" }}-->
-<!--        </button>-->
       </div>
       <div v-if="reminders.length" class="reminders-list">
         <div
@@ -208,7 +121,7 @@
 <script lang="ts" setup>
 import {computed} from "vue";
 import {NCheckbox, NIcon} from "naive-ui";
-import {CloseCircleOutline, CreateOutline, DocumentTextOutline, DownloadOutline, EyeOutline, NotificationsOutline, PaperPlaneOutline, TrashOutline} from "@vicons/ionicons5";
+import {CloseCircleOutline, EyeOutline, NotificationsOutline, PaperPlaneOutline, TrashOutline} from "@vicons/ionicons5";
 import {useRouter} from "vue-router";
 import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
 import type {RowIssue} from "@shared/rowIssues.js";
@@ -251,20 +164,6 @@ const sendableReminder = computed(() => {
       ?? rows.find((r) => r.status === "sent")
       ?? rows.find((r) => r.status === "snoozed")
       ?? null;
-});
-const canSendReminder = computed(() => {
-  if (sendableReminder.value) return reminderSendable(sendableReminder.value);
-  return hasEmail.value && Boolean(props.row.expiry_date);
-});
-const sendingThisCard = computed(() =>
-  props.creatingReminder === props.row.id
-  || (props.sendingReminder != null && (props.reminders ?? []).some((r) => r.id === props.sendingReminder)),
-);
-const sendReminderTitle = computed(() => {
-  if (sendableReminder.value) return reminderSendTitle(sendableReminder.value);
-  if (!hasEmail.value) return "חסר אימייל — לא ניתן לשלוח";
-  if (!props.row.expiry_date) return "חסר תאריך תוקף — לא ניתן לשלוח";
-  return "צור ושלח תזכורת";
 });
 const canCreateReminder = computed(() => Boolean(props.row.expiry_date));
 const reminderButtonTitle = computed(() => {
@@ -317,9 +216,7 @@ const emit = defineEmits<{
   "delete-reminder": [reminder: ReminderWithContext];
 }>();
 
-const showActions = computed(() => props.showActions);
 const showReminderActions = computed(() => props.showReminderActions);
-const showTemplateActions = computed(() => props.showTemplateActions);
 
 const subtitle = computed(() =>
     props.row.summary ??
