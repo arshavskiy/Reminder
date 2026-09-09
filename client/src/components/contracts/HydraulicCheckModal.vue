@@ -480,10 +480,6 @@
                       </div>
                       <button type="button" class="btn btn--ghost" @click="addBillingRate">הוספת סעיף</button>
                     </div>
-                    <div v-if="billingDocumentKind" class="hm-field hm-field--full">
-                      <label>הערות / פרטי תשלום</label>
-                      <n-input v-model:value="billingNotes" type="textarea" :rows="2" :maxlength="3000"/>
-                    </div>
                   </div>
                   <div v-if="billingDocumentKind" class="hm-billing-total">
                     סה״כ: {{ formatMoney(billingTotalCents) }}
@@ -597,6 +593,7 @@ import {
   useConfirm,
 } from "../../composables/useConfirm.js";
 import ConfirmDialogHead from "../ConfirmDialogHead.vue";
+import {DEFAULT_INSPECTOR_ID_START} from "@shared/types.js";
 import type {Equipment, PrintTemplate} from "@shared/types.js";
 import LayoutPreviewFrame from "../print/LayoutPreviewFrame.vue";
 import {useAuthStore} from "../../stores/auth.js";
