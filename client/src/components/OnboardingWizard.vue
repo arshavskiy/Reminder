@@ -290,20 +290,34 @@ async function finish() {
       company_email: form.value.company_email || null,
     });
 
+    // The profile is saved at this point. The uploads below are optional
+    // extras, so a failure there is reported but must not present itself as
+    // "nothing was saved" — the user would redo a step that already worked.
+    const failedUploads: string[] = [];
+
     // 2. Upload logo if selected
     if (logoFile.value) {
-      const fd = new FormData();
-      fd.append("logo", logoFile.value);
-      await fetch(`${SERVER}/api/profile/company-logo`, {
-        method: "POST",
-        credentials: "include",
-        body: fd,
-      });
+      try {
+        const fd = new FormData();
+        fd.append("logo", logoFile.value);
+        const res = await fetch(`${SERVER}/api/profile/company-logo`, {
+          method: "POST",
+          credentials: "include",
+          body: fd,
+        });
+        if (!res.ok) throw new Error(String(res.status));
+      } catch {
+        failedUploads.push("הלוגו");
+      }
     }
 
     // 3. Upload signature if selected
     if (sigFile.value) {
-      await api.templates.uploadUserAsset(sigFile.value, "signature");
+      try {
+        await api.templates.uploadUserAsset(sigFile.value, "signature");
+      } catch {
+        failedUploads.push("החתימה");
+      }
     }
 
     // 4. Save email from name
@@ -317,12 +331,18 @@ async function finish() {
       method: "POST",
       credentials: "include",
     });
+    if (!completeRes.ok) throw new Error(`onboarding-complete ${completeRes.status}`);
     const {onboarding_completed: completed} = await completeRes.json();
 
     await authStore.fetchMe();
     emit("update:modelValue", false);
-    message.success(completed ? "ההגדרה הושלמה בהצלחה!" : "הפרטים נשמרו — השלימו שם, טלפון וחברה כדי לסיים את ההגדרה");
-  } catch {
+    if (failedUploads.length) {
+      message.warning(`הפרטים נשמרו, אך העלאת ${failedUploads.join(" ו")} נכשלה — ניתן להעלות שוב מהפרופיל`);
+    } else {
+      message.success(completed ? "ההגדרה הושלמה בהצלחה!" : "הפרטים נשמרו — השלימו שם, טלפון וחברה כדי לסיים את ההגדרה");
+    }
+  } catch (error) {
+    console.error("[onboarding] finish failed", error);
     message.error("שגיאה בשמירת הנתונים");
   } finally {
     saving.value = false;

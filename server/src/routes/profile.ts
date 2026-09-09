@@ -504,11 +504,13 @@ export function registerProfileRoutes(app: express.Application) {
     // Only marks complete when the core fields are actually filled — a
     // skip/dismiss must not silence the "finish setup" reminder for someone
     // who never entered their details.
-    const user = await col("users").findOne({ _id: new ObjectId(ctx.realUserId) }) as any;
+    // ctx.userId, not realUserId — every other route here writes the acted-as
+    // document, so reading the admin's own row would check the wrong profile.
+    const user = await col("users").findOne({ _id: new ObjectId(ctx.userId) as any }) as any;
     const complete = Boolean(user?.name?.trim() && user?.phone?.trim() && user?.company_name?.trim());
     if (complete) {
       await col("users").updateOne(
-        { _id: new ObjectId(ctx.realUserId) },
+        { _id: new ObjectId(ctx.userId) as any },
         { $set: { onboarding_completed: true } },
       );
     }
