@@ -51,6 +51,10 @@ export interface AppSettings {
 }
 
 // Phase 2: Authentication types
+//
+// The user IS the engineer/company — there's no separate entity. Every
+// engineer/company field that used to live on a parallel engineer_profiles
+// document is a field directly on this type now.
 export interface User {
   id: number;
   google_sub: string;
@@ -60,10 +64,34 @@ export interface User {
   phone: string | null;
   picture_url: string | null;
   role: "admin" | "pro" | "user";
-  plan?: "free" | "basic" | "business";
+  plan?: "free" | "trial" | "basic" | "business";
+  trial_ends_at?: string | null;
   is_active: number;
   created_at: string;
   last_login_at: string | null;
+  onboarding_completed?: boolean;
+  address?: string | null;
+  city?: string | null;
+
+  // Engineer / inspector identity
+  inspector_number?: string | null;
+  /** Overrides inspector_number for a specific inspection type (key = INSPECTION_PRINT_TEMPLATE_PRESETS[].key), for inspectors who hold a separate certificate per type. */
+  inspector_numbers_by_type?: Record<string, string> | null;
+  title?: string | null;
+  expertise?: string | null;
+  mr_number?: string | null;
+  mg_number?: string | null;
+  membership_start_date?: string | null;
+  inspector_id_start?: string | null;
+  next_inspection_seq?: number | null;
+
+  // Company / business details
+  company_name?: string | null;
+  company_registration?: string | null;
+  company_subtitle?: string | null;
+  company_phone?: string | null;
+  company_email?: string | null;
+  company_logo_url?: string | null;
 }
 
 export interface Session {
@@ -80,28 +108,6 @@ export interface PipelineFlags {
   pipeline_ai: boolean;
   pipeline_s3: boolean;
   pipeline_entities: boolean;
-}
-
-export interface EngineerProfile {
-  inspector_number?: string | null;
-  /** Overrides inspector_number for a specific inspection type (key = INSPECTION_PRINT_TEMPLATE_PRESETS[].key), for inspectors who hold a separate certificate per type. */
-  inspector_numbers_by_type?: Record<string, string> | null;
-  address?: string | null;
-  city?: string | null;
-  title?: string | null;
-  expertise?: string | null;
-  mr_number?: string | null;
-  mg_number?: string | null;
-  membership_start_date?: string | null;
-  inspector_id_start?: string | null;
-  next_inspection_seq?: number | null;
-  company_name?: string | null;
-  company_registration?: string | null;
-  company_subtitle?: string | null;
-  company_phone?: string | null;
-  company_email?: string | null;
-  company_logo_url?: string | null;
-  full_name?: string | null;
 }
 
 export interface UserSettings extends PipelineFlags {

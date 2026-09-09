@@ -231,12 +231,13 @@
                   v-model:value="engineerForm.inspector_id_start"
                   placeholder="לדוגמה: 16125"
                 />
-                <span v-if="engineerForm.inspector_id_start" class="info-hint">
+                <span v-if="engineerForm.inspector_id_start && engineerForm.inspector_number" class="info-hint">
                   <n-icon :component="LockClosedOutline" :size="14" />
-                  מספר זה נקבע כבר. הבא יהיה:
-                  {{ engineerProfile?.inspector_number ?? "—" }}/{{
-                    engineerForm.inspector_id_start
-                  }}
+                  תצוגה מקדימה של המספר הבא:
+                  {{ engineerForm.inspector_number }}/{{ engineerForm.inspector_id_start }}
+                </span>
+                <span v-else-if="engineerForm.inspector_id_start" class="info-hint info-hint--warn">
+                  יש להזין מספר רישוי בדק כדי להציג את תצוגת המספר הבא
                 </span>
               </div>
               <div
@@ -245,10 +246,16 @@
               >
                 <span>{{ engineerProfile?.inspector_id_start || "—" }}</span>
                 <span
-                  v-if="engineerProfile?.inspector_id_start"
+                  v-if="engineerProfile?.inspector_id_start && engineerProfile?.inspector_number"
                   class="info-hint"
                 >
                   הבא יהיה: {{ nextInspectionId }}
+                </span>
+                <span
+                  v-else-if="engineerProfile?.inspector_id_start"
+                  class="info-hint info-hint--warn"
+                >
+                  יש להזין מספר רישוי בדק כדי להציג את המספר הבא
                 </span>
               </div>
             </div>
@@ -279,7 +286,7 @@
                 placeholder="לדוגמה: M.A.D הנדסה ובטיחות"
               />
               <span v-else class="info-val">{{
-                (engineerProfile as any)?.company_name || "—"
+                (engineerProfile as any)?.company_name || user?.company_name || "—"
               }}</span>
             </div>
             <div class="info-row">
@@ -303,7 +310,7 @@
                 placeholder="052-8195650"
               />
               <span v-else class="info-val">{{
-                (engineerProfile as any)?.company_phone || "—"
+                (engineerProfile as any)?.company_phone || user?.phone || "—"
               }}</span>
             </div>
             <div class="info-row">
@@ -315,7 +322,7 @@
                 placeholder="name@company.com"
               />
               <span v-else class="info-val">{{
-                (engineerProfile as any)?.company_email || "—"
+                (engineerProfile as any)?.company_email || user?.email || "—"
               }}</span>
             </div>
             <div class="info-row info-row--top">
@@ -1902,12 +1909,17 @@ function startEditEngineer() {
     membership_start_ms: p?.membership_start_date
       ? new Date(p.membership_start_date).getTime()
       : null,
-    inspector_id_start: p?.inspector_id_start ?? "",
-    company_name: (p as any)?.company_name ?? "",
+    // New users get a suggested 5-digit starting number rather than a blank
+    // field — editable before saving, just a sane default to start from.
+    inspector_id_start: p?.inspector_id_start ?? "10001",
+    // Default the extraction-filter company fields from the main profile
+    // (set during onboarding) when the inspector hasn't set them separately
+    // here — most users have one company, not two to enter.
+    company_name: (p as any)?.company_name || user.value?.company_name || "",
     company_registration: (p as any)?.company_registration ?? "",
     company_subtitle: (p as any)?.company_subtitle ?? "",
-    company_phone: (p as any)?.company_phone ?? "",
-    company_email: (p as any)?.company_email ?? "",
+    company_phone: (p as any)?.company_phone || user.value?.phone || "",
+    company_email: (p as any)?.company_email || user.value?.email || "",
     inspector_numbers_by_type: {...((p as any)?.inspector_numbers_by_type ?? {})},
   };
   showPerTypeInspectorNumbers.value = Object.keys(engineerForm.value.inspector_numbers_by_type).length > 0;

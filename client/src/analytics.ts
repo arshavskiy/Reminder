@@ -7,8 +7,17 @@ declare global {
   }
 }
 
-const GA_ID = import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined;
-const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID as string | undefined;
+// Never track localhost or non-production builds — .env (loaded in every
+// mode, dev included) sets these ids for the real deployed site, so gate on
+// hostname/mode here rather than relying on a separate dev env file to omit
+// them.
+const IS_TRACKABLE_ENV =
+  import.meta.env.PROD &&
+  typeof window !== "undefined" &&
+  !["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+const GA_ID = IS_TRACKABLE_ENV ? (import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined) : undefined;
+const META_PIXEL_ID = IS_TRACKABLE_ENV ? (import.meta.env.VITE_META_PIXEL_ID as string | undefined) : undefined;
 
 let initialized = false;
 

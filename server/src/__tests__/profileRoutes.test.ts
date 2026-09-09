@@ -24,17 +24,19 @@ function mockCol(data: Record<string, any[]> = {}) {
 }
 
 // ── Engineer profile ──────────────────────────────────────────────────────────
+// The engineer/company fields live directly on the users document — the user
+// IS the engineer, no separate entity. Queried by _id, not a user_id string.
 
 describe("engineer profile — GET", () => {
-  it("returns empty object when no profile exists", async () => {
-    const col = mockCol({ engineer_profiles: [] });
-    const doc = await col("engineer_profiles").findOne({ user_id: "u1" });
+  it("returns empty object when user doc doesn't exist", async () => {
+    const col = mockCol({ users: [] });
+    const doc = await col("users").findOne({ _id: "u1" });
     expect(doc ?? {}).toEqual({});
   });
 
-  it("returns the engineer profile when it exists", async () => {
-    const profile = {
-      user_id: "u1",
+  it("returns the user's engineer/company fields when set", async () => {
+    const user = {
+      _id: "u1",
       inspector_number: "INS-001",
       address: "123 Main St",
       title: "Engineer",
@@ -43,44 +45,40 @@ describe("engineer profile — GET", () => {
       mg_number: null,
       membership_start_date: "2020-01-01",
     };
-    const col = mockCol({ engineer_profiles: [profile] });
-    const doc = await col("engineer_profiles").findOne({ user_id: "u1" });
+    const col = mockCol({ users: [user] });
+    const doc = await col("users").findOne({ _id: "u1" });
     expect(doc).not.toBeNull();
     expect(doc?.inspector_number).toBe("INS-001");
     expect(doc?.title).toBe("Engineer");
   });
 
-  it("does not return another user's profile", async () => {
-    const profile = { user_id: "u2", inspector_number: "INS-999" };
-    const col = mockCol({ engineer_profiles: [profile] });
-    const doc = await col("engineer_profiles").findOne({ user_id: "u1" });
+  it("does not return another user's fields", async () => {
+    const user = { _id: "u2", inspector_number: "INS-999" };
+    const col = mockCol({ users: [user] });
+    const doc = await col("users").findOne({ _id: "u1" });
     expect(doc).toBeNull();
   });
 });
 
-describe("engineer profile — PUT upsert", () => {
-  it("calls updateOne with upsert flag", async () => {
-    const col = mockCol({ engineer_profiles: [] });
-    const updateOne = col("engineer_profiles").updateOne;
+describe("engineer profile — PUT", () => {
+  it("calls updateOne targeting the user's _id", async () => {
+    const col = mockCol({ users: [] });
+    const updateOne = col("users").updateOne;
     await updateOne(
-      { user_id: "u1" },
-      { $set: { user_id: "u1", inspector_number: "INS-100", updated_at: new Date().toISOString() } },
-      { upsert: true }
+      { _id: "u1" },
+      { $set: { inspector_number: "INS-100", updated_at: new Date().toISOString() } },
     );
     expect(updateOne).toHaveBeenCalledOnce();
-    const [filter, , options] = (updateOne as any).mock.calls[0];
-    expect(filter).toEqual({ user_id: "u1" });
-    expect(options?.upsert).toBe(true);
+    const [filter] = (updateOne as any).mock.calls[0];
+    expect(filter).toEqual({ _id: "u1" });
   });
 
   it("null-coalesces missing fields", () => {
     const body: Record<string, string | null> = { inspector_number: "INS-100" };
     const patch = {
       inspector_number: body.inspector_number ?? null,
-      address: body.address ?? null,
       title: body.title ?? null,
     };
-    expect(patch.address).toBeNull();
     expect(patch.title).toBeNull();
     expect(patch.inspector_number).toBe("INS-100");
   });

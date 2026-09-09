@@ -147,10 +147,13 @@ export function registerProfileRoutes(app: express.Application) {
     });
 
   // ── Engineer profile ──────────────────────────────────────────────────────
+  // The user IS the engineer/company — no separate entity. These two routes
+  // are kept (rather than folded into PUT /api/profile) only because the
+  // client already calls them separately; both read/write the same users doc.
   app.get("/api/profile/engineer", async (req, res) => {
     const ctx = await auth(req, res);
     if (!ctx) return;
-    const doc = await col("engineer_profiles").findOne({ user_id: ctx.userId });
+    const doc = await col("users").findOne({ _id: new ObjectId(ctx.userId) as any });
     res.json(doc ?? {});
   });
 
@@ -158,20 +161,17 @@ export function registerProfileRoutes(app: express.Application) {
     const ctx = await auth(req, res);
     if (!ctx) return;
     const {
-      inspector_number, address, city, title, expertise,
+      inspector_number, title, expertise,
       mr_number, mg_number, membership_start_date,
       company_name, company_registration, company_subtitle, company_phone, company_email,
       company_logo_url, inspector_id_start, inspector_numbers_by_type,
     } = req.body as Record<string, string | null> & { inspector_numbers_by_type?: unknown };
 
-    await col("engineer_profiles").updateOne(
-      { user_id: ctx.userId },
+    await col("users").updateOne(
+      { _id: new ObjectId(ctx.userId) as any },
       {
         $set: {
-          user_id: ctx.userId,
           inspector_number: inspector_number ?? null,
-          address: address ?? null,
-          city: city ?? null,
           title: title ?? null,
           expertise: expertise ?? null,
           mr_number: mr_number ?? null,
@@ -193,10 +193,9 @@ export function registerProfileRoutes(app: express.Application) {
           updated_at: new Date().toISOString(),
         },
       },
-      { upsert: true },
     );
 
-    const updated = await col("engineer_profiles").findOne({ user_id: ctx.userId });
+    const updated = await col("users").findOne({ _id: new ObjectId(ctx.userId) as any });
     res.json(updated ?? {});
   });
 
@@ -226,10 +225,9 @@ export function registerProfileRoutes(app: express.Application) {
       return;
     }
 
-    await col("engineer_profiles").updateOne(
-      { user_id: ctx.userId },
-      { $set: { company_logo_url: logoUrl, updated_at: new Date().toISOString() } },
-      { upsert: true },
+    await col("users").updateOne(
+      { _id: new ObjectId(ctx.userId) as any },
+      { $set: { company_logo_url: logoUrl, company_logo_storage_key: key, updated_at: new Date().toISOString() } },
     );
     res.json({ company_logo_url: logoUrl });
   });
@@ -238,11 +236,16 @@ export function registerProfileRoutes(app: express.Application) {
   app.put("/api/profile", async (req, res) => {
     const ctx = await auth(req, res);
     if (!ctx) return;
-    const { name, phone, company_name } = req.body as { name?: string; phone?: string | null; company_name?: string | null };
+    const { name, phone, company_name, address, city } = req.body as {
+      name?: string; phone?: string | null; company_name?: string | null;
+      address?: string | null; city?: string | null;
+    };
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (name !== undefined) patch.name = name?.trim() ?? null;
     if (phone !== undefined) patch.phone = phone?.trim() || null;
     if (company_name !== undefined) patch.company_name = company_name?.trim() || null;
+    if (address !== undefined) patch.address = address?.trim() || null;
+    if (city !== undefined) patch.city = city?.trim() || null;
     if (Object.keys(patch).length === 1) { res.status(400).json({ error: "nothing to update" }); return; }
     await col("users").updateOne({ _id: new ObjectId(ctx.userId) as any }, { $set: patch });
     res.json({ ok: true });
@@ -427,35 +430,27 @@ export function registerProfileRoutes(app: express.Application) {
         } as any);
         certificateId = certInsert.insertedId.toString();
 
-        // 6. Fill engineer_profiles — only-empty (don't overwrite user data)
-        const profile = (await col("engineer_profiles").findOne({ user_id: ctx.userId })) as any;
-        const profilePatch: Record<string, unknown> = {};
+        // 6. Fill the user's engineer/company fields — only-empty (don't overwrite existing data)
+        const userRow = (await col("users").findOne({ _id: new ObjectId(ctx.userId) as any })) as any;
+        const userPatch: Record<string, unknown> = {};
         const profileFields: Array<keyof typeof result & string> = [
           "inspector_number", "title", "expertise",
           "mr_number", "mg_number", "membership_start_date",
-          "company_name", "company_phone", "company_email", "address",
+          "company_name", "company_phone", "company_email",
         ];
         for (const k of profileFields) {
           const newVal = result[k];
-          if (newVal != null && newVal !== "" && (!profile || profile[k] == null || profile[k] === "")) {
-            profilePatch[k] = newVal;
+          if (newVal != null && newVal !== "" && (!userRow || userRow[k] == null || userRow[k] === "")) {
+            userPatch[k] = newVal;
             updatedProfileFields.add(k);
           }
         }
-        if (Object.keys(profilePatch).length) {
-          profilePatch.updated_at = new Date().toISOString();
-          await col("engineer_profiles").updateOne(
-            { user_id: ctx.userId },
-            { $set: { user_id: ctx.userId, ...profilePatch } },
-            { upsert: true }
-          );
-        }
-
-        // 7. Fill users (personal) — only-empty
-        const userRow = (await col("users").findOne({ _id: new ObjectId(ctx.userId) as any })) as any;
-        const userPatch: Record<string, unknown> = {};
         if (result.full_name && !userRow?.name) userPatch.name = result.full_name;
         if (result.phone && !userRow?.phone) userPatch.phone = result.phone;
+        if ((result as any).address && !userRow?.address) {
+          userPatch.address = (result as any).address;
+          updatedProfileFields.add("address");
+        }
         if (Object.keys(userPatch).length) {
           userPatch.updated_at = new Date().toISOString();
           await col("users").updateOne(
@@ -537,11 +532,18 @@ export function registerProfileRoutes(app: express.Application) {
   app.post("/api/profile/onboarding-complete", async (req, res) => {
     const ctx = await auth(req, res);
     if (!ctx) return;
-    await col("users").updateOne(
-      { _id: new ObjectId(ctx.realUserId) },
-      { $set: { onboarding_completed: true } },
-    );
-    res.json({ ok: true });
+    // Only marks complete when the core fields are actually filled — a
+    // skip/dismiss must not silence the "finish setup" reminder for someone
+    // who never entered their details.
+    const user = await col("users").findOne({ _id: new ObjectId(ctx.realUserId) }) as any;
+    const complete = Boolean(user?.name?.trim() && user?.phone?.trim() && user?.company_name?.trim());
+    if (complete) {
+      await col("users").updateOne(
+        { _id: new ObjectId(ctx.realUserId) },
+        { $set: { onboarding_completed: true } },
+      );
+    }
+    res.json({ ok: true, onboarding_completed: complete });
   });
 
   // ── Close account & delete all user data (irreversible) ───────────────────

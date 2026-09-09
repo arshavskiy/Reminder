@@ -174,15 +174,13 @@ async function resolveSenderName(userId: string | number | null | undefined): Pr
   const settings = getSettings();
   if (!userId) return firstNonEmpty(settings.emailFromName, "RemindOCR") ?? "RemindOCR";
 
-  const [userSettings, engineerProfile, user] = await Promise.all([
+  const [userSettings, user] = await Promise.all([
     col("user_settings").findOne({ user_id: String(userId) }) as Promise<any>,
-    col("engineer_profiles").findOne({ user_id: String(userId) }) as Promise<any>,
     col("users").findOne({ _id: tryObjectId(userId) } as any) as Promise<any>,
   ]);
 
   return firstNonEmpty(
     userSettings?.email_from_name,
-    engineerProfile?.company_name,
     user?.company_name,
     settings.emailFromName,
     "RemindOCR",
@@ -295,9 +293,8 @@ async function resolveContractForReminder(reminder: ReminderWithContext): Promis
 
 async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars> {
   const userId = String((reminder as any).user_id ?? "");
-  const [senderName, engineerProfile, user, linkedContract] = await Promise.all([
+  const [senderName, user, linkedContract] = await Promise.all([
     resolveSenderName(userId),
-    userId ? col("engineer_profiles").findOne({ user_id: userId }) as Promise<any> : Promise.resolve(null),
     userId ? col("users").findOne({ _id: tryObjectId(userId) } as any) as Promise<any> : Promise.resolve(null),
     resolveContractForReminder(reminder),
   ]);
@@ -311,13 +308,13 @@ async function buildEmailVars(reminder: ReminderWithContext): Promise<EmailVars>
     contract_number: (reminder as any).contract_number ?? null,
     contract_type: (reminder as any).contract_type ?? null,
     from_name: senderName,
-    engineer_name: firstNonEmpty(engineerProfile?.full_name, user?.name, senderName) ?? senderName,
-    inspector_number: firstNonEmpty(engineerProfile?.inspector_number) ?? null,
-    engineer_phone: firstNonEmpty(engineerProfile?.company_phone, user?.phone) ?? null,
-    engineer_company: firstNonEmpty(engineerProfile?.company_name, user?.company_name) ?? null,
-    engineer_subtitle: firstNonEmpty(engineerProfile?.company_subtitle) ?? null,
-    company_exp: firstNonEmpty(engineerProfile?.company_subtitle) ?? null,
-    comp_logo: hostedImageUrl(firstNonEmpty(engineerProfile?.company_logo_url, user?.picture_url)),
+    engineer_name: firstNonEmpty(user?.name, senderName) ?? senderName,
+    inspector_number: firstNonEmpty(user?.inspector_number) ?? null,
+    engineer_phone: firstNonEmpty(user?.company_phone, user?.phone) ?? null,
+    engineer_company: firstNonEmpty(user?.company_name) ?? null,
+    engineer_subtitle: firstNonEmpty(user?.company_subtitle) ?? null,
+    company_exp: firstNonEmpty(user?.company_subtitle) ?? null,
+    comp_logo: hostedImageUrl(firstNonEmpty(user?.company_logo_url, user?.picture_url)),
   };
 
   // Equipment fields stored directly on the reminder take precedence over the
@@ -828,14 +825,10 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
     const transport = useResend() ? null : buildTransport();
     if (transport) await transport.verify();
 
-    // Load real engineer profile vars when userId provided
-    let engineerProfile: any = null;
+    // Load real engineer/company vars when userId provided
     let user: any = null;
     if (userId) {
-      [engineerProfile, user] = await Promise.all([
-        col("engineer_profiles").findOne({ user_id: userId }),
-        col("users").findOne({ _id: tryObjectId(userId) } as any),
-      ]);
+      user = await col("users").findOne({ _id: tryObjectId(userId) } as any);
     }
 
     const sampleVars: EmailVars = {
@@ -845,7 +838,7 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
       body: " זהו דוא״ל בדיקה באמצעות תבנית שנבחרה.",
       client_name: " לקוח לדוגמה",
       document_name: " מסמך לדוגמה",
-      from_name: firstNonEmpty((engineerProfile as any)?.company_name, user?.company_name, settings.emailFromName, "RemindOCR") ?? "RemindOCR",
+      from_name: firstNonEmpty(user?.company_name, settings.emailFromName, "RemindOCR") ?? "RemindOCR",
       client_company: " חברה לדוגמה",
       contact_email: to,
       contact_phone: "050-1234567 ",
@@ -853,14 +846,14 @@ export async function sendTestEmail(to: string, emailTemplateId: string | number
       document_number: "001 ",
       contact_person: " איש קשר לדוגמה",
       expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-      engineer_name: firstNonEmpty((engineerProfile as any)?.full_name, user?.name) ?? null,
-      inspector_number: firstNonEmpty((engineerProfile as any)?.inspector_number) ?? null,
+      engineer_name: firstNonEmpty(user?.name) ?? null,
+      inspector_number: firstNonEmpty(user?.inspector_number) ?? null,
       license_number: "233017",
-      engineer_phone: firstNonEmpty((engineerProfile as any)?.company_phone, user?.phone) ?? null,
-      engineer_company: firstNonEmpty((engineerProfile as any)?.company_name, user?.company_name) ?? null,
-      engineer_subtitle: firstNonEmpty((engineerProfile as any)?.company_subtitle) ?? null,
-      company_exp: firstNonEmpty((engineerProfile as any)?.company_subtitle) ?? null,
-      comp_logo: hostedImageUrl((engineerProfile as any)?.company_logo_url),
+      engineer_phone: firstNonEmpty(user?.company_phone, user?.phone) ?? null,
+      engineer_company: firstNonEmpty(user?.company_name) ?? null,
+      engineer_subtitle: firstNonEmpty(user?.company_subtitle) ?? null,
+      company_exp: firstNonEmpty(user?.company_subtitle) ?? null,
+      comp_logo: hostedImageUrl(user?.company_logo_url),
       items_table: sampleGroupedItemsTable(),
       item_count: 3,
     };

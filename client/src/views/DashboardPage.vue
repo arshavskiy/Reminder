@@ -4,6 +4,13 @@
       <!--      <h1 class="dash__greet">{{ greeting }}{{ userName ? `, ${userName}` : "" }}</h1>-->
       <!--      <n-button :loading="store.loading" @click="store.fetch(true)">↻ רענן</n-button>-->
     </header>
+
+    <div v-if="needsOnboarding" class="dash__onboarding-reminder">
+      <span>נשארו עוד פרטים למילוי כדי לנצל את המערכת במלואה</span>
+      <button type="button" class="dash__onboarding-reminder__btn" @click="openOnboarding">
+        השלמת ההגדרה
+      </button>
+    </div>
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
       <div
@@ -231,6 +238,7 @@ import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import GmailLogo from "../components/GmailLogo.vue";
+import {useOnboarding} from "../composables/useOnboarding.js";
 
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
 const showHydraulicModal = ref(false);
@@ -241,6 +249,10 @@ const featuresStore = useFeaturesStore();
 const userSettingsStore = useUserSettingsStore();
 const router = useRouter();
 const message = useMessage();
+const {openOnboarding} = useOnboarding();
+const needsOnboarding = computed(() => {
+  return Boolean(authStore.user && !(authStore.user as any).onboarding_completed);
+});
 
 function onQuotaReached() {
   message.warning("הגעת למגבלת המסמכים בחשבון החינמי. שדרג את המסלול כדי להעלות עוד.");
@@ -570,6 +582,37 @@ const data_cards = computed(() =>
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20px;
+}
+
+.dash__onboarding-reminder {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--brand-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-color) 30%, var(--border-color));
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.dash__onboarding-reminder__btn {
+  flex-shrink: 0;
+  border: 1px solid var(--brand-color);
+  background: var(--brand-color);
+  color: #06210f;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dash__onboarding-reminder__btn:hover {
+  opacity: 0.9;
 }
 
 .dash__header {

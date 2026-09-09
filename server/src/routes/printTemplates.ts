@@ -36,22 +36,19 @@ function assertExportAllowed(auth: Awaited<ReturnType<typeof requireAuth>>): boo
  */
 async function getEngineerData(userId: string, reportTypeKey?: string | null): Promise<Record<string, string>> {
     try {
-        const [engineerProfile, user] = await Promise.all([
-            col("engineer_profiles").findOne({user_id: userId}),
-            col("users").findOne({_id: tryObjectId(userId)}),
-        ]) as [any, any];
-        const companyName = engineerProfile?.company_name || user?.company_name || "";
-        const byType = engineerProfile?.inspector_numbers_by_type;
+        const user = await col("users").findOne({_id: tryObjectId(userId)}) as any;
+        const companyName = user?.company_name || "";
+        const byType = user?.inspector_numbers_by_type;
         const typedNumber = reportTypeKey && byType && typeof byType === "object" ? byType[reportTypeKey] : undefined;
         return {
-            engineer_name: engineerProfile?.full_name || user?.name || "",
-            engineer_email: engineerProfile?.company_email || user?.email || "",
-            engineer_phone: engineerProfile?.company_phone || user?.phone || "",
+            engineer_name: user?.name || "",
+            engineer_email: user?.company_email || user?.email || "",
+            engineer_phone: user?.company_phone || user?.phone || "",
             engineer_company: companyName,
-            inspector_number: typedNumber || engineerProfile?.inspector_number || "",
+            inspector_number: typedNumber || user?.inspector_number || "",
             company_name: companyName,
-            company_registration: engineerProfile?.company_registration || "",
-            engineer_address: engineerProfile?.address || "",
+            company_registration: user?.company_registration || "",
+            engineer_address: user?.address || "",
         };
     } catch {
         return {};
@@ -382,6 +379,10 @@ async function renderTemplatePdf(t: any, data: Record<string, unknown>): Promise
   const html = t.editorType === "sections" && t.layout
     ? renderSectionTemplateHtml(t.layout, data, t.dir ?? "rtl")
     : renderTemplateHtml(t, data);
+  return renderHtmlPdf(html, t.page ?? "A4");
+}
+
+export async function renderHtmlPdf(html: string, format: any = "A4"): Promise<Uint8Array> {
   const { default: puppeteer } = await import("puppeteer-core");
   const launch = await resolveBrowserLaunch();
   const browser = await puppeteer.launch(launch);
@@ -389,7 +390,7 @@ async function renderTemplatePdf(t: any, data: Record<string, unknown>): Promise
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load" });
     return await page.pdf({
-      format: t.page ?? "A4",
+      format,
       printBackground: true,
       margin: { top: "10mm", bottom: "10mm", left: "8mm", right: "8mm" },
     });

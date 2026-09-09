@@ -267,7 +267,6 @@ const ALL_COLLECTIONS = [
   "print_templates",
   "print_template_drafts",
   "features",
-  "engineer_profiles",
   "certificates",
   "notifications",
   "gmail_imports",
@@ -435,9 +434,6 @@ async function applyIndexes(db: Db): Promise<void> {
   // features
   await db.collection("features").createIndex({ key: 1 }, { unique: true });
   await db.collection("features").createIndex({ scope: 1, sort_order: 1 });
-
-  // engineer_profiles
-  await db.collection("engineer_profiles").createIndex({ user_id: 1 }, { unique: true, sparse: true });
 
   // certificates
   await db.collection("certificates").createIndex({ user_id: 1 });

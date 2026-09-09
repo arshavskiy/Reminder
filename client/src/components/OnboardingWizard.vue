@@ -329,15 +329,17 @@ async function finish() {
       await api.userSettings.save({email_from_name: form.value.email_from_name});
     }
 
-    // 6. Mark onboarding complete
-    await fetch(`${SERVER}/api/profile/onboarding-complete`, {
+    // 6. Mark onboarding complete — server only sets the flag if the core
+    // fields (name/phone/company_name) actually came through.
+    const completeRes = await fetch(`${SERVER}/api/profile/onboarding-complete`, {
       method: "POST",
       credentials: "include",
     });
+    const {onboarding_completed: completed} = await completeRes.json();
 
     await authStore.fetchMe();
     emit("update:modelValue", false);
-    message.success("ההגדרה הושלמה בהצלחה!");
+    message.success(completed ? "ההגדרה הושלמה בהצלחה!" : "הפרטים נשמרו — השלימו שם, טלפון וחברה כדי לסיים את ההגדרה");
   } catch {
     message.error("שגיאה בשמירת הנתונים");
   } finally {
@@ -345,20 +347,11 @@ async function finish() {
   }
 }
 
-async function skipAll() {
-  saving.value = true;
-  try {
-    await fetch(`${SERVER}/api/profile/onboarding-complete`, {
-      method: "POST",
-      credentials: "include",
-    });
-    await authStore.fetchMe();
-    emit("update:modelValue", false);
-  } catch {
-    message.error("שגיאה");
-  } finally {
-    saving.value = false;
-  }
+// Just dismisses the modal — does not mark onboarding complete, so the
+// dashboard "finish setup" reminder keeps showing until the core fields
+// are actually filled in.
+function skipAll() {
+  emit("update:modelValue", false);
 }
 </script>
 

@@ -12,7 +12,7 @@ vi.stubGlobal("fetch", fetchMock);
 
 vi.mock("../db/db", () => ({
   col: vi.fn((name: string) => ({
-    findOne: name === "users" || name === "engineer_profiles" ? findOne : vi.fn(),
+    findOne: name === "users" ? findOne : vi.fn(),
     find,
     deleteMany,
     deleteOne,
@@ -57,10 +57,8 @@ describe("deleteAccountData", () => {
           picture_url: null,
           picture_storage_key: "users/u/avatar/a.png",
           gmail_refresh_token: "rt",
+          company_logo_url: "https://cdn.example/images/u/logo.png",
         };
-      }
-      if (filter?.user_id) {
-        return {user_id: filter.user_id, company_logo_url: "https://cdn.example/images/u/logo.png"};
       }
       return null;
     });

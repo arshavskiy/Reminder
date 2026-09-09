@@ -399,13 +399,13 @@ html[dir="rtl"] .n-base-clear {
 .btn--primary {
   background: var(--brand-color);
   border-color: var(--brand-color);
-  color: var(--text-inverse, #fff);
+  color: #fff;
   font-weight: 600;
 }
 .btn--primary:hover:not(:disabled) {
   background: var(--brand-color-hover);
   border-color: var(--brand-color-hover);
-  color: var(--text-inverse, #fff);
+  color: #fff;
 }
 .btn--primary:active:not(:disabled) {
   background: var(--brand-color-pressed);
@@ -519,13 +519,13 @@ html[dir="rtl"] .n-base-clear {
 .btn--primary {
   background: var(--brand-color);
   border-color: var(--brand-color);
-  color: var(--text-inverse, #fff);
+  color: #fff;
   font-weight: 600;
 }
 .btn--primary:hover:not(:disabled) {
   background: var(--brand-color-hover);
   border-color: var(--brand-color-hover);
-  color: var(--text-inverse, #fff);
+  color: #fff;
 }
 .btn--primary:active:not(:disabled) {
   background: var(--brand-color-pressed);

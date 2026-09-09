@@ -1310,12 +1310,12 @@ export async function processDocument(
       if (template) {
         let inspector: Record<string, any> | undefined;
         if (userId) {
-          const [engineerProfile, userRow] = await Promise.all([
-            col("engineer_profiles").findOne({ user_id: userId }) as Promise<any>,
-            col("users").findOne({ _id: new ObjectId(userId) as any }) as Promise<any>,
-          ]);
+          const userRow = await col("users").findOne({ _id: new ObjectId(userId) as any }) as any;
           inspector = {
-            ...(engineerProfile ?? {}),
+            company_name: userRow?.company_name ?? null,
+            company_phone: userRow?.company_phone ?? null,
+            company_email: userRow?.company_email ?? null,
+            inspector_number: userRow?.inspector_number ?? null,
             personal_phone: userRow?.phone ?? null,
             personal_email: userRow?.email ?? null,
             personal_name: userRow?.name ?? null,
@@ -2088,14 +2088,11 @@ function stripExcludedClientEmails(fields: Record<string, unknown>, excludedEmai
 async function stripExcludedClientEmailsForUser(fields: Record<string, unknown>, userId?: string): Promise<void> {
   const sources: ClientEmailExclusionSource[] = [];
   if (userId) {
-    const [engineerProfile, userRow] = await Promise.all([
-      col("engineer_profiles").findOne({ user_id: userId }) as Promise<any>,
-      ObjectId.isValid(userId)
-        ? col("users").findOne({ _id: new ObjectId(userId) as any }) as Promise<any>
-        : Promise.resolve(null),
-    ]);
-    sources.push(engineerProfile ?? {});
+    const userRow = ObjectId.isValid(userId)
+      ? await col("users").findOne({ _id: new ObjectId(userId) as any }) as any
+      : null;
     sources.push({
+      company_email: userRow?.company_email ?? null,
       email: userRow?.email ?? null,
       personal_email: userRow?.email ?? null,
     });

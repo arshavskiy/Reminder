@@ -840,12 +840,12 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
-    const [engineerProfile, userRow] = await Promise.all([
-      col("engineer_profiles").findOne({ user_id: userId }) as Promise<any>,
-      col("users").findOne({ _id: new ObjectId(userId) as any }) as Promise<any>,
-    ]);
+    const userRow = await col("users").findOne({ _id: new ObjectId(userId) as any }) as any;
     const inspector = {
-      ...(engineerProfile ?? {}),
+      company_name: userRow?.company_name ?? null,
+      company_phone: userRow?.company_phone ?? null,
+      company_email: userRow?.company_email ?? null,
+      inspector_number: userRow?.inspector_number ?? null,
       personal_phone: userRow?.phone ?? null,
       personal_email: userRow?.email ?? null,
       personal_name: userRow?.name ?? null,

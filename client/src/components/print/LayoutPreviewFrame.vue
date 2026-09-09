@@ -79,12 +79,14 @@
             <tr><th style="width:40px">מס׳</th><th style="width:80px">נושא</th><th colspan="2">פירוט</th></tr>
           </thead>
           <tbody>
-            <tr v-for="row in section.rows" :key="row.bind">
-              <td class="num">{{ row.number }}</td>
-              <td class="subj">{{ row.subjectLabel }}</td>
-              <td colspan="2" class="detail">{{ val(row.bind) }}</td>
-            </tr>
-            <tr v-if="section.deadlineBind">
+            <template v-for="row in section.rows" :key="row.bind">
+              <tr v-if="val(row.bind).trim()">
+                <td class="num">{{ row.number }}</td>
+                <td class="subj">{{ row.subjectLabel }}</td>
+                <td colspan="2" class="detail">{{ val(row.bind) }}</td>
+              </tr>
+            </template>
+            <tr v-if="section.deadlineBind && val(section.deadlineBind).trim()">
               <td class="num">{{ section.deadlineLabel ?? "תוך" }}</td>
               <td class="detail">{{ val(section.deadlineBind) }}</td>
               <td colspan="2" class="detail">{{ section.deadlineSuffix ?? "" }}</td>

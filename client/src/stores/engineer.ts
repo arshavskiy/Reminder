@@ -1,7 +1,12 @@
 import {defineStore} from "pinia";
 import {computed, ref} from "vue";
 import {api} from "../services/apiService.js";
-import type {EngineerProfile} from "../../src/shared/types.js";
+import type {User} from "../../src/shared/types.js";
+
+// The engineer/company fields live on the users document now — this store
+// still exposes just that slice (fetched via GET/PUT /api/profile/engineer,
+// which read/write the same users row profile.ts's other routes do).
+type EngineerProfile = Partial<User>;
 
 export const useEngineerStore = defineStore("engineer", () => {
   const profile = ref<EngineerProfile | null>(null);

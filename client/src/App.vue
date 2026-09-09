@@ -239,6 +239,7 @@ import UserDropdown from "./components/UserDropdown.vue";
 import OnboardingWizard from "./components/OnboardingWizard.vue";
 import WalkthroughOverlay from "./components/WalkthroughOverlay.vue";
 import {useWalkthrough} from "./composables/useWalkthrough.js";
+import {useOnboarding} from "./composables/useOnboarding.js";
 import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
@@ -289,7 +290,7 @@ const hideAppChrome = computed(() =>
 const mobileNavOpen = ref(false);
 
 // ── Onboarding wizard ───────────────────────────────────────────────────────
-const showOnboarding = ref(false);
+const {showOnboarding} = useOnboarding();
 
 watch(
   () => authStore.user,

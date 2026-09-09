@@ -90,11 +90,18 @@ function resolveInspectorNumber(profile: any, category: string | undefined | nul
  * (next_inspection_seq) is one running count shared across every inspection
  * type — only the number prefixed to it varies by type.
  * (nextInspectionId), but actually persisted here instead of just displayed.
- * Seeds the counter from engineer_profiles.inspector_id_start on first use,
- * or from this user's existing report numbers if the explicit seed is missing.
+ * Seeds the counter from the user's inspector_id_start on first use, or from
+ * this user's existing report numbers if the explicit seed is missing.
+ *
+ * NOTE: the read-then-$set here is not atomic (pre-existing, not introduced
+ * by folding this onto the users doc) — a race is possible under concurrent
+ * calls for the same user. Now that this shares a document with much more
+ * frequently written fields (profile edits, avatar uploads), that race
+ * window is exercised more often than before. Worth hardening to a single
+ * findOneAndUpdate with $inc if this becomes a real problem.
  */
 async function allocateReportNumber(userId: string, category?: string | null): Promise<string | null> {
-  const profile = await col("engineer_profiles").findOne({ user_id: userId }) as any;
+  const profile = await col("users").findOne({ _id: new ObjectId(userId) as any }) as any;
   const inspectorNumber = resolveInspectorNumber(profile, category);
   if (!inspectorNumber) return null;
 
@@ -114,8 +121,8 @@ async function allocateReportNumber(userId: string, category?: string | null): P
   if (!seed && maxExistingSeq <= 0 && storedSeq <= 0) return null;
   const nextSeq = Math.max(seed ?? 1, storedSeq + 1, maxExistingSeq + 1);
 
-  await col("engineer_profiles").updateOne(
-    { user_id: userId },
+  await col("users").updateOne(
+    { _id: new ObjectId(userId) as any },
     { $set: { next_inspection_seq: nextSeq } }
   );
 
@@ -135,14 +142,12 @@ export function registerReminderRoutes(app: express.Application) {
     }
 
     const settings = getSettings();
-    const [userSettings, engineerProfile, user] = await Promise.all([
+    const [userSettings, user] = await Promise.all([
       col("user_settings").findOne({ user_id: userId }) as Promise<any>,
-      col("engineer_profiles").findOne({ user_id: userId }) as Promise<any>,
       col("users").findOne({ _id: new ObjectId(userId) } as any) as Promise<any>,
     ]);
     const name = [
       userSettings?.email_from_name,
-      engineerProfile?.company_name,
       user?.company_name,
       settings.emailFromName,
       "RemindOCR",
@@ -949,13 +954,13 @@ function extractInspectionSequence(contractNumber: unknown, inspectorNumber: str
 }
 
 async function syncInspectionSequenceFromReportNumber(userId: string, reportNumber: string): Promise<void> {
-  const profile = await col("engineer_profiles").findOne({ user_id: userId }) as any;
+  const profile = await col("users").findOne({ _id: new ObjectId(userId) as any }) as any;
   const inspectorNumber = String(profile?.inspector_number ?? "").trim();
   if (!inspectorNumber) return;
   const seq = extractInspectionSequence(reportNumber, inspectorNumber);
   if (!seq) return;
-  await col("engineer_profiles").updateOne(
-    { user_id: userId },
+  await col("users").updateOne(
+    { _id: new ObjectId(userId) as any },
     { $max: { next_inspection_seq: seq } }
   );
 }

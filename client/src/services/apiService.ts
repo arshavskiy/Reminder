@@ -9,7 +9,6 @@ import type {
   Document,
   EmailLogEntry,
   EmailTemplate,
-  EngineerProfile,
   Equipment,
   FeatureDefinition,
   GlobalSearchResult,
@@ -18,6 +17,7 @@ import type {
   Reminder,
   ReminderWithContext,
   Task,
+  User,
   UserSettings,
 } from "../../src/shared/types.js";
 
@@ -844,8 +844,8 @@ export const api = {
   },
 
   profile: {
-    getEngineer: () => get<EngineerProfile>("/profile/engineer"),
-    saveEngineer: (body: Partial<EngineerProfile>) => put<EngineerProfile>("/profile/engineer", body),
+    getEngineer: () => get<Partial<User>>("/profile/engineer"),
+    saveEngineer: (body: Partial<User>) => put<Partial<User>>("/profile/engineer", body),
     getSubscription: () => get<ProfileSubscription>("/profile/subscription"),
     deleteAccount: (body: { confirm: "DELETE_ACCOUNT"; email?: string }) =>
       post<{ ok: boolean }>("/profile/account/delete", body),

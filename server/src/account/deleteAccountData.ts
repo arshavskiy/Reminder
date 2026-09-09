@@ -24,7 +24,6 @@ const USER_SCOPED_COLLECTIONS = [
   "doc_templates",
   "print_templates",
   "print_template_drafts",
-  "engineer_profiles",
   "certificates",
   "notifications",
   "gmail_imports",
@@ -245,14 +244,11 @@ export async function deleteAccountData(userId: string): Promise<DeleteAccountRe
   await removeStorageKey(typeof user.picture_storage_key === "string" ? user.picture_storage_key : null, counters);
   await removeStorageKey(spacesKeyFromUrl(user.picture_url), counters);
 
-  const engineer = await col("engineer_profiles").findOne({user_id: userId} as any) as Record<string, unknown> | null;
-  if (engineer) {
-    await removeStorageKey(spacesKeyFromUrl(engineer.company_logo_url), counters);
-    await removeStorageKey(
-      typeof engineer.company_logo_storage_key === "string" ? engineer.company_logo_storage_key : null,
-      counters,
-    );
-  }
+  await removeStorageKey(spacesKeyFromUrl(user.company_logo_url), counters);
+  await removeStorageKey(
+    typeof user.company_logo_storage_key === "string" ? user.company_logo_storage_key : null,
+    counters,
+  );
 
   const derivedFilters = documentIdValues.length
     ? {

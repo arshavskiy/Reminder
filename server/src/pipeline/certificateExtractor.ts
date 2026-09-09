@@ -12,7 +12,7 @@ export interface CertificateExtraction {
   issued_date: string | null;            // YYYY-MM-DD
   expiry_date: string | null;            // YYYY-MM-DD (null if permanent)
 
-  // Inspector identity (maps to engineer_profiles)
+  // Inspector identity (maps to users)
   inspector_number: string | null;       // "מספר מפקח" / "מספר רישיון"
   title: string | null;                  // "מהנדס בטיחות" / "מהנדס מכונות"
   mr_number: string | null;              // "מ.ר." — מספר רישום
@@ -21,12 +21,12 @@ export interface CertificateExtraction {
   membership_start_date: string | null;  // YYYY-MM-DD
 
   // Personal details (maps to users)
-  full_name: string | null;
+  full_name: string | null;              // falls back onto users.name if empty there
   address: string | null;
   phone: string | null;
   email: string | null;
 
-  // Company / business details (maps to engineer_profiles.company_*)
+  // Company / business details (maps to users.company_*)
   company_name: string | null;
   company_phone: string | null;
   company_email: string | null;
