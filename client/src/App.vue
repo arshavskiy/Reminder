@@ -489,7 +489,6 @@ const allNav: Array<{
 }> = [
   {label: "ראשי", key: "dashboard", minPlan: "free", feature: FEATURES.pages.dashboard},
   {label: "מסמכים", key: "documents", minPlan: "free", feature: FEATURES.pages.documents},
-  {label: "תסקירים", key: "contracts", minPlan: "free", feature: FEATURES.pages.contracts},
   {label: "תזכורות", key: "reminders", minPlan: "basic", feature: FEATURES.pages.reminders},
   {label: "דוחות", key: "reports", minPlan: "free", feature: FEATURES.pages.reports},
   {label: "לקוחות", key: "clients", minPlan: "basic", feature: FEATURES.pages.clients},
