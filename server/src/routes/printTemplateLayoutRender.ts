@@ -117,11 +117,15 @@ function renderEquipmentTable(columns: { label: string; bind: string }[], data: 
 
 function renderFindings(section: Extract<PrintTemplateSection, { type: "findings" }>, data: Record<string, unknown>, color: string): string {
   const head = `<tr><th style="width:40px">מס׳</th><th style="width:120px">נושא</th><th colspan="2">פירוט</th></tr>`;
-  const bodyRows = section.rows.map((row) =>
+  // A finding nobody filled in prints as an empty numbered row, which reads as
+  // an unanswered item rather than one that doesn't apply — same rule the
+  // preview applies, so the PDF matches what the inspector saw.
+  const isFilled = (bind: string) => String(data[bind] ?? "").trim() !== "";
+  const bodyRows = section.rows.filter((row) => isFilled(row.bind)).map((row) =>
     `<tr><td class="num">${escHtml(row.number)}</td><td class="subj">${escHtml(row.subjectLabel)}</td><td colspan="2" class="detail">${fieldValue(data, row.bind)}</td></tr>`,
   ).join("");
   let deadline = "";
-  if (section.deadlineBind) {
+  if (section.deadlineBind && isFilled(section.deadlineBind)) {
     deadline = `<tr><td class="num">${escHtml(section.deadlineLabel ?? "תוך")}</td><td class="detail">${fieldValue(data, section.deadlineBind)}</td><td colspan="2" class="detail">${escHtml(section.deadlineSuffix ?? "")}</td></tr>`;
   }
   return `<table class="data findings" style="border-color:${color}"><thead>${head}</thead><tbody>${bodyRows}${deadline}</tbody></table>`;
