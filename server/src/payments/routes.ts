@@ -121,9 +121,8 @@ export function registerPaymentRoutes(app: express.Application) {
     const contract = await col<any>("contracts").findOne({_id: id(body.contractId), user_id: userId});
     if (!contract) throw new HTTPException(404, "התסקיר לא נמצא");
     const client = contract.client_id ? await col<any>("clients").findOne({_id: id(String(contract.client_id)), user_id: userId}) : null;
-    const [pricebook, profile, user] = await Promise.all([
+    const [pricebook, user] = await Promise.all([
       pricebooks().findOne({user_id: userId}),
-      col<any>("engineer_profiles").findOne({user_id: userId}),
       col<any>("users").findOne({_id: id(userId)}),
     ]);
     let totals;
@@ -142,13 +141,13 @@ export function registerPaymentRoutes(app: express.Application) {
       reportType: reportType(contract), ...totals, status: "draft", paidCents: 0, payments: [], createdAt: new Date(), updatedAt: new Date(), dueDate: body.dueDate, notes: body.notes,
       customer: {name: client?.display_name || contract.counterparty || manual.client_company || "", registration: client?.id_number || "", email: client?.email || manual.client_email || ""},
       issuer: {
-        name: profile?.company_name || user?.company_name || user?.name || "",
-        subtitle: profile?.company_subtitle || user?.company_subtitle || "",
-        registration: profile?.company_registration || user?.company_registration || "",
-        email: profile?.company_email || user?.company_email || user?.email || "",
-        phone: profile?.company_phone || user?.company_phone || user?.phone || "",
-        address: [profile?.address || user?.address, profile?.city || user?.city].filter(Boolean).join(", "),
-        logoUrl: profile?.company_logo_url || user?.company_logo_url || "",
+        name: user?.company_name || user?.name || "",
+        subtitle: user?.company_subtitle || "",
+        registration: user?.company_registration || "",
+        email: user?.company_email || user?.email || "",
+        phone: user?.company_phone || user?.phone || "",
+        address: [user?.address, user?.city].filter(Boolean).join(", "),
+        logoUrl: user?.company_logo_url || "",
       }};
     await requests().insertOne(request);
     res.status(201).json(request);
