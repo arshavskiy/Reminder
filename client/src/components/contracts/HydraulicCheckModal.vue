@@ -427,6 +427,73 @@
                   </div>
                 </div>
               </section>
+
+              <!-- Step: Quote -->
+              <section v-show="activeStep === 'billing'" class="hm-section">
+                <div v-if="!updatingContractId" class="hm-section__card">
+                  <div class="hm-section__card-head">
+                    <n-icon :component="DocumentTextOutline" :size="18"/>
+                    <span>הצעת מחיר</span>
+                  </div>
+                  <div class="hm-section__grid hm-section__grid--2">
+                    <div class="hm-field">
+                      <label>מסמך שיופק עם התסקיר</label>
+                      <n-select
+                          v-model:value="billingDocumentKind"
+                          :options="billingDocumentKindOptions"
+                          placeholder="ללא מסמך"
+                      />
+                    </div>
+                    <div v-if="billingDocumentKind" class="hm-field">
+                      <label>שיעור מע״מ באחוזים</label>
+                      <n-input-number v-model:value="billingVatPercent" :min="0" :max="100" :precision="2"/>
+                    </div>
+                    <div v-if="billingDocumentKind" class="hm-field">
+                      <label>בתוקף / לתשלום עד</label>
+                      <n-input v-model:value="billingDueDate" placeholder="YYYY-MM-DD"/>
+                    </div>
+                    <div v-if="billingDocumentKind" class="hm-field hm-field--full">
+                      <label>סעיפי שירות</label>
+                      <div v-if="billingLoading" class="hm-muted">טוען מחירון…</div>
+                      <div v-for="rate in reportBillingRates" :key="rate.id" class="hm-billing-line">
+                        <n-checkbox
+                            :checked="(billingQuantities[rate.id] || 0) > 0"
+                            @update:checked="checked => billingQuantities[rate.id] = checked ? 1 : 0"
+                        />
+                        <n-input v-model:value="rate.section" placeholder="סעיף בדיקה" aria-label="סעיף בדיקה"/>
+                        <n-input v-model:value="rate.label" placeholder="תיאור השירות" aria-label="תיאור השירות"/>
+                        <n-input-number
+                            v-model:value="billingRateAmounts[rate.id]"
+                            :min="0"
+                            :precision="2"
+                            aria-label="מחיר יחידה"
+                        />
+                        <n-input-number
+                            v-if="(billingQuantities[rate.id] || 0) > 0"
+                            v-model:value="billingQuantities[rate.id]"
+                            :min="1"
+                            :max="10000"
+                            :precision="0"
+                            aria-label="כמות"
+                        />
+                        <button type="button" class="btn btn--ghost btn--xs" @click="removeBillingRate(rate.id)">הסר</button>
+                      </div>
+                      <button type="button" class="btn btn--ghost" @click="addBillingRate">הוספת סעיף</button>
+                    </div>
+                    <div v-if="billingDocumentKind" class="hm-field hm-field--full">
+                      <label>הערות / פרטי תשלום</label>
+                      <n-input v-model:value="billingNotes" type="textarea" :rows="2" :maxlength="3000"/>
+                    </div>
+                  </div>
+                  <div v-if="billingDocumentKind" class="hm-billing-total">
+                    סה״כ: {{ formatMoney(billingTotalCents) }}
+                  </div>
+                  <p v-if="billingDocumentKind" class="hm-muted">המסמך הוא הצעת מחיר בלבד. הוא אינו חשבונית או קבלה.</p>
+                </div>
+                <div v-else class="hm-section__card">
+                  <p class="hm-muted">אפשר להפיק הצעת מחיר בעת יצירת תסקיר חדש.</p>
+                </div>
+              </section>
             </div>
           </transition>
         </n-spin>
@@ -502,7 +569,7 @@
 <script lang="ts" setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
-import {NDatePicker, NDynamicTags, NIcon, NInput, NModal, NSelect, NSpin, NTooltip, useMessage} from "naive-ui";
+import {NCheckbox, NDatePicker, NDynamicTags, NIcon, NInput, NInputNumber, NModal, NSelect, NSpin, NTooltip, useMessage} from "naive-ui";
 import {
   AddCircleOutline,
   BusinessOutline,
@@ -521,9 +588,9 @@ import {
 import {storeToRefs} from "pinia";
 import {useContractsStore} from "../../stores/contracts.js";
 import {useHydraulicCheckDraftStore} from "../../stores/hydraulicCheckDraft.js";
-import {useEngineerStore} from "../../stores/engineer.js";
 import type {HydraulicCheckRequest} from "../../services/apiService.js";
 import {api} from "../../services/apiService.js";
+import {paymentService, type InspectionRate} from "../../services/paymentService.js";
 import {
   confirmActionButtonProps,
   CONFIRM_DIALOG_CLASS,
@@ -532,6 +599,7 @@ import {
 import ConfirmDialogHead from "../ConfirmDialogHead.vue";
 import type {Equipment, PrintTemplate} from "@shared/types.js";
 import LayoutPreviewFrame from "../print/LayoutPreviewFrame.vue";
+import {useAuthStore} from "../../stores/auth.js";
 import {
   extractLayoutFieldBinds,
   INSPECTION_PRINT_TEMPLATE_PRESETS,
@@ -550,9 +618,9 @@ const emit = defineEmits<{
 const visible = defineModel<boolean>("show", {default: false});
 
 const store = useContractsStore();
+const authStore = useAuthStore();
 const draftStore = useHydraulicCheckDraftStore();
-const engineerStore = useEngineerStore();
-const {profile: engineerProfile} = storeToRefs(engineerStore);
+const {user: engineerProfile} = storeToRefs(authStore);
 const router = useRouter();
 const message = useMessage();
 const {confirm} = useConfirm();
@@ -561,12 +629,13 @@ const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 const isMobile = ref(window.innerWidth <= 720);
 
 // Step navigation
-type StepKey = "basic" | "business" | "equipment" | "reminder";
+type StepKey = "basic" | "business" | "equipment" | "reminder" | "billing";
 const steps: { key: StepKey; label: string }[] = [
   {key: "basic", label: "פרטים"},
   {key: "business", label: "עסק"},
   {key: "equipment", label: "ציוד"},
   {key: "reminder", label: "תזכורת"},
+  {key: "billing", label: "הצעת מחיר"},
 ];
 const activeStep = ref<StepKey>("basic");
 const stepIndex = computed(() => steps.findIndex((s) => s.key === activeStep.value));
@@ -657,6 +726,150 @@ const clearDraftOnClose = ref(false);
 const updatingContractId = ref<string | null>(null);
 const updateReturnTo = ref("");
 const modalTitle = computed(() => updatingContractId.value ? "עדכון תסקיר" : "תסקיר חדש");
+type BillingDocumentKind = "quote" | "payment_request" | "service_specification";
+const billingDocumentKind = ref<BillingDocumentKind | null>(null);
+const billingRates = ref<InspectionRate[]>([]);
+const billingRateAmounts = ref<Record<string, number>>({});
+const billingQuantities = ref<Record<string, number>>({});
+const billingVatPercent = ref<number | null>(18);
+const billingDueDate = ref("");
+const billingNotes = ref("");
+const billingLoading = ref(false);
+const billingDocumentKindOptions = [
+  {label: "ללא מסמך", value: null},
+  {label: "הצעת מחיר", value: "quote"},
+];
+const reportBillingRates = computed(() =>
+    billingRates.value.filter((rate) => rate.reportType === selectedReportType.value.contractType),
+);
+const selectedBillingLines = computed(() => reportBillingRates.value
+    .filter((rate) => (billingQuantities.value[rate.id] || 0) > 0)
+    .map((rate) => ({rateId: rate.id, quantity: billingQuantities.value[rate.id]})));
+const billingSubtotalCents = computed(() => reportBillingRates.value.reduce(
+    (sum, rate) => sum + Math.round((billingRateAmounts.value[rate.id] || 0) * 100) * (billingQuantities.value[rate.id] || 0),
+    0,
+));
+const billingTotalCents = computed(() => billingSubtotalCents.value + Math.round(
+    billingSubtotalCents.value * Math.round((billingVatPercent.value || 0) * 100) / 10000,
+));
+
+function formatMoney(value: number): string {
+  return (value / 100).toLocaleString("he-IL", {style: "currency", currency: "ILS"});
+}
+
+function defaultBillingDueDate(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 14);
+  return formatLocalDate(date.getTime());
+}
+
+function addBillingRate() {
+  const rate: InspectionRate = {
+    id: crypto.randomUUID(),
+    reportType: selectedReportType.value.contractType,
+    section: "",
+    label: "",
+    unitCents: 0,
+  };
+  billingRates.value.push(rate);
+  billingRateAmounts.value[rate.id] = 0;
+  billingQuantities.value[rate.id] = 1;
+}
+
+function removeBillingRate(rateId: string) {
+  billingRates.value = billingRates.value.filter((rate) => rate.id !== rateId);
+  delete billingRateAmounts.value[rateId];
+  delete billingQuantities.value[rateId];
+}
+
+function automaticBillingRateId(equipmentId: string): string {
+  return `equipment-${equipmentId}`.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80);
+}
+
+function automaticBillingRateText(row: EquipmentRow, index: number) {
+  const categoryLabel = categoryOptions.value.find((option) => option.value === row.category)?.label;
+  const equipmentName = row.name.trim() || categoryLabel || `מכשיר ${index + 1}`;
+  const model = row.models.map((value) => value.trim()).filter(Boolean).join(", ");
+  const serials = row.serial_numbers.map((value) => value.trim()).filter(Boolean).join(", ");
+  const identification = [row.license_number.trim(), serials].filter(Boolean).join(" / ");
+  const details = [
+    `בדיקת ${equipmentName}`,
+    row.manufacturer.trim(),
+    model,
+    identification ? `מס׳ זיהוי: ${identification}` : "",
+  ].filter(Boolean);
+  return {
+    section: String(index + 1),
+    label: details.join(" · "),
+    quantity: Math.max(row.serial_numbers.filter((value) => value.trim()).length, 1),
+  };
+}
+
+function syncAutomaticBillingRates() {
+  const currentIds = new Set(equipmentRows.value.map((row) => automaticBillingRateId(row.id)));
+  const removedIds = billingRates.value
+      .filter((rate) => rate.source === "equipment" && !currentIds.has(rate.id))
+      .map((rate) => rate.id);
+  if (removedIds.length) {
+    const removed = new Set(removedIds);
+    billingRates.value = billingRates.value.filter((rate) => !removed.has(rate.id));
+    for (const id of removedIds) {
+      delete billingRateAmounts.value[id];
+      delete billingQuantities.value[id];
+    }
+  }
+
+  equipmentRows.value.forEach((row, index) => {
+    const id = automaticBillingRateId(row.id);
+    const next = automaticBillingRateText(row, index);
+    const existing = billingRates.value.find((rate) => rate.id === id && rate.source === "equipment");
+    if (!existing) {
+      billingRates.value.push({
+        id,
+        reportType: selectedReportType.value.contractType,
+        section: next.section,
+        label: next.label,
+        unitCents: 0,
+        source: "equipment",
+        equipmentId: row.id,
+        automaticSection: next.section,
+        automaticLabel: next.label,
+        automaticQuantity: next.quantity,
+      });
+      billingRateAmounts.value[id] = 0;
+      billingQuantities.value[id] = next.quantity;
+      return;
+    }
+    if (existing.section === existing.automaticSection) existing.section = next.section;
+    if (existing.label === existing.automaticLabel) existing.label = next.label;
+    if (billingQuantities.value[id] === existing.automaticQuantity) billingQuantities.value[id] = next.quantity;
+    existing.reportType = selectedReportType.value.contractType;
+    existing.automaticSection = next.section;
+    existing.automaticLabel = next.label;
+    existing.automaticQuantity = next.quantity;
+  });
+}
+
+async function loadBillingRates() {
+  billingLoading.value = true;
+  try {
+    const result = await paymentService.list();
+    const automaticRates = billingRates.value.filter((rate) => rate.source === "equipment");
+    const automaticAmounts = Object.fromEntries(automaticRates.map((rate) => [rate.id, billingRateAmounts.value[rate.id] ?? 0]));
+    billingRates.value = [...result.rates.map((rate) => ({...rate})), ...automaticRates];
+    billingRateAmounts.value = {
+      ...Object.fromEntries(result.rates.map((rate) => [rate.id, rate.unitCents / 100])),
+      ...automaticAmounts,
+    };
+  } catch {
+    const automaticRates = billingRates.value.filter((rate) => rate.source === "equipment");
+    billingRates.value = automaticRates;
+    billingRateAmounts.value = Object.fromEntries(automaticRates.map((rate) => [rate.id, billingRateAmounts.value[rate.id] ?? 0]));
+  } finally {
+    syncAutomaticBillingRates();
+    billingLoading.value = false;
+  }
+}
 
 const clientOptions = ref<{ label: string; value: string }[]>([]);
 const clientsMap = ref<Map<string, import("@shared/types.js").Client>>(new Map());
@@ -827,6 +1040,7 @@ watch([checkDateMs, intervalMonths], () => {
     calculateExpiryFromCheckDate();
   }
 });
+watch([equipmentRows, reportType], syncAutomaticBillingRates, {deep: true});
 
 const computedReminderDate = computed(() => {
   if (!expiryDateMs.value) return "—";
@@ -937,7 +1151,11 @@ const draftSavedAtLabel = computed(() => {
 const suggestedContractNumber = computed(() => {
   const inspectorNumber = currentInspectorNumber();
   if (!inspectorNumber) return "";
-  const parsedSeed = parseInt(engineerProfile.value?.inspector_id_start ?? "", 10);
+  // An inspector who never opened the profile form has no inspector_id_start,
+  // and without a seed there is nothing to count from — fall back to the same
+  // default the profile form offers rather than leaving the number blank.
+  const rawSeed = engineerProfile.value?.inspector_id_start || DEFAULT_INSPECTOR_ID_START;
+  const parsedSeed = parseInt(rawSeed, 10);
   const seed = Number.isFinite(parsedSeed) && parsedSeed > 0 ? parsedSeed : null;
   const maxFromRows = store.rows.reduce((max, row) => {
     const seq = extractInspectionSequence(row.contract_number, inspectorNumber);
@@ -993,7 +1211,7 @@ function extractInspectionSequence(contractNumber: string | null | undefined, in
 // inspector_number for that type only — falls back to it when the selected type
 // has no override, same as the number the server will actually allocate.
 function currentInspectorNumber(): string {
-  const byType = (engineerProfile.value as any)?.inspector_numbers_by_type;
+  const byType = engineerProfile.value?.inspector_numbers_by_type;
   const typed = byType && typeof byType === "object" ? byType[reportType.value] : undefined;
   return String(typed ?? engineerProfile.value?.inspector_number ?? "").trim();
 }
@@ -1140,7 +1358,7 @@ async function loadClients(force = false) {
 }
 
 async function loadEngineerProfile() {
-  await engineerStore.load();
+  await authStore.fetchMe();
 }
 
 async function loadCategories() {
@@ -1388,6 +1606,13 @@ function saveCurrentDraft() {
     reportType: reportType.value,
     templateId: templateId.value,
     templateValues: templateValues.value,
+    billingDocumentKind: billingDocumentKind.value,
+    billingRates: billingRates.value,
+    billingRateAmounts: billingRateAmounts.value,
+    billingQuantities: billingQuantities.value,
+    billingVatPercent: billingVatPercent.value,
+    billingDueDate: billingDueDate.value,
+    billingNotes: billingNotes.value,
   });
 }
 
@@ -1431,6 +1656,15 @@ async function open() {
   reportType.value = draft?.reportType ?? inferReportTypeValue(draft?.form?.contract_type, draft?.equipmentRows?.[0]?.category);
   intervalMonths.value = clampIntervalMonths(draft?.intervalMonths ?? selectedReportType.value.intervalMonths);
   prevReportNumber.value = draft?.prevReportNumber ?? "";
+  billingDocumentKind.value = draft?.billingDocumentKind ?? null;
+  billingRates.value = draft?.billingRates?.map((rate) => ({...rate})) ?? [];
+  billingRateAmounts.value = draft?.billingRateAmounts
+    ? {...draft.billingRateAmounts}
+    : Object.fromEntries(billingRates.value.map((rate) => [rate.id, rate.unitCents / 100]));
+  billingQuantities.value = {...(draft?.billingQuantities ?? {})};
+  billingVatPercent.value = draft?.billingVatPercent ?? 18;
+  billingDueDate.value = draft?.billingDueDate ?? defaultBillingDueDate();
+  billingNotes.value = draft?.billingNotes ?? "";
   equipmentRows.value = draft?.equipmentRows?.length
       ? draft.equipmentRows.map((row: any) => ({
         ...row,
@@ -1465,6 +1699,7 @@ async function open() {
   }
   void loadClients();
   void loadCategories();
+  if (!draft?.billingRates?.length) void loadBillingRates();
 }
 
 // ── Build template data ──────────────────────────────────────────────────────
@@ -1526,7 +1761,7 @@ function buildTemplateDraft(): Record<string, string> {
     engineer_company: engineerProfile.value?.company_name ?? "",
     engineer_email: engineerProfile.value?.company_email ?? "",
     engineer_phone: engineerProfile.value?.company_phone ?? "",
-    engineer_name: engineerProfile.value?.full_name ?? "",
+    engineer_name: engineerProfile.value?.name ?? "",
     engineer_address: engineerProfile.value?.address ?? "",
   };
 
@@ -1594,6 +1829,43 @@ function buildTemplateDraftMeta(): Record<string, unknown> {
 }
 
 // ── Create / Update ──────────────────────────────────────────────────────────
+
+function validateBillingDocument() {
+  if (!billingDocumentKind.value) return;
+  if (!selectedBillingLines.value.length) throw new Error("יש לבחור לפחות סעיף שירות אחד להצעת המחיר");
+  if (billingVatPercent.value === null || billingVatPercent.value < 0 || billingVatPercent.value > 100) {
+    throw new Error("יש להזין שיעור מע״מ תקין");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(billingDueDate.value)) throw new Error("יש להזין תאריך תוקף / תשלום תקין");
+  if (reportBillingRates.value.some((rate) => !rate.section.trim() || !rate.label.trim()
+    || !Number.isFinite(billingRateAmounts.value[rate.id]) || billingRateAmounts.value[rate.id] < 0)) {
+    throw new Error("יש להשלים סעיף, תיאור ומחיר בכל שורות המחירון");
+  }
+}
+
+async function createBillingDocument(contractId: string): Promise<string | null> {
+  if (!billingDocumentKind.value) return null;
+  billingRates.value.forEach((rate) => {
+    rate.unitCents = Math.round((billingRateAmounts.value[rate.id] || 0) * 100);
+  });
+  const savedRates = billingRates.value.filter((rate) => rate.source !== "equipment");
+  const inlineRates = billingRates.value
+      .filter((rate) => rate.source === "equipment")
+      .map(({id, reportType, section, label, unitCents}) => ({id, reportType, section, label, unitCents}));
+  await paymentService.saveRates(savedRates);
+  const created = await paymentService.create({
+    requestKey: crypto.randomUUID(),
+    documentKind: billingDocumentKind.value,
+    contractId,
+    lines: selectedBillingLines.value,
+    inlineRates,
+    vatBasisPoints: Math.round((billingVatPercent.value || 0) * 100),
+    dueDate: billingDueDate.value,
+    notes: billingNotes.value,
+  });
+  await paymentService.issue(created._id);
+  return "הצעת מחיר";
+}
 
 async function createContract() {
   if (!hydraulicForm.value) throw new Error("הטופס לא מוכן");
@@ -1695,13 +1967,20 @@ async function doCreate() {
   saveError.value = null;
   creating.value = true;
   try {
+    if (!updatingContractId.value) validateBillingDocument();
     if (updatingContractId.value) {
       await updateContract(updatingContractId.value);
       message.success("התסקיר עודכן");
       emit("updated");
     } else {
       const result = await createContract();
-      message.success(`התסקיר נשמר עבור ${result.client.display_name}. ניתן ליצור תזכורת מהכרטיס.`);
+      let billingLabel: string | null = null;
+      try {
+        billingLabel = await createBillingDocument(String(result.contract.id));
+      } catch (error) {
+        message.warning(`התסקיר נשמר, אך הצעת המחיר לא הופקה: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      message.success(`התסקיר נשמר עבור ${result.client.display_name}${billingLabel ? ` ו${billingLabel} הופקה` : ""}.`);
       emit("created");
     }
     clearDraftOnClose.value = true;
@@ -1724,6 +2003,7 @@ async function saveDraftAndPreview() {
   saveError.value = null;
   savingDraft.value = true;
   try {
+    if (!updatingContractId.value) validateBillingDocument();
     syncPrimaryEquipment();
     const data = buildTemplateDraft();
     let contractIdValue = updatingContractId.value ?? "";
@@ -1734,6 +2014,12 @@ async function saveDraftAndPreview() {
       const result = await createContract();
       contractIdValue = String(result.contract.id ?? "");
       clientIdValue = String(result.client.id ?? clientIdValue);
+      try {
+        const billingLabel = await createBillingDocument(contractIdValue);
+        if (billingLabel) message.success(`${billingLabel} הופקה ונשמרה במסמכים`);
+      } catch (error) {
+        message.warning(`התסקיר נשמר, אך הצעת המחיר לא הופקה: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
     await api.printTemplates.saveDraft(
         templateId.value,
@@ -2218,6 +2504,26 @@ defineExpose({open, openForUpdate});
   grid-column: 1 / -1;
 }
 
+.hm-billing-line {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) minmax(150px, 1.4fr) 120px 90px auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.hm-billing-total {
+  margin-top: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.hm-muted {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .hm-field--span2 {
   grid-column: span 2;
 }
@@ -2420,6 +2726,10 @@ defineExpose({open, openForUpdate});
   .hm-section__grid--3,
   .hm-section__grid--4 {
     grid-template-columns: 1fr;
+  }
+
+  .hm-billing-line {
+    grid-template-columns: auto 1fr;
   }
 
   .hm-field--span2 {

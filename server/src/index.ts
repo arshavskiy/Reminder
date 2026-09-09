@@ -181,6 +181,7 @@ app.use("/api/email", requireAnyFeature(["pages.settings", "pages.email_template
 app.use("/api/email-log", requireAnyFeature(["pages.settings", "pages.email_templates"]));
 app.use("/api/tasks", requireAnyFeature(["pages.reminders"]));
 app.use("/api/profile", requireAnyFeature(["pages.profile"]));
+app.use("/api/user", requireAnyFeature(["pages.profile"]));
 app.use("/api/equipment", (req, res, next) => {
   const required = req.path.startsWith("/expiry-calendar")
     ? ["pages.equipment", "dashboard.calendar"]

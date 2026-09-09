@@ -145,9 +145,11 @@ import {NAlert, NSpin, useMessage} from "naive-ui";
 import PageHeader from "../components/PageHeader.vue";
 import {storeToRefs} from "pinia";
 import {api} from "../services/apiService.js";
-import {useEngineerStore} from "../stores/engineer.js";
 import type {PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
+import {useAuthStore} from "../stores/auth.js";
+
+const authStore = useAuthStore();
 type ComposeFieldKind = "text" | "multiline" | "date" | "email" | "phone" | "number" | "integer" | "report_number";
 type ComposeFieldMeta = {
   label: string;
@@ -169,8 +171,7 @@ const template = ref<PrintTemplate | null>(null);
 const composeData = ref<Record<string, string>>({});
 const draftMeta = ref<Record<string, unknown>>({});
 const draftSavedAt = ref<string | null>(null);
-const engineerStore = useEngineerStore();
-const {profile: engineerProfile} = storeToRefs(engineerStore);
+const {user: engineerProfile} = storeToRefs(authStore);
 const printing = ref(false);
 const savingPdf = ref(false);
 const draftSaving = ref(false);
@@ -228,7 +229,7 @@ async function loadDraft() {
 }
 
 async function loadEngineerProfile() {
-  await engineerStore.load();
+  await authStore.fetchMe();
 }
 
 function applyComposeDraft(draft: {

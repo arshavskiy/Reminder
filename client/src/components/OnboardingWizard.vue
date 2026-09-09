@@ -203,7 +203,6 @@
 import {onMounted, ref} from "vue";
 import {NButton, NCard, NForm, NFormItem, NInput, NModal, NStep, NSteps, useMessage} from "naive-ui";
 import {useAuthStore} from "../stores/auth.js";
-import {useEngineerStore} from "../stores/engineer.js";
 import {api} from "../services/apiService.js";
 
 const props = defineProps<{ modelValue: boolean }>();
@@ -211,7 +210,6 @@ const emit = defineEmits<{ (e: "update:modelValue", v: boolean): void }>();
 
 const message = useMessage();
 const authStore = useAuthStore();
-const engineerStore = useEngineerStore();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 const currentStep = ref(1);
@@ -248,8 +246,8 @@ onMounted(async () => {
     form.value.phone = user.phone ?? "";
     form.value.company_name = (user as any).company_name ?? "";
   }
-  await engineerStore.load();
-  const p = engineerStore.profile;
+  await authStore.fetchMe();
+  const p = authStore.user;
   if (p) {
     form.value.inspector_number = p.inspector_number ?? "";
     form.value.mg_number = p.mg_number ?? "";
@@ -282,33 +280,25 @@ function onSignatureSelect(e: Event) {
 async function finish() {
   saving.value = true;
   try {
-    // 1. Save personal details
-    await fetch(`${SERVER}/api/profile`, {
-      method: "PUT",
-      headers: {"Content-Type": "application/json"},
-      credentials: "include",
-      body: JSON.stringify({
-        name: form.value.name,
-        phone: form.value.phone,
-        company_name: form.value.company_name,
-      }),
-    });
-
-    // 2. Save engineer profile
-    await engineerStore.save({
+    // 1. Save the profile — one document, one request. The wizard asks for the
+    // company name twice (personal step and engineer step); the engineer step's
+    // answer is the one that was already winning when these were two calls.
+    await authStore.save({
+      name: form.value.name,
+      phone: form.value.phone,
       inspector_number: form.value.inspector_number || null,
       mg_number: form.value.mg_number || null,
       address: form.value.address || null,
       city: form.value.city || null,
       company_registration: form.value.company_registration || null,
       inspector_id_start: form.value.inspector_id_start || null,
-      company_name: form.value.eng_company_name || null,
+      company_name: form.value.eng_company_name || form.value.company_name || null,
       company_subtitle: form.value.company_subtitle || null,
       company_phone: form.value.company_phone || null,
       company_email: form.value.company_email || null,
     });
 
-    // 3. Upload logo if selected
+    // 2. Upload logo if selected
     if (logoFile.value) {
       const fd = new FormData();
       fd.append("logo", logoFile.value);
@@ -319,17 +309,17 @@ async function finish() {
       });
     }
 
-    // 4. Upload signature if selected
+    // 3. Upload signature if selected
     if (sigFile.value) {
       await api.templates.uploadUserAsset(sigFile.value, "signature");
     }
 
-    // 5. Save email from name
+    // 4. Save email from name
     if (form.value.email_from_name) {
       await api.userSettings.save({email_from_name: form.value.email_from_name});
     }
 
-    // 6. Mark onboarding complete — server only sets the flag if the core
+    // 5. Mark onboarding complete — server only sets the flag if the core
     // fields (name/phone/company_name) actually came through.
     const completeRes = await fetch(`${SERVER}/api/profile/onboarding-complete`, {
       method: "POST",

@@ -1,5 +1,6 @@
 import {defineStore} from "pinia";
 import {computed, ref} from "vue";
+import {api} from "../services/apiService.js";
 import type {User} from "../shared/types.js";
 
 // /api/auth/me returns the whole user document (minus credentials), engineer
@@ -36,6 +37,25 @@ export const useAuthStore = defineStore("auth", () => {
   const actingAs = ref<AuthUser | null>(null);
 
   const isAdmin = computed(() => user.value?.role === "admin");
+  const saving = ref(false);
+  const inspectorNumber = computed(() => user.value?.inspector_number?.trim() ?? "");
+
+  /** Writes a partial profile update; only the keys passed are changed. */
+  async function save(updates: Partial<User>): Promise<User | null> {
+    saving.value = true;
+    try {
+      const row = await api.profile.saveUser(updates);
+      if (row) setUser({...(user.value ?? {}), ...row} as User);
+      return user.value;
+    } finally {
+      saving.value = false;
+    }
+  }
+
+  /** Local-only merge, for a field the server already persisted (e.g. a logo upload). */
+  function patch(partial: Partial<User>) {
+    if (user.value) setUser({...user.value, ...partial});
+  }
 
   async function fetchMe() {
     loading.value = true;
@@ -92,5 +112,5 @@ export const useAuthStore = defineStore("auth", () => {
     initialized.value = true;
   }
 
-  return { user, actingAs, isAdmin, loading, initialized, fetchMe, logout, loginWithGoogle, setUser, setActingAs };
+  return { user, actingAs, isAdmin, loading, saving, initialized, inspectorNumber, fetchMe, save, patch, logout, loginWithGoogle, setUser, setActingAs };
 });

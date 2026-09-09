@@ -50,6 +50,13 @@ export interface AppSettings {
   escalationThresholdDays: number;
 }
 
+/**
+ * Where report numbering starts for an inspector who has never set
+ * inspector_id_start. Report numbers read <inspector_number>/<sequence>, and a
+ * 5-digit sequence keeps them a consistent width as the count grows.
+ */
+export const DEFAULT_INSPECTOR_ID_START = "10001";
+
 // Phase 2: Authentication types
 //
 // The user IS the engineer/company — there's no separate entity. Every

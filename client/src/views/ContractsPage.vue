@@ -700,7 +700,6 @@ import {storeToRefs} from "pinia";
 import {useAuthStore} from "../stores/auth.js";
 import {planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
 import {useHydraulicCheckDraftStore} from "../stores/hydraulicCheckDraft.js";
-import {useEngineerStore} from "../stores/engineer.js";
 import type {HydraulicCheckRequest, PrintTemplateDraftSummary} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
@@ -735,8 +734,7 @@ const featuresStore = useFeaturesStore();
 const authStore = useAuthStore();
 const excelAllowed = computed(() => planAllowsExcelExport(resolveUserPlan(authStore.user)));
 const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
-const engineerStore = useEngineerStore();
-const {profile: engineerProfile} = storeToRefs(engineerStore);
+const {user: engineerProfile} = storeToRefs(authStore);
 const isAdmin = computed(() => authStore.isAdmin);
 const hydraulicDraftStore = useHydraulicCheckDraftStore();
 const route = useRoute();
@@ -1401,7 +1399,7 @@ async function loadClients(force = false) {
 }
 
 async function loadEngineerProfile() {
-  await engineerStore.load();
+  await authStore.fetchMe();
 }
 
 function extractInspectionSequence(contractNumber: string | null | undefined, inspectorNumber: string): number | null {

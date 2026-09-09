@@ -561,7 +561,6 @@ import {NAlert, NEmpty, NIcon, NSpin, useMessage,} from "naive-ui";
 import {BrushOutline, CreateOutline, PrintOutline, TrashOutline} from "@vicons/ionicons5";
 import {storeToRefs} from "pinia";
 import {api} from "../services/apiService.js";
-import {useEngineerStore} from "../stores/engineer.js";
 import {useAuthStore} from "../stores/auth.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useConfirm} from "../composables/useConfirm.js";
@@ -605,9 +604,8 @@ const {confirm} = useConfirm();
 const route = useRoute();
 const router = useRouter();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
-const engineerStore = useEngineerStore();
 const authStore = useAuthStore();
-const {profile: engineerProfile} = storeToRefs(engineerStore);
+const {user: engineerProfile} = storeToRefs(authStore);
 const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
 
 function canMutateTemplate(_t: PrintTemplate) {
@@ -690,7 +688,7 @@ async function openRouteDraftIfRequested() {
 }
 
 async function loadEngineerProfile() {
-  await engineerStore.load();
+  await authStore.fetchMe();
 }
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────

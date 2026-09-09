@@ -844,8 +844,8 @@ export const api = {
   },
 
   profile: {
-    getEngineer: () => get<Partial<User>>("/profile/engineer"),
-    saveEngineer: (body: Partial<User>) => put<Partial<User>>("/profile/engineer", body),
+    // Reads come from GET /api/auth/me (the auth store) — this is the write half.
+    saveUser: (body: Partial<User>) => put<Partial<User>>("/user", body),
     getSubscription: () => get<ProfileSubscription>("/profile/subscription"),
     deleteAccount: (body: { confirm: "DELETE_ACCOUNT"; email?: string }) =>
       post<{ ok: boolean }>("/profile/account/delete", body),

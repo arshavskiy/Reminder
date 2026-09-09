@@ -381,7 +381,9 @@ import {computed, onMounted, ref} from "vue";
 import {NCheckbox, NFormItem, NInput, NInputNumber, NSelect, useMessage} from "naive-ui";
 import LayoutPreviewFrame from "./LayoutPreviewFrame.vue";
 import {api} from "../../services/apiService.js";
-import {useEngineerStore} from "../../stores/engineer.js";
+import {useAuthStore} from "../../stores/auth.js";
+
+const authStore = useAuthStore();
 import {
   clonePrintTemplateLayout,
   createDefaultFooterSection,
@@ -440,7 +442,6 @@ const sectionTypeOptions = [
 
 const bindOptions = LAYOUT_FIELD_PRESETS.map((f) => ({ label: `${f.label} (${f.bind})`, value: f.bind }));
 const message = useMessage();
-const engineerStore = useEngineerStore();
 const signatureFileInput = ref<HTMLInputElement | null>(null);
 const signatureUploadIndex = ref<number | null>(null);
 const uploadingSignature = ref(false);
@@ -472,7 +473,8 @@ const previewData = computed(() => {
 });
 
 onMounted(async () => {
-  const profile = await engineerStore.load();
+  if (!authStore.user) await authStore.fetchMe();
+  const profile = authStore.user;
   if (!profile) return;
   const companyName = profile.company_name ?? "";
   engineerPreview.value = {

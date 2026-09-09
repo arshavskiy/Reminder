@@ -147,55 +147,42 @@ export function registerProfileRoutes(app: express.Application) {
         });
     });
 
-  // ── Engineer profile ──────────────────────────────────────────────────────
-  // The user IS the engineer/company — no separate entity. These two routes
-  // are kept (rather than folded into PUT /api/profile) only because the
-  // client already calls them separately; both read/write the same users doc.
-  app.get("/api/profile/engineer", async (req, res) => {
+  // ── User ──────────────────────────────────────────────────────────────────
+  // The user IS the engineer/company — one document, one route. GET /api/auth/me
+  // already returns it, so this is the write half.
+  //
+  // Only keys actually present in the body are written, so a caller editing one
+  // part of the profile can't blank the fields it didn't send.
+  const EDITABLE_USER_FIELDS = [
+    "name", "phone", "address", "city",
+    "inspector_number", "inspector_id_start", "title", "expertise",
+    "mr_number", "mg_number", "membership_start_date",
+    "company_name", "company_registration", "company_subtitle",
+    "company_phone", "company_email", "company_logo_url",
+  ] as const;
+
+  app.put("/api/user", async (req, res) => {
     const ctx = await auth(req, res);
     if (!ctx) return;
-    const doc = await col("users").findOne({ _id: new ObjectId(ctx.userId) as any });
-    res.json(serializeUser(doc) ?? {});
-  });
+    const body = req.body as Record<string, unknown>;
 
-  app.put("/api/profile/engineer", async (req, res) => {
-    const ctx = await auth(req, res);
-    if (!ctx) return;
-    const {
-      inspector_number, title, expertise,
-      mr_number, mg_number, membership_start_date,
-      company_name, company_registration, company_subtitle, company_phone, company_email,
-      company_logo_url, inspector_id_start, inspector_numbers_by_type,
-    } = req.body as Record<string, string | null> & { inspector_numbers_by_type?: unknown };
+    const patch: Record<string, unknown> = {};
+    for (const field of EDITABLE_USER_FIELDS) {
+      if (!(field in body)) continue;
+      const value = body[field];
+      patch[field] = typeof value === "string" ? value.trim() || null : value ?? null;
+    }
+    // Some inspectors hold a separate ministry certificate per inspection type
+    // (e.g. a different number for air-receiver vs lifting-machine reports)
+    // rather than one number covering every type — resolveInspectorNumber in
+    // reminders.ts falls back to inspector_number when a type has no override.
+    if ("inspector_numbers_by_type" in body) {
+      patch.inspector_numbers_by_type = sanitizeInspectorNumbersByType(body.inspector_numbers_by_type);
+    }
+    if (!Object.keys(patch).length) { res.status(400).json({ error: "nothing to update" }); return; }
+    patch.updated_at = new Date().toISOString();
 
-    await col("users").updateOne(
-      { _id: new ObjectId(ctx.userId) as any },
-      {
-        $set: {
-          inspector_number: inspector_number ?? null,
-          title: title ?? null,
-          expertise: expertise ?? null,
-          mr_number: mr_number ?? null,
-          mg_number: mg_number ?? null,
-          membership_start_date: membership_start_date ?? null,
-          company_name: company_name ?? null,
-          company_registration: company_registration ?? null,
-          company_subtitle: company_subtitle ?? null,
-          company_logo_url: company_logo_url ?? null,
-          company_phone: company_phone ?? null,
-          company_email: company_email ?? null,
-          inspector_id_start: inspector_id_start ?? null,
-          // Some inspectors hold a separate ministry certificate per inspection
-          // type (e.g. a different number for air-receiver vs lifting-machine
-          // reports) rather than one number covering every type — resolveInspectorNumber
-          // in reminders.ts falls back to inspector_number above when a type has
-          // no override here.
-          inspector_numbers_by_type: sanitizeInspectorNumbersByType(inspector_numbers_by_type),
-          updated_at: new Date().toISOString(),
-        },
-      },
-    );
-
+    await col("users").updateOne({ _id: new ObjectId(ctx.userId) as any }, { $set: patch });
     const updated = await col("users").findOne({ _id: new ObjectId(ctx.userId) as any });
     res.json(serializeUser(updated) ?? {});
   });
@@ -231,25 +218,6 @@ export function registerProfileRoutes(app: express.Application) {
       { $set: { company_logo_url: logoUrl, company_logo_storage_key: key, updated_at: new Date().toISOString() } },
     );
     res.json({ company_logo_url: logoUrl });
-  });
-
-  // ── Update personal info (name + phone) on the users collection ──────────
-  app.put("/api/profile", async (req, res) => {
-    const ctx = await auth(req, res);
-    if (!ctx) return;
-    const { name, phone, company_name, address, city } = req.body as {
-      name?: string; phone?: string | null; company_name?: string | null;
-      address?: string | null; city?: string | null;
-    };
-    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (name !== undefined) patch.name = name?.trim() ?? null;
-    if (phone !== undefined) patch.phone = phone?.trim() || null;
-    if (company_name !== undefined) patch.company_name = company_name?.trim() || null;
-    if (address !== undefined) patch.address = address?.trim() || null;
-    if (city !== undefined) patch.city = city?.trim() || null;
-    if (Object.keys(patch).length === 1) { res.status(400).json({ error: "nothing to update" }); return; }
-    await col("users").updateOne({ _id: new ObjectId(ctx.userId) as any }, { $set: patch });
-    res.json({ ok: true });
   });
 
   // ── Avatar upload ─────────────────────────────────────────────────────────

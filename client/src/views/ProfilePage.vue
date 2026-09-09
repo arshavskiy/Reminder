@@ -1543,7 +1543,6 @@ import {
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
 import { useUserSettingsStore } from "../stores/userSettings.js";
-import { useEngineerStore } from "../stores/engineer.js";
 import {api, type DriveExportJob, type DriveStatus, type ProfileSubscription} from "../services/apiService.js";
 import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "@shared/printTemplateLayout.js";
 import type { User, UserSettings } from "@shared/types.js";
@@ -1575,8 +1574,7 @@ const message = useMessage();
 const {confirm} = useConfirm();
 const authStore = useAuthStore();
 const userSettingsStore = useUserSettingsStore();
-const engineerStore = useEngineerStore();
-const { profile: engineerProfile } = storeToRefs(engineerStore);
+const {user: engineerProfile} = storeToRefs(authStore);
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -1845,23 +1843,13 @@ async function saveEngineer() {
           Object.entries(formFields.inspector_numbers_by_type).filter(([, v]) => v.trim())
         )
       : {};
-    // Two routes, one users document: name/phone belong to PUT /api/profile,
-    // everything else to PUT /api/profile/engineer.
-    await fetch(`${SERVER}/api/profile`, {
-      method: "PUT",
-      headers: {"Content-Type": "application/json"},
-      credentials: "include",
-      body: JSON.stringify({name, phone}),
-    });
-    await engineerStore.save({
+    await authStore.save({
+      name,
+      phone,
       ...formFields,
       inspector_numbers_by_type: inspectorNumbersByType,
-      // No longer edited here, but the route overwrites whatever it is sent —
-      // pass the stored value through so the certificate extractor's fill survives.
-      membership_start_date: engineerProfile.value?.membership_start_date ?? null,
       inspector_id_start: engineerForm.value.inspector_id_start || null,
     });
-    await authStore.fetchMe();
     editingEngineer.value = false;
     message.success("הפרופיל עודכן");
   } catch {
@@ -1884,7 +1872,7 @@ async function uploadCompanyLogo(e: Event) {
     });
     if (res.ok) {
       const data = await res.json();
-      engineerStore.patch({ company_logo_url: data.company_logo_url });
+      authStore.patch({ company_logo_url: data.company_logo_url });
       message.success("הלוגו הועלה");
     } else {
       message.error("שגיאה בהעלאת הלוגו");
@@ -2584,7 +2572,7 @@ onMounted(async () => {
       await Promise.allSettled([
         userSettingsStore.load(),
         fetch(`${SERVER}/api/profile/stats`, { credentials: "include" }),
-        engineerStore.load(),
+        authStore.fetchMe(),
         fetch(`${SERVER}/api/profile/notifications`, {
           credentials: "include",
         }),

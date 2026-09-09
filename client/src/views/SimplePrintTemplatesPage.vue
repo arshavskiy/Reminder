@@ -129,7 +129,6 @@ import LayoutPreviewFrame from "../components/print/LayoutPreviewFrame.vue";
 import {api} from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useConfirm} from "../composables/useConfirm.js";
-import {useEngineerStore} from "../stores/engineer.js";
 import {resolveUserPlan} from "../shared/pricingPlans.js";
 import type {PrintTemplate} from "@shared/types.js";
 import {
@@ -142,7 +141,6 @@ import {
 } from "@shared/printTemplateLayout.js";
 
 const authStore = useAuthStore();
-const engineerStore = useEngineerStore();
 
 function canMutateTemplate(_t: PrintTemplate) {
   return true;
@@ -311,7 +309,7 @@ async function openCompose(t: PrintTemplate, contractId?: string | null) {
 
   // Fetch engineer profile data and populate engineer fields
   const [engineerProfile, userProfile] = await Promise.all([
-    engineerStore.load(),
+    authStore.fetchMe(),
     fetchUserProfile(),
   ]);
   if (engineerProfile || userProfile) {
