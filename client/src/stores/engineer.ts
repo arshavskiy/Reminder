@@ -1,65 +1,46 @@
 import {defineStore} from "pinia";
 import {computed, ref} from "vue";
 import {api} from "../services/apiService.js";
+import {useAuthStore} from "./auth.js";
 import type {User} from "../../src/shared/types.js";
 
-// The engineer/company fields live on the users document now — this store
-// still exposes just that slice (fetched via GET/PUT /api/profile/engineer,
-// which read/write the same users row profile.ts's other routes do).
+// The engineer/company fields live on the users document, which /api/auth/me
+// already returns in full — so reads come from the auth store rather than a
+// second request. Writes still go through PUT /api/profile/engineer, and push
+// the result back onto the auth store so both stay in sync.
 type EngineerProfile = Partial<User>;
 
 export const useEngineerStore = defineStore("engineer", () => {
-  const profile = ref<EngineerProfile | null>(null);
-  const loading = ref(false);
+  const auth = useAuthStore();
   const saving = ref(false);
-  const initialized = ref(false);
-  let pendingLoad: Promise<EngineerProfile | null> | null = null;
 
+  const profile = computed<EngineerProfile | null>(() => auth.user);
+  const loading = computed(() => auth.loading);
+  const initialized = computed(() => auth.initialized);
   const inspectorNumber = computed(() => profile.value?.inspector_number?.trim() ?? "");
 
   async function load(force = false): Promise<EngineerProfile | null> {
-    if (profile.value && !force) return profile.value;
-    if (pendingLoad && !force) return pendingLoad;
-
-    loading.value = true;
-    pendingLoad = api.profile.getEngineer()
-      .then((row) => {
-        profile.value = row ?? {};
-        initialized.value = true;
-        return profile.value;
-      })
-      .catch(() => {
-        initialized.value = true;
-        return profile.value;
-      })
-      .finally(() => {
-        loading.value = false;
-        pendingLoad = null;
-      });
-
-    return pendingLoad;
+    if (!auth.user || force) await auth.fetchMe();
+    return profile.value;
   }
 
   async function save(updates: Partial<EngineerProfile>): Promise<EngineerProfile> {
     saving.value = true;
     try {
       const row = await api.profile.saveEngineer(updates);
-      profile.value = row ?? {};
-      initialized.value = true;
-      return profile.value;
+      if (row) auth.setUser({...(auth.user ?? {}), ...row} as User);
+      return profile.value ?? {};
     } finally {
       saving.value = false;
     }
   }
 
   function patch(partial: Partial<EngineerProfile>) {
-    profile.value = {...(profile.value ?? {}), ...partial};
+    if (auth.user) auth.setUser({...auth.user, ...partial} as User);
   }
 
   function reset() {
-    profile.value = null;
-    initialized.value = false;
-    pendingLoad = null;
+    // The auth store owns this data now; clearing it is logout's job.
   }
 
   return {profile, loading, saving, initialized, inspectorNumber, load, save, patch, reset};

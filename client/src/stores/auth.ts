@@ -1,18 +1,10 @@
 import {defineStore} from "pinia";
 import {computed, ref} from "vue";
+import type {User} from "../shared/types.js";
 
-interface AuthUser {
-  id: string;
-  email: string;
-  name: string | null;
-  phone?: string | null;
-  picture_url: string | null;
-  role: "admin" | "pro" | "user";
-  plan?: "free" | "trial" | "basic" | "business";
-  /** Set while an account has ever been on trial; null on legacy accounts. */
-  trial_ends_at?: string | null;
-  onboarding_completed?: boolean;
-}
+// /api/auth/me returns the whole user document (minus credentials), engineer
+// and company fields included — so this is the one source for all of it.
+type AuthUser = User;
 
 const STORAGE_KEY = "auth_user";
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";

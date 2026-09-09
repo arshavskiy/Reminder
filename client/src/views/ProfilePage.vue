@@ -2,7 +2,7 @@
   <div class="profile-page">
     <PageHeader
       title="פרופיל"
-      subtitle="ניהול פרטים אישיים, פרופיל מהנדס, הגדרות ומנוי"
+      subtitle="ניהול פרטים אישיים, הגדרות ומנוי"
     />
 
     <div class="profile-shell">
@@ -46,70 +46,6 @@
           <div class="section-header">
             <h2 class="section-title">פרטים אישיים</h2>
             <n-button
-              v-if="!editingPersonal"
-              size="small"
-              @click="startEditPersonal"
-            >
-              <template #icon>
-                <n-icon :component="CreateOutline" />
-              </template>
-              עריכה
-            </n-button>
-            <n-space v-else>
-              <n-button size="small" @click="cancelEditPersonal">ביטול</n-button>
-              <n-button
-                size="small"
-                type="primary"
-                :loading="savingPersonal"
-                @click="savePersonal"
-              >
-                שמור
-              </n-button>
-            </n-space>
-          </div>
-          <div class="info-card">
-            <div class="info-row">
-              <span class="info-label">שם מלא</span>
-              <n-input
-                v-if="editingPersonal"
-                v-model:value="personalForm.name"
-                class="info-input"
-              />
-              <span v-else class="info-val">{{ user?.name || "—" }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">טלפון</span>
-              <n-input
-                v-if="editingPersonal"
-                v-model:value="personalForm.phone"
-                class="info-input"
-              />
-              <span v-else class="info-val">{{ user?.phone || "—" }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">שם חברה</span>
-              <n-input
-                v-if="editingPersonal"
-                v-model:value="personalForm.company_name"
-                class="info-input"
-                placeholder="לדוגמה: M.A.D הנדסה ובטיחות"
-              />
-              <span v-else class="info-val">{{
-                (user as any)?.company_name || "—"
-              }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">אימייל</span>
-              <span class="info-val">{{ user?.email }}</span>
-            </div>
-          </div>
-        </section>
-
-        <!-- פרופיל מהנדס -->
-        <section v-if="activeSection === 'engineer'">
-          <div class="section-header">
-            <h2 class="section-title">פרופיל מהנדס</h2>
-            <n-button
               v-if="!editingEngineer"
               size="small"
               @click="startEditEngineer"
@@ -133,6 +69,30 @@
             </n-space>
           </div>
           <div class="info-card">
+            <div class="info-row">
+              <span class="info-label">שם מלא</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.name"
+                class="info-input"
+              />
+              <span v-else class="info-val">{{ user?.name || "—" }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">טלפון</span>
+              <n-input
+                v-if="editingEngineer"
+                v-model:value="engineerForm.phone"
+                class="info-input"
+              />
+              <span v-else class="info-val">{{ user?.phone || "—" }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">אימייל</span>
+              <span class="info-val">{{ user?.email }}</span>
+            </div>
+
+            <div class="info-section-divider">פרטי רישוי</div>
             <div class="info-row">
               <span class="info-label">מספר רישוי</span>
               <n-input
@@ -167,9 +127,9 @@
                 </div>
               </div>
             </template>
-            <div v-else-if="engineerProfile && Object.keys((engineerProfile as any)?.inspector_numbers_by_type ?? {}).length" class="per-type-inspector-numbers per-type-inspector-numbers--readonly">
+            <div v-else-if="engineerProfile && Object.keys(engineerProfile?.inspector_numbers_by_type ?? {}).length" class="per-type-inspector-numbers per-type-inspector-numbers--readonly">
               <span class="info-label">רישוי לפי בדיקה</span>
-              <div v-for="[key, num] in Object.entries((engineerProfile as any).inspector_numbers_by_type)" :key="key" class="info-row per-type-inspector-numbers__row">
+              <div v-for="[key, num] in Object.entries(engineerProfile?.inspector_numbers_by_type ?? {})" :key="key" class="info-row per-type-inspector-numbers__row">
                 <span class="info-label">{{ inspectionTypeOptions.find((o) => o.value === key)?.label ?? key }}</span>
                 <span class="info-val">{{ num }}</span>
               </div>
@@ -207,18 +167,6 @@
               />
               <span v-else class="info-val">{{
                 engineerProfile?.mg_number || "—"
-              }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">תאריך תחילת חברות</span>
-              <n-date-picker
-                v-if="editingEngineer"
-                v-model:value="engineerForm.membership_start_ms"
-                class="info-input"
-                type="date"
-              />
-              <span v-else class="info-val">{{
-                formatDate(engineerProfile?.membership_start_date)
               }}</span>
             </div>
             <div class="info-row">
@@ -269,7 +217,7 @@
                 placeholder="לדוגמה: 51646673"
               />
               <span v-else class="info-val">{{
-                (engineerProfile as any)?.company_registration || "—"
+                engineerProfile?.company_registration || "—"
               }}</span>
             </div>
 
@@ -285,9 +233,7 @@
                 class="info-input"
                 placeholder="לדוגמה: M.A.D הנדסה ובטיחות"
               />
-              <span v-else class="info-val">{{
-                (engineerProfile as any)?.company_name || user?.company_name || "—"
-              }}</span>
+              <span v-else class="info-val">{{ engineerProfile?.company_name || "—" }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">תיאור / כותרת</span>
@@ -298,7 +244,7 @@
                 placeholder="לדוגמה: בדיקות בטיחות למתקני הרמה ומכלי לחץ"
               />
               <span v-else class="info-val">{{
-                (engineerProfile as any)?.company_subtitle || "—"
+                engineerProfile?.company_subtitle || "—"
               }}</span>
             </div>
             <div class="info-row">
@@ -310,7 +256,7 @@
                 placeholder="052-8195650"
               />
               <span v-else class="info-val">{{
-                (engineerProfile as any)?.company_phone || user?.phone || "—"
+                engineerProfile?.company_phone || user?.phone || "—"
               }}</span>
             </div>
             <div class="info-row">
@@ -322,15 +268,15 @@
                 placeholder="name@company.com"
               />
               <span v-else class="info-val">{{
-                (engineerProfile as any)?.company_email || user?.email || "—"
+                engineerProfile?.company_email || user?.email || "—"
               }}</span>
             </div>
             <div class="info-row info-row--top">
               <span class="info-label">לוגו החברה</span>
               <div class="logo-upload">
                 <img
-                  v-if="(engineerProfile as any)?.company_logo_url"
-                  :src="(engineerProfile as any)?.company_logo_url"
+                  v-if="engineerProfile?.company_logo_url"
+                  :src="engineerProfile?.company_logo_url"
                   class="logo-upload__preview"
                   alt="לוגו חברה"
                 />
@@ -345,7 +291,7 @@
                   <template #icon>
                     <n-icon :component="ImageOutline" />
                   </template>
-                  {{ (engineerProfile as any)?.company_logo_url ? 'החלף לוגו' : 'העלה לוגו' }}
+                  {{ engineerProfile?.company_logo_url ? 'החלף לוגו' : 'העלה לוגו' }}
                 </n-button>
               </div>
             </div>
@@ -353,6 +299,7 @@
         </section>
 
         <!-- סטטיסטיקות -->
+
         <section v-if="activeSection === 'stats'">
           <div class="section-header">
             <h2 class="section-title">סטטיסטיקות</h2>
@@ -1571,7 +1518,6 @@ import {
   CheckmarkCircleOutline,
   CloudUploadOutline,
   ColorPaletteOutline,
-  ConstructOutline,
   CreateOutline,
   DiamondOutline,
   DownloadOutline,
@@ -1721,7 +1667,6 @@ const navItems = computed(() => {
   const isAdmin = user.value?.role === "admin";
   const items: { key: string; icon: Component; label: string }[] = [
     { key: "personal", icon: PersonOutline, label: "פרטים אישיים" },
-    { key: "engineer", icon: ConstructOutline, label: "פרופיל מהנדס" },
   ];
   if (isAdmin) {
     items.push(
@@ -1743,7 +1688,9 @@ function setActiveSection(section: string) {
 }
 
 function applySectionFromRoute() {
-  const section = String(route.query.section ?? "");
+  // "engineer" was a separate tab before the engineer fields moved onto the
+  // personal one — existing links still point at it.
+  const section = String(route.query.section ?? "").replace(/^engineer$/, "personal");
   if (section) {
     setActiveSection(section);
   }
@@ -1821,46 +1768,7 @@ function formatDate(d: string | null | undefined) {
   });
 }
 
-// ── Personal info ────────────────────────────────────────────────────────────
-const editingPersonal = ref(false);
-const savingPersonal = ref(false);
-const personalForm = ref({ name: "", phone: "", company_name: "" });
-
-function startEditPersonal() {
-  personalForm.value = {
-    name: user.value?.name ?? "",
-    phone: user.value?.phone ?? "",
-    company_name: (user.value as any)?.company_name ?? "",
-  };
-  editingPersonal.value = true;
-}
-function cancelEditPersonal() {
-  editingPersonal.value = false;
-}
-async function savePersonal() {
-  savingPersonal.value = true;
-  try {
-    await fetch(`${SERVER}/api/profile`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        name: personalForm.value.name,
-        phone: personalForm.value.phone,
-        company_name: personalForm.value.company_name,
-      }),
-    });
-    await authStore.fetchMe();
-    editingPersonal.value = false;
-    message.success("הפרטים עודכנו");
-  } catch {
-    message.error("שגיאה בשמירה");
-  } finally {
-    savingPersonal.value = false;
-  }
-}
-
-// ── Engineer profile ─────────────────────────────────────────────────────────
+// ── Profile ──────────────────────────────────────────────────────────────────
 const nextInspectionId = computed(() => {
   const start = parseInt(engineerProfile.value?.inspector_id_start ?? "0", 10);
   const total = inspectionStats.value.total;
@@ -1871,6 +1779,8 @@ const nextInspectionId = computed(() => {
 const editingEngineer = ref(false);
 const savingEngineer = ref(false);
 const engineerForm = ref({
+  name: "",
+  phone: "",
   inspector_number: "",
   address: "",
   city: "",
@@ -1878,7 +1788,6 @@ const engineerForm = ref({
   expertise: "",
   mr_number: "",
   mg_number: "",
-  membership_start_ms: null as number | null,
   inspector_id_start: "",
   company_name: "",
   company_registration: "",
@@ -1899,6 +1808,8 @@ const inspectionTypeOptions = INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => ({lab
 function startEditEngineer() {
   const p = engineerProfile.value;
   engineerForm.value = {
+    name: p?.name ?? "",
+    phone: p?.phone ?? "",
     inspector_number: p?.inspector_number ?? "",
     address: p?.address ?? "",
     city: p?.city ?? "",
@@ -1906,21 +1817,18 @@ function startEditEngineer() {
     expertise: p?.expertise ?? "",
     mr_number: p?.mr_number ?? "",
     mg_number: p?.mg_number ?? "",
-    membership_start_ms: p?.membership_start_date
-      ? new Date(p.membership_start_date).getTime()
-      : null,
     // New users get a suggested 5-digit starting number rather than a blank
     // field — editable before saving, just a sane default to start from.
     inspector_id_start: p?.inspector_id_start ?? "10001",
-    // Default the extraction-filter company fields from the main profile
-    // (set during onboarding) when the inspector hasn't set them separately
-    // here — most users have one company, not two to enter.
-    company_name: (p as any)?.company_name || user.value?.company_name || "",
-    company_registration: (p as any)?.company_registration ?? "",
-    company_subtitle: (p as any)?.company_subtitle ?? "",
-    company_phone: (p as any)?.company_phone || user.value?.phone || "",
-    company_email: (p as any)?.company_email || user.value?.email || "",
-    inspector_numbers_by_type: {...((p as any)?.inspector_numbers_by_type ?? {})},
+    company_name: p?.company_name ?? "",
+    company_registration: p?.company_registration ?? "",
+    company_subtitle: p?.company_subtitle ?? "",
+    // Seed the company contact fields from the personal ones when they've
+    // never been set — a solo inspector's company phone/email is usually
+    // their own, and an empty field here weakens the extraction filter.
+    company_phone: p?.company_phone || user.value?.phone || "",
+    company_email: p?.company_email || user.value?.email || "",
+    inspector_numbers_by_type: {...(p?.inspector_numbers_by_type ?? {})},
   };
   showPerTypeInspectorNumbers.value = Object.keys(engineerForm.value.inspector_numbers_by_type).length > 0;
   editingEngineer.value = true;
@@ -1931,20 +1839,29 @@ function cancelEditEngineer() {
 async function saveEngineer() {
   savingEngineer.value = true;
   try {
-    const {membership_start_ms, ...formFields} = engineerForm.value;
+    const {name, phone, ...formFields} = engineerForm.value;
     const inspectorNumbersByType = showPerTypeInspectorNumbers.value
       ? Object.fromEntries(
           Object.entries(formFields.inspector_numbers_by_type).filter(([, v]) => v.trim())
         )
       : {};
+    // Two routes, one users document: name/phone belong to PUT /api/profile,
+    // everything else to PUT /api/profile/engineer.
+    await fetch(`${SERVER}/api/profile`, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      credentials: "include",
+      body: JSON.stringify({name, phone}),
+    });
     await engineerStore.save({
       ...formFields,
       inspector_numbers_by_type: inspectorNumbersByType,
-      membership_start_date: membership_start_ms
-        ? new Date(membership_start_ms).toISOString().slice(0, 10)
-        : null,
+      // No longer edited here, but the route overwrites whatever it is sent —
+      // pass the stored value through so the certificate extractor's fill survives.
+      membership_start_date: engineerProfile.value?.membership_start_date ?? null,
       inspector_id_start: engineerForm.value.inspector_id_start || null,
     });
+    await authStore.fetchMe();
     editingEngineer.value = false;
     message.success("הפרופיל עודכן");
   } catch {

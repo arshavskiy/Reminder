@@ -81,6 +81,43 @@ export interface User {
   last_login_at: string | null;
 }
 
+/**
+ * The users document also holds credentials (password_hash, google_sub) and
+ * session bookkeeping, so anything sent to the client goes through this
+ * allow-list rather than shipping the raw document.
+ */
+export function serializeUser(doc: Record<string, any> | null | undefined) {
+  if (!doc) return null;
+  return {
+    id: String(doc._id ?? doc.id ?? ""),
+    email: doc.email ?? null,
+    name: doc.name ?? null,
+    phone: doc.phone ?? null,
+    picture_url: doc.picture_url ?? null,
+    role: doc.role ?? "user",
+    plan: doc.plan ?? null,
+    trial_ends_at: doc.trial_ends_at ?? null,
+    onboarding_completed: doc.onboarding_completed ?? false,
+    address: doc.address ?? null,
+    city: doc.city ?? null,
+    inspector_number: doc.inspector_number ?? null,
+    inspector_numbers_by_type: doc.inspector_numbers_by_type ?? null,
+    title: doc.title ?? null,
+    expertise: doc.expertise ?? null,
+    mr_number: doc.mr_number ?? null,
+    mg_number: doc.mg_number ?? null,
+    membership_start_date: doc.membership_start_date ?? null,
+    inspector_id_start: doc.inspector_id_start ?? null,
+    next_inspection_seq: doc.next_inspection_seq ?? null,
+    company_name: doc.company_name ?? null,
+    company_registration: doc.company_registration ?? null,
+    company_subtitle: doc.company_subtitle ?? null,
+    company_phone: doc.company_phone ?? null,
+    company_email: doc.company_email ?? null,
+    company_logo_url: doc.company_logo_url ?? null,
+  };
+}
+
 export interface Session {
   id: string;
   user_id: number;

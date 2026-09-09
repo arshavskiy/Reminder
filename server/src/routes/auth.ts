@@ -2,6 +2,7 @@ import express from "express";
 import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {getSettings} from "../settings";
+import {serializeUser} from "../shared/types";
 import {
     exchangeCodeForIdToken,
     generateCodeVerifier,
@@ -279,33 +280,12 @@ export function registerAuthRoutes(app: express.Application) {
     if (userDoc) {
       await ensureUserSettingsWithEntitlements(String(userDoc._id), userDoc);
     }
+    const serialized = serializeUser(userDoc ?? (user as any));
     res.json({
       user: {
+        ...serialized!,
         id: (user as any).id,
-        email: user.email,
-        name: user.name,
-        phone: (user as any).phone ?? null,
-        company_name: (user as any).company_name ?? null,
-        address: (user as any).address ?? null,
-        city: (user as any).city ?? null,
-        picture_url: user.picture_url,
-        role: user.role,
-        plan: user.plan ?? planFromRole(user.role),
-        onboarding_completed: userDoc?.onboarding_completed ?? false,
-        inspector_number: userDoc?.inspector_number ?? null,
-        inspector_numbers_by_type: userDoc?.inspector_numbers_by_type ?? null,
-        title: userDoc?.title ?? null,
-        expertise: userDoc?.expertise ?? null,
-        mr_number: userDoc?.mr_number ?? null,
-        mg_number: userDoc?.mg_number ?? null,
-        membership_start_date: userDoc?.membership_start_date ?? null,
-        inspector_id_start: userDoc?.inspector_id_start ?? null,
-        next_inspection_seq: userDoc?.next_inspection_seq ?? null,
-        company_registration: userDoc?.company_registration ?? null,
-        company_subtitle: userDoc?.company_subtitle ?? null,
-        company_phone: userDoc?.company_phone ?? null,
-        company_email: userDoc?.company_email ?? null,
-        company_logo_url: userDoc?.company_logo_url ?? null,
+        plan: serialized!.plan ?? planFromRole(user.role),
       },
       actingAs: actingAs
         ? {

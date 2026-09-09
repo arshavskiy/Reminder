@@ -15,6 +15,7 @@ import {getDocumentImportQuota, type DocumentImportQuotaCategory} from "../quota
 import {getImportUsageCounters} from "../quotas/importUsageCounters";
 import {getReminderQuota} from "../quotas/reminderQuota";
 import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "../shared/printTemplateLayout.js";
+import {serializeUser} from "../shared/types";
 
 const INSPECTION_TYPE_KEYS = new Set(INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => p.key));
 
@@ -154,7 +155,7 @@ export function registerProfileRoutes(app: express.Application) {
     const ctx = await auth(req, res);
     if (!ctx) return;
     const doc = await col("users").findOne({ _id: new ObjectId(ctx.userId) as any });
-    res.json(doc ?? {});
+    res.json(serializeUser(doc) ?? {});
   });
 
   app.put("/api/profile/engineer", async (req, res) => {
@@ -196,7 +197,7 @@ export function registerProfileRoutes(app: express.Application) {
     );
 
     const updated = await col("users").findOne({ _id: new ObjectId(ctx.userId) as any });
-    res.json(updated ?? {});
+    res.json(serializeUser(updated) ?? {});
   });
 
   // ── Company logo upload ────────────────────────────────────────────────────

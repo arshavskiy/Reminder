@@ -316,7 +316,7 @@ async function openCompose(t: PrintTemplate, contractId?: string | null) {
   ]);
   if (engineerProfile || userProfile) {
     const companyName = engineerProfile?.company_name || "";
-    composeData.value.engineer_name = engineerProfile?.full_name || userProfile?.name || "";
+    composeData.value.engineer_name = engineerProfile?.name || userProfile?.name || "";
     composeData.value.engineer_email = engineerProfile?.company_email || userProfile?.email || "";
     composeData.value.engineer_phone = engineerProfile?.company_phone || userProfile?.phone || "";
     composeData.value.engineer_company = companyName;
