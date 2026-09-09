@@ -1480,7 +1480,25 @@ function openEditPrintTemplate() {
 // ── Equipment actions ────────────────────────────────────────────────────────
 
 function addEquipment() {
-  equipmentRows.value.push(emptyEquipmentRow());
+  // Inspectors usually check several near-identical machines in one visit, so a
+  // new row starts as a copy of the last one. The array fields are cloned rather
+  // than shared, and the saved-equipment link is dropped so the new row isn't
+  // bound to the same equipment record.
+  const previous = equipmentRows.value.at(-1);
+  if (!previous) {
+    equipmentRows.value.push(emptyEquipmentRow());
+    return;
+  }
+  equipmentRows.value.push({
+    ...previous,
+    id: crypto.randomUUID(),
+    selected_equipment_id: null,
+    models: [...previous.models],
+    serial_numbers: [...previous.serial_numbers],
+    load_capacity_work: [...previous.load_capacity_work],
+    load_capacity_test: [...previous.load_capacity_test],
+    load_radius: [...previous.load_radius],
+  });
 }
 
 function removeEquipment(index: number) {
