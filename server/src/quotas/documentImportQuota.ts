@@ -1,5 +1,6 @@
 import { col } from "../db/db";
 import { getStoredUserUsage } from "./userUsageCounters";
+import {NON_IMPORTED_GENERATED_DOCUMENT_KINDS} from "../documents/documentVisibility";
 
 export const DOCUMENT_MONTHLY_QUOTA_ERROR = "document_monthly_limit_reached";
 
@@ -226,7 +227,7 @@ function sharedDocumentQuotaCountFilter(
 ): Record<string, unknown> {
   const filter: Record<string, unknown> = {
     user_id: userId,
-    document_kind: {$ne: "certificate"},
+    document_kind: {$nin: NON_IMPORTED_GENERATED_DOCUMENT_KINDS},
   };
   if (periodStart && periodEnd) {
     filter.created_at = { $gte: periodStart, $lt: periodEnd };

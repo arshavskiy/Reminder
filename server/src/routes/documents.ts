@@ -32,6 +32,7 @@ import {
   getDocumentImportQuota,
     quotaCategoryFromTemplate,
 } from "../quotas/documentImportQuota";
+import {MAIN_DOCUMENTS_EXCLUDED_KINDS} from "../documents/documentVisibility";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -77,7 +78,7 @@ export function registerDocumentRoutes(app: express.Application) {
     // flags and Gmail invoice storage paths as extra guards.
     const baseFilter: Record<string, any> = {
       user_id: userId,
-      document_kind: { $nin: ["certificate", "invoice"] },
+      document_kind: { $nin: MAIN_DOCUMENTS_EXCLUDED_KINDS },
       invoice_saved: { $ne: true },
       invoice_rejected: { $ne: true },
       // Matches both the legacy `gmail/invoices/...` layout and the tenant-first
@@ -639,7 +640,7 @@ export function registerDocumentRoutes(app: express.Application) {
       : null;
 
     const candidateDocs = await col("documents")
-      .find({ user_id: userId, processing_status: { $in: ["error", "done"] }, document_kind: { $nin: ["certificate", "invoice"] } })
+      .find({ user_id: userId, processing_status: { $in: ["error", "done"] }, document_kind: { $nin: MAIN_DOCUMENTS_EXCLUDED_KINDS } })
       .project({ raw_text: 0 })
       .sort({ import_date: -1, _id: -1 } as any)
       .limit(limit ?? 0)

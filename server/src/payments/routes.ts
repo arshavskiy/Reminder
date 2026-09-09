@@ -61,7 +61,7 @@ async function archiveRequest(request: any) {
   const storage: Record<string, string> = {local: "saved", object: "not_configured", drive: "not_synced"};
   if (spacesEnabled()) {
     try {
-      const key = `documents/${userId}/payment-requests/${request._id}.pdf`;
+      const key = `documents/${userId}/billing/${documentKind}/${request._id}.pdf`;
       const url = await uploadToSpaces(filePath, key, "application/pdf");
       await col("documents").updateOne({_id: documentId, user_id: userId}, {$set: {spaces_key: key, spaces_url: url}});
       storage.object = "saved";

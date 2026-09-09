@@ -39,3 +39,6 @@ client/test-results/
 client/playwright-report/
 client/tests/e2e/.auth/
 server/test-results/
+
+output/
+client/tmp/video-demo-auth.json
