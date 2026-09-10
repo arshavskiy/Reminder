@@ -756,6 +756,15 @@ function resolveExtractedFieldValue(
   if (key === "client_email" || key === "contact_email" || key === "email") {
     return raw[key] ?? raw.client_email ?? raw.contact_email ?? raw.email ?? contractEmail ?? null;
   }
+  if (key === "contact_phone") {
+    return raw.contact_phone ?? raw.client_mobile ?? raw.client_phone ?? raw.mobile ?? raw.phone ?? null;
+  }
+  if (key === "report_number") {
+    return raw.report_number ?? raw.document_number ?? raw.contract_number ?? null;
+  }
+  if (key === "equipment_description") {
+    return raw.equipment_description ?? raw.description ?? raw.checked_equipment ?? raw.name ?? null;
+  }
   if (key === "expiry_date") {
     return raw.expiry_date ?? raw.next_inspection_date ?? null;
   }

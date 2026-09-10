@@ -588,7 +588,11 @@ export function registerReminderRoutes(app: express.Application) {
     const licenseNumber = body.equipment?.license_number?.trim() || null;
     const contactPerson = body.business?.contact_person?.trim() || selectedClient?.contact_person || null;
     const contactEmail = body.business?.email?.trim() || selectedClient?.email || null;
-    const contactPhone = body.business?.phone?.trim() || selectedClient?.phone || null;
+    const contactPhone = body.business?.mobile?.trim()
+      || body.business?.phone?.trim()
+      || selectedClient?.mobile
+      || selectedClient?.phone
+      || null;
     const clientAddress = body.business?.address?.trim() || selectedClient?.address || null;
     const poBox = body.business?.po_box?.trim() || null;
     const clientZipcode = body.business?.client_zipcode?.trim() || null;
@@ -685,6 +689,7 @@ export function registerReminderRoutes(app: express.Application) {
           contract_type: contractType,
         contact_person: contactPerson,
         contact_phone: contactPhone,
+        client_mobile: body.business?.mobile?.trim() || selectedClient?.mobile || null,
         contact_email: contactEmail,
         client_address: clientAddress,
         po_box: poBox,

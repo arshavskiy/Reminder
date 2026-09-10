@@ -1,11 +1,11 @@
-import {chromium} from "../client/node_modules/@playwright/test/index.mjs";
+import {chromium} from "../../client/node_modules/@playwright/test/index.mjs";
 import {mkdir, readdir, rename} from "node:fs/promises";
 import {resolve} from "node:path";
 
 const appUrl = "http://localhost:4173";
 const magicUrl = process.env.DEMO_MAGIC_LINK_URL;
 const pdfDir = resolve("output/pdf/demo-upload-files");
-const rawDir = resolve("output/video/raw");
+const rawDir = resolve("video/recordings/raw");
 if (!magicUrl) throw new Error("Set DEMO_MAGIC_LINK_URL before recording.");
 await mkdir(rawDir, {recursive: true});
 
@@ -65,5 +65,5 @@ await caption("מסמך בודד — נתונים שחולצו ב-OCR וב-AI", 
 const rawPath = await video.path();
 await context.close();
 await browser.close();
-await rename(rawPath, resolve("output/video/RemindOCR-dashboard-ocr-flow.webm"));
-console.log(resolve("output/video/RemindOCR-dashboard-ocr-flow.webm"));
+await rename(rawPath, resolve("video/recordings/RemindOCR-dashboard-ocr-flow.webm"));
+console.log(resolve("video/recordings/RemindOCR-dashboard-ocr-flow.webm"));

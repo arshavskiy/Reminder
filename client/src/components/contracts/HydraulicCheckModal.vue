@@ -1760,8 +1760,9 @@ function buildTemplateDraft(): Record<string, string> {
     client_name: business.contact_person ?? "",
     contact_person: business.contact_person ?? "",
     client_company: business.display_name ?? "",
-    client_phone: business.phone ?? "",
+    client_phone: business.mobile || business.phone || "",
     client_mobile: business.mobile ?? "",
+    contact_phone: business.mobile || business.phone || "",
     client_fax: business.fax ?? "",
     client_email: business.email ?? "",
     client_address: business.address ?? "",
@@ -1791,8 +1792,8 @@ function buildTemplateDraft(): Record<string, string> {
     data[`load_radius${suffix}`] = joinStackedValues(eq.load_radius);
     data[`load_capacity_test${suffix}`] = joinStackedValues(eq.load_capacity_test);
     data[`load_capacity_work${suffix}`] = joinStackedValues(eq.load_capacity_work);
-    data[`description${suffix}`] = eq.description;
-    data[`equipment_description${suffix}`] = eq.description;
+    data[`description${suffix}`] = eq.description || eq.name;
+    data[`equipment_description${suffix}`] = eq.description || eq.name;
     data[`checked_equipment${suffix}`] = eq.name;
     data[`chassis${suffix}`] = joinStackedValues(eq.serial_numbers);
     data[`quantity${suffix}`] = String(Math.max(eq.serial_numbers.length, 1));

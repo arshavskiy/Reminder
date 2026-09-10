@@ -42,3 +42,8 @@ server/test-results/
 
 output/
 client/tmp/video-demo-auth.json
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm

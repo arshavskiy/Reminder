@@ -1,10 +1,10 @@
-import {chromium} from "../client/node_modules/@playwright/test/index.mjs";
+import {chromium} from "../../client/node_modules/@playwright/test/index.mjs";
 import {mkdir, rename, readdir} from "node:fs/promises";
 import {resolve} from "node:path";
 
 const appUrl = "http://localhost:4173";
 const magicUrl = process.env.DEMO_MAGIC_LINK_URL;
-const rawDir = resolve("output/video/raw");
+const rawDir = resolve("video/recordings/raw");
 const logoPath = resolve("client/src/public/logo-options/option-b-r-mark.png");
 const signaturePath = resolve("video/assets/demo-signature.png");
 const demoPdfDir = resolve("output/pdf/demo-upload-files");
@@ -68,7 +68,7 @@ async function createInspection(item, index) {
   await dialog().getByRole("button", {name: "הבא"}).click(); await pause(450); await dialog().getByRole("button", {name: "הבא"}).click(); await pause(450);
   if (index === 0) { await chooseSelection(field("מסמך שיופק עם התסקיר").locator(".n-base-selection"), "הצעת מחיר"); await caption("סעיפי המחיר נבחרים אוטומטית לפי סוג הציוד", 1100); }
   await dialog().getByRole("button", {name: "שמור ופתח תצוגה"}).click(); await page.waitForURL(/print-templates\/layout/, {timeout: 20000}); await pause(700);
-  if (index === 0) { const downloadPromise = page.waitForEvent("download"); await page.getByRole("button", {name: /הורד PDF/}).click(); const download = await downloadPromise; await download.saveAs(resolve("output/video/demo-inspection-report.pdf")); await caption("התסקיר והצעת המחיר נשמרו", 950); }
+  if (index === 0) { const downloadPromise = page.waitForEvent("download"); await page.getByRole("button", {name: /הורד PDF/}).click(); const download = await downloadPromise; await download.saveAs(resolve("video/recordings/demo-inspection-report.pdf")); await caption("התסקיר והצעת המחיר נשמרו", 950); }
   await page.goto(`${appUrl}/dashboard`, {waitUntil: "networkidle"}); await pause(500);
 }
 
@@ -149,12 +149,13 @@ async function createMultiEquipmentInspection() {
 
   await chooseSelection(field("מסמך שיופק עם התסקיר").locator(".n-base-selection"), "הצעת מחיר");
   await field("בתוקף / לתשלום עד").locator("input").fill("2026-11-20");
-  for (let index = 0; index < 3; index++) await dialog().getByRole("button", {name: "הוספת סעיף"}).click();
+  for (let index = 0; index < 4; index++) await dialog().getByRole("button", {name: "הוספת סעיף"}).click();
   const lines = dialog().locator(".hm-billing-line");
   const services = [
     ["בדיקת מלגזה", "בדיקה תקופתית למלגזה חשמלית", "850"],
     ["בדיקת במת הרמה", "בדיקה תקופתית לבמת הרמה", "950"],
     ["הפקת תסקיר", "הפקת תסקיר חתום ושליחה ללקוח", "320"],
+    ["תזכורת תקופתית", "הקמת תזכורת אוטומטית לבדיקה הבאה", "180"],
   ];
   const lineCount = await lines.count();
   for (let index = 0; index < lineCount; index++) {
@@ -171,7 +172,7 @@ async function createMultiEquipmentInspection() {
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", {name: /הורד PDF/}).click();
   const download = await downloadPromise;
-  await download.saveAs(resolve("output/video/demo-multi-equipment-report.pdf"));
+  await download.saveAs(resolve("video/recordings/demo-multi-equipment-report.pdf"));
   await caption("התסקיר והצעת המחיר נוצרו והורדו כ-PDF", 1100);
 }
 
@@ -196,7 +197,7 @@ async function showWorkspaceAndReports() {
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", {name: "הורד DOCX"}).click();
   const download = await downloadPromise;
-  await download.saveAs(resolve("output/video/demo-annual-report-2026.docx"));
+  await download.saveAs(resolve("video/recordings/demo-annual-report-2026.docx"));
   await page.getByRole("button", {name: "שלח דוח כולל אליי"}).click();
   await caption("הדוח החודשי נשלח במייל", 1200);
 }
@@ -214,4 +215,4 @@ await uploadDemoPdfs();
 await showCalendarClientsAndDocument();
 await createMultiEquipmentInspection();
 await showWorkspaceAndReports();
-const rawPath = await video.path(); await context.close(); await browser.close(); await rename(rawPath, resolve("output/video/RemindOCR-demo-flow.webm")); console.log(resolve("output/video/RemindOCR-demo-flow.webm"));
+const rawPath = await video.path(); await context.close(); await browser.close(); await rename(rawPath, resolve("video/recordings/RemindOCR-demo-flow.webm")); console.log(resolve("video/recordings/RemindOCR-demo-flow.webm"));

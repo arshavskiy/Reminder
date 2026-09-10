@@ -525,7 +525,7 @@
                   />
                   <n-tooltip v-if="row.quote_id">
                     <template #trigger>
-                      <button class="btn btn--ghost btn--xs icon-btn document-row-action" type="button" aria-label="פתח הצעת מחיר" @click="router.push('/quotes')">
+                      <button class="btn btn--ghost btn--xs icon-btn document-row-action document-row-action--quote" type="button" aria-label="פתח הצעת מחיר" @click="router.push('/quotes')">
                         <n-icon :component="DocumentTextOutline" class="btn-icon" />
                       </button>
                     </template>
@@ -1830,6 +1830,18 @@ async function bulkExtractAi() {
 .documents-workspace-tabs a { color:var(--text-secondary); padding:9px 14px; text-decoration:none; border-bottom:2px solid transparent; }
 .documents-workspace-tabs a:hover, .documents-workspace-tabs__active { color:var(--brand-color); border-bottom-color:var(--brand-color); font-weight:600; }
 .hidden { display: none; }
+
+.document-row-action--quote {
+  color: var(--brand-color);
+  border-color: color-mix(in srgb, var(--brand-color) 45%, transparent);
+  background: color-mix(in srgb, var(--brand-color) 10%, transparent);
+}
+
+.document-row-action--quote:hover {
+  color: var(--text-inverse, #fff);
+  border-color: var(--brand-color);
+  background: var(--brand-color);
+}
 
 .documents-actions {
   display: flex;

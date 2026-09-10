@@ -13,8 +13,9 @@ export function normalizeReportNumber(value: unknown): string | null {
   return text.toLowerCase();
 }
 
-export function parseDocumentExtractedFields(extracted_fields?: string | null): Record<string, unknown> {
+export function parseDocumentExtractedFields(extracted_fields?: string | Record<string, unknown> | null): Record<string, unknown> {
   if (!extracted_fields) return {};
+  if (typeof extracted_fields === "object" && !Array.isArray(extracted_fields)) return extracted_fields;
   try {
     const parsed = JSON.parse(extracted_fields);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
@@ -25,14 +26,14 @@ export function parseDocumentExtractedFields(extracted_fields?: string | null): 
   }
 }
 
-export function documentReportNumber(doc: { extracted_fields?: string | null }): string | null {
+export function documentReportNumber(doc: { extracted_fields?: string | Record<string, unknown> | null }): string | null {
   const fields = parseDocumentExtractedFields(doc.extracted_fields);
   return normalizeReportNumber(
     fields.report_number ?? fields.document_number ?? fields.contract_number,
   );
 }
 
-export function documentReportNumberLabel(doc: { extracted_fields?: string | null }): string | null {
+export function documentReportNumberLabel(doc: { extracted_fields?: string | Record<string, unknown> | null }): string | null {
   const fields = parseDocumentExtractedFields(doc.extracted_fields);
   const raw = fields.report_number ?? fields.document_number ?? fields.contract_number;
   if (raw == null) return null;
