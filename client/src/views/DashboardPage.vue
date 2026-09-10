@@ -108,7 +108,6 @@
       <MonthlyReportModal
         v-model:show="showMonthlyReport"
         :initial-month-ms="monthlyReportMonthMs"
-        @open-export="openMonthlyReportExport"
       />
 
       <HydraulicCheckModal
@@ -285,11 +284,6 @@ const calendarLoading = computed(
 function openMonthlyReport(monthMs?: number) {
   monthlyReportMonthMs.value = monthMs ?? Date.now();
   showMonthlyReport.value = true;
-}
-
-function openMonthlyReportExport() {
-  showMonthlyReport.value = false;
-  router.push("/contracts");
 }
 
 onMounted(async () => {

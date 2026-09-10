@@ -13,12 +13,9 @@
       </n-form-item>
     </n-form>
     <template #action>
-      <n-space justify="space-between" style="width: 100%">
-        <n-button @click="emit('open-export')">📊 ייצוא CSV / Excel / PDF</n-button>
-        <n-space>
-          <n-button @click="emit('update:show', false)">ביטול</n-button>
-          <n-button type="primary" :loading="loading" @click="downloadMonthlyReport">הורד DOC</n-button>
-        </n-space>
+      <n-space justify="end" style="width: 100%">
+        <n-button @click="emit('update:show', false)">ביטול</n-button>
+        <n-button type="primary" :loading="loading" @click="downloadMonthlyReport">הורד DOC</n-button>
       </n-space>
     </template>
   </n-modal>
@@ -37,7 +34,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "update:show": [value: boolean];
-  "open-export": [];
 }>();
 
 const message = useMessage();

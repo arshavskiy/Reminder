@@ -1,3 +1,14 @@
+<!--
+  PARKED — not routed, not reachable from the app.
+
+  Inspections moved into the documents workspace (DocumentsPage), and
+  "Unify inspection documents and quote management" (ca451a4) turned
+  /contracts into a redirect to /documents and dropped this page's import.
+
+  Kept for reference because the CSV/Excel/PDF export wizard below has no
+  equivalent in the new workspace yet — that flow is the reason not to delete
+  the file outright. Nothing imports it, so it is tree-shaken out of the bundle.
+-->
 <template>
   <div class="page2">
     <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
@@ -255,7 +266,7 @@
       </div>
     </n-spin>
 
-    <MonthlyReportModal v-model:show="showMonthlyReport" @open-export="openExportFromMonthlyReport"/>
+    <MonthlyReportModal v-model:show="showMonthlyReport"/>
     <!-- ── Export wizard modal ──────────────────────────────────────────── -->
     <n-modal v-model:show="showExport" preset="card" style="width:640px; max-width:95vw" :mask-closable="false">
       <template #header>
@@ -699,19 +710,19 @@ import {
   TrashOutline,
   WarningOutline,
 } from "@vicons/ionicons5";
-import {useContractsStore} from "../stores/contracts.js";
-import {useFeaturesStore} from "../stores/features.js";
+import {useContractsStore} from "../../stores/contracts.js";
+import {useFeaturesStore} from "../../stores/features.js";
 import {storeToRefs} from "pinia";
-import {useAuthStore} from "../stores/auth.js";
-import {featureFlagsForUser, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
-import {useHydraulicCheckDraftStore} from "../stores/hydraulicCheckDraft.js";
-import type {HydraulicCheckRequest, PrintTemplateDraftSummary} from "../services/apiService.js";
-import {api} from "../services/apiService.js";
-import ContractCard from "../components/contracts/ContractCard.vue";
-import MonthlyReportModal from "../components/MonthlyReportModal.vue";
-import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
-import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
-import {FEATURES} from "../shared/features.js";
+import {useAuthStore} from "../../stores/auth.js";
+import {featureFlagsForUser, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../../shared/pricingPlans.js";
+import {useHydraulicCheckDraftStore} from "../../stores/hydraulicCheckDraft.js";
+import type {HydraulicCheckRequest, PrintTemplateDraftSummary} from "../../services/apiService.js";
+import {api} from "../../services/apiService.js";
+import ContractCard from "../../components/contracts/ContractCard.vue";
+import MonthlyReportModal from "../../components/MonthlyReportModal.vue";
+import HydraulicCheckModal from "../../components/contracts/HydraulicCheckModal.vue";
+import ReminderPreviewModal from "../../components/modals/ReminderPreviewModal.vue";
+import {FEATURES} from "../../shared/features.js";
 import type {
   ContractWithClient,
   EmailTemplate,
@@ -730,8 +741,8 @@ import {
 } from "@shared/rowIssues.js";
 import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.js";
 import {joinStackedValues} from "@shared/printTemplateLayout.js";
-import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS, useConfirm} from "../composables/useConfirm.js";
-import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
+import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS, useConfirm} from "../../composables/useConfirm.js";
+import ConfirmDialogHead from "../../components/ConfirmDialogHead.vue";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const store = useContractsStore();
@@ -1141,11 +1152,6 @@ function openMonthlyReport() {
     return;
   }
   showMonthlyReport.value = true;
-}
-
-function openExportFromMonthlyReport() {
-  showMonthlyReport.value = false;
-  openExport();
 }
 
 const exportStep = ref(0);
