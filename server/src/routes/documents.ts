@@ -33,6 +33,7 @@ import {
     quotaCategoryFromTemplate,
 } from "../quotas/documentImportQuota";
 import {MAIN_DOCUMENTS_EXCLUDED_KINDS, mainDocumentsFilter} from "../documents/documentVisibility";
+import {slimExtractedFieldsForList} from "../documents/listExtractedFields";
 import {planAllowsDocumentImport, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -237,6 +238,9 @@ export function registerDocumentRoutes(app: express.Application) {
       const quote = contract ? quoteByContractId.get(String(contract._id)) : null;
       return {
         ...flatDoc(r),
+        // Narrowed after client_name is derived above, which still reads the
+        // full field set.
+        extracted_fields: slimExtractedFieldsForList(r.extracted_fields),
         client_id: link?.id ?? null,
         client_name: link?.name ?? extractedClientDisplayName(parseObjectJson(r.extracted_fields)) ?? null,
         reminder_count: documentReminders.length,
