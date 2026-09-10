@@ -527,7 +527,7 @@
         </div>
         <button
             :class="['btn', 'btn--primary', 'hm-footer__save', { 'btn--loading': savingDraft }]"
-            :disabled="savingDraft || stepIndex < steps.length - 1"
+            :disabled="savingDraft || !canSaveDraft"
             @click="saveDraftAndPreview"
         >
           <n-icon :component="SaveOutline" :size="16"/>
@@ -632,10 +632,21 @@ const steps: { key: StepKey; label: string }[] = [
   {key: "business", label: "עסק"},
   {key: "equipment", label: "ציוד"},
   {key: "reminder", label: "תזכורת"},
-  {key: "billing", label: "הצעת מחיר"},
+  {key: "billing", label: "הצעת מחיר (רשות)"},
 ];
+// The quote is optional: an inspection is complete without one, so saving is
+// unlocked from the last required step onward rather than only on the final
+// step. Without this the wizard could not be finished without visiting billing.
+const OPTIONAL_STEPS: StepKey[] = ["billing"];
 const activeStep = ref<StepKey>("basic");
 const stepIndex = computed(() => steps.findIndex((s) => s.key === activeStep.value));
+const lastRequiredStepIndex = computed(() => {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    if (!OPTIONAL_STEPS.includes(steps[i].key)) return i;
+  }
+  return steps.length - 1;
+});
+const canSaveDraft = computed(() => stepIndex.value >= lastRequiredStepIndex.value);
 
 function nextStep() {
   const idx = stepIndex.value;
