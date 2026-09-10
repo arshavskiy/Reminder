@@ -109,8 +109,8 @@
         <div :class="['sig-mark', `sig-align-${section.align ?? 'left'}`]">
           <div class="sig-label">חתימת הבודק:</div>
           <div class="sig-content">
-            <div v-if="section.imageSrc" class="sig-image">
-              <img :src="section.imageSrc" alt="חתימה">
+            <div v-if="section.imageSrc || userSignatureUrl" class="sig-image">
+              <img :src="section.imageSrc || userSignatureUrl" alt="חתימה">
             </div>
           </div>
         </div>
@@ -159,11 +159,18 @@ import type {
   PrintTemplateSectionField
 } from "@shared/printTemplateLayout.js";
 import {fillLayoutPlaceholders, signatureCertificationText, splitStackedCellValue, equipmentTableRowCount, equipmentTableCellKey} from "@shared/printTemplateLayout.js";
+import {useAuthStore} from "../../stores/auth.js";
 
 const props = defineProps<{
   layout: PrintTemplateLayout;
   data?: Record<string, string>;
 }>();
+
+// Mirrors the server renderer: a section without its own imageSrc falls back to
+// the signature stored on the user, so the preview shows what the PDF will.
+const authStore = useAuthStore();
+const userSignatureUrl = computed(
+  () => props.data?.user_signature_url || authStore.user?.signature_url || "");
 
 function val(bind: string): string {
   return props.data?.[bind] ?? "";

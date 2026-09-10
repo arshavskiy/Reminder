@@ -178,7 +178,11 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
             ? ""
             : (section.certificationText ?? DEFAULT_SIGNATURE_CERTIFICATION);
         const cert = certTemplate ? renderCertificationHtml(certTemplate, data) : "";
-      const sigImg = section.imageSrc ? renderImage(section.imageSrc, "חתימה", 120) : "";
+      // A template may pin its own signature image; otherwise fall back to the
+      // one stored on the user, so a signature uploaded once in the profile
+      // reaches every template without being copied into each layout.
+      const sigSrc = section.imageSrc || String(data.user_signature_url ?? "");
+      const sigImg = sigSrc ? renderImage(sigSrc, "חתימה", 120) : "";
         const align = section.align ?? "left";
       return `<section class="${sectionClass(section, "block sig-block")}">
         ${cert}

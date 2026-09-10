@@ -160,6 +160,7 @@ export function registerProfileRoutes(app: express.Application) {
     "membership_start_date",
     "company_name", "company_registration", "company_subtitle",
     "company_phone", "company_email", "company_logo_url",
+    "signature_url",
   ] as const;
 
   app.put("/api/user", async (req, res) => {
@@ -226,6 +227,59 @@ export function registerProfileRoutes(app: express.Application) {
       { $set: { company_logo_url: logoUrl, company_logo_storage_key: key, updated_at: new Date().toISOString() } },
     );
     res.json({ company_logo_url: logoUrl });
+  });
+
+  // ── Signature upload ───────────────────────────────────────────────────────
+  // The inspector signature stamped onto generated inspection documents. Kept on
+  // the user rather than per print template: a user has one signature, and the
+  // renderer falls back to it when a template's signature section carries no
+  // imageSrc of its own, so the layout editor can still override it per template.
+  app.post("/api/profile/signature", avatarUpload.single("signature"), async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+    if (!req.file) { res.status(400).json({ error: "no_file" }); return; }
+    if (!req.file.mimetype.startsWith("image/")) {
+      res.status(400).json({ error: "only_images_allowed" });
+      return;
+    }
+
+    const {
+      publicBucketEnabled,
+      uploadBufferToPublicSpaces,
+      spacesEnabled,
+      uploadBufferToSpaces,
+    } = await import("../storage/spaces.js");
+
+    let signatureUrl: string;
+    const ext = extname(req.file.originalname).toLowerCase() || ".png";
+    const key = `images/${ctx.userId}/signature_${Date.now()}${ext}`;
+
+    if (publicBucketEnabled()) {
+      signatureUrl = await uploadBufferToPublicSpaces(req.file.buffer, key, req.file.mimetype);
+    } else if (spacesEnabled()) {
+      signatureUrl = await uploadBufferToSpaces(req.file.buffer, key, req.file.mimetype);
+    } else {
+      res.status(500).json({ error: "object_storage_not_configured" });
+      return;
+    }
+
+    await col("users").updateOne(
+      { _id: new ObjectId(ctx.userId) as any },
+      { $set: { signature_url: signatureUrl, signature_storage_key: key, updated_at: new Date().toISOString() } },
+    );
+    res.json({ signature_url: signatureUrl });
+  });
+
+  // Remove the stored signature. The object is left in place — templates that
+  // pinned this URL as their own imageSrc keep rendering.
+  app.delete("/api/profile/signature", async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+    await col("users").updateOne(
+      { _id: new ObjectId(ctx.userId) as any },
+      { $set: { signature_url: null, signature_storage_key: null, updated_at: new Date().toISOString() } },
+    );
+    res.json({ signature_url: null });
   });
 
   // ── Avatar upload ─────────────────────────────────────────────────────────

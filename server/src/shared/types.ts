@@ -113,6 +113,7 @@ export function serializeUser(doc: Record<string, any> | null | undefined) {
     company_phone: doc.company_phone ?? null,
     company_email: doc.company_email ?? null,
     company_logo_url: doc.company_logo_url ?? null,
+    signature_url: doc.signature_url ?? null,
   };
 }
 

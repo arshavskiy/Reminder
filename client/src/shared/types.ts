@@ -97,6 +97,7 @@ export interface User {
   company_phone?: string | null;
   company_email?: string | null;
   company_logo_url?: string | null;
+  signature_url?: string | null;
 }
 
 export interface Session {

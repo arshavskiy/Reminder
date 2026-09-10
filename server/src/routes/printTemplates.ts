@@ -49,6 +49,9 @@ async function getEngineerData(userId: string, reportTypeKey?: string | null): P
             company_name: companyName,
             company_registration: user?.company_registration || "",
             engineer_address: user?.address || "",
+            // Fallback for a signature section that carries no imageSrc of its
+            // own. Templates that pin their own signature still win.
+            user_signature_url: user?.signature_url || "",
         };
     } catch {
         return {};

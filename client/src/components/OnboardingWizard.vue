@@ -312,9 +312,20 @@ async function finish() {
     }
 
     // 3. Upload signature if selected
+    // Goes to the same endpoint as the profile page, which stores the URL on the
+    // user. The previous call uploaded to object storage but dropped the
+    // returned URL on the floor, so the signature was never referenced by
+    // anything and never appeared on a generated document.
     if (sigFile.value) {
       try {
-        await api.templates.uploadUserAsset(sigFile.value, "signature");
+        const fd = new FormData();
+        fd.append("signature", sigFile.value);
+        const res = await fetch(`${SERVER}/api/profile/signature`, {
+          method: "POST",
+          credentials: "include",
+          body: fd,
+        });
+        if (!res.ok) throw new Error(String(res.status));
       } catch {
         failedUploads.push("החתימה");
       }

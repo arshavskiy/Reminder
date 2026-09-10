@@ -284,6 +284,49 @@
                 </n-button>
               </div>
             </div>
+            <div class="info-row info-row--top">
+              <span class="info-label">חתימה</span>
+              <div class="logo-upload">
+                <img
+                  v-if="signatureUrl"
+                  :src="signatureUrl"
+                  class="logo-upload__preview logo-upload__preview--signature"
+                  alt="חתימה"
+                />
+                <input
+                  ref="signatureInput"
+                  type="file"
+                  accept="image/*"
+                  class="visually-hidden"
+                  @change="uploadSignature"
+                />
+                <div class="signature-actions">
+                  <n-button
+                    size="small"
+                    secondary
+                    :loading="uploadingSignature"
+                    @click="(signatureInput as HTMLInputElement)?.click()"
+                  >
+                    <template #icon>
+                      <n-icon :component="ImageOutline" />
+                    </template>
+                    {{ signatureUrl ? 'החלף חתימה' : 'העלה חתימה' }}
+                  </n-button>
+                  <n-button
+                    v-if="signatureUrl"
+                    size="small"
+                    quaternary
+                    :disabled="uploadingSignature"
+                    @click="removeSignature"
+                  >
+                    הסר
+                  </n-button>
+                </div>
+                <span class="info-hint">
+                  תופיע בתסקירים שתפיקו. תבנית עם חתימה משלה גוברת על זו.
+                </span>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1378,7 +1421,6 @@
                 <p v-if="plan.yearlyPrice" class="upgrade-card__terms">
                   בתשלום שנתי: ₪{{ plan.yearlyPrice.toLocaleString() }} לשנה · או ₪{{ plan.price }} בחיוב חודשי
                 </p>
-                <p class="upgrade-card__vat">המחירים אינם כוללים מע״מ (18%)</p>
                 <ul class="upgrade-card__features">
                   <li v-for="feature in plan.features" :key="feature">
                     <n-icon :component="CheckmarkCircleOutline" :size="14"/>
@@ -1872,6 +1914,55 @@ async function uploadCompanyLogo(e: Event) {
 }
 
 const companyLogoInput = ref<HTMLInputElement | null>(null);
+
+// ── Signature ────────────────────────────────────────────────────────────────
+// One signature per user, stamped onto generated inspection documents. A print
+// template that pins its own signature image still overrides this.
+const signatureInput = ref<HTMLInputElement | null>(null);
+const uploadingSignature = ref(false);
+const signatureUrl = computed(() => engineerProfile.value?.signature_url ?? null);
+
+async function uploadSignature(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  const form = new FormData();
+  form.append("signature", file);
+  uploadingSignature.value = true;
+  try {
+    const res = await fetch(`${SERVER}/api/profile/signature`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    authStore.patch({signature_url: data.signature_url});
+    message.success("החתימה הועלתה");
+  } catch {
+    message.error("שגיאה בהעלאת החתימה");
+  } finally {
+    uploadingSignature.value = false;
+  }
+}
+
+async function removeSignature() {
+  uploadingSignature.value = true;
+  try {
+    const res = await fetch(`${SERVER}/api/profile/signature`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    authStore.patch({signature_url: null});
+    message.success("החתימה הוסרה");
+  } catch {
+    message.error("שגיאה בהסרת החתימה");
+  } finally {
+    uploadingSignature.value = false;
+  }
+}
 
 // ── Statistics ───────────────────────────────────────────────────────────────
 const inspectionStats = ref({ total: 0, completed: 0, pending: 0, monthly: 0 });
@@ -2857,6 +2948,18 @@ function showGoogleConnectionErrorFromRoute() {
   gap: 8px;
   flex: 1;
   min-width: 0;
+}
+.signature-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+/* Signatures are usually wide and thin, and often on a transparent or white
+   ground — give them a light plate so a dark-theme preview stays legible. */
+.logo-upload__preview--signature {
+  max-height: 48px;
+  max-width: 220px;
+  background: #ffffff;
 }
 .logo-upload__preview {
   max-height: 56px;
