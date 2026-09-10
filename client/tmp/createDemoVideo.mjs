@@ -44,7 +44,7 @@ async function completeProfile() {
   await page.locator(".n-form-item").filter({hasText: "שם חברה לתסקירים"}).locator("input").fill("אופק בדיקות והנדסה"); await page.getByPlaceholder("בדיקות בטיחות למתקני הרמה ומכלי לחץ").fill("בדיקות בטיחות, תסקירים ותזכורות תקופתיות"); await page.getByPlaceholder("052-8195650").fill("0586281637"); await page.getByPlaceholder("name@company.com").fill("office@ofek-demo.co.il");
   await page.getByRole("dialog").locator('input[type="file"]').setInputFiles(logoPath); await caption("העלאת לוגו החברה", 800); await page.getByRole("button", {name: "הבא"}).click(); await pause(450);
   await page.getByRole("dialog").locator('input[type="file"]').setInputFiles(signaturePath); await caption("העלאת חתימה למסמכים", 800); await page.getByRole("button", {name: /סיום והתחלה/}).click();
-  await page.waitForURL(/dashboard/, {timeout: 15000}); await pause(1000);
+  await page.getByRole("dialog").waitFor({state: "hidden", timeout: 20000}); await pause(1000);
 }
 
 async function createInspection(item, index) {
