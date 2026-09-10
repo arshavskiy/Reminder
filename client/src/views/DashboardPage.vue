@@ -46,7 +46,7 @@
         <!--            {{ gmailInspectionLoading ? "מייבא מ-Gmail…" : "חפש וייבא תסקירים מ-Gmail" }}-->
         <!--          </span>-->
         <!--        </button>-->
-        <DocumentDropStrip class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
+        <DocumentDropStrip v-if="documentImportAllowed" class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
       </div>
 
       <!-- Quick stats — small chips line, easy to scan -->
@@ -226,6 +226,7 @@ import {
 import {useDashboardStore} from "../stores/dashboard.js";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useAuthStore} from "../stores/auth.js";
+import {planAllowsDocumentImport, resolveUserPlan} from "../shared/pricingPlans.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {useUserSettingsStore} from "../stores/userSettings.js";
 import type {ExpiryCalendarItem} from "../services/apiService.js";
@@ -245,6 +246,9 @@ const showHydraulicModal = ref(false);
 const store = useDashboardStore();
 const remindersStore = useRemindersStore();
 const authStore = useAuthStore();
+// Hidden entirely on a plan without file import — the digital plan enters its
+// data through the forms, so a drop strip there has nothing to accept.
+const documentImportAllowed = computed(() => planAllowsDocumentImport(resolveUserPlan(authStore.user)));
 const featuresStore = useFeaturesStore();
 const userSettingsStore = useUserSettingsStore();
 const router = useRouter();

@@ -1,4 +1,4 @@
-export type PlanId = "free" | "trial" | "basic" | "business";
+export type PlanId = "free" | "trial" | "digital" | "basic" | "business";
 
 export interface TierFeatureFlags {
   gmailInspectionHistoryMonths: number | null;
@@ -8,6 +8,15 @@ export interface TierFeatureFlags {
   automaticEmailReminders: boolean;
   automaticMonthlyReports: boolean;
   excelExport: boolean;
+  /**
+   * Whether the account may keep files at all — object storage, local disk, or
+   * a Gmail import that pulls attachments in. False on the digital plan, whose
+   * whole premise is that nothing is uploaded: the user types the details and
+   * the app generates the inspection documents and reminders from them.
+   */
+  fileStorage: boolean;
+  /** Whether the account may import documents from files (upload, Gmail, OCR/AI extraction). */
+  documentImport: boolean;
   /** null = unlimited */
   maxUsers: number | null;
   /** null = unlimited */
@@ -23,6 +32,11 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     automaticEmailReminders: false,
     automaticMonthlyReports: false,
     excelExport: false,
+    // Free keeps fileStorage true: object storage for free accounts is already
+    // opted out via the per-user s3_store_* settings, and flipping this flag
+    // would also strip their local-disk copies. Only digital is storage-free.
+    fileStorage: true,
+    documentImport: true,
     maxUsers: 1,
     maxEmailAccounts: 0,
   },
@@ -37,8 +51,29 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     automaticEmailReminders: true,
     automaticMonthlyReports: true,
     excelExport: true,
+    fileStorage: true,
+    documentImport: true,
     maxUsers: 2,
     maxEmailAccounts: 2,
+  },
+  // Manual-only tier: no upload, no Gmail import, no OCR/AI — so nothing is ever
+  // written to object storage and nothing costs per-document AI spend. What the
+  // user gets is the record keeping: clients, equipment, generated inspection
+  // documents and the reminder schedule, all typed in by hand. With no storage
+  // or extraction cost per document there is nothing to meter, so the quotas are
+  // unlimited (see documentImportQuota / reminderQuota).
+  digital: {
+    gmailInspectionHistoryMonths: 0,
+    gmailInvoiceHistoryMonths: 0,
+    googleDriveSync: false,
+    googleCalendarSync: false,
+    automaticEmailReminders: true,
+    automaticMonthlyReports: true,
+    excelExport: true,
+    fileStorage: false,
+    documentImport: false,
+    maxUsers: 2,
+    maxEmailAccounts: 0,
   },
   // Invoice backfill stays a business feature, so basic gets none.
   basic: {
@@ -49,6 +84,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     automaticEmailReminders: true,
     automaticMonthlyReports: true,
     excelExport: true,
+    fileStorage: true,
+    documentImport: true,
     maxUsers: 2,
     maxEmailAccounts: 2,
   },
@@ -63,6 +100,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     automaticEmailReminders: true,
     automaticMonthlyReports: true,
     excelExport: true,
+    fileStorage: true,
+    documentImport: true,
     maxUsers: null,
     maxEmailAccounts: null,
   },
@@ -75,12 +114,15 @@ export const PLAN_GATE_MESSAGES = {
   excelExport: "ייצוא לאקסל זמין במסלולים בסיסי ועסקי בלבד.",
   extraUsers: "הוספת משתמשים זמינה במסלולים בסיסי ועסקי בלבד.",
   extraEmailAccounts: "חיבור חשבונות דוא״ל נוספים זמין במסלולים בסיסי ועסקי בלבד.",
+  fileStorage: "שמירת קבצים אינה זמינה במסלול הדיגיטלי. שדרגו למסלול בסיסי או עסקי כדי להעלות ולשמור מסמכים.",
+  documentImport: "יבוא מסמכים מקובץ או מ-Gmail אינו זמין במסלול הדיגיטלי. במסלול זה הנתונים מוזנים ידנית.",
 } as const;
 
 export function normalizePlanId(planOrRole: string | null | undefined): PlanId {
   const value = String(planOrRole ?? "").trim().toLowerCase();
   if (value === "business" || value === "admin") return "business";
   if (value === "basic" || value === "pro") return "basic";
+  if (value === "digital") return "digital";
   if (value === "trial") return "trial";
   return "free";
 }
@@ -138,6 +180,16 @@ export function planAllowsAutomaticMonthlyReports(planOrRole: string | null | un
 
 export function planAllowsExcelExport(planOrRole: string | null | undefined): boolean {
   return tierFeatureFlags(planOrRole).excelExport;
+}
+
+/** Whether this plan may persist files (object storage or disk) at all. */
+export function planAllowsFileStorage(planOrRole: string | null | undefined): boolean {
+  return tierFeatureFlags(planOrRole).fileStorage;
+}
+
+/** Whether this plan may import documents from files — upload, Gmail, OCR/AI. */
+export function planAllowsDocumentImport(planOrRole: string | null | undefined): boolean {
+  return tierFeatureFlags(planOrRole).documentImport;
 }
 
 export function tierFeatureFlags(planOrRole: string | null | undefined): TierFeatureFlags {

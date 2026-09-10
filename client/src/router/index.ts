@@ -22,7 +22,11 @@ import {useFeaturesStore} from "../stores/features.js";
 import {type FeatureKey, FEATURES} from "../shared/features.js";
 import {normalizePlanId, type PlanId, resolveUserPlan} from "../shared/pricingPlans.js";
 
-const PLAN_RANK: Record<PlanId, number> = {free: 0, basic: 1, trial: 1, business: 2};
+// Digital sits at the same rank as basic: it is a paid plan with the same record
+// keeping — clients, equipment, reminders — and differs only in that it cannot
+// import or store files. Those are gated by the documentImport/fileStorage
+// flags, not by rank, so ranking it below basic would wrongly close pages it pays for.
+const PLAN_RANK: Record<PlanId, number> = {free: 0, digital: 1, basic: 1, trial: 1, business: 2};
 
 export const router = createRouter({
     history: createWebHistory(),

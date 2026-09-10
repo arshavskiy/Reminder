@@ -9,7 +9,7 @@ import { generateState, generateCodeVerifier, generateCodeChallenge } from "../a
 import { importFile, type PipelineOptions } from "../pipeline/importer";
 import { logger } from "../logger";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
-import { featureFlagsForUser, tierFeatureFlags } from "../plans/tierFeatures";
+import { featureFlagsForUser, planAllowsDocumentImport, PLAN_GATE_MESSAGES, tierFeatureFlags } from "../plans/tierFeatures";
 import { loadTemplate } from "../templates/seedTemplates";
 import {
   assertDocumentImportQuota,
@@ -113,6 +113,13 @@ export function registerGmailRoutes(app: express.Application) {
     const codeVerifier = generateCodeVerifier();
 
       const purpose = googlePermissionPurpose(req.query.purpose);
+    // Requesting the Gmail scope only makes sense on a plan that may import
+    // documents from mail; a manual-entry plan should never reach the consent
+    // screen for it. "drive" is left alone here — Drive has its own plan gate.
+    if (purpose !== "drive" && !planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+      return;
+    }
     await col("oauth_states").insertOne({
       state,
       code_verifier: codeVerifier,
@@ -281,6 +288,11 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
+    if (!planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+      return;
+    }
+
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
@@ -344,6 +356,11 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
+    if (!planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+      return;
+    }
+
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
 
@@ -378,6 +395,11 @@ export function registerGmailRoutes(app: express.Application) {
 
     const { messageId, attachmentId, filename, templateId } = req.body;
     if (!messageId || !attachmentId) { res.status(400).json({ error: "messageId and attachmentId required" }); return; }
+
+    if (!planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+      return;
+    }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
@@ -416,6 +438,11 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+
+    if (!planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+      return;
+    }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
@@ -510,6 +537,11 @@ export function registerGmailRoutes(app: express.Application) {
     const cookieHeader = req.headers.cookie ?? undefined;
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+
+    if (!planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+      return;
+    }
 
     const accessToken = await resolveGmailToken(ctx.userId);
     if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }

@@ -74,10 +74,10 @@ async function main() {
   }
 
   const planArg = parseArg("plan") ?? DEFAULT_NEW_USER_PLAN;
-  if (!["free", "trial", "basic", "business"].includes(planArg)) {
+  if (!["free", "trial", "digital", "basic", "business"].includes(planArg)) {
     throw new Error(`Invalid plan "${planArg}". Use free, trial, basic, or business.`);
   }
-  const plan = planArg as "free" | "trial" | "basic" | "business";
+  const plan = planArg as "free" | "trial" | "digital" | "basic" | "business";
 
   // The 30-day trial window starts when the user actually clicks the magic
   // link (see /auth/magic), not when this script creates the account — a

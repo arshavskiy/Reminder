@@ -53,10 +53,11 @@ async function auth(req: express.Request, res: express.Response) {
   }
 }
 
-function normalizeSubscriptionPlan(plan: string | null | undefined): "free" | "basic" | "business" {
+function normalizeSubscriptionPlan(plan: string | null | undefined): "free" | "digital" | "basic" | "business" {
     const value = String(plan ?? "").trim().toLowerCase();
     if (value === "admin" || value === "business") return "business";
     if (value === "pro" || value === "basic") return "basic";
+    if (value === "digital") return "digital";
     return "free";
 }
 

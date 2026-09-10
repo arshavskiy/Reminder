@@ -3,7 +3,7 @@ import {col} from "../db/db";
 import {ensureUserSettingsWithEntitlements, type PlanEntitlements} from "./planEntitlements";
 import type {PlanId} from "./tierFeatures";
 
-export const VALID_PLAN_IDS: PlanId[] = ["free", "basic", "business"];
+export const VALID_PLAN_IDS: PlanId[] = ["free", "digital", "basic", "business"];
 
 export type TierUpdateResult = {
   user: {
@@ -17,7 +17,7 @@ export type TierUpdateResult = {
 
 export function parsePlanId(value: unknown): PlanId | null {
   const raw = String(value ?? "").trim().toLowerCase();
-  if (raw === "free" || raw === "basic" || raw === "business") return raw;
+  if (raw === "free" || raw === "digital" || raw === "basic" || raw === "business") return raw;
   return null;
 }
 

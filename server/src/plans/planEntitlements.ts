@@ -6,6 +6,7 @@ import {reminderLimit} from "../quotas/reminderQuota";
 import {
   featureFlagsForUser,
   normalizePlanId,
+  tierFeatureFlags,
   TRIAL_DAYS,
   type PlanId,
   type TierFeatureFlags,
@@ -107,8 +108,10 @@ export function newUserSettingsBase(
   userId: string,
   user?: {plan?: string | null; role?: string | null} | null,
 ): Record<string, unknown> {
-  // Cloud storage is a paid feature — free accounts start with it off.
-  const cloudStorage = normalizePlanId(user?.plan ?? user?.role) !== "free";
+  // Cloud storage is a paid feature — free accounts start with it off, and the
+  // digital plan has no file storage at all (tierFeatureFlags.fileStorage).
+  const planKey = user?.plan ?? user?.role;
+  const cloudStorage = normalizePlanId(planKey) !== "free" && tierFeatureFlags(planKey).fileStorage;
   return {
     user_id: userId,
     theme: "light",

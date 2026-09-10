@@ -1553,6 +1553,7 @@ import {
   planAllowsGoogleDrive,
   planAllowsGoogleCalendar,
   planAllowsAutomaticEmailReminders,
+  planAllowsFileStorage,
   PLAN_GATE_MESSAGES,
   type PlanId,
 } from "../shared/pricingPlans.js";
@@ -1577,8 +1578,10 @@ const userSettings = ref<UserSettings | null>(null);
 // Unset means enabled: the settings row predates these fields for existing
 // users, and the server applies the same default.
 const savingCloudStorage = ref<"invoices" | "inspections" | null>(null);
-// Cloud storage is a paid feature — free accounts see the rows locked with an upsell.
-const cloudStorageAllowed = computed(() => currentPlanId.value !== "free");
+// Cloud storage is a paid feature — free accounts see the rows locked with an
+// upsell, and the digital plan has no file storage at all (fileStorage flag).
+const cloudStorageAllowed = computed(
+    () => currentPlanId.value !== "free" && planAllowsFileStorage(currentPlanId.value));
 const s3StoreInvoices = computed(() =>
     cloudStorageAllowed.value && userSettings.value?.s3_store_invoices !== false);
 const s3StoreInspections = computed(() =>

@@ -14,7 +14,7 @@
 import type {PlanId} from "./tierFeatures";
 
 /** Plans a signup can express interest in. Trial is the default, not a choice. */
-const PURCHASABLE_PLANS = new Set<PlanId>(["basic", "business"]);
+const PURCHASABLE_PLANS = new Set<PlanId>(["digital", "basic", "business"]);
 
 export type BillingPeriod = "monthly" | "yearly";
 

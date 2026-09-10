@@ -33,6 +33,7 @@ import {
     quotaCategoryFromTemplate,
 } from "../quotas/documentImportQuota";
 import {MAIN_DOCUMENTS_EXCLUDED_KINDS} from "../documents/documentVisibility";
+import {planAllowsDocumentImport, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -295,6 +296,11 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
+    if (!planAllowsDocumentImport(userPlan)) {
+      res.status(403).json({ error: PLAN_GATE_MESSAGES.documentImport, code: "plan_no_document_import" });
+      return;
+    }
+
     const body = req.body as { filePath?: string };
     if (!body.filePath) {
       res.status(400).json({ error: "filePath required" });
@@ -327,6 +333,11 @@ export function registerDocumentRoutes(app: express.Application) {
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    if (!planAllowsDocumentImport(userPlan)) {
+      res.status(403).json({ error: PLAN_GATE_MESSAGES.documentImport, code: "plan_no_document_import" });
       return;
     }
 

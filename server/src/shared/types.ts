@@ -62,7 +62,7 @@ export interface AppSettings {
 
 // Phase 2: Authentication types
 export type UserRole = "admin" | "pro" | "user";
-export type UserPlan = "free" | "trial" | "basic" | "business";
+export type UserPlan = "free" | "trial" | "digital" | "basic" | "business";
 
 export interface User {
   id: number;
@@ -145,7 +145,7 @@ export interface UserSettings {
   calendar_next_tests_only?: boolean;
   features?: Record<string, boolean> | null;
   plan_entitlements?: {
-    plan: "free" | "basic" | "business";
+    plan: "free" | "digital" | "basic" | "business";
     gmailInvoiceHistoryMonths: number | null;
     gmailInspectionHistoryMonths: number | null;
     googleDriveSync: boolean;

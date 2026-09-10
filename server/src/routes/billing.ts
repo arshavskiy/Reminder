@@ -1,5 +1,5 @@
 import express from "express";
-import {parsePlanId, updateUserTier} from "../plans/updateUserTier";
+import {parsePlanId, updateUserTier, VALID_PLAN_IDS} from "../plans/updateUserTier";
 import {logger} from "../logger";
 
 export function registerBillingRoutes(app: express.Application) {
@@ -23,7 +23,7 @@ export function registerBillingRoutes(app: express.Application) {
     };
     const plan = parsePlanId(body.plan ?? body.tier);
     if (!plan) {
-      res.status(400).json({error: "invalid_plan", validPlans: ["free", "basic", "business"]});
+      res.status(400).json({error: "invalid_plan", validPlans: VALID_PLAN_IDS});
       return;
     }
 

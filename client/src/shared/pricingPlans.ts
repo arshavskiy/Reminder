@@ -1,8 +1,9 @@
-export type PlanId = "free" | "trial" | "basic" | "business";
+export type PlanId = "free" | "trial" | "digital" | "basic" | "business";
 
 export const PLAN_LABELS: Record<PlanId, string> = {
     free: "הסתיים",
     trial: "ניסיון",
+    digital: "דיגיטלי",
     basic: "בסיסי",
     business: "עסקי",
 };
@@ -31,6 +32,13 @@ export interface TierFeatureFlags {
     automaticEmailReminders: boolean;
     automaticMonthlyReports: boolean;
     excelExport: boolean;
+    /**
+     * Whether the account may keep files at all — object storage or disk. False
+     * on the digital plan, which stores extracted data only.
+     */
+    fileStorage: boolean;
+    /** Whether the account may import documents from files (upload, Gmail, OCR/AI). */
+    documentImport: boolean;
     /** null = unlimited */
     maxUsers: number | null;
     /** null = unlimited */
@@ -64,8 +72,25 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
+        fileStorage: true,
+        documentImport: true,
         maxUsers: 2,
         maxEmailAccounts: 2,
+    },
+    // Manual entry only: no upload, no Gmail, no OCR/AI, nothing written to
+    // object storage. Quotas are unlimited because nothing costs per document.
+    digital: {
+        gmailInspectionHistoryMonths: 0,
+        gmailInvoiceHistoryMonths: 0,
+        googleDriveSync: false,
+        googleCalendarSync: false,
+        automaticEmailReminders: true,
+        automaticMonthlyReports: true,
+        excelExport: true,
+        fileStorage: false,
+        documentImport: false,
+        maxUsers: 2,
+        maxEmailAccounts: 0,
     },
     basic: {
         gmailInspectionHistoryMonths: 16,
@@ -75,6 +100,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
+        fileStorage: true,
+        documentImport: true,
         maxUsers: 2,
         maxEmailAccounts: 2,
     },
@@ -86,6 +113,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
+        fileStorage: true,
+        documentImport: true,
         maxUsers: null,
         maxEmailAccounts: null,
     },
@@ -98,6 +127,8 @@ export const PLAN_GATE_MESSAGES = {
     excelExport: "ייצוא לאקסל זמין במסלולים בסיסי ועסקי בלבד.",
     extraUsers: "הוספת משתמשים זמינה במסלולים בסיסי ועסקי בלבד.",
     extraEmailAccounts: "חיבור חשבונות דוא״ל נוספים זמין במסלולים בסיסי ועסקי בלבד.",
+    fileStorage: "שמירת קבצים אינה זמינה במסלול הדיגיטלי. שדרגו למסלול בסיסי או עסקי כדי להעלות ולשמור מסמכים.",
+    documentImport: "יבוא מסמכים מקובץ או מ-Gmail אינו זמין במסלול הדיגיטלי. במסלול זה הנתונים מוזנים ידנית.",
 } as const;
 
 export const PRICING_PAGE_URL = "https://remindocr.com/pricing";
@@ -116,6 +147,21 @@ export const PRICING_PLANS: PricingPlan[] = [
             "יבוא תסקירים של 16 חודשים האחרונים",
             "יצוא לאקסל ודוחות חודשיים",
             "סנכרון Google Drive",
+        ],
+    },
+    {
+        id: "digital",
+        name: "דיגיטלי",
+        price: 50,
+        period: "/ חודש",
+        blurb: "לניהול תסקירים ותזכורות בהזנה ידנית, ללא שמירת קבצים בענן.",
+        features: [
+            "תסקירים ותזכורות ללא הגבלה",
+            "הזנת נתונים ידנית — ללא העלאת קבצים",
+            "ניהול לקוחות וציוד",
+            "הפקת תסקירים לחתימה ושליחה",
+            "תזכורות אימייל אוטומטיות ללקוחות",
+            "יצוא לאקסל ודוחות חודשיים",
         ],
     },
     {
@@ -164,7 +210,7 @@ export function planFromRole(role: string | null | undefined): PlanId {
 
 export function resolveUserPlan(user: { plan?: string | null; role?: string | null } | null | undefined): PlanId {
     const raw = String(user?.plan ?? "").trim().toLowerCase();
-    if (raw === "free" || raw === "trial" || raw === "basic" || raw === "business") return raw;
+    if (raw === "free" || raw === "trial" || raw === "digital" || raw === "basic" || raw === "business") return raw;
     return planFromRole(user?.role);
 }
 
@@ -190,10 +236,21 @@ export function planAllowsExcelExport(planId: PlanId | string | null | undefined
     return tierFeatureFlags(planId).excelExport;
 }
 
+/** Whether this plan may persist files (object storage or disk) at all. */
+export function planAllowsFileStorage(planId: PlanId | string | null | undefined): boolean {
+    return tierFeatureFlags(planId).fileStorage;
+}
+
+/** Whether this plan may import documents from files — upload, Gmail, OCR/AI. */
+export function planAllowsDocumentImport(planId: PlanId | string | null | undefined): boolean {
+    return tierFeatureFlags(planId).documentImport;
+}
+
 export function normalizePlanId(planId: PlanId | string | null | undefined): PlanId {
     const plan = String(planId ?? "").trim().toLowerCase();
     if (plan === "business" || plan === "admin") return "business";
     if (plan === "basic" || plan === "pro") return "basic";
+    if (plan === "digital") return "digital";
     // Without this a trial resolved to "free", so every client-side plan check
     // treated a paying-in-waiting account as a lapsed one — and a minPlan list
     // containing "trial" collapsed to "free", admitting exactly the users it was

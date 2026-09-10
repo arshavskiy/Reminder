@@ -67,6 +67,10 @@ export function documentImportLimit(
 ): { limit: number | null; scope: DocumentImportQuota["scope"] } {
   const plan = normalizePlan(role);
   if (plan === "business") return { limit: null, scope: "unlimited" };
+  // Digital is manual entry only — no upload, no Gmail, no OCR/AI — so a
+  // document costs neither storage nor extraction and there is nothing worth
+  // metering. The plan is bounded by the import gate, not by a counter.
+  if (plan === "digital") return { limit: null, scope: "unlimited" };
   // Invoices get their own smaller lifetime allowance on trial. They arrive in
   // bulk from a Gmail sync, so without a separate cap a single import would
   // consume the whole document budget and leave no room for the inspections the
@@ -258,10 +262,11 @@ function documentQuotaCountFilter(
   return filter;
 }
 
-function normalizePlan(role: string | null | undefined): "free" | "trial" | "basic" | "business" {
+function normalizePlan(role: string | null | undefined): "free" | "trial" | "digital" | "basic" | "business" {
   const value = String(role ?? "").trim().toLowerCase();
   if (value === "admin" || value === "business") return "business";
   if (value === "pro" || value === "basic") return "basic";
+  if (value === "digital") return "digital";
   if (value === "trial") return "trial";
   return "free";
 }

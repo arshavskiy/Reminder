@@ -22,6 +22,7 @@ import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "../shared/printTemplateLayout.j
 import {generatePdfThumbnailForDocument} from "../documents/pdfThumbnail";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {incrementDocumentUsage, type DocumentUsageKind} from "../quotas/userUsageCounters";
+import {tierFeatureFlags} from "../plans/tierFeatures";
 import {
   assertDocumentImportQuota,
   type DocumentImportQuotaCategory,
@@ -475,9 +476,22 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
  * container means it is lost on redeploy — so the toggles default to on and an
  * unset value is treated as enabled. Only invoices and inspection reports are
  * configurable; everything else always uses cloud storage.
+ *
+ * A plan whose fileStorage flag is false overrides all of that and stores
+ * nothing, whatever the kind and whatever the toggles say.
  */
 async function userAllowsCloudStorage(userId: string | undefined, kind: string | null): Promise<boolean> {
   if (!userId) return true;
+
+  // A plan without fileStorage keeps nothing in object storage regardless of
+  // kind or of what the per-user toggles say. Checked before the settings read
+  // so a missing user_settings row cannot default such an account back to on.
+  const user = await col<any>("users").findOne(
+    { _id: new ObjectId(userId) } as any,
+    { projection: { plan: 1, role: 1 } } as any,
+  ).catch(() => null);
+  if (user && !tierFeatureFlags(user.plan ?? user.role).fileStorage) return false;
+
   if (kind !== "invoice" && kind !== "inspection_report") return true;
 
   const settings = await col<any>("user_settings").findOne(

@@ -163,8 +163,22 @@ export function registerUserSettingsRoutes(app: express.Application) {
     if (body.report_config !== undefined) patch.report_config = normalizeReportConfig(body.report_config);
     if (body.calendar_next_tests_only !== undefined) patch.calendar_next_tests_only = Boolean(body.calendar_next_tests_only);
     if (body.default_email_template_id !== undefined) patch.default_email_template_id = body.default_email_template_id ?? null;
-    if (body.s3_store_invoices !== undefined) patch.s3_store_invoices = Boolean(body.s3_store_invoices);
-    if (body.s3_store_inspection_reports !== undefined) patch.s3_store_inspection_reports = Boolean(body.s3_store_inspection_reports);
+    if (body.s3_store_invoices !== undefined || body.s3_store_inspection_reports !== undefined) {
+      // A plan without fileStorage cannot turn cloud storage back on: without
+      // this the toggles were writable straight from the request body, so a
+      // digital account could re-enable the storage its plan excludes.
+      const wantsStorage = Boolean(body.s3_store_invoices) || Boolean(body.s3_store_inspection_reports);
+      const entitlements = await persistPlanEntitlements(auth.userId);
+      if (wantsStorage && !entitlements.fileStorage) {
+        res.status(403).json({
+          error: "file_storage_plan_required",
+          message: PLAN_GATE_MESSAGES.fileStorage,
+        });
+        return;
+      }
+      if (body.s3_store_invoices !== undefined) patch.s3_store_invoices = Boolean(body.s3_store_invoices);
+      if (body.s3_store_inspection_reports !== undefined) patch.s3_store_inspection_reports = Boolean(body.s3_store_inspection_reports);
+    }
     const rawFeatures = body.features !== undefined ? body.features : body.features_json;
     if (rawFeatures !== undefined) {
       try {

@@ -204,7 +204,10 @@
     </div>
 
     <!-- Drop strip with inline upload + results modal -->
-    <div v-if="limitReached" class="drop-strip drop-strip--disabled">
+    <div v-if="!documentImportAllowed" class="drop-strip drop-strip--disabled">
+      <span>{{ PLAN_GATE_MESSAGES.documentImport }}</span>
+    </div>
+    <div v-else-if="limitReached" class="drop-strip drop-strip--disabled">
       <span>הגעת למגבלת {{ store.documentLimit }} סריקות</span>
     </div>
     <DocumentDropStrip v-else @quota-reached="onQuotaReached" @uploaded="store.fetch(undefined, true)" />
@@ -674,7 +677,7 @@ import {useAuthStore} from "../stores/auth.js";
 import {useRescanModalStore} from "../stores/rescanModal.js";
 import {api, type DriveExportJob} from "../services/apiService.js";
 import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "@shared/printTemplateLayout.js";
-import {planAllowsGoogleDrive, resolveUserPlan} from "../shared/pricingPlans.js";
+import {planAllowsDocumentImport, planAllowsGoogleDrive, PLAN_GATE_MESSAGES, resolveUserPlan} from "../shared/pricingPlans.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
 import PaginationBar from "../components/PaginationBar.vue";
@@ -715,6 +718,9 @@ const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 
 const isRegularUser = computed(() => authStore.user?.role === "user");
 const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
+// The digital plan has no file import at all — the drop strip is replaced with
+// the upsell rather than left to fail against the server's 403.
+const documentImportAllowed = computed(() => planAllowsDocumentImport(resolveUserPlan(authStore.user)));
 const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
 const quotaPercent = computed(() => {
   const limit = store.documentLimit;

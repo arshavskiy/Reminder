@@ -25,7 +25,7 @@ export function reminderLimit(role: string | null | undefined): {
   scope: ReminderQuota["scope"];
 } {
   const plan = normalizePlan(role);
-  if (plan === "business" || plan === "basic") return {limit: null, scope: "unlimited"};
+  if (plan === "business" || plan === "basic" || plan === "digital") return {limit: null, scope: "unlimited"};
   // Trials must be able to send reminders — that is the product being trialled —
   // so they are unmetered here and bounded by the 25-document import cap instead.
   if (plan === "trial") return {limit: null, scope: "unlimited"};
@@ -103,10 +103,11 @@ export function reminderQuotaErrorPayload(error: ReminderQuotaError) {
   };
 }
 
-function normalizePlan(role: string | null | undefined): "free" | "trial" | "basic" | "business" {
+function normalizePlan(role: string | null | undefined): "free" | "trial" | "digital" | "basic" | "business" {
   const value = String(role ?? "").trim().toLowerCase();
   if (value === "admin" || value === "business") return "business";
   if (value === "pro" || value === "basic") return "basic";
+  if (value === "digital") return "digital";
   if (value === "trial") return "trial";
   return "free";
 }
