@@ -1,16 +1,19 @@
 <template>
   <div class="page2">
     <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
-      <router-link class="documents-workspace-tabs__active" to="/documents">מסמכים</router-link>
-      <router-link to="/contracts">תסקירים</router-link>
+      <router-link class="documents-workspace-tabs__active" to="/documents">תסקירים</router-link>
       <router-link to="/quotes">הצעות מחיר</router-link>
     </nav>
     <PageHeader
       :count="store.total"
-      title="מסמכים"
-      subtitle="צפייה, סינון וניהול של כל המסמכים במערכת"
+      title="תסקירים"
+      subtitle="צפייה, סינון וניהול של כל התסקירים במערכת"
     >
       <template #hero>
+        <button class="rbtn rbtn--primary" type="button" @click="openNewInspection">
+          <n-icon :component="AddOutline" class="btn-icon"/>
+          תסקיר חדש
+        </button>
         <button
             v-if="authStore.isAdmin || true"
             :class="{ 'rbtn--loading': uploading }"
@@ -525,7 +528,7 @@
                   />
                   <n-tooltip v-if="row.quote_id">
                     <template #trigger>
-                      <button class="btn btn--ghost btn--xs icon-btn document-row-action document-row-action--quote" type="button" aria-label="פתח הצעת מחיר" @click="router.push('/quotes')">
+                      <button class="btn btn--ghost btn--xs icon-btn document-row-action document-row-action--quote" type="button" aria-label="פתח הצעת מחיר" @click="router.push(`/quotes/${row.quote_id}`)">
                         <n-icon :component="DocumentTextOutline" class="btn-icon" />
                       </button>
                     </template>
@@ -624,6 +627,12 @@
       @view-document="openDocumentFromModal"
       @create-template="onCreateTemplate"
     />
+    <HydraulicCheckModal
+      ref="newInspectionModalRef"
+      v-model:show="showNewInspection"
+      @created="handleInspectionCreated"
+      @updated="handleInspectionCreated"
+    />
     <MonthlyReportModal v-model:show="showMonthlyReport"/>
     <ReminderPreviewModal
       v-model:show="showReminderPreview"
@@ -656,6 +665,7 @@ import {
 import {
   ArrowDownOutline,
   ArrowUpOutline,
+  AddOutline,
   CloudUploadOutline,
   DocumentOutline,
   DocumentTextOutline,
@@ -705,6 +715,7 @@ import {
 import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.js";
 import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS, useConfirm} from "../composables/useConfirm.js";
 import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
+import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -779,6 +790,16 @@ const rescanModalState = computed(() => ({
 // ── Upload modal ───────────────────────────────────────────────────────────────
 const showUploadModal = ref(false);
 const uploadModalRef = ref<InstanceType<typeof UploadModal> | null>(null);
+const showNewInspection = ref(false);
+const newInspectionModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
+
+function openNewInspection() {
+  newInspectionModalRef.value?.open();
+}
+
+async function handleInspectionCreated() {
+  await store.fetch(undefined, true);
+}
 
 function openUploadModal() {
   showUploadModal.value = true;

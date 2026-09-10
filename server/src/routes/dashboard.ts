@@ -4,6 +4,7 @@ import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {getDataDir} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {mainDocumentsFilter} from "../documents/documentVisibility";
 
 export function registerDashboardRoutes(app: express.Application) {
   app.get("/api/dashboard/stats", async (req, res) => {
@@ -54,7 +55,7 @@ export function registerDashboardRoutes(app: express.Application) {
       recent_documents,
       upcoming_reminders_raw,
     ] = await Promise.all([
-      col("documents").countDocuments({ user_id: userId }),
+      col("documents").countDocuments(mainDocumentsFilter(userId)),
       col("clients").countDocuments({ user_id: userId }),
       col("contracts").countDocuments(isContractFilter),
       col("contracts").countDocuments({ status: "active", ...isContractFilter }),

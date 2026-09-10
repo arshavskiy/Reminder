@@ -32,7 +32,7 @@ import {
   getDocumentImportQuota,
     quotaCategoryFromTemplate,
 } from "../quotas/documentImportQuota";
-import {MAIN_DOCUMENTS_EXCLUDED_KINDS} from "../documents/documentVisibility";
+import {MAIN_DOCUMENTS_EXCLUDED_KINDS, mainDocumentsFilter} from "../documents/documentVisibility";
 import {planAllowsDocumentImport, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -394,14 +394,14 @@ export function registerDocumentRoutes(app: express.Application) {
           displayName = Buffer.from(file.originalname, "latin1").toString("utf8");
           if (displayName.includes("�")) displayName = file.originalname;
         } catch { /* keep original */ }
-        const beforeCount = await col("documents").countDocuments({ user_id: userId });
+        const beforeCount = await col("documents").countDocuments(mainDocumentsFilter(userId));
         const id = await importFile(destPath, undefined, userId, displayName, {
           ...pipelineOptions,
           queueProcessing: true,
           processingJobContext: { source: "upload" },
           startDelayMs: index * UPLOAD_START_STAGGER_MS,
         });
-        const afterCount = await col("documents").countDocuments({ user_id: userId });
+        const afterCount = await col("documents").countDocuments(mainDocumentsFilter(userId));
         ids.push(String(id));
         if (afterCount === beforeCount) duplicates.push(String(id));
       }

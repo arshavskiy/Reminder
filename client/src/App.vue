@@ -490,7 +490,7 @@ const allNav: Array<{
   feature?: FeatureKey;
 }> = [
   {label: "ראשי", key: "dashboard", minPlan: "expired", feature: FEATURES.pages.dashboard},
-  {label: "מסמכים", key: "documents", minPlan: "expired", feature: FEATURES.pages.documents},
+  {label: "תסקירים", key: "documents", minPlan: "expired", feature: FEATURES.pages.documents},
   {label: "תזכורות", key: "reminders", minPlan: "basic", feature: FEATURES.pages.reminders},
   {label: "דוחות", key: "reports", minPlan: "expired", feature: FEATURES.pages.reports},
   {label: "לקוחות", key: "clients", minPlan: "basic", feature: FEATURES.pages.clients},

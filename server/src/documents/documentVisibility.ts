@@ -15,6 +15,14 @@ export const NON_IMPORTED_GENERATED_DOCUMENT_KINDS = [
   ...BILLING_DOCUMENT_KINDS,
 ] as const;
 
+/** Mongo filter for documents shown and counted as regular documents. */
+export function mainDocumentsFilter(userId: string): Record<string, unknown> {
+  return {
+    user_id: userId,
+    document_kind: { $nin: [...MAIN_DOCUMENTS_EXCLUDED_KINDS] },
+  };
+}
+
 export function belongsInMainDocumentsWorkspace(kind: unknown): boolean {
   return !MAIN_DOCUMENTS_EXCLUDED_KINDS.includes(String(kind ?? "") as never);
 }

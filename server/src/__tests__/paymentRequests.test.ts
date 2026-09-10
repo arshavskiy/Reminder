@@ -8,8 +8,8 @@ const mocks = vi.hoisted(() => ({auth: vi.fn(), collections: {} as Record<string
 vi.mock("../db/db", () => ({col: (name: string) => mocks.collections[name]}));
 vi.mock("../auth/middleware", () => ({requireAuth: mocks.auth, HTTPException: class extends Error {constructor(public status: number, message: string) {super(message);}}}));
 vi.mock("../routes/printTemplates", () => ({renderHtmlPdf: vi.fn()}));
-vi.mock("../storage/spaces", () => ({spacesEnabled: () => false, uploadToSpaces: vi.fn()}));
-vi.mock("../storage/gdrive", () => ({syncDocumentToDrive: vi.fn()}));
+vi.mock("../storage/spaces", () => ({spacesEnabled: () => false, uploadToSpaces: vi.fn(), deleteFromSpaces: vi.fn()}));
+vi.mock("../storage/gdrive", () => ({syncDocumentToDrive: vi.fn(), resolveDriveToken: vi.fn(), trashDriveFile: vi.fn()}));
 vi.mock("../documents/fileResolver", () => ({resolveDocumentFilePath: vi.fn()}));
 vi.mock("../reminders/emailSender", () => ({sendEmailWithAttachments: mocks.send}));
 vi.mock("../contracts/contractEmail", () => ({parseObjectRecord: (value: unknown) => value || {}}));
@@ -80,8 +80,8 @@ const requestId = new ObjectId();
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.auth.mockResolvedValue({userId});
-  for (const name of ["payment_requests", "inspection_pricebooks", "contracts", "engineer_profiles", "users", "clients"]) {
-    mocks.collections[name] = {findOne: vi.fn(), findOneAndUpdate: vi.fn(), updateOne: vi.fn(), insertOne: vi.fn()};
+  for (const name of ["payment_requests", "inspection_pricebooks", "contracts", "engineer_profiles", "users", "clients", "documents", "document_clients"]) {
+    mocks.collections[name] = {findOne: vi.fn(), findOneAndUpdate: vi.fn(), updateOne: vi.fn(), insertOne: vi.fn(), deleteOne: vi.fn(), deleteMany: vi.fn()};
   }
 });
 afterEach(async () => { if (server) await new Promise<void>(resolve => {server!.close(() => resolve());server!.closeAllConnections();}); server=undefined; });
@@ -140,6 +140,23 @@ describe("payment request authorization and settlement", () => {
     mocks.collections.payment_requests.findOne.mockResolvedValue(null);const url=await endpoint();
     expect((await fetch(`${url}/requests/${requestId}/pdf`)).status).toBe(404);
     expect(mocks.collections.payment_requests.findOne).toHaveBeenCalledWith({_id:requestId,user_id:userId});
+  });
+  it("returns a single owned quote", async () => {
+    mocks.collections.payment_requests.findOne.mockResolvedValue({_id: requestId, user_id: userId, documentKind: "quote", number: "001"});
+    const url = await endpoint();
+    const response = await fetch(`${url}/requests/${requestId}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({number: "001", documentKind: "quote"});
+  });
+  it("deletes a quote and its generated document", async () => {
+    const documentId = new ObjectId();
+    mocks.collections.payment_requests.findOne.mockResolvedValue({_id: requestId, user_id: userId, documentId: documentId.toString()});
+    mocks.collections.documents.findOne.mockResolvedValue({_id: documentId, user_id: userId});
+    const url = await endpoint();
+    const response = await fetch(`${url}/requests/${requestId}`, {method: "DELETE"});
+    expect(response.status).toBe(200);
+    expect(mocks.collections.payment_requests.deleteOne).toHaveBeenCalledWith({_id: requestId, user_id: userId});
+    expect(mocks.collections.documents.deleteOne).toHaveBeenCalledWith({_id: documentId, user_id: userId});
   });
   it("records payments atomically with balance and duplicate guards", async () => {
     mocks.collections.payment_requests.findOne.mockResolvedValue({_id:requestId,payments:[]});

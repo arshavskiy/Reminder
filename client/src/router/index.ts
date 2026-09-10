@@ -4,7 +4,6 @@ import DocumentsPage from "../views/DocumentsPage.vue";
 import DocumentDetailPage from "../views/DocumentDetailPage.vue";
 import ClientsPage from "../views/ClientsPage.vue";
 import ClientDetailPage from "../views/ClientDetailPage.vue";
-import ContractsPage from "../views/ContractsPage.vue";
 import RemindersPage from "../views/RemindersPage.vue";
 import SearchPage from "../views/SearchPage.vue";
 import ProfilePage from "../views/ProfilePage.vue";
@@ -86,8 +85,9 @@ export const router = createRouter({
             component: ClientDetailPage,
             meta: {feature: FEATURES.pages.clients, requirePlan: "basic"}
         },
-        {path: "/contracts", component: ContractsPage, meta: {feature: FEATURES.pages.contracts}},
+        {path: "/contracts", redirect: "/documents"},
         {path: "/quotes", component: () => import("../views/QuotesPage.vue"), meta: {feature: FEATURES.pages.contracts}},
+        {path: "/quotes/:id", component: () => import("../views/QuoteDetailPage.vue"), meta: {feature: FEATURES.pages.contracts}},
         {
             path: "/contracts/:contractId/draft",
             component: () => import("../views/ContractDraftPage.vue"),

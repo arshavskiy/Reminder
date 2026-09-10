@@ -489,7 +489,7 @@ async function saveGeneratedPdfDocument(args: {
 
   const signedUrlExpiresAt = downloadUrl ? new Date(Date.now() + SIGNED_URL_TTL * 1000) : null;
   const contractId = typeof meta.contract_id === "string" && meta.contract_id.trim() ? meta.contract_id.trim() : null;
-  const clientId = typeof meta.client_id === "string" && meta.client_id.trim() ? meta.client_id.trim() : null;
+  let clientId = typeof meta.client_id === "string" && meta.client_id.trim() ? meta.client_id.trim() : null;
     const reportNumber = reportNumberFromFields(data) ?? reportNumberFromFileName(fileName);
     const composeEmail = firstTrimmedEmail(data.client_email, data.contact_email, data.email);
   const docRecord: Record<string, any> = {
@@ -524,6 +524,13 @@ async function saveGeneratedPdfDocument(args: {
             : Promise.resolve(null),
         col("documents").findOne({user_id: userId, file_hash: fileHash}),
     ]);
+    // The wizard always creates the contract first. Some clients omit client_id
+    // from the final PDF request, so recover it from that authoritative relation.
+    // Without this fallback the PDF exists, but disappears from the client page.
+    if (!clientId && (contract as any)?.client_id) {
+        clientId = String((contract as any).client_id);
+        docRecord.client_id = clientId;
+    }
     const byId = new Map<string, any>();
     for (const doc of matches) byId.set(String(doc._id), doc);
     if (hashDoc) byId.set(String(hashDoc._id), hashDoc);

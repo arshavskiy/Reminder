@@ -42,13 +42,10 @@ export function registerClientRoutes(app: express.Application) {
     ]);
 
     const clientIds = rows.map((row) => String(row._id));
-    const docCounts = clientIds.length
-        ? await col("document_clients").aggregate([
-          {$match: {client_id: {$in: clientIds}}},
-          {$group: {_id: "$client_id", n: {$sum: 1}}},
-        ]).toArray()
-        : [];
-    const docCountById = new Map(docCounts.map((row: any) => [String(row._id), Number(row.n) || 0]));
+    const docCountById = new Map<string, number>();
+    await Promise.all(clientIds.map(async (clientId) => {
+      docCountById.set(clientId, (await findClientDocuments(userId, clientId)).length);
+    }));
 
     res.json({
       rows: rows.map((row) => ({
@@ -113,13 +110,13 @@ export function registerClientRoutes(app: express.Application) {
     }
 
     const id = req.params.id;
-    const [doc_count, contract_count, open_reminder_count] = await Promise.all([
-      col("document_clients").countDocuments({ client_id: id }),
+    const [clientDocuments, contract_count, open_reminder_count] = await Promise.all([
+      findClientDocuments(userId, id),
       col("contracts").countDocuments({ client_id: id, user_id: userId }),
       col("reminders").countDocuments({ client_id: id, status: "pending", user_id: userId }),
     ]);
 
-    res.json({ ...flatClient(client), doc_count, contract_count, open_reminder_count });
+    res.json({ ...flatClient(client), doc_count: clientDocuments.length, contract_count, open_reminder_count });
   });
 
   // POST /api/clients
@@ -333,23 +330,48 @@ export function registerClientRoutes(app: express.Application) {
       return;
     }
 
-    const links = await col("document_clients")
-      .find({ client_id: req.params.id })
-      .toArray();
-
-    const docIds = links.map((l: any) => l.document_id);
-    const docs = docIds.length
-      ? await col("documents")
-          .find({
-            _id: { $in: docIds.map((d: string) => { try { return new ObjectId(d); } catch { return d; } }) },
-            user_id: userId,
-          } as any)
-          .sort({ import_date: -1 })
-          .toArray()
-      : [];
-
+    const docs = await findClientDocuments(userId, req.params.id);
     res.json(docs.map(flatClientDocument));
   });
+}
+
+/**
+ * A document can be associated with a client directly, through document_clients,
+ * or through the contract created from it. Older generated PDFs only populated
+ * the contract relation, so treating document_clients as the sole source hid
+ * valid documents from the client page.
+ */
+async function findClientDocuments(userId: string, clientId: string): Promise<any[]> {
+  const clientIds: any[] = [clientId];
+  try { clientIds.push(new ObjectId(clientId)); } catch { /* string id */ }
+
+  const [links, contracts, directDocuments] = await Promise.all([
+    col("document_clients").find({ client_id: { $in: clientIds } } as any).project({ document_id: 1 }).toArray(),
+    col("contracts").find({ user_id: userId, client_id: { $in: clientIds } } as any).project({ document_id: 1 }).toArray(),
+    col("documents").find({ user_id: userId, client_id: { $in: clientIds } } as any).toArray(),
+  ]);
+
+  const documentsById = new Map(directDocuments.map((document: any) => [String(document._id), document]));
+  const linkedIds = [...links, ...contracts]
+    .map((row: any) => row.document_id)
+    .filter(Boolean);
+  const missingIds = linkedIds.filter((id: any) => !documentsById.has(String(id)));
+
+  if (missingIds.length) {
+    const idVariants = missingIds.flatMap((id: any) => {
+      const variants: any[] = [id, String(id)];
+      try { variants.push(new ObjectId(String(id))); } catch { /* non ObjectId */ }
+      return variants;
+    });
+    const linkedDocuments = await col("documents")
+      .find({ _id: { $in: idVariants }, user_id: userId } as any)
+      .toArray();
+    for (const document of linkedDocuments) documentsById.set(String(document._id), document);
+  }
+
+  return [...documentsById.values()].sort((a: any, b: any) =>
+    String(b.import_date ?? b.created_at ?? "").localeCompare(String(a.import_date ?? a.created_at ?? ""))
+  );
 }
 
 async function findClientByPhone(userId: string, phone: unknown): Promise<any | null> {

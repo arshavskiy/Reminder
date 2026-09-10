@@ -12,7 +12,10 @@ export interface InspectionRate {
 }
 export interface PaymentRequest {
   _id: string; number?: string; documentKind?: "quote" | "payment_request" | "service_specification"; reportNumber: string; reportType: string; status: string;
-  customer: {name: string; email: string}; dueDate: string; totalCents: number; paidCents: number;
+  customer: {name: string; email: string; registration?: string}; dueDate: string; totalCents: number; subtotalCents?: number; vatCents?: number; vatBasisPoints?: number; paidCents: number;
+  issuer?: {name?: string; subtitle?: string; registration?: string; email?: string; phone?: string; address?: string; logoUrl?: string};
+  lines?: {rateId?: string; section?: string; label?: string; quantity?: number; unitCents?: number; totalCents?: number}[];
+  notes?: string; createdAt?: string; issuedAt?: string; lastSentTo?: string; lastSendAt?: string;
   storage?: {local: string; object: string; drive: string}; sendState?: string;
   payments: {amountCents: number; method: string; paidDate: string; receiptStatus: string}[];
 }
@@ -28,11 +31,13 @@ async function request<T>(path: string, method = "GET", body?: unknown): Promise
 }
 export const paymentService = {
   list: () => request<PaymentData>("/"),
+  get: (id: string) => request<PaymentRequest>(`/requests/${id}`),
   saveRates: (rates: InspectionRate[]) => request("/rates", "PUT", {rates}),
   create: (body: unknown) => request<PaymentRequest>("/requests", "POST", body),
   issue: (id: string) => request<PaymentRequest>(`/requests/${id}/issue`, "POST", {}),
   archive: (id: string) => request<PaymentRequest>(`/requests/${id}/archive`, "POST", {}),
   send: (id: string, email: string, sendId: string) => request(`/requests/${id}/send`, "POST", {email, sendId}),
+  delete: (id: string) => request<{ok: boolean}>(`/requests/${id}`, "DELETE"),
   payment: (id: string, body: unknown) => request<PaymentRequest>(`/requests/${id}/payments`, "POST", body),
   pdf: (id: string) => `${base}/requests/${id}/pdf`,
 };

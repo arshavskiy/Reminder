@@ -1,15 +1,15 @@
 import express from "express";
 import {ObjectId} from "mongodb";
 import {createHash} from "node:crypto";
-import {mkdir, readFile, writeFile} from "node:fs/promises";
+import {mkdir, readFile, unlink, writeFile} from "node:fs/promises";
 import {join} from "node:path";
 import {col} from "../db/db";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getDataDir} from "../settings";
 import {parseObjectRecord} from "../contracts/contractEmail";
 import {renderHtmlPdf} from "../routes/printTemplates";
-import {spacesEnabled, uploadToSpaces} from "../storage/spaces";
-import {syncDocumentToDrive} from "../storage/gdrive";
+import {deleteFromSpaces, spacesEnabled, uploadToSpaces} from "../storage/spaces";
+import {resolveDriveToken, syncDocumentToDrive, trashDriveFile} from "../storage/gdrive";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {sendEmailWithAttachments} from "../reminders/emailSender";
 import {BILLING_DOCUMENT_LABELS, type BillingDocumentKind, calculateCharges, formatBillingDocumentNumber, renderPaymentRequestHtml, validateRates} from "./pricing";
@@ -101,6 +101,9 @@ export function registerPaymentRoutes(app: express.Application) {
       equipment: parseObjectRecord(contract.manual_fields)?._equipment || [],
     }))});
   }));
+  router.get("/requests/:id", route(async (req, res, userId) => {
+    res.json(await owned(req.params.id, userId));
+  }));
   router.put("/rates", route(async (req, res, userId) => {
     let rates;
     try { rates = validateRates(req.body?.rates); } catch (error) { throw new HTTPException(400, (error as Error).message); }
@@ -181,6 +184,28 @@ export function registerPaymentRoutes(app: express.Application) {
     const document = await col<any>("documents").findOne({_id: id(request.documentId), user_id: userId});
     if (!document) throw new HTTPException(404, "המסמך לא נמצא");
     res.type("application/pdf").send(await readFile(await resolveDocumentFilePath(document)));
+  }));
+  router.delete("/requests/:id", route(async (req, res, userId) => {
+    const request = await owned(req.params.id, userId);
+    const document = request.documentId
+      ? await col<any>("documents").findOne({_id: id(request.documentId), user_id: userId})
+      : null;
+
+    await requests().deleteOne({_id: request._id, user_id: userId});
+    if (document) {
+      await Promise.all([
+        col("documents").deleteOne({_id: document._id, user_id: userId} as any),
+        col("document_clients").deleteMany({document_id: {$in: [document._id, document._id.toString()]}} as any),
+      ]);
+      if (document.spaces_key) await deleteFromSpaces(document.spaces_key).catch(() => undefined);
+      if (document.drive_file_id) {
+        const accessToken = await resolveDriveToken(userId).catch(() => null);
+        if (accessToken) await trashDriveFile(accessToken, String(document.drive_file_id)).catch(() => undefined);
+      }
+      const localPath = typeof document.file_path === "string" ? document.file_path : null;
+      if (localPath) await unlink(localPath).catch(() => undefined);
+    }
+    res.json({ok: true});
   }));
   router.post("/requests/:id/send", route(async (req, res, userId) => {
     const request = await owned(req.params.id, userId);

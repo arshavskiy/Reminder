@@ -12,6 +12,7 @@ import {parsePlanId, updateUserTier} from "../plans/updateUserTier";
 import {createMagicLinkToken, magicLinkTtlMinutes} from "../auth/session";
 import {hashPassword} from "../auth/emailAuth";
 import {logger} from "../logger";
+import {mainDocumentsFilter} from "../documents/documentVisibility";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 // "expired" is not assignable: it is what a lapsed trial resolves to, not a
@@ -1744,7 +1745,7 @@ export function registerAdminRoutes(app: express.Application) {
       col("clients").countDocuments({ user_id: userId }),
       col("contracts").countDocuments({ user_id: userId }),
       col("equipment").countDocuments({ user_id: userId }),
-      col("documents").countDocuments({ user_id: userId }),
+      col("documents").countDocuments(mainDocumentsFilter(userId)),
       col("email_log").countDocuments({ user_id: userId, log_type: { $ne: "skipped" } }),
       col("extractions").countDocuments({ user_id: userId }),
 
