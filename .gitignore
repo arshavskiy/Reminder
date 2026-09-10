@@ -47,3 +47,8 @@ client/tmp/video-demo-auth.json
 *.avi
 *.mkv
 *.webm
+
+# Scratch renders and repro artifacts — regenerable, and the cookie jar holds a
+# live session token that must never reach the repo.
+tmp/
+video/recordings/
