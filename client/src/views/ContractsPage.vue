@@ -1,8 +1,8 @@
 <template>
   <div class="page2">
     <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
-      <router-link class="documents-workspace-tabs__active" to="/contracts">תסקירים</router-link>
       <router-link to="/documents">מסמכים</router-link>
+      <router-link class="documents-workspace-tabs__active" to="/contracts">תסקירים</router-link>
       <router-link to="/quotes">הצעות מחיר</router-link>
     </nav>
     <!-- ── Header ──────────────────────────────────────────────────────── -->
