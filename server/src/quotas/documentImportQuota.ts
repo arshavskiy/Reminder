@@ -81,10 +81,10 @@ export function documentImportLimit(
       scope: "lifetime",
     };
   }
-  // The trial otherwise shares the free tier's lifetime import cap: it unlocks
+  // The trial otherwise shares the lapsed tier's lifetime import cap: it unlocks
   // automation, not volume, so it cannot be used to bulk-import a backlog and
   // then lapse.
-  if (plan === "free" || plan === "trial") {
+  if (plan === "expired" || plan === "trial") {
     if (category === "documents") {
       return {
         limit: readPositiveIntEnv("FREE_LIFETIME_DOCUMENT_LIMIT", 50),
@@ -131,7 +131,7 @@ export async function getDocumentImportQuota(
   let used = 0;
   if (limit !== null) {
     if (scope === "lifetime") {
-      // Lifetime free-tier usage is stored on the user and never decreases on delete.
+      // Lifetime usage is stored on the user and never decreases on delete.
       const usage = await getStoredUserUsage(userId);
       if (category === "invoices") {
         // Metered against its own counter, which is what makes the trial's
@@ -180,7 +180,7 @@ export function effectiveQuotaCategory(
   // the shared manual/email pool — doing so would charge them against the
   // document budget and the 20-invoice cap would never be reached.
   if (plan === "trial" && category === "invoices") return "invoices";
-  if (plan === "free" || plan === "trial") {
+  if (plan === "expired" || plan === "trial") {
     return source === "email" ? "emailDocuments" : "manualDocuments";
   }
   // Basic pools every category into one monthly budget, so report and enforce
@@ -220,7 +220,7 @@ export function documentImportQuotaErrorPayload(error: DocumentImportQuotaError)
 /**
  * Every document the user imported this month, whatever its kind.
  *
- * Mirrors the free tier's shared pool but bounded by the monthly window instead
+ * Mirrors the lapsed tier's shared pool but bounded by the monthly window instead
  * of lifetime. Certificates are excluded here too: they are produced by the app
  * rather than imported, so charging them would bill the user for its own output.
  */
@@ -262,13 +262,13 @@ function documentQuotaCountFilter(
   return filter;
 }
 
-function normalizePlan(role: string | null | undefined): "free" | "trial" | "digital" | "basic" | "business" {
+function normalizePlan(role: string | null | undefined): "expired" | "trial" | "digital" | "basic" | "business" {
   const value = String(role ?? "").trim().toLowerCase();
   if (value === "admin" || value === "business") return "business";
   if (value === "pro" || value === "basic") return "basic";
   if (value === "digital") return "digital";
   if (value === "trial") return "trial";
-  return "free";
+  return "expired";
 }
 
 function readPositiveIntEnv(name: string, fallback: number): number {

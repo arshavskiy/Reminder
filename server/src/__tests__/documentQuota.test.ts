@@ -3,15 +3,15 @@ import { currentUtcMonthWindow, documentImportLimit, documentImportMonthlyLimit,
 import {reminderLimit} from "../quotas/reminderQuota";
 
 describe("document monthly import quota", () => {
-  it("limits free users to separate 50-document lifetime import buckets", () => {
-    expect(documentImportLimit("free", "manualDocuments")).toEqual({limit: 50, scope: "lifetime"});
-    expect(documentImportLimit("free", "emailDocuments")).toEqual({limit: 50, scope: "lifetime"});
-    expect(documentImportLimit("free", "invoices")).toEqual({limit: 50, scope: "lifetime"});
-    expect(documentImportLimit("free", "contracts")).toEqual({limit: 50, scope: "lifetime"});
-    expect(documentImportMonthlyLimit("free")).toBe(50);
+  it("limits lapsed accounts to separate 50-document lifetime import buckets", () => {
+    expect(documentImportLimit("expired", "manualDocuments")).toEqual({limit: 50, scope: "lifetime"});
+    expect(documentImportLimit("expired", "emailDocuments")).toEqual({limit: 50, scope: "lifetime"});
+    expect(documentImportLimit("expired", "invoices")).toEqual({limit: 50, scope: "lifetime"});
+    expect(documentImportLimit("expired", "contracts")).toEqual({limit: 50, scope: "lifetime"});
+    expect(documentImportMonthlyLimit("expired")).toBe(50);
   });
 
-  it("gives the trial the same 50-document allowance as free", () => {
+  it("gives the trial the same 50-document allowance as a lapsed account", () => {
     expect(documentImportLimit("trial", "manualDocuments")).toEqual({limit: 50, scope: "lifetime"});
       expect(documentImportLimit("trial", "documents")).toEqual({limit: 50, scope: "lifetime"});
   });
@@ -66,8 +66,8 @@ describe("document monthly import quota", () => {
 });
 
 describe("reminder quota", () => {
-  it("limits free users to 25 reminders for their lifetime", () => {
-    expect(reminderLimit("free")).toEqual({limit: 50, scope: "lifetime"});
+  it("limits lapsed accounts to 25 reminders for their lifetime", () => {
+    expect(reminderLimit("expired")).toEqual({limit: 50, scope: "lifetime"});
     expect(reminderLimit("user")).toEqual({limit: 50, scope: "lifetime"});
   });
 

@@ -214,7 +214,7 @@ import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
 import { api, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
-import {resolveUserPlan} from "../shared/pricingPlans.js";
+import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
 
 echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
@@ -237,7 +237,7 @@ const chartSeries = ref<InvoiceExpenseMonthlySeries[]>([]);
 const totalAmount = ref(0);
 const totalInvoices = ref(0);
 const exporting = ref(false);
-const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
+const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 const themeTick = ref(0);
 const chartType = ref<ExpenseChartType>("stacked");
 const supplierColorIndex = ref<Record<string, number>>({});

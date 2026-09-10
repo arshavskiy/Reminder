@@ -677,7 +677,7 @@ import {useAuthStore} from "../stores/auth.js";
 import {useRescanModalStore} from "../stores/rescanModal.js";
 import {api, type DriveExportJob} from "../services/apiService.js";
 import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "@shared/printTemplateLayout.js";
-import {planAllowsDocumentImport, planAllowsGoogleDrive, PLAN_GATE_MESSAGES, resolveUserPlan} from "../shared/pricingPlans.js";
+import {featureFlagsForUser, planAllowsDocumentImport, planAllowsGoogleDrive, PLAN_GATE_MESSAGES, resolveUserPlan} from "../shared/pricingPlans.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
 import PaginationBar from "../components/PaginationBar.vue";
@@ -721,7 +721,7 @@ const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authSt
 // The digital plan has no file import at all — the drop strip is replaced with
 // the upsell rather than left to fail against the server's 403.
 const documentImportAllowed = computed(() => planAllowsDocumentImport(resolveUserPlan(authStore.user)));
-const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
+const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 const quotaPercent = computed(() => {
   const limit = store.documentLimit;
   if (limit === null || limit <= 0) return 0;

@@ -1,7 +1,11 @@
-export type PlanId = "free" | "trial" | "digital" | "basic" | "business";
+/**
+ * "expired" is not a plan anyone signs up to or is assigned: it is the
+ * entitlement set a lapsed trial resolves to. Mirrors server/src/plans/tierFeatures.ts.
+ */
+export type PlanId = "expired" | "trial" | "digital" | "basic" | "business";
 
 export const PLAN_LABELS: Record<PlanId, string> = {
-    free: "הסתיים",
+    expired: "הסתיים",
     trial: "ניסיון",
     digital: "דיגיטלי",
     basic: "בסיסי",
@@ -64,6 +68,20 @@ export interface PlanEntitlements extends TierFeatureFlags {
 
 export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     // Mirrors server/src/plans/tierFeatures.ts — keep the two in step.
+    // What a trial degrades to once its window closes.
+    expired: {
+        gmailInspectionHistoryMonths: 16,
+        gmailInvoiceHistoryMonths: 0,
+        googleDriveSync: false,
+        googleCalendarSync: false,
+        automaticEmailReminders: false,
+        automaticMonthlyReports: false,
+        excelExport: false,
+        fileStorage: true,
+        documentImport: true,
+        maxUsers: 1,
+        maxEmailAccounts: 0,
+    },
     trial: {
         gmailInspectionHistoryMonths: 16,
         gmailInvoiceHistoryMonths: 1,
@@ -205,12 +223,13 @@ export function planFromRole(role: string | null | undefined): PlanId {
     // tier — admin administers, everyone else is a user, and what an account can
     // do comes from its plan.
     if (role === "admin") return "business";
-    return "free";
+    return "expired";
 }
 
 export function resolveUserPlan(user: { plan?: string | null; role?: string | null } | null | undefined): PlanId {
     const raw = String(user?.plan ?? "").trim().toLowerCase();
-    if (raw === "free" || raw === "trial" || raw === "digital" || raw === "basic" || raw === "business") return raw;
+    if (raw === "trial" || raw === "digital" || raw === "basic" || raw === "business") return raw;
+    if (raw === "expired" || raw === "free") return "expired";
     return planFromRole(user?.role);
 }
 
@@ -256,7 +275,51 @@ export function normalizePlanId(planId: PlanId | string | null | undefined): Pla
     // containing "trial" collapsed to "free", admitting exactly the users it was
     // meant to exclude. The server copy has always had it.
     if (plan === "trial") return "trial";
-    return "free";
+    return "expired";
+}
+
+/**
+ * Whether a trial is still inside its window. Mirrors isTrialActive on the
+ * server: a lapsed trial keeps plan "trial" and no job rewrites it, so the date
+ * is the only thing that says whether the entitlements still apply.
+ */
+export function isTrialActive(
+    user: { plan?: string | null; trial_ends_at?: string | Date | null } | null | undefined,
+    now: Date = new Date(),
+): boolean {
+    if (normalizePlanId(user?.plan) !== "trial") return false;
+    const endsAt = user?.trial_ends_at;
+    if (!endsAt) return false;
+    const parsed = endsAt instanceof Date ? endsAt : new Date(endsAt);
+    return !Number.isNaN(parsed.getTime()) && parsed.getTime() > now.getTime();
+}
+
+/**
+ * Feature flags for a user, honouring trial expiry. Mirrors featureFlagsForUser
+ * on the server: comparing plan strings misses a lapsed trial, because that
+ * account still reports plan "trial".
+ */
+export function featureFlagsForUser(
+    user: { plan?: string | null; role?: string | null; trial_ends_at?: string | Date | null } | null | undefined,
+): TierFeatureFlags {
+    if (String(user?.role ?? "").trim().toLowerCase() === "admin") {
+        return {
+            ...TIER_FEATURE_FLAGS.business,
+            gmailInspectionHistoryMonths: null,
+            gmailInvoiceHistoryMonths: null,
+        };
+    }
+    if (normalizePlanId(user?.plan) === "trial") {
+        return isTrialActive(user) ? TIER_FEATURE_FLAGS.trial : TIER_FEATURE_FLAGS.expired;
+    }
+    return tierFeatureFlags(user?.plan ?? user?.role);
+}
+
+/** A trial whose window has closed: plan still reads "trial", entitlements do not. */
+export function isLapsedTrial(
+    user: { plan?: string | null; trial_ends_at?: string | Date | null } | null | undefined,
+): boolean {
+    return normalizePlanId(user?.plan) === "trial" && !isTrialActive(user);
 }
 
 export function tierFeatureFlags(planId: PlanId | string | null | undefined): TierFeatureFlags {

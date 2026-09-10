@@ -547,7 +547,7 @@ import DriveExportJobStatus from "../components/DriveExportJobStatus.vue";
 import { api, type DriveExportJob, type GmailImportJob, type ImportedInvoice } from "../services/apiService.js";
 import type { DocTemplate } from "../shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
-import {planAllowsGoogleDrive, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
+import {featureFlagsForUser, planAllowsGoogleDrive, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
 import {useConfirm} from "../composables/useConfirm.js";
 
 const router = useRouter();
@@ -556,7 +556,7 @@ const {confirm} = useConfirm();
 const authStore = useAuthStore();
 const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
 const excelAllowed = computed(() => planAllowsExcelExport(resolveUserPlan(authStore.user)));
-const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
+const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 const excelExportLockedMessage = PLAN_GATE_MESSAGES.excelExport;
 
 const rows = ref<ImportedInvoice[]>([]);

@@ -25,7 +25,7 @@ import {
 import {normalizePlanId} from "../plans/tierFeatures.js";
 
 function assertExportAllowed(auth: Awaited<ReturnType<typeof requireAuth>>): boolean {
-  return normalizePlanId(auth.user.plan ?? auth.user.role) !== "free";
+  return normalizePlanId(auth.user.plan ?? auth.user.role) !== "expired";
 }
 
 /**

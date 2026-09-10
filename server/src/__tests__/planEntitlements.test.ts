@@ -3,9 +3,9 @@ import { buildPlanEntitlements } from "../plans/planEntitlements";
 import { TIER_FEATURE_FLAGS, featureFlagsForUser } from "../plans/tierFeatures";
 
 describe("plan entitlements", () => {
-  it("gives free the lifetime document and reminder caps", () => {
-    const entitlements = buildPlanEntitlements({ plan: "free", role: "user" });
-    expect(entitlements.plan).toBe("free");
+  it("gives a lapsed account the lifetime document and reminder caps", () => {
+    const entitlements = buildPlanEntitlements({ plan: "expired", role: "user" });
+    expect(entitlements.plan).toBe("expired");
     expect(entitlements.documents).toEqual({
       scope: "lifetime",
         invoices: 50,
@@ -65,7 +65,7 @@ describe("plan entitlements", () => {
   });
 
   it("treats admin as business with uncapped gmail history", () => {
-    const flags = featureFlagsForUser({ role: "admin", plan: "free" });
+    const flags = featureFlagsForUser({ role: "admin", plan: "expired" });
     expect(flags.googleCalendarSync).toBe(true);
     expect(flags.gmailInvoiceHistoryMonths).toBeNull();
     expect(flags.gmailInspectionHistoryMonths).toBeNull();

@@ -184,6 +184,7 @@ import {
   planAllowsExcelExport,
   resolveUserPlan,
   PLAN_GATE_MESSAGES,
+  featureFlagsForUser,
 } from "../shared/pricingPlans.js";
 import PageHeader from "../components/PageHeader.vue";
 
@@ -198,7 +199,7 @@ const excelAllowed = computed(() =>
   userSettingsStore.settings?.plan_entitlements?.excelExport
   ?? planAllowsExcelExport(resolveUserPlan(authStore.user)),
 );
-const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
+const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 const autoReportsLockedMessage = PLAN_GATE_MESSAGES.automaticMonthlyReports;
 const excelLockedMessage = PLAN_GATE_MESSAGES.excelExport;
 const exportLockedMessage = "ייצוא דוחות זמין במסלולים בסיסי ועסקי בלבד.";

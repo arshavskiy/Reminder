@@ -876,7 +876,7 @@ export const api = {
       is_active?: boolean | number;
       email_verified?: boolean | number;
     }) => adminPut<any>(`/admin/users/${id}`, body),
-    updateUserTier: (id: string, plan: "free" | "digital" | "basic" | "business") =>
+    updateUserTier: (id: string, plan: "trial" | "digital" | "basic" | "business") =>
       adminPost<any>(`/admin/users/${id}/tier`, {plan}),
     createMagicLink: (body: {
       email?: string | null;

@@ -49,7 +49,7 @@ import {
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {FEATURES} from "../shared/features.js";
-import {resolveUserPlan} from "../shared/pricingPlans.js";
+import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
 import {useWalkthrough} from "../composables/useWalkthrough.js";
 
 interface Props {
@@ -108,7 +108,7 @@ const menuIcons: Record<string, typeof PersonOutline> = {
 };
 
 // Templates are a paid feature — free accounts do not get the submenu at all.
-const templatesAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
+const templatesAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 
 const templateMenuItems = computed(() => {
   const items: Array<{ label: string; key: string }> = [];

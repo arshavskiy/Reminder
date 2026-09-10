@@ -18,11 +18,11 @@ describe("requirePlans on /api/invoices", () => {
 
   it("refuses the plans that did not", () => {
     expect(admits({ plan: "basic", role: "user" }, INVOICES)).toBe(false);
-    expect(admits({ plan: "free", role: "user" }, INVOICES)).toBe(false);
+    expect(admits({ plan: "expired", role: "user" }, INVOICES)).toBe(false);
   });
 
   it("admits admins, who support every account", () => {
-    expect(admits({ plan: "free", role: "admin" }, INVOICES)).toBe(true);
+    expect(admits({ plan: "expired", role: "admin" }, INVOICES)).toBe(true);
   });
 
   it("admits the production pro/business account that was being refused", () => {

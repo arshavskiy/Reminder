@@ -14,7 +14,9 @@ import {hashPassword} from "../auth/emailAuth";
 import {logger} from "../logger";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
-const VALID_PLANS: UserPlan[] = ["free", "digital", "basic", "business"];
+// "expired" is not assignable: it is what a lapsed trial resolves to, not a
+// state to put an account into.
+const VALID_PLANS: UserPlan[] = ["trial", "digital", "basic", "business"];
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
 const VALID_LEAD_STATUSES = new Set(["NEW", "CONTACTED", "DEMO", "TRIAL", "CUSTOMER", "NOT_RELEVANT"]);
 
@@ -149,7 +151,7 @@ function flatUser(doc: any) {
 function planFromRole(role: string | null | undefined): UserPlan {
   if (role === "admin") return "business";
   if (role === "pro") return "basic";
-  return "free";
+  return "expired";
 }
 
 function flatInspectorLead(doc: any) {

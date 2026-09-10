@@ -20,7 +20,7 @@ describe("invoice access agrees across router, nav and API", () => {
     ["trial", true],
     ["business", true],
     ["basic", false],
-    ["free", false],
+    ["expired", false],
   ] as Array<[string, boolean]>) {
     it(`${plan}: ${expected ? "allowed" : "refused"} everywhere`, () => {
       expect(clientAllows(plan, INVOICES)).toBe(expected);
@@ -38,6 +38,6 @@ describe("invoice access agrees across router, nav and API", () => {
   });
 
   it("lets an admin through regardless of plan", () => {
-    expect(serverAllows({ plan: "free", role: "admin" }, INVOICES)).toBe(true);
+    expect(serverAllows({ plan: "expired", role: "admin" }, INVOICES)).toBe(true);
   });
 });

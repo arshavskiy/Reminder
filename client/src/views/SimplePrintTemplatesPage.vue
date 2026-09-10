@@ -129,7 +129,7 @@ import LayoutPreviewFrame from "../components/print/LayoutPreviewFrame.vue";
 import {api} from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useConfirm} from "../composables/useConfirm.js";
-import {resolveUserPlan} from "../shared/pricingPlans.js";
+import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
 import type {PrintTemplate} from "@shared/types.js";
 import {
   clonePrintTemplateLayout,
@@ -171,7 +171,7 @@ const composeData = ref<Record<string, string>>({});
 const draftSaving = ref(false);
 const printing = ref(false);
 const savingPdf = ref(false);
-const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
+const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 
 const composeFields = computed(() => {
   if (!composing.value?.layout) return [];

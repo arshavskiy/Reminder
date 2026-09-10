@@ -171,17 +171,21 @@ function planFromRole(role: string | null | undefined): UserPlan {
   // Fallback only, for rows predating the plan field. Roles no longer map to
   // tiers: admin administers, everyone else is a user.
   if (role === "admin") return "business";
-  return "free";
+  return "expired";
 }
 
 function normalizeUserPlan(value: unknown): UserPlan {
   const text = String(value ?? "").trim().toLowerCase();
   if (text === "business") return "business";
   if (text === "basic") return "basic";
+  // "digital" must survive here for the same reason "trial" must: the gates read
+  // plan off the session user, so collapsing it would strip a paying digital
+  // account of its entitlements on every session load.
+  if (text === "digital") return "digital";
   // "trial" must survive here: the gates read plan off the session user, and
-  // collapsing it to free would expire every trial the moment it is loaded.
+  // collapsing it would expire every trial the moment it is loaded.
   if (text === "trial") return "trial";
-  return "free";
+  return "expired";
 }
 
 export interface SessionIdentity {

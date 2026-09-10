@@ -1595,6 +1595,7 @@ import {
   planAllowsGoogleDrive,
   planAllowsGoogleCalendar,
   planAllowsAutomaticEmailReminders,
+  featureFlagsForUser,
   planAllowsFileStorage,
   PLAN_GATE_MESSAGES,
   type PlanId,
@@ -1623,7 +1624,7 @@ const savingCloudStorage = ref<"invoices" | "inspections" | null>(null);
 // Cloud storage is a paid feature — free accounts see the rows locked with an
 // upsell, and the digital plan has no file storage at all (fileStorage flag).
 const cloudStorageAllowed = computed(
-    () => currentPlanId.value !== "free" && planAllowsFileStorage(currentPlanId.value));
+    () => currentPlanId.value !== "expired" && planAllowsFileStorage(currentPlanId.value));
 const s3StoreInvoices = computed(() =>
     cloudStorageAllowed.value && userSettings.value?.s3_store_invoices !== false);
 const s3StoreInspections = computed(() =>
@@ -1755,12 +1756,14 @@ const roleTag = computed(
 );
 
 const PLAN_TAG_TYPES: Record<PlanId, "success" | "info" | "default"> = {
-  free: "default",
+  expired: "default",
+  trial: "default",
+  digital: "info",
   basic: "info",
   business: "success",
 };
 const currentPlanId = computed(() => resolveUserPlan(user.value));
-const exportAllowed = computed(() => currentPlanId.value !== "free");
+const exportAllowed = computed(() => featureFlagsForUser(user.value).excelExport);
 const currentPricingPlan = computed(() => getPricingPlan(currentPlanId.value));
 
 /** Paid plans the user is not already on. Nothing to upsell to a business user. */
@@ -2492,7 +2495,7 @@ const billingHistory = ref<any[]>([]);
 const quotaScopeLabel = computed(() => {
   if (!subscriptionData.value) return "—";
   const plan = subscriptionData.value.plan;
-  if (plan === "free") {
+  if (plan === "expired" || plan === "trial") {
     return formatQuotaScope(subscriptionData.value.quotas.manualDocuments?.scope ?? "lifetime");
   }
   const scope = subscriptionData.value.quotas.invoices?.scope
@@ -2503,7 +2506,7 @@ const quotaScopeLabel = computed(() => {
 const quotaPeriodLabel = computed(() => {
   if (!subscriptionData.value) return "";
   const plan = subscriptionData.value.plan;
-  const quota = plan === "free"
+  const quota = plan === "expired" || plan === "trial"
       ? subscriptionData.value.quotas.manualDocuments
       : subscriptionData.value.quotas.invoices ?? subscriptionData.value.quotas.contracts;
   const periodStart = quota?.periodStart;
@@ -2515,7 +2518,7 @@ const quotaPeriodLabel = computed(() => {
 const quotaUsageRows = computed(() => {
   if (!subscriptionData.value) return [];
   const plan = subscriptionData.value.plan;
-  const defs = plan === "free"
+  const defs = plan === "expired" || plan === "trial"
       ? [
         {key: "manualDocuments" as const, label: "יבוא מסמכים"},
         {key: "emailDocuments" as const, label: "יבוא מסמכים מאימייל"},

@@ -564,7 +564,7 @@ import {api} from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useConfirm} from "../composables/useConfirm.js";
-import {resolveUserPlan} from "../shared/pricingPlans.js";
+import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
 import type {PrintCellBorderSides, PrintCellBorderStyle, PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
 type BorderSide = "top" | "right" | "bottom" | "left";
@@ -606,7 +606,7 @@ const router = useRouter();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const authStore = useAuthStore();
 const {user: engineerProfile} = storeToRefs(authStore);
-const exportAllowed = computed(() => resolveUserPlan(authStore.user) !== "free");
+const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 
 function canMutateTemplate(_t: PrintTemplate) {
   return true;

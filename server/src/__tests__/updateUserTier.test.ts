@@ -69,7 +69,11 @@ describe("updateUserTier", () => {
 
   it("validates supported plan ids exactly", async () => {
     const {parsePlanId} = await import("../plans/updateUserTier");
-    expect(parsePlanId("free")).toBe("free");
+    // "free"/"expired" are not assignable: expired is what a lapsed trial
+    // resolves to, never something an admin or a payment sets.
+    expect(parsePlanId("free")).toBeNull();
+    expect(parsePlanId("expired")).toBeNull();
+    expect(parsePlanId("digital")).toBe("digital");
     expect(parsePlanId(" BASIC ")).toBe("basic");
     expect(parsePlanId("business")).toBe("business");
     expect(parsePlanId("pro")).toBeNull();
@@ -82,7 +86,7 @@ describe("updateUserTier", () => {
       _id: userId,
       email: "buyer@example.com",
       role: "user",
-      plan: "free",
+      plan: "trial",
     });
 
     const {updateUserTier} = await import("../plans/updateUserTier");

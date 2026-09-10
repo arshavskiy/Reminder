@@ -26,7 +26,7 @@ import {normalizePlanId, type PlanId, resolveUserPlan} from "../shared/pricingPl
 // keeping — clients, equipment, reminders — and differs only in that it cannot
 // import or store files. Those are gated by the documentImport/fileStorage
 // flags, not by rank, so ranking it below basic would wrongly close pages it pays for.
-const PLAN_RANK: Record<PlanId, number> = {free: 0, digital: 1, basic: 1, trial: 1, business: 2};
+const PLAN_RANK: Record<PlanId, number> = {expired: 0, digital: 1, basic: 1, trial: 1, business: 2};
 
 export const router = createRouter({
     history: createWebHistory(),
@@ -207,7 +207,7 @@ router.beforeEach(async (to) => {
     // A minimum ("basic") is a rank comparison, so anything above it passes. A
     // list is membership, for pages that do not sit on a ladder — invoices are
     // open to trial and business but not basic, which no single threshold can
-    // express. Passing an array to normalizePlanId would have yielded "free"
+    // express. Passing an array to normalizePlanId would have yielded "expired"
     // and silently let everyone through.
     const requiredPlan = to.meta.requirePlan as PlanId | PlanId[] | undefined;
     if (requiredPlan) {

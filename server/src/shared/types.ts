@@ -62,7 +62,8 @@ export interface AppSettings {
 
 // Phase 2: Authentication types
 export type UserRole = "admin" | "pro" | "user";
-export type UserPlan = "free" | "trial" | "digital" | "basic" | "business";
+/** "expired" is the resolved state of a lapsed trial, never written to users.plan. */
+export type UserPlan = "expired" | "trial" | "digital" | "basic" | "business";
 
 export interface User {
   id: number;
@@ -146,7 +147,7 @@ export interface UserSettings {
   calendar_next_tests_only?: boolean;
   features?: Record<string, boolean> | null;
   plan_entitlements?: {
-    plan: "free" | "digital" | "basic" | "business";
+    plan: "expired" | "digital" | "basic" | "business";
     gmailInvoiceHistoryMonths: number | null;
     gmailInspectionHistoryMonths: number | null;
     googleDriveSync: boolean;

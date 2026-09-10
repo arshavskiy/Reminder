@@ -144,7 +144,7 @@ export function registerAuthRoutes(app: express.Application) {
       const user = await col("users").findOne({ $or: [{ google_sub: profile.sub }, { email: profile.email }] }) as any;
       if (!user) throw new Error("User not found after upsert");
 
-      // New Google users land on free until paid; refresh entitlements on every login.
+      // New Google users land on a trial until paid; refresh entitlements on every login.
       await ensureUserSettingsWithEntitlements(user._id.toString(), user);
 
       const ua = req.headers["user-agent"] ?? undefined;
@@ -713,10 +713,10 @@ function frontendBaseUrl(req: express.Request): string {
   return serverBaseUrl(req);
 }
 
-function planFromRole(role: string | null | undefined): "free" | "basic" | "business" {
+function planFromRole(role: string | null | undefined): "expired" | "basic" | "business" {
   // Fallback only. Roles no longer imply a tier.
   if (role === "admin") return "business";
-  return "free";
+  return "expired";
 }
 
 function logAuth(

@@ -1,4 +1,10 @@
-export type PlanId = "free" | "trial" | "digital" | "basic" | "business";
+/**
+ * "expired" is not a plan anyone signs up to or is assigned: it is the
+ * entitlement set a lapsed trial resolves to. featureFlagsForUser maps an
+ * expired trial onto it, so the account stays readable while imports and
+ * automation stop. Nothing writes it to users.plan.
+ */
+export type PlanId = "expired" | "trial" | "digital" | "basic" | "business";
 
 export interface TierFeatureFlags {
   gmailInspectionHistoryMonths: number | null;
@@ -24,7 +30,9 @@ export interface TierFeatureFlags {
 }
 
 export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
-  free: {
+  // What a trial degrades to once its window closes. Read-only in effect:
+  // everything that costs money to run is off, the data stays reachable.
+  expired: {
     gmailInspectionHistoryMonths: 16,
     gmailInvoiceHistoryMonths: 0,
     googleDriveSync: false,
@@ -32,9 +40,10 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     automaticEmailReminders: false,
     automaticMonthlyReports: false,
     excelExport: false,
-    // Free keeps fileStorage true: object storage for free accounts is already
-    // opted out via the per-user s3_store_* settings, and flipping this flag
-    // would also strip their local-disk copies. Only digital is storage-free.
+    // Expired keeps fileStorage true: object storage for these accounts is
+    // already opted out via the per-user s3_store_* settings, and flipping this
+    // flag would also strip their local-disk copies. Only digital is
+    // storage-free by design.
     fileStorage: true,
     documentImport: true,
     maxUsers: 1,
@@ -124,7 +133,7 @@ export function normalizePlanId(planOrRole: string | null | undefined): PlanId {
   if (value === "basic" || value === "pro") return "basic";
   if (value === "digital") return "digital";
   if (value === "trial") return "trial";
-  return "free";
+  return "expired";
 }
 
 /** Trial length for new signups. */
@@ -134,7 +143,7 @@ export const TRIAL_DAYS = 30;
  * A trial only counts while it has not run out.
  *
  * Resolved from trial_ends_at rather than from the plan alone, so an expired
- * trial degrades to free entitlements the moment the date passes — no cron job
+ * trial degrades to expired entitlements the moment the date passes — no cron job
  * has to rewrite the row for the gates to close.
  */
 export function isTrialActive(
@@ -161,7 +170,7 @@ export function featureFlagsForUser(
   // Every gate in the app reads its flags from here, so expiring the trial in this
   // one place closes calendar, reminders, reports and export together.
   if (normalizePlanId(user?.plan) === "trial") {
-    return isTrialActive(user) ? TIER_FEATURE_FLAGS.trial : TIER_FEATURE_FLAGS.free;
+    return isTrialActive(user) ? TIER_FEATURE_FLAGS.trial : TIER_FEATURE_FLAGS.expired;
   }
   return tierFeatureFlags(user?.plan ?? user?.role);
 }

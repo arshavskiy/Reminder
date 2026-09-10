@@ -53,12 +53,12 @@ async function auth(req: express.Request, res: express.Response) {
   }
 }
 
-function normalizeSubscriptionPlan(plan: string | null | undefined): "free" | "digital" | "basic" | "business" {
+function normalizeSubscriptionPlan(plan: string | null | undefined): "expired" | "digital" | "basic" | "business" {
     const value = String(plan ?? "").trim().toLowerCase();
     if (value === "admin" || value === "business") return "business";
     if (value === "pro" || value === "basic") return "basic";
     if (value === "digital") return "digital";
-    return "free";
+    return "expired";
 }
 
 export function registerProfileRoutes(app: express.Application) {

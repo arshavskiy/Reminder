@@ -11,9 +11,9 @@ import {reminderLimit} from "../quotas/reminderQuota";
 import {parsePlanId, VALID_PLAN_IDS} from "../plans/updateUserTier";
 
 describe("digital plan", () => {
-  it("resolves as its own plan rather than collapsing to free", () => {
+  it("resolves as its own plan rather than collapsing to expired", () => {
     // Without a branch in normalizePlanId a digital account fell through to
-    // "free", which closed the reminders and reports it pays for.
+    // "expired", which closed the reminders and reports it pays for.
     expect(normalizePlanId("digital")).toBe("digital");
     expect(normalizePlanId("DIGITAL")).toBe("digital");
   });
@@ -54,7 +54,7 @@ describe("digital plan", () => {
   });
 
   it("keeps file storage on for every other plan", () => {
-    for (const plan of ["free", "trial", "basic", "business"] as const) {
+    for (const plan of ["expired", "trial", "basic", "business"] as const) {
       expect(tierFeatureFlags(plan).fileStorage).toBe(true);
       expect(tierFeatureFlags(plan).documentImport).toBe(true);
     }

@@ -245,7 +245,7 @@ import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
 import {dateHeIL, heIL} from "./locales/heIL.js";
 import {type FeatureKey, FEATURES} from "./shared/features.js";
-import {normalizePlanId, resolveUserPlan, type PlanId} from "./shared/pricingPlans.js";
+import {isLapsedTrial as isLapsedTrialPlan, normalizePlanId, resolveUserPlan, type PlanId} from "./shared/pricingPlans.js";
 
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
@@ -384,16 +384,18 @@ const theme = computed(() => (isDark.value ? darkTheme : null));
 const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
 
 const PLAN_SHORT: Record<PlanId, string> = {
-  free: "הסתיים",
+  expired: "הסתיים",
   trial: "ניסיון",
+  digital: "דיגיטלי",
   basic: "בסיסי",
   business: "עסקי",
 };
 
-// Trial ranks alongside basic, not between free and basic: it grants basic's
+// Trial ranks alongside basic, not between expired and basic: it grants basic's
 // entitlements server-side, so ranking it lower would lock a trial user out of
 // reminders and clients — the very features the trial exists to demonstrate.
-const PLAN_RANK: Record<PlanId, number> = {free: 0, trial: 1, basic: 1, business: 2};
+// Digital ranks there too; what it lacks is gated by flags, not by rank.
+const PLAN_RANK: Record<PlanId, number> = {expired: 0, trial: 1, digital: 1, basic: 1, business: 2};
 
 const subscriptionPlanLabel = computed(() => {
   if (!authStore.user) return "";
@@ -487,10 +489,10 @@ const allNav: Array<{
   minPlan?: PlanId | PlanId[];
   feature?: FeatureKey;
 }> = [
-  {label: "ראשי", key: "dashboard", minPlan: "free", feature: FEATURES.pages.dashboard},
-  {label: "מסמכים", key: "documents", minPlan: "free", feature: FEATURES.pages.documents},
+  {label: "ראשי", key: "dashboard", minPlan: "expired", feature: FEATURES.pages.dashboard},
+  {label: "מסמכים", key: "documents", minPlan: "expired", feature: FEATURES.pages.documents},
   {label: "תזכורות", key: "reminders", minPlan: "basic", feature: FEATURES.pages.reminders},
-  {label: "דוחות", key: "reports", minPlan: "free", feature: FEATURES.pages.reports},
+  {label: "דוחות", key: "reports", minPlan: "expired", feature: FEATURES.pages.reports},
   {label: "לקוחות", key: "clients", minPlan: "basic", feature: FEATURES.pages.clients},
   {label: "שטח", key: "field", minPlan: "business", feature: FEATURES.pages.field},
   {label: "ציוד", key: "equipment", minPlan: "basic", feature: FEATURES.pages.equipment},
@@ -532,9 +534,10 @@ const primaryNav = computed(() => {
  * clients behind an upgrade wall rather than pausing the account. Writes stay
  * blocked by the entitlement flags, which is where the paywall actually belongs.
  */
-const isLapsedTrial = computed(
-  () => resolveUserPlan(authStore.user) === "free" && !!authStore.user?.trial_ends_at,
-);
+// A lapsed trial keeps plan "trial" — no job rewrites it — so this has to be
+// resolved from the date. The old check compared the plan to "free", which that
+// account never reports, so the lapsed-trial allowance below never applied.
+const isLapsedTrial = computed(() => isLapsedTrialPlan(authStore.user));
 
 function isPlanLocked(item: {minPlan?: PlanId | PlanId[]}): boolean {
   if (!item.minPlan) return false;
@@ -546,7 +549,7 @@ function isPlanLocked(item: {minPlan?: PlanId | PlanId[]}): boolean {
 function navLockLabel(item: {minPlan?: PlanId | PlanId[]}): string {
   if (!item.minPlan) return "";
   // A list has no "and above" — naming the plans is the only accurate phrasing,
-  // and normalizePlanId on an array would have yielded "free" and read as
+  // and normalizePlanId on an array would have yielded "expired" and read as
   // "available on הסתיים and above".
   if (Array.isArray(item.minPlan)) {
     const names = item.minPlan.map((plan) => PLAN_SHORT[normalizePlanId(plan)]).filter(Boolean);

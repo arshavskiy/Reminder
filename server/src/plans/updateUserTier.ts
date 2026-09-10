@@ -3,7 +3,13 @@ import {col} from "../db/db";
 import {ensureUserSettingsWithEntitlements, type PlanEntitlements} from "./planEntitlements";
 import type {PlanId} from "./tierFeatures";
 
-export const VALID_PLAN_IDS: PlanId[] = ["free", "digital", "basic", "business"];
+/**
+ * Plans an admin or a payment can actually assign. "expired" is absent on
+ * purpose: it is the resolved state of a lapsed trial, not something to put an
+ * account into — downgrading someone means moving them to a real plan or
+ * letting their trial run out.
+ */
+export const VALID_PLAN_IDS: PlanId[] = ["digital", "basic", "business"];
 
 export type TierUpdateResult = {
   user: {
@@ -17,7 +23,7 @@ export type TierUpdateResult = {
 
 export function parsePlanId(value: unknown): PlanId | null {
   const raw = String(value ?? "").trim().toLowerCase();
-  if (raw === "free" || raw === "digital" || raw === "basic" || raw === "business") return raw;
+  if (raw === "digital" || raw === "basic" || raw === "business") return raw;
   return null;
 }
 

@@ -71,7 +71,7 @@ export interface User {
   phone: string | null;
   picture_url: string | null;
   role: "admin" | "pro" | "user";
-  plan?: "free" | "trial" | "digital" | "basic" | "business";
+  plan?: "expired" | "trial" | "digital" | "basic" | "business";
   trial_ends_at?: string | null;
   is_active: number;
   created_at: string;

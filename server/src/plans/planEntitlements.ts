@@ -32,9 +32,9 @@ export interface PlanEntitlements extends TierFeatureFlags {
 /**
  * New signups start on a 30-day trial with basic entitlements.
  *
- * There is no free tier to sign up to any more: once the trial lapses the plan
- * still reads "trial", but featureFlagsForUser resolves it to free entitlements,
- * which leaves the account readable while stopping imports and automation.
+ * There is no free tier: once the trial lapses the plan still reads "trial",
+ * but featureFlagsForUser resolves it to the "expired" entitlements, which
+ * leave the account readable while stopping imports and automation.
  */
 export const DEFAULT_NEW_USER_PLAN: PlanId = "trial";
 
@@ -108,10 +108,10 @@ export function newUserSettingsBase(
   userId: string,
   user?: {plan?: string | null; role?: string | null} | null,
 ): Record<string, unknown> {
-  // Cloud storage is a paid feature — free accounts start with it off, and the
+  // Cloud storage is a paid feature — a lapsed trial starts with it off, and the
   // digital plan has no file storage at all (tierFeatureFlags.fileStorage).
   const planKey = user?.plan ?? user?.role;
-  const cloudStorage = normalizePlanId(planKey) !== "free" && tierFeatureFlags(planKey).fileStorage;
+  const cloudStorage = normalizePlanId(planKey) !== "expired" && tierFeatureFlags(planKey).fileStorage;
   return {
     user_id: userId,
     theme: "light",
@@ -145,7 +145,7 @@ export function newUserSettingsDefaults(
 
 /**
  * Ensure user_settings exists and plan_entitlements matches the user's plan.
- * New accounts get free-tier entitlements until paid.
+ * New accounts get trial entitlements until paid.
  */
 export async function ensureUserSettingsWithEntitlements(
   userId: string,

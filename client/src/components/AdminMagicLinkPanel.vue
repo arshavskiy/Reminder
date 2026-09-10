@@ -156,8 +156,11 @@ const emit = defineEmits<{
 
 const message = useMessage();
 
+// No "Free"/"Expired" option: expired is what a lapsed trial resolves to, not a
+// plan to put an account into.
 const planOptions = [
-  { label: "Free", value: "free" },
+  { label: "Trial", value: "trial" },
+  { label: "Digital", value: "digital" },
   { label: "Basic", value: "basic" },
   { label: "Business", value: "business" },
 ];
@@ -173,7 +176,7 @@ function emptyForm() {
     email: "",
     username: "",
     name: "",
-    plan: "free" as "free" | "basic" | "business",
+    plan: "trial" as "trial" | "digital" | "basic" | "business",
     role: "user" as "user" | "pro" | "admin",
     company_name: "",
     phone: "",
@@ -243,7 +246,7 @@ function applyUser(user: any) {
   form.email = user?.email ?? "";
   form.username = user?.username ?? "";
   form.name = user?.name ?? "";
-  form.plan = (user?.plan ?? "free") as typeof form.plan;
+  form.plan = (user?.plan ?? "trial") as typeof form.plan;
   form.role = (user?.role ?? "user") as typeof form.role;
   form.company_name = user?.company_name ?? "";
   form.phone = user?.phone ?? "";

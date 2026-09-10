@@ -25,9 +25,9 @@ describe("trial plan", () => {
     expect(flags.googleCalendarSync).toBe(false);
   });
 
-  it("drops an expired trial to free entitlements without rewriting the plan", () => {
+  it("drops an expired trial to the expired entitlements without rewriting the plan", () => {
     const flags = featureFlagsForUser({plan: "trial", trial_ends_at: new Date(Date.now() - DAY)});
-    expect(flags).toEqual(TIER_FEATURE_FLAGS.free);
+    expect(flags).toEqual(TIER_FEATURE_FLAGS.expired);
     expect(flags.automaticEmailReminders).toBe(false);
   });
 

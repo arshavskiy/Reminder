@@ -66,7 +66,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
     const row = await col("user_settings").findOne({ user_id: auth.userId });
     if (!row) {
       // Single source of truth for new-account defaults — newUserSettingsBase is
-      // plan-aware (free tier starts with cloud storage off).
+      // plan-aware (a lapsed trial starts with cloud storage off).
       const defaults = {
         ...newUserSettingsBase(auth.userId, user),
         report_config: DEFAULT_REPORT_CONFIG,

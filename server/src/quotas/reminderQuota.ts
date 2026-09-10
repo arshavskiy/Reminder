@@ -29,8 +29,9 @@ export function reminderLimit(role: string | null | undefined): {
   // Trials must be able to send reminders — that is the product being trialled —
   // so they are unmetered here and bounded by the 25-document import cap instead.
   if (plan === "trial") return {limit: null, scope: "unlimited"};
-  // Free tier gets no reminders at all. readPositiveIntEnv rejects 0, so read the
-  // override directly to keep an explicit FREE_LIFETIME_REMINDER_LIMIT=0 working.
+  // A lapsed trial gets no reminders at all. readPositiveIntEnv rejects 0, so
+  // read the override directly to keep an explicit
+  // FREE_LIFETIME_REMINDER_LIMIT=0 working (env name kept for deploy config).
   return {
     limit: readNonNegativeIntEnv("FREE_LIFETIME_REMINDER_LIMIT", readNonNegativeIntEnv("USER_REMINDER_LIMIT", 0)),
     scope: "lifetime",
@@ -103,13 +104,13 @@ export function reminderQuotaErrorPayload(error: ReminderQuotaError) {
   };
 }
 
-function normalizePlan(role: string | null | undefined): "free" | "trial" | "digital" | "basic" | "business" {
+function normalizePlan(role: string | null | undefined): "expired" | "trial" | "digital" | "basic" | "business" {
   const value = String(role ?? "").trim().toLowerCase();
   if (value === "admin" || value === "business") return "business";
   if (value === "pro" || value === "basic") return "basic";
   if (value === "digital") return "digital";
   if (value === "trial") return "trial";
-  return "free";
+  return "expired";
 }
 
 function readNonNegativeIntEnv(name: string, fallback: number): number {

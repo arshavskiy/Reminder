@@ -723,7 +723,7 @@ const profileForm = reactive({
   company_name: "",
   picture_url: "",
   role: "user",
-  plan: "free",
+  plan: "trial",
   is_active: true,
   email_verified: true,
 });
@@ -740,8 +740,11 @@ const roleOptions = [
   { label: "Pro", value: "pro" },
   { label: "Admin", value: "admin" },
 ];
+// No "Free"/"Expired" option: expired is what a lapsed trial resolves to, not a
+// plan to put an account into.
 const planOptions = [
-  { label: "Free", value: "free" },
+  { label: "Trial", value: "trial" },
+  { label: "Digital", value: "digital" },
   { label: "Basic", value: "basic" },
   { label: "Business", value: "business" },
 ];
@@ -750,9 +753,11 @@ const roleTagType: Record<string, "default" | "warning" | "error"> = {
 };
 const roleLabel: Record<string, string> = { user: "User", pro: "Pro", admin: "Admin" };
 const planTagType: Record<string, "default" | "success" | "info"> = {
-  free: "default", basic: "info", business: "success",
+  expired: "default", trial: "default", digital: "info", basic: "info", business: "success",
 };
-const planLabel: Record<string, string> = { free: "Free", basic: "Basic", business: "Business" };
+const planLabel: Record<string, string> = {
+  expired: "Expired", trial: "Trial", digital: "Digital", basic: "Basic", business: "Business",
+};
 const themeOptions = [
   { label: "System", value: "system" },
   { label: "Light", value: "light" },
@@ -925,12 +930,13 @@ function initials(u: any) {
 function planFromRole(role: string | null | undefined) {
   if (role === "admin") return "business";
   if (role === "pro") return "basic";
-  return "free";
+  return "expired";
 }
 
 function userPlan(u: any) {
   const raw = String(u?.plan ?? "").trim().toLowerCase();
-  if (raw === "business" || raw === "basic" || raw === "free") return raw;
+  if (raw === "business" || raw === "basic" || raw === "digital" || raw === "trial") return raw;
+  if (raw === "expired" || raw === "free") return "expired";
   return planFromRole(u?.role);
 }
 
