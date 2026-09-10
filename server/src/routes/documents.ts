@@ -127,7 +127,20 @@ export function registerDocumentRoutes(app: express.Application) {
     const [rows, total, totalAll, statusCounts, inspectionTypeCounts, documentQuota] = await Promise.all([
       col("documents")
         .find(filter)
-        .project({ raw_text: 0 })
+        // The list ships every document the user has (the page filters, searches
+        // and sorts client-side, so it asks for limit=0), which made these
+        // storage-bookkeeping fields the bulk of a multi-megabyte response
+        // despite never being read by the client. Anything the UI does use —
+        // extracted_fields, spaces_key, drive_web_link — stays, as do the
+        // thumbnail keys that flatDoc turns into thumbnail_url. The detail
+        // endpoint still returns the full document.
+        .project({
+          raw_text: 0,
+          spaces_url: 0,
+          file_path: 0,
+          original_path: 0,
+          file_hash: 0,
+        })
         .sort({ import_date: -1, created_at: -1 } as any)
         .skip(offset)
         .limit(limit)
