@@ -276,7 +276,7 @@ async function finish() {
     // 1. Save the profile — one document, one request. The wizard asks for the
     // company name twice (personal step and engineer step); the engineer step's
     // answer is the one that was already winning when these were two calls.
-    await authStore.save({
+    const savedUser = await authStore.save({
       name: form.value.name,
       phone: form.value.phone,
       inspector_number: form.value.inspector_number || null,
@@ -325,15 +325,10 @@ async function finish() {
       await api.userSettings.save({email_from_name: form.value.email_from_name});
     }
 
-    // 5. Mark onboarding complete — server only sets the flag if the core
-    // fields (name/phone/company_name) actually came through.
-    const completeRes = await fetch(`${SERVER}/api/profile/onboarding-complete`, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!completeRes.ok) throw new Error(`onboarding-complete ${completeRes.status}`);
-    const {onboarding_completed: completed} = await completeRes.json();
-
+    // The profile save also marks onboarding complete once core fields exist.
+    // This avoids trapping users in the modal when an unrelated follow-up call
+    // fails after their data has already been persisted.
+    const completed = Boolean(savedUser?.onboarding_completed);
     await authStore.fetchMe();
     emit("update:modelValue", false);
     if (failedUploads.length) {

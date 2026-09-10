@@ -183,7 +183,14 @@ export function registerProfileRoutes(app: express.Application) {
     patch.updated_at = new Date().toISOString();
 
     await col("users").updateOne({ _id: new ObjectId(ctx.userId) as any }, { $set: patch });
-    const updated = await col("users").findOne({ _id: new ObjectId(ctx.userId) as any });
+    let updated = await col("users").findOne({ _id: new ObjectId(ctx.userId) as any }) as any;
+    // Completing the core identity fields is the onboarding completion event.
+    // Keep it in this write flow so a separate request cannot trap the user in
+    // the onboarding modal after their details were already saved.
+    if (updated?.name?.trim() && updated?.phone?.trim() && updated?.company_name?.trim() && !updated.onboarding_completed) {
+      await col("users").updateOne({ _id: new ObjectId(ctx.userId) as any }, { $set: {onboarding_completed: true} });
+      updated = {...updated, onboarding_completed: true};
+    }
     res.json(serializeUser(updated) ?? {});
   });
 
