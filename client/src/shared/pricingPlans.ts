@@ -170,7 +170,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     {
         id: "digital",
         name: "דיגיטלי",
-        price: 50,
+        price: 47,
         period: "/ חודש",
         blurb: "לניהול תסקירים ותזכורות בהזנה ידנית, ללא שמירת קבצים בענן.",
         features: [
