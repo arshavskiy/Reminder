@@ -21,6 +21,7 @@ import {
   PROCESS_DESCRIPTORS,
   PROCESS_IDS,
   recentQueueJobs,
+  userQueueLoad,
   setProcessPaused,
   type ProcessId,
 } from "../ops/processControl";
@@ -528,6 +529,7 @@ export function registerAdminRoutes(app: express.Application) {
         { phone: rx },
         { website: rx },
         { certificationType: rx },
+        { professionType: rx },
       ];
     }
 
@@ -2893,6 +2895,11 @@ export function registerAdminRoutes(app: express.Application) {
         const queue = descriptor.jobCollection
           ? await jobQueueStats(descriptor.jobCollection).catch(() => null)
           : null;
+        // Jobs belong to individual users, so the fleet-wide counts above are
+        // only half the picture — this says whose work is actually affected.
+        const userLoad = descriptor.jobCollection
+          ? await userQueueLoad(descriptor.jobCollection).catch(() => [])
+          : [];
         const healthRows = (health as any[])
           .filter((row) => SCHEDULER_HEALTH_NAMES[descriptor.id]?.includes(row.name))
           .map((row) => ({
@@ -2910,6 +2917,7 @@ export function registerAdminRoutes(app: express.Application) {
           paused_by: control?.paused_by ?? null,
           pause_reason: control?.reason ?? null,
           queue,
+          user_load: userLoad,
           health: healthRows,
         };
       }));
@@ -2979,8 +2987,9 @@ export function registerAdminRoutes(app: express.Application) {
     if (!descriptor.jobCollection) { res.status(400).json({ error: "process_has_no_queue" }); return; }
 
     const limit = Math.min(Number(req.query.limit ?? 20) || 20, 100);
+    const userId = typeof req.query.userId === "string" && req.query.userId ? req.query.userId : undefined;
     try {
-      res.json({ rows: await recentQueueJobs(descriptor.jobCollection, limit) });
+      res.json({ rows: await recentQueueJobs(descriptor.jobCollection, limit, userId) });
     } catch (err: any) {
       res.status(500).json({ error: err.message ?? "Failed" });
     }

@@ -238,6 +238,50 @@ export async function jobQueueStats(collection: string): Promise<JobQueueStats> 
   };
 }
 
+export type UserQueueLoad = {
+  user_id: string | null;
+  queued: number;
+  running: number;
+  retry_wait: number;
+  failed: number;
+  total: number;
+};
+
+/**
+ * Queue load broken down by user.
+ *
+ * The fleet-wide totals answer "is the pipeline healthy"; this answers "whose
+ * work is affected", which is the question an operator actually acts on — one
+ * account's stuck batch looks identical to a systemic outage in the aggregate.
+ * Completed rows are excluded so the list stays about outstanding work.
+ */
+export async function userQueueLoad(collection: string, limit = 20): Promise<UserQueueLoad[]> {
+  const rows = await col(collection).aggregate([
+    { $match: { status: { $in: ["queued", "running", "retry_wait", "failed"] } } },
+    {
+      $group: {
+        _id: "$user_id",
+        queued: { $sum: { $cond: [{ $eq: ["$status", "queued"] }, 1, 0] } },
+        running: { $sum: { $cond: [{ $eq: ["$status", "running"] }, 1, 0] } },
+        retry_wait: { $sum: { $cond: [{ $eq: ["$status", "retry_wait"] }, 1, 0] } },
+        failed: { $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] } },
+        total: { $sum: 1 },
+      },
+    },
+    { $sort: { total: -1 } },
+    { $limit: limit },
+  ]).toArray();
+
+  return (rows as any[]).map((r) => ({
+    user_id: r._id ? String(r._id) : null,
+    queued: r.queued ?? 0,
+    running: r.running ?? 0,
+    retry_wait: r.retry_wait ?? 0,
+    failed: r.failed ?? 0,
+    total: r.total ?? 0,
+  }));
+}
+
 export type CancelJobResult = { ok: boolean; reason?: string };
 
 /**
@@ -307,10 +351,21 @@ export type QueueJobRow = {
   next_run_at: string | null;
 };
 
-/** Most recent job rows for one worker, newest first, for the admin table. */
-export async function recentQueueJobs(collection: string, limit = 20): Promise<QueueJobRow[]> {
+/**
+ * Most recent job rows for one worker, newest first, for the admin table.
+ *
+ * Every queue row carries the user it belongs to, so `userId` narrows the list
+ * to one account — the usual question when a queue is backed up is whose work
+ * is stuck, not what the fleet is doing in aggregate.
+ */
+export async function recentQueueJobs(
+  collection: string,
+  limit = 20,
+  userId?: string,
+): Promise<QueueJobRow[]> {
+  const filter = userId ? { user_id: userId } : {};
   const rows = await col(collection)
-    .find({}, { sort: { created_at: -1 }, limit } as any)
+    .find(filter as any, { sort: { created_at: -1 }, limit } as any)
     .toArray();
   return (rows as any[]).map((r) => ({
     id: String(r._id),

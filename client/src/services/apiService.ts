@@ -422,6 +422,7 @@ export interface InspectorLead {
   id: string;
   name: string;
   company?: string | null;
+  professionType?: string[] | string | null;
   certificationType?: string | null;
   city?: string | null;
   phone?: string | null;
@@ -949,8 +950,10 @@ export const api = {
     monitorProcesses: () => adminGet<any>("/admin/monitor/processes"),
     setProcessPaused: (id: string, paused: boolean, reason?: string) =>
       adminPost<any>(`/admin/processes/${id}/pause`, { paused, reason }),
-    processJobs: (id: string, limit = 20) =>
-      adminGet<{ rows: any[] }>(`/admin/processes/${id}/jobs?limit=${limit}`),
+    processJobs: (id: string, limit = 20, userId?: string | null) =>
+      adminGet<{ rows: any[] }>(
+        `/admin/processes/${id}/jobs?limit=${limit}${userId ? `&userId=${encodeURIComponent(userId)}` : ""}`,
+      ),
     cancelProcessJob: (id: string, jobId: string) =>
       adminPost<any>(`/admin/processes/${id}/jobs/${jobId}/cancel`, {}),
     sweepTempFiles: () => adminPost<any>("/admin/temp-files/sweep", {}),

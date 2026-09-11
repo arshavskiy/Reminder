@@ -819,7 +819,7 @@
 
           <div class="monitor-block">
             <div class="monitor-block__toolbar">
-              <div class="monitor-block__title">Recent Jobs</div>
+              <div class="monitor-block__title">Outstanding Work By User</div>
               <n-select
                 v-model:value="selectedQueueProcess"
                 :options="queueProcessOptions"
@@ -827,6 +827,39 @@
                 style="width:220px"
                 @update:value="loadProcessJobs"
               />
+            </div>
+            <n-data-table
+              v-if="selectedProcessUserLoad.length"
+              :columns="userLoadColumns"
+              :data="selectedProcessUserLoad"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              :max-height="320"
+              size="small"
+              style="margin-top:10px"
+            />
+            <p v-else class="process-note">No outstanding jobs for this worker.</p>
+            <p v-if="selectedProcessUserLoad.length" class="process-note">
+              Completed jobs are left out — this is work still queued, running, retrying or failed,
+              so a single account's stuck batch does not read as a system-wide outage.
+            </p>
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__toolbar">
+              <div class="monitor-block__title">Recent Jobs</div>
+              <div class="queue-filter">
+                <n-select
+                  v-model:value="queueUserFilter"
+                  :options="userSelectOptions"
+                  size="small"
+                  clearable
+                  filterable
+                  placeholder="All users"
+                  style="width:260px"
+                  @update:value="loadProcessJobs"
+                />
+              </div>
             </div>
             <n-data-table
               :columns="queueJobColumns"
@@ -1866,6 +1899,12 @@ const inspectorLeadColumns: DataTableColumns<InspectorLead> = [
     ]),
   },
   {
+    title: "בעל מקצוע", key: "professionType", align: "left", minWidth: 180, ellipsis: { tooltip: true },
+    render: (row) => Array.isArray(row.professionType)
+      ? row.professionType.join(" · ") || "—"
+      : row.professionType || "—",
+  },
+  {
     title: "Score", key: "leadScore", align: "center", width: 82,
     render: (row) => h(NTag, {
       size: "small",
@@ -2465,6 +2504,7 @@ const jobsLoading = ref(false);
 const sweepRunning = ref(false);
 const selectedQueueProcess = ref<string>("documents");
 const pausingProcess = ref<string | null>(null);
+const queueUserFilter = ref<string | null>(null);
 
 const pausedProcessCount = computed(
   () => (processMonitor.value?.processes ?? []).filter((p: any) => p.paused).length,
@@ -2524,7 +2564,7 @@ async function loadProcessJobs() {
   if (!id) { processJobs.value = []; return; }
   jobsLoading.value = true;
   try {
-    const res = await api.admin.processJobs(id, 50);
+    const res = await api.admin.processJobs(id, 50, queueUserFilter.value);
     processJobs.value = res.rows ?? [];
   } catch {
     processJobs.value = [];
@@ -2653,6 +2693,47 @@ const tempDirColumns: DataTableColumns<any> = [
   },
 ];
 
+/** Outstanding queue work for the selected process, grouped by owning account. */
+const selectedProcessUserLoad = computed(() => {
+  const proc = (processMonitor.value?.processes ?? [])
+    .find((p: any) => p.id === selectedQueueProcess.value);
+  return proc?.user_load ?? [];
+});
+
+const userLoadColumns: DataTableColumns<any> = [
+  {
+    title: "User", key: "user_id", align: "left", minWidth: 200,
+    render: (row) => h("span", { style: "font-size:13px; font-weight:500" },
+      row.user_id ? resolveUserEmail(row.user_id) : "Unassigned"),
+  },
+  {
+    title: "Queued", key: "queued", align: "center", width: 100,
+    render: (row) => h("span", { style: "font-size:12px" }, String(row.queued)),
+  },
+  {
+    title: "Running", key: "running", align: "center", width: 100,
+    render: (row) => h("span", { style: "font-size:12px" }, String(row.running)),
+  },
+  {
+    title: "Retrying", key: "retry_wait", align: "center", width: 100,
+    render: (row) => h("span", { style: "font-size:12px" }, String(row.retry_wait)),
+  },
+  {
+    title: "Failed", key: "failed", align: "center", width: 100,
+    render: (row) => row.failed
+      ? h(NTag, { size: "small", round: true, type: "error" }, { default: () => String(row.failed) })
+      : h("span", { style: "font-size:12px; color:var(--text-secondary)" }, "0"),
+  },
+  {
+    title: "", key: "view", align: "center", width: 110,
+    render: (row) => h(NButton, {
+      size: "tiny",
+      secondary: true,
+      onClick: () => { queueUserFilter.value = row.user_id; void loadProcessJobs(); },
+    }, { default: () => "View jobs" }),
+  },
+];
+
 const queueJobColumns: DataTableColumns<any> = [
   {
     title: "Status", key: "status", align: "center", width: 110,
@@ -2662,6 +2743,13 @@ const queueJobColumns: DataTableColumns<any> = [
         : row.status === "completed" ? "success" : "default";
       return h(NTag, { size: "small", round: true, type }, { default: () => row.status });
     },
+  },
+  {
+    // Jobs are per-user, so the owning account is the first thing an operator
+    // needs; the raw id is a fallback for a user row that is not loaded.
+    title: "User", key: "user_id", align: "left", minWidth: 180,
+    render: (row) => h("span", { style: "font-size:12px" },
+      row.user_id ? resolveUserEmail(row.user_id) : "—"),
   },
   {
     title: "Document", key: "document_id", align: "left", minWidth: 200,
@@ -3260,6 +3348,8 @@ async function loadSectionData(key: string) {
     } else if (key === "system_health") {
       systemHealth.value = await api.admin.monitorSystemHealth();
     } else if (key === "processes") {
+      // Job rows carry a user id; the users list is what turns it into an email.
+      if (users.value.length === 0) await loadUsers();
       processMonitor.value = await api.admin.monitorProcesses();
       await loadProcessJobs();
     } else if (key === "settings") {
@@ -3700,6 +3790,12 @@ onUnmounted(() => {
 
 .monitor-block__toolbar .monitor-block__title {
   margin-bottom: 0;
+}
+
+.queue-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .process-note {
