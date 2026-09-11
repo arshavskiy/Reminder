@@ -3,6 +3,7 @@ import {mkdir, readdir, rename, rm} from "node:fs/promises";
 import {resolve} from "node:path";
 import {execFile} from "node:child_process";
 import {promisify} from "node:util";
+import {loginWithMagic} from "./demoAssets.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,9 +29,9 @@ for (const file of await readdir(outputDir)) {
 }
 
 const browser = await chromium.launch({headless: true});
-const context = await browser.newContext({viewport: {width: 1440, height: 900}, recordVideo: {dir: outputDir, size: {width: 1440, height: 900}}});
+const context = await browser.newContext({viewport: {width: 1440, height: 900}, recordVideo: {dir: outputDir, size: {width: 1440, height: 900}}, serviceWorkers: "block"});
 const auth = await context.newPage();
-await auth.goto(magicUrl, {waitUntil: "networkidle"});
+await loginWithMagic(auth, magicUrl, appUrl);
 await auth.evaluate(() => localStorage.removeItem("walkthrough_completed"));
 await auth.waitForTimeout(700);
 const onboarding = auth.getByRole("dialog").filter({hasText: "ברוכים הבאים ל-RemindOCR"});
@@ -134,7 +135,7 @@ function loadedSelectorForRoute(route) {
     if (/^\/quotes\/.+/.test(route)) return ".quote-detail__grid";
     if (route === "/clients") return ".clients-row, .clients-empty";
     if (/^\/clients\/.+/.test(route)) return ".client-detail .details-card";
-    if (route.startsWith("/equipment")) return ".equipment-page, .equipment-list, .equipment-grid";
+    if (route.startsWith("/equipment")) return ".page2 .row, .page2 .subhead, .equipment-filters";
     if (route.startsWith("/reminders")) return ".reminders-page, .reminders-table, .reminder-list";
     if (route.startsWith("/reports")) return ".reports-page, .reports-layout, .report-card";
     return "main, .page, .content";
@@ -230,7 +231,13 @@ async function navigateFromDashboard(page, route) {
         await visualClick(page, page.locator(".document-table-row").first());
     } else if (route.startsWith("/quotes")) {
         await waitForEverythingLoaded(page, "/documents");
-        await visualClick(page, page.locator(".documents-workspace-tabs a").filter({hasText: "הצעות מחיר"}).first());
+        const quotesTab = page.locator(".documents-workspace-tabs a").filter({hasText: "הצעות מחיר"}).first();
+        if (await quotesTab.isVisible().catch(() => false)) {
+          await visualClick(page, quotesTab);
+        } else {
+          await page.goto(`${appUrl}/quotes`, {waitUntil: "domcontentloaded"});
+          await installVisibleCursor(page);
+        }
         if (route.startsWith("/quotes/")) {
             await waitForEverythingLoaded(page, "/quotes");
             await visualClick(page, page.locator(".quote-row").first());

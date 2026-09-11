@@ -1,6 +1,7 @@
 import {chromium} from "../../client/node_modules/@playwright/test/index.mjs";
 import {mkdir, rename} from "node:fs/promises";
 import {resolve} from "node:path";
+import {loginWithMagic} from "./demoAssets.mjs";
 
 const args = Object.fromEntries(process.argv.slice(2).map(value => {
   const [key, ...rest] = value.replace(/^--/, "").split("=");
@@ -25,6 +26,7 @@ const context = await browser.newContext({
   viewport: {width: 1440, height: 900},
   recordVideo: {dir: rawDir, size: {width: 1440, height: 900}},
   acceptDownloads: true,
+  serviceWorkers: "block",
 });
 await context.addInitScript(() => {
   localStorage.setItem("walkthrough_completed", JSON.stringify(["main", "documents"]));
@@ -77,11 +79,18 @@ async function chooseSelection(selection, option) {
 }
 
 try {
-  await page.goto(magicUrl, {waitUntil: "networkidle"});
-  await page.goto(`${appUrl}/dashboard`, {waitUntil: "networkidle"});
+  await loginWithMagic(page, magicUrl, appUrl);
+  await page.goto(`${appUrl}/dashboard`, {waitUntil: "domcontentloaded"});
+  const onboarding = page.getByRole("dialog").filter({hasText: "ברוכים הבאים ל-RemindOCR"});
+  if (await onboarding.isVisible().catch(() => false)) {
+    await onboarding.getByRole("button", {name: "דלג על ההגדרה"}).click();
+    await onboarding.waitFor({state: "hidden", timeout: 15000}).catch(() => {});
+  }
   await pause(800);
   await caption("יצירת תסקיר חדש ב־RemindOCR", 1500);
-  await page.getByRole("button", {name: /תסקיר חדש/}).click();
+  const newInspection = page.locator(".dash__new-contract").filter({hasText: "תסקיר חדש"}).first();
+  await newInspection.waitFor({state: "visible", timeout: 20000});
+  await newInspection.click();
   await dialog().waitFor({state: "visible"});
 
   const reportNumber = field("מספר תסקיר").locator("input");

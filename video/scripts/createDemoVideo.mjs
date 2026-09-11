@@ -1,18 +1,18 @@
 import {chromium} from "../../client/node_modules/@playwright/test/index.mjs";
-import {mkdir, rename, readdir} from "node:fs/promises";
+import {mkdir, rename} from "node:fs/promises";
 import {resolve} from "node:path";
+import {DEMO_LOGO, DEMO_SIGNATURE, listDemoPdfs, loginWithMagic} from "./demoAssets.mjs";
 
 const appUrl = "http://localhost:4173";
 const magicUrl = process.env.DEMO_MAGIC_LINK_URL;
 const rawDir = resolve("video/recordings/raw");
-const logoPath = resolve("client/src/public/logo-options/option-b-r-mark.png");
-const signaturePath = resolve("video/assets/demo-signature.png");
-const demoPdfDir = resolve("output/pdf/demo-upload-files");
+const logoPath = DEMO_LOGO;
+const signaturePath = DEMO_SIGNATURE;
 await mkdir(rawDir, {recursive: true});
 if (!magicUrl) throw new Error("Set DEMO_MAGIC_LINK_URL to a local magic-link URL before running the video demo.");
 
 const browser = await chromium.launch({headless: true});
-const context = await browser.newContext({viewport: {width: 1440, height: 900}, recordVideo: {dir: rawDir, size: {width: 1440, height: 900}}, acceptDownloads: true});
+const context = await browser.newContext({viewport: {width: 1440, height: 900}, recordVideo: {dir: rawDir, size: {width: 1440, height: 900}}, acceptDownloads: true, serviceWorkers: "block"});
 await context.addInitScript(() => {
   localStorage.setItem("walkthrough_completed", JSON.stringify(["main", "documents", "contracts", "reminders", "clients", "reports"]));
   document.addEventListener("DOMContentLoaded", () => {
@@ -36,7 +36,7 @@ async function caption(text, ms = 1100) {
 async function chooseSelection(selection, option) { await selection.click(); await pause(350); await page.getByText(option, {exact: true}).last().click(); await pause(500); }
 
 async function completeProfile() {
-  await page.goto(magicUrl, {waitUntil: "networkidle"}); await pause(800);
+  await loginWithMagic(page, magicUrl, appUrl); await pause(800);
   const onboarding = page.getByRole("dialog").filter({hasText: "ברוכים הבאים ל-RemindOCR"});
   if (!await onboarding.isVisible().catch(() => false)) {
     await page.getByRole("button", {name: "השלמת ההגדרה"}).click();
@@ -73,20 +73,16 @@ async function createInspection(item, index) {
 }
 
 async function uploadDemoPdfs() {
-  const pdfFiles = (await readdir(demoPdfDir))
-    .filter(name => name.toLowerCase().endsWith(".pdf"))
-    .sort()
-    .map(name => resolve(demoPdfDir, name));
-  if (pdfFiles.length !== 20) throw new Error(`Expected 20 demo PDFs, found ${pdfFiles.length}`);
-
-  await page.goto(`${appUrl}/documents`, {waitUntil: "networkidle"});
-  await caption("העלאת 20 מסמכי הדגמה למערכת", 1100);
-  await page.getByRole("button", {name: "העלה קבצים"}).click();
-  const uploadDialog = page.locator('[role="dialog"]').filter({hasText: "העלאת מסמכים"});
-  await uploadDialog.locator('input[type="file"]').setInputFiles(pdfFiles);
-  await caption("20 קבצי PDF נבחרו לעיבוד אוטומטי", 1000);
-  await uploadDialog.getByRole("button", {name: "העלה ועבד"}).click();
-  await uploadDialog.waitFor({state: "hidden", timeout: 30000});
+  const pdfFiles = await listDemoPdfs();
+  await page.goto(`${appUrl}/dashboard`, {waitUntil: "networkidle"});
+  await caption(`העלאת ${pdfFiles.length} תסקירי הדגמה מהדשבורד`, 1100);
+  await page.locator(".drop-strip").waitFor({state: "visible", timeout: 15000});
+  await page.locator('input.hidden-file-input[type="file"]').setInputFiles(pdfFiles);
+  const results = page.getByRole("dialog").filter({hasText: "תוצאות העלאה"});
+  await results.waitFor({state: "visible", timeout: 15000});
+  await results.locator(".ur-progress").waitFor({state: "hidden", timeout: 420000});
+  await results.getByRole("button", {name: "עבור למסמכים"}).click();
+  await page.waitForURL(/\/documents/, {timeout: 20000});
   await pause(1000);
 }
 
@@ -178,10 +174,13 @@ async function createMultiEquipmentInspection() {
 
 async function showWorkspaceAndReports() {
   await page.goto(`${appUrl}/documents`, {waitUntil: "networkidle"}); await pause(700);
-  await caption("מסמכים", 700);
-  await page.getByRole("link", {name: "תסקירים"}).click(); await page.waitForURL(/\/contracts/); await pause(800);
   await caption("תסקירים", 700);
-  await page.getByRole("link", {name: "הצעות מחיר"}).click(); await page.waitForURL(/\/quotes/); await pause(800);
+  const quotesTab = page.locator(".documents-workspace-tabs a").filter({hasText: "הצעות מחיר"});
+  if (await quotesTab.isVisible().catch(() => false)) {
+    await quotesTab.click();
+    await page.waitForURL(/\/quotes/);
+    await pause(800);
+  }
   await caption("הצעות מחיר — שמורות לצד התסקירים", 950);
   await page.goto(`${appUrl}/clients`, {waitUntil: "networkidle"}); await pause(800);
   await caption("לקוחות", 700);

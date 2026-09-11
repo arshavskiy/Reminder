@@ -1,59 +1,38 @@
 # הקלטת סרטוני הדגמה
 
-סקריפטי ההקלטה נמצאים ב-`video/scripts`, התסריטים העסקיים ב-`video/scenarios`, והקבצים המוכנים נשמרים ב-`video/recordings`.
+סקריפטי ההקלטה ב-`video/scripts`, התסריטים ב-`video/scenarios`, והתוצרים ב-`video/recordings`.
 
-## יצירת תסקיר חדש עם חתימה והצעת מחיר
+קבצי ההעלאה הם **10 תסקירי PDF בעברית** מ-`video/assets/demo-upload-files-hebrew`. אין להשתמש ב-`output/pdf/demo-upload-files` (התיקייה לא קיימת). עמוד **חשבוניות** כבוי בפרודקשן — לא מצלמים אותו.
 
-הסקריפט `recordNewInspectionVideo.mjs` נכנס למשתמש דרך קישור קסם, יוצר תסקיר עם שלוש מכונות והצעת מחיר, מציג את המסמך החתום ומוריד את ה-PDF.
+## דרישות
 
-### הרצה מקומית
-
-ודאו שהשרת פועל ב-`3737` והלקוח ב-`4173`. צרו קישור כניסה למשתמש:
+השרת ב-`3737` והלקוח ב-`4173`. חשבון דמו עם פרופיל, לוגו וחתימה. קישור כניסה:
 
 ```powershell
 cd E:\Projects\Reminder\server
 npm run auth:magic-link -- --email=video-onboarding-v1-20260910@example.com
 ```
 
-העתיקו את הקישור שהודפס והריצו משורש הפרויקט:
+## סקריפטים
+
+| פקודה | מה מצלמים |
+| --- | --- |
+| `npm run video:record-full -- --magic-url="..."` | דמו מלא: העלאה, תסקירים, ציוד (יצרן+דגם), לקוחות, תסקיר+הצעת מחיר, דוח |
+| `npm run video:record-inspection -- --magic-url="..."` | תסקיר חדש עם שלוש מכונות, חתימה והצעת מחיר |
+| `npm run video:record-pages -- --magic-url="..."` | קליפ קצר לכל מסך + סיור אתר |
+| `npm run video:record-ocr --` | העלאה מהדשבורד עד מסמך בודד |
+
+משתני סביבה: `DEMO_MAGIC_LINK_URL`, `DEMO_APP_URL`, `DEMO_TARGET=local|production`.
+
+במצב `production` נדרשות כתובות HTTPS:
 
 ```powershell
-cd E:\Projects\Reminder
-npm run video:record-inspection -- --target=local --magic-url="http://localhost:3737/auth/magic?token=TOKEN"
+npm run video:record-full -- --target=production --app-url="https://app.remindocr.com" --magic-url="https://api.remindocr.com/auth/magic?token=TOKEN"
 ```
-
-אפשר להשתמש גם במשתני סביבה:
-
-```powershell
-$env:DEMO_TARGET="local"
-$env:DEMO_APP_URL="http://localhost:4173"
-$env:DEMO_MAGIC_LINK_URL="http://localhost:3737/auth/magic?token=TOKEN"
-npm run video:record-inspection
-```
-
-### הרצה בפרודקשן
-
-הרצת פרודקשן יוצרת תסקיר אמיתי בחשבון ובמסד הנתונים של פרודקשן. צרו קישור באמצעות הגדרות הפרודקשן של השרת:
-
-```powershell
-cd E:\Projects\Reminder\server
-$env:SERVER_URL="https://api.remindocr.com"
-npm run auth:magic-link -- --production --email=video-onboarding-v1-20260910@example.com
-```
-
-לאחר מכן הריצו:
-
-```powershell
-cd E:\Projects\Reminder
-npm run video:record-inspection -- --target=production --app-url="https://app.remindocr.com" --magic-url="https://api.remindocr.com/auth/magic?token=TOKEN"
-```
-
-במצב `production` הסקריפט דורש כתובות HTTPS גם לאפליקציה וגם לקישור הכניסה. כך קישור מקומי לא ייצור בטעות הקלטה חלקית או יפנה למסד נתונים אחר.
 
 ## תוצרים
 
-- `video/recordings/RemindOCR-new-inspection-<timestamp>.webm` — סרטון ההקלטה. אפשר לקבוע שם בעזרת `--output=filename.webm`.
-- `video/recordings/demo-new-inspection-signed.pdf` — התסקיר שהורד במהלך ההקלטה.
-- `video/recordings/raw/` — קובץ Playwright זמני בזמן ההקלטה.
-
-כל הרצה מחליפה את שני קובצי התוצר בעלי השמות הקבועים. כדי לשמור גרסאות קודמות, העתיקו או שנו את שמן לפני ההרצה הבאה.
+- `video/recordings/RemindOCR-full-product-demo-<date>.webm`
+- `video/recordings/RemindOCR-new-inspection-<timestamp>.webm`
+- `video/recordings/pages/<date>/` — קליפים לפי מסך
+- `video/recordings/raw/` — קבצי Playwright זמניים
