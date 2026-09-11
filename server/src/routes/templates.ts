@@ -16,6 +16,7 @@ import {parsePdf} from "../pipeline/pdfParser";
 import {ocrFile} from "../pipeline/ocrParser";
 import {parseDocx} from "../pipeline/docxParser";
 import {parseXlsx} from "../pipeline/xlsxParser";
+import {releaseTempFile, tempDir} from "../storage/tempFiles";
 import multer from "multer";
 import type {DocTemplate, EmailTemplate, ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
@@ -216,8 +217,7 @@ export function registerTemplateRoutes(app: express.Application) {
           return;
         }
 
-        const tmpDir = join(getDataDir(), "template_samples");
-        mkdirSync(tmpDir, { recursive: true });
+        const tmpDir = tempDir("template_samples");
         const ext = extname(file.originalname).toLowerCase();
         const safeName = file.originalname.replace(/[^\p{L}\p{N}._-]/gu, "_");
         const tmpPath = join(tmpDir, `${Date.now()}_${safeName}`);
@@ -245,6 +245,10 @@ export function registerTemplateRoutes(app: express.Application) {
         } catch (err) {
           res.status(500).json({ error: `Failed to extract text from sample: ${err}` });
           return;
+        } finally {
+          // The sample is only ever an input to text extraction — nothing below
+          // reads the file again, and the template is built from `text`.
+          releaseTempFile(tmpPath);
         }
 
         if (text.trim().length < 50) {
@@ -283,8 +287,7 @@ export function registerTemplateRoutes(app: express.Application) {
         let fields: DocTemplate["fields"] = [];
         try { fields = JSON.parse(req.body.fields ?? "[]"); } catch {}
 
-        const tmpDir = join(getDataDir(), "template_samples");
-        mkdirSync(tmpDir, { recursive: true });
+        const tmpDir = tempDir("template_samples");
         const ext = extname(file.originalname).toLowerCase();
         const safeName = file.originalname.replace(/[^\p{L}\p{N}._-]/gu, "_");
         const tmpPath = join(tmpDir, `${Date.now()}_${safeName}`);
@@ -308,6 +311,9 @@ export function registerTemplateRoutes(app: express.Application) {
           }
         } catch (err) {
           res.status(500).json({ error: `Failed to extract text: ${err}` }); return;
+        } finally {
+          // Test extraction runs entirely off `text` from here on.
+          releaseTempFile(tmpPath);
         }
 
         if (text.trim().length < 10) {

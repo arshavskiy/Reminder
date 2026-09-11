@@ -87,7 +87,22 @@ function buildSettings(): AppSettings {
     escalationThresholdDays: process.env.ESCALATION_THRESHOLD_DAYS
       ? parseInt(process.env.ESCALATION_THRESHOLD_DAYS, 10)
       : 3,
+
+    tempFileRetentionHours: positiveNumber(process.env.TEMP_FILE_RETENTION_HOURS, 6),
+    tempFileSweepIntervalMinutes: positiveNumber(process.env.TEMP_FILE_SWEEP_INTERVAL_MINUTES, 60),
   };
+}
+
+/**
+ * Env numbers that must stay positive. A zero or negative retention would make
+ * the sweeper delete files that are still being written, and a non-numeric value
+ * would turn the interval into NaN (which setInterval treats as 1ms), so both
+ * fall back to the default rather than being trusted.
+ */
+function positiveNumber(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 // Singleton — built once per process, immutable after that.

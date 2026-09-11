@@ -49,6 +49,7 @@ import {registerResendWebhook} from "./reminders/resendDelivery";
 import {initializePaymentCollections, registerPaymentRoutes} from "./payments/routes";
 import {registerWhatsAppRoutes, registerWhatsAppWebhook} from "./whatsapp/routes";
 import {initializeWhatsAppQueue, startWhatsAppWorker} from "./whatsapp/queue";
+import {startTempFileSweeper, stopTempFileSweeper} from "./storage/tempFiles";
 import {requireAnyFeature, requireMinRole, requirePlans} from "./auth/middleware";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -249,6 +250,7 @@ async function main() {
   startGmailImportJobWorker();
   startDriveExportJobWorker();
   startDocumentProcessingJobWorker();
+  startTempFileSweeper();
 
   const server = app.listen(settings.port, () => {
     logger.info("server_started", {
@@ -270,6 +272,7 @@ async function main() {
     logger.info("server_shutdown_started", { signal });
     server.close();
     try {
+      stopTempFileSweeper();
       await stopWhatsAppWorker();
       await closeInspectorLeadsClient();
       await closeDb();

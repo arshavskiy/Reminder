@@ -722,6 +722,126 @@
       </section>
 
       <!-- ── Monthly Reports ── -->
+
+      <!-- Background processes & temp-file disk usage -->
+      <section v-if="activeSection === 'processes'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="processMonitor">
+          <n-alert v-if="pausedProcessCount > 0" type="warning" :bordered="false" style="margin-bottom:16px">
+            {{ pausedProcessCount }} background {{ pausedProcessCount === 1 ? 'process is' : 'processes are' }}
+            paused. Paused work stays queued and resumes where it left off.
+          </n-alert>
+
+          <div class="admin-stats-grid">
+            <AdminStatCard
+              title="Background Processes"
+              :primary="processMonitor.processes.length - pausedProcessCount"
+              primary-label="Running"
+              :secondary="pausedProcessCount"
+              secondary-label="Paused"
+              :status="pausedProcessCount === 0 ? 'success' : 'warning'"
+            />
+            <AdminStatCard
+              title="Queued Work"
+              :primary="totalQueuedJobs"
+              primary-label="Jobs Waiting"
+              :secondary="totalRunningJobs"
+              secondary-label="In Flight"
+              :status="totalStaleJobs > 0 ? 'warning' : 'default'"
+            />
+            <AdminStatCard
+              title="Temp Files On Disk"
+              :primary="formatBytes(tempTotalBytes)"
+              primary-label="Total Size"
+              :secondary="tempTotalFiles"
+              secondary-label="Files"
+              :status="tempStaleBytes > 0 ? 'warning' : 'success'"
+            />
+            <AdminStatCard
+              title="Sweeper"
+              :primary="processMonitor.temp_files.sweeper.running ? 'Running' : 'Stopped'"
+              :primary-label="`Every ${processMonitor.temp_files.sweeper.interval_minutes}m`"
+              :secondary="formatDate(processMonitor.temp_files.sweeper.last_run_at)"
+              secondary-label="Last Sweep"
+              :status="processMonitor.temp_files.sweeper.running ? 'success' : 'warning'"
+            />
+            <AdminStatCard
+              title="This Container"
+              :primary="formatInterval(processMonitor.container.uptime_seconds)"
+              primary-label="Uptime"
+              :secondary="formatBytes(processMonitor.container.memory_rss_bytes)"
+              secondary-label="Memory (RSS)"
+              :status="'default'"
+            />
+          </div>
+
+          <div class="monitor-block" style="margin-top:20px">
+            <div class="monitor-block__title">Background Processes</div>
+            <n-data-table
+              :columns="processColumns"
+              :data="processMonitor.processes"
+              :bordered="false"
+              :pagination="false"
+              size="small"
+              style="margin-top:10px"
+            />
+            <p class="process-note">
+              Pausing is stored in the database, so it survives a redeploy and applies to every
+              container. A job already in flight is allowed to finish — only the next one is held back.
+            </p>
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__toolbar">
+              <div class="monitor-block__title">Temp Directories</div>
+              <n-button
+                size="small"
+                secondary
+                :loading="sweepRunning"
+                @click="runTempSweep"
+              >
+                Sweep now
+              </n-button>
+            </div>
+            <n-data-table
+              :columns="tempDirColumns"
+              :data="processMonitor.temp_files.directories"
+              :bordered="false"
+              :pagination="false"
+              size="small"
+              style="margin-top:10px"
+            />
+            <p class="process-note">
+              Files here are scratch copies — the real document lives in object storage. Anything older
+              than {{ processMonitor.temp_files.sweeper.retention_hours }}h is swept automatically.
+            </p>
+          </div>
+
+          <div class="monitor-block">
+            <div class="monitor-block__toolbar">
+              <div class="monitor-block__title">Recent Jobs</div>
+              <n-select
+                v-model:value="selectedQueueProcess"
+                :options="queueProcessOptions"
+                size="small"
+                style="width:220px"
+                @update:value="loadProcessJobs"
+              />
+            </div>
+            <n-data-table
+              :columns="queueJobColumns"
+              :data="processJobs"
+              :loading="jobsLoading"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              :max-height="400"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+        </template>
+      </section>
+
       <section v-if="activeSection === 'monthly'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="monthlyMonitor">
@@ -1651,6 +1771,7 @@ const adminSections = [
   { key: "import_queue",      label: "Import Queue",           icon: TimerOutline },
   { key: "invoices",          label: "Invoices",               icon: ReceiptOutline },
   { key: "system_health",     label: "System Health",          icon: PulseOutline },
+  { key: "processes",         label: "Processes & Temp Files", icon: PulseOutline },
   { key: "storage_drive",     label: "Storage & Drive",        icon: ServerOutline },
   { key: "settings",           label: "Settings",               icon: SettingsOutline },
 ];
@@ -2337,6 +2458,239 @@ const JOB_NAME_HE: Record<string, string> = {
   checkEscalations: "Escalations",
 };
 
+// ── Background processes & temp files ───────────────────────────────────────
+const processMonitor = ref<any>(null);
+const processJobs = ref<any[]>([]);
+const jobsLoading = ref(false);
+const sweepRunning = ref(false);
+const selectedQueueProcess = ref<string>("documents");
+const pausingProcess = ref<string | null>(null);
+
+const pausedProcessCount = computed(
+  () => (processMonitor.value?.processes ?? []).filter((p: any) => p.paused).length,
+);
+
+const totalQueuedJobs = computed(() =>
+  (processMonitor.value?.processes ?? [])
+    .reduce((sum: number, p: any) => sum + (p.queue?.queued ?? 0), 0),
+);
+
+const totalRunningJobs = computed(() =>
+  (processMonitor.value?.processes ?? [])
+    .reduce((sum: number, p: any) => sum + (p.queue?.running ?? 0), 0),
+);
+
+const totalStaleJobs = computed(() =>
+  (processMonitor.value?.processes ?? [])
+    .reduce((sum: number, p: any) => sum + (p.queue?.stale_running ?? 0), 0),
+);
+
+const tempTotalBytes = computed(() =>
+  (processMonitor.value?.temp_files?.directories ?? [])
+    .reduce((sum: number, d: any) => sum + (d.total_bytes ?? 0), 0),
+);
+
+const tempTotalFiles = computed(() =>
+  (processMonitor.value?.temp_files?.directories ?? [])
+    .reduce((sum: number, d: any) => sum + (d.file_count ?? 0), 0),
+);
+
+const tempStaleBytes = computed(() =>
+  (processMonitor.value?.temp_files?.directories ?? [])
+    .reduce((sum: number, d: any) => sum + (d.stale_bytes ?? 0), 0),
+);
+
+const queueProcessOptions = computed(() =>
+  (processMonitor.value?.processes ?? [])
+    .filter((p: any) => p.jobCollection)
+    .map((p: any) => ({ label: p.label, value: p.id })),
+);
+
+async function toggleProcessPaused(row: any, paused: boolean) {
+  pausingProcess.value = row.id;
+  try {
+    await api.admin.setProcessPaused(row.id, paused);
+    message.success(paused ? `${row.label} paused` : `${row.label} resumed`);
+    processMonitor.value = await api.admin.monitorProcesses();
+  } catch {
+    message.error(`Could not ${paused ? "pause" : "resume"} ${row.label}`);
+  } finally {
+    pausingProcess.value = null;
+  }
+}
+
+async function loadProcessJobs() {
+  const id = selectedQueueProcess.value;
+  if (!id) { processJobs.value = []; return; }
+  jobsLoading.value = true;
+  try {
+    const res = await api.admin.processJobs(id, 50);
+    processJobs.value = res.rows ?? [];
+  } catch {
+    processJobs.value = [];
+  } finally {
+    jobsLoading.value = false;
+  }
+}
+
+async function cancelProcessJob(row: any) {
+  try {
+    const res = await api.admin.cancelProcessJob(selectedQueueProcess.value, row.id);
+    // A running job cannot be interrupted mid-flight, only unlocked so a worker
+    // retries it — say which of the two actually happened.
+    message.success(res.reason === "released_running_job"
+      ? "Running job released — a worker will retry it"
+      : "Job cancelled");
+    await loadProcessJobs();
+    processMonitor.value = await api.admin.monitorProcesses();
+  } catch {
+    message.error("Could not cancel job");
+  }
+}
+
+async function runTempSweep() {
+  sweepRunning.value = true;
+  try {
+    const res = await api.admin.sweepTempFiles();
+    const deleted = res.result?.deleted_count ?? 0;
+    message.success(deleted > 0
+      ? `Removed ${deleted} file(s), freed ${formatBytes(res.result.deleted_bytes ?? 0)}`
+      : "Nothing past retention — no files removed");
+    processMonitor.value = await api.admin.monitorProcesses();
+  } catch {
+    message.error("Sweep failed");
+  } finally {
+    sweepRunning.value = false;
+  }
+}
+
+const processColumns: DataTableColumns<any> = [
+  {
+    title: "Process", key: "label", align: "left", minWidth: 180,
+    render: (row) => h("div", {}, [
+      h("div", { style: "font-size:13px; font-weight:600" }, row.label),
+      h("div", { style: "font-size:11px; color:var(--text-secondary); margin-top:2px" }, row.description),
+    ]),
+  },
+  {
+    title: "Kind", key: "kind", align: "center", width: 120,
+    render: (row) => h(NTag, { size: "small", round: true, type: "default" },
+      { default: () => row.kind === "queue_worker" ? "Queue" : "Timer" }),
+  },
+  {
+    title: "State", key: "paused", align: "center", width: 120,
+    render: (row) => h(
+      NTag,
+      { size: "small", round: true, type: row.paused ? "warning" : "success" },
+      { default: () => row.paused ? "Paused" : "Running" },
+    ),
+  },
+  {
+    title: "Queue", key: "queue", align: "left", minWidth: 180,
+    render: (row) => {
+      if (!row.queue) return h("span", { style: "font-size:12px; color:var(--text-secondary)" }, "—");
+      const q = row.queue;
+      const parts = [`${q.queued} queued`, `${q.running} running`];
+      if (q.retry_wait) parts.push(`${q.retry_wait} retrying`);
+      if (q.failed) parts.push(`${q.failed} failed`);
+      return h("div", {}, [
+        h("div", { style: "font-size:12px" }, parts.join(" · ")),
+        q.stale_running
+          ? h("div", { style: "font-size:11px; color:var(--error-color,#d03050); margin-top:2px" },
+              `${q.stale_running} stuck running`)
+          : null,
+      ]);
+    },
+  },
+  {
+    title: "Last Error", key: "last_error", align: "left", minWidth: 160, ellipsis: { tooltip: true },
+    render: (row) => {
+      const failing = (row.health ?? []).find((h2: any) => h2.last_error);
+      return h("span", { style: "font-size:12px; color:var(--error-color,#d03050)" },
+        failing ? `${failing.name}: ${failing.last_error}` : "—");
+    },
+  },
+  {
+    title: "Pause", key: "actions", align: "center", width: 100,
+    // Keyed on the state it is showing: without this the switch is reused across
+    // data refreshes and keeps the position the click left it in, so a failed
+    // pause (or a resume made elsewhere) would leave the toggle disagreeing with
+    // the State tag next to it.
+    render: (row) => h(NSwitch, {
+      key: `${row.id}-${row.paused ? "paused" : "running"}`,
+      value: !row.paused,
+      loading: pausingProcess.value === row.id,
+      size: "small",
+      onUpdateValue: (running: boolean) => toggleProcessPaused(row, !running),
+    }),
+  },
+];
+
+const tempDirColumns: DataTableColumns<any> = [
+  {
+    title: "Directory", key: "name", align: "left", minWidth: 140,
+    render: (row) => h("span", { style: "font-size:13px; font-weight:500" }, `data/${row.name}`),
+  },
+  {
+    title: "Files", key: "file_count", align: "center", width: 90,
+    render: (row) => h("span", { style: "font-size:12px" }, String(row.file_count)),
+  },
+  {
+    title: "Size", key: "total_bytes", align: "right", width: 110,
+    render: (row) => h("span", { style: "font-size:12px" }, formatBytes(row.total_bytes)),
+  },
+  {
+    title: "Past Retention", key: "stale_count", align: "center", width: 140,
+    render: (row) => row.stale_count
+      ? h(NTag, { size: "small", round: true, type: "warning" },
+          { default: () => `${row.stale_count} · ${formatBytes(row.stale_bytes)}` })
+      : h("span", { style: "font-size:12px; color:var(--text-secondary)" }, "none"),
+  },
+  {
+    title: "Oldest File", key: "oldest_file_age_minutes", align: "left", minWidth: 120,
+    render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
+      row.oldest_file_age_minutes === null ? "—" : formatInterval(row.oldest_file_age_minutes * 60)),
+  },
+];
+
+const queueJobColumns: DataTableColumns<any> = [
+  {
+    title: "Status", key: "status", align: "center", width: 110,
+    render: (row) => {
+      const type = row.status === "failed" ? "error"
+        : row.status === "running" ? "info"
+        : row.status === "completed" ? "success" : "default";
+      return h(NTag, { size: "small", round: true, type }, { default: () => row.status });
+    },
+  },
+  {
+    title: "Document", key: "document_id", align: "left", minWidth: 200,
+    render: (row) => h("span", { style: "font-size:11px; font-family:monospace" }, row.document_id ?? "—"),
+  },
+  {
+    title: "Attempts", key: "attempts", align: "center", width: 100,
+    render: (row) => h("span", { style: "font-size:12px" },
+      row.max_attempts ? `${row.attempts ?? 0}/${row.max_attempts}` : String(row.attempts ?? 0)),
+  },
+  {
+    title: "Created", key: "created_at", align: "left", minWidth: 150,
+    render: (row) => h("span", { style: "font-size:12px; color:var(--text-secondary)" },
+      row.created_at ? new Date(row.created_at).toLocaleString("en-US") : "—"),
+  },
+  {
+    title: "Error", key: "error_message", align: "left", minWidth: 180, ellipsis: { tooltip: true },
+    render: (row) => h("span", { style: "font-size:12px; color:var(--error-color,#d03050)" },
+      row.error_message ?? "—"),
+  },
+  {
+    title: "", key: "cancel", align: "center", width: 90,
+    render: (row) => ["completed", "failed"].includes(row.status)
+      ? null
+      : h(NButton, { size: "tiny", secondary: true, onClick: () => cancelProcessJob(row) },
+          { default: () => row.status === "running" ? "Release" : "Cancel" }),
+  },
+];
+
 const cronJobColumns: DataTableColumns<any> = [
   {
     title: "Service", key: "name", align: "left", minWidth: 150,
@@ -2905,6 +3259,9 @@ async function loadSectionData(key: string) {
       storageDrive.value = await api.admin.monitorStorageDrive();
     } else if (key === "system_health") {
       systemHealth.value = await api.admin.monitorSystemHealth();
+    } else if (key === "processes") {
+      processMonitor.value = await api.admin.monitorProcesses();
+      await loadProcessJobs();
     } else if (key === "settings") {
       adminSettings.value = await api.admin.getAdminSettings();
     }
@@ -3331,6 +3688,25 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.monitor-block__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.monitor-block__toolbar .monitor-block__title {
+  margin-bottom: 0;
+}
+
+.process-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 10px 0 0;
+  line-height: 1.5;
 }
 
 /* ── S3 Storage Browser ──────────────────────────────────────────────────── */

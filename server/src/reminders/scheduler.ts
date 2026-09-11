@@ -18,6 +18,7 @@ import {clientDisplayName} from "../utils/clientNames";
 import {notifyEmailSendFailed, notifyReminderSkipped} from "../push/adminNotify";
 import {parseObjectRecord, parseReminderEmailTo, pickContractEmail, pickContractEmailWithMeta} from "../contracts/contractEmail.js";
 import {buildGroupedItemsTable, expiryFromReminderTitle, groupedReminderKey} from "./groupedReminderEmail";
+import {isProcessPaused} from "../ops/processControl";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
@@ -62,6 +63,13 @@ export function startScheduler() {
   }
 
   async function tick() {
+    // Checked every tick, not once at start, so an admin pause takes effect
+    // without a redeploy and survives one. The timer keeps firing while paused;
+    // it just does no work, which is what makes resuming a flag flip.
+    if (await isProcessPaused("scheduler")) {
+      logger.info("scheduler_tick_skipped_paused", {});
+      return;
+    }
     if (settings.reminderEnabled) await runWithHealth("checkReminders", checkReminders);
     await runWithHealth("checkMonthlyReports", checkMonthlyReports);
     if (settings.reminderEnabled) await runWithHealth("checkEscalations", checkEscalations);

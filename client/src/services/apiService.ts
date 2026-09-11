@@ -946,6 +946,14 @@ export const api = {
     monitorImportQueue: () => adminGet<any>("/admin/monitor/import-queue"),
     monitorInvoices: () => adminGet<any>("/admin/monitor/invoices"),
     monitorStorageDrive: () => adminGet<any>("/admin/monitor/storage-drive"),
+    monitorProcesses: () => adminGet<any>("/admin/monitor/processes"),
+    setProcessPaused: (id: string, paused: boolean, reason?: string) =>
+      adminPost<any>(`/admin/processes/${id}/pause`, { paused, reason }),
+    processJobs: (id: string, limit = 20) =>
+      adminGet<{ rows: any[] }>(`/admin/processes/${id}/jobs?limit=${limit}`),
+    cancelProcessJob: (id: string, jobId: string) =>
+      adminPost<any>(`/admin/processes/${id}/jobs/${jobId}/cancel`, {}),
+    sweepTempFiles: () => adminPost<any>("/admin/temp-files/sweep", {}),
     listFeatures: () => adminGet<{ rows: FeatureDefinition[] }>("/features"),
     getAdminSettings: () => adminGet<any>("/admin/settings"),
     getUserDetail: (id: string) => adminGet<any>(`/admin/users/${id}/detail`),

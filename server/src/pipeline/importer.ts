@@ -15,6 +15,7 @@ import {classifyDocumentKind, documentTypeFromTemplate, getOrBuildSystemPrompt, 
 import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
 import {deleteFromSpaces, fileExistsInSpaces, getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import {syncDocumentToDrive} from "../storage/gdrive";
+import {isProcessPaused} from "../ops/processControl";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
@@ -352,6 +353,9 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   const docRecord: Record<string, any> = {
     file_name: fileName,
     file_path: managedPath,
+    // Provenance only — never a path to read from. The caller's file is a
+    // staging copy in a temp dir that is released as soon as this import
+    // returns, so by the time anything reads this row the path is already gone.
     original_path: originalPath,
     file_hash: fileHash,
     mime_type: mimeType,
@@ -606,6 +610,14 @@ export function startDocumentProcessingJobWorker(): void {
 async function processDocumentProcessingJobs(): Promise<void> {
   await recoverStaleDocumentProcessingJobs();
   while (true) {
+    // Checked before claiming rather than before the loop, so pausing takes
+    // effect between jobs instead of only at worker start. The job already in
+    // flight is allowed to finish — killing it mid-OCR would just leave a row
+    // locked with nothing to unlock it.
+    if (await isProcessPaused("documents")) {
+      logger.info("document_processing_worker_paused", {});
+      return;
+    }
     const job = await claimNextDocumentProcessingJob();
     if (!job) return;
     await runDocumentProcessingJob(job);

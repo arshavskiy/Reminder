@@ -6,6 +6,7 @@ import {pinFolderToMyDrive, renameDriveFolder, resolveDriveToken, syncDocumentTo
 import {logger} from "../logger";
 import {tierFeatureFlags} from "../plans/tierFeatures";
 import {isObjectStorageMissingError} from "../documents/fileResolver";
+import {isProcessPaused} from "../ops/processControl";
 
 function planAllowsGoogleDrive(planOrRole: string | null | undefined): boolean {
     return tierFeatureFlags(planOrRole).googleDriveSync;
@@ -86,6 +87,10 @@ export function startDriveExportJobWorker() {
 async function processDriveExportJobs() {
     await recoverStaleDriveExportJobs();
     while (true) {
+        if (await isProcessPaused("drive_export")) {
+            logger.info("drive_export_worker_paused", {});
+            return;
+        }
         const job = await claimNextDriveExportJob();
         if (!job) return;
         try {

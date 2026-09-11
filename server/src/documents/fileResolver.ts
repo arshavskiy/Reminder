@@ -72,6 +72,12 @@ export async function resolveDocumentFilePath(doc: StoredDocumentFile): Promise<
     const res = await fetch(signedUrl);
     if (!res.ok) throw new ObjectStorageDownloadError(res.status);
 
+    // Named by document id rather than uniquely, so repeated reads of the same
+    // document overwrite one file instead of growing the directory. Cleanup is
+    // left to the temp-file sweeper: callers hold this path for varying and
+    // overlapping lifetimes (thumbnailing, Drive upload, PDF responses), so
+    // unlinking at any one call site would risk pulling the file out from under
+    // another in-flight request.
     const ext = extname(doc.spaces_key);
     const tmpDir = join(getDataDir(), "tmp");
     mkdirSync(tmpDir, { recursive: true });

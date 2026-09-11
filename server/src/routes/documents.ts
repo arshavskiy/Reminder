@@ -14,6 +14,7 @@ import {
 import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
+import {releaseTempFile, tempDir} from "../storage/tempFiles";
 import {resolveDocumentThumbnail} from "../documents/pdfThumbnail";
 import {extractWithTemplate} from "../pipeline/extractor";
 import {loadAllTemplates, loadTemplate, pickTemplate, documentTypeFromTemplate} from "../templates/seedTemplates";
@@ -382,8 +383,7 @@ export function registerDocumentRoutes(app: express.Application) {
           ...(quotaCategory === "invoices" ? {storageKeyPrefix: "invoices/uploaded"} : {}),
         };
 
-      const uploadDir = join(getDataDir(), "uploads");
-      mkdirSync(uploadDir, { recursive: true });
+      const uploadDir = tempDir("uploads");
 
       const ids: string[] = [];
       const duplicates: string[] = [];
@@ -412,12 +412,21 @@ export function registerDocumentRoutes(app: express.Application) {
           if (displayName.includes("�")) displayName = file.originalname;
         } catch { /* keep original */ }
         const beforeCount = await col("documents").countDocuments(mainDocumentsFilter(userId));
-        const id = await importFile(destPath, undefined, userId, displayName, {
-          ...pipelineOptions,
-          queueProcessing: true,
-          processingJobContext: { source: "upload" },
-          startDelayMs: index * UPLOAD_START_STAGGER_MS,
-        });
+        let id: string;
+        try {
+          id = await importFile(destPath, undefined, userId, displayName, {
+            ...pipelineOptions,
+            queueProcessing: true,
+            processingJobContext: { source: "upload" },
+            startDelayMs: index * UPLOAD_START_STAGGER_MS,
+          });
+        } finally {
+          // importFile has already copied the bytes into data/documents (and from
+          // there to object storage), so this upload-staging copy is dead the
+          // moment it returns — on the duplicate path it was never read at all.
+          // Released in a finally so a failed import does not leave it behind.
+          releaseTempFile(destPath);
+        }
         const afterCount = await col("documents").countDocuments(mainDocumentsFilter(userId));
         ids.push(String(id));
         if (afterCount === beforeCount) duplicates.push(String(id));

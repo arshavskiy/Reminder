@@ -8,6 +8,7 @@ import type {Equipment} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getDataDir} from "../settings";
 import {getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
+import {releaseTempFile, tempDir} from "../storage/tempFiles";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HEBREW_FONT = join(__dirname, "../../../scripts/NotoSansHebrew.ttf");
@@ -576,11 +577,16 @@ export function registerEquipmentRoutes(app: express.Application) {
 
       if (spacesEnabled()) {
         // Save buffer to a temp file then upload to S3
-        const tmpDir = join(getDataDir(), "uploads");
-        mkdirSync(tmpDir, { recursive: true });
+        const tmpDir = tempDir("uploads");
         const tmpPath = join(tmpDir, `photo-${Date.now()}${ext}`);
         writeFileSync(tmpPath, file.buffer);
-        await uploadToSpaces(tmpPath, key, file.mimetype);
+        try {
+          await uploadToSpaces(tmpPath, key, file.mimetype);
+        } finally {
+          // Only ever a staging file for the upload — the photo itself now lives
+          // in object storage under `key`.
+          releaseTempFile(tmpPath);
+        }
         photoUrl = await getSpacesSignedUrl(key, 7 * 24 * 3600);
         // Store the S3 key so we can refresh the URL later; encode as "s3:<key>|<url>"
         photoUrl = `s3:${key}`;

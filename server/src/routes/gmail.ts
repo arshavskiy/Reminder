@@ -7,6 +7,8 @@ import { getSettings, getDataDir } from "../settings";
 import { requireAuth } from "../auth/middleware";
 import { generateState, generateCodeVerifier, generateCodeChallenge } from "../auth/google";
 import { importFile, type PipelineOptions } from "../pipeline/importer";
+import { releaseTempFile, tempDir } from "../storage/tempFiles";
+import { isProcessPaused } from "../ops/processControl";
 import { logger } from "../logger";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
 import { featureFlagsForUser, planAllowsDocumentImport, PLAN_GATE_MESSAGES, tierFeatureFlags } from "../plans/tierFeatures";
@@ -783,6 +785,10 @@ export function startGmailImportJobWorker() {
 async function processGmailImportJobs() {
   await recoverStaleGmailImportJobs();
   while (true) {
+    if (await isProcessPaused("gmail_import")) {
+      logger.info("gmail_import_worker_paused", {});
+      return;
+    }
     const job = await claimNextGmailImportJob();
     if (!job) return;
     try {
@@ -1878,13 +1884,20 @@ async function downloadAndImportAttachment(
   const attData = await attRes.json() as { data: string };
   const buf = Buffer.from(attData.data.replace(/-/g, "+").replace(/_/g, "/"), "base64");
 
-  const tmpDir = join(getDataDir(), "gmail-tmp");
-  mkdirSync(tmpDir, { recursive: true });
+  const tmpDir = tempDir("gmail-tmp");
   const safeName = filename.replace(/[^a-zA-Z0-9._֐-׿ -]/g, "_");
   const tmpPath = join(tmpDir, `${Date.now()}-${safeName}`);
   writeFileSync(tmpPath, buf);
 
-  const documentId = await importFile(tmpPath, undefined, userId, filename, pipeline);
+  let documentId: string;
+  try {
+    documentId = await importFile(tmpPath, undefined, userId, filename, pipeline);
+  } finally {
+    // importFile has taken its own copy by now, so the attachment staging file
+    // is dead either way. Released in a finally because a failed Gmail import is
+    // the common case this used to leak on (storage errors throw here).
+    releaseTempFile(tmpPath);
+  }
   logger.info("gmail_attachment_imported", { user_id: userId, messageId, filename, documentId });
   return { documentId, filename };
 }

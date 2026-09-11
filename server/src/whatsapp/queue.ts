@@ -3,6 +3,7 @@ import {randomUUID} from "node:crypto";
 import {getPrimaryDb} from "../db/db";
 import {logger} from "../logger";
 import {sendWhatsAppTemplate, WhatsAppApiError, whatsappConfigStatus} from "./cloudApi";
+import {isProcessPaused} from "../ops/processControl";
 
 export const whatsappCollections = () => {
   const db = getPrimaryDb();
@@ -75,7 +76,12 @@ export function startWhatsAppWorker(): () => Promise<void> {
   let pending: Promise<void> | null = null;
   const timer = setInterval(() => {
     if (pending) return;
-    pending = processWhatsAppQueueOnce().catch(() => logger.error("whatsapp_worker_failed", {})).finally(() => { pending = null; });
+    // isProcessPaused caches for a few seconds, so this ticking once a second
+    // does not mean a Mongo read per second.
+    pending = isProcessPaused("whatsapp")
+      .then((paused) => (paused ? undefined : processWhatsAppQueueOnce()))
+      .catch(() => logger.error("whatsapp_worker_failed", {}))
+      .finally(() => { pending = null; });
   }, 1000);
   timer.unref();
   return async () => { clearInterval(timer); await pending; };

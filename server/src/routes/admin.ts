@@ -13,6 +13,18 @@ import {createMagicLinkToken, magicLinkTtlMinutes} from "../auth/session";
 import {hashPassword} from "../auth/emailAuth";
 import {logger} from "../logger";
 import {mainDocumentsFilter} from "../documents/documentVisibility";
+import {resolveDocumentFilePath} from "../documents/fileResolver";
+import {
+  cancelQueueJob,
+  jobQueueStats,
+  listProcessControls,
+  PROCESS_DESCRIPTORS,
+  PROCESS_IDS,
+  recentQueueJobs,
+  setProcessPaused,
+  type ProcessId,
+} from "../ops/processControl";
+import {runTempFileSweep, tempDirUsage, tempSweeperState} from "../storage/tempFiles";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 // "expired" is not assignable: it is what a lapsed trial resolves to, not a
@@ -1381,7 +1393,12 @@ export function registerAdminRoutes(app: express.Application) {
       const importer = await import("../pipeline/importer.js");
       const processFn = (importer as any).processDocument;
       const reprocessFn = (importer as any).reprocessDocument ?? (importer as any).importDocument;
-      const filePath = doc.file_path ?? doc.original_path;
+      // Resolved through the storage-aware resolver rather than read straight off
+      // the row: file_path points into the container's disk, which is wiped on
+      // every Railway redeploy, so the file usually has to come back from object
+      // storage. original_path is never a candidate — it pointed at the upload
+      // staging copy, which is released as soon as the import finishes.
+      const filePath = await resolveDocumentFilePath(doc).catch(() => null);
       const mimeType = doc.mime_type ?? "application/octet-stream";
       const ext = extname(String(filePath ?? doc.file_name ?? "")).toLowerCase();
 
@@ -2857,6 +2874,196 @@ export function registerAdminRoutes(app: express.Application) {
       res.status(500).json({ error: err.message ?? "Failed" });
     }
   });
+
+  // ── Monitoring: background processes ──────────────────────────────────────
+  // GET /api/admin/monitor/processes
+  //
+  // One view of every background loop plus the temp-file disk usage those loops
+  // produce. Deliberately not an OS process list: nothing here forks a durable
+  // child process, so "processes" means the timers and queue workers inside this
+  // container, which are what an operator can actually act on.
+  app.get("/api/admin/monitor/processes", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      const controls = await listProcessControls();
+      const health = await col("scheduler_health").find({}).toArray();
+
+      const processes = await Promise.all(PROCESS_DESCRIPTORS.map(async (descriptor) => {
+        const control = controls.get(descriptor.id);
+        const queue = descriptor.jobCollection
+          ? await jobQueueStats(descriptor.jobCollection).catch(() => null)
+          : null;
+        const healthRows = (health as any[])
+          .filter((row) => SCHEDULER_HEALTH_NAMES[descriptor.id]?.includes(row.name))
+          .map((row) => ({
+            name: row.name,
+            last_run_at: row.last_run_at ?? null,
+            last_success_at: row.last_success_at ?? null,
+            last_error: row.last_error ?? null,
+            consecutive_failures: row.consecutive_failures ?? 0,
+          }));
+
+        return {
+          ...descriptor,
+          paused: control?.paused ?? false,
+          paused_at: control?.paused_at ?? null,
+          paused_by: control?.paused_by ?? null,
+          pause_reason: control?.reason ?? null,
+          queue,
+          health: healthRows,
+        };
+      }));
+
+      res.json({
+        processes,
+        temp_files: {
+          sweeper: tempSweeperState(),
+          directories: tempDirUsage(),
+        },
+        // Timers live per container, so a pause flag is the only control that is
+        // guaranteed to reach every replica. Surfaced so the operator knows which
+        // container answered, rather than assuming there is only one.
+        container: {
+          pid: process.pid,
+          uptime_seconds: Math.round(process.uptime()),
+          node_version: process.version,
+          memory_rss_bytes: process.memoryUsage().rss,
+        },
+      });
+    } catch (err: any) {
+      logger.error("admin_monitor_processes_failed", { error: String(err) });
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // POST /api/admin/processes/:id/pause — body: { paused: boolean, reason?: string }
+  app.post("/api/admin/processes/:id/pause", async (req, res) => {
+    const auth = await adminAuth(req, res);
+    if (!auth) return;
+
+    const id = String(req.params.id) as ProcessId;
+    if (!PROCESS_IDS.includes(id)) {
+      res.status(400).json({ error: "unknown_process" });
+      return;
+    }
+    const paused = req.body?.paused;
+    if (typeof paused !== "boolean") {
+      res.status(400).json({ error: "paused must be a boolean" });
+      return;
+    }
+
+    try {
+      const row = await setProcessPaused(
+        id,
+        paused,
+        { userId: (auth as any).userId, email: (auth as any).user?.email },
+        typeof req.body?.reason === "string" ? req.body.reason : undefined,
+      );
+      // Resuming only clears the flag; a queue worker whose loop already exited
+      // needs a nudge to start draining again, and the timer-based ones pick the
+      // change up on their next tick.
+      if (!paused) await restartWorkerAfterResume(id);
+      res.json({ ok: true, control: row });
+    } catch (err: any) {
+      logger.error("admin_process_pause_failed", { process_id: id, error: String(err) });
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // GET /api/admin/processes/:id/jobs — recent job rows for a queue-backed worker
+  app.get("/api/admin/processes/:id/jobs", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+
+    const descriptor = PROCESS_DESCRIPTORS.find((p) => p.id === req.params.id);
+    if (!descriptor) { res.status(400).json({ error: "unknown_process" }); return; }
+    if (!descriptor.jobCollection) { res.status(400).json({ error: "process_has_no_queue" }); return; }
+
+    const limit = Math.min(Number(req.query.limit ?? 20) || 20, 100);
+    try {
+      res.json({ rows: await recentQueueJobs(descriptor.jobCollection, limit) });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // POST /api/admin/processes/:id/jobs/:jobId/cancel
+  app.post("/api/admin/processes/:id/jobs/:jobId/cancel", async (req, res) => {
+    const auth = await adminAuth(req, res);
+    if (!auth) return;
+
+    const descriptor = PROCESS_DESCRIPTORS.find((p) => p.id === req.params.id);
+    if (!descriptor) { res.status(400).json({ error: "unknown_process" }); return; }
+    if (!descriptor.jobCollection) { res.status(400).json({ error: "process_has_no_queue" }); return; }
+
+    try {
+      const result = await cancelQueueJob(
+        descriptor.jobCollection,
+        String(req.params.jobId),
+        (auth as any).user?.email ?? (auth as any).userId ?? null,
+      );
+      if (!result.ok) {
+        res.status(result.reason === "not_found" ? 404 : 400).json({ error: result.reason });
+        return;
+      }
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // POST /api/admin/temp-files/sweep — run the retention sweep immediately
+  app.post("/api/admin/temp-files/sweep", async (req, res) => {
+    const auth = await adminAuth(req, res);
+    if (!auth) return;
+    try {
+      const result = runTempFileSweep();
+      logger.info("admin_temp_file_sweep_triggered", {
+        actor: (auth as any).user?.email ?? (auth as any).userId ?? null,
+        deleted_count: result.deleted_count,
+        deleted_bytes: result.deleted_bytes,
+      });
+      res.json({ ok: true, result, directories: tempDirUsage() });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+}
+
+/**
+ * scheduler_health rows that belong to each process, so the dashboard can show
+ * the last run and last error of the named jobs a worker is responsible for.
+ * Only the scheduler writes these today; the map keeps the shape open for the
+ * others rather than special-casing one id in the response builder.
+ */
+const SCHEDULER_HEALTH_NAMES: Partial<Record<ProcessId, string[]>> = {
+  scheduler: ["tick", "checkReminders", "checkMonthlyReports", "checkEscalations", "syncCalendars"],
+};
+
+/**
+ * Restart an in-process worker loop after its pause flag is cleared.
+ *
+ * The queue workers exit their `while` loop when they see the pause, so clearing
+ * the flag alone would leave them idle until the next upload happened to call
+ * the start function. Imported lazily to keep this route module free of a static
+ * dependency on the pipeline, which imports routes of its own.
+ */
+async function restartWorkerAfterResume(id: ProcessId): Promise<void> {
+  try {
+    if (id === "documents") {
+      const { startDocumentProcessingJobWorker } = await import("../pipeline/importer.js");
+      startDocumentProcessingJobWorker();
+    } else if (id === "gmail_import") {
+      const { startGmailImportJobWorker } = await import("./gmail.js");
+      startGmailImportJobWorker();
+    } else if (id === "drive_export") {
+      const { startDriveExportJobWorker } = await import("./gdrive.js");
+      startDriveExportJobWorker();
+    }
+    // scheduler, whatsapp and temp_sweeper keep their timers running while
+    // paused, so they resume on their own next tick with nothing to restart.
+  } catch (err) {
+    logger.warn("process_resume_restart_failed", { process_id: id, error: String(err) });
+  }
 }
 
 /**

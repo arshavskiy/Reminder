@@ -58,6 +58,12 @@ export interface AppSettings {
   // Escalation
   escalationEmail: string;
   escalationThresholdDays: number;
+
+  // Temp file retention — how long a scratch file may sit in a temp dir before
+  // the sweeper removes it. Only a safety net: the write sites unlink their own
+  // files as soon as they are consumed.
+  tempFileRetentionHours: number;
+  tempFileSweepIntervalMinutes: number;
 }
 
 // Phase 2: Authentication types
