@@ -2435,11 +2435,18 @@ async function bulkExtractAi() {
 }
 
 .document-table__col--select { width: 46px; }
-.document-table__col--file { width: auto; min-width: clamp(180px, 28vw, 320px); }
-.document-table__col--date { width: 148px; }
-.document-table__col--client { width: clamp(140px, 18vw, 220px); }
+/* The filename is capped rather than left to flex: as the only auto-width column
+   it absorbed every spare pixel, pushing בתוקף far from the name it belongs to.
+   The slack goes to the client column instead, which holds variable-length
+   company names and reads better wide. */
+.document-table__col--file { width: clamp(260px, 32vw, 420px); }
+.document-table__col--date { width: 128px; }
+.document-table__col--client { width: clamp(160px, 20vw, 280px); }
 .document-table__col--number { width: 120px; }
-.document-table__col--actions { width: 172px; }
+/* Absorbs the leftover width so no earlier column stretches: the actions cell
+   holds fixed-size icon buttons, so extra space there is simply padding rather
+   than a gap pushing two related columns apart. */
+.document-table__col--actions { width: auto; min-width: 172px; }
 
 .document-table th,
 .document-table td {
