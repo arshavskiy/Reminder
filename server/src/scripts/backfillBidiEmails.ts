@@ -22,6 +22,14 @@
  *     it was read in, leaving every other field of the blob untouched.
  *   - Records the original value alongside the repair so a bad run is
  *     reversible from the audit log it prints.
+ *
+ * Deliberately NOT repaired:
+ *   - email_log and extractions record what was actually sent and what the
+ *     extractor actually produced. Rewriting them would erase the evidence that
+ *     12 reminders really did go to a mangled address in Aug 2026.
+ *   - inspector_leads came from spreadsheets, not from bidi PDF text. Addresses
+ *     there such as "0526711768a@gmail.com" (the owner's phone number) and
+ *     "7sdan7@gmail.com" are genuine, and the digit rule would corrupt them.
  */
 import {MongoClient} from "mongodb";
 import {normalizeEmail} from "../pipeline/emailNormalizer.js";
@@ -35,6 +43,8 @@ type Repair = {
   from: string;
   to: string;
   label: string;
+  /** Reminder lifecycle state, so the report separates pending from already sent. */
+  status?: string;
 };
 
 /**
@@ -80,6 +90,37 @@ function planRepair(value: unknown): string | null {
   const fixed = normalizeEmail(value);
   if (fixed === value || fixed === value.toLowerCase().trim()) return null;
   return fixed;
+}
+
+/** Whether a string is a bare address rather than a sentence containing one. */
+function isAddressShaped(value: unknown): value is string {
+  return typeof value === "string" && /^[^\s@]+@[^\s@]+$/.test(value.trim());
+}
+
+/**
+ * Repair a field that holds a JSON-encoded array of addresses.
+ *
+ * reminders.email_to is stored as the *string* '["a@b.com"]', not as an array,
+ * so a plain-address check skips it entirely — which is how 23 mangled
+ * recipients survived the first backfill run. Returns the re-encoded array when
+ * something inside it changes, and null when nothing does.
+ */
+function planJsonArrayRepair(value: unknown): { json: string; repairs: Array<[string, string]> } | null {
+  if (typeof value !== "string" || !value.trim().startsWith("[")) return null;
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); } catch { return null; }
+  if (!Array.isArray(parsed)) return null;
+
+  const repairs: Array<[string, string]> = [];
+  const next = parsed.map((item) => {
+    if (!isAddressShaped(item)) return item;
+    const fixed = planRepair(item);
+    if (!fixed || !isKnownArtifact(item, fixed)) return item;
+    repairs.push([item, fixed]);
+    return fixed;
+  });
+
+  return repairs.length > 0 ? { json: JSON.stringify(next), repairs } : null;
 }
 
 async function main() {
@@ -158,9 +199,12 @@ async function main() {
   }
 
   // ── contracts ──────────────────────────────────────────────────────────────
-  const contractUpdates: Array<{ id: any; set: Record<string, string> }> = [];
+  // manual_fields is a nested object holding the same email keys, so it needs the
+  // same repair; it was missed on the first pass because only top-level fields
+  // were read.
+  const contractUpdates: Array<{ id: any; set: Record<string, any> }> = [];
   const contracts = await db.collection("contracts")
-    .find({}, { projection: { email: 1, contact_email: 1, client_email: 1, title: 1 } })
+    .find({}, { projection: { email: 1, contact_email: 1, client_email: 1, title: 1, manual_fields: 1 } })
     .toArray();
   for (const row of contracts as any[]) {
     const set: Record<string, string> = {};
@@ -179,6 +223,29 @@ async function main() {
       repairs.push(entry);
       set[key] = fixed;
     }
+    const manual = row.manual_fields;
+    if (manual && typeof manual === "object") {
+      const nextManual = { ...manual };
+      let manualTouched = false;
+      for (const key of EMAIL_KEYS) {
+        const fixed = planRepair(manual[key]);
+        if (!fixed) continue;
+        const entry: Repair = {
+          collection: "contracts",
+          id: String(row._id),
+          field: `manual_fields.${key}`,
+          from: String(manual[key]),
+          to: fixed,
+          label: String(row.title ?? "").slice(0, 60),
+        };
+        if (!isKnownArtifact(entry.from, entry.to)) { skipped.push(entry); continue; }
+        repairs.push(entry);
+        nextManual[key] = fixed;
+        manualTouched = true;
+      }
+      if (manualTouched) set.manual_fields = nextManual;
+    }
+
     if (Object.keys(set).length > 0) contractUpdates.push({ id: row._id, set });
   }
 
@@ -188,11 +255,28 @@ async function main() {
   // address between 17 and 29 Aug 2026.
   const reminderUpdates: Array<{ id: any; set: Record<string, string> }> = [];
   const reminders = await db.collection("reminders")
-    .find({}, { projection: { email_to: 1, client_email: 1, title: 1 } })
+    .find({}, { projection: { email_to: 1, client_email: 1, title: 1, status: 1 } })
     .toArray();
   for (const row of reminders as any[]) {
     const set: Record<string, string> = {};
     for (const key of ["email_to", "client_email"]) {
+      // email_to is a JSON-encoded array; client_email is a bare address.
+      const arrayRepair = planJsonArrayRepair(row[key]);
+      if (arrayRepair) {
+        for (const [from, to] of arrayRepair.repairs) {
+          repairs.push({
+            collection: "reminders",
+            id: String(row._id),
+            field: key,
+            from,
+            to,
+            label: String(row.title ?? "").slice(0, 60),
+            status: row.status,
+          });
+        }
+        set[key] = arrayRepair.json;
+        continue;
+      }
       const fixed = planRepair(row[key]);
       if (!fixed) continue;
       const entry: Repair = {
@@ -202,6 +286,7 @@ async function main() {
         from: String(row[key]),
         to: fixed,
         label: String(row.title ?? "").slice(0, 60),
+        status: row.status,
       };
       if (!isKnownArtifact(entry.from, entry.to)) { skipped.push(entry); continue; }
       repairs.push(entry);
@@ -234,7 +319,7 @@ async function main() {
   if (reminderRepairs.length > 0) {
     console.log("");
     console.log("--- reminders (pending sends — these would go to the wrong address) ---");
-    for (const r of reminderRepairs) console.log(`  ${r.from} -> ${r.to}   (${r.label})`);
+    for (const r of reminderRepairs) console.log(`  [${r.status ?? "?"}] ${r.from} -> ${r.to}   (${r.label})`);
   }
 
   const clientRepairs = repairs.filter((r) => r.collection === "clients");
