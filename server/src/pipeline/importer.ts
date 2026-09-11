@@ -11,6 +11,7 @@ import {parseXlsx} from "./xlsxParser";
 import {extractDocument, extractWithTemplate} from "./extractor";
 import {extractCertificate} from "./certificateExtractor";
 import {extractFromOcr} from "./ocrExtractor";
+import {normalizeEmail} from "./emailNormalizer";
 import {classifyDocumentKind, documentTypeFromTemplate, getOrBuildSystemPrompt, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
 import {deleteFromSpaces, fileExistsInSpaces, getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
@@ -2086,8 +2087,6 @@ function firstEmailInText(value: string): string | null {
   return reversed?.[0] ?? null;
 }
 
-const KNOWN_TLDS = new Set(["com", "net", "org", "il", "co", "io", "me", "info", "biz", "edu", "gov"]);
-
 function buildExcludedClientEmailSet(source?: ClientEmailExclusionSource | null): Set<string> {
   const excluded = new Set<string>();
   for (const email of ALWAYS_EXCLUDED_CLIENT_EMAILS) {
@@ -2130,46 +2129,9 @@ async function stripExcludedClientEmailsForUser(fields: Record<string, unknown>,
   stripExcludedClientEmails(fields, excluded);
 }
 
-function reverseDotSegments(s: string): string {
-  return s.split(".").reverse().join(".");
-}
-
-function isReversedEmail(local: string, domain: string): boolean {
-  // A reversed email's local part, when dot-segments are reversed, ends with a known TLD.
-  // e.g. "com.gmail" reversed segments = "gmail.com" -> ends with "com" ✓
-  // e.g. "li.oc" reversed segments = "co.il" -> ends with "il" ✓
-  const reversedLocal = local.split(".").reverse().join(".");
-  const reversedLocalTld = reversedLocal.split(".").pop()?.toLowerCase() ?? "";
-  const domainLast = domain.split(".").pop()?.toLowerCase() ?? "";
-  return KNOWN_TLDS.has(reversedLocalTld) && !KNOWN_TLDS.has(domainLast);
-}
-
-export function normalizeEmail(value: string): string {
-  const cleaned = value.trim().replace(/[.,;:]+$/g, "").toLowerCase();
-  const atIdx = cleaned.indexOf("@");
-  if (atIdx === -1) return cleaned;
-  const beforeAt = cleaned.slice(0, atIdx);
-  const afterAt = cleaned.slice(atIdx + 1);
-
-  // RTL-reversed email: "com.gmail@mezeg.car" -> swap sides and reverse dot segments of each
-  // before="com.gmail" after="mezeg.car" -> local=reverseDots("mezeg.car")="car.mezeg" domain=reverseDots("com.gmail")="gmail.com"
-  if (isReversedEmail(beforeAt, afterAt)) {
-    return `${reverseDotSegments(afterAt)}@${reverseDotSegments(beforeAt)}`;
-  }
-
-  // Domain in local part, no dots in domain: "com.gmail@username" -> "username@gmail.com"
-  if (beforeAt.includes(".") && !afterAt.includes(".")) {
-    return `${afterAt}@${reverseDotSegments(beforeAt)}`;
-  }
-
-  // Local part has digits prepended from RTL number glue. A trailing digit in an
-  // RTL line renders at the visual start, so "rampa2@" is captured as "2rampa@".
-  // Single digits count: they are the common case (9 of 11 observed), and \d{2,}
-  // silently let them through.
-  const rtlLocal = beforeAt.match(/^(\d+)([a-z][a-z0-9._%+-]*)$/i);
-  const local = rtlLocal ? `${rtlLocal[2]}${rtlLocal[1]}` : beforeAt;
-  return `${local}@${afterAt}`;
-}
+// normalizeEmail now lives in emailNormalizer, shared with the OCR regex path.
+// Re-exported because call sites across the codebase import it from here.
+export {normalizeEmail};
 
 function isLikelyInspectorFooterLine(line: string): boolean {
   return /חתימ|בודק|מהנדס|הנדסה|בטיחות|פקודת\s+הבטיחות|תסקיר\s+זה|footer/i.test(line);

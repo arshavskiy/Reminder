@@ -5,6 +5,7 @@
  */
 
 import {normalizeDate} from "./dateNormalizer";
+import {extractEmailFromText} from "./emailNormalizer";
 
 export interface OcrExtraction {
   expiry_date:    string | null;  // ISO YYYY-MM-DD
@@ -148,30 +149,11 @@ function extractContactName(text: string): string | null {
 
 // ─── email ──────────────��────────────────────────────────────────��────────────
 
-function extractEmail(text: string): string | null {
-  // Match both normal and reversed bidi emails
-  const m = text.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+/);
-  if (!m?.[0]) return null;
-  const addr = m[0].replace(/[.,;:]+$/g, "");
-  const atIdx = addr.indexOf("@");
-  const before = addr.slice(0, atIdx);
-  const after  = addr.slice(atIdx + 1);
-  const afterHasDot = /\./.test(after);
-  const beforeHasDot = /\./.test(before);
-  // Reversed bidi: domain-like part is before @, user part after
-  // Detect: before has dots (looks like domain) AND after has no dots (looks like user)
-  if (beforeHasDot && !afterHasDot && after.length >= 1) {
-    const parts = before.split(".");
-    const shouldReverseDomainParts = /^(?:com|net|org|biz|info)$/i.test(parts[0] ?? "");
-    const domain = (shouldReverseDomainParts ? parts.reverse() : parts)
-      .map((part) => shouldReverseDomainParts && part.includes("-") ? part.split("-").reverse().join("-") : part)
-      .join(".");
-    return `${after}@${domain.toLowerCase()}`;
-  }
-  // Normal: must have a dot after @
-  if (afterHasDot) return `${before}@${after.toLowerCase()}`;
-  return null;
-}
+// Email repair lives in emailNormalizer so every extraction path shares one
+// implementation. The copy that used to live here fixed the reversed domain but
+// not the digit glue, so an address like "com.gmail@83shanigolan" was written to
+// the document as "83shanigolan@gmail.com" while other paths stored it correctly.
+const extractEmail = extractEmailFromText;
 
 // ─── address ──────────────────────────────────────────────────────���───────────
 

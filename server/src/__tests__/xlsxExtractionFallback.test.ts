@@ -374,8 +374,11 @@ describe("normalizeExtractionFieldsForTemplate", () => {
       client_company: "דפר עפר בע\"מ",
     });
 
-    expect(fields?.contact_email).toBe("Dafar@d-afar.com");
-    expect(fields?.client_email).toBe("Dafar@d-afar.com");
+    // Lower-cased: normalizeEmail canonicalises case so the same address stored
+    // by different extraction paths compares equal. Was also asserting the
+    // pre-repair "afar-d" domain, which never existed.
+    expect(fields?.contact_email).toBe("dafar@d-afar.com");
+    expect(fields?.client_email).toBe("dafar@d-afar.com");
   });
 
   it("repairs RTL-reordered email local parts that start with digits", () => {

@@ -117,18 +117,35 @@ describe("extractFromOcr — contact_email", () => {
   });
 
   it("corrects reversed bidi email with standard TLD", () => {
+    // "il.co.example@user" is "user@example.co.il" rendered in visual order —
+    // both the two sides of the "@" and the domain's dot segments are flipped.
     const r = extractFromOcr("מייל: il.co.example@user");
-    expect(r.contact_email).toBe("user@il.co.example");
+    expect(r.contact_email).toBe("user@example.co.il");
   });
 
   it("corrects reversed bidi email with non-standard domain", () => {
     const r = extractFromOcr("מייל: il.co1945.shelev@klodin");
-    expect(r.contact_email).toBe("klodin@il.co1945.shelev");
+    expect(r.contact_email).toBe("klodin@shelev.co1945.il");
   });
 
   it("corrects Hebrew table text fused to a reversed email with hyphenated domain", () => {
+    // Hyphen segments reverse too: "afar-d" is the visual order of "d-afar".
     const r = extractFromOcr("תקופתית: סוג בדיקהcom.afar-d@Dafar:");
-    expect(r.contact_email).toBe("Dafar@d-afar.com");
+    expect(r.contact_email).toBe("dafar@d-afar.com");
+  });
+
+  it("un-glues digits bidi moved to the front of the local part", () => {
+    // Regression: a real inspection PDF rendered "shanigolan83@gmail.com" as
+    // "com.gmail@83shanigolan". The reversed domain was repaired but the digit
+    // run stayed at the front, so the document stored "83shanigolan@gmail.com"
+    // while other extraction paths stored the address correctly.
+    const r = extractFromOcr("com.gmail@83shanigolan: מייל: מיקודאשדוד: ישוב");
+    expect(r.contact_email).toBe("shanigolan83@gmail.com");
+  });
+
+  it("leaves an already-correct address untouched", () => {
+    const r = extractFromOcr("מייל: shanigolan83@gmail.com");
+    expect(r.contact_email).toBe("shanigolan83@gmail.com");
   });
 
   it("returns null when no email present", () => {
