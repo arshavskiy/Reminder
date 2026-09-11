@@ -7,6 +7,11 @@ const execFile = promisify(execFileCb);
 
 const PROBE_TIMEOUT_MS = 10_000;
 
+/** Interpreter used for the Python-backed parsers; overridable per environment. */
+export function pythonCommand(): string {
+  return process.env.PYTHON_BIN || (process.platform === "win32" ? "python" : "python3");
+}
+
 export type SystemDepStatus = {
   name: string;
   ok: boolean;
@@ -67,6 +72,17 @@ export async function checkSystemDeps(): Promise<SystemDepsReport> {
     probe("tesseract", "tesseract", ["--version"], {
       shell: process.platform === "win32",
     }),
+    // pdfplumber reads the equipment tables that pdf-parse flattens into fused
+    // text. Probed through the interpreter so a present Python with the module
+    // missing is reported as missing rather than as working.
+    // Not run through a shell: the -c payload contains quotes that Windows cmd
+    // re-splits, which made a working pdfplumber report as missing.
+    probe("pdfplumber", pythonCommand(), ["-c", "import pdfplumber;print('pdfplumber', pdfplumber.__version__)"], {
+      shell: false,
+      // Without this Python writes Hebrew as replacement characters on any
+      // machine whose stdout is not already UTF-8.
+      env: {...process.env, PYTHONIOENCODING: "utf-8"},
+    }),
   ]);
 
   return {
@@ -80,6 +96,12 @@ export async function checkSystemDeps(): Promise<SystemDepsReport> {
  * Run at boot. Never throws — a missing OCR binary must not stop the server
  * from serving everything that does not need it.
  */
+const MISSING_DEP_HINTS: Record<string, string> = {
+  pdftoppm: "Install Poppler via railpack.json aptPackages (poppler-utils) or set PDF_THUMBNAIL_PDFTOPPM",
+  tesseract: "Install Tesseract via railpack.json aptPackages (tesseract-ocr, tesseract-ocr-heb)",
+  pdfplumber: "Install Python and pdfplumber via railpack.json; without it equipment tables fall back to flattened text",
+};
+
 export async function logSystemDepsOnStartup(): Promise<SystemDepsReport> {
   const report = await checkSystemDeps();
 
@@ -95,10 +117,7 @@ export async function logSystemDepsOnStartup(): Promise<SystemDepsReport> {
         dep: dep.name,
         command: dep.command,
         error: dep.error,
-        hint:
-          dep.name === "pdftoppm"
-            ? "Install Poppler via nixpacks.toml aptPkgs (poppler-utils) or set PDF_THUMBNAIL_PDFTOPPM"
-            : "Install Tesseract via nixpacks.toml aptPkgs (tesseract-ocr, tesseract-ocr-heb)",
+        hint: MISSING_DEP_HINTS[dep.name] ?? "Check the deploy configuration for this dependency",
       });
     }
   }
