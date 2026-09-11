@@ -64,15 +64,17 @@ The service builds with **Railpack** (`"builder": "RAILPACK"` in `railway.json`)
 {
   "$schema": "https://schema.railpack.com",
   "provider": "node",
-  "packages": { "node": "22" },
+  "packages": { "node": "22", "python": "3.12" },
   "deploy": {
-    "aptPackages": ["poppler-utils", "tesseract-ocr", "tesseract-ocr-heb"]
+    "aptPackages": ["poppler-utils", "tesseract-ocr", "tesseract-ocr-heb"],
+    "variables": { "PYTHONPATH": "/app/.python-packages" }
   }
 }
 ```
 
 Notes:
 - The packages go under **`deploy.aptPackages`**, not the root `buildAptPackages`. Railpack's own schema describes `deploy.aptPackages` as packages "to include at runtime", while `buildAptPackages` installs "during the build step" only. OCR shells out at request time, so build-only packages would not be there when it runs.
+- `pdfplumber` is a pip package, not an apt package. The Node provider only copies `/app` from the build step into the runtime image (Mise Python comes from the earlier `packages:mise` layer). Install into `/app/.python-packages` and set `PYTHONPATH` so `import pdfplumber` works at runtime. A plain `pip install` into site-packages is discarded.
 - Railpack has no config-path setting, so `railpack.json` must sit in the Railway service's **root directory**, which is set to `server`.
 - Railway's schema marks the Railpack builder **EXPERIMENTAL**. To fall back, set `"builder": "NIXPACKS"` in `railway.json` and restore a `server/nixpacks.toml` declaring the same packages under `aptPkgs` (see git history for the previous file).
 - The start command comes from `railway.json`. Railpack's node provider would otherwise infer `npm start` from `package.json` anyway.

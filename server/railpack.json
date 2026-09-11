@@ -10,13 +10,16 @@
       "poppler-utils",
       "tesseract-ocr",
       "tesseract-ocr-heb"
-    ]
+    ],
+    "variables": {
+      "PYTHONPATH": "/app/.python-packages"
+    }
   },
   "steps": {
     "build": {
       "commands": [
         "...",
-        "pip install --no-cache-dir -r requirements.txt"
+        "python3 -m pip install --no-cache-dir --target /app/.python-packages -r requirements.txt"
       ]
     }
   }
