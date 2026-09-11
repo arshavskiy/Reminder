@@ -805,3 +805,36 @@ html[dir="rtl"] .n-base-clear {
   }
 }
 
+
+/* ── Form control text ────────────────────────────────────────
+   Naive's default input text is a partial-opacity near-black, which on the
+   light theme's white cards reads as barely-there grey — typed values in the
+   documents filter toolbar were hard to make out.
+
+   Set here rather than through n-config-provider theme-overrides: Naive
+   resolves an override value once when it builds the theme object, so a
+   var(--text-primary) there freezes whichever theme happened to be active
+   first and then stays wrong in the other one. Plain CSS re-resolves the token
+   per theme, so light and dark both stay legible. */
+.n-input .n-input__input-el,
+.n-input .n-input__textarea-el,
+.n-base-selection .n-base-selection-input,
+.n-base-selection .n-base-selection-label__render-label,
+.n-base-selection-overlay__wrapper {
+  color: var(--text-primary);
+}
+
+/* Placeholders use --text-secondary, not --text-muted: muted is #95a5a6 on the
+   light theme, which against a white field is faint enough that the filter
+   toolbar read as a row of empty boxes. Secondary still reads as placeholder
+   against real input text without disappearing. Covers the date pickers too,
+   which render their own placeholder element rather than an <input> one. */
+.n-input .n-input__placeholder,
+.n-input .n-input__input-el::placeholder,
+.n-input .n-input__textarea-el::placeholder,
+.n-base-selection .n-base-selection-placeholder,
+.n-base-selection .n-base-selection-placeholder__inner,
+.n-date-panel .n-date-panel-actions__prefix,
+.n-input__placeholder span {
+  color: var(--text-secondary);
+}

@@ -423,12 +423,6 @@
                   <n-icon :component="documentSortIcon('file')" :size="14" />
                 </button>
               </th>
-              <th class="document-col document-col--status">
-                <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('status')" @click="setDocumentSort('status')">
-                  <span>סטטוס</span>
-                  <n-icon :component="documentSortIcon('status')" :size="14" />
-                </button>
-              </th>
               <th class="document-col document-col--date">
                 <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('date')" @click="setDocumentSort('date')">
                   <span>בתוקף</span>
@@ -479,11 +473,9 @@
                     <span class="document-cell-truncate" dir="auto" :title="row.file_name">{{ row.file_name }}</span>
                     <span v-if="inspectionTypeLabel(row)" class="document-file-cell__inspection-type">{{ inspectionTypeLabel(row) }}</span>
                   </span>
-                </span>
-              </td>
-              <td class="document-col document-col--status">
-                <div class="document-status-cell">
-                  <StatusBadge :status="row.processing_status" />
+                  <!-- Moved off the removed status column: a bounced reminder is a
+                       delivery failure the user has to act on, not processing
+                       state, so it outlives the column it happened to live in. -->
                   <n-tag
                     v-if="emailDelivery(row)"
                     round
@@ -493,7 +485,7 @@
                   >
                     אימייל חזר
                   </n-tag>
-                </div>
+                </span>
               </td>
               <td class="document-col document-col--date">
                 <span v-if="documentExpiryDate(row)" class="document-expiry">
@@ -987,7 +979,7 @@ const filterClientId = ref<string | null>(null);
 const filterInspectionType = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
 const statusFilter = ref<DocumentStatusFilter>(initialDocumentFilter());
-type DocumentSortKey = "file" | "status" | "date" | "client" | "number";
+type DocumentSortKey = "file" | "date" | "client" | "number";
 const documentSortBy = ref<DocumentSortKey>("date");
 const documentSortDir = ref<"asc" | "desc">("desc");
 
@@ -1143,7 +1135,6 @@ function documentSortIcon(key: DocumentSortKey): Component {
 function documentSortAriaLabel(key: DocumentSortKey): string {
   const labels: Record<DocumentSortKey, string> = {
     file: "קובץ",
-    status: "סטטוס",
     date: "בתוקף",
     client: "לקוח",
     number: "מספר",
@@ -1163,7 +1154,6 @@ function compareDocuments(a: Document, b: Document, key: DocumentSortKey, dir: "
 
 function documentSortText(row: Document, key: DocumentSortKey): string | null {
   if (key === "file") return row.file_name ?? "";
-  if (key === "status") return row.processing_status ?? "";
   if (key === "client") return documentClientName(row);
   if (key === "number") return documentReportNumberLabel(row) || documentReportNumber(row) || "";
   return "";
@@ -2496,14 +2486,6 @@ async function bulkExtractAi() {
   white-space: nowrap;
 }
 
-.document-status-cell {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
-
 .client-link {
   color: var(--brand-color);
   text-decoration: underline;
@@ -2557,7 +2539,6 @@ async function bulkExtractAi() {
 }
 
 .document-col--file,
-.document-col--status,
 .document-col--date,
 .document-col--client,
 .document-col--number {
