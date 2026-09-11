@@ -95,11 +95,11 @@
             </button>
             <div class="row__body">
               <div class="row__title-line">
-                <strong class="row__name">{{ r.name }}</strong>
+                <strong class="row__name">{{ equipmentTitle(r) }}</strong>
                 <span class="row__tag">{{ categoryLabel(r.category) }}</span>
                 <span v-if="r.client_name" class="row__client">{{ r.client_name }}</span>
               </div>
-              <p v-if="r.description" class="row__desc">{{ r.description }}</p>
+              <p v-if="equipmentSubtitle(r)" class="row__desc">{{ equipmentSubtitle(r) }}</p>
               <p class="row__meta">
                 <span v-if="r.manufacturer">יצרן: {{ r.manufacturer }}</span>
                 <span v-if="r.model">דגם: {{ r.model }}</span>
@@ -446,6 +446,23 @@ const categories: Array<{ value: EquipmentCategory | "all"; label: string }> = [
   { value: "other",     label: "אחר" },
 ];
 
+function equipmentTitle(row: { name?: string | null; manufacturer?: string | null; model?: string | null; serial_number?: string | null }): string {
+  const branded = [row.manufacturer, row.model].filter(Boolean).join(" ").trim();
+  if (branded) return branded;
+  const name = (row.name ?? "").trim();
+  if (name && name.length <= 48) return name;
+  if (row.serial_number) return `מס׳ ${row.serial_number}`;
+  return name ? `${name.slice(0, 40)}…` : "ציוד";
+}
+
+function equipmentSubtitle(row: { name?: string | null; description?: string | null; manufacturer?: string | null; model?: string | null }): string {
+  const description = (row.description ?? "").trim();
+  if (description) return description;
+  const name = (row.name ?? "").trim();
+  const title = equipmentTitle(row);
+  return name && name !== title ? name : "";
+}
+
 const categoryOptions = categories
   .filter((c) => c.value !== "all")
   .map((c) => ({ label: c.label, value: c.value }));
@@ -751,7 +768,7 @@ function del(r: Equipment) {
   if (!r.id) return;
   confirm({
     title: "מחיקת ציוד",
-    content: `למחוק את "${r.name}"?`,
+    content: `למחוק את "${equipmentTitle(r)}"?`,
     confirmText: "מחק",
     onConfirm: async () => {
       try {

@@ -7,6 +7,7 @@ import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
 import {getDataDir} from "../settings";
 import {parsePdf} from "../pipeline/pdfParser";
+import {enrichTextWithPlumberTables} from "../pipeline/pdfPlumberParser";
 import {parseDocx} from "../pipeline/docxParser";
 import {parseXlsx} from "../pipeline/xlsxParser";
 import {ocrFile} from "../pipeline/ocrParser";
@@ -401,6 +402,7 @@ export function registerProfileRoutes(app: express.Application) {
         if (file.mimetype === "application/pdf") {
           const r = await parsePdf(destPath);
           rawText = r.needsOcr ? await ocrFile(destPath) : r.text;
+          rawText = enrichTextWithPlumberTables(destPath, rawText);
         } else if (file.mimetype.startsWith("image/")) {
           rawText = await ocrFile(destPath);
         } else if (ext === ".docx") {

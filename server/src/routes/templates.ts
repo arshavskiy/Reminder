@@ -13,6 +13,7 @@ import {previewReminderEmail} from "../reminders/emailSender";
 import {generateTemplateFromText, toDraft} from "../templates/generateTemplate";
 import {requireAuth} from "../auth/middleware";
 import {parsePdf} from "../pipeline/pdfParser";
+import {enrichTextWithPlumberTables} from "../pipeline/pdfPlumberParser";
 import {ocrFile} from "../pipeline/ocrParser";
 import {parseDocx} from "../pipeline/docxParser";
 import {parseXlsx} from "../pipeline/xlsxParser";
@@ -230,6 +231,7 @@ export function registerTemplateRoutes(app: express.Application) {
             const pdf = await parsePdf(tmpPath);
             text = pdf.text;
             if (pdf.needsOcr) text = await ocrFile(tmpPath);
+            text = enrichTextWithPlumberTables(tmpPath, text);
           } else if (
             mime.startsWith("image/") ||
             [".png", ".jpg", ".jpeg", ".tif", ".tiff"].includes(ext)
@@ -300,6 +302,7 @@ export function registerTemplateRoutes(app: express.Application) {
             const pdf = await parsePdf(tmpPath);
             text = pdf.text;
             if (pdf.needsOcr) text = await ocrFile(tmpPath);
+            text = enrichTextWithPlumberTables(tmpPath, text);
           } else if (mime.startsWith("image/") || [".png", ".jpg", ".jpeg", ".tif", ".tiff"].includes(ext)) {
             text = await ocrFile(tmpPath);
           } else if (ext === ".docx") {

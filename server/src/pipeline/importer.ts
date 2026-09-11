@@ -5,6 +5,7 @@ import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {getDataDir, getSettings} from "../settings";
 import {parsePdf} from "./pdfParser";
+import {enrichTextWithPlumberTables} from "./pdfPlumberParser";
 import {ocrFile} from "./ocrParser";
 import {parseDocx} from "./docxParser";
 import {parseXlsx} from "./xlsxParser";
@@ -1038,6 +1039,9 @@ export async function processDocument(
       rawText = parseXlsx(filePath);
     } else {
       rawText = readFileSync(filePath, "utf-8");
+    }
+    if (mimeType === "application/pdf") {
+      rawText = enrichTextWithPlumberTables(filePath, rawText);
     }
   } catch (err) {
     if (pipeline?.gmailImport && forcedTemplate && isInvoiceTemplate(forcedTemplate)) {
@@ -2652,7 +2656,11 @@ async function saveTemplateEntities(
   const equipmentList = Array.isArray(f["_equipment"]) ? f["_equipment"] as any[] : [];
   for (const eq of equipmentList) {
     if (!eq || typeof eq !== "object") continue;
-    const name: string = (eq.name ?? eq.description ?? "").trim();
+    const tableDescription = (eq.name ?? eq.description ?? "").trim();
+    const name = [eq.manufacturer, eq.model].filter(Boolean).join(" ").trim()
+      || (tableDescription.length <= 48 ? tableDescription : "")
+      || (eq.serial_number ? `מס׳ ${String(eq.serial_number).trim()}` : "")
+      || tableDescription;
     if (!name) continue;
 
     // Match by serial_number if present (most reliable), otherwise by name
@@ -2666,6 +2674,7 @@ async function saveTemplateEntities(
       {
         $set: {
           name,
+          description: tableDescription && tableDescription !== name ? tableDescription : null,
           category: eq.category ?? "other",
           ...(eq.manufacturer != null && { manufacturer: String(eq.manufacturer) }),
           ...(eq.model != null && { model: String(eq.model) }),
@@ -2679,7 +2688,6 @@ async function saveTemplateEntities(
           updated_at: now,
         },
         $setOnInsert: {
-          description: null,
           notes: null,
           is_active: 1,
           created_at: now,

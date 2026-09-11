@@ -4,6 +4,7 @@ import {mkdirSync, unlinkSync, writeFileSync} from "fs";
 import multer from "multer";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {parsePdf} from "../pipeline/pdfParser";
+import {enrichTextWithPlumberTables} from "../pipeline/pdfPlumberParser";
 import {ocrFile} from "../pipeline/ocrParser";
 import {parseDocx} from "../pipeline/docxParser";
 import {parseXlsx} from "../pipeline/xlsxParser";
@@ -184,6 +185,7 @@ async function extractRemindersFromFile(
   if (ext === ".pdf") {
     const pdf = await parsePdf(filePath);
     rawText = pdf.needsOcr ? await ocrFile(filePath) : pdf.text;
+    rawText = enrichTextWithPlumberTables(filePath, rawText);
   } else if ([".jpg", ".jpeg", ".png", ".tif", ".tiff"].includes(ext)) {
     rawText = await ocrFile(filePath);
   } else if (ext === ".docx") {

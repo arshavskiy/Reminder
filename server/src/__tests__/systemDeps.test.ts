@@ -76,7 +76,7 @@ describe("checkSystemDeps", () => {
     const report = await checkSystemDeps();
 
     expect(report.ok).toBe(true);
-    expect(report.deps.map((dep) => dep.name).sort()).toEqual(["pdftoppm", "tesseract"]);
+    expect(report.deps.map((dep) => dep.name).sort()).toEqual(["pdfplumber", "pdftoppm", "tesseract"]);
     expect(report.deps.every((dep) => dep.ok)).toBe(true);
     expect(report.deps.find((dep) => dep.name === "pdftoppm")?.version).toContain("pdftoppm version");
     expect(report.deps.find((dep) => dep.name === "tesseract")?.version).toContain("tesseract 5.3.0");

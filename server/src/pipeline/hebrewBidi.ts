@@ -81,7 +81,7 @@ function fixLine(line: string): string {
 const HEBREW_FINAL_LETTERS = /[ךםןףץ]/;
 const HEBREW_NON_FINAL     = /[א-ת]/;
 
-function looksReversed(text: string): boolean {
+function reversedFinals(text: string): {startFinals: number; endFinals: number} {
   let startFinals = 0;
   let endFinals   = 0;
   const words = text.split(/[\s,.;:!?()]+/);
@@ -95,7 +95,38 @@ function looksReversed(text: string): boolean {
       endFinals++;
     }
   }
+  return {startFinals, endFinals};
+}
+
+function looksReversed(text: string): boolean {
+  const {startFinals, endFinals} = reversedFinals(text);
   return startFinals > endFinals && startFinals >= 3;
+}
+
+/**
+ * pdfplumber cells are usually one or two words, so the document-level
+ * "3 start-finals" heuristic never fires. Vote across the whole table
+ * instead, then reverse each Hebrew cell with the same per-line rules.
+ */
+export function fixHebrewBidiTable(table: string[][]): string[][] {
+  let startFinals = 0;
+  let endFinals = 0;
+  for (const row of table) {
+    for (const cell of row) {
+      const score = reversedFinals(cell);
+      startFinals += score.startFinals;
+      endFinals += score.endFinals;
+    }
+  }
+  if (!(startFinals > endFinals && startFinals >= 1)) return table;
+
+  return table.map((row) =>
+    row.map((cell) => {
+      if (!HEBREW_CHAR.test(cell)) return cell;
+      const score = reversedFinals(cell);
+      return score.startFinals > score.endFinals ? fixLine(cell) : cell;
+    }),
+  );
 }
 
 export function fixHebrewBidi(text: string): string {
