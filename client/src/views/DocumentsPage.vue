@@ -401,7 +401,6 @@
           <colgroup>
             <col class="document-table__col document-table__col--select" />
             <col class="document-table__col document-table__col--file" />
-            <col class="document-table__col document-table__col--status" />
             <col class="document-table__col document-table__col--date" />
             <col class="document-table__col document-table__col--client" />
             <col class="document-table__col document-table__col--number" />
@@ -620,6 +619,11 @@
       @created="handleInspectionCreated"
       @updated="handleInspectionCreated"
     />
+    <CreateQuoteModal
+      v-model:show="showCreateQuote"
+      :row="createQuoteRow"
+      @created="onQuoteCreated"
+    />
     <MonthlyReportModal v-model:show="showMonthlyReport"/>
     <ReminderPreviewModal
       v-model:show="showReminderPreview"
@@ -704,6 +708,7 @@ import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS
 import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import {useQuotesTab} from "../composables/useQuotesTab";
+import CreateQuoteModal from "../components/documents/CreateQuoteModal.vue";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -1440,6 +1445,7 @@ function rowActions() {
     {label: "הורד", key: "download", icon: renderActionIcon(DownloadOutline)},
     {label: "חלץ AI", key: "extract", icon: renderActionIcon(FlashOutline)},
     {label: "תצוגת תזכורת", key: "preview-reminder", icon: renderActionIcon(EyeOutline)},
+    {label: "צור הצעת מחיר", key: "create-quote", icon: renderActionIcon(DocumentTextOutline)},
     { type: "divider", key: "d1" },
     {
       label: "מחק",
@@ -1450,13 +1456,34 @@ function rowActions() {
   ];
 }
 function rowActionsFor(row: Document) {
-  return rowActions().filter((action) => action.key !== "extract" || canExtractDocument(row));
+  return rowActions()
+    .filter((action) => action.key !== "extract" || canExtractDocument(row))
+    .map((action) => {
+      if (action.key !== "create-quote") return action;
+      // A quote is built from the document's contract, so it cannot be produced
+      // without one. Shown disabled rather than hidden so the action stays
+      // discoverable, with the reason in the tooltip instead of the row simply
+      // lacking a menu entry other rows have.
+      const hasContract = Boolean(row.contract_id);
+      const alreadyQuoted = Boolean(row.quote_id);
+      if (hasContract && !alreadyQuoted) return action;
+      return {
+        ...action,
+        disabled: true,
+        props: {
+          title: alreadyQuoted
+            ? "כבר קיימת הצעת מחיר למסמך הזה"
+            : "אין חוזה מקושר למסמך, ולכן לא ניתן להפיק ממנו הצעת מחיר",
+        },
+      };
+    });
 }
 function handleRowAction(key: string, row: Document) {
   if (key === "view") router.push(`/documents/${row.id}`);
   if (key === "download") openDownload(row);
   if (key === "extract") openExtractModal(String(row.id));
   if (key === "preview-reminder") openDocumentReminderPreview(row);
+  if (key === "create-quote") openCreateQuote(row);
   if (key === "delete") confirmDeleteDocument(row);
 }
 
@@ -1535,7 +1562,22 @@ async function loadDocTemplates() {
   }
 }
 
-const {hasQuotes, ensureLoaded: ensureQuotesTab} = useQuotesTab();
+const {hasQuotes, ensureLoaded: ensureQuotesTab, refresh: refreshQuotesTab} = useQuotesTab();
+
+const showCreateQuote = ref(false);
+const createQuoteRow = ref<Document | null>(null);
+
+function openCreateQuote(row: Document) {
+  createQuoteRow.value = row;
+  showCreateQuote.value = true;
+}
+
+async function onQuoteCreated() {
+  // Refresh the tab so it appears for an account whose first quote this is, and
+  // refetch the list so the row swaps its menu action for the quote link.
+  await refreshQuotesTab();
+  await store.fetch(undefined, true);
+}
 
 onMounted(() => {
   store.fetch(undefined, true);
@@ -2393,8 +2435,7 @@ async function bulkExtractAi() {
 }
 
 .document-table__col--select { width: 46px; }
-.document-table__col--file { width: clamp(180px, 28vw, 320px); }
-.document-table__col--status { width: 132px; }
+.document-table__col--file { width: auto; min-width: clamp(180px, 28vw, 320px); }
 .document-table__col--date { width: 148px; }
 .document-table__col--client { width: clamp(140px, 18vw, 220px); }
 .document-table__col--number { width: 120px; }

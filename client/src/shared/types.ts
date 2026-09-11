@@ -216,6 +216,10 @@ export interface Document {
   download_url?: string | null;
   thumbnail_url?: string | null;
   email_delivery?: EmailDeliverySummary | null;
+  /** Contract derived from this document, when one exists. A quote is produced
+   *  from the contract rather than the document, so this is what gates the
+   *  "create a quote" row action. */
+  contract_id?: string | null;
   quote_id?: string | null;
   quote_number?: string | null;
 }

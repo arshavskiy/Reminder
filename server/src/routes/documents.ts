@@ -258,6 +258,10 @@ export function registerDocumentRoutes(app: express.Application) {
         reminder_status: getDocumentReminderStatus(r, documentReminders),
         reminder_date: getDocumentReminderDate(r, contract, documentReminders),
         contract_status: contract?.status ?? null,
+        // The contract is already loaded for reminder_date and contract_status;
+        // its id is what lets the list offer "create a quote" on a row, since a
+        // quote is built from a contract rather than from the document.
+        contract_id: contract?._id?.toString() ?? null,
         quote_id: quote?._id?.toString() ?? null,
         quote_number: quote?.number ?? null,
         email_delivery: latestFailedDeliveryForReminderIds(
