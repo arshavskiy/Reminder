@@ -2656,6 +2656,7 @@ async function saveTemplateEntities(
   const equipmentList = Array.isArray(f["_equipment"]) ? f["_equipment"] as any[] : [];
   for (const eq of equipmentList) {
     if (!eq || typeof eq !== "object") continue;
+    if (!String(eq.manufacturer ?? "").trim()) continue;
     const tableDescription = (eq.name ?? eq.description ?? "").trim();
     const name = [eq.manufacturer, eq.model].filter(Boolean).join(" ").trim()
       || (tableDescription.length <= 48 ? tableDescription : "")

@@ -51,7 +51,7 @@ describe("parseEquipmentFromPlumberTables", () => {
     ]];
 
     const rows = parseEquipmentFromPlumberTables(tables);
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
       name: "מגבהה ידנית",
       manufacturer: "Compac",
@@ -66,12 +66,6 @@ describe("parseEquipmentFromPlumberTables", () => {
       serial_number: "9122",
     });
     expect(rows[1].load_capacity_work).toEqual(["40000"]);
-    expect(rows[2]).toMatchObject({
-      name: "מגבה הידראולי עמוד להרמת רכבים",
-      manufacturer: null,
-      serial_number: "9844",
-    });
-    expect(rows[2].load_capacity_work).toEqual(["50000"]);
   });
 
   it("strips Hebrew leaked into the serial cell", () => {
@@ -81,23 +75,18 @@ describe("parseEquipmentFromPlumberTables", () => {
         ["סל הרמת אדם בעזרת מלגזה", "", "", "6 הדמע", "", "בדיקה ויזואלית", "350 ק\"ג- 2 אנשים + ציוד"],
       ],
     ]];
-    const rows = parseEquipmentFromPlumberTables(tables);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].serial_number).toBe("6");
-    expect(rows[0].load_capacity_work).toEqual(['350 ק"ג- 2 אנשים + ציוד']);
+    expect(parseEquipmentFromPlumberTables(tables)).toEqual([]);
   });
 
-  it("keeps a row with serial 6 and a text work-load, even if manufacturer is empty", () => {
+  it("skips rows with an empty יצרן column", () => {
     const tables = [[
       [
         ["תיאור", "יצרן", "דגם", "מס' סידורי", "רדיוס עומס (מטר)", "עומס מבחן (ק\"ג)", "עומס עבודה בטוח (ק\"ג)"],
+        ['שאקל אומגה 1"', "", "שנדקה 7 כמות", "233542", "", "בדיקה ויזואלית", "85000"],
         ["סל הרמה אנכי להתקנה", "", "", "6", "", "בדיקה ויזואלית", "350 ק\"ג + 2 אנשים"],
       ],
     ]];
-    const rows = parseEquipmentFromPlumberTables(tables);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].serial_number).toBe("6");
-    expect(rows[0].load_capacity_work).toEqual(['350 ק"ג + 2 אנשים']);
+    expect(parseEquipmentFromPlumberTables(tables)).toEqual([]);
   });
 
   it("does not create equipment from a description-only table row", () => {

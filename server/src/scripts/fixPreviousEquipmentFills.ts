@@ -120,7 +120,7 @@ await runWithDbTarget(production ? "production" : "local", async () => {
       }
 
       const flat = flattenEquipmentFields(rows);
-      const next = {...before, _equipment: rows};
+      const next: Record<string, unknown> = {...before, _equipment: rows};
       if (rows[0]) {
         next.manufacturer = next.manufacturer || flat.manufacturer;
         next.model = next.model || flat.model;

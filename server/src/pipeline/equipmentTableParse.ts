@@ -120,10 +120,9 @@ export function shouldSkipEquipmentInspection(...parts: Array<string | null | un
 export function isUsableEquipmentRow(row: EquipmentTableRow): boolean {
   const serial = row.serial_number?.trim() ?? "";
   const manufacturer = row.manufacturer?.trim() ?? "";
-  const model = row.model?.trim() ?? "";
   const name = row.name?.trim() ?? "";
-  if (!name && !manufacturer) return false;
-  if (!serial && !manufacturer && !model) return false;
+  if (!manufacturer) return false;
+  if (!name && !serial) return false;
   if (serial && !/\d/.test(serial)) return false;
   if (name.length > 220) return false;
   return true;

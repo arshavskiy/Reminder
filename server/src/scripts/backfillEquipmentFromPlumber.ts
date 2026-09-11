@@ -37,9 +37,9 @@ function empty(value: unknown): boolean {
 
 function mergeEquipment(existing: Record<string, unknown>, rows: ReturnType<typeof parseEquipmentFromPlumberTables>) {
   const flat = flattenEquipmentFields(rows);
-  const next = {...existing, _equipment: rows};
+  const next: Record<string, unknown> = {...existing, _equipment: rows};
   for (const key of ["manufacturer", "model", "serial_number", "load_capacity"] as const) {
-    if (empty(next[key]) && !empty((flat as any)[key])) next[key] = (flat as any)[key];
+    if (empty(next[key]) && !empty((flat as Record<string, unknown>)[key])) next[key] = (flat as Record<string, unknown>)[key];
   }
   return next;
 }
