@@ -45,7 +45,7 @@ async function main() {
 
   const leads = await col("inspector_leads")
     .find({phone: {$exists: true, $nin: [null, ""]}} as any)
-    .project({name: 1, phone: 1, appUserId: 1, city: 1})
+      .project({name: 1, phone: 1, appUserId: 1, city: 1, professionType: 1, certificationType: 1})
     .toArray() as any[];
 
   const rows: any[] = [];
@@ -58,7 +58,21 @@ async function main() {
       const token = await createMagicLinkToken(String(l.appUserId), "trial");
       magicLink = `${baseUrl}/auth/magic?token=${token}`;
     }
-    rows.push({name: l.name ?? "", city: l.city ?? "", phone: String(l.phone), waPhone: wa, magicLink});
+      const professionTypes = Array.isArray(l.professionType)
+          ? l.professionType.map(String).filter(Boolean)
+          : l.professionType ? [String(l.professionType)] : [];
+      const certificationTypes = Array.isArray(l.certificationType)
+          ? l.certificationType.map(String).filter(Boolean)
+          : l.certificationType ? [String(l.certificationType)] : [];
+      rows.push({
+          name: l.name ?? "",
+          city: l.city ?? "",
+          phone: String(l.phone),
+          waPhone: wa,
+          magicLink,
+          professionType: professionTypes,
+          certificationType: certificationTypes,
+      });
   }
 
   const outPath = process.argv.find((a) => !a.startsWith("--") && (a.endsWith(".json") || a.endsWith(".html")))

@@ -17,6 +17,7 @@ if (target === "production" && (!appUrl.startsWith("https://") || !magicUrl.star
 const outputDir = resolve("video/recordings");
 const rawDir = resolve(outputDir, "raw");
 const outputName = args.output || `RemindOCR-new-inspection-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`;
+const pdfOutput = args["pdf-output"] || "demo-new-inspection-signed.pdf";
 await mkdir(rawDir, {recursive: true});
 
 const browser = await chromium.launch({headless: true});
@@ -181,7 +182,7 @@ try {
   await page.getByRole("button", {name: /הורד PDF/}).click();
   const download = await downloadPromise;
   if (download) {
-    await download.saveAs(resolve(outputDir, "demo-new-inspection-signed.pdf"));
+      await download.saveAs(resolve(outputDir, pdfOutput));
     await caption("המסמך החתום הורד כ־PDF", 1400);
   } else {
     console.warn("[record] PDF download event not observed; continuing without saving the file.");

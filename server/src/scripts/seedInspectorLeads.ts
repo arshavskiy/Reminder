@@ -53,6 +53,7 @@ const prodOnly = process.argv.includes("--prod-only");
 
 interface RawContact {
   name: string;
+    professionType?: string;
   company?: string;
   city?: string;
   phone?: string;
@@ -70,6 +71,7 @@ interface RawContact {
 
 interface MergedLead {
   name: string;
+    professionType: string[];
   company: string | null;
   city: string | null;
   phone: string | null;
@@ -159,6 +161,7 @@ function loadInspectorsCsv(): RawContact[] {
     if (!name || looksLikeJunkRow(name)) continue;
     const base = {
       name,
+        professionType: "בודק מוסמך",
       company: normalizeText(r.company) || undefined,
       city: normalizeText(r.city) || undefined,
       phone: splitMulti(r.phone)[0],
@@ -190,6 +193,7 @@ function loadWithContactsXlsx(fileName: string): RawContact[] {
       const phones = splitMulti(r["טלפון"]).filter((p) => !p.toLowerCase().includes("פקס"));
       return {
         name,
+          professionType: "בודק מוסמך",
         city: normalizeText(r["יישוב"]) || undefined,
         phone: phones[0],
         whatsapp: phones[0],
@@ -204,6 +208,55 @@ function loadWithContactsXlsx(fileName: string): RawContact[] {
       };
     })
     .filter((r): r is RawContact => r !== null);
+}
+
+/** Additional registry exports added to SEED, including service-provider type. */
+function loadAdditionalRegistryXlsx(fileName: string): RawContact[] {
+    const rows = readXlsx(join(SEED_DIR, fileName));
+    return rows.map((r): RawContact | null => {
+        const name = normalizeText(r["שם"]);
+        if (!name || looksLikeJunkRow(name)) return null;
+        const phones = splitMulti(r["טלפון"]).filter((p) => !p.toLowerCase().includes("פקס"));
+        return {
+            name,
+            professionType: normalizeText(r["סוג נותן שירות"]) || "בודק מוסמך",
+            city: normalizeText(r["יישוב"]) || undefined,
+            phone: phones[0],
+            whatsapp: phones.find((phone) => /^(?:\+?972|0)?5\d/.test(phone.replace(/\D/g, ""))) ?? phones[0],
+            email: firstEmail(r["דוא״ל"]),
+            certificationType: normalizeText(r["הסמכה/תפקיד"] ?? r["הסמכה"]) || undefined,
+            authId: normalizeText(r["מזהה הסמכה"] ?? r["AuthorizationId"]) || undefined,
+            serviceNum: normalizeText(r["מספר נותן שירות"]) || undefined,
+            sourceUrl: normalizeText(r["קישור"] ?? r["קישור פרטים"]) || undefined,
+            notes: normalizeText(r["הערות"]) || undefined,
+            sourceFile: fileName,
+            sourceRank: 1,
+        };
+    }).filter((row): row is RawContact => row !== null);
+}
+
+function loadAdjacentProfessionsCsv(): RawContact[] {
+    return readCsv(join(SEED_DIR, "remindocr-adjacent-professions.csv"))
+        .map((r): RawContact | null => {
+            const name = normalizeText(r["שם_חברה"]);
+            if (!name || looksLikeJunkRow(name)) return null;
+            const professionType = normalizeText(r["קטגוריה"]);
+            return {
+                name,
+                company: name,
+                professionType: professionType || "עסק בתחום הבדיקות",
+                city: normalizeText(r["יישוב"]) || undefined,
+                phone: splitMulti(r["טלפון"])[0],
+                whatsapp: splitMulti(r["טלפון"])[0],
+                email: firstEmail(r["דואל"]),
+                website: normalizeText(r["אתר"]) || undefined,
+                notes: normalizeText(r["הערות"]) || undefined,
+                sourceUrl: normalizeText(r["מקור"]) || undefined,
+                sourceFile: "remindocr-adjacent-professions.csv",
+                sourceRank: 0,
+            };
+        })
+        .filter((row): row is RawContact => row !== null);
 }
 
 /** labor-serviceproviders-*.json scrape dumps: many files, heavy duplication, some pagination-artifact rows. */
@@ -222,6 +275,7 @@ function loadScrapeDumps(): RawContact[] {
         : undefined;
       out.push({
         name,
+          professionType: "בודק מוסמך",
         company: normalizeText(lead.company) || undefined,
         city: normalizeText(lead.city) || undefined,
         phone: normalizeText(lead.phone) || undefined,
@@ -247,8 +301,7 @@ function mergeContacts(rows: RawContact[]): MergedLead[] {
   // (certification types, auth ids, notes).
   const byIdentity = new Map<string, RawContact[]>();
   for (const row of rows) {
-    if (!row.city) continue; // can't confidently dedupe without a city
-    const key = identityKey(row.name, row.city);
+      const key = identityKey(row.name, row.city ?? "");
     const list = byIdentity.get(key) ?? [];
     list.push(row);
     byIdentity.set(key, list);
@@ -262,6 +315,9 @@ function mergeContacts(rows: RawContact[]): MergedLead[] {
     const certificationType = [...new Set(
       group.map((g) => g.certificationType).filter((v): v is string => Boolean(v))
     )];
+      const professionType = [...new Set(
+          group.map((g) => g.professionType).filter((v): v is string => Boolean(v))
+      )];
     const ministryAuthIds = [...new Set(
       group.map((g) => g.authId).filter((v): v is string => Boolean(v))
     )];
@@ -286,6 +342,7 @@ function mergeContacts(rows: RawContact[]): MergedLead[] {
     const now = new Date();
     merged.push({
       name: best.name,
+        professionType,
       company,
       city: best.city ?? null,
       phone,
@@ -311,6 +368,11 @@ const rawRows = [
   ...loadInspectorsCsv(),
   ...loadWithContactsXlsx("inspectors-elevators-with-contacts.xlsx"),
   ...loadWithContactsXlsx("inspectors-lifting-machines-with-contacts.xlsx"),
+    ...loadAdditionalRegistryXlsx("all-other-bodekim-with-contacts.xlsx"),
+    ...loadAdditionalRegistryXlsx("maaltan-with-contacts.xlsx"),
+    ...loadAdditionalRegistryXlsx("menahel-avoda-with-contacts.xlsx"),
+    ...loadAdditionalRegistryXlsx("safety-roles-with-contacts.xlsx"),
+    ...loadAdjacentProfessionsCsv(),
   ...loadScrapeDumps(),
 ];
 const leads = mergeContacts(rawRows);
@@ -329,6 +391,7 @@ console.table(
     .map((l) => ({
       name: l.name,
       city: l.city,
+        professionType: l.professionType.join(", "),
       quals: l.certificationType.length,
       email: l.email ?? "",
       phone: l.phone ?? "",

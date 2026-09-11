@@ -45,7 +45,8 @@
     margin-bottom: 14px;
     flex-wrap: wrap;
   }
-  input[type="search"] {
+
+  input[type="search"], select {
     flex: 1;
     min-width: 160px;
     padding: 8px 12px;
@@ -54,6 +55,11 @@
     background: var(--white);
     color: var(--text);
     font-size: 14px;
+  }
+
+  select {
+      flex: 0 1 220px;
+      min-width: 180px;
   }
   .count { font-size: 12px; color: var(--text-2); white-space: nowrap; }
   .row {
@@ -97,7 +103,10 @@
     ⚠️ קישורי הכניסה בהודעות תקפים ל-30 יום מרגע ההפקה ולשימוש חד-פעמי. אם עברו 30 יום — יש להריץ מחדש את הסקריפט לפני שליחה.
   </div>
   <div class="controls">
-    <input type="search" id="search" placeholder="חיפוש לפי שם או עיר..." />
+      <input id="search" placeholder="חיפוש לפי שם, עיר או מקצוע..." type="search"/>
+      <select id="profession">
+          <option value="">כל בעלי המקצוע</option>
+      </select>
     <span class="count" id="count"></span>
   </div>
   <div id="list"></div>
@@ -106,15 +115,37 @@
 <script>
   const LEADS = __LEADS_JSON__;
 
+  function messageBodyFor(lead) {
+      const types = (lead.professionType || []).join(" ");
+      if (types.includes("מנהל עבודה")) {
+          return "אנחנו מפתחים מערכת למנהלי עבודה שמרכזת מסמכי אתר, בדיקות ציוד, לקוחות ומועדי תוקף במקום אחד. המערכת מחלצת מידע מקבצי PDF, מציגה את הבדיקות ביומן ושולחת תזכורות לפני המועד הבא.";
+      }
+      if (types.includes("ממונה על בטיחות")) {
+          return "אנחנו מפתחים מערכת לממוני בטיחות שמרכזת תסקירים, ציוד, לקוחות ומועדי בדיקות. אפשר להעלות מסמכים קיימים, לחלץ מהם את הנתונים אוטומטית, לעקוב ביומן ולהפיק דוחות מסודרים ללקוחות.";
+      }
+      if (types.includes("מעליתן") || types.includes("מעליות")) {
+          return "אנחנו מפתחים מערכת לאנשי וחברות מעליות שמרכזת מסמכי בדיקה, לקוחות, מתקנים ומועדי ביקורת. המערכת קוראת קבצי PDF, מזהה תאריכי תוקף ושולחת תזכורות לקראת הבדיקה או הטיפול הבא.";
+      }
+      if (types.includes("בודק מוסמך") || types.includes("בודק")) {
+          return "בנינו מערכת לבודקים מוסמכים שחוסכת את ההקלדה החוזרת: היא מייבאת תסקירים ומסמכים, מחלצת מהם תאריכי תוקף ופרטי לקוח, שולחת תזכורות ומאפשרת ליצור תסקיר והצעת מחיר מותאמים לכל סוג בדיקה.";
+      }
+      if (types.includes("חברה") || types.includes("שירות") || types.includes("מעבדה")) {
+          return "אנחנו מפתחים מערכת לחברות שירות ובדיקה שמרכזת לקוחות, מסמכים, ציוד ומועדי בדיקות. אפשר לחלץ מידע מקבצי PDF, לנהל את העבודה ביומן, לשלוח תזכורות ולהפיק דוחות והצעות מחיר.";
+      }
+      return "אנחנו מפתחים מערכת לבעלי מקצוע בתחום הבדיקות והבטיחות שמרכזת מסמכים, לקוחות ומועדי בדיקות, מחלצת נתונים מקבצי PDF ושולחת תזכורות אוטומטיות לקראת המועד הבא.";
+  }
+
   const MESSAGE_TEMPLATE = (lead) => {
     const intro = "שלום" + (lead.name ? " " + lead.name : "") + ", מדבר פבל מ-RemindOCR.";
+      const profession = (lead.professionType || []).join(", ");
+      const professionLine = profession ? ("ראיתי שאתה עוסק בתחום " + profession + ".") : "";
     const site = "www.remindocr.com";
-    const body = "בנינו מערכת שחוסכת לבודקים מוסמכים את כל ההקלדה החוזרת: מייבאת תסקירים ומסמכים אוטומטית, מחלצת מהם תאריכי תוקף ופרטי לקוח, ושולחת תזכורת לפני שהתסקיר פג. אפשר גם לבנות תבנית PDF מותאמת אישית לכל סוג בדיקה שאתה עושה, וכן המערכת מייצרת יומן ומסנכרת עם יומן קיים של גוגל.";
+      const body = messageBodyFor(lead);
     const pricing = "המחיר נוח — החל מ-79 ש\"ח לחודש, ו-30 יום ניסיון חינם, בלי כרטיס אשראי.";
     const link = lead.magicLink ? ("קישור כניסה מהיר: " + lead.magicLink) : "אשמח לשלוח לך קישור כניסה אם תרצה/י להתנסות.";
     const outro = "אני תמיד זמין לשיחה קצרה ולהראות את המערכת בלייב, בלי התחייבות.";
     // return intro + "\n" + site + "\n\n" + body + "\n\n" + pricing + "\n" + link + "\n\n" + outro;
-    return intro + "\n" + site + "\n" + body + "\n" + link + "\n" + outro;
+      return [intro, professionLine, site, body, link, outro].filter(Boolean).join("\n");
   };
 
   function waLink(lead) {
@@ -124,7 +155,17 @@
 
   const listEl = document.getElementById("list");
   const searchEl = document.getElementById("search");
+  const professionEl = document.getElementById("profession");
   const countEl = document.getElementById("count");
+
+  [...new Set(LEADS.flatMap((lead) => lead.professionType || []))]
+      .sort((a, b) => a.localeCompare(b, "he"))
+      .forEach((profession) => {
+          const option = document.createElement("option");
+          option.value = profession;
+          option.textContent = profession;
+          professionEl.appendChild(option);
+      });
 
   function sentKey(i) { return "wa-lead-sent-" + i; }
   function isSent(i) {
@@ -136,11 +177,15 @@
 
   function render() {
     const q = searchEl.value.trim().toLowerCase();
+      const selectedProfession = professionEl.value;
     listEl.innerHTML = "";
     let shown = 0;
     LEADS.forEach((lead, i) => {
-      const hay = (lead.name + " " + lead.city).toLowerCase();
+        const professions = lead.professionType || [];
+        const certifications = lead.certificationType || [];
+        const hay = [lead.name, lead.city, ...professions, ...certifications].join(" ").toLowerCase();
       if (q && !hay.includes(q)) return;
+        if (selectedProfession && !professions.includes(selectedProfession)) return;
       shown++;
       const row = document.createElement("div");
       row.className = "row" + (isSent(i) ? " row--sent" : "");
@@ -154,7 +199,7 @@
         '<a class="btn btn--wa" target="_blank" rel="noopener">שלח ב-WhatsApp</a>';
 
       row.querySelector(".row__name").textContent = lead.name || "(ללא שם)";
-      row.querySelector(".row__meta").textContent = lead.city + " · " + lead.phone;
+        row.querySelector(".row__meta").textContent = [professions.join(" · "), lead.city, lead.phone].filter(Boolean).join(" · ");
 
       const waBtn = row.querySelector(".btn--wa");
       waBtn.href = waLink(lead);
@@ -173,5 +218,6 @@
   }
 
   searchEl.addEventListener("input", render);
+  professionEl.addEventListener("change", render);
   render();
 </script>
