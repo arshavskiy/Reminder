@@ -173,11 +173,20 @@ try {
   await pause(1800);
   await caption("התסקיר נוצר עם הלוגו והחתימה השמורים בפרופיל", 2200);
 
-  const downloadPromise = page.waitForEvent("download");
+  // savePdf builds the file client-side and triggers a synthetic <a download>
+  // on a blob: URL, which Playwright does not always surface as a "download"
+  // event. Treat the saved PDF as a nice-to-have: the recording is the point,
+  // so a missed download must not abort a run that has otherwise succeeded.
+  const downloadPromise = page.waitForEvent("download", {timeout: 15000}).catch(() => null);
   await page.getByRole("button", {name: /הורד PDF/}).click();
   const download = await downloadPromise;
-  await download.saveAs(resolve(outputDir, "demo-new-inspection-signed.pdf"));
-  await caption("המסמך החתום הורד כ־PDF", 1400);
+  if (download) {
+    await download.saveAs(resolve(outputDir, "demo-new-inspection-signed.pdf"));
+    await caption("המסמך החתום הורד כ־PDF", 1400);
+  } else {
+    console.warn("[record] PDF download event not observed; continuing without saving the file.");
+    await caption("המסמך החתום מוכן להורדה", 1400);
+  }
 
   const rawPath = await video.path();
   await context.close();
