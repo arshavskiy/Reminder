@@ -27,9 +27,12 @@
           <n-button size="small" secondary class="rcal__action-btn" @click="emit('open-monthly-report', cursor.getTime())">
             דוח חודשי
           </n-button>
+          <!-- Hidden rather than disabled when nothing is sendable: a greyed-out
+               "send (0)" told the user nothing about why, and the count depends on
+               the month and filter currently in view. -->
           <n-button
-            v-if="!testsOnly"
-            :disabled="sendableVisibleReminders.length === 0 || sendingVisible"
+            v-if="!testsOnly && sendableVisibleReminders.length > 0"
+            :disabled="sendingVisible"
             :loading="sendingVisible"
             size="small"
             type="primary"
@@ -37,7 +40,7 @@
             class="rcal__action-btn"
             @click="showSendVisibleConfirm = true"
           >
-            שלח נראות ({{ sendableVisibleReminders.length }})
+            שלח תזכורות גלויות ({{ sendableVisibleReminders.length }})
           </n-button>
           <n-button
             :disabled="loading"
