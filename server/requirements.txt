@@ -1,0 +1,3 @@
+# Python side of the PDF pipeline. pdfplumber reads the equipment tables that
+# pdf-parse flattens into fused text; without it those tables are lost.
+pdfplumber==0.11.9

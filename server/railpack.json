@@ -2,9 +2,22 @@
   "$schema": "https://schema.railpack.com",
   "provider": "node",
   "packages": {
-    "node": "22"
+    "node": "22",
+    "python": "3.12"
   },
   "deploy": {
-    "aptPackages": ["poppler-utils", "tesseract-ocr", "tesseract-ocr-heb"]
+    "aptPackages": [
+      "poppler-utils",
+      "tesseract-ocr",
+      "tesseract-ocr-heb"
+    ]
+  },
+  "steps": {
+    "install": {
+      "commands": [
+        "...",
+        "pip install --no-cache-dir -r requirements.txt"
+      ]
+    }
   }
 }
