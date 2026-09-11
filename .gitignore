@@ -52,3 +52,13 @@ client/tmp/video-demo-auth.json
 # live session token that must never reach the repo.
 tmp/
 video/recordings/
+
+# Private keys — never committable. A keypair generated in the working tree (for
+# example by `railway ssh keys`) landed here untracked once; these patterns make
+# a stray key impossible to stage by accident.
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+railway
+railway.pub
