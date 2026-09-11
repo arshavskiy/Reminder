@@ -91,6 +91,13 @@ export function registerPaymentRoutes(app: express.Application) {
     if (!request) throw new HTTPException(404, "דרישת התשלום לא נמצאה");
     return request;
   };
+  // Counts only, for deciding whether to show the quotes tab at all. The list
+  // route above also loads a pricebook and up to a thousand contracts, which is
+  // far too much work to do just to find out whether a nav link should render.
+  router.get("/counts", route(async (_req, res, userId) => {
+    const quotes = await requests().countDocuments({ user_id: userId, documentKind: "quote" });
+    res.json({ quotes });
+  }));
   router.get("/", route(async (_req, res, userId) => {
     const [pricebook, rows, contracts] = await Promise.all([
       pricebooks().findOne({user_id: userId}), requests().find({user_id: userId}).sort({createdAt: -1}).limit(200).toArray(),

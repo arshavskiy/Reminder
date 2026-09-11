@@ -31,6 +31,7 @@ async function request<T>(path: string, method = "GET", body?: unknown): Promise
 }
 export const paymentService = {
   list: () => request<PaymentData>("/"),
+  counts: () => request<{ quotes: number }>("/counts"),
   get: (id: string) => request<PaymentRequest>(`/requests/${id}`),
   saveRates: (rates: InspectionRate[]) => request("/rates", "PUT", {rates}),
   create: (body: unknown) => request<PaymentRequest>("/requests", "POST", body),

@@ -2,7 +2,7 @@
   <div class="page2">
     <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
       <router-link class="documents-workspace-tabs__active" to="/documents">תסקירים</router-link>
-      <router-link to="/quotes">הצעות מחיר</router-link>
+      <router-link v-if="hasQuotes" to="/quotes">הצעות מחיר</router-link>
     </nav>
     <PageHeader
       :count="store.total"
@@ -276,36 +276,36 @@
         type="daterange"
         @update:value="currentPage = 1"
       />
-      <div class="toolbar__view-toggle">
-        <n-tooltip placement="top">
-          <template #trigger>
-            <button
-              :class="{ 'rbtn--ghost-active': viewMode === 'grid' }"
-              :aria-label="'אריחים'"
-              class="rbtn rbtn--ghost rbtn--icon"
-              type="button"
-              @click="viewMode = 'grid'"
-            >
-              <n-icon :component="GridOutline" :size="16" class="btn-icon"/>
-            </button>
-          </template>
-          אריחים
-        </n-tooltip>
-        <n-tooltip placement="top">
-          <template #trigger>
-            <button
-              :class="{ 'rbtn--ghost-active': viewMode === 'list' }"
-              :aria-label="'טבלה'"
-              class="rbtn rbtn--ghost rbtn--icon"
-              type="button"
-              @click="viewMode = 'list'"
-            >
-              <n-icon :component="ListOutline" :size="16" class="btn-icon"/>
-            </button>
-          </template>
-          טבלה
-        </n-tooltip>
-      </div>
+<!--      <div class="toolbar__view-toggle">-->
+<!--        <n-tooltip placement="top">-->
+<!--          <template #trigger>-->
+<!--            <button-->
+<!--              :class="{ 'rbtn&#45;&#45;ghost-active': viewMode === 'grid' }"-->
+<!--              :aria-label="'אריחים'"-->
+<!--              class="rbtn rbtn&#45;&#45;ghost rbtn&#45;&#45;icon"-->
+<!--              type="button"-->
+<!--              @click="viewMode = 'grid'"-->
+<!--            >-->
+<!--              <n-icon :component="GridOutline" :size="16" class="btn-icon"/>-->
+<!--            </button>-->
+<!--          </template>-->
+<!--          אריחים-->
+<!--        </n-tooltip>-->
+<!--        <n-tooltip placement="top">-->
+<!--          <template #trigger>-->
+<!--            <button-->
+<!--              :class="{ 'rbtn&#45;&#45;ghost-active': viewMode === 'list' }"-->
+<!--              :aria-label="'טבלה'"-->
+<!--              class="rbtn rbtn&#45;&#45;ghost rbtn&#45;&#45;icon"-->
+<!--              type="button"-->
+<!--              @click="viewMode = 'list'"-->
+<!--            >-->
+<!--              <n-icon :component="ListOutline" :size="16" class="btn-icon"/>-->
+<!--            </button>-->
+<!--          </template>-->
+<!--          טבלה-->
+<!--        </n-tooltip>-->
+<!--      </div>-->
     </div>
 
 
@@ -464,11 +464,6 @@
               </td>
               <td class="cell-strong document-col document-col--file">
                 <span class="document-file-cell">
-                  <n-icon
-                    :component="fileTypeIcon(row.mime_type)"
-                    :class="['document-file-icon', `file-type-icon--${fileKind(row.mime_type)}`]"
-                    :size="16"
-                  />
                   <span class="document-file-cell__text">
                     <span class="document-cell-truncate" dir="auto" :title="row.file_name">{{ row.file_name }}</span>
                     <span v-if="inspectionTypeLabel(row)" class="document-file-cell__inspection-type">{{ inspectionTypeLabel(row) }}</span>
@@ -708,6 +703,7 @@ import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.
 import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS, useConfirm} from "../composables/useConfirm.js";
 import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
+import {useQuotesTab} from "../composables/useQuotesTab";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -1539,11 +1535,14 @@ async function loadDocTemplates() {
   }
 }
 
+const {hasQuotes, ensureLoaded: ensureQuotesTab} = useQuotesTab();
+
 onMounted(() => {
   store.fetch(undefined, true);
   loadPipelineFlags();
   loadClients();
   void loadDocTemplates();
+  void ensureQuotesTab();
 });
 onUnmounted(() => {
   if (saveFlagsTimer) clearTimeout(saveFlagsTimer);
@@ -2510,10 +2509,6 @@ async function bulkExtractAi() {
 .document-file-cell__inspection-type {
   font-size: 11px;
   color: var(--text-secondary);
-}
-
-.document-file-icon {
-  flex: 0 0 auto;
 }
 
 .row-actions {
