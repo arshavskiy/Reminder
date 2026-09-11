@@ -13,7 +13,7 @@
     ]
   },
   "steps": {
-    "install": {
+    "build": {
       "commands": [
         "...",
         "pip install --no-cache-dir -r requirements.txt"
