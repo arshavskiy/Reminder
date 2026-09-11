@@ -1071,6 +1071,8 @@ function applyFilter(f: CombinedFilter) {
 const clientOptions = ref<{ label: string; value: string }[]>([]);
 async function loadClients() {
   try {
+    // Only the names and ids feed the client filter dropdown; doc_count is not
+    // rendered here and costs three extra collection scans server-side.
     const r = await api.clients.list({ limit: 0 });
     clientOptions.value = r.rows.map((c) => ({ label: c.display_name, value: String(c.id) }));
   } catch { /* non-fatal */ }

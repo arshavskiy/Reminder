@@ -69,11 +69,21 @@ export function registerDocumentRoutes(app: express.Application) {
     const limit = parseInt((req.query.limit as string) ?? "0");
     const offset = parseInt((req.query.offset as string) ?? "0");
 
-    // Claim any legacy documents that were imported before auth existed
-    await col("documents").updateMany(
+    // Claim any legacy documents that were imported before auth existed.
+    // This is a one-time migration, but it ran as a write on every single list
+    // request. Guarded by a cheap existence check so the common case — no
+    // unclaimed rows, which is every request after the first — costs one
+    // indexed lookup instead of a collection-wide write.
+    const unclaimed = await col("documents").findOne(
       { user_id: { $exists: false } },
-      { $set: { user_id: userId, updated_at: new Date() } }
+      { projection: { _id: 1 } } as any,
     );
+    if (unclaimed) {
+      await col("documents").updateMany(
+        { user_id: { $exists: false } },
+        { $set: { user_id: userId, updated_at: new Date() } }
+      );
+    }
 
     // Hide specialized records from the main documents list. Certificates live
     // in Profile, and invoices are managed from the invoices workspace. Older

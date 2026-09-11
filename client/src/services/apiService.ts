@@ -734,7 +734,10 @@ export const api = {
   },
 
   clients: {
-    list: (params?: { q?: string; limit?: number; offset?: number }, force = false) => {
+    // withCounts opts into doc_count, which costs three extra collection scans
+    // server-side. Only the clients page shows that column; everything else
+    // (notably the documents page's client filter) wants just names and ids.
+    list: (params?: { q?: string; limit?: number; offset?: number; withCounts?: 1 }, force = false) => {
       return get<{ rows: Client[]; total: number }>(`/clients${qs(params)}`, force);
     },
     get: (id: string) => get<ClientDetail>(`/clients/${id}`),

@@ -358,14 +358,14 @@ const search = ref("");
 let searchTimer: ReturnType<typeof setTimeout>;
 function onSearch() {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => store.fetch({ q: search.value || undefined, limit: 200 }), 300);
+  searchTimer = setTimeout(() => store.fetch({ q: search.value || undefined, limit: 200, withCounts: 1 }), 300);
 }
 function refresh() {
-  return store.fetch({ q: search.value || undefined, limit: 200 }, true);
+  return store.fetch({ q: search.value || undefined, limit: 200, withCounts: 1 }, true);
 }
 
 onMounted(() => {
-  store.fetch({ limit: 200 }, true);
+  store.fetch({ limit: 200, withCounts: 1 }, true);
 });
 
 type EntityFilter = "all" | "person" | "company";
@@ -501,7 +501,7 @@ watch(
 async function openClientMergeModal() {
   const selected = selectedClients().map((row) => String(row.id));
   if (store.total > store.rows.length) {
-    await store.fetch({ limit: Math.max(store.total, 2000) });
+    await store.fetch({ limit: Math.max(store.total, 2000), withCounts: 1 });
   }
   mergeModal.sourceIds = selected.length >= 2 ? selected : [];
   mergeModal.canonicalId = mergeModal.sourceIds[0] ?? null;

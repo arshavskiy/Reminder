@@ -41,16 +41,21 @@ export function registerClientRoutes(app: express.Application) {
       col("clients").countDocuments(filter),
     ]);
 
-    const clientIds = rows.map((row) => String(row._id));
-    const docCountById = new Map<string, number>();
-    await Promise.all(clientIds.map(async (clientId) => {
-      docCountById.set(clientId, (await findClientDocuments(userId, clientId)).length);
-    }));
+    // doc_count is opt-in. It used to be computed for every client on every
+    // request: findClientDocuments runs up to four queries per client and loads
+    // whole document bodies only to take .length, which on an account with 248
+    // clients was ~1000 queries and about ten seconds. The documents page asks
+    // this endpoint only for the names in its client filter and never reads the
+    // counts, so it now opts out and the work disappears entirely.
+    const withCounts = req.query.withCounts === "1" || req.query.withCounts === "true";
+    const docCountById = withCounts
+      ? await clientDocumentCounts(userId, rows.map((row) => String(row._id)))
+      : new Map<string, number>();
 
     res.json({
       rows: rows.map((row) => ({
         ...flatClient(row),
-        doc_count: docCountById.get(String(row._id)) ?? 0,
+        ...(withCounts ? { doc_count: docCountById.get(String(row._id)) ?? 0 } : {}),
       })),
       total,
     });
@@ -341,6 +346,51 @@ export function registerClientRoutes(app: express.Application) {
  * the contract relation, so treating document_clients as the sole source hid
  * valid documents from the client page.
  */
+/**
+ * Document counts for many clients in three queries total, rather than the four
+ * per client that findClientDocuments costs.
+ *
+ * A document reaches a client three ways - a document_clients link, a contract
+ * carrying the client, or a direct client_id on the document itself - and the
+ * same document can arrive by more than one route, so the ids go into a Set per
+ * client before counting. Only ids are fetched; the bodies were never needed.
+ */
+async function clientDocumentCounts(userId: string, clientIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (clientIds.length === 0) return counts;
+
+  // Both string and ObjectId forms are stored, so match on either.
+  const variants: any[] = [];
+  for (const id of clientIds) {
+    variants.push(id);
+    try { variants.push(new ObjectId(id)); } catch { /* string id */ }
+  }
+
+  const [links, contracts, direct] = await Promise.all([
+    col("document_clients").find({ client_id: { $in: variants } } as any)
+      .project({ client_id: 1, document_id: 1 }).toArray(),
+    col("contracts").find({ user_id: userId, client_id: { $in: variants } } as any)
+      .project({ client_id: 1, document_id: 1 }).toArray(),
+    col("documents").find({ user_id: userId, client_id: { $in: variants } } as any)
+      .project({ client_id: 1, _id: 1 }).toArray(),
+  ]);
+
+  const seen = new Map<string, Set<string>>();
+  const record = (clientId: unknown, documentId: unknown) => {
+    if (!clientId || !documentId) return;
+    const key = String(clientId);
+    const set = seen.get(key) ?? new Set<string>();
+    set.add(String(documentId));
+    seen.set(key, set);
+  };
+  for (const row of links as any[]) record(row.client_id, row.document_id);
+  for (const row of contracts as any[]) record(row.client_id, row.document_id);
+  for (const row of direct as any[]) record(row.client_id, row._id);
+
+  for (const id of clientIds) counts.set(id, seen.get(id)?.size ?? 0);
+  return counts;
+}
+
 async function findClientDocuments(userId: string, clientId: string): Promise<any[]> {
   const clientIds: any[] = [clientId];
   try { clientIds.push(new ObjectId(clientId)); } catch { /* string id */ }
