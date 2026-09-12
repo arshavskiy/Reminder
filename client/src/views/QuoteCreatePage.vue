@@ -14,36 +14,17 @@
       <span style="font-size: 15px; font-weight: 600">{{ isEdit ? "עריכת הצעת מחיר" : "הצעת מחיר חדשה" }}</span>
     </template>
 
-    <n-tabs v-model:value="activeTab" type="line" style="margin-bottom: 16px">
-      <n-tab name="contract">מתוך תסקיר</n-tab>
-      <n-tab name="document">מתוך מסמך שהועלה</n-tab>
-    </n-tabs>
-
     <n-spin :show="loading">
       <form @submit.prevent="save" class="quote-form">
-        <!-- TAB: FROM CONTRACT -->
-        <template v-if="activeTab === 'contract'">
-          <section class="form-section">
-            <label class="form-label">תסקיר <span class="required">*</span></label>
-            <n-select v-model:value="form.contractId" :options="contractOptions" :loading="loadingContracts" @update:value="loadContractDetails" clearable placeholder="בחר תסקיר"/>
-            <div v-if="contractDetails" class="contract-details">
-              <div><span>לקוח</span><strong>{{ contractDetails.customerName }}</strong></div>
-              <div><span>סוג</span><strong>{{ contractDetails.reportType }}</strong></div>
-            </div>
-          </section>
-        </template>
-
-        <!-- TAB: FROM DOCUMENT -->
-        <template v-if="activeTab === 'document'">
-          <section class="form-section">
-            <label class="form-label">מסמך שהועלה <span class="required">*</span></label>
-            <n-select v-model:value="form.documentId" :options="documentOptions" :loading="loadingDocuments" @update:value="loadDocumentDetails" clearable placeholder="בחר מסמך"/>
-            <div v-if="documentDetails" class="contract-details">
-              <div><span>שם קובץ</span><strong>{{ documentDetails.fileName }}</strong></div>
-              <div><span>לקוח</span><strong>{{ documentDetails.customerName }}</strong></div>
-            </div>
-          </section>
-        </template>
+        <!-- FROM DOCUMENT -->
+        <section class="form-section">
+          <label class="form-label">מסמך שהועלה <span class="required">*</span></label>
+          <n-select v-model:value="form.documentId" :options="documentOptions" :loading="loadingDocuments" @update:value="loadDocumentDetails" clearable placeholder="בחר מסמך"/>
+          <div v-if="documentDetails" class="contract-details">
+            <div><span>שם קובץ</span><strong>{{ documentDetails.fileName }}</strong></div>
+            <div><span>לקוח</span><strong>{{ documentDetails.customerName }}</strong></div>
+          </div>
+        </section>
 
         <section class="form-section">
           <label class="form-label">סעיפי הצעה</label>
@@ -85,10 +66,10 @@
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn--primary" :disabled="!(form.contractId || form.documentId) || !form.dueDate || submitting">
+          <button type="submit" class="btn btn--primary" :disabled="!form.documentId || !form.dueDate || submitting">
             {{ submitting ? "שמירה…" : "שמור כטיוטה" }}
           </button>
-          <button type="button" class="btn btn--ghost" @click="saveAndIssue" :disabled="!(form.contractId || form.documentId) || !form.dueDate || submitting">
+          <button type="button" class="btn btn--ghost" @click="saveAndIssue" :disabled="!form.documentId || !form.dueDate || submitting">
             {{ submitting ? "הפקה…" : "שמור והפק" }}
           </button>
         </div>
@@ -111,15 +92,12 @@ const message = useMessage();
 
 const loading = ref(false);
 const submitting = ref(false);
-const loadingContracts = ref(false);
 const loadingDocuments = ref(false);
 const isEdit = ref(!!route.params.id);
-const activeTab = ref(route.query.from === "document" ? "document" : "contract");
 const paymentData = ref<PaymentData | null>(null);
 const documents = ref<Array<{id: string; file_name: string; client_name?: string}>>([]);
 
 const form = ref({
-  contractId: "",
   documentId: "",
   lines: [] as Array<{rateId?: string; quantity: number; unitCents?: number; section?: string; label?: string}>,
   dueDate: "",
@@ -127,16 +105,8 @@ const form = ref({
   notes: "",
 });
 
-const contractDetails = ref<{customerName: string; reportType: string} | null>(null);
 const documentDetails = ref<{fileName: string; customerName: string} | null>(null);
 const totals = ref<{subtotalCents: number; vatCents: number; totalCents: number} | null>(null);
-
-const contractOptions = computed(() =>
-  paymentData.value?.contracts?.map((c: any) => ({
-    label: `${c.reportType || c.number || "תסקיר"} #${c.number || "ללא"} — ${c.customer || "לא צוין"}`,
-    value: c.id
-  })) || []
-);
 
 const documentOptions = computed(() =>
   documents.value?.map(d => ({
@@ -171,9 +141,9 @@ async function loadData() {
 
     if (isEdit.value && route.params.id) {
       const quote = await paymentService.get(String(route.params.id));
-      if (quote.contractId) {
-        form.value.contractId = quote.contractId;
-        await loadContractDetails();
+      if (quote.sourceDocumentId) {
+        form.value.documentId = quote.sourceDocumentId;
+        await loadDocumentDetails();
       }
       form.value.lines = quote.lines || [];
       form.value.dueDate = quote.dueDate;
@@ -186,7 +156,6 @@ async function loadData() {
       };
     } else if (route.query.docId) {
       form.value.documentId = String(route.query.docId);
-      activeTab.value = "document";
       await loadDocumentDetails();
     }
   } catch (error) {
@@ -194,15 +163,6 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
-}
-
-async function loadContractDetails() {
-  if (!form.value.contractId || !paymentData.value) return;
-  const contract = paymentData.value.contracts.find(c => c.id === form.value.contractId);
-  if (!contract) return;
-  contractDetails.value = {customerName: contract.customer, reportType: contract.reportType};
-  form.value.lines = [];
-  calculateTotals();
 }
 
 async function loadDocumentDetails() {
@@ -233,7 +193,7 @@ function closeModal() {
 }
 
 async function save() {
-  if (!(form.value.contractId || form.value.documentId) || !form.value.dueDate) return;
+  if (!form.value.documentId || !form.value.dueDate) return;
   submitting.value = true;
   try {
     const body: any = {
@@ -243,13 +203,8 @@ async function save() {
       notes: form.value.notes,
       documentKind: "quote" as const,
       requestKey: crypto.randomUUID(),
+      documentId: form.value.documentId,
     };
-
-    if (activeTab.value === "contract" && form.value.contractId) {
-      body.contractId = form.value.contractId;
-    } else if (activeTab.value === "document" && form.value.documentId) {
-      body.documentId = form.value.documentId;
-    }
 
     if (isEdit.value && route.params.id) {
       await paymentService.update(String(route.params.id), body);
@@ -267,7 +222,7 @@ async function save() {
 }
 
 async function saveAndIssue() {
-  if (!(form.value.contractId || form.value.documentId) || !form.value.dueDate) return;
+  if (!form.value.documentId || !form.value.dueDate) return;
   submitting.value = true;
   try {
     const body: any = {
@@ -277,13 +232,8 @@ async function saveAndIssue() {
       notes: form.value.notes,
       documentKind: "quote" as const,
       requestKey: crypto.randomUUID(),
+      documentId: form.value.documentId,
     };
-
-    if (activeTab.value === "contract" && form.value.contractId) {
-      body.contractId = form.value.contractId;
-    } else if (activeTab.value === "document" && form.value.documentId) {
-      body.documentId = form.value.documentId;
-    }
 
     if (isEdit.value && route.params.id) {
       await paymentService.update(String(route.params.id), body);
