@@ -161,11 +161,13 @@ async function loadData() {
       api.documents.list()
     ]);
     paymentData.value = data;
-    documents.value = (docsRes.rows || []).map((d: any) => ({
-      id: d._id || d.id,
-      file_name: d.file_name,
-      client_name: d.extracted_fields?.client_name || d.client_name
-    }));
+    documents.value = (docsRes.rows || [])
+      .filter((d: any) => d.mime_type === "application/pdf" || d.file_name?.toLowerCase().endsWith(".pdf"))
+      .map((d: any) => ({
+        id: d._id || d.id,
+        file_name: d.file_name,
+        client_name: d.extracted_fields?.client_name || d.client_name
+      }));
 
     if (isEdit.value && route.params.id) {
       const quote = await paymentService.get(String(route.params.id));
