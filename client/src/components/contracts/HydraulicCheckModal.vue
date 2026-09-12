@@ -1544,7 +1544,11 @@ function selectEquipment(index: number, id: string | null) {
 }
 
 function applyEquipmentDirectly(row: EquipmentRow, eq: Equipment) {
-  row.category = eq.category ?? row.category;
+  // Equipment.category (lift/accessory/scaffold/ladder/balloon/intake/extractor/other)
+  // and this modal's own category taxonomy (used to drive report-type-specific
+  // fields, e.g. pressure_vessel/elevator/escalator) are different, unrelated
+  // classifications - there's no valid mapping between them, so leave the
+  // report's category as whatever the selected report type already defaulted it to.
   row.name = eq.name ?? "";
   row.manufacturer = eq.manufacturer ?? "";
   row.models = splitMultiValue(eq.model);
