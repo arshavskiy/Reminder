@@ -847,3 +847,9 @@ html[dir="rtl"] .n-base-clear {
   letter-spacing: -0.4px;
   line-height: 1.2;
 }
+
+.hm-report-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

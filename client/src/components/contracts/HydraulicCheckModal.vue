@@ -581,7 +581,7 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {NCheckbox, NDatePicker, NDynamicTags, NIcon, NInput, NInputNumber, NModal, NSelect, NSpin, NTooltip, useMessage} from "naive-ui";
 import {
@@ -1572,27 +1572,53 @@ function selectEquipment(index: number, id: string | null) {
   applyEquipmentDirectly(row, eq);
 }
 
-function guessCategoryFromText(...texts: Array<string | null | undefined>): string | null {
+function guessReportTypeFromText(...texts: Array<string | null | undefined>): ReportTypePreset | null {
   const haystack = texts.filter(Boolean).join(" ");
   if (!haystack) return null;
-  let best: {value: string; length: number} | null = null;
-  for (const cat of [...categoryDefaults, ...knownCategories.value]) {
-    if (!haystack.includes(cat.label)) continue;
-    if (!best || cat.label.length > best.length) best = {value: cat.value, length: cat.label.length};
+  let best: {preset: ReportTypePreset; length: number} | null = null;
+  for (const preset of reportTypePresets) {
+    const label = categoryDefaults.find((cat) => cat.value === preset.category)?.label;
+    if (!label || !haystack.includes(label)) continue;
+    if (!best || label.length > best.length) best = {preset, length: label.length};
   }
-  return best?.value ?? null;
+  return best?.preset ?? null;
+}
+
+function suggestReportTypeFromEquipment(eq: Equipment) {
+  const suggestion = guessReportTypeFromText(eq.name, eq.description);
+  if (!suggestion || suggestion.value === reportType.value) return;
+  const text = `הציוד שנבחר מתאים ל"${suggestion.label}" - להחליף את סוג התסקיר?`;
+  const reactive = message.info(text, {
+    duration: 8000,
+    render: () =>
+      h("div", {class: "hm-report-suggestion", dir: "rtl"}, [
+        h("span", null, text),
+        h(
+          "button",
+          {
+            class: "btn btn--xs btn--primary",
+            onClick: () => {
+              applyReportType(suggestion.value);
+              reactive.destroy();
+            },
+          },
+          "החלף"
+        ),
+      ]),
+  });
 }
 
 function applyEquipmentDirectly(row: EquipmentRow, eq: Equipment) {
   // Equipment.category (lift/accessory/scaffold/ladder/balloon/intake/extractor/other)
   // and this modal's own category taxonomy (used to drive report-type-specific
   // fields, e.g. pressure_vessel/elevator/escalator) are different, unrelated
-  // classifications - there's no valid mapping between them. Best-effort: look for
-  // one of this modal's own category labels inside the equipment's name/description
-  // text (e.g. "במת הרמה" appearing in the description) and use that if found;
-  // otherwise leave the report's category as whatever the report type defaulted to.
-  const guessedCategory = guessCategoryFromText(eq.name, eq.description);
-  if (guessedCategory) row.category = guessedCategory;
+  // classifications - there's no valid mapping between them, so leave the
+  // report's category as whatever the selected report type already defaulted it to.
+  // If the equipment's own text suggests a more specific report type exists
+  // (e.g. description "במת הרמה" while "תסקיר מכונות הרמה" is selected), surface
+  // that as a suggestion rather than silently switching category underneath the
+  // user's chosen report type.
+  suggestReportTypeFromEquipment(eq);
   row.name = eq.name ?? "";
   row.manufacturer = eq.manufacturer ?? "";
   row.models = splitMultiValue(eq.model);
