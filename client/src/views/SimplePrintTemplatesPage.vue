@@ -92,6 +92,12 @@
             הדפס PDF
           </button>
           <button class="btn btn--primary" :disabled="!exportAllowed || savingPdf" @click="savePdf">הורד PDF</button>
+          <a v-if="linkedQuote && linkedQuote.status === 'issued'" :href="paymentService.pdf(linkedQuote._id)" target="_blank" rel="noopener" class="btn btn--ghost">
+            הצעת מחיר PDF
+          </a>
+          <router-link v-else-if="linkedQuote" :to="`/quotes/${linkedQuote._id}`" class="btn btn--ghost">
+            הצעת מחיר (טיוטה)
+          </router-link>
         </template>
       </PageHeader>
       <div class="compose-grid">
@@ -127,6 +133,7 @@ import PageHeader from "../components/PageHeader.vue";
 import SimpleLayoutEditor from "../components/print/SimpleLayoutEditor.vue";
 import LayoutPreviewFrame from "../components/print/LayoutPreviewFrame.vue";
 import {api} from "../services/apiService.js";
+import {paymentService, type PaymentRequest} from "../services/paymentService.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
@@ -168,6 +175,7 @@ const editingLayout = ref<PrintTemplateLayout>(createDefaultPrintTemplateLayout(
 const composing = ref<PrintTemplate | null>(null);
 const composeContractId = ref<string | null>(null);
 const composeData = ref<Record<string, string>>({});
+const linkedQuote = ref<PaymentRequest | null>(null);
 const draftSaving = ref(false);
 const printing = ref(false);
 const savingPdf = ref(false);
@@ -336,6 +344,17 @@ async function openCompose(t: PrintTemplate, contractId?: string | null) {
       ? `/print-templates/layout/${t._id}/compose?contractId=${contractId}`
       : `/print-templates/layout/${t._id}/compose`;
   void router.replace(url);
+  linkedQuote.value = null;
+  if (contractId) void loadLinkedQuote(contractId);
+}
+
+async function loadLinkedQuote(contractId: string) {
+  try {
+    const {rows} = await paymentService.list();
+    linkedQuote.value = rows.find((row) => row.contractId === contractId) ?? null;
+  } catch {
+    linkedQuote.value = null;
+  }
 }
 
 async function saveDraft() {
