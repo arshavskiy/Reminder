@@ -36,9 +36,13 @@ export function registerDashboardRoutes(app: express.Application) {
         },
       ],
     };
+    // A contract only counts as a completed inspection report once it actually
+    // produced a PDF document - contracts saved as a draft and never printed
+    // still have no document_id, and shouldn't inflate this count.
     const isInspectionFilter = {
       user_id: userId,
       contract_type: { $regex: /תסקיר|בדיקה/ },
+      document_id: { $ne: null, $exists: true },
     };
 
     const [

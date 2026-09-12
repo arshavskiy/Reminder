@@ -763,6 +763,7 @@ export const api = {
       expiryTo?: string;
       due?: string;
       sort?: "serial" | "expiry";
+      hasDocument?: "true" | "false";
     }, force = false) => {
       return get<{ rows: ContractWithClient[]; total: number; counts: { all: number; draft: number; active: number; expired: number; cancelled: number } }>(`/contracts${qs(params)}`, force);
     },

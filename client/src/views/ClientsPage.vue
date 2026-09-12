@@ -33,9 +33,32 @@
             <n-icon :component="AddOutline" class="btn-icon" />
             לקוח חדש
           </button>
+          <button class="btn btn--ghost" type="button" @click="openReportClientPicker">
+            <n-icon :component="DocumentTextOutline" class="btn-icon" />
+            תסקיר חדש
+          </button>
         </div>
       </template>
     </PageHeader>
+
+    <n-modal
+      v-model:show="showReportClientPicker"
+      preset="dialog"
+      title="תסקיר חדש"
+      positive-text="המשך"
+      negative-text="ביטול"
+      :positive-button-props="{disabled: !reportClientId}"
+      @positive-click="confirmReportClient"
+      @negative-click="showReportClientPicker = false"
+    >
+      <n-select
+        v-model:value="reportClientId"
+        :options="reportClientOptions"
+        filterable
+        clearable
+        placeholder="בחר לקוח"
+      />
+    </n-modal>
 
     <!-- Filters -->
     <div class="clients-toolbar">
@@ -137,7 +160,6 @@
                   <n-icon :component="sortIcon('doc_count')" :size="13" :title="sortTitle('doc_count')" class="th-sort__mark" />
                 </button>
               </th>
-              <th class="col-open">פעולות</th>
             </tr>
           </thead>
           <tbody>
@@ -192,16 +214,6 @@
               </td>
               <td class="col-docs">
                 <span class="ltr">{{ row.doc_count ?? 0 }}</span>
-              </td>
-              <td class="col-open" @click.stop>
-                <n-tooltip placement="top">
-                  <template #trigger>
-                    <button class="btn btn--ghost btn--xs icon-btn" type="button" @click="openReportFor(row)">
-                      <n-icon :component="DocumentTextOutline" :size="14" class="btn-icon" />
-                    </button>
-                  </template>
-                  תסקיר חדש
-                </n-tooltip>
               </td>
             </tr>
           </tbody>
@@ -369,9 +381,21 @@ const store = useClientsStore();
 const router = useRouter();
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
 const showHydraulicModal = ref(false);
+const showReportClientPicker = ref(false);
+const reportClientId = ref<string | null>(null);
+const reportClientOptions = computed(() =>
+  store.rows.map((row) => ({label: displayClientName(row.display_name), value: row.id}))
+);
 
-function openReportFor(row: Client) {
-  hydraulicModalRef.value?.open({clientId: row.id});
+function openReportClientPicker() {
+  reportClientId.value = null;
+  showReportClientPicker.value = true;
+}
+
+function confirmReportClient() {
+  if (!reportClientId.value) return;
+  showReportClientPicker.value = false;
+  hydraulicModalRef.value?.open({clientId: reportClientId.value});
 }
 const message = useMessage();
 const { confirm } = useConfirm();
@@ -931,11 +955,6 @@ function bulkDeleteSelected() {
 
 .col-docs {
   width: 10%;
-  text-align: center;
-}
-
-.col-open {
-  width: 64px;
   text-align: center;
 }
 

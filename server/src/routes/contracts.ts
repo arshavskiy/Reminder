@@ -135,6 +135,7 @@ export function registerContractRoutes(app: express.Application) {
     const expiryFrom = typeof req.query.expiryFrom === "string" ? req.query.expiryFrom.trim() : "";
     const expiryTo = typeof req.query.expiryTo === "string" ? req.query.expiryTo.trim() : "";
     const due = typeof req.query.due === "string" ? req.query.due.trim() : "";
+    const hasDocument = typeof req.query.hasDocument === "string" ? req.query.hasDocument.trim() : "";
     const sort = req.query.sort === "expiry" ? "expiry" : "serial";
     const limit = parseInt((req.query.limit as string) ?? "0");
     const offset = parseInt((req.query.offset as string) ?? "0");
@@ -186,6 +187,12 @@ export function registerContractRoutes(app: express.Application) {
       if (expiryFrom) range.$gte = expiryFrom;
       if (expiryTo) range.$lte = expiryTo;
       extraConditions.push({ expiry_date: range });
+    }
+
+    if (hasDocument === "false") {
+      extraConditions.push({ $or: [{ document_id: null }, { document_id: { $exists: false } }] });
+    } else if (hasDocument === "true") {
+      extraConditions.push({ document_id: { $ne: null, $exists: true } });
     }
 
     const todayIso = new Date().toISOString().slice(0, 10);

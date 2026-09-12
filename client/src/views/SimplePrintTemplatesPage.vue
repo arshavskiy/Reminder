@@ -91,7 +91,7 @@
             <n-icon :component="PrintOutline"/>
             הדפס PDF
           </button>
-          <button class="btn btn--primary" :disabled="!exportAllowed || savingPdf" @click="savePdf">הורד PDF</button>
+          <button class="btn btn--primary" :disabled="!exportAllowed || savingPdf" @click="savePdf">תיצור תסקיר</button>
           <a v-if="linkedQuote && linkedQuote.status === 'issued'" :href="paymentService.pdf(linkedQuote._id)" target="_blank" rel="noopener" class="btn btn--ghost">
             הצעת מחיר PDF
           </a>
@@ -563,10 +563,7 @@ onMounted(() => {
 
 .compose-preview-area {
   display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 16px;
-  min-width: 0;
 }
 
 .compose-preview {
