@@ -2871,4 +2871,12 @@ defineExpose({open, openForUpdate});
     justify-content: center;
   }
 }
+
+:deep(.n-input .n-input__placeholder),
+:deep(.n-input .n-input__input-el::placeholder),
+:deep(.n-input .n-input__textarea-el::placeholder),
+:deep(.n-base-selection .n-base-selection-placeholder),
+:deep(.n-base-selection .n-base-selection-placeholder__inner) {
+  color: var(--text-muted);
+}
 </style>
