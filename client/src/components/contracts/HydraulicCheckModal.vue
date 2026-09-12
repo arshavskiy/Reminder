@@ -1572,12 +1572,27 @@ function selectEquipment(index: number, id: string | null) {
   applyEquipmentDirectly(row, eq);
 }
 
+function guessCategoryFromText(...texts: Array<string | null | undefined>): string | null {
+  const haystack = texts.filter(Boolean).join(" ");
+  if (!haystack) return null;
+  let best: {value: string; length: number} | null = null;
+  for (const cat of [...categoryDefaults, ...knownCategories.value]) {
+    if (!haystack.includes(cat.label)) continue;
+    if (!best || cat.label.length > best.length) best = {value: cat.value, length: cat.label.length};
+  }
+  return best?.value ?? null;
+}
+
 function applyEquipmentDirectly(row: EquipmentRow, eq: Equipment) {
   // Equipment.category (lift/accessory/scaffold/ladder/balloon/intake/extractor/other)
   // and this modal's own category taxonomy (used to drive report-type-specific
   // fields, e.g. pressure_vessel/elevator/escalator) are different, unrelated
-  // classifications - there's no valid mapping between them, so leave the
-  // report's category as whatever the selected report type already defaulted it to.
+  // classifications - there's no valid mapping between them. Best-effort: look for
+  // one of this modal's own category labels inside the equipment's name/description
+  // text (e.g. "במת הרמה" appearing in the description) and use that if found;
+  // otherwise leave the report's category as whatever the report type defaulted to.
+  const guessedCategory = guessCategoryFromText(eq.name, eq.description);
+  if (guessedCategory) row.category = guessedCategory;
   row.name = eq.name ?? "";
   row.manufacturer = eq.manufacturer ?? "";
   row.models = splitMultiValue(eq.model);
