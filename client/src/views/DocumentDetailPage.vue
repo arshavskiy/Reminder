@@ -91,6 +91,8 @@
       />
     </section>
 
+    <div v-if="notFound && !loading" class="preview-empty preview-empty--error" style="margin-top: 24px">המסמך לא נמצא. ייתכן שנמחק.</div>
+
     <div v-if="doc" class="doc-detail__grid">
       <!-- ── Left column: preview ───────────────────────────────────── -->
       <aside class="doc-detail__left">
@@ -470,6 +472,7 @@ const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const route = useRoute();
 const resolvedId = () => props.docId ?? (route.params.id as string);
 const doc = ref<Document | null>(null);
+const notFound = ref(false);
 const extractionRaw = ref<Record<string, any> | null>(null);
 const extractionRawText = ref<string | null>(null);
 const loading = ref(true);
@@ -1324,6 +1327,8 @@ onMounted(async () => {
   try {
     await reloadDoc();
     loadPreview();
+  } catch (e) {
+    notFound.value = true;
   } finally {
     loading.value = false;
   }
