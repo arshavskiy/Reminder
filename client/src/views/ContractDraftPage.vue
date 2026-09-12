@@ -96,6 +96,20 @@
             </table>
           </div>
         </div>
+
+        <div v-if="linkedQuote" class="quote-preview-block">
+          <div class="pane-label">תצוגה מקדימה — הצעת מחיר</div>
+          <iframe
+              v-if="linkedQuote.status === 'issued'"
+              :src="paymentService.pdf(linkedQuote._id)"
+              :title="`הצעת מחיר ${linkedQuote.number || ''}`"
+              class="quote-preview-frame"
+          />
+          <div v-else class="quote-preview-empty">
+            הצעת המחיר עדיין בטיוטה ולא הופקה כ-PDF.
+            <router-link :to="`/quotes/${linkedQuote._id}`">פתח את הטיוטה</router-link>
+          </div>
+        </div>
       </div>
 
       <div class="compose-form">
@@ -833,6 +847,27 @@ function escAttr(value: string): string {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+.quote-preview-block {
+  border-top: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+}
+.quote-preview-frame {
+  width: 100%;
+  height: 500px;
+  border: 0;
+  display: block;
+}
+.quote-preview-empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
 }
 .compose-draft-status {
   color: #64748b;

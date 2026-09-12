@@ -118,6 +118,19 @@
                 :layout="composing.layout"
             />
           </div>
+          <div v-if="linkedQuote" class="compose-preview">
+            <div class="compose-preview__label">תצוגה מקדימה — הצעת מחיר</div>
+            <iframe
+                v-if="linkedQuote.status === 'issued'"
+                :src="paymentService.pdf(linkedQuote._id)"
+                :title="`הצעת מחיר ${linkedQuote.number || ''}`"
+                class="compose-quote-frame"
+            />
+            <div v-else class="compose-quote-empty">
+              הצעת המחיר עדיין בטיוטה ולא הופקה כ-PDF.
+              <router-link :to="`/quotes/${linkedQuote._id}`">פתח את הטיוטה</router-link>
+            </div>
+          </div>
         </div>
       </div>
     </template>
@@ -550,7 +563,9 @@ onMounted(() => {
 
 .compose-preview-area {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -570,6 +585,24 @@ onMounted(() => {
   color: var(--text-secondary);
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-color);
+}
+
+.compose-quote-frame {
+  width: 100%;
+  height: 500px;
+  border: 0;
+  display: block;
+}
+
+.compose-quote-empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
 }
 
 @media (max-width: 900px) {
