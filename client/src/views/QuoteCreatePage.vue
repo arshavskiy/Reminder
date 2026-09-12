@@ -8,7 +8,7 @@
     preset="card"
     class="quote-modal"
     style="width: min(900px, calc(100vw - 24px)); max-height: calc(100vh - 24px)"
-    @update:show="$router.push('/quotes')"
+    @update:show="closeModal"
   >
     <template #header>
       <span style="font-size: 15px; font-weight: 600">{{ isEdit ? "עריכת הצעת מחיר" : "הצעת מחיר חדשה" }}</span>
@@ -215,6 +215,10 @@ function calculateTotals() {
   const subtotalCents = lines.reduce((sum, l) => sum + (l.unitCents || 0) * (l.quantity || 1), 0);
   const vatCents = Math.round(subtotalCents * (form.value.vatBasisPoints / 10000));
   totals.value = {subtotalCents, vatCents, totalCents: subtotalCents + vatCents};
+}
+
+function closeModal() {
+  router.push("/quotes");
 }
 
 async function save() {
