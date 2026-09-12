@@ -20,17 +20,6 @@
         "
         class="dash__intake"
       >
-        <router-link
-          v-if="hasFeature(FEATURES.pages.contracts)"
-          to="/quotes/new"
-          class="dash__new-contract"
-        >
-          <span class="dash__new-contract__top">
-            <span class="dash__new-contract__icon">＋</span>
-            <span class="dash__new-contract__label">הצעת מחיר</span>
-          </span>
-          <span class="dash__new-contract__hint">צור הצעת מחיר חדשה</span>
-        </router-link>
         <button
           v-if="hasFeature(FEATURES.pages.contracts)"
           class="dash__new-contract"
@@ -58,6 +47,17 @@
         <!--          </span>-->
         <!--        </button>-->
         <DocumentDropStrip v-if="documentImportAllowed" class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
+        <router-link
+            v-if="hasFeature(FEATURES.pages.contracts)"
+            to="/quotes/new"
+            class="dash__new-contract"
+        >
+          <span class="dash__new-contract__top">
+            <span class="dash__new-contract__icon">＋</span>
+            <span class="dash__new-contract__label">הצעת מחיר</span>
+          </span>
+          <span class="dash__new-contract__hint">צור הצעת מחיר חדשה</span>
+        </router-link>
       </div>
 
       <!-- Quick stats — small chips line, easy to scan -->
@@ -661,11 +661,11 @@ const data_cards = computed(() =>
   gap: 16px;
   margin-bottom: 24px;
 }
-.dash__drop {
+/*.dash__drop {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
-}
+}*/
 /* The strip component wraps its .drop-strip in an extra div; make both fill the
    row so the dropzone height matches the new-contract button exactly. */
 .dash__drop :deep(> div),
