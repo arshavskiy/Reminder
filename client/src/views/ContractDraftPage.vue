@@ -24,6 +24,12 @@
           <span v-if="creatingReminder" aria-hidden="true" class="xl-loader"></span>
           <span>צור תזכורת</span>
         </button>
+        <a v-if="linkedQuote && linkedQuote.status === 'issued'" :href="paymentService.pdf(linkedQuote._id)" target="_blank" rel="noopener" class="xl-btn">
+          <span>הצעת מחיר PDF</span>
+        </a>
+        <router-link v-else-if="linkedQuote" :to="`/quotes/${linkedQuote._id}`" class="xl-btn">
+          <span>הצעת מחיר (טיוטה)</span>
+        </router-link>
       </template>
     </PageHeader>
 
@@ -145,6 +151,7 @@ import {NAlert, NSpin, useMessage} from "naive-ui";
 import PageHeader from "../components/PageHeader.vue";
 import {storeToRefs} from "pinia";
 import {api} from "../services/apiService.js";
+import {paymentService, type PaymentRequest} from "../services/paymentService.js";
 import type {PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
 import {useAuthStore} from "../stores/auth.js";
@@ -176,6 +183,7 @@ const printing = ref(false);
 const savingPdf = ref(false);
 const draftSaving = ref(false);
 const creatingReminder = ref(false);
+const linkedQuote = ref<PaymentRequest | null>(null);
 
 const routeContractId = computed(() => typeof route.params.contractId === "string" ? route.params.contractId : "");
 const draftTitle = computed(() => `${template.value?.name ?? "תסקיר"} — מילוי שדות`);
@@ -221,10 +229,20 @@ async function loadDraft() {
     composeData.value = {};
     for (const field of composeFields.value) composeData.value[field.bind] = "";
     applyComposeDraft(draft);
+    void loadLinkedQuote();
   } catch (error: any) {
     loadError.value = error?.message ?? String(error);
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadLinkedQuote() {
+  try {
+    const {rows} = await paymentService.list();
+    linkedQuote.value = rows.find((row) => row.contractId === routeContractId.value) ?? null;
+  } catch {
+    linkedQuote.value = null;
   }
 }
 

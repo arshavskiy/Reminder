@@ -11,7 +11,7 @@ export interface InspectionRate {
   automaticQuantity?: number;
 }
 export interface PaymentRequest {
-  _id: string; number?: string; documentKind?: "quote" | "payment_request" | "service_specification"; reportNumber: string; reportType: string; status: string;
+  _id: string; number?: string; documentKind?: "quote" | "payment_request" | "service_specification"; reportNumber: string; reportType: string; status: string; contractId?: string;
   customer: {name: string; email: string; registration?: string}; dueDate: string; totalCents: number; subtotalCents?: number; vatCents?: number; vatBasisPoints?: number; paidCents: number;
   issuer?: {name?: string; subtitle?: string; registration?: string; email?: string; phone?: string; address?: string; logoUrl?: string};
   lines?: {rateId?: string; section?: string; label?: string; quantity?: number; unitCents?: number; totalCents?: number}[];
