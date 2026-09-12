@@ -932,7 +932,18 @@ const displayText = computed(() => extractionRawText.value ?? doc.value?.raw_tex
 const equipment = computed<any[]>(() => {
   const raw = extractionRaw.value;
   if (!raw || !Array.isArray(raw._equipment)) return [];
-  return raw._equipment.filter((e: any) => e && e.name);
+  const rows = raw._equipment.filter((e: any) => e && e.name);
+  // Older/AI-extracted documents sometimes only populate the flat top-level
+  // fields (serial_number/load_capacity) and leave the structured _equipment
+  // row blank. Backfill from those when there's a single unambiguous row.
+  if (rows.length === 1) {
+    const row = rows[0];
+    if (!row.serial_number && raw.serial_number) row.serial_number = raw.serial_number;
+    if ((!row.load_capacity_work || !row.load_capacity_work.length) && raw.load_capacity) {
+      row.load_capacity_work = [raw.load_capacity];
+    }
+  }
+  return rows;
 });
 
 function joinArr(v: unknown): string {
@@ -947,7 +958,7 @@ const ALL_EQUIPMENT_COLUMNS = [
   { title: 'מ"ס סידורי', key: "serial_number", width: 130 },
   { title: "עומס עבודה", key: "load_capacity_work", width: 110, render: (row: any) => joinArr(row.load_capacity_work) },
   { title: "עומס מבחן", key: "load_capacity_test", width: 110, render: (row: any) => joinArr(row.load_capacity_test) },
-  // { title: "רדיוס", key: "load_radius", width: 80, render: (row: any) => joinArr(row.load_radius) },
+  { title: "רדיוס", key: "load_radius", width: 80, render: (row: any) => joinArr(row.load_radius) },
 ];
 
 // Only show columns that have at least one non-empty value across all rows
