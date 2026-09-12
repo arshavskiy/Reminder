@@ -221,7 +221,7 @@ export function registerPaymentRoutes(app: express.Application) {
         const inlineRates = body.inlineRates === undefined ? request.inlineRates || [] : validateRates(body.inlineRates);
         const savedRates = pricebook?.rates || [];
         const savedIds = new Set(savedRates.map((rate: any) => rate.id));
-        if (inlineRates.some(rate => savedIds.has(rate.id))) throw new Error("מזהה סעיף אוטומטי מתנגש במחירון השמור");
+        if (inlineRates.some((rate: any) => savedIds.has(rate.id))) throw new Error("מזהה סעיף אוטומטי מתנגש במחירון השמור");
         totals = calculateCharges([...savedRates, ...inlineRates], reportType(contract), body.lines || request.lines, body.vatBasisPoints ?? request.vatBasisPoints);
       } catch (error) { throw new HTTPException(400, (error as Error).message); }
       Object.assign(updates, totals);
