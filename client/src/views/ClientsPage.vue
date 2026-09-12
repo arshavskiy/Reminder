@@ -137,6 +137,7 @@
                   <n-icon :component="sortIcon('doc_count')" :size="13" :title="sortTitle('doc_count')" class="th-sort__mark" />
                 </button>
               </th>
+              <th class="col-open">פעולות</th>
             </tr>
           </thead>
           <tbody>
@@ -191,6 +192,16 @@
               </td>
               <td class="col-docs">
                 <span class="ltr">{{ row.doc_count ?? 0 }}</span>
+              </td>
+              <td class="col-open" @click.stop>
+                <n-tooltip placement="top">
+                  <template #trigger>
+                    <button class="btn btn--ghost btn--xs icon-btn" type="button" @click="openReportFor(row)">
+                      <n-icon :component="DocumentTextOutline" :size="14" class="btn-icon" />
+                    </button>
+                  </template>
+                  תסקיר חדש
+                </n-tooltip>
               </td>
             </tr>
           </tbody>
@@ -308,6 +319,8 @@
         </div>
       </div>
     </n-modal>
+
+    <HydraulicCheckModal ref="hydraulicModalRef" v-model:show="showHydraulicModal" />
   </div>
 </template>
 
@@ -326,6 +339,7 @@ import {
   NRadioGroup,
   NSelect,
   NSpin,
+  NTooltip,
   useMessage,
   type SelectOption,
 } from "naive-ui";
@@ -336,6 +350,7 @@ import {
   BriefcaseOutline,
   BusinessOutline,
   CheckboxOutline,
+  DocumentTextOutline,
   PeopleOutline,
   PersonOutline,
   RefreshOutline,
@@ -346,11 +361,18 @@ import {
 import { useClientsStore } from "../stores/clients.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import PageHeader from "../components/PageHeader.vue";
+import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import { api } from "../services/apiService.js";
 import type { Client } from "@shared/types.js";
 
 const store = useClientsStore();
 const router = useRouter();
+const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
+const showHydraulicModal = ref(false);
+
+function openReportFor(row: Client) {
+  hydraulicModalRef.value?.open({clientId: row.id});
+}
 const message = useMessage();
 const { confirm } = useConfirm();
 
@@ -909,6 +931,11 @@ function bulkDeleteSelected() {
 
 .col-docs {
   width: 10%;
+  text-align: center;
+}
+
+.col-open {
+  width: 64px;
   text-align: center;
 }
 

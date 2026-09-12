@@ -721,7 +721,8 @@ type EquipmentRow = {
 };
 
 interface HydraulicCheckPrefill {
-  equipment: Equipment;
+  equipment?: Equipment;
+  clientId?: string;
   findingsGeneral?: string;
   findingsNote?: string;
 }
@@ -1685,7 +1686,7 @@ async function open(prefill?: HydraulicCheckPrefill) {
   }
   const draft = prefill ? undefined : draftStore.draft;
   hydratingDraft.value = true;
-  clientId.value = prefill?.equipment.client_id ?? draft?.clientId ?? null;
+  clientId.value = prefill?.equipment?.client_id ?? prefill?.clientId ?? draft?.clientId ?? null;
   checkDateMs.value = draft?.checkDateMs ?? Date.now();
   expiryDateMs.value = draft?.expiryDateMs ?? null;
   reminderDaysBefore.value = draft?.reminderDaysBefore ?? 30;
@@ -1729,8 +1730,8 @@ async function open(prefill?: HydraulicCheckPrefill) {
     if (clientId.value) {
       await Promise.all([loadClients(), loadClientEquipment(clientId.value)]);
       await applyClient(clientId.value);
-      selectEquipment(0, String(prefill.equipment.id));
-    } else {
+      if (prefill.equipment) selectEquipment(0, String(prefill.equipment.id));
+    } else if (prefill.equipment) {
       applyEquipmentDirectly(equipmentRows.value[0], prefill.equipment);
     }
   }

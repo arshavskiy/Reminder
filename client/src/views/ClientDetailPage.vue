@@ -13,6 +13,10 @@
               <n-icon :component="ArrowForwardOutline" class="btn-icon" />
               חזרה
             </button>
+            <button class="btn btn--primary" type="button" @click="openReport">
+              <n-icon :component="DocumentTextOutline" class="btn-icon" />
+              תסקיר חדש
+            </button>
             <button class="btn btn--primary" type="button" @click="openEdit">
               <n-icon :component="CreateOutline" class="btn-icon" />
               עריכה
@@ -343,6 +347,8 @@
         <n-button type="primary" :loading="saving" @click="doSave">שמור שינויים</n-button>
       </template>
     </n-modal>
+
+    <HydraulicCheckModal ref="hydraulicModalRef" v-model:show="showHydraulicModal" />
   </div>
 </template>
 
@@ -384,6 +390,7 @@ import { api } from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
 import EquipmentQuickAddModal from "../components/EquipmentQuickAddModal.vue";
+import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import type { Equipment, EventType } from "@shared/types.js";
 
 type TabKey = "docs" | "equipment" | "timeline";
@@ -438,6 +445,8 @@ const editForm = ref<EditForm | null>(null);
 const equipment = ref<Equipment[]>([]);
 const loadingEquipment = ref(false);
 const showEquipmentAdd = ref(false);
+const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
+const showHydraulicModal = ref(false);
 
 function openEquipmentAdd() {
   showEquipmentAdd.value = true;
@@ -445,6 +454,10 @@ function openEquipmentAdd() {
 
 function onEquipmentCreated(eq: Equipment) {
   router.push(`/field?equipment=${eq.id}`);
+}
+
+function openReport() {
+  hydraulicModalRef.value?.open({clientId: String(route.params.id)});
 }
 const activeTab = ref<TabKey>("docs");
 let editClosing = false;
