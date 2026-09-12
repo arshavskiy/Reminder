@@ -838,3 +838,12 @@ html[dir="rtl"] .n-base-clear {
 .n-input__placeholder span {
   color: var(--text-secondary);
 }
+
+.page-header__title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.4px;
+  line-height: 1.2;
+}

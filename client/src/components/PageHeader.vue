@@ -70,14 +70,7 @@ defineProps<Props>();
   gap: 10px;
   flex-wrap: wrap;
 }
-.page-header__title {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.4px;
-  line-height: 1.2;
-}
+
 .page-header__count {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);

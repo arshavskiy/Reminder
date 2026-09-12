@@ -4,7 +4,8 @@
       <router-link to="/documents">תסקירים</router-link><router-link class="quotes-tabs__active" to="/quotes">הצעות מחיר</router-link>
     </nav>
     <header class="quotes-head">
-      <div><h1>הצעות מחיר</h1><p>צפייה, שליחה ומחיקה של הצעות המחיר שנוצרו עם התסקירים.</p></div>
+      <div><h1 class="page-header__title">הצעות מחיר</h1>
+        <p>צפייה, שליחה ומחיקה של הצעות המחיר שנוצרו עם התסקירים.</p></div>
       <div class="quotes-actions">
         <router-link to="/quotes/new" class="btn btn--primary"><n-icon :component="AddOutline" :size="16"/>הצעת מחיר חדשה</router-link>
         <button class="btn btn--ghost" :disabled="loading" @click="load"><n-icon :component="RefreshOutline" :size="16"/>רענן</button>
