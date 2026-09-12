@@ -15,8 +15,8 @@
 <!--            <n-icon :component="ArrowBackOutline" class="btn-icon"/>-->
 <!--            חזרה-->
 <!--          </button>-->
-          <router-link v-if="isInvoiceDocument" to="/quotes/new?from=document" class="rbtn rbtn--ghost" :to="{path: '/quotes/new', query: {from: 'document', docId: doc.id}}">
-            <n-icon :component="FileTextOutline" class="btn-icon"/>
+          <router-link v-if="isInvoiceDocument" class="rbtn rbtn--ghost" :to="{path: '/quotes/new', query: {docId: doc.id}}">
+            <n-icon :component="DocumentOutline" class="btn-icon"/>
             הצעת מחיר
           </router-link>
           <button
@@ -432,8 +432,8 @@ import {
 import {
   ArrowBackOutline,
   CreateOutline,
+  DocumentOutline,
   DownloadOutline,
-  FileTextOutline,
   FlashOutline,
   OpenOutline,
   TrashOutline

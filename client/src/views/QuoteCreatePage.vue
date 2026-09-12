@@ -100,7 +100,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NIcon, NInput, NInputNumber, NSpin, NSelect, NTabs, NTab, useMessage} from "naive-ui";
+import {NIcon, NInput, NInputNumber, NModal, NSpin, NSelect, NTab, NTabs, useMessage} from "naive-ui";
 import {TrashOutline} from "@vicons/ionicons5";
 import {paymentService, type PaymentRequest, type PaymentData} from "../services/paymentService";
 import {apiService} from "../services/apiService";
