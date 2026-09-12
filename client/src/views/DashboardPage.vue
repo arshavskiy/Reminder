@@ -31,6 +31,17 @@
           </span>
           <span class="dash__new-contract__hint">צור תסקיר או חוזה ידני</span>
         </button>
+        <router-link
+          v-if="hasFeature(FEATURES.pages.contracts)"
+          to="/quotes/new"
+          class="dash__new-contract"
+        >
+          <span class="dash__new-contract__top">
+            <span class="dash__new-contract__icon">＋</span>
+            <span class="dash__new-contract__label">הצעת מחיר</span>
+          </span>
+          <span class="dash__new-contract__hint">צור הצעת מחיר חדשה</span>
+        </router-link>
         <!--        <button-->
         <!--          v-if="hasFeature(FEATURES.pages.contracts)"-->
         <!--          class="dash__new-contract dash__new-contract&#45;&#45;gmail"-->
