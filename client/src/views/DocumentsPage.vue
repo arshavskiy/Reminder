@@ -367,7 +367,10 @@
               <span v-if="documentReportNumberLabel(row)" class="tile__meta-item tile__meta-item--num">
                 {{ documentReportNumberLabel(row) }}
               </span>
-              <span v-if="documentHasClient(row)" class="tile__meta-item">{{ documentClientName(row) }}</span>
+              <span v-if="documentHasClient(row)" class="tile__meta-item">
+                {{ documentClientName(row) }}
+                <template v-if="documentContactPerson(row)"> · {{ documentContactPerson(row) }}</template>
+              </span>
               <span v-if="documentTypeLabel(row)" class="tile__meta-item">{{ documentTypeLabel(row) }}</span>
               <span v-if="inspectionTypeLabel(row)" class="tile__meta-item tile__meta-item--inspection">{{ inspectionTypeLabel(row) }}</span>
             </div>
@@ -391,7 +394,10 @@
                 {{ issue.label }}
               </n-tag>
             </div>
-            <div class="tile__date">{{ formatDate(row.import_date) }}</div>
+            <div class="tile__date">
+              {{ formatDate(row.import_date) }}
+              <span v-if="documentImportSourceLabel(row)" class="tile__import-source">{{ documentImportSourceLabel(row) }}</span>
+            </div>
           </div>
         </article>
       </div>
@@ -402,6 +408,7 @@
             <col class="document-table__col document-table__col--select" />
             <col class="document-table__col document-table__col--file" />
             <col class="document-table__col document-table__col--date" />
+            <col class="document-table__col document-table__col--import" />
             <col class="document-table__col document-table__col--client" />
             <col class="document-table__col document-table__col--number" />
             <col class="document-table__col document-table__col--actions" />
@@ -426,6 +433,12 @@
                 <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('date')" @click="setDocumentSort('date')">
                   <span>בתוקף</span>
                   <n-icon :component="documentSortIcon('date')" :size="14" />
+                </button>
+              </th>
+              <th class="document-col document-col--import">
+                <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('import')" @click="setDocumentSort('import')">
+                  <span>ייבוא</span>
+                  <n-icon :component="documentSortIcon('import')" :size="14" />
                 </button>
               </th>
               <th class="document-col document-col--client">
@@ -471,13 +484,14 @@
                        delivery failure the user has to act on, not processing
                        state, so it outlives the column it happened to live in. -->
                   <n-tag
-                    v-if="emailDelivery(row)"
+                    v-for="issue in documentIssues(row)"
+                    :key="issue.kind"
                     round
                     size="small"
-                    type="error"
-                    :title="emailDeliveryTitle(row)"
+                    :type="issue.tagClass === 'tag--bad' ? 'error' : 'warning'"
+                    :title="issue.kind === 'email_bounced' ? emailDeliveryTitle(row) : undefined"
                   >
-                    אימייל חזר
+                    {{ issue.label }}
                   </n-tag>
                 </span>
               </td>
@@ -487,16 +501,25 @@
                 </span>
                 <span v-else>—</span>
               </td>
+              <td class="document-col document-col--import">
+                <span class="document-import">
+                  <span>{{ formatDate(row.import_date) }}</span>
+                  <span v-if="documentImportSourceLabel(row)" class="document-import__source">{{ documentImportSourceLabel(row) }}</span>
+                </span>
+              </td>
               <td class="document-col document-col--client">
-                <router-link
-                  v-if="documentClientId(row)"
-                  class="document-cell-truncate client-link"
-                  dir="auto"
-                  :title="documentClientName(row)"
-                  :to="`/clients/${documentClientId(row)}`"
-                  @click.stop
-                >{{ documentClientName(row) }}</router-link>
-                <span v-else class="document-cell-truncate" dir="auto" :title="documentClientName(row)">{{ documentClientName(row) }}</span>
+                <span class="document-client">
+                  <router-link
+                    v-if="documentClientId(row)"
+                    class="document-cell-truncate client-link"
+                    dir="auto"
+                    :title="documentClientName(row)"
+                    :to="`/clients/${documentClientId(row)}`"
+                    @click.stop
+                  >{{ documentClientName(row) }}</router-link>
+                  <span v-else class="document-cell-truncate" dir="auto" :title="documentClientName(row)">{{ documentClientName(row) }}</span>
+                  <span v-if="documentContactPerson(row)" class="document-client__contact">{{ documentContactPerson(row) }}</span>
+                </span>
               </td>
               <td class="document-col document-col--number">
                 <span class="document-cell-truncate">{{ documentReportNumberLabel(row) || "—" }}</span>
@@ -965,10 +988,10 @@ async function onModalUpload(
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────
-type DocumentStatusFilter = "all" | "done" | "in_progress" | "error" | "no_reminder" | "no_email" | "email_bounced" | "contract_expired" | "duplicate_report_number";
+type DocumentStatusFilter = "all" | "in_progress" | "error" | "no_reminder" | "no_email" | "email_bounced" | "contract_expired" | "duplicate_report_number";
 
 const DOCUMENT_FILTER_KEYS = new Set<DocumentStatusFilter>([
-  "all", "done", "in_progress", "error", "no_reminder", "no_email", "email_bounced", "contract_expired", "duplicate_report_number",
+  "all", "in_progress", "error", "no_reminder", "no_email", "email_bounced", "contract_expired", "duplicate_report_number",
 ]);
 function initialDocumentFilter(): DocumentStatusFilter {
   const stored = readRememberedFilter("documents");
@@ -980,7 +1003,7 @@ const filterClientId = ref<string | null>(null);
 const filterInspectionType = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
 const statusFilter = ref<DocumentStatusFilter>(initialDocumentFilter());
-type DocumentSortKey = "file" | "date" | "client" | "number";
+type DocumentSortKey = "file" | "date" | "import" | "client" | "number";
 const documentSortBy = ref<DocumentSortKey>("date");
 const documentSortDir = ref<"asc" | "desc">("desc");
 
@@ -1033,7 +1056,6 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
   const duplicateCount = countDuplicateReportRows(rows, documentReportNumber);
   return [
     { key: "all",         label: "הכל",         count: c.all,          statusValue: "all" },
-    { key: "done",        label: "הושלם",       count: c.done,         statusValue: "done" },
     { key: "in_progress", label: "בעיבוד",      count: c.in_progress,  statusValue: "in_progress" },
     { key: "error",       label: "שגיאה",       count: c.error,        statusValue: "error" },
     { key: "no_reminder",       label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing" && !isPayslipDocument(row)).length, statusValue: "no_reminder" },
@@ -1124,7 +1146,7 @@ function setDocumentSort(key: DocumentSortKey) {
     documentSortDir.value = documentSortDir.value === "asc" ? "desc" : "asc";
   } else {
     documentSortBy.value = key;
-    documentSortDir.value = key === "date" ? "desc" : "asc";
+    documentSortDir.value = key === "date" || key === "import" ? "desc" : "asc";
   }
 }
 
@@ -1137,6 +1159,7 @@ function documentSortAriaLabel(key: DocumentSortKey): string {
   const labels: Record<DocumentSortKey, string> = {
     file: "קובץ",
     date: "בתוקף",
+    import: "ייבוא",
     client: "לקוח",
     number: "מספר",
   };
@@ -1148,7 +1171,9 @@ function compareDocuments(a: Document, b: Document, key: DocumentSortKey, dir: "
   const direction = dir === "asc" ? 1 : -1;
   const result = key === "date"
     ? compareNullableNumbers(documentDateSortValue(a), documentDateSortValue(b))
-    : compareNullableText(documentSortText(a, key), documentSortText(b, key));
+    : key === "import"
+      ? compareNullableNumbers(documentImportSortValue(a), documentImportSortValue(b))
+      : compareNullableText(documentSortText(a, key), documentSortText(b, key));
   if (result !== 0) return result * direction;
   return compareNullableText(a.file_name ?? "", b.file_name ?? "");
 }
@@ -1165,6 +1190,21 @@ function documentDateSortValue(row: Document): number | null {
   if (!raw) return null;
   const time = new Date(raw).getTime();
   return Number.isFinite(time) ? time : null;
+}
+
+function documentImportSortValue(row: Document): number | null {
+  if (!row.import_date) return null;
+  const time = new Date(row.import_date).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+function documentImportSourceLabel(row: Document | Record<string, unknown>): string {
+  const source = String((row as any).import_source ?? "").trim();
+  if (source === "gmail" || isGmailImported(row)) return "Gmail";
+  if (source === "drive") return "Drive";
+  if (source === "upload") return "העלאה";
+  if (String((row as any).document_source ?? "") === "generated") return "נוצר";
+  return "";
 }
 
 function compareNullableNumbers(a: number | null, b: number | null): number {
@@ -1361,7 +1401,6 @@ function emailDeliveryTitle(row: Document): string {
 
 function matchesStatusFilter(row: Document, filter: DocumentStatusFilter) {
   if (filter === "all") return true;
-  if (filter === "done") return row.processing_status === "done";
   if (filter === "in_progress") return row.processing_status === "queued" || row.processing_status === "processing";
   if (filter === "error") return row.processing_status === "error";
   if (filter === "no_reminder") {
@@ -1414,6 +1453,14 @@ function documentClientName(row: Document): string {
 }
 function documentHasClient(row: Document): boolean {
   return documentClientName(row) !== "—";
+}
+
+function documentContactPerson(row: Document): string | null {
+  const contact = String(documentExtractedFields(row).contact_person ?? "").trim();
+  if (!contact) return null;
+  const client = documentClientName(row);
+  if (client !== "—" && contact.localeCompare(client, "he", {sensitivity: "base"}) === 0) return null;
+  return contact;
 }
 function documentClientId(row: Document): string | null {
   const id = String(row.client_id ?? "").trim();
@@ -2441,6 +2488,7 @@ async function bulkExtractAi() {
    company names and reads better wide. */
 .document-table__col--file { width: clamp(260px, 32vw, 420px); }
 .document-table__col--date { width: 128px; }
+.document-table__col--import { width: 132px; }
 .document-table__col--client { width: clamp(160px, 20vw, 280px); }
 .document-table__col--number { width: 120px; }
 /* Absorbs the leftover width so no earlier column stretches: the actions cell
@@ -2583,10 +2631,26 @@ async function bulkExtractAi() {
 
 .document-col--file,
 .document-col--date,
+.document-col--import,
 .document-col--client,
 .document-col--number {
   direction: rtl;
   text-align: right;
+}
+
+.document-import,
+.document-client {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.document-import__source,
+.document-client__contact,
+.tile__import-source {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .document-row-action {

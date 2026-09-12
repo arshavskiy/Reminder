@@ -112,7 +112,7 @@ async function renderFirstPage(pdfPath: string, thumbnailPath: string): Promise<
     await execFile(
       pdftoppm.command,
       ["-f", "1", "-l", "1", "-singlefile", "-png", "-scale-to", String(THUMBNAIL_SIZE), pdfPath, prefix],
-      { shell: pdftoppm.shell, env: pdftoppm.env, timeout: 30_000 }
+      { env: pdftoppm.env, timeout: 30_000 }
     );
     const rendered = firstRenderedPage(tempDir, "page");
     if (!rendered || !existsSync(rendered) || statSync(rendered).size === 0) {

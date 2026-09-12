@@ -121,8 +121,9 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", ts: Date.now() });
 });
 
-// Live probe for OS-level binaries (Poppler, Tesseract) that PDF OCR shells
-// out to. Kept off /health so a missing OCR binary never fails the deploy.
+// Live probe for OS-level binaries (Poppler, pdfplumber) used to rasterize
+// PDFs and recover equipment tables. Kept off /health so a missing binary
+// never fails the deploy.
 app.get("/health/deps", async (_req, res) => {
   const report = await checkSystemDeps();
   res.status(report.ok ? 200 : 503).json(report);
@@ -231,10 +232,33 @@ if (process.env.NODE_ENV === "production" && existsSync(STATIC_DIR)) {
   app.get("*", (_req, res) => res.sendFile(join(STATIC_DIR, "index.html")));
 }
 
+function isLocalRuntime(): boolean {
+  const appEnv = process.env.APP_ENV?.trim().toLowerCase();
+  return Boolean(appEnv && appEnv !== "production");
+}
+
+async function localServerAlreadyListening(port: number): Promise<boolean> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(800),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ── HTTP server ───────────────────────────────────────────────────────────────
 async function main() {
   validateEnv();
   const settings = getSettings();
+  if (isLocalRuntime() && await localServerAlreadyListening(settings.port)) {
+    logger.info("server_already_running", {
+      port: settings.port,
+      health_url: `http://localhost:${settings.port}/health`,
+    });
+    return;
+  }
   await connectDb();
   await initializePaymentCollections();
   await initializeWhatsAppQueue();
@@ -258,6 +282,18 @@ async function main() {
       health_url: `http://localhost:${settings.port}/health`,
       api_docs_url: `http://localhost:${settings.port}/api-docs`,
     });
+  });
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      logger.warn("server_port_in_use", {
+        port: settings.port,
+        hint: `Stop the other process on ${settings.port} or keep using that instance`,
+      });
+      process.exit(isLocalRuntime() ? 0 : 1);
+      return;
+    }
+    logger.error("server_listen_failed", { error: err });
+    process.exit(1);
   });
 
   // Railway sends SIGTERM on every redeploy. Without this the process dies with its

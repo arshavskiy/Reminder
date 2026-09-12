@@ -76,10 +76,9 @@ describe("checkSystemDeps", () => {
     const report = await checkSystemDeps();
 
     expect(report.ok).toBe(true);
-    expect(report.deps.map((dep) => dep.name).sort()).toEqual(["pdfplumber", "pdftoppm", "tesseract"]);
+    expect(report.deps.map((dep) => dep.name).sort()).toEqual(["pdfplumber", "pdftoppm"]);
     expect(report.deps.every((dep) => dep.ok)).toBe(true);
     expect(report.deps.find((dep) => dep.name === "pdftoppm")?.version).toContain("pdftoppm version");
-    expect(report.deps.find((dep) => dep.name === "tesseract")?.version).toContain("tesseract 5.3.0");
   });
 
   it("flags the exact binary that is missing", async () => {
@@ -92,7 +91,7 @@ describe("checkSystemDeps", () => {
     const poppler = report.deps.find((dep) => dep.name === "pdftoppm");
     expect(poppler?.ok).toBe(false);
     expect(poppler?.error).toContain("ENOENT");
-    expect(report.deps.find((dep) => dep.name === "tesseract")?.ok).toBe(true);
+    expect(report.deps.find((dep) => dep.name === "pdfplumber")?.ok).toBe(true);
   });
 
   it("probes the same pdftoppm path the OCR pipeline uses", async () => {

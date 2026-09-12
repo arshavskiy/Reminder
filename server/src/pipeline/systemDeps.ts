@@ -27,9 +27,10 @@ export type SystemDepsReport = {
 };
 
 /**
- * Poppler and Tesseract are OS packages, not npm dependencies. They are
- * installed by nixpacks.toml (aptPkgs). When that config is wrong the failure
- * only surfaces mid-import as `spawn pdftoppm ENOENT`, so probe them up front.
+ * Poppler (pdftoppm) and pdfplumber are OS / Python packages, not npm
+ * dependencies. When that config is wrong the failure only surfaces mid-import
+ * as `spawn pdftoppm ENOENT`, so probe them up front. OCR itself uses
+ * tesseract.js and does not need a system tesseract binary.
  */
 async function probe(
   name: string,
@@ -66,12 +67,11 @@ export async function checkSystemDeps(): Promise<SystemDepsReport> {
 
   const deps = await Promise.all([
     probe("pdftoppm", pdftoppm.command, ["-v"], {
-      shell: pdftoppm.shell,
+      shell: false,
       env: pdftoppm.env,
     }),
-    probe("tesseract", "tesseract", ["--version"], {
-      shell: process.platform === "win32",
-    }),
+    // OCR uses tesseract.js, not the OS tesseract binary. Do not probe `tesseract`
+    // — it is not installed on Windows and is not on the import path.
     // pdfplumber reads the equipment tables that pdf-parse flattens into fused
     // text. Probed through the interpreter so a present Python with the module
     // missing is reported as missing rather than as working.
@@ -98,7 +98,6 @@ export async function checkSystemDeps(): Promise<SystemDepsReport> {
  */
 const MISSING_DEP_HINTS: Record<string, string> = {
   pdftoppm: "Install Poppler via railpack.json aptPackages (poppler-utils) or set PDF_THUMBNAIL_PDFTOPPM",
-  tesseract: "Install Tesseract via railpack.json aptPackages (tesseract-ocr, tesseract-ocr-heb)",
   pdfplumber: "Install Python and pdfplumber via railpack.json; without it equipment tables fall back to flattened text",
 };
 
@@ -125,7 +124,7 @@ export async function logSystemDepsOnStartup(): Promise<SystemDepsReport> {
   if (!report.ok) {
     logger.error("system_deps_incomplete", {
       missing: report.deps.filter((dep) => !dep.ok).map((dep) => dep.name),
-      impact: "PDF OCR and invoice import will fail until these are installed",
+      impact: "PDF rasterization or equipment-table extract will fail until these are installed",
     });
   }
 

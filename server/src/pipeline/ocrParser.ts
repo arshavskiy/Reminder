@@ -63,7 +63,7 @@ async function renderPdfToImages(pdfPath: string): Promise<string[]> {
     await execFile(
       pdftoppm.command,
       ["-png", "-r", String(PDF_OCR_DPI), pdfPath, prefix],
-      { shell: pdftoppm.shell, env: pdftoppm.env, timeout: PDF_RENDER_TIMEOUT_MS }
+      { env: pdftoppm.env, timeout: PDF_RENDER_TIMEOUT_MS }
     );
 
     const pages = renderedPages(tempDir, "page");
