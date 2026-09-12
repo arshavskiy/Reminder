@@ -47,17 +47,18 @@
         <!--          </span>-->
         <!--        </button>-->
         <DocumentDropStrip v-if="documentImportAllowed" class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
-        <router-link
+        <button
             v-if="hasFeature(FEATURES.pages.contracts)"
-            to="/quotes/new"
             class="dash__new-contract"
+            type="button"
+            @click="showQuoteCreateModal = true"
         >
           <span class="dash__new-contract__top">
             <span class="dash__new-contract__icon">＋</span>
             <span class="dash__new-contract__label">הצעת מחיר</span>
           </span>
           <span class="dash__new-contract__hint">צור הצעת מחיר חדשה</span>
-        </router-link>
+        </button>
       </div>
 
       <!-- Quick stats — small chips line, easy to scan -->
@@ -126,6 +127,11 @@
           v-model:show="showHydraulicModal"
           @created="store.fetch(true)"
           @updated="store.fetch(true)"
+      />
+
+      <QuoteCreateModal
+          v-model:show="showQuoteCreateModal"
+          @created="store.fetch(true)"
       />
 
       <!-- ── Module cards ──────────────────────────────────────────────── -->
@@ -248,6 +254,7 @@ import ReminderCalendar from "../components/ReminderCalendar.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
+import QuoteCreateModal from "../components/QuoteCreateModal.vue";
 import GmailLogo from "../components/GmailLogo.vue";
 import {useOnboarding} from "../composables/useOnboarding.js";
 
@@ -279,6 +286,7 @@ const savingCalendarPreference = ref(false);
 const gmailInspectionLoading = ref(false);
 const showMonthlyReport = ref(false);
 const monthlyReportMonthMs = ref<number | null>(null);
+const showQuoteCreateModal = ref(false);
 function hasFeature(feature: FeatureKey): boolean {
   return featuresStore.hasFeature(feature);
 }
