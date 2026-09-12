@@ -119,6 +119,9 @@
             @change="onPhoto"
           />
         </label>
+        <button class="field__btn field__btn--report" @click="openReportModal">
+          📝 פתח תסקיר חדש
+        </button>
       </div>
 
       <!-- Saved photos gallery -->
@@ -137,6 +140,8 @@
 
     <!-- Offline indicator -->
     <div v-if="!online" class="field__offline">מצב לא מקוון — מוצגים נתונים מהמטמון</div>
+
+    <HydraulicCheckModal ref="hydraulicModalRef" v-model:show="hydraulicModalVisible" />
   </div>
 </template>
 
@@ -147,6 +152,7 @@ import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import type {Equipment} from "../shared/types.js";
+import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 
 const {confirm} = useConfirm();
 const router = useRouter();
@@ -163,6 +169,8 @@ const savedPhotos = ref<{ url: string; key: string; taken_at: string }[]>([]);
 const photoUploading = ref(false);
 const lightboxUrl = ref<string | null>(null);
 const online = ref(navigator.onLine);
+const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
+const hydraulicModalVisible = ref(false);
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -225,6 +233,22 @@ async function saveChecklist() {
   } finally {
     checklistSaving.value = false;
   }
+}
+
+function buildFindingsPrefill(items: NonNullable<Equipment["inspection_checklist"]>): {general: string; note: string} {
+  const checked = items.filter((i) => i.checked).map((i) => i.label);
+  const uncheckedItems = items.filter((i) => !i.checked).map((i) => i.label);
+  const notes = items.filter((i) => i.note?.trim()).map((i) => `${i.label}: ${i.note!.trim()}`);
+  const generalParts: string[] = [];
+  if (checked.length) generalParts.push(`נבדק: ${checked.join(", ")}`);
+  if (uncheckedItems.length) generalParts.push(`לא נבדק: ${uncheckedItems.join(", ")}`);
+  return {general: generalParts.join("\n"), note: notes.join("\n")};
+}
+
+function openReportModal() {
+  if (!selected.value) return;
+  const {general, note} = buildFindingsPrefill(checklistDraft.value);
+  hydraulicModalRef.value?.open({equipment: selected.value, findingsGeneral: general, findingsNote: note});
 }
 
 function expiryClass(ev: EquipmentHistoryEvent) {
@@ -509,6 +533,10 @@ onUnmounted(() => {
   background: var(--bg-elevated);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
+}
+.field__btn--report {
+  background: #167344;
+  color: #fff;
 }
 
 /* Photo gallery */

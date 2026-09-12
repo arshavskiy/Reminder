@@ -720,6 +720,12 @@ type EquipmentRow = {
   safety_valve_diameter_mm: string;
 };
 
+interface HydraulicCheckPrefill {
+  equipment: Equipment;
+  findingsGeneral?: string;
+  findingsNote?: string;
+}
+
 const equipmentRows = ref<EquipmentRow[]>([]);
 const clientEquipment = ref<Equipment[]>([]);
 const loadingEquipment = ref(false);
@@ -1533,6 +1539,10 @@ function selectEquipment(index: number, id: string | null) {
   if (!id) return;
   const eq = clientEquipment.value.find((item) => String(item.id) === String(id));
   if (!eq) return;
+  applyEquipmentDirectly(row, eq);
+}
+
+function applyEquipmentDirectly(row: EquipmentRow, eq: Equipment) {
   row.category = eq.category ?? row.category;
   row.name = eq.name ?? "";
   row.manufacturer = eq.manufacturer ?? "";
@@ -1664,7 +1674,7 @@ function clearDraft() {
 
 // ── Open ─────────────────────────────────────────────────────────────────────
 
-async function open() {
+async function open(prefill?: HydraulicCheckPrefill) {
   visible.value = true;
   loading.value = true;
   updatingContractId.value = null;
@@ -1673,9 +1683,9 @@ async function open() {
     await loadEngineerProfile().catch(() => {
     });
   }
-  const draft = draftStore.draft;
+  const draft = prefill ? undefined : draftStore.draft;
   hydratingDraft.value = true;
-  clientId.value = draft?.clientId ?? null;
+  clientId.value = prefill?.equipment.client_id ?? draft?.clientId ?? null;
   checkDateMs.value = draft?.checkDateMs ?? Date.now();
   expiryDateMs.value = draft?.expiryDateMs ?? null;
   reminderDaysBefore.value = draft?.reminderDaysBefore ?? 30;
@@ -1713,6 +1723,16 @@ async function open() {
   if (!expiryDateMs.value) calculateExpiryFromCheckDate();
   hydratingDraft.value = false;
   loading.value = false;
+  if (prefill) {
+    if (prefill.findingsGeneral) templateValues.value.findings_general = prefill.findingsGeneral;
+    if (prefill.findingsNote) templateValues.value.findings_note = prefill.findingsNote;
+    if (clientId.value) {
+      await loadClientEquipment(clientId.value);
+      selectEquipment(0, String(prefill.equipment.id));
+    } else {
+      applyEquipmentDirectly(equipmentRows.value[0], prefill.equipment);
+    }
+  }
   void loadPrintTemplates().then(() => {
     if (draft?.templateId) {
       selectTemplate(draft.templateId);
