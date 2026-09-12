@@ -1728,6 +1728,7 @@ async function open(prefill?: HydraulicCheckPrefill) {
     if (prefill.findingsNote) templateValues.value.findings_note = prefill.findingsNote;
     if (clientId.value) {
       await Promise.all([loadClients(), loadClientEquipment(clientId.value)]);
+      await applyClient(clientId.value);
       selectEquipment(0, String(prefill.equipment.id));
     } else {
       applyEquipmentDirectly(equipmentRows.value[0], prefill.equipment);
