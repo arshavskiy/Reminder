@@ -1628,7 +1628,6 @@ onMounted(() => {
   loadPipelineFlags();
   loadClients();
   void loadDocTemplates();
-  void ensureQuotesTab();
 });
 onUnmounted(() => {
   if (saveFlagsTimer) clearTimeout(saveFlagsTimer);
