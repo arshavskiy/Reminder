@@ -17,7 +17,6 @@
     <n-tabs v-model:value="activeTab" type="line" style="margin-bottom: 16px">
       <n-tab name="contract">מתוך תסקיר</n-tab>
       <n-tab name="document">מתוך מסמך שהועלה</n-tab>
-      <n-tab name="rates">עריכת מחירון</n-tab>
     </n-tabs>
 
     <n-spin :show="loading">
@@ -42,34 +41,6 @@
             <div v-if="documentDetails" class="contract-details">
               <div><span>שם קובץ</span><strong>{{ documentDetails.fileName }}</strong></div>
               <div><span>לקוח</span><strong>{{ documentDetails.customerName }}</strong></div>
-            </div>
-          </section>
-        </template>
-
-        <!-- TAB: RATES EDITOR -->
-        <template v-if="activeTab === 'rates'">
-          <section class="form-section">
-            <label class="form-label">מחירון סעיפים</label>
-            <div class="rates-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>סעיף</th>
-                    <th>תיאור</th>
-                    <th>מחיר יחידה</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(rate, idx) in paymentData?.rates || []" :key="rate.id">
-                    <td>{{ rate.section }}</td>
-                    <td>{{ rate.label }}</td>
-                    <td>{{ formatMoney(rate.unitCents) }}</td>
-                    <td><button type="button" class="btn btn--ghost btn--xs" @click="addRateToLines(rate)">הוסף</button></td>
-                  </tr>
-                </tbody>
-              </table>
-              <div v-if="!paymentData?.rates?.length" class="rates-empty">אין סעיפים מוגדרים. צור סעיפים בהגדרות המחירון.</div>
             </div>
           </section>
         </template>
@@ -239,11 +210,6 @@ function addLine() {
   form.value.lines.push({quantity: 1});
 }
 
-function addRateToLines(rate: any) {
-  form.value.lines.push({rateId: rate.id, quantity: 1, unitCents: rate.unitCents, section: rate.section, label: rate.label});
-  calculateTotals();
-}
-
 function calculateTotals() {
   const lines = form.value.lines.filter(l => l.unitCents);
   const subtotalCents = lines.reduce((sum, l) => sum + (l.unitCents || 0) * (l.quantity || 1), 0);
@@ -346,9 +312,4 @@ onMounted(loadData);
 .quote-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px}
 .quote-summary div{display:flex;flex-direction:column;text-align:center;padding:8px}.quote-summary span{color:var(--text-secondary);font-size:12px}.quote-summary strong{color:var(--text-primary);margin-top:4px;font-size:14px}
 .form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
-.rates-table{overflow:auto}
-.rates-table table{width:100%;border-collapse:collapse;min-width:600px}
-.rates-table th,.rates-table td{padding:10px;border-bottom:1px solid var(--border-color);text-align:right}
-.rates-table th{background:var(--bg-muted);font-weight:600;font-size:13px}
-.rates-empty{padding:20px;text-align:center;color:var(--text-secondary);background:var(--bg-muted);border-radius:8px}
 </style>
