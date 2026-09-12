@@ -176,6 +176,13 @@
         </section>
 
         <section v-else-if="activeTab === 'equipment'" class="tab-panel">
+          <div class="tab-panel__head">
+            <span class="tab-panel__head-spacer"></span>
+            <button class="btn btn--primary" type="button" @click="openEquipmentAdd">
+              <n-icon :component="AddOutline" class="btn-icon" />
+              הוספת ציוד
+            </button>
+          </div>
           <n-spin :show="loadingEquipment">
             <div v-if="equipment.length" class="table-wrap">
               <table class="detail-table">
@@ -187,6 +194,7 @@
                   <col class="col-meta" />
                   <col class="col-meta" />
                   <col class="col-source" />
+                  <col class="col-open" />
                 </colgroup>
                 <thead>
                   <tr>
@@ -197,10 +205,19 @@
                     <th class="hide-sm">מספר סידורי</th>
                     <th class="hide-sm">עומס</th>
                     <th>מסמך מקור</th>
+                    <th>פעולות</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in equipment" :key="row.id">
+                  <tr
+                    v-for="row in equipment"
+                    :key="row.id"
+                    class="detail-table__row"
+                    tabindex="0"
+                    @click="router.push(`/field?equipment=${row.id}`)"
+                    @keydown.enter.prevent="router.push(`/field?equipment=${row.id}`)"
+                    @keydown.space.prevent="router.push(`/field?equipment=${row.id}`)"
+                  >
                     <td><span class="cell-truncate" :title="row.name">{{ row.name }}</span></td>
                     <td class="hide-sm">{{ categoryLabel(row.category) }}</td>
                     <td class="hide-sm"><span :class="row.manufacturer ? '' : 'muted'">{{ row.manufacturer || "—" }}</span></td>
@@ -209,7 +226,7 @@
                       <span class="ltr" :class="row.serial_number ? '' : 'muted'">{{ row.serial_number || "—" }}</span>
                     </td>
                     <td class="hide-sm"><span :class="row.capacity ? '' : 'muted'">{{ row.capacity || "—" }}</span></td>
-                    <td>
+                    <td @click.stop>
                       <button
                         v-if="row.document_id"
                         class="source-link"
@@ -219,6 +236,20 @@
                         {{ row.document_name || "מסמך מקור" }}
                       </button>
                       <span v-else class="muted">—</span>
+                    </td>
+                    <td class="col-open" @click.stop>
+                      <n-tooltip placement="top">
+                        <template #trigger>
+                          <button
+                            class="btn btn--ghost btn--xs icon-btn"
+                            type="button"
+                            @click="router.push(`/field?equipment=${row.id}`)"
+                          >
+                            <n-icon :component="OpenOutline" :size="14" class="btn-icon" />
+                          </button>
+                        </template>
+                        פתח בדיקה
+                      </n-tooltip>
                     </td>
                   </tr>
                 </tbody>
@@ -230,6 +261,12 @@
               <p>אין ציוד משויך ללקוח זה</p>
             </div>
           </n-spin>
+
+          <EquipmentQuickAddModal
+            v-model:show="showEquipmentAdd"
+            :client-id="String(route.params.id)"
+            @created="onEquipmentCreated"
+          />
         </section>
 
         <section v-else class="tab-panel">
@@ -326,6 +363,7 @@ import {
   useMessage,
 } from "naive-ui";
 import {
+  AddOutline,
   ArrowForwardOutline,
   BriefcaseOutline,
   BusinessOutline,
@@ -345,6 +383,7 @@ import { useClientsStore } from "../stores/clients.js";
 import { api } from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
+import EquipmentQuickAddModal from "../components/EquipmentQuickAddModal.vue";
 import type { Equipment, EventType } from "@shared/types.js";
 
 type TabKey = "docs" | "equipment" | "timeline";
@@ -398,6 +437,15 @@ const saving = ref(false);
 const editForm = ref<EditForm | null>(null);
 const equipment = ref<Equipment[]>([]);
 const loadingEquipment = ref(false);
+const showEquipmentAdd = ref(false);
+
+function openEquipmentAdd() {
+  showEquipmentAdd.value = true;
+}
+
+function onEquipmentCreated(eq: Equipment) {
+  router.push(`/field?equipment=${eq.id}`);
+}
 const activeTab = ref<TabKey>("docs");
 let editClosing = false;
 
@@ -1018,6 +1066,18 @@ watch(
 
 .col-open {
   text-align: center;
+}
+
+.tab-panel__head {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.tab-panel__head-spacer {
+  flex: 1;
 }
 
 .icon-btn {
