@@ -48,6 +48,10 @@
           <span class="field__meta-label">מ"ס</span>
           <span>{{ selected.serial_number }}</span>
         </div>
+        <div v-if="selected.license_number" class="field__meta-row">
+          <span class="field__meta-label">מס' רישוי</span>
+          <span>{{ selected.license_number }}</span>
+        </div>
         <div v-if="selected.capacity" class="field__meta-row">
           <span class="field__meta-label">עומס עבודה</span>
           <span>{{ selected.capacity }}</span>

@@ -11,6 +11,7 @@
         <n-gi><n-form-item label="יצרן"><n-input v-model:value="form.manufacturer" /></n-form-item></n-gi>
         <n-gi><n-form-item label="דגם"><n-input v-model:value="form.model" /></n-form-item></n-gi>
         <n-gi><n-form-item label="מספר סידורי"><n-input v-model:value="form.serial_number" /></n-form-item></n-gi>
+        <n-gi><n-form-item label="מספר רישוי"><n-input v-model:value="form.license_number" /></n-form-item></n-gi>
         <n-gi><n-form-item label='עומס עבודה בטוח (ק"ג)'><n-input v-model:value="form.capacity" /></n-form-item></n-gi>
       </n-grid>
     </n-form>
@@ -55,6 +56,7 @@ function emptyForm() {
     manufacturer: "",
     model: "",
     serial_number: "",
+    license_number: "",
     capacity: "",
   };
 }

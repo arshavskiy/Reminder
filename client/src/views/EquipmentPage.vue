@@ -190,7 +190,8 @@
               <n-grid :cols="2" :x-gap="12">
                 <n-gi><n-form-item label="יצרן"><n-input v-model:value="editing.manufacturer" /></n-form-item></n-gi>
                 <n-gi><n-form-item label="דגם"><n-input v-model:value="editing.model" /></n-form-item></n-gi>
-                <n-gi :span="2"><n-form-item label="מספר סידורי"><n-input v-model:value="editing.serial_number" placeholder="לדוגמה: K-G1235JXS" /></n-form-item></n-gi>
+                <n-gi><n-form-item label="מספר סידורי"><n-input v-model:value="editing.serial_number" placeholder="לדוגמה: K-G1235JXS" /></n-form-item></n-gi>
+                <n-gi><n-form-item label="מספר רישוי"><n-input v-model:value="(editing as any).license_number" placeholder="לדוגמה: 80327-8" /></n-form-item></n-gi>
                 <n-gi><n-form-item label='עומס עבודה בטוח (ק"ג)'><n-input v-model:value="editing.capacity" placeholder='3200 ק"ג' /></n-form-item></n-gi>
                 <n-gi><n-form-item label='עומס מבחן (ק"ג)'><n-input v-model:value="(editing as any).load_capacity_test" placeholder='2200 ק"ג' /></n-form-item></n-gi>
                 <n-gi><n-form-item label="רדיוס עומס (מטר)"><n-input v-model:value="(editing as any).load_radius" placeholder="--" /></n-form-item></n-gi>
@@ -309,7 +310,8 @@
           <n-grid :cols="2" :x-gap="12">
             <n-gi><n-form-item label="יצרן"><n-input v-model:value="editing.manufacturer" /></n-form-item></n-gi>
             <n-gi><n-form-item label="דגם"><n-input v-model:value="editing.model" /></n-form-item></n-gi>
-            <n-gi :span="2"><n-form-item label="מספר סידורי"><n-input v-model:value="editing.serial_number" placeholder="לדוגמה: K-G1235JXS" /></n-form-item></n-gi>
+            <n-gi><n-form-item label="מספר סידורי"><n-input v-model:value="editing.serial_number" placeholder="לדוגמה: K-G1235JXS" /></n-form-item></n-gi>
+            <n-gi><n-form-item label="מספר רישוי"><n-input v-model:value="(editing as any).license_number" placeholder="לדוגמה: 80327-8" /></n-form-item></n-gi>
             <n-gi><n-form-item label='עומס עבודה בטוח (ק"ג)'><n-input v-model:value="editing.capacity" placeholder='3200 ק"ג' /></n-form-item></n-gi>
             <n-gi><n-form-item label='עומס מבחן (ק"ג)'><n-input v-model:value="(editing as any).load_capacity_test" placeholder='2200 ק"ג' /></n-form-item></n-gi>
             <n-gi><n-form-item label="רדיוס עומס (מטר)"><n-input v-model:value="(editing as any).load_radius" placeholder="--" /></n-form-item></n-gi>
