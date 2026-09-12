@@ -20,6 +20,8 @@
             הצעת מחיר
           </router-link>
           <button
+              :class="{ 'rbtn--loading': extracting }"
+              :disabled="extracting"
               class="rbtn rbtn--ghost"
               type="button"
               @click="openExtractModal"
@@ -658,14 +660,21 @@ async function openExtractModal() {
     await rerunExtract();
     return;
   }
+  // Document type is already known (e.g. a matched template or an explicit
+  // template_id on the document) - skip the picker and re-extract directly.
+  const knownTemplateId =
+    (docTemplate.value?.id != null ? String(docTemplate.value.id) : null) ||
+    (doc.value.template_id != null ? String(doc.value.template_id) : null);
+  if (knownTemplateId) {
+    await rerunExtract(knownTemplateId);
+    return;
+  }
   try {
     availableTemplates.value = await api.docTemplates.list();
   } catch {
     availableTemplates.value = [];
   }
   extractTemplateId.value =
-    (docTemplate.value?.id != null ? String(docTemplate.value.id) : null) ||
-    (doc.value.template_id != null ? String(doc.value.template_id) : null) ||
     (availableTemplates.value.find((t) => t.name === (doc.value as any).document_type)?.id != null
       ? String(availableTemplates.value.find((t) => t.name === (doc.value as any).document_type)!.id)
       : null) ||
