@@ -20,6 +20,14 @@
             הצעת מחיר
           </router-link>
           <button
+              class="rbtn rbtn--ghost"
+              type="button"
+              @click="openExtractModal"
+          >
+            <n-icon :component="FlashOutline" class="btn-icon"/>
+            חילוץ AI
+          </button>
+          <button
               :class="{ 'rbtn--loading': downloading }"
               :disabled="downloading"
               class="rbtn rbtn--ghost"
