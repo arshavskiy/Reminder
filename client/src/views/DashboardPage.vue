@@ -20,17 +20,6 @@
         "
         class="dash__intake"
       >
-        <button
-          v-if="hasFeature(FEATURES.pages.contracts)"
-          class="dash__new-contract"
-          @click="hydraulicModalRef?.open()"
-        >
-          <span class="dash__new-contract__top">
-            <span class="dash__new-contract__icon">＋</span>
-            <span class="dash__new-contract__label">תסקיר חדש</span>
-          </span>
-          <span class="dash__new-contract__hint">צור תסקיר או חוזה ידני</span>
-        </button>
         <router-link
           v-if="hasFeature(FEATURES.pages.contracts)"
           to="/quotes/new"
@@ -42,6 +31,17 @@
           </span>
           <span class="dash__new-contract__hint">צור הצעת מחיר חדשה</span>
         </router-link>
+        <button
+          v-if="hasFeature(FEATURES.pages.contracts)"
+          class="dash__new-contract"
+          @click="hydraulicModalRef?.open()"
+        >
+          <span class="dash__new-contract__top">
+            <span class="dash__new-contract__icon">＋</span>
+            <span class="dash__new-contract__label">תסקיר חדש</span>
+          </span>
+          <span class="dash__new-contract__hint">צור תסקיר או חוזה ידני</span>
+        </button>
         <!--        <button-->
         <!--          v-if="hasFeature(FEATURES.pages.contracts)"-->
         <!--          class="dash__new-contract dash__new-contract&#45;&#45;gmail"-->
