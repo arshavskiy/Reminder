@@ -2,7 +2,7 @@
   <div class="page2">
     <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
       <router-link class="documents-workspace-tabs__active" to="/documents">תסקירים</router-link>
-      <router-link v-if="hasQuotes" to="/quotes">הצעות מחיר</router-link>
+      <router-link to="/quotes">הצעות מחיר</router-link>
     </nav>
     <PageHeader
       :count="store.total"
@@ -730,7 +730,6 @@ import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.
 import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS, useConfirm} from "../composables/useConfirm.js";
 import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
-import {useQuotesTab} from "../composables/useQuotesTab";
 import CreateQuoteModal from "../components/documents/CreateQuoteModal.vue";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -1608,8 +1607,6 @@ async function loadDocTemplates() {
     docTemplates.value = [];
   }
 }
-
-const {hasQuotes, ensureLoaded: ensureQuotesTab, refresh: refreshQuotesTab} = useQuotesTab();
 
 const showCreateQuote = ref(false);
 const createQuoteRow = ref<Document | null>(null);

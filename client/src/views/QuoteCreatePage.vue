@@ -103,7 +103,7 @@ import {useRoute, useRouter} from "vue-router";
 import {NIcon, NInput, NInputNumber, NModal, NSpin, NSelect, NTab, NTabs, useMessage} from "naive-ui";
 import {TrashOutline} from "@vicons/ionicons5";
 import {paymentService, type PaymentRequest, type PaymentData} from "../services/paymentService";
-import {apiService} from "../services/apiService";
+import {api} from "../services/apiService";
 
 const route = useRoute();
 const router = useRouter();
@@ -152,7 +152,7 @@ async function loadData() {
   try {
     const [data, docsRes] = await Promise.all([
       paymentService.list(),
-      apiService.get<{rows: Array<{_id: string; file_name: string; extracted_fields?: {client_name?: string}}>}>("/documents")
+      api.get<{rows: Array<{_id: string; file_name: string; extracted_fields?: {client_name?: string}}>}>("/documents")
     ]);
     paymentData.value = data;
     documents.value = docsRes.rows.map(d => ({
