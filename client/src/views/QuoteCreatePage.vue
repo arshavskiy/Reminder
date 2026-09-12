@@ -155,10 +155,10 @@ async function loadData() {
       api.documents.list()
     ]);
     paymentData.value = data;
-    documents.value = docsRes.rows.map(d => ({
-      id: d._id,
+    documents.value = (docsRes.rows || []).map((d: any) => ({
+      id: d._id || d.id,
       file_name: d.file_name,
-      client_name: d.extracted_fields?.client_name
+      client_name: d.extracted_fields?.client_name || d.client_name
     }));
 
     if (isEdit.value && route.params.id) {
@@ -201,7 +201,10 @@ async function loadDocumentDetails() {
   if (!form.value.documentId) return;
   const doc = documents.value.find(d => d.id === form.value.documentId);
   if (!doc) return;
-  documentDetails.value = {fileName: doc.file_name, customerName: doc.client_name || "לא צוין"};
+  documentDetails.value = {
+    fileName: doc.file_name || "ללא שם",
+    customerName: doc.client_name || "לא צוין"
+  };
   form.value.lines = [];
   calculateTotals();
 }
