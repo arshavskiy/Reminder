@@ -8,7 +8,7 @@
     preset="card"
     class="quote-modal"
     style="width: min(900px, calc(100vw - 24px)); max-height: calc(100vh - 24px)"
-    @update:show="$router.back()"
+    @update:show="$router.push('/quotes')"
   >
     <template #header>
       <span style="font-size: 15px; font-weight: 600">{{ isEdit ? "עריכת הצעת מחיר" : "הצעת מחיר חדשה" }}</span>
