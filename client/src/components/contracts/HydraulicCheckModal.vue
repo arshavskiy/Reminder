@@ -284,7 +284,7 @@
                             placeholder="בחר סוג ציוד"
                             style="flex:1"
                         />
-                        <button class="btn btn--xs btn--outline" title="הוסף סוג חדש" @click="promptNewCategory(index)">
+                        <button class="btn btn--xs btn--outline" title="הוסף סוג חדש" @click="openNewCategoryPrompt(index)">
                           +
                         </button>
                       </div>
@@ -299,7 +299,7 @@
                     </div>
                     <div class="hm-field">
                       <label>מספר רישוי</label>
-                      <n-input v-model:value="equipment.license_number" placeholder="פנימי 123"/>
+                      <n-input v-model:value="equipment.license_number" placeholder=""/>
                     </div>
                     <div class="hm-field hm-field--span2">
                       <label>דגם</label>
@@ -559,6 +559,24 @@
       </template>
       <template v-else>{{ formattedSaveError }}</template>
     </p>
+  </n-modal>
+
+  <n-modal
+      v-model:show="showNewCategoryPrompt"
+      :z-index="4000"
+      preset="dialog"
+      title="סוג ציוד חדש"
+      positive-text="הוסף"
+      negative-text="ביטול"
+      @positive-click="confirmNewCategory"
+      @negative-click="showNewCategoryPrompt = false"
+  >
+    <n-input
+        v-model:value="newCategoryLabel"
+        dir="rtl"
+        placeholder="שם סוג ציוד חדש"
+        @keydown.enter="confirmNewCategory"
+    />
   </n-modal>
 </template>
 
@@ -1385,13 +1403,24 @@ async function loadCategories() {
   }
 }
 
-function promptNewCategory(index: number) {
-  const label = window.prompt("שם סוג ציוד חדש:")?.trim();
+const showNewCategoryPrompt = ref(false);
+const newCategoryLabel = ref("");
+let newCategoryRowIndex: number | null = null;
+
+function openNewCategoryPrompt(index: number) {
+  newCategoryRowIndex = index;
+  newCategoryLabel.value = "";
+  showNewCategoryPrompt.value = true;
+}
+
+function confirmNewCategory() {
+  const label = newCategoryLabel.value.trim();
   if (!label || label.length < 2) return;
+  showNewCategoryPrompt.value = false;
   if (!knownCategories.value.some((cat) => cat.value === label || cat.label === label)) {
     knownCategories.value = [...knownCategories.value, {value: label, label}];
   }
-  const row = equipmentRows.value[index];
+  const row = newCategoryRowIndex != null ? equipmentRows.value[newCategoryRowIndex] : undefined;
   if (row) row.category = label;
   api.equipment.createCategory(label, label).then(() => loadCategories()).catch(() => {
   });
