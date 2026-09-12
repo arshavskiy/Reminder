@@ -2147,9 +2147,10 @@ function extractLicenseNumber(rawText: string): string | null {
     const line = lines[i];
     if (!line) continue;
 
-    // Value on same line as label (both directions); value is digits or "פנימי NNN"
-    const afterLabel = line.match(/(?:^|\s)מספר\s+רישוי\s*[:：-]?\s*(פנימי\s*\d{3,5}|\d+)/i);
-    const beforeLabel = line.match(/(פנימי\s*\d{3,5}|\d+)\s*[:：-]?\s*מספר\s+רישוי/i);
+    // Value on same line as label (both directions); value is digits (optionally
+    // hyphen-suffixed, e.g. "80327-8") or "פנימי NNN"
+    const afterLabel = line.match(/(?:^|\s)מספר\s+רישוי\s*[:：-]?\s*(פנימי\s*\d{3,5}|\d+(?:-\d{1,2})?)/i);
+    const beforeLabel = line.match(/(פנימי\s*\d{3,5}|\d+(?:-\d{1,2})?)\s*[:：-]?\s*מספר\s+רישוי/i);
     // Also match reversed RTL rendering: "145פנימי" on same line as label
     const afterLabelRev = line.match(/(?:^|\s)מספר\s+רישוי\s*[:：-]?\s*(\d{3,5}\s*פנימי)/i);
     const beforeLabelRev = line.match(/(\d{3,5}\s*פנימי)\s*[:：-]?\s*מספר\s+רישוי/i);
@@ -2241,7 +2242,12 @@ function cleanInlineFieldValue(value: string | undefined): string | null {
 function isLikelyLicenseNumber(value: unknown): boolean {
   if (typeof value !== "string") return false;
   const v = value.trim();
-  if (!/^\d{4,8}$/.test(v) && !/^פנימי\s*\d{3,5}$/i.test(v) && !/^\d{3,5}\s*פנימי$/i.test(v)) return false;
+  if (
+    !/^\d{4,8}$/.test(v) &&
+    !/^\d{4,8}-\d{1,2}$/.test(v) &&
+    !/^פנימי\s*\d{3,5}$/i.test(v) &&
+    !/^\d{3,5}\s*פנימי$/i.test(v)
+  ) return false;
   // Round thousands (1000, 2000, 3000 …) are load-capacity values, never license numbers
   if (/^\d+$/.test(v) && Number(v) % 1000 === 0) return false;
   return true;

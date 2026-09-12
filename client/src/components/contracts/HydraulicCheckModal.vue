@@ -1549,7 +1549,7 @@ function applyEquipmentDirectly(row: EquipmentRow, eq: Equipment) {
   row.manufacturer = eq.manufacturer ?? "";
   row.models = splitMultiValue(eq.model);
   row.serial_numbers = splitMultiValue(eq.serial_number).map(digitsOnly);
-  row.license_number = digitsOnly((eq as any).license_number ?? "");
+  row.license_number = String((eq as any).license_number ?? "").trim();
   row.load_capacity_work = splitMultiValue(eq.capacity);
   row.load_capacity_test = splitMultiValue((eq as any).load_capacity_test);
   row.load_radius = splitMultiValue((eq as any).load_radius);
