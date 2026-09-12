@@ -123,14 +123,28 @@ export function registerPaymentRoutes(app: express.Application) {
     if (!documentKinds.has(documentKind)) throw new HTTPException(400, "סוג מסמך תשלום לא תקין");
     if (typeof body?.requestKey !== "string" || !/^[a-f\d-]{36}$/i.test(body.requestKey)) throw new HTTPException(400, "מפתח בקשה נדרש");
     const previous = await requests().findOne({user_id: userId, requestKey: body.requestKey});
-    const inputHash = createHash("sha256").update(JSON.stringify({documentKind, contractId: body.contractId, lines: body.lines, inlineRates: body.inlineRates, vatBasisPoints: body.vatBasisPoints, dueDate: body.dueDate, notes: body.notes})).digest("hex");
+    const inputHash = createHash("sha256").update(JSON.stringify({documentKind, contractId: body.contractId, documentId: body.documentId, lines: body.lines, inlineRates: body.inlineRates, vatBasisPoints: body.vatBasisPoints, dueDate: body.dueDate, notes: body.notes})).digest("hex");
     if (previous) {
       if (previous.inputHash !== inputHash) throw new HTTPException(409, "מפתח בקשה כבר בשימוש לדרישה אחרת");
       res.json(previous); return;
     }
-    const contract = await col<any>("contracts").findOne({_id: id(body.contractId), user_id: userId});
-    if (!contract) throw new HTTPException(404, "התסקיר לא נמצא");
-    const client = contract.client_id ? await col<any>("clients").findOne({_id: id(String(contract.client_id)), user_id: userId}) : null;
+    const hasContractId = !!body.contractId;
+    const hasDocumentId = !!body.documentId;
+    if (!hasContractId && !hasDocumentId) throw new HTTPException(400, "נדרש תסקיר או מסמך");
+
+    let contract: any = null;
+    let client: any = null;
+    if (hasContractId) {
+      contract = await col<any>("contracts").findOne({_id: id(body.contractId), user_id: userId});
+      if (!contract) throw new HTTPException(404, "התסקיר לא נמצא");
+      client = contract.client_id ? await col<any>("clients").findOne({_id: id(String(contract.client_id)), user_id: userId}) : null;
+    } else if (hasDocumentId) {
+      const doc = await col<any>("documents").findOne({_id: id(body.documentId), user_id: userId});
+      if (!doc) throw new HTTPException(404, "המסמך לא נמצא");
+      const extracted = doc.extracted_fields || {};
+      contract = {_id: new ObjectId(), contract_number: doc.file_name, contract_type: doc.document_type || "מסמך", manual_fields: {}};
+      client = {display_name: extracted.client_name || "לא צוין", id_number: extracted.client_id, email: extracted.client_email};
+    }
     const [pricebook, user] = await Promise.all([
       pricebooks().findOne({user_id: userId}),
       col<any>("users").findOne({_id: id(userId)}),
@@ -147,8 +161,11 @@ export function registerPaymentRoutes(app: express.Application) {
     if (!validDate(body.dueDate)) throw new HTTPException(400, "תאריך תשלום לא תקין");
     if (typeof body.notes !== "string" || body.notes.length > 3000) throw new HTTPException(400, "הערות לא תקינות");
     const manual = parseObjectRecord(contract.manual_fields) || {};
-    const request = {_id: new ObjectId(), user_id: userId, requestKey: body.requestKey, inputHash, documentKind, contractId: contract._id.toString(), reportNumber: contract.contract_number,
-      reportType: reportType(contract), ...totals, status: "draft", paidCents: 0, payments: [], createdAt: new Date(), updatedAt: new Date(), dueDate: body.dueDate, notes: body.notes,
+    const request: Record<string, any> = {
+      _id: new ObjectId(), user_id: userId, requestKey: body.requestKey, inputHash, documentKind,
+      contractId: contract._id.toString(), reportNumber: contract.contract_number,
+      reportType: reportType(contract), ...totals, status: "draft", paidCents: 0, payments: [],
+      createdAt: new Date(), updatedAt: new Date(), dueDate: body.dueDate, notes: body.notes,
       customer: {name: client?.display_name || contract.counterparty || manual.client_company || "", registration: client?.id_number || "", email: client?.email || manual.client_email || ""},
       issuer: {
         name: user?.company_name || user?.name || "",
@@ -158,7 +175,9 @@ export function registerPaymentRoutes(app: express.Application) {
         phone: user?.company_phone || user?.phone || "",
         address: [user?.address, user?.city].filter(Boolean).join(", "),
         logoUrl: user?.company_logo_url || "",
-      }};
+      }
+    };
+    if (hasDocumentId) request.sourceDocumentId = body.documentId;
     await requests().insertOne(request);
     res.status(201).json(request);
   }));
@@ -179,6 +198,40 @@ export function registerPaymentRoutes(app: express.Application) {
       await requests().updateOne({_id: request._id}, {$set: {status: "issued", issuedAt: new Date()}});
       res.json(await owned(req.params.id, userId));
     } catch (error) { await requests().updateOne({_id: request._id}, {$set: {status: "draft"}}); throw error; }
+  }));
+  router.put("/requests/:id", route(async (req, res, userId) => {
+    const request = await owned(req.params.id, userId);
+    if (request.status !== "draft") throw new HTTPException(409, "ניתן לערוך רק טיוטות");
+    const body = req.body;
+    const updates: Record<string, any> = {};
+    if (body.dueDate !== undefined) {
+      if (!validDate(body.dueDate)) throw new HTTPException(400, "תאריך תשלום לא תקין");
+      updates.dueDate = body.dueDate;
+    }
+    if (body.notes !== undefined) {
+      if (typeof body.notes !== "string" || body.notes.length > 3000) throw new HTTPException(400, "הערות לא תקינות");
+      updates.notes = body.notes;
+    }
+    if (body.lines !== undefined || body.vatBasisPoints !== undefined || body.inlineRates !== undefined) {
+      const contract = await col<any>("contracts").findOne({_id: id(request.contractId), user_id: userId});
+      if (!contract) throw new HTTPException(404, "התסקיר לא נמצא");
+      const pricebook = await pricebooks().findOne({user_id: userId});
+      let totals;
+      try {
+        const inlineRates = body.inlineRates === undefined ? request.inlineRates || [] : validateRates(body.inlineRates);
+        const savedRates = pricebook?.rates || [];
+        const savedIds = new Set(savedRates.map((rate: any) => rate.id));
+        if (inlineRates.some(rate => savedIds.has(rate.id))) throw new Error("מזהה סעיף אוטומטי מתנגש במחירון השמור");
+        totals = calculateCharges([...savedRates, ...inlineRates], reportType(contract), body.lines || request.lines, body.vatBasisPoints ?? request.vatBasisPoints);
+      } catch (error) { throw new HTTPException(400, (error as Error).message); }
+      Object.assign(updates, totals);
+      if (body.lines !== undefined) updates.lines = body.lines;
+      if (body.inlineRates !== undefined) updates.inlineRates = body.inlineRates;
+      if (body.vatBasisPoints !== undefined) updates.vatBasisPoints = body.vatBasisPoints;
+    }
+    updates.updatedAt = new Date();
+    const updated = await requests().findOneAndUpdate({_id: request._id, user_id: userId}, {$set: updates}, {returnDocument: "after"});
+    res.json(updated);
   }));
   router.post("/requests/:id/archive", route(async (req, res, userId) => {
     const request = await owned(req.params.id, userId);

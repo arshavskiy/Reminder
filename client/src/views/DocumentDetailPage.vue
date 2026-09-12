@@ -15,6 +15,10 @@
 <!--            <n-icon :component="ArrowBackOutline" class="btn-icon"/>-->
 <!--            חזרה-->
 <!--          </button>-->
+          <router-link v-if="isInvoiceDocument" to="/quotes/new?from=document" class="rbtn rbtn--ghost" :to="{path: '/quotes/new', query: {from: 'document', docId: doc.id}}">
+            <n-icon :component="FileTextOutline" class="btn-icon"/>
+            הצעת מחיר
+          </router-link>
           <button
               :class="{ 'rbtn--loading': downloading }"
               :disabled="downloading"
@@ -429,6 +433,7 @@ import {
   ArrowBackOutline,
   CreateOutline,
   DownloadOutline,
+  FileTextOutline,
   FlashOutline,
   OpenOutline,
   TrashOutline
@@ -490,6 +495,11 @@ const documentTypeDisplay = computed(() => {
   const fromTpl = documentTypeFromTemplate(docTemplate.value);
   if (fromTpl) return fromTpl;
   return String((doc.value as any)?.document_type ?? (doc.value as any)?.document_kind ?? "").trim();
+});
+const isInvoiceDocument = computed(() => {
+  const kind = (doc.value as any)?.document_kind;
+  const type = (doc.value as any)?.document_type;
+  return kind === "invoice" || type?.toLowerCase().includes("invoice") || type?.toLowerCase().includes("חשבונית");
 });
 const missingFieldsList = ref<MissingFieldItem[]>([]);
 const showMissingFieldsBanner = ref(false);

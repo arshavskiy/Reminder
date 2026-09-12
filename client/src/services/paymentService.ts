@@ -35,6 +35,7 @@ export const paymentService = {
   get: (id: string) => request<PaymentRequest>(`/requests/${id}`),
   saveRates: (rates: InspectionRate[]) => request("/rates", "PUT", {rates}),
   create: (body: unknown) => request<PaymentRequest>("/requests", "POST", body),
+  update: (id: string, body: unknown) => request<PaymentRequest>(`/requests/${id}`, "PUT", body),
   issue: (id: string) => request<PaymentRequest>(`/requests/${id}/issue`, "POST", {}),
   archive: (id: string) => request<PaymentRequest>(`/requests/${id}/archive`, "POST", {}),
   send: (id: string, email: string, sendId: string) => request(`/requests/${id}/send`, "POST", {email, sendId}),

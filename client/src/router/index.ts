@@ -87,6 +87,8 @@ export const router = createRouter({
         },
         {path: "/contracts", redirect: "/documents"},
         {path: "/quotes", component: () => import("../views/QuotesPage.vue"), meta: {feature: FEATURES.pages.contracts}},
+        {path: "/quotes/new", component: () => import("../views/QuoteCreatePage.vue"), meta: {feature: FEATURES.pages.contracts}},
+        {path: "/quotes/:id/edit", component: () => import("../views/QuoteCreatePage.vue"), meta: {feature: FEATURES.pages.contracts}},
         {path: "/quotes/:id", component: () => import("../views/QuoteDetailPage.vue"), meta: {feature: FEATURES.pages.contracts}},
         {
             path: "/contracts/:contractId/draft",

@@ -5,7 +5,10 @@
     </nav>
     <header class="quotes-head">
       <div><h1>הצעות מחיר</h1><p>צפייה, שליחה ומחיקה של הצעות המחיר שנוצרו עם התסקירים.</p></div>
-      <button class="btn btn--ghost" :disabled="loading" @click="load"><n-icon :component="RefreshOutline" :size="16"/>רענן</button>
+      <div class="quotes-actions">
+        <router-link to="/quotes/new" class="btn btn--primary"><n-icon :component="AddOutline" :size="16"/>הצעת מחיר חדשה</router-link>
+        <button class="btn btn--ghost" :disabled="loading" @click="load"><n-icon :component="RefreshOutline" :size="16"/>רענן</button>
+      </div>
     </header>
     <n-spin :show="loading">
       <div v-if="rows.length" class="quotes-table-wrap">
@@ -35,7 +38,7 @@
 import {onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NIcon, NSpin, NTooltip, useMessage} from "naive-ui";
-import {DownloadOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline} from "@vicons/ionicons5";
+import {AddOutline, DownloadOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline} from "@vicons/ionicons5";
 import {paymentService, type PaymentRequest} from "../services/paymentService";
 import {useConfirm} from "../composables/useConfirm";
 
@@ -53,5 +56,7 @@ onMounted(load);
 </script>
 
 <style scoped>
-.quotes-tabs{display:flex;gap:8px;margin:0 0 22px;border-bottom:1px solid var(--border-color)}.quotes-tabs a{color:var(--text-secondary);padding:9px 14px;text-decoration:none;border-bottom:2px solid transparent}.quotes-tabs a:hover,.quotes-tabs__active{color:var(--brand-color);border-bottom-color:var(--brand-color);font-weight:600}.quotes-head{display:flex;justify-content:space-between;gap:18px;align-items:start;margin-bottom:24px}.quotes-head h1{margin:0;color:var(--text-primary);font-size:26px}.quotes-head p{margin:7px 0 0;color:var(--text-secondary)}.quotes-table-wrap{overflow:auto;background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px}.quotes-table{width:100%;border-collapse:collapse;min-width:980px}.quotes-table th,.quotes-table td{padding:14px 16px;text-align:right;border-bottom:1px solid var(--border-color);color:var(--text-primary)}.quotes-table th{background:var(--bg-muted);color:var(--text-secondary);font-size:13px;font-weight:600}.quotes-table tbody tr:last-child td{border-bottom:0}.quote-row{cursor:pointer;transition:background .15s ease}.quote-row:hover{background:var(--bg-hover)}.quote-link{color:var(--brand-color);font-weight:700;text-decoration:none}.quote-amount{font-weight:700;white-space:nowrap}.quote-status{display:inline-flex;padding:4px 10px;border-radius:999px;background:#fff3d8;color:#8a6100;font-size:13px}.quote-status--issued{background:#e4f6eb;color:#167344}.actions-title{text-align:center!important}.quote-actions{display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}.quote-actions a{text-decoration:none}.quote-delete{color:#d03050;border-color:rgba(208,48,80,.35)}.quotes-empty{padding:40px;text-align:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;color:var(--text-secondary)}@media(max-width:700px){.quotes-page{padding:18px}.quotes-head{align-items:center}.quotes-head p{font-size:14px}}
+.quotes-tabs{display:flex;gap:8px;margin:0 0 22px;border-bottom:1px solid var(--border-color)}.quotes-tabs a{color:var(--text-secondary);padding:9px 14px;text-decoration:none;border-bottom:2px solid transparent}.quotes-tabs a:hover,.quotes-tabs__active{color:var(--brand-color);border-bottom-color:var(--brand-color);font-weight:600}.quotes-head{display:flex;justify-content:space-between;gap:18px;align-items:start;margin-bottom:24px}.quotes-head h1{margin:0;color:var(--text-primary);font-size:26px}.quotes-head p{margin:7px 0 0;color:var(--text-secondary)}
+.quotes-actions{display:flex;gap:10px;align-items:center}
+.quotes-actions a{text-decoration:none}.quotes-table-wrap{overflow:auto;background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px}.quotes-table{width:100%;border-collapse:collapse;min-width:980px}.quotes-table th,.quotes-table td{padding:14px 16px;text-align:right;border-bottom:1px solid var(--border-color);color:var(--text-primary)}.quotes-table th{background:var(--bg-muted);color:var(--text-secondary);font-size:13px;font-weight:600}.quotes-table tbody tr:last-child td{border-bottom:0}.quote-row{cursor:pointer;transition:background .15s ease}.quote-row:hover{background:var(--bg-hover)}.quote-link{color:var(--brand-color);font-weight:700;text-decoration:none}.quote-amount{font-weight:700;white-space:nowrap}.quote-status{display:inline-flex;padding:4px 10px;border-radius:999px;background:#fff3d8;color:#8a6100;font-size:13px}.quote-status--issued{background:#e4f6eb;color:#167344}.actions-title{text-align:center!important}.quote-actions{display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}.quote-actions a{text-decoration:none}.quote-delete{color:#d03050;border-color:rgba(208,48,80,.35)}.quotes-empty{padding:40px;text-align:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;color:var(--text-secondary)}@media(max-width:700px){.quotes-page{padding:18px}.quotes-head{align-items:center}.quotes-head p{font-size:14px}}
 </style>

@@ -4,6 +4,7 @@
     <div class="quote-detail__bar">
       <button class="btn btn--ghost" type="button" @click="router.push('/quotes')"><n-icon :component="ArrowForwardOutline" :size="16"/>חזרה להצעות מחיר</button>
       <div v-if="quote" class="quote-detail__actions">
+        <router-link v-if="quote.status === 'draft'" :to="`/quotes/${quote._id}/edit`" class="btn btn--ghost"><n-icon :component="EditOutline" :size="16"/>ערוך</router-link>
         <a class="btn btn--ghost" :href="paymentService.pdf(quote._id)" download><n-icon :component="DownloadOutline" :size="16"/>הורד PDF</a>
         <button class="btn btn--ghost" :disabled="sending || !quote.customer.email" @click="send"><n-icon :component="PaperPlaneOutline" :size="16"/>{{ sending ? "שולח…" : "שלח במייל" }}</button>
         <button class="btn btn--danger" :disabled="deleting" @click="confirmDelete"><n-icon :component="TrashOutline" :size="16"/>מחק</button>
@@ -32,7 +33,7 @@
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from "vue"; import {useRoute, useRouter} from "vue-router"; import {NIcon,NSpin,useMessage} from "naive-ui"; import {ArrowForwardOutline,DownloadOutline,PaperPlaneOutline,TrashOutline} from "@vicons/ionicons5";
+import {onMounted, ref} from "vue"; import {useRoute, useRouter} from "vue-router"; import {NIcon,NSpin,useMessage} from "naive-ui"; import {ArrowForwardOutline,DownloadOutline,EditOutline,PaperPlaneOutline,TrashOutline} from "@vicons/ionicons5";
 import {paymentService,type PaymentRequest} from "../services/paymentService"; import {useConfirm} from "../composables/useConfirm";
 const route=useRoute(); const router=useRouter(); const message=useMessage(); const {confirm}=useConfirm(); const quote=ref<PaymentRequest|null>(null); const loading=ref(true); const sending=ref(false); const deleting=ref(false);
 function formatDate(value:string){return value?value.split("-").reverse().join("/"):"—"} function formatMoney(cents:number){return new Intl.NumberFormat("he-IL",{style:"currency",currency:"ILS"}).format((cents||0)/100)} function statusLabel(status:string){return status==="issued"?"הופקה":status==="draft"?"טיוטה":status}

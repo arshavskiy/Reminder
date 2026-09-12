@@ -63,6 +63,7 @@ const als = new AsyncLocalStorage<{ target: AdminDbTarget }>();
 let _primary: DbSlot | null = null;
 let _local: DbSlot | null = null;
 let _production: DbSlot | null = null;
+let _productionConnecting: Promise<DbSlot> | null = null;
 
 /** Positive integer from the environment, or the fallback when unset or invalid. */
 function readPositiveIntEnv(name: string, fallback: number): number {
@@ -145,22 +146,44 @@ export async function connectDb(): Promise<Db> {
       LOCAL_DB_NAME,
   );
 
-  if (PRODUCTION_URI && PRODUCTION_URI !== LOCAL_URI) {
+  if (PRODUCTION_URI && PRODUCTION_URI === LOCAL_URI) {
+    _production = _local;
+  } else if (PRIMARY_TARGET === "production" || IS_PRODUCTION_RUNTIME) {
+    // Scripts (`MONGODB_TARGET=production`) and Railway need Atlas immediately.
+    // Local `npm run dev` leaves it closed so boot does not log a second cluster.
     try {
-      _production = await openSlot("production", PRODUCTION_URI, PRODUCTION_DB_NAME);
+      await ensureProductionDb();
     } catch (err) {
       logger.warn("db_production_connect_failed", {
         error: err instanceof Error ? err.message : String(err),
-        uri: redactUri(PRODUCTION_URI),
+        uri: redactUri(PRODUCTION_URI ?? ""),
       });
-      _production = null;
     }
-  } else if (PRODUCTION_URI && PRODUCTION_URI === LOCAL_URI) {
-    _production = _local;
   }
 
   _primary = _local;
   return _primary.db;
+}
+
+/** Open the Atlas slot on first admin/script use. Safe to call more than once. */
+export async function ensureProductionDb(): Promise<DbSlot> {
+  if (_production) return _production;
+  if (!PRODUCTION_URI) throw new Error("Production database is not configured");
+  if (!_local) throw new Error("Database not connected. Call connectDb() first.");
+  if (PRODUCTION_URI === LOCAL_URI) {
+    _production = _local;
+    return _production;
+  }
+  if (!_productionConnecting) {
+    _productionConnecting = openSlot("production", PRODUCTION_URI, PRODUCTION_DB_NAME);
+  }
+  try {
+    _production = await _productionConnecting;
+    return _production;
+  } catch (err) {
+    _productionConnecting = null;
+    throw err;
+  }
 }
 
 // The inspector-leads collection in admin routes used to open its own MongoClient
@@ -200,7 +223,8 @@ export function enterAdminDbTarget(target: AdminDbTarget): void {
   als.enterWith({ target });
 }
 
-export function runWithDbTarget<T>(target: AdminDbTarget, fn: () => T): T {
+export async function runWithDbTarget<T>(target: AdminDbTarget, fn: () => T | Promise<T>): Promise<T> {
+  if (target === "production") await ensureProductionDb();
   return als.run({ target }, fn);
 }
 
@@ -226,7 +250,8 @@ export function getDbTargetStatus() {
     },
     production: {
       configured: Boolean(PRODUCTION_URI),
-      connected: Boolean(_production),
+      // URI present means admin can switch; the socket opens on first use.
+      connected: Boolean(_production) || Boolean(PRODUCTION_URI),
       dbName: _production?.dbName ?? PRODUCTION_DB_NAME,
       host: PRODUCTION_URI ? redactUri(_production?.uri ?? PRODUCTION_URI) : null,
       sameAsLocal: Boolean(_production && _local && _production.db === _local.db),
@@ -242,6 +267,7 @@ export async function closeDb(): Promise<void> {
   _primary = null;
   _local = null;
   _production = null;
+  _productionConnecting = null;
 }
 
 // All collection names used by the application

@@ -1,7 +1,7 @@
 import express from "express";
 import {Collection, Db, MongoClient, ObjectId} from "mongodb";
 import {extname} from "path";
-import {col, enterAdminDbTarget, getDbTargetStatus, getPrimaryUri, parseAdminDbTarget, runWithPrimaryDb} from "../db/db";
+import {col, ensureProductionDb, enterAdminDbTarget, getDbTargetStatus, getPrimaryUri, parseAdminDbTarget, runWithPrimaryDb} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
 import type {UserPlan, UserRole} from "../../src/shared/types.js";
 import {getSettings} from "../settings.js";
@@ -192,13 +192,14 @@ function adminMagicLinkBase(req: express.Request): string | null {
 
 export function registerAdminRoutes(app: express.Application) {
   // Admin data can target local or production Mongo while auth stays on primary.
-  app.use("/api/admin", (req, res, next) => {
+  app.use("/api/admin", async (req, res, next) => {
     const fromHeader = req.headers["x-admin-db-target"];
     const fromQuery = req.query.admin_db_target;
     const target = parseAdminDbTarget(fromHeader ?? fromQuery);
     if (target === "production") {
-      const status = getDbTargetStatus();
-      if (!status.production.connected) {
+      try {
+        await ensureProductionDb();
+      } catch {
         res.status(503).json({
           error: "production_db_unavailable",
           hint: "Set MONGODB_LOCAL_URI + MONGODB_URI (or MONGODB_PRODUCTION_URI) and restart the server",
