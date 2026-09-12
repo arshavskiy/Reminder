@@ -136,7 +136,10 @@ const contractOptions = computed(() =>
 );
 
 const documentOptions = computed(() =>
-  documents.value?.map(d => ({label: d.file_name, value: d.id})) || []
+  documents.value?.map(d => ({
+    label: `${d.file_name}${d.client_name ? ` — ${d.client_name}` : ""}`,
+    value: d.id
+  })) || []
 );
 
 const rateOptions = computed(() =>
