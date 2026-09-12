@@ -133,7 +133,7 @@ const totals = ref<{subtotalCents: number; vatCents: number; totalCents: number}
 
 const contractOptions = computed(() =>
   paymentData.value?.contracts?.map((c: any) => ({
-    label: `${c.number || "—"} — ${c.customer || "לא צוין"}`,
+    label: `${c.reportType || c.number || "תסקיר"} #${c.number || "ללא"} — ${c.customer || "לא צוין"}`,
     value: c.id
   })) || []
 );
