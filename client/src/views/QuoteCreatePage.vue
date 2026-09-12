@@ -152,7 +152,7 @@ async function loadData() {
   try {
     const [data, docsRes] = await Promise.all([
       paymentService.list(),
-      api.get<{rows: Array<{_id: string; file_name: string; extracted_fields?: {client_name?: string}}>}>("/documents")
+      api.documents.list()
     ]);
     paymentData.value = data;
     documents.value = docsRes.rows.map(d => ({
