@@ -132,7 +132,10 @@ const documentDetails = ref<{fileName: string; customerName: string} | null>(nul
 const totals = ref<{subtotalCents: number; vatCents: number; totalCents: number} | null>(null);
 
 const contractOptions = computed(() =>
-  paymentData.value?.contracts?.map(c => ({label: `${c.number} — ${c.customer}`, value: c.id})) || []
+  paymentData.value?.contracts?.map((c: any) => ({
+    label: `${c.number || "—"} — ${c.customer || "לא צוין"}`,
+    value: c.id
+  })) || []
 );
 
 const documentOptions = computed(() =>
