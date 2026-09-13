@@ -188,7 +188,7 @@ try {
   // event. Treat the saved PDF as a nice-to-have: the recording is the point,
   // so a missed download must not abort a run that has otherwise succeeded.
   const downloadPromise = page.waitForEvent("download", {timeout: 15000}).catch(() => null);
-  await page.getByRole("button", {name: /הורד PDF/}).click();
+  await page.getByRole("button", {name: /תיצור תסקיר/}).click();
   const download = await downloadPromise;
   if (download) {
       await download.saveAs(resolve(outputDir, pdfOutput));

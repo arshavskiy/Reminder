@@ -68,7 +68,7 @@ async function createInspection(item, index) {
   await dialog().getByRole("button", {name: "הבא"}).click(); await pause(450); await dialog().getByRole("button", {name: "הבא"}).click(); await pause(450);
   if (index === 0) { await chooseSelection(field("מסמך שיופק עם התסקיר").locator(".n-base-selection"), "הצעת מחיר"); await caption("סעיפי המחיר נבחרים אוטומטית לפי סוג הציוד", 1100); }
   await dialog().getByRole("button", {name: "שמור ופתח תצוגה"}).click(); await page.waitForURL(/print-templates\/layout/, {timeout: 20000}); await pause(700);
-  if (index === 0) { const downloadPromise = page.waitForEvent("download"); await page.getByRole("button", {name: /הורד PDF/}).click(); const download = await downloadPromise; await download.saveAs(resolve("video/recordings/demo-inspection-report.pdf")); await caption("התסקיר והצעת המחיר נשמרו", 950); }
+  if (index === 0) { const downloadPromise = page.waitForEvent("download"); await page.getByRole("button", {name: /תיצור תסקיר/}).click(); const download = await downloadPromise; await download.saveAs(resolve("video/recordings/demo-inspection-report.pdf")); await caption("התסקיר והצעת המחיר נשמרו", 950); }
   await page.goto(`${appUrl}/dashboard`, {waitUntil: "networkidle"}); await pause(500);
 }
 
@@ -166,7 +166,7 @@ async function createMultiEquipmentInspection() {
   await dialog().getByRole("button", {name: "שמור ופתח תצוגה"}).click();
   await page.waitForURL(/print-templates\/layout/, {timeout: 20000});
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", {name: /הורד PDF/}).click();
+  await page.getByRole("button", {name: /תיצור תסקיר/}).click();
   const download = await downloadPromise;
   await download.saveAs(resolve("video/recordings/demo-multi-equipment-report.pdf"));
   await caption("התסקיר והצעת המחיר נוצרו והורדו כ-PDF", 1100);

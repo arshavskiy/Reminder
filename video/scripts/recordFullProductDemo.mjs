@@ -202,7 +202,7 @@ async function createMultiEquipmentInspection() {
     await dialog().getByRole("button", {name: "שמור ופתח תצוגה"}).click();
     await page.waitForURL(/print-templates\/layout/, {timeout: 45000});
     const downloadPromise = page.waitForEvent("download");
-    await page.getByRole("button", {name: /הורד PDF/}).click();
+    await page.getByRole("button", {name: /תיצור תסקיר/}).click();
     const download = await downloadPromise;
     await download.saveAs(resolve("video/recordings/demo-multi-equipment-report.pdf"));
     await caption("התסקיר והצעת המחיר נוצרו והורדו כ-PDF", 1100);

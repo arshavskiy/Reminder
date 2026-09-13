@@ -16,11 +16,9 @@ const recordingDate = arg("date") ?? new Intl.DateTimeFormat("en-CA", {
 const only = arg("only") ?? "";
 const outputDir = resolve("video/recordings/pages", recordingDate);
 const expectedPageVideos = new Set([
-    "01-dashboard.webm", "02-documents.webm", "03-document-detail.webm",
-    "04-quotes.webm", "05-quote-detail.webm", "06-clients.webm",
-    "07-client-detail.webm", "08-reminders.webm", "09-equipment.webm",
-    "10-reports.webm", "11-profile-settings.webm", "12-search.webm",
-    "13-templates.webm", "RemindOCR-site-tour.webm",
+    "01-dashboard.webm", "02-documents.webm", "06-clients.webm",
+    "08-reminders.webm", "09-equipment.webm",
+    "10-reports.webm", "RemindOCR-site-tour.webm",
 ]);
 if (!magicUrl) throw new Error("Set DEMO_MAGIC_LINK_URL before recording.");
 await mkdir(outputDir, {recursive: true});
@@ -86,7 +84,15 @@ async function moveTo(page, locator) {
 
 async function visualClick(page, locator) {
     await moveTo(page, locator);
-    await locator.click();
+    try {
+        await locator.click({timeout: 5000});
+    } catch {
+        // The walkthrough tooltip can render outside the viewport for some
+        // anchors/placements; force-scroll it into view via JS rather than
+        // letting the whole recording run die on a single stuck tooltip.
+        await locator.evaluate((el) => el.scrollIntoView({block: "center", inline: "center"})).catch(() => {});
+        await locator.click({force: true, timeout: 5000}).catch(() => {});
+    }
 }
 
 async function trimPageVideo(target) {
@@ -120,12 +126,22 @@ async function advanceWalkthrough(page, deadline) {
     return steps;
 }
 
-async function scrollIfNeeded(page, deadline) {
+async function scrollToBottom(page, deadline) {
     const canScroll = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 80);
-    if (!canScroll || deadline - Date.now() < 3500) return;
+    if (!canScroll || deadline - Date.now() < 2000) return;
     await page.mouse.move(1390, 760, {steps: 12});
-    await page.mouse.wheel(0, 650);
-    await page.waitForTimeout(Math.min(3000, deadline - Date.now()));
+    let previousHeight = -1;
+    while (deadline - Date.now() > 900) {
+        const {scrollTop, scrollHeight, clientHeight} = await page.evaluate(() => ({
+            scrollTop: document.documentElement.scrollTop,
+            scrollHeight: document.documentElement.scrollHeight,
+            clientHeight: window.innerHeight,
+        }));
+        if (scrollTop + clientHeight >= scrollHeight - 4 || scrollHeight === previousHeight) break;
+        previousHeight = scrollHeight;
+        await page.mouse.wheel(0, 650);
+        await page.waitForTimeout(Math.min(900, deadline - Date.now()));
+    }
 }
 
 function loadedSelectorForRoute(route) {
@@ -264,8 +280,8 @@ async function record(name, route, title, action) {
     await page.waitForTimeout(850);
   await caption(page, title);
     if (action) await action(page, deadline);
-    const walkthroughSteps = await advanceWalkthrough(page, deadline);
-    if (!walkthroughSteps) await scrollIfNeeded(page, deadline);
+    await advanceWalkthrough(page, deadline);
+    await scrollToBottom(page, deadline);
     if (deadline - Date.now() > 0) await page.waitForTimeout(Math.min(700, deadline - Date.now()));
     const raw = await video.path();
     await page.close();
@@ -275,45 +291,18 @@ async function record(name, route, title, action) {
     await trimPageVideo(target);
 }
 
-const ids = await (async () => {
-  const page = await context.newPage();
-  await page.goto(`${appUrl}/dashboard`, {waitUntil: "networkidle"});
-    const result = await page.evaluate(async () => {
-        const readJson = async (url) => {
-            const response = await fetch(url, {credentials: "include"});
-            if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) return {};
-            return response.json();
-        };
-        const [documents, clients, quotes] = await Promise.all([
-            readJson("/api/documents?limit=1"),
-            readJson("/api/clients?limit=1"),
-            readJson("/api/payment-requests/"),
-        ]);
-        const quoteRows = Array.isArray(quotes) ? quotes : quotes.rows ?? [];
-        return {
-            documentId: documents.rows?.[0]?.id ?? documents.rows?.[0]?._id ?? "",
-            clientId: clients.rows?.[0]?.id ?? clients.rows?.[0]?._id ?? "",
-            quoteId: quoteRows[0]?._id ?? quoteRows[0]?.id ?? "",
-        };
-    });
-    await page.close();
-    return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, String(value ?? "")]));
-})();
-
+// Only pages that are actually reachable from the top navigation bar
+// (App.vue's primaryNav): dashboard, documents, clients, reminders, field,
+// equipment, reports. Detail pages, quotes, search, templates and profile are
+// real screens but aren't top-nav destinations, so they're no longer recorded
+// here.
 const recordIfSelected = (name, route, title, action) => (!only || only === name) ? record(name, route, title, action) : Promise.resolve();
 await recordIfSelected("01-dashboard", "/dashboard", "דשבורד — מסמכים, לקוחות ותזכורות במקום אחד", findDashboardReminders);
 await recordIfSelected("02-documents", "/documents", "תסקירים — מסמכים לאחר OCR וחילוץ AI");
-await recordIfSelected("03-document-detail", ids.documentId ? `/documents/${ids.documentId}` : "/documents", "פרטי תסקיר — המידע שחולץ מהקובץ");
-await recordIfSelected("04-quotes", "/quotes", "הצעות מחיר — סעיפי שירות ו-PDF");
-await recordIfSelected("05-quote-detail", ids.quoteId ? `/quotes/${ids.quoteId}` : "/quotes", "הצעת מחיר — פרטים ותצוגת PDF");
 await recordIfSelected("06-clients", "/clients", "לקוחות — פרטי קשר, מסמכים ותסקירים");
-await recordIfSelected("07-client-detail", ids.clientId ? `/clients/${ids.clientId}` : "/clients", "כרטיס לקוח — תסקירים, ציוד ותזכורות");
 await recordIfSelected("08-reminders", "/reminders", "תזכורות — בדיקות קרובות ומעקב");
 await recordIfSelected("09-equipment", "/equipment", "ציוד — מכונות והיסטוריית בדיקות");
 await recordIfSelected("10-reports", "/reports", "דוחות — הורדה ושליחה במייל");
-await recordIfSelected("11-profile-settings", "/profile?section=personal", "פרופיל והגדרות — לוגו, חתימה ומיתוג");
-await recordIfSelected("12-search", "/search", "חיפוש — איתור תסקירים ולקוחות");
-await recordIfSelected("13-templates", "/print-templates", "תבניות — יצירת מסמכי PDF מקצועיים");
 
 if (!only || only === "RemindOCR-site-tour") {
 const tour = await context.newPage(); const tourVideo = tour.video();
@@ -321,7 +310,13 @@ const tour = await context.newPage(); const tourVideo = tour.video();
     await installVisibleCursor(tour);
     await caption(tour, "דשבורד");
     await findDashboardReminders(tour, Date.now() + 15000);
-    for (const [route, title] of [["/documents", "תסקירים"], ["/quotes", "הצעות מחיר"], ["/clients", "לקוחות"], ["/reminders", "תזכורות"], ["/equipment", "ציוד"], ["/reports", "דוחות"], ["/profile?section=personal", "פרופיל והגדרות"], ["/search", "חיפוש"], ["/print-templates", "תבניות"]]) {
+    // Only routes that are actually reachable from the top navigation bar
+    // (App.vue's primaryNav) - quotes/search/print-templates/profile are real
+    // pages but aren't top-nav destinations, so a "site tour" walking the nav
+    // shouldn't visit them. /field also lives in primaryNav but requires the
+    // business plan, which the standard trial-plan demo account doesn't have,
+    // so it's left out here to avoid a locked/inaccessible nav link.
+    for (const [route, title] of [["/documents", "תסקירים"], ["/clients", "לקוחות"], ["/reminders", "תזכורות"], ["/equipment", "ציוד"], ["/reports", "דוחות"]]) {
         await tour.goto(`${appUrl}/dashboard`, {waitUntil: "networkidle"});
         await installVisibleCursor(tour);
         await tour.evaluate(() => localStorage.removeItem("walkthrough_completed"));
@@ -329,8 +324,8 @@ const tour = await context.newPage(); const tourVideo = tour.video();
         await tour.waitForTimeout(850);
         await caption(tour, title);
         const segmentDeadline = Date.now() + 14500;
-        const steps = await advanceWalkthrough(tour, segmentDeadline);
-        if (!steps) await scrollIfNeeded(tour, segmentDeadline);
+        await advanceWalkthrough(tour, segmentDeadline);
+        await scrollToBottom(tour, segmentDeadline);
 }
     const tourRaw = await tourVideo.path();
     await tour.close();
