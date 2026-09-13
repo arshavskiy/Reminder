@@ -250,8 +250,9 @@ export function registerPaymentRoutes(app: express.Application) {
         || {contract_type: request.reportType, manual_fields: {}};
       const pricebook = await pricebooks().findOne({user_id: userId});
       let totals;
+      let inlineRates: ReturnType<typeof validateRates> = [];
       try {
-        const inlineRates = body.inlineRates === undefined ? request.inlineRates || [] : validateRates(body.inlineRates);
+        inlineRates = body.inlineRates === undefined ? request.inlineRates || [] : validateRates(body.inlineRates);
         const savedRates = pricebook?.rates || [];
         const savedIds = new Set(savedRates.map((rate: any) => rate.id));
         if (inlineRates.some((rate: any) => savedIds.has(rate.id))) throw new Error("מזהה סעיף אוטומטי מתנגש במחירון השמור");
