@@ -21,10 +21,9 @@
               <td>{{ quote.customer.name || "לקוח ללא שם" }}</td><td>{{ quote.reportNumber || "—" }}</td><td>{{ formatDate(quote.dueDate) }}</td>
               <td class="quote-amount">{{ formatMoney(quote.totalCents) }}</td><td><span class="quote-status" :class="`quote-status--${quote.status}`">{{ statusLabel(quote.status) }}</span></td><td>{{ storageLabel(quote) }}</td>
               <td class="quote-actions" @click.stop>
-                <n-tooltip><template #trigger><button class="btn btn--ghost btn--xs icon-btn" type="button" aria-label="צפה בהצעת מחיר" @click="openQuote(quote)"><n-icon :component="EyeOutline" :size="16"/></button></template>הצג הצעת מחיר</n-tooltip>
-                <n-tooltip v-if="quote.status === 'issued'"><template #trigger><a class="btn btn--ghost btn--xs icon-btn" :href="paymentService.pdf(quote._id)" download aria-label="הורד הצעת מחיר"><n-icon :component="DownloadOutline" :size="16"/></a></template>הורד PDF</n-tooltip>
-                <n-tooltip v-if="quote.status === 'issued'"><template #trigger><button class="btn btn--ghost btn--xs icon-btn" type="button" aria-label="שלח הצעת מחיר במייל" :disabled="sending === quote._id || !quote.customer.email" @click="send(quote)"><n-icon :component="PaperPlaneOutline" :size="16"/></button></template>{{ quote.customer.email ? "שלח במייל" : "חסר אימייל ללקוח" }}</n-tooltip>
-                <n-tooltip><template #trigger><button class="btn btn--ghost btn--xs icon-btn quote-delete" type="button" aria-label="מחק הצעת מחיר" :disabled="deleting === quote._id" @click="confirmDelete(quote)"><n-icon :component="TrashOutline" :size="16"/></button></template>מחק הצעת מחיר</n-tooltip>
+                <n-dropdown :options="rowActionsFor(quote)" placement="bottom-end" trigger="click" @select="(key: string) => handleRowAction(key, quote)">
+                  <button class="btn btn--ghost btn--xs icon-btn" type="button" aria-label="פעולות"><n-icon :component="EllipsisVerticalOutline" :size="16"/></button>
+                </n-dropdown>
               </td>
             </tr>
           </tbody>
@@ -36,10 +35,10 @@
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from "vue";
+import {h, onMounted, ref, type Component} from "vue";
 import {useRouter} from "vue-router";
-import {NIcon, NSpin, NTooltip, useMessage} from "naive-ui";
-import {AddOutline, DownloadOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline} from "@vicons/ionicons5";
+import {NDropdown, NIcon, NSpin, useMessage} from "naive-ui";
+import {AddOutline, DownloadOutline, EllipsisVerticalOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline} from "@vicons/ionicons5";
 import {paymentService, type PaymentRequest} from "../services/paymentService";
 import {useConfirm} from "../composables/useConfirm";
 
@@ -53,6 +52,42 @@ function openQuote(quote: PaymentRequest) { void router.push(`/quotes/${quote._i
 async function load() { loading.value = true; try { rows.value = (await paymentService.list()).rows.filter((row) => row.documentKind === "quote"); } catch (error) { message.error(error instanceof Error ? error.message : "לא ניתן לטעון הצעות מחיר"); } finally { loading.value = false; } }
 async function send(quote: PaymentRequest) { if (!quote.customer.email) return; sending.value = quote._id; try { await paymentService.send(quote._id, quote.customer.email, crypto.randomUUID()); message.success("הצעת המחיר נשלחה"); await load(); } catch (error) { message.error(error instanceof Error ? error.message : "שליחת ההצעה נכשלה"); } finally { sending.value = null; } }
 function confirmDelete(quote: PaymentRequest) { confirm({title: "מחיקת הצעת מחיר", content: `למחוק את הצעת המחיר "${quote.number || "טיוטה"}"? גם קובץ ה-PDF המקושר יימחק.`, confirmText: "מחק", onConfirm: async () => { deleting.value = quote._id; try { await paymentService.delete(quote._id); message.success("הצעת המחיר נמחקה"); await load(); } catch (error) { message.error(error instanceof Error ? error.message : "מחיקת ההצעה נכשלה"); } finally { deleting.value = null; } }}); }
+function downloadQuotePdf(quote: PaymentRequest) {
+  const a = document.createElement("a");
+  a.href = paymentService.pdf(quote._id);
+  a.download = "";
+  a.click();
+}
+function renderActionIcon(icon: Component) { return () => h(NIcon, {component: icon}); }
+function rowActionsFor(quote: PaymentRequest) {
+  const actions: Array<Record<string, unknown>> = [
+    {label: "הצג הצעת מחיר", key: "view", icon: renderActionIcon(EyeOutline)},
+  ];
+  if (quote.status === "issued") {
+    actions.push({label: "הורד PDF", key: "download", icon: renderActionIcon(DownloadOutline)});
+    actions.push({
+      label: quote.customer.email ? "שלח במייל" : "חסר אימייל ללקוח",
+      key: "send",
+      icon: renderActionIcon(PaperPlaneOutline),
+      disabled: sending.value === quote._id || !quote.customer.email,
+    });
+  }
+  actions.push({type: "divider", key: "d1"});
+  actions.push({
+    label: "מחק הצעת מחיר",
+    key: "delete",
+    icon: renderActionIcon(TrashOutline),
+    disabled: deleting.value === quote._id,
+    props: {style: "color: var(--color-error, #d03050)"},
+  });
+  return actions;
+}
+function handleRowAction(key: string, quote: PaymentRequest) {
+  if (key === "view") { openQuote(quote); return; }
+  if (key === "download") { downloadQuotePdf(quote); return; }
+  if (key === "send") { void send(quote); return; }
+  if (key === "delete") { confirmDelete(quote); return; }
+}
 onMounted(load);
 </script>
 

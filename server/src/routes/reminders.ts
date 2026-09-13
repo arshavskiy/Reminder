@@ -159,6 +159,64 @@ export function registerReminderRoutes(app: express.Application) {
     });
   });
 
+  // GET /api/reminders/categories — distinct table-import categories with counts, for the category sidebar
+  // and email-template category binding. Must be registered before "/api/reminders" so it isn't shadowed.
+  app.get("/api/reminders/categories", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const [byCategory, uncategorized] = await Promise.all([
+      col("reminders").aggregate([
+        { $match: { user_id: userId, reminder_category: { $ne: null } } },
+        { $group: { _id: "$reminder_category", count: { $sum: 1 } } },
+      ]).toArray(),
+      col("reminders").find({
+        user_id: userId,
+        reminder_category: null,
+        source_id: { $ne: null },
+        source_type: { $in: ["contract_expiry", "manual"] },
+      } as any).toArray(),
+    ]);
+
+    const counts = new Map<string, number>();
+    for (const r of byCategory as any[]) counts.set(r._id, r.count);
+
+    // reminder_category is only set by table imports; a contract-derived reminder
+    // (e.g. an engineer's inspection PDF) carries its category as contract_type
+    // on the linked contract instead, so it needs its own lookup to join in here.
+    const contractSourceIds = [...new Set(uncategorized.map((r: any) => String(r.source_id)))];
+    const contractDocs = contractSourceIds.length
+      ? await col<any>("contracts").find({
+          user_id: userId,
+          $or: [
+            { _id: { $in: contractSourceIds.map(tryObjectId) } },
+            { id: { $in: contractSourceIds } },
+          ],
+        } as any).toArray()
+      : [];
+    const contractTypeBySourceId = new Map<string, string>();
+    for (const c of contractDocs) {
+      if (!c.contract_type) continue;
+      contractTypeBySourceId.set(String(c._id), c.contract_type);
+      if (c.id != null) contractTypeBySourceId.set(String(c.id), c.contract_type);
+    }
+    for (const r of uncategorized as any[]) {
+      const type = contractTypeBySourceId.get(String(r.source_id));
+      if (type) counts.set(type, (counts.get(type) ?? 0) + 1);
+    }
+
+    const categories = [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ categories });
+  });
+
   // GET /api/reminders
   app.get("/api/reminders", async (req, res) => {
     let userId: string;
@@ -188,6 +246,19 @@ export function registerReminderRoutes(app: express.Application) {
     if (status) filter.status = status;
     const documentId = req.query.documentId as string | undefined;
     if (documentId) filter.document_id = documentId;
+    const category = req.query.category as string | undefined;
+    if (category) {
+      // A category may be a real reminder_category (table imports) or a contract_type
+      // (contract-derived reminders, e.g. an engineer's inspection PDF) — same join as
+      // GET /api/reminders/categories.
+      const matchingContracts = await col<any>("contracts")
+        .find({ user_id: userId, contract_type: category } as any, { projection: { _id: 1, id: 1 } })
+        .toArray();
+      const contractSourceIds = matchingContracts.flatMap((c: any) => [String(c._id), ...(c.id != null ? [String(c.id)] : [])]);
+      filter.$or = contractSourceIds.length
+        ? [{ reminder_category: category }, { source_id: { $in: contractSourceIds }, source_type: { $in: ["contract_expiry", "manual"] } }]
+        : [{ reminder_category: category }];
+    }
     // Lets a caller fetch only the reminders belonging to known contracts instead of
     // pulling every row and filtering in the browser.
     const sourceIdsParam = req.query.sourceIds as string | undefined;

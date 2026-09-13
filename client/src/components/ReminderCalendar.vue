@@ -2,7 +2,7 @@
   <section class="rcal">
     <header class="rcal__head">
       <div class="rcal__title-wrap">
-        <h3 class="rcal__title">{{ testsOnly ? "לוח בדיקות מתוכננות" : "לוח תזכורות ותסקירים" }}</h3>
+        <h3 class="rcal__title">{{ testsOnly ? "יומן" : "לוח תזכורות ותסקירים" }}</h3>
         <div class="rcal__counts">
           <span v-if="!testsOnly" class="rcal__count">{{ filteredRows.length }} תזכורות</span>
           <span v-if="filteredExpiryItems.length" class="rcal__expiry-count">

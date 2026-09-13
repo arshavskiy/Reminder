@@ -403,6 +403,7 @@ export function registerTemplateRoutes(app: express.Application) {
     const doc = {
       name: body.name,
       doc_template_id: body.doc_template_id ?? null,
+      reminder_category: body.reminder_category ?? null,
       subject: body.subject ?? "[תזכורת] {{title}}",
       html: body.html,
       logo_path: body.logo_path ?? null,
@@ -421,7 +422,7 @@ export function registerTemplateRoutes(app: express.Application) {
     const body = req.body as Partial<EmailTemplate>;
 
     const updates: Record<string, any> = { updated_at: new Date() };
-    const fields = ["name", "doc_template_id", "subject", "html", "logo_path", "poster_url", "example_document_url", "is_default"];
+    const fields = ["name", "doc_template_id", "reminder_category", "subject", "html", "logo_path", "poster_url", "example_document_url", "is_default"];
     for (const f of fields) {
       if ((body as any)[f] !== undefined) updates[f] = (body as any)[f];
     }

@@ -621,6 +621,13 @@ function qs(params?: Record<string, unknown>): string {
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
 export const api = {
+  importReminderTable: async <T>(file: File, action: "preview" | "confirm"): Promise<T> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${BASE}/reminders/table-import/${action}`, {method: "POST", credentials: "include", body: form});
+    if (!res.ok) throw new Error(await responseErrorMessage(res, "Table import failed"));
+    return res.json() as Promise<T>;
+  },
   dashboard: {
     stats: (force = false) => get<DashboardStats>("/dashboard/stats", force),
   },
@@ -783,9 +790,10 @@ export const api = {
   },
 
   reminders: {
-    list: (params?: { status?: string; days?: number; limit?: number; documentId?: string; sourceIds?: string }, force = false) => {
+    list: (params?: { status?: string; days?: number; limit?: number; documentId?: string; sourceIds?: string; category?: string }, force = false) => {
       return get<{ rows: ReminderWithContext[]; total: number }>(`/reminders${qs(params)}`, force);
     },
+    categories: () => get<{ categories: { name: string; count: number }[] }>("/reminders/categories"),
     senderInfo: () => get<{ email: string | null; name: string }>("/reminders/email-sender"),
     create: (body: Partial<Reminder>) => post<Reminder>("/reminders", body),
     update: (id: number, body: Partial<Reminder>) => put<Reminder>(`/reminders/${id}`, body),

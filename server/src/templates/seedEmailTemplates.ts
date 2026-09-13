@@ -93,6 +93,7 @@ export async function seedDefaultEmailTemplate(): Promise<void> {
           name: seed.name,
           is_default: seed.is_default,
           doc_template_id,
+          reminder_category: null,
           logo_path: null,
           created_at: now,
         },
@@ -145,6 +146,20 @@ export async function pickEmailTemplate(docTemplateId: string | number | null): 
   if (!any) return null;
   const { _id, ...rest } = any;
   return { id: _id?.toString(), ...rest } as any;
+}
+
+export async function pickEmailTemplateForCategory(category: string | null): Promise<EmailTemplate | null> {
+  if (category) {
+    const bound = await col("email_templates").findOne(
+      { reminder_category: category },
+      { sort: { is_default: -1, _id: 1 } }
+    ) as any;
+    if (bound) {
+      const { _id, ...rest } = bound;
+      return { id: _id?.toString(), ...rest } as any;
+    }
+  }
+  return pickEmailTemplate(null);
 }
 
 export async function loadEmailTemplateByName(name: string): Promise<EmailTemplate | null> {

@@ -520,6 +520,18 @@ Dedup: existing non-dismissed reminder for the same `(source_id, advance_days)` 
 
 
 
+### Bulk table import (CSV/XLS/XLSX)
+
+Standalone reminders — category, dates, optional client — with no PDF upload and no contract created. Separate flow from the document/contract pipeline; see `docs/universal-csv-import.md` for the full field mapping.
+
+- Each row's email template is picked per-row by matching its category against a template bound to that category (Email Templates page), falling back to the user's default template, then the global default.
+
+- Reminders page shows a category sidebar (only when at least one table-import category exists) that filters the Name/Category-augmented reminders table.
+
+- Dashboard calendar hides these reminders while "הצג רק בדיקות מתוכננות" (show only scheduled tests) is on — that toggle restricts the view to equipment inspections only.
+
+
+
 ### Email delivery
 
 - Resend API (primary) or Nodemailer SMTP fallback

@@ -361,9 +361,23 @@ If `expiry_date` is updated, existing `pending` reminders are regenerated.
 |-------|-------------|
 | `status` | `pending` \| `sent` \| `snoozed` \| `dismissed` \| `error` |
 | `days` | Only reminders triggering within N days |
-| `limit` / `offset` | Pagination |
+| `limit` / `offset` | Pagination (limit capped at 200) |
+| `documentId` | Only reminders linked to a document |
+| `sourceIds` | Comma-separated `source_id` values |
+| `category` | Only reminders with this `reminder_category` (table-import reminders) |
 
 **Response** rows include `client_name` and `document_name`
+
+---
+
+### `GET /api/reminders/categories`
+
+Distinct `reminder_category` values for the authenticated user, with counts, sorted alphabetically. Used by the Reminders page category sidebar and the Email Templates category-binding picker.
+
+**Response**
+```json
+{ "categories": [{ "name": "Insurance", "count": 4 }, { "name": "Software", "count": 2 }] }
+```
 
 ---
 

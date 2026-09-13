@@ -1,10 +1,5 @@
 <template>
   <div class="dash">
-    <header class="dash__topbar">
-      <!--      <h1 class="dash__greet">{{ greeting }}{{ userName ? `, ${userName}` : "" }}</h1>-->
-      <!--      <n-button :loading="store.loading" @click="store.fetch(true)">↻ רענן</n-button>-->
-    </header>
-
     <div v-if="needsOnboarding" class="dash__onboarding-reminder">
       <span>נשארו עוד פרטים למילוי כדי לנצל את המערכת במלואה</span>
       <button type="button" class="dash__onboarding-reminder__btn" @click="openOnboarding">
@@ -23,10 +18,11 @@
         <button
           v-if="hasFeature(FEATURES.pages.contracts)"
           class="dash__new-contract"
+          type="button"
           @click="hydraulicModalRef?.open()"
         >
           <span class="dash__new-contract__top">
-            <span class="dash__new-contract__icon">＋</span>
+            <n-icon class="dash__new-contract__icon" :component="AddOutline" :size="22" />
             <span class="dash__new-contract__label">תסקיר חדש</span>
           </span>
           <span class="dash__new-contract__hint">צור תסקיר או חוזה ידני</span>
@@ -47,18 +43,24 @@
         <!--          </span>-->
         <!--        </button>-->
         <DocumentDropStrip v-if="documentImportAllowed" class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
-        <button
-            v-if="hasFeature(FEATURES.pages.contracts)"
-            class="dash__new-contract"
-            type="button"
-            @click="showQuoteCreateModal = true"
-        >
-          <span class="dash__new-contract__top">
-            <span class="dash__new-contract__icon">＋</span>
-            <span class="dash__new-contract__label">הצעת מחיר</span>
-          </span>
-          <span class="dash__new-contract__hint">צור הצעת מחיר חדשה</span>
-        </button>
+        <ReminderTableImport
+          v-if="hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar)"
+          variant="card"
+          class="dash__import"
+          @imported="onTableImported"
+        />
+<!--        <button-->
+<!--            v-if="hasFeature(FEATURES.pages.contracts)"-->
+<!--            class="dash__new-contract"-->
+<!--            type="button"-->
+<!--            @click="showQuoteCreateModal = true"-->
+<!--        >-->
+<!--          <span class="dash__new-contract__top">-->
+<!--            <span class="dash__new-contract__icon">＋</span>-->
+<!--            <span class="dash__new-contract__label">הצעת מחיר</span>-->
+<!--          </span>-->
+<!--          <span class="dash__new-contract__hint">צור הצעת מחיר חדשה</span>-->
+<!--        </button>-->
       </div>
 
       <!-- Quick stats — small chips line, easy to scan -->
@@ -230,6 +232,7 @@ import {computed, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NIcon, NSpin, NSwitch, useMessage} from "naive-ui";
 import {
+  AddOutline,
   AlarmOutline,
   ClipboardOutline,
   CloudUploadOutline,
@@ -252,6 +255,7 @@ import {type FeatureKey, FEATURES} from "../shared/features.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 import DocumentDropStrip from "../components/DocumentDropStrip.vue";
+import ReminderTableImport from "../components/ReminderTableImport.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import QuoteCreateModal from "../components/QuoteCreateModal.vue";
@@ -259,6 +263,11 @@ import GmailLogo from "../components/GmailLogo.vue";
 import {useOnboarding} from "../composables/useOnboarding.js";
 
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
+function onTableImported() {
+  calendarNextTestsOnly.value = false;
+  store.fetch(true);
+  refreshCalendar(true);
+}
 const showHydraulicModal = ref(false);
 const store = useDashboardStore();
 const remindersStore = useRemindersStore();
@@ -678,8 +687,18 @@ const data_cards = computed(() =>
    row so the dropzone height matches the new-contract button exactly. */
 .dash__drop :deep(> div),
 .dash__intake :deep(.drop-strip) { margin-bottom: 0; }
+.dash__drop,
+.dash__import {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+}
 .dash__drop :deep(.drop-strip) {
+  flex: 1;
   min-height: 92px;
+  margin: 0;
+  border-radius: 14px;
+  box-sizing: border-box;
 }
 .dash__drop :deep(.drop-strip__copy strong) {
   font-size: 14px;
@@ -691,7 +710,8 @@ const data_cards = computed(() =>
   line-height: 1.35;
 }
 .dash__new-contract {
-  flex: 0 0 240px;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -741,10 +761,7 @@ const data_cards = computed(() =>
   gap: 8px;
 }
 .dash__new-contract__icon {
-  font-size: 22px;
-  font-weight: 700;
   color: var(--brand-color);
-  line-height: 1;
 }
 .dash__new-contract__label {
   font-size: 14px;
@@ -765,7 +782,6 @@ const data_cards = computed(() =>
   }
 
   .dash__new-contract {
-    flex: 1 1 auto;
     width: 100%;
   }
 

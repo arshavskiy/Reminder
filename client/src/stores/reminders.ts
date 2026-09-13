@@ -8,7 +8,7 @@ export const useRemindersStore = defineStore("reminders", () => {
   const total = ref(0);
   const loading = ref(false);
 
-  async function fetch(params?: { status?: string; days?: number; limit?: number }, force = false) {
+  async function fetch(params?: { status?: string; days?: number; limit?: number; category?: string }, force = false) {
     loading.value = true;
     try {
       const r = await api.reminders.list(params, force);

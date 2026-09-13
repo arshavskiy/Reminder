@@ -312,9 +312,36 @@ export interface ContractManualFields {
   }>;
 }
 
+export interface ReminderItem {
+  id: string;
+  client_id: string | null;
+  name: string;
+  category: string | null;
+  start_date: string | null;
+  expiry_date: string;
+  description: string | null;
+  owner: string | null;
+  folder: string | null;
+  tags: string[];
+  priority: string | null;
+  location: string | null;
+  document_reference: string | null;
+  reference_number: string | null;
+  url: string | null;
+  audit_date: string | null;
+  advance_days: number[];
+  recipients: string[];
+  origin: "table_import";
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Reminder {
   id: number;
-  source_type: "contract_expiry" | "task" | "manual";
+  source_type: "contract_expiry" | "task" | "manual" | "table_import";
+  reminder_category?: string | null;
+  expiry_date?: string | null;
+  start_date?: string | null;
   source_id: number | null;
   client_id: number | null;
   document_id: number | null;
@@ -422,6 +449,7 @@ export interface ReminderWithContext extends Reminder {
   client_email?: string | null;
   client_phone?: string | null;
   document_name: string | null;
+  contract_type?: string | null;
   calendar_synced?: boolean;
   calendar_event_id?: string | null;
   calendar_last_synced_at?: string | null;
@@ -567,6 +595,7 @@ export interface EmailTemplate {
   id: string;
   name: string;
   doc_template_id: string | null;
+  reminder_category: string | null;
   subject: string;              // may contain {{vars}}
   html: string;                 // body with {{vars}} placeholders
   logo_path: string | null;

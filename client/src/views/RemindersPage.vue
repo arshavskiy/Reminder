@@ -123,7 +123,45 @@
         </button>
       </div>
 
+      <div v-if="categoryViewActive" class="reminders-body">
+        <aside class="reminders-categories">
+          <button
+            class="quick-pill"
+            :class="{ 'quick-pill--active': categoryFilter === null }"
+            type="button"
+            @click="selectCategory(null)"
+          >
+            הכל
+            <span>{{ reminderCategories.reduce((sum, c) => sum + c.count, 0) }}</span>
+          </button>
+          <button
+            v-for="c in reminderCategories"
+            :key="c.name"
+            class="quick-pill"
+            :class="{ 'quick-pill--active': categoryFilter === c.name }"
+            type="button"
+            @click="selectCategory(c.name)"
+          >
+            {{ c.name }}
+            <span>{{ c.count }}</span>
+          </button>
+        </aside>
+        <n-data-table
+          :columns="columns"
+          :data="filteredRows"
+          :loading="store.loading"
+          :pagination="{ pageSize: 20 }"
+          :row-key="(r: any) => r.id"
+          :row-props="rowProps"
+          :checked-row-keys="selectedReminderKeys"
+          :scroll-x="1290"
+          class="reminders-table reminders-table--with-sidebar"
+          size="small"
+          @update:checked-row-keys="onSelectedReminderKeys"
+        />
+      </div>
       <n-data-table
+        v-else
         :columns="columns"
         :data="filteredRows"
         :loading="store.loading"
@@ -131,7 +169,7 @@
         :row-key="(r: any) => r.id"
         :row-props="rowProps"
         :checked-row-keys="selectedReminderKeys"
-        :scroll-x="1040"
+        :scroll-x="1290"
         class="reminders-table"
         size="small"
         @update:checked-row-keys="onSelectedReminderKeys"
@@ -264,10 +302,10 @@
 </template>
 
 <script setup lang="ts">
-import {computed, h, onMounted, ref} from "vue";
+import {computed, h, onMounted, ref, type Component} from "vue";
 import {useRouter} from "vue-router";
-import {NAlert, NDataTable, NDatePicker, NForm, NFormItem, NIcon, NInput, NModal, NSelect, useMessage,} from "naive-ui";
-import {CheckboxOutline, CloseCircleOutline, CreateOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
+import {NAlert, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NSelect, useMessage,} from "naive-ui";
+import {CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";
@@ -318,6 +356,9 @@ const statusFilter = ref<string | null>(null);
 type DueFilter = "all" | "overdue" | "month" | "sent" | "no_email";
 const dueFilter = ref<DueFilter>("all");
 const search = ref("");
+const reminderCategories = ref<{ name: string; count: number }[]>([]);
+const categoryFilter = ref<string | null>(null);
+const categoryViewActive = computed(() => reminderCategories.value.length > 0);
 const bulkMode = ref(false);
 const selectedReminderKeys = ref<Array<string | number>>([]);
 const bulkSending = ref(false);
@@ -493,7 +534,21 @@ function load() {
   selectedReminderKeys.value = selectedReminderKeys.value.filter((id) =>
     filteredRows.value.some((row) => row.id === id)
   );
-  store.fetch({ status: statusFilter.value ?? undefined, limit: 5000 }, true);
+  store.fetch({ status: statusFilter.value ?? undefined, limit: 5000, category: categoryFilter.value ?? undefined }, true);
+}
+
+async function loadReminderCategories() {
+  try {
+    reminderCategories.value = (await api.reminders.categories()).categories;
+  } catch {
+    reminderCategories.value = [];
+  }
+}
+
+function selectCategory(name: string | null) {
+  categoryFilter.value = name;
+  selectedReminderKeys.value = [];
+  load();
 }
 
 function toggleBulkMode() {
@@ -543,6 +598,7 @@ onMounted(async () => {
     clientsStore.rows.length ? Promise.resolve() : clientsStore.fetch({ limit: 500 }),
     loadEmailTemplates(),
     loadSenderInfo(),
+    loadReminderCategories(),
   ]);
   load();
 });
@@ -1025,6 +1081,20 @@ function rowProps(row: ReminderWithContext) {
 
 const baseColumns = [
   {
+    title: "שם",
+    key: "title",
+    width: 200,
+    minWidth: 200,
+    render: (row: ReminderWithContext) => h("span", row.title || "—"),
+  },
+  {
+    title: "קטגוריה",
+    key: "reminder_category",
+    width: 140,
+    minWidth: 140,
+    render: (row: ReminderWithContext) => h("span", row.reminder_category || row.contract_type || "—"),
+  },
+  {
     title: "אימייל",
     key: "email_to",
     width: 240,
@@ -1077,65 +1147,62 @@ const baseColumns = [
   {
     title: "",
     key: "actions",
-    width: 156,
-    render: (row: ReminderWithContext) => {
-      const sending = sendingReminderId.value === row.id;
-      const hasEmail = Boolean(effectiveEmailTo(row)?.trim());
-      const buttons = [];
-      if (row.status !== "dismissed") {
-        buttons.push(h("button", {
-          class: ["btn", "btn--ghost", "btn--xs", "icon-btn", sending ? "btn--loading" : ""].filter(Boolean).join(" "),
-          title: hasEmail ? (row.status === "sent" ? "שלח שוב" : "שלח תזכורת") : "חסר אימייל לשליחה",
-          type: "button",
-          disabled: sending || !hasEmail,
-          onClick: (event: MouseEvent) => {
-            event.stopPropagation();
-            sendReminderRow(row);
-          },
-        }, [h(NIcon, { component: PaperPlaneOutline, class: "btn-icon" })]));
-      }
-      buttons.push(h("button", {
-        class: "btn btn--ghost btn--xs icon-btn",
-        title: "תצוגה מקדימה",
-        type: "button",
-        onClick: (event: MouseEvent) => {
-          event.stopPropagation();
-          openReminderPreview(row);
-        },
-      }, [h(NIcon, { component: EyeOutline, class: "btn-icon" })]));
-      buttons.push(h("button", {
-        class: "btn btn--ghost btn--xs icon-btn",
-        title: "ערוך תזכורת",
-        type: "button",
-        onClick: (event: MouseEvent) => {
-          event.stopPropagation();
-          openEditDate(row);
-        },
-      }, [h(NIcon, { component: CreateOutline, class: "btn-icon" })]));
-      if (row.status === "pending") {
-        buttons.push(h("button", {
+    width: 60,
+    render: (row: ReminderWithContext) =>
+      h(NDropdown, {
+        options: rowActionsFor(row),
+        placement: "bottom-end",
+        trigger: "click",
+        onSelect: (key: string) => handleRowAction(key, row),
+      }, {
+        default: () => h("button", {
           class: "btn btn--ghost btn--xs icon-btn",
-          title: "בטל תזכורת",
+          title: "פעולות",
           type: "button",
-          onClick: (event: MouseEvent) => {
-            event.stopPropagation();
-            dismissReminderRow(row);
-          },
-        }, [h(NIcon, { component: CloseCircleOutline, class: "btn-icon" })]));
-      }
-      buttons.push(h("button", {
-        class: "btn btn--danger-ghost btn--xs icon-btn",
-        title: "מחק",
-        type: "button",
-        onClick: (event: MouseEvent) => {
-          event.stopPropagation();
-          confirmDelete(row);
-        },
-      }, [h(NIcon, { component: TrashOutline, class: "btn-icon" })]));
-      return h("div", { class: "reminder-row-actions" }, buttons);
-    },
+          onClick: (event: MouseEvent) => event.stopPropagation(),
+        }, [h(NIcon, { component: EllipsisVerticalOutline, class: "btn-icon" })]),
+      }),
   },
 ];
+
+function renderActionIcon(icon: Component) {
+  return () => h(NIcon, { component: icon });
+}
+
+function rowActionsFor(row: ReminderWithContext) {
+  const hasEmail = Boolean(effectiveEmailTo(row)?.trim());
+  const actions: Array<Record<string, unknown>> = [];
+  if (row.status !== "dismissed") {
+    actions.push({
+      label: row.status === "sent" ? "שלח שוב" : "שלח תזכורת",
+      key: "send",
+      icon: renderActionIcon(PaperPlaneOutline),
+      disabled: !hasEmail,
+      props: hasEmail ? undefined : { title: "חסר אימייל לשליחה" },
+    });
+  }
+  actions.push({ label: "תצוגה מקדימה", key: "preview", icon: renderActionIcon(EyeOutline) });
+  actions.push({ label: "ערוך תזכורת", key: "edit", icon: renderActionIcon(CreateOutline) });
+  if (row.status === "pending") {
+    actions.push({ label: "בטל תזכורת", key: "dismiss", icon: renderActionIcon(CloseCircleOutline) });
+  }
+  actions.push({ type: "divider", key: "d1" });
+  actions.push({
+    label: "מחק",
+    key: "delete",
+    icon: renderActionIcon(TrashOutline),
+    props: { style: "color: var(--color-error, #d03050)" },
+  });
+  return actions;
+}
+
+function handleRowAction(key: string, row: ReminderWithContext) {
+  if (key === "send") { if (sendingReminderId.value !== row.id) sendReminderRow(row); return; }
+  if (key === "preview") { openReminderPreview(row); return; }
+  if (key === "edit") { openEditDate(row); return; }
+  if (key === "dismiss") { dismissReminderRow(row); return; }
+  if (key === "delete") { confirmDelete(row); return; }
+}
 
 const columns = computed(() =>
   bulkMode.value
@@ -1515,10 +1582,36 @@ const columns = computed(() =>
   box-shadow: var(--shadow-sm);
 }
 
+.reminders-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.reminders-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: transparent;
+}
+
+.reminders-categories .quick-pill {
+  justify-content: space-between;
+  width: 100%;
+}
+
 .reminders-table {
   overflow: hidden;
   border: 1px solid var(--border-color);
   border-radius: 14px;
+}
+
+.reminders-table--with-sidebar {
+  min-width: 0;
 }
 
 .reminders-table :deep(.n-data-table-th) {
@@ -1532,12 +1625,6 @@ const columns = computed(() =>
   padding-top: 12px;
   padding-bottom: 12px;
   vertical-align: top;
-}
-
-.reminder-row-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 4px;
 }
 
 .icon-btn {
@@ -1654,6 +1741,16 @@ const columns = computed(() =>
   }
 
   .reminders-table :deep(.n-data-table-wrapper) {
+    overflow-x: auto;
+  }
+
+  .reminders-body {
+    grid-template-columns: 1fr;
+  }
+
+  .reminders-categories {
+    flex-direction: row;
+    flex-wrap: wrap;
     overflow-x: auto;
   }
 

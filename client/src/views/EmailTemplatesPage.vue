@@ -13,6 +13,9 @@
           <p style="font-size: 13px; color: var(--text-secondary); margin: 0">
             {{ docTplName(t.doc_template_id) || "לכל סוגי המסמכים" }}
           </p>
+          <p v-if="t.reminder_category" style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 0">
+            קטגוריה: {{ t.reminder_category }}
+          </p>
           <p style="font-size: 12px; color: var(--text-muted); margin: 8px 0 0">{{ t.subject }}</p>
           <template #footer>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
@@ -102,6 +105,18 @@
                   :options="docTplOptions"
                   placeholder="לכל סוגי המסמכים"
                   clearable
+                  :virtual-scroll="false"
+                />
+              </n-form-item>
+
+              <n-form-item label="קשור לקטגוריית תזכורות מטבלה (אופציונלי)">
+                <n-select
+                  v-model:value="editing.reminder_category"
+                  :options="categoryOptions"
+                  placeholder="לכל הקטגוריות"
+                  clearable
+                  filterable
+                  tag
                   :virtual-scroll="false"
                 />
               </n-form-item>
@@ -283,6 +298,7 @@ import {useConfirm} from "../composables/useConfirm.js";
 
 const templates = ref<EmailTemplate[]>([]);
 const docTemplates = ref<DocTemplate[]>([]);
+const reminderCategories = ref<{ name: string; count: number }[]>([]);
 const userDefaultTemplateId = ref<string | null>(null);
 const showEdit = ref(false);
 const editing = ref<EmailTemplate | null>(null);
@@ -362,6 +378,10 @@ function docTplName(id: string | null): string {
   return docTemplates.value.find((t) => t.id === id)?.name ?? "";
 }
 
+const categoryOptions = computed(() =>
+  reminderCategories.value.map((c) => ({ label: c.name, value: c.name }))
+);
+
 const showSendTest = ref(false);
 const sendTestEmail = ref("");
 const sendingTest = ref(false);
@@ -419,14 +439,16 @@ async function setMyDefault(templateId: string) {
 }
 
 async function load() {
-  const [tplResult, docResult, settingsResult] = await Promise.allSettled([
+  const [tplResult, docResult, settingsResult, categoriesResult] = await Promise.allSettled([
     api.emailTemplates.list(),
     api.docTemplates.list(),
     api.userSettings.get(),
+    api.reminders.categories(),
   ]);
   if (tplResult.status === "fulfilled") templates.value = tplResult.value;
   if (docResult.status === "fulfilled") docTemplates.value = docResult.value;
   if (settingsResult.status === "fulfilled") userDefaultTemplateId.value = (settingsResult.value as any)?.default_email_template_id ?? null;
+  if (categoriesResult.status === "fulfilled") reminderCategories.value = categoriesResult.value.categories;
 }
 onMounted(() => {
   updateViewport();
@@ -453,6 +475,7 @@ function newTemplate() {
     id: "",
     name: "תבנית חדשה",
     doc_template_id: null,
+    reminder_category: null,
     subject: "[תזכורת] {{title}}",
     html: "",
     logo_path: null,

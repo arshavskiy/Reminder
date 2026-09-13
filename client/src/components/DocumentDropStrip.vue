@@ -15,7 +15,7 @@
         <n-icon :component="CloudUploadOutline" :size="30" />
       </div>
       <div class="drop-strip__copy">
-        <strong>{{ isDragging ? "שחרר כאן והייבוא יתחיל" : "גרור מסמכים לתזכורת כאן" }}</strong>
+        <strong>{{ isDragging ? "שחרר כאן והייבוא יתחיל" : "גרור תסקירים לתזכורת כאן" }}</strong>
         <span>גרירה או לחיצה מעלות מיד</span>
       </div>
     </div>
