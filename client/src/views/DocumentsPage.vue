@@ -453,7 +453,7 @@
                   <n-icon :component="documentSortIcon('number')" :size="14" />
                 </button>
               </th>
-              <th class="document-col document-col--actions"></th>
+              <th class="document-col document-col--actions actions-title">פעולות</th>
             </tr>
           </thead>
           <tbody>
@@ -2461,20 +2461,19 @@ async function bulkExtractAi() {
   margin-top: auto;
 }
 
-/* ── Document table ──────────────────────────────────────────────────────── */
+/* ── Document table (aligned with quotes-table) ──────────────────────────── */
 .document-table-wrap {
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--bg-card);
   overflow: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
 }
 
 .document-table {
   width: 100%;
-  min-width: 840px;
+  min-width: 980px;
   table-layout: fixed;
-  border-collapse: separate;
-  border-spacing: 0;
+  border-collapse: collapse;
 }
 
 .document-table__col--select { width: 46px; }
@@ -2494,25 +2493,19 @@ async function bulkExtractAi() {
 
 .document-table th,
 .document-table td {
-  padding: 11px 12px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 14px 16px;
   text-align: right;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
   white-space: nowrap;
   vertical-align: middle;
 }
 
-.document-table td.document-col--actions,
-.document-table th.document-col--actions {
-  text-align: left;
-}
-
 .document-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--bg-elevated);
+  background: var(--bg-muted);
   color: var(--text-secondary);
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .document-sort-button {
@@ -2526,7 +2519,7 @@ async function bulkExtractAi() {
   color: inherit;
   cursor: pointer;
   font: inherit;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .document-sort-button span {
@@ -2552,21 +2545,22 @@ async function bulkExtractAi() {
 }
 
 .document-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.document-table tbody tr:hover td {
-  background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
+  border-bottom: 0;
 }
 
 .document-table-row {
   cursor: pointer;
   outline: none;
+  transition: background .15s ease;
+}
+
+.document-table-row:hover,
+.document-table-row:hover td {
+  background: var(--bg-hover);
 }
 
 .document-table-row:focus-visible td {
-  background: color-mix(in srgb, var(--brand-color) 8%, var(--bg-card));
-  box-shadow: inset 0 0 0 1px var(--brand-color);
+  background: var(--bg-hover);
 }
 
 .document-cell-truncate {
@@ -2579,12 +2573,13 @@ async function bulkExtractAi() {
 
 .client-link {
   color: var(--brand-color);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  font-weight: 700;
+  text-decoration: none;
 }
 
 .client-link:hover {
-  opacity: 0.8;
+  text-decoration: none;
+  opacity: 0.85;
 }
 
 .document-file-cell {
@@ -2606,9 +2601,14 @@ async function bulkExtractAi() {
 .row-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   width: 100%;
-  gap: 8px;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.actions-title {
+  text-align: center !important;
 }
 
 .cell-strong {
@@ -2618,7 +2618,7 @@ async function bulkExtractAi() {
 
 .cell-actions,
 .document-col--actions {
-  text-align: left;
+  text-align: center;
 }
 
 .document-col--select {

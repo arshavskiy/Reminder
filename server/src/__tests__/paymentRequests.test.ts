@@ -7,7 +7,8 @@ import {calculateCharges, formatBillingDocumentNumber, renderPaymentRequestHtml,
 const mocks = vi.hoisted(() => ({auth: vi.fn(), collections: {} as Record<string, any>, send: vi.fn()}));
 vi.mock("../db/db", () => ({col: (name: string) => mocks.collections[name]}));
 vi.mock("../auth/middleware", () => ({requireAuth: mocks.auth, HTTPException: class extends Error {constructor(public status: number, message: string) {super(message);}}}));
-vi.mock("../routes/printTemplates", () => ({renderHtmlPdf: vi.fn()}));
+vi.mock("../routes/printTemplates", () => ({renderHtmlPdf: vi.fn(async () => "%PDF-1.4 regenerated")}));
+vi.mock("../settings", () => ({getDataDir: () => "C:/Users/User/AppData/Local/Temp/reminder-payment-tests"}));
 vi.mock("../storage/spaces", () => ({spacesEnabled: () => false, uploadToSpaces: vi.fn(), deleteFromSpaces: vi.fn()}));
 vi.mock("../storage/gdrive", () => ({syncDocumentToDrive: vi.fn(), resolveDriveToken: vi.fn(), trashDriveFile: vi.fn()}));
 vi.mock("../documents/fileResolver", () => ({resolveDocumentFilePath: vi.fn()}));
@@ -30,9 +31,20 @@ describe("inspection pricing", () => {
     source[0].unitCents = 999;
     expect(charge.lines[0].unitCents).toBe(12550);
   });
-  it("rejects sections for another inspection type and duplicate charges", () => {
-    expect(() => calculateCharges(rates, "מכונות הרמה", [{rateId: "pressure", quantity: 1}], 0)).toThrow();
-    expect(() => calculateCharges(rates, "מכונות הרמה", [{rateId: "lifting-visual", quantity: 1}, {rateId: "lifting-visual", quantity: 1}], 0)).toThrow();
+  it("rejects unknown rate ids", () => {
+    expect(() => calculateCharges(rates, "מכונות הרמה", [{rateId: "missing", quantity: 1}], 0)).toThrow();
+  });
+  it("uses a pricebook rate by id when the document type does not match", () => {
+    const charge = calculateCharges(rates, "מסמך", [{rateId: "lifting-visual", quantity: 1, label: "מלגזה"}], 0);
+    expect(charge.lines[0]).toMatchObject({label: "מלגזה", unitCents: 12550});
+  });
+  it("keeps equipment descriptions when the same rate is used on several lines", () => {
+    const charge = calculateCharges(rates, "מכונות הרמה", [
+      {rateId: "lifting-visual", quantity: 1, label: "מגבה רכב עמודי נייד"},
+      {rateId: "lifting-visual", quantity: 1, label: "מגבה מספריים"},
+    ], 0);
+    expect(charge.lines.map((line) => line.label)).toEqual(["מגבה רכב עמודי נייד", "מגבה מספריים"]);
+    expect(charge.subtotalCents).toBe(25100);
   });
   it.each([0, -1, 1.5, NaN, 10001])("rejects quantity %s", quantity => {
     expect(() => calculateCharges(rates, "מכונות הרמה", [{rateId: "lifting-visual", quantity}], 0)).toThrow();
@@ -123,6 +135,35 @@ describe("payment request authorization and settlement", () => {
     expect(await response.json()).toMatchObject({subtotalCents: 90000, vatCents: 16200, totalCents: 106200});
   });
 
+  it("creates a standalone quote without a document or inspection", async () => {
+    mocks.collections.inspection_pricebooks.findOne.mockResolvedValue({
+      rates: [{id: "lifting-visual", reportType: "מכונות הרמה", section: "1", label: "בדיקה", unitCents: 10000}],
+    });
+    mocks.collections.payment_requests.findOne.mockResolvedValue(null);
+    const url = await endpoint();
+    const response = await fetch(`${url}/requests`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        requestKey: "22345678-1234-1234-1234-123456789abc",
+        documentKind: "quote",
+        standalone: true,
+        customer: {name: "לקוח עצמאי", email: "a@example.com"},
+        lines: [{rateId: "lifting-visual", quantity: 1, label: "בדיקה כללית"}],
+        vatBasisPoints: 1800,
+        dueDate: "2026-09-23",
+        notes: "",
+      }),
+    });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({
+      reportNumber: "הצעה",
+      sourceKind: "standalone",
+      customer: {name: "לקוח עצמאי", email: "a@example.com"},
+      subtotalCents: 10000,
+    });
+  });
+
   it("does not resend a completed email and rejects a changed recipient", async () => {
     const sendId = body.paymentKey;
     mocks.collections.payment_requests.findOne.mockResolvedValue({_id: requestId, status: "issued", documentId: new ObjectId().toString(), sendId, sendState: "sent", lastSentTo: "customer@example.com"});
@@ -140,6 +181,68 @@ describe("payment request authorization and settlement", () => {
     mocks.collections.payment_requests.findOne.mockResolvedValue(null);const url=await endpoint();
     expect((await fetch(`${url}/requests/${requestId}/pdf`)).status).toBe(404);
     expect(mocks.collections.payment_requests.findOne).toHaveBeenCalledWith({_id:requestId,user_id:userId});
+  });
+  it("updates an issued quote and regenerates the stored PDF", async () => {
+    const documentId = new ObjectId();
+    const issued = {
+      _id: requestId,
+      user_id: userId,
+      status: "issued",
+      documentKind: "quote",
+      number: "001",
+      documentId: documentId.toString(),
+      contractId: new ObjectId().toString(),
+      reportType: "מסמך",
+      customer: {name: "לקוח ישן", email: "old@example.com", registration: ""},
+      lines: [{rateId: "lifting-visual", quantity: 1, label: "בדיקה"}],
+      vatBasisPoints: 1800,
+      inlineRates: [],
+      notes: "",
+    };
+    const updated = {...issued, customer: {name: "לקוח מעודכן", email: "new@example.com", registration: ""}, notes: "עודכן"};
+    mocks.collections.payment_requests.findOne
+      .mockResolvedValueOnce(issued)
+      .mockResolvedValueOnce(updated);
+    mocks.collections.payment_requests.findOneAndUpdate.mockResolvedValue(updated);
+    mocks.collections.inspection_pricebooks.findOne.mockResolvedValue({
+      rates: [{id: "lifting-visual", reportType: "מכונות הרמה", section: "1", label: "בדיקה", unitCents: 10000}],
+    });
+    mocks.collections.documents.findOne.mockResolvedValue({_id: documentId, user_id: userId, file_path: "E:/data/old.pdf"});
+    const {renderHtmlPdf} = await import("../routes/printTemplates");
+    const url = await endpoint();
+    const response = await fetch(`${url}/requests/${requestId}`, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        customer: {name: "לקוח מעודכן", email: "new@example.com"},
+        notes: "עודכן",
+        dueDate: "2026-10-01",
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(renderHtmlPdf).toHaveBeenCalled();
+    expect(mocks.collections.payment_requests.findOneAndUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({$set: expect.objectContaining({
+        customer: {name: "לקוח מעודכן", email: "new@example.com", registration: ""},
+        notes: "עודכן",
+        dueDate: "2026-10-01",
+      })}),
+      {returnDocument: "after"},
+    );
+    expect(mocks.collections.documents.updateOne).toHaveBeenCalled();
+  });
+  it("rejects editing an issued payment request", async () => {
+    mocks.collections.payment_requests.findOne.mockResolvedValue({
+      _id: requestId, user_id: userId, status: "issued", documentKind: "payment_request",
+    });
+    const url = await endpoint();
+    const response = await fetch(`${url}/requests/${requestId}`, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({notes: "no"}),
+    });
+    expect(response.status).toBe(409);
   });
   it("returns a single owned quote", async () => {
     mocks.collections.payment_requests.findOne.mockResolvedValue({_id: requestId, user_id: userId, documentKind: "quote", number: "001"});

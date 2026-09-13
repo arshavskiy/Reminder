@@ -444,47 +444,18 @@
                           placeholder="ללא מסמך"
                       />
                     </div>
-                    <div v-if="billingDocumentKind" class="hm-field">
-                      <label>שיעור מע״מ באחוזים</label>
-                      <n-input-number v-model:value="billingVatPercent" :min="0" :max="100" :precision="2"/>
-                    </div>
-                    <div v-if="billingDocumentKind" class="hm-field">
-                      <label>בתוקף / לתשלום עד</label>
-                      <n-input v-model:value="billingDueDate" placeholder="YYYY-MM-DD"/>
-                    </div>
                     <div v-if="billingDocumentKind" class="hm-field hm-field--full">
-                      <label>סעיפי שירות</label>
-                      <div v-if="billingLoading" class="hm-muted">טוען מחירון…</div>
-                      <div v-for="rate in reportBillingRates" :key="rate.id" class="hm-billing-line">
-                        <n-checkbox
-                            :checked="(billingQuantities[rate.id] || 0) > 0"
-                            @update:checked="checked => billingQuantities[rate.id] = checked ? 1 : 0"
-                        />
-                        <n-input v-model:value="rate.section" placeholder="סעיף בדיקה" aria-label="סעיף בדיקה"/>
-                        <n-input v-model:value="rate.label" placeholder="תיאור השירות" aria-label="תיאור השירות"/>
-                        <n-input-number
-                            v-model:value="billingRateAmounts[rate.id]"
-                            :min="0"
-                            :precision="2"
-                            aria-label="מחיר יחידה"
-                        />
-                        <n-input-number
-                            v-if="(billingQuantities[rate.id] || 0) > 0"
-                            v-model:value="billingQuantities[rate.id]"
-                            :min="1"
-                            :max="10000"
-                            :precision="0"
-                            aria-label="כמות"
-                        />
-                        <button type="button" class="btn btn--ghost btn--xs" @click="removeBillingRate(rate.id)">הסר</button>
-                      </div>
-                      <button type="button" class="btn btn--ghost" @click="addBillingRate">הוספת סעיף</button>
+                      <QuoteBillingForm
+                          v-model:rates="billingRates"
+                          v-model:amounts="billingRateAmounts"
+                          v-model:quantities="billingQuantities"
+                          v-model:vat-percent="billingVatPercent"
+                          v-model:due-date="billingDueDate"
+                          :report-type="selectedReportType.contractType"
+                          :loading="billingLoading"
+                      />
                     </div>
                   </div>
-                  <div v-if="billingDocumentKind" class="hm-billing-total">
-                    סה״כ: {{ formatMoney(billingTotalCents) }}
-                  </div>
-                  <p v-if="billingDocumentKind" class="hm-muted">המסמך הוא הצעת מחיר בלבד. הוא אינו חשבונית או קבלה.</p>
                 </div>
                 <div v-else class="hm-section__card">
                   <p class="hm-muted">אפשר להפיק הצעת מחיר בעת יצירת תסקיר חדש.</p>
@@ -583,7 +554,7 @@
 <script lang="ts" setup>
 import {computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
-import {NCheckbox, NDatePicker, NDynamicTags, NIcon, NInput, NInputNumber, NModal, NSelect, NSpin, NTooltip, useMessage} from "naive-ui";
+import {NDatePicker, NDynamicTags, NIcon, NInput, NInputNumber, NModal, NSelect, NSpin, NTooltip, useMessage} from "naive-ui";
 import {
   AddCircleOutline,
   BusinessOutline,
@@ -605,6 +576,7 @@ import {useHydraulicCheckDraftStore} from "../../stores/hydraulicCheckDraft.js";
 import type {HydraulicCheckRequest} from "../../services/apiService.js";
 import {api} from "../../services/apiService.js";
 import {paymentService, type InspectionRate} from "../../services/paymentService.js";
+import QuoteBillingForm from "../QuoteBillingForm.vue";
 import {
   confirmActionButtonProps,
   CONFIRM_DIALOG_CLASS,
@@ -778,41 +750,10 @@ const reportBillingRates = computed(() =>
 const selectedBillingLines = computed(() => reportBillingRates.value
     .filter((rate) => (billingQuantities.value[rate.id] || 0) > 0)
     .map((rate) => ({rateId: rate.id, quantity: billingQuantities.value[rate.id]})));
-const billingSubtotalCents = computed(() => reportBillingRates.value.reduce(
-    (sum, rate) => sum + Math.round((billingRateAmounts.value[rate.id] || 0) * 100) * (billingQuantities.value[rate.id] || 0),
-    0,
-));
-const billingTotalCents = computed(() => billingSubtotalCents.value + Math.round(
-    billingSubtotalCents.value * Math.round((billingVatPercent.value || 0) * 100) / 10000,
-));
-
-function formatMoney(value: number): string {
-  return (value / 100).toLocaleString("he-IL", {style: "currency", currency: "ILS"});
-}
-
 function defaultBillingDueDate(): string {
   const date = new Date();
   date.setDate(date.getDate() + 14);
   return formatLocalDate(date.getTime());
-}
-
-function addBillingRate() {
-  const rate: InspectionRate = {
-    id: crypto.randomUUID(),
-    reportType: selectedReportType.value.contractType,
-    section: "",
-    label: "",
-    unitCents: 0,
-  };
-  billingRates.value.push(rate);
-  billingRateAmounts.value[rate.id] = 0;
-  billingQuantities.value[rate.id] = 1;
-}
-
-function removeBillingRate(rateId: string) {
-  billingRates.value = billingRates.value.filter((rate) => rate.id !== rateId);
-  delete billingRateAmounts.value[rateId];
-  delete billingQuantities.value[rateId];
 }
 
 function automaticBillingRateId(equipmentId: string): string {

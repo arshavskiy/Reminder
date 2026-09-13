@@ -33,13 +33,14 @@ export function validateRates(input: unknown): InspectionRate[] {
 export function calculateCharges(rates: InspectionRate[], reportType: string, selections: unknown, vatBasisPoints: unknown) {
   if (!Array.isArray(selections) || !selections.length || selections.length > 100) throw new Error("יש לבחור לפחות סעיף חיוב אחד");
   if (!Number.isSafeInteger(vatBasisPoints) || Number(vatBasisPoints) < 0 || Number(vatBasisPoints) > 10000) throw new Error("שיעור מס לא תקין");
-  const seen = new Set<string>();
   const lines: ChargeLine[] = selections.map(selection => {
-    const rate = rates.find(item => item.id === selection?.rateId && item.reportType === reportType);
-    if (!rate || seen.has(rate.id)) throw new Error("סעיף לא קיים, כפול או לא מתאים לסוג התסקיר");
-    seen.add(rate.id);
+    const rate = rates.find(item => item.id === selection?.rateId && item.reportType === reportType)
+      ?? rates.find(item => item.id === selection?.rateId);
+    if (!rate) throw new Error("סעיף לא קיים או לא מתאים לסוג התסקיר");
     if (!Number.isSafeInteger(selection.quantity) || selection.quantity < 1 || selection.quantity > 10000) throw new Error("כמות לא תקינה");
-    return {rateId: rate.id, section: rate.section, label: rate.label, quantity: selection.quantity, unitCents: rate.unitCents, totalCents: rate.unitCents * selection.quantity};
+    const customLabel = typeof selection.label === "string" ? selection.label.trim() : "";
+    const label = customLabel ? customLabel.slice(0, 200) : rate.label;
+    return {rateId: rate.id, section: rate.section, label, quantity: selection.quantity, unitCents: rate.unitCents, totalCents: rate.unitCents * selection.quantity};
   });
   const subtotalCents = lines.reduce((sum, item) => sum + item.totalCents, 0);
   if (!Number.isSafeInteger(subtotalCents) || subtotalCents > 1000000000) throw new Error("סכום דרישה גבוה מדי");

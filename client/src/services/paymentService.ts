@@ -4,7 +4,7 @@ export interface InspectionRate {
   section: string;
   label: string;
   unitCents: number;
-  source?: "equipment";
+  source?: "equipment" | "quote";
   equipmentId?: string;
   automaticSection?: string;
   automaticLabel?: string;
@@ -15,7 +15,8 @@ export interface PaymentRequest {
   customer: {name: string; email: string; registration?: string}; dueDate: string; totalCents: number; subtotalCents?: number; vatCents?: number; vatBasisPoints?: number; paidCents: number;
   issuer?: {name?: string; subtitle?: string; registration?: string; email?: string; phone?: string; address?: string; logoUrl?: string};
   lines?: {rateId?: string; section?: string; label?: string; quantity?: number; unitCents?: number; totalCents?: number}[];
-  notes?: string; createdAt?: string; issuedAt?: string; lastSentTo?: string; lastSendAt?: string;
+  notes?: string; createdAt?: string; updatedAt?: string; issuedAt?: string; lastSentTo?: string; lastSendAt?: string;
+  sourceDocumentId?: string; sourceKind?: string;
   storage?: {local: string; object: string; drive: string}; sendState?: string;
   payments: {amountCents: number; method: string; paidDate: string; receiptStatus: string}[];
 }
@@ -41,5 +42,5 @@ export const paymentService = {
   send: (id: string, email: string, sendId: string) => request(`/requests/${id}/send`, "POST", {email, sendId}),
   delete: (id: string) => request<{ok: boolean}>(`/requests/${id}`, "DELETE"),
   payment: (id: string, body: unknown) => request<PaymentRequest>(`/requests/${id}/payments`, "POST", body),
-  pdf: (id: string) => `${base}/requests/${id}/pdf`,
+  pdf: (id: string, version?: string | number) => `${base}/requests/${id}/pdf${version != null && version !== "" ? `?v=${encodeURIComponent(String(version))}` : ""}`,
 };
