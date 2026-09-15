@@ -323,7 +323,7 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, onMounted, ref} from "vue";
+import {computed, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {NButton, NIcon, NModal, NPopover, useMessage} from "naive-ui";
 import {CalendarOutline} from "@vicons/ionicons5";
@@ -366,7 +366,10 @@ function saveCursor(d: Date) {
   try { localStorage.setItem(CURSOR_KEY, d.toISOString()); } catch {}
 }
 const cursor = ref(loadCursor());
-const activeFilter = ref<CalendarFilterKey>("all");
+const activeFilter = ref<CalendarFilterKey>(props.testsOnly ? "expiries" : "all");
+watch(() => props.testsOnly, (testsOnly) => {
+  activeFilter.value = testsOnly ? "expiries" : "all";
+});
 const sendingVisible = ref(false);
 const showSendVisibleConfirm = ref(false);
 

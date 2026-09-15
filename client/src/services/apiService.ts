@@ -677,7 +677,7 @@ export const api = {
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
     upload: async (
       files: File[],
-      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean },
+      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean; skipCloudStorage?: boolean },
       templateId?: string | number
     ) => {
       const fd = new FormData();
@@ -687,6 +687,7 @@ export const api = {
       if (options?.doEntities === false) params.set("skipEntities", "true");
       if (options?.doReminders === false) params.set("skipReminders", "true");
       if (options?.reprocessDuplicates === true) params.set("reprocessDuplicates", "true");
+      if (options?.skipCloudStorage === true) params.set("skipCloudStorage", "true");
       if (templateId) params.set("templateId", String(templateId));
       const qs = params.toString();
       const url = `${BASE}/documents/upload${qs ? "?" + qs : ""}`;
@@ -703,7 +704,7 @@ export const api = {
     },
     uploadOne: async (
       file: File,
-      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean },
+      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean; skipCloudStorage?: boolean },
       templateId?: string | number
     ): Promise<{ id: string; duplicate: boolean }> => {
       const fd = new FormData();
@@ -713,6 +714,7 @@ export const api = {
       if (options?.doEntities === false) params.set("skipEntities", "true");
       if (options?.doReminders === false) params.set("skipReminders", "true");
       if (options?.reprocessDuplicates === true) params.set("reprocessDuplicates", "true");
+      if (options?.skipCloudStorage === true) params.set("skipCloudStorage", "true");
       if (templateId) params.set("templateId", String(templateId));
       const qs = params.toString();
       const url = `${BASE}/documents/upload${qs ? "?" + qs : ""}`;

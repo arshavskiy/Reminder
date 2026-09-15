@@ -57,6 +57,7 @@ export interface PipelineOptions {
   };
   quotaCategory?: DocumentImportQuotaCategory;
   skipQuotaCheck?: boolean;
+  skipCloudStorage?: boolean; // never upload to S3/Drive regardless of the account's storage settings
 }
 
 type DocumentProcessingJobStatus = "queued" | "running" | "completed" | "failed" | "retry_wait";
@@ -326,7 +327,7 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   // Resolved before the upload because it decides both whether the file goes to
   // cloud storage and what document_kind the row is created with.
   const intendedKind = await intendedDocumentKind(pipeline);
-  const cloudStorageAllowed = await userAllowsCloudStorage(userId, intendedKind);
+  const cloudStorageAllowed = !pipeline?.skipCloudStorage && await userAllowsCloudStorage(userId, intendedKind);
   if (spacesEnabled() && cloudStorageAllowed) {
     try {
       spacesKey = buildStorageKey(userId, pipeline?.storageKeyPrefix, fileHash, ext);

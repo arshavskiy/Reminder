@@ -15,52 +15,29 @@
         "
         class="dash__intake"
       >
-        <button
-          v-if="hasFeature(FEATURES.pages.contracts)"
-          class="dash__new-contract"
-          type="button"
-          @click="hydraulicModalRef?.open()"
-        >
-          <span class="dash__new-contract__top">
-            <n-icon class="dash__new-contract__icon" :component="AddOutline" :size="22" />
-            <span class="dash__new-contract__label">תסקיר חדש</span>
-          </span>
-          <span class="dash__new-contract__hint">צור תסקיר או חוזה ידני</span>
-        </button>
-        <!--        <button-->
-        <!--          v-if="hasFeature(FEATURES.pages.contracts)"-->
-        <!--          class="dash__new-contract dash__new-contract&#45;&#45;gmail"-->
-        <!--          type="button"-->
-        <!--          :disabled="gmailInspectionLoading"-->
-        <!--          @click="openGmailInspectionImport"-->
-        <!--        >-->
-        <!--          <span class="dash__new-contract__top">-->
-        <!--            <GmailLogo :size="22" />-->
-        <!--            <span class="dash__new-contract__label">ייבוא תסקיר בדיקה</span>-->
-        <!--          </span>-->
-        <!--          <span class="dash__new-contract__hint">-->
-        <!--            {{ gmailInspectionLoading ? "מייבא מ-Gmail…" : "חפש וייבא תסקירים מ-Gmail" }}-->
-        <!--          </span>-->
-        <!--        </button>-->
         <DocumentDropStrip v-if="documentImportAllowed" class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
-        <ReminderTableImport
-          v-if="hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar)"
-          variant="card"
-          class="dash__import"
-          @imported="onTableImported"
-        />
-<!--        <button-->
-<!--            v-if="hasFeature(FEATURES.pages.contracts)"-->
-<!--            class="dash__new-contract"-->
-<!--            type="button"-->
-<!--            @click="showQuoteCreateModal = true"-->
-<!--        >-->
-<!--          <span class="dash__new-contract__top">-->
-<!--            <span class="dash__new-contract__icon">＋</span>-->
-<!--            <span class="dash__new-contract__label">הצעת מחיר</span>-->
-<!--          </span>-->
-<!--          <span class="dash__new-contract__hint">צור הצעת מחיר חדשה</span>-->
-<!--        </button>-->
+        <div class="dash__intake-actions">
+          <button
+            v-if="hasFeature(FEATURES.pages.contracts)"
+            class="rbtn-sm"
+            type="button"
+            @click="hydraulicModalRef?.open()"
+          >
+            <n-icon :component="AddOutline" class="btn-icon" />
+            תסקיר חדש
+          </button>
+          <ReminderTableImport
+            v-if="hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar)"
+            @imported="onTableImported"
+          >
+            <template #trigger="{ open }">
+              <button class="rbtn-sm" type="button" @click="open">
+                <n-icon :component="GridOutline" class="btn-icon" />
+                ייבוא תזכורות Excel / CSV
+              </button>
+            </template>
+          </ReminderTableImport>
+        </div>
       </div>
 
       <!-- Quick stats — small chips line, easy to scan -->
@@ -238,6 +215,7 @@ import {
   CloudUploadOutline,
   ConstructOutline,
   ExtensionPuzzleOutline,
+  GridOutline,
   MailOutline,
   PeopleOutline,
   SettingsOutline,
@@ -675,8 +653,8 @@ const data_cards = computed(() =>
 .dash__intake {
   display: flex;
   align-items: stretch;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 /*.dash__drop {
   flex: 1 1 auto;
@@ -687,102 +665,60 @@ const data_cards = computed(() =>
    row so the dropzone height matches the new-contract button exactly. */
 .dash__drop :deep(> div),
 .dash__intake :deep(.drop-strip) { margin-bottom: 0; }
-.dash__drop,
-.dash__import {
+.dash__drop {
   flex: 1 1 0;
   min-width: 0;
   display: flex;
 }
 .dash__drop :deep(.drop-strip) {
   flex: 1;
-  min-height: 92px;
+  min-height: 60px;
   margin: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   box-sizing: border-box;
 }
 .dash__drop :deep(.drop-strip__copy strong) {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
 }
 .dash__drop :deep(.drop-strip__copy span) {
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.3;
 }
-.dash__new-contract {
-  flex: 1 1 0;
-  min-width: 0;
+.dash__intake-actions {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 8px;
   justify-content: center;
+}
+.rbtn-sm {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  min-height: 92px;
-  padding: 16px 14px;
-  border: 1px solid color-mix(in srgb, var(--brand-color) 40%, var(--border-color));
-  border-radius: 14px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   background: var(--bg-card);
   color: var(--text-primary);
   cursor: pointer;
-  transition: background var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
-}
-.dash__new-contract:hover {
-  background: var(--bg-hover);
-  border-color: color-mix(in srgb, var(--brand-color) 35%, var(--border-color));
-  box-shadow: var(--shadow-sm);
-}
-.dash__new-contract:active { transform: scale(0.98); }
-.dash__new-contract:disabled {
-  cursor: wait;
-  opacity: 0.72;
-}
-.dash__new-contract--gmail {
-  border-color: color-mix(in srgb, #EA4335 28%, var(--border-color));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, #EA4335 6%, var(--bg-card)) 0%,
-      var(--bg-card) 55%
-    );
-}
-.dash__new-contract--gmail:hover {
-  border-color: color-mix(in srgb, #EA4335 45%, var(--border-color));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, #EA4335 10%, var(--bg-card)) 0%,
-      var(--bg-hover) 60%
-    );
-}
-.dash__new-contract__top {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-.dash__new-contract__icon {
-  color: var(--brand-color);
-}
-.dash__new-contract__label {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: center;
-}
-.dash__new-contract__hint {
+  font-family: inherit;
   font-size: 12px;
-  color: var(--text-secondary);
-  text-align: center;
-  line-height: 1.35;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
+.rbtn-sm:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.rbtn-sm:active { transform: scale(0.97); }
+.rbtn-sm :deep(.n-icon) { color: var(--brand-color); }
 
 @media (max-width: 720px) {
   .dash__intake {
     flex-direction: column;
-  }
-
-  .dash__new-contract {
-    width: 100%;
   }
 
   .dash__drop {
@@ -794,6 +730,11 @@ const data_cards = computed(() =>
   .dash__drop :deep(.drop-strip) {
     width: 100%;
     box-sizing: border-box;
+  }
+
+  .dash__intake-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 }
 

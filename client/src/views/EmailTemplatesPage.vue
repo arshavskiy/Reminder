@@ -14,7 +14,7 @@
             {{ docTplName(t.doc_template_id) || "לכל סוגי המסמכים" }}
           </p>
           <p v-if="t.reminder_category" style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 0">
-            קטגוריה: {{ t.reminder_category }}
+            קטגוריה: {{ categoryLabel(t.reminder_category) }}
           </p>
           <p style="font-size: 12px; color: var(--text-muted); margin: 8px 0 0">{{ t.subject }}</p>
           <template #footer>
@@ -295,6 +295,7 @@ import {api} from "../services/apiService.js";
 import type {DocTemplate, EmailTemplate} from "@shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useConfirm} from "../composables/useConfirm.js";
+import {categoryLabel} from "../utils/reminderCategoryLabels.js";
 
 const templates = ref<EmailTemplate[]>([]);
 const docTemplates = ref<DocTemplate[]>([]);
@@ -379,7 +380,7 @@ function docTplName(id: string | null): string {
 }
 
 const categoryOptions = computed(() =>
-  reminderCategories.value.map((c) => ({ label: c.name, value: c.name }))
+  reminderCategories.value.map((c) => ({ label: categoryLabel(c.name), value: c.name }))
 );
 
 const showSendTest = ref(false);

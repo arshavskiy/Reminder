@@ -7,10 +7,12 @@
     </span>
     <span class="table-import-card__hint">הוסף תזכורות מקובץ</span>
   </button>
-  <n-button v-else @click="show = true">
-    <template #icon><n-icon :component="GridOutline" /></template>
-    ייבוא Excel / CSV
-  </n-button>
+  <slot v-else name="trigger" :open="() => (show = true)">
+    <button type="button" class="btn btn--ghost" @click="show = true">
+      <n-icon :component="GridOutline" class="btn-icon" />
+      ייבוא Excel / CSV
+    </button>
+  </slot>
   <n-modal v-model:show="show" preset="card" title="ייבוא תזכורות מטבלה" :style="{width: '900px', maxWidth: 'calc(100vw - 32px)'}" :mask-closable="!busy" :closable="!busy">
     <div class="table-import" dir="rtl">
       <p class="table-import__intro">הוסיפו לקוחות, תאריכי תוקף ותזכורות מתוך קובץ אחד. בדקו את הנתונים לפני השמירה.</p>
@@ -141,12 +143,12 @@ async function confirm() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 92px;
+  gap: 4px;
+  min-height: 60px;
   min-width: 0;
-  padding: 16px 14px;
+  padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--brand-color) 40%, var(--border-color));
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--bg-card);
   color: var(--text-primary);
   cursor: pointer;
@@ -166,16 +168,16 @@ async function confirm() {
 }
 .table-import-card__top :deep(.n-icon) { color: var(--brand-color); }
 .table-import-card__label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
 }
 .table-import-card__hint {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
   text-align: center;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 .table-import { display: grid; gap: 20px; color: var(--text-primary); font-family: var(--font-ui); }
 .table-import p { margin: 0; }

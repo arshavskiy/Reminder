@@ -13,6 +13,14 @@
         <button class="rbtn rbtn--primary" :disabled="loadingEmailTemplates" @click="openCreate">
           + תזכורת חדשה
         </button>
+        <ReminderTableImport @imported="onTableImported">
+          <template #trigger="{ open }">
+            <button class="rbtn rbtn--ghost" type="button" @click="open">
+              <n-icon :component="GridOutline" class="btn-icon"/>
+              ייבוא תזכורות מ-Excel / CSV
+            </button>
+          </template>
+        </ReminderTableImport>
         <div class="bulk-action-anchor">
           <button
             class="rbtn rbtn--ghost"
@@ -142,7 +150,7 @@
             type="button"
             @click="selectCategory(c.name)"
           >
-            {{ c.name }}
+            {{ categoryLabel(c.name) }}
             <span>{{ c.count }}</span>
           </button>
         </aside>
@@ -201,13 +209,14 @@
     <!-- Create reminder modal -->
     <n-modal v-model:show="showCreate" title="תזכורת חדשה" :show-icon="false" preset="dialog" style="width: 520px; max-width: 95vw">
       <n-form label-placement="top" v-if="newReminder">
-        <n-form-item label="לקוח" required>
+        <n-form-item label="לקוח (אופציונלי)">
           <n-select
             v-model:value="newReminder.client_id"
             :options="clientOptions"
             :virtual-scroll="false"
             placeholder="בחר לקוח..."
             filterable
+            clearable
             @update:value="onPickClient"
           />
         </n-form-item>
@@ -236,7 +245,7 @@
         <n-form-item v-else label="תאריך תזכורת מותאם אישית" required>
           <n-date-picker v-model:value="reminderCustomDateMs" type="date" style="width: 100%" />
         </n-form-item>
-        <n-form-item label="אימייל נמען" required>
+        <n-form-item :label="newReminder.client_id ? 'אימייל נמען' : 'אימייל נמען (אופציונלי — תזכורת אישית)'" :required="Boolean(newReminder.client_id)">
           <n-input
             v-model:value="newReminder.email_to"
             :placeholder="emailPlaceholder"
@@ -251,6 +260,33 @@
             placeholder="ברירת מחדל"
             clearable
           />
+        </n-form-item>
+        <n-form-item label="קטגוריה (אופציונלי)">
+          <n-select
+            v-model:value="newReminder.category"
+            :options="newReminderCategoryOptions"
+            placeholder="ללא קטגוריה"
+            clearable
+            filterable
+            tag
+            :virtual-scroll="false"
+          />
+        </n-form-item>
+        <n-form-item label="קובץ מצורף (אופציונלי)">
+          <n-select
+            v-model:value="attachMode"
+            :options="[
+              { label: 'ללא קובץ', value: 'none' },
+              { label: 'הפניה בלבד (שם קובץ/מספר)', value: 'reference' },
+              { label: 'העלאת קובץ', value: 'upload' },
+            ]"
+          />
+        </n-form-item>
+        <n-form-item v-if="attachMode === 'reference'" label="שם קובץ / מספר אסמכתא">
+          <n-input v-model:value="attachReference" placeholder="לדוגמה: תסקיר-2027-01.pdf" />
+        </n-form-item>
+        <n-form-item v-if="attachMode === 'upload'" label="בחירת קובץ">
+          <input ref="attachFileInput" type="file" @change="onAttachFileChange" />
         </n-form-item>
         <n-form-item label="תוכן">
           <n-input v-model:value="newReminder.body" type="textarea" :rows="3" />
@@ -305,14 +341,16 @@
 import {computed, h, onMounted, ref, type Component} from "vue";
 import {useRouter} from "vue-router";
 import {NAlert, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NSelect, useMessage,} from "naive-ui";
-import {CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
+import {CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, GridOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {api} from "../services/apiService.js";
+import {categoryLabel} from "../utils/reminderCategoryLabels.js";
 import {useConfirm} from "../composables/useConfirm.js";
+import ReminderTableImport from "../components/ReminderTableImport.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import {FEATURES} from "../shared/features.js";
@@ -394,16 +432,29 @@ const newReminder = ref<{
   email_to: string;
   body: string;
   email_template_id: string | null;
+  category: string | null;
 } | null>(null);
 const newReminderContractId = ref<string | null>(null);
 const newReminderContracts = ref<ContractWithClient[]>([]);
 const loadingContracts = ref(false);
+type AttachMode = "none" | "reference" | "upload";
+const attachMode = ref<AttachMode>("none");
+const attachReference = ref("");
+const attachFile = ref<File | null>(null);
+const attachFileInput = ref<HTMLInputElement | null>(null);
+function onAttachFileChange(event: Event) {
+  attachFile.value = (event.target as HTMLInputElement).files?.[0] ?? null;
+}
 
 const clientOptions = computed(() =>
   clientsStore.rows.map((c: Client) => ({
     label: c.email ? `${c.display_name}  ·  ${c.email}` : c.display_name,
     value: c.id,
   }))
+);
+
+const newReminderCategoryOptions = computed(() =>
+  reminderCategories.value.map((c) => ({ label: categoryLabel(c.name), value: c.name }))
 );
 
 const emailTemplateOptions = computed(() =>
@@ -551,6 +602,11 @@ function selectCategory(name: string | null) {
   load();
 }
 
+function onTableImported() {
+  loadReminderCategories();
+  load();
+}
+
 function toggleBulkMode() {
   bulkMode.value = !bulkMode.value;
   if (!bulkMode.value) selectedReminderKeys.value = [];
@@ -620,9 +676,11 @@ async function openCreate() {
   newReminder.value = {
     client_id: null,
     title: "",
-    email_to: "",
+    // No client picked yet — treat this as a self reminder by default.
+    email_to: testEmail.value ?? "",
     body: "",
     email_template_id: canSelectEmailTemplates.value ? pickEmailTemplate()?.id ?? null : null,
+    category: null,
   };
   newReminderContractId.value = null;
   newReminderContracts.value = [];
@@ -630,12 +688,23 @@ async function openCreate() {
   reminderDateMode.value = "months";
   reminderCustomDateMs.value = null;
   reminderIntervalMonths.value = 4;
+  attachMode.value = "none";
+  attachReference.value = "";
+  attachFile.value = null;
   showCreate.value = true;
 }
 
 // When the user picks a client, fetch their contracts and auto-fill email/title/body.
 async function onPickClient(clientId: string | null) {
   if (!newReminder.value) return;
+  if (!clientId) {
+    // No client selected — this is a self reminder, default the recipient to
+    // the account's own address instead of leaving it blank.
+    if (testEmail.value && !newReminder.value.email_to.trim()) newReminder.value.email_to = testEmail.value;
+    newReminderContractId.value = null;
+    newReminderContracts.value = [];
+    return;
+  }
   const c = clientsStore.rows.find((x) => x.id === clientId);
   if (!c) return;
   if (c.email) newReminder.value.email_to = c.email;
@@ -739,10 +808,6 @@ function normalizeEmailTo(input: string): string | null {
 
 async function doCreate() {
   if (!newReminder.value) return;
-  if (!newReminder.value.client_id) {
-    message.warning("יש לבחור לקוח");
-    return;
-  }
   if (!newReminder.value.title.trim()) {
     message.warning("יש להזין כותרת ותאריך");
     return;
@@ -751,8 +816,12 @@ async function doCreate() {
     message.warning("יש לבחור תאריך תזכורת");
     return;
   }
-  if (!newReminder.value.email_to.trim()) {
+  if (newReminder.value.client_id && !newReminder.value.email_to.trim()) {
     message.warning("יש להזין כתובת אימייל");
+    return;
+  }
+  if (attachMode.value === "upload" && !attachFile.value) {
+    message.warning("יש לבחור קובץ לצירוף");
     return;
   }
   creating.value = true;
@@ -763,11 +832,20 @@ async function doCreate() {
     const triggerDate = msToLocalDateStr(triggerDateMsValue);
     const contract = selectedContract();
     const equipment = firstContractEquipment(contract);
+    let attachedDocumentId: string | null = contract?.document_id ?? null;
+    if (attachMode.value === "upload" && attachFile.value) {
+      const result = await api.documents.uploadOne(attachFile.value, {
+        doAi: false, doEntities: false, doReminders: false, skipCloudStorage: true,
+      });
+      attachedDocumentId = result.id;
+    }
     await api.reminders.create({
       source_type: contract ? "contract_expiry" : "manual",
       source_id: contract?.id ?? null,
       client_id: newReminder.value.client_id,
-      document_id: contract?.document_id ?? null,
+      document_id: attachedDocumentId,
+      document_reference: attachMode.value === "reference" ? attachReference.value.trim() || null : null,
+      reminder_category: newReminder.value.category,
       trigger_date: triggerDate,
       advance_days: 0,
       title: newReminder.value.title,
@@ -1092,7 +1170,7 @@ const baseColumns = [
     key: "reminder_category",
     width: 140,
     minWidth: 140,
-    render: (row: ReminderWithContext) => h("span", row.reminder_category || row.contract_type || "—"),
+    render: (row: ReminderWithContext) => h("span", categoryLabel(row.reminder_category || row.contract_type) || "—"),
   },
   {
     title: "אימייל",

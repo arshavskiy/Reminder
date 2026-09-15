@@ -48,6 +48,8 @@
     "inspector-leads:create-trial-users:apply": "tsx src/scripts/createTrialUsersFromInspectorLeads.ts --apply",
     "inspection-type:backfill": "tsx src/scripts/backfillInspectionType.ts",
     "inspection-type:backfill:apply": "tsx src/scripts/backfillInspectionType.ts --apply",
+    "reminder-category-split:backfill": "tsx src/scripts/backfillReminderCategorySplit.ts",
+    "reminder-category-split:backfill:apply": "tsx src/scripts/backfillReminderCategorySplit.ts --apply",
     "templates:sync-prod": "tsx src/scripts/syncEmailTemplateToProduction.ts --apply",
     "templates:sync-prod:dry": "tsx src/scripts/syncEmailTemplateToProduction.ts",
     "gmail:seed-search-providers": "tsx src/scripts/seedGmailSearchProviders.ts",

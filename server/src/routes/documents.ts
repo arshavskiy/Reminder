@@ -383,6 +383,7 @@ export function registerDocumentRoutes(app: express.Application) {
       const skipAi       = req.query.skipAi       === "true";
       const skipEntities = req.query.skipEntities === "true";
       const skipReminders = req.query.skipReminders === "true";
+      const skipCloudStorage = req.query.skipCloudStorage === "true";
       const reprocessDuplicates = req.query.reprocessDuplicates === "true";
         const templateId = req.query.templateId as string | undefined;
         const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
@@ -391,6 +392,7 @@ export function registerDocumentRoutes(app: express.Application) {
           skipAi,
           skipEntities,
           skipReminders,
+          skipCloudStorage,
           templateId: templateId || undefined,
           reprocessDuplicate: reprocessDuplicates,
             quotaCategory,

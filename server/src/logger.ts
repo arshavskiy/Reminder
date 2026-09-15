@@ -168,7 +168,8 @@ export function requestLogger(req: express.Request, res: express.Response, next:
   const start = Date.now();
   res.on("finish", () => {
     const status = res.statusCode;
-    const level: LogLevel = status >= 500 ? "error" : status >= 400 ? "warn" : "info";
+    if (status < 400) return; // only log client/server errors — success responses are routine noise
+    const level: LogLevel = status >= 500 ? "error" : "warn";
     logger[level]("http_request", {
       method: req.method,
       path: req.path,

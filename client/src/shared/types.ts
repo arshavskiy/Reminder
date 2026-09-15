@@ -345,6 +345,7 @@ export interface Reminder {
   source_id: number | null;
   client_id: number | null;
   document_id: number | null;
+  document_reference?: string | null;
   trigger_date: string;
   advance_days: number;
   title: string;

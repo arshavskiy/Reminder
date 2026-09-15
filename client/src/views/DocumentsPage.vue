@@ -1003,7 +1003,7 @@ const filterInspectionType = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
 const statusFilter = ref<DocumentStatusFilter>(initialDocumentFilter());
 type DocumentSortKey = "file" | "date" | "import" | "client" | "number";
-const documentSortBy = ref<DocumentSortKey>("date");
+const documentSortBy = ref<DocumentSortKey>("import");
 const documentSortDir = ref<"asc" | "desc">("desc");
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {

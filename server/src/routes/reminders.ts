@@ -50,9 +50,18 @@ function formatIsoDateOnly(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-async function resolveEmailTemplateId(value: unknown, userId?: string): Promise<string | null> {
+async function resolveEmailTemplateId(value: unknown, userId?: string, category?: string | null): Promise<string | null> {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  // A category-bound template outranks the user's personal default, matching
+  // the table-import flow's precedence.
+  if (category) {
+    const bound = await col("email_templates").findOne(
+      { reminder_category: category },
+      { sort: { is_default: -1, _id: 1 } }
+    ) as any;
+    if (bound) return String(bound._id);
+  }
   // Check user's default template preference
   if (userId) {
     const userSettings = await col("user_settings").findOne({ user_id: userId }) as any;
@@ -407,13 +416,19 @@ export function registerReminderRoutes(app: express.Application) {
 
     const body = req.body as Record<string, unknown>;
     const now = new Date();
-    const emailTemplateId = await resolveEmailTemplateId(body.email_template_id, userId);
+    const reminderCategory = typeof body.reminder_category === "string" && body.reminder_category.trim()
+      ? body.reminder_category.trim()
+      : null;
+    const emailTemplateId = await resolveEmailTemplateId(body.email_template_id, userId, reminderCategory);
     const doc = {
       user_id: userId,
       source_type: body.source_type ?? "manual",
       source_id: body.source_id ?? null,
       client_id: body.client_id ?? null,
       document_id: body.document_id ?? null,
+      document_reference: typeof body.document_reference === "string" && body.document_reference.trim()
+        ? body.document_reference.trim()
+        : null,
       trigger_date: body.trigger_date,
       advance_days: body.advance_days ?? 0,
       title: body.title,
@@ -421,6 +436,7 @@ export function registerReminderRoutes(app: express.Application) {
       email_to: body.email_to ?? null,
       email_template_id: emailTemplateId,
       status: "pending",
+      reminder_category: reminderCategory,
       client_company: body.client_company ?? body.company_name ?? body.client_name ?? null,
       client_name: body.client_name ?? null,
       contact_person: body.contact_person ?? null,

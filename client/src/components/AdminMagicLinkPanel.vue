@@ -102,6 +102,10 @@
       <p v-if="editingUserId" class="magic-form__edit-hint">
         Editing user <code>{{ editingUserId }}</code>
       </p>
+      <p v-if="loadedUserLoginInfo" class="magic-form__edit-hint">
+        Last login: {{ formatLoginTimestamp(loadedUserLoginInfo.last_login_at) }}
+        <template v-if="loadedUserLoginInfo.created_at"> · Created: {{ formatLoginTimestamp(loadedUserLoginInfo.created_at) }}</template>
+      </p>
     </n-form>
 
     <div v-if="result" class="magic-result">
@@ -112,6 +116,7 @@
         <span class="magic-result__meta">
           {{ identityLabel(result.user) }} · {{ result.user?.plan }} · {{ result.user?.role }}
           <template v-if="result.expiresInMinutes"> · expires in {{ result.expiresInMinutes }} min</template>
+          · last login: {{ formatLoginTimestamp(result.user?.last_login_at ?? null) }}
         </span>
       </div>
 
@@ -131,14 +136,31 @@
         </n-button>
       </div>
     </div>
+
+    <div class="magic-panel__users">
+      <div class="magic-panel__users-head">
+        <h3 class="magic-panel__users-title">All users — last login</h3>
+        <n-button size="small" secondary :loading="loadingUsers" @click="loadAllUsers">Refresh</n-button>
+      </div>
+      <n-data-table
+        :columns="userListColumns"
+        :data="allUsers"
+        :loading="loadingUsers"
+        :pagination="{ pageSize: 25 }"
+        :row-key="(u: any) => u.id"
+        :row-props="userRowProps"
+        size="small"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, h, onMounted, reactive, ref } from "vue";
 import {
   NButton,
   NCheckbox,
+  NDataTable,
   NForm,
   NFormItem,
   NIcon,
@@ -188,6 +210,9 @@ function emptyForm() {
 
 const form = reactive(emptyForm());
 const editingUserId = ref<string | null>(null);
+const loadedUserLoginInfo = ref<{ last_login_at: string | null; created_at: string | null } | null>(null);
+const allUsers = ref<any[]>([]);
+const loadingUsers = ref(false);
 const busy = ref(false);
 const result = ref<{
   isNewUser: boolean;
@@ -226,6 +251,112 @@ function identityLabel(user: any) {
   return user?.email || user?.username || user?.id || "—";
 }
 
+function formatLoginTimestamp(value: string | null): string {
+  if (!value) return "never";
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString() : "never";
+}
+
+// "Online" is a heuristic, not a fact — there is no logout timestamp or live
+// session tracking, only last_login_at. A user counts as recently active if
+// they signed in within this window; nothing here proves they're still there.
+const RECENTLY_ACTIVE_MS = 15 * 60 * 1000;
+
+function minutesSinceLogin(value: string | null): number | null {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return null;
+  return (Date.now() - time) / 60000;
+}
+
+function isRecentlyActive(value: string | null): boolean {
+  const minutes = minutesSinceLogin(value);
+  return minutes !== null && minutes * 60000 <= RECENTLY_ACTIVE_MS;
+}
+
+function formatRelativeActivity(value: string | null): string {
+  const minutes = minutesSinceLogin(value);
+  if (minutes === null) return "never logged in";
+  if (minutes < 1) return "active now";
+  if (minutes < 60) return `active ${Math.round(minutes)}m ago`;
+  const hours = minutes / 60;
+  if (hours < 24) return `active ${Math.round(hours)}h ago`;
+  const days = hours / 24;
+  return `active ${Math.round(days)}d ago`;
+}
+
+function userRowProps(row: any) {
+  return isRecentlyActive(row.last_login_at ?? null)
+    ? { class: "admin-user-row--online" }
+    : {};
+}
+
+async function loadAllUsers() {
+  loadingUsers.value = true;
+  try {
+    allUsers.value = await api.admin.listUsers();
+  } catch (err: any) {
+    message.error(err?.message ?? "Failed to load users");
+  } finally {
+    loadingUsers.value = false;
+  }
+}
+
+function loadUserFromList(user: any) {
+  applyUser(user);
+  message.info(`Loaded ${identityLabel(user)} into the form above`);
+}
+
+function nullableTimeSort(a: string | null | undefined, b: string | null | undefined): number {
+  const at = a ? new Date(a).getTime() : -Infinity;
+  const bt = b ? new Date(b).getTime() : -Infinity;
+  return at - bt;
+}
+
+const userListColumns = [
+  {
+    title: "User",
+    key: "identity",
+    sorter: (a: any, b: any) => identityLabel(a).localeCompare(identityLabel(b)),
+    render: (row: any) => identityLabel(row),
+  },
+  {
+    title: "Plan",
+    key: "plan",
+    sorter: (a: any, b: any) => String(a.plan ?? "").localeCompare(String(b.plan ?? "")),
+    filterOptions: planOptions.map((o) => ({ label: o.label, value: o.value })),
+    filter: (value: string | number, row: any) => row.plan === value,
+  },
+  { title: "Role", key: "role", sorter: (a: any, b: any) => String(a.role ?? "").localeCompare(String(b.role ?? "")) },
+  {
+    title: "Last login",
+    key: "last_login_at",
+    sorter: (a: any, b: any) => nullableTimeSort(a.last_login_at, b.last_login_at),
+    defaultSortOrder: "descend" as const,
+    render: (row: any) => {
+      const value = row.last_login_at ?? null;
+      return h("span", null, [
+        formatLoginTimestamp(value),
+        h("span", { style: "color: var(--text-secondary); margin-inline-start: 6px" }, `(${formatRelativeActivity(value)})`),
+      ]);
+    },
+  },
+  {
+    title: "Created",
+    key: "created_at",
+    sorter: (a: any, b: any) => nullableTimeSort(a.created_at, b.created_at),
+    render: (row: any) => formatLoginTimestamp(row.created_at ?? null),
+  },
+  {
+    title: "",
+    key: "actions",
+    render: (row: any) =>
+      h(NButton, { size: "small", secondary: true, onClick: () => loadUserFromList(row) }, { default: () => "Load" }),
+  },
+];
+
+onMounted(loadAllUsers);
+
 function payload() {
   return {
     email: normalizedEmail() || null,
@@ -243,6 +374,9 @@ function payload() {
 
 function applyUser(user: any) {
   editingUserId.value = user?.id ?? null;
+  loadedUserLoginInfo.value = user
+    ? { last_login_at: user.last_login_at ?? null, created_at: user.created_at ?? null }
+    : null;
   form.email = user?.email ?? "";
   form.username = user?.username ?? "";
   form.name = user?.name ?? "";
@@ -258,6 +392,7 @@ function applyUser(user: any) {
 function resetForm() {
   Object.assign(form, emptyForm());
   editingUserId.value = null;
+  loadedUserLoginInfo.value = null;
   result.value = null;
 }
 
@@ -309,6 +444,7 @@ async function saveUser() {
       emit("created", res.user);
       message.success(res.isNewUser ? "User created" : "User updated");
     }
+    loadAllUsers();
   } catch (err: any) {
     message.error(err?.message ?? "Failed to save user");
   } finally {
@@ -331,6 +467,7 @@ async function createLink() {
     };
     emit("created", res.user);
     message.success(res.isNewUser ? "User created and magic link ready" : "User updated and magic link ready");
+    loadAllUsers();
   } catch (err: any) {
     message.error(err?.message ?? "Failed to create magic link");
   } finally {
@@ -351,7 +488,7 @@ async function copyLink() {
 
 <style scoped>
 .magic-panel {
-  max-width: 880px;
+  max-width: 1100px;
 }
 
 .magic-panel__title {
@@ -423,6 +560,29 @@ async function copyLink() {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.magic-panel__users {
+  margin-top: 28px;
+}
+
+.magic-panel__users-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.magic-panel__users-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.magic-panel__users :deep(.admin-user-row--online td) {
+  background: color-mix(in srgb, #18a058 12%, transparent);
 }
 
 @media (max-width: 700px) {
