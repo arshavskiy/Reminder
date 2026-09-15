@@ -2601,14 +2601,14 @@ async function bulkExtractAi() {
 .row-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   width: 100%;
   gap: 6px;
   white-space: nowrap;
 }
 
 .actions-title {
-  text-align: center !important;
+  text-align: end !important;
 }
 
 .cell-strong {
@@ -2618,7 +2618,7 @@ async function bulkExtractAi() {
 
 .cell-actions,
 .document-col--actions {
-  text-align: center;
+  text-align: end;
 }
 
 .document-col--select {
