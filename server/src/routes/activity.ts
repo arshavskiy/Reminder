@@ -1,8 +1,17 @@
 import express from "express";
+import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {HTTPException, requireAuth} from "../auth/middleware";
 
 const MAX_LIMIT = 200;
+
+function tryObjectId(id: string): ObjectId | string {
+  try {
+    return new ObjectId(id);
+  } catch {
+    return id;
+  }
+}
 
 export type ActivityEntry = {
   id: string;
@@ -11,6 +20,7 @@ export type ActivityEntry = {
   detail: string | null;
   at: string;
   status: "ok" | "failed" | "info";
+  document_id: string | null;
 };
 
 function isoDate(value: unknown): string | null {
@@ -105,21 +115,47 @@ export function registerActivityRoutes(app: express.Application) {
             .join(" · ") || null,
           at,
           status: failed ? "failed" : "ok",
+          document_id: null,
         });
       }
 
-      for (const row of documentRows as any[]) {
+      // The event itself carries no client name or file name — only client_id and
+      // a source_id that may no longer point at a live document — so both are
+      // resolved in one batch rather than per row.
+      const eventRows = documentRows as any[];
+      const eventClientIds = [...new Set(eventRows.map((row) => String(row.client_id ?? "")).filter(Boolean))];
+      const eventSourceIds = [...new Set(
+        eventRows.filter((row) => row.source_type === "document" && row.source_id).map((row) => String(row.source_id)),
+      )];
+      const [eventClients, eventDocuments] = await Promise.all([
+        eventClientIds.length
+          ? col("clients").find({_id: {$in: eventClientIds.map(tryObjectId)}} as any, {projection: {display_name: 1}}).toArray()
+          : Promise.resolve([]),
+        eventSourceIds.length
+          ? col("documents").find({_id: {$in: eventSourceIds.map(tryObjectId)}} as any, {projection: {file_name: 1}}).toArray()
+          : Promise.resolve([]),
+      ]);
+      const clientNameById = new Map((eventClients as any[]).map((c) => [String(c._id), c.display_name as string | undefined]));
+      const documentNameById = new Map((eventDocuments as any[]).map((d) => [String(d._id), d.file_name as string | undefined]));
+
+      for (const row of eventRows) {
         const at = isoDate(row.event_date) ?? isoDate(row.created_at);
         if (!at) continue;
+        const documentId = row.source_type === "document" && row.source_id ? String(row.source_id) : null;
+        const clientName = clientNameById.get(String(row.client_id ?? ""));
+        const fileName = documentId ? documentNameById.get(documentId) : undefined;
         // description is sometimes an object rather than a string in older rows.
         const description = typeof row.description === "string" ? row.description : null;
         entries.push({
           id: String(row._id),
           kind: "document",
           title: typeof row.title === "string" && row.title.trim() ? row.title : "מסמך נוסף",
-          detail: description,
+          detail: [clientName, fileName, description].filter((part) => typeof part === "string" && part.trim()).join(" · ") || null,
           at,
           status: "info",
+          // Only set when the source document still exists, so the client never
+          // links to a row that 404s.
+          document_id: fileName !== undefined ? documentId : null,
         });
       }
 

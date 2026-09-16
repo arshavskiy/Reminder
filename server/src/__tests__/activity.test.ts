@@ -50,7 +50,8 @@ beforeEach(() => {
   mocks.userId = "tenant-a";
   mocks.data.clear();
   mocks.data.set("reminders", [{_id: "rem-1", user_id: "tenant-a"}]);
-  mocks.data.set("clients", [{_id: "client-1", user_id: "tenant-a"}]);
+  mocks.data.set("clients", [{_id: "client-1", user_id: "tenant-a", display_name: "לקוח לדוגמה"}]);
+  mocks.data.set("documents", [{_id: "doc-1", file_name: "report.pdf"}]);
   mocks.data.set("email_log", [
     {_id: "log-1", user_id: "tenant-a", log_type: "send", subject: "Sent one", to_address: "a@x.com", sent_at: new Date("2026-03-02T10:00:00Z"), success: 1},
     {_id: "log-2", user_id: "tenant-a", log_type: "bounce", subject: "Bounced", to_address: "b@x.com", sent_at: new Date("2026-03-03T10:00:00Z"), success: 1},
@@ -59,16 +60,34 @@ beforeEach(() => {
     {_id: "log-4", user_id: "tenant-b", log_type: "send", subject: "Other tenant", sent_at: new Date("2026-03-09T10:00:00Z"), success: 1},
   ]);
   mocks.data.set("timeline_events", [
-    {_id: "ev-1", client_id: "client-1", title: "Document added", description: "report.pdf", event_date: new Date("2026-03-04T10:00:00Z")},
-    {_id: "ev-2", client_id: "client-other", title: "Other tenant doc", description: "nope.pdf", event_date: new Date("2026-03-08T10:00:00Z")},
+    // source_id still resolves to a live document — gets a name and a link.
+    {_id: "ev-1", client_id: "client-1", title: "Document added", description: null, source_type: "document", source_id: "doc-1", event_date: new Date("2026-03-04T10:00:00Z")},
+    // source_id points at a document that no longer exists — no link, but the
+    // client name still resolves.
+    {_id: "ev-2", client_id: "client-1", title: "Document added", description: null, source_type: "document", source_id: "doc-deleted", event_date: new Date("2026-03-05T10:00:00Z")},
+    {_id: "ev-3", client_id: "client-other", title: "Other tenant doc", description: "nope.pdf", event_date: new Date("2026-03-08T10:00:00Z")},
   ]);
 });
 
 describe("GET /api/activity", () => {
   it("merges both sources newest first and keeps other tenants out", async () => {
     const body = await (await fetch(`${base}/api/activity`)).json();
-    expect(body.rows.map((r: any) => r.id)).toEqual(["ev-1", "log-2", "log-1", "log-3"]);
-    expect(body.rows.map((r: any) => r.kind)).toEqual(["document", "email", "email", "email"]);
+    expect(body.rows.map((r: any) => r.id)).toEqual(["ev-2", "ev-1", "log-2", "log-1", "log-3"]);
+    expect(body.rows.map((r: any) => r.kind)).toEqual(["document", "document", "email", "email", "email"]);
+  });
+
+  it("resolves the client name and document name for a document event", async () => {
+    const body = await (await fetch(`${base}/api/activity`)).json();
+    const row = body.rows.find((r: any) => r.id === "ev-1");
+    expect(row.detail).toBe("לקוח לדוגמה · report.pdf");
+    expect(row.document_id).toBe("doc-1");
+  });
+
+  it("resolves the client name but drops the link when the source document is gone", async () => {
+    const body = await (await fetch(`${base}/api/activity`)).json();
+    const row = body.rows.find((r: any) => r.id === "ev-2");
+    expect(row.detail).toBe("לקוח לדוגמה");
+    expect(row.document_id).toBeNull();
   });
 
   it("includes email_log rows that predate the user_id column", async () => {

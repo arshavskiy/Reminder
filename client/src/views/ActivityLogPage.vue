@@ -43,7 +43,7 @@
 
 <script setup lang="ts">
 import {h, onMounted, ref} from "vue";
-import {useRoute} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {NDataTable, NIcon, NTag, useMessage} from "naive-ui";
 import {RefreshOutline} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
@@ -56,10 +56,12 @@ type ActivityRow = {
   detail: string | null;
   at: string;
   status: "ok" | "failed" | "info";
+  document_id: string | null;
 };
 type KindFilter = "all" | "email" | "document";
 
 const route = useRoute();
+const router = useRouter();
 const rows = ref<ActivityRow[]>([]);
 const loading = ref(false);
 const kind = ref<KindFilter>(route.query.kind === "document" || route.query.kind === "email" ? route.query.kind : "all");
@@ -101,6 +103,21 @@ const columns = [
     key: "title",
     minWidth: 220,
     sorter: (a: ActivityRow, b: ActivityRow) => a.title.localeCompare(b.title),
+    render: (row: ActivityRow) =>
+      row.document_id
+        ? h(
+          "a",
+          {
+            href: `/documents/${row.document_id}`,
+            class: "activity-link",
+            onClick: (event: MouseEvent) => {
+              event.preventDefault();
+              router.push(`/documents/${row.document_id}?from=activity`);
+            },
+          },
+          row.title,
+        )
+        : row.title,
   },
   {
     title: "פירוט",
@@ -213,6 +230,14 @@ onMounted(load);
   color: var(--text-primary);
   font-weight: 600;
   box-shadow: var(--shadow-sm);
+}
+
+.activity-table :deep(.activity-link) {
+  color: var(--brand-color);
+  text-decoration: none;
+}
+.activity-table :deep(.activity-link:hover) {
+  text-decoration: underline;
 }
 
 .activity-table {
