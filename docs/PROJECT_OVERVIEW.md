@@ -365,11 +365,26 @@ cd client && npm run build
 
 ## Future Roadmap
 
-- [ ] SMS reminders (in addition to email)
-- [ ] WhatsApp notifications
-- [ ] Slack integration
-- [ ] Calendar sync (Google/Outlook)
-- [ ] Bulk reminders via CSV import
+> `docs/FEATURES.md` is the canonical, per-feature reference and is kept current.
+> This roadmap only tracks what is *not* built yet — check FEATURES.md before
+> assuming anything here is still outstanding.
+
+**Shipped since this roadmap was first written:**
+
+- [x] Bulk reminders via CSV / Excel import — `server/src/imports/reminderTable.ts`, `server/src/routes/reminderTableImport.ts`; see `docs/universal-csv-import.md`
+- [x] Google Calendar sync — `server/src/calendar/sync.ts`; see the "Google Calendar Sync" section of FEATURES.md
+- [x] WhatsApp sending infrastructure — `server/src/whatsapp/`, admin lead campaigns only; see `docs/WHATSAPP.md`
+
+**Still outstanding:**
+
+- [ ] WhatsApp/SMS *reminders* — the sender exists but is not wired into the reminder scheduler, so reminders remain email-only
+- [ ] Recurring / self-renewing reminders — reminders are one-shot per `(source_id, advance_days)`; a renewal needs a new contract today
+- [ ] Multi-level escalation — `checkEscalations()` emails one fixed address once, with no chain
+- [ ] Slack / Microsoft Teams integration
+- [ ] Outlook calendar sync (Google only today)
+- [ ] Public API / webhooks for external systems
+- [ ] Real multi-seat teams — seats are entitlement UI only, with no invite model (`docs/ROLES_AND_PLANS.md`)
+- [ ] Customer self-serve portal
 - [ ] Compliance reporting (SOX, GDPR)
 - [ ] Mobile app (React Native)
 - [ ] AI-powered suggestions (next inspection date, equipment matching)
@@ -385,6 +400,6 @@ For questions, issues, or feature requests:
 
 ---
 
-**Document Version:** 1.0  
-**Last Reviewed:** 2026-07-24  
-**Next Review:** 2026-08-24
+**Document Version:** 1.1  
+**Last Reviewed:** 2026-09-16  
+**Next Review:** 2026-12-16
