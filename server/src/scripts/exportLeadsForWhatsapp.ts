@@ -88,4 +88,6 @@ async function main() {
   console.log(`Wrote ${rows.length} mobile lead(s) to ${outPath} (target: ${target})`);
 }
 
-runWithDbTarget(target, main).finally(() => closeDb());
+connectDb()
+    .then(() => runWithDbTarget(target, main))
+    .finally(() => closeDb());

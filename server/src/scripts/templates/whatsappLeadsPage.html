@@ -115,6 +115,14 @@
 <script>
   const LEADS = __LEADS_JSON__;
 
+  const MESSAGE_HOOK = [
+      "כמה פעמים חיפשת תסקיר ישן ולא זכרת איפה שמרת אותו?",
+      "",
+      "וכמה פעמים היית צריך לבדוק בעצמך מתי מגיע מועד הבדיקה הבא?",
+      "",
+      "בדיוק בשביל זה בנינו את RemindOCR.",
+  ].join("\n");
+
   function messageBodyFor(lead) {
       const types = (lead.professionType || []).join(" ");
       if (types.includes("מנהל עבודה")) {
@@ -124,7 +132,7 @@
           return "אנחנו מפתחים מערכת לממוני בטיחות שמרכזת תסקירים, ציוד, לקוחות ומועדי בדיקות. אפשר להעלות מסמכים קיימים, לחלץ מהם את הנתונים אוטומטית, לעקוב ביומן ולהפיק דוחות מסודרים ללקוחות.";
       }
       if (types.includes("מעליתן") || types.includes("מעליות")) {
-          return "אנחנו מפתחים מערכת לאנשי וחברות מעליות שמרכזת מסמכי בדיקה, לקוחות, מתקנים ומועדי ביקורת. המערכת קוראת קבצי PDF, מזהה תאריכי תוקף ושולחת תזכורות לקראת הבדיקה או הטיפול הבא.";
+          return "מערכת פשוטה לניהול תסקירי מעליות:\nהעלאת תסקיר, שמירת פרטי הלקוח והמעלית, היסטוריה ותזכורות אוטומטיות לפני מועד הבדיקה.";
       }
       if (types.includes("בודק מוסמך") || types.includes("בודק")) {
           return "בנינו מערכת לבודקים מוסמכים שחוסכת את ההקלדה החוזרת: היא מייבאת תסקירים ומסמכים, מחלצת מהם תאריכי תוקף ופרטי לקוח, שולחת תזכורות ומאפשרת ליצור תסקיר והצעת מחיר מותאמים לכל סוג בדיקה.";
@@ -141,11 +149,9 @@
       const professionLine = profession ? ("ראיתי שאתה עוסק בתחום " + profession + ".") : "";
     const site = "www.remindocr.com";
       const body = messageBodyFor(lead);
-    const pricing = "המחיר נוח — החל מ-79 ש\"ח לחודש, ו-30 יום ניסיון חינם, בלי כרטיס אשראי.";
     const link = lead.magicLink ? ("קישור כניסה מהיר: " + lead.magicLink) : "אשמח לשלוח לך קישור כניסה אם תרצה/י להתנסות.";
     const outro = "אני תמיד זמין לשיחה קצרה ולהראות את המערכת בלייב, בלי התחייבות.";
-    // return intro + "\n" + site + "\n\n" + body + "\n\n" + pricing + "\n" + link + "\n\n" + outro;
-      return [intro, professionLine, site, body, link, outro].filter(Boolean).join("\n");
+      return [intro, professionLine, site, MESSAGE_HOOK, body, link, outro].filter(Boolean).join("\n\n");
   };
 
   function waLink(lead) {
