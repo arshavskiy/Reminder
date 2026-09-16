@@ -24,25 +24,22 @@
       </button>
     </div>
 
-    <n-spin :show="loading">
-      <ul v-if="rows.length" class="activity-list">
-        <li v-for="row in rows" :key="row.id" class="activity-row" :class="`activity-row--${row.status}`">
-          <span class="activity-row__dot" aria-hidden="true" />
-          <div class="activity-row__body">
-            <strong class="activity-row__title">{{ row.title }}</strong>
-            <span v-if="row.detail" class="activity-row__detail">{{ row.detail }}</span>
-          </div>
-          <time class="activity-row__at" :dateTime="row.at">{{ formatAt(row.at) }}</time>
-        </li>
-      </ul>
-      <p v-else-if="!loading" class="activity-empty">אין פעילות להצגה.</p>
-    </n-spin>
+    <n-data-table
+      :columns="columns"
+      :data="rows"
+      :loading="loading"
+      :pagination="{ pageSize: 25 }"
+      :row-key="(r: ActivityRow) => r.id"
+      :scroll-x="820"
+      size="small"
+      class="activity-table"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from "vue";
-import {NIcon, NSpin, useMessage} from "naive-ui";
+import {h, onMounted, ref} from "vue";
+import {NDataTable, NIcon, NTag, useMessage} from "naive-ui";
 import {RefreshOutline} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 
@@ -77,6 +74,48 @@ function selectKind(value: KindFilter) {
   kind.value = value;
   load();
 }
+
+const KIND_LABEL: Record<ActivityRow["kind"], string> = {email: "תזכורת", document: "מסמך"};
+const STATUS_TAG: Record<ActivityRow["status"], {type: "success" | "error" | "default"; label: string}> = {
+  ok: {type: "success", label: "בוצע"},
+  failed: {type: "error", label: "נכשל"},
+  info: {type: "default", label: "מידע"},
+};
+
+const columns = [
+  {
+    title: "סוג",
+    key: "kind",
+    width: 90,
+    render: (row: ActivityRow) => KIND_LABEL[row.kind],
+  },
+  {
+    title: "כותרת",
+    key: "title",
+    minWidth: 220,
+    sorter: (a: ActivityRow, b: ActivityRow) => a.title.localeCompare(b.title),
+  },
+  {
+    title: "פירוט",
+    key: "detail",
+    minWidth: 260,
+    render: (row: ActivityRow) => row.detail ?? "—",
+  },
+  {
+    title: "סטטוס",
+    key: "status",
+    width: 100,
+    render: (row: ActivityRow) => h(NTag, {type: STATUS_TAG[row.status].type, size: "small"}, {default: () => STATUS_TAG[row.status].label}),
+  },
+  {
+    title: "מועד",
+    key: "at",
+    width: 160,
+    defaultSortOrder: "descend" as const,
+    sorter: (a: ActivityRow, b: ActivityRow) => a.at.localeCompare(b.at),
+    render: (row: ActivityRow) => formatAt(row.at),
+  },
+];
 
 async function load() {
   loading.value = true;
@@ -189,76 +228,15 @@ onMounted(load);
   box-shadow: var(--shadow-sm);
 }
 
-.activity-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.activity-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 14px;
+.activity-table {
+  overflow: hidden;
   border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--bg-card);
-}
-
-.activity-row__dot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: var(--text-secondary);
-}
-
-.activity-row--ok .activity-row__dot { background: var(--brand-color, #18a058); }
-.activity-row--failed .activity-row__dot { background: var(--color-error, #d03050); }
-
-.activity-row__body {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.activity-row__title {
-  font-size: 13px;
-  color: var(--text-primary);
-}
-
-.activity-row__detail {
-  font-size: 12px;
-  color: var(--text-secondary);
-  overflow-wrap: anywhere;
-}
-
-.activity-row__at {
-  flex: 0 0 auto;
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.activity-empty {
-  padding: 32px;
-  text-align: center;
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: 14px;
 }
 
 @media (max-width: 600px) {
-  .activity-row {
-    flex-wrap: wrap;
-  }
-
-  .activity-row__at {
-    width: 100%;
+  .activity-table :deep(.n-data-table-wrapper) {
+    overflow-x: auto;
   }
 }
 </style>
