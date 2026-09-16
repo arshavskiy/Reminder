@@ -41,7 +41,7 @@ The parser recognizes English and Hebrew aliases, including `שם תזכורת`,
 | Type/category | Reminder item `category` and reminder `reminder_category`. Free text — see Categories below. |
 | Description / Notes | Reminder item `description` and reminder `body`. |
 | Owner | Saved in `import_metadata`; does not assign an app user or change tenant ownership. |
-| Document, Document Number | Document is saved as reference metadata only; no upload or fetch. Document Number maps to `reference_number` and reminder context. |
+| Document, Document Number | Document is saved as a filename reference on both the reminder item and its reminders (`document_reference`) — the same reference-only mode a manually created reminder offers; no upload or fetch, and `document_id` stays null. Document Number maps to `reference_number` and reminder context. |
 | URL | Reminder item `url`. Stored as-is, not validated as a live link. |
 | Audit Date | Reminder item `audit_date`. Same date parsing as Expiry/Start Date. |
 | Compliance ID | Alias for External ID (the tenant-scoped import key). |

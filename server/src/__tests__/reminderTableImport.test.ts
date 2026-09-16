@@ -86,6 +86,16 @@ describe("table import API", () => {
     expect(mocks.usage).toHaveBeenCalledTimes(2);
     expect(mocks.data.get("clients")!.size).toBe(1);
   });
+  it("carries the Document column onto both the item and its reminders", async () => {
+    const withDocument = "Expiry Name,Expiry Date,External ID,Document,Reminder Advance Days\n"
+      + "Renewal,2027-01-15,E1,inspection-2027.pdf,0";
+    await send("confirm", withDocument);
+    const item = [...mocks.data.get("reminder_items")!.values()][0];
+    const reminders = [...mocks.data.get("reminders")!.values()];
+    expect(item.document_reference).toBe("inspection-2027.pdf");
+    // A spreadsheet carries no file, so the reference travels but document_id stays null.
+    expect(reminders.every(r => r.document_reference === "inspection-2027.pdf" && r.document_id === null)).toBe(true);
+  });
   it("rejects changed content for an imported item key", async () => {
     await send("confirm");
     expect((await send("confirm", content.replace("2027-01-15", "2027-03-01"))).status).toBe(400);

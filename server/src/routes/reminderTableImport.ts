@@ -83,6 +83,9 @@ export function registerReminderTableImportRoutes(app: express.Application) {
           const result = await col("reminders").updateOne({_id: idFor(userId, "table-reminder", `${row.key}:${row.offsets[i]}`), user_id: userId} as any, {$setOnInsert: {
             user_id: userId, source_type: "table_import", source_id: itemId.toHexString(),
             client_id: clientId?.toHexString() ?? null, document_id: null,
+            // A spreadsheet cannot carry the file itself, so the Document column is a
+            // reference only — the same filename-reference mode manual reminders have.
+            document_reference: f.document || null,
             trigger_date: row.dates[i], advance_days: row.offsets[i], title: row.name,
             body: f.description || null, email_to: JSON.stringify(row.recipients), email_template_id: template,
             status: "pending", snoozed_until: null, client_company: f.clientName || null,
