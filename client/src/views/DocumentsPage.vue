@@ -125,6 +125,17 @@
                 <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
               </button>
               <button
+                  :class="{ 'bulk-action-item--loading': bulkMerging }"
+                  :disabled="bulkMerging"
+                  class="bulk-action-item"
+                  type="button"
+                  @click="bulkMergePdf"
+              >
+                <n-icon :component="DocumentTextOutline" class="bulk-action-item__icon"/>
+                <span class="bulk-action-item__text">מיזוג ל-PDF אחד</span>
+                <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
+              </button>
+              <button
                   :class="{ 'bulk-action-item--loading': bulkExtracting }"
                   :disabled="bulkExtracting || selectedExtractableIds.length === 0"
                   class="bulk-action-item bulk-action-item--primary"
@@ -774,6 +785,7 @@ const bulkMode = ref(false);
 const selectedIds = ref(new Set<string>());
 const bulkDeleting = ref(false);
 const bulkDownloading = ref(false);
+const bulkMerging = ref(false);
 const bulkExtracting = ref(false);
 const showRescanAllConfirm = ref(false);
 const showLimitModal = ref(false);
@@ -1922,6 +1934,47 @@ async function bulkDownload() {
     message.success(`${ids.length} קבצים הורדו`);
   } finally {
     bulkDownloading.value = false;
+  }
+}
+
+async function bulkMergePdf() {
+  const ids = [...selectedIds.value];
+  if (!ids.length || bulkMerging.value) return;
+  bulkMerging.value = true;
+  try {
+    // The response is the PDF itself, so this goes through fetch rather than the
+    // JSON api helper.
+    const res = await fetch(`${SERVER}/api/documents/merge-pdf`, {
+      method: "POST",
+      headers: {"content-type": "application/json"},
+      credentials: "include",
+      body: JSON.stringify({ids}),
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      message.error(payload.error ?? "מיזוג הקבצים נכשל");
+      return;
+    }
+
+    const merged = Number(res.headers.get("x-merged-count") ?? 0);
+    const skipped = Number(res.headers.get("x-skipped-count") ?? 0);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `merged-${new Date().toISOString().slice(0, 10)}.pdf`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    message.success(
+      skipped > 0
+        ? `${merged} קבצים מוזגו, ${skipped} דולגו (לא PDF או קובץ חסר)`
+        : `${merged} קבצים מוזגו לקובץ אחד`,
+    );
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : "מיזוג הקבצים נכשל");
+  } finally {
+    bulkMerging.value = false;
   }
 }
 

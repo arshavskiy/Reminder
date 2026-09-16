@@ -1,6 +1,6 @@
 import express from "express";
 import {extname, join} from "path";
-import {existsSync, mkdirSync, unlinkSync, writeFileSync} from "fs";
+import {existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync} from "fs";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {
@@ -13,7 +13,7 @@ import {
 } from "../pipeline/importer";
 import {getDataDir, getSettings} from "../settings";
 import {HTTPException, requireAuth} from "../auth/middleware";
-import {resolveDocumentFilePath} from "../documents/fileResolver";
+import {isObjectStorageMissingError, resolveDocumentFilePath} from "../documents/fileResolver";
 import {releaseTempFile, tempDir} from "../storage/tempFiles";
 import {resolveDocumentThumbnail} from "../documents/pdfThumbnail";
 import {extractWithTemplate} from "../pipeline/extractor";
@@ -492,6 +492,113 @@ export function registerDocumentRoutes(app: express.Application) {
     } catch (err) {
       logger.warn("document_thumbnail_serve_failed", { document_id: req.params.id, user_id: userId, error: err });
       res.status(503).json({ error: "thumbnail_not_accessible" });
+    }
+  });
+
+  // POST /api/documents/merge-pdf — one PDF from several documents.
+  //
+  // Offices send a client a single pack rather than a dozen separate reports.
+  // Merging is memory-resident, so the request is capped; documents that are not
+  // PDFs, or whose stored file has gone missing, are reported back rather than
+  // failing the whole pack.
+  app.post("/api/documents/merge-pdf", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const MAX_DOCUMENTS = 50;
+    const MAX_TOTAL_BYTES = 150 * 1024 * 1024;
+
+    const rawIds = (req.body as { ids?: unknown })?.ids;
+    const ids = Array.isArray(rawIds)
+      ? [...new Set(rawIds.map((id) => String(id)).filter(Boolean))]
+      : [];
+    if (!ids.length) {
+      res.status(400).json({ error: "No documents selected" });
+      return;
+    }
+    if (ids.length > MAX_DOCUMENTS) {
+      res.status(400).json({ error: `Select up to ${MAX_DOCUMENTS} documents per merge` });
+      return;
+    }
+
+    try {
+      const docs = await col("documents")
+        .find({ _id: { $in: ids.map((id) => idFilter(id)._id) }, user_id: userId } as any)
+        .toArray() as any[];
+
+      // Keep the caller's order rather than Mongo's, so the pack reads in the
+      // order the user selected on screen.
+      const byId = new Map(docs.map((doc) => [String(doc._id), doc]));
+
+      const { PDFDocument } = await import("pdf-lib");
+      const merged = await PDFDocument.create();
+      const skipped: Array<{ id: string; file_name: string | null; reason: string }> = [];
+      let mergedCount = 0;
+      let totalBytes = 0;
+
+      for (const id of ids) {
+        const doc = byId.get(id);
+        if (!doc) {
+          skipped.push({ id, file_name: null, reason: "not_found" });
+          continue;
+        }
+        const isPdf = doc.mime_type === "application/pdf"
+          || /\.pdf$/i.test(String(doc.file_name ?? ""))
+          || /\.pdf$/i.test(String(doc.spaces_key ?? ""));
+        if (!isPdf) {
+          skipped.push({ id, file_name: doc.file_name ?? null, reason: "not_a_pdf" });
+          continue;
+        }
+
+        try {
+          const filePath = await resolveDocumentFilePath(doc);
+          const bytes = readFileSync(filePath);
+          totalBytes += bytes.byteLength;
+          if (totalBytes > MAX_TOTAL_BYTES) {
+            res.status(413).json({ error: "Merged document would be too large" });
+            return;
+          }
+          // Encrypted PDFs would otherwise throw and abort the whole pack.
+          const source = await PDFDocument.load(bytes, { ignoreEncryption: true });
+          const pages = await merged.copyPages(source, source.getPageIndices());
+          for (const page of pages) merged.addPage(page);
+          mergedCount++;
+        } catch (err) {
+          logger.warn("document_merge_skipped", {
+            document_id: id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          skipped.push({
+            id,
+            file_name: doc.file_name ?? null,
+            reason: isObjectStorageMissingError(err) ? "file_missing" : "unreadable",
+          });
+        }
+      }
+
+      if (!mergedCount) {
+        res.status(422).json({ error: "No readable PDFs among the selected documents", skipped });
+        return;
+      }
+
+      const output = Buffer.from(await merged.save());
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="merged-${Date.now()}.pdf"`);
+      res.setHeader("X-Merged-Count", String(mergedCount));
+      res.setHeader("X-Skipped-Count", String(skipped.length));
+      res.send(output);
+    } catch (err) {
+      logger.warn("document_merge_failed", { error: err instanceof Error ? err.message : String(err) });
+      if (!res.headersSent) {
+        res.status(500).json({ error: err instanceof Error ? err.message : "Merge failed" });
+      }
     }
   });
 
