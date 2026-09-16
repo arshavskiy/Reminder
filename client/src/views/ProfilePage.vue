@@ -1303,6 +1303,7 @@
                   <p class="sub-plan-card__blurb">{{ currentPricingPlan.blurb }}</p>
                 </div>
                 <div class="sub-plan-card__price">
+                  <span v-if="currentPricingPlan.oldPrice" class="sub-plan-card__old-price">₪{{ currentPricingPlan.oldPrice }}</span>
                   <strong>{{ currentPricingPlan.price === 0 ? "חינם" : `₪${currentPricingPlan.price}` }}</strong>
                   <span v-if="currentPricingPlan.period">{{ currentPricingPlan.period }}</span>
                   <span v-if="planYearlyLabel" class="sub-plan-card__yearly">{{ planYearlyLabel }}</span>
@@ -1414,12 +1415,12 @@
                 <h3 class="upgrade-card__name">{{ plan.name }}</h3>
                 <p class="upgrade-card__blurb">{{ plan.blurb }}</p>
                 <div class="upgrade-card__price">
-                  <span v-if="plan.yearlyPrice" class="upgrade-card__old">₪{{ plan.price }}</span>
+                  <span v-if="plan.oldPrice" class="upgrade-card__old">₪{{ plan.oldPrice }}</span>
                   <strong>₪{{ yearlyMonthly(plan) }}</strong>
                   <span class="upgrade-card__period">/ חודש</span>
                 </div>
                 <p v-if="plan.yearlyPrice" class="upgrade-card__terms">
-                  בתשלום שנתי: ₪{{ plan.yearlyPrice.toLocaleString() }} לשנה · או ₪{{ plan.price }} בחיוב חודשי
+                  בתשלום שנתי: ₪{{ plan.yearlyPrice.toLocaleString() }} לשנה · או ₪{{ plan.oldPrice ?? plan.price }} בחיוב חודשי
                 </p>
                 <ul class="upgrade-card__features">
                   <li v-for="feature in plan.features" :key="feature">
@@ -1780,9 +1781,9 @@ function yearlyMonthly(plan: {price: number; yearlyPrice?: number}): number {
  * Checkout is manual until Green Invoice payment links exist, so the CTA opens
  * WhatsApp with the plan and its price already written into the message.
  */
-function whatsappHref(plan: {name: string; price: number; yearlyPrice?: number}): string {
+function whatsappHref(plan: {name: string; price: number; oldPrice?: number; yearlyPrice?: number}): string {
   const price = plan.yearlyPrice
-      ? `₪${yearlyMonthly(plan)} לחודש בתשלום שנתי או ₪${plan.price} בחיוב חודשי`
+      ? `₪${yearlyMonthly(plan)} לחודש בתשלום שנתי או ₪${plan.oldPrice ?? plan.price} בחיוב חודשי`
       : `₪${plan.price} לחודש`;
   const message = `שלום, אני מעוניין לרכוש את המסלול ${plan.name} של RemindOCR (${price}).`;
   return `https://wa.me/972554605328?text=${encodeURIComponent(message)}`;
@@ -3512,6 +3513,11 @@ function showGoogleConnectionErrorFromRoute() {
 .sub-plan-card__price span {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.sub-plan-card__old-price {
+  text-decoration: line-through;
+  opacity: 0.7;
 }
 
 .sub-plan-card__yearly {

@@ -159,10 +159,9 @@ export const PRICING_PLANS: PricingPlan[] = [
         period: "/ 30 יום",
         blurb: "כל היכולות של המסלול הבסיסי, ללא כרטיס אשראי.",
         features: [
-            "עד 50 מסמכים — ידני ומאימייל יחד",
             "תצוגה מקדימה וחילוץ נתונים AI",
             "תזכורות אימייל אוטומטיות ללקוחות",
-            "יבוא תסקירים של 16 חודשים האחרונים",
+            "יבוא עד 20 חשבוניות וקבלות",
             "יצוא לאקסל ודוחות חודשיים",
             "סנכרון Google Drive",
         ],
@@ -174,7 +173,6 @@ export const PRICING_PLANS: PricingPlan[] = [
         period: "/ חודש",
         blurb: "לניהול תסקירים ותזכורות בהזנה ידנית, ללא שמירת קבצים בענן.",
         features: [
-            "תסקירים ותזכורות ללא הגבלה",
             "הזנת נתונים ידנית — ללא העלאת קבצים",
             "ניהול לקוחות וציוד",
             "הפקת תסקירים לחתימה ושליחה",
@@ -185,7 +183,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     {
         id: "basic",
         name: "בסיסי",
-        price: 88,
+        price: 79,
+        oldPrice: 88,
         period: "/ חודש",
         yearlyPrice: 948,
         blurb: "מתאים לעסק קטן שמייבא מסמכים בכל חודש.",
@@ -202,13 +201,13 @@ export const PRICING_PLANS: PricingPlan[] = [
     {
         id: "business",
         name: "עסקי",
-        price: 143,
+        price: 128,
+        oldPrice: 143,
         period: "/ חודש",
         yearlyPrice: 1536,
         blurb: "לבודקים מוסמכים שמייבאים מסמכים באופן שוטף, עובדים עם כמה מאיילים ורוצים יומן Google מסונכרן.",
         highlighted: true,
         features: [
-            "כל מה שיש בבסיסי, ובנוסף",
             "יבוא תסקירים וחשבוניות ללא הגבלה",
             "יבוא תסקירים מ-Gmail עד 24 חודשים אחורה",
             "יבוא חשבוניות וקבלות מ-Gmail עד 36 חודשים אחורה",
@@ -355,6 +354,12 @@ export function formatPlanPrice(plan: PricingPlan): string {
         return `${monthly} · ₪${plan.yearlyPrice.toLocaleString("he-IL")} לשנה`;
     }
     return monthly;
+}
+
+/** The pre-discount monthly sticker price, when the plan is currently discounted. */
+export function formatPlanOldPrice(plan: PricingPlan): string | null {
+    if (!plan.oldPrice) return null;
+    return `₪${plan.oldPrice}`;
 }
 
 export function formatPlanYearlyPrice(plan: PricingPlan): string | null {
