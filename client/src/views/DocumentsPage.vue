@@ -57,6 +57,10 @@
             <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
             רענן
           </button>
+          <button class="rbtn rbtn--ghost" type="button" @click="router.push('/activity?kind=document')">
+            <n-icon :component="TimeOutline" class="btn-icon"/>
+            יומן פעילות
+          </button>
           <button v-if="rescanStore.hasSession" class="rbtn rbtn--ghost" type="button" @click="openRescanModal">
             {{ rescanStore.kind === "upload" ? "הצג העלאה אחרונה" : "הצג סריקה אחרונה" }}
           </button>
@@ -703,6 +707,7 @@ import {
   ImageOutline,
   ListOutline,
   RefreshOutline,
+  TimeOutline,
   CheckboxOutline,
   SettingsOutline,
   SwapVerticalOutline,
