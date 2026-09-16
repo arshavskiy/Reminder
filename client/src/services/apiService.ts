@@ -798,6 +798,11 @@ export const api = {
       return get<{ rows: ReminderWithContext[]; total: number }>(`/reminders${qs(params)}`, force);
     },
     categories: () => get<{ categories: { name: string; count: number }[] }>("/reminders/categories"),
+    activity: (params?: { limit?: number; kind?: "email" | "document" }, force = false) =>
+      get<{ rows: { id: string; kind: "email" | "document"; title: string; detail: string | null; at: string; status: "ok" | "failed" | "info" }[] }>(
+        `/activity${qs(params)}`,
+        force,
+      ),
     senderInfo: () => get<{ email: string | null; name: string }>("/reminders/email-sender"),
     create: (body: Partial<Reminder>) => post<Reminder>("/reminders", body),
     update: (id: number, body: Partial<Reminder>) => put<Reminder>(`/reminders/${id}`, body),

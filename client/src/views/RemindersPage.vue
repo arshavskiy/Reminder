@@ -10,6 +10,10 @@
           <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
           רענן
         </button>
+        <button class="rbtn rbtn--ghost" type="button" @click="router.push('/activity')">
+          <n-icon :component="TimeOutline" class="btn-icon"/>
+          יומן פעילות
+        </button>
         <button class="rbtn rbtn--primary" :disabled="loadingEmailTemplates" @click="openCreate">
           + תזכורת חדשה
         </button>
@@ -341,7 +345,7 @@
 import {computed, h, onMounted, ref, type Component} from "vue";
 import {useRouter} from "vue-router";
 import {NAlert, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NSelect, useMessage,} from "naive-ui";
-import {CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, GridOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
+import {CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, GridOutline, PaperPlaneOutline, RefreshOutline, TimeOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";

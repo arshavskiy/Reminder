@@ -96,6 +96,11 @@ export const router = createRouter({
             meta: {feature: FEATURES.pages.contracts}
         },
         {path: "/reminders", component: RemindersPage, meta: {feature: FEATURES.pages.reminders, requirePlan: "basic"}},
+        {
+            path: "/activity",
+            component: () => import("../views/ActivityLogPage.vue"),
+            meta: {feature: FEATURES.pages.reminders, requirePlan: "basic"},
+        },
         {path: "/search", component: SearchPage, meta: {feature: FEATURES.pages.search}},
         {path: "/profile", component: ProfilePage, meta: {feature: FEATURES.pages.profile}},
         {path: "/settings/doc-templates", component: DocTemplatesPage, meta: {feature: FEATURES.pages.docTemplates}},
