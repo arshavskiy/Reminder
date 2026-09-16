@@ -62,3 +62,9 @@ id_rsa*
 id_ed25519*
 railway
 railway.pub
+
+# Scratch build scripts/previews from ad-hoc template generation — not source.
+outputs/
+
+# Editor-local config, not project source.
+.cursor/
