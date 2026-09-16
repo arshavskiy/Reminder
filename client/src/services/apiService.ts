@@ -787,6 +787,8 @@ export const api = {
     create: (body: Partial<Contract>) => post<Contract>("/contracts", body),
     update: (id: string, body: Partial<Contract>) => put<Contract>(`/contracts/${id}`, body),
     createReminder: (id: string) => post<{ ok: boolean; replaced: number; reminders: Reminder[] }>(`/contracts/${id}/reminder`),
+    clone: (id: string, body?: { shift_months?: number; start_date?: string; expiry_date?: string }) =>
+      post<Contract>(`/contracts/${id}/clone`, body ?? {}),
     delete: (id: string, params?: { deleteRelatedReminders?: boolean }) => del(`/contracts/${id}${qs(params)}`),
     deleteAll: () => del("/contracts"),
   },

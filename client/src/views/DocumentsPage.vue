@@ -682,6 +682,7 @@ import {
   AddOutline,
   CloudUploadOutline,
   DocumentOutline,
+  CopyOutline,
   DocumentTextOutline,
   DownloadOutline,
   EllipsisVerticalOutline,
@@ -1492,6 +1493,7 @@ function rowActions() {
     {label: "חלץ AI", key: "extract", icon: renderActionIcon(FlashOutline)},
     {label: "תצוגת תזכורת", key: "preview-reminder", icon: renderActionIcon(EyeOutline)},
     {label: "צור הצעת מחיר", key: "create-quote", icon: renderActionIcon(DocumentTextOutline)},
+    {label: "שכפול / חידוש", key: "clone-contract", icon: renderActionIcon(CopyOutline)},
     { type: "divider", key: "d1" },
     {
       label: "מחק",
@@ -1505,6 +1507,14 @@ function rowActionsFor(row: Document) {
   return rowActions()
     .filter((action) => action.key !== "extract" || canExtractDocument(row))
     .map((action) => {
+      if (action.key === "clone-contract") {
+        if (row.contract_id) return action;
+        return {
+          ...action,
+          disabled: true,
+          props: {title: "אין חוזה/תסקיר מקושר למסמך, ולכן אין מה לשכפל"},
+        };
+      }
       if (action.key !== "create-quote") return action;
       // A quote is built from the document's contract, so it cannot be produced
       // without one. Shown disabled rather than hidden so the action stays
@@ -1530,7 +1540,26 @@ function handleRowAction(key: string, row: Document) {
   if (key === "extract") openExtractModal(String(row.id));
   if (key === "preview-reminder") openDocumentReminderPreview(row);
   if (key === "create-quote") openCreateQuote(row);
+  if (key === "clone-contract") confirmCloneContract(row);
   if (key === "delete") confirmDeleteDocument(row);
+}
+
+function confirmCloneContract(row: Document) {
+  if (!row.contract_id) return;
+  confirm({
+    title: "שכפול וחידוש תסקיר",
+    content: "ייווצר תסקיר חדש עם אותם פרטים ותאריכים מוסטים בשנה, כולל תזכורות חדשות. מספר התסקיר יישאר ריק למילוי.",
+    confirmText: "שכפל",
+    onConfirm: async () => {
+      try {
+        const created = await api.contracts.clone(String(row.contract_id));
+        message.success("התסקיר שוכפל");
+        router.push(`/contracts/${created.id}/draft`);
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : "שכפול התסקיר נכשל");
+      }
+    },
+  });
 }
 
 async function openDocumentReminderPreview(row: Document) {

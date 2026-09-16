@@ -116,6 +116,104 @@ export function registerContractRoutes(app: express.Application) {
     }
   });
 
+  // POST /api/contracts/:id/clone — renew a contract for another term.
+  //
+  // Renewals are the common case for periodic inspections: same client, same
+  // equipment, dates moved on a year. Cloning skips re-keying all of that, and
+  // the copy gets its own fresh reminder chain.
+  app.post("/api/contracts/:id/clone", async (req, res) => {
+    let userId: string;
+    let userPlan: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+      userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    try {
+      await assertDocumentImportQuota(userId, userPlan, 1, "contracts");
+    } catch (err) {
+      if (err instanceof DocumentImportQuotaError) {
+        res.status(403).json(documentImportQuotaErrorPayload(err));
+        return;
+      }
+      throw err;
+    }
+
+    try {
+      const source = await col("contracts").findOne({ ...idFilter(req.params.id), user_id: userId }) as any;
+      if (!source) {
+        res.status(404).json({ error: "Contract not found" });
+        return;
+      }
+
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const shiftMonths = Number.isFinite(Number(body.shift_months)) ? Number(body.shift_months) : 12;
+      const now = new Date();
+
+      const shifted = (value: unknown): string | null => {
+        const raw = typeof value === "string" ? value.slice(0, 10) : "";
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+        const [y, m, d] = raw.split("-").map(Number);
+        // Day 0 of the following month clamps 31 January + 1 month to 28/29 February
+        // instead of letting Date roll it forward into March.
+        const target = new Date(Date.UTC(y, m - 1 + shiftMonths, 1));
+        const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+        target.setUTCDate(Math.min(d, lastDay));
+        return target.toISOString().slice(0, 10);
+      };
+
+      const expiryDate = body.expiry_date != null ? String(body.expiry_date) : shifted(source.expiry_date);
+      const startDate = body.start_date != null ? String(body.start_date) : shifted(source.start_date);
+
+      const doc: Record<string, any> = {
+        user_id: userId,
+        client_id: source.client_id ?? null,
+        // Numbers are unique per user and usually issued per term, so the renewal
+        // starts without one rather than colliding with the contract it came from.
+        contract_number: null,
+        contract_type: source.contract_type ?? null,
+        start_date: startDate,
+        expiry_date: expiryDate,
+        amount: source.amount ?? null,
+        currency: source.currency ?? "ILS",
+        counterparty: source.counterparty ?? null,
+        summary: source.summary ?? null,
+        manual_fields: source.manual_fields ?? null,
+        confidence: source.confidence ?? "medium",
+        editor_type: source.editor_type === "grid" ? "grid" : "sections",
+        print_template_id: source.print_template_id ?? null,
+        cloned_from_contract_id: String(source._id),
+        created_at: now,
+        updated_at: now,
+      };
+      const today = now.toISOString().slice(0, 10);
+      const isPast = Boolean(doc.expiry_date && String(doc.expiry_date) < today);
+      doc.status = isPast ? "expired" : "active";
+
+      // document_id is deliberately not copied: the renewal has no signed PDF of
+      // its own yet, and a stored null collides under the unique index.
+      const r = await col("contracts").insertOne(doc);
+      const contractId = r.insertedId.toString();
+
+      if (doc.expiry_date && !isPast) {
+        await generateContractReminders(contractId, doc.client_id, null, String(doc.expiry_date), userId);
+      }
+
+      const inserted = await col("contracts").findOne({ _id: r.insertedId });
+      res.status(201).json(flatDoc(inserted));
+    } catch (err) {
+      console.error("[contracts] clone failed:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+      }
+    }
+  });
+
   // GET /api/contracts
   app.get("/api/contracts", async (req, res) => {
     let userId: string;
