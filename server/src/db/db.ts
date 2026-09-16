@@ -41,8 +41,10 @@ const PRODUCTION_DB_NAME =
  * Which database the app and scripts actually use.
  *
  * Local by default, so day-to-day work cannot touch customer data by accident.
- * Set MONGODB_TARGET=production to point a script or a one-off run at Atlas —
- * it is ignored unless a production URI is configured, so a stray value cannot
+ * Set MONGODB_TARGET=production to point a script or a one-off run at Atlas: the
+ * Atlas slot then becomes the primary that col()/getDb() resolve to, and connectDb()
+ * fails loudly rather than falling back to local if that connection cannot be made.
+ * It is ignored unless a production URI is configured, so a stray value cannot
  * silently leave you connected to nothing.
  */
 const PRIMARY_TARGET: AdminDbTarget =
@@ -148,9 +150,15 @@ export async function connectDb(): Promise<Db> {
 
   if (PRODUCTION_URI && PRODUCTION_URI === LOCAL_URI) {
     _production = _local;
-  } else if (PRIMARY_TARGET === "production" || IS_PRODUCTION_RUNTIME) {
-    // Scripts (`MONGODB_TARGET=production`) and Railway need Atlas immediately.
-    // Local `npm run dev` leaves it closed so boot does not log a second cluster.
+  } else if (PRIMARY_TARGET === "production") {
+    // MONGODB_TARGET=production is an explicit "operate on Atlas" instruction, so
+    // a failure here must not fall back to local: a reseed or backfill script that
+    // silently wrote to the developer's local database instead of the customer one
+    // is worse than a script that refuses to start.
+    await ensureProductionDb();
+  } else if (IS_PRODUCTION_RUNTIME) {
+    // Railway wants Atlas warm on boot, but serving must not depend on it — the
+    // request path reaches it through ensureProductionDb() anyway.
     try {
       await ensureProductionDb();
     } catch (err) {
@@ -161,7 +169,10 @@ export async function connectDb(): Promise<Db> {
     }
   }
 
-  _primary = _local;
+  // MONGODB_TARGET=production makes the Atlas slot primary, so col()/getDb() and
+  // every script that never touches the admin override resolve to it. Without this
+  // the flag only pre-warmed the slot and left every unscoped read on local.
+  _primary = PRIMARY_TARGET === "production" && _production ? _production : _local;
   return _primary.db;
 }
 
