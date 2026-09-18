@@ -316,11 +316,12 @@ async function handleSelect(key: string) {
 
 :global(.user-menu-label) {
   display: inline-flex;
+  flex-direction: row;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
   width: 100%;
-  min-width: 132px;
+  min-width: 168px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -340,7 +341,8 @@ async function handleSelect(key: string) {
 
 :global(.user-menu-label__text) {
   flex: 1;
-  text-align: right;
+  min-width: 0;
+  text-align: start;
 }
 
 :global(.user-menu-label--active) {

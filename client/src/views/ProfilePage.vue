@@ -44,7 +44,7 @@
       <n-spin :show="loading">
         <section v-if="activeSection === 'personal'">
           <div class="section-header">
-            <h2 class="section-title">פרטים אישיים</h2>
+            <h2 class="section-title">{{ l.profilePersonal.title }}</h2>
             <n-button
               v-if="!editingEngineer"
               size="small"
@@ -53,24 +53,24 @@
               <template #icon>
                 <n-icon :component="CreateOutline" />
               </template>
-              עריכה
+              {{ l.profilePersonal.edit }}
             </n-button>
             <n-space v-else>
               <n-button size="small" @click="cancelEditEngineer"
-                >ביטול</n-button
+                >{{ l.common.cancel }}</n-button
               >
               <n-button
                 size="small"
                 type="primary"
                 :loading="savingEngineer"
                 @click="saveEngineer"
-                >שמור</n-button
+                >{{ l.common.save }}</n-button
               >
             </n-space>
           </div>
           <div class="info-card">
             <div class="info-row">
-              <span class="info-label">שם מלא</span>
+              <span class="info-label">{{ l.profilePersonal.fullName }}</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.name"
@@ -79,7 +79,7 @@
               <span v-else class="info-val">{{ user?.name || "—" }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">טלפון</span>
+              <span class="info-label">{{ l.profilePersonal.phone }}</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.phone"
@@ -88,18 +88,18 @@
               <span v-else class="info-val">{{ user?.phone || "—" }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">אימייל</span>
+              <span class="info-label">{{ l.profilePersonal.email }}</span>
               <span class="info-val">{{ user?.email }}</span>
             </div>
 
-            <div class="info-section-divider">פרטי רישוי</div>
+            <div class="info-section-divider">{{ l.profilePersonal.licensing }}</div>
             <div class="info-row">
-              <span class="info-label">מספר רישוי</span>
+              <span class="info-label">{{ l.profilePersonal.licenseNumber }}</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.inspector_number"
                 class="info-input"
-                :placeholder="showPerTypeInspectorNumbers ? 'ברירת מחדל לסוגים ללא מספר משלהם' : ''"
+                :placeholder="showPerTypeInspectorNumbers ? l.profilePersonal.licenseDefaultPlaceholder : ''"
               />
               <span v-else class="info-val">{{
                 engineerProfile?.inspector_number || "—"
@@ -111,70 +111,70 @@
                 type="button"
                 class="btn btn--ghost btn--xs per-type-toggle"
                 @click="showPerTypeInspectorNumbers = true"
-              >+ הוסף רישוי לפי בדיקה</button>
+              >{{ l.profilePersonal.addLicenseByType }}</button>
               <div v-else class="per-type-inspector-numbers">
                 <div class="per-type-inspector-numbers__head">
-                  <span class="info-label">רישוי לפי בדיקה</span>
-                  <button type="button" class="btn btn--ghost btn--xs" @click="showPerTypeInspectorNumbers = false; engineerForm.inspector_numbers_by_type = {}">בטל</button>
+                  <span class="info-label">{{ l.profilePersonal.licenseByType }}</span>
+                  <button type="button" class="btn btn--ghost btn--xs" @click="showPerTypeInspectorNumbers = false; engineerForm.inspector_numbers_by_type = {}">{{ l.profilePersonal.dismiss }}</button>
                 </div>
                 <div v-for="opt in inspectionTypeOptions" :key="opt.value" class="info-row per-type-inspector-numbers__row">
                   <span class="info-label">{{ opt.label }}</span>
                   <n-input
                     v-model:value="engineerForm.inspector_numbers_by_type[opt.value]"
                     class="info-input"
-                    :placeholder="engineerForm.inspector_number || 'מספר רישוי'"
+                    :placeholder="engineerForm.inspector_number || l.profilePersonal.licenseNumber"
                   />
                 </div>
               </div>
             </template>
             <div v-else-if="engineerProfile && Object.keys(engineerProfile?.inspector_numbers_by_type ?? {}).length" class="per-type-inspector-numbers per-type-inspector-numbers--readonly">
-              <span class="info-label">רישוי לפי בדיקה</span>
+              <span class="info-label">{{ l.profilePersonal.licenseByType }}</span>
               <div v-for="[key, num] in Object.entries(engineerProfile?.inspector_numbers_by_type ?? {})" :key="key" class="info-row per-type-inspector-numbers__row">
                 <span class="info-label">{{ inspectionTypeOptions.find((o) => o.value === key)?.label ?? key }}</span>
                 <span class="info-val">{{ num }}</span>
               </div>
             </div>
             <div class="info-row">
-              <span class="info-label">כתובת</span>
+              <span class="info-label">{{ l.profilePersonal.address }}</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.address"
                 class="info-input"
-                placeholder="רחוב ומספר"
+                :placeholder="l.profilePersonal.addressPlaceholder"
               />
               <span v-else class="info-val">{{
                 engineerProfile?.address || "—"
               }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">עיר</span>
+              <span class="info-label">{{ l.profilePersonal.city }}</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.city"
                 class="info-input"
-                placeholder="תל אביב"
+                :placeholder="l.profilePersonal.cityPlaceholder"
               />
               <span v-else class="info-val">{{
                 engineerProfile?.city || "—"
               }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">מספר התחלת תסקירים</span>
+              <span class="info-label">{{ l.profilePersonal.inspectionStart }}</span>
               <div
                 v-if="editingEngineer"
                 class="info-stack"
               >
                 <n-input
                   v-model:value="engineerForm.inspector_id_start"
-                  placeholder="לדוגמה: 16125"
+                  :placeholder="l.profilePersonal.exampleNumber"
                 />
                 <span v-if="engineerForm.inspector_id_start && engineerForm.inspector_number" class="info-hint">
                   <n-icon :component="LockClosedOutline" :size="14" />
-                  תצוגה מקדימה של המספר הבא:
+                  {{ l.profilePersonal.nextPreview }}
                   {{ engineerForm.inspector_number }}/{{ engineerForm.inspector_id_start }}
                 </span>
                 <span v-else-if="engineerForm.inspector_id_start" class="info-hint info-hint--warn">
-                  יש להזין מספר רישוי בדק כדי להציג את תצוגת המספר הבא
+                  {{ l.profilePersonal.needLicenseForPreview }}
                 </span>
               </div>
               <div
@@ -186,24 +186,24 @@
                   v-if="engineerProfile?.inspector_id_start && engineerProfile?.inspector_number"
                   class="info-hint"
                 >
-                  הבא יהיה: {{ nextInspectionId }}
+                  {{ t("profilePersonal.nextWillBe", { id: nextInspectionId }) }}
                 </span>
                 <span
                   v-else-if="engineerProfile?.inspector_id_start"
                   class="info-hint info-hint--warn"
                 >
-                  יש להזין מספר רישוי בדק כדי להציג את המספר הבא
+                  {{ l.profilePersonal.needLicenseForNext }}
                 </span>
               </div>
             </div>
 
             <div class="info-row">
-              <span class="info-label">עוסק מורשה (ח.פ)</span>
+              <span class="info-label">{{ l.profilePersonal.vatNumber }}</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.company_registration"
                 class="info-input"
-                placeholder="לדוגמה: 51646673"
+                :placeholder="l.profilePersonal.vatPlaceholder"
               />
               <span v-else class="info-val">{{
                 engineerProfile?.company_registration || "—"
@@ -212,32 +212,32 @@
 
             <!-- ── Inspector company details (used to filter out from AI extraction) ── -->
             <div class="info-section-divider">
-              פרטי החברה / בית העסק (לסינון מהחילוץ)
+              {{ l.profilePersonal.companyDetails }}
             </div>
             <div class="info-row">
-              <span class="info-label">שם החברה</span>
+              <span class="info-label">{{ l.profilePersonal.companyName }}</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.company_name"
                 class="info-input"
-                placeholder="לדוגמה: M.A.D הנדסה ובטיחות"
+                :placeholder="l.profilePersonal.companyNamePlaceholder"
               />
               <span v-else class="info-val">{{ engineerProfile?.company_name || "—" }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">תיאור / כותרת</span>
+              <span class="info-label">{{ l.profilePersonal.companySubtitle }}</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.company_subtitle"
                 class="info-input"
-                placeholder="לדוגמה: בדיקות בטיחות למתקני הרמה ומכלי לחץ"
+                :placeholder="l.profilePersonal.companySubtitlePlaceholder"
               />
               <span v-else class="info-val">{{
                 engineerProfile?.company_subtitle || "—"
               }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">טלפון / נייד</span>
+              <span class="info-label">{{ l.profilePersonal.companyPhone }}</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.company_phone"
@@ -249,7 +249,7 @@
               }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">אימייל</span>
+              <span class="info-label">{{ l.profilePersonal.email }}</span>
               <n-input
                 v-if="editingEngineer"
                 v-model:value="engineerForm.company_email"
@@ -261,13 +261,13 @@
               }}</span>
             </div>
             <div class="info-row info-row--top">
-              <span class="info-label">לוגו החברה</span>
+              <span class="info-label">{{ l.profilePersonal.companyLogo }}</span>
               <div class="logo-upload">
                 <img
                   v-if="engineerProfile?.company_logo_url"
                   :src="engineerProfile?.company_logo_url"
                   class="logo-upload__preview"
-                  alt="לוגו חברה"
+                  :alt="l.profilePersonal.companyLogoAlt"
                 />
                 <input
                   ref="companyLogoInput"
@@ -280,18 +280,18 @@
                   <template #icon>
                     <n-icon :component="ImageOutline" />
                   </template>
-                  {{ engineerProfile?.company_logo_url ? 'החלף לוגו' : 'העלה לוגו' }}
+                  {{ engineerProfile?.company_logo_url ? l.profilePersonal.replaceLogo : l.profilePersonal.uploadLogo }}
                 </n-button>
               </div>
             </div>
             <div class="info-row info-row--top">
-              <span class="info-label">חתימה</span>
+              <span class="info-label">{{ l.profilePersonal.signature }}</span>
               <div class="logo-upload">
                 <img
                   v-if="signatureUrl"
                   :src="signatureUrl"
                   class="logo-upload__preview logo-upload__preview--signature"
-                  alt="חתימה"
+                  :alt="l.profilePersonal.signatureAlt"
                 />
                 <input
                   ref="signatureInput"
@@ -310,7 +310,7 @@
                     <template #icon>
                       <n-icon :component="ImageOutline" />
                     </template>
-                    {{ signatureUrl ? 'החלף חתימה' : 'העלה חתימה' }}
+                    {{ signatureUrl ? l.profilePersonal.replaceSignature : l.profilePersonal.uploadSignature }}
                   </n-button>
                   <n-button
                     v-if="signatureUrl"
@@ -319,11 +319,11 @@
                     :disabled="uploadingSignature"
                     @click="removeSignature"
                   >
-                    הסר
+                    {{ l.profilePersonal.remove }}
                   </n-button>
                 </div>
                 <span class="info-hint">
-                  תופיע בתסקירים שתפיקו. תבנית עם חתימה משלה גוברת על זו.
+                  {{ l.profilePersonal.signatureHint }}
                 </span>
               </div>
             </div>
@@ -1284,8 +1284,8 @@
         <section v-if="activeSection === 'subscription'">
           <div class="section-header subscription-header">
             <div>
-              <h2 class="section-title">מנוי ותשלומים</h2>
-              <p class="subscription-header__desc">ניהול המסלול, מכסות השימוש והחיובים של החשבון.</p>
+              <h2 class="section-title">{{ l.profileBilling.title }}</h2>
+              <p class="subscription-header__desc">{{ l.profileBilling.subtitle }}</p>
             </div>
             <n-tag :type="planTag.type" size="small">{{ planTag.label }}</n-tag>
           </div>
@@ -1294,13 +1294,13 @@
             <article v-if="currentPricingPlan" class="sub-plan-card">
               <div class="sub-plan-card__head">
                 <div>
-                  <p class="sub-plan-card__eyebrow">המסלול שלכם</p>
+                  <p class="sub-plan-card__eyebrow">{{ l.profileBilling.yourPlan }}</p>
                   <h3 class="sub-plan-card__title">{{ currentPricingPlan.name }}</h3>
                   <p class="sub-plan-card__blurb">{{ currentPricingPlan.blurb }}</p>
                 </div>
                 <div class="sub-plan-card__price">
-                  <span v-if="currentPricingPlan.oldPrice" class="sub-plan-card__old-price">₪{{ currentPricingPlan.oldPrice }}</span>
-                  <strong>{{ currentPricingPlan.price === 0 ? "חינם" : `₪${currentPricingPlan.price}` }}</strong>
+                  <span v-if="currentPricingPlan.oldPrice" class="sub-plan-card__old-price">{{ currency }}{{ currentPricingPlan.oldPrice }}</span>
+                  <strong>{{ currentPricingPlan.price === 0 ? l.profileBilling.free : `${currency}${currentPricingPlan.price}` }}</strong>
                   <span v-if="currentPricingPlan.period">{{ currentPricingPlan.period }}</span>
                   <span v-if="planYearlyLabel" class="sub-plan-card__yearly">{{ planYearlyLabel }}</span>
                 </div>
@@ -1313,13 +1313,13 @@
               </ul>
             </article>
 
-            <aside aria-label="פרטי המנוי" class="sub-summary-card">
+            <aside :aria-label="l.profileBilling.summaryAria" class="sub-summary-card">
               <div class="sub-summary-card__row">
                 <span aria-hidden="true" class="sub-summary-card__icon">
                   <n-icon :component="CardOutline" :size="18"/>
                 </span>
                 <div>
-                  <span class="sub-summary-card__label">מחיר</span>
+                  <span class="sub-summary-card__label">{{ l.profileBilling.price }}</span>
                   <strong>{{ planPriceLabel }}</strong>
                 </div>
               </div>
@@ -1328,7 +1328,7 @@
                   <n-icon :component="WalletOutline" :size="18"/>
                 </span>
                 <div>
-                  <span class="sub-summary-card__label">סוג מכסה</span>
+                  <span class="sub-summary-card__label">{{ l.profileBilling.quotaType }}</span>
                   <strong>{{ quotaScopeLabel }}</strong>
                 </div>
               </div>
@@ -1337,7 +1337,7 @@
                   <n-icon :component="CalendarOutline" :size="18"/>
                 </span>
                 <div>
-                  <span class="sub-summary-card__label">תקופת מכסה</span>
+                  <span class="sub-summary-card__label">{{ l.profileBilling.quotaPeriod }}</span>
                   <strong>{{ quotaPeriodLabel }}</strong>
                 </div>
               </div>
@@ -1348,8 +1348,8 @@
             <section class="sub-panel">
               <div class="sub-panel__head">
                 <div>
-                  <h3>שימוש במכסה</h3>
-                  <p>מעקב אחרי מסמכים ותזכורות לפי המסלול.</p>
+                  <h3>{{ l.profileBilling.quotaUsage }}</h3>
+                  <p>{{ l.profileBilling.quotaUsageDesc }}</p>
                 </div>
               </div>
               <div v-if="quotaUsageRows.length" class="sub-quota-list">
@@ -1366,19 +1366,19 @@
                       :show-indicator="false"
                       type="line"
                   />
-                  <p v-else class="sub-quota__unlimited">ללא הגבלה</p>
+                  <p v-else class="sub-quota__unlimited">{{ l.profileBilling.unlimited }}</p>
                 </div>
               </div>
               <div v-else class="sub-billing-empty sub-billing-empty--compact">
-                נתוני השימוש יופיעו לאחר טעינת פרטי המנוי.
+                {{ l.profileBilling.usageWaiting }}
               </div>
             </section>
 
             <section class="sub-panel">
               <div class="sub-panel__head">
                 <div>
-                  <h3>פירוט שימוש</h3>
-                  <p>סיכום יבוא מסמכים מהעלאה ידנית ומ-Gmail.</p>
+                  <h3>{{ l.profileBilling.usageDetails }}</h3>
+                  <p>{{ l.profileBilling.usageDetailsDesc }}</p>
                 </div>
               </div>
               <div v-if="importCounterRows.length" class="sub-counter-list">
@@ -1388,7 +1388,7 @@
                 </div>
               </div>
               <div v-else class="sub-billing-empty sub-billing-empty--compact">
-                עדיין אין נתוני שימוש להצגה.
+                {{ l.profileBilling.usageEmpty }}
               </div>
             </section>
           </div>
@@ -1396,8 +1396,8 @@
           <div v-if="upgradePlans.length" class="subscription-upgrades">
             <div class="sub-panel__head">
               <div>
-                <h3>שדרוג מסלול</h3>
-                <p>בחרו מסלול מתאים ונמשיך את הרכישה ב-WhatsApp.</p>
+                <h3>{{ l.profileBilling.upgradeTitle }}</h3>
+                <p>{{ l.profileBilling.upgradeDesc }}</p>
               </div>
             </div>
             <div class="upgrade-grid">
@@ -1407,16 +1407,18 @@
                 class="upgrade-card"
                 :class="{ 'upgrade-card--highlighted': plan.highlighted }"
               >
-                <span v-if="plan.highlighted" class="upgrade-card__badge">הכי פופולרי</span>
+                <span v-if="plan.highlighted" class="upgrade-card__badge">{{ l.profileBilling.mostPopular }}</span>
                 <h3 class="upgrade-card__name">{{ plan.name }}</h3>
                 <p class="upgrade-card__blurb">{{ plan.blurb }}</p>
                 <div class="upgrade-card__price">
-                  <span v-if="plan.oldPrice" class="upgrade-card__old">₪{{ plan.oldPrice }}</span>
-                  <strong>₪{{ yearlyMonthly(plan) }}</strong>
-                  <span class="upgrade-card__period">/ חודש</span>
+                  <span v-if="plan.oldPrice" class="upgrade-card__old">{{ currency }}{{ plan.oldPrice }}</span>
+                  <strong>{{ currency }}{{ yearlyMonthly(plan) }}</strong>
+                  <span class="upgrade-card__period">{{ plan.period }}</span>
                 </div>
                 <p v-if="plan.yearlyPrice" class="upgrade-card__terms">
-                  בתשלום שנתי: ₪{{ plan.yearlyPrice.toLocaleString() }} לשנה · או ₪{{ plan.oldPrice ?? plan.price }} בחיוב חודשי
+                  {{ locale === "en"
+                    ? `Billed yearly: ${currency}${plan.yearlyPrice.toLocaleString("en-US")} / year · or ${currency}${plan.oldPrice ?? plan.price} billed monthly`
+                    : `בתשלום שנתי: ${currency}${plan.yearlyPrice.toLocaleString("he-IL")} לשנה · או ${currency}${plan.oldPrice ?? plan.price} בחיוב חודשי` }}
                 </p>
                 <ul class="upgrade-card__features">
                   <li v-for="feature in plan.features" :key="feature">
@@ -1426,9 +1428,9 @@
                 </ul>
                 <a :href="whatsappHref(plan)" class="upgrade-card__cta" rel="noopener" target="_blank">
                   <n-icon :component="LogoWhatsapp" :size="16"/>
-                  לרכישה ב-WhatsApp
+                  {{ l.profileBilling.buyWhatsapp }}
                 </a>
-                <p class="upgrade-card__note">תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל</p>
+                <p class="upgrade-card__note">{{ l.profileBilling.payNote }}</p>
               </article>
             </div>
           </div>
@@ -1436,8 +1438,8 @@
           <section class="sub-panel sub-billing-panel">
             <div class="sub-panel__head">
               <div>
-                <h3>היסטוריית חיוב</h3>
-                <p>חשבוניות ותשלומים יוצגו כאן לאחר חיבור מערכת התשלומים.</p>
+                <h3>{{ l.profileBilling.billingHistory }}</h3>
+                <p>{{ l.profileBilling.billingHistoryDesc }}</p>
               </div>
               <n-icon :component="ReceiptOutline" :size="20"/>
             </div>
@@ -1445,16 +1447,16 @@
               <table class="billing-table">
                 <thead>
                 <tr>
-                  <th>תאריך</th>
-                  <th>סכום</th>
-                  <th>סטטוס</th>
-                  <th>תיאור</th>
+                  <th>{{ l.profileBilling.colDate }}</th>
+                  <th>{{ l.profileBilling.colAmount }}</th>
+                  <th>{{ l.profileBilling.colStatus }}</th>
+                  <th>{{ l.profileBilling.colDescription }}</th>
                 </tr>
                 </thead>
                 <tbody>
                 <tr v-for="(row, index) in billingHistory" :key="index">
                   <td>{{ formatDate(row.date) }}</td>
-                  <td>₪{{ row.amount }}</td>
+                  <td>{{ currency }}{{ row.amount }}</td>
                   <td>{{ row.status }}</td>
                   <td>{{ row.description }}</td>
                 </tr>
@@ -1462,7 +1464,7 @@
               </table>
             </div>
             <div v-else class="sub-billing-empty">
-              אין חיובים עדיין.
+              {{ l.profileBilling.noCharges }}
             </div>
           </section>
         </section>
@@ -1583,12 +1585,12 @@ import AwsS3Logo from "../components/AwsS3Logo.vue";
 import {useConfirm} from "../composables/useConfirm.js";
 import {
   PLAN_LABELS,
+  PLAN_LABELS_EN,
   formatPlanPrice,
   formatPlanYearlyPrice,
-  formatQuotaScope,
-  formatQuotaUsage,
-  getPricingPlan,
-  PRICING_PLANS,
+  getPricingPlanForLocale,
+  moneySymbol,
+  plansForLocale,
   quotaPercent,
   resolveUserPlan,
   planAllowsGoogleDrive,
@@ -1768,11 +1770,20 @@ const PLAN_TAG_TYPES: Record<PlanId, "success" | "info" | "default"> = {
 };
 const currentPlanId = computed(() => resolveUserPlan(user.value));
 const exportAllowed = computed(() => featureFlagsForUser(user.value).excelExport);
-const currentPricingPlan = computed(() => getPricingPlan(currentPlanId.value));
+const currency = computed(() => moneySymbol(locale.value));
+const currentPricingPlan = computed(() => getPricingPlanForLocale(currentPlanId.value, locale.value));
 
-/** Paid plans the user is not already on. Nothing to upsell to a business user. */
+const PLAN_RANK: Record<PlanId, number> = {
+  expired: 0,
+  trial: 1,
+  digital: 2,
+  basic: 3,
+  business: 4,
+};
+
+/** Higher-tier paid plans the user is not already on, including Digital. */
 const upgradePlans = computed(
-    () => PRICING_PLANS.filter((plan) => plan.yearlyPrice != null && plan.id !== currentPlanId.value),
+    () => plansForLocale(locale.value).filter((plan) => PLAN_RANK[plan.id] > PLAN_RANK[currentPlanId.value]),
 );
 
 /** The yearly price expressed per month, which is how the cards compare. */
@@ -1785,22 +1796,29 @@ function yearlyMonthly(plan: {price: number; yearlyPrice?: number}): number {
  * WhatsApp with the plan and its price already written into the message.
  */
 function whatsappHref(plan: {name: string; price: number; oldPrice?: number; yearlyPrice?: number}): string {
+  const symbol = currency.value;
   const price = plan.yearlyPrice
-      ? `₪${yearlyMonthly(plan)} לחודש בתשלום שנתי או ₪${plan.oldPrice ?? plan.price} בחיוב חודשי`
-      : `₪${plan.price} לחודש`;
-  const message = `שלום, אני מעוניין לרכוש את המסלול ${plan.name} של RemindOCR (${price}).`;
+      ? locale.value === "en"
+        ? `${symbol}${yearlyMonthly(plan)} / month billed yearly or ${symbol}${plan.oldPrice ?? plan.price} billed monthly`
+        : `${symbol}${yearlyMonthly(plan)} לחודש בתשלום שנתי או ${symbol}${plan.oldPrice ?? plan.price} בחיוב חודשי`
+      : locale.value === "en"
+        ? `${symbol}${plan.price} / month`
+        : `${symbol}${plan.price} לחודש`;
+  const message = locale.value === "en"
+      ? `Hi, I would like to purchase the RemindOCR ${plan.name} plan (${price}).`
+      : `שלום, אני מעוניין לרכוש את המסלול ${plan.name} של RemindOCR (${price}).`;
   return `https://wa.me/972554605328?text=${encodeURIComponent(message)}`;
 }
 const planTag = computed(() => ({
-  label: PLAN_LABELS[currentPlanId.value],
+  label: (locale.value === "en" ? PLAN_LABELS_EN : PLAN_LABELS)[currentPlanId.value],
   type: PLAN_TAG_TYPES[currentPlanId.value],
 }));
-const planPriceLabel = computed(() => formatPlanPrice(currentPricingPlan.value));
-const planYearlyLabel = computed(() => formatPlanYearlyPrice(currentPricingPlan.value));
+const planPriceLabel = computed(() => formatPlanPrice(currentPricingPlan.value, locale.value));
+const planYearlyLabel = computed(() => formatPlanYearlyPrice(currentPricingPlan.value, locale.value));
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("he-IL", {
+  return new Date(d).toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -1840,7 +1858,12 @@ const engineerForm = ref({
 // "הוסף רישוי לפי בדיקה", so the common single-number case stays a
 // one-line field.
 const showPerTypeInspectorNumbers = ref(false);
-const inspectionTypeOptions = INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => ({label: p.name, value: p.key}));
+const inspectionTypeOptions = computed(() =>
+  INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => ({
+    label: l.value.profilePersonal.types[p.key as keyof typeof l.value.profilePersonal.types] ?? p.name,
+    value: p.key,
+  })),
+);
 
 function startEditEngineer() {
   const p = engineerProfile.value;
@@ -2498,15 +2521,26 @@ async function setTheme(t: string) {
 const subscriptionData = ref<ProfileSubscription | null>(null);
 const billingHistory = ref<any[]>([]);
 
+function quotaScopeText(scope: string) {
+  if (scope === "monthly") return l.value.profileBilling.monthlyQuota;
+  if (scope === "lifetime") return l.value.profileBilling.lifetimeQuota;
+  return l.value.profileBilling.unlimited;
+}
+
+function quotaUsageText(used: number, limit: number | null) {
+  if (limit === null) return t("profileBilling.usageUnlimited", {n: used});
+  return `${used} / ${limit}`;
+}
+
 const quotaScopeLabel = computed(() => {
   if (!subscriptionData.value) return "—";
   const plan = subscriptionData.value.plan;
   if (plan === "expired" || plan === "trial") {
-    return formatQuotaScope(subscriptionData.value.quotas.manualDocuments?.scope ?? "lifetime");
+    return quotaScopeText(subscriptionData.value.quotas.manualDocuments?.scope ?? "lifetime");
   }
   const scope = subscriptionData.value.quotas.invoices?.scope
       ?? subscriptionData.value.quotas.contracts?.scope;
-  return scope ? formatQuotaScope(scope) : "—";
+  return scope ? quotaScopeText(scope) : "—";
 });
 
 const quotaPeriodLabel = computed(() => {
@@ -2526,13 +2560,13 @@ const quotaUsageRows = computed(() => {
   const plan = subscriptionData.value.plan;
   const defs = plan === "expired" || plan === "trial"
       ? [
-        {key: "manualDocuments" as const, label: "יבוא מסמכים"},
-        {key: "emailDocuments" as const, label: "יבוא מסמכים מאימייל"},
-        {key: "reminders" as const, label: "תזכורות אימייל"},
+        {key: "manualDocuments" as const, label: l.value.profileBilling.importDocuments},
+        {key: "emailDocuments" as const, label: l.value.profileBilling.importFromEmail},
+        {key: "reminders" as const, label: l.value.profileBilling.emailReminders},
       ]
       : [
-        {key: "contracts" as const, label: "תסקירים וחוזים (העלאה/ייבוא)"},
-        {key: "reminders" as const, label: "תזכורות אימייל"},
+        {key: "contracts" as const, label: l.value.profileBilling.inspectionsContracts},
+        {key: "reminders" as const, label: l.value.profileBilling.emailReminders},
       ];
   return defs.map(({key, label}) => {
     const quota = subscriptionData.value!.quotas[key];
@@ -2540,7 +2574,7 @@ const quotaUsageRows = computed(() => {
       key,
       label,
       limit: quota?.limit ?? null,
-      usageLabel: formatQuotaUsage(quota?.used ?? 0, quota?.limit ?? null),
+      usageLabel: quotaUsageText(quota?.used ?? 0, quota?.limit ?? null),
       percent: quotaPercent(quota?.used ?? 0, quota?.limit ?? null),
     };
   });
@@ -2550,9 +2584,9 @@ const importCounterRows = computed(() => {
   const counters = subscriptionData.value?.counters;
   if (!counters) return [];
   return [
-    {key: "scanned", label: "מסמכים שנסרקו (העלאה ידנית)", value: counters.scannedDocuments},
-    {key: "gmail-docs", label: "מסמכים שיובאו מ-Gmail", value: counters.gmailDocuments},
-    {key: "gmail-invoices", label: "חשבוניות שיובאו מ-Gmail", value: counters.gmailInvoices},
+    {key: "scanned", label: l.value.profileBilling.scannedDocs, value: counters.scannedDocuments},
+    {key: "gmail-docs", label: l.value.profileBilling.gmailDocs, value: counters.gmailDocuments},
+    {key: "gmail-invoices", label: l.value.profileBilling.gmailInvoices, value: counters.gmailInvoices},
   ];
 });
 
