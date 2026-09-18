@@ -1,17 +1,17 @@
 <template>
   <div>
     <n-space justify="space-between" align="center" style="margin-bottom: 16px">
-      <n-button type="primary" @click="newTemplate">+ תבנית חדשה</n-button>
+      <n-button type="primary" @click="newTemplate">+ {{ l.emailTemplates.newTemplate }}</n-button>
     </n-space>
 
     <n-grid v-if="templates.length" :cols="templateGridCols" :x-gap="16" :y-gap="16">
       <n-gi v-for="t in templates" :key="t.id">
         <n-card hoverable :title="t.name" @click="select(t)" style="cursor: pointer">
           <template #header-extra>
-            <n-tag v-if="userDefaultTemplateId ? t.id === userDefaultTemplateId : t.is_default" size="small" type="success">ברירת מחדל</n-tag>
+            <n-tag v-if="userDefaultTemplateId ? t.id === userDefaultTemplateId : t.is_default" size="small" type="success">{{ l.emailTemplates.default }}</n-tag>
           </template>
           <p style="font-size: 13px; color: var(--text-secondary); margin: 0">
-            {{ docTplName(t.doc_template_id) || "לכל סוגי המסמכים" }}
+            {{ docTplName(t.doc_template_id) || l.emailTemplates.allDocTypes }}
           </p>
           <p v-if="t.reminder_category" style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 0">
             קטגוריה: {{ categoryLabel(t.reminder_category) }}
@@ -269,6 +269,7 @@
 
 <script setup lang="ts">
 import {computed, onBeforeUnmount, onMounted, ref} from "vue";
+import {useI18n} from "../composables/useI18n.js";
 import {
   NAlert,
   NButton,
@@ -313,7 +314,9 @@ const detectedVars = ref<string[]>([]);
 const activeTab = ref("editor");
 const htmlTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const htmlHighlightRef = ref<HTMLPreElement | null>(null);
+
 const message = useMessage();
+const {l} = useI18n();
 const {confirm: confirmDialog} = useConfirm();
 const authStore = useAuthStore();
 const isMobile = ref(false);

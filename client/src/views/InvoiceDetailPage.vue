@@ -1,11 +1,11 @@
 <template>
-  <div class="invoice-detail" dir="rtl">
+  <div class="invoice-detail" :dir="dir">
     <PageHeader
-      :title="invoice?.supplier_name || 'חשבונית'"
-      :subtitle="sourceLine ? `מאת: ${sourceLine}` : undefined"
+      :title="invoice?.supplier_name || l.invoices.fallbackTitle"
+      :subtitle="sourceLine ? t('invoices.from', {source: sourceLine}) : undefined"
     >
       <template #breadcrumb>
-        <router-link to="/invoices">חשבוניות</router-link>
+        <router-link :to="href('/invoices')">{{ l.invoices.title }}</router-link>
         <span class="sep">/</span>
         <span>{{ invoice?.invoice_number || "פרטי חשבונית" }}</span>
       </template>
@@ -223,9 +223,11 @@ import {
 } from "@vicons/ionicons5";
 import { api, type ImportedInvoice } from "../services/apiService.js";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import StorageSyncIcons from "../components/StorageSyncIcons.vue";
 
 const route = useRoute();
+const {l, t, href, dir} = useI18n();
 const router = useRouter();
 const message = useMessage();
 

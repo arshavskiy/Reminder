@@ -1,33 +1,31 @@
 <template>
-  <div class="quote-detail" dir="rtl">
-    <nav class="quote-detail__tabs" aria-label="אזור מסמכים"><router-link to="/documents">תסקירים</router-link><router-link to="/quotes">הצעות מחיר</router-link></nav>
+  <div class="quote-detail" :dir="dir">
+    <nav class="quote-detail__tabs" :aria-label="l.chrome.workspaceAria"><router-link :to="href('/documents')">{{ l.chrome.nav.documents }}</router-link><router-link :to="href('/quotes')">{{ l.chrome.nav.quotes }}</router-link></nav>
     <div class="quote-detail__bar">
-      <button class="btn btn--ghost" type="button" @click="router.push('/quotes')"><n-icon :component="ArrowForwardOutline" :size="16"/>חזרה להצעות מחיר</button>
+      <button class="btn btn--ghost" type="button" @click="router.push(href('/quotes'))"><n-icon :component="ArrowForwardOutline" :size="16"/>{{ l.quotes.backToQuotes }}</button>
       <div v-if="quote" class="quote-detail__actions">
-        <router-link v-if="quote.status === 'draft' || quote.status === 'issued'" :to="`/quotes/${quote._id}/edit`" class="btn btn--ghost"><n-icon :component="CreateOutline" :size="16"/>ערוך</router-link>
-        <a class="btn btn--ghost" :href="paymentService.pdf(quote._id, quote.updatedAt)" download><n-icon :component="DownloadOutline" :size="16"/>הורד PDF</a>
-        <button class="btn btn--ghost" :disabled="sending || !quote.customer.email" @click="send"><n-icon :component="PaperPlaneOutline" :size="16"/>{{ sending ? "שולח…" : "שלח במייל" }}</button>
-        <button class="btn btn--danger" :disabled="deleting" @click="confirmDelete"><n-icon :component="TrashOutline" :size="16"/>מחק</button>
+        <router-link v-if="quote.status === 'draft' || quote.status === 'issued'" :to="href(`/quotes/${quote._id}/edit`)" class="btn btn--ghost"><n-icon :component="CreateOutline" :size="16"/>{{ l.common.edit }}</router-link>
+        <a class="btn btn--ghost" :href="paymentService.pdf(quote._id, quote.updatedAt)" download><n-icon :component="DownloadOutline" :size="16"/>{{ l.quotes.downloadPdf }}</a>
+        <button class="btn btn--ghost" :disabled="sending || !quote.customer.email" @click="send"><n-icon :component="PaperPlaneOutline" :size="16"/>{{ sending ? l.quotes.sending : l.quotes.sendEmail }}</button>
+        <button class="btn btn--danger" :disabled="deleting" @click="confirmDelete"><n-icon :component="TrashOutline" :size="16"/>{{ l.common.delete }}</button>
       </div>
     </div>
     <n-spin :show="loading">
       <template v-if="quote">
-        <header class="quote-detail__head"><div><span class="quote-detail__eyebrow">הצעת מחיר</span><h1>{{ quote.number || "טיוטה" }}</h1><p>{{ quote.customer.name || "לקוח ללא שם" }} · תסקיר {{ quote.reportNumber || "—" }}</p></div><span class="quote-status" :class="`quote-status--${quote.status}`">{{ statusLabel(quote.status) }}</span></header>
+        <header class="quote-detail__head"><div><span class="quote-detail__eyebrow">{{ l.quotes.eyebrow }}</span><h1>{{ quote.number || l.common.draft }}</h1><p>{{ quote.customer.name || l.common.unnamedClient }} · {{ l.quotes.inspection }} {{ quote.reportNumber || "—" }}</p></div><span class="quote-status" :class="`quote-status--${quote.status}`">{{ statusLabel(quote.status) }}</span></header>
         <div class="quote-detail__grid">
-          <!-- Left: the document itself, sticky like the document detail page -->
           <aside class="quote-detail__left">
-            <section class="quote-preview"><div class="quote-preview__title"><h2>תצוגת המסמך</h2><span>אפשר לצפות במסמך בלי להוריד אותו</span></div><iframe v-if="quote.status === 'issued'" :src="paymentService.pdf(quote._id, quote.updatedAt)" :title="`הצעת מחיר ${quote.number || ''}`"/><div v-else class="quote-preview__empty">הצעת המחיר עדיין לא הופקה כ-PDF.</div></section>
+            <section class="quote-preview"><div class="quote-preview__title"><h2>{{ l.quotes.previewTitle }}</h2><span>{{ l.quotes.previewHint }}</span></div><iframe v-if="quote.status === 'issued'" :src="paymentService.pdf(quote._id, quote.updatedAt)" :title="`${l.quotes.eyebrow} ${quote.number || ''}`"/><div v-else class="quote-preview__empty">{{ l.quotes.previewEmpty }}</div></section>
           </aside>
-          <!-- Right: the data -->
           <section class="quote-detail__right">
             <div class="quote-summary">
-              <div><span>בתוקף עד</span><strong>{{ formatDate(quote.dueDate) }}</strong></div><div><span>סכום</span><strong>{{ formatMoney(quote.totalCents) }}</strong></div><div><span>אימייל</span><strong dir="ltr">{{ quote.customer.email || "—" }}</strong></div><div><span>שמירה</span><strong>{{ storageLabel(quote) }}</strong></div>
+              <div><span>{{ l.quotes.validUntil }}</span><strong>{{ formatDate(quote.dueDate) }}</strong></div><div><span>{{ l.quotes.amount }}</span><strong>{{ formatMoney(quote.totalCents) }}</strong></div><div><span>{{ l.quotes.email }}</span><strong dir="ltr">{{ quote.customer.email || "—" }}</strong></div><div><span>{{ l.quotes.storage }}</span><strong>{{ storageLabel(quote) }}</strong></div>
             </div>
-            <section v-if="quote.lines?.length" class="quote-lines"><h2>סעיפי ההצעה</h2><table><thead><tr><th>סעיף</th><th>תיאור</th><th>כמות</th><th>מחיר יחידה</th><th>סה״כ</th></tr></thead><tbody><tr v-for="(line,index) in quote.lines" :key="line.rateId || index"><td>{{ line.section || "—" }}</td><td>{{ line.label || "—" }}</td><td>{{ line.quantity || 0 }}</td><td>{{ formatMoney(line.unitCents || 0) }}</td><td>{{ formatMoney(line.totalCents ?? (line.unitCents || 0) * (line.quantity || 0)) }}</td></tr></tbody></table></section>
+            <section v-if="quote.lines?.length" class="quote-lines"><h2>{{ l.quotes.lines }}</h2><table><thead><tr><th>{{ l.quotes.line }}</th><th>{{ l.quotes.description }}</th><th>{{ l.quotes.qty }}</th><th>{{ l.quotes.unitPrice }}</th><th>{{ l.quotes.total }}</th></tr></thead><tbody><tr v-for="(line,index) in quote.lines" :key="line.rateId || index"><td>{{ line.section || "—" }}</td><td>{{ line.label || "—" }}</td><td>{{ line.quantity || 0 }}</td><td>{{ formatMoney(line.unitCents || 0) }}</td><td>{{ formatMoney(line.totalCents ?? (line.unitCents || 0) * (line.quantity || 0)) }}</td></tr></tbody></table></section>
           </section>
         </div>
       </template>
-      <div v-else-if="!loading" class="quote-error">הצעת המחיר לא נמצאה.</div>
+      <div v-else-if="!loading" class="quote-error">{{ l.quotes.notFound }}</div>
     </n-spin>
   </div>
 </template>
@@ -35,7 +33,8 @@
 <script setup lang="ts">
 import {onMounted, ref} from "vue"; import {useRoute, useRouter} from "vue-router"; import {NIcon,NSpin,useMessage} from "naive-ui"; import {ArrowForwardOutline,DownloadOutline,CreateOutline,PaperPlaneOutline,TrashOutline} from "@vicons/ionicons5";
 import {paymentService,type PaymentRequest} from "../services/paymentService"; import {useConfirm} from "../composables/useConfirm";
-const route=useRoute(); const router=useRouter(); const message=useMessage(); const {confirm}=useConfirm(); const quote=ref<PaymentRequest|null>(null); const loading=ref(true); const sending=ref(false); const deleting=ref(false);
+import {useI18n} from "../composables/useI18n.js";
+const route=useRoute(); const router=useRouter(); const message=useMessage(); const {confirm}=useConfirm(); const {l, href, dir}=useI18n(); const quote=ref<PaymentRequest|null>(null); const loading=ref(true); const sending=ref(false); const deleting=ref(false);
 function formatDate(value:string){return value?value.split("-").reverse().join("/"):"—"} function formatMoney(cents:number){return new Intl.NumberFormat("he-IL",{style:"currency",currency:"ILS"}).format((cents||0)/100)} function statusLabel(status:string){return status==="issued"?"הופקה":status==="draft"?"טיוטה":status}
 function storageLabel(row:PaymentRequest){const storage=row.storage;if(!storage)return "מקומי";return [storage.local==="saved"?"מקומי":null,storage.object==="saved"?"S3":null,storage.drive==="saved"?"Drive":null].filter(Boolean).join(" · ")||"ממתין"}
 async function load(){loading.value=true;try{quote.value=await paymentService.get(String(route.params.id))}catch(error){message.error(error instanceof Error?error.message:"לא ניתן לטעון את ההצעה")}finally{loading.value=false}}

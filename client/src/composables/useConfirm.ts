@@ -32,7 +32,7 @@ function renderContent(text: string): () => VNodeChild {
     }
     if (lastIndex < text.length) parts.push(text.slice(lastIndex));
 
-    return h("div", {class: "confirm-dialog__body", dir: "rtl"}, [
+    return h("div", {class: "confirm-dialog__body", dir: document.documentElement.dir || "rtl"}, [
       h("p", {class: "confirm-dialog__text"}, parts),
     ]);
   };

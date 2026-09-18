@@ -2,30 +2,30 @@
   <section class="rcal">
     <header class="rcal__head">
       <div class="rcal__title-wrap">
-        <h3 class="rcal__title">{{ testsOnly ? "יומן" : "לוח תזכורות ותסקירים" }}</h3>
+        <h3 class="rcal__title">{{ testsOnly ? l.calendar.journal : l.calendar.title }}</h3>
         <div class="rcal__counts">
-          <span v-if="!testsOnly" class="rcal__count">{{ filteredRows.length }} תזכורות</span>
+          <span v-if="!testsOnly" class="rcal__count">{{ t('calendar.remindersCount', {n: filteredRows.length}) }}</span>
           <span v-if="filteredExpiryItems.length" class="rcal__expiry-count">
-            {{ filteredExpiryItems.length }} תסקירים
+            {{ t('calendar.inspectionsCount', {n: filteredExpiryItems.length}) }}
           </span>
         </div>
       </div>
       <div class="rcal__controls">
-        <div class="rcal__toggle" role="group" aria-label="תצוגת לוח">
+        <div class="rcal__toggle" role="group" :aria-label="l.calendar.viewAria">
           <n-button
             :type="view === 'month' ? 'primary' : 'default'"
             size="small"
             @click="view = 'month'"
-          >▦ חודש</n-button>
+          >{{ l.calendar.month }}</n-button>
           <n-button
             :type="view === 'agenda' ? 'primary' : 'default'"
             size="small"
             @click="view = 'agenda'"
-          >☰ רשימה</n-button>
+          >{{ l.calendar.list }}</n-button>
         </div>
         <div class="rcal__actions">
           <n-button size="small" secondary class="rcal__action-btn" @click="emit('open-monthly-report', cursor.getTime())">
-            דוח חודשי
+            {{ l.calendar.monthlyReport }}
           </n-button>
           <!-- Hidden rather than disabled when nothing is sendable: a greyed-out
                "send (0)" told the user nothing about why, and the count depends on
@@ -40,13 +40,13 @@
             class="rcal__action-btn"
             @click="showSendVisibleConfirm = true"
           >
-            שלח תזכורות גלויות ({{ sendableVisibleReminders.length }})
+            {{ t('calendar.sendVisible', {n: sendableVisibleReminders.length}) }}
           </n-button>
           <n-button
             :disabled="loading"
             size="small"
             class="rcal__refresh-btn"
-            aria-label="רענן"
+            :aria-label="l.calendar.refresh"
             @click="$emit('refresh')"
           >
             <span :class="{ 'rcal__refresh-icon--spin': loading }" aria-hidden="true">↻</span>
@@ -80,20 +80,20 @@
       </div>
       <div class="rcal__legend">
         <span v-if="!testsOnly" class="rcal__legend-item">
-          <span class="rcal__legend-dot" style="background:var(--brand-color)"></span> תזכורות
+          <span class="rcal__legend-dot" style="background:var(--brand-color)"></span> {{ l.calendar.legendReminders }}
         </span>
         <span v-if="!testsOnly" class="rcal__legend-item">
-          <span class="rcal__legend-dot" style="background:#2080f0"></span> נשלחה
+          <span class="rcal__legend-dot" style="background:#2080f0"></span> {{ l.calendar.legendSent }}
         </span>
         <template v-if="featuresStore.hasFeature(FEATURES.dashboard.calendarFilters)">
           <span class="rcal__legend-item">
-            <span class="rcal__legend-dot" style="background:#d03050"></span> פג תוקף
+            <span class="rcal__legend-dot" style="background:#d03050"></span> {{ l.calendar.legendExpired }}
           </span>
           <span class="rcal__legend-item">
-            <span class="rcal__legend-dot" style="background:#f0a020"></span> ≤30 יום
+            <span class="rcal__legend-dot" style="background:#f0a020"></span> {{ l.calendar.legend30 }}
           </span>
           <span class="rcal__legend-item">
-            <span class="rcal__legend-dot" style="background:#e8c84a"></span> ≤90 יום
+            <span class="rcal__legend-dot" style="background:#e8c84a"></span> {{ l.calendar.legend90 }}
           </span>
         </template>
       </div>
@@ -105,7 +105,7 @@
         <n-button class="rcal__nav-btn" size="small" @click="shiftMonth(-1)">‹</n-button>
         <span class="rcal__nav-label">{{ monthLabel }}</span>
         <n-button class="rcal__nav-btn" size="small" @click="shiftMonth(1)">›</n-button>
-        <n-button class="rcal__today-btn" size="small" tertiary @click="goToday">היום</n-button>
+        <n-button class="rcal__today-btn" size="small" tertiary @click="goToday">{{ l.calendar.today }}</n-button>
       </div>
 
       <div class="rcal__weekdays">
@@ -143,7 +143,7 @@
                     v-if="r.calendar_synced"
                     :component="CalendarOutline"
                     class="rcal__gcal-icon"
-                    aria-label="מסונכרן ל-Google Calendar"
+                    :aria-label="l.calendar.synced"
                   />
                   <span class="rcal__pill-label">{{ reminderCalendarLabel(r) }}</span>
                 </button>
@@ -169,44 +169,44 @@
               </template>
               <div class="rcal__expiry-pop">
                 <p class="rcal__expiry-pop__title">{{ expiryCalendarLabel(e) }}</p>
-                <p v-if="e.equipment_name" class="rcal__expiry-pop__sub">ציוד: {{ e.equipment_name }}</p>
-                <p v-if="e.client_name" class="rcal__expiry-pop__sub">לקוח: {{ e.client_name }}</p>
-                <p v-if="e.contact_person" class="rcal__expiry-pop__sub">איש קשר: {{ e.contact_person }}</p>
-                <p v-if="e.contact_phone" class="rcal__expiry-pop__sub">טלפון: {{ e.contact_phone }}</p>
-                <p v-if="e.contact_email" class="rcal__expiry-pop__sub">אימייל: {{ e.contact_email }}</p>
+                <p v-if="e.equipment_name" class="rcal__expiry-pop__sub">{{ t('calendar.equipment', {name: e.equipment_name}) }}</p>
+                <p v-if="e.client_name" class="rcal__expiry-pop__sub">{{ t('calendar.client', {name: e.client_name}) }}</p>
+                <p v-if="e.contact_person" class="rcal__expiry-pop__sub">{{ t('calendar.contact', {name: e.contact_person}) }}</p>
+                <p v-if="e.contact_phone" class="rcal__expiry-pop__sub">{{ t('calendar.phone', {name: e.contact_phone}) }}</p>
+                <p v-if="e.contact_email" class="rcal__expiry-pop__sub">{{ t('calendar.email', {name: e.contact_email}) }}</p>
                 <p :class="`rcal__expiry-pop__days--${expiryVisualStatus(e)}`" class="rcal__expiry-pop__days">
                   {{ expiryTimeLabel(e) }}
                 </p>
                 <n-button class="rcal__expiry-pop__action" size="tiny" type="primary" ghost @click="onExpiryNavigate(e)">
-                  פתח מקור
+                  {{ l.calendar.openSource }}
                 </n-button>
               </div>
             </n-popover>
             <button
               v-if="hiddenItemCount(cell) > 0"
-              :title="`עוד ${hiddenItemCount(cell)} פריטים — לחץ להצגת כל היום`"
+              :title="t('calendar.moreItems', {n: hiddenItemCount(cell)})"
               class="rcal__more"
               type="button"
               @click.stop="openDay(cell)"
             >
-              +{{ hiddenItemCount(cell) }} עוד
+              {{ t('calendar.more', {n: hiddenItemCount(cell)}) }}
             </button>
           </div>
           <button
             v-if="cell.items.length + cell.expiryItems.length > 0"
             class="rcal__cell-all"
             type="button"
-            title="הצג את כל התזכורות של היום"
+            :title="l.calendar.showAllDay"
             @click.stop="openDay(cell)"
           >
-            הצג הכל</button>
+            {{ l.calendar.showAll }}</button>
         </div>
       </div>
     </div>
 
     <!-- ── Agenda list ─────────────────────────────────────────────────── -->
     <div v-else class="rcal__agenda">
-      <div v-if="!agendaGroups.length" class="rcal__empty">אין תזכורות קרובות</div>
+      <div v-if="!agendaGroups.length" class="rcal__empty">{{ l.calendar.empty }}</div>
       <div v-for="grp in agendaGroups" :key="grp.iso" class="rcal__agenda-group">
         <div :class="{ 'rcal__agenda-date--today': grp.isToday, 'rcal__agenda-date--past': grp.isPast }" class="rcal__agenda-date">
           {{ grp.label }}
@@ -226,10 +226,10 @@
                   v-if="r.calendar_synced"
                   :component="CalendarOutline"
                   class="rcal__gcal-icon rcal__gcal-icon--agenda"
-                  aria-label="מסונכרן ל-Google Calendar"
+                  :aria-label="l.calendar.synced"
                 />
                 <span class="rcal__agenda-title">{{ reminderCalendarLabel(r) }}</span>
-                <span v-if="isReminderOverdue(r)" class="rcal__agenda-overdue">באיחור</span>
+                <span v-if="isReminderOverdue(r)" class="rcal__agenda-overdue">{{ l.calendar.overdue }}</span>
                 <span v-if="reminderSecondaryLabel(r)" class="rcal__agenda-client">— {{ reminderSecondaryLabel(r) }}</span>
               </button>
             </template>
@@ -253,11 +253,11 @@
 
     <!-- ── Day detail modal (all reminders/expiries for a date) ──────────── -->
     <n-modal v-model:show="dayModalOpen">
-      <div class="rcal__day-modal" dir="rtl">
+      <div class="rcal__day-modal" :dir="dir">
         <header class="rcal__day-modal-head">
           <h3 class="rcal__day-modal-title">{{ dayModalLabel }}</h3>
           <span class="rcal__day-modal-count">
-            {{ (dayModalItems.length + dayModalExpiry.length) }} פריטים
+            {{ t('calendar.items', {n: dayModalItems.length + dayModalExpiry.length}) }}
           </span>
           <button class="rcal__day-modal-close" type="button" @click="dayModalOpen = false">✕</button>
         </header>
@@ -276,10 +276,10 @@
               v-if="r.calendar_synced"
               :component="CalendarOutline"
               class="rcal__gcal-icon rcal__gcal-icon--day"
-              aria-label="מסונכרן ל-Google Calendar"
+              :aria-label="l.calendar.synced"
             />
             <span class="rcal__day-row-title">{{ reminderCalendarLabel(r) }}</span>
-            <span v-if="isReminderOverdue(r)" class="rcal__day-badge">באיחור</span>
+            <span v-if="isReminderOverdue(r)" class="rcal__day-badge">{{ l.calendar.overdue }}</span>
             <span v-if="reminderSecondaryLabel(r)" class="rcal__day-row-sub">— {{ reminderSecondaryLabel(r) }}</span>
           </button>
           <button
@@ -307,16 +307,16 @@
       :show-icon="false"
       preset="dialog"
       type="warning"
-      positive-text="שלח תזכורות"
-      negative-text="ביטול"
+      :positive-text="l.calendar.sendReminders"
+      :negative-text="l.common.cancel"
       @positive-click="sendVisibleReminders"
     >
       <template #header>
-        <ConfirmDialogHead title="שליחת תזכורות גלויות" type="warning"/>
+        <ConfirmDialogHead :title="l.calendar.sendVisibleTitle" type="warning"/>
       </template>
-      <div class="rcal__confirm" dir="rtl">
-        <p>לשלוח {{ sendableVisibleReminders.length }} תזכורות גלויות?</p>
-        <p>הפעולה תשלח רק תזכורות שמופיעות בחודש ובסינון הנוכחי, עם אימייל תקין ועדיין בסטטוס ממתין.</p>
+      <div class="rcal__confirm" :dir="dir">
+        <p>{{ t('calendar.sendVisibleQ', {n: sendableVisibleReminders.length}) }}</p>
+        <p>{{ l.calendar.sendVisibleBody }}</p>
       </div>
     </n-modal>
   </section>
@@ -334,8 +334,10 @@ import {FEATURES} from "../shared/features.js";
 import ReminderQuickView from "./ReminderQuickView.vue";
 import ConfirmDialogHead from "./ConfirmDialogHead.vue";
 import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS} from "../composables/useConfirm.js";
+import {useI18n} from "../composables/useI18n.js";
 
 const featuresStore = useFeaturesStore();
+const {l, t, locale, dir} = useI18n();
 const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 
 interface Props {
@@ -383,11 +385,11 @@ function openDay(cell: { iso: string; items: ReminderWithContext[]; expiryItems:
   dayModalItems.value = cell.items;
   dayModalExpiry.value = cell.expiryItems;
   const d = new Date(cell.iso + "T00:00:00");
-  dayModalLabel.value = d.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  dayModalLabel.value = d.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   dayModalOpen.value = true;
 }
 
-const weekdayLabels = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
+const weekdayLabels = computed(() => [...l.value.calendar.weekdays]);
 
 function isMobileViewport(): boolean {
   return typeof window !== "undefined" && window.innerWidth <= 720;
@@ -402,16 +404,16 @@ function sameDay(a: Date, b: Date): boolean { return a.getFullYear() === b.getFu
 const today = startOfDay(new Date());
 type CalendarFilterKey = "all" | "overdue" | "next30" | "month" | "sent" | "no_email" | "reminders" | "expiries";
 
-const calendarFilters: Array<{ key: CalendarFilterKey; label: string }> = [
-  { key: "all", label: "הכל" },
-  { key: "overdue", label: "פג / באיחור" },
-  { key: "next30", label: "30 יום" },
-  { key: "month", label: "החודש" },
-  { key: "sent", label: "נשלחו" },
-  { key: "no_email", label: "חסר אימייל" },
-  { key: "reminders", label: "תזכורות" },
-  { key: "expiries", label: "תסקירים" },
-];
+const calendarFilters = computed(() => [
+  { key: "all" as CalendarFilterKey, label: l.value.calendar.filterAll },
+  { key: "overdue" as CalendarFilterKey, label: l.value.calendar.filterOverdue },
+  { key: "next30" as CalendarFilterKey, label: l.value.calendar.filter30 },
+  { key: "month" as CalendarFilterKey, label: l.value.calendar.filterMonth },
+  { key: "sent" as CalendarFilterKey, label: l.value.calendar.filterSent },
+  { key: "no_email" as CalendarFilterKey, label: l.value.calendar.filterNoEmail },
+  { key: "reminders" as CalendarFilterKey, label: l.value.calendar.filterReminders },
+  { key: "expiries" as CalendarFilterKey, label: l.value.calendar.filterExpiries },
+]);
 
 function monthBounds(date: Date) {
   const from = new Date(date.getFullYear(), date.getMonth(), 1);
@@ -491,22 +493,22 @@ const monthExpiryItems = computed(() =>
 const summaryFilters = computed(() => [
   {
     key: "overdue" as CalendarFilterKey,
-    label: "באיחור",
+    label: l.value.calendar.overdue,
     count: monthReminders.value.filter(isReminderOverdue).length + monthExpiryItems.value.filter((item) => item.days_until < 0).length,
   },
   {
     key: "month" as CalendarFilterKey,
-    label: "החודש",
+    label: l.value.calendar.filterMonth,
     count: monthReminders.value.length + monthExpiryItems.value.length,
   },
   {
     key: "sent" as CalendarFilterKey,
-    label: "נשלחו",
+    label: l.value.calendar.filterSent,
     count: monthReminders.value.filter((row) => row.status === "sent").length,
   },
   {
     key: "no_email" as CalendarFilterKey,
-    label: "חסר אימייל",
+    label: l.value.calendar.filterNoEmail,
     count: monthReminders.value.filter((row) => !reminderHasEmail(row)).length + monthExpiryItems.value.filter((item) => !item.contact_email).length,
   },
 ]);
@@ -530,7 +532,7 @@ function reminderDisplayTitle(r: ReminderWithContext): string {
     r.title,
     shortContractNumber(r.contract_number),
   ].filter(Boolean).join(" — ");
-  return isReminderOverdue(r) ? `באיחור: ${label}` : label;
+  return isReminderOverdue(r) ? t("calendar.overduePrefix", {label}) : label;
 }
 
 function reminderCalendarLabel(r: ReminderWithContext): string {
@@ -555,7 +557,7 @@ function shortContractNumber(contractNumber: string | null | undefined): string 
 
 function contractNumberLabel(contractNumber: string | null | undefined): string | null {
   const value = shortContractNumber(contractNumber);
-  return value ? `מס׳ ${value}` : null;
+  return value ? t("calendar.num", {n: value}) : null;
 }
 
 function expiryVisualStatus(e: ExpiryCalendarItem): "overdue" | "critical" | "warning" | "ok" {
@@ -569,30 +571,30 @@ function expiryVisualStatus(e: ExpiryCalendarItem): "overdue" | "critical" | "wa
 function expiryCalendarLabel(e: ExpiryCalendarItem): string {
   const client = e.client_name?.trim();
   const contact = e.contact_person?.trim();
-  const identity = client && contact ? `${client} · ${contact}` : client || contact || e.equipment_name || e.contract_type || "תסקירים";
+  const identity = client && contact ? `${client} · ${contact}` : client || contact || e.equipment_name || e.contract_type || l.value.calendar.filterExpiries;
   return [contractNumberLabel(e.contract_number), identity].filter(Boolean).join(" · ");
 }
 
 function expiryCalendarTitle(e: ExpiryCalendarItem): string {
   return [
     `${expiryStatusLabel(e)}: ${expiryCalendarLabel(e)}`,
-    e.equipment_name ? `ציוד: ${e.equipment_name}` : null,
-    e.contract_number ? `מס׳ ${e.contract_number}` : null,
+    e.equipment_name ? t("calendar.equipment", {name: e.equipment_name}) : null,
+    e.contract_number ? t("calendar.num", {n: e.contract_number}) : null,
   ].filter(Boolean).join(" — ");
 }
 
 function expiryStatusLabel(e: ExpiryCalendarItem): string {
   const status = expiryVisualStatus(e);
-  if (status === "overdue") return "פג תוקף";
-  if (status === "critical") return e.days_until === 0 ? "פג היום" : "תוקף קרוב";
-  if (status === "warning") return "תוקף עד 90 יום";
-  return "בתוקף";
+  if (status === "overdue") return l.value.calendar.expired;
+  if (status === "critical") return e.days_until === 0 ? l.value.calendar.expiredToday : l.value.calendar.dueSoon;
+  if (status === "warning") return l.value.calendar.due90;
+  return l.value.calendar.valid;
 }
 
 function expiryTimeLabel(e: ExpiryCalendarItem): string {
-  if (e.days_until < 0) return `פג לפני ${Math.abs(e.days_until)} ימים`;
-  if (e.days_until === 0) return "פג היום";
-  return `${e.days_until} ימים לפקיעה`;
+  if (e.days_until < 0) return t("calendar.expiredDaysAgo", {n: Math.abs(e.days_until)});
+  if (e.days_until === 0) return l.value.calendar.expiredToday;
+  return t("calendar.daysUntil", {n: e.days_until});
 }
 
 const rowsByIso = computed(() => {
@@ -617,7 +619,7 @@ const expiryByIso = computed(() => {
   return m;
 });
 
-const monthLabel = computed(() => cursor.value.toLocaleDateString("he-IL", { month: "long", year: "numeric" }));
+const monthLabel = computed(() => cursor.value.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL", { month: "long", year: "numeric" }));
 
 const monthCells = computed(() => {
   const c = cursor.value;
@@ -1140,7 +1142,7 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
 .rcal__pill--expiry-warning  { background: #e8c84a; color: #333; }
 .rcal__pill--expiry-ok       { background: #18a058; }
 
-.rcal__expiry-pop { padding: 4px 0; font-size: 13px; direction: rtl; }
+.rcal__expiry-pop { padding: 4px 0; font-size: 13px; }
 .rcal__expiry-pop__title { font-weight: 600; margin: 0 0 4px; color: var(--text-primary); }
 .rcal__expiry-pop__sub { margin: 2px 0; color: var(--text-secondary); font-size: 12px; }
 .rcal__expiry-pop__days { margin: 6px 0 0; font-weight: 600; font-size: 12px; }

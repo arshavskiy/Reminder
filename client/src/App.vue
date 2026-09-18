@@ -1,12 +1,12 @@
 <template>
-  <n-config-provider :rtl="rtlConfig" :theme="theme" :theme-overrides="themeOverrides" :locale="heIL" :date-locale="dateHeIL">
+  <n-config-provider :rtl="naiveRtl" :theme="theme" :theme-overrides="themeOverrides" :locale="naiveLocale" :date-locale="naiveDateLocale">
     <n-message-provider>
       <n-dialog-provider>
-        <div class="app-shell">
+        <div class="app-shell" :dir="localeStore.dir">
           <!-- ── Top horizontal app bar ─────────────────────────────────── -->
           <header v-if="!hideAppChrome" class="appbar">
             <!-- Brand on the right (RTL "start") -->
-            <div class="appbar__brand" @click="router.push('/dashboard')">
+            <div class="appbar__brand" @click="router.push(localizedPath('/dashboard'))">
               <div class="appbar__logo">
                 <img class="appbar__logo-img" :src="logoSrc" alt="" />
               </div>
@@ -34,7 +34,7 @@
               </n-tooltip>
             </nav>
 
-            <button class="nav-menu-btn" type="button" aria-label="פתח ניווט" @click="mobileNavOpen = true">
+            <button class="nav-menu-btn" type="button" :aria-label="l.chrome.openNav" @click="mobileNavOpen = true">
               <span class="nav-menu-btn__icon">☰</span>
             </button>
 
@@ -44,11 +44,11 @@
                  <template #trigger>
                    <a
                      class="subscription-btn"
-                     href="/profile?section=subscription"
-                     @click.prevent="router.push({path: '/profile', query: {section: 'subscription'}})"
+                     :href="localizedPath('/profile') + '?section=subscription'"
+                     @click.prevent="router.push({path: localizedPath('/profile'), query: {section: 'subscription'}})"
                    >
                      <n-icon :component="DiamondOutline" :size="15" class="subscription-btn__icon" />
-                     <span class="subscription-btn__label">מנוי</span>
+                     <span class="subscription-btn__label">{{ l.chrome.subscription }}</span>
                      <span v-if="subscriptionPlanLabel" class="subscription-btn__plan">{{ subscriptionPlanLabel }}</span>
                    </a>
                  </template>
@@ -61,20 +61,20 @@
                    type="button"
                    @click="openActAsPicker"
                  >
-                   {{ authStore.actingAs ? "החלף משתמש" : "צפה כ" }}
+                   {{ authStore.actingAs ? l.chrome.switchUser : l.chrome.actAs }}
                  </button>
                  <div v-else class="actas-picker">
                    <n-select
                      :value="authStore.actingAs?.id ?? null"
                      :options="actAsOptions"
                      :loading="actAsLoading"
-                     placeholder="צפה כמשתמש"
+                     :placeholder="l.chrome.actAsPlaceholder"
                      clearable
                      filterable
                      class="actas-select"
                      @update:value="onActAsChange"
                    />
-                   <button class="actas-close" type="button" aria-label="סגור בחירת משתמש" @click="actAsExpanded = false">
+                   <button class="actas-close" type="button" :aria-label="l.chrome.closeActAs" @click="actAsExpanded = false">
                      ×
                    </button>
                  </div>
@@ -83,21 +83,21 @@
                  <template #trigger>
                    <button
                      class="iconbtn"
-                     :aria-label="isDark ? 'החלף למצב בהיר' : 'החלף למצב כהה'"
+                     :aria-label="isDark ? l.auth.themeToLight : l.auth.themeToDark"
                      @click="toggleTheme"
                    >
                      <n-icon :component="isDark ? SunnyOutline : MoonOutline" :size="18" />
                    </button>
                  </template>
-                 {{ isDark ? "מצב בהיר" : "מצב כהה" }}
+                 {{ isDark ? l.auth.themeLight : l.auth.themeDark }}
                </n-tooltip>
                <n-tooltip v-if="pwa.canInstall.value && !pwa.isInstalled.value" placement="bottom" :keep-alive-on-hover="false">
                  <template #trigger>
-                   <button class="iconbtn" aria-label="התקן אפליקציה" @click="pwa.install()">
+                   <button class="iconbtn" :aria-label="l.chrome.installApp" @click="pwa.install()">
                      <n-icon :component="DownloadOutline" :size="18" />
                    </button>
                  </template>
-                 התקן אפליקציה
+                 {{ l.chrome.installApp }}
                </n-tooltip>
                <UserDropdown
                  :userName="authStore.user?.name ?? authStore.user?.email ?? null"
@@ -110,22 +110,22 @@
 
           <!-- PWA install banner -->
           <div v-if="showInstallBanner && !hideAppChrome" class="install-banner">
-            <span class="install-banner__text">📲 התקן את האפליקציה למחשב לגישה מהירה</span>
+            <span class="install-banner__text">{{ l.chrome.installBanner }}</span>
             <div class="install-banner__actions">
-              <button class="install-banner__btn install-banner__btn--primary" @click="installAndDismiss">התקן</button>
-              <button class="install-banner__btn" @click="dismissInstallBanner">לא עכשיו</button>
+              <button class="install-banner__btn install-banner__btn--primary" @click="installAndDismiss">{{ l.common.install }}</button>
+              <button class="install-banner__btn" @click="dismissInstallBanner">{{ l.common.notNow }}</button>
             </div>
           </div>
 
           <!-- Impersonation banner — always visible while acting as someone
                else, because writes (uploads, emails) really affect that user -->
           <div v-if="authStore.actingAs" class="actas-banner">
-            <span>צופה כ: <b>{{ authStore.actingAs.email }}</b></span>
-            <button class="actas-banner__exit" @click="onActAsChange(null)">חזור לעצמי</button>
+            <span>{{ l.chrome.viewingAs }} <b>{{ authStore.actingAs.email }}</b></span>
+            <button class="actas-banner__exit" @click="onActAsChange(null)">{{ l.chrome.backToSelf }}</button>
           </div>
 
           <n-drawer v-model:show="mobileNavOpen" :width="280" placement="right">
-            <n-drawer-content title="ניווט" closable>
+            <n-drawer-content :title="l.chrome.navTitle" closable>
               <nav class="mobile-nav-list">
                 <n-tooltip
                   v-for="item in primaryNav"
@@ -161,14 +161,14 @@
             </main>
           </div>
 
-          <footer v-if="!isPublicMarketingRoute && !isLegalRoute" class="app-footer" dir="rtl">
-            <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים
+          <footer v-if="!isPublicMarketingRoute && !isLegalRoute" class="app-footer" :dir="localeStore.dir">
+            <strong>RemindOCR</strong> — {{ l.chrome.footerTagline }}
             <div class="app-footer__legal">
-              © 2026 HandCoded. כל הזכויות שמורות. |
-              <a href="https://remindocr.com/terms">תנאי שימוש</a> |
-              <a href="https://remindocr.com/privacy">מדיניות פרטיות</a> |
-              <a href="https://remindocr.com/accessibility">נגישות</a> |
-              <a href="https://remindocr.com/security">אבטחת מידע</a>
+              © 2026 HandCoded. {{ l.chrome.rights }} |
+              <a :href="marketingUrl('/terms', localeStore.locale)">{{ l.chrome.terms }}</a> |
+              <a :href="marketingUrl('/privacy', localeStore.locale)">{{ l.chrome.privacy }}</a> |
+              <a :href="marketingUrl('/accessibility', localeStore.locale)">{{ l.chrome.accessibility }}</a> |
+              <a :href="marketingUrl('/security', localeStore.locale)">{{ l.chrome.security }}</a>
             </div>
           </footer>
         </div>
@@ -186,6 +186,8 @@ import {computed, onBeforeUnmount, onMounted, ref, watch, watchEffect} from "vue
 import {useRoute, useRouter} from "vue-router";
 import {
   darkTheme,
+  dateEnUS,
+  enUS,
   NConfigProvider,
   NDialogProvider,
   NDrawer,
@@ -244,7 +246,8 @@ import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
 import {dateHeIL, heIL} from "./locales/heIL.js";
-import {type FeatureKey, FEATURES} from "./shared/features.js";
+import {isPublicAuthPath, localizedPath, marketingUrl, stripLocalePrefix, useLocaleStore} from "./stores/locale.js";
+import {FEATURES} from "./shared/features.js";
 import {isLapsedTrial as isLapsedTrialPlan, normalizePlanId, resolveUserPlan, type PlanId} from "./shared/pricingPlans.js";
 
 const rtlConfig = [
@@ -263,7 +266,13 @@ const rtlConfig = [
 
 const router = useRouter();
 const route = useRoute();
+const localeStore = useLocaleStore();
 const authStore = useAuthStore();
+const naiveUsesEnglish = computed(() => localeStore.locale === "en");
+const l = computed(() => localeStore.catalog);
+const naiveRtl = computed(() => (naiveUsesEnglish.value ? [] : rtlConfig));
+const naiveLocale = computed(() => (naiveUsesEnglish.value ? enUS : heIL));
+const naiveDateLocale = computed(() => (naiveUsesEnglish.value ? dateEnUS : dateHeIL));
 const featuresStore = useFeaturesStore();
 const userSettingsStore = useUserSettingsStore();
 const pwa = usePwa();
@@ -271,20 +280,17 @@ const pwa = usePwa();
 const isLegalRoute = computed(() => Boolean(route.meta.legal));
 // /pricing, /privacy and /terms are served by the marketing site now, so the
 // only routes reachable here without a session are sign-in and password reset.
-const isPublicMarketingRoute = computed(() =>
-  route.path === "/" ||
-  route.path === "/login" ||
-  route.path === "/reset-password",
-);
+const isPublicMarketingRoute = computed(() => isPublicAuthPath(route.path));
+const isAppAdminRoute = computed(() => stripLocalePrefix(route.path).startsWith("/admin"));
 const isMinimalShell = computed(() =>
   isPublicMarketingRoute.value ||
   isLegalRoute.value ||
-  route.path.startsWith("/admin"),
+  isAppAdminRoute.value,
 );
 const hideAppChrome = computed(() =>
   isPublicMarketingRoute.value ||
   isLegalRoute.value ||
-  route.path.startsWith("/admin"),
+  isAppAdminRoute.value,
 );
 
 const mobileNavOpen = ref(false);
@@ -307,8 +313,8 @@ const walkthrough = useWalkthrough();
 watch(
   () => route.path,
   (path) => {
-    if (authStore.user && !showOnboarding.value && path !== "/login") {
-      walkthrough.autoTriggerForPage(path);
+    if (authStore.user && !showOnboarding.value && stripLocalePrefix(path) !== "/login") {
+      walkthrough.autoTriggerForPage(stripLocalePrefix(path));
     }
   },
 );
@@ -383,28 +389,20 @@ const isDark = computed(() => darkPref.value);
 const theme = computed(() => (isDark.value ? darkTheme : null));
 const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
 
-const PLAN_SHORT: Record<PlanId, string> = {
-  expired: "הסתיים",
-  trial: "ניסיון",
-  digital: "דיגיטלי",
-  basic: "בסיסי",
-  business: "עסקי",
-};
+const PLAN_SHORT = computed(() => localeStore.catalog.plans);
 
-// Trial ranks alongside basic, not between expired and basic: it grants basic's
-// entitlements server-side, so ranking it lower would lock a trial user out of
-// reminders and clients — the very features the trial exists to demonstrate.
-// Digital ranks there too; what it lacks is gated by flags, not by rank.
 const PLAN_RANK: Record<PlanId, number> = {expired: 0, trial: 1, digital: 1, basic: 1, business: 2};
 
 const subscriptionPlanLabel = computed(() => {
   if (!authStore.user) return "";
-  return PLAN_SHORT[resolveUserPlan(authStore.user)] ?? "";
+  return PLAN_SHORT.value[resolveUserPlan(authStore.user)] ?? "";
 });
 
 const subscriptionTooltip = computed(() => {
   const plan = subscriptionPlanLabel.value;
-  return plan ? `מנוי נוכחי: ${plan} — לחצו לניהול המנוי` : "מנוי ותשלומים";
+  return plan
+    ? localeStore.t("chrome.subscriptionTooltipPlan", {plan})
+    : localeStore.catalog.chrome.subscriptionTooltip;
 });
 
 const themeOverrides = computed(() => ({
@@ -437,6 +435,12 @@ function onThemeChanged(event: Event) {
     darkPref.value = next === "dark";
   }
 }
+
+watch(
+  () => route.path,
+  (path) => localeStore.syncFromPath(path),
+  {immediate: true},
+);
 
 onMounted(async () => {
   window.addEventListener("remindocr:theme-change", onThemeChanged);
@@ -481,26 +485,20 @@ watch(isDark, (dark) => {
 // primary bar to keep it sparse (matches the spec which shows ~6 items).
 const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
 
-const allNav: Array<{
-  label: string;
-  key: string;
-  minRole?: string;
-  /** A minimum plan, or an explicit list for pages that do not sit on a ladder. */
-  minPlan?: PlanId | PlanId[];
-  feature?: FeatureKey;
-}> = [
-  {label: "ראשי", key: "dashboard", minPlan: "expired", feature: FEATURES.pages.dashboard},
-  {label: "תסקירים", key: "documents", minPlan: "expired", feature: FEATURES.pages.documents},
-  {label: "תזכורות", key: "reminders", minPlan: "basic", feature: FEATURES.pages.reminders},
-  {label: "דוחות", key: "reports", minPlan: "expired", feature: FEATURES.pages.reports},
-  {label: "לקוחות", key: "clients", minPlan: "basic", feature: FEATURES.pages.clients},
-  {label: "שטח", key: "field", minPlan: "business", feature: FEATURES.pages.field},
-  {label: "ציוד", key: "equipment", minPlan: "basic", feature: FEATURES.pages.equipment},
-  {label: "חשבוניות", key: "invoices", minPlan: "business", feature: FEATURES.pages.invoices},
-  {label: "Gmail", key: "gmail", minRole: "admin", feature: FEATURES.pages.gmail},
-  // Template management lives under the account dropdown.
-  // {label: "הגדרות", key: "settings", minRole: "admin", feature: FEATURES.pages.settings},
-];
+const allNav = computed(() => {
+  const nav = localeStore.catalog.chrome.nav;
+  return [
+    {label: nav.dashboard, key: "dashboard", minPlan: "expired" as const, feature: FEATURES.pages.dashboard},
+    {label: nav.documents, key: "documents", minPlan: "expired" as const, feature: FEATURES.pages.documents},
+    {label: nav.reminders, key: "reminders", minPlan: "basic" as const, feature: FEATURES.pages.reminders},
+    {label: nav.reports, key: "reports", minPlan: "expired" as const, feature: FEATURES.pages.reports},
+    {label: nav.clients, key: "clients", minPlan: "basic" as const, feature: FEATURES.pages.clients},
+    {label: nav.field, key: "field", minPlan: "business" as const, feature: FEATURES.pages.field},
+    {label: nav.equipment, key: "equipment", minPlan: "basic" as const, feature: FEATURES.pages.equipment},
+    {label: nav.invoices, key: "invoices", minPlan: "business" as const, feature: FEATURES.pages.invoices},
+    {label: nav.gmail, key: "gmail", minRole: "admin", feature: FEATURES.pages.gmail},
+  ];
+});
 
 /**
  * Whether the account's plan satisfies a nav item's minPlan.
@@ -519,7 +517,7 @@ function planAllowsNav(minPlan: PlanId | PlanId[] | undefined): boolean {
 
 const primaryNav = computed(() => {
   const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
-  return allNav.filter((item) =>
+  return allNav.value.filter((item) =>
     userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
       planAllowsNav(item.minPlan) &&
       (!item.feature || featuresStore.hasFeature(item.feature))
@@ -552,29 +550,30 @@ function navLockLabel(item: {minPlan?: PlanId | PlanId[]}): string {
   // and normalizePlanId on an array would have yielded "expired" and read as
   // "available on הסתיים and above".
   if (Array.isArray(item.minPlan)) {
-    const names = item.minPlan.map((plan) => PLAN_SHORT[normalizePlanId(plan)]).filter(Boolean);
+    const names = item.minPlan.map((plan) => PLAN_SHORT.value[normalizePlanId(plan)]).filter(Boolean);
     if (!names.length) return "";
-    return `זמין במסלולים ${names.join(" ו")} בלבד`;
+    return localeStore.t("chrome.lockPlansOnly", {plans: names.join(" / ")});
   }
-  const label = PLAN_SHORT[normalizePlanId(item.minPlan)];
-  return label ? `זמין במסלול ${label} ומעלה` : "";
+  const label = PLAN_SHORT.value[normalizePlanId(item.minPlan)];
+  return label ? localeStore.t("chrome.lockPlanAndUp", {plan: label}) : "";
 }
 
 const activeKey = computed(() => {
-  const seg = route.path.split("/")[1] || "dashboard";
+  const seg = stripLocalePrefix(route.path).split("/")[1] || "dashboard";
   return seg;
 });
 
 function isActiveNav(key: string): boolean {
-  if (key.includes("/")) return route.path === `/${key}` || route.path.startsWith(`/${key}/`);
+  const path = stripLocalePrefix(route.path);
+  if (key.includes("/")) return path === `/${key}` || path.startsWith(`/${key}/`);
   return activeKey.value === key;
 }
 
 function navigate(itemOrKey: string | {key: string; minPlan?: PlanId}) {
-  const item = typeof itemOrKey === "string" ? allNav.find((nav) => nav.key === itemOrKey) : itemOrKey;
+  const item = typeof itemOrKey === "string" ? allNav.value.find((nav) => nav.key === itemOrKey) : itemOrKey;
   if (!item || isPlanLocked(item)) return;
   mobileNavOpen.value = false;
-  router.push(item.key === "dashboard" ? "/dashboard" : `/${item.key}`);
+  router.push(localizedPath(item.key === "dashboard" ? "/dashboard" : `/${item.key}`));
 }
 </script>
 

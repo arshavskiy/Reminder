@@ -1,5 +1,5 @@
 <template>
-  <div class="login-page" dir="rtl">
+  <div class="login-page" :dir="t.dir">
     <nav class="landing-nav">
       <a class="nav-brand" href="#top" aria-label="RemindOCR">
         <img :src="logoSrc" alt="" class="nav-brand__logo"/>
@@ -9,7 +9,7 @@
         <n-tooltip placement="bottom" :keep-alive-on-hover="false">
           <template #trigger>
             <button
-                :aria-label="isDark ? 'החלף למצב בהיר' : 'החלף למצב כהה'"
+                :aria-label="isDark ? t.copy.themeToLight : t.copy.themeToDark"
                 class="iconbtn"
                 type="button"
                 @click="toggleTheme"
@@ -17,9 +17,10 @@
               <n-icon :component="isDark ? SunnyOutline : MoonOutline" :size="18"/>
             </button>
           </template>
-          {{ isDark ? "מצב בהיר" : "מצב כהה" }}
+          {{ isDark ? t.copy.themeLight : t.copy.themeDark }}
         </n-tooltip>
-        <a class="nav-cta" href="#login-card">כניסה למערכת</a>
+        <a class="nav-lang" :href="t.otherPath" :hreflang="t.otherHreflang" :lang="t.otherHreflang" @click.prevent="switchLocale">{{ t.copy.langSwitch }}</a>
+        <a class="nav-cta" href="#login-card">{{ t.copy.navCta }}</a>
       </div>
     </nav>
 
@@ -29,13 +30,9 @@
           <!--          <div class="hero-badge">-->
           <!--            <span>מותאם לעסקים ישראלים</span>-->
           <!--          </div>-->
-          <h1>ניהול תסקירים, מסמכים ותזכורות</h1>
+          <h1>{{ t.copy.heroTitle }}</h1>
           <h2 style="font-size: 24px; line-height: 52px">EXTRACT • TRACK • AUTOMATE</h2>
-          <p class="hero-desc">
-            RemindOCR היא מערכת לניהול תסקירי בדיקה, מסמכים, לקוחות וחוזים. המערכת מאפשרת להעלות או לייבא מסמכים,
-            לחלץ מהם תאריכים ופרטי לקוח בעזרת OCR ו-AI, ולעקוב אחרי תוקף מסמכים באמצעות תזכורות אוטומטיות וסנכרון
-            ל-Google Calendar.
-          </p>
+          <p class="hero-desc">{{ t.copy.heroDesc }}</p>
           <!--          <p class="hero-purpose">-->
           <!--            חיבור Gmail הוא אופציונלי ומשמש רק להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר להכניס למערכת.-->
           <!--          </p>-->
@@ -49,7 +46,7 @@
           <div class="login-brand">
             <img :src="logoSrc" alt="" class="login-brand__logo"/>
             <h2 class="login-brand__title">RemindOCR</h2>
-            <p class="login-brand__sub">מערכת ניהול תסקירים ותזכורות</p>
+            <p class="login-brand__sub">{{ t.copy.brandSub }}</p>
           </div>
 
           <n-alert v-if="successMsg" type="success" :title="successMsg" style="margin-bottom:16px" closable
@@ -58,9 +55,9 @@
                    @close="clearError"/>
 
           <n-tabs v-model:value="activeTab" type="line" animated style="width:100%;margin-bottom:8px">
-            <n-tab-pane name="login" tab="כניסה">
+            <n-tab-pane name="login" :tab="t.copy.tabLogin">
               <n-form @submit.prevent="handleLogin" style="margin-top:8px">
-                <n-form-item label="אימייל" :show-feedback="false" style="margin-bottom:12px">
+                <n-form-item :label="t.copy.email" :show-feedback="false" style="margin-bottom:12px">
                   <n-input
                       v-model:value="loginEmail"
                       type="email"
@@ -71,7 +68,7 @@
                       :disabled="loading"
                   />
                 </n-form-item>
-                <n-form-item label="סיסמה" :show-feedback="false" style="margin-bottom:16px">
+                <n-form-item :label="t.copy.password" :show-feedback="false" style="margin-bottom:16px">
                   <n-input
                       v-model:value="loginPassword"
                       type="password"
@@ -91,30 +88,30 @@
                     :loading="loading"
                     :disabled="!loginEmail || !loginPassword"
                 >
-                  כניסה
+                  {{ t.copy.loginSubmit }}
                 </n-button>
                 <div style="text-align:center">
-                  <n-button text size="small" @click="showForgot = true">שכחתי סיסמה</n-button>
+                  <n-button text size="small" @click="showForgot = true">{{ t.copy.forgot }}</n-button>
                 </div>
               </n-form>
 
-              <div class="divider"><span>או</span></div>
-              <GoogleSignIn @error="onGisError"/>
+              <div class="divider"><span>{{ t.copy.or }}</span></div>
+              <GoogleSignIn :label="t.copy.google" @error="onGisError"/>
             </n-tab-pane>
 
-            <n-tab-pane name="register" tab="הרשמה">
+            <n-tab-pane name="register" :tab="t.copy.tabRegister">
               <n-form @submit.prevent="handleRegister" style="margin-top:8px">
-                <n-form-item label="שם מלא" :show-feedback="false" style="margin-bottom:12px">
+                <n-form-item :label="t.copy.fullName" :show-feedback="false" style="margin-bottom:12px">
                   <n-input
                       v-model:value="regName"
-                      placeholder="ישראל ישראלי"
+                      :placeholder="t.copy.namePlaceholder"
                       size="large"
                       autocomplete="name"
                       :input-props="{ autocomplete: 'name', name: 'name' }"
                       :disabled="loading"
                   />
                 </n-form-item>
-                <n-form-item label="אימייל" :show-feedback="false" style="margin-bottom:12px">
+                <n-form-item :label="t.copy.email" :show-feedback="false" style="margin-bottom:12px">
                   <n-input
                       v-model:value="regEmail"
                       type="email"
@@ -125,11 +122,11 @@
                       :disabled="loading"
                   />
                 </n-form-item>
-                <n-form-item label="סיסמה" :show-feedback="false" style="margin-bottom:4px">
+                <n-form-item :label="t.copy.password" :show-feedback="false" style="margin-bottom:4px">
                   <n-input
                       v-model:value="regPassword"
                       type="password"
-                      placeholder="לפחות 8 תווים"
+                      :placeholder="t.copy.passwordPlaceholder"
                       size="large"
                       show-password-on="click"
                       autocomplete="new-password"
@@ -139,17 +136,17 @@
                 </n-form-item>
                 <p v-if="regPassword && regPassword.length < 8"
                    style="color:var(--color-warning);font-size:12px;margin:4px 0 12px">
-                  הסיסמה חייבת להכיל לפחות 8 תווים</p>
+                  {{ t.copy.passwordTooShort }}</p>
                 <div style="height:12px" v-else/>
                 <n-checkbox
                     v-model:checked="regTermsAccepted"
                     :disabled="loading"
                     class="register-terms"
                 >
-                  אני מאשר/ת שקראתי ואני מסכים/ה ל
-                  <a href="https://remindocr.com/terms" rel="noopener" target="_blank">תנאי השימוש</a>
-                  ול
-                  <a href="https://remindocr.com/privacy" rel="noopener" target="_blank">מדיניות הפרטיות</a>
+                  {{ t.copy.termsPrefix }}
+                  <a :href="marketingUrl('/terms', localeStore.locale)" rel="noopener" target="_blank">{{ t.copy.terms }}</a>
+                  {{ t.copy.termsAnd }}
+                  <a :href="marketingUrl('/privacy', localeStore.locale)" rel="noopener" target="_blank">{{ t.copy.privacy }}</a>
                 </n-checkbox>
                 <n-button
                     type="primary"
@@ -159,13 +156,13 @@
                     :loading="loading"
                     :disabled="!regEmail || !regPassword || regPassword.length < 8 || !regTermsAccepted"
                 >
-                  הרשמה
+                  {{ t.copy.registerSubmit }}
                 </n-button>
               </n-form>
             </n-tab-pane>
           </n-tabs>
 
-          <p class="login-footer">גישה מוגבלת למשתמשים מורשים בלבד</p>
+          <p class="login-footer">{{ t.copy.footerAccess }}</p>
         </div>
       </div>
     </section>
@@ -391,8 +388,8 @@
     <!--    </section>-->
 
     <!-- Forgot password modal -->
-    <n-modal v-model:show="showForgot" preset="card" title="שחזור סיסמה" style="max-width:380px;direction:rtl">
-      <p style="margin-top:0">הזן את כתובת האימייל שלך ונשלח לך קישור לאיפוס הסיסמה.</p>
+    <n-modal v-model:show="showForgot" preset="card" :title="t.copy.forgotTitle" :style="{maxWidth: '380px', direction: t.dir}">
+      <p style="margin-top:0">{{ t.copy.forgotBody }}</p>
       <n-input
           v-model:value="forgotEmail"
           type="email"
@@ -403,8 +400,8 @@
       />
       <template #footer>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <n-button @click="showForgot = false">ביטול</n-button>
-          <n-button type="primary" :loading="loading" :disabled="!forgotEmail" @click="handleForgot">שלח</n-button>
+          <n-button @click="showForgot = false">{{ t.copy.cancel }}</n-button>
+          <n-button type="primary" :loading="loading" :disabled="!forgotEmail" @click="handleForgot">{{ t.copy.send }}</n-button>
         </div>
       </template>
     </n-modal>
@@ -433,6 +430,7 @@ import {useDocumentsStore} from "../stores/documents.js";
 import {useContractsStore} from "../stores/contracts.js";
 import {useClientsStore} from "../stores/clients.js";
 import {useRemindersStore} from "../stores/reminders.js";
+import {dashboardPath, marketingUrl, useLocaleStore} from "../stores/locale.js";
 import GoogleSignIn from "../components/GoogleSignIn.vue";
 import {trackConversion} from "../analytics.js";
 
@@ -444,8 +442,21 @@ const docsStore = useDocumentsStore();
 const contractsStore = useContractsStore();
 const clientsStore = useClientsStore();
 const remindersStore = useRemindersStore();
+const localeStore = useLocaleStore();
 const route = useRoute();
 const router = useRouter();
+const t = computed(() => {
+  const english = localeStore.locale === "en";
+  const loginish = route.path.endsWith("/login");
+  return {
+    copy: localeStore.messages,
+    dir: localeStore.dir,
+    otherHreflang: english ? "he" : "en",
+    otherPath: english
+      ? (loginish ? "/login" : "/")
+      : (loginish ? "/en/login" : "/en"),
+  };
+});
 const darkPref = ref(localStorage.getItem("theme") === "dark");
 const isDark = computed(() => darkPref.value);
 const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
@@ -470,32 +481,21 @@ const regTermsAccepted = ref(false);
 const showForgot = ref(false);
 const forgotEmail = ref("");
 
-const errorMessages: Record<string, string> = {
-  not_allowed: "כתובת האימייל שלך אינה ברשימת הגישה המורשית",
-  auth_failed: "אירעה שגיאה בתהליך ההתחברות, אנא נסה שנית",
-  invalid_state: "בקשת ההתחברות פגה, אנא נסה שנית",
-  missing_params: "שגיאה בתהליך OAuth",
-  invalid_credentials: "אימייל או סיסמה שגויים",
-  email_not_verified: "יש לאמת את כתובת האימייל לפני הכניסה. בדוק את תיבת הדואר שלך.",
-  account_disabled: "החשבון הושבת, אנא פנה לתמיכה",
-  email_taken: "כתובת האימייל כבר רשומה במערכת",
-  invalid_email: "כתובת האימייל אינה תקינה",
-  password_too_short: "הסיסמה חייבת להכיל לפחות 8 תווים",
-  terms_required: "יש לאשר את תנאי השימוש ומדיניות הפרטיות לפני ההרשמה",
-  invalid_token: "קישור האימות אינו תקין",
-  token_expired: "קישור האימות פג תוקף — אנא הירשם מחדש",
-};
-
 const errorMsg = computed(() => {
-  if (gisError.value) return errorMessages[gisError.value] ?? `שגיאה: ${gisError.value}`;
-  if (routeError.value) return errorMessages[routeError.value] ?? `שגיאה: ${routeError.value}`;
+  const copy = localeStore.messages;
+  if (gisError.value) return copy.errors[gisError.value as keyof typeof copy.errors] ?? `${copy.unknownError}: ${gisError.value}`;
+  if (routeError.value) return copy.errors[routeError.value as keyof typeof copy.errors] ?? `${copy.unknownError}: ${routeError.value}`;
   return null;
 });
+
+function switchLocale() {
+  router.replace({path: t.value.otherPath, query: route.query});
+}
 
 function clearError() {
   gisError.value = null;
   routeError.value = null;
-  router.replace(route.path === "/login" ? "/login" : "/");
+  router.replace({path: route.path});
 }
 
 function onGisError(msg: string) {
@@ -542,7 +542,7 @@ async function handleLogin() {
       remindersStore.fetch(),
     ]).catch(() => {
     });
-    router.replace("/dashboard");
+    router.replace(dashboardPath());
   } catch {
     routeError.value = "auth_failed";
   } finally {
@@ -602,8 +602,8 @@ async function handleRegister() {
       return;
     }
     successMsg.value = data.emailSent === false
-        ? "החשבון נוצר, אך שליחת אימייל האימות נכשלה. פנה לתמיכה כדי להשלים את האימות."
-        : "נשלח אימייל לאימות הכתובת. אנא בדוק את תיבת הדואר ולחץ על הקישור.";
+        ? localeStore.messages.registerOkNoEmail
+        : localeStore.messages.registerOk;
     trackConversion("CompleteRegistration", {method: "email"});
     regEmail.value = "";
     regPassword.value = "";
@@ -623,10 +623,10 @@ async function handleForgot() {
     await fetch(`${SERVER}/api/auth/forgot-password`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({email: forgotEmail.value}),
+      body: JSON.stringify({email: forgotEmail.value, locale: localeStore.locale}),
     });
     showForgot.value = false;
-    successMsg.value = "אם כתובת האימייל קיימת במערכת, נשלח קישור לאיפוס הסיסמה.";
+    successMsg.value = localeStore.messages.forgotOk;
     forgotEmail.value = "";
   } catch {
     // silently ignore
@@ -656,7 +656,7 @@ onMounted(async () => {
   }
 
   if (!authStore.initialized) await authStore.fetchMe();
-  if (authStore.user) router.replace("/dashboard");
+  if (authStore.user) router.replace(dashboardPath());
 });
 </script>
 
@@ -738,6 +738,19 @@ onMounted(async () => {
 .iconbtn:hover {
   background: var(--login-brand-tint);
   border-color: var(--login-brand-border);
+  color: var(--brand-color);
+}
+
+.nav-lang {
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+.nav-lang:hover {
+  background: var(--login-brand-tint);
   color: var(--brand-color);
 }
 
@@ -1443,7 +1456,7 @@ onMounted(async () => {
     gap: 12px;
   }
 
-  .nav-links a:not(.nav-cta) {
+  .nav-links a:not(.nav-cta):not(.nav-lang) {
     display: none;
   }
 

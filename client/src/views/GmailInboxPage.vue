@@ -1,8 +1,8 @@
 <template>
-  <div class="page2 gmail-page" dir="rtl">
+  <div class="page2 gmail-page" :dir="dir">
     <PageHeader
-      title="Gmail"
-      :subtitle="connectedEmail ? `מחובר: ${connectedEmail}` : 'ייבוא קבצים מצורפים מתיבת הדואר'"
+      :title="l.gmail.title"
+      :subtitle="connectedEmail ? t('gmail.connected', {email: connectedEmail}) : l.gmail.subtitle"
       :count="importedDocuments.length > 0 ? importedDocuments.length : undefined"
     >
       <template #hero>
@@ -15,7 +15,7 @@
             @click="refreshCurrentFlow"
           >
             <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
-            רענן
+            {{ l.common.refresh }}
           </button>
           <button
             v-if="connected && (isAdmin || selectedGuidedFlow)"
@@ -26,14 +26,14 @@
             @click="importAllNew"
           >
             <GmailLogo :size="16" class="btn-icon" />
-            ייבא הכל
+            {{ l.common.importAll }}
           </button>
           <n-select
             v-if="connected && isAdmin"
             v-model:value="selectedTemplateId"
             :options="templateOptions"
             clearable
-            placeholder="תבנית אוטומטית"
+            :placeholder="l.gmail.autoTemplate"
             size="small"
             class="gmail-actions__select"
           />
@@ -43,7 +43,7 @@
             type="button"
             @click="disconnect"
           >
-            נתק Gmail
+            {{ l.common.disconnectGmail }}
           </button>
           <button
             v-if="!connected && !loading"
@@ -52,23 +52,23 @@
             @click="connectGmail"
           >
             <n-icon :component="LogoGoogle" class="btn-icon" />
-            חבר Gmail
+            {{ l.common.connectGmail }}
           </button>
         </div>
       </template>
       <template v-if="connected && isAdmin" #actions>
         <div id="gmail-search-section" class="gmail-search-bar">
-          <span class="gmail-search-bar__label">חיפוש</span>
+          <span class="gmail-search-bar__label">{{ l.common.search }}</span>
           <div class="file-type-checks">
             <n-checkbox v-model:checked="fileTypes.pdf">PDF</n-checkbox>
             <n-checkbox v-model:checked="fileTypes.doc">DOC/DOCX</n-checkbox>
             <n-checkbox v-model:checked="fileTypes.xls">XLS/XLSX</n-checkbox>
-            <n-checkbox v-model:checked="fileTypes.img">תמונות</n-checkbox>
+            <n-checkbox v-model:checked="fileTypes.img">{{ l.common.images }}</n-checkbox>
           </div>
           <n-select
             v-model:value="searchTemplateId"
             :options="templateOptions"
-            placeholder="סוג מסמך"
+            :placeholder="l.gmail.docType"
             filterable
             clearable
             class="toolbar__type"
@@ -76,7 +76,7 @@
           <n-select
             v-model:value="filterType"
             :options="filterTypeOptions"
-            placeholder="סינון נוסף"
+            :placeholder="l.gmail.extraFilter"
             class="toolbar__type toolbar__type--sm"
             @update:value="onFilterChange"
           />
@@ -84,7 +84,7 @@
             v-if="filterType === 'sender'"
             v-model:value="filterSender"
             :options="senderOptions"
-            placeholder="שולח"
+            :placeholder="l.common.sender"
             filterable
             clearable
             tag
@@ -100,7 +100,7 @@
           <n-input
             v-if="filterType === 'inspection'"
             v-model:value="filterIdentifierText"
-            placeholder="מספר רישוי / תסקיר"
+            :placeholder="l.gmail.licenseOrInspection"
             clearable
             class="toolbar__search"
             :allow-input="(v: string) => /^\d*$/.test(v)"
@@ -114,13 +114,13 @@
             @click="buildAndSearch"
           >
             <n-icon :component="SearchOutline" class="btn-icon" />
-            חפש
+            {{ l.common.search }}
           </button>
         </div>
       </template>
     </PageHeader>
 
-    <nav v-if="sectionNavItems.length" class="filterbar filterbar--compact gmail-section-nav" aria-label="ניווט בעמוד Gmail">
+    <nav v-if="sectionNavItems.length" class="filterbar filterbar--compact gmail-section-nav" :aria-label="l.gmail.pageNav">
       <a
         v-for="item in sectionNavItems"
         :key="item.id"
@@ -131,7 +131,7 @@
       </a>
     </nav>
 
-    <div v-if="connected && !isAdmin" class="filterbar filterbar--compact gmail-flow-tabs" role="tablist" aria-label="מסלולי ייבוא Gmail">
+    <div v-if="connected && !isAdmin" class="filterbar filterbar--compact gmail-flow-tabs" role="tablist" :aria-label="l.gmail.flowAria">
       <button
         type="button"
         class="pill pill--compact"
@@ -141,7 +141,7 @@
         @click="selectGuidedFlow('invoice')"
       >
         <n-icon :component="DocumentOutline" :size="16" />
-        ייבוא חשבוניות
+        {{ l.gmail.importInvoices }}
       </button>
       <button
         type="button"
@@ -152,13 +152,13 @@
         @click="selectGuidedFlow('inspection')"
       >
         <n-icon :component="DocumentOutline" :size="16" />
-        ייבוא תסקיר בדיקה
+        {{ l.gmail.importInspection }}
       </button>
     </div>
 
     <section v-if="connected && !isAdmin && selectedGuidedFlow" class="guided-flow-bar">
       <div>
-        <span class="guided-flow-bar__label">מסלול ייבוא</span>
+        <span class="guided-flow-bar__label">{{ l.gmail.flowLabel }}</span>
         <strong>{{ guidedFlowLabel }}</strong>
       </div>
       <span class="guided-flow-bar__query">{{ searchQuery }}</span>
@@ -175,10 +175,10 @@
     <!-- Not connected -->
     <div v-if="!connected && !loading" class="empty">
       <n-icon :component="LogoGoogle" :size="48" class="empty__icon" style="color:#4285F4" />
-      <p>חבר את חשבון Gmail שלך כדי לראות חשבוניות PDF</p>
+      <p>{{ l.gmail.connectHint }}</p>
       <button class="rbtn rbtn--primary mt-3" type="button" @click="connectGmail">
         <n-icon :component="LogoGoogle" class="btn-icon" />
-        חבר Gmail
+        {{ l.common.connectGmail }}
       </button>
     </div>
 
@@ -244,11 +244,11 @@
           <table class="inbox-table">
           <thead>
             <tr>
-              <th class="col-from">מאת</th>
-              <th class="col-subject">נושא</th>
-              <th class="col-date">תאריך</th>
-              <th class="col-file">קובץ</th>
-              <th class="col-actions">פעולות</th>
+              <th class="col-from">{{ l.common.from }}</th>
+              <th class="col-subject">{{ l.common.subject }}</th>
+              <th class="col-date">{{ l.common.date }}</th>
+              <th class="col-file">{{ l.common.file }}</th>
+              <th class="col-actions">{{ l.common.actions }}</th>
             </tr>
           </thead>
           <tbody>
@@ -330,7 +330,7 @@
             type="button"
             @click="loadMore"
           >
-            טען עוד
+            {{ l.gmail.loadMore }}
             <template v-if="totalEstimate"> ({{ emails.length }} מתוך ~{{ totalEstimate }})</template>
           </button>
         </div>
@@ -338,20 +338,20 @@
     </section>
 
     <!-- Import results modal -->
-    <n-modal v-model:show="importResults.show" preset="card" title="תוצאות ייבוא" style="max-width:600px">
+    <n-modal v-model:show="importResults.show" preset="card" :title="l.gmail.importResults" style="max-width:600px">
       <div class="import-results">
         <div class="import-results__summary">
-          <span class="import-results__stat import-results__stat--ok">{{ importResults.imported }} יובאו</span>
-          <span class="import-results__stat import-results__stat--skip">{{ importResults.skipped }} כבר קיימים</span>
-          <span v-if="importResults.errors > 0" class="import-results__stat import-results__stat--err">{{ importResults.errors }} שגיאות</span>
+          <span class="import-results__stat import-results__stat--ok">{{ t("gmail.importedCountStat", {n: importResults.imported}) }}</span>
+          <span class="import-results__stat import-results__stat--skip">{{ t("gmail.skippedCount", {n: importResults.skipped}) }}</span>
+          <span v-if="importResults.errors > 0" class="import-results__stat import-results__stat--err">{{ t("gmail.errorsCount", {n: importResults.errors}) }}</span>
         </div>
         <table v-if="importResults.results.length" class="import-results__table">
-          <thead><tr><th>קובץ</th><th>סטטוס</th></tr></thead>
+          <thead><tr><th>{{ l.common.file }}</th><th>{{ l.common.status }}</th></tr></thead>
           <tbody>
             <tr v-for="r in importResults.results" :key="r.filename + r.messageId">
               <td class="import-results__file">{{ r.filename }}</td>
               <td>
-                <span v-if="r.documentId" class="tag tag--success">יובא</span>
+                <span v-if="r.documentId" class="tag tag--success">{{ l.gmail.imported }}</span>
                 <span v-else-if="r.error" class="tag tag--danger" :title="r.explanation ?? r.error">
                   {{ r.explanation ?? "שגיאה" }}
                 </span>
@@ -365,21 +365,21 @@
     <n-modal
       v-model:show="importedBusinessModal.show"
       preset="card"
-      title="הגדר עסק"
+      :title="l.gmail.assignBusiness"
       class="gmail-business-modal"
       :style="{ width: '460px', maxWidth: 'calc(100vw - 32px)' }"
     >
-      <div class="gmail-business-form" dir="rtl">
+      <div class="gmail-business-form" :dir="dir">
         <n-input
           v-model:value="importedBusinessModal.value"
           clearable
-          placeholder="שם עסק חדש"
+          :placeholder="l.gmail.newBusiness"
           @keydown.enter="saveImportedBusinessModal"
         />
         <div class="gmail-business-form__actions">
-          <n-button @click="importedBusinessModal.show = false">ביטול</n-button>
+          <n-button @click="importedBusinessModal.show = false">{{ l.common.cancel }}</n-button>
           <n-button type="primary" :disabled="!importedBusinessModal.value.trim()" @click="saveImportedBusinessModal">
-            שמור
+            {{ l.common.save }}
           </n-button>
         </div>
       </div>
@@ -388,8 +388,8 @@
     <section v-if="connected && (isAdmin || selectedGuidedFlow) && importedDocuments.length" id="gmail-imported-section" class="gmail-docs-section">
       <div class="gmail-docs-head">
         <div>
-          <h2 class="gmail-docs-title">מסמכים שיובאו מ-Gmail</h2>
-          <p class="gmail-docs-subtitle">{{ filteredImportedDocuments.length }} מתוך {{ importedDocuments.length }} מסמכים</p>
+          <h2 class="gmail-docs-title">{{ l.gmail.importedTitle }}</h2>
+          <p class="gmail-docs-subtitle">{{ t("gmail.importedCount", {shown: filteredImportedDocuments.length, total: importedDocuments.length}) }}</p>
         </div>
         <n-tooltip v-if="selectedImportedCount" placement="top">
           <template #trigger>
@@ -397,13 +397,13 @@
               class="btn btn--ghost btn--xs icon-btn gmail-docs-delete-selected"
               type="button"
               :disabled="deletingImportedDocuments"
-              aria-label="מחק נבחרים"
+              :aria-label="l.common.deleteSelected"
               @click="deleteSelectedImportedDocuments"
             >
               <n-icon :component="TrashOutline" class="btn-icon" />
             </button>
           </template>
-          מחק {{ selectedImportedCount }} מסמכים נבחרים
+          {{ t("gmail.deleteSelectedDocs", {n: selectedImportedCount}) }}
         </n-tooltip>
       </div>
 
@@ -424,7 +424,7 @@
             <template #trigger>
               <button
                 :class="{ 'rbtn--ghost-active': importedView === 'grid' }"
-                :aria-label="'כרטיסים'"
+                :aria-label="l.common.cards"
                 class="rbtn rbtn--ghost rbtn--icon"
                 type="button"
                 @click="importedView = 'grid'"
@@ -432,13 +432,13 @@
                 <n-icon :component="GridOutline" :size="16" class="btn-icon"/>
               </button>
             </template>
-            כרטיסים
+            {{ l.common.cards }}
           </n-tooltip>
           <n-tooltip placement="top">
             <template #trigger>
               <button
                 :class="{ 'rbtn--ghost-active': importedView === 'list' }"
-                :aria-label="'טבלה'"
+                :aria-label="l.common.tableView"
                 class="rbtn rbtn--ghost rbtn--icon"
                 type="button"
                 @click="importedView = 'list'"
@@ -446,7 +446,7 @@
                 <n-icon :component="ListOutline" :size="16" class="btn-icon"/>
               </button>
             </template>
-            טבלה
+            {{ l.common.tableView }}
           </n-tooltip>
         </div>
       </div>
@@ -455,7 +455,7 @@
         <n-input
           v-model:value="importedSearch"
           clearable
-          placeholder="חיפוש ספק, סכום, סוג או שם קובץ..."
+          :placeholder="l.gmail.searchImported"
           class="toolbar__search"
         />
         <n-select
@@ -463,7 +463,7 @@
           :options="importedTypeOptions"
           clearable
           filterable
-          placeholder="סוג מסמך"
+          :placeholder="l.gmail.docType"
           class="toolbar__type"
         />
         <n-select
@@ -471,7 +471,7 @@
           :options="importedSourceOptions"
           clearable
           filterable
-          placeholder="מקור"
+          :placeholder="l.common.source"
           class="toolbar__supplier"
         />
         <n-select
@@ -479,7 +479,7 @@
           :options="importedCategoryOptions"
           clearable
           filterable
-          placeholder="קטגוריה"
+          :placeholder="l.common.category"
           class="toolbar__type"
         />
         <n-date-picker
@@ -554,16 +554,16 @@
                   @update:checked="togglePagedImportedSelection"
                 />
               </th>
-              <th>ספק</th>
-              <th>קטגוריה</th>
-              <th>סטטוס</th>
-              <th>הסבר ייבוא</th>
-              <th>תאריך</th>
-              <th>תאריך ייבוא</th>
-              <th>עסק</th>
-              <th>סוג</th>
-              <th>סכום</th>
-              <th class="gmail-doc-table__actions-head">פעולות</th>
+              <th>{{ l.common.supplier }}</th>
+              <th>{{ l.common.category }}</th>
+              <th>{{ l.common.status }}</th>
+              <th>{{ l.gmail.importExplanation }}</th>
+              <th>{{ l.common.date }}</th>
+              <th>{{ l.gmail.importDate }}</th>
+              <th>{{ l.gmail.business }}</th>
+              <th>{{ l.common.type }}</th>
+              <th>{{ l.common.amount }}</th>
+              <th class="gmail-doc-table__actions-head">{{ l.common.actions }}</th>
             </tr>
           </thead>
           <tbody>
@@ -621,7 +621,7 @@
                   trigger="click"
                   @select="(key: string) => handleImportedDocAction(key, doc)"
                 >
-                  <button class="btn btn--ghost btn--xs icon-btn gmail-doc-row-action" type="button" aria-label="פעולות">
+                  <button class="btn btn--ghost btn--xs icon-btn gmail-doc-row-action" type="button" :aria-label="l.common.actions">
                     <n-icon :component="EllipsisVerticalOutline" class="btn-icon" />
                   </button>
                 </n-dropdown>
@@ -642,7 +642,7 @@
       </div>
 
       <div v-if="!filteredImportedDocuments.length" class="empty">
-        אין מסמכים שתואמים לסינון הנוכחי
+        {{ l.gmail.emptyFiltered }}
       </div>
     </section>
 
@@ -676,10 +676,12 @@ import { api, type GmailAttachment, type GmailEmail, type GmailImportedDocument,
 import { useAuthStore } from "../stores/auth.js";
 import type { DocTemplate } from "../shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import GmailLogo from "../components/GmailLogo.vue";
 import GmailImportJobStatus from "../components/GmailImportJobStatus.vue";
 
 const route = useRoute();
+const {l, dir, t} = useI18n();
 const message = useMessage();
 const authStore = useAuthStore();
 
@@ -703,14 +705,14 @@ const totalEstimate = ref<number | null>(null);
 const importing = ref<Record<string, boolean>>({});
 const selectedGuidedFlow = ref<"invoice" | "inspection" | null>(null);
 const isAdmin = computed(() => authStore.user?.role === "admin");
-const guidedFlowLabel = computed(() => selectedGuidedFlow.value === "invoice" ? "חשבוניות" : "תסקיר בדיקה");
+const guidedFlowLabel = computed(() => selectedGuidedFlow.value === "invoice" ? l.value.gmail.importInvoices : l.value.gmail.importInspection);
 const visibleImportJob = computed(() => activeImportJob.value ?? lastImportJob.value);
 
 const sectionNavItems = computed(() => {
   if (!connected.value) return [];
   const items: Array<{ id: string; label: string }> = [];
-  if (!isAdmin.value && selectedGuidedFlow.value) items.push({ id: "gmail-search-section", label: "חיפוש" });
-  if ((isAdmin.value || selectedGuidedFlow.value) && importedDocuments.value.length) items.push({ id: "gmail-imported-section", label: "מסמכים שיובאו" });
+  if (!isAdmin.value && selectedGuidedFlow.value) items.push({ id: "gmail-search-section", label: l.value.common.search });
+  if ((isAdmin.value || selectedGuidedFlow.value) && importedDocuments.value.length) items.push({ id: "gmail-imported-section", label: l.value.gmail.imported });
   return items;
 });
 
@@ -752,20 +754,21 @@ const importedBusinessModal = ref<{
   doc: ImportedDocumentCard | null;
   value: string;
 }>({ show: false, doc: null, value: "" });
-const invoiceStatusOptions: SelectOption[] = [
-  { label: "חדש", value: "new" },
-  { label: "נבדק", value: "reviewed" },
-  { label: "יוצא", value: "outgoing" },
-  { label: "ארכיון", value: "archived" },
-];
+const invoiceStatusOptions = computed<SelectOption[]>(() => [
+  { label: l.value.common.statusNew, value: "new" },
+  { label: l.value.common.statusReviewed, value: "reviewed" },
+  { label: l.value.common.statusOutgoing, value: "outgoing" },
+  { label: l.value.common.statusArchived, value: "archived" },
+]);
 
 // File type checkboxes
 const fileTypes = ref({ pdf: true, doc: false, xls: false, img: false });
 
-const fileTypeLabels: Record<string, string> = { pdf: "PDF", doc: "DOC/DOCX", xls: "XLS/XLSX", img: "תמונות" };
+const fileTypeLabels = computed(() => ({ pdf: "PDF", doc: "DOC/DOCX", xls: "XLS/XLSX", img: l.value.common.images }));
 const selectedTypeLabel = computed(() => {
-  const active = Object.entries(fileTypes.value).filter(([, v]) => v).map(([k]) => fileTypeLabels[k]);
-  return active.length ? active.join(" / ") : "קבצים";
+  const labels = fileTypeLabels.value;
+  const active = Object.entries(fileTypes.value).filter(([, v]) => v).map(([k]) => labels[k as keyof typeof labels]);
+  return active.length ? active.join(" / ") : l.value.gmail.files;
 });
 
 // Extra filters
@@ -775,12 +778,12 @@ const filterDateRange = ref<[number, number] | null>(null);
 const filterIdentifierText = ref("");
 const senderProviders = ref<GmailSearchProvider[]>([]);
 
-const filterTypeOptions: SelectOption[] = [
-  { label: "ללא", value: "none" },
-  { label: "לפי שולח", value: "sender" },
-  { label: "לפי תאריך", value: "date" },
-  { label: "תסקירים (מספר רישוי)", value: "inspection" },
-];
+const filterTypeOptions = computed<SelectOption[]>(() => [
+  { label: l.value.gmail.none, value: "none" },
+  { label: l.value.gmail.bySender, value: "sender" },
+  { label: l.value.gmail.byDate, value: "date" },
+  { label: l.value.gmail.byInspection, value: "inspection" },
+]);
 
 const senderOptions = computed<SelectOption[]>(() => senderProviders.value.map((option) => ({
   label: option.label,
@@ -824,11 +827,11 @@ const importedStatusStrip = computed(() => {
     counts[status] = (counts[status] ?? 0) + 1;
   }
   return [
-    { label: "הכל", value: "", count: importedDocuments.value.length },
-    { label: "בתור", value: "queued", count: counts.queued ?? 0 },
-    { label: "בעיבוד", value: "processing", count: counts.processing ?? 0 },
-    { label: "חדש", value: "done", count: counts.done ?? 0 },
-    { label: "שגיאה", value: "error", count: counts.error ?? 0 },
+    { label: l.value.common.all, value: "", count: importedDocuments.value.length },
+    { label: l.value.common.queued, value: "queued", count: counts.queued ?? 0 },
+    { label: l.value.common.processing, value: "processing", count: counts.processing ?? 0 },
+    { label: l.value.common.statusNew, value: "done", count: counts.done ?? 0 },
+    { label: l.value.common.error, value: "error", count: counts.error ?? 0 },
   ];
 });
 
@@ -1593,18 +1596,19 @@ function renderActionIcon(icon: Component) {
 }
 
 function importedDocActionOptions(doc: ImportedDocumentCard) {
+  const c = l.value;
   return [
-    { label: "פתח מסמך", key: "open", icon: renderActionIcon(EyeOutline) },
-    { label: "ייצא מסמך", key: "download", icon: renderActionIcon(DownloadOutline) },
+    { label: c.common.openDocument, key: "open", icon: renderActionIcon(EyeOutline) },
+    { label: c.common.exportDocument, key: "download", icon: renderActionIcon(DownloadOutline) },
     { type: "divider", key: "d1" },
     {
-      label: "הגדר עסק",
+      label: c.gmail.assignBusiness,
       key: "business",
       disabled: !doc.invoice_id,
       icon: renderActionIcon(BriefcaseOutline),
       children: [
         { label: "Business", key: "business:Business" },
-        { label: "עסק חדש...", key: "business:custom" },
+        { label: `${c.gmail.assignBusiness}...`, key: "business:custom" },
       ],
     },
     {
@@ -1619,14 +1623,14 @@ function importedDocActionOptions(doc: ImportedDocumentCard) {
     },
     { type: "divider", key: "d2" },
     {
-      label: "העבר לארכיון",
+      label: c.common.archive,
       key: "archive",
       disabled: !doc.invoice_id,
       icon: renderActionIcon(ArchiveOutline),
       props: { style: "color: var(--color-error, #d03050)" },
     },
     {
-      label: "מחק מסמך",
+      label: c.common.deleteDocument,
       key: "delete",
       icon: renderActionIcon(TrashOutline),
       props: { style: "color: var(--color-error, #d03050)" },

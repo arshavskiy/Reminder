@@ -90,9 +90,10 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
   });
 }
 
-export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string, userName?: string) {
+export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string, userName?: string, locale: "en" | "he" = "he") {
   const s = getSettings();
-  const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+  const resetPath = locale === "en" ? "/en/reset-password" : "/reset-password";
+  const resetUrl = `${baseUrl}${resetPath}?token=${token}`;
   const appName = s.emailFromName ?? "RemindOCR";
   // No provider guard here: sendAuthEmail already skips when neither Resend nor
   // SMTP is configured, and checking smtpHost alone would drop the mail for

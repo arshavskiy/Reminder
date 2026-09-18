@@ -5,6 +5,7 @@ import App from "./App.vue";
 import "vfonts/Lato.css";
 import "./styles/global.css";
 import { useAuthStore } from "./stores/auth.js";
+import { loginPath } from "./stores/locale.js";
 
 const app = createApp(App);
 const pinia = createPinia();
@@ -20,7 +21,7 @@ if (authStore.user) {
   authStore.fetchMe().then(() => {
     // If server says session is invalid, redirect to login
     if (!authStore.user) {
-      window.location.href = "/login";
+      window.location.href = loginPath();
     }
   });
 } else {

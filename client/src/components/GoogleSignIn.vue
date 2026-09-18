@@ -1,17 +1,24 @@
 <template>
   <div class="gsi-wrapper">
-    <button class="gsi-button" @click="redirectToGoogle">
-      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" height="20" />
-      <span>התחבר עם Google</span>
+    <button class="gsi-button" type="button" @click="redirectToGoogle">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" width="20" height="20" />
+      <span>{{ label }}</span>
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
+import {useLocaleStore} from "../stores/locale.js";
+
+withDefaults(defineProps<{ label?: string }>(), {
+  label: "התחבר עם Google",
+});
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+const localeStore = useLocaleStore();
 
 function redirectToGoogle() {
-  window.location.href = `${SERVER}/auth/google`;
+  const locale = localeStore.locale === "en" ? "en" : "he";
+  window.location.href = `${SERVER}/auth/google?locale=${encodeURIComponent(locale)}`;
 }
 </script>
 

@@ -44,6 +44,7 @@ export function registerAuthRoutes(app: express.Application) {
 
     const state = generateState();
     const codeVerifier = generateCodeVerifier();
+    const uiLocale = parseUiLocale(req.query.locale);
 
     // Persist PKCE state to DB so a server restart between redirect and callback
     // doesn't lose it
@@ -52,6 +53,7 @@ export function registerAuthRoutes(app: express.Application) {
       state,
       code_verifier: codeVerifier,
       expires_at: expiresAt,
+      ui_locale: uiLocale,
       // Stored server-side so it cannot be swapped between redirect and callback.
       ...signupIntentFields(parseSignupIntent(req.query.plan, req.query.billing)),
     } as any);
@@ -71,21 +73,21 @@ export function registerAuthRoutes(app: express.Application) {
     const error = req.query.error as string | undefined;
 
     if (error) {
-      res.redirect(frontendUrl(`/login?error=${encodeURIComponent(error)}`));
+      res.redirect(frontendUrl(withLocale(`/login?error=${encodeURIComponent(error)}`, "he")));
       return;
     }
 
     if (!code || !state) {
-      res.redirect(frontendUrl("/login?error=missing_params"));
+      res.redirect(frontendUrl(withLocale("/login?error=missing_params", "he")));
       return;
     }
 
-    const pkce = await col<{ state: string; code_verifier: string; expires_at: Date }>(
+    const pkce = await col<{ state: string; code_verifier: string; expires_at: Date; ui_locale?: string }>(
       "oauth_states"
     ).findOne({ state, expires_at: { $gt: new Date() } });
 
     if (!pkce) {
-      res.redirect(frontendUrl("/login?error=invalid_state"));
+      res.redirect(frontendUrl(withLocale("/login?error=invalid_state", "he")));
       return;
     }
 
@@ -101,6 +103,7 @@ export function registerAuthRoutes(app: express.Application) {
       (pkce as any).signup_intent_plan,
       (pkce as any).signup_intent_billing,
     ));
+    const uiLocale = parseUiLocale((pkce as any).ui_locale);
     await col("oauth_states").deleteOne({ state });
 
     try {
@@ -111,7 +114,7 @@ export function registerAuthRoutes(app: express.Application) {
       // Email whitelist check
       if (settings.allowedEmails && settings.allowedEmails.length > 0) {
         if (!settings.allowedEmails.includes(profile.email)) {
-          res.redirect(frontendUrl("/login?error=not_allowed"));
+          res.redirect(frontendUrl(withLocale("/login?error=not_allowed", uiLocale)));
           return;
         }
       }
@@ -157,10 +160,10 @@ export function registerAuthRoutes(app: express.Application) {
       });
 
       res.setHeader("Set-Cookie", cookies);
-      res.redirect(frontendUrl(POST_LOGIN_PATH));
+      res.redirect(frontendUrl(withLocale(POST_LOGIN_PATH, uiLocale)));
     } catch (err) {
       logger.error("login_failed", { method: "google_oauth", reason: "callback_error", error: err, ip: clientIp(req) ?? null });
-      res.redirect(frontendUrl("/login?error=auth_failed"));
+      res.redirect(frontendUrl(withLocale("/login?error=auth_failed", uiLocale)));
     }
   });
 
@@ -586,7 +589,7 @@ export function registerAuthRoutes(app: express.Application) {
 
   // POST /api/auth/forgot-password
   app.post("/api/auth/forgot-password", async (req, res) => {
-    const { email } = req.body as { email?: string };
+    const { email, locale } = req.body as { email?: string; locale?: string };
     if (!email) {
       res.status(400).json({ error: "email_required" });
       return;
@@ -614,7 +617,7 @@ export function registerAuthRoutes(app: express.Application) {
     // route, so it must not be built from the API host.
     const base = frontendBaseUrl(req);
     try {
-      await sendPasswordResetEmail(emailLower, resetToken, base, user.name);
+      await sendPasswordResetEmail(emailLower, resetToken, base, user.name, parseUiLocale(locale));
       notifyPasswordResetRequested({email: emailLower});
       logger.info("password_reset_requested", { user_id: user._id.toString(), email: emailLower, user_found: true, ip: clientIp(req) ?? null });
     } catch (err) {
@@ -677,6 +680,20 @@ const DEV_FRONTEND = !isProd
  * breaks entirely once the root domain serves the marketing site instead.
  */
 const POST_LOGIN_PATH = "/dashboard";
+
+function parseUiLocale(value: unknown): "en" | "he" {
+  return value === "en" ? "en" : "he";
+}
+
+function withLocale(path: string, locale: "en" | "he"): string {
+  if (locale !== "en") return path;
+  const q = path.indexOf("?");
+  const pathname = q === -1 ? path : path.slice(0, q);
+  const search = q === -1 ? "" : path.slice(q);
+  if (pathname === "/en" || pathname.startsWith("/en/")) return path;
+  const prefixed = pathname === "/" ? "/en" : `/en${pathname}`;
+  return `${prefixed}${search}`;
+}
 
 function frontendUrl(path: string): string {
   return `${DEV_FRONTEND}${path}`;

@@ -6,7 +6,7 @@
         v-model="query"
         autofocus
         class="field__search"
-        placeholder="חפש ציוד לפי שם / מספר סידורי / יצרן..."
+        :placeholder="l.field.searchPlaceholder"
         type="search"
         @input="onSearch"
       />
@@ -25,7 +25,7 @@
         <span v-if="r.manufacturer" class="field__result-mfr">{{ r.manufacturer }}</span>
       </button>
     </div>
-    <p v-else-if="query && !loading && !results.length" class="field__empty">לא נמצא ציוד</p>
+    <p v-else-if="query && !loading && !results.length" class="field__empty">{{ l.field.empty }}</p>
 
     <!-- Equipment detail card -->
     <div v-if="selected" class="field__card">
@@ -37,7 +37,7 @@
 
       <div class="field__card-meta">
         <div v-if="selected.manufacturer" class="field__meta-row">
-          <span class="field__meta-label">יצרן</span>
+          <span class="field__meta-label">{{ l.field.manufacturer }}</span>
           <span>{{ selected.manufacturer }}</span>
         </div>
         <div v-if="selected.model" class="field__meta-row">
@@ -132,7 +132,7 @@
       <div v-if="savedPhotos.length" class="field__gallery">
         <div v-for="(photo, i) in savedPhotos" :key="photo.key" class="field__gallery-item">
           <img :src="photo.url" alt="תמונת ציוד" class="field__photo" @click="lightboxUrl = photo.url" />
-          <button class="field__photo-del" title="מחק תמונה" @click="deletePhoto(i)">✕</button>
+          <button class="field__photo-del" :title="l.field.deletePhoto" @click="deletePhoto(i)">✕</button>
         </div>
       </div>
 
@@ -155,10 +155,12 @@ import {useRoute, useRouter} from "vue-router";
 import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
+import {useI18n} from "../composables/useI18n.js";
 import type {Equipment} from "../shared/types.js";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 
 const {confirm} = useConfirm();
+const {l} = useI18n();
 const router = useRouter();
 const route = useRoute();
 const query = ref("");

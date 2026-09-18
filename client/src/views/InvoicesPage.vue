@@ -1,9 +1,9 @@
 <template>
-  <div class="page2 invoices-page" dir="rtl">
+  <div class="page2 invoices-page" :dir="dir">
     <PageHeader
       :count="total"
-      title="חשבוניות"
-      subtitle="חשבוניות שיובאו מ-Gmail — צפייה, סינון וניהול"
+      :title="l.invoices.title"
+      :subtitle="l.invoices.subtitle"
     >
       <template #hero>
         <input
@@ -23,7 +23,7 @@
           @click="confirmDeleteSelected"
         >
           <n-icon :component="TrashOutline" class="btn-icon" />
-          מחק {{ selectedInvoiceCount }}
+          {{ t("common.deleteN", {n: selectedInvoiceCount}) }}
         </button>
         <button
           :class="{ 'rbtn--loading': importingFromGmail }"
@@ -43,7 +43,7 @@
           @click="openInvoiceUploadPicker"
         >
           <n-icon :component="CloudUploadOutline" class="btn-icon" />
-          העלה קבצים
+          {{ l.common.upload }}
         </button>
         <button
           :disabled="loading"
@@ -52,7 +52,7 @@
           @click="load(true)"
         >
           <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
-          רענן
+          {{ l.common.refresh }}
         </button>
         <n-tooltip placement="top">
           <template #trigger>
@@ -65,11 +65,11 @@
                 @click="exportInvoicesToExcel"
               >
                 <n-icon :component="DownloadOutline" class="btn-icon" />
-                ייצוא לאקסל
+                {{ l.common.exportExcel }}
               </button>
             </span>
           </template>
-          {{ excelAllowed ? "הורדת החשבוניות לקובץ Excel" : excelExportLockedMessage }}
+          {{ excelAllowed ? l.invoices.excelTooltip : excelExportLockedMessage }}
         </n-tooltip>
         <n-tooltip placement="top">
           <template #trigger>
@@ -82,11 +82,11 @@
                 @click="sendSixMonthInvoiceReport"
               >
                 <n-icon :component="MailOutline" class="btn-icon" />
-                שלח דוח 6 חודשים
+                {{ l.invoices.sixMonth }}
               </button>
             </span>
           </template>
-          {{ excelAllowed ? "שליחת קובץ Excel של החשבוניות מששת החודשים האחרונים למייל שלך" : excelExportLockedMessage }}
+          {{ excelAllowed ? l.invoices.sixMonthTooltip : excelExportLockedMessage }}
         </n-tooltip>
         <button
             :class="{ 'rbtn--loading': exportingToDrive }"
@@ -96,11 +96,11 @@
             @click="handleDriveExport"
         >
           <GoogleDriveLogo :size="16" />
-          ייצוא ל-Drive
+          {{ l.documents.driveExport }}
         </button>
         <button class="rbtn rbtn--ghost" type="button" :disabled="!exportAllowed" @click="openMonthlyReport">
           <n-icon :component="DocumentTextOutline" class="btn-icon"/>
-          דוח חודשי
+          {{ l.documents.monthlyReport }}
         </button>
       </template>
     </PageHeader>
@@ -135,7 +135,7 @@
           <template #trigger>
             <button
               :class="{ 'rbtn--ghost-active': viewMode === 'cards' }"
-              :aria-label="'כרטיסים'"
+              :aria-label="l.common.cards"
               class="rbtn rbtn--ghost rbtn--icon"
               type="button"
               @click="viewMode = 'cards'"
@@ -143,13 +143,13 @@
               <n-icon :component="GridOutline" :size="16" class="btn-icon"/>
             </button>
           </template>
-          כרטיסים
+          {{ l.common.cards }}
         </n-tooltip>
         <n-tooltip placement="top">
           <template #trigger>
             <button
               :class="{ 'rbtn--ghost-active': viewMode === 'table' }"
-              :aria-label="'טבלה'"
+              :aria-label="l.common.tableView"
               class="rbtn rbtn--ghost rbtn--icon"
               type="button"
               @click="viewMode = 'table'"
@@ -157,7 +157,7 @@
               <n-icon :component="ListOutline" :size="16" class="btn-icon"/>
             </button>
           </template>
-          טבלה
+          {{ l.common.tableView }}
         </n-tooltip>
       </div>
     </div>
@@ -166,7 +166,7 @@
       <n-input
         v-model:value="filters.q"
         clearable
-        placeholder="חיפוש ספק, מספר, כתובת או קובץ..."
+        :placeholder="l.invoices.searchPlaceholder"
         class="toolbar__search"
         @keydown.enter="load(true)"
       />
@@ -175,7 +175,7 @@
         :options="typeOptions"
         clearable
         filterable
-        placeholder="סוג מסמך"
+        :placeholder="l.gmail.docType"
         class="toolbar__type"
         @update:value="load(true)"
       />
@@ -183,7 +183,7 @@
         v-model:value="filters.cashFlow"
         :options="cashFlowFilterOptions"
         clearable
-        placeholder="הכנסה / הוצאה"
+        :placeholder="l.invoices.cashFlowPlaceholder"
         class="toolbar__type"
         @update:value="load(true)"
       />
@@ -192,7 +192,7 @@
         :options="categoryOptions"
         clearable
         filterable
-        placeholder="קטגוריה"
+        :placeholder="l.common.category"
         class="toolbar__type"
         @update:value="load(true)"
       />
@@ -203,7 +203,7 @@
         filterable
         multiple
         max-tag-count="responsive"
-        placeholder="שם הספק"
+        :placeholder="l.invoices.supplierName"
         class="toolbar__supplier"
         @update:value="load(true)"
       />
@@ -214,7 +214,7 @@
         @click="openVendorMergeModal"
       >
         <n-icon :component="BriefcaseOutline" class="btn-icon" />
-        מזג ספקים
+        {{ l.invoices.mergeSuppliers }}
       </button>
       <DateRangePresets v-model="dateRange" @change="load(true)" />
       <n-date-picker
@@ -242,7 +242,7 @@
     <n-spin :show="loading">
       <div v-if="!rows.length && !loading" class="empty">
         <n-icon :component="DocumentTextOutline" :size="48" class="empty__icon" />
-        <p>לא נמצאו חשבוניות מיובאות</p>
+        <p>{{ l.invoices.empty }}</p>
         <button
           :class="{ 'rbtn--loading': importingFromGmail }"
           :disabled="importingFromGmail"
@@ -287,11 +287,11 @@
               <span>{{ displayDate(row) }}</span>
             </div>
             <div class="invoice-card__line invoice-card__line--muted">
-              <span>קטגוריה</span>
+              <span>{{ l.common.category }}</span>
               <span class="invoice-category-chip" :title="row.provider_label || undefined">{{ invoiceProviderCategoryLabel(row) }}</span>
             </div>
             <div class="invoice-card__line invoice-card__line--muted">
-              <span>{{ row.invoice_number || "ללא מספר" }}</span>
+              <span>{{ row.invoice_number || l.common.noNumber }}</span>
               <span>{{ row.billing_period || "" }}</span>
             </div>
           </div>
@@ -316,47 +316,47 @@
                 <n-checkbox
                   :checked="allVisibleSelected"
                   :indeterminate="someVisibleSelected && !allVisibleSelected"
-                  aria-label="בחר את כל החשבוניות בעמוד"
+                  :aria-label="l.common.selectAllInvoices"
                   @update:checked="toggleSelectVisible"
                 />
               </th>
               <th class="invoice-col invoice-col--supplier">
                 <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('supplier')" @click="setSort('supplier')">
-                  <span>ספק</span>
+                  <span>{{ l.common.supplier }}</span>
                   <n-icon :component="sortIcon('supplier')" :size="14" />
                 </button>
               </th>
               <th class="invoice-col invoice-col--date">
                 <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('date')" @click="setSort('date')">
-                  <span>תאריך</span>
+                  <span>{{ l.common.date }}</span>
                   <n-icon :component="sortIcon('date')" :size="14" />
                 </button>
               </th>
               <th class="invoice-col invoice-col--client">
                 <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('client')" @click="setSort('client')">
-                  <span>לקוח</span>
+                  <span>{{ l.common.client }}</span>
                   <n-icon :component="sortIcon('client')" :size="14" />
                 </button>
               </th>
               <th class="invoice-col invoice-col--category">
                 <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('category')" @click="setSort('category')">
-                  <span>קטגוריה</span>
+                  <span>{{ l.common.category }}</span>
                   <n-icon :component="sortIcon('category')" :size="14" />
                 </button>
               </th>
               <th class="invoice-col invoice-col--type">
                 <button class="invoice-sort-button" type="button" :aria-label="sortAriaLabel('type')" @click="setSort('type')">
-                  <span>סוג</span>
+                  <span>{{ l.common.type }}</span>
                   <n-icon :component="sortIcon('type')" :size="14" />
                 </button>
               </th>
               <th class="invoice-col invoice-col--amount">
                 <button class="invoice-sort-button invoice-sort-button--amount" type="button" :aria-label="sortAriaLabel('amount')" @click="setSort('amount')">
-                  <span>סכום</span>
+                  <span>{{ l.common.amount }}</span>
                   <n-icon :component="sortIcon('amount')" :size="14" />
                 </button>
               </th>
-              <th class="invoice-col invoice-col--actions">פעולות</th>
+              <th class="invoice-col invoice-col--actions">{{ l.common.actions }}</th>
             </tr>
           </thead>
           <tbody>
@@ -392,7 +392,7 @@
                   filterable
                   size="small"
                   class="invoice-category-select"
-                  placeholder="לא מסווג"
+                  :placeholder="l.common.uncategorized"
                   @click.stop
                   @update:value="(value) => updateInvoiceProviderCategory(row, value)"
                 />
@@ -415,7 +415,7 @@
                     trigger="click"
                     @select="(key: string) => handleInvoiceAction(key, row)"
                   >
-                    <button class="btn btn--ghost btn--xs icon-btn invoice-row-action" type="button" aria-label="פעולות">
+                    <button class="btn btn--ghost btn--xs icon-btn invoice-row-action" type="button" :aria-label="l.common.actions">
                       <n-icon :component="EllipsisVerticalOutline" class="btn-icon" />
                     </button>
                   </n-dropdown>
@@ -442,21 +442,21 @@
     <n-modal
       v-model:show="businessModal.show"
       preset="card"
-      title="הגדר לקוח"
+      :title="l.invoices.assignClient"
       class="invoice-business-modal"
       :style="{ width: '460px', maxWidth: 'calc(100vw - 32px)' }"
     >
-      <div class="invoice-business-form" dir="rtl">
+      <div class="invoice-business-form" :dir="dir">
         <n-input
           v-model:value="businessModal.value"
           clearable
-          placeholder="שם לקוח"
+          :placeholder="l.common.clientName"
           @keydown.enter="saveBusinessModal"
         />
         <div class="invoice-business-form__actions">
-          <n-button @click="businessModal.show = false">ביטול</n-button>
+          <n-button @click="businessModal.show = false">{{ l.common.cancel }}</n-button>
           <n-button type="primary" :disabled="!businessModal.value.trim()" @click="saveBusinessModal">
-            שמור
+            {{ l.common.save }}
           </n-button>
         </div>
       </div>
@@ -465,13 +465,13 @@
     <n-modal
       v-model:show="vendorMergeModal.show"
       preset="card"
-      title="מיזוג ספקים"
+      :title="l.invoices.mergeSuppliers"
       class="invoice-vendor-merge-modal"
       :style="{ width: '560px', maxWidth: 'calc(100vw - 32px)' }"
     >
-      <div class="invoice-business-form" dir="rtl">
+      <div class="invoice-business-form" :dir="dir">
         <label class="invoice-form-label">
-          שמות ספקים למיזוג
+          {{ l.invoices.mergeNames }}
           <n-select
             v-model:value="vendorMergeModal.sourceNames"
             :options="supplierOptions"
@@ -479,32 +479,32 @@
             filterable
             multiple
             max-tag-count="responsive"
-            placeholder="בחר ספקים"
+            :placeholder="l.invoices.pickSuppliers"
           />
         </label>
         <label class="invoice-form-label">
-          שם ספק מאוחד
+          {{ l.invoices.unifiedName }}
           <n-select
             v-model:value="vendorMergeModal.canonicalName"
             :options="supplierOptions"
             clearable
             filterable
             tag
-            placeholder="לדוגמה: גולן טלקום בע&quot;מ"
+            :placeholder="l.invoices.unifiedName"
           />
         </label>
         <p class="invoice-form-hint">
-          כל החשבוניות של הספקים שנבחרו יישמרו תחת שם הספק המאוחד.
+          {{ l.invoices.mergeHint }}
         </p>
         <div class="invoice-business-form__actions">
-          <n-button @click="vendorMergeModal.show = false">ביטול</n-button>
+          <n-button @click="vendorMergeModal.show = false">{{ l.common.cancel }}</n-button>
           <n-button
             type="primary"
             :loading="vendorMergeModal.saving"
             :disabled="vendorMergeModal.sourceNames.length < 2 || !String(vendorMergeModal.canonicalName ?? '').trim()"
             @click="saveVendorMerge"
           >
-            מזג ושמור
+            {{ l.invoices.mergeSave }}
           </n-button>
         </div>
       </div>
@@ -536,6 +536,7 @@ import {
   TrashOutline,
 } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
 import GmailLogo from "../components/GmailLogo.vue";
@@ -551,6 +552,7 @@ import {featureFlagsForUser, planAllowsGoogleDrive, planAllowsExcelExport, resol
 import {useConfirm} from "../composables/useConfirm.js";
 
 const router = useRouter();
+const {l, dir, t} = useI18n();
 const message = useMessage();
 const {confirm} = useConfirm();
 const authStore = useAuthStore();
@@ -615,17 +617,17 @@ const statusOptions = computed<SelectOption[]>(() => statusStrip.value.map((item
   label: `${item.label} (${item.count})`,
   value: item.value,
 })));
-const invoiceStatusOptions: SelectOption[] = [
-  { label: "חדש", value: "new" },
-  { label: "נבדק", value: "reviewed" },
-  { label: "יוצא", value: "outgoing" },
-  { label: "ארכיון", value: "archived" },
-];
+const invoiceStatusOptions = computed<SelectOption[]>(() => [
+  { label: l.value.common.statusNew, value: "new" },
+  { label: l.value.common.statusReviewed, value: "reviewed" },
+  { label: l.value.common.statusOutgoing, value: "outgoing" },
+  { label: l.value.common.statusArchived, value: "archived" },
+]);
 const typeOptions = computed<SelectOption[]>(() => types.value.map((value) => ({ label: value, value })));
-const cashFlowFilterOptions: SelectOption[] = [
-  { label: "הוצאה", value: "expense" },
-  { label: "הכנסה", value: "income" },
-];
+const cashFlowFilterOptions = computed<SelectOption[]>(() => [
+  { label: l.value.common.expense, value: "expense" },
+  { label: l.value.common.income, value: "income" },
+]);
 const categoryOptions = computed<SelectOption[]>(() => categories.value.map((value) => ({
   label: providerCategoryLabel(value),
   value,
@@ -635,10 +637,10 @@ const providerCategoryOptions = computed<SelectOption[]>(() => PROVIDER_CATEGORI
   value,
 })));
 const supplierOptions = computed<SelectOption[]>(() => [
-  {label: "ספק לא מזוהה", value: "__unidentified__"},
+  {label: l.value.common.unidentifiedSupplier, value: "__unidentified__"},
   ...suppliers.value.map((value) => ({label: value, value})),
 ]);
-const gmailImportButtonLabel = computed(() => gmailConnected.value === false ? "חבר Gmail" : "ייבא הכל");
+const gmailImportButtonLabel = computed(() => gmailConnected.value === false ? l.value.common.connectGmail : l.value.common.importAll);
 const visibleGmailImportJob = computed(() => activeGmailImportJob.value ?? lastGmailImportJob.value);
 const visibleDriveExportJob = computed(() => activeDriveExportJob.value ?? lastDriveExportJob.value);
 const selectedInvoiceCount = computed(() => selectedInvoiceIds.value.size);
@@ -648,18 +650,18 @@ const allVisibleSelected = computed(() => (
   visibleRowIds.value.length > 0 && visibleRowIds.value.every((id) => selectedInvoiceIds.value.has(id))
 ));
 const statusStrip = computed(() => [
-  { label: "חדש", value: "new", count: counts.value.new ?? 0 },
-  { label: "נבדק", value: "reviewed", count: counts.value.reviewed ?? 0 },
-  { label: "יוצא", value: "outgoing", count: counts.value.outgoing ?? 0 },
-  { label: "ארכיון", value: "archived", count: counts.value.archived ?? 0 },
+  { label: l.value.common.statusNew, value: "new", count: counts.value.new ?? 0 },
+  { label: l.value.common.statusReviewed, value: "reviewed", count: counts.value.reviewed ?? 0 },
+  { label: l.value.common.statusOutgoing, value: "outgoing", count: counts.value.outgoing ?? 0 },
+  { label: l.value.common.statusArchived, value: "archived", count: counts.value.archived ?? 0 },
 ]);
 const documentCategoryStrip = computed(() => [
-  { label: "הכל", value: "", count: totalAll.value },
-  { label: "חשבוניות", value: "invoice", count: documentCategoryCounts.value.invoice ?? 0 },
-  { label: "קבלות", value: "receipt", count: documentCategoryCounts.value.receipt ?? 0 },
-  { label: "חשבונות", value: "bill", count: documentCategoryCounts.value.bill ?? 0 },
-  { label: "דרישות תשלום", value: "payment_request", count: documentCategoryCounts.value.payment_request ?? 0 },
-  { label: "זיכויים", value: "credit_note", count: documentCategoryCounts.value.credit_note ?? 0 },
+  { label: l.value.common.all, value: "", count: totalAll.value },
+  { label: l.value.invoices.title, value: "invoice", count: documentCategoryCounts.value.invoice ?? 0 },
+  { label: l.value.common.receipts, value: "receipt", count: documentCategoryCounts.value.receipt ?? 0 },
+  { label: l.value.common.bills, value: "bill", count: documentCategoryCounts.value.bill ?? 0 },
+  { label: l.value.common.paymentRequests, value: "payment_request", count: documentCategoryCounts.value.payment_request ?? 0 },
+  { label: l.value.common.creditNotes, value: "credit_note", count: documentCategoryCounts.value.credit_note ?? 0 },
 ]);
 
 let searchTimer: number | undefined;
@@ -852,25 +854,28 @@ function sortIcon(key: InvoiceSortKey): Component {
 
 function sortAriaLabel(key: InvoiceSortKey): string {
   const labels: Record<InvoiceSortKey, string> = {
-    supplier: "ספק",
-    status: "סטטוס",
-    date: "תאריך",
-    client: "לקוח",
-    category: "קטגוריה",
-    type: "סוג",
-    amount: "סכום",
+    supplier: l.value.common.supplier,
+    status: l.value.common.status,
+    date: l.value.common.date,
+    client: l.value.common.client,
+    category: l.value.common.category,
+    type: l.value.common.type,
+    amount: l.value.common.amount,
   };
-  const nextDirection = sortBy.value === key && sortDir.value === "asc" ? "יורד" : "עולה";
-  return `מיין לפי ${labels[key]} בסדר ${nextDirection}`;
+  const nextDirection = sortBy.value === key && sortDir.value === "asc"
+    ? l.value.common.sortDesc
+    : l.value.common.sortAsc;
+  return t("common.sortBy", {col: labels[key], dir: nextDirection});
 }
 
 function statusLabel(status: string): string {
+  const c = l.value.common;
   const labels: Record<string, string> = {
-    new: "חדש",
-    reviewed: "נבדק",
-    outgoing: "יוצא",
-    archived: "ארכיון",
-    done: "חדש",
+    new: c.statusNew,
+    reviewed: c.statusReviewed,
+    outgoing: c.statusOutgoing,
+    archived: c.statusArchived,
+    done: c.statusNew,
   };
   return labels[status] ?? status;
 }
@@ -898,23 +903,23 @@ function clientLabel(row: ImportedInvoice): string {
 }
 
 function invoiceTypeLabel(row: ImportedInvoice): string {
-  if (row.document_category === "receipt") return "קבלה";
-  if (row.document_category === "bill") return "חשבון";
-  if (row.document_category === "payment_request") return "דרישת תשלום";
+  if (row.document_category === "receipt") return l.value.invoices.typeReceipt;
+  if (row.document_category === "bill") return l.value.invoices.typeBill;
+  if (row.document_category === "payment_request") return l.value.invoices.typePaymentRequest;
   const value = String(row.type || firstInvoiceField(row, ["document_subtype", "invoice_type", "receipt_type"]) || "").trim();
   const normalized = value.toLowerCase();
-  if (/receipt|קבלה/.test(normalized)) return "קבלה";
-  if (/order|הזמנה/.test(normalized)) return "אישור הזמנה";
-  if (/payment|תשלום/.test(normalized)) return "אישור תשלום";
-  return "חשבונית";
+  if (/receipt|קבלה/.test(normalized)) return l.value.invoices.typeReceipt;
+  if (/order|הזמנה/.test(normalized)) return value || l.value.invoices.fallbackTitle;
+  if (/payment|תשלום/.test(normalized)) return l.value.invoices.typePaymentRequest;
+  return l.value.invoices.fallbackTitle;
 }
 
 function cashFlowLabel(row: ImportedInvoice): string {
-  return row.cash_flow === "income" ? "הכנסה" : "הוצאה";
+  return row.cash_flow === "income" ? l.value.common.income : l.value.common.expense;
 }
 
 function invoiceProviderCategoryLabel(row: ImportedInvoice): string {
-  return row.provider_category ? providerCategoryLabel(row.provider_category) : "לא מסווג";
+  return row.provider_category ? providerCategoryLabel(row.provider_category) : l.value.common.uncategorized;
 }
 
 const PROVIDER_CATEGORIES: Array<NonNullable<ImportedInvoice["provider_category"]>> = [
@@ -1276,26 +1281,27 @@ function renderActionIcon(icon: Component) {
 }
 
 function invoiceActionOptions(row: ImportedInvoice) {
+  const c = l.value;
   return [
-    { label: "פתח מסמך", key: "open", icon: renderActionIcon(EyeOutline) },
+    { label: c.common.openDocument, key: "open", icon: renderActionIcon(EyeOutline) },
     {
-      label: "ייצא מסמך",
+      label: c.common.exportDocument,
       key: "download",
       disabled: !row.download_url,
       icon: renderActionIcon(DownloadOutline),
     },
     { type: "divider", key: "d1" },
     {
-      label: "הגדר לקוח",
+      label: c.invoices.assignClient,
       key: "business",
       icon: renderActionIcon(BriefcaseOutline),
       children: [
         { label: clientLabel(row), key: "business:current", disabled: true },
-        { label: "לקוח חדש...", key: "business:custom" },
+        { label: `${c.clients.newClient}...`, key: "business:custom" },
       ],
     },
     {
-      label: row.cash_flow === "income" ? "הגדר קטגוריית הכנסה" : "הגדר קטגוריית הוצאה",
+      label: row.cash_flow === "income" ? l.value.invoices.setIncomeCategory : l.value.invoices.setExpenseCategory,
       key: "category",
       icon: renderActionIcon(PricetagOutline),
       children: [
@@ -1305,17 +1311,17 @@ function invoiceActionOptions(row: ImportedInvoice) {
       ],
     },
     {
-      label: "סוג תנועה",
+      label: l.value.invoices.cashFlowType,
       key: "cashFlow",
       icon: renderActionIcon(SwapVerticalOutline),
       children: [
-        { label: "הוצאה", key: "cashFlow:expense" },
-        { label: "הכנסה", key: "cashFlow:income" },
+        { label: l.value.common.expense, key: "cashFlow:expense" },
+        { label: l.value.common.income, key: "cashFlow:income" },
       ],
     },
     { type: "divider", key: "d2" },
     {
-      label: "העבר לארכיון",
+      label: c.common.archive,
       key: "archive",
       icon: renderActionIcon(ArchiveOutline),
       props: { style: "color: var(--color-error, #d03050)" },

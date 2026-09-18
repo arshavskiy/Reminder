@@ -1,9 +1,9 @@
 <template>
   <div class="dash">
     <div v-if="needsOnboarding" class="dash__onboarding-reminder">
-      <span>נשארו עוד פרטים למילוי כדי לנצל את המערכת במלואה</span>
+      <span>{{ l.dashboard.onboarding }}</span>
       <button type="button" class="dash__onboarding-reminder__btn" @click="openOnboarding">
-        השלמת ההגדרה
+        {{ l.dashboard.completeSetup }}
       </button>
     </div>
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
@@ -24,7 +24,7 @@
             @click="hydraulicModalRef?.open()"
           >
             <n-icon :component="AddOutline" class="btn-icon" />
-            תסקיר חדש
+            {{ l.dashboard.newInspection }}
           </button>
           <ReminderTableImport
             v-if="hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar)"
@@ -33,7 +33,7 @@
             <template #trigger="{ open }">
               <button class="rbtn-sm" type="button" @click="open">
                 <n-icon :component="GridOutline" class="btn-icon" />
-                ייבוא תזכורות Excel / CSV
+                {{ l.dashboard.importReminders }}
               </button>
             </template>
           </ReminderTableImport>
@@ -44,15 +44,15 @@
       <div class="dash__stats">
         <div v-if="hasFeature(FEATURES.dashboard.statDocuments)" class="stat">
           <span class="stat__num">{{ stats?.total_documents ?? 0 }}</span>
-          <span class="stat__label">מסמכים</span>
+          <span class="stat__label">{{ l.dashboard.statDocuments }}</span>
         </div>
         <div v-if="hasFeature(FEATURES.dashboard.statClients)" class="stat">
           <span class="stat__num">{{ stats?.total_clients ?? 0 }}</span>
-          <span class="stat__label">לקוחות</span>
+          <span class="stat__label">{{ l.dashboard.statClients }}</span>
         </div>
         <div v-if="hasFeature(FEATURES.dashboard.statInspections)" class="stat">
           <span class="stat__num">{{ stats?.total_inspections ?? 0 }}</span>
-          <span class="stat__label">תסקירים</span>
+          <span class="stat__label">{{ l.dashboard.statInspections }}</span>
         </div>
         <div
           v-if="hasFeature(FEATURES.dashboard.statPendingReminders)"
@@ -61,7 +61,7 @@
           <span class="stat__num stat__num--accent">{{
             stats?.pending_reminders ?? 0
           }}</span>
-          <span class="stat__label">תזכורות ממתינות</span>
+          <span class="stat__label">{{ l.dashboard.statPending }}</span>
         </div>
         <div
           v-if="
@@ -73,13 +73,13 @@
           <span class="stat__num stat__num--warn">{{
             stats?.expiring_soon
           }}</span>
-          <span class="stat__label">פגי תוקף ב-30 יום</span>
+          <span class="stat__label">{{ l.dashboard.statExpiring }}</span>
         </div>
       </div>
 
       <!-- ── Reminders calendar ───────────────────────────────────────── -->
       <div v-if="hasFeature(FEATURES.dashboard.calendar)" class="calendar-pref">
-        <span class="calendar-pref__label">הצג רק בדיקות מתוכננות</span>
+        <span class="calendar-pref__label">{{ l.dashboard.testsOnly }}</span>
         <n-switch
           v-model:value="calendarNextTestsOnly"
           :loading="savingCalendarPreference"
@@ -115,7 +115,7 @@
 
       <!-- ── Module cards ──────────────────────────────────────────────── -->
       <h2 v-if="hasFeature(FEATURES.dashboard.modules)" class="dash__section">
-        סביבת העבודה
+        {{ l.dashboard.workspace }}
       </h2>
       <div v-if="hasFeature(FEATURES.dashboard.modules)" class="module-grid">
         <article
@@ -137,7 +137,7 @@
               </div>
             </div>
             <p class="module__desc">{{ m.desc }}</p>
-            <span class="module__cta">פתח </span>
+            <span class="module__cta">{{ l.dashboard.open }}</span>
           </div>
         </article>
       </div>
@@ -149,9 +149,9 @@
           class="panel"
         >
           <header class="panel__head">
-            <h3>מסמכים אחרונים</h3>
-            <router-link class="panel__more" to="/documents"
-              >כל המסמכים
+            <h3>{{ l.dashboard.recentDocuments }}</h3>
+            <router-link class="panel__more" :to="href('/documents')"
+              >{{ l.dashboard.allDocuments }}
             </router-link>
           </header>
           <ul v-if="stats?.recent_documents?.length" class="panel__list">
@@ -161,7 +161,7 @@
               class="panel__row"
             >
               <router-link
-                :to="`/documents/${doc.id}`"
+                :to="href(`/documents/${doc.id}`)"
                 class="panel__row-title"
               >
                 {{ doc.file_name }}
@@ -169,7 +169,7 @@
               <StatusBadge :status="doc.processing_status" />
             </li>
           </ul>
-          <p v-else class="panel__empty">אין מסמכים עדיין</p>
+          <p v-else class="panel__empty">{{ l.dashboard.noDocuments }}</p>
         </section>
 
         <section
@@ -177,9 +177,9 @@
           class="panel"
         >
           <header class="panel__head">
-            <h3>תזכורות קרובות</h3>
-            <router-link class="panel__more" to="/reminders"
-              >כל התזכורות
+            <h3>{{ l.dashboard.upcomingReminders }}</h3>
+            <router-link class="panel__more" :to="href('/reminders')"
+              >{{ l.dashboard.allReminders }}
             </router-link>
           </header>
           <ul v-if="stats?.upcoming_reminders?.length" class="panel__list">
@@ -197,7 +197,7 @@
               <span class="panel__row-date">{{ r.trigger_date }}</span>
             </li>
           </ul>
-          <p v-else class="panel__empty">אין תזכורות קרובות</p>
+          <p v-else class="panel__empty">{{ l.dashboard.noUpcoming }}</p>
         </section>
       </div>
     </n-spin>
@@ -239,8 +239,10 @@ import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue
 import QuoteCreateModal from "../components/QuoteCreateModal.vue";
 import GmailLogo from "../components/GmailLogo.vue";
 import {useOnboarding} from "../composables/useOnboarding.js";
+import {useI18n} from "../composables/useI18n.js";
 
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
+const {l, href, locale} = useI18n();
 function onTableImported() {
   calendarNextTestsOnly.value = false;
   store.fetch(true);
@@ -263,7 +265,7 @@ const needsOnboarding = computed(() => {
 });
 
 function onQuotaReached() {
-  message.warning("הגעת למגבלת המסמכים בחשבון החינמי. שדרג את המסלול כדי להעלות עוד.");
+  message.warning(l.value.dashboard.quotaWarning);
 }
 const stats = computed(() => store.stats);
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
@@ -480,7 +482,7 @@ const greeting = computed(() => {
 // Hebrew-formatted date: יום רביעי, 20 במאי 2026
 const dateLine = computed(() => {
   const d = new Date();
-  return d.toLocaleDateString("he-IL", {
+  return d.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -488,90 +490,84 @@ const dateLine = computed(() => {
   });
 });
 
-const modules = [
+const modules = computed(() => {
+  const m = l.value.dashboard.modules;
+  return [
   {
     key: "documents",
     feature: FEATURES.pages.documents,
-    title: "מסמכים",
-    desc: "צפה, ערוך וסרוק מסמכים בדיקה.",
+    title: m.documentsTitle,
+    desc: m.documentsDesc,
     count: () => stats.value?.total_documents ?? 0,
     icon: ClipboardOutline,
-    to: "/contracts",
+    to: href("/contracts"),
     show: true,
   },
   {
     key: "contracts",
     feature: FEATURES.pages.contracts,
-    title: "תסקירים",
-    desc: "צפה, ערוך וצור תסקירי בדיקה. נהל את כל שלבי התסקיר ממקום אחד.",
+    title: m.inspectionsTitle,
+    desc: m.inspectionsDesc,
     count: () => stats.value?.total_inspections ?? 0,
     icon: ClipboardOutline,
-    to: "/contracts",
+    to: href("/contracts"),
     show: true,
   },
   {
     key: "equipment",
     feature: FEATURES.pages.equipment,
-    title: "הגדרות ציוד",
-    desc: "נהל את רשימת הציוד שלך, יצרנים והצהרות בטיחות.",
+    title: m.equipmentTitle,
+    desc: m.equipmentDesc,
     count: () => stats.value?.total_equipment ?? 0,
     icon: ConstructOutline,
-    to: "/equipment",
+    to: href("/equipment"),
     show: true,
   },
   {
     key: "clients",
     feature: FEATURES.pages.clients,
-    title: "ניהול לקוחות",
-    desc: "הוסף לקוחות חדשים, נהל אנשי קשר ועקוב אחרי פרטי לקוח.",
+    title: m.clientsTitle,
+    desc: m.clientsDesc,
     count: () => stats.value?.total_clients ?? 0,
     icon: PeopleOutline,
-    to: "/clients",
+    to: href("/clients"),
     show: true,
   },
   {
     key: "doc-templates",
     feature: FEATURES.pages.docTemplates,
-    title: "תבניות מסמכים",
-    desc: "הגדר אילו שדות לחלץ מכל סוג מסמך. יצירה אוטומטית מ-AI.",
+    title: m.docTemplatesTitle,
+    desc: m.docTemplatesDesc,
     count: () => stats.value?.total_email_templates ?? 0,
     icon: ExtensionPuzzleOutline,
-    to: "/settings/doc-templates",
+    to: href("/settings/doc-templates"),
     show: true,
   },
   {
     key: "email-templates",
     feature: FEATURES.pages.emailTemplates,
-    title: "תבניות",
-    desc: "עצב את תוכן התזכורות עם משתנים דינמיים ולוגו של החברה.",
+    title: m.emailTemplatesTitle,
+    desc: m.emailTemplatesDesc,
     count: () => stats.value?.total_email_templates ?? 0,
     icon: MailOutline,
-    to: "/settings/email-templates",
-    show: authStore.user?.role === "admin", // Only show to admins
+    to: href("/settings/email-templates"),
+    show: authStore.user?.role === "admin",
   },
   {
     key: "reminders",
     feature: FEATURES.pages.reminders,
-    title: "תזכורות",
-    desc: "כל התזכורות הממתינות והנשלחות. שלח עכשיו או דחה.",
+    title: m.remindersTitle,
+    desc: m.remindersDesc,
     count: () => stats.value?.pending_reminders ?? 0,
     icon: AlarmOutline,
-    to: "/reminders",
+    to: href("/reminders"),
     show: true,
   },
-  // {
-  //   key: "settings",
-  //   feature: FEATURES.pages.settings,
-  //   title: "הגדרות",
-  //   desc: "AI, SMTP, מעקב תיקיות, ערכת נושא ועוד.",
-  //   icon: SettingsOutline,
-  //   to: "/settings",
-  //   show: authStore.user?.role === "admin", // Only show to admins
-  // },
 ];
+});
 
 const data_cards = computed(() =>
-  modules.filter((m) => m.show && hasFeature(m.feature)),
+  modules.value.filter((m) => m.show && hasFeature(m.feature)),
 );
 </script>
 
@@ -640,7 +636,7 @@ const data_cards = computed(() =>
   color: var(--text-secondary);
   display: flex;
   gap: 10px;
-  justify-content: flex-end;
+  justify-content: flex-start;
   margin: 0 0 10px;
 }
 

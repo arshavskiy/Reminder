@@ -1,11 +1,11 @@
 <template>
   <div class="activity-page">
-    <PageHeader title="יומן פעילות" subtitle="היסטוריית שליחת תזכורות ומסמכים שנוספו, מהחדש לישן.">
+    <PageHeader :title="l.activity.title" :subtitle="l.activity.subtitle">
       <template #breadcrumb>
-        <router-link v-if="route.query.kind === 'document'" to="/documents">תסקירים</router-link>
-        <router-link v-else to="/reminders">תזכורות</router-link>
+        <router-link v-if="route.query.kind === 'document'" :to="href('/documents')">{{ l.chrome.nav.documents }}</router-link>
+        <router-link v-else :to="href('/reminders')">{{ l.chrome.nav.reminders }}</router-link>
         <span class="sep">/</span>
-        <span>יומן פעילות</span>
+        <span>{{ l.activity.title }}</span>
       </template>
       <template #actions>
         <button class="rbtn rbtn--ghost" :disabled="loading" @click="load">
@@ -48,6 +48,7 @@ import {NDataTable, NIcon, NTag, useMessage} from "naive-ui";
 import {RefreshOutline} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 
 type ActivityRow = {
   id: string;
@@ -61,6 +62,7 @@ type ActivityRow = {
 type KindFilter = "all" | "email" | "document";
 
 const route = useRoute();
+const {l, href} = useI18n();
 const router = useRouter();
 const rows = ref<ActivityRow[]>([]);
 const loading = ref(false);

@@ -11,7 +11,7 @@
     @update:show="closeModal"
   >
     <template #header>
-      <span style="font-size: 15px; font-weight: 600">{{ isEdit ? "עריכת הצעת מחיר" : "הצעת מחיר חדשה" }}</span>
+      <span style="font-size: 15px; font-weight: 600">{{ isEdit ? l.quotes.editQuote : l.quotes.newQuote }}</span>
     </template>
 
     <n-spin :show="loading">
@@ -91,8 +91,10 @@ import {paymentService, type InspectionRate, type PaymentRequest} from "../servi
 import {api} from "../services/apiService";
 import QuoteDocumentEquipmentPreview from "../components/QuoteDocumentEquipmentPreview.vue";
 import QuoteBillingForm from "../components/QuoteBillingForm.vue";
+import {useI18n} from "../composables/useI18n.js";
 
 const route = useRoute();
+const {l} = useI18n();
 const router = useRouter();
 const message = useMessage();
 

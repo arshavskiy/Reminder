@@ -1,15 +1,15 @@
 <template>
-  <div class="clients-page" dir="rtl">
+  <div class="clients-page" :dir="dir">
     <PageHeader
       :count="store.total"
-      title="לקוחות"
-      subtitle="צפייה, סינון וניהול של כל הלקוחות במערכת"
+      :title="l.clients.title"
+      :subtitle="l.clients.subtitle"
     >
       <template #actions>
         <div class="clients-actions">
           <button :disabled="store.loading" class="btn btn--ghost" type="button" @click="refresh">
             <n-icon :class="{ 'spin': store.loading }" :component="RefreshOutline" class="btn-icon" />
-            רענן
+            {{ l.common.refresh }}
           </button>
           <button
             class="btn btn--ghost"
@@ -18,7 +18,7 @@
             @click="toggleBulkMode"
           >
             <n-icon :component="CheckboxOutline" class="btn-icon" />
-            בחירה
+            {{ l.common.select }}
           </button>
           <button
             v-if="store.rows.length"
@@ -27,15 +27,15 @@
             @click="doDeleteAll"
           >
             <n-icon :component="TrashOutline" class="btn-icon" />
-            מחק הכל
+            {{ l.common.deleteAll }}
           </button>
           <button class="btn btn--primary" type="button" @click="openCreate">
             <n-icon :component="AddOutline" class="btn-icon" />
-            לקוח חדש
+            {{ l.clients.newClient }}
           </button>
           <button class="btn btn--ghost" type="button" @click="openReportClientPicker">
             <n-icon :component="DocumentTextOutline" class="btn-icon" />
-            תסקיר חדש
+            {{ l.clients.newInspection }}
           </button>
         </div>
       </template>
@@ -44,9 +44,9 @@
     <n-modal
       v-model:show="showReportClientPicker"
       preset="dialog"
-      title="תסקיר חדש"
-      positive-text="המשך"
-      negative-text="ביטול"
+      :title="l.clients.newInspection"
+      :positive-text="l.common.continue"
+      :negative-text="l.common.cancel"
       :positive-button-props="{disabled: !reportClientId}"
       @positive-click="confirmReportClient"
       @negative-click="showReportClientPicker = false"
@@ -56,7 +56,7 @@
         :options="reportClientOptions"
         filterable
         clearable
-        placeholder="בחר לקוח"
+        :placeholder="l.clients.pickClient"
       />
     </n-modal>
 
@@ -66,7 +66,7 @@
         v-model:value="search"
         clearable
         class="clients-toolbar__search"
-        placeholder="חיפוש לפי שם, איש קשר או אימייל..."
+        :placeholder="l.clients.searchPlaceholder"
         @update:value="onSearch"
       >
         <template #prefix><n-icon :component="SearchOutline" :size="16" /></template>
@@ -92,13 +92,13 @@
         @click="openClientMergeModal"
       >
         <n-icon :component="BriefcaseOutline" class="btn-icon" />
-        מזג לקוחות
+        {{ l.clients.merge }}
       </button>
     </div>
 
     <!-- Bulk bar -->
     <div v-if="bulkMode && selectedClientKeys.length" class="bulk-bar">
-      <span class="bulk-bar__label">נבחרו {{ selectedClientKeys.length }}</span>
+      <span class="bulk-bar__label">{{ t("common.selectedCount", {n: selectedClientKeys.length}) }}</span>
       <button
         v-if="selectedClientKeys.length >= 2"
         class="btn btn--ghost btn--xs"
@@ -106,14 +106,14 @@
         @click="openClientMergeModal"
       >
         <n-icon :component="BriefcaseOutline" :size="14" class="btn-icon" />
-        מזג נבחרים
+        {{ l.common.mergeSelected }}
       </button>
       <button class="btn btn--danger-ghost btn--xs" type="button" @click="bulkDeleteSelected">
         <n-icon :component="TrashOutline" :size="14" class="btn-icon" />
-        מחק נבחרים
+        {{ l.common.deleteSelected }}
       </button>
       <button class="btn btn--ghost btn--xs" type="button" @click="selectedClientKeys = []">
-        נקה בחירה
+        {{ l.common.clearSelection }}
       </button>
     </div>
 
@@ -132,31 +132,31 @@
               </th>
               <th class="col-name">
                 <button class="th-sort" type="button" @click="toggleSort('display_name')">
-                  שם הלקוח
+                  {{ l.common.clientName }}
                   <n-icon :component="sortIcon('display_name')" :size="13" :title="sortTitle('display_name')" class="th-sort__mark" />
                 </button>
               </th>
               <th class="col-contact">
                 <button class="th-sort" type="button" @click="toggleSort('contact_person')">
-                  איש קשר
+                  {{ l.common.contact }}
                   <n-icon :component="sortIcon('contact_person')" :size="13" :title="sortTitle('contact_person')" class="th-sort__mark" />
                 </button>
               </th>
               <th class="col-email">
                 <button class="th-sort" type="button" @click="toggleSort('email')">
-                  אימייל
+                  {{ l.common.email }}
                   <n-icon :component="sortIcon('email')" :size="13" :title="sortTitle('email')" class="th-sort__mark" />
                 </button>
               </th>
               <th class="col-phone">
                 <button class="th-sort" type="button" @click="toggleSort('phone')">
-                  נייד
+                  {{ l.common.phone }}
                   <n-icon :component="sortIcon('phone')" :size="13" :title="sortTitle('phone')" class="th-sort__mark" />
                 </button>
               </th>
               <th class="col-docs">
                 <button class="th-sort" type="button" @click="toggleSort('doc_count')">
-                  מסמכים
+                  {{ l.search.documents }}
                   <n-icon :component="sortIcon('doc_count')" :size="13" :title="sortTitle('doc_count')" class="th-sort__mark" />
                 </button>
               </th>
@@ -188,7 +188,7 @@
                     <strong class="client-name__title" :title="displayClientName(row.display_name)">
                       {{ displayClientName(row.display_name) }}
                     </strong>
-                    <span class="client-type">{{ row.entity_type === 'company' ? 'חברה' : 'פרטי' }}</span>
+                    <span class="client-type">{{ row.entity_type === 'company' ? l.common.company : l.common.person }}</span>
                   </div>
                 </div>
               </td>
@@ -222,9 +222,9 @@
 
       <div v-else-if="!store.loading" class="clients-empty">
         <n-icon :component="PeopleOutline" :size="40" class="clients-empty__icon" />
-        <h3 class="clients-empty__title">{{ search || entityFilter !== 'all' ? 'לא נמצאו לקוחות' : 'אין לקוחות עדיין' }}</h3>
+        <h3 class="clients-empty__title">{{ search || entityFilter !== 'all' ? l.clients.emptyFiltered : l.clients.emptyNone }}</h3>
         <p class="clients-empty__desc">
-          {{ search || entityFilter !== 'all' ? 'נסו לשנות את החיפוש או הסינון' : 'צרו לקוח ראשון כדי להתחיל' }}
+          {{ search || entityFilter !== 'all' ? l.clients.emptyFilteredHint : l.clients.emptyHint }}
         </p>
         <button v-if="!search && entityFilter === 'all'" class="btn btn--primary" type="button" @click="openCreate">
           <n-icon :component="AddOutline" class="btn-icon" />
@@ -373,11 +373,13 @@ import {
 import { useClientsStore } from "../stores/clients.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import { api } from "../services/apiService.js";
 import type { Client } from "@shared/types.js";
 
 const store = useClientsStore();
+const {l, dir, t} = useI18n();
 const router = useRouter();
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
 const showHydraulicModal = ref(false);
@@ -470,9 +472,9 @@ const typeFilters = computed(() => {
   const person = store.rows.filter((r) => r.entity_type === "person").length;
   const company = store.rows.filter((r) => r.entity_type === "company").length;
   return [
-    { value: "all" as const, label: "הכל", count: store.rows.length },
-    { value: "person" as const, label: "פרטי", count: person },
-    { value: "company" as const, label: "חברה", count: company },
+    { value: "all" as const, label: l.value.common.all, count: store.rows.length },
+    { value: "person" as const, label: l.value.common.person, count: person },
+    { value: "company" as const, label: l.value.common.company, count: company },
   ];
 });
 

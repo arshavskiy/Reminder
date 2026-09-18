@@ -3,18 +3,18 @@
     <!-- List -->
     <template v-if="mode === 'list'">
       <PageHeader
-          title="עורך פריסה פשוט"
-          subtitle="תבניות הדפסה מבוססות סעיפים"
+          :title="l.printTemplates.simpleTitle"
+          :subtitle="l.printTemplates.simpleSubtitle"
           :count="templates.length"
       >
         <template #breadcrumb>
-          <router-link to="/print-templates">תבניות הדפסה</router-link>
+          <router-link :to="href('/print-templates')">{{ l.printTemplates.title }}</router-link>
           <span class="sep">/</span>
-          <span>עורך פריסה</span>
+          <span>{{ l.printTemplates.layoutEditor }}</span>
         </template>
         <template #actions>
-          <button class="btn btn--ghost" @click="router.push('/print-templates/excel')">עורך Excel</button>
-          <button class="btn btn--primary" @click="createTemplate">+ תבנית חדשה</button>
+          <button class="btn btn--ghost" @click="router.push(href('/print-templates/excel'))">{{ l.printTemplates.excelEditor }}</button>
+          <button class="btn btn--primary" @click="createTemplate">+ {{ l.printTemplates.newTemplate }}</button>
         </template>
       </PageHeader>
 
@@ -143,6 +143,7 @@ import {useRoute, useRouter} from "vue-router";
 import {NAlert, NEmpty, NForm, NFormItem, NIcon, NInput, NSpin, useMessage} from "naive-ui";
 import {BrushOutline, CreateOutline, PrintOutline, TrashOutline} from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import SimpleLayoutEditor from "../components/print/SimpleLayoutEditor.vue";
 import LayoutPreviewFrame from "../components/print/LayoutPreviewFrame.vue";
 import {api} from "../services/apiService.js";
@@ -173,6 +174,7 @@ function canDeleteTemplate(t: PrintTemplate) {
 type Mode = "list" | "edit" | "compose";
 
 const router = useRouter();
+const {l, t, href} = useI18n();
 const route = useRoute();
 const message = useMessage();
 const {confirm} = useConfirm();

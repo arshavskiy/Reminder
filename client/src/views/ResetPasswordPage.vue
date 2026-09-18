@@ -1,23 +1,23 @@
 <template>
-  <div class="login-page">
+  <div class="login-page" :dir="localeStore.dir">
     <div class="login-card">
       <div class="login-brand">
         <div class="login-brand__icon">
           <n-icon :component="BriefcaseOutline" :size="32" color="#fff" />
         </div>
-        <h1 class="login-brand__title">איפוס סיסמה</h1>
+        <h1 class="login-brand__title">{{ t.resetTitle }}</h1>
       </div>
 
-      <n-alert v-if="success" type="success" title="הסיסמה עודכנה בהצלחה — ניתן להתחבר" style="margin-bottom:16px;width:100%" />
+      <n-alert v-if="success" type="success" :title="t.resetSuccess" style="margin-bottom:16px;width:100%" />
       <n-alert v-if="errorMsg" type="error" :title="errorMsg" style="margin-bottom:16px;width:100%" closable @close="errorMsg = null" />
 
       <template v-if="!success">
         <n-form @submit.prevent="handleReset" style="width:100%">
-          <n-form-item label="סיסמה חדשה" :show-feedback="false" style="margin-bottom:12px">
+          <n-form-item :label="t.newPassword" :show-feedback="false" style="margin-bottom:12px">
             <n-input
               v-model:value="password"
               type="password"
-              placeholder="לפחות 8 תווים"
+              :placeholder="t.passwordPlaceholder"
               size="large"
               show-password-on="click"
               autocomplete="new-password"
@@ -25,11 +25,11 @@
               :disabled="loading"
             />
           </n-form-item>
-          <n-form-item label="אימות סיסמה" :show-feedback="false" style="margin-bottom:20px">
+          <n-form-item :label="t.confirmPassword" :show-feedback="false" style="margin-bottom:20px">
             <n-input
               v-model:value="confirm"
               type="password"
-              placeholder="חזור על הסיסמה"
+              :placeholder="t.confirmPlaceholder"
               size="large"
               show-password-on="click"
               autocomplete="new-password"
@@ -45,28 +45,32 @@
             :loading="loading"
             :disabled="!password || password.length < 8 || password !== confirm"
           >
-            עדכן סיסמה
+            {{ t.updatePassword }}
           </n-button>
         </n-form>
       </template>
 
-      <n-button v-if="success" type="primary" size="large" style="width:100%" @click="router.replace('/login')">
-        לדף הכניסה
+      <n-button v-if="success" type="primary" size="large" style="width:100%" @click="router.replace(loginPath)">
+        {{ t.backToLogin }}
       </n-button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { NIcon, NAlert, NForm, NFormItem, NInput, NButton } from "naive-ui";
-import { BriefcaseOutline } from "@vicons/ionicons5";
+import {computed, ref, onMounted} from "vue";
+import {useRoute, useRouter} from "vue-router";
+import {NIcon, NAlert, NForm, NFormItem, NInput, NButton} from "naive-ui";
+import {BriefcaseOutline} from "@vicons/ionicons5";
+import {useLocaleStore} from "../stores/locale.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 const route = useRoute();
 const router = useRouter();
+const localeStore = useLocaleStore();
+const t = computed(() => localeStore.messages);
+const loginPath = computed(() => (localeStore.locale === "en" ? "/en/login" : "/login"));
 
 const token = ref("");
 const password = ref("");
@@ -78,7 +82,7 @@ const errorMsg = ref<string | null>(null);
 onMounted(() => {
   token.value = route.query.token as string ?? "";
   if (!token.value) {
-    errorMsg.value = "קישור האיפוס אינו תקין";
+    errorMsg.value = t.value.invalidResetLink;
   }
 });
 
@@ -93,16 +97,13 @@ async function handleReset() {
     });
     const data = await res.json() as any;
     if (!res.ok) {
-      const msgs: Record<string, string> = {
-        invalid_or_expired_token: "הקישור פג תוקף — אנא בקש קישור חדש",
-        password_too_short: "הסיסמה חייבת להכיל לפחות 8 תווים",
-      };
-      errorMsg.value = msgs[data.error] ?? "אירעה שגיאה, נסה שנית";
+      const key = data.error as keyof typeof t.value.errors;
+      errorMsg.value = t.value.errors[key] ?? t.value.genericError;
       return;
     }
     success.value = true;
   } catch {
-    errorMsg.value = "אירעה שגיאה, נסה שנית";
+    errorMsg.value = t.value.genericError;
   } finally {
     loading.value = false;
   }

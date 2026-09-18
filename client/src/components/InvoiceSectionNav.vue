@@ -1,5 +1,5 @@
 <template>
-  <nav class="invoice-section-nav" aria-label="ניווט חשבוניות">
+  <nav class="invoice-section-nav" :aria-label="l.common.invoicesNav">
     <button
       v-for="item in items"
       :key="item.path"
@@ -15,21 +15,27 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { NIcon } from "naive-ui";
 import { AnalyticsOutline, ReceiptOutline } from "@vicons/ionicons5";
 import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "../composables/useI18n.js";
+import { stripLocalePrefix } from "../stores/locale.js";
 
 const route = useRoute();
 const router = useRouter();
+const { l, href } = useI18n();
 
-const items = [
-  { label: "חשבוניות", path: "/invoices", icon: ReceiptOutline },
-  { label: "הוצאות", path: "/invoices/expenses", icon: AnalyticsOutline },
-];
+const items = computed(() => [
+  { label: l.value.invoices.title, path: href("/invoices"), icon: ReceiptOutline },
+  { label: l.value.common.expenses, path: href("/invoices/expenses"), icon: AnalyticsOutline },
+]);
 
 function isActive(path: string): boolean {
-  if (path === "/invoices") return route.path === "/invoices";
-  return route.path === path || route.path.startsWith(`${path}/`);
+  const current = stripLocalePrefix(route.path);
+  const target = stripLocalePrefix(path);
+  if (target === "/invoices") return current === "/invoices";
+  return current === target || current.startsWith(`${target}/`);
 }
 </script>
 

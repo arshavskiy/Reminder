@@ -1,27 +1,27 @@
 <template>
-  <div class="reminders-page">
+  <div class="reminders-page" :dir="dir">
     <header class="reminders-hero">
       <div class="reminders-hero__copy">
-        <h1>תזכורות</h1>
-        <p>מעקב, שליחה וניהול של תזכורות לפי לקוח, סטטוס ותאריך יעד.</p>
+        <h1>{{ l.reminders.title }}</h1>
+        <p>{{ l.reminders.subtitle }}</p>
       </div>
       <div class="reminders-actions">
         <button class="rbtn rbtn--ghost" :disabled="store.loading" @click="load">
           <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
-          רענן
+          {{ l.common.refresh }}
         </button>
-        <button class="rbtn rbtn--ghost" type="button" @click="router.push('/activity')">
+        <button class="rbtn rbtn--ghost" type="button" @click="router.push(href('/activity'))">
           <n-icon :component="TimeOutline" class="btn-icon"/>
-          יומן פעילות
+          {{ l.reminders.activityLog }}
         </button>
         <button class="rbtn rbtn--primary" :disabled="loadingEmailTemplates" @click="openCreate">
-          + תזכורת חדשה
+          + {{ l.reminders.newReminder }}
         </button>
         <ReminderTableImport @imported="onTableImported">
           <template #trigger="{ open }">
             <button class="rbtn rbtn--ghost" type="button" @click="open">
               <n-icon :component="GridOutline" class="btn-icon"/>
-              ייבוא תזכורות מ-Excel / CSV
+              {{ l.reminders.importExcel }}
             </button>
           </template>
         </ReminderTableImport>
@@ -29,11 +29,11 @@
           <button
             class="rbtn rbtn--ghost"
             :class="{ 'rbtn--ghost-active': bulkMode }"
-            title="בחירה מרובה"
+            :title="l.reminders.multiSelect"
             @click="toggleBulkMode"
           >
             <n-icon :component="CheckboxOutline" class="btn-icon"/>
-            בחירה מרובה
+            {{ l.reminders.multiSelect }}
           </button>
           <div v-if="bulkMode && selectedReminderKeys.length > 0" class="bulk-action-anchor__actions">
             <button
@@ -43,7 +43,7 @@
               @click="bulkSendSelected"
             >
               <n-icon class="bulk-action-item__icon" :component="PaperPlaneOutline" />
-              <span class="bulk-action-item__text">שלח נבחרים</span>
+              <span class="bulk-action-item__text">{{ l.common.sendSelected }}</span>
               <span class="bulk-action-item__count">{{ selectedReminderKeys.length }}</span>
             </button>
             <button
@@ -53,7 +53,7 @@
               @click="bulkDismissSelected"
             >
               <n-icon class="bulk-action-item__icon" :component="CloseCircleOutline" />
-              <span class="bulk-action-item__text">בטל נבחרים</span>
+              <span class="bulk-action-item__text">{{ l.common.dismissSelected }}</span>
               <span class="bulk-action-item__count">{{ selectedReminderKeys.length }}</span>
             </button>
             <button
@@ -63,7 +63,7 @@
               @click="bulkDeleteSelected"
             >
               <n-icon class="bulk-action-item__icon" :component="TrashOutline" />
-              <span class="bulk-action-item__text">מחק נבחרים</span>
+              <span class="bulk-action-item__text">{{ l.common.deleteSelected }}</span>
               <span class="bulk-action-item__count">{{ selectedReminderKeys.length }}</span>
             </button>
           </div>
@@ -98,8 +98,8 @@
     <section class="reminders-panel">
       <div class="reminders-panel__head">
         <div>
-          <h2>רשימת תזכורות</h2>
-          <p>{{ filteredRows.length }} מתוך {{ store.rows.length }} תזכורות</p>
+          <h2>{{ l.reminders.listTitle }}</h2>
+          <p>{{ t("reminders.listCount", {shown: filteredRows.length, total: store.rows.length}) }}</p>
         </div>
       </div>
 
@@ -108,14 +108,14 @@
           v-model:value="search"
           class="reminders-search"
           clearable
-          placeholder="חיפוש לפי כותרת, לקוח, אימייל או תסקיר..."
+          :placeholder="l.reminders.searchPlaceholder"
         />
         <n-select
           v-model:value="statusFilter"
           class="reminders-status-select"
           :options="statusOptions"
           :virtual-scroll="false"
-          placeholder="כל הסטטוסים"
+          :placeholder="l.reminders.allStatuses"
           clearable
           @update:value="load"
         />
@@ -143,7 +143,7 @@
             type="button"
             @click="selectCategory(null)"
           >
-            הכל
+            {{ l.common.all }}
             <span>{{ reminderCategories.reduce((sum, c) => sum + c.count, 0) }}</span>
           </button>
           <button
@@ -154,7 +154,7 @@
             type="button"
             @click="selectCategory(c.name)"
           >
-            {{ categoryLabel(c.name) }}
+            {{ categoryLabel(c.name, locale) }}
             <span>{{ c.count }}</span>
           </button>
         </aside>
@@ -206,7 +206,7 @@
       </n-form>
       <template #action>
         <n-button @click="showQuickTest = false">ביטול</n-button>
-        <n-button type="primary" :loading="testing" @click="doQuickTest">שלח</n-button>
+        <n-button type="primary" :loading="testing" @click="doQuickTest">{{ l.common.send }}</n-button>
       </template>
     </n-modal>
 
@@ -358,6 +358,7 @@ import ReminderTableImport from "../components/ReminderTableImport.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import {FEATURES} from "../shared/features.js";
+import {useI18n} from "../composables/useI18n.js";
 import type {Client, ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
 // Date-only strings (YYYY-MM-DD) must round-trip through the date picker using
@@ -383,6 +384,7 @@ function msToLocalDateStr(ms: number): string {
 }
 
 const store = useRemindersStore();
+const {l, href, t, dir, locale} = useI18n();
 const settingsStore = useSettingsStore();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
@@ -458,7 +460,7 @@ const clientOptions = computed(() =>
 );
 
 const newReminderCategoryOptions = computed(() =>
-  reminderCategories.value.map((c) => ({ label: categoryLabel(c.name), value: c.name }))
+  reminderCategories.value.map((c) => ({ label: categoryLabel(c.name, locale.value), value: c.name }))
 );
 
 const emailTemplateOptions = computed(() =>
@@ -499,14 +501,14 @@ const emailPlaceholder = computed(() => {
   return c?.email ?? testEmail.value ?? "אין אימייל ללקוח";
 });
 
-const statusOptions = [
-  { label: "ממתין", value: "pending" },
-  { label: "נשלח", value: "sent" },
-  { label: "נדחה", value: "snoozed" },
-  { label: "בוטל", value: "dismissed" },
-  { label: "חסר אימייל", value: "no_email" },
-  { label: "שגיאה", value: "error" },
-];
+const statusOptions = computed(() => [
+  { label: l.value.common.pending, value: "pending" },
+  { label: l.value.common.sent, value: "sent" },
+  { label: l.value.common.snoozed, value: "snoozed" },
+  { label: l.value.common.dismissed, value: "dismissed" },
+  { label: l.value.common.missingEmail, value: "no_email" },
+  { label: l.value.common.error, value: "error" },
+]);
 
 function todayIso(): string {
   return msToLocalDateStr(Date.now());
@@ -535,11 +537,11 @@ function reminderMatchesDueFilter(row: ReminderWithContext, filter: DueFilter): 
 const dueFilters = computed(() => {
   const rows = store.rows ?? [];
   return [
-    { label: "הכל", value: "all" as DueFilter, count: rows.length },
-    { label: "באיחור", value: "overdue" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "overdue")).length },
-    { label: "החודש", value: "month" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "month")).length },
-    { label: "נשלחו", value: "sent" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "sent")).length },
-    { label: "חסר אימייל", value: "no_email" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "no_email")).length },
+    { label: l.value.common.all, value: "all" as DueFilter, count: rows.length },
+    { label: l.value.reminders.overdue, value: "overdue" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "overdue")).length },
+    { label: l.value.reminders.thisMonth, value: "month" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "month")).length },
+    { label: l.value.reminders.sentPlural, value: "sent" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "sent")).length },
+    { label: l.value.common.missingEmail, value: "no_email" as DueFilter, count: rows.filter((row) => reminderMatchesDueFilter(row, "no_email")).length },
   ];
 });
 
@@ -555,10 +557,10 @@ type ReminderStat = {
 const reminderStats = computed<ReminderStat[]>(() => {
   const rows = store.rows ?? [];
   return [
-    { key: "all", label: "סה\"כ", count: rows.length, tone: "neutral", due: "all", status: null },
-    { key: "pending", label: "ממתינות", count: rows.filter((row) => row.status === "pending").length, tone: "warning", status: "pending" },
-    { key: "overdue", label: "באיחור", count: rows.filter((row) => reminderMatchesDueFilter(row, "overdue")).length, tone: "danger", due: "overdue", status: null },
-    { key: "sent", label: "נשלחו", count: rows.filter((row) => row.status === "sent").length, tone: "success", due: "sent", status: null },
+    { key: "all", label: l.value.reminders.total, count: rows.length, tone: "neutral", due: "all", status: null },
+    { key: "pending", label: l.value.reminders.pendingCount, count: rows.filter((row) => row.status === "pending").length, tone: "warning", status: "pending" },
+    { key: "overdue", label: l.value.reminders.overdue, count: rows.filter((row) => reminderMatchesDueFilter(row, "overdue")).length, tone: "danger", due: "overdue", status: null },
+    { key: "sent", label: l.value.reminders.sentPlural, count: rows.filter((row) => row.status === "sent").length, tone: "success", due: "sent", status: null },
   ];
 });
 
@@ -1161,31 +1163,31 @@ function rowProps(row: ReminderWithContext) {
   };
 }
 
-const baseColumns = [
+const baseColumns = computed(() => [
   {
-    title: "שם",
+    title: l.value.common.name,
     key: "title",
     width: 200,
     minWidth: 200,
     render: (row: ReminderWithContext) => h("span", row.title || "—"),
   },
   {
-    title: "קטגוריה",
+    title: l.value.common.category,
     key: "reminder_category",
     width: 140,
     minWidth: 140,
-    render: (row: ReminderWithContext) => h("span", categoryLabel(row.reminder_category || row.contract_type) || "—"),
+    render: (row: ReminderWithContext) => h("span", categoryLabel(row.reminder_category || row.contract_type, locale.value) || "—"),
   },
   {
-    title: "אימייל",
+    title: l.value.common.email,
     key: "email_to",
     width: 240,
     minWidth: 240,
     render: (row: ReminderWithContext) =>
-      h("span", { class: "reminder-email-cell" }, displayEmailTo(effectiveEmailTo(row)) || "אין אימייל"),
+      h("span", { class: "reminder-email-cell" }, displayEmailTo(effectiveEmailTo(row)) || l.value.common.noEmail),
   },
   {
-    title: "לקוח",
+    title: l.value.common.client,
     key: "client_name",
     width: 220,
     minWidth: 220,
@@ -1196,14 +1198,14 @@ const baseColumns = [
               class: "link-button",
               onClick: (event: MouseEvent) => {
                 event.stopPropagation();
-                router.push(`/clients/${row.client_id}`);
+                router.push(href(`/clients/${row.client_id}`));
               },
             }, row.client_name ?? "—")
           : h("span", row.client_name ?? "—"),
       ]),
   },
   {
-    title: "תסקיר",
+    title: l.value.reminders.inspection,
     key: "contract_number",
     width: 180,
     minWidth: 180,
@@ -1211,7 +1213,7 @@ const baseColumns = [
       h("span", { class: "reminder-source-cell" }, row.contract_number || row.document_name || "—"),
   },
   {
-    title: "תאריך",
+    title: l.value.common.date,
     key: "trigger_date",
     width: 130,
     minWidth: 130,
@@ -1221,7 +1223,7 @@ const baseColumns = [
       ]),
   },
   {
-    title: "סטטוס",
+    title: l.value.common.status,
     key: "status",
     width: 120,
     render: (row: ReminderWithContext) => h(StatusBadge, { status: row.status }),
@@ -1239,38 +1241,39 @@ const baseColumns = [
       }, {
         default: () => h("button", {
           class: "btn btn--ghost btn--xs icon-btn",
-          title: "פעולות",
+          title: l.value.common.actions,
           type: "button",
           onClick: (event: MouseEvent) => event.stopPropagation(),
         }, [h(NIcon, { component: EllipsisVerticalOutline, class: "btn-icon" })]),
       }),
   },
-];
+]);
 
 function renderActionIcon(icon: Component) {
   return () => h(NIcon, { component: icon });
 }
 
 function rowActionsFor(row: ReminderWithContext) {
+  const c = l.value;
   const hasEmail = Boolean(effectiveEmailTo(row)?.trim());
   const actions: Array<Record<string, unknown>> = [];
   if (row.status !== "dismissed") {
     actions.push({
-      label: row.status === "sent" ? "שלח שוב" : "שלח תזכורת",
+      label: row.status === "sent" ? c.common.sendAgain : c.reminders.sendReminder,
       key: "send",
       icon: renderActionIcon(PaperPlaneOutline),
       disabled: !hasEmail,
-      props: hasEmail ? undefined : { title: "חסר אימייל לשליחה" },
+      props: hasEmail ? undefined : { title: c.reminders.missingEmailSend },
     });
   }
-  actions.push({ label: "תצוגה מקדימה", key: "preview", icon: renderActionIcon(EyeOutline) });
-  actions.push({ label: "ערוך תזכורת", key: "edit", icon: renderActionIcon(CreateOutline) });
+  actions.push({ label: c.common.preview, key: "preview", icon: renderActionIcon(EyeOutline) });
+  actions.push({ label: c.reminders.editReminder, key: "edit", icon: renderActionIcon(CreateOutline) });
   if (row.status === "pending") {
-    actions.push({ label: "בטל תזכורת", key: "dismiss", icon: renderActionIcon(CloseCircleOutline) });
+    actions.push({ label: c.reminders.dismissReminder, key: "dismiss", icon: renderActionIcon(CloseCircleOutline) });
   }
   actions.push({ type: "divider", key: "d1" });
   actions.push({
-    label: "מחק",
+    label: c.common.delete,
     key: "delete",
     icon: renderActionIcon(TrashOutline),
     props: { style: "color: var(--color-error, #d03050)" },
@@ -1288,8 +1291,8 @@ function handleRowAction(key: string, row: ReminderWithContext) {
 
 const columns = computed(() =>
   bulkMode.value
-    ? [{ type: "selection", width: 46, fixed: "right" }, ...baseColumns]
-    : baseColumns
+    ? [{ type: "selection", width: 46, fixed: "right" }, ...baseColumns.value]
+    : baseColumns.value
 );
 </script>
 
@@ -1748,7 +1751,7 @@ const columns = computed(() =>
 
 .reminder-email-cell {
   direction: ltr;
-  text-align: right;
+  text-align: start;
 }
 
 .reminder-source-cell {
@@ -1768,7 +1771,7 @@ const columns = computed(() =>
   font-weight: 700;
   overflow: hidden;
   padding: 0;
-  text-align: right;
+  text-align: start;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

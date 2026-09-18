@@ -1,7 +1,7 @@
 <template>
   <div v-if="itemCount > 0" class="pagination-bar">
     <span class="pagination-summary">
-      מציג {{ start }}-{{ end }} מתוך {{ itemCount }}
+      {{ t("common.showingRange", { start, end, total: itemCount }) }}
     </span>
     <n-pagination
       :page="page"
@@ -18,6 +18,9 @@
 <script lang="ts" setup>
 import {computed} from "vue";
 import {NPagination} from "naive-ui";
+import {useI18n} from "../composables/useI18n.js";
+
+const {t} = useI18n();
 
 const props = withDefaults(defineProps<{
   page: number;

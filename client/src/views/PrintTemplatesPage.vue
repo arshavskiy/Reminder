@@ -4,7 +4,7 @@
     <template v-if="routeDraftLoading">
       <div class="route-draft-loading">
         <n-spin :show="true" size="large">
-          <div class="route-draft-loading__text">טוען טיוטת תסקיר...</div>
+          <div class="route-draft-loading__text">{{ l.printTemplates.loadingDraft }}</div>
         </n-spin>
       </div>
     </template>
@@ -12,18 +12,18 @@
     <!-- ── LIST ──────────────────────────────────────────────────────────────── -->
     <template v-else-if="mode === 'list'">
       <PageHeader
-        title="תבניות הדפסה"
-        subtitle="עיצוב ומילוי תבניות בסגנון Excel"
+        :title="l.printTemplates.title"
+        :subtitle="l.printTemplates.subtitle"
         :count="templates.length"
       >
         <template #breadcrumb>
-          <router-link to="/print-templates">תבניות הדפסה</router-link>
+          <router-link :to="href('/print-templates')">{{ l.printTemplates.title }}</router-link>
           <span class="sep">/</span>
-          <span>עורך Excel</span>
+          <span>{{ l.printTemplates.excelEditor }}</span>
         </template>
         <template #actions>
-          <button class="btn btn--ghost" @click="router.push('/print-templates/layout')">עורך פריסה</button>
-          <button class="btn btn--primary" @click="newTemplate">+ תבנית חדשה</button>
+          <button class="btn btn--ghost" @click="router.push(href('/print-templates/layout'))">{{ l.printTemplates.layoutEditor }}</button>
+          <button class="btn btn--primary" @click="newTemplate">+ {{ l.printTemplates.newTemplate }}</button>
         </template>
       </PageHeader>
 
@@ -563,6 +563,7 @@ import {storeToRefs} from "pinia";
 import {api} from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
 import type {PrintCellBorderSides, PrintCellBorderStyle, PrintTemplate, PrintTemplateCell} from "@shared/types.js";
@@ -600,6 +601,7 @@ function resolveBorderSides(border: PrintTemplateCell["border"]): Required<Print
 }
 
 const message = useMessage();
+const {l, t, href} = useI18n();
 const {confirm} = useConfirm();
 const route = useRoute();
 const router = useRouter();

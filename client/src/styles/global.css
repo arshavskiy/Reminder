@@ -107,7 +107,7 @@ body {
   font-size: var(--font-size-md);
   color: var(--text-primary);
   background-color: transparent;
-  direction: rtl;
+  direction: inherit;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -627,8 +627,8 @@ html[dir="rtl"] .n-base-clear {
 }
 
 /* ── Naive UI confirm / delete dialogs ─────────────────────────────────────── */
-.app-confirm-dialog.n-dialog,
-.n-modal.app-confirm-dialog .n-dialog {
+html[dir="rtl"] .app-confirm-dialog.n-dialog,
+html[dir="rtl"] .n-modal.app-confirm-dialog .n-dialog {
   direction: rtl;
   text-align: right;
   border-radius: 12px;

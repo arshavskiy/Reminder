@@ -51,6 +51,7 @@ import {useFeaturesStore} from "../stores/features.js";
 import {FEATURES} from "../shared/features.js";
 import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
 import {useWalkthrough} from "../composables/useWalkthrough.js";
+import {localizedPath, useLocaleStore} from "../stores/locale.js";
 
 interface Props {
   userName?: string | null;
@@ -65,6 +66,8 @@ const router = useRouter();
 const authStore = useAuthStore();
 const featuresStore = useFeaturesStore();
 const walkthrough = useWalkthrough();
+const localeStore = useLocaleStore();
+const l = computed(() => localeStore.catalog);
 
 // Create avatar from email / name
 const avatarUrl = computed<string>(() => {
@@ -114,13 +117,13 @@ const templateMenuItems = computed(() => {
   const items: Array<{ label: string; key: string }> = [];
   if (!templatesAllowed.value) return items;
   if (featuresStore.hasFeature(FEATURES.pages.printTemplates)) {
-    items.push({label: "תבניות הדפסה", key: "print-templates"});
+    items.push({label: l.value.chrome.menu.printTemplates, key: "print-templates"});
   }
   if (featuresStore.hasFeature(FEATURES.pages.emailTemplates)) {
-    items.push({label: "תבניות אימייל", key: "email-templates"});
+    items.push({label: l.value.chrome.menu.emailTemplates, key: "email-templates"});
   }
   if (featuresStore.hasFeature(FEATURES.pages.docTemplates)) {
-    items.push({label: "תבניות מסמך", key: "doc-templates"});
+    items.push({label: l.value.chrome.menu.docTemplates, key: "doc-templates"});
   }
   return items;
 });
@@ -129,38 +132,38 @@ const dropdownItems = computed(() => {
   const templates = templateMenuItems.value;
   return [
     {
-      label: "הפרופיל שלי",
+      label: l.value.chrome.menu.profile,
       key: "profile",
     },
     {
-      label: "הגדרות",
+      label: l.value.chrome.menu.settings,
       key: "settings",
     },
     {
-      label: "מנוי ותשלומים",
+      label: l.value.chrome.menu.subscription,
       key: "subscription",
     },
     ...(templates.length
         ? [{
-          label: "תבניות",
+          label: l.value.chrome.menu.templates,
           key: "templates",
           children: templates,
         }]
         : []),
     ...(props.userRole === "admin"
         ? [
-          {label: "פאנל ניהול", key: "admin"},
+          {label: l.value.chrome.menu.admin, key: "admin"},
         ]
         : []),
     {
       type: "divider" as const,
     },
     {
-      label: "סיור במערכת",
+      label: l.value.chrome.menu.tour,
       key: "tour",
     },
     {
-      label: "התנתק",
+      label: l.value.chrome.menu.logout,
       key: "logout",
     },
   ];
@@ -186,7 +189,7 @@ function renderDropdownLabel(option: any) {
   const icon = menuIcons[key];
   const isActive = key === activeMenuKey.value
       || (key === "templates" && TEMPLATE_KEYS.has(activeMenuKey.value));
-  return h("span", {class: ["user-menu-label", {"user-menu-label--active": isActive}], dir: "rtl"}, [
+  return h("span", {class: ["user-menu-label", {"user-menu-label--active": isActive}], dir: localeStore.dir}, [
     icon
       ? h(NIcon, {component: icon, size: 16, class: "user-menu-label__glyph"})
       : h("span", {class: "user-menu-label__icon-spacer"}),
@@ -197,21 +200,21 @@ function renderDropdownLabel(option: any) {
 
 async function handleSelect(key: string) {
   if (key === "profile") {
-    router.push({path: "/profile", query: {section: "personal"}});
+    router.push({path: localizedPath("/profile"), query: {section: "personal"}});
   } else if (key === "engineer") {
-    router.push({path: "/profile", query: {section: "engineer"}});
+    router.push({path: localizedPath("/profile"), query: {section: "engineer"}});
   } else if (key === "settings") {
-    router.push({path: "/profile", query: {section: "settings"}});
+    router.push({path: localizedPath("/profile"), query: {section: "settings"}});
   } else if (key === "subscription") {
-    router.push({path: "/profile", query: {section: "subscription"}});
+    router.push({path: localizedPath("/profile"), query: {section: "subscription"}});
   } else if (key === "print-templates") {
-    router.push("/print-templates");
+    router.push(localizedPath("/print-templates"));
   } else if (key === "email-templates") {
-    router.push("/settings/email-templates");
+    router.push(localizedPath("/settings/email-templates"));
   } else if (key === "doc-templates") {
-    router.push("/settings/doc-templates");
+    router.push(localizedPath("/settings/doc-templates"));
   } else if (key === "admin") {
-    router.push("/admin");
+    router.push(localizedPath("/admin"));
   } else if (key === "tour") {
     walkthrough.startTour("main");
   } else if (key === "logout") {

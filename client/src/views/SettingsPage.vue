@@ -1,12 +1,12 @@
 <template>
   <div class="settings-page">
-    <PageHeader title="הגדרות" subtitle="הגדרות כלליות של המערכת" />
+    <PageHeader :title="l.settings.title" :subtitle="l.settings.subtitle" />
 
     <n-spin :show="settingsStore.loading || settingsStore.saving">
       <template v-if="form">
         <!-- Theme moved to personal profile settings (ProfilePage.vue) - keep global settings page theme link unchanged -->
 
-        <n-card title="בינה מלאכותית (AI)" style="margin-bottom: 16px">
+        <n-card :title="l.settings.ai" style="margin-bottom: 16px">
           <n-form label-placement="top">
             <n-form-item label="מנוע AI">
               <n-radio-group v-model:value="form.aiBackend">
@@ -33,7 +33,7 @@
           </n-form>
         </n-card>
 
-        <n-card title="אימייל (SMTP)" style="margin-bottom: 16px">
+        <n-card :title="l.settings.smtp" style="margin-bottom: 16px">
           <n-form label-placement="top">
             <n-form-item label="SMTP Host">
               <n-input v-model:value="form.smtpHost" placeholder="smtp-relay.brevo.com" />
@@ -86,7 +86,7 @@
           </n-form>
         </n-card>
 
-        <n-card title="תזכורות" style="margin-bottom: 16px">
+        <n-card :title="l.settings.reminders" style="margin-bottom: 16px">
           <n-form label-placement="top">
             <n-form-item label="הפעל תזכורות אוטומטיות">
               <n-switch v-model:value="form.reminderEnabled" />
@@ -110,7 +110,7 @@
           </n-form>
         </n-card>
 
-        <n-card title="תיקיית מעקב (Watch Folder)" style="margin-bottom: 16px">
+        <n-card :title="l.settings.watchFolder" style="margin-bottom: 16px">
           <n-form label-placement="top">
             <n-form-item label="הפעל מעקב אוטומטי">
               <n-switch v-model:value="form.watchFolderEnabled" />
@@ -133,6 +133,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import {
   NAlert,
   NButton,
@@ -158,6 +159,7 @@ import {FEATURES} from "../shared/features.js";
 import type {AppSettings, EmailTemplate} from "@shared/types.js";
 
 const settingsStore = useSettingsStore();
+const {l} = useI18n();
 const featuresStore = useFeaturesStore();
 const message = useMessage();
 const form = ref<AppSettings | null>(null);

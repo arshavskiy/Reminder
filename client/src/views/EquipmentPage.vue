@@ -1,9 +1,9 @@
 <template>
-  <div class="page2">
+  <div class="page2" :dir="dir">
     <!-- ── Header ──────────────────────────────────────────────────────── -->
     <header class="page__head">
       <div>
-        <h1 class="page__title">הגדרות ציוד</h1>
+        <h1 class="page__title">{{ l.equipment.title }}</h1>
       </div>
     </header>
 
@@ -24,25 +24,25 @@
     <template v-if="section === 'equipment'">
       <div class="subhead">
         <div>
-          <h2 class="subhead__title">ניהול ציוד</h2>
-          <p class="subhead__sub">נהל את רשימת הציוד שלך והצהרות הבטיחות המשויכות</p>
+          <h2 class="subhead__title">{{ l.equipment.manageTitle }}</h2>
+          <p class="subhead__sub">{{ l.equipment.manageSubtitle }}</p>
         </div>
         <div class="equipment-actions">
-          <button class="btn btn--primary" @click="openCreate">+ הוספת ציוד חדש</button>
+          <button class="btn btn--primary" @click="openCreate">+ {{ l.equipment.add }}</button>
           <button class="btn btn--ghost" @click="showImport = true">
             <n-icon :component="CloudUploadOutline" class="btn-icon"/>
-            ייבוא מ-Excel
+            {{ l.equipment.importExcel }}
           </button>
           <button class="btn btn--ghost" :disabled="loading" @click="load(true)">
             <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon"/>
-            רענן
+            {{ l.common.refresh }}
           </button>
           <button class="btn btn--ghost" :disabled="backfilling" @click="backfill">
-            {{ backfilling ? 'מקשר...' : 'קשר לתיקים' }}
+            {{ backfilling ? l.equipment.linking : l.equipment.linkFolders }}
           </button>
           <button class="btn btn--ghost btn--danger" @click="deleteAll">
             <n-icon :component="TrashOutline" class="btn-icon"/>
-            מחק הכל
+            {{ l.equipment.deleteAll }}
           </button>
         </div>
       </div>
@@ -52,7 +52,7 @@
           v-model="search"
           class="search"
           type="search"
-          placeholder="חפש ציוד..."
+          :placeholder="l.equipment.searchPlaceholder"
           @input="debouncedLoad"
         />
         <n-select
@@ -60,14 +60,14 @@
           :options="manufacturerOptions"
           clearable
           filterable
-          placeholder="סינון לפי יצרן"
+          :placeholder="l.equipment.filterManufacturer"
         />
         <n-select
           v-model:value="filterClientId"
           :options="clientOptions"
           clearable
           filterable
-          placeholder="סינון לפי לקוח"
+          :placeholder="l.equipment.filterClient"
           @update:value="load(true)"
         />
       </div>
@@ -101,16 +101,16 @@
               </div>
               <p v-if="equipmentSubtitle(r)" class="row__desc">{{ equipmentSubtitle(r) }}</p>
               <p class="row__meta">
-                <span v-if="r.manufacturer">יצרן: {{ r.manufacturer }}</span>
-                <span v-if="r.model">דגם: {{ r.model }}</span>
-                <span v-if="r.serial_number">מ"ס: {{ r.serial_number }}</span>
-                <span v-if="r.capacity">עומס עבודה: {{ r.capacity }}</span>
-                <span v-if="r.load_capacity_test">עומס מבחן: {{ r.load_capacity_test }}</span>
-                <span v-if="r.load_radius">רדיוס: {{ r.load_radius }}</span>
+                <span v-if="r.manufacturer">{{ l.equipment.manufacturerLabel }}: {{ r.manufacturer }}</span>
+                <span v-if="r.model">{{ l.equipment.model }}: {{ r.model }}</span>
+                <span v-if="r.serial_number">{{ l.equipment.serial }}: {{ r.serial_number }}</span>
+                <span v-if="r.capacity">{{ l.equipment.workingLoadShort }}: {{ r.capacity }}</span>
+                <span v-if="r.load_capacity_test">{{ l.equipment.testLoadShort }}: {{ r.load_capacity_test }}</span>
+                <span v-if="r.load_radius">{{ l.equipment.radiusShort }}: {{ r.load_radius }}</span>
               </p>
               <p v-if="r.document_id" class="row__doc">
-                <router-link :to="`/documents/${r.document_id}`" class="row__doc-link">
-                  {{ r.document_name || 'מסמך מקור' }}
+                <router-link :to="href(`/documents/${r.document_id}`)" class="row__doc-link">
+                  {{ r.document_name || l.equipment.sourceDoc }}
                 </router-link>
               </p>
             </div>
@@ -119,14 +119,14 @@
                 <n-icon :component="QrCodeOutline" class="btn-icon"/>
                 QR
               </button>
-              <button class="btn btn--xs btn--ghost" @click="openHistory(r)">היסטוריה</button>
+              <button class="btn btn--xs btn--ghost" @click="openHistory(r)">{{ l.common.history }}</button>
 <!--              <button class="btn btn&#45;&#45;xs btn&#45;&#45;ghost" @click="api.equipment.downloadReport(r.id)">PDF</button>-->
-              <button class="btn btn--xs btn--ghost" @click="openEdit(r)">ערוך</button>
-              <button class="btn btn--xs btn--ghost btn--danger" @click="del(r)">מחק</button>
+              <button class="btn btn--xs btn--ghost" @click="openEdit(r)">{{ l.common.edit }}</button>
+              <button class="btn btn--xs btn--ghost btn--danger" @click="del(r)">{{ l.common.delete }}</button>
             </div>
           </article>
         </div>
-        <p v-else class="empty">{{ filterManufacturer ? 'אין ציוד עבור יצרן זה.' : 'אין ציוד להצגה. לחץ "הוספת ציוד חדש" כדי להתחיל.' }}</p>
+        <p v-else class="empty">{{ filterManufacturer ? l.equipment.emptyManufacturer : l.equipment.empty }}</p>
       </n-spin>
     </template>
 
@@ -134,8 +134,8 @@
     <template v-else-if="section === 'manufacturers'">
       <div class="subhead">
         <div>
-          <h2 class="subhead__title">יצרנים</h2>
-          <p class="subhead__sub">רשימת היצרנים הקיימים במערכת לפי מספר פריטי ציוד</p>
+          <h2 class="subhead__title">{{ l.equipment.tabManufacturers }}</h2>
+          <p class="subhead__sub">{{ l.equipment.manufacturersSubtitle }}</p>
         </div>
       </div>
       <n-spin :show="loading">
@@ -153,7 +153,7 @@
             <div class="row__body">
               <div class="row__title-line">
                 <strong class="row__name">{{ m.name }}</strong>
-                <span class="row__tag">{{ m.count }} פריטים</span>
+                <span class="row__tag">{{ t("common.itemsCount", {n: m.count}) }}</span>
               </div>
               <p class="row__meta">
                 <span v-for="cat in m.categories" :key="cat">{{ cat }}</span>
@@ -161,7 +161,7 @@
             </div>
           </article>
         </div>
-        <p v-else class="empty">אין יצרנים במערכת עדיין.</p>
+        <p v-else class="empty">{{ l.equipment.emptyManufacturers }}</p>
       </n-spin>
     </template>
 
@@ -177,34 +177,34 @@
 
     <!-- ── Create/Edit drawer ──────────────────────────────────────────── -->
     <n-drawer v-model:show="showEdit" :width="520" placement="left">
-      <n-drawer-content :title="editing?.id ? 'עריכת ציוד' : 'הוספת ציוד חדש'" closable>
+      <n-drawer-content :title="editing?.id ? l.equipment.edit : l.equipment.add" closable>
         <n-tabs v-if="editing?.id" v-model:value="drawerTab" animated type="line">
-          <n-tab-pane name="details" tab="פרטים">
+          <n-tab-pane name="details" :tab="l.common.details">
             <n-form label-placement="top" style="margin-top:12px">
-              <n-form-item label="שם הציוד" required>
-                <n-input v-model:value="editing.name" placeholder="למשל: במת הרמה" />
+              <n-form-item :label="l.equipment.name" required>
+                <n-input v-model:value="editing.name" :placeholder="l.equipment.namePlaceholder" />
               </n-form-item>
-              <n-form-item label="קטגוריה" required>
+              <n-form-item :label="l.common.category" required>
                 <n-select v-model:value="editing.category" :options="categoryOptions" :virtual-scroll="false" />
               </n-form-item>
               <n-grid :cols="2" :x-gap="12">
-                <n-gi><n-form-item label="יצרן"><n-input v-model:value="editing.manufacturer" /></n-form-item></n-gi>
-                <n-gi><n-form-item label="דגם"><n-input v-model:value="editing.model" /></n-form-item></n-gi>
-                <n-gi><n-form-item label="מספר סידורי"><n-input v-model:value="editing.serial_number" placeholder="לדוגמה: K-G1235JXS" /></n-form-item></n-gi>
-                <n-gi><n-form-item label="מספר רישוי"><n-input v-model:value="(editing as any).license_number" placeholder="לדוגמה: 80327-8" /></n-form-item></n-gi>
-                <n-gi><n-form-item label='עומס עבודה בטוח (ק"ג)'><n-input v-model:value="editing.capacity" placeholder='3200 ק"ג' /></n-form-item></n-gi>
-                <n-gi><n-form-item label='עומס מבחן (ק"ג)'><n-input v-model:value="(editing as any).load_capacity_test" placeholder='2200 ק"ג' /></n-form-item></n-gi>
-                <n-gi><n-form-item label="רדיוס עומס (מטר)"><n-input v-model:value="(editing as any).load_radius" placeholder="--" /></n-form-item></n-gi>
+                <n-gi><n-form-item :label="l.equipment.manufacturerLabel"><n-input v-model:value="editing.manufacturer" /></n-form-item></n-gi>
+                <n-gi><n-form-item :label="l.equipment.model"><n-input v-model:value="editing.model" /></n-form-item></n-gi>
+                <n-gi><n-form-item :label="l.common.serialNumber"><n-input v-model:value="editing.serial_number" placeholder="K-G1235JXS" /></n-form-item></n-gi>
+                <n-gi><n-form-item :label="l.common.licenseNumber"><n-input v-model:value="(editing as any).license_number" placeholder="80327-8" /></n-form-item></n-gi>
+                <n-gi><n-form-item :label="l.equipment.workingLoad"><n-input v-model:value="editing.capacity" placeholder="3200" /></n-form-item></n-gi>
+                <n-gi><n-form-item :label="l.equipment.testLoad"><n-input v-model:value="(editing as any).load_capacity_test" placeholder="2200" /></n-form-item></n-gi>
+                <n-gi><n-form-item :label="l.equipment.loadRadius"><n-input v-model:value="(editing as any).load_radius" placeholder="--" /></n-form-item></n-gi>
               </n-grid>
-              <n-form-item label="תיאור"><n-input v-model:value="editing.description" :rows="3" type="textarea" /></n-form-item>
-              <n-form-item label="הערות פנימיות"><n-input v-model:value="editing.notes" :rows="2" type="textarea" /></n-form-item>
-              <n-form-item label="לקוח משויך">
-                <n-select v-model:value="(editing as any).client_id" :options="clientOptions" :virtual-scroll="false" clearable filterable placeholder="בחר לקוח..." />
+              <n-form-item :label="l.common.description"><n-input v-model:value="editing.description" :rows="3" type="textarea" /></n-form-item>
+              <n-form-item :label="l.equipment.internalNotes"><n-input v-model:value="editing.notes" :rows="2" type="textarea" /></n-form-item>
+              <n-form-item :label="l.equipment.linkedClient">
+                <n-select v-model:value="(editing as any).client_id" :options="clientOptions" :virtual-scroll="false" clearable filterable :placeholder="l.clients.pickClient" />
               </n-form-item>
             </n-form>
           </n-tab-pane>
 
-          <n-tab-pane name="history" tab="היסטוריה">
+          <n-tab-pane name="history" :tab="l.common.history">
             <n-spin :show="historyLoading" style="margin-top:12px">
               <div v-if="timeline.length" class="hist">
                 <div v-for="(item, idx) in timeline" :key="idx" class="hist__item">
@@ -301,39 +301,39 @@
 
         <!-- New equipment (no id) — just the form, no tabs -->
         <n-form v-else-if="editing" label-placement="top">
-          <n-form-item label="שם הציוד" required>
-            <n-input v-model:value="editing.name" placeholder="למשל: במת הרמה" />
+          <n-form-item :label="l.equipment.name" required>
+            <n-input v-model:value="editing.name" :placeholder="l.equipment.namePlaceholder" />
           </n-form-item>
-          <n-form-item label="קטגוריה" required>
+          <n-form-item :label="l.common.category" required>
             <n-select v-model:value="editing.category" :options="categoryOptions" :virtual-scroll="false" />
           </n-form-item>
           <n-grid :cols="2" :x-gap="12">
-            <n-gi><n-form-item label="יצרן"><n-input v-model:value="editing.manufacturer" /></n-form-item></n-gi>
-            <n-gi><n-form-item label="דגם"><n-input v-model:value="editing.model" /></n-form-item></n-gi>
-            <n-gi><n-form-item label="מספר סידורי"><n-input v-model:value="editing.serial_number" placeholder="לדוגמה: K-G1235JXS" /></n-form-item></n-gi>
-            <n-gi><n-form-item label="מספר רישוי"><n-input v-model:value="(editing as any).license_number" placeholder="לדוגמה: 80327-8" /></n-form-item></n-gi>
-            <n-gi><n-form-item label='עומס עבודה בטוח (ק"ג)'><n-input v-model:value="editing.capacity" placeholder='3200 ק"ג' /></n-form-item></n-gi>
-            <n-gi><n-form-item label='עומס מבחן (ק"ג)'><n-input v-model:value="(editing as any).load_capacity_test" placeholder='2200 ק"ג' /></n-form-item></n-gi>
-            <n-gi><n-form-item label="רדיוס עומס (מטר)"><n-input v-model:value="(editing as any).load_radius" placeholder="--" /></n-form-item></n-gi>
+            <n-gi><n-form-item :label="l.equipment.manufacturerLabel"><n-input v-model:value="editing.manufacturer" /></n-form-item></n-gi>
+            <n-gi><n-form-item :label="l.equipment.model"><n-input v-model:value="editing.model" /></n-form-item></n-gi>
+            <n-gi><n-form-item :label="l.common.serialNumber"><n-input v-model:value="editing.serial_number" placeholder="K-G1235JXS" /></n-form-item></n-gi>
+            <n-gi><n-form-item :label="l.common.licenseNumber"><n-input v-model:value="(editing as any).license_number" placeholder="80327-8" /></n-form-item></n-gi>
+            <n-gi><n-form-item :label="l.equipment.workingLoad"><n-input v-model:value="editing.capacity" placeholder="3200" /></n-form-item></n-gi>
+            <n-gi><n-form-item :label="l.equipment.testLoad"><n-input v-model:value="(editing as any).load_capacity_test" placeholder="2200" /></n-form-item></n-gi>
+            <n-gi><n-form-item :label="l.equipment.loadRadius"><n-input v-model:value="(editing as any).load_radius" placeholder="--" /></n-form-item></n-gi>
           </n-grid>
-          <n-form-item label="תיאור"><n-input v-model:value="editing.description" :rows="3" type="textarea" /></n-form-item>
-          <n-form-item label="הערות פנימיות"><n-input v-model:value="editing.notes" :rows="2" type="textarea" /></n-form-item>
-          <n-form-item label="לקוח משויך">
-            <n-select v-model:value="(editing as any).client_id" :options="clientOptions" :virtual-scroll="false" clearable filterable placeholder="בחר לקוח..." />
+          <n-form-item :label="l.common.description"><n-input v-model:value="editing.description" :rows="3" type="textarea" /></n-form-item>
+          <n-form-item :label="l.equipment.internalNotes"><n-input v-model:value="editing.notes" :rows="2" type="textarea" /></n-form-item>
+          <n-form-item :label="l.equipment.linkedClient">
+            <n-select v-model:value="(editing as any).client_id" :options="clientOptions" :virtual-scroll="false" clearable filterable :placeholder="l.clients.pickClient" />
           </n-form-item>
         </n-form>
 
         <template #footer>
           <n-space>
-            <n-button @click="showEdit = false">ביטול</n-button>
-            <n-button v-if="editing?.id" type="error" quaternary @click="del(editing as Equipment)">מחק</n-button>
-            <n-button v-if="drawerTab === 'details'" :loading="saving" type="primary" @click="save">שמור</n-button>
+            <n-button @click="showEdit = false">{{ l.common.cancel }}</n-button>
+            <n-button v-if="editing?.id" type="error" quaternary @click="del(editing as Equipment)">{{ l.common.delete }}</n-button>
+            <n-button v-if="drawerTab === 'details'" :loading="saving" type="primary" @click="save">{{ l.common.save }}</n-button>
           </n-space>
         </template>
       </n-drawer-content>
     </n-drawer>
 
-    <n-modal v-model:show="showQr" class="qr-modal" preset="card" title="QR לציוד">
+    <n-modal v-model:show="showQr" class="qr-modal" preset="card" :title="l.equipment.qrTitle">
       <div v-if="qrEquipment" class="qr-card">
         <img :src="qrImageUrl" alt="קוד QR לציוד" class="qr-card__image"/>
         <div class="qr-card__body">
@@ -411,42 +411,46 @@ import {useRouter} from "vue-router";
 import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
+import {useI18n} from "../composables/useI18n.js";
 import type {Client, Equipment, EquipmentCategory} from "@shared/types.js";
 import XlsxImportModal from "../components/XlsxImportModal.vue";
 
 const message = useMessage();
 const { confirm } = useConfirm();
+const {l, t, href, dir} = useI18n();
 const router = useRouter();
 
 const section = ref<"equipment" | "categories" | "manufacturers" | "declarations">("equipment");
-const sections = [
-  { value: "equipment",     label: "ציוד",            icon: ConstructOutline },
-  // { value: "categories",    label: "קטגוריות",        icon: LayersOutline },
-  { value: "manufacturers", label: "יצרנים",          icon: BusinessOutline },
-  // { value: "declarations",  label: "הצהרות בטיחות",   icon: DocumentTextOutline },
-];
+const sections = computed(() => [
+  { value: "equipment",     label: l.value.equipment.tabEquipment,            icon: ConstructOutline },
+  { value: "manufacturers", label: l.value.equipment.tabManufacturers,          icon: BusinessOutline },
+]);
 
 const sectionPlaceholder = computed(() => {
   const map: Record<string, string> = {
-    categories:    "ניהול קטגוריות יבוא בקרוב.",
-    manufacturers: "ניהול יצרנים יבוא בקרוב.",
-    declarations:  "הצהרות בטיחות יבוא בקרוב.",
+    categories:    l.value.equipment.categoriesSoon,
+    manufacturers: l.value.equipment.manufacturersSoon,
+    declarations:  l.value.equipment.declarationsSoon,
   };
   return map[section.value] ?? "";
 });
 
 const category = ref<EquipmentCategory | "all">("all");
-const categories: Array<{ value: EquipmentCategory | "all"; label: string }> = [
-  { value: "all",       label: "כל הסוגים" },
-  { value: "lift",      label: "מכונות הרמה" },
-  { value: "accessory", label: "אביזרי הרמה" },
-  { value: "scaffold",  label: "פיגומים" },
-  { value: "ladder",    label: "מעליות" },
-  { value: "balloon",   label: "מעלונים" },
-  { value: "intake",    label: "קולטי אוויר" },
-  { value: "extractor", label: "קולטי קיטור" },
-  { value: "other",     label: "אחר" },
-];
+const categories = computed(() => {
+  const e = l.value.equipment;
+  return [
+    { value: "all" as const,       label: l.value.common.allTypes },
+    { value: "lift" as const,      label: e.catLift },
+    { value: "accessory" as const, label: e.catAccessory },
+    { value: "scaffold" as const,  label: e.catScaffold },
+    { value: "ladder" as const,    label: e.catLadder },
+    { value: "balloon" as const,   label: e.catBalloon },
+    { value: "intake" as const,    label: e.catIntake },
+    { value: "extractor" as const, label: e.catExtractor },
+    { value: "other" as const,     label: l.value.common.other },
+  ];
+});
+const categoryOptions = computed(() => categories.value.filter((c) => c.value !== "all"));
 
 function equipmentTitle(row: { name?: string | null; manufacturer?: string | null; model?: string | null; serial_number?: string | null }): string {
   const branded = [row.manufacturer, row.model].filter(Boolean).join(" ").trim();
@@ -464,10 +468,6 @@ function equipmentSubtitle(row: { name?: string | null; description?: string | n
   const title = equipmentTitle(row);
   return name && name !== title ? name : "";
 }
-
-const categoryOptions = categories
-  .filter((c) => c.value !== "all")
-  .map((c) => ({ label: c.label, value: c.value }));
 
 const rows = ref<Equipment[]>([]);
 const filterManufacturer = ref<string | null>(null);
@@ -567,7 +567,7 @@ function formatDateTime(iso: string) {
 };
 
 function categoryLabel(c: string): string {
-  return categories.find((x) => x.value === c)?.label ?? c;
+  return categories.value.find((x) => x.value === c)?.label ?? c;
 }
 
 const ICONS: Record<string, unknown> = {

@@ -1,36 +1,36 @@
 <template>
   <div class="pt-hub page2">
     <PageHeader
-        title="תבניות הדפסה"
-        subtitle="בחרו את סוג העורך המתאים לכם"
+        :title="l.printTemplates.title"
+        :subtitle="l.printTemplates.hubSubtitle"
     >
       <template #breadcrumb>
-        <span>תבניות הדפסה</span>
+        <span>{{ l.printTemplates.title }}</span>
       </template>
     </PageHeader>
 
     <div class="pt-hub__grid">
-      <article class="pt-hub__card" @click="router.push('/print-templates/layout')">
+      <article class="pt-hub__card" @click="router.push(href('/print-templates/layout'))">
         <div class="pt-hub__icon">
           <n-icon :component="DocumentTextOutline" :size="36"/>
         </div>
-        <h2>עורך פריסה פשוט</h2>
-        <p>סעיפים, שדות דינמיים וצבע מסגרת — מומלץ לתסקירים סטנדרטיים</p>
+        <h2>{{ l.printTemplates.simpleTitle }}</h2>
+        <p>{{ l.printTemplates.simpleCard }}</p>
         <button class="btn btn--primary" type="button">
           <n-icon :component="CreateOutline"/>
-          פתח עורך פריסה
+          {{ l.printTemplates.layoutEditor }}
         </button>
       </article>
 
-      <article class="pt-hub__card" @click="router.push('/print-templates/excel')">
+      <article class="pt-hub__card" @click="router.push(href('/print-templates/excel'))">
         <div class="pt-hub__icon">
           <n-icon :component="GridOutline" :size="36"/>
         </div>
-        <h2>עורך Excel</h2>
-        <p>טבלה מלאה עם תאים, מיזוג, גבולות לכל צד ועיצוב מתקדם</p>
+        <h2>{{ l.printTemplates.excelEditor }}</h2>
+        <p>{{ l.printTemplates.subtitle }}</p>
         <button class="btn btn--ghost" type="button">
           <n-icon :component="AppsOutline"/>
-          פתח עורך Excel
+          {{ l.printTemplates.excelEditor }}
         </button>
       </article>
     </div>
@@ -42,8 +42,10 @@ import {useRouter} from "vue-router";
 import {NIcon} from "naive-ui";
 import {AppsOutline, CreateOutline, DocumentTextOutline, GridOutline} from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 
 const router = useRouter();
+const {l, href} = useI18n();
 </script>
 
 <style scoped>

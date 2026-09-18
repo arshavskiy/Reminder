@@ -1,13 +1,13 @@
 <template>
   <!-- dir=ltr keeps 1m..1y in ascending order inside the RTL toolbar. -->
-  <div class="date-presets" dir="ltr" role="group" aria-label="טווח תאריכים מהיר">
+  <div class="date-presets" dir="ltr" role="group" :aria-label="l.common.dateRangeAria">
     <button
       v-for="preset in DATE_RANGE_PRESETS"
       :key="preset.id"
-      :aria-label="preset.title"
+      :aria-label="presetTitle(preset.id)"
       :aria-pressed="activePreset === preset.id"
       :class="{ 'date-presets__item--active': activePreset === preset.id }"
-      :title="preset.title"
+      :title="presetTitle(preset.id)"
       class="date-presets__item"
       type="button"
       @click="select(preset.id)"
@@ -26,6 +26,9 @@ import {
   type DateRangePresetId,
   type DateRangeTuple,
 } from "../shared/dateRangePresets";
+import { useI18n } from "../composables/useI18n.js";
+
+const { l } = useI18n();
 
 const props = defineProps<{ modelValue: DateRangeTuple | null }>();
 const emit = defineEmits<{
@@ -34,6 +37,16 @@ const emit = defineEmits<{
 }>();
 
 const activePreset = computed(() => matchDateRangePreset(props.modelValue));
+
+function presetTitle(id: DateRangePresetId): string {
+  const map = {
+    "1m": l.value.common.range1m,
+    "3m": l.value.common.range3m,
+    "6m": l.value.common.range6m,
+    "1y": l.value.common.range1y,
+  };
+  return map[id];
+}
 
 function select(id: DateRangePresetId) {
   // Clicking the active preset clears it, so the chips can toggle back to

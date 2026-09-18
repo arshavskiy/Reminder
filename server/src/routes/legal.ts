@@ -210,6 +210,22 @@ export function registerLegalRoutes(app: express.Application) {
   app.get(["/security", "/security.html"], (_req, res) => {
     sendLandingHtml(res, "security.html", SECURITY_HTML);
   });
+
+  app.get(["/en/privacy", "/en/privacy.html"], (_req, res) => {
+    sendLandingHtml(res, "en/privacy.html", PRIVACY_HTML);
+  });
+
+  app.get(["/en/terms", "/en/terms.html"], (_req, res) => {
+    sendLandingHtml(res, "en/terms.html", TERMS_HTML);
+  });
+
+  app.get(["/en/accessibility", "/en/accessibility.html"], (_req, res) => {
+    sendLandingHtml(res, "en/accessibility.html", ACCESSIBILITY_HTML);
+  });
+
+  app.get(["/en/security", "/en/security.html"], (_req, res) => {
+    sendLandingHtml(res, "en/security.html", SECURITY_HTML);
+  });
 }
 
 function sendLandingHtml(res: express.Response, fileName: string, fallbackHtml: string) {

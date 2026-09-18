@@ -1,9 +1,9 @@
 <template>
-  <div class="page2 expense-page" dir="rtl">
+  <div class="page2 expense-page" :dir="dir">
     <PageHeader
       :count="totalInvoices"
-      title="הוצאות לפי ספק"
-      subtitle="גרף חודשי של הוצאות — סננו הוכחת תשלום מול דרישות תשלום"
+      :title="l.expenses.title"
+      :subtitle="l.expenses.subtitle"
     >
       <template #hero>
         <n-dropdown
@@ -210,6 +210,7 @@ import { BarChart, LineChart, PieChart } from "echarts/charts";
 import { GridComponent, TooltipComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
 import { api, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
@@ -221,6 +222,7 @@ echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, Can
 type ExpenseChartType = "stacked" | "grouped" | "line" | "pie";
 
 const message = useMessage();
+const {l, dir} = useI18n();
 const authStore = useAuthStore();
 const chartEl = ref<HTMLDivElement | null>(null);
 const loading = ref(false);

@@ -4,7 +4,7 @@
       <template #breadcrumb>
         <router-link v-if="route.query.from === 'contracts'" to="/contracts">חוזים ותסקירים</router-link>
         <router-link v-else-if="route.query.from === 'calendar'" to="/dashboard">לוח שנה</router-link>
-        <router-link v-else to="/documents">מסמכים</router-link>
+        <router-link v-else :to="href('/documents')">{{ l.search.documents }}</router-link>
         <span class="sep">/</span>
         <span>{{ doc.file_name }}</span>
       </template>
@@ -453,6 +453,7 @@ import {
 import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
 import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import MissingFieldsModal from "../components/MissingFieldsModal.vue";
@@ -475,6 +476,7 @@ const props = defineProps<{ docId?: string }>();
 
 const authStore = useAuthStore();
 const message = useMessage();
+const {l, href} = useI18n();
 const {confirm} = useConfirm();
 const router = useRouter();
 

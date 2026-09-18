@@ -14,7 +14,8 @@ const CATEGORY_LABELS_HE: Record<string, string> = {
   Equipment: "ציוד",
 };
 
-export function categoryLabel(name: string | null | undefined): string {
+export function categoryLabel(name: string | null | undefined, locale: "he" | "en" = "he"): string {
   if (!name) return "";
+  if (locale === "en") return name;
   return CATEGORY_LABELS_HE[name] ?? name;
 }

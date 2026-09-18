@@ -1,8 +1,8 @@
 <template>
   <div class="profile-page">
     <PageHeader
-      title="פרופיל"
-      subtitle="ניהול פרטים אישיים, הגדרות ומנוי"
+      :title="l.profile.title"
+      :subtitle="l.profile.subtitle"
     />
 
     <div class="profile-shell">
@@ -24,7 +24,7 @@
         </div>
       </div>
 
-      <nav class="sidebar-nav" aria-label="ניווט פרופיל">
+      <nav class="sidebar-nav" :aria-label="l.profile.navAria">
         <button
           v-for="item in navItems"
           :key="item.key"
@@ -458,7 +458,7 @@
 
         <section v-if="activeSection === 'settings'">
           <div class="section-header">
-            <h2 class="section-title">הגדרות</h2>
+            <h2 class="section-title">{{ l.profileSettings.title }}</h2>
           </div>
 
           <div class="settings-stack">
@@ -468,8 +468,8 @@
                   <n-icon :component="CameraOutline" :size="18" />
                 </span>
                 <div>
-                  <h3 class="settings-group__title">תמונת פרופיל</h3>
-                  <p class="settings-group__desc">התמונה מוצגת בתפריט המשתמש ובמסך הפרופיל.</p>
+                  <h3 class="settings-group__title">{{ l.profileSettings.avatarTitle }}</h3>
+                  <p class="settings-group__desc">{{ l.profileSettings.avatarDesc }}</p>
                 </div>
               </div>
               <div class="settings-row settings-row--avatar">
@@ -484,7 +484,7 @@
                 </div>
                 <div class="settings-row__text">
                   <span class="settings-row__title">{{ user?.name || user?.email || "—" }}</span>
-                  <span class="settings-row__desc">JPG או PNG</span>
+                  <span class="settings-row__desc">{{ l.profileSettings.avatarFormat }}</span>
                 </div>
                 <input
                   ref="avatarInput"
@@ -503,7 +503,7 @@
                     <template #icon>
                       <n-icon :component="CameraOutline" />
                     </template>
-                    שנה תמונה
+                    {{ l.profileSettings.changePhoto }}
                   </n-button>
                 </div>
               </div>
@@ -515,11 +515,11 @@
                   <n-icon :component="LogoGoogle" :size="18" />
                 </span>
                 <div>
-                  <h3 class="settings-group__title">חיבורי Google</h3>
+                  <h3 class="settings-group__title">{{ l.profileSettings.googleTitle }}</h3>
                   <p class="settings-group__desc">
-                    Gmail לקריאת מיילים וייבוא קבצים מצורפים שתבחרו, וסנכרון מסמכים לתיקיית
+                    {{ l.profileSettings.googleDescPrefix }}
                     <strong>{{ driveStatus?.folderName || "RemindOCR" }}</strong>
-                    ב-Drive. חשבוניות נשמרות ב״חשבוניות״ ותסקירים ב״תסקירי בדיקה״.
+                    {{ l.profileSettings.googleDescSuffix }}
                   </p>
                 </div>
               </div>
@@ -536,19 +536,19 @@
                         class="settings-status"
                         :class="gmailStatus?.connected ? 'settings-status--on' : 'settings-status--off'"
                       >
-                        {{ gmailStatus?.connected ? "מחובר" : "לא מחובר" }}
+                        {{ gmailStatus?.connected ? l.profileSettings.connected : l.profileSettings.notConnected }}
                       </span>
                     </span>
                     <span class="settings-row__desc">
                       {{
                         gmailStatus?.connected
-                          ? (gmailStatus.email || "מחובר")
+                          ? (gmailStatus.email || l.profileSettings.connected)
                           : gmailLoading
-                            ? "טוען..."
-                            : "קריאת מיילים וייבוא קבצים מצורפים"
+                            ? l.profileSettings.loading
+                            : l.profileSettings.gmailIdle
                       }}
                       <template v-if="gmailStatus?.connected && gmailStatus.importedCount != null">
-                        · {{ gmailStatus.importedCount }} מסמכים יובאו
+                        {{ t("profileSettings.importedCount", {n: gmailStatus.importedCount}) }}
                       </template>
                     </span>
                   </div>
@@ -561,16 +561,16 @@
                       type="primary"
                       @click="connectGmailFromProfile"
                     >
-                      חבר Gmail
+                      {{ l.profileSettings.connectGmail }}
                     </n-button>
                     <n-button
                       v-else-if="!gmailStatus?.connected"
                       size="small"
                       ghost
                       tag="a"
-                      href="https://remindocr.com/pricing"
+                      :href="pricingUrl"
                     >
-                      שדרוג מנוי
+                      {{ l.profileSettings.upgradePlan }}
                     </n-button>
                     <template v-else>
                       <n-button
@@ -581,7 +581,7 @@
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        ניהול הרשאות
+                        {{ l.profileSettings.managePermissions }}
                       </n-button>
                       <n-button
                         :loading="gmailDisconnecting"
@@ -589,7 +589,7 @@
                         ghost
                         @click="disconnectGmailFromProfile"
                       >
-                        נתק
+                        {{ l.profileSettings.disconnect }}
                       </n-button>
                     </template>
                   </div>
@@ -613,18 +613,18 @@
                       >
                         {{
                           driveFolderGone
-                            ? "תיקייה חסרה"
+                            ? l.profileSettings.folderMissing
                             : driveStatus.syncEnabled
-                              ? "מחובר"
-                              : "כבוי"
+                              ? l.profileSettings.connected
+                              : l.profileSettings.off
                         }}
                       </span>
                     </span>
                     <span class="settings-row__desc">
-                      <template v-if="!driveAllowed">זמין במסלולים בסיסי ועסקי בלבד.</template>
-                      <template v-else-if="!driveStatus">טוען סטטוס...</template>
-                      <template v-else-if="driveFolderGone">תיקיית הסנכרון חסרה.</template>
-                      <template v-else-if="!driveStatus.connected">נדרש אישור Google Drive בלבד.</template>
+                      <template v-if="!driveAllowed">{{ l.profileSettings.driveBasicBusinessOnly }}</template>
+                      <template v-else-if="!driveStatus">{{ l.profileSettings.loadingStatus }}</template>
+                      <template v-else-if="driveFolderGone">{{ l.profileSettings.syncFolderMissing }}</template>
+                      <template v-else-if="!driveStatus.connected">{{ l.profileSettings.driveConsentNeeded }}</template>
                       <template v-else>{{ driveStatus.folderName || "RemindOCR" }}</template>
                     </span>
                   </div>
@@ -634,9 +634,9 @@
                       size="small"
                       ghost
                       tag="a"
-                      href="https://remindocr.com/pricing"
+                      :href="pricingUrl"
                     >
-                      שדרוג מנוי
+                      {{ l.profileSettings.upgradePlan }}
                     </n-button>
                     <template v-else-if="driveStatus">
                       <n-button
@@ -647,13 +647,13 @@
                         type="primary"
                         @click="connectDriveFromProfile"
                       >
-                        חבר Drive
+                        {{ l.profileSettings.connectDrive }}
                       </n-button>
                       <n-switch
                         v-else
                         :value="driveStatus.syncEnabled"
                         :loading="driveToggling"
-                        aria-label="סנכרון Google Drive"
+                        :aria-label="l.profileSettings.driveSyncAria"
                         @update:value="onDriveSyncToggle"
                       />
                     </template>
@@ -672,19 +672,19 @@
                         class="settings-status"
                         :class="calendarStatus?.connected ? 'settings-status--on' : 'settings-status--off'"
                       >
-                        {{ calendarStatus?.connected ? "מחובר" : "לא מחובר" }}
+                        {{ calendarStatus?.connected ? l.profileSettings.connected : l.profileSettings.notConnected }}
                       </span>
                     </span>
                     <span class="settings-row__desc">
-                      <template v-if="!calendarAllowed">זמין במסלול עסקי בלבד.</template>
-                      <template v-else-if="calendarLoading">טוען...</template>
+                      <template v-if="!calendarAllowed">{{ l.profileSettings.calendarBusinessOnly }}</template>
+                      <template v-else-if="calendarLoading">{{ l.profileSettings.loading }}</template>
                       <template v-else-if="calendarStatus?.connected">
-                        {{ calendarStatus.email || "מחובר" }}
+                        {{ calendarStatus.email || l.profileSettings.connected }}
                         <small class="settings-row__subline">
-                          {{ calendarStatus.synced_count }} תזכורות מסונכרנות ליומן יעודי
+                          {{ t("profileSettings.calendarSynced", {n: calendarStatus.synced_count}) }}
                         </small>
                       </template>
-                      <template v-else>סנכרון דו-כיווני של תזכורות ליומן Google</template>
+                      <template v-else>{{ l.profileSettings.calendarIdle }}</template>
                     </span>
                   </div>
                   <div class="settings-row__actions">
@@ -693,9 +693,9 @@
                       size="small"
                       ghost
                       tag="a"
-                      href="https://remindocr.com/pricing"
+                      :href="pricingUrl"
                     >
-                      שדרוג מנוי
+                      {{ l.profileSettings.upgradePlan }}
                     </n-button>
                     <n-button
                       v-if="!calendarAllowed && calendarStatus?.connected"
@@ -704,7 +704,7 @@
                       ghost
                       @click="disconnectCalendarFromProfile"
                     >
-                      נתק
+                      {{ l.profileSettings.disconnect }}
                     </n-button>
                     <n-button
                       v-else-if="!calendarStatus?.connected"
@@ -714,7 +714,7 @@
                       type="primary"
                       @click="connectCalendarFromProfile"
                     >
-                      חבר יומן
+                      {{ l.profileSettings.connectCalendar }}
                     </n-button>
                     <template v-else>
                       <n-button
@@ -729,7 +729,7 @@
                         <template #icon>
                           <n-icon :component="OpenOutline" />
                         </template>
-                        פתח יומן
+                        {{ l.profileSettings.openCalendar }}
                       </n-button>
                       <n-button
                         :loading="calendarSyncing"
@@ -737,7 +737,7 @@
                         ghost
                         @click="syncCalendarNow"
                       >
-                        סנכרן
+                        {{ l.profileSettings.syncNow }}
                       </n-button>
                       <n-button
                         :loading="calendarDisconnecting"
@@ -745,14 +745,14 @@
                         ghost
                         @click="disconnectCalendarFromProfile"
                       >
-                        נתק
+                        {{ l.profileSettings.disconnect }}
                       </n-button>
                     </template>
                   </div>
                 </div>
 
                 <div v-if="calendarAllowed && calendarStatus?.connected" class="settings-subrow">
-                  <label class="settings-panel__label" for="calendar-name">שם היומן ב-Google</label>
+                  <label class="settings-panel__label" for="calendar-name">{{ l.profileSettings.calendarNameLabel }}</label>
                   <div class="inline-field__row">
                     <n-input
                       id="calendar-name"
@@ -770,7 +770,7 @@
                       type="primary"
                       @click="renameCalendar"
                     >
-                      שמור
+                      {{ l.profileSettings.save }}
                     </n-button>
                   </div>
                 </div>
@@ -782,18 +782,18 @@
               >
                 <n-alert :bordered="false" type="warning">
                   <template v-if="driveStatus.folderState === 'trashed'">
-                    תיקיית Google Drive נמצאת בפח.
+                    {{ l.profileSettings.driveTrashed }}
                     <span v-if="driveStatus.syncedFileCount">
-                      {{ driveStatus.syncedFileCount }} מסמכים סומנו כמסונכרנים, אבל הם בפח יחד עם התיקייה.
+                      {{ t("profileSettings.driveTrashedCount", {n: driveStatus.syncedFileCount}) }}
                     </span>
-                    אפשר לשחזר אותה מהפח, או ליצור תיקייה חדשה ולהעלות מחדש.
+                    {{ l.profileSettings.driveTrashedHint }}
                   </template>
                   <template v-else>
-                    תיקיית Google Drive נמחקה.
+                    {{ l.profileSettings.driveDeleted }}
                     <span v-if="driveStatus.syncedFileCount">
-                      {{ driveStatus.syncedFileCount }} מסמכים סומנו כמסונכרנים, אבל הם כבר לא ב-Drive.
+                      {{ t("profileSettings.driveDeletedCount", {n: driveStatus.syncedFileCount}) }}
                     </span>
-                    צריך ליצור תיקייה חדשה ולהעלות אותם מחדש.
+                    {{ l.profileSettings.driveDeletedHint }}
                   </template>
                 </n-alert>
                 <div class="settings-row__actions">
@@ -809,7 +809,7 @@
                     <template #icon>
                       <n-icon :component="OpenOutline" />
                     </template>
-                    פתח את הפח ב-Google Drive
+                    {{ l.profileSettings.openTrash }}
                   </n-button>
                   <n-button
                     :loading="repairingFolder"
@@ -818,7 +818,7 @@
                     type="warning"
                     @click="repairDriveFolder"
                   >
-                    צור תיקייה והעלה מחדש
+                    {{ l.profileSettings.recreateFolder }}
                   </n-button>
                 </div>
               </div>
@@ -827,28 +827,28 @@
                 v-if="driveAllowed && driveStatus?.syncEnabled && !driveFolderGone"
                 class="settings-panel"
               >
-                <div aria-label="סטטוס סנכרון Drive" class="drive-dashboard">
+                <div :aria-label="l.profileSettings.driveStatusAria" class="drive-dashboard">
                   <div class="drive-dashboard__item">
                     <strong>
                       {{ driveStatus.syncedFileCount ?? 0 }}<template v-if="driveStatus.totalFileCount != null"><span class="drive-dashboard__of">/ {{ driveStatus.totalFileCount }}</span></template>
                     </strong>
-                    <span>מסונכרנים</span>
+                    <span>{{ l.profileSettings.synced }}</span>
                   </div>
                   <div class="drive-dashboard__item">
                     <strong>{{ driveStatus.pendingFileCount ?? 0 }}</strong>
-                    <span>ממתינים</span>
+                    <span>{{ l.profileSettings.pending }}</span>
                   </div>
                   <div :class="{ 'drive-dashboard__item--warn': (driveStatus.missingFileCount ?? 0) > 0 }"
                        class="drive-dashboard__item">
                     <strong>{{ driveStatus.missingFileCount ?? 0 }}</strong>
-                    <span>קבצים חסרים</span>
+                    <span>{{ l.profileSettings.missingFiles }}</span>
                   </div>
                   <div class="drive-dashboard__item">
                     <strong>{{ latestDriveJobLabel }}</strong>
-                    <span>ייצוא אחרון</span>
+                    <span>{{ l.profileSettings.lastExport }}</span>
                   </div>
                 </div>
-                <label class="settings-panel__label" for="drive-folder-name">שם תיקייה ב-Drive</label>
+                <label class="settings-panel__label" for="drive-folder-name">{{ l.profileSettings.driveFolderName }}</label>
                 <div class="drive-folder__row">
                   <n-input
                     id="drive-folder-name"
@@ -864,7 +864,7 @@
                     type="primary"
                     @click="renameDriveFolder"
                   >
-                    שמור
+                    {{ l.profileSettings.save }}
                   </n-button>
                 </div>
                 <n-button
@@ -879,16 +879,16 @@
                   <template #icon>
                     <n-icon :component="OpenOutline" />
                   </template>
-                  פתח תיקייה ב-Google Drive
+                  {{ l.profileSettings.openDriveFolder }}
                 </n-button>
               </div>
 
               <div v-if="driveNeedsReauth" class="settings-panel">
                 <n-alert :bordered="false" type="warning">
-                  יש להתחבר מחדש ל-Gmail כדי לאשר הרשאות Drive.
+                  {{ l.profileSettings.reauthDrive }}
                 </n-alert>
                 <n-button size="small" ghost type="warning" @click="reconnectGmailForDrive">
-                  התחבר מחדש ל-Gmail
+                  {{ l.profileSettings.reconnectGmail }}
                 </n-button>
               </div>
             </div>
@@ -899,9 +899,9 @@
                   <n-icon :component="DiamondOutline" :size="18" />
                 </span>
                 <div>
-                  <h3 class="settings-group__title">תכונות לפי מסלול</h3>
+                  <h3 class="settings-group__title">{{ l.profileSettings.featuresTitle }}</h3>
                   <p class="settings-group__desc">
-                    חלק מהיכולות כלולות במסלול שלכם, ואחרות דורשות שדרוג.
+                    {{ l.profileSettings.featuresDesc }}
                   </p>
                 </div>
               </div>
@@ -912,17 +912,17 @@
                   </span>
                   <div class="settings-row__text">
                     <span class="settings-row__title">
-                      תזכורות אימייל אוטומטיות
+                      {{ l.profileSettings.autoReminders }}
                       <span
                         class="settings-status"
                         :class="autoRemindersAllowed ? 'settings-status--on' : 'settings-status--off'"
                       >
-                        {{ autoRemindersAllowed ? "פעיל" : "לא כלול" }}
+                        {{ autoRemindersAllowed ? l.profileSettings.active : l.profileSettings.notIncluded }}
                       </span>
                     </span>
                     <span class="settings-row__desc">
-                      <template v-if="autoRemindersAllowed">המערכת שולחת תזכורות במועד שנקבע.</template>
-                      <template v-else>זמין במסלולים בסיסי ועסקי בלבד. אפשר לשלוח ידנית במסלול החינמי.</template>
+                      <template v-if="autoRemindersAllowed">{{ l.profileSettings.autoRemindersOn }}</template>
+                      <template v-else>{{ l.profileSettings.autoRemindersOff }}</template>
                     </span>
                   </div>
                   <div class="settings-row__actions">
@@ -931,9 +931,9 @@
                       size="small"
                       ghost
                       tag="a"
-                      href="https://remindocr.com/pricing"
+                      :href="pricingUrl"
                     >
-                      שדרוג מנוי
+                      {{ l.profileSettings.upgradePlan }}
                     </n-button>
                   </div>
                 </div>
@@ -943,7 +943,7 @@
                     <n-icon :component="PeopleOutline" :size="20" />
                   </span>
                   <div class="settings-row__text">
-                    <span class="settings-row__title">משתמשים</span>
+                    <span class="settings-row__title">{{ l.profileSettings.users }}</span>
                     <span class="settings-row__desc">{{ seatsUsageLabel }}</span>
                   </div>
                   <div class="settings-row__actions">
@@ -951,20 +951,20 @@
                       <template #trigger>
                         <span>
                           <n-button size="small" ghost disabled>
-                            הוסף משתמש
+                            {{ l.profileSettings.addUser }}
                           </n-button>
                         </span>
                       </template>
-                      {{ seatLimit === 1 ? extraUsersLockedMessage : "הוספת משתמשים נוספים תתאפשר בהמשך." }}
+                      {{ seatLimit === 1 ? l.profileSettings.extraUsersLocked : l.profileSettings.extraUsersSoon }}
                     </n-tooltip>
                     <n-button
                       v-if="seatLimit === 1"
                       size="small"
                       ghost
                       tag="a"
-                      href="https://remindocr.com/pricing"
+                      :href="pricingUrl"
                     >
-                      שדרוג מנוי
+                      {{ l.profileSettings.upgradePlan }}
                     </n-button>
                   </div>
                 </div>
@@ -974,7 +974,7 @@
                     <n-icon :component="MailOutline" :size="20" />
                   </span>
                   <div class="settings-row__text">
-                    <span class="settings-row__title">חשבונות דוא״ל</span>
+                    <span class="settings-row__title">{{ l.profileSettings.emailAccounts }}</span>
                     <span class="settings-row__desc">{{ emailAccountsUsageLabel }}</span>
                   </div>
                   <div class="settings-row__actions">
@@ -982,20 +982,20 @@
                       <template #trigger>
                         <span>
                           <n-button size="small" ghost disabled>
-                            הוסף חשבון
+                            {{ l.profileSettings.addAccount }}
                           </n-button>
                         </span>
                       </template>
-                      {{ emailAccountLimit === 1 ? extraEmailLockedMessage : "חיבור חשבון דוא״ל נוסף יתאפשר בהמשך." }}
+                      {{ emailAccountLimit === 1 ? l.profileSettings.extraEmailLocked : l.profileSettings.extraEmailSoon }}
                     </n-tooltip>
                     <n-button
                       v-if="emailAccountLimit === 1"
                       size="small"
                       ghost
                       tag="a"
-                      href="https://remindocr.com/pricing"
+                      :href="pricingUrl"
                     >
-                      שדרוג מנוי
+                      {{ l.profileSettings.upgradePlan }}
                     </n-button>
                   </div>
                 </div>
@@ -1008,26 +1008,25 @@
                   <n-icon :component="NotificationsOutline" :size="18" />
                 </span>
                 <div>
-                  <h3 class="settings-group__title">מועדי תזכורת</h3>
+                  <h3 class="settings-group__title">{{ l.profileSettings.reminderTimingTitle }}</h3>
                   <p class="settings-group__desc">
-                    כמה ימים לפני פקיעת התוקף תישלח תזכורת. אפשר להגדיר עד שישה מועדים;
-                    תזכורת נוצרת בכל אחד מהם. השינוי חל על תסקירים חדשים שייווצרו מכאן והלאה.
+                    {{ l.profileSettings.reminderTimingDesc }}
                   </p>
                 </div>
               </div>
               <div class="advance-days">
                 <div class="advance-days__list">
                   <span v-for="d in advanceDays" :key="d" class="advance-days__chip">
-                    {{ d }} ימים
+                    {{ t("profileSettings.days", {n: d}) }}
                     <button
-                      :aria-label="`הסר ${d} ימים`"
+                      :aria-label="t('profileSettings.removeDaysAria', {n: d})"
                       class="advance-days__remove"
                       type="button"
                       @click="removeAdvanceDay(d)"
                     >✕</button>
                   </span>
                   <span v-if="!advanceDays.length" class="advance-days__empty">
-                    לא הוגדרו מועדים — ישמש ברירת המחדל של המערכת.
+                    {{ l.profileSettings.noTimings }}
                   </span>
                 </div>
                 <div class="advance-days__add">
@@ -1036,7 +1035,7 @@
                     :min="0"
                     :max="365"
                     :disabled="advanceDays.length >= 6"
-                    placeholder="מספר ימים"
+                    :placeholder="l.profileSettings.daysPlaceholder"
                     size="small"
                     style="width: 140px"
                     @keyup.enter="addAdvanceDay"
@@ -1049,10 +1048,10 @@
                     ghost
                     @click="addAdvanceDay"
                   >
-                    הוסף מועד
+                    {{ l.profileSettings.addTiming }}
                   </n-button>
                   <span v-if="advanceDays.length >= 6" class="advance-days__hint">
-                    הגעת למקסימום שישה מועדים.
+                    {{ l.profileSettings.maxTimings }}
                   </span>
                 </div>
               </div>
@@ -1064,10 +1063,9 @@
                   <n-icon :component="CloudUploadOutline" :size="18" />
                 </span>
                 <div>
-                  <h3 class="settings-group__title">שמירה בענן</h3>
+                  <h3 class="settings-group__title">{{ l.profileSettings.cloudTitle }}</h3>
                   <p class="settings-group__desc">
-                    קבצים נשמרים באחסון ענן כדי שיישארו זמינים גם לאחר עדכון גרסה.
-                    כיבוי ישמור את הקובץ על השרת בלבד, והוא עלול להימחק בעדכון הבא.
+                    {{ l.profileSettings.cloudDesc }}
                   </p>
                 </div>
               </div>
@@ -1077,10 +1075,10 @@
                     <AwsS3Logo :size="18" />
                   </span>
                   <div class="settings-row__text">
-                    <span class="settings-row__title">חשבוניות</span>
+                    <span class="settings-row__title">{{ l.profileSettings.invoices }}</span>
                     <span class="settings-row__desc">
-                      <template v-if="!cloudStorageAllowed">זמין במסלולים בסיסי ועסקי בלבד.</template>
-                      <template v-else>שמירת קבצי חשבוניות באחסון ענן</template>
+                      <template v-if="!cloudStorageAllowed">{{ l.profileSettings.driveBasicBusinessOnly }}</template>
+                      <template v-else>{{ l.profileSettings.cloudInvoicesDesc }}</template>
                     </span>
                   </div>
                   <div class="settings-row__actions">
@@ -1088,7 +1086,7 @@
                       :value="s3StoreInvoices"
                       :disabled="!cloudStorageAllowed"
                       :loading="savingCloudStorage === 'invoices'"
-                      aria-label="שמירת חשבוניות בענן"
+                      :aria-label="l.profileSettings.cloudInvoicesAria"
                       @update:value="(v: boolean) => saveCloudStorage('invoices', v)"
                     />
                   </div>
@@ -1098,10 +1096,10 @@
                     <AwsS3Logo :size="18" />
                   </span>
                   <div class="settings-row__text">
-                    <span class="settings-row__title">תסקירי בדיקה</span>
+                    <span class="settings-row__title">{{ l.profileSettings.inspections }}</span>
                     <span class="settings-row__desc">
-                      <template v-if="!cloudStorageAllowed">זמין במסלולים בסיסי ועסקי בלבד.</template>
-                      <template v-else>שמירת קבצי תסקירים באחסון ענן</template>
+                      <template v-if="!cloudStorageAllowed">{{ l.profileSettings.driveBasicBusinessOnly }}</template>
+                      <template v-else>{{ l.profileSettings.cloudInspectionsDesc }}</template>
                     </span>
                   </div>
                   <div class="settings-row__actions">
@@ -1109,7 +1107,7 @@
                       :value="s3StoreInspections"
                       :disabled="!cloudStorageAllowed"
                       :loading="savingCloudStorage === 'inspections'"
-                      aria-label="שמירת תסקירים בענן"
+                      :aria-label="l.profileSettings.cloudInspectionsAria"
                       @update:value="(v: boolean) => saveCloudStorage('inspections', v)"
                     />
                   </div>
@@ -1121,7 +1119,7 @@
                 class="settings-panel"
                 type="warning"
               >
-                קבצים שלא נשמרים בענן עלולים ללכת לאיבוד בעדכון גרסה של השרת.
+                {{ l.profileSettings.cloudWarning }}
               </n-alert>
             </div>
 
@@ -1131,13 +1129,13 @@
                   <n-icon :component="KeyOutline" :size="18" />
                 </span>
                 <div>
-                  <h3 class="settings-group__title">שינוי סיסמה</h3>
-                  <p class="settings-group__desc">הסיסמה משמשת לכניסה עם אימייל.</p>
+                  <h3 class="settings-group__title">{{ l.profileSettings.passwordTitle }}</h3>
+                  <p class="settings-group__desc">{{ l.profileSettings.passwordDesc }}</p>
                 </div>
               </div>
               <n-form class="settings-form" label-placement="top">
                 <div class="settings-form__grid">
-                  <n-form-item label="סיסמה נוכחית" :show-feedback="false">
+                  <n-form-item :label="l.profileSettings.currentPassword" :show-feedback="false">
                     <n-input
                       v-model:value="pwForm.current"
                       type="password"
@@ -1145,7 +1143,7 @@
                       autocomplete="current-password"
                     />
                   </n-form-item>
-                  <n-form-item label="סיסמה חדשה" :show-feedback="false">
+                  <n-form-item :label="l.profileSettings.newPassword" :show-feedback="false">
                     <n-input
                       v-model:value="pwForm.next"
                       type="password"
@@ -1155,7 +1153,7 @@
                   </n-form-item>
                   <n-form-item
                     class="settings-form__span"
-                    label="אימות סיסמה חדשה"
+                    :label="l.profileSettings.confirmPassword"
                     :show-feedback="false"
                   >
                     <n-input
@@ -1172,7 +1170,7 @@
                       :loading="savingPw"
                       @click="changePassword"
                     >
-                      שנה סיסמה
+                      {{ l.profileSettings.changePassword }}
                     </n-button>
                   </div>
                 </div>
@@ -1185,14 +1183,14 @@
                   <n-icon :component="LogOutOutline" :size="18" />
                 </span>
                 <div>
-                  <h3 class="settings-group__title">ניהול הפעלות</h3>
-                  <p class="settings-group__desc">סיים את כל ההפעלות הפעילות בכל המכשירים.</p>
+                  <h3 class="settings-group__title">{{ l.profileSettings.sessionsTitle }}</h3>
+                  <p class="settings-group__desc">{{ l.profileSettings.sessionsDesc }}</p>
                 </div>
               </div>
               <div class="settings-row">
                 <div class="settings-row__text">
-                  <span class="settings-row__title">התנתקות מכל המכשירים</span>
-                  <span class="settings-row__desc">יסיים את ההפעלה הנוכחית וכל שאר המכשירים המחוברים.</span>
+                  <span class="settings-row__title">{{ l.profileSettings.signOutAll }}</span>
+                  <span class="settings-row__desc">{{ l.profileSettings.signOutAllDesc }}</span>
                 </div>
                 <div class="settings-row__actions">
                   <n-button
@@ -1205,7 +1203,7 @@
                     <template #icon>
                       <n-icon :component="LogOutOutline" />
                     </template>
-                    התנתק מכל המכשירים
+                    {{ l.profileSettings.signOutAllButton }}
                   </n-button>
                 </div>
               </div>
@@ -1217,18 +1215,16 @@
                   <n-icon :component="TrashOutline" :size="18" />
                 </span>
                 <div>
-                  <h3 class="settings-group__title">סגירת חשבון ומחיקת נתונים</h3>
+                  <h3 class="settings-group__title">{{ l.profileSettings.closeTitle }}</h3>
                   <p class="settings-group__desc">
-                    מחיקה בלתי הפיכה של החשבון וכל הנתונים, כולל מסמכים ונתונים שמקורם ב־Google.
-                    פירוט נוסף ב־
-                    <a href="https://remindocr.com/security" target="_blank" rel="noopener noreferrer">עמוד אבטחת מידע</a>.
+                    {{ l.profileSettings.closeDesc }}<a :href="securityUrl" target="_blank" rel="noopener noreferrer">{{ l.profileSettings.securityPage }}</a>.
                   </p>
                 </div>
               </div>
               <div class="settings-row">
                 <div class="settings-row__text">
-                  <span class="settings-row__title">מחיקת החשבון לצמיתות</span>
-                  <span class="settings-row__desc">לא ניתן לשחזר מסמכים, לקוחות, תזכורות או חיבורי Google לאחר המחיקה.</span>
+                  <span class="settings-row__title">{{ l.profileSettings.deleteForever }}</span>
+                  <span class="settings-row__desc">{{ l.profileSettings.deleteForeverDesc }}</span>
                 </div>
                 <div class="settings-row__actions">
                   <n-button
@@ -1241,7 +1237,7 @@
                     <template #icon>
                       <n-icon :component="TrashOutline" />
                     </template>
-                    סגירת חשבון ומחיקת נתונים
+                    {{ l.profileSettings.closeButton }}
                   </n-button>
                 </div>
               </div>
@@ -1478,16 +1474,16 @@
   <n-modal
     v-model:show="showDeleteAccountModal"
     preset="card"
-    title="סגירת חשבון ומחיקת נתונים"
+    :title="l.profileSettings.deleteModalTitle"
     style="width: min(480px, 94vw)"
     :mask-closable="!deletingAccount"
     :closable="!deletingAccount"
   >
     <p class="delete-account-warn">
-      פעולה זו תמחק לצמיתות את החשבון ואת כל הנתונים (מסמכים, לקוחות, תזכורות, חיבורי Google ועוד).
-      לא ניתן לשחזר.
+      {{ l.profileSettings.deleteModalBody }}
+      {{ l.profileSettings.deleteModalIrreversible }}
     </p>
-    <n-form-item v-if="user?.email" label="הקלידו את כתובת האימייל של החשבון לאישור" :show-feedback="false">
+    <n-form-item v-if="user?.email" :label="l.profileSettings.deleteEmailConfirm" :show-feedback="false">
       <n-input
         v-model:value="deleteAccountEmail"
         type="text"
@@ -1496,7 +1492,7 @@
         autocomplete="off"
       />
     </n-form-item>
-    <n-form-item label='הקלידו DELETE_ACCOUNT לאישור סופי' :show-feedback="false">
+    <n-form-item :label="l.profileSettings.deleteTypeConfirm" :show-feedback="false">
       <n-input
         v-model:value="deleteAccountConfirm"
         type="text"
@@ -1507,14 +1503,14 @@
     </n-form-item>
     <template #footer>
       <n-space justify="end">
-        <n-button :disabled="deletingAccount" @click="showDeleteAccountModal = false">ביטול</n-button>
+        <n-button :disabled="deletingAccount" @click="showDeleteAccountModal = false">{{ l.common.cancel }}</n-button>
         <n-button
           type="error"
           :loading="deletingAccount"
           :disabled="!canConfirmDeleteAccount"
           @click="confirmDeleteAccount"
         >
-          מחק חשבון ונתונים
+          {{ l.profileSettings.deleteConfirmButton }}
         </n-button>
       </n-space>
     </template>
@@ -1524,6 +1520,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref, watch, type Component} from "vue";
 import {useRoute} from "vue-router";
+import {loginPath} from "../stores/locale.js";
 import {
   NAlert,
   NButton,
@@ -1579,6 +1576,7 @@ import {api, type DriveExportJob, type DriveStatus, type ProfileSubscription} fr
 import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "@shared/printTemplateLayout.js";
 import type { User, UserSettings } from "@shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import GmailLogo from "../components/GmailLogo.vue";
 import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
 import AwsS3Logo from "../components/AwsS3Logo.vue";
@@ -1601,8 +1599,13 @@ import {
   PLAN_GATE_MESSAGES,
   type PlanId,
 } from "../shared/pricingPlans.js";
+import {localizedPath, marketingUrl} from "../stores/locale.js";
 
 const route = useRoute();
+const {l, t, locale} = useI18n();
+const pricingUrl = computed(() => marketingUrl("/pricing", locale.value));
+const securityUrl = computed(() => marketingUrl("/security", locale.value));
+const settingsReturnPath = computed(() => `${localizedPath("/profile", locale.value)}?section=settings`);
 
 const message = useMessage();
 const {confirm} = useConfirm();
@@ -1660,9 +1663,9 @@ async function persistAdvanceDays(days: number[]) {
   try {
     await userSettingsStore.save(patch as Partial<UserSettings>);
     if (userSettings.value) Object.assign(userSettings.value, patch);
-    message.success("מועדי התזכורת נשמרו");
+    message.success(l.value.profileSettings.timingsSaved);
   } catch {
-    message.error("שגיאה בשמירת מועדי התזכורת");
+    message.error(l.value.profileSettings.timingsSaveError);
   } finally {
     savingAdvanceDays.value = false;
   }
@@ -1688,9 +1691,9 @@ async function saveCloudStorage(target: "invoices" | "inspections", value: boole
     await userSettingsStore.save(patch as Partial<UserSettings>);
     // Mirror locally so the switch reflects the saved state without a reload.
     if (userSettings.value) Object.assign(userSettings.value, patch);
-    message.success(value ? "שמירה בענן הופעלה" : "שמירה בענן כובתה");
+    message.success(value ? l.value.profileSettings.cloudOn : l.value.profileSettings.cloudOff);
   } catch {
-    message.error("שגיאה בשמירת ההגדרה");
+    message.error(l.value.profileSettings.settingSaveError);
   } finally {
     savingCloudStorage.value = null;
   }
@@ -1700,19 +1703,19 @@ async function saveCloudStorage(target: "invoices" | "inspections", value: boole
 const navItems = computed(() => {
   const isAdmin = user.value?.role === "admin";
   const items: { key: string; icon: Component; label: string }[] = [
-    { key: "personal", icon: PersonOutline, label: "פרטים אישיים" },
+    { key: "personal", icon: PersonOutline, label: l.value.profile.personal },
   ];
   if (isAdmin) {
     items.push(
-      { key: "stats", icon: StatsChartOutline, label: "סטטיסטיקות" },
-      { key: "notifications", icon: NotificationsOutline, label: "התראות ועדכונים" },
+      { key: "stats", icon: StatsChartOutline, label: l.value.profile.stats },
+      { key: "notifications", icon: NotificationsOutline, label: l.value.profile.notifications },
     );
   }
-  items.push({ key: "settings", icon: SettingsOutline, label: "הגדרות" });
+  items.push({ key: "settings", icon: SettingsOutline, label: l.value.profile.settings });
   if (isAdmin) {
-    items.push({ key: "theme", icon: ColorPaletteOutline, label: "נושא עיצוב" });
+    items.push({ key: "theme", icon: ColorPaletteOutline, label: l.value.profile.theme });
   }
-  items.push({ key: "subscription", icon: DiamondOutline, label: "מנוי ותשלומים" });
+  items.push({ key: "subscription", icon: DiamondOutline, label: l.value.profile.subscription });
   return items;
 });
 
@@ -2095,7 +2098,7 @@ async function confirmDeleteAccount() {
     showDeleteAccountModal.value = false;
     message.success("החשבון והנתונים נמחקו");
     localStorage.removeItem("auth_user");
-    window.location.href = "/login";
+    window.location.href = loginPath();
   } catch (err: any) {
     const code = String(err?.message ?? "");
     if (code.includes("email_mismatch")) message.error("כתובת האימייל אינה תואמת");
@@ -2123,8 +2126,8 @@ const calendarLoading = ref(false);
 const calendarSyncing = ref(false);
 const calendarDisconnecting = ref(false);
 /** Mirrors APP_CALENDAR_SUMMARY on the server. */
-const DEFAULT_CALENDAR_NAME = "תסקירים";
-const calendarName = ref(DEFAULT_CALENDAR_NAME);
+const DEFAULT_CALENDAR_NAME = computed(() => l.value.profileSettings.calendarDefaultName);
+const calendarName = ref("");
 const renamingCalendar = ref(false);
 const driveStatus = ref<DriveStatus | null>(null);
 const driveToggling = ref(false);
@@ -2157,13 +2160,15 @@ const emailAccountLimit = computed(() =>
 const gmailAllowed = computed(() => emailAccountLimit.value === null || emailAccountLimit.value > 0);
 
 const seatsUsageLabel = computed(() =>
-  seatLimit.value === null ? "1 · ללא הגבלה" : `1 מתוך ${seatLimit.value}`,
+  seatLimit.value === null
+    ? l.value.profileSettings.usageUnlimited
+    : t("profileSettings.usageOf", {n: seatLimit.value}),
 );
 const emailAccountsUsageLabel = computed(() =>
-  emailAccountLimit.value === null ? "1 · ללא הגבלה" : `1 מתוך ${emailAccountLimit.value}`,
+  emailAccountLimit.value === null
+    ? l.value.profileSettings.usageUnlimited
+    : t("profileSettings.usageOf", {n: emailAccountLimit.value}),
 );
-const extraUsersLockedMessage = PLAN_GATE_MESSAGES.extraUsers;
-const extraEmailLockedMessage = PLAN_GATE_MESSAGES.extraEmailAccounts;
 const driveFolderGone = computed(() => {
   const state = driveStatus.value?.folderState;
   return state === "missing" || state === "trashed";
@@ -2178,11 +2183,11 @@ const driveFolderUrl = computed(() => {
 });
 const latestDriveJobLabel = computed(() => {
   const job = driveStatus.value?.latestJob;
-  if (!job) return "אין";
-  if (job.status === "queued") return "ממתין";
+  if (!job) return l.value.profileSettings.jobNone;
+  if (job.status === "queued") return l.value.profileSettings.jobQueued;
   if (job.status === "running") return `${job.processed}/${job.total}`;
-  if (job.status === "failed") return "נכשל";
-  return `${job.uploaded} הועלו`;
+  if (job.status === "failed") return l.value.profileSettings.jobFailed;
+  return t("profileSettings.jobUploaded", {n: job.uploaded});
 });
 
 async function loadDriveStatus() {
@@ -2198,7 +2203,7 @@ async function loadCalendarStatus() {
   calendarLoading.value = true;
   try {
     calendarStatus.value = await api.calendar.status();
-    calendarName.value = calendarStatus.value?.calendar_name || DEFAULT_CALENDAR_NAME;
+    calendarName.value = calendarStatus.value?.calendar_name || DEFAULT_CALENDAR_NAME.value;
   } catch {
     calendarStatus.value = null;
   } finally {
@@ -2231,7 +2236,7 @@ async function connectCalendarFromProfile() {
   }
   calendarLoading.value = true;
   try {
-    const {url} = await api.calendar.authUrl("/profile?section=settings");
+    const {url} = await api.calendar.authUrl(settingsReturnPath.value);
     window.location.href = url;
   } catch {
     calendarLoading.value = false;
@@ -2282,7 +2287,7 @@ async function loadGmailStatus() {
 async function connectGmailFromProfile() {
   gmailLoading.value = true;
   try {
-    const {url} = await api.gmail.authUrl("/profile?section=settings", "gmail");
+    const {url} = await api.gmail.authUrl(settingsReturnPath.value, "gmail");
     window.location.href = url;
   } catch {
     gmailLoading.value = false;
@@ -2293,7 +2298,7 @@ async function connectGmailFromProfile() {
 async function connectDriveFromProfile() {
   driveToggling.value = true;
   try {
-    const {url} = await api.gmail.authUrl("/profile?section=settings", "drive");
+    const {url} = await api.gmail.authUrl(settingsReturnPath.value, "drive");
     window.location.href = url;
   } catch {
     driveToggling.value = false;
@@ -2433,7 +2438,7 @@ async function waitForDriveExportJob(jobId: string | null): Promise<DriveExportJ
 
 async function reconnectGmailForDrive() {
   try {
-    const {url} = await api.gmail.authUrl("/profile?section=settings", "drive");
+    const {url} = await api.gmail.authUrl(settingsReturnPath.value, "drive");
     window.location.href = url;
   } catch {
     message.error("שגיאה בקבלת קישור חיבור Drive");

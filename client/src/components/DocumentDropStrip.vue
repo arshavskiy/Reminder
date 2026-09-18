@@ -15,8 +15,8 @@
         <n-icon :component="CloudUploadOutline" :size="30" />
       </div>
       <div class="drop-strip__copy">
-        <strong>{{ isDragging ? "שחרר כאן והייבוא יתחיל" : "גרור תסקירים לתזכורת כאן" }}</strong>
-        <span>גרירה או לחיצה מעלות מיד</span>
+        <strong>{{ isDragging ? l.dashboard.dropActive : l.dashboard.dropTitle }}</strong>
+        <span>{{ l.dashboard.dropHint }}</span>
       </div>
     </div>
     <input
@@ -59,7 +59,7 @@
         </div>
       </template>
 
-      <div class="ur" dir="rtl">
+      <div class="ur">
         <div v-if="uploadResultsLoading" class="ur-progress" role="status">
           <div class="ur-progress__bar">
             <span class="ur-progress__fill" :style="{ width: `${uploadProgress.pct}%` }"/>
@@ -140,6 +140,7 @@ import { useRouter } from "vue-router";
 import { NButton, NIcon, NModal, useMessage } from "naive-ui";
 import { CloudUploadOutline, DocumentOutline, DocumentTextOutline, GridOutline, ImageOutline } from "@vicons/ionicons5";
 import { api } from "../services/apiService";
+import {useI18n} from "../composables/useI18n.js";
 import MissingFieldsModal from "./MissingFieldsModal.vue";
 import {
   listMissingDocumentFields,
@@ -168,6 +169,7 @@ interface UploadResultRow {
 const emit = defineEmits<{ (e: "uploaded"): void; (e: "quota-reached"): void }>();
 
 const router = useRouter();
+const {l} = useI18n();
 const message = useMessage();
 
 const isDragging = ref(false);
@@ -867,8 +869,8 @@ async function onMissingFieldsSaved() {
 </style>
 
 <style>
-.upload-results-modal.n-card,
-.n-modal.upload-results-modal .n-card {
+html[dir="rtl"] .upload-results-modal.n-card,
+html[dir="rtl"] .n-modal.upload-results-modal .n-card {
   direction: rtl;
   overflow: hidden;
   border-radius: 12px;

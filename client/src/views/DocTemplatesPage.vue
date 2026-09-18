@@ -1,9 +1,9 @@
 <template>
-  <div class="dt-page" dir="rtl">
+  <div class="dt-page" :dir="dir">
     <PageHeader
         :count="templates.length"
-        subtitle="הגדרת שדות לחילוץ לפי סוג מסמך, כולל מילות מפתח ותזכורות"
-        title="תבניות מסמכים"
+        :subtitle="l.docTemplates.subtitle"
+        :title="l.docTemplates.title"
     >
       <template #actions>
         <div class="dt-actions">
@@ -409,9 +409,11 @@ import {
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 import type {DocTemplate, DocumentKind, FieldType, TemplateField} from "@shared/types.js";
 
 const templates = ref<DocTemplate[]>([]);
+const {l, dir} = useI18n();
 const loading = ref(false);
 const showEdit = ref(false);
 const editing = ref<DocTemplate | null>(null);

@@ -1,18 +1,18 @@
 <template>
-  <div class="page2">
-    <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
-      <router-link class="documents-workspace-tabs__active" to="/documents">תסקירים</router-link>
-      <router-link to="/quotes">הצעות מחיר</router-link>
+  <div class="page2" :dir="dir">
+    <nav class="documents-workspace-tabs" :aria-label="l.chrome.workspaceAria">
+      <router-link class="documents-workspace-tabs__active" :to="href('/documents')">{{ l.chrome.nav.documents }}</router-link>
+      <router-link :to="href('/quotes')">{{ l.chrome.nav.quotes }}</router-link>
     </nav>
     <PageHeader
       :count="store.total"
-      title="תסקירים"
-      subtitle="צפייה, סינון וניהול של כל התסקירים במערכת"
+      :title="l.documents.title"
+      :subtitle="l.documents.subtitle"
     >
       <template #hero>
         <button class="rbtn rbtn--primary" type="button" @click="openNewInspection">
           <n-icon :component="AddOutline" class="btn-icon"/>
-          תסקיר חדש
+          {{ l.documents.newInspection }}
         </button>
         <button
             v-if="authStore.isAdmin || true"
@@ -23,7 +23,7 @@
             @click="openUploadModal()"
         >
           <n-icon :component="CloudUploadOutline" class="btn-icon"/>
-          העלה קבצים
+          {{ l.common.upload }}
         </button>
         <button
             :class="{ 'rbtn--loading': importingFromGmail }"
@@ -33,7 +33,7 @@
             @click="handleGmailImport"
         >
           <GmailLogo :size="16" class="btn-icon" />
-          ייבוא תסקיר בדיקה
+          {{ l.documents.gmailImport }}
         </button>
         <button
             :class="{ 'rbtn--loading': exportingToDrive }"
@@ -43,11 +43,11 @@
             @click="handleDriveExport"
         >
           <GoogleDriveLogo :size="16" />
-          ייצוא ל-Drive
+          {{ l.documents.driveExport }}
         </button>
         <button class="rbtn rbtn--ghost" type="button" :disabled="!exportAllowed" @click="openMonthlyReport">
           <n-icon :component="DocumentTextOutline" class="btn-icon"/>
-          דוח חודשי
+          {{ l.documents.monthlyReport }}
         </button>
       </template>
       <template #actions>
@@ -55,14 +55,14 @@
           <button :disabled="store.loading" class="rbtn rbtn--ghost" type="button"
                   @click="store.fetch(undefined, true)">
             <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
-            רענן
+            {{ l.common.refresh }}
           </button>
-          <button class="rbtn rbtn--ghost" type="button" @click="router.push('/activity?kind=document')">
+          <button class="rbtn rbtn--ghost" type="button" @click="router.push(href('/activity?kind=document'))">
             <n-icon :component="TimeOutline" class="btn-icon"/>
-            יומן פעילות
+            {{ l.documents.activityLog }}
           </button>
           <button v-if="rescanStore.hasSession" class="rbtn rbtn--ghost" type="button" @click="openRescanModal">
-            {{ rescanStore.kind === "upload" ? "הצג העלאה אחרונה" : "הצג סריקה אחרונה" }}
+            {{ rescanStore.kind === "upload" ? l.documents.lastUpload : l.documents.lastRescan }}
           </button>
           <button
               :disabled="rescanningAll || rescanning"
@@ -71,7 +71,7 @@
               @click="doRescan"
           >
             <n-icon :class="{ 'refresh-icon--spin': rescanning }" :component="RefreshOutline" class="btn-icon"/>
-            סריקה מחדש
+            {{ l.documents.rescan }}
           </button>
           <button
               v-if="authStore.isAdmin"
@@ -81,7 +81,7 @@
               @click="showRescanAllConfirm = true"
           >
             <n-icon :class="{ 'refresh-icon--spin': rescanningAll }" :component="RefreshOutline" class="btn-icon"/>
-            סרוק הכל מחדש
+            {{ l.documents.rescanAll }}
           </button>
           <button
               v-if="authStore.isAdmin"
@@ -92,19 +92,19 @@
               @click="confirmDeleteAll"
           >
             <n-icon :component="TrashOutline" class="btn-icon"/>
-            מחק הכל
+            {{ l.common.deleteAll }}
           </button>
           <div v-if="store.rows.length" class="bulk-action-anchor">
             <div class="bulk-action-anchor__row">
               <button
                   :class="{ 'rbtn--ghost-active': bulkMode }"
                   class="rbtn rbtn--ghost"
-                  title="בחירה מרובה"
+                  :title="l.documents.multiSelect"
                   type="button"
                   @click="toggleBulkMode"
               >
                 <n-icon :component="CheckboxOutline" class="btn-icon"/>
-                בחירה מרובה
+                {{ l.documents.multiSelect }}
                 <span v-if="selectedIds.size">({{ selectedIds.size }})</span>
               </button>
               <button
@@ -113,7 +113,7 @@
                   type="button"
                   @click="selectAll"
               >
-                {{ selectedIds.size === filteredRows.length ? 'בטל הכל' : 'בחר הכל' }}
+                {{ selectedIds.size === filteredRows.length ? l.common.deselectAll : l.common.selectAll }}
               </button>
             </div>
             <div v-if="selectedIds.size > 0" class="bulk-action-anchor__actions">
@@ -125,7 +125,7 @@
                   @click="bulkDownload"
               >
                 <n-icon :component="DownloadOutline" class="bulk-action-item__icon"/>
-                <span class="bulk-action-item__text">הורד נבחרים</span>
+                <span class="bulk-action-item__text">{{ l.common.downloadSelected }}</span>
                 <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
               </button>
               <button
@@ -136,7 +136,7 @@
                   @click="bulkMergePdf"
               >
                 <n-icon :component="DocumentTextOutline" class="bulk-action-item__icon"/>
-                <span class="bulk-action-item__text">מיזוג ל-PDF אחד</span>
+                <span class="bulk-action-item__text">{{ l.common.mergePdf }}</span>
                 <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
               </button>
               <button
@@ -147,7 +147,7 @@
                   @click="bulkExtractAi"
               >
                 <n-icon :component="FlashOutline" class="bulk-action-item__icon"/>
-                <span class="bulk-action-item__text">חלץ AI</span>
+                <span class="bulk-action-item__text">{{ l.documents.extractAi }}</span>
                 <span class="bulk-action-item__count">{{ selectedExtractableIds.length }}</span>
               </button>
               <button
@@ -158,7 +158,7 @@
                   @click="confirmBulkDelete"
               >
                 <n-icon :component="TrashOutline" class="bulk-action-item__icon"/>
-                <span class="bulk-action-item__text">מחק נבחרים</span>
+                <span class="bulk-action-item__text">{{ l.common.deleteSelected }}</span>
                 <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
               </button>
             </div>
@@ -167,9 +167,9 @@
           <!-- Pipeline settings popover -->
           <n-popover :width="320" placement="bottom-end" trigger="click">
             <template #trigger>
-              <button class="rbtn rbtn--ghost" title="הגדרות עיבוד" type="button">
+              <button class="rbtn rbtn--ghost" :title="l.documents.processingSettings" type="button">
                 <n-icon :component="SettingsOutline" class="btn-icon"/>
-                הגדרות
+                {{ l.chrome.menu.settings }}
               </button>
             </template>
           <div class="settings-pop">
@@ -258,36 +258,36 @@
       <n-input
         v-model:value="search"
         clearable
-        placeholder="חיפוש לפי שם קובץ או מספר תסקיר..."
+        :placeholder="l.documents.searchPlaceholder"
         class="toolbar__search"
         @update:value="currentPage = 1"
       />
       <n-select
         v-model:value="filterClientId"
-        :options="[{ label: 'כל הלקוחות', value: null }, ...clientOptions]"
+        :options="[{ label: l.documents.allClients, value: null }, ...clientOptions]"
         :virtual-scroll="false"
         class="toolbar__client"
         clearable
         filterable
-        placeholder="סינון לפי לקוח"
+        :placeholder="l.documents.filterByClient"
         @update:value="currentPage = 1"
       />
       <n-select
         v-if="inspectionTypeOptions.length"
         v-model:value="filterInspectionType"
-        :options="[{ label: 'כל סוגי התסקיר', value: null }, ...inspectionTypeOptions]"
+        :options="[{ label: l.documents.allTypes, value: null }, ...inspectionTypeOptions]"
         :virtual-scroll="false"
         class="toolbar__type"
         clearable
         filterable
-        placeholder="סינון לפי סוג תסקיר"
+        :placeholder="l.documents.filterByType"
         @update:value="currentPage = 1"
       />
       <n-date-picker
         v-model:value="filterDateRange"
         class="toolbar__dates"
         clearable
-        placeholder="סינון לפי תאריך ייבוא"
+        :placeholder="l.documents.filterByImportDate"
         type="daterange"
         @update:value="currentPage = 1"
       />
@@ -363,7 +363,7 @@
                 trigger="click"
                 @select="(k: string) => handleRowAction(k, row)"
               >
-                <button class="btn btn--ghost btn--xs icon-btn" type="button" aria-label="פעולות">
+                <button class="btn btn--ghost btn--xs icon-btn" type="button" :aria-label="l.common.actions">
                   <n-icon :component="EllipsisVerticalOutline" class="btn-icon"/>
                 </button>
               </n-dropdown>
@@ -434,41 +434,41 @@
                 <n-checkbox
                   :checked="allVisibleSelected"
                   :indeterminate="someVisibleSelected && !allVisibleSelected"
-                  aria-label="בחר את כל המסמכים בעמוד"
+                  :aria-label="l.documents.selectAllOnPage"
                   @update:checked="toggleSelectVisible"
                 />
               </th>
               <th class="document-col document-col--file">
                 <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('file')" @click="setDocumentSort('file')">
-                  <span>קובץ</span>
+                  <span>{{ l.common.file }}</span>
                   <n-icon :component="documentSortIcon('file')" :size="14" />
                 </button>
               </th>
               <th class="document-col document-col--date">
                 <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('date')" @click="setDocumentSort('date')">
-                  <span>בתוקף</span>
+                  <span>{{ l.common.validUntil }}</span>
                   <n-icon :component="documentSortIcon('date')" :size="14" />
                 </button>
               </th>
               <th class="document-col document-col--import">
                 <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('import')" @click="setDocumentSort('import')">
-                  <span>ייבוא</span>
+                  <span>{{ l.common.importCol }}</span>
                   <n-icon :component="documentSortIcon('import')" :size="14" />
                 </button>
               </th>
               <th class="document-col document-col--client">
                 <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('client')" @click="setDocumentSort('client')">
-                  <span>לקוח</span>
+                  <span>{{ l.common.client }}</span>
                   <n-icon :component="documentSortIcon('client')" :size="14" />
                 </button>
               </th>
               <th class="document-col document-col--number">
                 <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('number')" @click="setDocumentSort('number')">
-                  <span>מספר</span>
+                  <span>{{ l.common.number }}</span>
                   <n-icon :component="documentSortIcon('number')" :size="14" />
                 </button>
               </th>
-              <th class="document-col document-col--actions actions-title">פעולות</th>
+              <th class="document-col document-col--actions actions-title">{{ l.common.actions }}</th>
             </tr>
           </thead>
           <tbody>
@@ -529,7 +529,7 @@
                     class="document-cell-truncate client-link"
                     dir="auto"
                     :title="documentClientName(row)"
-                    :to="`/clients/${documentClientId(row)}`"
+                    :to="href(`/clients/${documentClientId(row)}`)"
                     @click.stop
                   >{{ documentClientName(row) }}</router-link>
                   <span v-else class="document-cell-truncate" dir="auto" :title="documentClientName(row)">{{ documentClientName(row) }}</span>
@@ -552,11 +552,11 @@
                   />
                   <n-tooltip v-if="row.quote_id">
                     <template #trigger>
-                      <button class="btn btn--ghost btn--xs icon-btn document-row-action document-row-action--quote" type="button" aria-label="פתח הצעת מחיר" @click="router.push(`/quotes/${row.quote_id}`)">
+                      <button class="btn btn--ghost btn--xs icon-btn document-row-action document-row-action--quote" type="button" :aria-label="l.documents.openQuote" @click="router.push(href(`/quotes/${row.quote_id}`))">
                         <n-icon :component="DocumentTextOutline" class="btn-icon" />
                       </button>
                     </template>
-                    פתח הצעת מחיר {{ row.quote_number || "" }}
+                    {{ l.documents.openQuote }} {{ row.quote_number || "" }}
                   </n-tooltip>
                   <n-dropdown
                     :options="rowActionsFor(row)"
@@ -565,7 +565,7 @@
                     trigger="click"
                     @select="(key: string) => handleRowAction(key, row)"
                   >
-                    <button class="btn btn--ghost btn--xs icon-btn document-row-action" type="button" aria-label="פעולות">
+                    <button class="btn btn--ghost btn--xs icon-btn document-row-action" type="button" :aria-label="l.common.actions">
                       <n-icon :component="EllipsisVerticalOutline" class="btn-icon" />
                     </button>
                   </n-dropdown>
@@ -577,10 +577,10 @@
       </div>
 
       <div v-else-if="!store.loading" class="empty">
-        <p>אין מסמכים להצגה</p>
+        <p>{{ l.documents.empty }}</p>
         <button :disabled="limitReached" class="rbtn rbtn--primary mt-3" type="button" @click="openUploadModal()">
           <n-icon :component="CloudUploadOutline" class="btn-icon"/>
-          העלה מסמך ראשון
+          {{ l.documents.firstUpload }}
         </button>
       </div>
     </n-spin>
@@ -748,10 +748,12 @@ import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS
 import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import CreateQuoteModal from "../components/documents/CreateQuoteModal.vue";
+import {useI18n} from "../composables/useI18n.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 const store = useDocumentsStore();
+const {l, href, t, dir} = useI18n();
 const authStore = useAuthStore();
 const rescanStore = useRescanModalStore();
 const router = useRouter();
@@ -1072,14 +1074,14 @@ const combinedFilters = computed<CombinedFilter[]>(() => {
   const rows = store.rows ?? [];
   const duplicateCount = countDuplicateReportRows(rows, documentReportNumber);
   return [
-    { key: "all",         label: "הכל",         count: c.all,          statusValue: "all" },
-    { key: "in_progress", label: "בעיבוד",      count: c.in_progress,  statusValue: "in_progress" },
-    { key: "error",       label: "שגיאה",       count: c.error,        statusValue: "error" },
-    { key: "no_reminder",       label: "ללא תזכורת", count: rows.filter((row) => (row as any).reminder_status === "missing" && !isPayslipDocument(row)).length, statusValue: "no_reminder" },
-    { key: "no_email",          label: "חסר אימייל", count: rows.filter((row) => !documentHasEmail(row)).length, statusValue: "no_email" },
-    { key: "email_bounced",     label: "אימייל חזר", count: rows.filter((row) => Boolean((row as any).email_delivery)).length, statusValue: "email_bounced" },
-    { key: "contract_expired",  label: "פג תוקף",   count: rows.filter((row) => (row as any).contract_status === "expired" || (row as any).contract_status === "overdue").length, statusValue: "contract_expired" },
-    { key: "duplicate_report_number", label: "כפילות מספר", count: duplicateCount, statusValue: "duplicate_report_number" },
+    { key: "all",         label: l.value.common.all,         count: c.all,          statusValue: "all" },
+    { key: "in_progress", label: l.value.documents.inProgress,      count: c.in_progress,  statusValue: "in_progress" },
+    { key: "error",       label: l.value.common.error,       count: c.error,        statusValue: "error" },
+    { key: "no_reminder",       label: l.value.documents.noReminder, count: rows.filter((row) => (row as any).reminder_status === "missing" && !isPayslipDocument(row)).length, statusValue: "no_reminder" },
+    { key: "no_email",          label: l.value.common.missingEmail, count: rows.filter((row) => !documentHasEmail(row)).length, statusValue: "no_email" },
+    { key: "email_bounced",     label: l.value.documents.bounced, count: rows.filter((row) => Boolean((row as any).email_delivery)).length, statusValue: "email_bounced" },
+    { key: "contract_expired",  label: l.value.common.expired,   count: rows.filter((row) => (row as any).contract_status === "expired" || (row as any).contract_status === "overdue").length, statusValue: "contract_expired" },
+    { key: "duplicate_report_number", label: l.value.documents.duplicateNumber, count: duplicateCount, statusValue: "duplicate_report_number" },
   ];
 });
 
@@ -1174,14 +1176,16 @@ function documentSortIcon(key: DocumentSortKey): Component {
 
 function documentSortAriaLabel(key: DocumentSortKey): string {
   const labels: Record<DocumentSortKey, string> = {
-    file: "קובץ",
-    date: "בתוקף",
-    import: "ייבוא",
-    client: "לקוח",
-    number: "מספר",
+    file: l.value.common.file,
+    date: l.value.common.validUntil,
+    import: l.value.common.importCol,
+    client: l.value.common.client,
+    number: l.value.common.number,
   };
-  const nextDirection = documentSortBy.value === key && documentSortDir.value === "asc" ? "יורד" : "עולה";
-  return `מיין לפי ${labels[key]} בסדר ${nextDirection}`;
+  const nextDirection = documentSortBy.value === key && documentSortDir.value === "asc"
+    ? l.value.common.sortDesc
+    : l.value.common.sortAsc;
+  return t("common.sortBy", {col: labels[key], dir: nextDirection});
 }
 
 function compareDocuments(a: Document, b: Document, key: DocumentSortKey, dir: "asc" | "desc"): number {
@@ -1504,16 +1508,17 @@ function renderActionIcon(icon: Component) {
   return () => h(NIcon, {component: icon});
 }
 function rowActions() {
+  const c = l.value;
   return [
-    {label: "צפה", key: "view", icon: renderActionIcon(EyeOutline)},
-    {label: "הורד", key: "download", icon: renderActionIcon(DownloadOutline)},
-    {label: "חלץ AI", key: "extract", icon: renderActionIcon(FlashOutline)},
-    {label: "תצוגת תזכורת", key: "preview-reminder", icon: renderActionIcon(EyeOutline)},
-    {label: "צור הצעת מחיר", key: "create-quote", icon: renderActionIcon(DocumentTextOutline)},
-    {label: "שכפול / חידוש", key: "clone-contract", icon: renderActionIcon(CopyOutline)},
+    {label: c.common.view, key: "view", icon: renderActionIcon(EyeOutline)},
+    {label: c.common.download, key: "download", icon: renderActionIcon(DownloadOutline)},
+    {label: c.documents.extractAi, key: "extract", icon: renderActionIcon(FlashOutline)},
+    {label: c.documents.previewReminder, key: "preview-reminder", icon: renderActionIcon(EyeOutline)},
+    {label: c.documents.createQuote, key: "create-quote", icon: renderActionIcon(DocumentTextOutline)},
+    {label: c.documents.cloneRenew, key: "clone-contract", icon: renderActionIcon(CopyOutline)},
     { type: "divider", key: "d1" },
     {
-      label: "מחק",
+      label: c.common.delete,
       key: "delete",
       icon: renderActionIcon(TrashOutline),
       props: {style: "color: var(--color-error, #d03050)"},
@@ -1521,6 +1526,7 @@ function rowActions() {
   ];
 }
 function rowActionsFor(row: Document) {
+  const c = l.value;
   return rowActions()
     .filter((action) => action.key !== "extract" || canExtractDocument(row))
     .map((action) => {
@@ -1529,14 +1535,10 @@ function rowActionsFor(row: Document) {
         return {
           ...action,
           disabled: true,
-          props: {title: "אין חוזה/תסקיר מקושר למסמך, ולכן אין מה לשכפל"},
+          props: {title: c.documents.noContractClone},
         };
       }
       if (action.key !== "create-quote") return action;
-      // A quote is built from the document's contract, so it cannot be produced
-      // without one. Shown disabled rather than hidden so the action stays
-      // discoverable, with the reason in the tooltip instead of the row simply
-      // lacking a menu entry other rows have.
       const hasContract = Boolean(row.contract_id);
       const alreadyQuoted = Boolean(row.quote_id);
       if (hasContract && !alreadyQuoted) return action;
@@ -1544,15 +1546,13 @@ function rowActionsFor(row: Document) {
         ...action,
         disabled: true,
         props: {
-          title: alreadyQuoted
-            ? "כבר קיימת הצעת מחיר למסמך הזה"
-            : "אין חוזה מקושר למסמך, ולכן לא ניתן להפיק ממנו הצעת מחיר",
+          title: alreadyQuoted ? c.documents.alreadyQuoted : c.documents.noContractQuote,
         },
       };
     });
 }
 function handleRowAction(key: string, row: Document) {
-  if (key === "view") router.push(`/documents/${row.id}`);
+  if (key === "view") router.push(href(`/documents/${row.id}`));
   if (key === "download") openDownload(row);
   if (key === "extract") openExtractModal(String(row.id));
   if (key === "preview-reminder") openDocumentReminderPreview(row);
@@ -2581,7 +2581,7 @@ async function bulkExtractAi() {
 .document-table th,
 .document-table td {
   padding: 14px 16px;
-  text-align: right;
+  text-align: start;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
   white-space: nowrap;
@@ -2717,8 +2717,7 @@ async function bulkExtractAi() {
 .document-col--import,
 .document-col--client,
 .document-col--number {
-  direction: rtl;
-  text-align: right;
+  text-align: start;
 }
 
 .document-import,

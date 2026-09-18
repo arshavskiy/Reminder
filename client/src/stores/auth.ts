@@ -2,6 +2,7 @@ import {defineStore} from "pinia";
 import {computed, ref} from "vue";
 import {api} from "../services/apiService.js";
 import type {User} from "../shared/types.js";
+import {loginPath} from "../stores/locale.js";
 
 // /api/auth/me returns the whole user document (minus credentials), engineer
 // and company fields included — so this is the one source for all of it.
@@ -98,7 +99,7 @@ export const useAuthStore = defineStore("auth", () => {
     } finally {
       user.value = null;
       saveCache(null);
-      window.location.href = "/login";
+      window.location.href = loginPath();
     }
   }
 

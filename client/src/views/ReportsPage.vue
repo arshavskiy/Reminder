@@ -1,13 +1,13 @@
 <template>
-  <div class="reports-page">
+  <div class="reports-page" :dir="dir">
     <PageHeader
-      title="דוחות"
-      subtitle="הפקה, הורדה ושליחה חודשית של נתוני חוזים ותסקירים"
+      :title="l.reports.title"
+      :subtitle="l.reports.subtitle"
     >
       <template #actions>
         <div class="reports-status" :class="{ 'is-active': form.enabled && autoReportsAllowed }">
           <span class="status-dot" aria-hidden="true"></span>
-          <span>{{ autoReportsAllowed && form.enabled ? "שליחה אוטומטית פעילה" : autoReportsAllowed ? "שליחה אוטומטית כבויה" : "שליחה אוטומטית לא כלולה" }}</span>
+          <span>{{ autoReportsAllowed && form.enabled ? l.reports.autoOn : autoReportsAllowed ? l.reports.autoOff : l.reports.autoMissing }}</span>
         </div>
       </template>
     </PageHeader>
@@ -17,24 +17,24 @@
       <section class="reports-panel reports-panel--generator">
         <div class="reports-panel__header">
           <div>
-            <h2>הפקת דוח</h2>
-            <p>הורד את נתוני החוזים והתסקירים של חודש מסוים.</p>
+            <h2>{{ l.reports.generateTitle }}</h2>
+            <p>{{ l.reports.generateBody }}</p>
           </div>
         </div>
         <div class="generator-controls">
-          <n-form-item label="שנת הדוח" :show-feedback="false">
+          <n-form-item :label="l.reports.year" :show-feedback="false">
             <n-select v-model:value="reportYear" :options="yearOptions"/>
           </n-form-item>
-          <n-form-item label="חודש הדוח" :show-feedback="false">
-            <n-select v-model:value="reportMonth" :options="monthOptions" clearable placeholder="כל השנה"/>
+          <n-form-item :label="l.reports.month" :show-feedback="false">
+            <n-select v-model:value="reportMonth" :options="monthOptions" clearable :placeholder="l.reports.allYear"/>
           </n-form-item>
-          <n-form-item label="לקוח" :show-feedback="false">
+          <n-form-item :label="l.common.client" :show-feedback="false">
             <n-select v-model:value="selectedClientId" :options="clientOptions"/>
           </n-form-item>
         </div>
-        <p v-if="selectedClientEmail" class="generator-recipient">דוח לקוח {{ selectedPeriodLabel }} יישלח ללקוח: {{ selectedClientEmail }} וגם לנמענים/כתובת החשבון.</p>
-        <p v-else-if="selectedReportClientId" class="generator-recipient generator-recipient--warning">ללקוח הנבחר לא מוגדר אימייל. דוח הלקוח {{ selectedPeriodLabel }} יישלח רק לנמענים/כתובת החשבון.</p>
-        <p v-else class="generator-recipient">דוח כולל לכל הלקוחות יישלח רק לנמענים או לכתובת החשבון שלך.</p>
+        <p v-if="selectedClientEmail" class="generator-recipient">{{ t("reports.recipientClient", {period: selectedPeriodLabel, email: selectedClientEmail}) }}</p>
+        <p v-else-if="selectedReportClientId" class="generator-recipient generator-recipient--warning">{{ t("reports.recipientNoEmail", {period: selectedPeriodLabel}) }}</p>
+        <p v-else class="generator-recipient">{{ l.reports.recipientAll }}</p>
         <div :class="{ 'field-selector--collapsed': !fieldsOpen }" class="field-selector">
           <div class="field-selector__head">
             <button
@@ -44,11 +44,11 @@
                 @click="fieldsOpen = !fieldsOpen"
             >
               <span :class="{ 'field-selector__caret--open': fieldsOpen }" class="field-selector__caret">▾</span>
-              <span>שדות בדוח: {{ selectedFields.length }} נבחרו</span>
+              <span>{{ t("reports.fieldsSelected", {n: selectedFields.length}) }}</span>
             </button>
             <n-space v-if="fieldsOpen" size="small">
-              <n-button text size="small" @click="selectedFields = [...defaultReportFields]">בחר הכל</n-button>
-              <n-button text size="small" @click="selectedFields = []">נקה</n-button>
+              <n-button text size="small" @click="selectedFields = [...defaultReportFields]">{{ l.reports.selectAll }}</n-button>
+              <n-button text size="small" @click="selectedFields = []">{{ l.common.clear }}</n-button>
             </n-space>
           </div>
           <n-checkbox-group v-if="fieldsOpen" v-model:value="selectedFields">
@@ -63,21 +63,21 @@
           <n-tooltip v-if="!exportAllowed">
             <template #trigger>
               <span>
-                <n-button :disabled="true" type="primary">הורד DOCX</n-button>
+                <n-button :disabled="true" type="primary">{{ l.reports.downloadDocx }}</n-button>
               </span>
             </template>
             {{ exportLockedMessage }}
           </n-tooltip>
-          <n-button v-else :loading="downloading === 'docx'" :disabled="!hasFields" type="primary" @click="downloadReport('docx')">הורד DOCX</n-button>
+          <n-button v-else :loading="downloading === 'docx'" :disabled="!hasFields" type="primary" @click="downloadReport('docx')">{{ l.reports.downloadDocx }}</n-button>
           <n-tooltip v-if="!excelAllowed || !exportAllowed">
             <template #trigger>
               <span>
-                <n-button :disabled="true" type="primary">הורד XLSX</n-button>
+                <n-button :disabled="true" type="primary">{{ l.common.downloadXlsx }}</n-button>
               </span>
             </template>
             {{ exportAllowed ? excelLockedMessage : exportLockedMessage }}
           </n-tooltip>
-          <n-button v-else :loading="downloading === 'xlsx'" :disabled="!hasFields" type="primary" @click="downloadReport('xlsx')">הורד XLSX</n-button>
+          <n-button v-else :loading="downloading === 'xlsx'" :disabled="!hasFields" type="primary" @click="downloadReport('xlsx')">{{ l.common.downloadXlsx }}</n-button>
           <n-tooltip v-if="!autoReportsAllowed">
             <template #trigger>
               <span>
@@ -90,14 +90,14 @@
             {{ sendButtonLabel }}
           </n-button>
         </div>
-        <div class="generator-note">הקבצים כוללים את פרטי הלקוח, תאריכים, ציוד ותזכורות המשויכים לרשומות עם בדיקה הבאה {{ selectedPeriodLabel }}.</div>
+        <div class="generator-note">{{ t("reports.generatorNote", {period: selectedPeriodLabel}) }}</div>
       </section>
       <section class="reports-panel reports-panel--schedule">
         <div class="reports-panel__header">
           <div>
-            <h2>דוח חודשי במייל</h2>
-            <p>המערכת תיצור את הקבצים ותשלח אותם אוטומטית פעם בחודש.</p>
-            <p v-if="!autoReportsAllowed" class="hint">זמין במסלולים בסיסי ועסקי בלבד.</p>
+            <h2>{{ l.reports.emailTitle }}</h2>
+            <p>{{ l.reports.emailBody }}</p>
+            <p v-if="!autoReportsAllowed" class="hint">{{ autoReportsLockedMessage }}</p>
           </div>
           <n-switch v-model:value="form.enabled" :disabled="!autoReportsAllowed"/>
         </div>
@@ -105,23 +105,23 @@
         <n-divider/>
         <n-grid :cols="2" :x-gap="20" :y-gap="16" responsive="screen">
           <n-gi :span="2">
-            <n-form-item label="נמענים" :show-feedback="false">
+            <n-form-item :label="l.reports.recipients" :show-feedback="false">
               <n-input v-model:value="form.recipients" placeholder="email@example.com, another@example.com"/>
             </n-form-item>
-            <p class="hint">השאר ריק כדי לשלוח לכתובת החשבון. אפשר להפריד כתובות בפסיק.</p>
+            <p class="hint">{{ l.reports.recipientsHint }}</p>
           </n-gi>
           <n-gi>
-            <n-form-item label="יום בחודש">
+            <n-form-item :label="l.reports.dayOfMonth">
               <n-select v-model:value="form.day" :options="dayOptions"/>
             </n-form-item>
           </n-gi>
           <n-gi>
-            <n-form-item label="שעת שליחה">
+            <n-form-item :label="l.reports.sendHour">
               <n-select v-model:value="form.hour" :options="hourOptions"/>
             </n-form-item>
           </n-gi>
           <n-gi :span="2">
-            <n-form-item label="קבצים מצורפים">
+            <n-form-item :label="l.reports.attachments">
               <n-space>
                 <n-checkbox v-model:checked="form.docx">DOCX</n-checkbox>
                 <n-checkbox v-model:checked="form.xlsx" :disabled="!excelAllowed || !exportAllowed">XLSX</n-checkbox>
@@ -131,10 +131,10 @@
         </n-grid>
 
         <n-alert v-if="form.lastSent" type="success" :show-icon="false" class="report-status">
-          הדוח האחרון נשלח עבור {{ formatLastSent(form.lastSent) }}.
+          {{ t("reports.lastSent", {detail: formatLastSent(form.lastSent)}) }}
         </n-alert>
         <n-alert v-if="form.lastError" type="error" :show-icon="false" class="report-status">
-          השליחה האחרונה נכשלה: {{ form.lastError }}
+          {{ t("reports.lastError", {error: form.lastError}) }}
         </n-alert>
 
         <div class="reports-actions">
@@ -143,13 +143,13 @@
             type="primary"
             :disabled="!autoReportsAllowed"
             @click="saveSettings"
-          >שמור הגדרות</n-button>
+          >{{ l.reports.saveSettings }}</n-button>
           <n-button
             v-if="!autoReportsAllowed"
             ghost
             tag="a"
             href="https://remindocr.com/pricing"
-          >שדרוג מנוי</n-button>
+          >{{ l.reports.upgrade }}</n-button>
         </div>
       </section>
       </div>
@@ -187,8 +187,10 @@ import {
   featureFlagsForUser,
 } from "../shared/pricingPlans.js";
 import PageHeader from "../components/PageHeader.vue";
+import {useI18n} from "../composables/useI18n.js";
 
 const message = useMessage();
+const {l, t, dir} = useI18n();
 const userSettingsStore = useUserSettingsStore();
 const authStore = useAuthStore();
 const autoReportsAllowed = computed(() =>
@@ -212,41 +214,50 @@ const reportYear = ref(now.getFullYear());
 const reportMonth = ref<number | null>(now.getMonth() + 1);
 const allClientsValue = "__all__";
 const selectedClientId = ref<string>(allClientsValue);
-const clientOptions = ref<Array<{label: string; value: string}>>([{label: "כל הלקוחות", value: allClientsValue}]);
+const clientOptions = ref<Array<{label: string; value: string}>>([]);
 const clientEmailById = ref<Record<string, string>>({});
-const trackingReportFieldOptions = [
-  {key: "tracking_date", label: "תאריך"},
-  {key: "tracking_checked", label: "מה נבדק"},
-  {key: "tracking_holder_contact", label: "תופש/איש קשר"},
-  {key: "tracking_phone", label: "טלפון"},
-  {key: "tracking_license_number", label: "מספר רישוי"},
-  {key: "tracking_notes", label: "הערות"},
-  {key: "tracking_relevant", label: "רלוונטי"},
-] as const;
-const clientReportFieldOptions = [
-  {key: "contract_number", label: "מספר חוזה"},
-  {key: "contract_type", label: "סוג מסמך"},
-  {key: "client", label: "לקוח"},
-  {key: "contact_person", label: "איש קשר"},
-  {key: "contact_phone", label: "טלפון"},
-  {key: "contact_email", label: "אימייל"},
-  {key: "client_address", label: "כתובת"},
-  {key: "start_date", label: "תאריך תסקיר"},
-  {key: "expiry_date", label: "תאריך סיום / בדיקה הבאה"},
-  {key: "status", label: "סטטוס"},
-  {key: "source_document", label: "מסמך מקור"},
-  {key: "equipment", label: "ציוד"},
-  {key: "reminders", label: "תזכורות"},
-] as const;
-const defaultTrackingReportFields = trackingReportFieldOptions.map((field) => field.key);
-const defaultClientReportFields = clientReportFieldOptions.map((field) => field.key);
-const allClientReportFieldOptions = [...trackingReportFieldOptions, ...clientReportFieldOptions] as const;
+const trackingReportFieldOptions = computed(() => {
+  const f = l.value.reports.fields;
+  return [
+    {key: "tracking_date", label: f.trackingDate},
+    {key: "tracking_checked", label: f.trackingChecked},
+    {key: "tracking_holder_contact", label: f.trackingHolder},
+    {key: "tracking_phone", label: f.trackingPhone},
+    {key: "tracking_license_number", label: f.trackingLicense},
+    {key: "tracking_notes", label: f.trackingNotes},
+    {key: "tracking_relevant", label: f.trackingRelevant},
+  ] as const;
+});
+const clientReportFieldOptions = computed(() => {
+  const f = l.value.reports.fields;
+  return [
+    {key: "contract_number", label: f.contractNumber},
+    {key: "contract_type", label: f.contractType},
+    {key: "client", label: f.client},
+    {key: "contact_person", label: f.contactPerson},
+    {key: "contact_phone", label: f.contactPhone},
+    {key: "contact_email", label: f.contactEmail},
+    {key: "client_address", label: f.clientAddress},
+    {key: "start_date", label: f.startDate},
+    {key: "expiry_date", label: f.expiryDate},
+    {key: "status", label: f.status},
+    {key: "source_document", label: f.sourceDocument},
+    {key: "equipment", label: f.equipment},
+    {key: "reminders", label: f.reminders},
+  ] as const;
+});
+const defaultTrackingReportFields = ["tracking_date", "tracking_checked", "tracking_holder_contact", "tracking_phone", "tracking_license_number", "tracking_notes", "tracking_relevant"];
+const defaultClientReportFields = [
+  "contract_number", "contract_type", "client", "contact_person", "contact_phone", "contact_email",
+  "client_address", "start_date", "expiry_date", "status", "source_document", "equipment", "reminders",
+];
+const allClientReportFieldOptions = computed(() => [...trackingReportFieldOptions.value, ...clientReportFieldOptions.value]);
 const defaultAllReportFields = [
   "tracking_date", "tracking_checked", "client","contact_person", "tracking_phone",
   "tracking_license_number", "tracking_relevant", "tracking_notes",
 ];
 const selectedReportClientId = computed(() => selectedClientId.value === allClientsValue ? undefined : selectedClientId.value);
-const activeReportFieldOptions = computed(() => selectedReportClientId.value ? clientReportFieldOptions : allClientReportFieldOptions);
+const activeReportFieldOptions = computed(() => selectedReportClientId.value ? clientReportFieldOptions.value : allClientReportFieldOptions.value);
 const defaultReportFields = computed(() => selectedReportClientId.value ? defaultClientReportFields : defaultAllReportFields);
 const selectedFields = ref<string[]>([...defaultAllReportFields]);
 // Collapsed by default — the preselected defaults still apply, the list is just hidden.
@@ -266,20 +277,9 @@ const yearOptions = Array.from({length: 8}, (_, index) => {
   const year = now.getFullYear() - 2 + index;
   return {label: String(year), value: year};
 });
-const monthOptions = [
-  {label: "ינואר", value: 1},
-  {label: "פברואר", value: 2},
-  {label: "מרץ", value: 3},
-  {label: "אפריל", value: 4},
-  {label: "מאי", value: 5},
-  {label: "יוני", value: 6},
-  {label: "יולי", value: 7},
-  {label: "אוגוסט", value: 8},
-  {label: "ספטמבר", value: 9},
-  {label: "אוקטובר", value: 10},
-  {label: "נובמבר", value: 11},
-  {label: "דצמבר", value: 12},
-];
+const monthOptions = computed(() =>
+  l.value.reports.months.map((label, index) => ({label, value: index + 1})),
+);
 const dayOptions = Array.from({length: 28}, (_, i) => ({
   label: `${i + 1}`,
   value: i + 1,
@@ -292,8 +292,8 @@ const hasFormat = computed(() => form.docx || form.xlsx);
 const hasFields = computed(() => selectedFields.value.length > 0);
 const canSendReport = computed(() => hasFormat.value && hasFields.value);
 const selectedClientEmail = computed(() => selectedReportClientId.value ? clientEmailById.value[selectedReportClientId.value] ?? null : null);
-const sendButtonLabel = computed(() => selectedReportClientId.value ? "שלח דוח לקוח" : "שלח דוח כולל אליי");
-const selectedPeriodLabel = computed(() => reportMonth.value ? "בחודש שנבחר" : "בשנה שנבחרה");
+const sendButtonLabel = computed(() => selectedReportClientId.value ? l.value.reports.sendClient : l.value.reports.sendCombined);
+const selectedPeriodLabel = computed(() => reportMonth.value ? l.value.reports.periodMonth : l.value.reports.periodYear);
 
 watch(selectedClientId, () => {
   selectedFields.value = fieldsForCurrentMode();
@@ -338,7 +338,7 @@ async function loadSettings() {
     ]);
     if (!settings) throw new Error("Settings unavailable");
     clientOptions.value = [
-      {label: "כל הלקוחות", value: allClientsValue},
+      {label: l.value.documents.allClients, value: allClientsValue},
       ...clients.rows.map((client) => ({label: client.display_name, value: String(client.id)})),
     ];
     clientEmailById.value = Object.fromEntries(clients.rows.filter((client) => Boolean(client.email)).map((client) => [String(client.id), String(client.email)]));
@@ -411,11 +411,16 @@ async function downloadReport(format: "docx" | "xlsx") {
 
 function formatLastSent(raw: string): string {
   const match = raw.match(/\((.+)\)$/);
+  const locale = dir.value === "ltr" ? "en-GB" : "he-IL";
   if (match) {
     const d = new Date(match[1]);
     if (!isNaN(d.getTime())) {
       const period = raw.split(" ")[0];
-      return `${period} בתאריך ${d.toLocaleDateString("he-IL")} ${d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`;
+      return t("reports.lastSentDate", {
+        period,
+        date: d.toLocaleDateString(locale),
+        time: d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
+      });
     }
   }
   return raw;
