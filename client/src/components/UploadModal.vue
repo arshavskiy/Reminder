@@ -15,8 +15,8 @@
 
     <!-- Mode tabs -->
     <n-tabs v-if="activeTab !== 'rescan'" v-model:value="activeTab" size="small" style="margin-bottom: 16px" type="line">
-      <n-tab name="upload">העלאת מסמך</n-tab>
-      <n-tab name="extract">חילוץ תזכורות</n-tab>
+      <n-tab name="upload">{{ l.uploadModal.tabUpload }}</n-tab>
+      <n-tab name="extract">{{ l.uploadModal.tabExtract }}</n-tab>
     </n-tabs>
 
     <!-- ══════════════════════════════════════════════════════ TAB: UPLOAD ══ -->
@@ -41,13 +41,13 @@
           />
           <div v-if="!files.length" class="drop-zone__empty">
             <div class="drop-zone__icon">☁</div>
-            <div class="drop-zone__main">גרור קבצים לכאן</div>
-            <div class="drop-zone__or">או</div>
-            <n-button ghost size="small" type="primary" @click.stop="fileInput?.click()">בחר קבצים</n-button>
+            <div class="drop-zone__main">{{ l.uploadModal.dropMain }}</div>
+            <div class="drop-zone__or">{{ l.uploadModal.or }}</div>
+            <n-button ghost size="small" type="primary" @click.stop="fileInput?.click()">{{ l.uploadModal.chooseFiles }}</n-button>
             <div class="drop-zone__hint">PDF · DOCX · XLSX · PNG · JPG · TIF</div>
           </div>
           <div v-else class="drop-zone__add-more" @click.stop="fileInput?.click()">
-            <span>+ הוסף עוד קבצים</span>
+            <span>{{ l.uploadModal.addMoreFiles }}</span>
           </div>
         </div>
 
@@ -66,30 +66,30 @@
       <!-- ── Right col: extraction fields ─────────────────────────────────── -->
       <div class="upload-col upload-col--fields">
         <div class="fields-header">
-          <span class="fields-title">שדות לחילוץ</span>
-          <n-tag :bordered="false" size="small" type="info">אופציונלי</n-tag>
+          <span class="fields-title">{{ l.uploadModal.fieldsTitle }}</span>
+          <n-tag :bordered="false" size="small" type="info">{{ l.uploadModal.optional }}</n-tag>
         </div>
-        <p class="fields-hint">הגדר שדות שה-AI יחלץ. השאר ריק לחילוץ סטנדרטי אוטומטי.</p>
+        <p class="fields-hint">{{ l.uploadModal.fieldsHint }}</p>
 
         <div class="fields-list">
           <div v-if="!fields.length" class="fields-empty">
             <div class="fields-empty__icon">✨</div>
-            <div class="fields-empty__text">AI יחלץ שדות סטנדרטיים</div>
-            <div class="fields-empty__sub">לקוח · תאריכים · סכומים · מספרי מסמך</div>
+            <div class="fields-empty__text">{{ l.uploadModal.fieldsEmptyText }}</div>
+            <div class="fields-empty__sub">{{ l.uploadModal.fieldsEmptySub }}</div>
           </div>
 
           <div v-for="(f, i) in fields" :key="i" class="field-row">
             <n-input
               v-model:value="f.key"
               class="field-row__key"
-              placeholder="key"
+              :placeholder="l.uploadModal.fieldKeyPlaceholder"
               size="small"
               style="direction: ltr; font-family: monospace"
             />
             <n-input
               v-model:value="f.label_he"
               class="field-row__label"
-              placeholder="תווית עברית"
+              :placeholder="l.uploadModal.fieldLabelPlaceholder"
               size="small"
             />
             <n-select
@@ -104,36 +104,36 @@
         </div>
 
         <n-button dashed size="small" style="margin-top: 8px; width: 100%" @click="addField">
-          + הוסף שדה
+          {{ l.uploadModal.addField }}
         </n-button>
 
         <!-- Pipeline toggles -->
         <div class="pipeline-toggles">
-          <div class="pipeline-toggles__title">אפשרויות עיבוד</div>
+          <div class="pipeline-toggles__title">{{ l.uploadModal.processingOptionsTitle }}</div>
           <label class="toggle-row">
             <n-select
                 v-model:value="selectedTemplateId"
                 :options="templateOptions"
                 clearable
-                placeholder="תבנית אוטומטית"
+                :placeholder="l.uploadModal.autoTemplate"
                 size="small"
                 style="width: 100%"
             />
           </label>
           <label class="toggle-row">
             <n-switch v-model:value="doAi" size="small" />
-            <span class="toggle-row__label">חילוץ AI</span>
-            <span class="toggle-row__hint">זיהוי שדות, תאריכים וסכומים</span>
+            <span class="toggle-row__label">{{ l.uploadModal.extractAi }}</span>
+            <span class="toggle-row__hint">{{ l.uploadModal.extractAiHint }}</span>
           </label>
           <label :class="{ 'toggle-row--disabled': !doAi }" class="toggle-row">
             <n-switch v-model:value="doEntities" :disabled="!doAi" size="small" />
-            <span class="toggle-row__label">צור לקוחות וחוזים</span>
-            <span class="toggle-row__hint">שמור ישויות ממסמך זה</span>
+            <span class="toggle-row__label">{{ l.uploadModal.createClientsContracts }}</span>
+            <span class="toggle-row__hint">{{ l.uploadModal.createClientsContractsHint }}</span>
           </label>
           <label :class="{ 'toggle-row--disabled': !doEntities }" class="toggle-row">
             <n-switch v-model:value="doReminders" :disabled="!doEntities" size="small" />
-            <span class="toggle-row__label">צור תזכורות</span>
-            <span class="toggle-row__hint">תזכורת לפי תאריך פקיעה</span>
+            <span class="toggle-row__label">{{ l.uploadModal.createReminders }}</span>
+            <span class="toggle-row__hint">{{ l.uploadModal.createRemindersHint }}</span>
           </label>
         </div>
       </div>
@@ -161,13 +161,13 @@
           />
           <div v-if="!extractFiles.length" class="drop-zone__empty">
             <div class="drop-zone__icon">🔍</div>
-            <div class="drop-zone__main">גרור קבצים לחילוץ תזכורות</div>
-            <div class="drop-zone__or">או</div>
-            <n-button ghost size="small" type="primary" @click.stop="extractInput?.click()">בחר קבצים</n-button>
-            <div class="drop-zone__hint">PDF · DOCX · XLSX · PNG · JPG — ללא שמירת מסמך</div>
+            <div class="drop-zone__main">{{ l.uploadModal.dropExtractMain }}</div>
+            <div class="drop-zone__or">{{ l.uploadModal.or }}</div>
+            <n-button ghost size="small" type="primary" @click.stop="extractInput?.click()">{{ l.uploadModal.chooseFiles }}</n-button>
+            <div class="drop-zone__hint">{{ l.uploadModal.dropExtractHint }}</div>
           </div>
           <div v-else class="drop-zone__add-more" @click.stop="extractInput?.click()">
-            <span>+ הוסף עוד קבצים</span>
+            <span>{{ l.uploadModal.addMoreFiles }}</span>
           </div>
         </div>
 
@@ -183,9 +183,7 @@
         <div class="extract-hint-box">
           <div class="extract-hint-box__icon">💡</div>
           <div>
-            <strong>מצב חילוץ תזכורות</strong> — ה-AI סורק את הקבצים, מזהה תאריכי פקיעה וחידוש,
-            ומציג תצוגה מקדימה. לא נשמרים מסמכים ולא נוצרים לקוחות.
-            ניתן לאשר או לדחות כל תזכורת לפני השמירה.
+            <strong>{{ l.uploadModal.extractHintTitle }}</strong> — {{ l.uploadModal.extractHintBody }}
           </div>
         </div>
       </div>
@@ -194,7 +192,7 @@
       <div v-else-if="extractStep === 'loading'" class="extract-loading">
         <n-spin size="large" />
         <div style="margin-top: 16px; font-size: 14px; color: var(--text-muted)">
-          מחלץ תזכורות מ-{{ extractFiles.length }} קובץ/ים…
+          {{ t('uploadModal.extracting', { count: extractFiles.length }) }}
         </div>
       </div>
 
@@ -202,16 +200,16 @@
       <div v-else-if="extractStep === 'preview'" class="extract-preview">
         <div v-if="!extractPreviews.length" class="fields-empty" style="margin: 32px 0">
           <div class="fields-empty__icon">😕</div>
-          <div class="fields-empty__text">לא נמצאו תזכורות בקבצים אלו</div>
-          <div class="fields-empty__sub">נסה קבצים אחרים עם תאריכי פקיעה</div>
+          <div class="fields-empty__text">{{ l.uploadModal.noRemindersFound }}</div>
+          <div class="fields-empty__sub">{{ l.uploadModal.noRemindersFoundSub }}</div>
         </div>
 
         <div v-else>
           <div class="preview-summary">
-            <span class="preview-summary__count">{{ confirmedCount }} / {{ extractPreviews.length }} תזכורות נבחרו</span>
+            <span class="preview-summary__count">{{ t('uploadModal.remindersSelected', { selected: confirmedCount, total: extractPreviews.length }) }}</span>
             <div style="display: flex; gap: 8px">
-              <n-button quaternary size="tiny" @click="selectAll(true)">בחר הכל</n-button>
-              <n-button quaternary size="tiny" @click="selectAll(false)">נקה הכל</n-button>
+              <n-button quaternary size="tiny" @click="selectAll(true)">{{ l.uploadModal.selectAll }}</n-button>
+              <n-button quaternary size="tiny" @click="selectAll(false)">{{ l.uploadModal.clearAll }}</n-button>
             </div>
           </div>
 
@@ -229,9 +227,9 @@
               <div class="preview-card__body">
                 <div class="preview-card__title">{{ p.title }}</div>
                 <div class="preview-card__meta">
-                  <span class="preview-card__badge preview-card__badge--date">📅 שלח: {{ p.trigger_date }}</span>
-                  <span v-if="p.next_check_date" class="preview-card__badge preview-card__badge--next">בדיקה הבאה: {{ p.next_check_date }}</span>
-                  <span v-if="p.expiry_date" class="preview-card__badge preview-card__badge--expiry">⏰ בתוקף: {{ p.expiry_date }}</span>
+                  <span class="preview-card__badge preview-card__badge--date">📅 {{ l.uploadModal.sendDate }}: {{ p.trigger_date }}</span>
+                  <span v-if="p.next_check_date" class="preview-card__badge preview-card__badge--next">{{ l.uploadModal.nextCheckDate }}: {{ p.next_check_date }}</span>
+                  <span v-if="p.expiry_date" class="preview-card__badge preview-card__badge--expiry">⏰ {{ l.uploadModal.expiryDate }}: {{ p.expiry_date }}</span>
                   <span v-if="p.document_type" class="preview-card__badge">{{ p.document_type }}</span>
                   <span :class="`preview-card__badge--conf-${p.confidence}`" class="preview-card__badge preview-card__badge--conf">{{ confidenceLabel(p.confidence) }}</span>
                 </div>
@@ -240,7 +238,7 @@
                   <span v-if="p.contact_phone">📞 {{ p.contact_phone }}</span>
                   <span v-if="p.contact_email">✉️ {{ p.contact_email }}</span>
                 </div>
-                <div class="preview-card__source">מקור: {{ p.source_file }}</div>
+                <div class="preview-card__source">{{ l.uploadModal.sourceFile }}: {{ p.source_file }}</div>
               </div>
             </div>
           </div>
@@ -257,10 +255,10 @@
       <div v-else-if="extractStep === 'saved'" class="extract-saved">
         <div style="font-size: 48px; text-align: center; margin-bottom: 12px">✅</div>
         <div style="font-size: 16px; font-weight: 600; text-align: center">
-          {{ savedCount }} תזכורות נשמרו בהצלחה
+          {{ t('uploadModal.savedCount', { count: savedCount }) }}
         </div>
         <div style="font-size: 13px; color: var(--text-muted); text-align: center; margin-top: 6px">
-          ניתן לראות אותן בעמוד התזכורות
+          {{ l.uploadModal.savedHint }}
         </div>
       </div>
     </div>
@@ -288,19 +286,19 @@
       <div class="rescan-summary">
         <div class="rescan-stat">
           <span class="rescan-stat__value">{{ props.rescan?.queued ?? 0 }}</span>
-          <span class="rescan-stat__label">{{ isUploadSession ? "בהעלאה" : "נסרקים" }}</span>
+          <span class="rescan-stat__label">{{ isUploadSession ? l.uploadModal.statInProgress : l.uploadModal.statPending }}</span>
         </div>
         <div class="rescan-stat">
           <span class="rescan-stat__value">{{ isUploadSession ? uploadCompleted : rescanAssigned }}</span>
-          <span class="rescan-stat__label">{{ isUploadSession ? "עובדו" : "קיבלו תזכורת" }}</span>
+          <span class="rescan-stat__label">{{ isUploadSession ? l.uploadModal.statProcessed : l.uploadModal.statHasReminder }}</span>
         </div>
         <div class="rescan-stat">
           <span class="rescan-stat__value">{{ isUploadSession ? uploadDuplicates : rescanMissing }}</span>
-          <span class="rescan-stat__label">{{ isUploadSession ? "כפולים" : "ללא תזכורת" }}</span>
+          <span class="rescan-stat__label">{{ isUploadSession ? l.uploadModal.statDuplicates : l.uploadModal.statMissingReminder }}</span>
         </div>
         <div class="rescan-stat">
           <span class="rescan-stat__value">{{ rescanFailed }}</span>
-          <span class="rescan-stat__label">שגיאות</span>
+          <span class="rescan-stat__label">{{ l.uploadModal.statErrors }}</span>
         </div>
       </div>
 
@@ -321,8 +319,8 @@
               <span :class="rescanRowClass(row)" class="preview-card__badge">
                 {{ rescanRowLabel(row) }}
               </span>
-              <span v-if="row.duplicate" class="preview-card__badge preview-card__badge--duplicate">כפול</span>
-              <span v-if="row.reminder_date" class="preview-card__badge preview-card__badge--next">בדיקה הבאה: {{ row.reminder_date }}</span>
+              <span v-if="row.duplicate" class="preview-card__badge preview-card__badge--duplicate">{{ l.uploadModal.duplicate }}</span>
+              <span v-if="row.reminder_date" class="preview-card__badge preview-card__badge--next">{{ l.uploadModal.nextCheckDate }}: {{ row.reminder_date }}</span>
               <span v-if="row.document_type" class="preview-card__badge">{{ row.document_type }}</span>
             </div>
             <div v-if="row.error_message" class="preview-card__error">
@@ -332,7 +330,7 @@
         </div>
         <div v-if="!(props.rescan?.rows ?? []).length" class="fields-empty">
           <div class="fields-empty__icon">↻</div>
-          <div class="fields-empty__text">אין מסמכים בסריקה מחדש</div>
+          <div class="fields-empty__text">{{ l.uploadModal.noDocumentsInRescan }}</div>
         </div>
       </div>
     </div>
@@ -341,15 +339,15 @@
     <template #footer>
       <!-- Upload tab footer -->
       <div v-if="activeTab === 'upload'" class="modal-footer">
-        <n-button @click="cancel">ביטול</n-button>
+        <n-button @click="cancel">{{ l.common.cancel }}</n-button>
         <div class="modal-footer__actions">
-          <span v-if="files.length" class="footer-count">{{ files.length }} קובץ/ים נבחרו</span>
+          <span v-if="files.length" class="footer-count">{{ t('uploadModal.filesSelected', { count: files.length }) }}</span>
           <n-button
             v-if="files.length"
             secondary
             @click="createTemplate"
           >
-            ✨ צור תבנית מהמסמך
+            {{ l.uploadModal.createFromDocument }}
           </n-button>
           <n-button
             :disabled="!files.length"
@@ -357,14 +355,14 @@
             type="primary"
             @click="submit"
           >
-            העלה ועבד
+            {{ l.uploadModal.uploadAndProcess }}
           </n-button>
         </div>
       </div>
 
       <!-- Extract tab footer -->
       <div v-else-if="activeTab === 'extract'" class="modal-footer">
-        <n-button @click="cancel">ביטול</n-button>
+        <n-button @click="cancel">{{ l.common.cancel }}</n-button>
         <div class="modal-footer__actions">
           <!-- Step: pick -->
           <template v-if="extractStep === 'pick'">
@@ -373,33 +371,33 @@
               type="primary"
               @click="runExtract"
             >
-              חלץ תזכורות
+              {{ l.uploadModal.extractReminders }}
             </n-button>
           </template>
 
           <!-- Step: preview -->
           <template v-else-if="extractStep === 'preview'">
-            <n-button @click="extractStep = 'pick'">חזור</n-button>
+            <n-button @click="extractStep = 'pick'">{{ l.uploadModal.back }}</n-button>
             <n-button
               :disabled="confirmedCount === 0 || savingExtract"
               :loading="savingExtract"
               type="primary"
               @click="saveExtracted"
             >
-              שמור {{ confirmedCount }} תזכורות
+              {{ t('uploadModal.saveNReminders', { count: confirmedCount }) }}
             </n-button>
           </template>
 
           <!-- Step: saved -->
           <template v-else-if="extractStep === 'saved'">
-            <n-button type="primary" @click="cancel">סגור</n-button>
+            <n-button type="primary" @click="cancel">{{ l.common.close }}</n-button>
           </template>
         </div>
       </div>
 
       <!-- Rescan footer -->
       <div v-else class="modal-footer">
-        <n-button @click="cancel">{{ rescanRunning ? "המשך ברקע" : "סגור" }}</n-button>
+        <n-button @click="cancel">{{ rescanRunning ? l.uploadModal.continueInBackground : l.common.close }}</n-button>
         <div class="modal-footer__actions">
           <span class="footer-count">{{ rescanSubtitle }}</span>
         </div>
@@ -412,6 +410,9 @@
 import {computed, onMounted, ref, watch} from "vue";
 import {NButton, NCheckbox, NInput, NModal, NProgress, NSelect, NSpin, NSwitch, NTab, NTabs, NTag} from "naive-ui";
 import {api} from "../services/apiService.js";
+import {useI18n} from "../composables/useI18n.js";
+
+const {l, t} = useI18n();
 
 const API = import.meta.env.VITE_API_BASE ?? "";
 
@@ -501,7 +502,7 @@ const savedCount = ref(0);
 
 const confirmedCount = computed(() => extractPreviews.value.filter((p) => p.selected).length);
 const isUploadSession = computed(() => props.rescan?.kind === "upload");
-const modalTitle = computed(() => activeTab.value === "rescan" ? (isUploadSession.value ? "עיבוד העלאה" : "סריקה מחדש") : "העלאת מסמכים");
+const modalTitle = computed(() => activeTab.value === "rescan" ? (isUploadSession.value ? l.value.uploadModal.titleReprocessUpload : l.value.uploadModal.titleRescan) : l.value.uploadModal.titleUpload);
 const rescanRunning = computed(() => activeTab.value === "rescan" && !!props.rescan && !props.rescan.done);
 const rescanAssigned = computed(() => (props.rescan?.rows ?? []).filter((row) => row.reminder_status === "assigned").length);
 const rescanMissing = computed(() => (props.rescan?.rows ?? []).filter((row) => row.reminder_status === "missing").length);
@@ -515,27 +516,27 @@ const rescanProgress = computed(() => {
   return Math.round(((queued - (props.rescan?.remaining ?? 0)) / queued) * 100);
 });
 const rescanTitle = computed(() => {
-  if (!props.rescan?.queued) return isUploadSession.value ? "אין מסמכים בעיבוד" : "אין מסמכים לסריקה מחדש";
-  if (rescanRunning.value) return isUploadSession.value ? "עיבוד העלאה פעיל" : "סריקה מחדש פעילה";
-  return isUploadSession.value ? "עיבוד העלאה הסתיים" : "סריקה מחדש הסתיימה";
+  if (!props.rescan?.queued) return isUploadSession.value ? l.value.uploadModal.noDocumentsInProcessing : l.value.uploadModal.noDocumentsForRescan;
+  if (rescanRunning.value) return isUploadSession.value ? l.value.uploadModal.reprocessActive : l.value.uploadModal.rescanActive;
+  return isUploadSession.value ? l.value.uploadModal.reprocessDone : l.value.uploadModal.rescanDone;
 });
 const rescanSubtitle = computed(() => {
   const queued = props.rescan?.queued ?? 0;
-  if (!queued) return isUploadSession.value ? "לא נמצאו מסמכים בעיבוד" : "לא נמצאו מסמכים שצריכים סריקה מחדש";
-  if (rescanRunning.value) return `${props.rescan?.remaining ?? 0} מתוך ${queued} עדיין בעיבוד`;
-  if (isUploadSession.value) return `${uploadCompleted.value} עובדו · ${uploadDuplicates.value} כפולים · ${rescanFailed.value} שגיאות`;
-  return `${rescanAssigned.value} קיבלו תזכורת · ${rescanMissing.value} ללא תזכורת · ${rescanFailed.value} שגיאות`;
+  if (!queued) return isUploadSession.value ? l.value.uploadModal.noDocumentsInProcessingSub : l.value.uploadModal.noDocumentsForRescanSub;
+  if (rescanRunning.value) return t("uploadModal.ofStillProcessing", { remaining: props.rescan?.remaining ?? 0, queued });
+  if (isUploadSession.value) return t("uploadModal.uploadStats", { completed: uploadCompleted.value, duplicates: uploadDuplicates.value, errors: rescanFailed.value });
+  return t("uploadModal.rescanStats", { assigned: rescanAssigned.value, missing: rescanMissing.value, errors: rescanFailed.value });
 });
 
-const typeOptions = [
-  { label: "טקסט",   value: "text" },
-  { label: "מספר",   value: "number" },
-  { label: "תאריך",  value: "date" },
-  { label: "טלפון",  value: "phone" },
-  { label: "אימייל", value: "email" },
-  { label: "מטבע",   value: "currency" },
-  { label: "רשימה",  value: "list" },
-];
+const typeOptions = computed(() => [
+  { label: l.value.uploadModal.typeText,     value: "text" },
+  { label: l.value.uploadModal.typeNumber,   value: "number" },
+  { label: l.value.uploadModal.typeDate,     value: "date" },
+  { label: l.value.uploadModal.typePhone,    value: "phone" },
+  { label: l.value.uploadModal.typeEmail,    value: "email" },
+  { label: l.value.uploadModal.typeCurrency, value: "currency" },
+  { label: l.value.uploadModal.typeList,     value: "list" },
+]);
 
 watch(visible, (v) => {
   if (v) resetAll();
@@ -634,7 +635,7 @@ async function runExtract() {
       body: fd,
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error ?? "שגיאה בחילוץ");
+    if (!resp.ok) throw new Error(data.error ?? t("uploadModal.extractionFailed"));
 
     extractPreviews.value = (data.reminders ?? []).map((r: any) => ({
       ...r,
@@ -644,7 +645,7 @@ async function runExtract() {
     extractErrors.value = data.errors ?? [];
     extractStep.value = "preview";
   } catch (err) {
-    extractErrors.value = [{ file: "כלל הקבצים", error: String(err) }];
+    extractErrors.value = [{ file: l.value.uploadModal.allFiles, error: String(err) }];
     extractStep.value = "preview";
   }
 }
@@ -666,13 +667,13 @@ async function saveExtracted() {
       body: JSON.stringify({ reminders: toSave }),
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error ?? "שגיאה בשמירה");
+    if (!resp.ok) throw new Error(data.error ?? t("uploadModal.saveFailed"));
 
     savedCount.value = data.saved ?? toSave.length;
     extractStep.value = "saved";
     emit("reminders-saved", savedCount.value);
   } catch (err) {
-    extractErrors.value = [{ file: "שמירה", error: String(err) }];
+    extractErrors.value = [{ file: l.value.uploadModal.saveErrorLabel, error: String(err) }];
   } finally {
     savingExtract.value = false;
   }
@@ -695,7 +696,7 @@ function formatSize(bytes: number) {
 }
 
 function confidenceLabel(c: string) {
-  return c === "high" ? "בטוח" : c === "medium" ? "בינוני" : "נמוך";
+  return c === "high" ? l.value.uploadModal.confidenceHigh : c === "medium" ? l.value.uploadModal.confidenceMedium : l.value.uploadModal.confidenceLow;
 }
 
 function openRescan() {
@@ -703,13 +704,13 @@ function openRescan() {
 }
 
 function rescanRowLabel(row: RescanRow) {
-  if (row.processing_status === "queued" || row.processing_status === "processing") return "בעיבוד";
-  if (row.processing_status === "error") return "שגיאה";
-  if (isUploadSession.value && row.duplicate) return "כפול";
-  if (isUploadSession.value && row.processing_status === "done") return "עובד";
-  if (row.reminder_status === "assigned") return "תזכורת נקבעה";
-  if (row.reminder_status === "missing") return "אין תזכורת";
-  return "ממתין";
+  if (row.processing_status === "queued" || row.processing_status === "processing") return l.value.uploadModal.rowStatusProcessing;
+  if (row.processing_status === "error") return l.value.uploadModal.rowStatusError;
+  if (isUploadSession.value && row.duplicate) return l.value.uploadModal.rowStatusDuplicate;
+  if (isUploadSession.value && row.processing_status === "done") return l.value.uploadModal.rowStatusProcessed;
+  if (row.reminder_status === "assigned") return l.value.uploadModal.rowStatusAssigned;
+  if (row.reminder_status === "missing") return l.value.uploadModal.rowStatusMissing;
+  return l.value.uploadModal.rowStatusWaiting;
 }
 
 function rescanRowClass(row: RescanRow) {

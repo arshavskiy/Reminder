@@ -2,8 +2,8 @@
   <div class="page2 doc-detail">
     <PageHeader v-if="doc" :title="doc.file_name">
       <template #breadcrumb>
-        <router-link v-if="route.query.from === 'contracts'" to="/contracts">חוזים ותסקירים</router-link>
-        <router-link v-else-if="route.query.from === 'calendar'" to="/dashboard">לוח שנה</router-link>
+        <router-link v-if="route.query.from === 'contracts'" :to="href('/documents')">{{ l.documents.detail.contracts }}</router-link>
+        <router-link v-else-if="route.query.from === 'calendar'" :to="href('/dashboard')">{{ l.documents.detail.calendar }}</router-link>
         <router-link v-else :to="href('/documents')">{{ l.search.documents }}</router-link>
         <span class="sep">/</span>
         <span>{{ doc.file_name }}</span>
@@ -17,7 +17,7 @@
 <!--          </button>-->
           <router-link v-if="isInvoiceDocument" class="rbtn rbtn--ghost" :to="{path: '/quotes/new', query: {docId: doc.id}}">
             <n-icon :component="DocumentOutline" class="btn-icon"/>
-            הצעת מחיר
+            {{ l.documents.detail.quote }}
           </router-link>
           <button
               :class="{ 'rbtn--loading': extracting }"
@@ -27,7 +27,7 @@
               @click="openExtractModal"
           >
             <n-icon :component="FlashOutline" class="btn-icon"/>
-            חילוץ AI
+            {{ l.documents.extractAi }}
           </button>
           <button
               :class="{ 'rbtn--loading': downloading }"
@@ -37,7 +37,7 @@
               @click="openDownload"
           >
             <n-icon :component="DownloadOutline" class="btn-icon"/>
-            הורד
+            {{ l.common.download }}
           </button>
           <button
               :class="{ 'rbtn--loading': deleting }"
@@ -47,25 +47,25 @@
               @click="deleteDoc"
           >
             <n-icon :component="TrashOutline" class="btn-icon"/>
-            מחק
+            {{ l.common.delete }}
           </button>
         </div>
       </template>
     </PageHeader>
 
-    <n-alert v-if="doc?.error_message" class="mb-4" title="שגיאה בעיבוד" type="error">
+    <n-alert v-if="doc?.error_message" class="mb-4" :title="l.documents.detail.processError" type="error">
       {{ doc.error_message }}
     </n-alert>
 
     <n-alert
       v-if="showMissingFieldsBanner"
       class="mb-4"
-      title="חסרים שדות ליצירת תזכורת"
+      :title="l.documents.detail.missingReminderTitle"
       type="warning"
     >
-      <div>OCR לא מילא {{ missingExpiryLabel }}. מלא/י את השדות כדי ליצור תזכורות.</div>
+      <div>{{ t("documents.detail.missingReminderBody", {field: missingExpiryLabel}) }}</div>
       <n-button size="small" type="primary" style="margin-top:10px" @click="showMissingFieldsModal = true">
-        מלא שדות חסרים
+        {{ l.documents.detail.fillMissing }}
       </n-button>
     </n-alert>
 
@@ -101,14 +101,14 @@
       />
     </section>
 
-    <div v-if="notFound && !loading" class="preview-empty preview-empty--error" style="margin-top: 24px">המסמך לא נמצא. ייתכן שנמחק.</div>
+    <div v-if="notFound && !loading" class="preview-empty preview-empty--error" style="margin-top: 24px">{{ l.documents.detail.notFound }}</div>
 
     <div v-if="doc" class="doc-detail__grid">
       <!-- ── Left column: preview ───────────────────────────────────── -->
       <aside class="doc-detail__left">
         <div class="preview-card">
           <div class="preview-card__head">
-            <span class="preview-card__title">תצוגה מקדימה</span>
+            <span class="preview-card__title">{{ l.documents.detail.preview }}</span>
             <n-tag v-if="doc.mime_type" :bordered="false" size="small">{{ doc.mime_type }}</n-tag>
           </div>
           <div :class="{ 'preview-card__body--sheet': isSpreadsheet }" class="preview-card__body">
@@ -136,16 +136,16 @@
             <div v-else-if="previewError" class="preview-empty preview-empty--error">{{ previewError }}</div>
             <div v-else-if="!previewUrl && !isSpreadsheet" class="preview-empty">
               <n-spin size="small" />
-              <span class="mt-2">טוען תצוגה...</span>
+              <span class="mt-2">{{ l.documents.detail.loadingPreview }}</span>
             </div>
             <div v-else-if="isSpreadsheet" class="preview-empty">
-              <span>אין עדיין טקסט טבלאי להצגה</span>
+              <span>{{ l.documents.detail.noSheetPreview }}</span>
             </div>
             <div v-else class="preview-empty">
-              <span>אין תצוגה מקדימה זמינה לסוג קובץ זה</span>
+              <span>{{ l.documents.detail.noPreview }}</span>
               <button class="rbtn rbtn--ghost mt-3" type="button" @click="openExternal">
                 <n-icon :component="OpenOutline" class="btn-icon"/>
-                פתח בחלון חיצוני
+                {{ l.documents.detail.openExternal }}
               </button>
             </div>
           </div>
@@ -153,13 +153,13 @@
 
         <!-- File metadata under preview (admin only) -->
         <div v-if="authStore.user?.role === 'admin'" class="meta-card">
-          <div class="meta-card__title">פרטי קובץ</div>
+          <div class="meta-card__title">{{ l.documents.detail.fileDetails }}</div>
           <div class="meta-grid">
-            <div class="meta-row"><span class="meta-row__label">סוג קובץ</span><span class="meta-row__value">{{ doc.mime_type }}</span></div>
-            <div class="meta-row"><span class="meta-row__label">גודל</span><span class="meta-row__value">{{ formatSize(doc.file_size_bytes) }}</span></div>
-            <div class="meta-row"><span class="meta-row__label">ייבוא</span><span class="meta-row__value">{{ formatDate(doc.import_date) }}</span></div>
-            <div v-if="doc.page_count" class="meta-row"><span class="meta-row__label">עמודים</span><span class="meta-row__value">{{ doc.page_count }}</span></div>
-            <div v-if="documentTypeDisplay" class="meta-row"><span class="meta-row__label">סוג מסמך</span><span class="meta-row__value">{{ documentTypeDisplay }}</span></div>
+            <div class="meta-row"><span class="meta-row__label">{{ l.documents.detail.fileType }}</span><span class="meta-row__value">{{ doc.mime_type }}</span></div>
+            <div class="meta-row"><span class="meta-row__label">{{ l.documents.detail.fileSize }}</span><span class="meta-row__value">{{ formatSize(doc.file_size_bytes) }}</span></div>
+            <div class="meta-row"><span class="meta-row__label">{{ l.documents.detail.imported }}</span><span class="meta-row__value">{{ formatDate(doc.import_date) }}</span></div>
+            <div v-if="doc.page_count" class="meta-row"><span class="meta-row__label">{{ l.documents.detail.pages }}</span><span class="meta-row__value">{{ doc.page_count }}</span></div>
+            <div v-if="documentTypeDisplay" class="meta-row"><span class="meta-row__label">{{ l.documents.detail.docType }}</span><span class="meta-row__value">{{ documentTypeDisplay }}</span></div>
           </div>
         </div>
       </aside>
@@ -169,9 +169,9 @@
         <div v-if="showContractSidePanel" class="data-card contract-side-card">
           <div class="data-card__head">
             <div>
-              <span class="data-card__title">תסקיר חדש</span>
+              <span class="data-card__title">{{ l.documents.detail.newInspection }}</span>
               <div class="contract-side-card__sub">
-                {{ activeLinkedContract?.client_name || activeLinkedContract?.counterparty || 'ללא לקוח' }}
+                {{ activeLinkedContract?.client_name || activeLinkedContract?.counterparty || l.documents.detail.noClient }}
               </div>
             </div>
             <div class="data-card__head-actions">
@@ -182,10 +182,10 @@
                   type="button"
                   @click="saveContractSidePanel"
               >
-                שמור
+                {{ l.common.save }}
               </button>
               <button class="btn btn--ghost btn--xs" type="button" @click="openLinkedContract">
-                פתח תסקיר
+                {{ l.documents.detail.openInspection }}
               </button>
             </div>
           </div>
@@ -193,82 +193,82 @@
             <n-form class="contract-side-form" label-placement="top" size="small">
               <n-grid :cols="2" :x-gap="10" :y-gap="2" responsive="screen">
                 <n-gi>
-                  <n-form-item label="מספר תסקיר">
-                    <n-input v-model:value="contractSideForm.contract_number" placeholder="מספר תסקיר"/>
+                  <n-form-item :label="l.documents.detail.reportNumber">
+                    <n-input v-model:value="contractSideForm.contract_number" :placeholder="l.documents.detail.reportNumber"/>
                   </n-form-item>
                 </n-gi>
                 <n-gi>
-                  <n-form-item label="לקוח">
-                    <n-input v-model:value="contractSideForm.client_name" placeholder="שם לקוח"/>
+                  <n-form-item :label="l.documents.detail.client">
+                    <n-input v-model:value="contractSideForm.client_name" :placeholder="l.documents.detail.clientName"/>
                   </n-form-item>
                 </n-gi>
                 <n-gi>
-                  <n-form-item label="תאריך בדיקה">
+                  <n-form-item :label="l.documents.detail.inspectionDate">
                     <n-input v-model:value="contractSideForm.start_date" placeholder="YYYY-MM-DD"/>
                   </n-form-item>
                 </n-gi>
                 <n-gi>
-                  <n-form-item label="בתוקף עד">
+                  <n-form-item :label="l.documents.detail.validUntil">
                     <n-input v-model:value="contractSideForm.expiry_date" placeholder="YYYY-MM-DD"/>
                   </n-form-item>
                 </n-gi>
                 <n-gi>
-                  <n-form-item label="איש קשר">
+                  <n-form-item :label="l.documents.detail.contact">
                     <n-input v-model:value="contractSideForm.contact_person"/>
                   </n-form-item>
                 </n-gi>
                 <n-gi>
-                  <n-form-item label="טלפון">
+                  <n-form-item :label="l.documents.detail.phone">
                     <n-input v-model:value="contractSideForm.contact_phone"/>
                   </n-form-item>
                 </n-gi>
                 <n-gi>
-                  <n-form-item label="אימייל">
+                  <n-form-item :label="l.documents.detail.email">
                     <n-input v-model:value="contractSideForm.contact_email" dir="ltr" class="email-ltr"/>
                   </n-form-item>
                 </n-gi>
                 <n-gi>
-                  <n-form-item label="כתובת">
+                  <n-form-item :label="l.documents.detail.address">
                     <n-input v-model:value="contractSideForm.client_address"/>
                   </n-form-item>
                 </n-gi>
               </n-grid>
 
               <div class="contract-side-section">
-                <div class="contract-side-section__title">ציוד שנבדק</div>
+                <div class="contract-side-section__title">{{ l.documents.detail.inspectedEquipment }}</div>
                 <n-grid :cols="2" :x-gap="10" :y-gap="2" responsive="screen">
                   <n-gi>
-                    <n-form-item label="סוג ציוד">
+                    <n-form-item :label="l.documents.detail.equipmentType">
                       <n-input v-model:value="contractSideForm.checked_equipment"/>
                     </n-form-item>
                   </n-gi>
                   <n-gi>
-                    <n-form-item label="מספר רישוי">
+                    <n-form-item :label="l.documents.detail.licenseNumber">
                       <n-input v-model:value="contractSideForm.license_number"/>
                     </n-form-item>
                   </n-gi>
                   <n-gi>
-                    <n-form-item label="יצרן">
+                    <n-form-item :label="l.documents.detail.manufacturer">
                       <n-input v-model:value="contractSideForm.manufacturer"/>
                     </n-form-item>
                   </n-gi>
                   <n-gi>
-                    <n-form-item label="דגם">
+                    <n-form-item :label="l.documents.detail.model">
                       <n-input v-model:value="contractSideForm.model"/>
                     </n-form-item>
                   </n-gi>
                   <n-gi>
-                    <n-form-item label="מספר סידורי">
+                    <n-form-item :label="l.documents.detail.serial">
                       <n-input v-model:value="contractSideForm.serial_number"/>
                     </n-form-item>
                   </n-gi>
                   <n-gi>
-                    <n-form-item label="כושר עבודה">
+                    <n-form-item :label="l.documents.detail.workingLoad">
                       <n-input v-model:value="contractSideForm.load_capacity_work"/>
                     </n-form-item>
                   </n-gi>
                   <n-gi :span="2">
-                    <n-form-item label="תיאור ציוד">
+                    <n-form-item :label="l.documents.detail.equipmentDesc">
                       <n-input v-model:value="contractSideForm.equipment_description" :rows="2" type="textarea"/>
                     </n-form-item>
                   </n-gi>
@@ -281,16 +281,16 @@
         <!-- Extracted fields -->
         <div v-else class="data-card">
           <div class="data-card__head">
-            <span class="data-card__title">נתונים שחולצו</span>
+            <span class="data-card__title">{{ l.documents.detail.extracted }}</span>
             <div class="data-card__head-actions">
               <n-tag v-if="docTemplate?.name" :bordered="false" size="small" type="info">
                 {{ docTemplate.name }}
               </n-tag>
               <n-tag v-if="extractionRaw" :bordered="false" size="small" type="success">
-                {{ extractedFields.filter(f => f.value !== null && f.value !== '').length }} שדות
+                {{ t("documents.detail.fieldsCount", {n: extractedFields.filter(f => f.value !== null && f.value !== '').length}) }}
               </n-tag>
               <template v-if="editingFields">
-                <button class="btn btn--ghost btn--xs" type="button" @click="cancelEdit">ביטול</button>
+                <button class="btn btn--ghost btn--xs" type="button" @click="cancelEdit">{{ l.common.cancel }}</button>
                 <button
                     :class="{ 'btn--loading': savingFields }"
                     :disabled="savingFields"
@@ -298,25 +298,25 @@
                     type="button"
                     @click="saveFields"
                 >
-                  שמור
+                  {{ l.common.save }}
                 </button>
               </template>
               <template v-else-if="extractionRaw">
                 <button class="btn btn--ghost btn--xs" type="button" @click="showEmptyFields = !showEmptyFields">
-                  {{ showEmptyFields ? 'הסתר ריקים' : 'הצג הכל' }}
+                  {{ showEmptyFields ? l.documents.detail.hideEmpty : l.documents.detail.showAll }}
                 </button>
                 <button class="btn btn--ghost btn--xs" type="button" @click="startEdit">
                   <n-icon :component="CreateOutline" class="btn-icon"/>
-                  ערוך
+                  {{ l.common.edit }}
                 </button>
               </template>
             </div>
           </div>
           <div class="data-card__body">
             <div v-if="!extractionRaw" class="data-empty">
-              <span>עדיין לא חולצו נתונים מהמסמך</span>
+              <span>{{ l.documents.detail.noExtracted }}</span>
             </div>
-            <div v-else class="fields-table">
+            <div v-else class="fields-table" :dir="dir">
               <div
                 v-for="f in extractedFields"
                 v-show="shouldShowExtractedField(f)"
@@ -336,9 +336,9 @@
                   <template v-else-if="Array.isArray(f.value)">{{ f.value.join(', ') || '—' }}</template>
                   <template v-else-if="f.value && typeof f.value === 'object'">{{ JSON.stringify(f.value) }}</template>
                   <template v-else>
-                    {{ isMissingField(f) ? 'חסר' : displayExtractedValue(f) }}
-                    <span v-if="(f as any).fromClient" class="fields-from-client"> (מהלקוח)</span>
-                    <span v-if="isExpiredExtractedField(f)" class="fields-expired"> · לא בתוקף</span>
+                    {{ isMissingField(f) ? l.documents.detail.missing : displayExtractedValue(f) }}
+                    <span v-if="(f as any).fromClient" class="fields-from-client">{{ l.documents.detail.fromClient }}</span>
+                    <span v-if="isExpiredExtractedField(f)" class="fields-expired">{{ l.documents.detail.expired }}</span>
                   </template>
                 </span>
               </div>
@@ -349,8 +349,8 @@
         <!-- Equipment table -->
         <div v-if="!showContractSidePanel && equipment.length" class="data-card">
           <div class="data-card__head">
-            <span class="data-card__title">ציוד שנבדק</span>
-            <n-tag :bordered="false" size="small">{{ equipment.length }} פריטים</n-tag>
+            <span class="data-card__title">{{ l.documents.detail.inspectedEquipment }}</span>
+            <n-tag :bordered="false" size="small">{{ t("documents.detail.itemsCount", {n: equipment.length}) }}</n-tag>
           </div>
           <div class="data-card__body">
             <n-data-table
@@ -366,8 +366,8 @@
         <!-- Raw text (admin only) -->
         <div v-if="displayText && authStore.user?.role === 'admin'" class="data-card">
           <div class="data-card__head">
-            <span class="data-card__title">טקסט גולמי</span>
-            <n-tag :bordered="false" size="small" type="info">{{ displayText.length.toLocaleString() }} תווים</n-tag>
+            <span class="data-card__title">{{ l.documents.detail.rawText }}</span>
+            <n-tag :bordered="false" size="small" type="info">{{ t("documents.detail.charsCount", {n: displayText.length.toLocaleString()}) }}</n-tag>
           </div>
           <div class="data-card__body data-card__body--no-pad">
             <n-scrollbar class="raw-scroll">
@@ -383,24 +383,24 @@
     <n-modal
       v-model:show="showExtractModal"
       preset="card"
-      title="חילוץ AI לפי תבנית"
+      :title="l.documents.detail.extractTitle"
       style="width: min(480px, 94vw)"
       :mask-closable="!extracting"
     >
       <p class="extract-modal__lead">
-        בחר את תבנית המסמך לחילוץ. השדות והתוויות מגיעים מהתבנית שנבחרה.
+        {{ l.documents.detail.extractLead }}
       </p>
       <n-select
         v-model:value="extractTemplateId"
         :options="templateSelectOptions"
         filterable
-        placeholder="בחר תבנית..."
+        :placeholder="l.documents.detail.chooseTemplate"
         :disabled="extracting"
       />
       <template #footer>
         <div class="extract-modal__footer">
           <button class="btn btn--ghost" type="button" :disabled="extracting" @click="showExtractModal = false">
-            ביטול
+            {{ l.common.cancel }}
           </button>
           <button
             class="btn btn--primary"
@@ -408,7 +408,7 @@
             :disabled="extracting || !extractTemplateId"
             @click="confirmExtract"
           >
-            {{ extracting ? "מחלץ..." : "הפעל חילוץ" }}
+            {{ extracting ? l.documents.detail.extracting : l.documents.detail.runExtract }}
           </button>
         </div>
       </template>
@@ -476,7 +476,7 @@ const props = defineProps<{ docId?: string }>();
 
 const authStore = useAuthStore();
 const message = useMessage();
-const {l, href} = useI18n();
+const {l, t, href, locale, dir} = useI18n();
 const {confirm} = useConfirm();
 const router = useRouter();
 
@@ -522,7 +522,7 @@ const showMissingFieldsModal = ref(false);
 const missingFieldsPrompted = ref(false);
 const missingFieldInitials = ref<Record<string, string>>({});
 const missingExpiryLabel = computed(() =>
-  missingFieldsList.value.find((field) => field.critical)?.label ?? "תאריך בתוקף",
+  missingFieldsList.value.find((field) => field.critical)?.label ?? l.value.documents.detail.expiryDateFallback,
 );
 const missingFieldKeys = computed(() => new Set(missingFieldsList.value.map((f) => f.key)));
 const editingFields = ref(false);
@@ -724,10 +724,10 @@ function formatDate(d: string | null | undefined) {
   const iso = parseDateOnly(d);
   if (iso) {
     const [year, month, day] = iso.split("-").map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString("he-IL");
+    return new Date(year, month - 1, day).toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL");
   }
   const parsed = new Date(d);
-  return Number.isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString("he-IL");
+  return Number.isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL");
 }
 function formatSize(bytes: number | null | undefined) {
   if (!bytes) return "—";
@@ -736,28 +736,42 @@ function formatSize(bytes: number | null | undefined) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-const DEFAULT_FIELDS: { key: string; label: string }[] = [
-  { key: "report_number",         label: "מספר תסקיר" },
-  { key: "client_company",        label: "שם החברה / תופש" },
-  { key: "contact_person",        label: "איש קשר" },
-  { key: "contact_phone",         label: "נייד" },
-  { key: "client_email",          label: "מייל" },
-  { key: "inspection_date",       label: "תאריך בדיקה" },
-  { key: "expiry_date",           label: "בתוקף עד" },
-  { key: "date_diff_months",      label: "הפרש בחודשים לבדיקה" },
-  { key: "equipment_description", label: "תיאור" },
-  { key: "checked_equipment",     label: "ציוד שנבדק" },
-  { key: "license_number",        label: "מספר רישוי" },
-  { key: "manufacturer",          label: "יצרן" },
-  { key: "model",                 label: "דגם" },
-  { key: "serial_number",         label: "מספר סידורי" },
-  { key: "load_capacity",         label: "כושר עמיסה" },
-  { key: "findings",              label: "ממצאים / הערות" },
-  { key: "notes",                 label: "תיאור" },
-];
+const DEFAULT_FIELD_KEYS = [
+  "report_number",
+  "client_company",
+  "contact_person",
+  "contact_phone",
+  "client_email",
+  "inspection_date",
+  "expiry_date",
+  "date_diff_months",
+  "equipment_description",
+  "checked_equipment",
+  "license_number",
+  "manufacturer",
+  "model",
+  "serial_number",
+  "load_capacity",
+  "findings",
+  "notes",
+] as const;
 
-const LABEL_MAP: Record<string, string> = Object.fromEntries(
-  DEFAULT_FIELDS.map((f) => [f.key, f.label]),
+function humanizeFieldKey(key: string): string {
+  return key.replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function extractedFieldLabel(key: string, templateField?: {label_he?: string; label_en?: string}): string {
+  const mapped = (l.value.documents.detail.fieldLabels as Record<string, string>)[key];
+  if (locale.value === "en") {
+    const en = templateField?.label_en?.trim();
+    if (en && !/[\u0590-\u05FF]/.test(en)) return en;
+    return mapped || humanizeFieldKey(key);
+  }
+  return templateField?.label_he?.trim() || mapped || key;
+}
+
+const defaultExtractedFields = computed(() =>
+  DEFAULT_FIELD_KEYS.map((key) => ({key, label: extractedFieldLabel(key)})),
 );
 
 /** Hidden only when falling back to the default inspection schema (no template). */
@@ -821,17 +835,17 @@ const extractedFields = computed(() => {
       seen.add(key);
       schema.push({
         key,
-        label: field.label_he?.trim() || LABEL_MAP[key] || key,
+        label: extractedFieldLabel(key, field),
       });
     }
     // The email drives reminder delivery, so it stays editable even when the
     // template schema omits it — otherwise "חסר אימייל" can never be resolved here.
     if (!seen.has("client_email") && !seen.has("contact_email") && !seen.has("email")) {
       seen.add("client_email");
-      schema.push({ key: "client_email", label: LABEL_MAP.client_email });
+      schema.push({ key: "client_email", label: extractedFieldLabel("client_email") });
     }
   } else {
-    for (const field of DEFAULT_FIELDS) {
+    for (const field of defaultExtractedFields.value) {
       seen.add(field.key);
       schema.push(field);
     }
@@ -845,7 +859,7 @@ const extractedFields = computed(() => {
         continue;
       }
       seen.add(key);
-      schema.push({ key, label: LABEL_MAP[key] ?? key });
+      schema.push({ key, label: extractedFieldLabel(key) });
     }
   }
 
@@ -970,20 +984,19 @@ function joinArr(v: unknown): string {
   return v != null ? String(v) : "";
 }
 
-const ALL_EQUIPMENT_COLUMNS = [
-  { title: "תיאור", key: "name", ellipsis: true },
-  { title: "יצרן", key: "manufacturer", width: 110 },
-  { title: "דגם", key: "model", width: 120 },
-  { title: 'מ"ס סידורי', key: "serial_number", width: 130 },
-  { title: "עומס עבודה", key: "load_capacity_work", width: 110, render: (row: any) => joinArr(row.load_capacity_work) },
-  { title: "עומס מבחן", key: "load_capacity_test", width: 110, render: (row: any) => joinArr(row.load_capacity_test) },
-  { title: "רדיוס", key: "load_radius", width: 80, render: (row: any) => joinArr(row.load_radius) },
-];
-
-// Only show columns that have at least one non-empty value across all rows
 const equipmentColumns = computed(() => {
+  const d = l.value.documents.detail;
+  const all = [
+    { title: d.colDescription, key: "name", ellipsis: true },
+    { title: d.colManufacturer, key: "manufacturer", width: 110 },
+    { title: d.colModel, key: "model", width: 120 },
+    { title: d.colSerial, key: "serial_number", width: 130 },
+    { title: d.colWorkLoad, key: "load_capacity_work", width: 110, render: (row: any) => joinArr(row.load_capacity_work) },
+    { title: d.colTestLoad, key: "load_capacity_test", width: 110, render: (row: any) => joinArr(row.load_capacity_test) },
+    { title: d.colRadius, key: "load_radius", width: 80, render: (row: any) => joinArr(row.load_radius) },
+  ];
   const rows = equipment.value;
-  return ALL_EQUIPMENT_COLUMNS.filter(col => {
+  return all.filter(col => {
     return rows.some(row => {
       const v = row[col.key];
       if (Array.isArray(v)) return v.some(Boolean);
@@ -1071,7 +1084,7 @@ async function evaluateMissingFields() {
     return;
   }
 
-  missingFieldsList.value = listMissingDocumentFields(docTemplate.value, extracted);
+  missingFieldsList.value = listMissingDocumentFields(docTemplate.value, extracted, locale.value);
   missingFieldInitials.value = Object.fromEntries(
     missingFieldsList.value.map((field) => [
       field.key,
@@ -1684,7 +1697,6 @@ onMounted(async () => {
   gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--border-color);
-  direction: rtl;
 }
 .fields-row:last-child { border-bottom: none; }
 .fields-label {

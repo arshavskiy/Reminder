@@ -2,6 +2,9 @@
 import { computed } from "vue";
 import { NCheckbox, NInput, NInputNumber } from "naive-ui";
 import type { InspectionRate } from "@/services/paymentService";
+import { useI18n } from "@/composables/useI18n";
+
+const { l, t, locale, dir } = useI18n();
 
 export type QuoteEquipmentItem = {
   name: string;
@@ -44,13 +47,17 @@ const vatCents = computed(() => Math.round(
 const totalCents = computed(() => subtotalCents.value + vatCents.value);
 
 function formatMoney(cents: number) {
-  return (cents / 100).toLocaleString("he-IL", { style: "currency", currency: "ILS" });
+  const isEn = locale.value === "en";
+  return (cents / 100).toLocaleString(isEn ? "en-US" : "he-IL", {
+    style: "currency",
+    currency: isEn ? "USD" : "ILS",
+  });
 }
 
 function addRate() {
   const rate: InspectionRate = {
     id: crypto.randomUUID(),
-    reportType: props.reportType || "מסמך",
+    reportType: props.reportType || l.value.quotes.documentFallback,
     section: "",
     label: "",
     unitCents: 0,
@@ -96,13 +103,13 @@ function applyEquipmentItems(items: QuoteEquipmentItem[]) {
       item.name,
       item.manufacturer,
       item.model,
-      item.serial_number ? `מס׳ זיהוי: ${item.serial_number}` : "",
+      item.serial_number ? t("quotes.idPrefix", {id: item.serial_number}) : "",
     ].filter(Boolean);
     nextAmounts[id] = nextAmounts[id] ?? 0;
     nextQuantities[id] = 1;
     return {
       id,
-      reportType: props.reportType || "מסמך",
+      reportType: props.reportType || l.value.quotes.documentFallback,
       section: String(index + 1),
       label: details.join(" · "),
       unitCents: Math.round((nextAmounts[id] || 0) * 100),
@@ -121,14 +128,14 @@ function selectedLines() {
 }
 
 function validate(): string | null {
-  if (!selectedLines().length) return "יש לבחור לפחות סעיף שירות אחד להצעת המחיר";
-  if (vatPercent.value === null || vatPercent.value < 0 || vatPercent.value > 100) return "יש להזין שיעור מע״מ תקין";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate.value || "")) return "יש להזין תאריך תוקף / תשלום תקין";
+  if (!selectedLines().length) return l.value.quotes.needServiceLine;
+  if (vatPercent.value === null || vatPercent.value < 0 || vatPercent.value > 100) return l.value.quotes.invalidVat;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate.value || "")) return l.value.quotes.invalidDueDate;
   if (visibleRates.value.some((rate) => (quantities.value[rate.id] || 0) > 0 && (
     !String(rate.section || "").trim() || !String(rate.label || "").trim()
     || !Number.isFinite(amounts.value[rate.id]) || amounts.value[rate.id] < 0
   ))) {
-    return "יש להשלים סעיף, תיאור ומחיר בכל שורות המחירון";
+    return l.value.quotes.incompleteLine;
   }
   return null;
 }
@@ -160,33 +167,33 @@ defineExpose({
 </script>
 
 <template>
-  <div class="quote-billing">
+  <div class="quote-billing" :dir="dir">
     <div v-if="showVatAndDue" class="quote-billing__meta">
       <div class="quote-billing__field">
-        <label>שיעור מע״מ באחוזים</label>
+        <label>{{ l.quotes.vatPercent }}</label>
         <NInputNumber v-model:value="vatPercent" :min="0" :max="100" :precision="2"/>
       </div>
       <div class="quote-billing__field">
-        <label>בתוקף / לתשלום עד</label>
+        <label>{{ l.quotes.validUntilPay }}</label>
         <NInput v-model:value="dueDate" placeholder="YYYY-MM-DD"/>
       </div>
     </div>
 
     <div class="quote-billing__field">
-      <label>סעיפי שירות</label>
-      <div v-if="loading" class="quote-billing__muted">טוען מחירון…</div>
+      <label>{{ l.quotes.serviceLines }}</label>
+      <div v-if="loading" class="quote-billing__muted">{{ l.quotes.loadingRates }}</div>
       <div v-for="rate in visibleRates" :key="rate.id" class="quote-billing__line">
         <NCheckbox
           :checked="(quantities[rate.id] || 0) > 0"
           @update:checked="(checked: boolean) => setChecked(rate.id, checked)"
         />
-        <NInput v-model:value="rate.section" placeholder="סעיף בדיקה" aria-label="סעיף בדיקה"/>
-        <NInput v-model:value="rate.label" placeholder="תיאור השירות" aria-label="תיאור השירות"/>
+        <NInput v-model:value="rate.section" :placeholder="l.quotes.sectionPlaceholder" :aria-label="l.quotes.sectionPlaceholder"/>
+        <NInput v-model:value="rate.label" :placeholder="l.quotes.servicePlaceholder" :aria-label="l.quotes.servicePlaceholder"/>
         <NInputNumber
           :value="amounts[rate.id]"
           :min="0"
           :precision="2"
-          aria-label="מחיר יחידה"
+          :aria-label="l.quotes.unitPrice"
           @update:value="(value: number | null) => amounts = { ...amounts, [rate.id]: value ?? 0 }"
         />
         <NInputNumber
@@ -195,16 +202,16 @@ defineExpose({
           :min="1"
           :max="10000"
           :precision="0"
-          aria-label="כמות"
+          :aria-label="l.quotes.qty"
           @update:value="(value: number | null) => quantities = { ...quantities, [rate.id]: value ?? 1 }"
         />
-        <button type="button" class="btn btn--ghost btn--xs" @click="removeRate(rate.id)">הסר</button>
+        <button type="button" class="btn btn--ghost btn--xs" @click="removeRate(rate.id)">{{ l.common.remove }}</button>
       </div>
-      <button type="button" class="btn btn--ghost" @click="addRate">הוספת סעיף</button>
+      <button type="button" class="btn btn--ghost" @click="addRate">{{ l.quotes.addLine }}</button>
     </div>
 
-    <div class="quote-billing__total">סה״כ: {{ formatMoney(totalCents) }}</div>
-    <p class="quote-billing__muted">המסמך הוא הצעת מחיר בלבד. הוא אינו חשבונית או קבלה.</p>
+    <div class="quote-billing__total">{{ l.quotes.total }}: {{ formatMoney(totalCents) }}</div>
+    <p class="quote-billing__muted">{{ l.quotes.quoteDisclaimer }}</p>
   </div>
 </template>
 

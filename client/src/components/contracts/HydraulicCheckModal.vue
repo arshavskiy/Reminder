@@ -2,13 +2,13 @@
   <n-modal
       v-model:show="visible"
       :show-icon="false"
-      class="hydraulic-modal"
+      :class="['hydraulic-modal', { 'hydraulic-modal--ltr': locale === 'en' }]"
       :style="{ width: showLayoutPreview ? 'min(1340px, 96vw)' : 'min(900px, 96vw)', maxWidth: '96vw' }"
       preset="card"
   >
     <template #header>
       <div class="hm-header">
-        <button class="hm-header__close" title="סגור" @click="visible = false">
+        <button class="hm-header__close" :title="l.common.close" @click="visible = false">
           <n-icon :component="CloseOutline" :size="18"/>
         </button>
         <div class="hm-header__title">
@@ -18,8 +18,8 @@
         <div v-if="draftStore.hasDraft" class="hm-header__draft">
           <div class="hm-draft-pill" @click="editSavedDraft">
             <n-icon :component="TimeOutline" :size="14"/>
-            <span>טיוטה שמורה{{ draftSavedAtLabel ? ` (${draftSavedAtLabel})` : "" }}</span>
-            <button class="hm-draft-pill__close" title="מחק טיוטה" @click.stop="clearDraft">
+            <span>{{ l.inspectionModal.savedDraft }}{{ draftSavedAtLabel ? ` (${draftSavedAtLabel})` : "" }}</span>
+            <button class="hm-draft-pill__close" :title="l.inspectionModal.deleteDraft" @click.stop="clearDraft">
               <n-icon :component="CloseOutline" :size="12"/>
             </button>
           </div>
@@ -49,22 +49,22 @@
               <section v-show="activeStep === 'basic'" class="hm-section">
                 <div class="hm-section__grid hm-section__grid--4">
                   <div class="hm-field hm-field--span2">
-                    <label class="required">סוג תסקיר</label>
+                    <label class="required">{{ l.inspectionModal.reportType }}</label>
                     <n-select
                         v-model:value="reportType"
                         :options="reportTypeOptions"
                         :virtual-scroll="false"
                         filterable
-                        placeholder="בחר סוג תסקיר"
+                        :placeholder="l.inspectionModal.reportTypePlaceholder"
                         @update:value="applyReportType"
                     />
                   </div>
                   <div class="hm-field">
-                    <label>מספר תסקיר</label>
+                    <label>{{ l.inspectionModal.reportNumber }}</label>
                     <n-input
                         :value="hydraulicForm.contract_number"
                         inputmode="numeric"
-                        placeholder="הזן מספר"
+                        :placeholder="l.inspectionModal.enterNumber"
                         @update:value="setContractNumberInput"
                     >
                       <template v-if="currentInspectorNumber()" #prefix>
@@ -73,11 +73,11 @@
                     </n-input>
                   </div>
                   <div class="hm-field">
-                    <label>תסקיר קודם</label>
-                    <n-input v-model:value="prevReportNumber" placeholder="אופציונלי"/>
+                    <label>{{ l.inspectionModal.prevReport }}</label>
+                    <n-input v-model:value="prevReportNumber" :placeholder="l.inspectionModal.optional"/>
                   </div>
                   <div class="hm-field">
-                    <label>תבנית הדפסה</label>
+                    <label>{{ l.inspectionModal.printTemplate }}</label>
                     <div class="hm-field__row">
                       <n-select
                           v-model:value="templateId"
@@ -87,7 +87,7 @@
                           :options="templateOptions"
                           :virtual-scroll="false"
                           filterable
-                          placeholder="בחר תבנית"
+                          :placeholder="l.inspectionModal.chooseTemplate"
                           style="width:100px;flex:none"
                           @update:value="(id) => selectTemplate(id, {syncReportType: true})"
                       />
@@ -96,43 +96,43 @@
                           <button
                               type="button"
                               class="btn btn--ghost btn--xs icon-btn"
-                              aria-label="ערוך תבנית"
+                              :aria-label="l.printTemplates.editTemplate"
                               :disabled="!templateId"
                               @click="openEditPrintTemplate"
                           >
                             <n-icon :component="CreateOutline" :size="16"/>
                           </button>
                         </template>
-                        ערוך תבנית
+                        {{ l.printTemplates.editTemplate }}
                       </n-tooltip>
                       <n-tooltip trigger="hover">
                         <template #trigger>
                           <button
                               type="button"
                               class="btn btn--ghost btn--xs icon-btn"
-                              aria-label="תבנית חדשה"
+                              :aria-label="l.printTemplates.newTemplate"
                               @click="openCreatePrintTemplate"
                           >
                             <n-icon :component="AddCircleOutline" :size="16"/>
                           </button>
                         </template>
-                        תבנית חדשה
+                        {{ l.printTemplates.newTemplate }}
                       </n-tooltip>
                     </div>
                   </div>
                   <div class="hm-field">
-                    <label>לקוח קיים</label>
+                    <label>{{ l.inspectionModal.existingClient }}</label>
                     <n-select
                         v-model:value="clientId"
                         :loading="loadingClients"
                         :options="clientOptions"
                         clearable
                         filterable
-                        placeholder="בחר או צור חדש"
+                        :placeholder="l.inspectionModal.chooseOrCreate"
                     />
                   </div>
                   <div class="hm-field">
-                    <label class="required">תאריך בדיקה</label>
+                    <label class="required">{{ l.inspectionModal.inspectionDate }}</label>
                     <n-date-picker
                         v-model:value="checkDateMs"
                         style="width: 100%"
@@ -141,7 +141,7 @@
                     />
                   </div>
                   <div class="hm-field">
-                    <label>מרווח בדיקות</label>
+                    <label>{{ l.inspectionModal.interval }}</label>
                     <n-select
                         v-model:value="intervalMonths"
                         :options="intervalOptions"
@@ -149,7 +149,7 @@
                     />
                   </div>
                   <div class="hm-field">
-                    <label class="required">בתוקף עד</label>
+                    <label class="required">{{ l.inspectionModal.validUntil }}</label>
                     <n-date-picker
                         v-model:value="expiryDateMs"
                         :disabled="!updatingContractId"
@@ -158,19 +158,19 @@
                     />
                   </div>
                   <div class="hm-field">
-                    <label>סוג בדיקה</label>
+                    <label>{{ l.inspectionModal.inspectionKind }}</label>
                     <n-select
                         v-model:value="hydraulicForm.inspection_type"
                         :options="inspectionTypeOptions"
                         :virtual-scroll="false"
                         filterable
                         tag
-                        placeholder="תקופתית"
+                        :placeholder="l.inspectionModal.periodic"
                     />
                   </div>
                   <div class="hm-field">
-                    <label>מקום הבדיקה</label>
-                    <n-input v-model:value="hydraulicForm.inspection_location" placeholder="יישוב / אתר"/>
+                    <label>{{ l.inspectionModal.location }}</label>
+                    <n-input v-model:value="hydraulicForm.inspection_location" :placeholder="l.inspectionModal.locationPlaceholder"/>
                   </div>
                 </div>
               </section>
@@ -180,51 +180,51 @@
                 <div class="hm-section__card">
                   <div class="hm-section__card-head">
                     <n-icon :component="BusinessOutline" :size="18"/>
-                    <span>{{ clientId ? 'פרטי קשר (לתסקיר זה)' : 'פרטי עסק חדש' }}</span>
+                    <span>{{ clientId ? l.inspectionModal.contactForThis : l.inspectionModal.newBusiness }}</span>
                   </div>
                   <div class="hm-section__grid hm-section__grid--3">
                     <div v-if="!clientId" class="hm-field hm-field--full">
-                      <label class="required">שם העסק</label>
-                      <n-input v-model:value="hydraulicForm.business.display_name" placeholder="לדוגמה: מפעל דן בע״מ"/>
+                      <label class="required">{{ l.inspectionModal.businessName }}</label>
+                      <n-input v-model:value="hydraulicForm.business.display_name" :placeholder="l.inspectionModal.businessNamePlaceholder"/>
                     </div>
                     <div v-if="!clientId" class="hm-field">
-                      <label>ח.פ / ת.ז</label>
+                      <label>{{ l.inspectionModal.vatId }}</label>
                       <n-input v-model:value="hydraulicForm.business.id_number"/>
                     </div>
                     <div class="hm-field">
-                      <label>איש קשר</label>
-                      <n-input v-model:value="hydraulicForm.business.contact_person" placeholder="שם מלא"/>
+                      <label>{{ l.inspectionModal.contact }}</label>
+                      <n-input v-model:value="hydraulicForm.business.contact_person" :placeholder="l.inspectionModal.fullName"/>
                     </div>
                     <div class="hm-field">
-                      <label>טלפון</label>
+                      <label>{{ l.inspectionModal.phone }}</label>
                       <n-input v-model:value="hydraulicForm.business.phone" dir="ltr"/>
                     </div>
                     <div class="hm-field">
-                      <label>נייד</label>
+                      <label>{{ l.inspectionModal.mobile }}</label>
                       <n-input v-model:value="hydraulicForm.business.mobile" dir="ltr"/>
                     </div>
                     <div class="hm-field">
-                      <label>פקס</label>
+                      <label>{{ l.inspectionModal.fax }}</label>
                       <n-input v-model:value="hydraulicForm.business.fax" dir="ltr"/>
                     </div>
                     <div class="hm-field">
-                      <label>אימייל</label>
+                      <label>{{ l.inspectionModal.email }}</label>
                       <n-input v-model:value="hydraulicForm.business.email" dir="ltr" placeholder="office@example.com"/>
                     </div>
                     <div class="hm-field">
-                      <label>כתובת</label>
+                      <label>{{ l.inspectionModal.address }}</label>
                       <n-input v-model:value="hydraulicForm.business.address"/>
                     </div>
                     <div class="hm-field">
-                      <label>יישוב</label>
+                      <label>{{ l.inspectionModal.city }}</label>
                       <n-input v-model:value="hydraulicForm.business.city"/>
                     </div>
                     <div class="hm-field">
-                      <label>ת.ד</label>
+                      <label>{{ l.inspectionModal.poBox }}</label>
                       <n-input v-model:value="hydraulicForm.business.po_box"/>
                     </div>
                     <div class="hm-field">
-                      <label>מיקוד</label>
+                      <label>{{ l.inspectionModal.zip }}</label>
                       <n-input v-model:value="hydraulicForm.business.client_zipcode"/>
                     </div>
                   </div>
@@ -236,18 +236,18 @@
                 <div class="hm-section__toolbar">
                   <div class="hm-section__card-head hm-section__card-head--plain">
                     <n-icon :component="ConstructOutline" :size="18"/>
-                    <span>ציוד שנבדק</span>
+                    <span>{{ l.inspectionModal.inspectedEquipment }}</span>
                   </div>
                   <button class="btn btn--primary btn--xs" type="button" @click="addEquipment">
                     <n-icon :component="AddCircleOutline" :size="16"/>
-                    הוסף מכונה
+                    {{ l.inspectionModal.addMachine }}
                   </button>
                 </div>
                 <div v-for="(equipment, index) in equipmentRows" :key="equipment.id" class="hm-equipment">
                   <div class="hm-equipment__head">
                     <div class="hm-equipment__title">
                       <n-icon :component="ConstructOutline" :size="18"/>
-                      <span>{{ equipment.name?.trim() || `מכונה ${index + 1}` }}</span>
+                      <span>{{ equipment.name?.trim() || t("inspectionModal.machineN", { n: index + 1 }) }}</span>
                     </div>
                     <button
                         v-if="equipmentRows.length > 1"
@@ -260,7 +260,7 @@
                   </div>
                   <div class="hm-section__grid hm-section__grid--4">
                     <div class="hm-field hm-field--span2">
-                      <label>ציוד קיים ללקוח</label>
+                      <label>{{ l.inspectionModal.existingEquipment }}</label>
                       <n-select
                           v-model:value="equipment.selected_equipment_id"
                           :disabled="!clientId"
@@ -269,114 +269,212 @@
                           :virtual-scroll="false"
                           clearable
                           filterable
-                          placeholder="חפש לפי שם / יצרן / דגם"
+                          :placeholder="l.inspectionModal.searchEquipment"
                           @update:value="(id) => selectEquipment(index, id)"
                       />
                     </div>
                     <div class="hm-field">
-                      <label class="required">סוג ציוד</label>
+                      <label class="required">{{ l.inspectionModal.equipmentType }}</label>
                       <div class="hm-field__row">
                         <n-select
                             v-model:value="equipment.category"
                             :options="categoryOptions"
                             :virtual-scroll="false"
                             filterable
-                            placeholder="בחר סוג ציוד"
+                            :placeholder="l.inspectionModal.chooseType"
                             style="flex:1"
                         />
-                        <button class="btn btn--xs btn--outline" title="הוסף סוג חדש" @click="openNewCategoryPrompt(index)">
+                        <button class="btn btn--xs btn--outline" :title="l.inspectionModal.addType" @click="openNewCategoryPrompt(index)">
                           +
                         </button>
                       </div>
                     </div>
                     <div class="hm-field">
-                      <label>שם הציוד</label>
+                      <label>{{ l.inspectionModal.equipmentName }}</label>
                       <n-input v-model:value="equipment.name" :placeholder="selectedReportType.equipmentPlaceholder"/>
                     </div>
                     <div class="hm-field">
-                      <label>יצרן</label>
-                      <n-input v-model:value="equipment.manufacturer" placeholder="יצרן"/>
+                      <label>{{ l.inspectionModal.manufacturer }}</label>
+                      <n-input v-model:value="equipment.manufacturer" :placeholder="l.inspectionModal.manufacturer"/>
                     </div>
                     <div class="hm-field">
-                      <label>מספר רישוי</label>
+                      <label>{{ l.inspectionModal.licenseNumber }}</label>
                       <n-input v-model:value="equipment.license_number" placeholder=""/>
                     </div>
                     <div class="hm-field hm-field--span2">
-                      <label>דגם</label>
-                      <n-dynamic-tags v-model:value="equipment.models" input-placeholder="הוסף דגם"/>
+                      <label>{{ l.inspectionModal.model }}</label>
+                      <n-dynamic-tags v-model:value="equipment.models" :input-placeholder="l.inspectionModal.addModel"/>
                     </div>
                     <div class="hm-field hm-field--span2">
-                      <label>מס׳ סידורי</label>
-                      <n-dynamic-tags v-model:value="equipment.serial_numbers" input-placeholder="הוסף מספר סידורי"/>
+                      <label>{{ l.inspectionModal.serial }}</label>
+                      <n-dynamic-tags v-model:value="equipment.serial_numbers" :input-placeholder="l.inspectionModal.addSerial"/>
                     </div>
                     <template v-if="isPressureType">
                       <div class="hm-field">
-                        <label>מיקום</label>
-                        <n-input v-model:value="equipment.equipment_location" placeholder="מיקום המתקן"/>
+                        <label>{{ l.inspectionModal.locationField }}</label>
+                        <n-input v-model:value="equipment.equipment_location" :placeholder="l.inspectionModal.vesselLocation"/>
                       </div>
                       <div class="hm-field">
-                        <label>נפח (ליטר)</label>
-                        <n-input v-model:value="equipment.volume_liters" placeholder="נפח"/>
+                        <label>{{ l.inspectionModal.volumeL }}</label>
+                        <n-input v-model:value="equipment.volume_liters" :placeholder="l.inspectionModal.volumeL"/>
                       </div>
                       <div class="hm-field">
-                        <label>קוטר (מ״מ)</label>
-                        <n-input v-model:value="equipment.diameter_mm" placeholder="קוטר"/>
+                        <label>{{ l.inspectionModal.diameterMm }}</label>
+                        <n-input v-model:value="equipment.diameter_mm" :placeholder="l.inspectionModal.diameterMm"/>
                       </div>
                       <div class="hm-field">
-                        <label>חומר</label>
-                        <n-input v-model:value="equipment.material" placeholder="חומר"/>
+                        <label>{{ l.inspectionModal.material }}</label>
+                        <n-input v-model:value="equipment.material" :placeholder="l.inspectionModal.material"/>
                       </div>
                       <div class="hm-field">
-                        <label>מבנה</label>
-                        <n-input v-model:value="equipment.construction_type" placeholder="מבנה"/>
+                        <label>{{ l.inspectionModal.construction }}</label>
+                        <n-input v-model:value="equipment.construction_type" :placeholder="l.inspectionModal.construction"/>
                       </div>
                       <div class="hm-field">
-                        <label>עובי דופן (מ״מ)</label>
-                        <n-input v-model:value="equipment.wall_thickness_mm" placeholder="עובי דופן"/>
+                        <label>{{ l.inspectionModal.wallMm }}</label>
+                        <n-input v-model:value="equipment.wall_thickness_mm" :placeholder="l.inspectionModal.wallMm"/>
                       </div>
                       <div class="hm-field">
-                        <label>עובי כיפות (מ״מ)</label>
-                        <n-input v-model:value="equipment.cap_thickness_mm" placeholder="עובי כיפות"/>
+                        <label>{{ l.inspectionModal.capMm }}</label>
+                        <n-input v-model:value="equipment.cap_thickness_mm" :placeholder="l.inspectionModal.capMm"/>
                       </div>
                       <div class="hm-field">
-                        <label>פתחי בקרה וניקוי</label>
-                        <n-input v-model:value="equipment.access_openings" placeholder="פתחי בקרה וניקוי"/>
+                        <label>{{ l.inspectionModal.openings }}</label>
+                        <n-input v-model:value="equipment.access_openings" :placeholder="l.inspectionModal.openings"/>
                       </div>
                       <div class="hm-field">
-                        <label>פקק</label>
-                        <n-input v-model:value="equipment.plug_present" placeholder="פקק"/>
+                        <label>{{ l.inspectionModal.plug }}</label>
+                        <n-input v-model:value="equipment.plug_present" :placeholder="l.inspectionModal.plug"/>
                       </div>
                       <div class="hm-field">
-                        <label>כווה</label>
-                        <n-input v-model:value="equipment.corrosion_present" placeholder="כווה"/>
+                        <label>{{ l.inspectionModal.corrosion }}</label>
+                        <n-input v-model:value="equipment.corrosion_present" :placeholder="l.inspectionModal.corrosion"/>
                       </div>
                       <div class="hm-field">
-                        <label>קוטר שסתום בטחון (מ״מ)</label>
-                        <n-input v-model:value="equipment.safety_valve_diameter_mm" placeholder="קוטר שסתום בטחון"/>
+                        <label>{{ l.inspectionModal.safetyValveMm }}</label>
+                        <n-input v-model:value="equipment.safety_valve_diameter_mm" :placeholder="l.inspectionModal.safetyValveMm"/>
                       </div>
                     </template>
                     <template v-else>
                       <div class="hm-field hm-field--span2">
-                        <label>עומס עבודה בטוח (ק״ג)</label>
-                        <n-dynamic-tags v-model:value="equipment.load_capacity_work" input-placeholder="הוסף עומס"/>
+                        <label>{{ l.inspectionModal.swlKg }}</label>
+                        <n-dynamic-tags v-model:value="equipment.load_capacity_work" :input-placeholder="l.inspectionModal.addLoad"/>
                       </div>
                       <div class="hm-field hm-field--span2">
-                        <label>עומס מבחן (ק״ג)</label>
-                        <n-dynamic-tags v-model:value="equipment.load_capacity_test" input-placeholder="הוסף עומס"/>
+                        <label>{{ l.inspectionModal.testLoadKg }}</label>
+                        <n-dynamic-tags v-model:value="equipment.load_capacity_test" :input-placeholder="l.inspectionModal.addLoad"/>
                       </div>
                       <div class="hm-field hm-field--span2">
-                        <label>רדיוס עומס (מטר)</label>
-                        <n-dynamic-tags v-model:value="equipment.load_radius" input-placeholder="הוסף רדיוס"/>
+                        <label>{{ l.inspectionModal.loadRadiusM }}</label>
+                        <n-dynamic-tags v-model:value="equipment.load_radius" :input-placeholder="l.inspectionModal.addRadius"/>
                       </div>
                     </template>
                     <div class="hm-field hm-field--full">
-                      <label>תיאור ציוד</label>
+                      <label>{{ l.inspectionModal.equipmentDesc }}</label>
                       <n-input
                           v-model:value="equipment.description"
                           :rows="2"
                           type="textarea"
                           :placeholder="selectedReportType.descriptionPlaceholder"
                       />
+                    </div>
+                  </div>
+                </div>
+                <div v-if="craneExtraFields.length" class="hm-section__card">
+                  <div class="hm-section__card-head">
+                    <n-icon :component="ConstructOutline" :size="18"/>
+                    <span>{{ l.inspectionModal.craneFields }}</span>
+                  </div>
+                  <div class="hm-section__grid hm-section__grid--3">
+                    <div v-for="field in craneExtraFields" :key="field.bind" class="hm-field">
+                      <label>{{ field.label }}</label>
+                      <n-input v-model:value="templateValues[field.bind]" :placeholder="field.placeholder"/>
+                    </div>
+                  </div>
+                </div>
+                <div v-for="table in templateTableEditors" :key="table.title" class="hm-section__card">
+                  <div class="hm-section__card-head">
+                    <n-icon :component="ListOutline" :size="18"/>
+                    <span>{{ table.title }}</span>
+                  </div>
+                  <div class="hm-table-wrap">
+                    <table class="hm-rope-table">
+                      <thead>
+                        <tr>
+                          <th v-for="col in table.columns" :key="col.bind">{{ col.label }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="ri in table.rowIndexes" :key="ri">
+                          <td v-for="(col, ci) in table.columns" :key="col.bind">
+                            <n-input
+                                v-model:value="templateValues[equipmentTableCellKey(col.bind, ri)]"
+                                :placeholder="ci === 0 ? table.fixedRows[ri] || '' : ''"
+                                size="small"
+                            />
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Step: Checklist -->
+              <section v-show="activeStep === 'checklist'" class="hm-section">
+                <div v-for="section in templateChecklistSections" :key="section.title" class="hm-section__card">
+                  <div class="hm-section__card-head">
+                    <n-icon :component="CheckboxOutline" :size="18"/>
+                    <span>{{ section.title || l.inspectionModal.stepChecklist }}</span>
+                  </div>
+                  <p v-if="section.codeLegend" class="hm-muted">{{ section.codeLegend }}</p>
+                  <div class="hm-check-actions">
+                    <template v-if="section.markStyle === 'acceptable_na'">
+                      <button class="btn btn--xs btn--outline" type="button" @click="markChecklist(section, 'A')">
+                        {{ l.inspectionModal.markAllAcceptable }}
+                      </button>
+                      <button class="btn btn--xs btn--outline" type="button" @click="markChecklist(section, 'NA')">
+                        {{ l.inspectionModal.markAllNa }}
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button
+                          v-for="code in ANSI_CHECK_CODES"
+                          :key="code"
+                          class="btn btn--xs btn--outline"
+                          type="button"
+                          @click="markChecklist(section, code)"
+                      >
+                        {{ t("inspectionModal.markAllCode", {code}) }}
+                      </button>
+                    </template>
+                  </div>
+                  <div v-for="(group, gi) in section.groups" :key="gi" class="hm-check-group">
+                    <div v-if="group.title" class="hm-check-group__title">{{ group.title }}</div>
+                    <div class="hm-check-list">
+                      <div v-for="item in group.items" :key="item.bind" class="hm-check-item">
+                        <div class="hm-check-item__text">
+                          <strong>{{ item.number }}.</strong>
+                          <span v-if="item.reference" class="hm-check-item__ref">{{ item.reference }}</span>
+                          {{ item.label }}
+                        </div>
+                        <n-select
+                            v-if="section.markStyle === 'acceptable_na'"
+                            v-model:value="templateValues[item.bind]"
+                            :options="acceptableNaOptions"
+                            clearable
+                            size="small"
+                            style="width: 140px"
+                        />
+                        <n-select
+                            v-else
+                            v-model:value="templateValues[item.bind]"
+                            :options="ansiCodeOptions"
+                            clearable
+                            size="small"
+                            style="width: 88px"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -387,32 +485,32 @@
                 <div class="hm-section__card">
                   <div class="hm-section__card-head">
                     <n-icon :component="CalendarOutline" :size="18"/>
-                    <span>מועד התזכורת הבאה</span>
+                    <span>{{ l.inspectionModal.nextReminder }}</span>
                   </div>
                   <div class="hm-section__grid hm-section__grid--2">
                     <div class="hm-field">
-                      <label>תזכורת לפני תוקף</label>
+                      <label>{{ l.inspectionModal.reminderBefore }}</label>
                       <n-select v-model:value="reminderDaysBefore" :options="reminderDaysOptions"/>
                     </div>
                     <div class="hm-field">
-                      <label>תאריך תזכורת</label>
+                      <label>{{ l.inspectionModal.reminderDate }}</label>
                       <div class="hm-reminder-preview">
                         {{ computedReminderDate }}
                       </div>
                     </div>
                   </div>
                   <div v-if="!expiryDateMs" class="hm-warning">
-                    יש להזין תאריך תוקף בשלב הראשון
+                    {{ l.inspectionModal.needExpiryFirst }}
                   </div>
                 </div>
-                <div v-if="templateExtraFields.length" class="hm-section__card hm-findings">
+                <div v-if="reminderExtraFields.length" class="hm-section__card hm-findings">
                   <div class="hm-section__card-head">
                     <n-icon :component="ListOutline" :size="18"/>
                     <span>{{ extraFieldsTitle }}</span>
                   </div>
                   <div class="hm-findings__list">
                     <div
-                        v-for="field in templateExtraFields"
+                        v-for="field in reminderExtraFields"
                         :key="field.bind"
                         :class="['hm-field', { 'hm-field--deadline': field.bind === 'findings_deadline' }]"
                     >
@@ -433,15 +531,15 @@
                 <div v-if="!updatingContractId" class="hm-section__card">
                   <div class="hm-section__card-head">
                     <n-icon :component="DocumentTextOutline" :size="18"/>
-                    <span>הצעת מחיר</span>
+                    <span>{{ l.inspectionModal.quote }}</span>
                   </div>
                   <div class="hm-section__grid hm-section__grid--2">
                     <div class="hm-field">
-                      <label>מסמך שיופק עם התסקיר</label>
+                      <label>{{ l.inspectionModal.documentWithInspection }}</label>
                       <n-select
                           v-model:value="billingDocumentKind"
                           :options="billingDocumentKindOptions"
-                          placeholder="ללא מסמך"
+                          :placeholder="l.inspectionModal.noDocument"
                       />
                     </div>
                     <div v-if="billingDocumentKind" class="hm-field hm-field--full">
@@ -458,7 +556,7 @@
                   </div>
                 </div>
                 <div v-else class="hm-section__card">
-                  <p class="hm-muted">אפשר להפיק הצעת מחיר בעת יצירת תסקיר חדש.</p>
+                  <p class="hm-muted">{{ l.inspectionModal.quoteOnlyOnCreate }}</p>
                 </div>
               </section>
             </div>
@@ -466,9 +564,10 @@
         </n-spin>
       </div>
       <aside v-if="previewLayout" class="compose-preview hm-preview">
-        <div class="compose-preview__label">תצוגה מקדימה</div>
+        <div class="compose-preview__label">{{ l.inspectionModal.preview }}</div>
         <LayoutPreviewFrame
             :data="previewData"
+            :dir="template?.dir === 'ltr' || locale === 'en' ? 'ltr' : 'rtl'"
             :layout="previewLayout"
         />
       </aside>
@@ -477,23 +576,23 @@
     <template #footer>
       <div class="hm-footer">
         <div class="hm-footer__actions">
-          <button class="btn btn--ghost" @click="visible = false">ביטול</button>
+          <button class="btn btn--ghost" @click="visible = false">{{ l.common.cancel }}</button>
           <button
               v-if="updatingContractId"
               :class="['btn', 'btn--primary', { 'btn--loading': creating }]"
               :disabled="creating"
               @click="doCreate"
-          >עדכן תסקיר
+          >{{ l.inspectionModal.updateInspection }}
           </button>
         </div>
         <div class="hm-footer__nav">
           <button v-if="stepIndex > 0" class="btn btn--ghost" @click="prevStep">
-            הקודם
-            <n-icon :component="ChevronForwardOutline" :size="16"/>
+            {{ l.inspectionModal.previous }}
+            <n-icon :component="locale === 'en' ? ChevronBackOutline : ChevronForwardOutline" :size="16"/>
           </button>
           <button v-if="stepIndex < steps.length - 1" class="btn btn--primary" @click="nextStep">
-            <n-icon :component="ChevronBackOutline" :size="16"/>
-            הבא
+            <n-icon :component="locale === 'en' ? ChevronForwardOutline : ChevronBackOutline" :size="16"/>
+            {{ l.inspectionModal.next }}
           </button>
         </div>
         <button
@@ -502,7 +601,7 @@
             @click="saveDraftAndPreview"
         >
           <n-icon :component="SaveOutline" :size="16"/>
-          שמור ופתח תצוגה
+          {{ l.inspectionModal.saveAndPreview }}
         </button>
       </div>
     </template>
@@ -514,19 +613,17 @@
       :positive-button-props="confirmActionButtonProps('error')"
       :show-icon="false"
       :z-index="4000"
-      positive-text="אישור"
+      :positive-text="l.inspectionModal.ok"
       preset="dialog"
       type="error"
       @positive-click="showErrorModal = false"
   >
     <template #header>
-      <ConfirmDialogHead title="שגיאה"/>
+      <ConfirmDialogHead :title="l.inspectionModal.error"/>
     </template>
-    <p class="hm-error-text" dir="rtl">
+    <p class="hm-error-text" :dir="dir">
       <template v-if="saveErrorDuplicateNumber">
-        מספר התסקיר
-        <bdi class="hm-error-text__id" dir="ltr">{{ saveErrorDuplicateNumber }}</bdi>
-        כבר קיים במערכת.
+        {{ t("inspectionModal.duplicateNumber", { n: saveErrorDuplicateNumber }) }}
       </template>
       <template v-else>{{ formattedSaveError }}</template>
     </p>
@@ -536,16 +633,16 @@
       v-model:show="showNewCategoryPrompt"
       :z-index="4000"
       preset="dialog"
-      title="סוג ציוד חדש"
-      positive-text="הוסף"
-      negative-text="ביטול"
+      :title="l.inspectionModal.newTypeTitle"
+      :positive-text="l.common.add"
+      :negative-text="l.common.cancel"
       @positive-click="confirmNewCategory"
       @negative-click="showNewCategoryPrompt = false"
   >
     <n-input
         v-model:value="newCategoryLabel"
-        dir="rtl"
-        placeholder="שם סוג ציוד חדש"
+        :dir="dir"
+        :placeholder="l.inspectionModal.newTypePlaceholder"
         @keydown.enter="confirmNewCategory"
     />
   </n-modal>
@@ -559,6 +656,7 @@ import {
   AddCircleOutline,
   BusinessOutline,
   CalendarOutline,
+  CheckboxOutline,
   ChevronBackOutline,
   ChevronForwardOutline,
   CloseOutline,
@@ -587,12 +685,20 @@ import {DEFAULT_INSPECTOR_ID_START} from "@shared/types.js";
 import type {Equipment, PrintTemplate} from "@shared/types.js";
 import LayoutPreviewFrame from "../print/LayoutPreviewFrame.vue";
 import {useAuthStore} from "../../stores/auth.js";
+import {useI18n} from "../../composables/useI18n.js";
 import {
+  equipmentTableCellKey,
+  equipmentTableMinRows,
+  extractLayoutChecklistSections,
+  extractLayoutEquipmentTables,
   extractLayoutFieldBinds,
   INSPECTION_PRINT_TEMPLATE_PRESETS,
+  INSPECTION_PRINT_TEMPLATE_PRESETS_EN,
   joinStackedValues,
   LAYOUT_FIELD_PRESETS,
-  type PrintTemplateLayout
+  type PrintTemplateLayout,
+  type PrintTemplateLayoutChecklistSection,
+  type PrintTemplateLayoutEquipmentSection,
 } from "@shared/printTemplateLayout.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -603,6 +709,7 @@ const emit = defineEmits<{
 }>();
 
 const visible = defineModel<boolean>("show", {default: false});
+const {l, t, locale, dir} = useI18n();
 
 const store = useContractsStore();
 const authStore = useAuthStore();
@@ -616,36 +723,44 @@ const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 const isMobile = ref(window.innerWidth <= 720);
 
 // Step navigation
-type StepKey = "basic" | "business" | "equipment" | "reminder" | "billing";
-const steps: { key: StepKey; label: string }[] = [
-  {key: "basic", label: "פרטים"},
-  {key: "business", label: "עסק"},
-  {key: "equipment", label: "ציוד"},
-  {key: "reminder", label: "תזכורת"},
-  {key: "billing", label: "הצעת מחיר (רשות)"},
-];
+type StepKey = "basic" | "business" | "equipment" | "checklist" | "reminder" | "billing";
+const steps = computed(() => {
+  const list: {key: StepKey; label: string}[] = [
+    {key: "basic", label: l.value.inspectionModal.stepDetails},
+    {key: "business", label: l.value.inspectionModal.stepBusiness},
+    {key: "equipment", label: l.value.inspectionModal.stepEquipment},
+  ];
+  if (templateChecklistSections.value.length) {
+    list.push({key: "checklist", label: l.value.inspectionModal.stepChecklist});
+  }
+  list.push(
+    {key: "reminder", label: l.value.inspectionModal.stepReminder},
+    {key: "billing", label: l.value.inspectionModal.stepQuote},
+  );
+  return list;
+});
 // The quote is optional: an inspection is complete without one, so saving is
 // unlocked from the last required step onward rather than only on the final
 // step. Without this the wizard could not be finished without visiting billing.
 const OPTIONAL_STEPS: StepKey[] = ["billing"];
 const activeStep = ref<StepKey>("basic");
-const stepIndex = computed(() => steps.findIndex((s) => s.key === activeStep.value));
+const stepIndex = computed(() => steps.value.findIndex((s) => s.key === activeStep.value));
 const lastRequiredStepIndex = computed(() => {
-  for (let i = steps.length - 1; i >= 0; i--) {
-    if (!OPTIONAL_STEPS.includes(steps[i].key)) return i;
+  for (let i = steps.value.length - 1; i >= 0; i--) {
+    if (!OPTIONAL_STEPS.includes(steps.value[i].key)) return i;
   }
-  return steps.length - 1;
+  return steps.value.length - 1;
 });
 const canSaveDraft = computed(() => stepIndex.value >= lastRequiredStepIndex.value);
 
 function nextStep() {
   const idx = stepIndex.value;
-  if (idx < steps.length - 1) activeStep.value = steps[idx + 1].key;
+  if (idx < steps.value.length - 1) activeStep.value = steps.value[idx + 1].key;
 }
 
 function prevStep() {
   const idx = stepIndex.value;
-  if (idx > 0) activeStep.value = steps[idx - 1].key;
+  if (idx > 0) activeStep.value = steps.value[idx - 1].key;
 }
 
 function updateViewport() {
@@ -675,9 +790,9 @@ const saveErrorDuplicateNumber = computed(() => {
 const formattedSaveError = computed(() => {
   const raw = saveError.value?.trim() ?? "";
   if (!raw) return "";
-  if (raw === "חסר לקוח") return "יש לבחור לקוח קיים או להזין שם עסק";
-  if (raw === "חסר תאריך תזכורת") return "יש לבחור תאריך תזכורת";
-  if (raw === "הטופס לא מוכן") return "יש למלא את פרטי התסקיר לפני השמירה";
+  if (raw === "חסר לקוח") return l.value.inspectionModal.missingClient;
+  if (raw === "חסר תאריך תזכורת") return l.value.inspectionModal.missingReminderDate;
+  if (raw === "הטופס לא מוכן") return l.value.inspectionModal.formNotReady;
   return raw;
 });
 const hydraulicForm = ref<HydraulicCheckRequest | null>(null);
@@ -730,7 +845,7 @@ const hydratingDraft = ref(false);
 const clearDraftOnClose = ref(false);
 const updatingContractId = ref<string | null>(null);
 const updateReturnTo = ref("");
-const modalTitle = computed(() => updatingContractId.value ? "עדכון תסקיר" : "תסקיר חדש");
+const modalTitle = computed(() => updatingContractId.value ? l.value.inspectionModal.updateTitle : l.value.inspectionModal.newTitle);
 type BillingDocumentKind = "quote" | "payment_request" | "service_specification";
 const billingDocumentKind = ref<BillingDocumentKind | null>(null);
 const billingRates = ref<InspectionRate[]>([]);
@@ -740,10 +855,10 @@ const billingVatPercent = ref<number | null>(18);
 const billingDueDate = ref("");
 const billingNotes = ref("");
 const billingLoading = ref(false);
-const billingDocumentKindOptions = [
-  {label: "ללא מסמך", value: null},
-  {label: "הצעת מחיר", value: "quote"},
-];
+const billingDocumentKindOptions = computed(() => [
+  {label: l.value.inspectionModal.noDocument, value: null},
+  {label: l.value.inspectionModal.quote, value: "quote"},
+]);
 const reportBillingRates = computed(() =>
     billingRates.value.filter((rate) => rate.reportType === selectedReportType.value.contractType),
 );
@@ -762,15 +877,15 @@ function automaticBillingRateId(equipmentId: string): string {
 
 function automaticBillingRateText(row: EquipmentRow, index: number) {
   const categoryLabel = categoryOptions.value.find((option) => option.value === row.category)?.label;
-  const equipmentName = row.name.trim() || categoryLabel || `מכשיר ${index + 1}`;
+  const equipmentName = row.name.trim() || categoryLabel || t("inspectionModal.deviceN", {n: index + 1});
   const model = row.models.map((value) => value.trim()).filter(Boolean).join(", ");
   const serials = row.serial_numbers.map((value) => value.trim()).filter(Boolean).join(", ");
   const identification = [row.license_number.trim(), serials].filter(Boolean).join(" / ");
   const details = [
-    `בדיקת ${equipmentName}`,
+    t("inspectionModal.inspectLine", {name: equipmentName}),
     row.manufacturer.trim(),
     model,
-    identification ? `מס׳ זיהוי: ${identification}` : "",
+    identification ? t("inspectionModal.idLine", {id: identification}) : "",
   ].filter(Boolean);
   return {
     section: String(index + 1),
@@ -849,24 +964,27 @@ const clientOptions = ref<{ label: string; value: string }[]>([]);
 const clientsMap = ref<Map<string, import("@shared/types.js").Client>>(new Map());
 const loadingClients = ref(false);
 const knownCategories = ref<{ id?: string; value: string; label: string }[]>([]);
-const categoryDefaults: { label: string; value: string }[] = [
-  {label: "מכונות הרמה", value: "lift"},
-  {label: "אביזרי הרמה", value: "accessory"},
-  {label: "פיגום ממוכן", value: "powered_scaffold"},
-  {label: "עגורן צריח", value: "tower_crane"},
-  {label: "במת הרמה", value: "work_platform"},
-  {label: "מעליות", value: "elevator"},
-  {label: "דרגנועים", value: "escalator"},
-  {label: "דוד קיטור", value: "steam_boiler"},
-  {label: "קולט קיטור", value: "steam_receiver"},
-  {label: "קולט אוויר / קומפרסור", value: "air_receiver"},
-  {label: "כלי לחץ", value: "pressure_vessel"},
-  {label: "אחר", value: "other"},
-];
+const categoryDefaults = computed(() => {
+  const c = l.value.inspectionModal.categories;
+  return [
+    {label: c.lift, value: "lift"},
+    {label: c.accessory, value: "accessory"},
+    {label: c.powered_scaffold, value: "powered_scaffold"},
+    {label: c.tower_crane, value: "tower_crane"},
+    {label: c.work_platform, value: "work_platform"},
+    {label: c.elevator, value: "elevator"},
+    {label: c.escalator, value: "escalator"},
+    {label: c.steam_boiler, value: "steam_boiler"},
+    {label: c.steam_receiver, value: "steam_receiver"},
+    {label: c.air_receiver, value: "air_receiver"},
+    {label: c.pressure_vessel, value: "pressure_vessel"},
+    {label: c.other, value: "other"},
+  ];
+});
 const categoryOptions = computed(() => {
   const seen = new Set<string>();
   const options: { label: string; value: string }[] = [];
-  for (const opt of categoryDefaults) {
+  for (const opt of categoryDefaults.value) {
     if (seen.has(opt.value)) continue;
     seen.add(opt.value);
     options.push(opt);
@@ -884,13 +1002,13 @@ const checkDateMs = ref<number>(Date.now());
 const expiryDateMs = ref<number | null>(null);
 const reminderDaysBefore = ref<number>(30);
 const reminderDateMs = ref<number | null>(null);
-const DEFAULT_REPORT_TYPE = "lifting_machine";
+const DEFAULT_REPORT_TYPE = locale.value === "en" ? "lifting_machine_en" : "lifting_machine";
 // Not a hardcoded literal: the initial interval must match DEFAULT_REPORT_TYPE's
 // legal interval, or the modal opens showing a type/interval pair that was never
 // legally correct together (this previously defaulted to 4 months while
 // lifting_machine's actual interval is 14).
 const intervalMonths = ref<number>(
-    INSPECTION_PRINT_TEMPLATE_PRESETS.find((p) => p.key === DEFAULT_REPORT_TYPE)?.intervalMonths ?? 4,
+    [...INSPECTION_PRINT_TEMPLATE_PRESETS, ...INSPECTION_PRINT_TEMPLATE_PRESETS_EN].find((p) => p.key === DEFAULT_REPORT_TYPE)?.intervalMonths ?? 4,
 );
 const reportType = ref(DEFAULT_REPORT_TYPE);
 type ReportTypePreset = {
@@ -907,87 +1025,71 @@ type ReportTypePreset = {
 // an interval or contract-type change only has to happen in one place instead of
 // drifting between the modal and the generated document. Only the form's own
 // placeholder copy stays local, since the shared preset has no use for it.
-const REPORT_TYPE_FORM_TEXT: Record<string, { equipmentPlaceholder: string; descriptionPlaceholder: string }> = {
-  lifting_machine: {
-    equipmentPlaceholder: "מלגזה / מנוף משאית / כננת / במה",
-    descriptionPlaceholder: "תיאור מכונת ההרמה, מיקום, מספר פנימי וממצאים",
-  },
-  lifting_accessory: {
-    equipmentPlaceholder: "שרשרת / רצועה / שאקל / אונקל / מענב",
-    descriptionPlaceholder: "רשימת האביזרים, עומס עבודה בטוח, זיהוי פריט וממצאים",
-  },
-  elevator: {
-    equipmentPlaceholder: "מעלית נוסעים / מעלית משא",
-    descriptionPlaceholder: "פרטי המעלית, פיר, חדר מכונות, דלתות ומערכות בטיחות",
-  },
-  escalator: {
-    equipmentPlaceholder: "דרגנוע / מסוע נוסעים",
-    descriptionPlaceholder: "פרטי הדרגנוע, מערכות עצירה, מדרגות, מעקות וממצאים",
-  },
-  tower_crane: {
-    equipmentPlaceholder: "עגורן צריח",
-    descriptionPlaceholder: "פרטי העגורן, תא מפעיל, מנגנוני סיבוב, בלמים, חשמל וממצאים",
-  },
-  work_platform: {
-    equipmentPlaceholder: "במת הרמה",
-    descriptionPlaceholder: "פרטי הבמה, מערכת הרמה, מעקות, בלמים וממצאים",
-  },
-  powered_scaffold: {
-    equipmentPlaceholder: "פיגום ממוכן",
-    descriptionPlaceholder: "פרטי הפיגום, עיגון, מנגנון הרמה, בלמים וממצאים",
-  },
-  air_receiver: {
-    equipmentPlaceholder: "קולט אוויר / קומפרסור",
-    descriptionPlaceholder: "פרטי קולט האוויר, נפח, לחץ עבודה מותר, שסתומים וממצאים",
-  },
-  steam_receiver: {
-    equipmentPlaceholder: "קולט קיטור",
-    descriptionPlaceholder: "פרטי קולט הקיטור, לחץ עבודה מותר, אבזרים וניסויים",
-  },
-  steam_boiler: {
-    equipmentPlaceholder: "דוד קיטור",
-    descriptionPlaceholder: "פרטי דוד הקיטור, בדיקה קרה/בלחץ, שסתומים ולחץ עבודה מותר",
-  },
-  pressure_vessel: {
-    equipmentPlaceholder: "כלי לחץ",
-    descriptionPlaceholder: "פרטי מתקן הלחץ, לחץ עבודה מותר, ניסוי הידרולי וממצאים",
-  },
-};
+function reportTypeFormText(key: string): { equipmentPlaceholder: string; descriptionPlaceholder: string } {
+  const p = l.value.inspectionModal.placeholders;
+  const base = key.replace(/_en$/, "") as keyof typeof p extends never ? string : string;
+  const eqKey = `${base}_eq` as keyof typeof p;
+  const descKey = `${base}_desc` as keyof typeof p;
+  return {
+    equipmentPlaceholder: p[eqKey] ?? "",
+    descriptionPlaceholder: p[descKey] ?? "",
+  };
+}
 const FALLBACK_FORM_TEXT = {equipmentPlaceholder: "", descriptionPlaceholder: ""};
-const reportTypePresets: ReportTypePreset[] = INSPECTION_PRINT_TEMPLATE_PRESETS.map((preset) => ({
-  value: preset.key,
-  label: preset.name,
-  contractType: preset.contractType,
-  category: preset.category,
-  intervalMonths: preset.intervalMonths,
-  ...(REPORT_TYPE_FORM_TEXT[preset.key] ?? FALLBACK_FORM_TEXT),
-}));
-const reportTypeOptions = reportTypePresets.map((preset) => ({label: preset.label, value: preset.value}));
+const reportTypePresets = computed<ReportTypePreset[]>(() => {
+  const source = locale.value === "en" ? INSPECTION_PRINT_TEMPLATE_PRESETS_EN : INSPECTION_PRINT_TEMPLATE_PRESETS;
+  return source.map((preset) => ({
+    value: preset.key,
+    label: preset.name,
+    contractType: preset.contractType,
+    category: preset.category,
+    intervalMonths: preset.intervalMonths,
+    ...(reportTypeFormText(preset.key) ?? FALLBACK_FORM_TEXT),
+  }));
+});
+const reportTypeOptions = computed(() => reportTypePresets.value.map((preset) => ({label: preset.label, value: preset.value})));
 const selectedReportType = computed(() =>
-    reportTypePresets.find((preset) => preset.value === reportType.value) ?? reportTypePresets[0],
+    reportTypePresets.value.find((preset) => preset.value === reportType.value) ?? reportTypePresets.value[0],
 );
-const PRESSURE_TYPE_KEYS = new Set(["air_receiver", "steam_receiver", "steam_boiler", "pressure_vessel"]);
+const PRESSURE_TYPE_KEYS = new Set([
+  "air_receiver", "steam_receiver", "steam_boiler", "pressure_vessel",
+  "air_receiver_en", "steam_receiver_en", "steam_boiler_en", "pressure_vessel_en",
+]);
 const isPressureType = computed(() => PRESSURE_TYPE_KEYS.has(reportType.value));
-const reminderDaysOptions = [
-  {label: "7 ימים לפני", value: 7},
-  {label: "14 ימים לפני", value: 14},
-  {label: "30 ימים לפני (ברירת מחדל)", value: 30},
-  {label: "60 ימים לפני", value: 60},
-  {label: "90 ימים לפני", value: 90},
-];
-const inspectionTypeOptions = [
-  {label: "תקופתית", value: "תקופתית"},
-  {label: "ראשונית", value: "ראשונית"},
-  {label: "חוזרת", value: "חוזרת"},
-  {label: "לאחר תיקון", value: "לאחר תיקון"},
-];
-const intervalOptions = Array.from({length: 26}, (_, i) => {
+const reminderDaysOptions = computed(() => {
+  const m = l.value.inspectionModal;
+  return [
+    {label: t("inspectionModal.daysBefore", {n: 7}), value: 7},
+    {label: t("inspectionModal.daysBefore", {n: 14}), value: 14},
+    {label: t("inspectionModal.daysBeforeDefault", {n: 30}), value: 30},
+    {label: t("inspectionModal.daysBefore", {n: 60}), value: 60},
+    {label: t("inspectionModal.daysBefore", {n: 90}), value: 90},
+  ];
+});
+const inspectionTypeOptions = computed(() => {
+  const m = l.value.inspectionModal;
+  return locale.value === "en"
+    ? [
+      {label: m.periodic, value: "Periodic"},
+      {label: m.annual, value: "Annual"},
+      {label: m.initial, value: "Initial"},
+      {label: m.repeat, value: "Follow-up"},
+      {label: m.afterRepair, value: "After repair"},
+    ]
+    : [
+      {label: m.periodic, value: "תקופתית"},
+      {label: m.initial, value: "ראשונית"},
+      {label: m.repeat, value: "חוזרת"},
+      {label: m.afterRepair, value: "לאחר תיקון"},
+    ];
+});
+const intervalOptions = computed(() => Array.from({length: 26}, (_, i) => {
   const months = i + 1;
   return {
-    label: months === 1 ? "חודש אחד" : `${months} חודשים`,
+    label: months === 1 ? l.value.inspectionModal.monthOne : t("inspectionModal.monthsN", {n: months}),
     value: months,
   };
-});
+}));
 
 function clampIntervalMonths(value: unknown): number {
   const months = Math.round(Number(value));
@@ -1020,14 +1122,14 @@ const computedReminderDate = computed(() => {
   if (!expiryDateMs.value) return "—";
   const expiry = new Date(expiryDateMs.value);
   expiry.setDate(expiry.getDate() - reminderDaysBefore.value);
-  return expiry.toLocaleDateString("he-IL");
+  return expiry.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL");
 });
 
 const HYDRAULIC_PRINT_TEMPLATE_ID = "6a7cfbee5e95a7b2e1e4b606";
 
 const templateOptions = computed(() =>
     templates.value.map((t) => ({
-      label: `${t.name} (${t.editorType === "sections" ? "פריסה" : "Excel"})`,
+      label: `${t.name} (${t.editorType === "sections" ? l.value.inspectionModal.layoutEditor : l.value.inspectionModal.excelEditor})`,
       value: t._id,
     }))
 );
@@ -1036,7 +1138,7 @@ const equipmentOptions = computed(() => {
     const seen = new Set<string>();
     return clientEquipment.value
         .map((eq) => ({
-          label: [eq.name, eq.manufacturer, eq.model, eq.serial_number ? `מס׳ ${eq.serial_number}` : null].filter(Boolean).join(" · "),
+          label: [eq.name, eq.manufacturer, eq.model, eq.serial_number ? t("inspectionModal.serialPrefix", {n: eq.serial_number}) : null].filter(Boolean).join(" · "),
           value: String(eq.id),
         }))
         .filter((opt) => {
@@ -1059,36 +1161,38 @@ const templateKnownFields = new Set([
   "engineer_company", "engineer_email", "engineer_phone", "engineer_name", "engineer_address",
 ]);
 
-const EXTRA_FIELD_LABELS: Record<string, string> = {
-  findings_general: "כללי",
-  findings_remedy: "ליקוי",
-  findings_deadline: "תוך (ימים)",
-  findings_note: "הערה נוספת",
-};
+const EXTRA_FIELD_LABELS = computed<Record<string, string>>(() => ({
+  findings_general: l.value.inspectionModal.general,
+  findings_remedy: l.value.inspectionModal.defect,
+  findings_deadline: l.value.inspectionModal.withinDays,
+  findings_note: l.value.inspectionModal.extraNote,
+}));
 
 function extraFieldLabel(bind: string, layoutLabel?: string): string {
-  if (bind === "findings_deadline") return EXTRA_FIELD_LABELS.findings_deadline;
+  if (bind === "findings_deadline") return EXTRA_FIELD_LABELS.value.findings_deadline;
   const cleaned = layoutLabel?.replace(/:$/, "").trim() ?? "";
-  if (cleaned && /[\u0590-\u05FF]/.test(cleaned)) return cleaned;
-  if (EXTRA_FIELD_LABELS[bind]) return EXTRA_FIELD_LABELS[bind];
+  if (cleaned && locale.value === "he" && /[\u0590-\u05FF]/.test(cleaned)) return cleaned;
+  if (cleaned && locale.value === "en" && !/[\u0590-\u05FF]/.test(cleaned)) return cleaned;
+  if (EXTRA_FIELD_LABELS.value[bind]) return EXTRA_FIELD_LABELS.value[bind];
   const preset = LAYOUT_FIELD_PRESETS.find((field) => field.bind === bind);
   if (preset?.label) return preset.label;
   return bind;
 }
 
 const templateExtraFields = computed(() => {
-  if (!template.value) return [];
+  const layout = activeLayout.value ?? template.value?.layout ?? null;
+  if (!template.value && !layout) return [];
   const seen = new Set<string>();
   const binds: string[] = [];
   const layoutLabels = new Map<string, string>();
-  for (const cell of template.value.cells) {
+  for (const cell of template.value?.cells ?? []) {
     if (cell.type === "field" && cell.bind && !seen.has(cell.bind)) {
       seen.add(cell.bind);
       binds.push(cell.bind);
     }
   }
-  if (template.value.layout) {
-    for (const field of extractLayoutFieldBinds(template.value.layout)) {
+  if (layout) {
+    for (const field of extractLayoutFieldBinds(layout)) {
       layoutLabels.set(field.bind, field.label);
       if (!seen.has(field.bind)) {
         seen.add(field.bind);
@@ -1097,7 +1201,11 @@ const templateExtraFields = computed(() => {
     }
   }
   return binds
-      .filter((bind) => !templateKnownFields.has(bind) && !bind.match(/_\d+$/))
+      .filter((bind) =>
+        !templateKnownFields.has(bind)
+        && !bind.match(/_\d+$/)
+        && !bind.startsWith("checklist_")
+        && !tableColumnBinds.value.has(bind))
       .map((bind) => {
         const label = extraFieldLabel(bind, layoutLabels.get(bind));
         const multiline = bind.startsWith("findings_") && bind !== "findings_deadline";
@@ -1105,12 +1213,110 @@ const templateExtraFields = computed(() => {
       });
 });
 
-const extraFieldsTitle = computed(() => {
-  const fields = templateExtraFields.value;
-  if (fields.length && fields.every((field) => field.bind.startsWith("findings_"))) {
-    return "תיאור ליקויים, השיפורים ואמצעים לתיקונים";
+const CRANE_REPORT_KEYS = new Set(["crane_annual_wa_en", "crane_annual_ansi_en"]);
+const ANSI_CHECK_CODES = ["A", "X", "M", "R", "N"];
+
+const activeLayout = computed<PrintTemplateLayout | null>(() => {
+  const preset = [...INSPECTION_PRINT_TEMPLATE_PRESETS, ...INSPECTION_PRINT_TEMPLATE_PRESETS_EN]
+      .find((item) => item.key === reportType.value);
+  if (preset?.customLayout) return preset.customLayout;
+  return template.value?.editorType === "sections" ? template.value.layout ?? null : null;
+});
+
+const templateChecklistSections = computed(() =>
+    activeLayout.value ? extractLayoutChecklistSections(activeLayout.value) : [],
+);
+
+const templateTableEditors = computed(() => {
+  if (!activeLayout.value) return [];
+  return extractLayoutEquipmentTables(activeLayout.value)
+      .filter((section) =>
+        Boolean(section.fixedRows?.length)
+        || Boolean(section.minRows)
+        || section.columns.some((col) => col.bind.startsWith("rope_") || col.bind === "load_line"))
+      .map((section: PrintTemplateLayoutEquipmentSection) => ({
+        title: section.title || l.value.inspectionModal.wireRopeTable,
+        columns: section.columns,
+        fixedRows: section.fixedRows ?? [],
+        rowIndexes: Array.from({length: equipmentTableMinRows(section)}, (_, index) => index),
+      }));
+});
+
+const tableColumnBinds = computed(() => {
+  const binds = new Set<string>();
+  for (const table of templateTableEditors.value) {
+    for (const col of table.columns) binds.add(col.bind);
   }
-  return "שדות נוספים מהתבנית";
+  return binds;
+});
+
+const craneExtraFields = computed(() =>
+    CRANE_REPORT_KEYS.has(reportType.value)
+      ? templateExtraFields.value.filter((field) => !field.bind.startsWith("findings_"))
+      : [],
+);
+
+const reminderExtraFields = computed(() =>
+    CRANE_REPORT_KEYS.has(reportType.value)
+      ? templateExtraFields.value.filter((field) => field.bind.startsWith("findings_"))
+      : templateExtraFields.value,
+);
+
+const acceptableNaOptions = computed(() => [
+  {label: l.value.inspectionModal.acceptable, value: "A"},
+  {label: l.value.inspectionModal.notApplicable, value: "NA"},
+]);
+
+const ansiCodeOptions = computed(() =>
+    ANSI_CHECK_CODES.map((code) => ({label: code, value: code})),
+);
+
+function markChecklist(section: PrintTemplateLayoutChecklistSection, code: string) {
+  const next = {...templateValues.value};
+  for (const group of section.groups) {
+    for (const item of group.items) next[item.bind] = code;
+  }
+  templateValues.value = next;
+}
+
+function ensureTemplateValueKeys() {
+  const next = {...templateValues.value};
+  for (const field of templateExtraFields.value) {
+    if (next[field.bind] == null) {
+      next[field.bind] = field.bind === "findings_general" ? l.value.common.none : "";
+    }
+  }
+  for (const section of templateChecklistSections.value) {
+    for (const group of section.groups) {
+      for (const item of group.items) {
+        if (next[item.bind] == null) next[item.bind] = "";
+      }
+    }
+  }
+  for (const table of templateTableEditors.value) {
+    for (const rowIndex of table.rowIndexes) {
+      table.columns.forEach((col, columnIndex) => {
+        const key = equipmentTableCellKey(col.bind, rowIndex);
+        if (next[key] == null) next[key] = columnIndex === 0 ? table.fixedRows[rowIndex] ?? "" : "";
+      });
+    }
+  }
+  templateValues.value = next;
+}
+
+watch([reportType, activeLayout], () => {
+  ensureTemplateValueKeys();
+  if (activeStep.value === "checklist" && !templateChecklistSections.value.length) {
+    activeStep.value = "equipment";
+  }
+});
+
+const extraFieldsTitle = computed(() => {
+  const fields = reminderExtraFields.value;
+  if (fields.length && fields.every((field) => field.bind.startsWith("findings_"))) {
+    return l.value.inspectionModal.findingsTitle;
+  }
+  return l.value.inspectionModal.extraFieldsTitle;
 });
 
 const draftSavedAtLabel = computed(() => {
@@ -1119,7 +1325,7 @@ const draftSavedAtLabel = computed(() => {
   const date = new Date(savedAt);
   return Number.isNaN(date.getTime())
       ? ""
-      : date.toLocaleString("he-IL", {dateStyle: "short", timeStyle: "short"});
+      : date.toLocaleString(locale.value === "en" ? "en-US" : "he-IL", {dateStyle: "short", timeStyle: "short"});
 });
 
 const suggestedContractNumber = computed(() => {
@@ -1265,7 +1471,7 @@ function defaultForm(): HydraulicCheckRequest {
       po_box: "",
       client_zipcode: "",
     },
-    inspection_type: "תקופתית",
+    inspection_type: locale.value === "en" ? "Periodic" : "תקופתית",
     inspection_location: "",
     equipment: {
       category: selectedReportType.value.category,
@@ -1284,12 +1490,18 @@ function defaultForm(): HydraulicCheckRequest {
 }
 
 function applyReportType(value?: string, options: { syncTemplate?: boolean } = {}) {
-  const preset = reportTypePresets.find((item) => item.value === (value ?? reportType.value)) ?? reportTypePresets[0];
+  const preset = reportTypePresets.value.find((item) => item.value === (value ?? reportType.value)) ?? reportTypePresets.value[0];
   reportType.value = preset.value;
   intervalMonths.value = preset.intervalMonths;
   if (hydraulicForm.value) {
     hydraulicForm.value.contract_type = preset.contractType;
     hydraulicForm.value.equipment.category = preset.category as HydraulicCheckRequest["equipment"]["category"];
+    const hebrewType = /[\u0590-\u05FF]/.test(hydraulicForm.value.inspection_type || "");
+    if (locale.value === "en" && (hebrewType || !hydraulicForm.value.inspection_type)) {
+      hydraulicForm.value.inspection_type = CRANE_REPORT_KEYS.has(preset.value) ? "Annual" : "Periodic";
+    } else if (CRANE_REPORT_KEYS.has(preset.value) && hydraulicForm.value.inspection_type === (locale.value === "en" ? "Periodic" : "תקופתית")) {
+      hydraulicForm.value.inspection_type = locale.value === "en" ? "Annual" : "שנתית";
+    }
   }
   equipmentRows.value = equipmentRows.value.map((row) => ({
     ...row,
@@ -1311,9 +1523,9 @@ function applyReportType(value?: string, options: { syncTemplate?: boolean } = {
 
 function inferReportTypeValue(contractType?: string | null, category?: string | null): string {
   const contract = String(contractType ?? "");
-  const byContract = reportTypePresets.find((preset) => preset.contractType === contract || contract.includes(preset.label.replace(/^תסקיר\s+/, "")));
+  const byContract = reportTypePresets.value.find((preset) => preset.contractType === contract || contract.includes(preset.label.replace(/^תסקיר\s+/, "")));
   if (byContract) return byContract.value;
-  const byCategory = reportTypePresets.find((preset) => preset.category === category);
+  const byCategory = reportTypePresets.value.find((preset) => preset.category === category);
   return byCategory?.value ?? "lifting_machine";
 }
 
@@ -1430,12 +1642,7 @@ function selectTemplate(id: string | null, options: { syncReportType?: boolean }
     templateValues.value = {};
     return;
   }
-  const nextValues: Record<string, string> = {};
-  for (const field of templateExtraFields.value) {
-    const defaultValue = field.bind === "findings_general" ? "אין" : "";
-    nextValues[field.bind] = templateValues.value[field.bind] || defaultValue;
-  }
-  templateValues.value = nextValues;
+  ensureTemplateValueKeys();
 
   // syncReportType is off when applyReportType() itself called this (the type
   // already drove the pick, deriving it back would be a no-op at best) and on when
@@ -1444,7 +1651,7 @@ function selectTemplate(id: string | null, options: { syncReportType?: boolean }
   // showing the wrong one. A template with no reportTypeKey (a custom layout) is
   // left alone: it isn't tied to one legal report type, so there's nothing to sync.
   if ((options.syncReportType ?? false) && template.value.reportTypeKey) {
-    const preset = reportTypePresets.find((p) => p.value === template.value?.reportTypeKey);
+    const preset = reportTypePresets.value.find((p) => p.value === template.value?.reportTypeKey);
     if (preset && preset.value !== reportType.value) {
       applyReportType(preset.value, {syncTemplate: false});
     }
@@ -1492,11 +1699,12 @@ function addEquipment() {
 function removeEquipment(index: number) {
   if (equipmentRows.value.length <= 1) return;
   const row = equipmentRows.value[index];
-  const label = row?.name?.trim() || `מכונה ${index + 1}`;
+  const label = row?.name?.trim() || t("hydraulicModal.defaultEquipmentLabel", {n: index + 1});
   confirm({
-    title: "מחיקת מכונה",
-    content: `להסיר את "${label}" מהתסקיר?`,
-    confirmText: "מחק",
+    title: l.value.hydraulicModal.removeEquipmentTitle,
+    content: t("hydraulicModal.removeEquipmentContent", {label}),
+    confirmText: l.value.common.delete,
+    cancelText: l.value.common.cancel,
     onConfirm: () => {
       equipmentRows.value.splice(index, 1);
     },
@@ -1517,7 +1725,7 @@ function guessReportTypeFromText(...texts: Array<string | null | undefined>): Re
   const haystack = texts.filter(Boolean).join(" ");
   if (!haystack) return null;
   let best: {preset: ReportTypePreset; length: number} | null = null;
-  for (const preset of reportTypePresets) {
+  for (const preset of reportTypePresets.value) {
     const label = categoryDefaults.find((cat) => cat.value === preset.category)?.label;
     if (!label || !haystack.includes(label)) continue;
     if (!best || label.length > best.length) best = {preset, length: label.length};
@@ -1670,7 +1878,7 @@ function saveCurrentDraft() {
 
 async function editSavedDraft() {
   if (!draftStore.draft) {
-    message.info("אין טיוטה שמורה לעריכה");
+    message.info(l.value.hydraulicModal.noDraftToEdit);
     return;
   }
   await open();
@@ -1678,12 +1886,13 @@ async function editSavedDraft() {
 
 function clearDraft() {
   confirm({
-    title: "מחיקת טיוטה",
-    content: "למחוק את הטיוטה השמורה? פעולה זו אינה הפיכה.",
-    confirmText: "מחק",
+    title: l.value.hydraulicModal.clearDraftTitle,
+    content: l.value.hydraulicModal.clearDraftContent,
+    confirmText: l.value.common.delete,
+    cancelText: l.value.common.cancel,
     onConfirm: () => {
       draftStore.clear();
-      message.success("הטיוטה נמחקה");
+      message.success(l.value.hydraulicModal.draftCleared);
     },
   });
 }
@@ -1803,7 +2012,7 @@ function buildTemplateDraft(): Record<string, string> {
     contract_type: selectedReportType.value.contractType,
     report_type: selectedReportType.value.label,
     inspection_interval_months: String(intervalMonths.value),
-    inspection_type: form.inspection_type || "תקופתית",
+    inspection_type: form.inspection_type || (locale.value === "en" ? "Periodic" : "תקופתית"),
     inspection_location: form.inspection_location ?? "",
     client_name: business.contact_person ?? "",
     contact_person: business.contact_person ?? "",
@@ -1864,14 +2073,23 @@ function buildTemplateDraft(): Record<string, string> {
   }
 
   for (const [key, value] of Object.entries(templateValues.value)) {
-    data[key] = value ?? "";
+    const next = value ?? "";
+    data[key] = locale.value === "en" && next.trim() === "אין" ? l.value.common.none : next;
+  }
+  for (const table of templateTableEditors.value) {
+    table.rowIndexes.forEach((rowIndex) => {
+      const first = table.columns[0];
+      if (!first) return;
+      const key = equipmentTableCellKey(first.bind, rowIndex);
+      if (!String(data[key] ?? "").trim() && table.fixedRows[rowIndex]) {
+        data[key] = table.fixedRows[rowIndex];
+      }
+    });
   }
   return data;
 }
 
-const previewLayout = computed<PrintTemplateLayout | null>(() =>
-    template.value?.editorType === "sections" ? template.value.layout ?? null : null,
-);
+const previewLayout = computed<PrintTemplateLayout | null>(() => activeLayout.value);
 
 const showLayoutPreview = computed(() => Boolean(previewLayout.value));
 
@@ -1896,14 +2114,14 @@ function buildTemplateDraftMeta(): Record<string, unknown> {
 
 function validateBillingDocument() {
   if (!billingDocumentKind.value) return;
-  if (!selectedBillingLines.value.length) throw new Error("יש לבחור לפחות סעיף שירות אחד להצעת המחיר");
+  if (!selectedBillingLines.value.length) throw new Error(l.value.quotes.needServiceLine);
   if (billingVatPercent.value === null || billingVatPercent.value < 0 || billingVatPercent.value > 100) {
-    throw new Error("יש להזין שיעור מע״מ תקין");
+    throw new Error(l.value.quotes.invalidVat);
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(billingDueDate.value)) throw new Error("יש להזין תאריך תוקף / תשלום תקין");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(billingDueDate.value)) throw new Error(l.value.quotes.invalidDueDate);
   if (reportBillingRates.value.some((rate) => !rate.section.trim() || !rate.label.trim()
     || !Number.isFinite(billingRateAmounts.value[rate.id]) || billingRateAmounts.value[rate.id] < 0)) {
-    throw new Error("יש להשלים סעיף, תיאור ומחיר בכל שורות המחירון");
+    throw new Error(l.value.quotes.incompleteLine);
   }
 }
 
@@ -2231,6 +2449,10 @@ defineExpose({open, openForUpdate});
 :global(.hydraulic-modal.n-card),
 :global(.n-modal.hydraulic-modal) {
   direction: rtl;
+}
+:global(.hydraulic-modal--ltr.n-card),
+:global(.n-modal.hydraulic-modal--ltr) {
+  direction: ltr;
   width: min(1260px, 96vw) !important;
   max-width: 96vw !important;
   display: flex;
@@ -2547,6 +2769,69 @@ defineExpose({open, openForUpdate});
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.hm-table-wrap {
+  overflow-x: auto;
+}
+
+.hm-rope-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.hm-rope-table th,
+.hm-rope-table td {
+  padding: 4px;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  vertical-align: top;
+}
+
+.hm-rope-table th {
+  text-align: start;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hm-check-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.hm-check-group {
+  margin-top: 10px;
+}
+
+.hm-check-group__title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.hm-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hm-check-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hm-check-item__text {
+  flex: 1;
+  font-size: 13px;
+}
+
+.hm-check-item__ref {
+  display: block;
+  color: var(--text-secondary, #666);
+  font-size: 11px;
 }
 
 .hm-field--deadline {

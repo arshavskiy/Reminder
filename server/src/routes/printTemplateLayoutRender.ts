@@ -1,5 +1,5 @@
 import type {PrintTemplateLayout, PrintTemplateSection} from "../shared/printTemplateLayout.js";
-import {DEFAULT_SIGNATURE_CERTIFICATION} from "../shared/printTemplateLayout.js";
+import {signatureCertificationText} from "../shared/printTemplateLayout.js";
 
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -88,10 +88,15 @@ function renderFieldsGrid(fields: { label: string; bind: string; bold?: boolean;
   return `<table class="fields-grid"><tbody>${rows.join("")}</tbody></table>`;
 }
 
-function renderEquipmentTable(columns: { label: string; bind: string }[], data: Record<string, unknown>): string {
+function renderEquipmentTable(
+  section: Extract<PrintTemplateSection, { type: "equipment_table" }>,
+  data: Record<string, unknown>,
+): string {
+  const columns = section.columns;
   const head = columns.map((c) => `<th>${escHtml(c.label)}</th>`).join("");
+  const minRows = Math.max(section.fixedRows?.length ?? 1, section.minRows ?? 1);
   const rowCount = (() => {
-    let max = 1;
+    let max = minRows;
     for (const key of Object.keys(data)) {
       for (const col of columns) {
         const prefix = `${col.bind}_`;
@@ -103,9 +108,10 @@ function renderEquipmentTable(columns: { label: string; bind: string }[], data: 
     return max;
   })();
   const body = Array.from({length: rowCount}, (_, rowIndex) => {
-    const cells = columns.map((col) => {
+    const cells = columns.map((col, colIndex) => {
       const key = rowIndex === 0 ? col.bind : `${col.bind}_${rowIndex + 1}`;
-      const parts = String(data[key] ?? "").split(/\r?\n/).map((part) => part.trim()).filter(Boolean);
+      const fallback = colIndex === 0 ? section.fixedRows?.[rowIndex] ?? "" : "";
+      const parts = String(data[key] ?? fallback).split(/\r?\n/).map((part) => part.trim()).filter(Boolean);
       if (parts.length <= 1) return `<td>${escHtml(parts[0] ?? "")}</td>`;
       const items = parts.map((part) => `<div class="stack__item">${escHtml(part)}</div>`).join("");
       return `<td class="stack-td"><div class="stack">${items}</div></td>`;
@@ -115,8 +121,15 @@ function renderEquipmentTable(columns: { label: string; bind: string }[], data: 
   return `<table class="data equip"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
-function renderFindings(section: Extract<PrintTemplateSection, { type: "findings" }>, data: Record<string, unknown>, color: string): string {
-  const head = `<tr><th style="width:40px">מס׳</th><th style="width:120px">נושא</th><th colspan="2">פירוט</th></tr>`;
+function renderFindings(
+  section: Extract<PrintTemplateSection, { type: "findings" }>,
+  data: Record<string, unknown>,
+  color: string,
+  dir: "rtl" | "ltr" = "rtl",
+): string {
+  const head = dir === "ltr"
+    ? `<tr><th style="width:40px">No.</th><th style="width:120px">Subject</th><th colspan="2">Details</th></tr>`
+    : `<tr><th style="width:40px">מס׳</th><th style="width:120px">נושא</th><th colspan="2">פירוט</th></tr>`;
   // A finding nobody filled in prints as an empty numbered row, which reads as
   // an unanswered item rather than one that doesn't apply — same rule the
   // preview applies, so the PDF matches what the inspector saw.
@@ -126,9 +139,43 @@ function renderFindings(section: Extract<PrintTemplateSection, { type: "findings
   ).join("");
   let deadline = "";
   if (section.deadlineBind && isFilled(section.deadlineBind)) {
-    deadline = `<tr><td class="num">${escHtml(section.deadlineLabel ?? "תוך")}</td><td class="detail">${fieldValue(data, section.deadlineBind)}</td><td colspan="2" class="detail">${escHtml(section.deadlineSuffix ?? "")}</td></tr>`;
+    deadline = `<tr><td class="num">${escHtml(section.deadlineLabel ?? (dir === "ltr" ? "Within" : "תוך"))}</td><td class="detail">${fieldValue(data, section.deadlineBind)}</td><td colspan="2" class="detail">${escHtml(section.deadlineSuffix ?? "")}</td></tr>`;
   }
   return `<table class="data findings" style="border-color:${color}"><thead>${head}</thead><tbody>${bodyRows}${deadline}</tbody></table>`;
+}
+
+function renderChecklist(
+  section: Extract<PrintTemplateSection, { type: "checklist" }>,
+  data: Record<string, unknown>,
+  color: string,
+): string {
+  const cols = section.columns ?? 2;
+  const legend = section.codeLegend
+    ? `<div class="checklist-legend">${escHtml(section.codeLegend)}</div>`
+    : "";
+  const groups = section.groups.map((group) => {
+    const heading = group.title
+      ? `<div class="checklist-group-title">${escHtml(group.title)}</div>`
+      : "";
+    const rows: string[] = [];
+    for (let i = 0; i < group.items.length; i += cols) {
+      const rowItems = group.items.slice(i, i + cols);
+      const cells = rowItems.map((item) => {
+        const ref = item.reference ? `<span class="checklist-ref">${escHtml(item.reference)}</span>` : "";
+        const raw = String(data[item.bind] ?? "").trim();
+        const marks = section.markStyle === "acceptable_na"
+          ? `<span class="cl-marks"><span class="cl-box${/^(A|OK|Acceptable|Yes)$/i.test(raw) ? " on" : ""}">A</span><span class="cl-box${/^(N|NA|N-A|N\/A|Not Applicable)$/i.test(raw) ? " on" : ""}">NA</span></span>`
+          : `<span class="checklist-code">${fieldValue(data, item.bind)}</span>`;
+        return `<td class="checklist-cell"><span class="checklist-num">${escHtml(item.number)}.</span>${ref}<span class="checklist-label">${escHtml(item.label)}</span>${marks}</td>`;
+      }).join("");
+      const padCells = cols - rowItems.length > 0
+        ? `<td class="checklist-cell checklist-cell--empty"></td>`.repeat(cols - rowItems.length)
+        : "";
+      rows.push(`<tr>${cells}${padCells}</tr>`);
+    }
+    return `${heading}<table class="data checklist" style="border-color:${color}"><tbody>${rows.join("")}</tbody></table>`;
+  }).join("");
+  return `${legend}${groups}`;
 }
 
 function sectionClass(section: PrintTemplateSection, base: string): string {
@@ -136,28 +183,28 @@ function sectionClass(section: PrintTemplateSection, base: string): string {
   return noBorder ? `${base} no-border` : base;
 }
 
-function renderSection(section: PrintTemplateSection, data: Record<string, unknown>, color: string): string {
+function renderSection(section: PrintTemplateSection, data: Record<string, unknown>, color: string, dir: "rtl" | "ltr" = "rtl"): string {
   switch (section.type) {
     case "header": {
-      const leftFields = section.fields.slice(0, 2);
-      const rightFields = section.fields.slice(2, 4);
-      const leftMeta = leftFields.map((f) => {
+      const startFields = dir === "ltr" ? section.fields.slice(0, 2) : section.fields.slice(2, 4);
+      const endFields = dir === "ltr" ? section.fields.slice(2, 4) : section.fields.slice(0, 2);
+      const startMeta = startFields.map((f) => {
         const cls = fieldTextClass(f);
         return `<div class="hdr-field${cls ? ` ${cls}` : ""}"><span class="hdr-lbl">${escHtml(f.label)}:</span><span class="hdr-val">${fieldValue(data, f.bind)}</span></div>`;
       }).join("");
-      const rightMeta = rightFields.map((f) => {
+      const endMeta = endFields.map((f) => {
         const cls = fieldTextClass(f);
         return `<div class="hdr-field${cls ? ` ${cls}` : ""}"><span class="hdr-lbl">${escHtml(f.label)}:</span><span class="hdr-val">${fieldValue(data, f.bind)}</span></div>`;
       }).join("");
       return `<section class="${sectionClass(section, "block header-block")}">
         <table class="header-table"><tbody>
           <tr>
-            <td class="hdr-side hdr-right">${rightMeta}</td>
+            <td class="hdr-side hdr-start">${startMeta}</td>
             <td class="hdr-center">
               <div class="hdr-title${headingTextClass(section, "title")}">${escHtml(section.title)}</div>
               ${section.subtitle ? `<div class="hdr-sub${headingTextClass(section, "subtitle")}">${escHtml(section.subtitle)}</div>` : ""}
             </td>
-            <td class="hdr-side hdr-left">${leftMeta}</td>
+            <td class="hdr-side hdr-end">${endMeta}</td>
           </tr>
         </tbody></table>
       </section>`;
@@ -167,27 +214,27 @@ function renderSection(section: PrintTemplateSection, data: Record<string, unkno
       return `<section class="${sectionClass(section, "block")}">${section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : ""}${renderFieldsGrid(section.fields, data, cols)}</section>`;
     }
     case "equipment_table":
-      return `<section class="${sectionClass(section, "block")}">${section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : ""}${renderEquipmentTable(section.columns, data)}</section>`;
+      return `<section class="${sectionClass(section, "block")}">${section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : ""}${renderEquipmentTable(section, data)}</section>`;
     case "findings":
-      return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div>${renderFindings(section, data, color)}</section>`;
+      return `<section class="${sectionClass(section, "block")}"><div class="sec-title">${escHtml(section.title)}</div>${renderFindings(section, data, color, dir)}</section>`;
+    case "checklist":
+      return `<section class="${sectionClass(section, "block")}">${section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : ""}${renderChecklist(section, data, color)}</section>`;
     case "static_text":
       return `<section class="${sectionClass(section, "block")}">${section.title ? `<div class="sec-title">${escHtml(section.title)}</div>` : ""}<p class="static">${escHtml(section.text)}</p></section>`;
     case "signature": {
       if (!section.enabled) return "";
-        const certTemplate = section.certificationText === ""
-            ? ""
-            : (section.certificationText ?? DEFAULT_SIGNATURE_CERTIFICATION);
+        const certTemplate = signatureCertificationText(section, dir) ?? "";
         const cert = certTemplate ? renderCertificationHtml(certTemplate, data) : "";
       // A template may pin its own signature image; otherwise fall back to the
       // one stored on the user, so a signature uploaded once in the profile
       // reaches every template without being copied into each layout.
       const sigSrc = section.imageSrc || String(data.user_signature_url ?? "");
-      const sigImg = sigSrc ? renderImage(sigSrc, "חתימה", 120) : "";
+      const sigImg = sigSrc ? renderImage(sigSrc, dir === "ltr" ? "Signature" : "חתימה", 120) : "";
         const align = section.align ?? "left";
       return `<section class="${sectionClass(section, "block sig-block")}">
         ${cert}
         <div class="sig-mark sig-align-${align}">
-          <div class="sig-label">חתימת הבודק:</div>
+          <div class="sig-label">${dir === "ltr" ? "Inspector signature:" : "חתימת הבודק:"}</div>
           <div class="sig-content">
             <div class="sig-image">${sigImg}</div>
           </div>
@@ -229,7 +276,7 @@ export function renderSectionTemplateHtml(
     ? layout.styles.borderColor
     : "#111111";
   const bw = borderWidthPx(layout.styles.borderWidth);
-  const sections = layout.sections.map((s) => renderSection(s, data, color)).join("\n");
+  const sections = layout.sections.map((s) => renderSection(s, data, color, dir)).join("\n");
 
   return `<!DOCTYPE html>
 <html dir="${dir}">
@@ -258,16 +305,16 @@ export function renderSectionTemplateHtml(
   .hdr-sub--bold { font-weight: 700; }
   .hdr-field { margin-bottom: 3px; font-size: 10px; }
   .hdr-lbl { font-weight: inherit; }
-  .hdr-val { margin-right: 4px; }
+  .hdr-val { margin-inline-start: 4px; }
   .field-text--small { font-size: 8px; }
   .field-text--bold { font-weight: 700; }
-  .hdr-right { text-align: right; }
-  .hdr-left { text-align: left; }
+  .hdr-start { text-align: start; }
+  .hdr-end { text-align: end; }
 
   /* Fields grid (multi-column) */
   .fields-grid { width: 100%; border-collapse: collapse; }
   .fields-grid td { padding: 2px 4px; vertical-align: top; font-size: 10px; }
-  .fields-grid td.lbl { font-weight: inherit; white-space: nowrap; width: 70px; text-align: right; }
+  .fields-grid td.lbl { font-weight: inherit; white-space: nowrap; width: 70px; text-align: start; }
   .fields-grid td.val { border-bottom: 1px solid #ccc; min-width: 80px; }
 
   /* Data tables */
@@ -280,15 +327,29 @@ export function renderSectionTemplateHtml(
   .stack__item { flex: 1; display: flex; align-items: center; justify-content: center; padding: 4px 6px; border-bottom: 1px solid ${color}; }
   .stack__item:last-child { border-bottom: none; }
   table.findings td.num { width: 40px; }
-  table.findings td.subj { width: 80px; font-weight: 600; text-align: right; }
-  table.findings td.detail { text-align: right; }
+  table.findings td.subj { width: 80px; font-weight: 600; text-align: start; }
+  table.findings td.detail { text-align: start; }
+
+  /* Checklist */
+  .checklist-legend { font-size: 9px; font-style: italic; margin-bottom: 4px; }
+  .checklist-group-title { font-size: 10px; font-weight: 700; background: #f0f0f0; padding: 3px 6px; margin-top: 4px; }
+  table.checklist { margin-bottom: 2px; }
+  table.checklist td.checklist-cell { text-align: left; vertical-align: top; padding: 3px 6px; }
+  table.checklist td.checklist-cell--empty { border: none; }
+  .checklist-num { font-weight: 700; margin-right: 3px; }
+  .checklist-ref { display: block; font-size: 8px; color: #555; }
+  .checklist-label { margin-right: 4px; }
+  .checklist-code { float: inline-end; font-weight: 700; border-bottom: 1px solid #999; min-width: 24px; text-align: center; display: inline-block; }
+  .cl-marks { float: inline-end; display: inline-flex; gap: 4px; }
+  .cl-box { min-width: 18px; padding: 0 3px; border: 1px solid ${color}; font-size: 8px; font-weight: 700; text-align: center; }
+  .cl-box.on { background: #111; color: #fff; }
 
   /* Static text */
   .static { line-height: 1.4; font-size: 10px; text-align: justify; }
 
   /* Signature */
   .sig-block { min-height: 70px; }
-  .sig-cert { font-size: 10px; line-height: 1.45; margin-bottom: 8px; text-align: right; }
+  .sig-cert { font-size: 10px; line-height: 1.45; margin-bottom: 8px; text-align: start; }
   .sig-cert-line { margin-bottom: 2px; }
   .sig-cert-num { text-decoration: underline; }
   .sig-cert-details { font-weight: 700; margin-top: 2px; }

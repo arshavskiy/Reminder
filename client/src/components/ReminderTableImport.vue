@@ -3,46 +3,46 @@
   <button v-if="variant === 'card'" type="button" class="table-import-card" @click="show = true">
     <span class="table-import-card__top">
       <n-icon :component="GridOutline" :size="22" />
-      <span class="table-import-card__label">ייבוא Excel / CSV</span>
+      <span class="table-import-card__label">{{ l.reminderTableImport.cardLabel }}</span>
     </span>
-    <span class="table-import-card__hint">הוסף תזכורות מקובץ</span>
+    <span class="table-import-card__hint">{{ l.reminderTableImport.cardHint }}</span>
   </button>
   <slot v-else name="trigger" :open="() => (show = true)">
     <button type="button" class="btn btn--ghost" @click="show = true">
       <n-icon :component="GridOutline" class="btn-icon" />
-      ייבוא Excel / CSV
+      {{ l.reminderTableImport.triggerButton }}
     </button>
   </slot>
-  <n-modal v-model:show="show" preset="card" title="ייבוא תזכורות מטבלה" :style="{width: '900px', maxWidth: 'calc(100vw - 32px)'}" :mask-closable="!busy" :closable="!busy">
-    <div class="table-import" dir="rtl">
-      <p class="table-import__intro">הוסיפו לקוחות, תאריכי תוקף ותזכורות מתוך קובץ אחד. בדקו את הנתונים לפני השמירה.</p>
-      <ol class="table-import__steps" aria-label="שלבי הייבוא">
-        <li :class="{'is-active': !preview}"><span>1</span> בחירת קובץ</li>
-        <li :class="{'is-active': preview && !confirmed}"><span>2</span> בדיקת הנתונים</li>
-        <li :class="{'is-active': confirmed}"><span>3</span> ייבוא למערכת</li>
+  <n-modal v-model:show="show" preset="card" :title="l.reminderTableImport.modalTitle" :style="{width: '900px', maxWidth: 'calc(100vw - 32px)'}" :mask-closable="!busy" :closable="!busy">
+    <div class="table-import" :dir="dir">
+      <p class="table-import__intro">{{ l.reminderTableImport.intro }}</p>
+      <ol class="table-import__steps" :aria-label="l.reminderTableImport.stepsAria">
+        <li :class="{'is-active': !preview}"><span>1</span> {{ l.reminderTableImport.step1 }}</li>
+        <li :class="{'is-active': preview && !confirmed}"><span>2</span> {{ l.reminderTableImport.step2 }}</li>
+        <li :class="{'is-active': confirmed}"><span>3</span> {{ l.reminderTableImport.step3 }}</li>
       </ol>
-      <section class="table-import__templates" aria-label="קבצים לדוגמה">
-        <div class="table-import__section-heading"><strong>מתחילים עם קובץ לדוגמה?</strong><span>20 פריטים בכל קובץ · אותם נתונים בכל הפורמטים</span></div>
+      <section class="table-import__templates" :aria-label="l.reminderTableImport.templatesAria">
+        <div class="table-import__section-heading"><strong>{{ l.reminderTableImport.templatesHeading }}</strong><span>{{ l.reminderTableImport.templatesSub }}</span></div>
         <div class="table-import__links">
-          <a href="/templates/remindocr-import-20.xlsx" download="remindocr-import-20.xlsx"><n-icon :component="DocumentOutline" :size="22" /><span><strong>Excel</strong><small>כותרות בעברית · XLSX</small></span><n-icon :component="DownloadOutline" :size="18" /></a>
-          <a href="/templates/remindocr-import-20-he.csv" download="remindocr-import-20-he.csv"><n-icon :component="DocumentTextOutline" :size="22" /><span><strong>CSV בעברית</strong><small>20 פריטים לדוגמה</small></span><n-icon :component="DownloadOutline" :size="18" /></a>
-          <a href="/templates/remindocr-import-20-en.csv" download="remindocr-import-20-en.csv"><n-icon :component="DocumentTextOutline" :size="22" /><span><strong>CSV באנגלית</strong><small>English column headers</small></span><n-icon :component="DownloadOutline" :size="18" /></a>
+          <a href="/templates/remindocr-import-20.xlsx" download="remindocr-import-20.xlsx"><n-icon :component="DocumentOutline" :size="22" /><span><strong>{{ l.reminderTableImport.templateExcel }}</strong><small>{{ l.reminderTableImport.templateExcelSub }}</small></span><n-icon :component="DownloadOutline" :size="18" /></a>
+          <a href="/templates/remindocr-import-20-he.csv" download="remindocr-import-20-he.csv"><n-icon :component="DocumentTextOutline" :size="22" /><span><strong>{{ l.reminderTableImport.templateCsvHe }}</strong><small>{{ l.reminderTableImport.templateCsvHeSub }}</small></span><n-icon :component="DownloadOutline" :size="18" /></a>
+          <a href="/templates/remindocr-import-20-en.csv" download="remindocr-import-20-en.csv"><n-icon :component="DocumentTextOutline" :size="22" /><span><strong>{{ l.reminderTableImport.templateCsvEn }}</strong><small>{{ l.reminderTableImport.templateCsvEnSub }}</small></span><n-icon :component="DownloadOutline" :size="18" /></a>
         </div>
       </section>
       <div class="table-import__upload" :class="{'is-dragging': dragging}" @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false" @drop.prevent="dropFile">
         <n-icon :component="CloudUploadOutline" :size="34" class="table-import__upload-icon" />
-        <strong>{{ file?.name || 'גררו לכאן קובץ Excel או CSV' }}</strong>
-        <span>{{ file ? 'אפשר לבחור קובץ אחר כדי להחליף את הנתונים' : 'טבלאות בעברית ובאנגלית מתקבלות באופן אוטומטי' }}</span>
-        <n-button :disabled="busy" secondary type="primary" @click="fileInput?.click()">{{ file ? 'החלפת קובץ' : 'בחירת קובץ מהמחשב' }}</n-button>
-        <small dir="ltr">CSV / XLS / XLSX · 5 MB · עד 500 פריטים</small>
-        <input ref="fileInput" class="table-import__file-input" type="file" accept=".csv,.xls,.xlsx" :disabled="busy" aria-label="בחירת קובץ לייבוא" @change="selectFile" />
+        <strong>{{ file?.name || l.reminderTableImport.dropHint }}</strong>
+        <span>{{ file ? l.reminderTableImport.dropHintHasFile : l.reminderTableImport.dropHintNoFile }}</span>
+        <n-button :disabled="busy" secondary type="primary" @click="fileInput?.click()">{{ file ? l.reminderTableImport.replaceFile : l.reminderTableImport.chooseFile }}</n-button>
+        <small dir="ltr">{{ l.reminderTableImport.fileLimits }}</small>
+        <input ref="fileInput" class="table-import__file-input" type="file" accept=".csv,.xls,.xlsx" :disabled="busy" :aria-label="l.reminderTableImport.fileInputAria" @change="selectFile" />
       </div>
-      <div class="table-import__requirements"><n-icon :component="InformationCircleOutline" :size="18" /><p>שדות חובה: <strong>שם תזכורת</strong> ו־<strong>תאריך תפוגה</strong> (<bdi>YYYY-MM-DD</bdi>). ללא ימי התראה, התזכורת תיווצר ביום התפוגה.</p></div>
+      <div class="table-import__requirements"><n-icon :component="InformationCircleOutline" :size="18" /><p>{{ t('reminderTableImport.requirements', {name: l.reminderTableImport.requiredName, expiry: l.reminderTableImport.requiredExpiry, format: 'YYYY-MM-DD'}) }}</p></div>
       <n-alert v-if="error" type="error" role="alert">{{ error }}</n-alert>
       <n-alert v-if="success" type="success" role="status">{{ success }}</n-alert>
       <n-spin :show="busy">
         <template v-if="preview">
-          <div class="table-import__summary"><strong>תצוגה מקדימה</strong><span>{{ preview.rows.length }} פריטים · {{ preview.reminderCount }} תזכורות · {{ preview.newReminderCount }} חדשות</span></div>
+          <div class="table-import__summary"><strong>{{ l.reminderTableImport.previewTitle }}</strong><span>{{ t('reminderTableImport.previewSummary', {rows: preview.rows.length, reminders: preview.reminderCount, newReminders: preview.newReminderCount}) }}</span></div>
           <div class="table-import__messages">
             <n-alert v-for="warning in preview.warnings" :key="warning" type="warning">{{ warning }}</n-alert>
             <n-alert v-for="issue in preview.errors" :key="issue" type="error">{{ issue }}</n-alert>
@@ -51,12 +51,12 @@
             <table>
               <thead>
                 <tr>
-                  <th>שורה</th>
-                  <th>שם</th>
-                  <th>לקוח</th>
-                  <th>תפוגה</th>
-                  <th>תאריכי תזכורות</th>
-                  <th>נמענים</th>
+                  <th>{{ l.reminderTableImport.colRow }}</th>
+                  <th>{{ l.reminderTableImport.colName }}</th>
+                  <th>{{ l.reminderTableImport.colClient }}</th>
+                  <th>{{ l.reminderTableImport.colExpiry }}</th>
+                  <th>{{ l.reminderTableImport.colReminderDates }}</th>
+                  <th>{{ l.reminderTableImport.colRecipients }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -66,15 +66,15 @@
                   <td><span class="reminder-client-link">{{ row.fields.clientName || "—" }}</span></td>
                   <td><span class="reminder-date-cell__date" dir="ltr">{{ row.expiry }}</span></td>
                   <td class="reminder-muted-cell" dir="ltr">{{ row.dates.join(", ") }}</td>
-                  <td class="reminder-email-cell">{{ row.recipients.join("; ") || "ללא אימייל" }}</td>
+                  <td class="reminder-email-cell">{{ row.recipients.join("; ") || l.reminderTableImport.noEmail }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <details class="table-import__details"><summary>מה יקרה לאחר הייבוא?</summary><p>מסמכים, אחראי, תיקייה, תגיות ועדיפות נשמרים כמידע נלווה. קבצים מצורפים אינם מועלים דרך הטבלה. ייבוא חוזר של אותם מזהים ידלג על תזכורות קיימות.</p><p>תזכורות עם נמענים יטופלו לפי הגדרות השליחה בחשבון. סנכרון Google Calendar דורש חיבור יומן פעיל.</p></details>
+          <details class="table-import__details"><summary>{{ l.reminderTableImport.detailsSummary }}</summary><p>{{ l.reminderTableImport.detailsBody1 }}</p><p>{{ l.reminderTableImport.detailsBody2 }}</p></details>
         </template>
       </n-spin>
-      <div class="table-import__footer"><span>{{ confirmed ? 'הייבוא הושלם' : 'הנתונים יישמרו רק לאחר אישור הייבוא' }}</span><div><n-button :disabled="busy" @click="show = false">{{ confirmed ? 'סגירה' : 'ביטול' }}</n-button><n-button v-if="!confirmed" type="primary" :loading="busy" :disabled="busy || !preview || preview.errors.length > 0 || !preview.rows.length" @click="confirm">{{ preview ? `ייבוא ${preview.rows.length} פריטים` : 'ייבוא למערכת' }}</n-button></div></div>
+      <div class="table-import__footer"><span>{{ confirmed ? l.reminderTableImport.footerConfirmed : l.reminderTableImport.footerPending }}</span><div><n-button :disabled="busy" @click="show = false">{{ confirmed ? l.reminderTableImport.close : l.reminderTableImport.cancel }}</n-button><n-button v-if="!confirmed" type="primary" :loading="busy" :disabled="busy || !preview || preview.errors.length > 0 || !preview.rows.length" @click="confirm">{{ preview ? t('reminderTableImport.importN', {count: preview.rows.length}) : l.reminderTableImport.importToSystem }}</n-button></div></div>
     </div>
   </n-modal>
   </div>
@@ -85,9 +85,11 @@ import {ref} from "vue";
 import {NAlert, NButton, NIcon, NModal, NSpin} from "naive-ui";
 import {GridOutline, CloudUploadOutline, DownloadOutline, DocumentOutline, DocumentTextOutline, InformationCircleOutline} from "@vicons/ionicons5";
 import {api} from "../services/apiService";
+import {useI18n} from "../composables/useI18n.js";
 type Preview = {rows: {row: number; sheet: string; name: string; expiry: string; dates: string[]; recipients: string[]; fields: Record<string, string>}[]; errors: string[]; warnings: string[]; reminderCount: number; newReminderCount: number};
 withDefaults(defineProps<{variant?: "button" | "card"}>(), {variant: "button"});
 const emit = defineEmits<{imported: []}>();
+const {l, t, dir} = useI18n();
 const show = ref(false);
 const busy = ref(false);
 const file = ref<File | null>(null);
@@ -104,15 +106,15 @@ async function selectFile(event: Event) {
 async function dropFile(event: DragEvent) {
   dragging.value = false;
   if (busy.value) return;
-  if (event.dataTransfer?.files.length !== 1) { error.value = "יש לבחור קובץ אחד בכל ייבוא"; return; }
+  if (event.dataTransfer?.files.length !== 1) { error.value = l.value.reminderTableImport.errorOneFile; return; }
   await previewFile(event.dataTransfer.files[0]);
 }
 async function previewFile(selected: File | null) {
   file.value = selected;
   preview.value = null; error.value = ""; success.value = ""; confirmed.value = false;
   if (!file.value) return;
-  if (!/\.(csv|xls|xlsx)$/i.test(file.value.name)) { error.value = "יש לבחור קובץ CSV או Excel"; return; }
-  if (file.value.size > 5 * 1024 * 1024) { error.value = "גודל הקובץ המרבי הוא 5 MB"; return; }
+  if (!/\.(csv|xls|xlsx)$/i.test(file.value.name)) { error.value = l.value.reminderTableImport.errorFileType; return; }
+  if (file.value.size > 5 * 1024 * 1024) { error.value = l.value.reminderTableImport.errorFileSize; return; }
   busy.value = true;
   try { preview.value = await api.importReminderTable<Preview>(file.value, "preview"); }
   catch (e) { error.value = (e as Error).message; }
@@ -123,9 +125,9 @@ async function confirm() {
   busy.value = true; error.value = "";
   try {
     const result = await api.importReminderTable<{createdReminders: number; skippedReminders: number}>(file.value, "confirm");
-    success.value = `נוצרו ${result.createdReminders} תזכורות. ${result.skippedReminders} תזכורות קיימות דולגו.`;
+    success.value = t("reminderTableImport.successMessage", {created: result.createdReminders, skipped: result.skippedReminders});
     confirmed.value = true; emit("imported");
-  } catch (e) { error.value = `${(e as Error).message}. ניתן לנסות שוב עם אותו קובץ; תזכורות שכבר נוצרו לא יוכפלו.`; }
+  } catch (e) { error.value = t("reminderTableImport.errorRetryHint", {message: (e as Error).message}); }
   finally { busy.value = false; }
 }
 </script>

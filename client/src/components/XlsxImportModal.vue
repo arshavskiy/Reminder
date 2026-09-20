@@ -1,5 +1,5 @@
 <template>
-  <n-modal v-model:show="visible" :mask-closable="false" preset="card" style="width: 680px" title="ייבוא ציוד מ-Excel">
+  <n-modal v-model:show="visible" :mask-closable="false" preset="card" style="width: 680px" :title="l.xlsxImportModal.title">
     <!-- Step 1: Upload -->
     <template v-if="step === 'upload'">
       <div
@@ -12,24 +12,24 @@
       >
         <input ref="fileInput" accept=".xlsx,.xls" style="display:none" type="file" @change="onFileChange" />
         <n-icon :component="DocumentOutline" :size="36" style="color: var(--text-muted)" />
-        <p style="margin: 8px 0 4px; font-weight: 600;">גרור קובץ Excel לכאן</p>
-        <p style="color: var(--text-muted); font-size: 13px;">או לחץ לבחירת קובץ (.xlsx / .xls)</p>
+        <p style="margin: 8px 0 4px; font-weight: 600;">{{ l.xlsxImportModal.dropMain }}</p>
+        <p style="color: var(--text-muted); font-size: 13px;">{{ l.xlsxImportModal.dropHint }}</p>
       </div>
     </template>
 
     <!-- Step 2: Column mapping -->
     <template v-else-if="step === 'mapping'">
       <p style="margin: 0 0 12px; font-size: 13px; color: var(--text-secondary)">
-        נמצאו <strong>{{ total }}</strong> שורות. שייך עמודות מהקובץ לשדות הציוד:
+        {{ t('xlsxImportModal.foundRows', { n: total }) }}
       </p>
 
-      <div class="mapping-grid">
+      <div class="mapping-grid" :dir="dir">
         <template v-for="f in FIELDS" :key="f.key">
           <label class="mapping-label">{{ f.label }}<span v-if="f.required" style="color:#d03050"> *</span></label>
           <n-select
             v-model:value="mapping[f.key]"
             :options="columnOptions"
-            :placeholder="`בחר עמודה...`"
+            :placeholder="l.xlsxImportModal.columnPlaceholder"
             :virtual-scroll="false"
             clearable
             size="small"
@@ -38,7 +38,7 @@
       </div>
 
       <div v-if="preview.length" style="margin-top: 16px">
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px">תצוגה מקדימה (5 שורות ראשונות):</p>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px">{{ l.xlsxImportModal.previewLabel }}</p>
         <div class="preview-table-wrap">
           <table class="preview-table">
             <thead>
@@ -60,17 +60,17 @@
     <template v-else-if="step === 'done'">
       <div class="done-screen">
         <n-icon :component="CheckmarkCircleOutline" :size="48" style="color: var(--brand-color)" />
-        <p class="done-screen__title">הייבוא הושלם</p>
-        <p class="done-screen__sub">נוספו <strong>{{ result?.created }}</strong> פריטים · דולגו <strong>{{ result?.skipped }}</strong> (כפולים / שורות ריקות)</p>
+        <p class="done-screen__title">{{ l.xlsxImportModal.importComplete }}</p>
+        <p class="done-screen__sub">{{ t('xlsxImportModal.importSummary', { created: result?.created ?? 0, skipped: result?.skipped ?? 0 }) }}</p>
       </div>
     </template>
 
     <template #footer>
       <n-space justify="end">
-        <n-button v-if="step !== 'done'" @click="close">ביטול</n-button>
-        <n-button v-if="step === 'done'" type="primary" @click="close">סגור</n-button>
+        <n-button v-if="step !== 'done'" @click="close">{{ l.xlsxImportModal.cancel }}</n-button>
+        <n-button v-if="step === 'done'" type="primary" @click="close">{{ l.xlsxImportModal.close }}</n-button>
         <n-button v-if="step === 'mapping'" :disabled="!mapping.name" :loading="importing" type="primary" @click="confirm">
-          ייבא {{ total }} פריטים
+          {{ t('xlsxImportModal.importN', { n: total }) }}
         </n-button>
       </n-space>
     </template>
@@ -82,10 +82,12 @@ import {computed, ref} from "vue";
 import {NButton, NIcon, NModal, NSelect, NSpace, useMessage} from "naive-ui";
 import {CheckmarkCircleOutline, DocumentOutline} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
+import {useI18n} from "../composables/useI18n.js";
 
 const emit = defineEmits<{ (e: "imported"): void }>();
 const visible = defineModel<boolean>({ required: true });
 
+const {l, t, dir} = useI18n();
 const message = useMessage();
 const fileInput = ref<HTMLInputElement | null>(null);
 const dragOver = ref(false);
@@ -97,28 +99,28 @@ const preview = ref<Record<string, string>[]>([]);
 const importing = ref(false);
 const result = ref<{ created: number; skipped: number } | null>(null);
 
-const FIELDS = [
-  { key: "name",                label: "שם הציוד",                  required: true },
-  { key: "serial_number",       label: "מספר סידורי",                required: false },
-  { key: "category",            label: "קטגוריה",                   required: false },
-  { key: "manufacturer",        label: "יצרן",                      required: false },
-  { key: "model",               label: "דגם",                       required: false },
-  { key: "capacity",            label: 'עומס עבודה בטוח (ק"ג)',     required: false },
-  { key: "load_capacity_test",  label: 'עומס מבחן (ק"ג)',           required: false },
-  { key: "load_radius",         label: "רדיוס עומס",                required: false },
-  { key: "expiry_date",label: "תאריך תוקף (YYYY-MM-DD)", required: false },
-  { key: "description",         label: "תיאור",                     required: false },
-  { key: "notes",               label: "הערות",                     required: false },
-];
+const FIELDS = computed(() => [
+  { key: "name",                label: l.value.xlsxImportModal.fieldName,             required: true },
+  { key: "serial_number",       label: l.value.xlsxImportModal.fieldSerialNumber,     required: false },
+  { key: "category",            label: l.value.xlsxImportModal.fieldCategory,         required: false },
+  { key: "manufacturer",        label: l.value.xlsxImportModal.fieldManufacturer,     required: false },
+  { key: "model",               label: l.value.xlsxImportModal.fieldModel,            required: false },
+  { key: "capacity",            label: l.value.xlsxImportModal.fieldCapacity,         required: false },
+  { key: "load_capacity_test",  label: l.value.xlsxImportModal.fieldLoadCapacityTest, required: false },
+  { key: "load_radius",         label: l.value.xlsxImportModal.fieldLoadRadius,       required: false },
+  { key: "expiry_date",         label: l.value.xlsxImportModal.fieldExpiryDate,       required: false },
+  { key: "description",         label: l.value.xlsxImportModal.fieldDescription,      required: false },
+  { key: "notes",               label: l.value.xlsxImportModal.fieldNotes,            required: false },
+]);
 
-const mapping = ref<Record<string, string>>(Object.fromEntries(FIELDS.map(f => [f.key, ""])));
+const mapping = ref<Record<string, string>>(Object.fromEntries(FIELDS.value.map(f => [f.key, ""])));
 
 const columnOptions = computed(() =>
   headers.value.map(h => ({ label: h, value: h }))
 );
 
 const mappedFields = computed(() =>
-  FIELDS.filter(f => mapping.value[f.key])
+  FIELDS.value.filter(f => mapping.value[f.key])
 );
 
 function close() {
@@ -128,7 +130,7 @@ function close() {
   headers.value = [];
   preview.value = [];
   result.value = null;
-  mapping.value = Object.fromEntries(FIELDS.map(f => [f.key, ""]));
+  mapping.value = Object.fromEntries(FIELDS.value.map(f => [f.key, ""]));
 }
 
 async function loadFile(f: File) {
@@ -139,7 +141,7 @@ async function loadFile(f: File) {
     total.value = data.total;
     preview.value = data.preview;
     // Auto-map headers with obvious matches
-    for (const field of FIELDS) {
+    for (const field of FIELDS.value) {
       const match = data.headers.find(h =>
         h.toLowerCase().includes(field.key.replace(/_/g, " ")) ||
         h.includes(field.label.split("(")[0].trim())
@@ -209,7 +211,6 @@ async function confirm() {
 .mapping-label {
   font-size: 13px;
   color: var(--text-secondary);
-  direction: rtl;
 }
 
 .preview-table-wrap {

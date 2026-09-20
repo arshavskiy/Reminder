@@ -173,23 +173,23 @@
               </button>
             </template>
           <div class="settings-pop">
-            <div class="settings-pop__title">שירותי עיבוד</div>
+            <div class="settings-pop__title">{{ l.documents.processingServices }}</div>
             <n-space size="small" vertical>
               <n-tooltip placement="left">
-                <template #trigger><n-checkbox v-model:checked="flagOcr">OCR (זיהוי טקסט)</n-checkbox></template>
-                הפעל זיהוי תווים אופטי (Tesseract) לחילוץ טקסט מ-PDF ותמונות
+                <template #trigger><n-checkbox v-model:checked="flagOcr">{{ l.documents.ocrLabel }}</n-checkbox></template>
+                {{ l.documents.ocrHint }}
               </n-tooltip>
               <n-tooltip placement="left">
-                <template #trigger><n-checkbox v-model:checked="flagAi">AI (חילוץ שדות)</n-checkbox></template>
-                הפעל מודל AI לחילוץ אוטומטי של שדות
+                <template #trigger><n-checkbox v-model:checked="flagAi">{{ l.documents.aiLabel }}</n-checkbox></template>
+                {{ l.documents.aiHint }}
               </n-tooltip>
               <n-tooltip placement="left">
-                <template #trigger><n-checkbox v-model:checked="flagS3">S3 (אחסון ענן)</n-checkbox></template>
-                העלה את הקובץ לאחסון ענן. כבה כדי לשמור מקומית בלבד
+                <template #trigger><n-checkbox v-model:checked="flagS3">{{ l.documents.s3Label }}</n-checkbox></template>
+                {{ l.documents.s3Hint }}
               </n-tooltip>
               <n-tooltip placement="left">
-                <template #trigger><n-checkbox v-model:checked="flagEntities">ישויות (לקוחות / חוזים)</n-checkbox></template>
-                צור אוטומטית לקוחות, חוזים ותזכורות מנתוני הקובץ
+                <template #trigger><n-checkbox v-model:checked="flagEntities">{{ l.documents.entitiesLabel }}</n-checkbox></template>
+                {{ l.documents.entitiesHint }}
               </n-tooltip>
             </n-space>
           </div>

@@ -5,13 +5,13 @@ import {getDataDir, getSettings} from "../settings";
 import type {DocTemplate, DynamicExtraction, ExtractionResult} from "../../src/shared/types.js";
 import {buildPromptForTemplate, InspectorProfile} from "../templates/buildPrompt";
 import {logger} from "../logger";
-import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "../shared/printTemplateLayout.js";
+import {INSPECTION_PRINT_TEMPLATE_PRESETS, INSPECTION_PRINT_TEMPLATE_PRESETS_EN} from "../shared/printTemplateLayout.js";
 
-// Built from the same preset list the print templates use, so this can't drift
+// Built from the same preset lists the print templates use, so this can't drift
 // from the actual set of inspection types the app knows about — adding a new
-// type to INSPECTION_PRINT_TEMPLATE_PRESETS makes it classifiable here too,
-// with no separate list to keep in sync.
-const INSPECTION_TYPE_ENUM_LINES = INSPECTION_PRINT_TEMPLATE_PRESETS
+// type to either preset list makes it classifiable here too, with no separate
+// list to keep in sync.
+const INSPECTION_TYPE_ENUM_LINES = [...INSPECTION_PRINT_TEMPLATE_PRESETS, ...INSPECTION_PRINT_TEMPLATE_PRESETS_EN]
   .map((p) => `     - "${p.key}" — ${p.name} (${p.reportTypeLabel})`)
   .join("\n");
 

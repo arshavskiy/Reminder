@@ -10,7 +10,7 @@
       <template #actions>
         <button class="rbtn rbtn--ghost" :disabled="loading" @click="load">
           <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
-          רענן
+          {{ l.common.refresh }}
         </button>
       </template>
     </PageHeader>
@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import {h, onMounted, ref} from "vue";
+import {computed, h, onMounted, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {NDataTable, NIcon, NTag, useMessage} from "naive-ui";
 import {RefreshOutline} from "@vicons/ionicons5";
@@ -69,11 +69,11 @@ const loading = ref(false);
 const kind = ref<KindFilter>(route.query.kind === "document" || route.query.kind === "email" ? route.query.kind : "all");
 const message = useMessage();
 
-const kindFilters: Array<{ label: string; value: KindFilter }> = [
-  {label: "הכל", value: "all"},
-  {label: "תזכורות", value: "email"},
-  {label: "מסמכים", value: "document"},
-];
+const kindFilters = computed<Array<{ label: string; value: KindFilter }>>(() => [
+  {label: l.value.activity.filterAll, value: "all"},
+  {label: l.value.activity.filterReminders, value: "email"},
+  {label: l.value.activity.filterDocuments, value: "document"},
+]);
 
 function formatAt(value: string): string {
   const date = new Date(value);
@@ -86,62 +86,64 @@ function selectKind(value: KindFilter) {
   load();
 }
 
-const KIND_LABEL: Record<ActivityRow["kind"], string> = {email: "תזכורת", document: "מסמך"};
-const STATUS_TAG: Record<ActivityRow["status"], {type: "success" | "error" | "default"; label: string}> = {
-  ok: {type: "success", label: "בוצע"},
-  failed: {type: "error", label: "נכשל"},
-  info: {type: "default", label: "מידע"},
-};
+const columns = computed(() => {
+  const KIND_LABEL: Record<ActivityRow["kind"], string> = {email: l.value.activity.kindReminder, document: l.value.activity.kindDocument};
+  const STATUS_TAG: Record<ActivityRow["status"], {type: "success" | "error" | "default"; label: string}> = {
+    ok: {type: "success", label: l.value.activity.statusOk},
+    failed: {type: "error", label: l.value.activity.statusFailed},
+    info: {type: "default", label: l.value.activity.statusInfo},
+  };
 
-const columns = [
-  {
-    title: "סוג",
-    key: "kind",
-    width: 90,
-    render: (row: ActivityRow) => KIND_LABEL[row.kind],
-  },
-  {
-    title: "כותרת",
-    key: "title",
-    minWidth: 220,
-    sorter: (a: ActivityRow, b: ActivityRow) => a.title.localeCompare(b.title),
-    render: (row: ActivityRow) =>
-      row.document_id
-        ? h(
-          "a",
-          {
-            href: `/documents/${row.document_id}`,
-            class: "activity-link",
-            onClick: (event: MouseEvent) => {
-              event.preventDefault();
-              router.push(`/documents/${row.document_id}?from=activity`);
+  return [
+    {
+      title: l.value.activity.colKind,
+      key: "kind",
+      width: 90,
+      render: (row: ActivityRow) => KIND_LABEL[row.kind],
+    },
+    {
+      title: l.value.activity.colTitle,
+      key: "title",
+      minWidth: 220,
+      sorter: (a: ActivityRow, b: ActivityRow) => a.title.localeCompare(b.title),
+      render: (row: ActivityRow) =>
+        row.document_id
+          ? h(
+            "a",
+            {
+              href: `/documents/${row.document_id}`,
+              class: "activity-link",
+              onClick: (event: MouseEvent) => {
+                event.preventDefault();
+                router.push(`/documents/${row.document_id}?from=activity`);
+              },
             },
-          },
-          row.title,
-        )
-        : row.title,
-  },
-  {
-    title: "פירוט",
-    key: "detail",
-    minWidth: 260,
-    render: (row: ActivityRow) => row.detail ?? "—",
-  },
-  {
-    title: "סטטוס",
-    key: "status",
-    width: 100,
-    render: (row: ActivityRow) => h(NTag, {type: STATUS_TAG[row.status].type, size: "small"}, {default: () => STATUS_TAG[row.status].label}),
-  },
-  {
-    title: "מועד",
-    key: "at",
-    width: 160,
-    defaultSortOrder: "descend" as const,
-    sorter: (a: ActivityRow, b: ActivityRow) => a.at.localeCompare(b.at),
-    render: (row: ActivityRow) => formatAt(row.at),
-  },
-];
+            row.title,
+          )
+          : row.title,
+    },
+    {
+      title: l.value.activity.colDetail,
+      key: "detail",
+      minWidth: 260,
+      render: (row: ActivityRow) => row.detail ?? "—",
+    },
+    {
+      title: l.value.activity.colStatus,
+      key: "status",
+      width: 100,
+      render: (row: ActivityRow) => h(NTag, {type: STATUS_TAG[row.status].type, size: "small"}, {default: () => STATUS_TAG[row.status].label}),
+    },
+    {
+      title: l.value.activity.colAt,
+      key: "at",
+      width: 160,
+      defaultSortOrder: "descend" as const,
+      sorter: (a: ActivityRow, b: ActivityRow) => a.at.localeCompare(b.at),
+      render: (row: ActivityRow) => formatAt(row.at),
+    },
+  ];
+});
 
 async function load() {
   loading.value = true;
@@ -152,7 +154,7 @@ async function load() {
     );
     rows.value = result.rows;
   } catch (err) {
-    message.error(err instanceof Error ? err.message : "טעינת יומן הפעילות נכשלה");
+    message.error(err instanceof Error ? err.message : l.value.activity.loadFailed);
     rows.value = [];
   } finally {
     loading.value = false;

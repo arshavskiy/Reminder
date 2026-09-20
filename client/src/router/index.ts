@@ -1,19 +1,24 @@
 import {createRouter, createWebHistory, type RouteRecordRaw} from "vue-router";
-import DashboardPage from "../views/DashboardPage.vue";
-import DocumentsPage from "../views/DocumentsPage.vue";
-import DocumentDetailPage from "../views/DocumentDetailPage.vue";
-import ClientsPage from "../views/ClientsPage.vue";
-import ClientDetailPage from "../views/ClientDetailPage.vue";
-import RemindersPage from "../views/RemindersPage.vue";
-import SearchPage from "../views/SearchPage.vue";
-import ProfilePage from "../views/ProfilePage.vue";
-import DocTemplatesPage from "../views/DocTemplatesPage.vue";
-import EmailTemplatesPage from "../views/EmailTemplatesPage.vue";
-import EquipmentPage from "../views/EquipmentPage.vue";
-import ReportsPage from "../views/ReportsPage.vue";
+// LoginPage stays a static import: it's the first thing almost every visitor
+// hits, so it should render without an extra network round-trip. Every other
+// page is lazy-loaded so the main bundle doesn't carry code for pages the
+// visitor may never open — this is what keeps the PWA precache chunk under
+// its size cap as the app (and its i18n catalog) grows.
 import LoginPage from "../views/LoginPage.vue";
-import ResetPasswordPage from "../views/ResetPasswordPage.vue";
-import AdminPage from "../views/AdminPage.vue";
+const DashboardPage = () => import("../views/DashboardPage.vue");
+const DocumentsPage = () => import("../views/DocumentsPage.vue");
+const DocumentDetailPage = () => import("../views/DocumentDetailPage.vue");
+const ClientsPage = () => import("../views/ClientsPage.vue");
+const ClientDetailPage = () => import("../views/ClientDetailPage.vue");
+const RemindersPage = () => import("../views/RemindersPage.vue");
+const SearchPage = () => import("../views/SearchPage.vue");
+const ProfilePage = () => import("../views/ProfilePage.vue");
+const DocTemplatesPage = () => import("../views/DocTemplatesPage.vue");
+const EmailTemplatesPage = () => import("../views/EmailTemplatesPage.vue");
+const EquipmentPage = () => import("../views/EquipmentPage.vue");
+const ReportsPage = () => import("../views/ReportsPage.vue");
+const ResetPasswordPage = () => import("../views/ResetPasswordPage.vue");
+const AdminPage = () => import("../views/AdminPage.vue");
 import {trackPageView} from "../analytics.js";
 import {applySeo} from "../seo.js";
 import {useAuthStore} from "../stores/auth.js";

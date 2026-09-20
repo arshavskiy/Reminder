@@ -9,15 +9,15 @@
         <div class="dt-actions">
           <button :disabled="loading" class="btn btn--ghost" type="button" @click="refresh">
             <n-icon :class="{ 'dt-spin': loading }" :component="RefreshOutline" :size="16" class="btn-icon"/>
-            רענן
+            {{ l.docTemplates.refresh }}
           </button>
           <button class="btn btn--ghost" type="button" @click="showGenerate = true">
             <n-icon :component="FlashOutline" :size="16" class="btn-icon"/>
-            צור מ-AI
+            {{ l.docTemplates.createFromAi }}
           </button>
           <button class="btn btn--primary" type="button" @click="newTemplate">
             <n-icon :component="AddOutline" :size="16" class="btn-icon"/>
-            תבנית חדשה
+            {{ l.docTemplates.newTemplate }}
           </button>
         </div>
       </template>
@@ -28,7 +28,7 @@
           v-model:value="search"
           class="dt-toolbar__search"
           clearable
-          placeholder="חיפוש לפי שם, תיאור או מילת מפתח..."
+          :placeholder="l.docTemplates.searchPlaceholder"
       >
         <template #prefix>
           <n-icon :component="SearchOutline" :size="16"/>
@@ -63,7 +63,7 @@
             </div>
             <div class="dt-card__titles">
               <h3 class="dt-card__name">{{ t.name }}</h3>
-              <p class="dt-card__desc">{{ t.description || "ללא תיאור" }}</p>
+              <p class="dt-card__desc">{{ t.description || l.docTemplates.noDescription }}</p>
             </div>
             <div class="dt-card__actions" @click.stop>
               <n-tooltip placement="top">
@@ -72,7 +72,7 @@
                     <n-icon :component="CreateOutline" :size="14" class="btn-icon"/>
                   </button>
                 </template>
-                עריכה
+                {{ l.docTemplates.edit }}
               </n-tooltip>
               <n-tooltip v-if="!t.is_builtin" placement="top">
                 <template #trigger>
@@ -80,7 +80,7 @@
                     <n-icon :component="TrashOutline" :size="14" class="btn-icon"/>
                   </button>
                 </template>
-                מחיקה
+                {{ l.docTemplates.delete }}
               </n-tooltip>
             </div>
           </header>
@@ -93,15 +93,15 @@
             >
               {{ kindLabel(t.document_kind) }}
             </span>
-            <span v-if="t.is_builtin" class="dt-chip dt-chip--info">מובנה</span>
-            <span v-if="t.is_default" class="dt-chip dt-chip--success">ברירת מחדל</span>
+            <span v-if="t.is_builtin" class="dt-chip dt-chip--info">{{ l.docTemplates.builtin }}</span>
+            <span v-if="t.is_default" class="dt-chip dt-chip--success">{{ l.docTemplates.default }}</span>
           </div>
 
           <footer class="dt-card__meta">
-            <span>{{ t.fields.length }} שדות</span>
+            <span>{{ tr('docTemplates.fieldsCount', { n: t.fields.length }) }}</span>
             <span class="dt-card__dot">·</span>
             <span :title="(t.match_keywords || []).join(', ')" class="dt-card__keywords">
-              {{ (t.match_keywords || []).join(", ") || "ללא מילות מפתח" }}
+              {{ (t.match_keywords || []).join(", ") || l.docTemplates.noKeywords }}
             </span>
           </footer>
         </article>
@@ -109,17 +109,17 @@
 
       <div v-else-if="!loading" class="dt-empty">
         <n-icon :component="DocumentTextOutline" :size="40" class="dt-empty__icon"/>
-        <h3>{{ templates.length ? "אין תוצאות לחיפוש" : "אין עדיין תבניות" }}</h3>
+        <h3>{{ templates.length ? l.docTemplates.noSearchResults : l.docTemplates.noTemplatesYet }}</h3>
         <p>
           {{
             templates.length
-                ? "נסה לשנות את הסינון או החיפוש."
-                : "צור תבנית כדי להגדיר אילו שדות לחלץ מסוגי מסמכים שונים."
+                ? l.docTemplates.tryDifferentFilter
+                : l.docTemplates.createTemplateHint
           }}
         </p>
         <button v-if="!templates.length" class="btn btn--primary" type="button" @click="newTemplate">
           <n-icon :component="AddOutline" :size="16" class="btn-icon"/>
-          תבנית חדשה
+          {{ l.docTemplates.newTemplate }}
         </button>
       </div>
     </n-spin>
@@ -185,7 +185,7 @@
     <n-modal
         v-model:show="showEdit"
         :mask-closable="!saving"
-        :title="editing?.id ? 'עריכת תבנית' : 'תבנית חדשה'"
+        :title="editing?.id ? l.docTemplates.editTemplate : l.docTemplates.newTemplate"
         class="dt-modal dt-edit-modal"
         preset="card"
         style="width: min(920px, 96vw)"
@@ -413,7 +413,7 @@ import {useI18n} from "../composables/useI18n.js";
 import type {DocTemplate, DocumentKind, FieldType, TemplateField} from "@shared/types.js";
 
 const templates = ref<DocTemplate[]>([]);
-const {l, dir} = useI18n();
+const {l, dir, t: tr} = useI18n();
 const loading = ref(false);
 const showEdit = ref(false);
 const editing = ref<DocTemplate | null>(null);
@@ -440,24 +440,24 @@ const typeOptions = [
   { label: "רשימה", value: "list" },
 ];
 
-const BUILTIN_KIND_OPTIONS = [
-  { label: "תסקיר בדיקה", value: "inspection_report" },
-  {label: "חוזה / הסכם", value: "contract"},
-  {label: "חשבונית", value: "invoice"},
-  { label: "תעודה / הסמכה", value: "certificate" },
-  { label: "אחר / לא ידוע", value: "unknown" },
-];
+const BUILTIN_KIND_OPTIONS = computed(() => [
+  { label: l.value.docTemplates.kindInspection, value: "inspection_report" },
+  { label: l.value.docTemplates.kindContract, value: "contract" },
+  { label: l.value.docTemplates.kindInvoice, value: "invoice" },
+  { label: l.value.docTemplates.kindCertificate, value: "certificate" },
+  { label: l.value.docTemplates.kindUnknown, value: "unknown" },
+]);
 
-const kindOptions = ref([...BUILTIN_KIND_OPTIONS]);
+const kindOptions = ref([...BUILTIN_KIND_OPTIONS.value]);
 
 async function loadKinds() {
   try {
     const { kinds } = await api.docTemplates.kinds();
-    const builtinValues = new Set(BUILTIN_KIND_OPTIONS.map((o) => o.value));
+    const builtinValues = new Set(BUILTIN_KIND_OPTIONS.value.map((o) => o.value));
     const custom = kinds
       .filter((k) => !builtinValues.has(k))
       .map((k) => ({ label: k, value: k }));
-    kindOptions.value = [...BUILTIN_KIND_OPTIONS, ...custom];
+    kindOptions.value = [...BUILTIN_KIND_OPTIONS.value, ...custom];
   } catch { /* fallback to builtins */ }
 }
 
@@ -504,10 +504,10 @@ const kindFilters = computed(() => {
     const k = t.document_kind || "unknown";
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
-  const pills = [{value: "all", label: "הכל", count: templates.value.length}];
+  const pills = [{value: "all", label: l.value.docTemplates.filterAll, count: templates.value.length}];
   for (const opt of kindOptions.value) {
     const count = counts.get(opt.value) ?? 0;
-    if (count || BUILTIN_KIND_OPTIONS.some((b) => b.value === opt.value)) {
+    if (count || BUILTIN_KIND_OPTIONS.value.some((b) => b.value === opt.value)) {
       pills.push({value: opt.value, label: opt.label, count});
     }
   }
@@ -517,7 +517,7 @@ const kindFilters = computed(() => {
       pills.push({value: k, label: k, count});
     }
   }
-  return pills.filter((p) => p.value === "all" || p.count > 0 || BUILTIN_KIND_OPTIONS.some((b) => b.value === p.value));
+  return pills.filter((p) => p.value === "all" || p.count > 0 || BUILTIN_KIND_OPTIONS.value.some((b) => b.value === p.value));
 });
 
 const dateFieldOptions = computed(() => {

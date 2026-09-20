@@ -53,7 +53,7 @@
             <n-icon :component="CloudUploadOutline" :size="20"/>
           </span>
           <div class="ur-head__text">
-            <h2 class="ur-head__title">תוצאות העלאה</h2>
+            <h2 class="ur-head__title">{{ l.documents.uploadResults.title }}</h2>
             <p class="ur-head__sub">{{ uploadProgressLabel }}</p>
           </div>
         </div>
@@ -64,19 +64,19 @@
           <div class="ur-progress__bar">
             <span class="ur-progress__fill" :style="{ width: `${uploadProgress.pct}%` }"/>
           </div>
-          <p class="ur-progress__label">מעבד מסמכים… {{ uploadProgress.done }} מתוך {{ uploadProgress.total }}</p>
+          <p class="ur-progress__label">{{ t("documents.uploadResults.processingFiles", {done: uploadProgress.done, total: uploadProgress.total}) }}</p>
         </div>
 
         <div class="ur-table-wrap">
           <table class="ur-table">
             <thead>
               <tr>
-                <th>קובץ</th>
-                <th>סטטוס</th>
-                <th>לקוח</th>
-                <th>אימייל</th>
-                <th>תזכורות</th>
-                <th>תאריך</th>
+                <th>{{ l.documents.uploadResults.colFile }}</th>
+                <th>{{ l.documents.uploadResults.colStatus }}</th>
+                <th>{{ l.documents.uploadResults.colClient }}</th>
+                <th>{{ l.documents.uploadResults.colEmail }}</th>
+                <th>{{ l.documents.uploadResults.colReminders }}</th>
+                <th>{{ l.documents.uploadResults.colDate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -96,7 +96,7 @@
                 <td>
                   <div class="ur-status">
                     <span v-if="!row.duplicate" :class="['ur-badge', `ur-badge--${row.status}`]">{{ statusLabel(row.status) }}</span>
-                    <span v-if="row.duplicate" class="ur-badge ur-badge--dup">כפול</span>
+                    <span v-if="row.duplicate" class="ur-badge ur-badge--dup">{{ l.documents.uploadResults.duplicate }}</span>
                   </div>
                 </td>
                 <td>
@@ -112,7 +112,7 @@
                     v-else
                     :class="['ur-badge', row.remindersCreated > 0 ? 'ur-badge--done' : 'ur-badge--muted']"
                   >
-                    {{ row.remindersCreated > 0 ? `${row.remindersCreated} תזכורות` : "אין" }}
+                    {{ row.remindersCreated > 0 ? t("documents.uploadResults.remindersCount", {n: row.remindersCreated}) : l.documents.uploadResults.noReminders }}
                   </span>
                 </td>
                 <td>
@@ -126,8 +126,8 @@
 
       <template #footer>
         <div class="ur-actions">
-          <n-button :disabled="uploadResultsLoading" @click="showUploadResults = false">סגור</n-button>
-          <n-button type="primary" @click="goToDocuments">עבור למסמכים</n-button>
+          <n-button :disabled="uploadResultsLoading" @click="showUploadResults = false">{{ l.common.close }}</n-button>
+          <n-button type="primary" @click="goToDocuments">{{ l.documents.uploadResults.goToDocuments }}</n-button>
         </div>
       </template>
     </n-modal>
@@ -169,7 +169,7 @@ interface UploadResultRow {
 const emit = defineEmits<{ (e: "uploaded"): void; (e: "quota-reached"): void }>();
 
 const router = useRouter();
-const {l} = useI18n();
+const {l, t, href, locale} = useI18n();
 const message = useMessage();
 
 const isDragging = ref(false);
@@ -191,7 +191,7 @@ const isUploading = computed(() =>
 
 function goToDocuments() {
   showUploadResults.value = false;
-  router.push("/documents");
+  router.push(href("/documents"));
 }
 
 const uploadProgress = computed(() => {
@@ -206,22 +206,16 @@ const uploadProgress = computed(() => {
 
 const uploadProgressLabel = computed(() => {
   const total = uploadResultRows.value.length;
-  if (!total) return "אין קבצים";
-  if (uploadResultsLoading.value) return `${total} קבצים · מעבד כעת`;
+  const u = l.value.documents.uploadResults;
+  if (!total) return u.noFiles;
+  if (uploadResultsLoading.value) return t("documents.uploadResults.processingNow", {n: total});
   const errors = uploadResultRows.value.filter((r) => r.status === "error").length;
-  if (errors) return `${total} קבצים · ${errors} נכשלו`;
-  return `${total} קבצים · ההעלאה הושלמה`;
+  if (errors) return t("documents.uploadResults.someFailed", {n: total, errors});
+  return t("documents.uploadResults.completed", {n: total});
 });
 
 function statusLabel(status: UploadResultRow["status"]): string {
-  const map: Record<UploadResultRow["status"], string> = {
-    pending: "ממתין",
-    uploading: "מעלה",
-    processing: "מעבד",
-    done: "הושלם",
-    error: "שגיאה",
-  };
-  return map[status];
+  return l.value.documents.uploadResults[status];
 }
 
 function fileKind(name: string): "pdf" | "image" | "sheet" | "doc" {
@@ -323,7 +317,7 @@ async function uploadFiles(
         idx === i ? { ...r, status: "error" } : r,
       );
       if (e.status === 401 || e.status === 403) {
-        message.error(e.message ?? "שגיאה בהעלאת הקבצים");
+        message.error(e.message ?? l.value.documents.uploadResults.uploadFailed);
       }
     }
   }
@@ -468,7 +462,7 @@ async function promptMissingFieldsForCompletedRows() {
       ) {
         continue;
       }
-      const missing = listMissingDocumentFields(template, fields);
+      const missing = listMissingDocumentFields(template, fields, locale.value);
       if (!missingFieldsBlockReminders(missing)) continue;
       missingFieldsTarget.value = {
         documentId: row.id!,
@@ -569,7 +563,7 @@ async function onMissingFieldsSaved() {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  text-align: right;
+  text-align: start;
 }
 
 .drop-strip__copy strong {
@@ -679,7 +673,7 @@ async function onMissingFieldsSaved() {
 .ur-table th,
 .ur-table td {
   padding: 14px 14px;
-  text-align: right;
+  text-align: start;
   vertical-align: middle;
 }
 
@@ -870,8 +864,10 @@ async function onMissingFieldsSaved() {
 
 <style>
 html[dir="rtl"] .upload-results-modal.n-card,
-html[dir="rtl"] .n-modal.upload-results-modal .n-card {
-  direction: rtl;
+html[dir="rtl"] .n-modal.upload-results-modal .n-card,
+html[dir="ltr"] .upload-results-modal.n-card,
+html[dir="ltr"] .n-modal.upload-results-modal .n-card {
+  direction: inherit;
   overflow: hidden;
   border-radius: 12px;
   font-family: var(--font-ui);
@@ -880,7 +876,8 @@ html[dir="rtl"] .n-modal.upload-results-modal .n-card {
 
 .upload-results-modal .n-card-header,
 .n-modal.upload-results-modal .n-card-header {
-  padding: 18px 20px 12px 48px;
+  padding: 18px 20px 12px;
+  padding-inline-end: 48px;
   font-family: var(--font-ui) !important;
 }
 
@@ -903,7 +900,7 @@ html[dir="rtl"] .n-modal.upload-results-modal .n-card {
 .upload-results-modal .n-base-close,
 .n-modal.upload-results-modal .n-base-close {
   top: 14px;
-  left: 14px;
-  right: auto;
+  inset-inline-end: 14px;
+  inset-inline-start: auto;
 }
 </style>

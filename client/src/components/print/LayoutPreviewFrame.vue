@@ -1,5 +1,5 @@
 <template>
-  <div class="layout-preview" dir="rtl">
+  <div class="layout-preview" :dir="dir">
     <section
         v-for="(section, si) in layout.sections"
         :key="si"
@@ -11,8 +11,8 @@
         <table class="header-table">
           <tbody>
             <tr>
-              <td class="hdr-side hdr-right">
-                <div v-for="f in section.fields.slice(2, 4)" :key="f.bind" :class="fieldTextClass(f)" class="hdr-field">
+              <td class="hdr-side hdr-start">
+                <div v-for="f in headerStartFields(section.fields)" :key="f.bind" :class="fieldTextClass(f)" class="hdr-field">
                   <span class="hdr-lbl">{{ f.label }}:</span>
                   <span class="hdr-val">{{ val(f.bind) }}</span>
                 </div>
@@ -21,8 +21,8 @@
                 <div :class="['hdr-title', headingTextClass(section, 'title')]">{{ section.title }}</div>
                 <div v-if="section.subtitle" :class="['hdr-sub', headingTextClass(section, 'subtitle')]">{{ section.subtitle }}</div>
               </td>
-              <td class="hdr-side hdr-left">
-                <div v-for="f in section.fields.slice(0, 2)" :key="f.bind" :class="fieldTextClass(f)" class="hdr-field">
+              <td class="hdr-side hdr-end">
+                <div v-for="f in headerEndFields(section.fields)" :key="f.bind" :class="fieldTextClass(f)" class="hdr-field">
                   <span class="hdr-lbl">{{ f.label }}:</span>
                   <span class="hdr-val">{{ val(f.bind) }}</span>
                 </div>
@@ -55,16 +55,16 @@
             <tr><th v-for="c in section.columns" :key="c.bind">{{ c.label }}</th></tr>
           </thead>
           <tbody>
-            <tr v-for="ri in equipmentRowIndexes(section.columns)" :key="ri">
+            <tr v-for="ri in equipmentRowIndexes(section)" :key="ri">
               <td
-                  v-for="c in section.columns"
+                  v-for="(c, ci) in section.columns"
                   :key="c.bind"
-                  :class="{ 'stack-td': stackedParts(c.bind, ri).length > 1 }"
+                  :class="{ 'stack-td': stackedParts(section, c, ci, ri).length > 1 }"
               >
-                <div v-if="stackedParts(c.bind, ri).length > 1" class="stack">
-                  <div v-for="(part, pi) in stackedParts(c.bind, ri)" :key="pi" class="stack__item">{{ part }}</div>
+                <div v-if="stackedParts(section, c, ci, ri).length > 1" class="stack">
+                  <div v-for="(part, pi) in stackedParts(section, c, ci, ri)" :key="pi" class="stack__item">{{ part }}</div>
                 </div>
-                <template v-else>{{ stackedParts(c.bind, ri)[0] }}</template>
+                <template v-else>{{ stackedParts(section, c, ci, ri)[0] }}</template>
               </td>
             </tr>
           </tbody>
@@ -76,7 +76,11 @@
         <div class="sec-title">{{ section.title }}</div>
         <table class="data findings">
           <thead>
-            <tr><th style="width:40px">מס׳</th><th style="width:80px">נושא</th><th colspan="2">פירוט</th></tr>
+            <tr>
+              <th style="width:40px">{{ dir === "ltr" ? "No." : "מס׳" }}</th>
+              <th style="width:80px">{{ dir === "ltr" ? "Subject" : "נושא" }}</th>
+              <th colspan="2">{{ dir === "ltr" ? "Details" : "פירוט" }}</th>
+            </tr>
           </thead>
           <tbody>
             <template v-for="row in section.rows" :key="row.bind">
@@ -87,12 +91,40 @@
               </tr>
             </template>
             <tr v-if="section.deadlineBind && val(section.deadlineBind).trim()">
-              <td class="num">{{ section.deadlineLabel ?? "תוך" }}</td>
+              <td class="num">{{ section.deadlineLabel ?? (dir === "ltr" ? "Within" : "תוך") }}</td>
               <td class="detail">{{ val(section.deadlineBind) }}</td>
               <td colspan="2" class="detail">{{ section.deadlineSuffix ?? "" }}</td>
             </tr>
           </tbody>
         </table>
+      </template>
+
+      <!-- Checklist -->
+      <template v-else-if="section.type === 'checklist'">
+        <div v-if="section.title" class="sec-title">{{ section.title }}</div>
+        <div v-if="section.codeLegend" class="checklist-legend">{{ section.codeLegend }}</div>
+        <template v-for="(group, gi) in section.groups" :key="gi">
+          <div v-if="group.title" class="checklist-group-title">{{ group.title }}</div>
+          <table class="data checklist">
+            <tbody>
+              <tr v-for="(row, ri) in checklistRows(group.items, section.columns ?? 2)" :key="ri">
+                <template v-for="(item, ii) in row" :key="ii">
+                  <td v-if="item" class="checklist-cell">
+                    <span class="checklist-num">{{ item.number }}.</span>
+                    <span v-if="item.reference" class="checklist-ref">{{ item.reference }}</span>
+                    <span class="checklist-label">{{ item.label }}</span>
+                    <span v-if="section.markStyle === 'acceptable_na'" class="cl-marks">
+                      <span :class="['cl-box', { on: isAcceptableMark(item.bind) }]">A</span>
+                      <span :class="['cl-box', { on: isNaMark(item.bind) }]">NA</span>
+                    </span>
+                    <span v-else class="checklist-code">{{ val(item.bind) }}</span>
+                  </td>
+                  <td v-else class="checklist-cell checklist-cell--empty"></td>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+        </template>
       </template>
 
       <!-- Static text -->
@@ -107,10 +139,10 @@
           <div v-for="(line, li) in certLines(section)" :key="li" class="sig-cert-line">{{ line }}</div>
         </div>
         <div :class="['sig-mark', `sig-align-${section.align ?? 'left'}`]">
-          <div class="sig-label">חתימת הבודק:</div>
+          <div class="sig-label">{{ dir === "ltr" ? "Inspector signature:" : "חתימת הבודק:" }}</div>
           <div class="sig-content">
             <div v-if="section.imageSrc || userSignatureUrl" class="sig-image">
-              <img :src="section.imageSrc || userSignatureUrl" alt="חתימה">
+              <img :src="section.imageSrc || userSignatureUrl" :alt="dir === 'ltr' ? 'Signature' : 'חתימה'">
             </div>
           </div>
         </div>
@@ -156,15 +188,28 @@ import type {
   PrintTemplateLayout,
   PrintTemplateLayoutHeaderSection,
   PrintTemplateLayoutSignatureSection,
+  PrintTemplateLayoutChecklistItem,
+  PrintTemplateLayoutEquipmentSection,
   PrintTemplateSectionField
 } from "@shared/printTemplateLayout.js";
-import {fillLayoutPlaceholders, signatureCertificationText, splitStackedCellValue, equipmentTableRowCount, equipmentTableCellKey} from "@shared/printTemplateLayout.js";
+import {fillLayoutPlaceholders, signatureCertificationText, splitStackedCellValue, equipmentTableRowCount, equipmentTableCellKey, equipmentTableMinRows} from "@shared/printTemplateLayout.js";
 import {useAuthStore} from "../../stores/auth.js";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   layout: PrintTemplateLayout;
   data?: Record<string, string>;
-}>();
+  dir?: "rtl" | "ltr";
+}>(), {
+  dir: "rtl",
+});
+
+function headerStartFields(fields: PrintTemplateSectionField[]) {
+  return props.dir === "ltr" ? fields.slice(0, 2) : fields.slice(2, 4);
+}
+
+function headerEndFields(fields: PrintTemplateSectionField[]) {
+  return props.dir === "ltr" ? fields.slice(2, 4) : fields.slice(0, 2);
+}
 
 // Mirrors the server renderer: a section without its own imageSrc falls back to
 // the signature stored on the user, so the preview shows what the PDF will.
@@ -173,7 +218,9 @@ const userSignatureUrl = computed(
   () => props.data?.user_signature_url || authStore.user?.signature_url || "");
 
 function val(bind: string): string {
-  return props.data?.[bind] ?? "";
+  const raw = props.data?.[bind] ?? "";
+  if (props.dir === "ltr" && raw.trim() === "אין") return "None";
+  return raw;
 }
 
 function fieldTextClass(field: PrintTemplateSectionField | null | undefined): string[] {
@@ -196,7 +243,7 @@ function headingTextClass(section: PrintTemplateLayoutHeaderSection, which: "tit
 }
 
 function certLines(section: PrintTemplateLayoutSignatureSection): string[] {
-  const template = signatureCertificationText(section);
+  const template = signatureCertificationText(section, props.dir);
   if (!template) return [];
   const filled = fillLayoutPlaceholders(template, props.data ?? {});
   return filled.split(/\r?\n/).filter((line) => line.length > 0);
@@ -213,13 +260,30 @@ const blockStyle = computed(() => ({
   borderColor: props.layout.styles.borderColor || "#111",
 }));
 
-function equipmentRowIndexes(columns: {bind: string}[]): number[] {
-  const count = equipmentTableRowCount(columns, props.data);
+function equipmentRowIndexes(section: PrintTemplateLayoutEquipmentSection): number[] {
+  const count = equipmentTableRowCount(section.columns, props.data, equipmentTableMinRows(section));
   return Array.from({length: count}, (_, index) => index);
 }
 
-function stackedParts(bind: string, rowIndex: number): string[] {
-  return splitStackedCellValue(val(equipmentTableCellKey(bind, rowIndex)));
+function stackedParts(
+  section: PrintTemplateLayoutEquipmentSection,
+  column: {bind: string},
+  columnIndex: number,
+  rowIndex: number,
+): string[] {
+  const raw = val(equipmentTableCellKey(column.bind, rowIndex));
+  if (!raw.trim() && columnIndex === 0 && section.fixedRows?.[rowIndex]) {
+    return [section.fixedRows[rowIndex]];
+  }
+  return splitStackedCellValue(raw);
+}
+
+function isAcceptableMark(bind: string): boolean {
+  return /^(A|OK|Acceptable|Yes)$/i.test(val(bind).trim());
+}
+
+function isNaMark(bind: string): boolean {
+  return /^(N|NA|N-A|N\/A|Not Applicable)$/i.test(val(bind).trim());
 }
 
 function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (PrintTemplateSectionField | null)[][] {
@@ -228,6 +292,18 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
     const row: (PrintTemplateSectionField | null)[] = [];
     for (let j = 0; j < cols; j++) {
       row.push(fields[i + j] ?? null);
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+function checklistRows(items: PrintTemplateLayoutChecklistItem[], cols: number): (PrintTemplateLayoutChecklistItem | null)[][] {
+  const rows: (PrintTemplateLayoutChecklistItem | null)[][] = [];
+  for (let i = 0; i < items.length; i += cols) {
+    const row: (PrintTemplateLayoutChecklistItem | null)[] = [];
+    for (let j = 0; j < cols; j++) {
+      row.push(items[i + j] ?? null);
     }
     rows.push(row);
   }
@@ -280,16 +356,16 @@ function fieldsRows(fields: PrintTemplateSectionField[], cols: number = 3): (Pri
 .hdr-sub--bold { font-weight: 700; }
 .hdr-field { margin-bottom: 2px; font-size: 7px; }
 .hdr-lbl { font-weight: inherit; }
-.hdr-val { margin-right: 3px; }
+.hdr-val { margin-inline-start: 3px; }
 .field-text--small { font-size: 6px; }
 .field-text--bold { font-weight: 700; }
-.hdr-right { text-align: right; }
-.hdr-left { text-align: left; }
+.hdr-start { text-align: start; }
+.hdr-end { text-align: end; }
 
 /* Fields grid */
 .fields-grid { width: 100%; border-collapse: collapse; }
 .fields-grid td { padding: 2px 3px; vertical-align: top; font-size: 7px; }
-.fields-grid td.lbl { font-weight: inherit; white-space: nowrap; width: 55px; text-align: right; }
+.fields-grid td.lbl { font-weight: inherit; white-space: nowrap; width: 55px; text-align: start; }
 .fields-grid td.val { border-bottom: 1px solid #ccc; min-width: 50px; }
 
 /* Data tables */
@@ -313,8 +389,22 @@ table.equip td.stack-td { padding: 0; vertical-align: stretch; }
 }
 .stack__item:last-child { border-bottom: none; }
 table.findings td.num { width: 30px; }
-table.findings td.subj { width: 60px; font-weight: 600; text-align: right; }
-table.findings td.detail { text-align: right; }
+table.findings td.subj { width: 60px; font-weight: 600; text-align: start; }
+table.findings td.detail { text-align: start; }
+
+/* Checklist */
+.checklist-legend { font-size: 6px; font-style: italic; margin-bottom: 3px; }
+.checklist-group-title { font-size: 7px; font-weight: 700; background: #f0f0f0; padding: 2px 4px; margin-top: 3px; }
+table.checklist { margin-bottom: 1px; }
+table.checklist td.checklist-cell { text-align: start; vertical-align: top; padding: 2px 4px; }
+table.checklist td.checklist-cell--empty { border: none; }
+.checklist-num { font-weight: 700; margin-inline-end: 2px; }
+.checklist-ref { display: block; font-size: 6px; color: #555; }
+.checklist-label { margin-inline-end: 3px; }
+.checklist-code { float: inline-end; font-weight: 700; border-bottom: 1px solid #999; min-width: 18px; text-align: center; display: inline-block; }
+.cl-marks { float: inline-end; display: inline-flex; gap: 3px; }
+.cl-box { min-width: 16px; padding: 0 2px; border: 1px solid #999; font-size: 6px; font-weight: 700; text-align: center; }
+.cl-box.on { background: #111; color: #fff; }
 
 /* Static */
 .static { line-height: 1.35; font-size: 7px; text-align: justify; margin: 0; white-space: pre-wrap; }
@@ -337,7 +427,7 @@ table.findings td.detail { text-align: right; }
   font-size: 7px;
   line-height: 1.4;
   margin-bottom: 6px;
-  text-align: right;
+  text-align: start;
 }
 
 .sig-cert-line {
@@ -392,6 +482,6 @@ table.findings td.detail { text-align: right; }
 }
 
 .ftr-lbl {
-  margin-left: 3px;
+  margin-inline-end: 3px;
 }
 </style>

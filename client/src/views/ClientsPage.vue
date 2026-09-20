@@ -242,44 +242,44 @@
     <n-modal
       v-model:show="showForm"
       preset="card"
-      :title="editingId ? 'עריכת לקוח' : 'לקוח חדש'"
+      :title="editingId ? l.clients.editClient : l.clients.newClient"
       class="client-form-modal"
       style="width: min(560px, 94vw)"
       :mask-closable="!saving"
     >
       <n-form label-placement="top" class="client-form">
-        <n-form-item label="שם מלא / שם חברה" required>
-          <n-input v-model:value="form.display_name" placeholder="ישראל ישראלי / חברת דוגמה בע״מ" />
+        <n-form-item :label="l.clients.form.fullName" required>
+          <n-input v-model:value="form.display_name" :placeholder="l.clients.form.fullNamePlaceholder" />
         </n-form-item>
-        <n-form-item label="סוג">
+        <n-form-item :label="l.clients.form.type">
           <n-radio-group v-model:value="form.entity_type">
-            <n-radio-button value="person">אדם פרטי</n-radio-button>
-            <n-radio-button value="company">חברה</n-radio-button>
+            <n-radio-button value="person">{{ l.clients.form.typePerson }}</n-radio-button>
+            <n-radio-button value="company">{{ l.clients.form.typeCompany }}</n-radio-button>
           </n-radio-group>
         </n-form-item>
         <div class="client-form__grid">
-          <n-form-item label="איש קשר">
-            <n-input v-model:value="form.contact_person" placeholder="שם איש הקשר" />
+          <n-form-item :label="l.clients.form.contactPerson">
+            <n-input v-model:value="form.contact_person" :placeholder="l.clients.form.contactPersonPlaceholder" />
           </n-form-item>
-          <n-form-item label="מספר ת.ז / ח.פ">
+          <n-form-item :label="l.clients.form.idNumber">
             <n-input v-model:value="form.id_number" dir="ltr" />
           </n-form-item>
-          <n-form-item label="אימייל">
+          <n-form-item :label="l.clients.form.email">
             <n-input v-model:value="form.email" dir="ltr" placeholder="israel@example.com" />
           </n-form-item>
-          <n-form-item label="טלפון">
+          <n-form-item :label="l.clients.form.phone">
             <n-input v-model:value="form.phone" placeholder="02-0000000" />
           </n-form-item>
-          <n-form-item label="נייד">
+          <n-form-item :label="l.clients.form.mobile">
             <n-input v-model:value="form.mobile" placeholder="050-0000000" />
           </n-form-item>
         </div>
       </n-form>
       <template #footer>
         <div class="client-form__footer">
-          <n-button :disabled="saving" @click="showForm = false">ביטול</n-button>
+          <n-button :disabled="saving" @click="showForm = false">{{ l.common.cancel }}</n-button>
           <n-button :loading="saving" type="primary" @click="doSave">
-            {{ editingId ? 'שמור שינויים' : 'צור לקוח' }}
+            {{ editingId ? l.clients.form.saveChanges : l.clients.form.createClient }}
           </n-button>
         </div>
       </template>
@@ -288,13 +288,13 @@
     <n-modal
       v-model:show="mergeModal.show"
       preset="card"
-      title="מיזוג לקוחות"
+      :title="l.clients.merge"
       class="client-merge-modal"
       :style="{ width: '560px', maxWidth: 'calc(100vw - 32px)' }"
     >
-      <div class="client-merge-form" dir="rtl">
+      <div class="client-merge-form" :dir="dir">
         <label class="client-merge-label">
-          לקוחות למיזוג
+          {{ l.clients.mergeModal.sourceLabel }}
           <n-select
             v-model:value="mergeModal.sourceIds"
             :options="clientMergeOptions"
@@ -302,31 +302,31 @@
             filterable
             multiple
             max-tag-count="responsive"
-            placeholder="בחר לקוחות"
+            :placeholder="l.clients.mergeModal.sourcePlaceholder"
           />
         </label>
         <label class="client-merge-label">
-          לקוח מאוחד
+          {{ l.clients.mergeModal.canonicalLabel }}
           <n-select
             v-model:value="mergeModal.canonicalId"
             :options="canonicalMergeOptions"
             clearable
             filterable
-            placeholder="בחר את הלקוח שישאר"
+            :placeholder="l.clients.mergeModal.canonicalPlaceholder"
           />
         </label>
         <p class="client-merge-hint">
-          כל המסמכים, החוזים והתזכורות של הלקוחות שנבחרו יועברו ללקוח המאוחד. הלקוחות האחרים יימחקו.
+          {{ l.clients.mergeModal.hint }}
         </p>
         <div class="client-merge-actions">
-          <n-button @click="mergeModal.show = false">ביטול</n-button>
+          <n-button @click="mergeModal.show = false">{{ l.common.cancel }}</n-button>
           <n-button
             type="primary"
             :loading="mergeModal.saving"
             :disabled="mergeModal.sourceIds.length < 2 || !mergeModal.canonicalId"
             @click="saveClientMerge"
           >
-            מזג ושמור
+            {{ l.clients.mergeModal.confirm }}
           </n-button>
         </div>
       </div>
@@ -565,10 +565,10 @@ async function saveClientMerge() {
     const result = await api.clients.merge({ sourceIds, canonicalId });
     mergeModal.show = false;
     selectedClientKeys.value = selectedClientKeys.value.filter((id) => String(id) === result.kept);
-    message.success(`${result.merged + 1} לקוחות מוזגו תחת ${result.clientName || "הלקוח המאוחד"}`);
+    message.success(t("clients.mergeModal.success", {count: result.merged + 1, name: result.clientName || t("clients.mergeModal.defaultName")}));
     await refresh();
   } catch {
-    message.error("שגיאה במיזוג לקוחות");
+    message.error(t("clients.mergeModal.error"));
   } finally {
     mergeModal.saving = false;
   }

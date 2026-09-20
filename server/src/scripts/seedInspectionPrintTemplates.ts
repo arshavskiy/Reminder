@@ -7,13 +7,14 @@ import {closeDb, connectDb} from "../db/db.js";
 import {
     createInspectionPrintTemplateSeeds,
     INSPECTION_PRINT_TEMPLATE_PRESETS,
+    INSPECTION_PRINT_TEMPLATE_PRESETS_EN,
 } from "../shared/printTemplateLayout.js";
 
 const apply = process.argv.includes("--apply");
 const now = new Date().toISOString();
 const seeds = createInspectionPrintTemplateSeeds(now);
 
-console.table(INSPECTION_PRINT_TEMPLATE_PRESETS.map((preset) => ({
+console.table([...INSPECTION_PRINT_TEMPLATE_PRESETS, ...INSPECTION_PRINT_TEMPLATE_PRESETS_EN].map((preset) => ({
     key: preset.key,
     name: preset.name,
     intervalMonths: preset.intervalMonths,

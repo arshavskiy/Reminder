@@ -67,9 +67,20 @@ function isMissingReminderDate(
  * Missing fields are always derived from the doc-template schema.
  * For templates without expiry_field, returns [] (no reminder/missing prompt).
  */
+function localizedTemplateLabel(
+  field: {label_he?: string; label_en?: string} | undefined,
+  locale: "he" | "en",
+  fallbackHe: string,
+  fallbackEn = fallbackHe,
+): string {
+  if (locale === "en") return field?.label_en?.trim() || fallbackEn || field?.label_he?.trim() || fallbackHe;
+  return field?.label_he?.trim() || fallbackHe;
+}
+
 export function listMissingDocumentFields(
   template: DocTemplate | null | undefined,
   extracted: Record<string, unknown>,
+  locale: "he" | "en" = "he",
 ): MissingFieldItem[] {
   const missing: MissingFieldItem[] = [];
   const seen = new Set<string>();
@@ -91,9 +102,9 @@ export function listMissingDocumentFields(
 
   // No template → keep legacy inspection defaults for older docs.
   if (!template) {
-    push(EXPIRY_FIELD, "בתוקף עד", "date", true);
-    push("inspection_date", "תאריך בדיקה", "date", false);
-    push("client_email", "מייל", "email", false);
+    push(EXPIRY_FIELD, locale === "en" ? "Valid until" : "בתוקף עד", "date", true);
+    push("inspection_date", locale === "en" ? "Inspection date" : "תאריך בדיקה", "date", false);
+    push("client_email", locale === "en" ? "Email" : "מייל", "email", false);
     return missing;
   }
 
@@ -112,12 +123,12 @@ export function listMissingDocumentFields(
     if (reminderKey && (field.key === reminderKey || field.key === EXPIRY_FIELD)) continue;
     if ((field.key === "client_email" || field.key === "contact_email" || field.key === "email") && field.type === "email") {
       if (seen.has("client_email")) continue;
-      push("client_email", field.label_he || "מייל", "email", false);
+      push("client_email", localizedTemplateLabel(field, locale, "מייל", "Email"), "email", false);
       continue;
     }
     push(
       field.key,
-      field.label_he || field.key,
+      localizedTemplateLabel(field, locale, field.key),
       field.type,
       field.key === template.expiry_field,
     );
@@ -126,7 +137,7 @@ export function listMissingDocumentFields(
   if (reminderKey && isMissingReminderDate(template, reminderKey, extracted)) {
     push(
       reminderKey === "next_inspection_date" ? EXPIRY_FIELD : reminderKey,
-      reminderDef?.label_he ?? (reminderKey === EXPIRY_FIELD ? "בתוקף עד" : reminderKey),
+      localizedTemplateLabel(reminderDef, locale, reminderKey === EXPIRY_FIELD ? "בתוקף עד" : reminderKey, reminderKey === EXPIRY_FIELD ? "Valid until" : reminderKey),
       reminderDef?.type ?? "date",
       true,
     );

@@ -3,19 +3,19 @@
     :show="show"
     preset="dialog"
     :show-icon="false"
-    title="דוח חודשי"
+    :title="t('documents.monthlyReport')"
     style="width: 460px; max-width: 95vw"
     @update:show="emit('update:show', $event)"
   >
     <n-form label-placement="top">
-      <n-form-item label="חודש הדוח">
+      <n-form-item :label="t('documents.monthlyReportModal.monthLabel')">
         <n-date-picker v-model:value="monthMs" type="month" style="width: 100%" />
       </n-form-item>
     </n-form>
     <template #action>
       <n-space justify="end" style="width: 100%">
-        <n-button @click="emit('update:show', false)">ביטול</n-button>
-        <n-button type="primary" :loading="loading" @click="downloadMonthlyReport">הורד DOC</n-button>
+        <n-button @click="emit('update:show', false)">{{ t('common.cancel') }}</n-button>
+        <n-button type="primary" :loading="loading" @click="downloadMonthlyReport">{{ t('documents.monthlyReportModal.download') }}</n-button>
       </n-space>
     </template>
   </n-modal>
@@ -26,6 +26,9 @@ import {ref, watch} from "vue";
 import {NButton, NDatePicker, NForm, NFormItem, NModal, NSpace, useMessage} from "naive-ui";
 import {api} from "../services/apiService.js";
 import {useUserSettingsStore} from "../stores/userSettings.js";
+import {useI18n} from "../composables/useI18n.js";
+
+const {t} = useI18n();
 
 const props = defineProps<{
   show: boolean;
@@ -68,7 +71,7 @@ async function downloadMonthlyReport() {
       mode: "all",
       fields: Array.isArray(selectedFields) && selectedFields.length ? selectedFields : undefined,
     });
-    message.success("דוח DOC הורד בהצלחה");
+    message.success(t('documents.monthlyReportModal.downloadSuccess'));
     emit("update:show", false);
   } catch (e) {
     message.error(String(e));
