@@ -629,14 +629,14 @@ const data_cards = computed(() => modules.value);
   background: color-mix(in srgb, var(--brand-color) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--brand-color) 30%, var(--border-color));
   font-size: 13px;
-  color: var(--text-primary);
+  color: #fff;
 }
 
 .dash__onboarding-reminder__btn {
   flex-shrink: 0;
   border: 1px solid var(--brand-color);
   background: var(--brand-color);
-  color: #06210f;
+  color: #fff;
   font-weight: 600;
   font-size: 12px;
   padding: 6px 14px;

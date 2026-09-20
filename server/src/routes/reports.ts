@@ -35,7 +35,7 @@ export function registerReportRoutes(app: express.Application) {
       const format = String(req.query.format ?? "docx");
       const user = await col("users").findOne({ _id: new ObjectId(userId) }) as any;
       if (normalizePlanId(user?.plan ?? user?.role) === "expired") {
-        res.status(403).json({ error: "export_plan_required", message: "ייצוא דוחות זמין במסלולים בסיסי ועסקי בלבד." });
+        res.status(403).json({ error: "export_plan_required", message: "ייצוא דוחות אינו זמין במסלול שפג תוקפו." });
         return;
       }
       if (format === "xlsx") {

@@ -255,7 +255,6 @@ import {FEATURES} from "./shared/features.js";
 import {
   isLapsedTrial as isLapsedTrialPlan,
   normalizePlanId,
-  PAID_PLAN_IDS,
   planMeetsMinimum,
   resolveUserPlan,
   type PlanId
@@ -310,9 +309,11 @@ const mobileNavOpen = ref(false);
 const {showOnboarding} = useOnboarding();
 
 watch(
-  () => authStore.user,
-  (user) => {
-    if (user && !(user as any).onboarding_completed && !hideAppChrome.value) {
+  [() => authStore.user, hideAppChrome],
+  ([user, hideChrome]) => {
+    // Login sets the user while the route is still /login (chrome hidden).
+    // Re-check after the dashboard opens or the card never appears.
+    if (user && !user.onboarding_completed && !hideChrome) {
       showOnboarding.value = true;
     }
   },
@@ -500,7 +501,7 @@ const allNav = computed(() => {
     {label: nav.dashboard, key: "dashboard", minPlan: "expired" as const, feature: FEATURES.pages.dashboard},
     {label: nav.documents, key: "documents", minPlan: "expired" as const, feature: FEATURES.pages.documents},
     {label: nav.reminders, key: "reminders", minPlan: "expired" as const, feature: FEATURES.pages.reminders},
-    {label: nav.reports, key: "reports", minPlan: PAID_PLAN_IDS, feature: FEATURES.pages.reports},
+    {label: nav.reports, key: "reports", minPlan: "expired" as const, feature: FEATURES.pages.reports},
     {label: nav.clients, key: "clients", minPlan: "expired" as const, feature: FEATURES.pages.clients},
     {label: nav.field, key: "field", minPlan: "business" as const, feature: FEATURES.pages.field},
     {label: nav.equipment, key: "equipment", minPlan: "expired" as const, feature: FEATURES.pages.equipment},
