@@ -162,6 +162,11 @@ const appRoutes: RouteRecordRaw[] = [
         },
         {path: "/reminders", component: RemindersPage, meta: {feature: FEATURES.pages.reminders, requirePlan: "basic"}},
         {
+            path: "/reminders/:id",
+            component: () => import("../views/ReminderDetailPage.vue"),
+            meta: {feature: FEATURES.pages.reminders, requirePlan: "basic"},
+        },
+        {
             path: "/activity",
             component: () => import("../views/ActivityLogPage.vue"),
             meta: {feature: FEATURES.pages.reminders, requirePlan: "basic"},

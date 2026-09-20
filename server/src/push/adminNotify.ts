@@ -1,4 +1,4 @@
-import { sendPushToAdmins } from "./pushService";
+import { sendPushToAdmins, sendToUser } from "./pushService";
 import { logger } from "../logger";
 
 // Fire-and-forget admin push helpers. Never throw into the caller's flow — a
@@ -50,4 +50,25 @@ export function notifyReminderSkipped(opts: {
 
 export function notifyPasswordResetRequested(opts: { email?: string | null }): void {
   fire("בקשת איפוס סיסמה", opts.email ? `נשלח קישור איפוס אל ${opts.email}` : "נשלח קישור איפוס סיסמה", "/admin");
+}
+
+// Personal reminders push to the owning user, not admins — fire-and-forget,
+// same "never throw into the caller's flow" rule as the admin helpers above.
+export async function notifyPersonalReminderDue(opts: {
+  userId: string;
+  title?: string | null;
+  reminderId?: string | null;
+}): Promise<void> {
+  try {
+    await sendToUser(opts.userId, {
+      title: "תזכורת אישית",
+      body: opts.title?.trim() || "תזכורת",
+      data: { url: "/reminders", reminderId: opts.reminderId ?? null, kind: "personal_reminder" },
+    });
+  } catch (err) {
+    logger.warn("personal_reminder_notify_failed", {
+      user_id: opts.userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }

@@ -166,7 +166,7 @@
           :row-key="(r: any) => r.id"
           :row-props="rowProps"
           :checked-row-keys="selectedReminderKeys"
-          :scroll-x="1290"
+          :scroll-x="1320"
           class="reminders-table reminders-table--with-sidebar"
           size="small"
           @update:checked-row-keys="onSelectedReminderKeys"
@@ -181,7 +181,7 @@
         :row-key="(r: any) => r.id"
         :row-props="rowProps"
         :checked-row-keys="selectedReminderKeys"
-        :scroll-x="1290"
+        :scroll-x="1320"
         class="reminders-table"
         size="small"
         @update:checked-row-keys="onSelectedReminderKeys"
@@ -211,8 +211,48 @@
     </n-modal>
 
     <!-- Create reminder modal -->
-    <n-modal v-model:show="showCreate" title="תזכורת חדשה" :show-icon="false" preset="dialog" style="width: 520px; max-width: 95vw">
+    <n-modal v-model:show="showCreate" :title="l.reminders.newReminder" :show-icon="false" preset="dialog" style="width: 520px; max-width: 95vw">
       <n-form label-placement="top" v-if="newReminder">
+        <n-form-item :label="l.reminders.reminderKindLabel">
+          <n-radio-group :value="isPersonalReminder ? 'personal' : 'client'" name="reminder-kind" @update:value="onReminderKindChange">
+            <n-radio-button value="client">{{ l.reminders.reminderKindClient }}</n-radio-button>
+            <n-radio-button value="personal">{{ l.reminders.reminderKindPersonal }}</n-radio-button>
+          </n-radio-group>
+        </n-form-item>
+        <p v-if="isPersonalReminder" class="personal-reminder-hint">{{ l.reminders.personalReminderHint }}</p>
+
+        <!-- ── Personal reminder: title + date + category + optional self-email ── -->
+        <template v-if="isPersonalReminder">
+          <n-form-item label="כותרת" required>
+            <n-input v-model:value="newReminder.title" :placeholder="l.notifications.quickAddTitlePlaceholder" />
+          </n-form-item>
+          <n-form-item :label="l.reminders.targetDate" required>
+            <n-date-picker v-model:value="personalTargetDateMs" type="date" style="width: 100%" />
+          </n-form-item>
+          <n-form-item :label="l.notifications.quickAddCategoryLabel">
+            <n-select
+              v-model:value="newReminder.category"
+              :options="newReminderCategoryOptions"
+              :placeholder="l.notifications.quickAddCategoryPlaceholder"
+              clearable
+              filterable
+              tag
+              :virtual-scroll="false"
+            />
+          </n-form-item>
+          <n-form-item :label="l.notifications.quickAddRemindBeforeLabel">
+            <n-input
+              v-model:value="personalRemindBeforeDays"
+              :placeholder="l.notifications.quickAddRemindBeforePlaceholder"
+            />
+          </n-form-item>
+          <n-form-item>
+            <n-checkbox v-model:checked="personalAlsoEmailSelf">{{ l.reminders.alsoEmailSelf }}</n-checkbox>
+          </n-form-item>
+        </template>
+
+        <!-- ── Normal (client/category) reminder ── -->
+        <template v-else>
         <n-form-item label="לקוח (אופציונלי)">
           <n-select
             v-model:value="newReminder.client_id"
@@ -249,7 +289,7 @@
         <n-form-item v-else label="תאריך תזכורת מותאם אישית" required>
           <n-date-picker v-model:value="reminderCustomDateMs" type="date" style="width: 100%" />
         </n-form-item>
-        <n-form-item :label="newReminder.client_id ? 'אימייל נמען' : 'אימייל נמען (אופציונלי — תזכורת אישית)'" :required="Boolean(newReminder.client_id)">
+        <n-form-item :label="newReminder.client_id ? l.reminders.recipientEmail : l.reminders.recipientEmailOptional" :required="Boolean(newReminder.client_id)">
           <n-input
             v-model:value="newReminder.email_to"
             :placeholder="emailPlaceholder"
@@ -295,6 +335,7 @@
         <n-form-item label="תוכן">
           <n-input v-model:value="newReminder.body" type="textarea" :rows="3" />
         </n-form-item>
+        </template>
       </n-form>
       <template #action>
         <n-button @click="showCreate = false">ביטול</n-button>
@@ -344,8 +385,8 @@
 <script setup lang="ts">
 import {computed, h, onMounted, ref, type Component} from "vue";
 import {useRouter} from "vue-router";
-import {NAlert, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NSelect, useMessage,} from "naive-ui";
-import {CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, GridOutline, PaperPlaneOutline, RefreshOutline, TimeOutline, TrashOutline,} from "@vicons/ionicons5";
+import {NAlert, NButton, NCheckbox, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NTooltip, useMessage,} from "naive-ui";
+import {CalendarOutline, CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, GridOutline, PaperPlaneOutline, RefreshOutline, TimeOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";
@@ -359,6 +400,7 @@ import StatusBadge from "../components/StatusBadge.vue";
 import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import {FEATURES} from "../shared/features.js";
 import {useI18n} from "../composables/useI18n.js";
+import {useNotifications} from "../composables/useNotifications.js";
 import type {Client, ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
 // Date-only strings (YYYY-MM-DD) must round-trip through the date picker using
@@ -385,6 +427,7 @@ function msToLocalDateStr(ms: number): string {
 
 const store = useRemindersStore();
 const {l, href, t, dir, locale} = useI18n();
+const { refresh: refreshNotifications } = useNotifications();
 const settingsStore = useSettingsStore();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
@@ -440,6 +483,10 @@ const newReminder = ref<{
   email_template_id: string | null;
   category: string | null;
 } | null>(null);
+const isPersonalReminder = ref(false);
+const personalTargetDateMs = ref<number | null>(null);
+const personalAlsoEmailSelf = ref(false);
+const personalRemindBeforeDays = ref("");
 const newReminderContractId = ref<string | null>(null);
 const newReminderContracts = ref<ContractWithClient[]>([]);
 const loadingContracts = ref(false);
@@ -459,9 +506,15 @@ const clientOptions = computed(() =>
   }))
 );
 
-const newReminderCategoryOptions = computed(() =>
-  reminderCategories.value.map((c) => ({ label: categoryLabel(c.name, locale.value), value: c.name }))
-);
+const newReminderCategoryOptions = computed(() => {
+  const options = reminderCategories.value.map((c) => ({ label: categoryLabel(c.name, locale.value), value: c.name }));
+  // "Personal" always offered even with zero existing reminders in it yet —
+  // every other option only appears once a reminder in that category exists.
+  if (!options.some((o) => o.value === "Personal")) {
+    options.push({ label: categoryLabel("Personal", locale.value), value: "Personal" });
+  }
+  return options;
+});
 
 const emailTemplateOptions = computed(() =>
   emailTemplates.value.length
@@ -592,11 +645,12 @@ function load() {
     filteredRows.value.some((row) => row.id === id)
   );
   store.fetch({ status: statusFilter.value ?? undefined, limit: 5000, category: categoryFilter.value ?? undefined }, true);
+  loadReminderCategories(true);
 }
 
-async function loadReminderCategories() {
+async function loadReminderCategories(force = false) {
   try {
-    reminderCategories.value = (await api.reminders.categories()).categories;
+    reminderCategories.value = (await api.reminders.categories(force)).categories;
   } catch {
     reminderCategories.value = [];
   }
@@ -674,6 +728,13 @@ async function loadSenderInfo() {
 }
 
 // ── Create new reminder ─────────────────────────────────────────────────────
+function onReminderKindChange(kind: string) {
+  isPersonalReminder.value = kind === "personal";
+  if (kind === "personal" && newReminder.value && !newReminder.value.category) {
+    newReminder.value.category = "Personal";
+  }
+}
+
 async function openCreate() {
   await loadEmailTemplates();
   // Default to the periodic-inspection template, since that's what most
@@ -697,6 +758,10 @@ async function openCreate() {
   attachMode.value = "none";
   attachReference.value = "";
   attachFile.value = null;
+  isPersonalReminder.value = false;
+  personalTargetDateMs.value = null;
+  personalAlsoEmailSelf.value = false;
+  personalRemindBeforeDays.value = "";
   showCreate.value = true;
 }
 
@@ -813,6 +878,33 @@ function normalizeEmailTo(input: string): string | null {
 }
 
 async function doCreate() {
+  if (isPersonalReminder.value) {
+    if (!newReminder.value?.title.trim() || !personalTargetDateMs.value) {
+      message.warning(l.value.reminders.missingTitleAndDate);
+      return;
+    }
+    creating.value = true;
+    try {
+      const targetDate = msToLocalDateStr(personalTargetDateMs.value);
+      await api.reminders.createPersonal({
+        title: newReminder.value.title.trim(),
+        target_date: targetDate,
+        reminder_category: newReminder.value.category || "Personal",
+        email_to: personalAlsoEmailSelf.value ? (authStore.user?.email ?? null) : null,
+        remind_before_days: personalRemindBeforeDays.value.trim() || null,
+      });
+      message.success(l.value.notifications.quickAddSuccess);
+      showCreate.value = false;
+      load();
+      void refreshNotifications();
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      creating.value = false;
+    }
+    return;
+  }
+
   if (!newReminder.value) return;
   if (!newReminder.value.title.trim()) {
     message.warning("יש להזין כותרת ותאריך");
@@ -1153,12 +1245,16 @@ function dueTone(row: ReminderWithContext): string {
 
 function rowProps(row: ReminderWithContext) {
   return {
-    class: `reminder-row reminder-row--${dueTone(row)}${bulkMode.value ? " reminder-row--selectable" : ""}`,
+    class: `reminder-row reminder-row--${dueTone(row)} reminder-row--clickable${bulkMode.value ? " reminder-row--selectable" : ""}`,
+    style: "cursor: pointer",
     onClick: (event: MouseEvent) => {
-      if (!bulkMode.value) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest("button, a, .n-checkbox")) return;
-      toggleReminderSelection(row);
+      if (target?.closest("button, a, .n-checkbox, .n-dropdown, .n-popover")) return;
+      if (bulkMode.value) {
+        toggleReminderSelection(row);
+        return;
+      }
+      router.push(href(`/reminders/${row.id}`));
     },
   };
 }
@@ -1169,14 +1265,23 @@ const baseColumns = computed(() => [
     key: "title",
     width: 200,
     minWidth: 200,
-    render: (row: ReminderWithContext) => h("span", row.title || "—"),
+    render: (row: ReminderWithContext) =>
+      h("button", {
+        class: "link-button",
+        type: "button",
+        onClick: (event: MouseEvent) => {
+          event.stopPropagation();
+          router.push(href(`/reminders/${row.id}`));
+        },
+      }, row.title || "—"),
   },
   {
     title: l.value.common.category,
     key: "reminder_category",
     width: 140,
     minWidth: 140,
-    render: (row: ReminderWithContext) => h("span", categoryLabel(row.reminder_category || row.contract_type, locale.value) || "—"),
+    render: (row: ReminderWithContext) =>
+      h("span", categoryLabel(row.reminder_category || row.contract_type, locale.value) || "—"),
   },
   {
     title: l.value.common.email,
@@ -1213,7 +1318,7 @@ const baseColumns = computed(() => [
       h("span", { class: "reminder-source-cell" }, row.contract_number || row.document_name || "—"),
   },
   {
-    title: l.value.common.date,
+    title: l.value.reminders.dateColumn,
     key: "trigger_date",
     width: 130,
     minWidth: 130,
@@ -1231,21 +1336,41 @@ const baseColumns = computed(() => [
   {
     title: "",
     key: "actions",
-    width: 60,
+    width: 88,
     render: (row: ReminderWithContext) =>
-      h(NDropdown, {
-        options: rowActionsFor(row),
-        placement: "bottom-end",
-        trigger: "click",
-        onSelect: (key: string) => handleRowAction(key, row),
-      }, {
-        default: () => h("button", {
-          class: "btn btn--ghost btn--xs icon-btn",
-          title: l.value.common.actions,
-          type: "button",
-          onClick: (event: MouseEvent) => event.stopPropagation(),
-        }, [h(NIcon, { component: EllipsisVerticalOutline, class: "btn-icon" })]),
-      }),
+      h("div", {
+        class: "reminder-actions-cell",
+        onClick: (event: MouseEvent) => event.stopPropagation(),
+      }, [
+        h(NTooltip, { placement: "top" }, {
+          trigger: () => h("span", {
+            class: ["reminder-sync-icon", row.calendar_synced ? "reminder-sync-icon--on" : "reminder-sync-icon--off"],
+          }, [
+            h(NIcon, {
+              component: row.source_type === "personal" ? CheckboxOutline : CalendarOutline,
+              size: 16,
+            }),
+          ]),
+          default: () => {
+            if (!row.calendar_synced) return l.value.reminders.detailCalendarNotSynced;
+            return row.calendar_task_id || row.source_type === "personal"
+              ? l.value.reminders.calendarSyncedAsTask
+              : l.value.calendar.synced;
+          },
+        }),
+        h(NDropdown, {
+          options: rowActionsFor(row),
+          placement: "bottom-end",
+          trigger: "click",
+          onSelect: (key: string) => handleRowAction(key, row),
+        }, {
+          default: () => h("button", {
+            class: "btn btn--ghost btn--xs icon-btn",
+            title: l.value.common.actions,
+            type: "button",
+          }, [h(NIcon, { component: EllipsisVerticalOutline, class: "btn-icon" })]),
+        }),
+      ]),
   },
 ]);
 
@@ -1284,7 +1409,7 @@ function rowActionsFor(row: ReminderWithContext) {
 function handleRowAction(key: string, row: ReminderWithContext) {
   if (key === "send") { if (sendingReminderId.value !== row.id) sendReminderRow(row); return; }
   if (key === "preview") { openReminderPreview(row); return; }
-  if (key === "edit") { openEditDate(row); return; }
+  if (key === "edit") { router.push(href(`/reminders/${row.id}`)); return; }
   if (key === "dismiss") { dismissReminderRow(row); return; }
   if (key === "delete") { confirmDelete(row); return; }
 }
@@ -1722,6 +1847,15 @@ const columns = computed(() =>
   margin: 0;
 }
 
+.reminders-table :deep(.reminder-row--clickable) {
+  cursor: pointer;
+}
+
+.reminders-table :deep(.reminder-row--clickable:hover td) {
+  background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
+  cursor: pointer;
+}
+
 .reminders-table :deep(.reminder-row--selectable) {
   cursor: pointer;
 }
@@ -1730,12 +1864,35 @@ const columns = computed(() =>
   background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
 }
 
+.personal-reminder-hint {
+  margin: -4px 0 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .reminder-client-cell,
 .reminder-date-cell {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 6px;
   min-width: 0;
   max-width: 100%;
+}
+
+.reminder-actions-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+}
+.reminder-sync-icon--on {
+  color: var(--brand-color);
+}
+.reminder-sync-icon--off {
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .reminder-email-cell,

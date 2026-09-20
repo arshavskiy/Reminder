@@ -37,7 +37,7 @@ interface StoredSubscription {
 }
 
 // Send to every subscription of a specific user. Dead subs (404/410) are pruned.
-async function sendToUser(userId: string, payload: PushPayload): Promise<void> {
+export async function sendToUser(userId: string, payload: PushPayload): Promise<void> {
   if (!enabled) return;
   const subs = await col<StoredSubscription>("push_subscriptions").find({ user_id: userId }).toArray();
   if (!subs.length) return;

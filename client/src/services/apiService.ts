@@ -12,6 +12,7 @@ import type {
   Equipment,
   FeatureDefinition,
   GlobalSearchResult,
+  NotificationItem,
   PipelineFlags,
   PrintTemplate,
   Reminder,
@@ -797,23 +798,34 @@ export const api = {
     list: (params?: { status?: string; days?: number; limit?: number; documentId?: string; sourceIds?: string; category?: string }, force = false) => {
       return get<{ rows: ReminderWithContext[]; total: number }>(`/reminders${qs(params)}`, force);
     },
-    categories: () => get<{ categories: { name: string; count: number }[] }>("/reminders/categories"),
+    categories: (force = false) => get<{ categories: { name: string; count: number }[] }>("/reminders/categories", force),
     activity: (params?: { limit?: number; kind?: "email" | "document" }, force = false) =>
       get<{ rows: { id: string; kind: "email" | "document"; title: string; detail: string | null; at: string; status: "ok" | "failed" | "info" }[] }>(
         `/activity${qs(params)}`,
         force,
       ),
     senderInfo: () => get<{ email: string | null; name: string }>("/reminders/email-sender"),
+    get: (id: string | number) => get<ReminderWithContext>(`/reminders/${id}`, true),
     create: (body: Partial<Reminder>) => post<Reminder>("/reminders", body),
-    update: (id: number, body: Partial<Reminder>) => put<Reminder>(`/reminders/${id}`, body),
-    delete: (id: number) => del(`/reminders/${id}`),
+    update: (id: string | number, body: Partial<Reminder>) => put<ReminderWithContext>(`/reminders/${id}`, body),
+    delete: (id: string | number) => del(`/reminders/${id}`),
     deleteAll: () => del("/reminders"),
-    dismiss: (id: number) => post(`/reminders/${id}/dismiss`),
+    dismiss: (id: string | number) => post(`/reminders/${id}/dismiss`),
     snooze: (id: number, until: string) => post(`/reminders/${id}/snooze`, { until }),
-    sendNow: (id: number) => post<{ success: boolean; error?: string }>(`/reminders/${id}/send-now`),
+    sendNow: (id: string | number) => post<{ success: boolean; error?: string }>(`/reminders/${id}/send-now`),
+    syncCalendar: (id: string | number) =>
+      post<{ ok: boolean; synced: boolean; reminder: ReminderWithContext }>(`/reminders/${id}/sync-calendar`),
     previewEmail: (id: number | string) => get<{ subject: string; html: string }>(`/reminders/${id}/preview-email`, true),
     createHydraulicCheck: (body: HydraulicCheckRequest) =>
       post<HydraulicCheckResult>("/reminders/hydraulic-check", body),
+    createPersonal: (body: { title: string; target_date: string; reminder_category?: string | null; email_to?: string | null; remind_before_days?: number | number[] | string | null }) =>
+      post<{ created: number }>("/reminders/personal", body),
+  },
+
+  notifications: {
+    list: () => get<{ items: NotificationItem[]; unreadCount: number }>("/notifications", true),
+    markRead: (id: string) => post<{ ok: boolean }>(`/notifications/${id}/read`),
+    markAllRead: () => post<{ ok: boolean }>("/notifications/read-all"),
   },
 
   tasks: {

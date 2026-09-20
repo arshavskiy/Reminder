@@ -2,7 +2,7 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {sendReminderEmail} from "../reminders/emailSender";
-import {generateContractReminders} from "../reminders/scheduler";
+import {createPersonalReminder, generateContractReminders} from "../reminders/scheduler";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSettings} from "../settings";
@@ -19,6 +19,9 @@ import {
   reminderQuotaErrorPayload,
 } from "../quotas/reminderQuota";
 import {incrementReminderUsage} from "../quotas/userUsageCounters";
+import {pushReminderToCalendar} from "../calendar/sync";
+import {resolveCalendarToken} from "../calendar/googleCalendar";
+import {featureFlagsForUser, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 
 const MIN_INSPECTION_INTERVAL_MONTHS = 1;
 const MAX_INSPECTION_INTERVAL_MONTHS = 26;
@@ -381,13 +384,34 @@ export function registerReminderRoutes(app: express.Application) {
         document_name: (document as any)?.file_name ?? null,
         contract_number: (contract as any)?.contract_number ?? null,
         contract_type: (contract as any)?.contract_type ?? null,
-        calendar_synced: Boolean(calendarLink?.gcal_event_id),
+        calendar_synced: Boolean(calendarLink?.gcal_event_id || calendarLink?.gtask_id),
         calendar_event_id: calendarLink?.gcal_event_id ?? null,
+        calendar_task_id: calendarLink?.gtask_id ?? null,
         calendar_last_synced_at: calendarLink?.last_synced_at ?? null,
       };
     });
 
     res.json({ rows, total });
+  });
+
+  // GET /api/reminders/:id
+  app.get("/api/reminders/:id", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const reminder = await col("reminders").findOne({ ...idFilter(req.params.id), user_id: userId });
+    if (!reminder) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    res.json(await enrichReminderDoc(userId, reminder));
   });
 
   // POST /api/reminders
@@ -455,7 +479,49 @@ export function registerReminderRoutes(app: express.Application) {
     const result = await col("reminders").insertOne(doc as any);
     await incrementReminderUsage(userId, 1);
     const inserted = await col("reminders").findOne({ _id: result.insertedId });
+    pushReminderToCalendar(userId, String(result.insertedId)).catch((e) => {
+      logger.warn("calendar_push_after_create_failed", {
+        user_id: userId,
+        reminder_id: String(result.insertedId),
+        error: String(e),
+      });
+    });
     res.status(201).json(flatDoc(inserted));
+  });
+
+  // POST /api/reminders/personal — internal-only reminder: no client, email
+  // only if explicitly opted in via email_to. Delivered via push
+  // notification + the in-app notification bell always, and picked up by
+  // the existing calendar sync like any other pending reminder. Creates one
+  // row per the user's configured advance days.
+  app.post("/api/reminders/personal", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const targetDate = typeof body.target_date === "string" ? body.target_date.trim() : "";
+    if (!title || !/^\d{4}-\d{2}-\d{2}/.test(targetDate)) {
+      res.status(400).json({ error: "title and target_date (YYYY-MM-DD) are required" });
+      return;
+    }
+    const reminderCategory = typeof body.reminder_category === "string" ? body.reminder_category : null;
+    const emailTo = typeof body.email_to === "string" ? body.email_to : null;
+    const remindBeforeDays = body.remind_before_days ?? null;
+
+    try {
+      const result = await createPersonalReminder(userId, title, targetDate, { reminderCategory, emailTo, remindBeforeDays: remindBeforeDays as number | number[] | string | null });
+      res.status(201).json(result);
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   // POST /api/reminders/hydraulic-check — manual entry: creates a business (client),
@@ -868,19 +934,43 @@ export function registerReminderRoutes(app: express.Application) {
 
     const updates: Record<string, any> = { updated_at: new Date() };
     const fields = [
-      "title", "body", "trigger_date", "email_to", "status", "email_template_id",
+      "title", "body", "trigger_date", "status", "email_template_id",
+      "reminder_category", "expiry_date", "advance_days", "client_id",
+      "document_id", "document_reference",
       "client_company", "client_name", "contact_person", "client_email", "client_phone", "contract_number", "contract_type",
       "equipment_type", "manufacturer", "model", "serial_number", "license_number",
     ];
     for (const f of fields) {
       if (body[f] !== undefined) updates[f] = body[f];
     }
+    if (body.email_to !== undefined) {
+      updates.email_to = normalizeStoredEmailTo(body.email_to);
+    }
     if (body.email_template_id !== undefined) {
       updates.email_template_id = await resolveEmailTemplateId(body.email_template_id, userId);
+    }
+    if (body.reminder_category !== undefined) {
+      updates.reminder_category = typeof body.reminder_category === "string" && body.reminder_category.trim()
+        ? body.reminder_category.trim()
+        : null;
+    }
+    if (body.advance_days !== undefined) {
+      const days = Number(body.advance_days);
+      updates.advance_days = Number.isFinite(days) && days >= 0 ? Math.trunc(days) : 0;
+    }
+    if (body.client_id !== undefined) {
+      updates.client_id = body.client_id ? String(body.client_id) : null;
     }
 
     await col("reminders").updateOne(filter, { $set: updates });
     const updated = await col("reminders").findOne(filter);
+    if (updated) {
+      pushReminderToCalendar(userId, String((updated as any)._id)).catch((e) => {
+        logger.warn("calendar_push_after_update_failed", { user_id: userId, reminder_id: String((updated as any)._id), error: String(e) });
+      });
+      res.json(await enrichReminderDoc(userId, updated));
+      return;
+    }
     res.json(flatDoc(updated));
   });
 
@@ -1027,6 +1117,46 @@ export function registerReminderRoutes(app: express.Application) {
 
     res.json(result);
   });
+
+  // POST /api/reminders/:id/sync-calendar — push this reminder to Google Calendar / Tasks.
+  app.post("/api/reminders/:id/sync-calendar", async (req, res) => {
+    let userId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
+    if (!featureFlagsForUser(user).googleCalendarSync) {
+      res.status(403).json({ error: "calendar_plan_required", message: PLAN_GATE_MESSAGES.calendar });
+      return;
+    }
+
+    const filter = { ...idFilter(req.params.id), user_id: userId };
+    const reminder = await col("reminders").findOne(filter);
+    if (!reminder) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+
+    const accessToken = await resolveCalendarToken(userId);
+    if (!accessToken) {
+      res.status(400).json({ error: "calendar_not_connected" });
+      return;
+    }
+
+    await pushReminderToCalendar(userId, String((reminder as any)._id));
+    const enriched = await enrichReminderDoc(userId, await col("reminders").findOne(filter));
+    res.json({
+      ok: true,
+      synced: Boolean(enriched?.calendar_synced),
+      reminder: enriched,
+    });
+  });
 }
 
 async function findClientByPhone(userId: string, phone: unknown): Promise<any | null> {
@@ -1148,4 +1278,41 @@ function parseManualFields(value: unknown): Record<string, unknown> | null {
 
 function textField(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeStoredEmailTo(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value !== "string") return null;
+  const t = value.trim();
+  if (!t) return null;
+  if (t.startsWith("[")) return t;
+  const list = t.split(",").map((s) => s.trim()).filter(Boolean);
+  return list.length ? JSON.stringify(list) : null;
+}
+
+async function enrichReminderDoc(userId: string, r: any) {
+  const reminderId = String(r._id);
+  const [document, contract, calendarLink] = await Promise.all([
+    r.document_id
+      ? col<any>("documents").findOne({ _id: tryObjectId(String(r.document_id)) } as any)
+      : Promise.resolve(null),
+    resolveReminderContract(r, userId),
+    col<any>("calendar_links").findOne({ user_id: userId, source_type: "reminder", source_id: reminderId }),
+  ]);
+  const client = await resolveReminderClient(r, contract, userId);
+  const contactFields = contactFieldsFromSources(contract, document);
+  return {
+    ...flatDoc(r),
+    client_name: normalizeClientNameForDisplay((client as any)?.display_name),
+    contact_person: textField((client as any)?.contact_person) ?? contactFields.contact_person ?? extractContactPersonFromNotes((client as any)?.notes),
+    client_email: textField((client as any)?.email) ?? contactFields.contact_email ?? firstReminderEmail(r.email_to),
+    client_phone: textField((client as any)?.phone) ?? contactFields.contact_phone ?? null,
+    document_name: (document as any)?.file_name ?? null,
+    contract_number: (contract as any)?.contract_number ?? null,
+    contract_type: (contract as any)?.contract_type ?? null,
+    calendar_synced: Boolean(calendarLink?.gcal_event_id || calendarLink?.gtask_id),
+    calendar_event_id: calendarLink?.gcal_event_id ?? null,
+    calendar_task_id: calendarLink?.gtask_id ?? null,
+    calendar_last_synced_at: calendarLink?.last_synced_at ?? null,
+  };
 }

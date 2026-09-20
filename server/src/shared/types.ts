@@ -337,7 +337,7 @@ export interface ReminderItem {
 
 export interface Reminder {
   id: number;
-  source_type: "contract_expiry" | "task" | "manual" | "table_import";
+  source_type: "contract_expiry" | "task" | "manual" | "table_import" | "personal";
   reminder_category?: string | null;
   expiry_date?: string | null;
   start_date?: string | null;
@@ -433,6 +433,7 @@ export interface ReminderWithContext extends Reminder {
   contract_type?: string | null;
   calendar_synced?: boolean;
   calendar_event_id?: string | null;
+  calendar_task_id?: string | null;
   calendar_last_synced_at?: string | null;
 }
 

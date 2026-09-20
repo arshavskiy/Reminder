@@ -6,8 +6,11 @@ const MAX_ENTRIES = 6;
 const MAX_DAYS = 365;
 
 export function parseAdvanceDays(raw: unknown): number[] | null {
+  if (raw == null || raw === "") return null;
   let list: unknown = raw;
-  if (typeof raw === "string") {
+  if (typeof raw === "number") {
+    list = [raw];
+  } else if (typeof raw === "string") {
     const trimmed = raw.trim();
     if (!trimmed) return null;
     try {
@@ -16,6 +19,7 @@ export function parseAdvanceDays(raw: unknown): number[] | null {
       // Also accept a bare "90,60,30" so a hand-edited value is not silently lost.
       list = trimmed.split(",");
     }
+    if (typeof list === "number") list = [list];
   }
   if (!Array.isArray(list)) return null;
 

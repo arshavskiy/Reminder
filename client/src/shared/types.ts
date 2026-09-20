@@ -338,7 +338,7 @@ export interface ReminderItem {
 
 export interface Reminder {
   id: number;
-  source_type: "contract_expiry" | "task" | "manual" | "table_import";
+  source_type: "contract_expiry" | "task" | "manual" | "table_import" | "personal";
   reminder_category?: string | null;
   expiry_date?: string | null;
   start_date?: string | null;
@@ -444,6 +444,17 @@ export interface ContractWithClient extends Contract {
   email_delivery?: EmailDeliverySummary | null;
 }
 
+export interface NotificationItem {
+  id: string;
+  user_id: string;
+  kind: "personal_reminder";
+  reminder_id: string | number;
+  title: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+}
+
 export interface ReminderWithContext extends Reminder {
   client_name: string | null;
   contact_person?: string | null;
@@ -453,6 +464,7 @@ export interface ReminderWithContext extends Reminder {
   contract_type?: string | null;
   calendar_synced?: boolean;
   calendar_event_id?: string | null;
+  calendar_task_id?: string | null;
   calendar_last_synced_at?: string | null;
 }
 

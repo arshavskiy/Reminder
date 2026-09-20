@@ -12,11 +12,12 @@ import {
   renameCalendar,
   resolveCalendarToken,
 } from "../calendar/googleCalendar";
+import { TASKS_SCOPE } from "../calendar/googleTasks";
 import { pullCalendarChanges, pushAllReminders } from "../calendar/sync";
 import { featureFlagsForUser, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
 
 const GOOGLE_IDENTITY_SCOPE = "openid profile email";
-const CALENDAR_CONNECT_SCOPE = `${GOOGLE_IDENTITY_SCOPE} ${CALENDAR_SCOPE}`;
+const CALENDAR_CONNECT_SCOPE = `${GOOGLE_IDENTITY_SCOPE} ${CALENDAR_SCOPE} ${TASKS_SCOPE}`;
 const DEFAULT_RETURN_PATH = "/settings";
 
 type HTTPException = { status?: number; message: string };
@@ -158,11 +159,13 @@ export function registerCalendarRoutes(app: express.Express) {
     }
     const grantedScopes = String(tokens.scope ?? "").split(/\s+/).filter(Boolean);
     const hasCalendarScope = grantedScopes.includes(CALENDAR_SCOPE);
+    const hasTasksScope = grantedScopes.includes(TASKS_SCOPE);
 
     const setFields: Record<string, any> = {
       calendar_access_token: tokens.access_token,
       calendar_token_expires_at: new Date(Date.now() + tokens.expires_in * 1000),
       calendar_scope_granted: hasCalendarScope,
+      calendar_tasks_scope_granted: hasTasksScope,
       calendar_email: connectedEmail,
       updated_at: new Date(),
     };
@@ -207,7 +210,10 @@ export function registerCalendarRoutes(app: express.Express) {
     const syncedCount = connected
       ? await col("calendar_links").countDocuments({
         user_id: userId,
-        gcal_event_id: { $exists: true, $nin: [null, ""] },
+        $or: [
+          { gcal_event_id: { $exists: true, $nin: [null, ""] } },
+          { gtask_id: { $exists: true, $nin: [null, ""] } },
+        ],
       })
       : 0;
     const calendarId = user?.calendar_id ? String(user.calendar_id) : null;

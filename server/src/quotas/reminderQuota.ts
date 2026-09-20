@@ -67,10 +67,10 @@ export async function assertReminderQuota(
 export async function insertReminderIfAllowed(
   userId: string | undefined,
   doc: Record<string, unknown>,
-): Promise<boolean> {
+): Promise<string | false> {
   if (!userId) {
-    await col("reminders").insertOne(doc as any);
-    return true;
+    const result = await col("reminders").insertOne(doc as any);
+    return String(result.insertedId);
   }
 
   const role = await resolveUserPlan(userId);
@@ -81,9 +81,9 @@ export async function insertReminderIfAllowed(
     throw err;
   }
 
-  await col("reminders").insertOne(doc as any);
+  const result = await col("reminders").insertOne(doc as any);
   await incrementReminderUsage(userId, 1);
-  return true;
+  return String(result.insertedId);
 }
 
 async function resolveUserPlan(userId: string): Promise<string> {

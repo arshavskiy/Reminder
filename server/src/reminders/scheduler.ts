@@ -2,7 +2,7 @@ import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {getSettings} from "../settings";
 import {sendGroupedReminderEmail, sendReminderEmail} from "./emailSender";
-import {advanceDaysForUser} from "./advanceDays";
+import {advanceDaysForUser, parseAdvanceDays} from "./advanceDays";
 import {sendMonthlyReportToRecipients} from "../reports/monthlyReports";
 import {
   isMonthlyReportDue,
@@ -15,7 +15,7 @@ import { syncAllCalendars, pushReminderToCalendar } from "../calendar/sync";
 import {insertReminderIfAllowed} from "../quotas/reminderQuota";
 import {featureFlagsForUser} from "../plans/tierFeatures";
 import {clientDisplayName} from "../utils/clientNames";
-import {notifyEmailSendFailed, notifyReminderSkipped} from "../push/adminNotify";
+import {notifyEmailSendFailed, notifyPersonalReminderDue, notifyReminderSkipped} from "../push/adminNotify";
 import {parseObjectRecord, parseReminderEmailTo, pickContractEmail, pickContractEmailWithMeta} from "../contracts/contractEmail.js";
 import {buildGroupedItemsTable, expiryFromReminderTitle, groupedReminderKey} from "./groupedReminderEmail";
 import {isProcessPaused} from "../ops/processControl";
@@ -426,6 +426,10 @@ async function processGroupedReminders(items: Array<{
 }
 
 async function processReminder(reminder: ReminderWithContext) {
+  if ((reminder as any).source_type === "personal") {
+    return handlePersonalReminderDue(reminder);
+  }
+
   const settings = getSettings();
   const remId = reminder.id;
   let recipients: string[] = parseReminderEmailTo(reminder.email_to);
@@ -725,6 +729,145 @@ export async function generateTaskReminders(
       updated_at: new Date(),
       });
   }
+}
+
+/**
+ * Create a personal/internal reminder for the given user: no client, and no
+ * email unless the user explicitly opts in (emailTo). It always reaches the
+ * user via push notification and the in-app notification bell, and (through
+ * the existing calendar sync, which syncs any "pending" reminder regardless
+ * of category) their Google Calendar. `source_type: "personal"` is the only
+ * thing that marks it internal — reminder_category stays free for the
+ * user's own tag (e.g. ביטוח, רכב), same as any other reminder, so it's
+ * still organizable/filterable by category.
+ * Mirrors generateTaskReminders's advance-day loop, but keyed on a
+ * user-supplied title/date pair instead of a task/document.
+ */
+export async function createPersonalReminder(
+  userId: string,
+  title: string,
+  targetDate: string,
+  options?: { reminderCategory?: string | null; emailTo?: string | null; remindBeforeDays?: number | number[] | string | null },
+): Promise<{ created: number }> {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(targetDate)) {
+    throw new Error("targetDate must be YYYY-MM-DD");
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const label = title.trim().slice(0, 120) || "תזכורת אישית";
+  const reminderCategory = options?.reminderCategory?.trim() || "Personal";
+  const emailTo = options?.emailTo?.trim() || null;
+  let created = 0;
+
+  // A personal reminder is about the target date itself. Extra "remind me
+  // before" days (3 or 7,14,30) add more rows. An empty field must not fall
+  // back to the user's global inspection advance-days — that silently created
+  // a second reminder (often clamped to today).
+  const extraDays = parseAdvanceDays(options?.remindBeforeDays) ?? [];
+  const advanceDays = [...new Set([0, ...extraDays])];
+  const seenTriggerDates = new Set<string>();
+  let calendarReminderId: string | null = null;
+
+  for (const days of advanceDays) {
+    const due = new Date(targetDate);
+    due.setDate(due.getDate() - days);
+    const calculatedTrigger = due.toISOString().slice(0, 10);
+    const triggerDate = calculatedTrigger < today ? today : calculatedTrigger;
+    if (seenTriggerDates.has(triggerDate)) continue;
+    seenTriggerDates.add(triggerDate);
+
+    const insertedId = await insertReminderIfAllowed(userId, {
+      user_id: userId,
+      source_type: "personal",
+      client_id: null,
+      document_id: null,
+      email_to: emailTo ? JSON.stringify([emailTo]) : null,
+      reminder_category: reminderCategory,
+      trigger_date: triggerDate,
+      expiry_date: targetDate,
+      advance_days: days,
+      title: label,
+      status: "pending",
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+    if (insertedId) {
+      created += 1;
+      if (days === 0 || !calendarReminderId) calendarReminderId = insertedId;
+    }
+  }
+
+  if (created) {
+    await col("notifications").insertOne({
+      user_id: userId,
+      kind: "personal_reminder",
+      reminder_id: calendarReminderId,
+      title: label,
+      body: `יעד: ${targetDate}`,
+      created_at: new Date(),
+      read_at: null,
+    } as any);
+  }
+
+  if (calendarReminderId) {
+    try {
+      await pushReminderToCalendar(userId, calendarReminderId);
+    } catch (e) {
+      logger.warn("calendar_personal_sync_failed", {
+        user_id: userId,
+        reminder_id: calendarReminderId,
+        error: String(e),
+      });
+    }
+  }
+
+  return { created };
+}
+
+/**
+ * Delivery for a due personal reminder: push notification + in-app
+ * notification row, always. Only sends an actual email when the reminder
+ * carries email_to (the user's own opt-in "also email me" checkbox) — a
+ * plain personal reminder never touches email_log. Marks the reminder
+ * "sent" so it stops being reprocessed and so it's excluded from the
+ * calendar-sync's SYNCABLE_STATUSES the same way any other sent reminder
+ * would be.
+ */
+async function handlePersonalReminderDue(reminder: ReminderWithContext) {
+  const remId = reminder.id;
+  const userId = (reminder as any).user_id ?? null;
+
+  logger.info("personal_reminder_due", { reminder_id: remId, user_id: userId, title: reminder.title });
+
+  if (userId) {
+    await col("notifications").insertOne({
+      user_id: userId,
+      kind: "personal_reminder",
+      reminder_id: remId,
+      title: reminder.title,
+      body: (reminder as any).expiry_date ? `יעד: ${(reminder as any).expiry_date}` : "",
+      created_at: new Date(),
+      read_at: null,
+    } as any);
+
+    await notifyPersonalReminderDue({
+      userId: String(userId),
+      title: reminder.title,
+      reminderId: String(remId),
+    });
+  }
+
+  const optInRecipients = parseReminderEmailTo(reminder.email_to);
+  if (optInRecipients.length) {
+    const result = await sendReminderEmail(reminder, optInRecipients);
+    if (!result.success) {
+      notifyEmailSendFailed({ recipient: optInRecipients.join(", "), error: result.error, title: reminder.title });
+    }
+  }
+
+  await col("reminders").updateOne(
+    { _id: toObjectId(remId) } as any,
+    { $set: { status: "sent", updated_at: new Date() } },
+  );
 }
 
 export function resolveContractReminderEmail(

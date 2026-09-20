@@ -12,6 +12,7 @@ const CATEGORY_LABELS_HE: Record<string, string> = {
   Contract: "חוזה",
   Compliance: "רגולציה",
   Equipment: "ציוד",
+  Personal: "אישי",
 };
 
 export function categoryLabel(name: string | null | undefined, locale: "he" | "en" = "he"): string {

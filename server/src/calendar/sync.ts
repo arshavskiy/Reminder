@@ -22,6 +22,7 @@ import {
   resolveCalendarToken,
   type GoogleCalendarEvent,
 } from "./googleCalendar";
+import { buildTask, deleteTask, insertTask, patchTask, taskPayloadHash } from "./googleTasks";
 
 const SOURCE_TYPE = "reminder";
 const PROP_SOURCE_TYPE = "reminderAppSourceType";
@@ -72,13 +73,23 @@ function describeReminder(reminder: any): string {
   return lines.join("\n");
 }
 
+function isPersonalReminder(reminder: any): boolean {
+  return String(reminder?.source_type ?? "") === "personal";
+}
+
 function buildEventSummary(reminder: any): string {
+  if (isPersonalReminder(reminder)) {
+    const title = String(reminder.title ?? "").trim();
+    return title || "תזכורת אישית";
+  }
   const companyName = companyNameForReminder(reminder);
   return companyName ? `${EVENT_SUMMARY_PREFIX} - ${companyName}` : EVENT_SUMMARY_PREFIX;
 }
 
 export function buildEvent(reminder: any): GoogleCalendarEvent {
-  const date = String(reminder.trigger_date ?? "").slice(0, 10);
+  const date = String(
+    (isPersonalReminder(reminder) ? reminder.expiry_date : null) ?? reminder.trigger_date ?? "",
+  ).slice(0, 10);
   return {
     summary: buildEventSummary(reminder),
     description: describeReminder(reminder),
@@ -135,17 +146,25 @@ async function linkFor(userId: string, reminderId: string) {
 /**
  * Push one reminder to Google. Safe to call on every reminder write — it no-ops
  * when the user has not connected a calendar or nothing changed.
+ * Personal reminders become Google Tasks (they show on Calendar's Tasks list).
+ * Client/inspection reminders stay all-day events on the app calendar.
  */
 export async function pushReminderToCalendar(userId: string, reminderId: string): Promise<void> {
   const user = await col<any>("users").findOne({ _id: toObjectId(userId) });
   if (!featureFlagsForUser(user).googleCalendarSync) return;
   const accessToken = await resolveCalendarToken(userId);
   if (!accessToken) return;
-  const calendarId = await ensureAppCalendar(userId, accessToken);
-  if (!calendarId) return;
 
   const reminder = await col<any>("reminders").findOne({ _id: toObjectId(reminderId) });
   const link = await linkFor(userId, reminderId);
+
+  if (isPersonalReminder(reminder) || link?.gtask_id) {
+    await pushPersonalReminderAsTask(userId, reminderId, accessToken, reminder, link);
+    return;
+  }
+
+  const calendarId = await ensureAppCalendar(userId, accessToken);
+  if (!calendarId) return;
 
   // Gone, dismissed or sent: remove the event so the calendar matches the app.
   if (!reminder || !SYNCABLE_STATUSES.includes(String(reminder.status))) {
@@ -193,6 +212,80 @@ export async function pushReminderToCalendar(userId: string, reminderId: string)
     );
   } catch (e) {
     logger.warn("calendar_push_failed", { user_id: userId, reminder_id: reminderId, error: String(e) });
+  }
+}
+
+async function pushPersonalReminderAsTask(
+  userId: string,
+  reminderId: string,
+  accessToken: string,
+  reminder: any,
+  link: any,
+): Promise<void> {
+  if (link?.gcal_event_id) {
+    const calendarId = await ensureAppCalendar(userId, accessToken);
+    if (calendarId) {
+      try {
+        await deleteEvent(accessToken, calendarId, link.gcal_event_id);
+      } catch (e) {
+        logger.warn("calendar_personal_event_cleanup_failed", {
+          user_id: userId,
+          reminder_id: reminderId,
+          error: String(e),
+        });
+      }
+    }
+  }
+
+  if (!reminder || !SYNCABLE_STATUSES.includes(String(reminder.status))) {
+    if (link?.gtask_id) await deleteTask(accessToken, String(link.gtask_id));
+    if (link) await col("calendar_links").deleteOne({ _id: link._id });
+    return;
+  }
+
+  const task = buildTask(reminder);
+  const hash = taskPayloadHash(task);
+  if (link?.last_pushed_hash === hash && link.gtask_id) return;
+
+  try {
+    if (link?.gtask_id) {
+      const patched = await patchTask(accessToken, String(link.gtask_id), task);
+      if (patched) {
+        await col("calendar_links").updateOne(
+          { _id: link._id },
+          {
+            $set: {
+              last_pushed_hash: hash,
+              etag: patched.etag ?? null,
+              last_synced_at: new Date(),
+              gcal_event_id: null,
+            },
+          },
+        );
+        return;
+      }
+      await col("calendar_links").deleteOne({ _id: link._id });
+    }
+
+    const created = await insertTask(accessToken, task);
+    await col("calendar_links").updateOne(
+      { user_id: userId, source_type: SOURCE_TYPE, source_id: reminderId },
+      {
+        $set: {
+          user_id: userId,
+          source_type: SOURCE_TYPE,
+          source_id: reminderId,
+          gtask_id: created.id ?? null,
+          gcal_event_id: null,
+          etag: created.etag ?? null,
+          last_pushed_hash: hash,
+          last_synced_at: new Date(),
+        },
+      },
+      { upsert: true },
+    );
+  } catch (e) {
+    logger.warn("tasks_push_failed", { user_id: userId, reminder_id: reminderId, error: String(e) });
   }
 }
 

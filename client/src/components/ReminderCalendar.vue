@@ -80,7 +80,7 @@
       </div>
       <div class="rcal__legend">
         <span v-if="!testsOnly" class="rcal__legend-item">
-          <span class="rcal__legend-dot" style="background:var(--brand-color)"></span> {{ l.calendar.legendReminders }}
+          <span class="rcal__legend-dot" style="background:var(--brand-color)"></span> {{ l.calendar.legendReminderDocs }}
         </span>
         <span v-if="!testsOnly" class="rcal__legend-item">
           <span class="rcal__legend-dot" style="background:#2080f0"></span> {{ l.calendar.legendSent }}

@@ -280,9 +280,10 @@ function hasFeature(feature: FeatureKey): boolean {
   return featuresStore.hasFeature(feature);
 }
 
-const calendarRows = computed(() =>
-  calendarNextTestsOnly.value ? [] : remindersStore.rows,
-);
+const calendarRows = computed(() => {
+  if (!calendarNextTestsOnly.value) return remindersStore.rows;
+  return remindersStore.rows.filter((row) => row.source_type === "personal");
+});
 const calendarLoading = computed(
   () =>
     loadingExpiryItems.value ||
@@ -351,8 +352,8 @@ function onCalendarMonthChange(range: { from: string; to: string }) {
 }
 
 async function refreshCalendar(force: boolean) {
-  if (!calendarNextTestsOnly.value && (force || !remindersStore.rows.length)) {
-    remindersStore.fetch({ limit: 500 }, force);
+  if (force || !remindersStore.rows.length) {
+    remindersStore.fetch({ limit: 200 }, force);
   }
   loadingExpiryItems.value = true;
   try {

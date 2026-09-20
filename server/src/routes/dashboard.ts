@@ -138,8 +138,9 @@ export function registerDashboardRoutes(app: express.Application) {
         document_name: (document as any)?.file_name ?? null,
         contract_number: (contract as any)?.contract_number ?? null,
         contract_type: (contract as any)?.contract_type ?? null,
-        calendar_synced: Boolean(calendarLink?.gcal_event_id),
+        calendar_synced: Boolean(calendarLink?.gcal_event_id || calendarLink?.gtask_id),
         calendar_event_id: calendarLink?.gcal_event_id ?? null,
+        calendar_task_id: calendarLink?.gtask_id ?? null,
         calendar_last_synced_at: calendarLink?.last_synced_at ?? null,
       };
     });

@@ -99,6 +99,7 @@
                  </template>
                  {{ l.chrome.installApp }}
                </n-tooltip>
+               <NotificationBell v-if="authStore.user" />
                <UserDropdown
                  :userName="authStore.user?.name ?? authStore.user?.email ?? null"
                  :userEmail="authStore.user?.email ?? null"
@@ -238,6 +239,7 @@ import {
 import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
+import NotificationBell from "./components/NotificationBell.vue";
 import OnboardingWizard from "./components/OnboardingWizard.vue";
 import WalkthroughOverlay from "./components/WalkthroughOverlay.vue";
 import {useWalkthrough} from "./composables/useWalkthrough.js";
@@ -741,6 +743,13 @@ html[data-theme="light"] .mobile-nav-list__item--active {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.appbar__actions :deep(.n-popover),
+.appbar__actions :deep(.n-popover-trigger),
+.appbar__actions :deep(.n-popover__trigger) {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
 }
 
 .subscription-btn {

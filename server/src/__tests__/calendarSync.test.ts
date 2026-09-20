@@ -8,6 +8,7 @@ import {
   reminderIdOfEvent,
   remoteChangeWins,
 } from "../calendar/sync.js";
+import { buildTask } from "../calendar/googleTasks.js";
 
 describe("addDays", () => {
   it("advances a plain date", () => {
@@ -153,5 +154,19 @@ describe("eventDateOf", () => {
 
   it("returns null when the event has no start", () => {
     expect(eventDateOf({})).toBeNull();
+  });
+});
+
+describe("buildTask", () => {
+  it("uses the reminder title and target date as a Google Task", () => {
+    const task = buildTask({
+      title: "לקנות חלב",
+      expiry_date: "2026-09-26",
+      trigger_date: "2026-09-20",
+      reminder_category: "Personal",
+    });
+    expect(task.title).toBe("לקנות חלב");
+    expect(task.due).toBe("2026-09-26T00:00:00.000Z");
+    expect(task.notes).toContain("Personal");
   });
 });
