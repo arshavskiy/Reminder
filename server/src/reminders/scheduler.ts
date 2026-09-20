@@ -11,7 +11,7 @@ import {
 } from "../reports/monthlyReportRecipients";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {logger} from "../logger";
-import { syncAllCalendars, pushReminderToCalendar } from "../calendar/sync";
+import { syncAllCalendars, pushReminderToCalendar, parseCalendarTime } from "../calendar/sync";
 import {insertReminderIfAllowed} from "../quotas/reminderQuota";
 import {featureFlagsForUser} from "../plans/tierFeatures";
 import {clientDisplayName} from "../utils/clientNames";
@@ -752,56 +752,53 @@ export async function createPersonalReminder(
   userId: string,
   title: string,
   targetDate: string,
-  options?: { reminderCategory?: string | null; emailTo?: string | null; remindBeforeDays?: number | number[] | string | null },
+  options?: {
+    reminderCategory?: string | null;
+    emailTo?: string | null;
+    remindBeforeDays?: number | number[] | string | null;
+    syncCalendar?: boolean;
+    calendarKind?: "task" | "event";
+    calendarTime?: string | null;
+  },
 ): Promise<{ created: number }> {
   if (!/^\d{4}-\d{2}-\d{2}/.test(targetDate)) {
     throw new Error("targetDate must be YYYY-MM-DD");
   }
-  const today = new Date().toISOString().slice(0, 10);
   const label = title.trim().slice(0, 120) || "תזכורת אישית";
   const reminderCategory = options?.reminderCategory?.trim() || "Personal";
   const emailTo = options?.emailTo?.trim() || null;
   let created = 0;
 
-  // A personal reminder is about the target date itself. Extra "remind me
-  // before" days (3 or 7,14,30) add more rows. An empty field must not fall
-  // back to the user's global inspection advance-days — that silently created
-  // a second reminder (often clamped to today).
+  // One row on the chosen target date. Extra "remind me before" days used to
+  // insert more reminders (e.g. 7 days earlier plus the real date).
   const extraDays = parseAdvanceDays(options?.remindBeforeDays) ?? [];
-  const advanceDays = [...new Set([0, ...extraDays])];
-  const seenTriggerDates = new Set<string>();
+  const storedAdvanceDays = extraDays[0] ?? 0;
+
+  const insertedId = await insertReminderIfAllowed(userId, {
+    user_id: userId,
+    source_type: "personal",
+    client_id: null,
+    document_id: null,
+    email_to: emailTo ? JSON.stringify([emailTo]) : null,
+    reminder_category: reminderCategory,
+    trigger_date: targetDate,
+    expiry_date: targetDate,
+    advance_days: storedAdvanceDays,
+    title: label,
+    calendar_sync: options?.syncCalendar !== false,
+    calendar_kind: options?.calendarKind === "event" ? "event" : "task",
+    calendar_time: options?.calendarKind === "event" ? parseCalendarTime(options.calendarTime) : null,
+    status: "pending",
+    created_at: new Date(),
+    updated_at: new Date(),
+  });
   let calendarReminderId: string | null = null;
-
-  for (const days of advanceDays) {
-    const due = new Date(targetDate);
-    due.setDate(due.getDate() - days);
-    const calculatedTrigger = due.toISOString().slice(0, 10);
-    const triggerDate = calculatedTrigger < today ? today : calculatedTrigger;
-    if (seenTriggerDates.has(triggerDate)) continue;
-    seenTriggerDates.add(triggerDate);
-
-    const insertedId = await insertReminderIfAllowed(userId, {
-      user_id: userId,
-      source_type: "personal",
-      client_id: null,
-      document_id: null,
-      email_to: emailTo ? JSON.stringify([emailTo]) : null,
-      reminder_category: reminderCategory,
-      trigger_date: triggerDate,
-      expiry_date: targetDate,
-      advance_days: days,
-      title: label,
-      status: "pending",
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
-    if (insertedId) {
-      created += 1;
-      if (days === 0 || !calendarReminderId) calendarReminderId = insertedId;
-    }
+  if (insertedId) {
+    created += 1;
+    calendarReminderId = insertedId;
   }
 
-  if (calendarReminderId) {
+  if (calendarReminderId && options?.syncCalendar !== false) {
     try {
       await pushReminderToCalendar(userId, calendarReminderId);
     } catch (e) {

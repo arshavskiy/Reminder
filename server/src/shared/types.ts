@@ -366,6 +366,9 @@ export interface Reminder {
   model: string | null;
   serial_number: string | null;
   license_number: string | null;
+  calendar_sync?: boolean;
+  calendar_kind?: "task" | "event";
+  calendar_time?: string | null;
   created_at: string;
   updated_at: string;
 }

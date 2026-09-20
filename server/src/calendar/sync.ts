@@ -77,6 +77,18 @@ function isPersonalReminder(reminder: any): boolean {
   return String(reminder?.source_type ?? "") === "personal";
 }
 
+export function wantsCalendarSync(reminder: any): boolean {
+  return reminder?.calendar_sync !== false;
+}
+
+export function calendarKindOf(reminder: any, link?: { gtask_id?: unknown; gcal_event_id?: unknown } | null): "task" | "event" {
+  if (reminder?.calendar_kind === "task" || reminder?.calendar_kind === "event") {
+    return reminder.calendar_kind;
+  }
+  if (link?.gtask_id && !link?.gcal_event_id) return "task";
+  return isPersonalReminder(reminder) ? "task" : "event";
+}
+
 function buildEventSummary(reminder: any): string {
   if (isPersonalReminder(reminder)) {
     const title = String(reminder.title ?? "").trim();
@@ -86,16 +98,48 @@ function buildEventSummary(reminder: any): string {
   return companyName ? `${EVENT_SUMMARY_PREFIX} - ${companyName}` : EVENT_SUMMARY_PREFIX;
 }
 
+export function parseCalendarTime(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(raw.trim());
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function addMinutesToClock(date: string, time: string, minutes: number): { date: string; time: string } {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  const dt = new Date(year, month - 1, day, hour, minute + minutes);
+  return {
+    date: `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`,
+    time: `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`,
+  };
+}
+
 export function buildEvent(reminder: any): GoogleCalendarEvent {
   const date = String(
     (isPersonalReminder(reminder) ? reminder.expiry_date : null) ?? reminder.trigger_date ?? "",
   ).slice(0, 10);
+  const timed = parseCalendarTime(reminder.calendar_time);
+  const startEnd = timed
+    ? (() => {
+      const end = addMinutesToClock(date, timed, 60);
+      return {
+        start: { dateTime: `${date}T${timed}:00`, timeZone: "Asia/Jerusalem" },
+        end: { dateTime: `${end.date}T${end.time}:00`, timeZone: "Asia/Jerusalem" },
+      };
+    })()
+    : {
+      // All-day events are half-open in the Calendar API: end is the day after.
+      start: { date },
+      end: { date: addDays(date, 1) },
+    };
   return {
     summary: buildEventSummary(reminder),
     description: describeReminder(reminder),
-    // All-day events are half-open in the Calendar API: end is the day after.
-    start: { date },
-    end: { date: addDays(date, 1) },
+    ...startEnd,
     extendedProperties: {
       private: {
         [PROP_SOURCE_TYPE]: SOURCE_TYPE,
@@ -108,7 +152,7 @@ export function buildEvent(reminder: any): GoogleCalendarEvent {
 /** Fingerprint of what we last pushed, so unchanged reminders skip the API. */
 export function payloadHash(event: GoogleCalendarEvent): string {
   return createHash("sha1")
-    .update(JSON.stringify([event.summary, event.description, event.start?.date]))
+    .update(JSON.stringify([event.summary, event.description, event.start?.date, event.start?.dateTime]))
     .digest("hex");
 }
 
@@ -158,7 +202,9 @@ export async function pushReminderToCalendar(userId: string, reminderId: string)
   const reminder = await col<any>("reminders").findOne({ _id: toObjectId(reminderId) });
   const link = await linkFor(userId, reminderId);
 
-  if (isPersonalReminder(reminder) || link?.gtask_id) {
+  if (!wantsCalendarSync(reminder)) return;
+
+  if (calendarKindOf(reminder, link) === "task") {
     await pushPersonalReminderAsTask(userId, reminderId, accessToken, reminder, link);
     return;
   }
@@ -431,7 +477,11 @@ export async function backfillUnsyncedReminders(userId: string, limit = 40): Pro
   if (!(await resolveCalendarToken(userId))) return 0;
 
   const reminders = await col<any>("reminders")
-    .find({ user_id: userId, status: { $in: SYNCABLE_STATUSES } })
+    .find({
+      user_id: userId,
+      status: { $in: SYNCABLE_STATUSES },
+      calendar_sync: { $ne: false },
+    })
     .project({ _id: 1 })
     .limit(500)
     .toArray();

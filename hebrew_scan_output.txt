@@ -1,0 +1,152 @@
+=== views/SettingsPage.vue (3 lines) ===
+  11: <n-form-item label="מנוע AI">
+  14: <n-radio value="ollama">Ollama (מקומי)</n-radio>
+  21: <n-form-item label="מודל">
+=== views/InvoiceDetailPage.vue (1 lines) ===
+  10: <span>{{ invoice?.invoice_number || "פרטי חשבונית" }}</span>
+=== views/EquipmentPage.vue (2 lines) ===
+  10: <!-- Top "section" tabs — mirrors the spec (ציוד / קטגוריות / יצרנים / הצהרות) -->
+  23: <!-- ── ציוד tab body ──────────────────────────────────────────────── -->
+=== views/DocTemplatesPage.vue (3 lines) ===
+  12: רענן
+  16: צור מ-AI
+  20: תבנית חדשה
+=== views/SearchPage.vue (1 lines) ===
+  3: <!--    <n-h2>חיפוש</n-h2>-->
+=== views/FieldPage.vue (18 lines) ===
+  44: <span class="field__meta-label">דגם</span>
+  48: <span class="field__meta-label">מ"ס</span>
+  52: <span class="field__meta-label">מס' רישוי</span>
+  56: <span class="field__meta-label">עומס עבודה</span>
+  60: <span class="field__meta-label">עומס מבחן</span>
+  67: <h3>צ׳קליסט בדיקה</h3>
+  73: {{ checklistSaving ? "שומר..." : "שמור" }}
+  82: placeholder="הערה"
+  89: <div v-if="historyLoading" class="field__loading">טוען היסטוריה...</div>
+  91: <h3 class="field__hist-title">בדיקות אחרונות</h3>
+=== views/ExpenseAnalyticsPage.vue (2 lines) ===
+  23: ייצוא
+  33: רענן
+=== views/ContractDraftPage.vue (2 lines) ===
+  5: <router-link to="/contracts">תסקירים</router-link>
+  7: <span>{{ template?.name ?? "טיוטה" }}</span>
+=== views/ClientDetailPage.vue (1 lines) ===
+  7: <router-link to="/clients">לקוחות</router-link>
+=== components/MonthlyReportModal.vue (4 lines) ===
+  6: title="דוח חודשי"
+  11: <n-form-item label="חודש הדוח">
+  17: <n-button @click="emit('update:show', false)">ביטול</n-button>
+  18: <n-button type="primary" :loading="loading" @click="downloadMonthlyReport">הורד DOC</n-button>
+=== components/AdminReportModal.vue (14 lines) ===
+  2: <n-modal :show="show" preset="card" :title="`דוח חודשי — ${userName}`" style="max-width: 640px; width: 95vw" @update:show="$emit('
+  6: <n-form-item label="שנה" :show-feedback="false">
+  11: <n-form-item label="חודש" :show-feedback="false">
+  12: <n-select v-model:value="month" :options="monthOptions" clearable placeholder="כל השנה" />
+  16: <n-form-item label="לקוח" :show-feedback="false">
+  17: <n-select v-model:value="clientId" :options="clientOptions" :loading="loadingClients" clearable placeholder="כולם" />
+  21: <n-form-item label="נמענים (ריק = אימייל המשתמש)" :show-feedback="false">
+  26: <n-form-item label="קבצים מצורפים" :show-feedback="false">
+  39: <span>שדות בדוח: {{ selectedFields.length }} נבחרו</span>
+  41: <n-button text size="small" @click="selectedFields = [...allFieldKeys]">בחר הכל</n-button>
+=== components/EquipmentQuickAddModal.vue (11 lines) ===
+  2: <n-modal v-model:show="visible" :mask-closable="false" preset="card" style="width: 480px" title="הוספת ציוד">
+  4: <n-form-item label="שם הציוד" required>
+  5: <n-input v-model:value="form.name" placeholder="למשל: במת הרמה" />
+  7: <n-form-item label="קטגוריה" required>
+  11: <n-gi><n-form-item label="יצרן"><n-input v-model:value="form.manufacturer" /></n-form-item></n-gi>
+  12: <n-gi><n-form-item label="דגם"><n-input v-model:value="form.model" /></n-form-item></n-gi>
+  13: <n-gi><n-form-item label="מספר סידורי"><n-input v-model:value="form.serial_number" /></n-form-item></n-gi>
+  14: <n-gi><n-form-item label="מספר רישוי"><n-input v-model:value="form.license_number" /></n-form-item></n-gi>
+  15: <n-gi><n-form-item label='עומס עבודה בטוח (ק"ג)'><n-input v-model:value="form.capacity" /></n-form-item></n-gi>
+  21: <n-button @click="close">ביטול</n-button>
+=== components/QuoteCreateModal.vue (1 lines) ===
+  14: <span style="font-size: 15px; font-weight: 600">הצעת מחיר חדשה</span>
+=== components/documents/CreateQuoteModal.vue (1 lines) ===
+  13: <span>הצעת מחיר חדשה</span>
+=== components/XlsxImportModal.vue (3 lines) ===
+  2: <n-modal v-model:show="visible" :mask-closable="false" preset="card" style="width: 680px" title="ייבוא ציוד מ-Excel">
+  15: <p style="margin: 8px 0 4px; font-weight: 600;">גרור קובץ Excel לכאן</p>
+  16: <p style="color: var(--text-muted); font-size: 13px;">או לחץ לבחירת קובץ (.xlsx / .xls)</p>
+=== components/OnboardingWizard.vue (32 lines) ===
+  6: <n-step title="ברוכים הבאים" />
+  7: <n-step title="פרטים" />
+  8: <n-step title="מהנדס" />
+  9: <n-step title="חברה" />
+  10: <n-step title="חתימה" />
+  18: <h2 class="welcome-title">ברוכים הבאים ל-RemindOCR</h2>
+  20: מערכת חכמה לניהול תסקירים, חוזים ותזכורות.<br>
+  21: בואו נגדיר כמה פרטים בסיסיים כדי להתחיל.
+  28: <strong>העלאת מסמכים</strong>
+  29: <p>העלו PDF, תמונות או מסמכים — המערכת תחלץ את הנתונים אוטומטית</p>
+=== components/contracts/ContractCard.vue (3 lines) ===
+  23: <span v-if="!row.document_id" class="tag tag--warn">חסר PDF</span>
+  24: <span v-if="!hasEmail" class="tag tag--warn">חסר אימייל</span>
+  41: <span class="kv"><strong>לקוח:</strong> <router-link v-if="row.client_id" class="client-link" :to="`/clients/${row.client_id}`" @c
+=== components/modals/ReminderPreviewModal.vue (3 lines) ===
+  17: <span>נושא</span>
+  18: <strong dir="auto">{{ preview.subject || "ללא נושא" }}</strong>
+  24: title="תצוגה מקדימה לאימייל תזכורת"
+=== components/ReminderQuickView.vue (8 lines) ===
+  7: <span class="rqv__label">תאריך</span>
+  11: <span class="rqv__label">לקוח</span>
+  15: <span class="rqv__label">איש קשר</span>
+  19: <span class="rqv__label">טלפון</span>
+  23: <span class="rqv__label">אימייל</span>
+  30: מסונכרן
+  37: פתח תזכורת
+  46: פתח מסמך
+=== components/ReminderTableImport.vue (29 lines) ===
+  6: <span class="table-import-card__label">ייבוא Excel / CSV</span>
+  8: <span class="table-import-card__hint">הוסף תזכורות מקובץ</span>
+  13: ייבוא Excel / CSV
+  16: <n-modal v-model:show="show" preset="card" title="ייבוא תזכורות מטבלה" :style="{width: '900px', maxWidth: 'calc(100vw - 32px)'}" :
+  18: <p class="table-import__intro">הוסיפו לקוחות, תאריכי תוקף ותזכורות מתוך קובץ אחד. בדקו את הנתונים לפני השמירה.</p>
+  19: <ol class="table-import__steps" aria-label="שלבי הייבוא">
+  20: <li :class="{'is-active': !preview}"><span>1</span> בחירת קובץ</li>
+  21: <li :class="{'is-active': preview && !confirmed}"><span>2</span> בדיקת הנתונים</li>
+  22: <li :class="{'is-active': confirmed}"><span>3</span> ייבוא למערכת</li>
+  24: <section class="table-import__templates" aria-label="קבצים לדוגמה">
+=== components/UserCard.vue (2 lines) ===
+  10: <h3 class="user-card__name">{{ user?.name || "משתמש" }}</h3>
+  14: {{ user?.role === 'admin' ? '👑 מנהל' : '👤 משתמש' }}
+=== views/old/ContractsPage.vue (35 lines) ===
+  14: <nav class="documents-workspace-tabs" aria-label="אזור מסמכים">
+  15: <router-link to="/documents">מסמכים</router-link>
+  16: <router-link class="documents-workspace-tabs__active" to="/contracts">תסקירים</router-link>
+  17: <router-link to="/quotes">הצעות מחיר</router-link>
+  22: <h1 class="page__title">{{ kind === "inspection" ? "ניהול תסקירים" : "ניהול חוזים" }}</h1>
+  24: צפייה, סינון וניהול של כל ה{{ kind === "inspection" ? "תסקירים" : "חוזים" }} במערכת
+  30: {{ kind === "inspection" ? "תסקיר חדש" : "חוזה חדש" }}
+  37: תבניות הדפסה
+  43: title="בחירה מרובה"
+  46: ☑ בחירה מרובה
+=== components/WalkthroughOverlay.vue (3 lines) ===
+  19: <button class="wt-tooltip__close" @click="walkthrough.skipTour()" aria-label="סגור">×</button>
+  31: >הקודם</button>
+  33: {{ walkthrough.isLastStep.value ? 'סיום' : 'הבא' }}
+=== components/QuoteDocumentEquipmentPreview.vue (3 lines) ===
+  130: <h3>ציוד שנבדק במסמך</h3>
+  131: <span class="eq-preview__meta">{{ loading ? "טוען…" : `${rows.length} פריטים` }}</span>
+  143: <p v-else-if="!loading" class="eq-preview__empty">{{ loadError || "לא נמצאה טבלת ציוד במסמך שנבחר." }}</p>
+=== components/StorageSyncIcons.vue (1 lines) ===
+  6: <span class="storage-sync__btn storage-sync__btn--source" aria-label="יובא מ-Gmail">
+=== components/GmailImportJobStatus.vue (13 lines) ===
+  12: aria-label="סגור סטטוס ייבוא"
+  24: <span>{{ job.processedMessages }} מתוך {{ totalForProgress }} מיילים נסרקו</span>
+  25: <span>{{ job.attachmentsFound ?? job.results.length }} קבצים נמצאו</span>
+  26: <span>{{ job.stored ?? job.imported }} נשמרו</span>
+  27: <span>{{ job.classifiedInvoices ?? 0 }} סווגו כחשבונית</span>
+  28: <span>{{ job.rejected ?? 0 }} נדחו</span>
+  29: <span v-if="job.ocrFailed" class="gmail-job__error">{{ job.ocrFailed }} OCR נכשל</span>
+  30: <span v-if="job.aiRetryPending" class="gmail-job__warn">{{ job.aiRetryPending }} ממתינים לניסיון AI חוזר</span>
+  31: <span v-if="job.errors" class="gmail-job__error">{{ job.errors }} שגיאות</span>
+  34: <div v-if="summaryItems.length" class="gmail-job__summary" aria-label="פירוט תוצאות ייבוא">
+=== components/DriveExportJobStatus.vue (5 lines) ===
+  12: aria-label="סגור סטטוס ייצוא"
+  24: <span>{{ job.processed }} מתוך {{ job.total }} מסמכים</span>
+  25: <span>{{ job.uploaded }} הועלו</span>
+  26: <span>{{ job.skipped }} דולגו</span>
+  27: <span v-if="job.failed" class="drive-job__error">{{ job.failed }} נכשלו</span>
+=== components/UserCard.vue (2 lines) ===
+  10: <h3 class="user-card__name">{{ user?.name || "משתמש" }}</h3>
+  14: {{ user?.role === 'admin' ? '👑 מנהל' : '👤 משתמש' }}

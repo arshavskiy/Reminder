@@ -50,6 +50,13 @@ describe("buildEvent", () => {
     expect(event.end?.date).toBe("2027-01-05");
   });
 
+  it("emits a timed event when calendar_time is set", () => {
+    const event = buildEvent({ ...reminder, calendar_time: "09:30" });
+    expect(event.start?.dateTime).toBe("2027-01-04T09:30:00");
+    expect(event.end?.dateTime).toBe("2027-01-04T10:30:00");
+    expect(event.start?.timeZone).toBe("Asia/Jerusalem");
+  });
+
   it("uses the inspection overdue title with the reminder client", () => {
     expect(buildEvent(reminder).summary).toBe("תסקיר לא בתוקף - בניתא במות הרמה בע״מ");
   });

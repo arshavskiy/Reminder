@@ -336,6 +336,19 @@
           <n-input v-model:value="newReminder.body" type="textarea" :rows="3" />
         </n-form-item>
         </template>
+
+        <n-form-item>
+          <n-checkbox v-model:checked="createSyncCalendar">{{ l.reminders.syncToGoogleCalendar }}</n-checkbox>
+        </n-form-item>
+        <n-form-item v-if="createSyncCalendar" :label="l.reminders.calendarItemType">
+          <n-radio-group v-model:value="createCalendarKind" name="calendar-kind">
+            <n-radio-button value="task">{{ l.reminders.calendarKindTask }}</n-radio-button>
+            <n-radio-button value="event">{{ l.reminders.calendarKindEvent }}</n-radio-button>
+          </n-radio-group>
+        </n-form-item>
+        <n-form-item v-if="createSyncCalendar && createCalendarKind === 'event'" :label="l.reminders.calendarEventTime">
+          <n-time-picker v-model:value="createEventTimeMs" format="HH:mm" style="width: 100%" />
+        </n-form-item>
       </n-form>
       <template #action>
         <n-button @click="showCreate = false">ביטול</n-button>
@@ -385,7 +398,7 @@
 <script setup lang="ts">
 import {computed, h, onMounted, ref, type Component} from "vue";
 import {useRouter} from "vue-router";
-import {NAlert, NButton, NCheckbox, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NTooltip, useMessage,} from "naive-ui";
+import {NAlert, NButton, NCheckbox, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NTimePicker, NTooltip, useMessage,} from "naive-ui";
 import {CalendarOutline, CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, GridOutline, PaperPlaneOutline, RefreshOutline, TimeOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
@@ -484,6 +497,21 @@ const newReminder = ref<{
   category: string | null;
 } | null>(null);
 const isPersonalReminder = ref(false);
+const createSyncCalendar = ref(true);
+const createCalendarKind = ref<"task" | "event">("event");
+const createEventTimeMs = ref<number | null>(defaultEventTimeMs());
+
+function defaultEventTimeMs(): number {
+  const d = new Date();
+  d.setHours(9, 0, 0, 0);
+  return d.getTime();
+}
+
+function clockFromMs(ms: number | null): string | null {
+  if (ms == null) return null;
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 const personalTargetDateMs = ref<number | null>(null);
 const personalAlsoEmailSelf = ref(false);
 const personalRemindBeforeDays = ref("");
@@ -731,6 +759,7 @@ async function loadSenderInfo() {
 // ── Create new reminder ─────────────────────────────────────────────────────
 function onReminderKindChange(kind: string) {
   isPersonalReminder.value = kind === "personal";
+  createCalendarKind.value = kind === "personal" ? "task" : "event";
   if (kind === "personal" && newReminder.value && !newReminder.value.category) {
     newReminder.value.category = "Personal";
   }
@@ -760,6 +789,9 @@ async function openCreate() {
   attachReference.value = "";
   attachFile.value = null;
   isPersonalReminder.value = false;
+  createSyncCalendar.value = true;
+  createCalendarKind.value = "event";
+  createEventTimeMs.value = defaultEventTimeMs();
   personalTargetDateMs.value = null;
   personalAlsoEmailSelf.value = false;
   personalRemindBeforeDays.value = "";
@@ -893,6 +925,9 @@ async function doCreate() {
         reminder_category: newReminder.value.category || "Personal",
         email_to: personalAlsoEmailSelf.value ? (authStore.user?.email ?? null) : null,
         remind_before_days: personalRemindBeforeDays.value.trim() || null,
+        sync_calendar: createSyncCalendar.value,
+        calendar_kind: createCalendarKind.value,
+        calendar_time: createCalendarKind.value === "event" ? clockFromMs(createEventTimeMs.value) : null,
       });
       message.success(l.value.notifications.quickAddSuccess);
       showCreate.value = false;
@@ -956,7 +991,10 @@ async function doCreate() {
       model: equipment?.model ?? null,
       serial_number: equipment?.serial_number ?? null,
       license_number: equipment?.license_number ?? null,
-    });
+      sync_calendar: createSyncCalendar.value,
+      calendar_kind: createCalendarKind.value,
+      calendar_time: createCalendarKind.value === "event" ? clockFromMs(createEventTimeMs.value) : null,
+    } as any);
     message.success("תזכורת נוצרה");
     showCreate.value = false;
     load();

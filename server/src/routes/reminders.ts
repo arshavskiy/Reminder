@@ -3,7 +3,7 @@ import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {sendReminderEmail} from "../reminders/emailSender";
 import {backfillTriggeredFromNotifications, createPersonalReminder, flushDuePersonalReminders, generateContractReminders} from "../reminders/scheduler";
-import {backfillUnsyncedReminders} from "../calendar/sync";
+import {backfillUnsyncedReminders, parseCalendarTime} from "../calendar/sync";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSettings} from "../settings";
@@ -484,13 +484,16 @@ export function registerReminderRoutes(app: express.Application) {
       model: body.model ?? null,
       serial_number: body.serial_number ?? null,
       license_number: body.license_number ?? null,
+      calendar_sync: body.sync_calendar !== false && body.sync_calendar !== "false",
+      calendar_kind: body.calendar_kind === "task" ? "task" : "event",
+      calendar_time: body.calendar_kind === "task" ? null : parseCalendarTime(body.calendar_time),
       created_at: now,
       updated_at: now,
     };
     const result = await col("reminders").insertOne(doc as any);
     await incrementReminderUsage(userId, 1);
     const inserted = await col("reminders").findOne({ _id: result.insertedId });
-    pushReminderToCalendar(userId, String(result.insertedId)).catch((e) => {
+    if ((doc as any).calendar_sync) pushReminderToCalendar(userId, String(result.insertedId)).catch((e) => {
       logger.warn("calendar_push_after_create_failed", {
         user_id: userId,
         reminder_id: String(result.insertedId),
@@ -526,9 +529,19 @@ export function registerReminderRoutes(app: express.Application) {
     const reminderCategory = typeof body.reminder_category === "string" ? body.reminder_category : null;
     const emailTo = typeof body.email_to === "string" ? body.email_to : null;
     const remindBeforeDays = body.remind_before_days ?? null;
+    const syncCalendar = body.sync_calendar !== false && body.sync_calendar !== "false";
+    const calendarKind = body.calendar_kind === "event" ? "event" : "task";
+    const calendarTime = typeof body.calendar_time === "string" ? body.calendar_time : null;
 
     try {
-      const result = await createPersonalReminder(userId, title, targetDate, { reminderCategory, emailTo, remindBeforeDays: remindBeforeDays as number | number[] | string | null });
+      const result = await createPersonalReminder(userId, title, targetDate, {
+        reminderCategory,
+        emailTo,
+        remindBeforeDays: remindBeforeDays as number | number[] | string | null,
+        syncCalendar,
+        calendarKind,
+        calendarTime,
+      });
       res.status(201).json(result);
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });

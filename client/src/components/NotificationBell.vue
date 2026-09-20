@@ -30,42 +30,42 @@
         </button>
       </div>
 
-      <div class="notif-panel__quickadd">
-        <div class="notif-panel__quickadd-title">{{ l.notifications.quickAdd }}</div>
-        <n-input v-model:value="quickTitle" size="small" :placeholder="l.notifications.quickAddTitlePlaceholder" />
-        <n-date-picker v-model:value="quickDateMs" type="date" size="small" class="notif-panel__field" />
-        <n-select
-          v-model:value="quickCategory"
-          size="small"
-          :options="categoryOptions"
-          :placeholder="l.notifications.quickAddCategoryPlaceholder"
-          clearable
-          filterable
-          tag
-          :virtual-scroll="false"
-          class="notif-panel__field"
-        />
-        <div class="notif-panel__remind-label">{{ l.notifications.quickAddRemindBeforeLabel }}</div>
-        <n-input
-          v-model:value="quickRemindBeforeDays"
-          size="small"
-          :placeholder="l.notifications.quickAddRemindBeforePlaceholder"
-          class="notif-panel__field"
-        />
-        <n-checkbox v-model:checked="quickAlsoEmailSelf" class="notif-panel__field">
-          {{ l.reminders.alsoEmailSelf }}
-        </n-checkbox>
-        <n-button
-          size="small"
-          type="primary"
-          class="notif-panel__submit"
-          :disabled="!quickTitle.trim() || !quickDateMs"
-          :loading="quickAdding"
-          @click="submitQuickAdd"
-        >
-          {{ l.notifications.quickAddSubmit }}
-        </n-button>
-      </div>
+<!--      <div class="notif-panel__quickadd">-->
+<!--        <div class="notif-panel__quickadd-title">{{ l.notifications.quickAdd }}</div>-->
+<!--        <n-input v-model:value="quickTitle" size="small" :placeholder="l.notifications.quickAddTitlePlaceholder" />-->
+<!--        <n-date-picker v-model:value="quickDateMs" type="date" size="small" class="notif-panel__field" />-->
+<!--        <n-select-->
+<!--          v-model:value="quickCategory"-->
+<!--          size="small"-->
+<!--          :options="categoryOptions"-->
+<!--          :placeholder="l.notifications.quickAddCategoryPlaceholder"-->
+<!--          clearable-->
+<!--          filterable-->
+<!--          tag-->
+<!--          :virtual-scroll="false"-->
+<!--          class="notif-panel__field"-->
+<!--        />-->
+<!--        <div class="notif-panel__remind-label">{{ l.notifications.quickAddRemindBeforeLabel }}</div>-->
+<!--        <n-input-->
+<!--          v-model:value="quickRemindBeforeDays"-->
+<!--          size="small"-->
+<!--          :placeholder="l.notifications.quickAddRemindBeforePlaceholder"-->
+<!--          class="notif-panel__field"-->
+<!--        />-->
+<!--        <n-checkbox v-model:checked="quickAlsoEmailSelf" class="notif-panel__field">-->
+<!--          {{ l.reminders.alsoEmailSelf }}-->
+<!--        </n-checkbox>-->
+<!--        <n-button-->
+<!--          size="small"-->
+<!--          type="primary"-->
+<!--          class="notif-panel__submit"-->
+<!--          :disabled="!quickTitle.trim() || !quickDateMs"-->
+<!--          :loading="quickAdding"-->
+<!--          @click="submitQuickAdd"-->
+<!--        >-->
+<!--          {{ l.notifications.quickAddSubmit }}-->
+<!--        </n-button>-->
+<!--      </div>-->
     </div>
   </n-popover>
 </template>

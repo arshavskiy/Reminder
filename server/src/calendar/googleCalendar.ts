@@ -45,8 +45,8 @@ export interface GoogleCalendarEvent {
   description?: string;
   etag?: string;
   updated?: string;
-  start?: { date?: string; dateTime?: string };
-  end?: { date?: string; dateTime?: string };
+  start?: { date?: string; dateTime?: string; timeZone?: string };
+  end?: { date?: string; dateTime?: string; timeZone?: string };
   extendedProperties?: { private?: Record<string, string> };
 }
 

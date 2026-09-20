@@ -818,7 +818,16 @@ export const api = {
     previewEmail: (id: number | string) => get<{ subject: string; html: string }>(`/reminders/${id}/preview-email`, true),
     createHydraulicCheck: (body: HydraulicCheckRequest) =>
       post<HydraulicCheckResult>("/reminders/hydraulic-check", body),
-    createPersonal: (body: { title: string; target_date: string; reminder_category?: string | null; email_to?: string | null; remind_before_days?: number | number[] | string | null }) =>
+    createPersonal: (body: {
+      title: string;
+      target_date: string;
+      reminder_category?: string | null;
+      email_to?: string | null;
+      remind_before_days?: number | number[] | string | null;
+      sync_calendar?: boolean;
+      calendar_kind?: "task" | "event";
+      calendar_time?: string | null;
+    }) =>
       post<{ created: number }>("/reminders/personal", body),
   },
 
