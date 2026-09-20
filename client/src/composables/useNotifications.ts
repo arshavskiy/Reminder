@@ -15,6 +15,10 @@ async function refresh(): Promise<void> {
     const data = await api.notifications.list();
     items.value = data.items;
     unreadCount.value = data.unreadCount;
+    if ((data.triggered_count ?? 0) > 0) {
+      const { useRemindersStore } = await import("../stores/reminders.js");
+      await useRemindersStore().refetchLast();
+    }
   } finally {
     loading.value = false;
   }

@@ -7,8 +7,10 @@ export const useRemindersStore = defineStore("reminders", () => {
   const rows = ref<ReminderWithContext[]>([]);
   const total = ref(0);
   const loading = ref(false);
+  const lastParams = ref<{ status?: string; days?: number; limit?: number; category?: string } | undefined>(undefined);
 
   async function fetch(params?: { status?: string; days?: number; limit?: number; category?: string }, force = false) {
+    lastParams.value = params;
     loading.value = true;
     try {
       const r = await api.reminders.list(params, force);
@@ -17,6 +19,11 @@ export const useRemindersStore = defineStore("reminders", () => {
     } finally {
       loading.value = false;
     }
+  }
+
+  async function refetchLast() {
+    if (!lastParams.value && rows.value.length === 0) return;
+    await fetch(lastParams.value, true);
   }
 
   async function dismiss(id: number) {
@@ -39,5 +46,5 @@ export const useRemindersStore = defineStore("reminders", () => {
     total.value = 0;
   }
 
-  return { rows, total, loading, fetch, dismiss, remove, sendNow, removeAll };
+  return { rows, total, loading, fetch, refetchLast, dismiss, remove, sendNow, removeAll };
 });

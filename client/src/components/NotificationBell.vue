@@ -144,6 +144,8 @@ async function submitQuickAdd() {
     quickRemindBeforeDays.value = "";
     quickAlsoEmailSelf.value = false;
     await refresh();
+    const { useRemindersStore } = await import("../stores/reminders.js");
+    await useRemindersStore().refetchLast();
   } catch {
     message.error(l.value.notifications.quickAddError);
   } finally {

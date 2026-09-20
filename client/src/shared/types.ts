@@ -160,7 +160,7 @@ export type DocumentSource = "scanned" | "generated";
  *  drives capability checks (re-extract, replace) rather than provenance. */
 export type DocumentImportSource = "gmail" | "drive" | "upload";
 export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error" | "not_applicable";
-export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error" | "no_email";
+export type ReminderStatus = "pending" | "triggered" | "sent" | "snoozed" | "dismissed" | "error" | "no_email";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
 export type EntityType = "person" | "company";
 export type TaskStatus = "open" | "done" | "cancelled";
@@ -447,7 +447,7 @@ export interface ContractWithClient extends Contract {
 export interface NotificationItem {
   id: string;
   user_id: string;
-  kind: "personal_reminder";
+  kind: "personal_reminder" | "personal_reminder_due";
   reminder_id: string | number;
   title: string;
   body: string;

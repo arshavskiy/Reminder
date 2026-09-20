@@ -2,7 +2,8 @@ import express from "express";
 import {col} from "../db/db";
 import {ObjectId} from "mongodb";
 import {sendReminderEmail} from "../reminders/emailSender";
-import {createPersonalReminder, generateContractReminders} from "../reminders/scheduler";
+import {backfillTriggeredFromNotifications, createPersonalReminder, flushDuePersonalReminders, generateContractReminders} from "../reminders/scheduler";
+import {backfillUnsyncedReminders} from "../calendar/sync";
 import type {ReminderWithContext} from "../../src/shared/types.js";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {getSettings} from "../settings";
@@ -240,6 +241,16 @@ export function registerReminderRoutes(app: express.Application) {
       res.status(err.status ?? 401).json({ error: err.message });
       return;
     }
+
+    await flushDuePersonalReminders(userId).catch((e) => {
+      logger.warn("personal_due_flush_failed", { user_id: userId, error: String(e) });
+    });
+    await backfillTriggeredFromNotifications(userId).catch((e) => {
+      logger.warn("personal_triggered_backfill_failed", { user_id: userId, error: String(e) });
+    });
+    await backfillUnsyncedReminders(userId).catch((e) => {
+      logger.warn("calendar_backfill_failed", { user_id: userId, error: String(e) });
+    });
 
     const status = req.query.status as string | undefined;
     const days = req.query.days as string | undefined;

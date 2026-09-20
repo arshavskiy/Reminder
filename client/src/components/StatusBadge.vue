@@ -17,6 +17,7 @@ const MAP = computed(() => {
     processing: { type: "info" as const,    label: c.processing },
     done:       { type: "success" as const, label: c.done },
     pending:    { type: "warning" as const, label: c.pending },
+    triggered:  { type: "info" as const,    label: c.triggered },
     sent:       { type: "success" as const, label: c.sent },
     snoozed:    { type: "default" as const, label: c.snoozed },
     dismissed:  { type: "default" as const, label: c.dismissed },

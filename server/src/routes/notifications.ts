@@ -2,6 +2,8 @@ import express from "express";
 import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {flushDuePersonalReminders} from "../reminders/scheduler";
+import {logger} from "../logger";
 
 function flatDoc(doc: any) {
   if (!doc) return doc;
@@ -30,11 +32,16 @@ export function registerNotificationRoutes(app: express.Application) {
       return;
     }
 
+    const triggeredIds = await flushDuePersonalReminders(userId).catch((e) => {
+      logger.warn("personal_due_flush_failed", { user_id: userId, error: String(e) });
+      return [] as string[];
+    });
+
     const [items, unreadCount] = await Promise.all([
       col("notifications").find({ user_id: userId }).sort({ created_at: -1 }).limit(50).toArray(),
       col("notifications").countDocuments({ user_id: userId, read_at: null }),
     ]);
-    res.json({ items: items.map(flatDoc), unreadCount });
+    res.json({ items: items.map(flatDoc), unreadCount, triggered_count: triggeredIds.length });
   });
 
   // POST /api/notifications/:id/read

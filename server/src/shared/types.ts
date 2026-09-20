@@ -182,7 +182,7 @@ export interface UserSettings {
 
 export type ProcessingStatus = "queued" | "processing" | "done" | "error";
 export type DocumentReminderAssignmentStatus = "pending" | "assigned" | "missing" | "error" | "not_applicable";
-export type ReminderStatus = "pending" | "sent" | "snoozed" | "dismissed" | "error" | "no_email";
+export type ReminderStatus = "pending" | "triggered" | "sent" | "snoozed" | "dismissed" | "error" | "no_email";
 export type ContractStatus = "active" | "expired" | "cancelled" | "renewed";
 export type EntityType = "person" | "company";
 export type TaskStatus = "open" | "done" | "cancelled";

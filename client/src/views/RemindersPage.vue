@@ -166,7 +166,7 @@
           :row-key="(r: any) => r.id"
           :row-props="rowProps"
           :checked-row-keys="selectedReminderKeys"
-          :scroll-x="1320"
+          :scroll-x="1380"
           class="reminders-table reminders-table--with-sidebar"
           size="small"
           @update:checked-row-keys="onSelectedReminderKeys"
@@ -181,7 +181,7 @@
         :row-key="(r: any) => r.id"
         :row-props="rowProps"
         :checked-row-keys="selectedReminderKeys"
-        :scroll-x="1320"
+        :scroll-x="1380"
         class="reminders-table"
         size="small"
         @update:checked-row-keys="onSelectedReminderKeys"
@@ -556,6 +556,7 @@ const emailPlaceholder = computed(() => {
 
 const statusOptions = computed(() => [
   { label: l.value.common.pending, value: "pending" },
+  { label: l.value.common.triggered, value: "triggered" },
   { label: l.value.common.sent, value: "sent" },
   { label: l.value.common.snoozed, value: "snoozed" },
   { label: l.value.common.dismissed, value: "dismissed" },
@@ -1213,6 +1214,87 @@ async function doQuickTest() {
   }
 }
 
+function columnTextSort(a: string | null | undefined, b: string | null | undefined): number {
+  const lang = locale.value === "he" ? "he" : "en";
+  return String(a ?? "").localeCompare(String(b ?? ""), lang, { numeric: true, sensitivity: "base" });
+}
+
+function columnDateSort(a: string | null | undefined, b: string | null | undefined): number {
+  const left = a?.slice(0, 10) ?? "";
+  const right = b?.slice(0, 10) ?? "";
+  if (!left && !right) return 0;
+  if (!left) return 1;
+  if (!right) return -1;
+  return left.localeCompare(right);
+}
+
+function uniqueColumnOptions(items: { value: string; label: string }[]) {
+  const seen = new Set<string>();
+  const options: { label: string; value: string }[] = [];
+  for (const item of items) {
+    if (seen.has(item.value)) continue;
+    seen.add(item.value);
+    options.push(item);
+  }
+  const lang = locale.value === "he" ? "he" : "en";
+  options.sort((a, b) => a.label.localeCompare(b.label, lang));
+  return options;
+}
+
+function reminderCategoryKey(row: ReminderWithContext): string {
+  return row.reminder_category || row.contract_type || "__empty__";
+}
+
+function reminderInspectionKey(row: ReminderWithContext): string {
+  return row.contract_number || row.document_name || "__empty__";
+}
+
+function reminderDateBucket(row: ReminderWithContext): string {
+  const trigger = row.trigger_date?.slice(0, 10);
+  if (!trigger) return "__empty__";
+  if (trigger < todayIso()) return "overdue";
+  const range = monthRangeIso();
+  if (trigger >= range.from && trigger <= range.to) return "month";
+  return "later";
+}
+
+const categoryColumnFilters = computed(() =>
+  uniqueColumnOptions(
+    (store.rows ?? []).map((row) => {
+      const value = reminderCategoryKey(row);
+      return {
+        value,
+        label: value === "__empty__"
+          ? l.value.reminders.columnFilterNoCategory
+          : categoryLabel(value, locale.value) || value,
+      };
+    }),
+  ),
+);
+
+const clientColumnFilters = computed(() =>
+  uniqueColumnOptions(
+    (store.rows ?? []).map((row) => ({
+      value: row.client_id ? String(row.client_id) : "__empty__",
+      label: row.client_id
+        ? (row.client_name || String(row.client_id))
+        : l.value.reminders.columnFilterNoClient,
+    })),
+  ),
+);
+
+const inspectionColumnFilters = computed(() =>
+  uniqueColumnOptions(
+    (store.rows ?? []).map((row) => {
+      const value = reminderInspectionKey(row);
+      return {
+        value,
+        label: value === "__empty__" ? l.value.reminders.columnFilterNoInspection : value,
+      };
+    }),
+  ),
+);
+
 function openReminderPreview(row: ReminderWithContext) {
   previewReminderId.value = row.id;
   previewReminderTitle.value = row.title ?? null;
@@ -1265,6 +1347,7 @@ const baseColumns = computed(() => [
     key: "title",
     width: 200,
     minWidth: 200,
+    sorter: (a: ReminderWithContext, b: ReminderWithContext) => columnTextSort(a.title, b.title),
     render: (row: ReminderWithContext) =>
       h("button", {
         class: "link-button",
@@ -1280,6 +1363,13 @@ const baseColumns = computed(() => [
     key: "reminder_category",
     width: 140,
     minWidth: 140,
+    filterMultiple: true,
+    filterOptions: categoryColumnFilters.value,
+    filter: (value: string | number, row: ReminderWithContext) => reminderCategoryKey(row) === String(value),
+    sorter: (a: ReminderWithContext, b: ReminderWithContext) => columnTextSort(
+      categoryLabel(a.reminder_category || a.contract_type, locale.value),
+      categoryLabel(b.reminder_category || b.contract_type, locale.value),
+    ),
     render: (row: ReminderWithContext) =>
       h("span", categoryLabel(row.reminder_category || row.contract_type, locale.value) || "—"),
   },
@@ -1288,6 +1378,17 @@ const baseColumns = computed(() => [
     key: "email_to",
     width: 240,
     minWidth: 240,
+    filterMultiple: true,
+    filterOptions: [
+      { label: l.value.reminders.columnFilterHasEmail, value: "has" },
+      { label: l.value.common.noEmail, value: "none" },
+    ],
+    filter: (value: string | number, row: ReminderWithContext) => {
+      const has = Boolean(effectiveEmailTo(row)?.trim());
+      return value === "has" ? has : !has;
+    },
+    sorter: (a: ReminderWithContext, b: ReminderWithContext) =>
+      columnTextSort(displayEmailTo(effectiveEmailTo(a)), displayEmailTo(effectiveEmailTo(b))),
     render: (row: ReminderWithContext) =>
       h("span", { class: "reminder-email-cell" }, displayEmailTo(effectiveEmailTo(row)) || l.value.common.noEmail),
   },
@@ -1296,6 +1397,11 @@ const baseColumns = computed(() => [
     key: "client_name",
     width: 220,
     minWidth: 220,
+    filterMultiple: true,
+    filterOptions: clientColumnFilters.value,
+    filter: (value: string | number, row: ReminderWithContext) =>
+      (row.client_id ? String(row.client_id) : "__empty__") === String(value),
+    sorter: (a: ReminderWithContext, b: ReminderWithContext) => columnTextSort(a.client_name, b.client_name),
     render: (row: ReminderWithContext) =>
       h("div", { class: "reminder-client-cell" }, [
         row.client_id
@@ -1314,6 +1420,11 @@ const baseColumns = computed(() => [
     key: "contract_number",
     width: 180,
     minWidth: 180,
+    filterMultiple: true,
+    filterOptions: inspectionColumnFilters.value,
+    filter: (value: string | number, row: ReminderWithContext) => reminderInspectionKey(row) === String(value),
+    sorter: (a: ReminderWithContext, b: ReminderWithContext) =>
+      columnTextSort(reminderInspectionKey(a), reminderInspectionKey(b)),
     render: (row: ReminderWithContext) =>
       h("span", { class: "reminder-source-cell" }, row.contract_number || row.document_name || "—"),
   },
@@ -1322,6 +1433,15 @@ const baseColumns = computed(() => [
     key: "trigger_date",
     width: 130,
     minWidth: 130,
+    filterMultiple: true,
+    filterOptions: [
+      { label: l.value.reminders.overdue, value: "overdue" },
+      { label: l.value.reminders.thisMonth, value: "month" },
+      { label: l.value.reminders.columnFilterLater, value: "later" },
+    ],
+    filter: (value: string | number, row: ReminderWithContext) => reminderDateBucket(row) === String(value),
+    sorter: (a: ReminderWithContext, b: ReminderWithContext) => columnDateSort(a.trigger_date, b.trigger_date),
+    defaultSortOrder: "ascend" as const,
     render: (row: ReminderWithContext) =>
       h("div", { class: "reminder-date-cell" }, [
         h("span", { class: "reminder-date-cell__date" }, formatReminderDate(row.trigger_date)),
@@ -1331,12 +1451,25 @@ const baseColumns = computed(() => [
     title: l.value.common.status,
     key: "status",
     width: 120,
+    filterMultiple: true,
+    filterOptions: statusOptions.value,
+    filter: (value: string | number, row: ReminderWithContext) => row.status === value,
+    sorter: (a: ReminderWithContext, b: ReminderWithContext) => columnTextSort(a.status, b.status),
     render: (row: ReminderWithContext) => h(StatusBadge, { status: row.status }),
   },
   {
-    title: "",
+    title: l.value.reminders.detailCalendar,
     key: "actions",
-    width: 88,
+    width: 112,
+    filterMultiple: true,
+    filterOptions: [
+      { label: l.value.reminders.detailCalendarOn, value: "synced" },
+      { label: l.value.reminders.detailCalendarNotSynced, value: "unsynced" },
+    ],
+    filter: (value: string | number, row: ReminderWithContext) =>
+      Boolean(row.calendar_synced) === (value === "synced"),
+    sorter: (a: ReminderWithContext, b: ReminderWithContext) =>
+      Number(Boolean(a.calendar_synced)) - Number(Boolean(b.calendar_synced)),
     render: (row: ReminderWithContext) =>
       h("div", {
         class: "reminder-actions-cell",
@@ -1829,6 +1962,23 @@ const columns = computed(() =>
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
+}
+
+.reminders-table :deep(.n-data-table-filter) {
+  color: var(--text-secondary);
+}
+
+.reminders-table :deep(.n-data-table-filter--active) {
+  color: var(--brand-color);
+}
+
+.reminders-table :deep(.n-data-table-sorter) {
+  color: var(--text-secondary);
+}
+
+.reminders-table :deep(.n-data-table-sorter--asc),
+.reminders-table :deep(.n-data-table-sorter--desc) {
+  color: var(--brand-color);
 }
 
 .reminders-table :deep(.n-data-table-td) {

@@ -30,7 +30,7 @@ const PROP_SOURCE_ID = "reminderAppSourceId";
 const EVENT_SUMMARY_PREFIX = "תסקיר לא בתוקף";
 
 /** Reminder statuses worth putting on a calendar. */
-const SYNCABLE_STATUSES = ["pending", "snoozed"];
+const SYNCABLE_STATUSES = ["pending", "snoozed", "triggered"];
 
 function toObjectId(value: unknown): any {
   try { return new ObjectId(String(value)); } catch { return value; }
@@ -422,6 +422,43 @@ export async function pushAllReminders(userId: string): Promise<number> {
     await pushReminderToCalendar(userId, String(reminder._id));
   }
   return reminders.length;
+}
+
+/** Push only reminders that have no Google event/task link yet. */
+export async function backfillUnsyncedReminders(userId: string, limit = 40): Promise<number> {
+  const user = await col<any>("users").findOne({ _id: toObjectId(userId) });
+  if (!featureFlagsForUser(user).googleCalendarSync) return 0;
+  if (!(await resolveCalendarToken(userId))) return 0;
+
+  const reminders = await col<any>("reminders")
+    .find({ user_id: userId, status: { $in: SYNCABLE_STATUSES } })
+    .project({ _id: 1 })
+    .limit(500)
+    .toArray();
+  if (!reminders.length) return 0;
+
+  const ids = reminders.map((r) => String(r._id));
+  const links = await col<any>("calendar_links")
+    .find({
+      user_id: userId,
+      source_type: SOURCE_TYPE,
+      source_id: { $in: ids },
+    })
+    .toArray();
+  const synced = new Set(
+    links
+      .filter((link) => link.gcal_event_id || link.gtask_id)
+      .map((link) => String(link.source_id)),
+  );
+
+  let pushed = 0;
+  for (const id of ids) {
+    if (synced.has(id)) continue;
+    if (pushed >= limit) break;
+    await pushReminderToCalendar(userId, id);
+    pushed += 1;
+  }
+  return pushed;
 }
 
 /**

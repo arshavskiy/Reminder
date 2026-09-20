@@ -222,6 +222,7 @@ async function checkReminders() {
       trigger_date: { $lte: today },
       $or: [
         { status: "pending" },
+        { status: "triggered", source_type: "personal" },
         // Retry when a business email may have been added later
         { status: "no_email" },
         {
@@ -262,6 +263,10 @@ async function checkReminders() {
   for (const reminder of due) {
     const remId = reminder._id?.toString();
     if (sentIds.has(remId)) continue;
+    if ((reminder as any).source_type === "personal") {
+      await handlePersonalReminderDue({ ...(reminder as any), id: remId });
+      continue;
+    }
     if (!(await allowsAutomaticEmailReminders((reminder as any).user_id))) {
       logger.info("reminder_auto_send_skipped_plan", { reminder_id: remId, user_id: (reminder as any).user_id ?? null });
       continue;
@@ -796,18 +801,6 @@ export async function createPersonalReminder(
     }
   }
 
-  if (created) {
-    await col("notifications").insertOne({
-      user_id: userId,
-      kind: "personal_reminder",
-      reminder_id: calendarReminderId,
-      title: label,
-      body: `יעד: ${targetDate}`,
-      created_at: new Date(),
-      read_at: null,
-    } as any);
-  }
-
   if (calendarReminderId) {
     try {
       await pushReminderToCalendar(userId, calendarReminderId);
@@ -820,7 +813,73 @@ export async function createPersonalReminder(
     }
   }
 
+  if (created) {
+    const dueIds = await flushDuePersonalReminders(userId);
+    if (calendarReminderId && !dueIds.includes(calendarReminderId)) {
+      await col("notifications").insertOne({
+        user_id: userId,
+        kind: "personal_reminder",
+        reminder_id: calendarReminderId,
+        title: label,
+        body: `יעד: ${targetDate}`,
+        created_at: new Date(),
+        read_at: null,
+      } as any);
+      await col("reminders").updateOne(
+        { _id: toObjectId(calendarReminderId), status: { $in: ["pending", "no_email", "error"] } } as any,
+        { $set: { status: "triggered", triggered_at: new Date(), updated_at: new Date() } },
+      );
+    }
+  }
+
   return { created };
+}
+
+/**
+ * Fire due personal reminders for one user (in-app + optional email) and
+ * update their status. Safe to call from the scheduler, list endpoints, or
+ * create — already-triggered rows are skipped.
+ */
+export async function flushDuePersonalReminders(userId: string): Promise<string[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const due = await col("reminders")
+    .find({
+      user_id: userId,
+      source_type: "personal",
+      status: { $in: ["pending", "triggered", "no_email", "error"] },
+      trigger_date: { $lte: today },
+    })
+    .toArray();
+  const ids: string[] = [];
+  for (const reminder of due as any[]) {
+    const id = String(reminder._id);
+    await handlePersonalReminderDue({ ...reminder, id });
+    ids.push(id);
+  }
+  return ids;
+}
+
+/** Mark pending personal reminders that already have a bell notification. */
+export async function backfillTriggeredFromNotifications(userId: string): Promise<number> {
+  const notifs = await col("notifications")
+    .find({
+      user_id: userId,
+      kind: { $in: ["personal_reminder", "personal_reminder_due"] },
+    })
+    .project({ reminder_id: 1 })
+    .toArray() as Array<{ reminder_id?: unknown }>;
+  const ids = [...new Set(notifs.map((n) => String(n.reminder_id ?? "")).filter(Boolean))];
+  if (!ids.length) return 0;
+  const result = await col("reminders").updateMany(
+    {
+      user_id: userId,
+      source_type: "personal",
+      status: { $in: ["pending", "no_email", "error"] },
+      _id: { $in: ids.map((id) => toObjectId(id)) },
+    } as any,
+    { $set: { status: "triggered", triggered_at: new Date(), updated_at: new Date() } },
+  );
+  return result.modifiedCount;
 }
 
 /**
@@ -828,20 +887,33 @@ export async function createPersonalReminder(
  * notification row, always. Only sends an actual email when the reminder
  * carries email_to (the user's own opt-in "also email me" checkbox) — a
  * plain personal reminder never touches email_log. Marks the reminder
- * "sent" so it stops being reprocessed and so it's excluded from the
- * calendar-sync's SYNCABLE_STATUSES the same way any other sent reminder
- * would be.
+ * "triggered" (in-app / push) or "sent" (opt-in email succeeded).
+ * Triggered rows stay on the calendar; sent/dismissed do not.
  */
 async function handlePersonalReminderDue(reminder: ReminderWithContext) {
   const remId = reminder.id;
   const userId = (reminder as any).user_id ?? null;
+
+  const current = await col("reminders").findOne({ _id: toObjectId(remId) } as any);
+  const currentStatus = String((current as any)?.status ?? "");
+  if (!current || !["pending", "triggered", "no_email", "error"].includes(currentStatus)) {
+    return;
+  }
+  if (currentStatus === "triggered" && userId) {
+    const alreadyDue = await col("notifications").findOne({
+      user_id: userId,
+      kind: "personal_reminder_due",
+      reminder_id: remId,
+    } as any);
+    if (alreadyDue) return;
+  }
 
   logger.info("personal_reminder_due", { reminder_id: remId, user_id: userId, title: reminder.title });
 
   if (userId) {
     await col("notifications").insertOne({
       user_id: userId,
-      kind: "personal_reminder",
+      kind: "personal_reminder_due",
       reminder_id: remId,
       title: reminder.title,
       body: (reminder as any).expiry_date ? `יעד: ${(reminder as any).expiry_date}` : "",
@@ -857,16 +929,16 @@ async function handlePersonalReminderDue(reminder: ReminderWithContext) {
   }
 
   const optInRecipients = parseReminderEmailTo(reminder.email_to);
+  let status: "triggered" | "sent" = "triggered";
   if (optInRecipients.length) {
     const result = await sendReminderEmail(reminder, optInRecipients);
-    if (!result.success) {
-      notifyEmailSendFailed({ recipient: optInRecipients.join(", "), error: result.error, title: reminder.title });
-    }
+    if (result.success) status = "sent";
+    else notifyEmailSendFailed({ recipient: optInRecipients.join(", "), error: result.error, title: reminder.title });
   }
 
   await col("reminders").updateOne(
     { _id: toObjectId(remId) } as any,
-    { $set: { status: "sent", updated_at: new Date() } },
+    { $set: { status, triggered_at: new Date(), updated_at: new Date() } },
   );
 }
 

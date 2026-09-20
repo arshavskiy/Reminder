@@ -823,7 +823,7 @@ export const api = {
   },
 
   notifications: {
-    list: () => get<{ items: NotificationItem[]; unreadCount: number }>("/notifications", true),
+    list: () => get<{ items: NotificationItem[]; unreadCount: number; triggered_count?: number }>("/notifications", true),
     markRead: (id: string) => post<{ ok: boolean }>(`/notifications/${id}/read`),
     markAllRead: () => post<{ ok: boolean }>("/notifications/read-all"),
   },
