@@ -2,6 +2,7 @@ import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {ensureUserSettingsWithEntitlements, type PlanEntitlements} from "./planEntitlements";
 import type {PlanId} from "./tierFeatures";
+import {nextPaymentDate, type ConfirmedPayment} from "./billingPayment";
 
 /**
  * Plans an admin or a payment can actually assign. "expired" is absent on
@@ -31,20 +32,37 @@ export async function updateUserTier(
   selector: {userId?: string | null; email?: string | null},
   plan: PlanId,
   metadata: Record<string, unknown> = {},
+  payment: ConfirmedPayment | null = null,
 ): Promise<TierUpdateResult | null> {
   const filter = userFilter(selector);
   if (!filter) return null;
 
   const now = new Date();
+    // Keep payment and entitlement changes in one atomic write. Replays and
+    // out-of-order callbacks must not reset the renewal date or downgrade a plan.
+    const paymentKey = payment ? JSON.stringify([metadata.provider ?? "morning", payment.paymentId]) : null;
+    const paymentFilter = payment ? {
+        billing_payment_ids: {$ne: paymentKey},
+        $or: [{billing_paid_at: null}, {billing_paid_at: {$lt: payment.paidAt}}],
+    } : {};
   await col("users").updateOne(
-    filter as any,
+      {...filter, ...paymentFilter} as any,
     {
       $set: {
         plan,
         updated_at: now,
         subscription_updated_at: now,
+          ...(payment ? {
+              billing_mode: payment.billing,
+              billing_paid_at: payment.paidAt,
+              billing_months: payment.billing === "one_time" ? (payment.months ?? 1) : null,
+              billing_next_payment_at: payment.billing === "one_time" ? nextPaymentDate(payment.paidAt, payment.months) : null,
+              billing_reminder_sent_for: null,
+              billing_reminder_lease_until: null,
+          } : {}),
         ...(Object.keys(metadata).length ? {subscription_update_metadata: metadata} : {}),
       },
+        ...(payment ? {$addToSet: {billing_payment_ids: paymentKey}} : {}),
     },
   );
 
@@ -57,7 +75,7 @@ export async function updateUserTier(
       id: String(user._id),
       email: user.email ?? null,
       role: user.role ?? null,
-      plan,
+        plan: user.plan,
     },
     entitlements,
   };

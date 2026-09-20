@@ -13,10 +13,17 @@
               <n-icon :component="ArrowForwardOutline" class="btn-icon" />
               חזרה
             </button>
-            <button class="btn btn--primary" type="button" @click="openReport">
-              <n-icon :component="DocumentTextOutline" class="btn-icon" />
-              תסקיר חדש
-            </button>
+            <n-tooltip :disabled="writesAllowed">
+              <template #trigger>
+                <span class="locked-action" @click="!writesAllowed && goToSubscription()">
+                  <button :disabled="!writesAllowed" class="btn btn--primary" type="button" @click="openReport">
+                    <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+                    תסקיר חדש
+                  </button>
+                </span>
+              </template>
+              שדרוג מנוי
+            </n-tooltip>
             <button class="btn btn--primary" type="button" @click="openEdit">
               <n-icon :component="CreateOutline" class="btn-icon" />
               עריכה
@@ -391,6 +398,9 @@ import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
 import EquipmentQuickAddModal from "../components/EquipmentQuickAddModal.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
+import {useAuthStore} from "../stores/auth.js";
+import {resolveUserPlan} from "../shared/pricingPlans.js";
+import {useI18n} from "../composables/useI18n.js";
 import type { Equipment, EventType } from "@shared/types.js";
 
 type TabKey = "docs" | "equipment" | "timeline";
@@ -436,6 +446,13 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const route = useRoute();
 const router = useRouter();
+const {href} = useI18n();
+const authStore = useAuthStore();
+const writesAllowed = computed(() => resolveUserPlan(authStore.user) !== "expired");
+
+function goToSubscription() {
+  router.push({path: href("/profile"), query: {section: "subscription"}});
+}
 const store = useClientsStore();
 const message = useMessage();
 
@@ -457,6 +474,7 @@ function onEquipmentCreated(eq: Equipment) {
 }
 
 function openReport() {
+  if (!writesAllowed.value) return;
   hydraulicModalRef.value?.open({clientId: String(route.params.id)});
 }
 const activeTab = ref<TabKey>("docs");
@@ -702,6 +720,13 @@ watch(
 </script>
 
 <style scoped>
+.locked-action {
+  display: inline-flex;
+}
+
+.locked-action button:disabled {
+  pointer-events: none;
+}
 .client-detail {
   direction: rtl;
 }

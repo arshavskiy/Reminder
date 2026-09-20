@@ -16,11 +16,21 @@ import type {PlanId} from "./tierFeatures";
 /** Plans a signup can express interest in. Trial is the default, not a choice. */
 const PURCHASABLE_PLANS = new Set<PlanId>(["digital", "basic", "business"]);
 
-export type BillingPeriod = "monthly" | "yearly";
+export type BillingPeriod = "monthly" | "yearly" | "one_time";
 
 export interface SignupIntent {
   plan: PlanId;
   billing: BillingPeriod;
+    months?: number;
+}
+
+/** One item represents one prepaid month; existing links default to one. */
+export function parsePrepaidMonths(value: unknown): number | null {
+    if (value === undefined) return 1;
+    if (typeof value !== "number" && typeof value !== "string") return null;
+    if (typeof value === "string" && !/^\d+$/.test(value.trim())) return null;
+    const months = Number(value);
+    return Number.isInteger(months) && months >= 1 && months <= 12 ? months : null;
 }
 
 /**
@@ -32,11 +42,16 @@ export interface SignupIntent {
 export function parseSignupIntent(
   plan: unknown,
   billing: unknown,
+  months?: unknown,
 ): SignupIntent | null {
   const planValue = String(plan ?? "").trim().toLowerCase() as PlanId;
   const billingValue = String(billing ?? "").trim().toLowerCase();
   if (!PURCHASABLE_PLANS.has(planValue)) return null;
-  if (billingValue !== "monthly" && billingValue !== "yearly") return null;
+    if (billingValue !== "monthly" && billingValue !== "yearly" && billingValue !== "one_time") return null;
+    if (billingValue === "one_time") {
+        const prepaidMonths = parsePrepaidMonths(months);
+        return prepaidMonths === null ? null : {plan: planValue, billing: billingValue, months: prepaidMonths};
+    }
   return {plan: planValue, billing: billingValue};
 }
 
@@ -49,6 +64,7 @@ export function signupIntentFields(
   return {
     signup_intent_plan: intent.plan,
     signup_intent_billing: intent.billing,
+      ...(intent.billing === "one_time" ? {signup_intent_months: intent.months ?? 1} : {}),
     signup_intent_at: now,
   };
 }

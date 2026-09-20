@@ -7,6 +7,7 @@ import {ObjectId} from "mongodb";
 import {generateContractReminders} from "../reminders/scheduler";
 import {type EquipmentInput, upsertEquipmentForClient} from "../reminders/equipmentUpsert";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {effectivePlanId} from "../plans/tierFeatures";
 import {printTemplateVisibleFilter} from "../templates/printTemplateAccess.js";
 import {parseObjectRecord, pickContractEmail} from "../contracts/contractEmail.js";
 import {
@@ -30,7 +31,7 @@ export function registerContractRoutes(app: express.Application) {
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
+        userPlan = effectivePlanId(ctx.user);
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -127,7 +128,7 @@ export function registerContractRoutes(app: express.Application) {
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
+        userPlan = effectivePlanId(ctx.user);
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });

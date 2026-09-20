@@ -685,6 +685,7 @@ import {DEFAULT_INSPECTOR_ID_START} from "@shared/types.js";
 import type {Equipment, PrintTemplate} from "@shared/types.js";
 import LayoutPreviewFrame from "../print/LayoutPreviewFrame.vue";
 import {useAuthStore} from "../../stores/auth.js";
+import {resolveUserPlan} from "../../shared/pricingPlans.js";
 import {useI18n} from "../../composables/useI18n.js";
 import {
   equipmentTableCellKey,
@@ -1900,6 +1901,7 @@ function clearDraft() {
 // ── Open ─────────────────────────────────────────────────────────────────────
 
 async function open(prefill?: HydraulicCheckPrefill) {
+  if (resolveUserPlan(authStore.user) === "expired") return;
   visible.value = true;
   loading.value = true;
   updatingContractId.value = null;

@@ -567,8 +567,7 @@
                       v-else-if="!gmailStatus?.connected"
                       size="small"
                       ghost
-                      tag="a"
-                      :href="pricingUrl"
+                      @click="openSubscription"
                     >
                       {{ l.profileSettings.upgradePlan }}
                     </n-button>
@@ -633,8 +632,7 @@
                       v-if="!driveAllowed"
                       size="small"
                       ghost
-                      tag="a"
-                      :href="pricingUrl"
+                      @click="openSubscription"
                     >
                       {{ l.profileSettings.upgradePlan }}
                     </n-button>
@@ -692,8 +690,7 @@
                       v-if="!calendarAllowed"
                       size="small"
                       ghost
-                      tag="a"
-                      :href="pricingUrl"
+                      @click="openSubscription"
                     >
                       {{ l.profileSettings.upgradePlan }}
                     </n-button>
@@ -930,8 +927,7 @@
                       v-if="!autoRemindersAllowed"
                       size="small"
                       ghost
-                      tag="a"
-                      :href="pricingUrl"
+                      @click="openSubscription"
                     >
                       {{ l.profileSettings.upgradePlan }}
                     </n-button>
@@ -961,8 +957,7 @@
                       v-if="seatLimit === 1"
                       size="small"
                       ghost
-                      tag="a"
-                      :href="pricingUrl"
+                      @click="openSubscription"
                     >
                       {{ l.profileSettings.upgradePlan }}
                     </n-button>
@@ -992,8 +987,7 @@
                       v-if="emailAccountLimit === 1"
                       size="small"
                       ghost
-                      tag="a"
-                      :href="pricingUrl"
+                      @click="openSubscription"
                     >
                       {{ l.profileSettings.upgradePlan }}
                     </n-button>
@@ -1282,6 +1276,7 @@
         </section>
 
         <section v-if="activeSection === 'subscription'">
+          <BillingReminder show-upcoming @loaded="billingMode = $event.mode"/>
           <div class="section-header subscription-header">
             <div>
               <h2 class="section-title">{{ l.profileBilling.title }}</h2>
@@ -1426,9 +1421,9 @@
                     <span>{{ feature }}</span>
                   </li>
                 </ul>
-                <a :href="whatsappHref(plan)" class="upgrade-card__cta" rel="noopener" target="_blank">
-                  <n-icon :component="LogoWhatsapp" :size="16"/>
-                  {{ l.profileBilling.buyWhatsapp }}
+                <a :href="planPurchaseHref(plan)" class="upgrade-card__cta" rel="noopener" target="_blank">
+                  <n-icon v-if="!PLAN_PAYMENT_LINKS[plan.id]" :component="LogoWhatsapp" :size="16"/>
+                  {{ PLAN_PAYMENT_LINKS[plan.id] ? l.profileBilling.payNow : l.profileBilling.buyWhatsapp }}
                 </a>
                 <p class="upgrade-card__note">{{ l.profileBilling.payNote }}</p>
               </article>
@@ -1520,8 +1515,9 @@
 </template>
 
 <script setup lang="ts">
+import BillingReminder from "../components/BillingReminder.vue";
 import {computed, onMounted, ref, watch, type Component} from "vue";
-import {useRoute} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {loginPath} from "../stores/locale.js";
 import {
   NAlert,
@@ -1591,6 +1587,7 @@ import {
   getPricingPlanForLocale,
   moneySymbol,
   plansForLocale,
+  PLAN_PAYMENT_LINKS,
   quotaPercent,
   resolveUserPlan,
   planAllowsGoogleDrive,
@@ -1604,8 +1601,8 @@ import {
 import {localizedPath, marketingUrl} from "../stores/locale.js";
 
 const route = useRoute();
+const router = useRouter();
 const {l, t, locale} = useI18n();
-const pricingUrl = computed(() => marketingUrl("/pricing", locale.value));
 const securityUrl = computed(() => marketingUrl("/security", locale.value));
 const settingsReturnPath = computed(() => `${localizedPath("/profile", locale.value)}?section=settings`);
 
@@ -1726,6 +1723,13 @@ function setActiveSection(section: string) {
   activeSection.value = section;
 }
 
+function openSubscription() {
+  setActiveSection("subscription");
+  if (route.query.section !== "subscription") {
+    router.replace({path: route.path, query: {...route.query, section: "subscription"}});
+  }
+}
+
 function applySectionFromRoute() {
   // "engineer" was a separate tab before the engineer fields moved onto the
   // personal one — existing links still point at it.
@@ -1771,7 +1775,12 @@ const PLAN_TAG_TYPES: Record<PlanId, "success" | "info" | "default"> = {
 const currentPlanId = computed(() => resolveUserPlan(user.value));
 const exportAllowed = computed(() => featureFlagsForUser(user.value).excelExport);
 const currency = computed(() => moneySymbol(locale.value));
-const currentPricingPlan = computed(() => getPricingPlanForLocale(currentPlanId.value, locale.value));
+const billingMode = ref<string | null>(null);
+const currentPricingPlan = computed(() => {
+  const plan = getPricingPlanForLocale(currentPlanId.value, locale.value);
+  if (billingMode.value !== "one_time" || !plan) return plan;
+  return {...plan, price: plan.oldPrice ?? plan.price, oldPrice: undefined, yearlyPrice: undefined};
+});
 
 const PLAN_RANK: Record<PlanId, number> = {
   expired: 0,
@@ -1795,6 +1804,16 @@ function yearlyMonthly(plan: {price: number; yearlyPrice?: number}): number {
  * Checkout is manual until Green Invoice payment links exist, so the CTA opens
  * WhatsApp with the plan and its price already written into the message.
  */
+function planPurchaseHref(plan: {
+  id: PlanId;
+  name: string;
+  price: number;
+  oldPrice?: number;
+  yearlyPrice?: number
+}): string {
+  return PLAN_PAYMENT_LINKS[plan.id] || whatsappHref(plan);
+}
+
 function whatsappHref(plan: {name: string; price: number; oldPrice?: number; yearlyPrice?: number}): string {
   const symbol = currency.value;
   const price = plan.yearlyPrice

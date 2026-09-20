@@ -56,6 +56,9 @@ describe("digital plan", () => {
   it("keeps file storage on for every other plan", () => {
     for (const plan of ["expired", "trial", "basic", "business"] as const) {
       expect(tierFeatureFlags(plan).fileStorage).toBe(true);
+    }
+      expect(tierFeatureFlags("expired").documentImport).toBe(false);
+      for (const plan of ["trial", "basic", "business"] as const) {
       expect(tierFeatureFlags(plan).documentImport).toBe(true);
     }
   });

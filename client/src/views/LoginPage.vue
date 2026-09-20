@@ -49,6 +49,13 @@
             <p class="login-brand__sub">{{ t.copy.brandSub }}</p>
           </div>
 
+          <n-alert v-if="route.query.billing === 'one_time'" style="margin-bottom:16px" type="info">
+            {{
+              localeStore.locale === "en"
+                  ? "One-time payment for the number of months purchased. After payment verification, we’ll remind you by email and in the app when that period ends. Already registered? Sign in to your existing account."
+                  : "תשלום חד־פעמי למספר החודשים שנרכשו. לאחר אימות התשלום נזכיר לכם באימייל ובאפליקציה בסיום התקופה ששולמה. כבר נרשמתם? התחברו לחשבון הקיים."
+            }}
+          </n-alert>
           <n-alert v-if="successMsg" type="success" :title="successMsg" style="margin-bottom:16px" closable
                    @close="successMsg = null"/>
           <n-alert v-if="errorMsg" type="error" :title="errorMsg" style="margin-bottom:16px" closable
@@ -430,7 +437,8 @@ import {useDocumentsStore} from "../stores/documents.js";
 import {useContractsStore} from "../stores/contracts.js";
 import {useClientsStore} from "../stores/clients.js";
 import {useRemindersStore} from "../stores/reminders.js";
-import {dashboardPath, marketingUrl, useLocaleStore} from "../stores/locale.js";
+import {dashboardPath, localizedPath, marketingUrl, useLocaleStore} from "../stores/locale.js";
+import {INTENT_KEY, parseIntent, readIntent} from "../shared/signupIntent";
 import GoogleSignIn from "../components/GoogleSignIn.vue";
 import {trackConversion} from "../analytics.js";
 
@@ -520,7 +528,7 @@ async function handleLogin() {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       credentials: "include",
-      body: JSON.stringify({email: loginEmail.value, password: loginPassword.value}),
+      body: JSON.stringify({email: loginEmail.value, password: loginPassword.value, ...readIntent()}),
     });
     const data = await res.json() as any;
     if (!res.ok) {
@@ -542,36 +550,18 @@ async function handleLogin() {
       remindersStore.fetch(),
     ]).catch(() => {
     });
-    router.replace(dashboardPath());
+    const oneTimeReturn = readIntent().billing === "one_time";
+    try {
+      sessionStorage.removeItem(INTENT_KEY);
+    } catch { /* Storage is optional. */
+    }
+    router.replace(oneTimeReturn
+        ? {path: localizedPath("/profile"), query: {section: "subscription"}}
+        : dashboardPath());
   } catch {
     routeError.value = "auth_failed";
   } finally {
     loading.value = false;
-  }
-}
-
-const INTENT_KEY = "signup_intent";
-
-type SignupIntent = { plan: "basic" | "business"; billing: "monthly" | "yearly" };
-
-/** Both halves must be recognised, or there is no intent — never a partial one. */
-function parseIntent(plan: unknown, billing: unknown): SignupIntent | null {
-  const p = String(plan ?? "").trim().toLowerCase();
-  const b = String(billing ?? "").trim().toLowerCase();
-  if (p !== "basic" && p !== "business") return null;
-  if (b !== "monthly" && b !== "yearly") return null;
-  return {plan: p, billing: b};
-}
-
-/** The stored intent, spread into a signup body. Empty when there is none. */
-function readIntent(): Partial<SignupIntent> {
-  try {
-    const raw = sessionStorage.getItem(INTENT_KEY);
-    if (!raw) return {};
-    const stored = JSON.parse(raw);
-    return parseIntent(stored?.plan, stored?.billing) ?? {};
-  } catch {
-    return {};
   }
 }
 
@@ -646,7 +636,7 @@ onMounted(async () => {
   // Remember which plan the visitor came in for. Held in sessionStorage because
   // Google sign-in leaves the page entirely and returns without the query string.
   // It is attribution only — the server records it and never grants a plan from it.
-  const intent = parseIntent(route.query.plan, route.query.billing);
+  const intent = parseIntent(route.query.plan, route.query.billing, route.query.months);
   if (intent) {
     try {
       sessionStorage.setItem(INTENT_KEY, JSON.stringify(intent));
@@ -656,7 +646,9 @@ onMounted(async () => {
   }
 
   if (!authStore.initialized) await authStore.fetchMe();
-  if (authStore.user) router.replace(dashboardPath());
+  if (authStore.user) router.replace(intent?.billing === "one_time"
+      ? {path: localizedPath("/profile"), query: {section: "subscription"}}
+      : dashboardPath());
 });
 </script>
 

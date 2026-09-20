@@ -3,6 +3,7 @@ import {extname, join} from "path";
 import {mkdirSync, unlinkSync, writeFileSync} from "fs";
 import multer from "multer";
 import {HTTPException, requireAuth} from "../auth/middleware";
+import {effectivePlanId} from "../plans/tierFeatures";
 import {parsePdf} from "../pipeline/pdfParser";
 import {enrichTextWithPlumberTables} from "../pipeline/pdfPlumberParser";
 import {ocrFile} from "../pipeline/ocrParser";
@@ -103,7 +104,7 @@ export function registerExtractRemindersRoutes(app: express.Application) {
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-        userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
+        userPlan = effectivePlanId(ctx.user);
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });

@@ -1,5 +1,6 @@
 import {col} from "../db/db";
 import {getStoredUserUsage, incrementReminderUsage} from "./userUsageCounters";
+import {effectivePlanId} from "../plans/tierFeatures";
 
 export const REMINDER_QUOTA_ERROR = "reminder_limit_reached";
 
@@ -29,13 +30,8 @@ export function reminderLimit(role: string | null | undefined): {
   // Trials must be able to send reminders — that is the product being trialled —
   // so they are unmetered here and bounded by the 25-document import cap instead.
   if (plan === "trial") return {limit: null, scope: "unlimited"};
-  // A lapsed trial gets no reminders at all. readPositiveIntEnv rejects 0, so
-  // read the override directly to keep an explicit
-  // FREE_LIFETIME_REMINDER_LIMIT=0 working (env name kept for deploy config).
-  return {
-    limit: readNonNegativeIntEnv("FREE_LIFETIME_REMINDER_LIMIT", readNonNegativeIntEnv("USER_REMINDER_LIMIT", 0)),
-    scope: "lifetime",
-  };
+    // A lapsed trial cannot create new reminders. Existing rows stay readable.
+    return {limit: 0, scope: "lifetime"};
 }
 
 export async function getReminderQuota(userId: string, role: string | null | undefined): Promise<ReminderQuota> {
@@ -90,8 +86,10 @@ async function resolveUserPlan(userId: string): Promise<string> {
   const {ObjectId} = await import("mongodb");
   let filter: Record<string, unknown> = {_id: userId};
   if (ObjectId.isValid(userId)) filter = {_id: new ObjectId(userId)};
-  const user = await col("users").findOne(filter as any) as { plan?: string; role?: string } | null;
-  return user?.plan ?? user?.role ?? "user";
+    const user = await col("users").findOne(filter as any) as {
+        plan?: string; role?: string; trial_ends_at?: Date | string | null;
+    } | null;
+    return effectivePlanId(user ?? {plan: "expired"});
 }
 
 export function reminderQuotaErrorPayload(error: ReminderQuotaError) {
@@ -113,8 +111,3 @@ function normalizePlan(role: string | null | undefined): "expired" | "trial" | "
   return "expired";
 }
 
-function readNonNegativeIntEnv(name: string, fallback: number): number {
-  const value = Number(process.env[name]);
-  if (!Number.isFinite(value) || value < 0) return fallback;
-  return Math.floor(value);
-}

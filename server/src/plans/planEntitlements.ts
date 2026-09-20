@@ -4,6 +4,7 @@ import {DEFAULT_FEATURES_NESTED} from "../features";
 import {documentImportLimit} from "../quotas/documentImportQuota";
 import {reminderLimit} from "../quotas/reminderQuota";
 import {
+    effectivePlanId,
   featureFlagsForUser,
   normalizePlanId,
   tierFeatureFlags,
@@ -62,9 +63,9 @@ export async function ensureTrialStartedOnLogin(user: {
 }
 
 export function buildPlanEntitlements(
-  user: {plan?: string | null; role?: string | null} | null | undefined,
+    user: { plan?: string | null; role?: string | null; trial_ends_at?: Date | string | null } | null | undefined,
 ): PlanEntitlements {
-  const planKey = user?.plan ?? user?.role;
+    const planKey = effectivePlanId(user);
   const flags = featureFlagsForUser(user);
   const invoices = documentImportLimit(planKey, "invoices");
   const contracts = documentImportLimit(planKey, "contracts");
@@ -72,9 +73,7 @@ export function buildPlanEntitlements(
   const emailDocuments = documentImportLimit(planKey, "emailDocuments");
   const reminders = reminderLimit(planKey);
   return {
-    plan: String(user?.role ?? "").trim().toLowerCase() === "admin"
-      ? "business"
-      : normalizePlanId(planKey),
+      plan: planKey,
     ocr: true,
     previewAndExtraction: true,
     ...flags,

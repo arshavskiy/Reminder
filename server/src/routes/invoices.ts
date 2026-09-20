@@ -4,7 +4,7 @@ import { ObjectId } from "mongodb";
 import { col } from "../db/db";
 import { HTTPException, requireAuth } from "../auth/middleware";
 import { documentImportMonthlyLimit } from "../quotas/documentImportQuota";
-import { featureFlagsForUser, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
+import {effectivePlanId, featureFlagsForUser, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
 import {
   categoryFacetRows,
@@ -32,7 +32,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userPlan = ctx.user.plan ?? ctx.user.role;
+        userPlan = effectivePlanId(ctx.user);
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });

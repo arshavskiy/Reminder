@@ -25,13 +25,7 @@ import {useAuthStore} from "../stores/auth.js";
 import {dashboardPath, isEnglishPath, localeFromPath, localizedPath, loginPath, useLocaleStore, wantsEnglishPrefix} from "../stores/locale.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {type FeatureKey, FEATURES} from "../shared/features.js";
-import {normalizePlanId, type PlanId, resolveUserPlan} from "../shared/pricingPlans.js";
-
-// Digital sits at the same rank as basic: it is a paid plan with the same record
-// keeping — clients, equipment, reminders — and differs only in that it cannot
-// import or store files. Those are gated by the documentImport/fileStorage
-// flags, not by rank, so ranking it below basic would wrongly close pages it pays for.
-const PLAN_RANK: Record<PlanId, number> = {expired: 0, digital: 1, basic: 1, trial: 1, business: 2};
+import {PAID_PLAN_IDS, planMeetsMinimum, type PlanId, resolveUserPlan} from "../shared/pricingPlans.js";
 
 function englishRedirect(path: string): string {
     if (!path.startsWith("/") || path.startsWith("/en")) return path;
@@ -144,11 +138,11 @@ const appRoutes: RouteRecordRaw[] = [
             component: () => import("../views/InvoiceDetailPage.vue"),
             meta: {feature: FEATURES.pages.invoices, requirePlan: "business"}
         },
-        {path: "/clients", component: ClientsPage, meta: {feature: FEATURES.pages.clients, requirePlan: "basic"}},
+    {path: "/clients", component: ClientsPage, meta: {feature: FEATURES.pages.clients, requirePlan: "expired"}},
         {
             path: "/clients/:id",
             component: ClientDetailPage,
-            meta: {feature: FEATURES.pages.clients, requirePlan: "basic"}
+            meta: {feature: FEATURES.pages.clients, requirePlan: "expired"}
         },
         {path: "/contracts", redirect: "/documents"},
         {path: "/quotes", component: () => import("../views/QuotesPage.vue"), meta: {feature: FEATURES.pages.contracts}},
@@ -160,27 +154,31 @@ const appRoutes: RouteRecordRaw[] = [
             component: () => import("../views/ContractDraftPage.vue"),
             meta: {feature: FEATURES.pages.contracts}
         },
-        {path: "/reminders", component: RemindersPage, meta: {feature: FEATURES.pages.reminders, requirePlan: "basic"}},
+    {path: "/reminders", component: RemindersPage, meta: {feature: FEATURES.pages.reminders, requirePlan: "expired"}},
         {
             path: "/reminders/:id",
             component: () => import("../views/ReminderDetailPage.vue"),
-            meta: {feature: FEATURES.pages.reminders, requirePlan: "basic"},
+            meta: {feature: FEATURES.pages.reminders, requirePlan: "expired"},
         },
         {
             path: "/activity",
             component: () => import("../views/ActivityLogPage.vue"),
-            meta: {feature: FEATURES.pages.reminders, requirePlan: "basic"},
+            meta: {feature: FEATURES.pages.reminders, requirePlan: "expired"},
         },
         {path: "/search", component: SearchPage, meta: {feature: FEATURES.pages.search}},
         {path: "/profile", component: ProfilePage, meta: {feature: FEATURES.pages.profile}},
-        {path: "/settings/doc-templates", component: DocTemplatesPage, meta: {feature: FEATURES.pages.docTemplates}},
+    {
+        path: "/settings/doc-templates",
+        component: DocTemplatesPage,
+        meta: {feature: FEATURES.pages.docTemplates, requirePlan: PAID_PLAN_IDS}
+    },
         {
             path: "/settings/email-templates",
             component: EmailTemplatesPage,
             meta: {feature: FEATURES.pages.emailTemplates}
         },
-        {path: "/equipment", component: EquipmentPage, meta: {feature: FEATURES.pages.equipment, requirePlan: "basic"}},
-        {path: "/reports", component: ReportsPage, meta: {feature: FEATURES.pages.reports}},
+    {path: "/equipment", component: EquipmentPage, meta: {feature: FEATURES.pages.equipment, requirePlan: "expired"}},
+    {path: "/reports", component: ReportsPage, meta: {feature: FEATURES.pages.reports, requirePlan: PAID_PLAN_IDS}},
         {path: "/reports/expenses", redirect: "/invoices/expenses"},
         {
             path: "/field",
@@ -264,6 +262,9 @@ router.beforeEach(async (to) => {
             const loc = isEnglishPath(to.path) || (to.path === "/" && wantsEnglishPrefix())
                 ? "en"
                 : (localeFromPath(to.path) ?? (wantsEnglishPrefix() ? "en" : "he"));
+            if (to.query.billing === "one_time") {
+                return {path: localizedPath("/profile", loc), query: {section: "subscription"}};
+            }
             return {path: dashboardPath(loc), query: to.query};
         }
         return true;
@@ -315,10 +316,7 @@ router.beforeEach(async (to) => {
     const requiredPlan = to.meta.requirePlan as PlanId | PlanId[] | undefined;
     if (requiredPlan) {
         const userPlan = resolveUserPlan(authStore.user);
-        const allowed = Array.isArray(requiredPlan)
-            ? requiredPlan.map((plan) => normalizePlanId(plan)).includes(userPlan)
-            : (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[normalizePlanId(requiredPlan)] ?? 0);
-        if (!allowed) {
+        if (!planMeetsMinimum(userPlan, requiredPlan)) {
             return deny("/403");
         }
     }

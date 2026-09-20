@@ -75,25 +75,15 @@ export function documentImportLimit(
   // bulk from a Gmail sync, so without a separate cap a single import would
   // consume the whole document budget and leave no room for the inspections the
   // trial is meant to demonstrate.
-  if (plan === "trial" && category === "invoices") {
-    return {
-      limit: readPositiveIntEnv("TRIAL_LIFETIME_INVOICE_LIMIT", 20),
-      scope: "lifetime",
-    };
+    // Ended trial: keep existing files readable, but no new uploads or Gmail imports.
+    if (plan === "expired") {
+        return {limit: 0, scope: "lifetime"};
   }
-  // The trial otherwise shares the lapsed tier's lifetime import cap: it unlocks
-  // automation, not volume, so it cannot be used to bulk-import a backlog and
-  // then lapse.
-  if (plan === "expired" || plan === "trial") {
-    if (category === "documents") {
-      return {
-        limit: readPositiveIntEnv("FREE_LIFETIME_DOCUMENT_LIMIT", 50),
-        scope: "lifetime",
-      };
-    }
-    // One shared pool for manual + email, so both categories report the same limit.
-    return {
-      limit: readPositiveIntEnv("FREE_LIFETIME_MANUAL_DOCUMENT_LIMIT", 50),
+    // Active trial: one shared lifetime pool of 20 for upload and Gmail (inspections
+    // and receipts together) — the same number the pricing page advertises.
+    if (plan === "trial") {
+        return {
+            limit: readPositiveIntEnv("TRIAL_LIFETIME_DOCUMENT_LIMIT", readPositiveIntEnv("TRIAL_LIFETIME_INVOICE_LIMIT", 20)),
       scope: "lifetime",
     };
   }
@@ -133,13 +123,13 @@ export async function getDocumentImportQuota(
     if (scope === "lifetime") {
       // Lifetime usage is stored on the user and never decreases on delete.
       const usage = await getStoredUserUsage(userId);
-      if (category === "invoices") {
-        // Metered against its own counter, which is what makes the trial's
-        // separate invoice allowance independent of the document pool.
+        if (plan === "trial" || plan === "expired") {
+            // One advertised pool of 20 across upload and Gmail (inspections and
+            // receipts together). Querying any category reports the same used count.
+            used = usage.scannedDocuments + usage.gmailDocuments + usage.gmailInvoices;
+        } else if (category === "invoices") {
         used = usage.gmailInvoices;
       } else if (category === "manualDocuments" || category === "emailDocuments") {
-        // Free tier gets ONE shared lifetime pool: manual uploads and Gmail imports
-        // draw from the same budget, so importing cannot hand out a second allowance.
         used = usage.scannedDocuments + usage.gmailDocuments + usage.gmailInvoices;
       } else {
         used = usage.documents;
@@ -176,10 +166,9 @@ export function effectiveQuotaCategory(
   source: DocumentImportSource = "manual",
 ): DocumentImportQuotaCategory {
   const plan = normalizePlan(role ?? "user");
-  // Invoices are metered separately on trial, so they must not be folded into
-  // the shared manual/email pool — doing so would charge them against the
-  // document budget and the 20-invoice cap would never be reached.
-  if (plan === "trial" && category === "invoices") return "invoices";
+    // Trial (and a lapsed trial) share one lifetime pool. Keep upload vs Gmail
+    // as the reported category so the profile bars stay labeled, but both draw
+    // from the same 20-document budget.
   if (plan === "expired" || plan === "trial") {
     return source === "email" ? "emailDocuments" : "manualDocuments";
   }

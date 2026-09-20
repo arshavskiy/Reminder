@@ -32,6 +32,7 @@ import {clientIp, logger} from "../logger";
 import {notifyPasswordResetRequested} from "../push/adminNotify";
 import {DEFAULT_NEW_USER_PLAN, ensureTrialStartedOnLogin, ensureUserSettingsWithEntitlements, newTrialEndsAt} from "../plans/planEntitlements";
 import {parseSignupIntent, signupIntentFields} from "../plans/signupIntent";
+import {deliverOneTimeBillingReminders, rememberOneTimeIntentAndRemind} from "../plans/billingReminders";
 
 export function registerAuthRoutes(app: express.Application) {
   // GET /auth/google — kick off OAuth flow
@@ -55,7 +56,7 @@ export function registerAuthRoutes(app: express.Application) {
       expires_at: expiresAt,
       ui_locale: uiLocale,
       // Stored server-side so it cannot be swapped between redirect and callback.
-      ...signupIntentFields(parseSignupIntent(req.query.plan, req.query.billing)),
+        ...signupIntentFields(parseSignupIntent(req.query.plan, req.query.billing, req.query.months)),
     } as any);
 
     // Prune expired states
@@ -102,6 +103,7 @@ export function registerAuthRoutes(app: express.Application) {
     const oauthSignupIntent = signupIntentFields(parseSignupIntent(
       (pkce as any).signup_intent_plan,
       (pkce as any).signup_intent_billing,
+        (pkce as any).signup_intent_months,
     ));
     const uiLocale = parseUiLocale((pkce as any).ui_locale);
     await col("oauth_states").deleteOne({ state });
@@ -149,6 +151,20 @@ export function registerAuthRoutes(app: express.Application) {
 
       // New Google users land on a trial until paid; refresh entitlements on every login.
       await ensureUserSettingsWithEntitlements(user._id.toString(), user);
+        const oauthIntent = parseSignupIntent(
+            (pkce as any).signup_intent_plan,
+            (pkce as any).signup_intent_billing,
+            (pkce as any).signup_intent_months,
+        );
+        try {
+            await rememberOneTimeIntentAndRemind(user, oauthIntent);
+        } catch (error) {
+            logger.warn("billing_reminder_on_login_failed", {
+                user_id: String(user._id),
+                method: "google_oauth",
+                error: String(error)
+            });
+        }
 
       const ua = req.headers["user-agent"] ?? undefined;
       const ip = clientIp(req);
@@ -160,7 +176,9 @@ export function registerAuthRoutes(app: express.Application) {
       });
 
       res.setHeader("Set-Cookie", cookies);
-      res.redirect(frontendUrl(withLocale(POST_LOGIN_PATH, uiLocale)));
+        const destination = oauthSignupIntent.signup_intent_billing === "one_time"
+            ? "/profile?section=subscription" : POST_LOGIN_PATH;
+        res.redirect(frontendUrl(withLocale(destination, uiLocale)));
     } catch (err) {
       logger.error("login_failed", { method: "google_oauth", reason: "callback_error", error: err, ip: clientIp(req) ?? null });
       res.redirect(frontendUrl(withLocale("/login?error=auth_failed", uiLocale)));
@@ -169,13 +187,13 @@ export function registerAuthRoutes(app: express.Application) {
 
   // POST /api/auth/google — GIS credential (ID token) sign-in
   app.post("/api/auth/google", async (req, res) => {
-    const body = req.body as { credential?: string; plan?: string; billing?: string };
+      const body = req.body as { credential?: string; plan?: string; billing?: string; months?: number | string };
     if (!body.credential) {
       res.status(400).json({ error: "missing_credential" });
       return;
     }
     // No PKCE row on this path — the client posts the intent with the credential.
-    const oauthSignupIntent = signupIntentFields(parseSignupIntent(body.plan, body.billing));
+      const oauthSignupIntent = signupIntentFields(parseSignupIntent(body.plan, body.billing, body.months));
 
     try {
       const profile = await verifyIdToken(body.credential);
@@ -216,6 +234,18 @@ export function registerAuthRoutes(app: express.Application) {
       if (!user) throw new Error("User not found after upsert");
 
       await ensureUserSettingsWithEntitlements(user._id.toString(), user);
+        try {
+            await rememberOneTimeIntentAndRemind(
+                user,
+                parseSignupIntent(body.plan, body.billing, body.months),
+            );
+        } catch (error) {
+            logger.warn("billing_reminder_on_login_failed", {
+                user_id: String(user._id),
+                method: "google_gis",
+                error: String(error)
+            });
+        }
 
       const ua = req.headers["user-agent"] ?? undefined;
       const ip = clientIp(req);
@@ -369,11 +399,11 @@ export function registerAuthRoutes(app: express.Application) {
 
   // POST /api/auth/register — email/password registration
   app.post("/api/auth/register", async (req, res) => {
-    const { email, password, name, plan: intentPlan, billing: intentBilling } = req.body as {
-      email?: string; password?: string; name?: string; plan?: string; billing?: string;
+      const {email, password, name, plan: intentPlan, billing: intentBilling, months: intentMonths} = req.body as {
+          email?: string; password?: string; name?: string; plan?: string; billing?: string; months?: number | string;
     };
     // Recorded for attribution only — it never grants the plan. See signupIntent.ts.
-    const signupIntent = parseSignupIntent(intentPlan, intentBilling);
+      const signupIntent = parseSignupIntent(intentPlan, intentBilling, intentMonths);
 
     if (!email || !password) {
       res.status(400).json({ error: "email_and_password_required" });
@@ -430,6 +460,21 @@ export function registerAuthRoutes(app: express.Application) {
     } as any);
     const userId = insert.insertedId.toString();
     await ensureUserSettingsWithEntitlements(userId, { plan: DEFAULT_NEW_USER_PLAN, role: "user" });
+      if (signupIntent?.billing === "one_time") {
+          try {
+              await rememberOneTimeIntentAndRemind({
+                  _id: insert.insertedId,
+                  email: emailLower,
+                  is_active: 1, ...signupIntentFields(signupIntent)
+              }, signupIntent);
+          } catch (error) {
+              logger.warn("billing_reminder_on_login_failed", {
+                  user_id: userId,
+                  method: "register",
+                  error: String(error)
+              });
+          }
+      }
     logger.info("user_registered", {
       user_id: userId,
       email: emailLower,
@@ -454,7 +499,9 @@ export function registerAuthRoutes(app: express.Application) {
 
   // POST /api/auth/login — email/password sign-in
   app.post("/api/auth/login", async (req, res) => {
-    const { email, password } = req.body as { email?: string; password?: string };
+      const {email, password, plan: intentPlan, billing: intentBilling, months: intentMonths} = req.body as {
+          email?: string; password?: string; plan?: string; billing?: string; months?: number | string;
+      };
 
     if (!email || !password) {
       res.status(400).json({ error: "email_and_password_required" });
@@ -491,6 +538,15 @@ export function registerAuthRoutes(app: express.Application) {
 
     await col("users").updateOne({ _id: user._id }, { $set: { last_login_at: new Date() } });
     await ensureUserSettingsWithEntitlements(user._id.toString(), user);
+      try {
+          await rememberOneTimeIntentAndRemind(user, parseSignupIntent(intentPlan, intentBilling, intentMonths));
+      } catch (error) {
+          logger.warn("billing_reminder_on_login_failed", {
+              user_id: String(user._id),
+              method: "email_password",
+              error: String(error)
+          });
+      }
 
     const ua = req.headers["user-agent"] ?? undefined;
     const ip = clientIp(req);
@@ -537,6 +593,18 @@ export function registerAuthRoutes(app: express.Application) {
     await ensureTrialStartedOnLogin(user);
     const freshUser = await col("users").findOne({ _id: user._id }) as any;
     await ensureUserSettingsWithEntitlements(user._id.toString(), freshUser);
+      try {
+          await rememberOneTimeIntentAndRemind(
+              freshUser ?? user,
+              parseSignupIntent(req.query.plan, req.query.billing, req.query.months),
+          );
+      } catch (error) {
+          logger.warn("billing_reminder_on_login_failed", {
+              user_id: userId,
+              method: "magic_link",
+              error: String(error)
+          });
+      }
 
     const ua = req.headers["user-agent"] ?? undefined;
     const ip = clientIp(req);

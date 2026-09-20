@@ -35,7 +35,7 @@ import {
 } from "../quotas/documentImportQuota";
 import {MAIN_DOCUMENTS_EXCLUDED_KINDS, mainDocumentsFilter} from "../documents/documentVisibility";
 import {slimExtractedFieldsForList} from "../documents/listExtractedFields";
-import {planAllowsDocumentImport, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
+import {effectivePlanId, planAllowsDocumentImport, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -48,6 +48,18 @@ function readNonNegativeIntEnv(name: string, fallback: number, max = 60_000): nu
 const RESCAN_START_STAGGER_MS = readNonNegativeIntEnv("DOCUMENT_RESCAN_START_STAGGER_MS", 250);
 const UPLOAD_START_STAGGER_MS = readNonNegativeIntEnv("DOCUMENT_UPLOAD_START_STAGGER_MS", 0);
 
+function documentQuotaPayload(
+    userPlan: string,
+    documentQuota: Awaited<ReturnType<typeof getDocumentImportQuota>>,
+) {
+    return {
+        documentLimit: documentQuota.limit,
+        documentQuotaUsed: documentQuota.limit === null ? 0 : documentQuota.used,
+        documentImportAllowed: planAllowsDocumentImport(userPlan),
+        plan: userPlan,
+    };
+}
+
 export function registerDocumentRoutes(app: express.Application) {
   // GET /api/documents
   app.get("/api/documents", async (req, res) => {
@@ -56,7 +68,7 @@ export function registerDocumentRoutes(app: express.Application) {
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
+        userPlan = effectivePlanId(ctx.user);
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -120,8 +132,7 @@ export function registerDocumentRoutes(app: express.Application) {
           rows: [],
           total: 0,
           totalAll: 0,
-          documentLimit: documentQuota.limit,
-          documentQuotaUsed: documentQuota.limit === null ? 0 : documentQuota.used,
+            ...documentQuotaPayload(userPlan, documentQuota),
         });
         return;
       }
@@ -288,8 +299,7 @@ export function registerDocumentRoutes(app: express.Application) {
       totalAll: allCount,
       counts,
       inspectionTypeCounts: (inspectionTypeCounts as any[]).map((g) => ({ type: g._id, count: g.count })),
-      documentLimit: documentQuota.limit,
-      documentQuotaUsed: documentQuota.limit === null ? 0 : documentQuota.used,
+        ...documentQuotaPayload(userPlan, documentQuota),
     });
   });
 
@@ -321,7 +331,7 @@ export function registerDocumentRoutes(app: express.Application) {
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userPlan = ctx.user.plan ?? ctx.user.role;
+        userPlan = effectivePlanId(ctx.user);
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
@@ -361,7 +371,7 @@ export function registerDocumentRoutes(app: express.Application) {
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userPlan = ctx.user.plan ?? ctx.user.role;
+        userPlan = effectivePlanId(ctx.user);
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });

@@ -10,31 +10,56 @@
       :subtitle="l.documents.subtitle"
     >
       <template #hero>
-        <button class="rbtn rbtn--primary" type="button" @click="openNewInspection">
-          <n-icon :component="AddOutline" class="btn-icon"/>
-          {{ l.documents.newInspection }}
-        </button>
-        <button
-            v-if="authStore.isAdmin || true"
-            :class="{ 'rbtn--loading': uploading }"
-            :disabled="limitReached || uploading"
-            class="rbtn rbtn--primary"
-            type="button"
-            @click="openUploadModal()"
-        >
-          <n-icon :component="CloudUploadOutline" class="btn-icon"/>
-          {{ l.common.upload }}
-        </button>
-        <button
-            :class="{ 'rbtn--loading': importingFromGmail }"
-            :disabled="importingFromGmail"
-            class="rbtn rbtn--ghost"
-            type="button"
-            @click="handleGmailImport"
-        >
-          <GmailLogo :size="16" class="btn-icon" />
-          {{ l.documents.gmailImport }}
-        </button>
+        <n-tooltip :disabled="!createLocked">
+          <template #trigger>
+            <span class="locked-action" @click="createLocked && goToSubscription()">
+              <button
+                  :disabled="createLocked"
+                  class="rbtn rbtn--primary"
+                  type="button"
+                  @click="openNewInspection"
+              >
+                <n-icon :component="AddOutline" class="btn-icon"/>
+                {{ l.documents.newInspection }}
+              </button>
+            </span>
+          </template>
+          {{ l.profile.upgradePlan }}
+        </n-tooltip>
+        <n-tooltip :disabled="!importLocked">
+          <template #trigger>
+            <span class="locked-action" @click="importLocked && goToSubscription()">
+              <button
+                  :class="{ 'rbtn--loading': uploading }"
+                  :disabled="importLocked || uploading"
+                  class="rbtn rbtn--primary"
+                  type="button"
+                  @click="openUploadModal()"
+              >
+                <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+                {{ l.common.upload }}
+              </button>
+            </span>
+          </template>
+          {{ l.profile.upgradePlan }}
+        </n-tooltip>
+        <n-tooltip :disabled="!importLocked">
+          <template #trigger>
+            <span class="locked-action" @click="importLocked && goToSubscription()">
+              <button
+                  :class="{ 'rbtn--loading': importingFromGmail }"
+                  :disabled="importLocked || importingFromGmail"
+                  class="rbtn rbtn--ghost"
+                  type="button"
+                  @click="handleGmailImport"
+              >
+                <GmailLogo :size="16" class="btn-icon"/>
+                {{ l.documents.gmailImport }}
+              </button>
+            </span>
+          </template>
+          {{ l.profile.upgradePlan }}
+        </n-tooltip>
         <button
             :class="{ 'rbtn--loading': exportingToDrive }"
             :disabled="!driveAllowed || exportingToDrive"
@@ -209,7 +234,7 @@
     <div v-if="isRegularUser" class="quota-bar">
       <div class="quota-bar__text">
         <span>מסמכים: {{ store.documentQuotaUsed }} / {{ store.documentLimit ?? "∞" }}</span>
-        <span v-if="limitReached" class="quota-bar__limit">הגעת למגבלת סריקות — שדרג ל-Basic</span>
+        <span v-if="importLocked" class="quota-bar__limit">{{ importLockLabel }}</span>
       </div>
       <n-progress
         type="line"
@@ -222,11 +247,11 @@
     </div>
 
     <!-- Drop strip with inline upload + results modal -->
-    <div v-if="!documentImportAllowed" class="drop-strip drop-strip--disabled">
-      <span>{{ PLAN_GATE_MESSAGES.documentImport }}</span>
-    </div>
-    <div v-else-if="limitReached" class="drop-strip drop-strip--disabled">
-      <span>הגעת למגבלת {{ store.documentLimit }} סריקות</span>
+    <div v-if="importLocked" class="drop-strip drop-strip--disabled">
+      <span>{{ importLockLabel }}</span>
+      <button class="btn btn--ghost btn--xs" type="button" @click="goToSubscription">
+        {{ l.profile.upgradePlan }}
+      </button>
     </div>
     <DocumentDropStrip v-else @quota-reached="onQuotaReached" @uploaded="store.fetch(undefined, true)" />
 
@@ -422,6 +447,7 @@
           <colgroup>
             <col class="document-table__col document-table__col--select" />
             <col class="document-table__col document-table__col--file" />
+            <col class="document-table__col document-table__col--type"/>
             <col class="document-table__col document-table__col--date" />
             <col class="document-table__col document-table__col--import" />
             <col class="document-table__col document-table__col--client" />
@@ -442,6 +468,13 @@
                 <button class="document-sort-button" type="button" :aria-label="documentSortAriaLabel('file')" @click="setDocumentSort('file')">
                   <span>{{ l.common.file }}</span>
                   <n-icon :component="documentSortIcon('file')" :size="14" />
+                </button>
+              </th>
+              <th class="document-col document-col--type">
+                <button :aria-label="documentSortAriaLabel('type')" class="document-sort-button" type="button"
+                        @click="setDocumentSort('type')">
+                  <span>{{ l.documents.typeColumn }}</span>
+                  <n-icon :component="documentSortIcon('type')" :size="14"/>
                 </button>
               </th>
               <th class="document-col document-col--date">
@@ -493,7 +526,6 @@
                 <span class="document-file-cell">
                   <span class="document-file-cell__text">
                     <span class="document-cell-truncate" dir="auto" :title="row.file_name">{{ row.file_name }}</span>
-                    <span v-if="inspectionTypeLabel(row)" class="document-file-cell__inspection-type">{{ inspectionTypeLabel(row) }}</span>
                   </span>
                   <!-- Moved off the removed status column: a bounced reminder is a
                        delivery failure the user has to act on, not processing
@@ -509,6 +541,10 @@
                     {{ issue.label }}
                   </n-tag>
                 </span>
+              </td>
+              <td class="document-col document-col--type">
+                <span :title="inspectionTypeLabel(row) ?? undefined"
+                      class="document-cell-truncate">{{ inspectionTypeLabel(row) || "—" }}</span>
               </td>
               <td class="document-col document-col--date">
                 <span v-if="documentExpiryDate(row)" class="document-expiry">
@@ -762,17 +798,40 @@ const {confirm} = useConfirm();
 const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 
 const isRegularUser = computed(() => authStore.user?.role === "user");
-const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
-// The digital plan has no file import at all — the drop strip is replaced with
-// the upsell rather than left to fail against the server's 403.
-const documentImportAllowed = computed(() => planAllowsDocumentImport(resolveUserPlan(authStore.user)));
-const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
+const planUser = computed(() => authStore.actingAs ?? authStore.user);
+const currentPlan = computed(() => {
+  const local = resolveUserPlan(planUser.value);
+  if (local === "expired") return "expired";
+  return store.plan || local;
+});
+const createLocked = computed(() => currentPlan.value === "expired");
+const driveAllowed = computed(() => planAllowsGoogleDrive(currentPlan.value));
+
+function goToSubscription() {
+  router.push({path: href("/profile"), query: {section: "subscription"}});
+}
+
+const exportAllowed = computed(() => featureFlagsForUser(planUser.value).excelExport);
 const quotaPercent = computed(() => {
   const limit = store.documentLimit;
-  if (limit === null || limit <= 0) return 0;
+  if (limit === null || limit <= 0) return currentPlan.value === "expired" ? 100 : 0;
   return Math.min(100, Math.round((store.documentQuotaUsed / limit) * 100));
 });
-const limitReached = computed(() => isRegularUser.value && store.documentLimit !== null && store.documentQuotaUsed >= store.documentLimit);
+const limitReached = computed(() =>
+    store.documentLimit !== null && store.documentQuotaUsed >= store.documentLimit,
+);
+const importLocked = computed(() =>
+    createLocked.value
+    || store.documentImportAllowed === false
+    || !planAllowsDocumentImport(currentPlan.value)
+    || limitReached.value,
+);
+const importLockLabel = computed(() => {
+  if (createLocked.value || store.documentImportAllowed === false || !planAllowsDocumentImport(currentPlan.value)) {
+    return PLAN_GATE_MESSAGES.documentImport;
+  }
+  return `הגעת למגבלת ${store.documentLimit} סריקות`;
+});
 
 const uploading = ref(false);
 const importingFromGmail = ref(false);
@@ -829,6 +888,7 @@ const showNewInspection = ref(false);
 const newInspectionModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
 
 function openNewInspection() {
+  if (createLocked.value) return;
   newInspectionModalRef.value?.open();
 }
 
@@ -837,10 +897,12 @@ async function handleInspectionCreated() {
 }
 
 function openUploadModal() {
+  if (importLocked.value) return;
   showUploadModal.value = true;
 }
 
 async function handleGmailImport() {
+  if (importLocked.value) return;
   importingFromGmail.value = true;
   try {
     const status = await api.gmail.status();
@@ -1022,7 +1084,7 @@ const filterClientId = ref<string | null>(null);
 const filterInspectionType = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
 const statusFilter = ref<DocumentStatusFilter>(initialDocumentFilter());
-type DocumentSortKey = "file" | "date" | "import" | "client" | "number";
+type DocumentSortKey = "file" | "type" | "date" | "import" | "client" | "number";
 const documentSortBy = ref<DocumentSortKey>("import");
 const documentSortDir = ref<"asc" | "desc">("desc");
 
@@ -1054,10 +1116,15 @@ function inspectionTypeLabel(row: Document): string | null {
 // dataset) rather than the currently-loaded page, so a type that has documents
 // outside the current page/filter still shows up with an accurate count.
 const inspectionTypeOptions = computed(() => {
-  return store.inspectionTypeCounts
-    .map((c) => ({
-      label: `${INSPECTION_TYPE_LABELS[c.type] ?? c.type} (${c.count})`,
-      value: c.type,
+  const counts = new Map(store.inspectionTypeCounts.map((c) => [c.type, c.count]));
+  const keys = new Set<string>([
+    ...INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => p.key),
+    ...counts.keys(),
+  ]);
+  return [...keys]
+      .map((type) => ({
+        label: `${INSPECTION_TYPE_LABELS[type] ?? type} (${counts.get(type) ?? 0})`,
+        value: type,
     }))
     .sort((a, b) => a.label.localeCompare(b.label, "he"));
 });
@@ -1177,6 +1244,7 @@ function documentSortIcon(key: DocumentSortKey): Component {
 function documentSortAriaLabel(key: DocumentSortKey): string {
   const labels: Record<DocumentSortKey, string> = {
     file: l.value.common.file,
+    type: l.value.documents.typeColumn,
     date: l.value.common.validUntil,
     import: l.value.common.importCol,
     client: l.value.common.client,
@@ -1201,6 +1269,7 @@ function compareDocuments(a: Document, b: Document, key: DocumentSortKey, dir: "
 
 function documentSortText(row: Document, key: DocumentSortKey): string | null {
   if (key === "file") return row.file_name ?? "";
+  if (key === "type") return inspectionTypeLabel(row) ?? "";
   if (key === "client") return documentClientName(row);
   if (key === "number") return documentReportNumberLabel(row) || documentReportNumber(row) || "";
   return "";
@@ -2296,6 +2365,13 @@ async function bulkExtractAi() {
 }
 
 /* ── Quota bar ───────────────────────────────────────────────────────────── */
+.locked-action {
+  display: inline-flex;
+}
+
+.locked-action button:disabled {
+  pointer-events: none;
+}
 .quota-bar { margin-bottom: 12px; }
 .quota-bar__text { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); margin-bottom: 5px; }
 .quota-bar__limit { color: #e88080; font-weight: 600; }
@@ -2568,11 +2644,21 @@ async function bulkExtractAi() {
    it absorbed every spare pixel, pushing בתוקף far from the name it belongs to.
    The slack goes to the client column instead, which holds variable-length
    company names and reads better wide. */
-.document-table__col--file { width: clamp(260px, 32vw, 420px); }
+.document-table__col--file {
+  width: clamp(220px, 26vw, 360px);
+}
+
+.document-table__col--type {
+  width: 196px;
+}
 .document-table__col--date { width: 128px; }
 .document-table__col--import { width: 132px; }
 .document-table__col--client { width: clamp(160px, 20vw, 280px); }
-.document-table__col--number { width: 120px; }
+
+.document-table__col--number {
+  width: 150px;
+  min-width: 150px;
+}
 /* Absorbs the leftover width so no earlier column stretches: the actions cell
    holds fixed-size icon buttons, so extra space there is simply padding rather
    than a gap pushing two related columns apart. */
@@ -2712,7 +2798,17 @@ async function bulkExtractAi() {
   text-align: center;
 }
 
+.document-col--type {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.document-col--number {
+  min-width: 150px;
+}
+
 .document-col--file,
+.document-col--type,
 .document-col--date,
 .document-col--import,
 .document-col--client,

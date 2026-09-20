@@ -9,6 +9,7 @@ import {sendPushToAdmins} from "../push/pushService.js";
 import {DEFAULT_FEATURES, normalizeFeatures} from "../features.js";
 import {DEFAULT_NEW_USER_PLAN, ensureUserSettingsWithEntitlements} from "../plans/planEntitlements";
 import {parsePlanId, updateUserTier} from "../plans/updateUserTier";
+import {parseConfirmedPayment} from "../plans/billingPayment";
 import {createMagicLinkToken, magicLinkTtlMinutes} from "../auth/session";
 import {hashPassword} from "../auth/emailAuth";
 import {logger} from "../logger";
@@ -807,10 +808,18 @@ export function registerAdminRoutes(app: express.Application) {
       return;
     }
 
+    let payment;
+    try {
+      payment = parseConfirmedPayment(req.body);
+    } catch (error) {
+      res.status(400).json({error: (error as Error).message});
+      return;
+    }
     const result = await updateUserTier(
       {userId: req.params.id},
       plan,
       {source: "admin", admin_user_id: auth.userId},
+        payment,
     );
     if (!result) {
       res.status(404).json({error: "User not found"});

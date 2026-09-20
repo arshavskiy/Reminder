@@ -45,7 +45,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     // flag would also strip their local-disk copies. Only digital is
     // storage-free by design.
     fileStorage: true,
-    documentImport: true,
+      documentImport: false,
     maxUsers: 1,
     maxEmailAccounts: 0,
   },
@@ -124,7 +124,7 @@ export const PLAN_GATE_MESSAGES = {
   extraUsers: "הוספת משתמשים זמינה במסלולים בסיסי ועסקי בלבד.",
   extraEmailAccounts: "חיבור חשבונות דוא״ל נוספים זמין במסלולים בסיסי ועסקי בלבד.",
   fileStorage: "שמירת קבצים אינה זמינה במסלול הדיגיטלי. שדרגו למסלול בסיסי או עסקי כדי להעלות ולשמור מסמכים.",
-  documentImport: "יבוא מסמכים מקובץ או מ-Gmail אינו זמין במסלול הדיגיטלי. במסלול זה הנתונים מוזנים ידנית.",
+    documentImport: "יבוא מסמכים מקובץ או מ-Gmail אינו זמין במסלול זה. שדרגו כדי להעלות ולייבא מסמכים.",
 } as const;
 
 export function normalizePlanId(planOrRole: string | null | undefined): PlanId {
@@ -155,6 +155,17 @@ export function isTrialActive(
   if (!endsAt) return false;
   const parsed = endsAt instanceof Date ? endsAt : new Date(endsAt);
   return !Number.isNaN(parsed.getTime()) && parsed.getTime() > now.getTime();
+}
+
+/** Trial rows stay plan "trial" after the window; quotas and gates must use this. */
+export function effectivePlanId(
+    user: { plan?: string | null; role?: string | null; trial_ends_at?: Date | string | null } | null | undefined,
+): PlanId {
+    if (String(user?.role ?? "").trim().toLowerCase() === "admin") return "business";
+    if (normalizePlanId(user?.plan) === "trial") {
+        return isTrialActive(user) ? "trial" : "expired";
+    }
+    return normalizePlanId(user?.plan ?? user?.role);
 }
 
 export function featureFlagsForUser(

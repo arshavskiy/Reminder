@@ -9,6 +9,8 @@ export const useDocumentsStore = defineStore("documents", () => {
   const totalAll = ref(0);
     const documentLimit = ref<number | null>(30);
     const documentQuotaUsed = ref(0);
+    const documentImportAllowed = ref<boolean | null>(null);
+    const plan = ref<string | null>(null);
   const loading = ref(false);
   const counts = ref<{ all: number; done: number; in_progress: number; error: number }>({ all: 0, done: 0, in_progress: 0, error: 0 });
   const inspectionTypeCounts = ref<{ type: string; count: number }[]>([]);
@@ -26,6 +28,8 @@ export const useDocumentsStore = defineStore("documents", () => {
       totalAll.value = r.totalAll ?? 0;
         documentLimit.value = r.documentLimit ?? null;
         documentQuotaUsed.value = r.documentQuotaUsed ?? 0;
+        documentImportAllowed.value = r.documentImportAllowed ?? null;
+        plan.value = r.plan ?? null;
       if (r.counts) counts.value = r.counts;
       inspectionTypeCounts.value = r.inspectionTypeCounts ?? [];
     } finally {
@@ -48,6 +52,8 @@ export const useDocumentsStore = defineStore("documents", () => {
         totalAll,
         documentLimit,
         documentQuotaUsed,
+        documentImportAllowed,
+        plan,
         loading,
         hasInProgress,
         counts,

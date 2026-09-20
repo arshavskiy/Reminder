@@ -157,6 +157,7 @@
           <div :class="['shell-body', { 'shell-body--fullpage': isMinimalShell }]">
             <main :class="['content', { 'content--fullpage': isMinimalShell }]">
               <div :class="isMinimalShell ? '' : 'page'">
+                <BillingReminder v-if="authStore.user && !hideAppChrome && !route.path.endsWith('/profile')"/>
               <router-view />
               </div>
             </main>
@@ -240,6 +241,7 @@ import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
 import UserDropdown from "./components/UserDropdown.vue";
 import NotificationBell from "./components/NotificationBell.vue";
+import BillingReminder from "./components/BillingReminder.vue";
 import OnboardingWizard from "./components/OnboardingWizard.vue";
 import WalkthroughOverlay from "./components/WalkthroughOverlay.vue";
 import {useWalkthrough} from "./composables/useWalkthrough.js";
@@ -250,7 +252,14 @@ import {useUserSettingsStore} from "./stores/userSettings.js";
 import {dateHeIL, heIL} from "./locales/heIL.js";
 import {isPublicAuthPath, localizedPath, marketingUrl, stripLocalePrefix, useLocaleStore} from "./stores/locale.js";
 import {FEATURES} from "./shared/features.js";
-import {isLapsedTrial as isLapsedTrialPlan, normalizePlanId, resolveUserPlan, type PlanId} from "./shared/pricingPlans.js";
+import {
+  isLapsedTrial as isLapsedTrialPlan,
+  normalizePlanId,
+  PAID_PLAN_IDS,
+  planMeetsMinimum,
+  resolveUserPlan,
+  type PlanId
+} from "./shared/pricingPlans.js";
 
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
@@ -393,8 +402,6 @@ const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/re
 
 const PLAN_SHORT = computed(() => localeStore.catalog.plans);
 
-const PLAN_RANK: Record<PlanId, number> = {expired: 0, trial: 1, digital: 1, basic: 1, business: 2};
-
 const subscriptionPlanLabel = computed(() => {
   if (!authStore.user) return "";
   return PLAN_SHORT.value[resolveUserPlan(authStore.user)] ?? "";
@@ -492,11 +499,11 @@ const allNav = computed(() => {
   return [
     {label: nav.dashboard, key: "dashboard", minPlan: "expired" as const, feature: FEATURES.pages.dashboard},
     {label: nav.documents, key: "documents", minPlan: "expired" as const, feature: FEATURES.pages.documents},
-    {label: nav.reminders, key: "reminders", minPlan: "basic" as const, feature: FEATURES.pages.reminders},
-    {label: nav.reports, key: "reports", minPlan: "expired" as const, feature: FEATURES.pages.reports},
-    {label: nav.clients, key: "clients", minPlan: "basic" as const, feature: FEATURES.pages.clients},
+    {label: nav.reminders, key: "reminders", minPlan: "expired" as const, feature: FEATURES.pages.reminders},
+    {label: nav.reports, key: "reports", minPlan: PAID_PLAN_IDS, feature: FEATURES.pages.reports},
+    {label: nav.clients, key: "clients", minPlan: "expired" as const, feature: FEATURES.pages.clients},
     {label: nav.field, key: "field", minPlan: "business" as const, feature: FEATURES.pages.field},
-    {label: nav.equipment, key: "equipment", minPlan: "basic" as const, feature: FEATURES.pages.equipment},
+    {label: nav.equipment, key: "equipment", minPlan: "expired" as const, feature: FEATURES.pages.equipment},
     {label: nav.invoices, key: "invoices", minPlan: "business" as const, feature: FEATURES.pages.invoices},
     {label: nav.gmail, key: "gmail", minRole: "admin", feature: FEATURES.pages.gmail},
   ];
@@ -511,10 +518,7 @@ const allNav = computed(() => {
  * typing the URL.
  */
 function planAllowsNav(minPlan: PlanId | PlanId[] | undefined): boolean {
-  if (!minPlan) return true;
-  const userPlan = resolveUserPlan(authStore.user);
-  if (Array.isArray(minPlan)) return minPlan.map((plan) => normalizePlanId(plan)).includes(userPlan);
-  return (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[normalizePlanId(minPlan)] ?? 0);
+  return planMeetsMinimum(resolveUserPlan(authStore.user), minPlan);
 }
 
 const primaryNav = computed(() => {

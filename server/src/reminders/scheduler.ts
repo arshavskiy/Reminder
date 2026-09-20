@@ -19,6 +19,7 @@ import {notifyEmailSendFailed, notifyPersonalReminderDue, notifyReminderSkipped}
 import {parseObjectRecord, parseReminderEmailTo, pickContractEmail, pickContractEmailWithMeta} from "../contracts/contractEmail.js";
 import {buildGroupedItemsTable, expiryFromReminderTitle, groupedReminderKey} from "./groupedReminderEmail";
 import {isProcessPaused} from "../ops/processControl";
+import {checkBillingReminders} from "../plans/billingReminders";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
@@ -72,6 +73,7 @@ export function startScheduler() {
     }
     if (settings.reminderEnabled) await runWithHealth("checkReminders", checkReminders);
     await runWithHealth("checkMonthlyReports", checkMonthlyReports);
+      await runWithHealth("checkBillingReminders", checkBillingReminders);
     if (settings.reminderEnabled) await runWithHealth("checkEscalations", checkEscalations);
     await runWithHealth("syncCalendars", syncAllCalendars);
     await col("scheduler_health").updateOne(

@@ -21,11 +21,14 @@ import {isProcessPaused} from "../ops/processControl";
 import type {DocTemplate, DynamicExtraction} from "../../src/shared/types.js";
 import {logger} from "../logger";
 import {notifyDocumentUploaded, notifyExtractionFailed} from "../push/adminNotify";
-import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "../shared/printTemplateLayout.js";
+import {
+    INSPECTION_PRINT_TEMPLATE_PRESETS,
+    INSPECTION_PRINT_TEMPLATE_PRESETS_EN
+} from "../shared/printTemplateLayout.js";
 import {generatePdfThumbnailForDocument} from "../documents/pdfThumbnail";
 import {resolveDocumentFilePath} from "../documents/fileResolver";
 import {incrementDocumentUsage, type DocumentUsageKind} from "../quotas/userUsageCounters";
-import {tierFeatureFlags} from "../plans/tierFeatures";
+import {effectivePlanId, featureFlagsForUser} from "../plans/tierFeatures";
 import {
   assertDocumentImportQuota,
   type DocumentImportQuotaCategory,
@@ -301,12 +304,12 @@ export async function importFile(originalPath: string, push?: PushFn, userId?: s
   if (userId && !pipeline?.skipQuotaCheck) {
     const user = await col<any>("users").findOne(
         {_id: new ObjectId(userId)} as any,
-        {projection: {role: 1, plan: 1}} as any,
+        {projection: {role: 1, plan: 1, trial_ends_at: 1}} as any,
     );
     const category = await resolveImportQuotaCategory(pipeline);
     await assertDocumentImportQuota(
       userId,
-      user?.plan ?? user?.role,
+        effectivePlanId(user),
       1,
       category,
       pipeline?.gmailImport ? "email" : "manual",
@@ -495,9 +498,9 @@ async function userAllowsCloudStorage(userId: string | undefined, kind: string |
   // so a missing user_settings row cannot default such an account back to on.
   const user = await col<any>("users").findOne(
     { _id: new ObjectId(userId) } as any,
-    { projection: { plan: 1, role: 1 } } as any,
+      {projection: {plan: 1, role: 1, trial_ends_at: 1}} as any,
   ).catch(() => null);
-  if (user && !tierFeatureFlags(user.plan ?? user.role).fileStorage) return false;
+    if (user && !featureFlagsForUser(user).fileStorage) return false;
 
   if (kind !== "invoice" && kind !== "inspection_report") return true;
 
@@ -1634,7 +1637,9 @@ async function releaseLocalDocumentCache(
   }
 }
 
-const KNOWN_INSPECTION_TYPE_KEYS = new Set(INSPECTION_PRINT_TEMPLATE_PRESETS.map((p) => p.key));
+const KNOWN_INSPECTION_TYPE_KEYS = new Set(
+    [...INSPECTION_PRINT_TEMPLATE_PRESETS, ...INSPECTION_PRINT_TEMPLATE_PRESETS_EN].map((p) => p.key),
+);
 
 /** Never persist a key the model invented outside the known preset list — a document with an unrecognized value is better left unclassified than mislabeled. */
 function validInspectionType(value: string | null | undefined): string | null {

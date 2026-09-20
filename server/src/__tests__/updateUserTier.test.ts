@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => {
   const settings = new Map<string, any>();
 
   function matches(doc: any, filter: Record<string, any>) {
+      if (filter.billing_payment_ids && doc.billing_payment_ids?.includes(filter.billing_payment_ids.$ne)) return false;
+      if (filter.$or && doc.billing_paid_at && !(doc.billing_paid_at < filter.$or[1].billing_paid_at.$lt)) return false;
     if (filter._id) return String(doc._id) === String(filter._id);
     if (filter.email) return String(doc.email).toLowerCase() === String(filter.email).toLowerCase();
     if (filter.user_id) return String(doc.user_id) === String(filter.user_id);
@@ -22,7 +24,11 @@ const mocks = vi.hoisted(() => {
     updateOne: vi.fn(async (filter: Record<string, any>, update: any) => {
       for (const [key, user] of users.entries()) {
         if (matches(user, filter)) {
-          users.set(key, {...user, ...(update.$set ?? {})});
+            users.set(key, {
+                ...user, ...(update.$set ?? {}), ...(update.$addToSet ? {
+                    billing_payment_ids: [...(user.billing_payment_ids ?? []), update.$addToSet.billing_payment_ids],
+                } : {})
+            });
           return {matchedCount: 1, modifiedCount: 1};
         }
       }
@@ -128,4 +134,57 @@ describe("updateUserTier", () => {
     await expect(updateUserTier({email: "missing@example.com"}, "basic")).resolves.toBeNull();
     expect(mocks.settingsCollection.updateOne).not.toHaveBeenCalled();
   });
+
+    it("uses only verified quantity for prepaid periods and ignores changed-quantity replays", async () => {
+        const userId = new ObjectId();
+        mocks.users.set(String(userId), {
+            _id: userId,
+            email: "buyer@example.com",
+            plan: "trial",
+            signup_intent_months: 1
+        });
+        const {updateUserTier} = await import("../plans/updateUserTier");
+        const payment = {
+            billing: "one_time" as const,
+            paymentId: "twelve-months",
+            paidAt: new Date("2026-09-20T09:00:00Z"),
+            months: 12
+        };
+        await updateUserTier({userId: String(userId)}, "basic", {}, payment);
+        await updateUserTier({userId: String(userId)}, "basic", {}, {...payment, months: 1});
+        expect(mocks.users.get(String(userId)).billing_months).toBe(12);
+        expect(mocks.users.get(String(userId)).billing_next_payment_at).toEqual(new Date("2027-09-20T09:00:00Z"));
+        await updateUserTier({userId: String(userId)}, "basic", {}, {
+            ...payment,
+            paymentId: "three-months",
+            paidAt: new Date("2027-09-20T09:00:00Z"),
+            months: 3
+        });
+        expect(mocks.users.get(String(userId)).billing_months).toBe(3);
+        expect(mocks.users.get(String(userId)).billing_next_payment_at).toEqual(new Date("2027-12-20T09:00:00Z"));
+    });
+
+    it("renews only for a new verified payment, ignoring duplicate and older callbacks", async () => {
+        const userId = new ObjectId();
+        mocks.users.set(String(userId), {_id: userId, email: "buyer@example.com", plan: "trial"});
+        const {updateUserTier} = await import("../plans/updateUserTier");
+        const payment = {billing: "one_time" as const, paymentId: "p1", paidAt: new Date("2026-01-31T09:00:00Z")};
+        await updateUserTier({userId: String(userId)}, "basic", {}, payment);
+        expect(mocks.users.get(String(userId)).billing_next_payment_at).toEqual(new Date("2026-02-28T09:00:00Z"));
+        await updateUserTier({userId: String(userId)}, "business", {}, {
+            ...payment,
+            paymentId: "p2",
+            paidAt: new Date("2026-02-28T09:00:00Z")
+        });
+        await updateUserTier({userId: String(userId)}, "basic", {}, payment);
+        await updateUserTier({userId: String(userId)}, "basic", {}, {...payment, paymentId: "older"});
+        const user = mocks.users.get(String(userId));
+        expect(user.plan).toBe("business");
+        expect(user.billing_next_payment_at).toEqual(new Date("2026-03-28T09:00:00Z"));
+        expect(user.billing_payment_ids).toHaveLength(2);
+        await updateUserTier({userId: String(userId)}, "business", {}, {
+            billing: "yearly", paymentId: "p3", paidAt: new Date("2026-03-28T09:00:00Z"),
+        });
+        expect(mocks.users.get(String(userId)).billing_next_payment_at).toBeNull();
+    });
 });

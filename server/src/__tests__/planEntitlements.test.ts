@@ -3,15 +3,39 @@ import { buildPlanEntitlements } from "../plans/planEntitlements";
 import { TIER_FEATURE_FLAGS, featureFlagsForUser } from "../plans/tierFeatures";
 
 describe("plan entitlements", () => {
+    it("treats a lapsed trial as expired for quotas and import flags", () => {
+        const entitlements = buildPlanEntitlements({
+            plan: "trial",
+            role: "user",
+            trial_ends_at: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        });
+        expect(entitlements.plan).toBe("expired");
+        expect(entitlements.documentImport).toBe(false);
+        expect(entitlements.documents.manualDocuments).toBe(0);
+        expect(entitlements.reminders).toEqual({scope: "lifetime", limit: 0});
+    });
+
+    it("gives an active trial 20 lifetime documents", () => {
+        const entitlements = buildPlanEntitlements({
+            plan: "trial",
+            trial_ends_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        });
+        expect(entitlements.plan).toBe("trial");
+        expect(entitlements.documentImport).toBe(true);
+        expect(entitlements.documents.manualDocuments).toBe(20);
+        expect(entitlements.documents.emailDocuments).toBe(20);
+        expect(entitlements.reminders).toEqual({scope: "unlimited", limit: null});
+    });
+
   it("gives a lapsed account the lifetime document and reminder caps", () => {
     const entitlements = buildPlanEntitlements({ plan: "expired", role: "user" });
     expect(entitlements.plan).toBe("expired");
     expect(entitlements.documents).toEqual({
       scope: "lifetime",
-        invoices: 50,
-        contracts: 50,
-        manualDocuments: 50,
-        emailDocuments: 50,
+        invoices: 0,
+        contracts: 0,
+        manualDocuments: 0,
+        emailDocuments: 0,
     });
       expect(entitlements.reminders).toEqual({scope: "lifetime", limit: 0});
     expect(entitlements.gmailInvoiceHistoryMonths).toBe(0);

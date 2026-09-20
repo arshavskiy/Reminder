@@ -4,6 +4,13 @@
  */
 export type PlanId = "expired" | "trial" | "digital" | "basic" | "business";
 
+/** Morning one-time checkout links. Env on the server can override these. */
+export const PLAN_PAYMENT_LINKS: Partial<Record<PlanId, string>> = {
+    digital: "https://mrng.to/SUPCi1tsrC",
+    basic: "https://mrng.to/5vjboMGOmm",
+    business: "https://mrng.to/qE6K86XDbW",
+};
+
 export const PLAN_LABELS: Record<PlanId, string> = {
     expired: "הסתיים",
     trial: "ניסיון",
@@ -78,7 +85,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         automaticMonthlyReports: false,
         excelExport: false,
         fileStorage: true,
-        documentImport: true,
+        documentImport: false,
         maxUsers: 1,
         maxEmailAccounts: 0,
     },
@@ -146,7 +153,7 @@ export const PLAN_GATE_MESSAGES = {
     extraUsers: "הוספת משתמשים זמינה במסלולים בסיסי ועסקי בלבד.",
     extraEmailAccounts: "חיבור חשבונות דוא״ל נוספים זמין במסלולים בסיסי ועסקי בלבד.",
     fileStorage: "שמירת קבצים אינה זמינה במסלול הדיגיטלי. שדרגו למסלול בסיסי או עסקי כדי להעלות ולשמור מסמכים.",
-    documentImport: "יבוא מסמכים מקובץ או מ-Gmail אינו זמין במסלול הדיגיטלי. במסלול זה הנתונים מוזנים ידנית.",
+    documentImport: "יבוא מסמכים מקובץ או מ-Gmail אינו זמין במסלול זה. שדרגו כדי להעלות ולייבא מסמכים.",
 } as const;
 
 export const PRICING_PAGE_URL = "https://remindocr.com/pricing";
@@ -168,7 +175,7 @@ const PRICING_PLANS_EN_COPY: Record<Exclude<PlanId, "expired">, Pick<PricingPlan
         features: [
             "Preview and AI data extraction",
             "Automatic email reminders to clients",
-            "Import up to 20 invoices and receipts",
+            "Import up to 20 documents — upload and Gmail",
             "Excel export and monthly reports",
             "Google Drive sync",
         ],
@@ -254,7 +261,7 @@ export const PRICING_PLANS: PricingPlan[] = [
         features: [
             "תצוגה מקדימה וחילוץ נתונים AI",
             "תזכורות אימייל אוטומטיות ללקוחות",
-            "יבוא עד 20 חשבוניות וקבלות",
+            "יבוא עד 20 מסמכים — העלאה ומ-Gmail",
             "יצוא לאקסל ודוחות חודשיים",
             "סנכרון Google Drive",
         ],
@@ -318,7 +325,13 @@ export function planFromRole(role: string | null | undefined): PlanId {
     return "expired";
 }
 
-export function resolveUserPlan(user: { plan?: string | null; role?: string | null } | null | undefined): PlanId {
+export function resolveUserPlan(user: {
+    plan?: string | null;
+    role?: string | null;
+    trial_ends_at?: string | Date | null
+} | null | undefined): PlanId {
+    if (String(user?.role ?? "").trim().toLowerCase() === "admin") return "business";
+    if (isLapsedTrial(user)) return "expired";
     const raw = String(user?.plan ?? "").trim().toLowerCase();
     if (raw === "trial" || raw === "digital" || raw === "basic" || raw === "business") return raw;
     if (raw === "expired" || raw === "free") return "expired";
@@ -355,6 +368,30 @@ export function planAllowsFileStorage(planId: PlanId | string | null | undefined
 /** Whether this plan may import documents from files — upload, Gmail, OCR/AI. */
 export function planAllowsDocumentImport(planId: PlanId | string | null | undefined): boolean {
     return tierFeatureFlags(planId).documentImport;
+}
+
+/** Used by nav, router, and dashboard cards so a page and its module never disagree. */
+export const PLAN_RANK: Record<PlanId, number> = {
+    expired: 0,
+    trial: 1,
+    digital: 1,
+    basic: 1,
+    business: 2,
+};
+
+/** Pages a trial (or lapsed trial) does not open — matches top nav and dashboard cards. */
+export const PAID_PLAN_IDS: PlanId[] = ["digital", "basic", "business"];
+
+export function planMeetsMinimum(
+    userPlan: PlanId | string | null | undefined,
+    minPlan: PlanId | PlanId[] | undefined,
+): boolean {
+    if (!minPlan) return true;
+    const resolved = normalizePlanId(userPlan);
+    if (Array.isArray(minPlan)) {
+        return minPlan.map((plan) => normalizePlanId(plan)).includes(resolved);
+    }
+    return (PLAN_RANK[resolved] ?? 0) >= (PLAN_RANK[normalizePlanId(minPlan)] ?? 0);
 }
 
 export function normalizePlanId(planId: PlanId | string | null | undefined): PlanId {

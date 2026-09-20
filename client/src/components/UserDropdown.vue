@@ -49,7 +49,7 @@ import {
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {FEATURES} from "../shared/features.js";
-import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
+import {featureFlagsForUser, PAID_PLAN_IDS, planMeetsMinimum, resolveUserPlan} from "../shared/pricingPlans.js";
 import {useWalkthrough} from "../composables/useWalkthrough.js";
 import {localizedPath, useLocaleStore} from "../stores/locale.js";
 
@@ -110,8 +110,12 @@ const menuIcons: Record<string, typeof PersonOutline> = {
   logout: LogOutOutline,
 };
 
-// Templates are a paid feature — free accounts do not get the submenu at all.
-const templatesAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
+const userPlan = computed(() => resolveUserPlan(authStore.user));
+// Print + email templates stay on trial (inspections and reminders). Document
+// templates match the paid-only route, so they must not appear for trial.
+const templatesAllowed = computed(() =>
+    userPlan.value !== "expired" && featureFlagsForUser(authStore.user).excelExport,
+);
 
 const templateMenuItems = computed(() => {
   const items: Array<{ label: string; key: string }> = [];
@@ -122,7 +126,10 @@ const templateMenuItems = computed(() => {
   if (featuresStore.hasFeature(FEATURES.pages.emailTemplates)) {
     items.push({label: l.value.chrome.menu.emailTemplates, key: "email-templates"});
   }
-  if (featuresStore.hasFeature(FEATURES.pages.docTemplates)) {
+  if (
+      featuresStore.hasFeature(FEATURES.pages.docTemplates)
+      && planMeetsMinimum(userPlan.value, PAID_PLAN_IDS)
+  ) {
     items.push({label: l.value.chrome.menu.docTemplates, key: "doc-templates"});
   }
   return items;

@@ -14,10 +14,23 @@
           <n-icon :component="TimeOutline" class="btn-icon"/>
           {{ l.reminders.activityLog }}
         </button>
-        <button class="rbtn rbtn--primary" :disabled="loadingEmailTemplates" @click="openCreate">
+        <button
+            v-if="!reminderCreatesAllowed"
+            class="rbtn rbtn--primary"
+            type="button"
+            @click="goToSubscription"
+        >
+          {{ l.profile.upgradePlan }}
+        </button>
+        <button
+            v-else
+            :disabled="loadingEmailTemplates"
+            class="rbtn rbtn--primary"
+            @click="openCreate"
+        >
           + {{ l.reminders.newReminder }}
         </button>
-        <ReminderTableImport @imported="onTableImported">
+        <ReminderTableImport v-if="reminderCreatesAllowed" @imported="onTableImported">
           <template #trigger="{ open }">
             <button class="rbtn rbtn--ghost" type="button" @click="open">
               <n-icon :component="GridOutline" class="btn-icon"/>
@@ -412,6 +425,7 @@ import ReminderTableImport from "../components/ReminderTableImport.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import {FEATURES} from "../shared/features.js";
+import {resolveUserPlan} from "../shared/pricingPlans.js";
 import {useI18n} from "../composables/useI18n.js";
 import {useNotifications} from "../composables/useNotifications.js";
 import type {Client, ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
@@ -444,6 +458,11 @@ const { refresh: refreshNotifications } = useNotifications();
 const settingsStore = useSettingsStore();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
+const reminderCreatesAllowed = computed(() => resolveUserPlan(authStore.user) !== "expired");
+
+function goToSubscription() {
+  router.push({path: href("/profile"), query: {section: "subscription"}});
+}
 const featuresStore = useFeaturesStore();
 const { confirm } = useConfirm();
 
@@ -766,6 +785,7 @@ function onReminderKindChange(kind: string) {
 }
 
 async function openCreate() {
+  if (!reminderCreatesAllowed.value) return;
   await loadEmailTemplates();
   // Default to the periodic-inspection template, since that's what most
   // manually-created reminders are for; fall back to whichever template is
@@ -2000,9 +2020,23 @@ const columns = computed(() =>
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
+  justify-content: flex-start;
+  gap: 4px;
+}
+
+.reminders-table :deep(.n-data-table-th__title-wrapper) {
+  flex: 0 1 auto;
+  justify-content: flex-start;
+  gap: 4px;
+}
+
+.reminders-table :deep(.n-data-table-th__title) {
+  flex: 0 1 auto;
+  margin-inline-end: 0;
 }
 
 .reminders-table :deep(.n-data-table-filter) {
+  margin-inline-start: 0;
   color: var(--text-secondary);
 }
 
@@ -2011,6 +2045,7 @@ const columns = computed(() =>
 }
 
 .reminders-table :deep(.n-data-table-sorter) {
+  margin-inline-start: 0;
   color: var(--text-secondary);
 }
 
@@ -2072,15 +2107,28 @@ const columns = computed(() =>
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
 }
+
+.reminder-sync-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-inline: 8px;
+  border-radius: 8px;
+}
+
 .reminder-sync-icon--on {
   color: var(--brand-color);
+  background: color-mix(in srgb, var(--brand-color) 20%, transparent);
 }
+
 .reminder-sync-icon--off {
   color: var(--text-muted);
-  opacity: 0.7;
+  background: color-mix(in srgb, var(--text-muted) 18%, var(--bg-elevated));
 }
 
 .reminder-email-cell,

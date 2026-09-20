@@ -4,6 +4,7 @@ import {col} from "../db/db";
 import {HTTPException, requireAuth} from "../auth/middleware";
 import {flushDuePersonalReminders} from "../reminders/scheduler";
 import {logger} from "../logger";
+import {ensureBillingNotification} from "../plans/billingReminders";
 
 function flatDoc(doc: any) {
   if (!doc) return doc;
@@ -37,6 +38,12 @@ export function registerNotificationRoutes(app: express.Application) {
       return [] as string[];
     });
 
+      try {
+          const user = await col("users").findOne({_id: new ObjectId(userId)});
+          if (user) await ensureBillingNotification(user);
+      } catch (error) {
+          logger.warn("billing_notification_failed", {user_id: userId, error: String(error)});
+      }
     const [items, unreadCount] = await Promise.all([
       col("notifications").find({ user_id: userId }).sort({ created_at: -1 }).limit(50).toArray(),
       col("notifications").countDocuments({ user_id: userId, read_at: null }),

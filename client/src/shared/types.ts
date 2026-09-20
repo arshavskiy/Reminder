@@ -450,8 +450,8 @@ export interface ContractWithClient extends Contract {
 export interface NotificationItem {
   id: string;
   user_id: string;
-  kind: "personal_reminder" | "personal_reminder_due";
-  reminder_id: string | number;
+    kind: "personal_reminder" | "personal_reminder_due" | "billing_renewal_due";
+    reminder_id: string | number | null;
   title: string;
   body: string;
   created_at: string;

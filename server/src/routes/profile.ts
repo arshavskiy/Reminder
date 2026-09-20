@@ -12,6 +12,7 @@ import {parseDocx} from "../pipeline/docxParser";
 import {parseXlsx} from "../pipeline/xlsxParser";
 import {ocrFile} from "../pipeline/ocrParser";
 import {extractCertificate} from "../pipeline/certificateExtractor";
+import {effectivePlanId} from "../plans/tierFeatures";
 import {getDocumentImportQuota, type DocumentImportQuotaCategory} from "../quotas/documentImportQuota";
 import {getImportUsageCounters} from "../quotas/importUsageCounters";
 import {getReminderQuota} from "../quotas/reminderQuota";
@@ -54,11 +55,12 @@ async function auth(req: express.Request, res: express.Response) {
   }
 }
 
-function normalizeSubscriptionPlan(plan: string | null | undefined): "expired" | "digital" | "basic" | "business" {
+function normalizeSubscriptionPlan(plan: string | null | undefined): "expired" | "trial" | "digital" | "basic" | "business" {
     const value = String(plan ?? "").trim().toLowerCase();
     if (value === "admin" || value === "business") return "business";
     if (value === "pro" || value === "basic") return "basic";
     if (value === "digital") return "digital";
+    if (value === "trial") return "trial";
     return "expired";
 }
 
@@ -91,7 +93,7 @@ export function registerProfileRoutes(app: express.Application) {
         const ctx = await auth(req, res);
         if (!ctx) return;
 
-        const userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
+        const userPlan = effectivePlanId(ctx.user);
         const normalizedPlan = normalizeSubscriptionPlan(userPlan);
         const categories: DocumentImportQuotaCategory[] = [
             "invoices",

@@ -120,7 +120,8 @@ function onToggle(show: boolean) {
 
 function onItemClick(item: NotificationItem) {
   if (!item.read_at) void markRead(item.id);
-  if (item.reminder_id) router.push(href(`/reminders/${item.reminder_id}`));
+  if (item.kind === "billing_renewal_due") router.push({path: href("/profile"), query: {section: "subscription"}});
+  else if (item.reminder_id) router.push(href(`/reminders/${item.reminder_id}`));
   else router.push(href("/reminders"));
 }
 

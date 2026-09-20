@@ -9,6 +9,7 @@
 
 <script setup lang="ts">
 import {useLocaleStore} from "../stores/locale.js";
+import {readIntent} from "../shared/signupIntent";
 
 withDefaults(defineProps<{ label?: string }>(), {
   label: "התחבר עם Google",
@@ -18,7 +19,14 @@ const localeStore = useLocaleStore();
 
 function redirectToGoogle() {
   const locale = localeStore.locale === "en" ? "en" : "he";
-  window.location.href = `${SERVER}/auth/google?locale=${encodeURIComponent(locale)}`;
+  const query = new URLSearchParams({locale});
+  const intent = readIntent();
+  if (intent.plan && intent.billing) {
+    query.set("plan", intent.plan);
+    query.set("billing", intent.billing);
+    if (intent.months !== undefined) query.set("months", String(intent.months));
+  }
+  window.location.href = `${SERVER}/auth/google?${query}`;
 }
 </script>
 

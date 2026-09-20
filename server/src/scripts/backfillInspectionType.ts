@@ -31,6 +31,7 @@ const apply = process.argv.includes("--apply");
 // but checking accessories/cranes/etc. before the broad "מכונות הרמה" catch-all
 // avoids a tower-crane report being misclassified as a generic lifting machine.
 const MATCH_PHRASES: Record<string, string[]> = {
+    underground_parking_lift: ["קרקעי תת חניה", "קרקעי תת-חניה", "תת חניה מתקן", "מתקן תת חניה", "מתקן תת-חניה"],
   air_receiver: ["קולט אוויר", "קולט אויר", "קולטי אוויר", "קולטי אויר"],
   steam_receiver: ["קולט קיטור", "קולטי קיטור"],
   steam_boiler: ["דוד קיטור", "דודי קיטור"],
@@ -55,9 +56,14 @@ function phrasesFor(key: string): string[] {
 }
 
 function classify(text: string): string | null {
+    const seen = new Set<string>();
+    for (const key of Object.keys(MATCH_PHRASES)) {
+        seen.add(key);
+        if (phrasesFor(key).some((phrase) => text.includes(phrase))) return key;
+    }
   for (const preset of INSPECTION_PRINT_TEMPLATE_PRESETS) {
-    const phrases = phrasesFor(preset.key);
-    if (phrases.some((phrase) => text.includes(phrase))) return preset.key;
+      if (seen.has(preset.key)) continue;
+      if (phrasesFor(preset.key).some((phrase) => text.includes(phrase))) return preset.key;
   }
   return null;
 }

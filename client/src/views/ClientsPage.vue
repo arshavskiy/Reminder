@@ -33,10 +33,17 @@
             <n-icon :component="AddOutline" class="btn-icon" />
             {{ l.clients.newClient }}
           </button>
-          <button class="btn btn--ghost" type="button" @click="openReportClientPicker">
-            <n-icon :component="DocumentTextOutline" class="btn-icon" />
-            {{ l.clients.newInspection }}
-          </button>
+          <n-tooltip :disabled="writesAllowed">
+            <template #trigger>
+              <span class="locked-action" @click="!writesAllowed && goToSubscription()">
+                <button :disabled="!writesAllowed" class="btn btn--ghost" type="button" @click="openReportClientPicker">
+                  <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+                  {{ l.clients.newInspection }}
+                </button>
+              </span>
+            </template>
+            {{ l.profile.upgradePlan }}
+          </n-tooltip>
         </div>
       </template>
     </PageHeader>
@@ -374,13 +381,21 @@ import { useClientsStore } from "../stores/clients.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
+import {useAuthStore} from "../stores/auth.js";
+import {resolveUserPlan} from "../shared/pricingPlans.js";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import { api } from "../services/apiService.js";
 import type { Client } from "@shared/types.js";
 
 const store = useClientsStore();
-const {l, dir, t} = useI18n();
+const {l, dir, t, href} = useI18n();
 const router = useRouter();
+const authStore = useAuthStore();
+const writesAllowed = computed(() => resolveUserPlan(authStore.user) !== "expired");
+
+function goToSubscription() {
+  router.push({path: href("/profile"), query: {section: "subscription"}});
+}
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
 const showHydraulicModal = ref(false);
 const showReportClientPicker = ref(false);
@@ -390,6 +405,7 @@ const reportClientOptions = computed(() =>
 );
 
 function openReportClientPicker() {
+  if (!writesAllowed.value) return;
   reportClientId.value = null;
   showReportClientPicker.value = true;
 }
@@ -730,6 +746,13 @@ function bulkDeleteSelected() {
 </script>
 
 <style scoped>
+.locked-action {
+  display: inline-flex;
+}
+
+.locked-action button:disabled {
+  pointer-events: none;
+}
 .clients-page {
   margin: 0 auto;
   padding: 0 4px 32px;

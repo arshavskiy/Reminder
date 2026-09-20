@@ -29,6 +29,7 @@ describe("trial plan", () => {
     const flags = featureFlagsForUser({plan: "trial", trial_ends_at: new Date(Date.now() - DAY)});
     expect(flags).toEqual(TIER_FEATURE_FLAGS.expired);
     expect(flags.automaticEmailReminders).toBe(false);
+      expect(flags.documentImport).toBe(false);
   });
 
   it("lets a trial send reminders", () => {

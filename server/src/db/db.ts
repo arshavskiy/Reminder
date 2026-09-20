@@ -334,6 +334,7 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("users").createIndex({ username: 1 }, { unique: true, sparse: true });
   await db.collection("users").createIndex({ verification_token: 1 }, { sparse: true });
   await db.collection("users").createIndex({ reset_token: 1 }, { sparse: true });
+    await db.collection("users").createIndex({billing_mode: 1, billing_next_payment_at: 1});
   await db.collection("users").createIndex({gmail_email: 1}, {unique: true, sparse: true});
 
   // sessions

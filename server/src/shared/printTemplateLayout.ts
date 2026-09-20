@@ -251,7 +251,7 @@ export interface InspectionPrintTemplatePreset {
 export const INSPECTION_PRINT_TEMPLATE_PRESETS: InspectionPrintTemplatePreset[] = [
     {
         key: "lifting_machine",
-        name: "תסקיר מכונות הרמה",
+        name: "מכונות הרמה",
         reportTypeLabel: "תסקיר מכונות הרמה",
         contractType: "תסקיר בדיקה וניסוי מכונות הרמה",
         category: "lift",
@@ -263,6 +263,21 @@ export const INSPECTION_PRINT_TEMPLATE_PRESETS: InspectionPrintTemplatePreset[] 
         equipmentColumns: DEFAULT_EQUIPMENT_COLUMNS,
         legalText:
             "התסקיר נערך לבדיקת מכונת הרמה בהתאם לפקודת הבטיחות בעבודה (נוסח חדש), תש\"ל-1970, ובכלל זה סעיפים 81 ו-86. בדיקה תקופתית נדרשת לכל היותר אחת ל-14 חודשים, אלא אם נקבעה דרישה מחמירה יותר לפי דין, הוראות יצרן או החלטת הבודק. יש להפעיל את הציוד לפי עומסי העבודה המאושרים, טבלת העומסים, תנאי האתר והוראות היצרן. " + COMMON_LEGAL_TEXT,
+    },
+    {
+        key: "underground_parking_lift",
+        name: "קרקעי תת חניה מתקן",
+        reportTypeLabel: "קרקעי תת חניה מתקן",
+        contractType: "תסקיר בדיקה וניסוי מתקן הרמה קרקעי תת-חניה",
+        category: "lift",
+        intervalMonths: 14,
+        title: "תסקיר ניסוי ובדיקה של מתקן הרמה קרקעי תת-חניה",
+        subtitle: 'פקודת הבטיחות בעבודה (נוסח חדש) תש"ל-1970 סעיפים 81 ו-86',
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. תיאור המתקן",
+        equipmentColumns: DEFAULT_EQUIPMENT_COLUMNS,
+        legalText:
+            "התסקיר נערך לבדיקת מתקן הרמה קרקעי בתת-חניה בהתאם לפקודת הבטיחות בעבודה (נוסח חדש), תש\"ל-1970, ובכלל זה סעיפים 81 ו-86. בדיקה תקופתית נדרשת לכל היותר אחת ל-14 חודשים, אלא אם נקבעה דרישה מחמירה יותר לפי דין, הוראות יצרן או החלטת הבודק. יש להפעיל את הציוד לפי עומסי העבודה המאושרים, תנאי החניון והוראות היצרן. " + COMMON_LEGAL_TEXT,
     },
     {
         key: "lifting_accessory",
@@ -982,6 +997,21 @@ export const INSPECTION_PRINT_TEMPLATE_PRESETS_EN: InspectionPrintTemplatePreset
         equipmentColumns: DEFAULT_EQUIPMENT_COLUMNS_EN,
         legalText:
             "This report is issued for the inspection of a lifting machine under OSHA 29 CFR 1910.179 (overhead/gantry cranes) or 1926.1412 (construction cranes/derricks), and ASME B30 series requirements. A comprehensive periodic inspection is required at least annually, or more frequently per manufacturer instructions, severity of service, or inspector determination. Equipment must be operated within its rated load chart, site conditions, and manufacturer instructions. " + COMMON_LEGAL_TEXT_EN,
+    },
+    {
+        key: "underground_parking_lift_en",
+        name: "Underground Parking Lift Inspection Report",
+        reportTypeLabel: "Underground Parking Lift Facility",
+        contractType: "Underground Parking Lift Test & Inspection Report",
+        category: "lift",
+        intervalMonths: 12,
+        title: "Periodic Test and Inspection Report — Underground Parking Lift",
+        subtitle: "OSHA 29 CFR 1910.179 / ASME B30 Series — Vehicle / Parking Lift",
+        equipmentTitle: "",
+        equipmentFieldsTitle: "2. Parking Lift Description",
+        equipmentColumns: DEFAULT_EQUIPMENT_COLUMNS_EN,
+        legalText:
+            "This report is issued for the inspection of a ground-level underground parking lift facility. A comprehensive periodic inspection is required at least annually, or more frequently per manufacturer instructions, severity of service, or inspector determination. Equipment must be operated within its rated load, parking-garage conditions, and manufacturer instructions. " + COMMON_LEGAL_TEXT_EN,
     },
     {
         key: "lifting_accessory_en",

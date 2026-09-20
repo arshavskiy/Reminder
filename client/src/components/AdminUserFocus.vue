@@ -553,6 +553,8 @@
             </n-tab-pane>
 
             <n-tab-pane name="settings" tab="Settings">
+              <AdminPaymentForm :key="selectedUser.id" :current-plan="userPlan(selectedUser)" :user-id="selectedUser.id"
+                                @saved="paymentSaved"/>
               <div v-if="settingsForm" class="uf-settings">
                 <section class="uf-card">
                   <h3 class="uf-card__title">User profile</h3>
@@ -661,6 +663,7 @@
 </template>
 
 <script setup lang="ts">
+import AdminPaymentForm from "./AdminPaymentForm.vue";
 import { computed, reactive, ref, watch } from "vue";
 import {
   NButton, NCheckbox, NCheckboxGroup, NIcon, NInput, NInputNumber,
@@ -1068,6 +1071,11 @@ async function reloadAll() {
   } finally {
     busy.value = false;
   }
+}
+
+function paymentSaved() {
+  emit("refresh");
+  void reloadAll();
 }
 
 const magicLinkResult = ref<{ userId: string; link: string; expiresAt: number } | null>(null);

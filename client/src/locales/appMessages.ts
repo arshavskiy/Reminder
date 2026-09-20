@@ -339,6 +339,7 @@ const he = {
     searchPlaceholder: "חיפוש לפי שם קובץ או מספר תסקיר...",
     filterByClient: "סינון לפי לקוח",
     filterByType: "סינון לפי סוג תסקיר",
+    typeColumn: "סוג תסקיר",
     filterByImportDate: "סינון לפי תאריך ייבוא",
     uploadResults: {
       title: "תוצאות העלאה",
@@ -998,7 +999,8 @@ const he = {
     remove: "הסר",
     signatureHint: "תופיע בתסקירים שתפיקו. תבנית עם חתימה משלה גוברת על זו.",
     types: {
-      lifting_machine: "תסקיר מכונות הרמה",
+      lifting_machine: "מכונות הרמה",
+      underground_parking_lift: "קרקעי תת חניה מתקן",
       lifting_accessory: "תסקיר אביזרי הרמה",
       elevator: "תסקיר מעלית",
       escalator: "תסקיר דרגנוע",
@@ -1041,6 +1043,7 @@ const he = {
     upgradeDesc: "בחרו מסלול מתאים ונמשיך את הרכישה ב-WhatsApp.",
     mostPopular: "הכי פופולרי",
     buyWhatsapp: "לרכישה ב-WhatsApp",
+    payNow: "לתשלום",
     payNote: "תשלום בהעברה בנקאית או ב-Bit · חשבונית מס נשלחת במייל",
     billingHistory: "היסטוריית חיוב",
     billingHistoryDesc: "חשבוניות ותשלומים יוצגו כאן לאחר חיבור מערכת התשלומים.",
@@ -1488,6 +1491,8 @@ const he = {
     placeholders: {
       lifting_machine_eq: "מלגזה / מנוף משאית / כננת / במה",
       lifting_machine_desc: "תיאור מכונת ההרמה, מיקום, מספר פנימי וממצאים",
+      underground_parking_lift_eq: "מתקן הרמה קרקעי / תת-חניה",
+      underground_parking_lift_desc: "תיאור המתקן, מיקום בחניון, מספר פנימי וממצאים",
       lifting_accessory_eq: "שרשרת / רצועה / שאקל / אונקל / מענב",
       lifting_accessory_desc: "רשימת האביזרים, עומס עבודה בטוח, זיהוי פריט וממצאים",
       elevator_eq: "מעלית נוסעים / מעלית משא",
@@ -1853,6 +1858,7 @@ const en = {
     searchPlaceholder: "Search by file name or inspection number…",
     filterByClient: "Filter by client",
     filterByType: "Filter by inspection type",
+    typeColumn: "Inspection type",
     filterByImportDate: "Filter by import date",
     uploadResults: {
       title: "Upload results",
@@ -2513,6 +2519,7 @@ const en = {
     signatureHint: "Shown on inspections you issue. A template with its own signature overrides this.",
     types: {
       lifting_machine: "Lifting machine inspection",
+      underground_parking_lift: "Underground parking lift",
       lifting_accessory: "Lifting accessory inspection",
       elevator: "Elevator inspection",
       escalator: "Escalator inspection",
@@ -2555,6 +2562,7 @@ const en = {
     upgradeDesc: "Choose a plan and we will continue the purchase on WhatsApp.",
     mostPopular: "Most popular",
     buyWhatsapp: "Buy on WhatsApp",
+    payNow: "Pay now",
     payNote: "Pay by bank transfer · invoice sent by email",
     billingHistory: "Billing history",
     billingHistoryDesc: "Invoices and payments will appear here after checkout is connected.",
@@ -3002,6 +3010,8 @@ const en = {
     placeholders: {
       lifting_machine_eq: "Forklift / truck crane / winch / platform",
       lifting_machine_desc: "Lifting machine description, location, internal number, and findings",
+      underground_parking_lift_eq: "Ground / underground parking lift",
+      underground_parking_lift_desc: "Parking-lift description, garage location, internal number, and findings",
       lifting_accessory_eq: "Chain / sling / shackle / hook / bridle",
       lifting_accessory_desc: "Accessory list, safe working load, identification, and findings",
       elevator_eq: "Passenger / freight elevator",

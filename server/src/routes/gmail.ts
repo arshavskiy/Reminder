@@ -11,7 +11,13 @@ import { releaseTempFile, tempDir } from "../storage/tempFiles";
 import { isProcessPaused } from "../ops/processControl";
 import { logger } from "../logger";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
-import { featureFlagsForUser, planAllowsDocumentImport, PLAN_GATE_MESSAGES, tierFeatureFlags } from "../plans/tierFeatures";
+import {
+    effectivePlanId,
+    featureFlagsForUser,
+    planAllowsDocumentImport,
+    PLAN_GATE_MESSAGES,
+    tierFeatureFlags
+} from "../plans/tierFeatures";
 import { loadTemplate } from "../templates/seedTemplates";
 import {
   assertDocumentImportQuota,
@@ -118,7 +124,7 @@ export function registerGmailRoutes(app: express.Application) {
     // Requesting the Gmail scope only makes sense on a plan that may import
     // documents from mail; a manual-entry plan should never reach the consent
     // screen for it. "drive" is left alone here — Drive has its own plan gate.
-    if (purpose !== "drive" && !planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      if (purpose !== "drive" && !planAllowsDocumentImport(effectivePlanId(ctx.user))) {
       res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
       return;
     }
@@ -290,7 +296,7 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    if (!planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      if (!planAllowsDocumentImport(effectivePlanId(ctx.user))) {
       res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
       return;
     }
@@ -358,7 +364,7 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    if (!planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      if (!planAllowsDocumentImport(effectivePlanId(ctx.user))) {
       res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
       return;
     }
@@ -398,7 +404,7 @@ export function registerGmailRoutes(app: express.Application) {
     const { messageId, attachmentId, filename, templateId } = req.body;
     if (!messageId || !attachmentId) { res.status(400).json({ error: "messageId and attachmentId required" }); return; }
 
-    if (!planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      if (!planAllowsDocumentImport(effectivePlanId(ctx.user))) {
       res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
       return;
     }
@@ -413,7 +419,7 @@ export function registerGmailRoutes(app: express.Application) {
         res.status(422).json({ error: "monthly_report_not_imported" });
         return;
       }
-      await assertDocumentImportQuota(ctx.userId, ctx.user.plan ?? ctx.user.role, 1, quotaCategoryFromTemplate(template), "email");
+        await assertDocumentImportQuota(ctx.userId, effectivePlanId(ctx.user), 1, quotaCategoryFromTemplate(template), "email");
       const pipeline = await gmailImportPipelineOptions(templateId, meta, filename);
       const result = await downloadAndImportAttachment(accessToken, messageId, attachmentId, filename ?? "attachment.pdf", ctx.userId, pipeline);
       await col("gmail_imports").updateOne(
@@ -441,7 +447,7 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    if (!planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      if (!planAllowsDocumentImport(effectivePlanId(ctx.user))) {
       res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
       return;
     }
@@ -473,7 +479,7 @@ export function registerGmailRoutes(app: express.Application) {
     try {
         await assertDocumentImportQuota(
             ctx.userId,
-            ctx.user.plan ?? ctx.user.role,
+            effectivePlanId(ctx.user),
             1,
             quotaCategoryFromTemplate(template),
             "email",
@@ -540,7 +546,7 @@ export function registerGmailRoutes(app: express.Application) {
     let ctx: Awaited<ReturnType<typeof requireAuth>>;
     try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
 
-    if (!planAllowsDocumentImport(ctx.user.plan ?? ctx.user.role)) {
+      if (!planAllowsDocumentImport(effectivePlanId(ctx.user))) {
       res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
       return;
     }
@@ -603,7 +609,7 @@ export function registerGmailRoutes(app: express.Application) {
     try {
         await assertDocumentImportQuota(
             ctx.userId,
-            ctx.user.plan ?? ctx.user.role,
+            effectivePlanId(ctx.user),
             1,
             quotaCategoryFromTemplate(template),
             "email",
@@ -894,8 +900,14 @@ async function runGmailImportJob(job: GmailImportJob) {
         continue;
       }
       try {
-        const user = await col<any>("users").findOne({ _id: new ObjectId(job.user_id) } as any, { projection: { role: 1, plan: 1 } } as any);
-        await assertDocumentImportQuota(job.user_id, user?.plan ?? user?.role, 1, quotaCategory, "email");
+          const user = await col<any>("users").findOne({_id: new ObjectId(job.user_id)} as any, {
+              projection: {
+                  role: 1,
+                  plan: 1,
+                  trial_ends_at: 1
+              }
+          } as any);
+          await assertDocumentImportQuota(job.user_id, effectivePlanId(user), 1, quotaCategory, "email");
         const basePipeline = await gmailImportPipelineOptions(job.template_id ?? undefined, meta, att.filename);
         const pipeline: PipelineOptions | undefined = basePipeline
           ? {
@@ -1619,10 +1631,12 @@ function applyInspectionHistoryWindow(query: string, planOrRole: string | null |
     return applyFixedHistoryWindow(query, months ?? 0);
 }
 
-function gmailFeatureKey(user: { plan?: string | null; role?: string | null }): string {
-  return String(user.role ?? "").trim().toLowerCase() === "admin"
-    ? "admin"
-    : String(user.plan ?? user.role ?? "");
+function gmailFeatureKey(user: {
+    plan?: string | null;
+    role?: string | null;
+    trial_ends_at?: Date | string | null
+}): string {
+    return effectivePlanId(user);
 }
 
 function normalizeInvoiceAttachmentQuery(query: string): string {

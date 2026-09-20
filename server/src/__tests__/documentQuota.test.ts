@@ -3,31 +3,26 @@ import { currentUtcMonthWindow, documentImportLimit, documentImportMonthlyLimit,
 import {reminderLimit} from "../quotas/reminderQuota";
 
 describe("document monthly import quota", () => {
-  it("limits lapsed accounts to separate 50-document lifetime import buckets", () => {
-    expect(documentImportLimit("expired", "manualDocuments")).toEqual({limit: 50, scope: "lifetime"});
-    expect(documentImportLimit("expired", "emailDocuments")).toEqual({limit: 50, scope: "lifetime"});
-    expect(documentImportLimit("expired", "invoices")).toEqual({limit: 50, scope: "lifetime"});
-    expect(documentImportLimit("expired", "contracts")).toEqual({limit: 50, scope: "lifetime"});
-    expect(documentImportMonthlyLimit("expired")).toBe(50);
+    it("blocks new imports once the trial has lapsed", () => {
+        expect(documentImportLimit("expired", "manualDocuments")).toEqual({limit: 0, scope: "lifetime"});
+        expect(documentImportLimit("expired", "emailDocuments")).toEqual({limit: 0, scope: "lifetime"});
+        expect(documentImportLimit("expired", "invoices")).toEqual({limit: 0, scope: "lifetime"});
+        expect(documentImportLimit("expired", "contracts")).toEqual({limit: 0, scope: "lifetime"});
+        expect(documentImportMonthlyLimit("expired")).toBe(0);
   });
 
-  it("gives the trial the same 50-document allowance as a lapsed account", () => {
-    expect(documentImportLimit("trial", "manualDocuments")).toEqual({limit: 50, scope: "lifetime"});
-      expect(documentImportLimit("trial", "documents")).toEqual({limit: 50, scope: "lifetime"});
-  });
-
-    it("meters trial invoices separately from the document pool", () => {
-        // Invoices arrive in bulk from a Gmail sync, so they get their own smaller
-        // allowance rather than consuming the documents budget.
+    it("gives an active trial 20 lifetime documents across upload and Gmail", () => {
+        expect(documentImportLimit("trial", "manualDocuments")).toEqual({limit: 20, scope: "lifetime"});
+        expect(documentImportLimit("trial", "emailDocuments")).toEqual({limit: 20, scope: "lifetime"});
+        expect(documentImportLimit("trial", "documents")).toEqual({limit: 20, scope: "lifetime"});
         expect(documentImportLimit("trial", "invoices")).toEqual({limit: 20, scope: "lifetime"});
         expect(documentImportMonthlyLimit("trial")).toBe(20);
     });
 
-    it("charges a trial invoice import against the invoice category", () => {
-        // Without this the import would be folded into the shared manual/email pool
-        // and the 20-invoice cap would never apply.
-        expect(effectiveQuotaCategory("trial", "invoices", "email")).toBe("invoices");
+    it("charges trial upload and Gmail against the shared lifetime pool", () => {
+        expect(effectiveQuotaCategory("trial", "invoices", "email")).toBe("emailDocuments");
         expect(effectiveQuotaCategory("trial", "contracts", "email")).toBe("emailDocuments");
+        expect(effectiveQuotaCategory("trial", "documents", "manual")).toBe("manualDocuments");
   });
 
   it("limits basic users to 50 documents per month", () => {
@@ -51,11 +46,11 @@ describe("document monthly import quota", () => {
   });
 
   it("keeps legacy roles mapped to equivalent plans", () => {
-    expect(documentImportMonthlyLimit("user")).toBe(50);
+      expect(documentImportMonthlyLimit("user")).toBe(0);
     expect(documentImportMonthlyLimit("pro")).toBe(50);
     expect(documentImportMonthlyLimit("admin")).toBeNull();
-    expect(documentImportMonthlyLimit(null)).toBe(50);
-    expect(documentImportMonthlyLimit("")).toBe(50);
+      expect(documentImportMonthlyLimit(null)).toBe(0);
+      expect(documentImportMonthlyLimit("")).toBe(0);
   });
 
   it("uses a UTC calendar month window", () => {
@@ -66,9 +61,9 @@ describe("document monthly import quota", () => {
 });
 
 describe("reminder quota", () => {
-  it("limits lapsed accounts to 25 reminders for their lifetime", () => {
-    expect(reminderLimit("expired")).toEqual({limit: 50, scope: "lifetime"});
-    expect(reminderLimit("user")).toEqual({limit: 50, scope: "lifetime"});
+    it("blocks new reminders once the trial has lapsed", () => {
+        expect(reminderLimit("expired")).toEqual({limit: 0, scope: "lifetime"});
+        expect(reminderLimit("user")).toEqual({limit: 0, scope: "lifetime"});
   });
 
   it("does not limit paid plans", () => {

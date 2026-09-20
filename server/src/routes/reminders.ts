@@ -22,7 +22,7 @@ import {
 import {incrementReminderUsage} from "../quotas/userUsageCounters";
 import {pushReminderToCalendar} from "../calendar/sync";
 import {resolveCalendarToken} from "../calendar/googleCalendar";
-import {featureFlagsForUser, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
+import {effectivePlanId, featureFlagsForUser, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
 
 const MIN_INSPECTION_INTERVAL_MONTHS = 1;
 const MAX_INSPECTION_INTERVAL_MONTHS = 26;
@@ -432,7 +432,7 @@ export function registerReminderRoutes(app: express.Application) {
     try {
       const ctx = await requireAuth(req.headers.cookie);
       userId = ctx.userId;
-      userPlan = ctx.user.plan ?? ctx.user.role ?? "user";
+        userPlan = effectivePlanId(ctx.user);
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });

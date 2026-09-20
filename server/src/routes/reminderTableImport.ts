@@ -5,6 +5,7 @@ import {requireAuth, HTTPException} from "../auth/middleware";
 import {col} from "../db/db";
 import {parseReminderTable, importHash} from "../imports/reminderTable";
 import {reminderItemFields, reminderItemSignature} from "../imports/reminderItem";
+import {effectivePlanId} from "../plans/tierFeatures";
 import {assertReminderQuota, ReminderQuotaError, reminderQuotaErrorPayload} from "../quotas/reminderQuota";
 import {incrementReminderUsage} from "../quotas/userUsageCounters";
 import {pickEmailTemplate} from "../templates/seedEmailTemplates";
@@ -37,7 +38,7 @@ export function registerReminderTableImportRoutes(app: express.Application) {
       if (req.params.action === "preview") { res.json({...preview, newReminderCount: remaining}); return; }
       if (preview.errors.length) { res.status(400).json({...preview, error: "Fix the table errors before importing / יש לתקן את השגיאות"}); return; }
       // Confirm always reparses the original upload; no client-supplied preview rows are trusted.
-      await assertReminderQuota(userId, effectiveUser.plan ?? effectiveUser.role, remaining);
+        await assertReminderQuota(userId, effectivePlanId(effectiveUser), remaining);
       const settings = await col<{user_id: string; default_email_template_id?: string}>("user_settings").findOne({user_id: userId});
       const templateCache = new Map<string, string | null>();
       async function templateForCategory(category: string | null): Promise<string | null> {

@@ -16,18 +16,31 @@
         class="dash__intake"
       >
         <DocumentDropStrip v-if="documentImportAllowed" class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
-        <div class="dash__intake-actions">
-          <button
-            v-if="hasFeature(FEATURES.pages.contracts)"
-            class="rbtn-sm"
-            type="button"
-            @click="hydraulicModalRef?.open()"
-          >
-            <n-icon :component="AddOutline" class="btn-icon" />
-            {{ l.dashboard.newInspection }}
+        <div v-else class="drop-strip drop-strip--disabled dash__drop">
+          <span>{{ PLAN_GATE_MESSAGES.documentImport }}</span>
+          <button class="rbtn-sm" type="button" @click="goToSubscription">
+            {{ l.profile.upgradePlan }}
           </button>
+        </div>
+        <div class="dash__intake-actions">
+          <n-tooltip v-if="hasFeature(FEATURES.pages.contracts)" :disabled="writesAllowed">
+            <template #trigger>
+              <span class="dash__locked-action" @click="!writesAllowed && goToSubscription()">
+                <button
+                    :disabled="!writesAllowed"
+                    class="rbtn-sm"
+                    type="button"
+                    @click="hydraulicModalRef?.open()"
+                >
+                  <n-icon :component="AddOutline" class="btn-icon"/>
+                  {{ l.dashboard.newInspection }}
+                </button>
+              </span>
+            </template>
+            {{ l.profile.upgradePlan }}
+          </n-tooltip>
           <ReminderTableImport
-            v-if="hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar)"
+              v-if="writesAllowed && (hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar))"
             @imported="onTableImported"
           >
             <template #trigger="{ open }">
@@ -207,7 +220,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
-import {NIcon, NSpin, NSwitch, useMessage} from "naive-ui";
+import {NIcon, NSpin, NSwitch, NTooltip, useMessage} from "naive-ui";
 import {
   AddOutline,
   AlarmOutline,
@@ -223,7 +236,14 @@ import {
 import {useDashboardStore} from "../stores/dashboard.js";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useAuthStore} from "../stores/auth.js";
-import {planAllowsDocumentImport, resolveUserPlan} from "../shared/pricingPlans.js";
+import {
+  PAID_PLAN_IDS,
+  planAllowsDocumentImport,
+  PLAN_GATE_MESSAGES,
+  planMeetsMinimum,
+  resolveUserPlan,
+  type PlanId
+} from "../shared/pricingPlans.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {useUserSettingsStore} from "../stores/userSettings.js";
 import type {ExpiryCalendarItem} from "../services/apiService.js";
@@ -254,7 +274,13 @@ const remindersStore = useRemindersStore();
 const authStore = useAuthStore();
 // Hidden entirely on a plan without file import — the digital plan enters its
 // data through the forms, so a drop strip there has nothing to accept.
-const documentImportAllowed = computed(() => planAllowsDocumentImport(resolveUserPlan(authStore.user)));
+const currentPlan = computed(() => resolveUserPlan(authStore.user));
+const documentImportAllowed = computed(() => planAllowsDocumentImport(currentPlan.value));
+const writesAllowed = computed(() => currentPlan.value !== "expired");
+
+function goToSubscription() {
+  router.push({path: href("/profile"), query: {section: "subscription"}});
+}
 const featuresStore = useFeaturesStore();
 const userSettingsStore = useUserSettingsStore();
 const router = useRouter();
@@ -493,10 +519,12 @@ const dateLine = computed(() => {
 
 const modules = computed(() => {
   const m = l.value.dashboard.modules;
+  const userPlan = resolveUserPlan(authStore.user);
   return [
   {
     key: "documents",
     feature: FEATURES.pages.documents,
+    minPlan: "expired" as PlanId,
     title: m.documentsTitle,
     desc: m.documentsDesc,
     count: () => stats.value?.total_documents ?? 0,
@@ -507,6 +535,7 @@ const modules = computed(() => {
   {
     key: "contracts",
     feature: FEATURES.pages.contracts,
+    minPlan: "expired" as PlanId,
     title: m.inspectionsTitle,
     desc: m.inspectionsDesc,
     count: () => stats.value?.total_inspections ?? 0,
@@ -517,6 +546,7 @@ const modules = computed(() => {
   {
     key: "equipment",
     feature: FEATURES.pages.equipment,
+    minPlan: "expired" as PlanId,
     title: m.equipmentTitle,
     desc: m.equipmentDesc,
     count: () => stats.value?.total_equipment ?? 0,
@@ -527,6 +557,7 @@ const modules = computed(() => {
   {
     key: "clients",
     feature: FEATURES.pages.clients,
+    minPlan: "expired" as PlanId,
     title: m.clientsTitle,
     desc: m.clientsDesc,
     count: () => stats.value?.total_clients ?? 0,
@@ -537,6 +568,7 @@ const modules = computed(() => {
   {
     key: "doc-templates",
     feature: FEATURES.pages.docTemplates,
+    minPlan: PAID_PLAN_IDS,
     title: m.docTemplatesTitle,
     desc: m.docTemplatesDesc,
     count: () => stats.value?.total_email_templates ?? 0,
@@ -547,6 +579,7 @@ const modules = computed(() => {
   {
     key: "email-templates",
     feature: FEATURES.pages.emailTemplates,
+    minPlan: "business" as PlanId,
     title: m.emailTemplatesTitle,
     desc: m.emailTemplatesDesc,
     count: () => stats.value?.total_email_templates ?? 0,
@@ -557,6 +590,7 @@ const modules = computed(() => {
   {
     key: "reminders",
     feature: FEATURES.pages.reminders,
+    minPlan: "expired" as PlanId,
     title: m.remindersTitle,
     desc: m.remindersDesc,
     count: () => stats.value?.pending_reminders ?? 0,
@@ -564,12 +598,10 @@ const modules = computed(() => {
     to: href("/reminders"),
     show: true,
   },
-];
+  ].filter((item) => item.show && hasFeature(item.feature) && planMeetsMinimum(userPlan, item.minPlan));
 });
 
-const data_cards = computed(() =>
-  modules.value.filter((m) => m.show && hasFeature(m.feature)),
-);
+const data_cards = computed(() => modules.value);
 </script>
 
 <style scoped>
@@ -683,11 +715,31 @@ const data_cards = computed(() =>
   font-size: 11px;
   line-height: 1.3;
 }
+
+.dash__drop.drop-strip--disabled {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 1px dashed #e88080;
+  border-radius: 12px;
+  background: rgba(232, 128, 128, 0.05);
+  color: #e88080;
+  font-size: 13px;
+}
 .dash__intake-actions {
   display: flex;
   flex-direction: column;
   gap: 8px;
   justify-content: center;
+}
+
+.dash__locked-action {
+  display: inline-flex;
+}
+
+.dash__locked-action button:disabled {
+  pointer-events: none;
 }
 .rbtn-sm {
   display: inline-flex;

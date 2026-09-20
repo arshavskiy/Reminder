@@ -621,7 +621,19 @@ function qs(params?: Record<string, unknown>): string {
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
+export interface BillingStatus {
+    mode: "monthly" | "yearly" | "one_time" | null;
+    paidAt: string | null;
+    months: number | null;
+    nextPaymentAt: string | null;
+    paymentDue: boolean;
+    paymentUrl: string | null;
+}
+
 export const api = {
+    billing: {
+        status: () => get<BillingStatus>("/billing/status"),
+    },
   importReminderTable: async <T>(file: File, action: "preview" | "confirm"): Promise<T> => {
     const form = new FormData();
     form.append("file", file);
@@ -670,6 +682,8 @@ export const api = {
         totalAll: number;
         documentLimit: number | null;
         documentQuotaUsed?: number;
+          documentImportAllowed?: boolean;
+          plan?: string;
         counts?: { all: number; done: number; in_progress: number; error: number };
         inspectionTypeCounts?: { type: string; count: number }[];
       }>(`/documents${qs(params)}`, force);
@@ -919,8 +933,12 @@ export const api = {
       is_active?: boolean | number;
       email_verified?: boolean | number;
     }) => adminPut<any>(`/admin/users/${id}`, body),
-    updateUserTier: (id: string, plan: "trial" | "digital" | "basic" | "business") =>
-      adminPost<any>(`/admin/users/${id}/tier`, {plan}),
+      updateUserTier: (id: string, plan: "digital" | "basic" | "business", payment?: {
+          billing: "one_time" | "monthly" | "yearly";
+          months?: number;
+          paymentId: string;
+          paidAt: string;
+      }) => adminPost<any>(`/admin/users/${id}/tier`, {plan, ...payment}),
     createMagicLink: (body: {
       email?: string | null;
       username?: string | null;
