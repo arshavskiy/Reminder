@@ -4,7 +4,7 @@
         :options="dropdownItems"
         :render-label="renderDropdownLabel"
         :theme-overrides="dropdownThemeOverrides"
-        placement="bottom-end"
+        :placement="menuPlacement"
         show-arrow
         trigger="click"
         @select="handleSelect"
@@ -85,6 +85,8 @@ const avatarUrl = computed<string>(() => {
 });
 
 const avatarSrc = computed<string>(() => avatarUrl.value || "");
+
+const menuPlacement = computed(() => (localeStore.dir === "rtl" ? "left-end" : "right-end"));
 
 const dropdownThemeOverrides = {
   borderRadius: "10px",
@@ -321,14 +323,23 @@ async function handleSelect(key: string) {
   }
 }
 
+:global(.n-dropdown-menu .n-dropdown-option-body) {
+  width: 100%;
+}
+
+:global(.n-dropdown-menu .n-dropdown-option-body__label) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 :global(.user-menu-label) {
-  display: inline-flex;
+  display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
   width: 100%;
-  min-width: 168px;
+  min-width: 180px;
   font-weight: 600;
   color: var(--text-primary);
 }

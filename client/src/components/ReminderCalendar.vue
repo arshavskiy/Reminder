@@ -786,7 +786,6 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px 16px;
-  margin-bottom: 14px;
 }
 .rcal__title-wrap {
   display: flex;
