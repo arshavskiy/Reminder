@@ -2,177 +2,125 @@
   <n-config-provider :rtl="naiveRtl" :theme="theme" :theme-overrides="themeOverrides" :locale="naiveLocale" :date-locale="naiveDateLocale">
     <n-message-provider>
       <n-dialog-provider>
-        <div class="app-shell" :dir="localeStore.dir">
-          <!-- ── Top horizontal app bar ─────────────────────────────────── -->
-          <header v-if="!hideAppChrome" class="appbar">
-            <!-- Brand on the right (RTL "start") -->
-            <div class="appbar__brand" @click="router.push(localizedPath('/dashboard'))">
-              <div class="appbar__logo">
-                <img class="appbar__logo-img" :src="logoSrc" alt="" />
-              </div>
-              <span class="appbar__brand-text"> RemindOCR </span>
-            </div>
+        <div
+          class="app-shell"
+          :class="{
+            'app-shell--with-nav': !hideAppChrome,
+            'app-shell--nav-collapsed': !hideAppChrome && navCollapsed && !isMobileViewport,
+          }"
+          :dir="localeStore.dir"
+        >
+          <AppSidebar
+            v-if="!hideAppChrome"
+            v-model:collapsed="navCollapsed"
+            v-model:mobile-open="mobileNavOpen"
+            :is-mobile="isMobileViewport"
+            :logo-src="logoSrc"
+          />
 
-            <!-- Center nav -->
-            <nav class="appbar__nav">
-              <n-tooltip
-                v-for="item in primaryNav"
-                :key="item.key"
-                placement="bottom"
-                :disabled="!isPlanLocked(item)"
-                :keep-alive-on-hover="false"
+          <div class="app-main">
+            <!-- ── Slim top bar (utilities only) ──────────────────────────── -->
+            <header v-if="!hideAppChrome" class="app-topbar">
+              <button
+                class="nav-menu-btn"
+                type="button"
+                :aria-label="mobileNavOpen ? l.chrome.closeNav : l.chrome.openNav"
+                :aria-expanded="mobileNavOpen"
+                aria-controls="app-sidebar-panel"
+                @click="mobileNavOpen = !mobileNavOpen"
               >
-                <template #trigger>
-                  <a
-                    class="navlink"
-                    :class="{ 'navlink--active': isActiveNav(item.key), 'navlink--locked': isPlanLocked(item) }"
-                    :aria-disabled="isPlanLocked(item) ? 'true' : undefined"
-                    @click="navigate(item)"
-                  >{{ item.label }}</a>
-                </template>
-                {{ navLockLabel(item) }}
-              </n-tooltip>
-            </nav>
+                <span class="nav-menu-btn__icon">☰</span>
+              </button>
 
-            <button class="nav-menu-btn" type="button" :aria-label="l.chrome.openNav" @click="mobileNavOpen = true">
-              <span class="nav-menu-btn__icon">☰</span>
-            </button>
+              <div class="app-topbar__spacer" />
 
-             <!-- Tail actions: theme toggle + user dropdown -->
-             <div class="appbar__actions">
-               <n-tooltip placement="bottom" :keep-alive-on-hover="false">
-                 <template #trigger>
-                   <a
-                     class="subscription-btn"
-                     :href="localizedPath('/profile') + '?section=subscription'"
-                     @click.prevent="router.push({path: localizedPath('/profile'), query: {section: 'subscription'}})"
-                   >
-                     <n-icon :component="DiamondOutline" :size="15" class="subscription-btn__icon" />
-                     <span class="subscription-btn__label">{{ l.chrome.subscription }}</span>
-                     <span v-if="subscriptionPlanLabel" class="subscription-btn__plan">{{ subscriptionPlanLabel }}</span>
-                   </a>
-                 </template>
-                 {{ subscriptionTooltip }}
-               </n-tooltip>
-               <div v-if="authStore.isAdmin" class="actas-control" :class="{ 'actas-control--open': actAsExpanded }">
-                 <button
-                   v-if="!actAsExpanded"
-                   class="actas-toggle"
-                   type="button"
-                   @click="openActAsPicker"
-                 >
-                   {{ authStore.actingAs ? l.chrome.switchUser : l.chrome.actAs }}
-                 </button>
-                 <div v-else class="actas-picker">
-                   <n-select
-                     :value="authStore.actingAs?.id ?? null"
-                     :options="actAsOptions"
-                     :loading="actAsLoading"
-                     :placeholder="l.chrome.actAsPlaceholder"
-                     clearable
-                     filterable
-                     class="actas-select"
-                     @update:value="onActAsChange"
-                   />
-                   <button class="actas-close" type="button" :aria-label="l.chrome.closeActAs" @click="actAsExpanded = false">
-                     ×
-                   </button>
-                 </div>
-               </div>
-               <n-tooltip placement="bottom" :keep-alive-on-hover="false">
-                 <template #trigger>
-                   <button
-                     class="iconbtn"
-                     :aria-label="isDark ? l.auth.themeToLight : l.auth.themeToDark"
-                     @click="toggleTheme"
-                   >
-                     <n-icon :component="isDark ? SunnyOutline : MoonOutline" :size="18" />
-                   </button>
-                 </template>
-                 {{ isDark ? l.auth.themeLight : l.auth.themeDark }}
-               </n-tooltip>
-               <n-tooltip v-if="pwa.canInstall.value && !pwa.isInstalled.value" placement="bottom" :keep-alive-on-hover="false">
-                 <template #trigger>
-                   <button class="iconbtn" :aria-label="l.chrome.installApp" @click="pwa.install()">
-                     <n-icon :component="DownloadOutline" :size="18" />
-                   </button>
-                 </template>
-                 {{ l.chrome.installApp }}
-               </n-tooltip>
-               <NotificationBell v-if="authStore.user" />
-               <UserDropdown
-                 :userName="authStore.user?.name ?? authStore.user?.email ?? null"
-                 :userEmail="authStore.user?.email ?? null"
-                 :userPicture="authStore.user?.picture_url ?? null"
-                 :userRole="authStore.user?.role ?? null"
-               />
-             </div>
-          </header>
-
-          <!-- PWA install banner -->
-          <div v-if="showInstallBanner && !hideAppChrome" class="install-banner">
-            <span class="install-banner__text">{{ l.chrome.installBanner }}</span>
-            <div class="install-banner__actions">
-              <button class="install-banner__btn install-banner__btn--primary" @click="installAndDismiss">{{ l.common.install }}</button>
-              <button class="install-banner__btn" @click="dismissInstallBanner">{{ l.common.notNow }}</button>
-            </div>
-          </div>
-
-          <!-- Impersonation banner — always visible while acting as someone
-               else, because writes (uploads, emails) really affect that user -->
-          <div v-if="authStore.actingAs" class="actas-banner">
-            <span>{{ l.chrome.viewingAs }} <b>{{ authStore.actingAs.email }}</b></span>
-            <button class="actas-banner__exit" @click="onActAsChange(null)">{{ l.chrome.backToSelf }}</button>
-          </div>
-
-          <n-drawer v-model:show="mobileNavOpen" :width="280" placement="right">
-            <n-drawer-content :title="l.chrome.navTitle" closable>
-              <nav class="mobile-nav-list">
-                <n-tooltip
-                  v-for="item in primaryNav"
-                  :key="item.key"
-                  placement="left"
-                  :disabled="!isPlanLocked(item)"
-                >
+              <div class="app-topbar__actions">
+                <div v-if="authStore.isAdmin" class="actas-control" :class="{ 'actas-control--open': actAsExpanded }">
+                  <button
+                    v-if="!actAsExpanded"
+                    class="actas-toggle"
+                    type="button"
+                    @click="openActAsPicker"
+                  >
+                    {{ authStore.actingAs ? l.chrome.switchUser : l.chrome.actAs }}
+                  </button>
+                  <div v-else class="actas-picker">
+                    <n-select
+                      :value="authStore.actingAs?.id ?? null"
+                      :options="actAsOptions"
+                      :loading="actAsLoading"
+                      :placeholder="l.chrome.actAsPlaceholder"
+                      clearable
+                      filterable
+                      class="actas-select"
+                      @update:value="onActAsChange"
+                    />
+                    <button class="actas-close" type="button" :aria-label="l.chrome.closeActAs" @click="actAsExpanded = false">
+                      ×
+                    </button>
+                  </div>
+                </div>
+                <n-tooltip placement="bottom" :keep-alive-on-hover="false">
                   <template #trigger>
-                    <span class="mobile-nav-list__trigger">
-                      <button
-                        :class="{ 'mobile-nav-list__item--active': isActiveNav(item.key), 'mobile-nav-list__item--locked': isPlanLocked(item) }"
-                        class="mobile-nav-list__item"
-                        type="button"
-                        :disabled="isPlanLocked(item)"
-                        @click="navigate(item)"
-                      >
-                        {{ item.label }}
-                      </button>
-                    </span>
+                    <button
+                      class="iconbtn"
+                      :aria-label="isDark ? l.auth.themeToLight : l.auth.themeToDark"
+                      @click="toggleTheme"
+                    >
+                      <n-icon :component="isDark ? SunnyOutline : MoonOutline" :size="18" />
+                    </button>
                   </template>
-                  {{ navLockLabel(item) }}
+                  {{ isDark ? l.auth.themeLight : l.auth.themeDark }}
                 </n-tooltip>
-              </nav>
-            </n-drawer-content>
-          </n-drawer>
-
-          <!-- ── Main content ───────────────────────────────────────────── -->
-          <div :class="['shell-body', { 'shell-body--fullpage': isMinimalShell }]">
-            <main :class="['content', { 'content--fullpage': isMinimalShell }]">
-              <div :class="isMinimalShell ? '' : 'page'">
-                <BillingReminder v-if="authStore.user && !hideAppChrome && !route.path.endsWith('/profile')"/>
-              <router-view />
+                <n-tooltip v-if="pwa.canInstall.value && !pwa.isInstalled.value" placement="bottom" :keep-alive-on-hover="false">
+                  <template #trigger>
+                    <button class="iconbtn" :aria-label="l.chrome.installApp" @click="pwa.install()">
+                      <n-icon :component="DownloadOutline" :size="18" />
+                    </button>
+                  </template>
+                  {{ l.chrome.installApp }}
+                </n-tooltip>
+                <NotificationBell v-if="authStore.user" />
               </div>
-            </main>
-          </div>
+            </header>
 
-          <footer v-if="!isPublicMarketingRoute && !isLegalRoute" class="app-footer" :dir="localeStore.dir">
-            <strong>RemindOCR</strong> — {{ l.chrome.footerTagline }}
-            <div class="app-footer__legal">
-              © 2026 HandCoded. {{ l.chrome.rights }} |
-              <a :href="marketingUrl('/terms', localeStore.locale)">{{ l.chrome.terms }}</a> |
-              <a :href="marketingUrl('/privacy', localeStore.locale)">{{ l.chrome.privacy }}</a> |
-              <a :href="marketingUrl('/accessibility', localeStore.locale)">{{ l.chrome.accessibility }}</a> |
-              <a :href="marketingUrl('/security', localeStore.locale)">{{ l.chrome.security }}</a>
+            <!-- PWA install banner -->
+            <div v-if="showInstallBanner && !hideAppChrome" class="install-banner">
+              <span class="install-banner__text">{{ l.chrome.installBanner }}</span>
+              <div class="install-banner__actions">
+                <button class="install-banner__btn install-banner__btn--primary" @click="installAndDismiss">{{ l.common.install }}</button>
+                <button class="install-banner__btn" @click="dismissInstallBanner">{{ l.common.notNow }}</button>
+              </div>
             </div>
-          </footer>
+
+            <!-- Impersonation banner — always visible while acting as someone
+                 else, because writes (uploads, emails) really affect that user -->
+            <div v-if="authStore.actingAs" class="actas-banner">
+              <span>{{ l.chrome.viewingAs }} <b>{{ authStore.actingAs.email }}</b></span>
+              <button class="actas-banner__exit" @click="onActAsChange(null)">{{ l.chrome.backToSelf }}</button>
+            </div>
+
+            <!-- ── Main content ───────────────────────────────────────────── -->
+            <div :class="['shell-body', { 'shell-body--fullpage': isMinimalShell }]">
+              <main :class="['content', { 'content--fullpage': isMinimalShell }]">
+                <div :class="isMinimalShell ? '' : 'page'">
+                  <BillingReminder v-if="authStore.user && !hideAppChrome && !route.path.endsWith('/profile')"/>
+                <router-view />
+                </div>
+              </main>
+            </div>
+
+            <footer v-if="!isPublicMarketingRoute && !isLegalRoute" class="app-footer" :dir="localeStore.dir">
+              <strong>RemindOCR</strong> — {{ l.chrome.footerTagline }}
+              <div class="app-footer__legal">
+                © 2026 HandCoded. {{ l.chrome.rights }} |
+                <a :href="marketingUrl('/terms', localeStore.locale)">{{ l.chrome.terms }}</a> |
+                <a :href="marketingUrl('/privacy', localeStore.locale)">{{ l.chrome.privacy }}</a> |
+                <a :href="marketingUrl('/accessibility', localeStore.locale)">{{ l.chrome.accessibility }}</a> |
+                <a :href="marketingUrl('/security', localeStore.locale)">{{ l.chrome.security }}</a>
+              </div>
+            </footer>
+          </div>
         </div>
 
         <WsConnector />
@@ -186,15 +134,13 @@
 
 <script setup lang="ts">
 import {computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch, watchEffect} from "vue";
-import {useRoute, useRouter} from "vue-router";
+import {useRoute} from "vue-router";
 import {
   darkTheme,
   dateEnUS,
   enUS,
   NConfigProvider,
   NDialogProvider,
-  NDrawer,
-  NDrawerContent,
   NIcon,
   NMessageProvider,
   NSelect,
@@ -233,14 +179,13 @@ import {
   unstableUploadsRtl,
 } from "naive-ui";
 import {
-  DiamondOutline,
   DownloadOutline,
   MoonOutline,
   SunnyOutline,
 } from "@vicons/ionicons5";
 import {usePwa} from "./composables/usePwa.js";
 import WsConnector from "./components/WsConnector.vue";
-import UserDropdown from "./components/UserDropdown.vue";
+import AppSidebar from "./components/AppSidebar.vue";
 import NotificationBell from "./components/NotificationBell.vue";
 import BillingReminder from "./components/BillingReminder.vue";
 import OnboardingWizard from "./components/OnboardingWizard.vue";
@@ -252,15 +197,7 @@ import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
 import {dateHeIL, heIL} from "./locales/heIL.js";
-import {isPublicAuthPath, localizedPath, marketingUrl, stripLocalePrefix, useLocaleStore} from "./stores/locale.js";
-import {FEATURES} from "./shared/features.js";
-import {
-  isLapsedTrial as isLapsedTrialPlan,
-  normalizePlanId,
-  planMeetsMinimum,
-  resolveUserPlan,
-  type PlanId
-} from "./shared/pricingPlans.js";
+import {isPublicAuthPath, marketingUrl, stripLocalePrefix, useLocaleStore} from "./stores/locale.js";
 
 const rtlConfig = [
   unstableAlertRtl, unstableAvatarGroupRtl, unstableBadgeRtl,
@@ -276,7 +213,6 @@ const rtlConfig = [
   unstableUploadsRtl, unstableScrollbarRtl,
 ];
 
-const router = useRouter();
 const route = useRoute();
 const localeStore = useLocaleStore();
 const authStore = useAuthStore();
@@ -305,7 +241,20 @@ const hideAppChrome = computed(() =>
   isAppAdminRoute.value,
 );
 
+const NAV_COLLAPSED_KEY = "remindocr_nav_collapsed";
 const mobileNavOpen = ref(false);
+const navCollapsed = ref(localStorage.getItem(NAV_COLLAPSED_KEY) === "1");
+const isMobileViewport = ref(false);
+
+function syncMobileViewport() {
+  isMobileViewport.value = window.matchMedia("(max-width: 900px)").matches;
+  if (!isMobileViewport.value) mobileNavOpen.value = false;
+}
+
+watch(navCollapsed, (collapsed) => {
+  localStorage.setItem(NAV_COLLAPSED_KEY, collapsed ? "1" : "0");
+});
+
 const DevModalHost = import.meta.env.DEV
   ? defineAsyncComponent(() => import("./dev/DevModalHost.vue"))
   : null;
@@ -408,20 +357,6 @@ const isDark = computed(() => darkPref.value);
 const theme = computed(() => (isDark.value ? darkTheme : null));
 const logoSrc = computed(() => (isDark.value ? "/remindocr-logo-dark.png" : "/remindocr-logo-light.png"));
 
-const PLAN_SHORT = computed(() => localeStore.catalog.plans);
-
-const subscriptionPlanLabel = computed(() => {
-  if (!authStore.user) return "";
-  return PLAN_SHORT.value[resolveUserPlan(authStore.user)] ?? "";
-});
-
-const subscriptionTooltip = computed(() => {
-  const plan = subscriptionPlanLabel.value;
-  return plan
-    ? localeStore.t("chrome.subscriptionTooltipPlan", {plan})
-    : localeStore.catalog.chrome.subscriptionTooltip;
-});
-
 const themeOverrides = computed(() => ({
   common: {
     fontFamily: '"Segoe UI", Arial, Helvetica, sans-serif',
@@ -461,6 +396,8 @@ watch(
 
 onMounted(async () => {
   window.addEventListener("remindocr:theme-change", onThemeChanged);
+  syncMobileViewport();
+  window.addEventListener("resize", syncMobileViewport);
 
   if (authStore.user) {
     // Sync theme from user-settings only after auth is known. The login page
@@ -479,6 +416,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("remindocr:theme-change", onThemeChanged);
+  window.removeEventListener("resize", syncMobileViewport);
 });
 
 watch(
@@ -495,191 +433,60 @@ watch(
 watch(isDark, (dark) => {
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
 }, { immediate: true });
-
-// ── Nav ──────────────────────────────────────────────────────────────────────
-// Top-bar primary nav. Matches the Spects design — terse Hebrew labels.
-// Settings is reached via the avatar; templates / search are hidden from the
-// primary bar to keep it sparse (matches the spec which shows ~6 items).
-const ROLE_RANK: Record<string, number> = { user: 0, pro: 1, admin: 2 };
-
-const allNav = computed(() => {
-  const nav = localeStore.catalog.chrome.nav;
-  return [
-    {label: nav.dashboard, key: "dashboard", minPlan: "expired" as const, feature: FEATURES.pages.dashboard},
-    {label: nav.documents, key: "documents", minPlan: "expired" as const, feature: FEATURES.pages.documents},
-    {label: nav.reminders, key: "reminders", minPlan: "expired" as const, feature: FEATURES.pages.reminders},
-    {label: nav.reports, key: "reports", minPlan: "expired" as const, feature: FEATURES.pages.reports},
-    {label: nav.clients, key: "clients", minPlan: "expired" as const, feature: FEATURES.pages.clients},
-    {label: nav.field, key: "field", minPlan: "business" as const, feature: FEATURES.pages.field},
-    {label: nav.equipment, key: "equipment", minPlan: "expired" as const, feature: FEATURES.pages.equipment},
-    {label: nav.invoices, key: "invoices", minPlan: "business" as const, feature: FEATURES.pages.invoices},
-    {label: nav.gmail, key: "gmail", minRole: "admin", feature: FEATURES.pages.gmail},
-  ];
-});
-
-/**
- * Whether the account's plan satisfies a nav item's minPlan.
- *
- * An array is membership, a single value is a minimum. Kept in step with the
- * router guard: an item the nav shows but the router refuses sends the user to
- * /403, and one the nav hides but the router allows is unreachable except by
- * typing the URL.
- */
-function planAllowsNav(minPlan: PlanId | PlanId[] | undefined): boolean {
-  return planMeetsMinimum(resolveUserPlan(authStore.user), minPlan);
-}
-
-const primaryNav = computed(() => {
-  const userRank = ROLE_RANK[authStore.user?.role ?? "user"] ?? 0;
-  return allNav.value.filter((item) =>
-    userRank >= (ROLE_RANK[item.minRole] ?? 0) &&
-      planAllowsNav(item.minPlan) &&
-      (!item.feature || featuresStore.hasFeature(item.feature))
-  );
-});
-
-/**
- * A lapsed trial keeps read access to everything it could reach while running.
- *
- * The nav gate controls whether a page opens at all, and the server puts no plan
- * check on reads — so locking these would hide the user's own reminders and
- * clients behind an upgrade wall rather than pausing the account. Writes stay
- * blocked by the entitlement flags, which is where the paywall actually belongs.
- */
-// A lapsed trial keeps plan "trial" — no job rewrites it — so this has to be
-// resolved from the date. The old check compared the plan to "free", which that
-// account never reports, so the lapsed-trial allowance below never applied.
-const isLapsedTrial = computed(() => isLapsedTrialPlan(authStore.user));
-
-function isPlanLocked(item: {minPlan?: PlanId | PlanId[]}): boolean {
-  if (!item.minPlan) return false;
-  if (isLapsedTrial.value) return false;
-  // Shares planAllowsNav so a locked item and a hidden one never disagree.
-  return !planAllowsNav(item.minPlan);
-}
-
-function navLockLabel(item: {minPlan?: PlanId | PlanId[]}): string {
-  if (!item.minPlan) return "";
-  // A list has no "and above" — naming the plans is the only accurate phrasing,
-  // and normalizePlanId on an array would have yielded "expired" and read as
-  // "available on הסתיים and above".
-  if (Array.isArray(item.minPlan)) {
-    const names = item.minPlan.map((plan) => PLAN_SHORT.value[normalizePlanId(plan)]).filter(Boolean);
-    if (!names.length) return "";
-    return localeStore.t("chrome.lockPlansOnly", {plans: names.join(" / ")});
-  }
-  const label = PLAN_SHORT.value[normalizePlanId(item.minPlan)];
-  return label ? localeStore.t("chrome.lockPlanAndUp", {plan: label}) : "";
-}
-
-const activeKey = computed(() => {
-  const seg = stripLocalePrefix(route.path).split("/")[1] || "dashboard";
-  return seg;
-});
-
-function isActiveNav(key: string): boolean {
-  const path = stripLocalePrefix(route.path);
-  if (key.includes("/")) return path === `/${key}` || path.startsWith(`/${key}/`);
-  return activeKey.value === key;
-}
-
-function navigate(itemOrKey: string | {key: string; minPlan?: PlanId}) {
-  const item = typeof itemOrKey === "string" ? allNav.value.find((nav) => nav.key === itemOrKey) : itemOrKey;
-  if (!item || isPlanLocked(item)) return;
-  mobileNavOpen.value = false;
-  router.push(localizedPath(item.key === "dashboard" ? "/dashboard" : `/${item.key}`));
-}
 </script>
 
 <style scoped>
 .app-shell {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100vh;
+  background: var(--bg-app);
+  overflow: hidden;
+}
+
+.app-shell:not(.app-shell--with-nav) {
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-app);
 }
 
-/* ── App bar ──────────────────────────────────────────────────────────────── */
-.appbar {
+.app-topbar {
   display: flex;
   align-items: center;
-  gap: 32px;
-  height: 64px;
-  padding: 0 28px;
+  gap: 12px;
+  height: 56px;
+  padding: 0 20px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 100;
+  flex: 0 0 auto;
 }
 
-.appbar__brand {
+.app-topbar__spacer {
+  flex: 1 1 auto;
+}
+
+.app-topbar__actions {
   display: flex;
   align-items: center;
   gap: 10px;
-  cursor: pointer;
-  user-select: none;
-}
-.appbar__logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: transparent;
-  box-shadow: var(--shadow-sm);
-}
-.appbar__logo-img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
-}
-.appbar__brand-text {
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--text-primary);
-  letter-spacing: 0.2px;
 }
 
-.appbar__nav {
-  display: flex;
+.app-topbar__actions :deep(.n-popover),
+.app-topbar__actions :deep(.n-popover-trigger),
+.app-topbar__actions :deep(.n-popover__trigger) {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  flex: 1;
-  justify-content: center;
-}
-.navlink {
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 14px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  transition: background var(--transition-fast), color var(--transition-fast);
-  white-space: nowrap;
-}
-.navlink:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.navlink--locked {
-  opacity: 0.48;
-  cursor: not-allowed;
-}
-.navlink--locked:hover {
-  background: transparent;
-  color: var(--text-secondary);
-}
-.navlink--active {
-  background: rgba(99, 226, 183, 0.14); /* tinted with brand */
-  color: var(--brand-color);
-  font-weight: 600;
-}
-html[data-theme="light"] .navlink--active {
-  background: rgba(24, 160, 88, 0.10);
+  flex: 0 0 auto;
 }
 
 .nav-menu-btn {
@@ -705,128 +512,6 @@ html[data-theme="light"] .navlink--active {
 .nav-menu-btn__icon {
   font-size: 20px;
   line-height: 1;
-}
-
-.mobile-nav-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.mobile-nav-list__trigger {
-  display: block;
-}
-.mobile-nav-list__item {
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  padding: 12px 14px;
-  text-align: right;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-  width: 100%;
-}
-.mobile-nav-list__item:hover {
-  background: var(--bg-hover);
-}
-.mobile-nav-list__item--locked,
-.mobile-nav-list__item:disabled {
-  opacity: 0.52;
-  cursor: not-allowed;
-}
-.mobile-nav-list__item--locked:hover,
-.mobile-nav-list__item:disabled:hover {
-  background: transparent;
-}
-.mobile-nav-list__item--active {
-  border-color: rgba(99, 226, 183, 0.24);
-  background: rgba(99, 226, 183, 0.12);
-  color: var(--brand-color);
-}
-html[data-theme="light"] .mobile-nav-list__item--active {
-  border-color: rgba(24, 160, 88, 0.18);
-  background: rgba(24, 160, 88, 0.10);
-}
-
-.appbar__actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.appbar__actions :deep(.n-popover),
-.appbar__actions :deep(.n-popover-trigger),
-.appbar__actions :deep(.n-popover__trigger) {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-}
-
-.subscription-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 34px;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 650;
-  padding: 0 12px;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast),
-    border-color var(--transition-fast);
-}
-
-.subscription-btn__icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  opacity: 0.85;
-}
-
-.subscription-btn__label {
-  line-height: 1;
-}
-
-.subscription-btn__plan {
-  color: var(--text-muted, var(--text-secondary));
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0.85;
-}
-
-.subscription-btn__plan::before {
-  content: "·";
-  margin-inline-end: 5px;
-  opacity: 0.55;
-}
-
-.subscription-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-color);
-  color: var(--text-primary);
-}
-
-.subscription-btn:hover .subscription-btn__plan {
-  color: var(--text-secondary);
-  opacity: 1;
-}
-
-.subscription-btn--active {
-  border-color: color-mix(in srgb, var(--brand-color) 28%, var(--border-color));
-  background: color-mix(in srgb, var(--brand-color) 8%, transparent);
-  color: var(--brand-color);
-}
-
-.subscription-btn--active .subscription-btn__plan {
-  color: var(--brand-color);
-  opacity: 0.8;
 }
 
 .actas-control {
@@ -968,13 +653,6 @@ html[data-theme="dark"] .install-banner {
   background: rgba(240, 160, 32, 0.2);
 }
 
-@media (max-width: 768px) {
-  .actas-select {
-    width: 190px;
-    min-width: 160px;
-  }
-}
-
 .iconbtn {
   width: 36px;
   height: 36px;
@@ -992,20 +670,6 @@ html[data-theme="dark"] .install-banner {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-.avatar:hover { background: var(--bg-hover); }
 
 /* ── Content ──────────────────────────────────────────────────────────────── */
 .shell-body {
@@ -1029,49 +693,22 @@ html[data-theme="dark"] .install-banner {
 }
 
 @media (max-width: 900px) {
-  .appbar {
-    gap: 14px;
-    height: auto;
-    min-height: 60px;
-    padding: 10px 14px;
-  }
-
-  .appbar__brand {
-    display: none;
-  }
-
-  .appbar__nav {
-    display: none;
-  }
-
   .nav-menu-btn {
     display: inline-flex;
     flex: 0 0 auto;
   }
 
-  .appbar__actions {
+  .app-topbar {
+    padding: 0 14px;
+  }
+
+  .app-topbar__actions {
     gap: 6px;
-    min-width: 0;
-    flex: 1 1 auto;
-    justify-content: flex-end;
   }
 
-  .subscription-btn {
-    padding: 0 10px;
-    max-width: 100%;
-  }
-
-  .subscription-btn__label {
-    display: none;
-  }
-
-  .subscription-btn__plan::before {
-    display: none;
-  }
-
-  .actas-toggle {
-    min-width: 0;
-    padding: 0 10px;
+  .actas-select {
+    width: 190px;
+    min-width: 160px;
   }
 
   .content {
@@ -1080,26 +717,15 @@ html[data-theme="dark"] .install-banner {
 }
 
 @media (max-width: 520px) {
-  .appbar {
+  .app-topbar {
     padding-inline: 10px;
     gap: 8px;
   }
 
-  .appbar__logo,
-  .iconbtn {
-    width: 34px;
-    height: 34px;
-  }
-
+  .iconbtn,
   .nav-menu-btn {
     width: 34px;
     height: 34px;
-  }
-
-  .subscription-btn {
-    height: 32px;
-    padding: 0 8px;
-    font-size: 11px;
   }
 
   .actas-control:not(.actas-control--open) {
@@ -1123,6 +749,7 @@ html[data-theme="dark"] .install-banner {
   text-align: center;
   font-size: 13px;
   border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  flex: 0 0 auto;
 }
 
 .app-footer strong {

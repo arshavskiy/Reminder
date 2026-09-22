@@ -695,7 +695,7 @@ const data_cards = computed(() => modules.value);
 .dash__drop :deep(> div),
 .dash__intake :deep(.drop-strip) { margin-bottom: 0; }
 .dash__drop {
-  flex: 1 1 0;
+  //flex: 1 1 0;
   min-width: 0;
   display: flex;
 }
@@ -791,7 +791,7 @@ const data_cards = computed(() => modules.value);
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
-  margin-bottom: 40px;
+  margin-bottom: 15px;
 }
 .stat {
   background: var(--bg-card);

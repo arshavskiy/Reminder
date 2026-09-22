@@ -142,6 +142,9 @@ const he = {
   },
   chrome: {
     openNav: "פתח ניווט",
+    closeNav: "סגור ניווט",
+    collapseNav: "כווץ תפריט",
+    expandNav: "הרחב תפריט",
     navTitle: "ניווט",
     subscription: "מנוי",
     subscriptionTooltip: "מנוי ותשלומים",
@@ -1713,6 +1716,9 @@ const en = {
   },
   chrome: {
     openNav: "Open navigation",
+    closeNav: "Close navigation",
+    collapseNav: "Collapse menu",
+    expandNav: "Expand menu",
     navTitle: "Navigation",
     subscription: "Plan",
     subscriptionTooltip: "Plan and billing",
