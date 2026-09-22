@@ -1,6 +1,6 @@
-import { ref, computed, watch, nextTick } from "vue";
-import { useRoute } from "vue-router";
-import { useLocaleStore } from "../stores/locale.js";
+import { ref, computed, nextTick } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { localizedPath, stripLocalePrefix, useLocaleStore } from "../stores/locale.js";
 
 export interface WalkthroughStep {
   selector: string;
@@ -42,9 +42,12 @@ function resetAll() {
 
 const PAGE_TOUR_MAP: Record<string, string> = {
   "/": "main",
+  "/dashboard": "main",
   "/documents": "documents",
-  "/contracts": "contracts",
+  "/quotes": "quotes",
+  "/activity": "activity",
   "/reminders": "reminders",
+  "/equipment": "equipment",
   "/clients": "clients",
   "/reports": "reports",
 };
@@ -52,16 +55,16 @@ const PAGE_TOUR_MAP: Record<string, string> = {
 const TOURS_HE: Record<string, WalkthroughStep[]> = {
   main: [
     {
-      selector: ".appbar__brand",
-      title: "ברוכים הבאים ל-RemindOCR",
-      text: "המערכת לניהול תסקירים, תזכורות ולקוחות. בואו נכיר את הממשק.",
-      placement: "bottom",
+      selector: ".app-nav__brand",
+      title: "ברוכים הבאים ללובי",
+      text: "מכאן חוזרים ללובי. המערכת לניהול תסקירים, תזכורות ולקוחות.",
+      placement: "left",
     },
     {
-      selector: ".appbar__nav",
-      title: "תפריט ניווט",
-      text: "כאן תמצאו גישה מהירה לכל חלקי המערכת: מסמכים, תסקירים, תזכורות, דוחות, לקוחות ועוד.",
-      placement: "bottom",
+      selector: ".app-nav__list",
+      title: "תפריט צד",
+      text: "לחצו על פריט כדי לעבור לעמוד. פריט עם חץ נפתח בריחוף: תסקירים (תסקירים, הצעות מחיר, יומן פעילות), תזכורות (תזכורות ויומן פעילות), וציוד (ציוד ויצרנים). אפשר לכווץ את התפריט לאייקונים.",
+      placement: "left",
     },
     {
       selector: ".dash__intake",
@@ -90,15 +93,21 @@ const TOURS_HE: Record<string, WalkthroughStep[]> = {
     {
       selector: ".user-dropdown",
       title: "תפריט משתמש",
-      text: "מכאן תוכלו לגשת לפרופיל, תבניות הדפסה ואימייל, הגדרות ציוד, וכניסה מחדש לסיור זה.",
-      placement: "bottom",
+      text: "מכאן נכנסים לפרופיל, להגדרות, למנוי ולתבניות. אפשר גם להתחיל מחדש את הסיור.",
+      placement: "left",
     },
   ],
   documents: [
     {
-      selector: ".documents-actions",
-      title: "פעולות מסמכים",
-      text: "העלו מסמכים חדשים, רעננו רשימה, הפעילו סריקה מחדש או מחקו מסמכים.",
+      selector: ".page-header__hero",
+      title: "פעולות תסקירים",
+      text: "תסקיר חדש, העלאת קבצים, ייבוא מ-Gmail, ייצוא ל-Drive ודוח חודשי.",
+      placement: "bottom",
+    },
+    {
+      selector: ".page-header__tools",
+      title: "כלים",
+      text: "רענון, בחירה מרובה (הורדה, מיזוג, חילוץ ומחיקה) והגדרות עיבוד. יומן הפעילות נמצא בתפריט הצד תחת תסקירים.",
       placement: "bottom",
     },
     {
@@ -110,39 +119,35 @@ const TOURS_HE: Record<string, WalkthroughStep[]> = {
     {
       selector: ".toolbar",
       title: "חיפוש וסינון מתקדם",
-      text: "חפשו לפי שם קובץ, סננו לפי לקוח או תאריכים, והחליפו בין תצוגת רשימה וכרטיסים.",
-      placement: "bottom",
-    },
-    {
-      selector: ".bulk-action-anchor",
-      title: "פעולות מרובות",
-      text: "הפעילו מצב בחירה כדי לסמן מסמכים ולבצע פעולות על כולם — מחיקה, סריקה מחדש ועוד.",
+      text: "חפשו לפי שם קובץ, וסננו לפי לקוח, סוג או תאריכים.",
       placement: "bottom",
     },
   ],
-  contracts: [
+  quotes: [
     {
-      selector: ".page__actions-row--main",
-      title: "ניהול תסקירים",
-      text: "צרו תסקיר חדש, ייצאו דוח חודשי, או עברו לתצוגת מסמכים.",
+      selector: ".quotes-head",
+      title: "הצעות מחיר",
+      text: "צרו הצעת מחיר חדשה או רעננו את הרשימה. העמוד נמצא בתפריט הצד תחת תסקירים.",
       placement: "bottom",
     },
     {
-      selector: ".filterbar",
-      title: "סינון לפי סטטוס",
-      text: "סננו תסקירים לפי מצב: הכל, פעיל, פג תוקף, ממתין לבדיקה ועוד.",
+      selector: ".quotes-table-wrap, .quotes-empty",
+      title: "רשימת הצעות",
+      text: "כל ההצעות עם לקוח, תסקיר, תוקף וסכום. לחצו על שורה לפרטים.",
+      placement: "top",
+    },
+  ],
+  activity: [
+    {
+      selector: ".page-header",
+      title: "יומן פעילות",
+      text: "מגיעים לכאן מתפריט תסקירים (פעילות מסמכים) או מתפריט תזכורות (פעילות מיילים).",
       placement: "bottom",
     },
     {
-      selector: ".toolbar",
-      title: "חיפוש תסקירים",
-      text: "חפשו תסקיר לפי שם לקוח, מספר חוזה או כל שדה אחר.",
-      placement: "bottom",
-    },
-    {
-      selector: ".bulk-action-anchor",
-      title: "פעולות מרובות",
-      text: "סמנו תסקירים ושלחו התראות, צרו תזכורות או מחקו בבת אחת.",
+      selector: ".quick-filterbar",
+      title: "סינון לפי סוג",
+      text: "החליפו בין סוגי הפעילות. הקישור מהתפריט כבר מסנן לתסקירים או לתזכורות.",
       placement: "bottom",
     },
   ],
@@ -150,7 +155,7 @@ const TOURS_HE: Record<string, WalkthroughStep[]> = {
     {
       selector: ".reminders-hero",
       title: "ניהול תזכורות",
-      text: "כאן תנהלו את כל התזכורות — יצירה, שליחה ומעקב אחרי סטטוס.",
+      text: "כאן תנהלו את כל התזכורות — יצירה, שליחה ומעקב אחרי סטטוס. יומן הפעילות נמצא בתפריט הצד תחת תזכורות.",
       placement: "bottom",
     },
     {
@@ -172,23 +177,37 @@ const TOURS_HE: Record<string, WalkthroughStep[]> = {
       placement: "top",
     },
   ],
+  equipment: [
+    {
+      selector: ".page__head",
+      title: "ציוד",
+      text: "ניהול ציוד. בתפריט הצד תחת ציוד יש שני עמודים: ציוד ויצרנים.",
+      placement: "bottom",
+    },
+    {
+      selector: ".subhead",
+      title: "העמוד הפעיל",
+      text: "כותרת העמוד הנוכחי. בעמוד ציוד מופיעים כאן גם הוספה, ייבוא ורענון.",
+      placement: "bottom",
+    },
+  ],
   clients: [
     {
       selector: ".clients-actions",
       title: "ניהול לקוחות",
-      text: "הוסיפו לקוח חדש, רעננו רשימה, או מחקו לקוחות שאינם רלוונטיים.",
+      text: "הוסיפו לקוח חדש, רעננו את הרשימה, בחרו כמה לקוחות או מחקו.",
       placement: "bottom",
     },
     {
-      selector: ".client-search",
-      title: "חיפוש לקוחות",
-      text: "חפשו לפי שם, אימייל, טלפון או כל שדה. התוצאות מתעדכנות בזמן אמת.",
+      selector: ".clients-toolbar",
+      title: "חיפוש וסינון",
+      text: "חפשו לפי שם, אימייל או טלפון, וסננו לפי סוג.",
       placement: "bottom",
     },
     {
-      selector: ".table-wrap",
+      selector: ".clients-table-wrap, .clients-empty",
       title: "טבלת לקוחות",
-      text: "כל הלקוחות מוצגים כאן עם פרטי קשר, מספר חוזים ותזכורות. לחצו לעריכה.",
+      text: "כל הלקוחות עם פרטי קשר ומספר מסמכים. לחצו על שורה לעריכה.",
       placement: "top",
     },
   ],
@@ -217,16 +236,16 @@ const TOURS_HE: Record<string, WalkthroughStep[]> = {
 const TOURS_EN: Record<string, WalkthroughStep[]> = {
   main: [
     {
-      selector: ".appbar__brand",
-      title: "Welcome to RemindOCR",
-      text: "The system for managing inspections, reminders, and clients. Let's take a quick tour of the interface.",
-      placement: "bottom",
+      selector: ".app-nav__brand",
+      title: "Welcome to the lobby",
+      text: "This returns you to the lobby. The system for managing inspections, reminders, and clients.",
+      placement: "right",
     },
     {
-      selector: ".appbar__nav",
-      title: "Navigation menu",
-      text: "Quick access to every part of the system: documents, inspections, reminders, reports, clients, and more.",
-      placement: "bottom",
+      selector: ".app-nav__list",
+      title: "Side menu",
+      text: "Click an item to open that page. An item with a chevron opens on hover: Inspections (inspections, quotes, activity log), Reminders (reminders and activity log), and Equipment (equipment and manufacturers). You can collapse the menu to icons.",
+      placement: "right",
     },
     {
       selector: ".dash__intake",
@@ -255,15 +274,21 @@ const TOURS_EN: Record<string, WalkthroughStep[]> = {
     {
       selector: ".user-dropdown",
       title: "User menu",
-      text: "Access your profile, print and email templates, equipment settings, and restart this tour from here.",
-      placement: "bottom",
+      text: "Open your profile, settings, subscription, and templates. You can also restart this tour from here.",
+      placement: "right",
     },
   ],
   documents: [
     {
-      selector: ".documents-actions",
-      title: "Document actions",
-      text: "Upload new documents, refresh the list, trigger a rescan, or delete documents.",
+      selector: ".page-header__hero",
+      title: "Inspection actions",
+      text: "New inspection, file upload, Gmail import, Drive export, and the monthly report.",
+      placement: "bottom",
+    },
+    {
+      selector: ".page-header__tools",
+      title: "Tools",
+      text: "Refresh, multi-select (download, merge, extract, and delete), and processing settings. The activity log is in the side menu under Inspections.",
       placement: "bottom",
     },
     {
@@ -275,39 +300,35 @@ const TOURS_EN: Record<string, WalkthroughStep[]> = {
     {
       selector: ".toolbar",
       title: "Search and advanced filters",
-      text: "Search by file name, filter by client or date, and switch between list and card views.",
-      placement: "bottom",
-    },
-    {
-      selector: ".bulk-action-anchor",
-      title: "Bulk actions",
-      text: "Turn on selection mode to mark documents and act on all of them at once — delete, rescan, and more.",
+      text: "Search by file name, and filter by client, type, or date.",
       placement: "bottom",
     },
   ],
-  contracts: [
+  quotes: [
     {
-      selector: ".page__actions-row--main",
-      title: "Manage inspections",
-      text: "Create a new inspection report, export a monthly report, or switch to the documents view.",
+      selector: ".quotes-head",
+      title: "Quotes",
+      text: "Create a new quote or refresh the list. This page is in the side menu under Inspections.",
       placement: "bottom",
     },
     {
-      selector: ".filterbar",
-      title: "Filter by status",
-      text: "Filter inspections by status: all, active, expired, pending review, and more.",
+      selector: ".quotes-table-wrap, .quotes-empty",
+      title: "Quote list",
+      text: "Every quote with client, inspection, validity, and amount. Click a row for details.",
+      placement: "top",
+    },
+  ],
+  activity: [
+    {
+      selector: ".page-header",
+      title: "Activity log",
+      text: "Open this from Inspections (document activity) or from Reminders (email activity).",
       placement: "bottom",
     },
     {
-      selector: ".toolbar",
-      title: "Search inspections",
-      text: "Search by client name, contract number, or any other field.",
-      placement: "bottom",
-    },
-    {
-      selector: ".bulk-action-anchor",
-      title: "Bulk actions",
-      text: "Select inspections and send reminders, create reminders, or delete them all at once.",
+      selector: ".quick-filterbar",
+      title: "Filter by type",
+      text: "Switch activity types. The menu link already filters to inspections or reminders.",
       placement: "bottom",
     },
   ],
@@ -315,7 +336,7 @@ const TOURS_EN: Record<string, WalkthroughStep[]> = {
     {
       selector: ".reminders-hero",
       title: "Manage reminders",
-      text: "Create, send, and track the status of all your reminders here.",
+      text: "Create, send, and track the status of all your reminders here. The activity log is in the side menu under Reminders.",
       placement: "bottom",
     },
     {
@@ -337,23 +358,37 @@ const TOURS_EN: Record<string, WalkthroughStep[]> = {
       placement: "top",
     },
   ],
+  equipment: [
+    {
+      selector: ".page__head",
+      title: "Equipment",
+      text: "Manage equipment. Under Equipment in the side menu there are two pages: Equipment and Manufacturers.",
+      placement: "bottom",
+    },
+    {
+      selector: ".subhead",
+      title: "Current page",
+      text: "The heading for the page you are on. On Equipment, add, import, and refresh are here too.",
+      placement: "bottom",
+    },
+  ],
   clients: [
     {
       selector: ".clients-actions",
       title: "Manage clients",
-      text: "Add a new client, refresh the list, or delete clients you no longer need.",
+      text: "Add a client, refresh the list, select several clients, or delete them.",
       placement: "bottom",
     },
     {
-      selector: ".client-search",
-      title: "Search clients",
-      text: "Search by name, email, phone, or any field. Results update in real time.",
+      selector: ".clients-toolbar",
+      title: "Search and filter",
+      text: "Search by name, email, or phone, and filter by type.",
       placement: "bottom",
     },
     {
-      selector: ".table-wrap",
+      selector: ".clients-table-wrap, .clients-empty",
       title: "Clients table",
-      text: "All clients shown here with contact details, contract count, and reminders. Click to edit.",
+      text: "All clients with contact details and document counts. Click a row to edit.",
       placement: "top",
     },
   ],
@@ -388,29 +423,67 @@ export function useWalkthrough() {
   const localeStore = useLocaleStore();
   const tours = computed(() => TOURS_BY_LOCALE[localeStore.locale] ?? TOURS_HE);
   const route = useRoute();
+  const router = useRouter();
   const steps = computed(() => currentTourId.value ? (tours.value[currentTourId.value] ?? []) : []);
   const currentStep = computed(() => steps.value[currentStepIndex.value] ?? null);
   const totalSteps = computed(() => steps.value.length);
-  const isLastStep = computed(() => currentStepIndex.value >= steps.value.length - 1);
 
-  function startTour(tourId = "main") {
-    currentTourId.value = tourId;
-    currentStepIndex.value = 0;
-    active.value = true;
+  function selectorExists(selector: string): boolean {
+    return !!document.querySelector(selector);
   }
 
-  function nextStep() {
-    if (isLastStep.value) {
+  function findVisibleIndex(from: number, direction: 1 | -1): number | null {
+    const list = steps.value;
+    for (let i = from; i >= 0 && i < list.length; i += direction) {
+      const step = list[i];
+      if (step && selectorExists(step.selector)) return i;
+    }
+    return null;
+  }
+
+  const isLastStep = computed(() => findVisibleIndex(currentStepIndex.value + 1, 1) == null);
+
+  function focusVisibleStep(from: number, direction: 1 | -1) {
+    const index = findVisibleIndex(from, direction);
+    if (index == null) {
       endTour();
       return;
     }
-    currentStepIndex.value++;
+    currentStepIndex.value = index;
+  }
+
+  function beginTour(tourId: string) {
+    currentTourId.value = tourId;
+    currentStepIndex.value = 0;
+    active.value = true;
+    void nextTick(() => {
+      if (!active.value || currentTourId.value !== tourId) return;
+      focusVisibleStep(0, 1);
+    });
+  }
+
+  function startTour(tourId = "main") {
+    if (tourId === "main" && stripLocalePrefix(route.path) !== "/dashboard") {
+      active.value = true;
+      currentTourId.value = tourId;
+      void router.push(localizedPath("/dashboard")).then(() => beginTour(tourId));
+      return;
+    }
+    beginTour(tourId);
+  }
+
+  function nextStep() {
+    const next = findVisibleIndex(currentStepIndex.value + 1, 1);
+    if (next == null) {
+      endTour();
+      return;
+    }
+    currentStepIndex.value = next;
   }
 
   function prevStep() {
-    if (currentStepIndex.value > 0) {
-      currentStepIndex.value--;
-    }
+    const prev = findVisibleIndex(currentStepIndex.value - 1, -1);
+    if (prev != null) currentStepIndex.value = prev;
   }
 
   function endTour() {
@@ -430,6 +503,7 @@ export function useWalkthrough() {
     const tourId = PAGE_TOUR_MAP[path];
     if (!tourId || isCompleted(tourId) || active.value) return;
     setTimeout(() => {
+      if (isCompleted(tourId) || active.value) return;
       const firstStep = tours.value[tourId]?.[0];
       if (firstStep && document.querySelector(firstStep.selector)) {
         startTour(tourId);

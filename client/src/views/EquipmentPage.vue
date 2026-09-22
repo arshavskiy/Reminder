@@ -7,19 +7,6 @@
       </div>
     </header>
 
-    <!-- Top "section" tabs — mirrors the spec (ציוד / קטגוריות / יצרנים / הצהרות) -->
-    <div class="sectiontabs">
-      <button
-        v-for="s in sections"
-        :key="s.value"
-        class="sectionpill"
-        :class="{ 'sectionpill--active': section === s.value }"
-        @click="section = s.value"
-      >
-        <n-icon :component="s.icon" :size="14" /> {{ s.label }}
-      </button>
-    </div>
-
     <!-- ── ציוד tab body ──────────────────────────────────────────────── -->
     <template v-if="section === 'equipment'">
       <div class="subhead">
@@ -145,7 +132,7 @@
             :key="m.name"
             class="row"
             style="cursor:pointer"
-            @click="section = 'equipment'; filterManufacturer = m.name"
+            @click="openEquipmentForManufacturer(m.name)"
           >
             <button class="row__icon row__icon--lift" style="pointer-events:none">
               <n-icon :component="BusinessOutline" :size="18" />
@@ -165,12 +152,6 @@
       </n-spin>
     </template>
 
-    <!-- Placeholders for remaining sections -->
-    <template v-else>
-      <div class="placeholder">
-        <p>{{ sectionPlaceholder }}</p>
-      </div>
-    </template>
 
     <!-- ── XLSX Import modal ─────────────────────────────────────────── -->
     <XlsxImportModal v-model="showImport" @imported="load(true)" />
@@ -407,7 +388,7 @@ import {
   TrashOutline,
 } from "@vicons/ionicons5";
 import {RouterLink} from "vue-router";
-import {useRouter} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
@@ -419,22 +400,17 @@ import XlsxImportModal from "../components/XlsxImportModal.vue";
 const message = useMessage();
 const { confirm } = useConfirm();
 const {l, t, href, dir} = useI18n();
+const route = useRoute();
 const router = useRouter();
 
-const section = ref<"equipment" | "categories" | "manufacturers" | "declarations">("equipment");
-const sections = computed(() => [
-  { value: "equipment",     label: l.value.equipment.tabEquipment,            icon: ConstructOutline },
-  { value: "manufacturers", label: l.value.equipment.tabManufacturers,          icon: BusinessOutline },
-]);
+const section = computed<"equipment" | "manufacturers">(() =>
+  route.query.section === "manufacturers" ? "manufacturers" : "equipment",
+);
 
-const sectionPlaceholder = computed(() => {
-  const map: Record<string, string> = {
-    categories:    l.value.equipment.categoriesSoon,
-    manufacturers: l.value.equipment.manufacturersSoon,
-    declarations:  l.value.equipment.declarationsSoon,
-  };
-  return map[section.value] ?? "";
-});
+function openEquipmentForManufacturer(name: string) {
+  filterManufacturer.value = name;
+  router.push({path: href("/equipment"), query: {section: "equipment"}});
+}
 
 const category = ref<EquipmentCategory | "all">("all");
 const categories = computed(() => {

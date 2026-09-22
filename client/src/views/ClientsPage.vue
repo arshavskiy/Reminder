@@ -20,15 +20,6 @@
             <n-icon :component="CheckboxOutline" class="btn-icon" />
             {{ l.common.select }}
           </button>
-          <button
-            v-if="store.rows.length"
-            class="btn btn--danger-ghost"
-            type="button"
-            @click="doDeleteAll"
-          >
-            <n-icon :component="TrashOutline" class="btn-icon" />
-            {{ l.common.deleteAll }}
-          </button>
           <button class="btn btn--primary" type="button" @click="openCreate">
             <n-icon :component="AddOutline" class="btn-icon" />
             {{ l.clients.newClient }}
@@ -711,22 +702,6 @@ function doDelete(row: Client) {
   });
 }
 
-function doDeleteAll() {
-  confirm({
-    title: "מחיקת כל הלקוחות",
-    content: `למחוק את כל ${store.total} הלקוחות? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק הכל",
-    onConfirm: async () => {
-      try {
-        await store.removeAll();
-        message.success("כל הלקוחות נמחקו");
-      } catch (e) {
-        message.error(String(e));
-      }
-    },
-  });
-}
-
 function bulkDeleteSelected() {
   const rows = selectedClients();
   const count = rows.length;
@@ -765,8 +740,12 @@ function bulkDeleteSelected() {
 .clients-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
+}
+
+.clients-page[dir="rtl"] .clients-actions {
+  margin-inline-start: auto;
 }
 
 .clients-toolbar {

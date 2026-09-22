@@ -62,11 +62,5 @@ export const useClientsStore = defineStore("clients", () => {
     total.value--;
   }
 
-  async function removeAll() {
-    await api.clients.deleteAll();
-    rows.value = [];
-    total.value = 0;
-  }
-
-  return { rows, total, loading, active, activeDocuments, activeTimeline, fetch, fetchOne, create, update, remove, removeAll };
+  return { rows, total, loading, active, activeDocuments, activeTimeline, fetch, fetchOne, create, update, remove };
 });
