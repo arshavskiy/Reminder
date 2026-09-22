@@ -20,7 +20,14 @@
     "types": ["node"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules",
-    "../dist"
+  "exclude": [
+    "node_modules",
+    "../dist",
+    // Tests are not deployed, and some of them import the client copy of a
+    // shared module to assert the two stay in step. Railway builds only the
+    // server directory, so that path does not exist there and `tsc --noEmit`
+    // failed the build over a file it was never going to ship. Vitest still
+    // typechecks these when it runs.
+    "src/__tests__"
   ]
 }
