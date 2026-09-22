@@ -1,0 +1,79 @@
+{
+  "buildCommand": "npm install && npm run build",
+  "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/manifest.webmanifest",
+      "destination": "/manifest.webmanifest"
+    },
+    {
+      "source": "/sw.js",
+      "destination": "/sw.js"
+    },
+    {
+      "source": "/workbox-(.*)",
+      "destination": "/workbox-$1"
+    },
+    {
+      "source": "/registerSW.js",
+      "destination": "/registerSW.js"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/robots.txt"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://reminder-dev-development.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/auth/:path*",
+      "destination": "https://reminder-dev-development.up.railway.app/auth/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
