@@ -17,7 +17,57 @@
 
     <nav class="app-nav__list">
       <div v-for="item in visibleNav" :key="item.key" class="app-nav__group">
+        <n-popover
+          v-if="item.children?.length && !isMobile"
+          trigger="hover"
+          :placement="flyoutPlacement"
+          :show-arrow="false"
+          raw
+          :delay="40"
+          :duration="120"
+        >
+          <template #trigger>
+            <button
+              type="button"
+              class="app-nav__item"
+              :class="{
+                'app-nav__item--active': isItemActive(item) && !item.children?.length,
+                'app-nav__item--locked': isPlanLocked(item),
+                'app-nav__item--parent-active': isItemActive(item),
+              }"
+              :aria-disabled="isPlanLocked(item) ? 'true' : undefined"
+              @click="onItemClick(item)"
+            >
+              <n-icon class="app-nav__icon" :component="item.icon" :size="24" />
+              <span v-show="showLabels" class="app-nav__label">{{ item.label }}</span>
+              <n-icon
+                v-if="showLabels"
+                class="app-nav__chevron"
+                :component="ChevronBackOutline"
+                :size="16"
+              />
+            </button>
+          </template>
+          <div class="app-nav__flyout" :dir="localeStore.dir">
+            <button
+              v-for="child in item.children"
+              :key="navChildKey(child)"
+              type="button"
+              class="app-nav__flyout-item"
+              :class="{
+                'app-nav__flyout-item--active': isActiveNav(child.key, child.query),
+                'app-nav__flyout-item--locked': isPlanLocked(child),
+              }"
+              :disabled="isPlanLocked(child)"
+              @click="navigate(child)"
+            >
+              {{ child.label }}
+            </button>
+          </div>
+        </n-popover>
+
         <n-tooltip
+          v-else
           placement="left"
           :disabled="showLabels && !isPlanLocked(item)"
           :keep-alive-on-hover="false"
@@ -50,12 +100,12 @@
         </n-tooltip>
 
         <div
-          v-if="item.children?.length && isExpanded(item.key) && showLabels"
+          v-if="isMobile && item.children?.length && isExpanded(item.key)"
           class="app-nav__sub"
         >
           <n-tooltip
             v-for="child in item.children"
-            :key="child.key"
+            :key="navChildKey(child)"
             placement="left"
             :disabled="!isPlanLocked(child)"
             :keep-alive-on-hover="false"
@@ -65,7 +115,7 @@
                 type="button"
                 class="app-nav__subitem"
                 :class="{
-                  'app-nav__subitem--active': isActiveNav(child.key),
+                  'app-nav__subitem--active': isActiveNav(child.key, child.query),
                   'app-nav__subitem--locked': isPlanLocked(child),
                 }"
                 :aria-disabled="isPlanLocked(child) ? 'true' : undefined"
@@ -108,12 +158,6 @@
           :userPicture="authStore.user?.picture_url ?? null"
           :userRole="authStore.user?.role ?? null"
         />
-        <n-icon
-          v-if="showLabels"
-          class="app-nav__user-chevron"
-          :component="ChevronBackOutline"
-          :size="16"
-        />
       </div>
 
       <button
@@ -141,7 +185,7 @@
 <script setup lang="ts">
 import {computed, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NIcon, NTooltip} from "naive-ui";
+import {NIcon, NPopover, NTooltip} from "naive-ui";
 import {
   ChevronBackOutline,
   ChevronForwardOutline,
@@ -190,6 +234,7 @@ const featuresStore = useFeaturesStore();
 const l = computed(() => localeStore.catalog);
 
 const showLabels = computed(() => props.isMobile || !props.collapsed);
+const flyoutPlacement = computed(() => (localeStore.dir === "rtl" ? "left-start" : "right-start"));
 
 const ROLE_RANK: Record<string, number> = {user: 0, pro: 1, admin: 2};
 const PLAN_SHORT = computed(() => localeStore.catalog.plans);
@@ -204,6 +249,7 @@ type NavItem = {
   children?: Array<{
     key: string;
     label: string;
+    query?: Record<string, string>;
     minPlan?: PlanId | PlanId[];
     minRole?: string;
     feature?: string;
@@ -228,9 +274,22 @@ const allNav = computed<NavItem[]>(() => {
       feature: FEATURES.pages.documents,
       children: [
         {
+          label: nav.documents,
+          key: "documents",
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.documents,
+        },
+        {
           label: nav.quotes,
           key: "quotes",
           feature: FEATURES.pages.contracts,
+        },
+        {
+          label: localeStore.catalog.documents.activityLog,
+          key: "activity",
+          query: {kind: "document"},
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.reminders,
         },
       ],
     },
@@ -240,6 +299,21 @@ const allNav = computed<NavItem[]>(() => {
       icon: NotificationsOutline,
       minPlan: "expired" as const,
       feature: FEATURES.pages.reminders,
+      children: [
+        {
+          label: nav.reminders,
+          key: "reminders",
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.reminders,
+        },
+        {
+          label: localeStore.catalog.reminders.activityLog,
+          key: "activity",
+          query: {kind: "email"},
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.reminders,
+        },
+      ],
     },
     {
       label: localeStore.catalog.common.expenses,
@@ -282,6 +356,22 @@ const allNav = computed<NavItem[]>(() => {
       icon: ConstructOutline,
       minPlan: "expired" as const,
       feature: FEATURES.pages.equipment,
+      children: [
+        {
+          label: localeStore.catalog.equipment.tabEquipment,
+          key: "equipment",
+          query: {section: "equipment"},
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.equipment,
+        },
+        {
+          label: localeStore.catalog.equipment.tabManufacturers,
+          key: "equipment",
+          query: {section: "manufacturers"},
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.equipment,
+        },
+      ],
     },
     {
       label: nav.field,
@@ -369,15 +459,31 @@ const activeKey = computed(() => {
   return seg;
 });
 
-function isActiveNav(key: string): boolean {
+function isActiveNav(key: string, query?: Record<string, string>): boolean {
   const path = stripLocalePrefix(route.path);
-  if (key.includes("/")) return path === `/${key}` || path.startsWith(`/${key}/`);
-  return activeKey.value === key || path === `/${key}` || path.startsWith(`/${key}/`);
+  if (key === "activity") {
+    if (path !== "/activity") return false;
+    return !query?.kind || route.query.kind === query.kind;
+  }
+  const onPage = key.includes("/")
+    ? path === `/${key}` || path.startsWith(`/${key}/`)
+    : activeKey.value === key || path === `/${key}` || path.startsWith(`/${key}/`);
+  if (!onPage) return false;
+  if (query?.section) {
+    const current = String(route.query.section || (key === "equipment" ? "equipment" : ""));
+    return current === query.section;
+  }
+  return true;
+}
+
+function navChildKey(child: {key: string; query?: Record<string, string>}) {
+  const extra = child.query?.section || child.query?.kind;
+  return extra ? `${child.key}:${extra}` : child.key;
 }
 
 function isItemActive(item: NavItem): boolean {
   if (isActiveNav(item.key)) return true;
-  return !!item.children?.some((child) => isActiveNav(child.key));
+  return !!item.children?.some((child) => isActiveNav(child.key, child.query));
 }
 
 const expandedKeys = ref<Set<string>>(new Set());
@@ -389,7 +495,7 @@ function isExpanded(key: string): boolean {
 function syncExpandedFromRoute() {
   const next = new Set(expandedKeys.value);
   for (const item of visibleNav.value) {
-    if (item.children?.some((child) => isActiveNav(child.key)) || isActiveNav(item.key)) {
+    if (item.children?.some((child) => isActiveNav(child.key, child.query)) || isActiveNav(item.key)) {
       next.add(item.key);
     }
   }
@@ -405,26 +511,19 @@ function toggleExpanded(key: string) {
   expandedKeys.value = next;
 }
 
-function navigate(item: {key: string; minPlan?: PlanId | PlanId[]}) {
+function navigate(item: {key: string; minPlan?: PlanId | PlanId[]; query?: Record<string, string>}) {
   if (isPlanLocked(item)) return;
   emit("update:mobileOpen", false);
   const path = item.key === "dashboard" ? "/dashboard" : `/${item.key}`;
-  router.push(localizedPath(path));
+  router.push({path: localizedPath(path), query: item.query});
 }
 
 function onItemClick(item: NavItem) {
   if (isPlanLocked(item)) return;
 
-  if (props.collapsed && !props.isMobile && item.children?.length) {
-    emit("update:collapsed", false);
-    expandedKeys.value = new Set([...expandedKeys.value, item.key]);
-    return;
-  }
-
-  if (item.children?.length) {
+  if (props.isMobile && item.children?.length) {
     const wasOpen = isExpanded(item.key);
     toggleExpanded(item.key);
-    // Open the parent page on first expand; later clicks only toggle.
     if (!wasOpen) navigate(item);
     return;
   }
@@ -608,6 +707,54 @@ function goSubscription() {
   transition: transform 0.15s ease;
 }
 
+.app-nav__group :deep(.n-popover) {
+  display: block;
+  width: 100%;
+}
+
+.app-nav__flyout {
+  min-width: 168px;
+  padding: 10px 8px;
+  border-radius: 14px;
+  background: #243b46;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-nav__flyout-item {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: start;
+}
+
+.app-nav__flyout-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.app-nav__flyout-item--active {
+  background: rgba(99, 226, 183, 0.14);
+  color: #63e2b7;
+}
+
+.app-nav__flyout-item--locked,
+.app-nav__flyout-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .app-nav__sub {
   display: flex;
   flex-direction: column;
@@ -708,8 +855,13 @@ function goSubscription() {
   color: #fff;
 }
 
+.app-nav__user :deep(.app-nav__chevron) {
+  margin-inline-start: auto;
+  color: var(--app-nav-text-muted);
+}
+
 .app-nav__user--collapsed :deep(.user-dropdown__meta),
-.app-nav__user--collapsed .app-nav__user-chevron {
+.app-nav__user--collapsed :deep(.app-nav__chevron) {
   display: none;
 }
 

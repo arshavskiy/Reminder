@@ -1,45 +1,6 @@
 <template>
   <div class="profile-page">
-    <PageHeader
-      :title="l.profile.title"
-      :subtitle="l.profile.subtitle"
-    />
-
     <div class="profile-shell">
-    <aside class="profile-sidebar">
-      <div class="sidebar-user">
-        <div class="sidebar-avatar">
-          <img
-            v-if="user?.picture_url"
-            :src="user.picture_url"
-            alt=""
-            referrerpolicy="no-referrer"
-          />
-          <span v-else class="sidebar-avatar__initials">{{ initials }}</span>
-        </div>
-        <div class="sidebar-user__info">
-          <div class="sidebar-user__name">
-            {{ user?.name || user?.email || "—" }}
-          </div>
-        </div>
-      </div>
-
-      <nav class="sidebar-nav" :aria-label="l.profile.navAria">
-        <button
-          v-for="item in navItems"
-          :key="item.key"
-          type="button"
-          class="sidebar-nav__item"
-          :class="{ 'sidebar-nav__item--active': activeSection === item.key }"
-          :aria-current="activeSection === item.key ? 'page' : undefined"
-          @click="setActiveSection(item.key)"
-        >
-          <n-icon :component="item.icon" :size="18" />
-          <span>{{ item.label }}</span>
-        </button>
-      </nav>
-    </aside>
-
     <main class="profile-content">
       <n-spin :show="loading">
         <section v-if="activeSection === 'personal'">
@@ -1573,7 +1534,6 @@ import { useUserSettingsStore } from "../stores/userSettings.js";
 import {api, type DriveExportJob, type DriveStatus, type ProfileSubscription} from "../services/apiService.js";
 import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "@shared/printTemplateLayout.js";
 import type { User, UserSettings } from "@shared/types.js";
-import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
 import {useDevModal} from "../composables/useDevModal.js";
 import GmailLogo from "../components/GmailLogo.vue";
@@ -2776,11 +2736,13 @@ function showGoogleConnectionErrorFromRoute() {
 
 <style scoped>
 .profile-page {
+  width: 100%;
   min-width: 0;
 }
 
 .profile-shell {
   display: flex;
+  width: 100%;
   gap: 24px;
   align-items: flex-start;
 }
@@ -2795,27 +2757,6 @@ function showGoogleConnectionErrorFromRoute() {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-/* ── Sidebar ─────────────────────────────────────────────────────────────── */
-.profile-sidebar {
-  width: 240px;
-  flex-shrink: 0;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 20px 12px;
-  position: sticky;
-  top: 16px;
-}
-
-.sidebar-user {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 8px 16px;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 12px;
 }
 
 .sidebar-avatar {
@@ -2846,74 +2787,20 @@ function showGoogleConnectionErrorFromRoute() {
   color: var(--brand-color);
 }
 
-.sidebar-user__info {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-.sidebar-user__name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.sidebar-nav__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.3;
-  color: var(--text-secondary);
-  text-align: start;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.sidebar-nav__item :deep(.n-icon) {
-  flex: 0 0 auto;
-}
-.sidebar-nav__item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.sidebar-nav__item:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--brand-color) 55%, transparent);
-  outline-offset: 2px;
-}
-.sidebar-nav__item--active {
-  background: color-mix(in srgb, var(--brand-color) 14%, transparent);
-  color: var(--brand-color);
-  font-weight: 600;
-}
-
 /* ── Content ─────────────────────────────────────────────────────────────── */
 .profile-content {
   flex: 1;
+  width: 100%;
   min-width: 0;
-  max-width: 800px;
+  max-width: none;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .section-title {
@@ -2925,6 +2812,9 @@ function showGoogleConnectionErrorFromRoute() {
 
 .section-header .section-title {
   margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
 }
 
 .info-card {
@@ -3932,34 +3822,6 @@ function showGoogleConnectionErrorFromRoute() {
     flex-direction: column;
     gap: 16px;
     min-height: 0;
-  }
-
-  .profile-sidebar {
-    position: static;
-    width: 100%;
-    padding: 14px;
-  }
-
-  .sidebar-user {
-    padding-bottom: 12px;
-  }
-
-  .sidebar-nav {
-    flex-direction: row;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-
-  .sidebar-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .sidebar-nav__item {
-    flex: 0 0 auto;
-    width: auto;
-    white-space: nowrap;
   }
 
   .profile-content {

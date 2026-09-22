@@ -10,6 +10,9 @@
         <div v-if="$slots.hero" class="page-header__hero">
           <slot name="hero" />
         </div>
+        <div v-if="$slots.tools" class="page-header__tools">
+          <slot name="tools" />
+        </div>
       </div>
       <p v-if="subtitle" class="page-header__subtitle">{{ subtitle }}</p>
     </div>
@@ -47,6 +50,16 @@ defineProps<Props>();
   flex-wrap: wrap;
   align-items: center;
   margin-inline-start: auto;
+}
+.page-header__tools {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-inline-start: auto;
+}
+.page-header__hero + .page-header__tools {
+  margin-inline-start: 4px;
 }
 .page-header__breadcrumb {
   display: flex;

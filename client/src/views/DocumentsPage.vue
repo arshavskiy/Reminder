@@ -1,9 +1,5 @@
 <template>
   <div class="page2" :dir="dir">
-    <nav class="documents-workspace-tabs" :aria-label="l.chrome.workspaceAria">
-      <router-link class="documents-workspace-tabs__active" :to="href('/documents')">{{ l.chrome.nav.documents }}</router-link>
-      <router-link :to="href('/quotes')">{{ l.chrome.nav.quotes }}</router-link>
-    </nav>
     <PageHeader
       :count="store.total"
       :title="l.documents.title"
@@ -75,65 +71,107 @@
           {{ l.documents.monthlyReport }}
         </button>
       </template>
+      <template #tools>
+        <n-tooltip placement="bottom">
+          <template #trigger>
+            <button
+                :disabled="store.loading"
+                class="rbtn rbtn--ghost rbtn--icon"
+                type="button"
+                :aria-label="l.common.refresh"
+                @click="store.fetch(undefined, true)"
+            >
+              <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" :size="18"/>
+            </button>
+          </template>
+          {{ l.common.refresh }}
+        </n-tooltip>
+        <n-tooltip v-if="rescanStore.hasSession" placement="bottom">
+          <template #trigger>
+            <button class="rbtn rbtn--ghost rbtn--icon" type="button" :aria-label="rescanStore.kind === 'upload' ? l.documents.lastUpload : l.documents.lastRescan" @click="openRescanModal">
+              <n-icon :component="TimeOutline" :size="18"/>
+            </button>
+          </template>
+          {{ rescanStore.kind === "upload" ? l.documents.lastUpload : l.documents.lastRescan }}
+        </n-tooltip>
+        <n-tooltip v-if="authStore.isAdmin" placement="bottom">
+          <template #trigger>
+            <button
+                :disabled="rescanningAll"
+                class="rbtn rbtn--ghost rbtn--warning rbtn--icon"
+                type="button"
+                :aria-label="l.documents.rescanAll"
+                @click="showRescanAllConfirm = true"
+            >
+              <n-icon :class="{ 'refresh-icon--spin': rescanningAll }" :component="RefreshOutline" :size="18"/>
+            </button>
+          </template>
+          {{ l.documents.rescanAll }}
+        </n-tooltip>
+        <n-tooltip v-if="authStore.isAdmin" placement="bottom">
+          <template #trigger>
+            <button
+                :class="{ 'rbtn--loading': deletingAll }"
+                :disabled="deletingAll"
+                class="rbtn rbtn--danger rbtn--icon"
+                type="button"
+                :aria-label="l.common.deleteAll"
+                @click="confirmDeleteAll"
+            >
+              <n-icon :component="TrashOutline" :size="18"/>
+            </button>
+          </template>
+          {{ l.common.deleteAll }}
+        </n-tooltip>
+        <n-tooltip v-if="store.rows.length" placement="bottom">
+          <template #trigger>
+            <button
+                :class="{ 'rbtn--ghost-active': bulkMode }"
+                class="rbtn rbtn--ghost rbtn--icon"
+                type="button"
+                :aria-label="l.documents.multiSelect"
+                @click="toggleBulkMode"
+            >
+              <n-icon :component="CheckboxOutline" :size="18"/>
+            </button>
+          </template>
+          {{ l.documents.multiSelect }}<span v-if="selectedIds.size"> ({{ selectedIds.size }})</span>
+        </n-tooltip>
+        <n-popover :width="320" placement="bottom-end" trigger="click">
+          <template #trigger>
+            <button class="rbtn rbtn--ghost rbtn--icon" type="button" :aria-label="l.documents.processingSettings">
+              <n-icon :component="SettingsOutline" :size="18"/>
+            </button>
+          </template>
+          <div class="settings-pop">
+            <div class="settings-pop__title">{{ l.documents.processingServices }}</div>
+            <n-space size="small" vertical>
+              <n-tooltip placement="left">
+                <template #trigger><n-checkbox v-model:checked="flagOcr">{{ l.documents.ocrLabel }}</n-checkbox></template>
+                {{ l.documents.ocrHint }}
+              </n-tooltip>
+              <n-tooltip placement="left">
+                <template #trigger><n-checkbox v-model:checked="flagAi">{{ l.documents.aiLabel }}</n-checkbox></template>
+                {{ l.documents.aiHint }}
+              </n-tooltip>
+              <n-tooltip placement="left">
+                <template #trigger><n-checkbox v-model:checked="flagS3">{{ l.documents.s3Label }}</n-checkbox></template>
+                {{ l.documents.s3Hint }}
+              </n-tooltip>
+              <n-tooltip placement="left">
+                <template #trigger><n-checkbox v-model:checked="flagEntities">{{ l.documents.entitiesLabel }}</n-checkbox></template>
+                {{ l.documents.entitiesHint }}
+              </n-tooltip>
+            </n-space>
+          </div>
+        </n-popover>
+      </template>
       <template #actions>
-        <div class="documents-actions">
-          <button :disabled="store.loading" class="rbtn rbtn--ghost" type="button"
-                  @click="store.fetch(undefined, true)">
-            <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
-            {{ l.common.refresh }}
-          </button>
-          <button class="rbtn rbtn--ghost" type="button" @click="router.push(href('/activity?kind=document'))">
-            <n-icon :component="TimeOutline" class="btn-icon"/>
-            {{ l.documents.activityLog }}
-          </button>
-          <button v-if="rescanStore.hasSession" class="rbtn rbtn--ghost" type="button" @click="openRescanModal">
-            {{ rescanStore.kind === "upload" ? l.documents.lastUpload : l.documents.lastRescan }}
-          </button>
-          <button
-              :disabled="rescanningAll || rescanning"
-              class="rbtn rbtn--ghost"
-              type="button"
-              @click="doRescan"
-          >
-            <n-icon :class="{ 'refresh-icon--spin': rescanning }" :component="RefreshOutline" class="btn-icon"/>
-            {{ l.documents.rescan }}
-          </button>
-          <button
-              v-if="authStore.isAdmin"
-              :disabled="rescanning || rescanningAll"
-              class="rbtn rbtn--ghost rbtn--warning"
-              type="button"
-              @click="showRescanAllConfirm = true"
-          >
-            <n-icon :class="{ 'refresh-icon--spin': rescanningAll }" :component="RefreshOutline" class="btn-icon"/>
-            {{ l.documents.rescanAll }}
-          </button>
-          <button
-              v-if="authStore.isAdmin"
-              :class="{ 'rbtn--loading': deletingAll }"
-              :disabled="deletingAll"
-              class="rbtn rbtn--danger"
-              type="button"
-              @click="confirmDeleteAll"
-          >
-            <n-icon :component="TrashOutline" class="btn-icon"/>
-            {{ l.common.deleteAll }}
-          </button>
-          <div v-if="store.rows.length" class="bulk-action-anchor">
+        <div v-if="bulkMode && store.rows.length" class="documents-actions">
+          <div class="bulk-action-anchor">
             <div class="bulk-action-anchor__row">
               <button
-                  :class="{ 'rbtn--ghost-active': bulkMode }"
-                  class="rbtn rbtn--ghost"
-                  :title="l.documents.multiSelect"
-                  type="button"
-                  @click="toggleBulkMode"
-              >
-                <n-icon :component="CheckboxOutline" class="btn-icon"/>
-                {{ l.documents.multiSelect }}
-                <span v-if="selectedIds.size">({{ selectedIds.size }})</span>
-              </button>
-              <button
-                  v-if="bulkMode && filteredRows.length"
+                  v-if="filteredRows.length"
                   class="rbtn rbtn--ghost"
                   type="button"
                   @click="selectAll"
@@ -188,37 +226,6 @@
               </button>
             </div>
           </div>
-
-          <!-- Pipeline settings popover -->
-          <n-popover :width="320" placement="bottom-end" trigger="click">
-            <template #trigger>
-              <button class="rbtn rbtn--ghost" :title="l.documents.processingSettings" type="button">
-                <n-icon :component="SettingsOutline" class="btn-icon"/>
-                {{ l.chrome.menu.settings }}
-              </button>
-            </template>
-          <div class="settings-pop">
-            <div class="settings-pop__title">{{ l.documents.processingServices }}</div>
-            <n-space size="small" vertical>
-              <n-tooltip placement="left">
-                <template #trigger><n-checkbox v-model:checked="flagOcr">{{ l.documents.ocrLabel }}</n-checkbox></template>
-                {{ l.documents.ocrHint }}
-              </n-tooltip>
-              <n-tooltip placement="left">
-                <template #trigger><n-checkbox v-model:checked="flagAi">{{ l.documents.aiLabel }}</n-checkbox></template>
-                {{ l.documents.aiHint }}
-              </n-tooltip>
-              <n-tooltip placement="left">
-                <template #trigger><n-checkbox v-model:checked="flagS3">{{ l.documents.s3Label }}</n-checkbox></template>
-                {{ l.documents.s3Hint }}
-              </n-tooltip>
-              <n-tooltip placement="left">
-                <template #trigger><n-checkbox v-model:checked="flagEntities">{{ l.documents.entitiesLabel }}</n-checkbox></template>
-                {{ l.documents.entitiesHint }}
-              </n-tooltip>
-            </n-space>
-          </div>
-        </n-popover>
         </div>
       </template>
     </PageHeader>
@@ -845,7 +852,6 @@ const showReminderPreview = ref(false);
 const previewReminderId = ref<number | string | null>(null);
 const previewReminderTitle = ref<string | null>(null);
 let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
-const rescanning = ref(false);
 const rescanningAll = ref(false);
 const deletingAll = ref(false);
 const bulkMode = ref(false);
@@ -1784,17 +1790,6 @@ async function uploadFiles(
     uploading.value = false;
   }
 }
-async function doRescan() {
-  rescanning.value = true;
-  try {
-    await runRescan(false);
-  } catch {
-    message.error("שגיאה בסריקה מחדש");
-  } finally {
-    rescanning.value = false;
-  }
-}
-
 async function doRescanAll() {
   showRescanAllConfirm.value = false;
   rescanningAll.value = true;
@@ -2083,9 +2078,6 @@ async function bulkExtractAi() {
 </script>
 
 <style scoped>
-.documents-workspace-tabs { display:flex; gap:8px; margin:0 0 18px; border-bottom:1px solid var(--border-color); }
-.documents-workspace-tabs a { color:var(--text-secondary); padding:9px 14px; text-decoration:none; border-bottom:2px solid transparent; }
-.documents-workspace-tabs a:hover, .documents-workspace-tabs__active { color:var(--brand-color); border-bottom-color:var(--brand-color); font-weight:600; }
 .hidden { display: none; }
 
 .document-row-action--quote {
@@ -2125,6 +2117,15 @@ async function bulkExtractAi() {
   line-height: 1;
   transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
   white-space: nowrap;
+}
+
+.rbtn--icon {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 10px;
 }
 
 .rbtn:hover:not(.rbtn--primary):not(.rbtn--danger):not(.rbtn--warning):not(:disabled) {

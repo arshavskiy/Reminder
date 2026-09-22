@@ -10,10 +10,6 @@
           <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
           {{ l.common.refresh }}
         </button>
-        <button class="rbtn rbtn--ghost" type="button" @click="router.push(href('/activity'))">
-          <n-icon :component="TimeOutline" class="btn-icon"/>
-          {{ l.reminders.activityLog }}
-        </button>
         <button
             v-if="!reminderCreatesAllowed"
             class="rbtn rbtn--primary"
@@ -412,7 +408,7 @@
 import {computed, h, onMounted, ref, type Component} from "vue";
 import {useRouter} from "vue-router";
 import {NAlert, NButton, NCheckbox, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NTimePicker, NTooltip, useMessage,} from "naive-ui";
-import {CalendarOutline, CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, GridOutline, PaperPlaneOutline, RefreshOutline, TimeOutline, TrashOutline,} from "@vicons/ionicons5";
+import {CalendarOutline, CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, GridOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";

@@ -89,7 +89,7 @@ useDevModal("adminReport", showAdminReport);
 useDevModal("hydraulicInspection", showHydraulic);
 
 const walkthrough = useWalkthrough();
-const walkthroughIds = ["main", "documents", "contracts", "reminders", "clients", "reports"] as const;
+const walkthroughIds = ["main", "documents", "quotes", "activity", "reminders", "equipment", "clients", "reports"] as const;
 let unregWalkthrough: Array<() => void> = [];
 
 function onKey(e: KeyboardEvent) {

@@ -1,51 +1,54 @@
 <template>
   <div class="user-dropdown">
-    <n-dropdown
-        :options="dropdownItems"
-        :render-label="renderDropdownLabel"
-        :theme-overrides="dropdownThemeOverrides"
+    <n-popover
+        :delay="40"
+        :duration="120"
         :placement="menuPlacement"
-        show-arrow
-        trigger="click"
-        @select="handleSelect"
+        :show-arrow="false"
+        :trigger="menuTrigger"
+        raw
     >
-      <div class="user-dropdown__trigger">
-        <div class="user-dropdown__avatar">
-          <img
-              v-if="avatarSrc"
-              :alt="userName"
-              :src="avatarSrc"
-              class="user-dropdown__avatar-img"
-              referrerpolicy="no-referrer"
-          />
-          <n-icon v-else :component="PersonOutline" :size="18"/>
+      <template #trigger>
+        <div class="user-dropdown__trigger">
+          <div class="user-dropdown__avatar">
+            <img
+                v-if="avatarSrc"
+                :alt="userName"
+                :src="avatarSrc"
+                class="user-dropdown__avatar-img"
+                referrerpolicy="no-referrer"
+            />
+            <n-icon v-else :component="PersonOutline" :size="18"/>
+          </div>
+          <div class="user-dropdown__meta">
+            <span v-if="userName" class="user-dropdown__name">{{ userName }}</span>
+          </div>
+          <n-icon class="app-nav__chevron" :component="ChevronBackOutline" :size="16"/>
         </div>
-        <div class="user-dropdown__meta">
-          <span v-if="userName" class="user-dropdown__name">{{ userName }}</span>
-          <!--          <span v-if="props.userRole" class="user-dropdown__role">{{ roleLabel }}</span>-->
-        </div>
+      </template>
+      <div class="user-menu" :dir="localeStore.dir">
+        <template v-for="item in menuEntries" :key="item.key">
+          <div v-if="item.divider" class="user-menu__divider"/>
+          <button
+              v-else
+              type="button"
+              class="user-menu__item"
+              :class="{ 'user-menu__item--active': item.key === activeMenuKey || (item.key === 'templates' && templateActive) }"
+              @click="handleSelect(item.key)"
+          >
+            {{ item.label }}
+          </button>
+        </template>
       </div>
-    </n-dropdown>
+    </n-popover>
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, h} from "vue";
+import {computed} from "vue";
 import {useRoute, useRouter} from "vue-router";
-import {NDropdown, NIcon} from "naive-ui";
-import {
-  AlbumsOutline,
-  ConstructOutline,
-  DiamondOutline,
-  DocumentTextOutline,
-  LogOutOutline,
-  MailOutline,
-  MapOutline,
-  PersonOutline,
-  PrintOutline,
-  SettingsOutline,
-  ShieldCheckmarkOutline,
-} from "@vicons/ionicons5";
+import {NIcon, NPopover} from "naive-ui";
+import {ChevronBackOutline, PersonOutline} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {FEATURES} from "../shared/features.js";
@@ -87,30 +90,11 @@ const avatarUrl = computed<string>(() => {
 const avatarSrc = computed<string>(() => avatarUrl.value || "");
 
 const menuPlacement = computed(() => (localeStore.dir === "rtl" ? "left-end" : "right-end"));
-
-const dropdownThemeOverrides = {
-  borderRadius: "10px",
-  padding: "6px",
-  optionHeightMedium: "40px",
-  fontSizeMedium: "13px",
-  optionColorHover: "rgba(24, 160, 88, 0.08)",
-  optionTextColorHover: "#18a058",
-  dividerColor: "rgba(17, 24, 39, 0.08)",
-};
-
-const menuIcons: Record<string, typeof PersonOutline> = {
-  profile: PersonOutline,
-  engineer: ConstructOutline,
-  settings: SettingsOutline,
-  subscription: DiamondOutline,
-  templates: AlbumsOutline,
-  "print-templates": PrintOutline,
-  "email-templates": MailOutline,
-  "doc-templates": DocumentTextOutline,
-  admin: ShieldCheckmarkOutline,
-  tour: MapOutline,
-  logout: LogOutOutline,
-};
+const menuTrigger = computed(() =>
+  typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    ? "hover"
+    : "click",
+);
 
 const userPlan = computed(() => resolveUserPlan(authStore.user));
 // Print + email templates stay on trial (inspections and reminders). Document
@@ -137,44 +121,17 @@ const templateMenuItems = computed(() => {
   return items;
 });
 
-const dropdownItems = computed(() => {
+const menuEntries = computed(() => {
   const templates = templateMenuItems.value;
   return [
-    {
-      label: l.value.chrome.menu.profile,
-      key: "profile",
-    },
-    {
-      label: l.value.chrome.menu.settings,
-      key: "settings",
-    },
-    {
-      label: l.value.chrome.menu.subscription,
-      key: "subscription",
-    },
-    ...(templates.length
-        ? [{
-          label: l.value.chrome.menu.templates,
-          key: "templates",
-          children: templates,
-        }]
-        : []),
-    ...(props.userRole === "admin"
-        ? [
-          {label: l.value.chrome.menu.admin, key: "admin"},
-        ]
-        : []),
-    {
-      type: "divider" as const,
-    },
-    {
-      label: l.value.chrome.menu.tour,
-      key: "tour",
-    },
-    {
-      label: l.value.chrome.menu.logout,
-      key: "logout",
-    },
+    {label: l.value.chrome.menu.profile, key: "profile"},
+    {label: l.value.chrome.menu.settings, key: "settings"},
+    {label: l.value.chrome.menu.subscription, key: "subscription"},
+    ...templates,
+    ...(props.userRole === "admin" ? [{label: l.value.chrome.menu.admin, key: "admin"}] : []),
+    {label: "", key: "divider", divider: true},
+    {label: l.value.chrome.menu.tour, key: "tour"},
+    {label: l.value.chrome.menu.logout, key: "logout"},
   ];
 });
 
@@ -192,20 +149,7 @@ const activeMenuKey = computed(() => {
   return "";
 });
 
-function renderDropdownLabel(option: any) {
-  const key = String(option.key ?? "");
-  if (!key || option.type === "divider") return option.label;
-  const icon = menuIcons[key];
-  const isActive = key === activeMenuKey.value
-      || (key === "templates" && TEMPLATE_KEYS.has(activeMenuKey.value));
-  return h("span", {class: ["user-menu-label", {"user-menu-label--active": isActive}], dir: localeStore.dir}, [
-    icon
-      ? h(NIcon, {component: icon, size: 16, class: "user-menu-label__glyph"})
-      : h("span", {class: "user-menu-label__icon-spacer"}),
-    h("span", {class: "user-menu-label__text"}, String(option.label ?? "")),
-    isActive && key !== "templates" ? h("span", {class: "user-menu-label__active-dot"}) : null,
-  ]);
-}
+const templateActive = computed(() => TEMPLATE_KEYS.has(activeMenuKey.value));
 
 async function handleSelect(key: string) {
   if (key === "profile") {
@@ -236,20 +180,24 @@ async function handleSelect(key: string) {
 .user-dropdown {
   display: flex;
   align-items: center;
+  width: 100%;
+}
+
+.user-dropdown :deep(.n-popover) {
+  display: block;
+  width: 100%;
 }
 
 .user-dropdown__trigger {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   min-height: 44px;
   padding: 5px 8px 5px 12px;
   border: 1px solid transparent;
   border-radius: 999px;
   cursor: pointer;
-  transition: background var(--transition-fast),
-  border-color var(--transition-fast),
-  box-shadow var(--transition-fast);
 }
 
 .user-dropdown__trigger:hover {
@@ -309,74 +257,47 @@ async function handleSelect(key: string) {
   line-height: 1.5;
 }
 
-@media (max-width: 768px) {
-  .user-dropdown__name {
-    display: none;
-  }
-
-  .user-dropdown__role {
-    display: none;
-  }
-
-  .user-dropdown__trigger {
-    padding: 4px;
-  }
-}
-
-:global(.n-dropdown-menu .n-dropdown-option-body) {
-  width: 100%;
-}
-
-:global(.n-dropdown-menu .n-dropdown-option-body__label) {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-:global(.user-menu-label) {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  width: 100%;
+.user-menu {
   min-width: 180px;
-  font-weight: 600;
-  color: var(--text-primary);
+  padding: 10px 8px;
+  border-radius: 14px;
+  background: #243b46;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-:global(.user-menu-label__glyph),
-:global(.user-menu-label__icon-spacer) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--brand-color) 12%, transparent);
-  color: var(--brand-color);
-  flex: 0 0 auto;
-}
-
-:global(.user-menu-label__text) {
-  flex: 1;
-  min-width: 0;
+.user-menu__item {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
   text-align: start;
 }
 
-:global(.user-menu-label--active) {
-  color: var(--brand-color);
+.user-menu__item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
-:global(.user-menu-label--active .user-menu-label__glyph) {
-  background: color-mix(in srgb, var(--brand-color) 18%, transparent);
+.user-menu__item--active {
+  background: rgba(99, 226, 183, 0.14);
+  color: #63e2b7;
 }
 
-:global(.user-menu-label__active-dot) {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--brand-color);
-  flex: 0 0 auto;
+.user-menu__divider {
+  height: 1px;
+  margin: 6px 10px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 </style>
