@@ -16,7 +16,7 @@
       >
         <div class="wt-tooltip__header">
           <span class="wt-tooltip__title">{{ walkthrough.currentStep.value.title }}</span>
-          <button class="wt-tooltip__close" @click="walkthrough.skipTour()" aria-label="סגור">×</button>
+          <button class="wt-tooltip__close" @click="walkthrough.skipTour()" :aria-label="l.walkthrough.close">×</button>
         </div>
         <p class="wt-tooltip__text">{{ walkthrough.currentStep.value.text }}</p>
         <div class="wt-tooltip__footer">
@@ -28,9 +28,9 @@
               v-if="walkthrough.currentStepIndex.value > 0"
               class="wt-btn wt-btn--ghost"
               @click="walkthrough.prevStep()"
-            >הקודם</button>
+            >{{ l.walkthrough.prev }}</button>
             <button class="wt-btn wt-btn--primary" @click="walkthrough.nextStep()">
-              {{ walkthrough.isLastStep.value ? 'סיום' : 'הבא' }}
+              {{ walkthrough.isLastStep.value ? l.walkthrough.finish : l.walkthrough.next }}
             </button>
           </div>
         </div>
@@ -45,7 +45,7 @@ import { useWalkthrough } from "../composables/useWalkthrough.js";
 import {useI18n} from "../composables/useI18n.js";
 
 const walkthrough = useWalkthrough();
-const {dir} = useI18n();
+const {dir, l} = useI18n();
 const spotlightRef = ref<HTMLElement | null>(null);
 const tooltipRef = ref<HTMLElement | null>(null);
 const targetRect = ref<DOMRect | null>(null);

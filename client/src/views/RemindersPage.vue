@@ -421,6 +421,7 @@ import {useFeaturesStore} from "../stores/features.js";
 import {api} from "../services/apiService.js";
 import {categoryLabel} from "../utils/reminderCategoryLabels.js";
 import {useConfirm} from "../composables/useConfirm.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import ReminderTableImport from "../components/ReminderTableImport.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
@@ -486,6 +487,8 @@ const bulkDeleting = ref(false);
 const sendingReminderId = ref<number | null>(null);
 const showCreate = ref(false);
 const showQuickTest = ref(false);
+useDevModal("reminders.create", showCreate);
+useDevModal("reminders.quickTest", showQuickTest);
 const quickTestTemplateId = ref<string | null>(null);
 const creating = ref(false);
 const testing = ref(false);
@@ -1027,6 +1030,7 @@ async function doCreate() {
 
 // ── Edit reminder (trigger_date + email_to) ─────────────────────────────────
 const showEditDate = ref(false);
+useDevModal("reminders.editDate", showEditDate);
 const showReminderPreview = ref(false);
 const previewReminderId = ref<number | string | null>(null);
 const previewReminderTitle = ref<string | null>(null);

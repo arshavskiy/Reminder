@@ -381,6 +381,7 @@ import { useClientsStore } from "../stores/clients.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import {useAuthStore} from "../stores/auth.js";
 import {resolveUserPlan} from "../shared/pricingPlans.js";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
@@ -399,6 +400,7 @@ function goToSubscription() {
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
 const showHydraulicModal = ref(false);
 const showReportClientPicker = ref(false);
+useDevModal("clients.reportPicker", showReportClientPicker);
 const reportClientId = ref<string | null>(null);
 const reportClientOptions = computed(() =>
   store.rows.map((row) => ({label: displayClientName(row.display_name), value: row.id}))
@@ -540,6 +542,7 @@ const mergeModal = reactive({
   canonicalId: null as string | null,
   saving: false,
 });
+useDevModal("clients.merge", mergeModal);
 
 const clientMergeOptions = computed<SelectOption[]>(() =>
   store.rows.map((row) => ({
@@ -615,6 +618,7 @@ function displayClientName(value: string) {
 }
 
 const showCreate = ref(false);
+useDevModal("clients.form", showCreate);
 const showForm = computed({
   get: () => showCreate.value,
   set: (v) => {

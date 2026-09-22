@@ -785,6 +785,7 @@ import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import CreateQuoteModal from "../components/documents/CreateQuoteModal.vue";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -855,6 +856,8 @@ const bulkMerging = ref(false);
 const bulkExtracting = ref(false);
 const showRescanAllConfirm = ref(false);
 const showLimitModal = ref(false);
+useDevModal("documents.rescanAll", showRescanAllConfirm);
+useDevModal("documents.limit", showLimitModal);
 
 function onQuotaReached() {
   showLimitModal.value = true;
@@ -883,6 +886,7 @@ const rescanModalState = computed(() => ({
 
 // ── Upload modal ───────────────────────────────────────────────────────────────
 const showUploadModal = ref(false);
+useDevModal("documents.upload", showUploadModal);
 const uploadModalRef = ref<InstanceType<typeof UploadModal> | null>(null);
 const showNewInspection = ref(false);
 const newInspectionModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);

@@ -178,13 +178,14 @@
         <WsConnector />
         <OnboardingWizard v-if="showOnboarding" v-model="showOnboarding" />
         <WalkthroughOverlay />
+        <component :is="DevModalHost" v-if="DevModalHost" />
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>
 </template>
 
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref, watch, watchEffect} from "vue";
+import {computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch, watchEffect} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
   darkTheme,
@@ -246,6 +247,7 @@ import OnboardingWizard from "./components/OnboardingWizard.vue";
 import WalkthroughOverlay from "./components/WalkthroughOverlay.vue";
 import {useWalkthrough} from "./composables/useWalkthrough.js";
 import {useOnboarding} from "./composables/useOnboarding.js";
+import {useDevModal} from "./composables/useDevModal.js";
 import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
@@ -304,9 +306,14 @@ const hideAppChrome = computed(() =>
 );
 
 const mobileNavOpen = ref(false);
+const DevModalHost = import.meta.env.DEV
+  ? defineAsyncComponent(() => import("./dev/DevModalHost.vue"))
+  : null;
 
 // ── Onboarding wizard ───────────────────────────────────────────────────────
 const {showOnboarding} = useOnboarding();
+useDevModal("onboarding", showOnboarding);
+useDevModal("chrome.mobileNav", mobileNavOpen);
 
 watch(
   [() => authStore.user, hideAppChrome],

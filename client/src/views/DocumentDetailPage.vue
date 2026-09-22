@@ -454,6 +454,7 @@ import {api} from "../services/apiService.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import ContractCard from "../components/contracts/ContractCard.vue";
 import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import MissingFieldsModal from "../components/MissingFieldsModal.vue";
@@ -519,6 +520,7 @@ const isInvoiceDocument = computed(() => {
 const missingFieldsList = ref<MissingFieldItem[]>([]);
 const showMissingFieldsBanner = ref(false);
 const showMissingFieldsModal = ref(false);
+useDevModal("document.missingFields", showMissingFieldsModal);
 const missingFieldsPrompted = ref(false);
 const missingFieldInitials = ref<Record<string, string>>({});
 const missingExpiryLabel = computed(() =>
@@ -646,6 +648,7 @@ async function deleteDoc() {
 }
 
 const showExtractModal = ref(false);
+useDevModal("document.extract", showExtractModal);
 const extractTemplateId = ref<string | null>(null);
 const availableTemplates = ref<DocTemplate[]>([]);
 

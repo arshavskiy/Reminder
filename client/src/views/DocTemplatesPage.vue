@@ -410,12 +410,14 @@ import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import type {DocTemplate, DocumentKind, FieldType, TemplateField} from "@shared/types.js";
 
 const templates = ref<DocTemplate[]>([]);
 const {l, dir, t: tr} = useI18n();
 const loading = ref(false);
 const showEdit = ref(false);
+useDevModal("docTemplates.edit", showEdit);
 const editing = ref<DocTemplate | null>(null);
 const saving = ref(false);
 const message = useMessage();
@@ -426,6 +428,7 @@ type KindFilter = "all" | string;
 const kindFilter = ref<KindFilter>("all");
 
 const showGenerate = ref(false);
+useDevModal("docTemplates.generate", showGenerate);
 const genMode = ref<"file" | "text">("file");
 const genText = ref("");
 const generating = ref(false);

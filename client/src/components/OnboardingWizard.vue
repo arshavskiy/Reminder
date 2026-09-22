@@ -1,171 +1,197 @@
 <template>
   <n-modal :show="modelValue" :mask-closable="false" :close-on-esc="false" style="max-width: 640px; width: 95vw">
-    <n-card :bordered="false" class="onboarding-card" role="dialog" aria-modal="true">
-      <!-- Steps indicator -->
+    <n-card
+      :bordered="false"
+      class="onboarding-card"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-title"
+      :dir="dir"
+    >
+      <h2 id="onboarding-title" class="onboarding-sr-title">{{ ob.welcomeTitle }}</h2>
       <n-steps :current="currentStep" size="small" class="onboarding-steps">
-        <n-step title="ברוכים הבאים" />
-        <n-step title="פרטים" />
-        <n-step title="מהנדס" />
-        <n-step title="חברה" />
-        <n-step title="חתימה" />
+        <n-step :title="ob.stepWelcome" />
+        <n-step :title="ob.stepDetails" />
+        <n-step :title="ob.stepEngineer" />
+        <n-step :title="ob.stepCompany" />
+        <n-step :title="ob.stepSignature" />
       </n-steps>
 
       <div class="onboarding-body">
-        <!-- Step 1: Welcome -->
         <div v-if="currentStep === 1" class="step-content">
           <div class="welcome-hero">
-            <div class="welcome-icon">📋</div>
-            <h2 class="welcome-title">ברוכים הבאים ל-RemindOCR</h2>
-            <p class="welcome-desc">
-              מערכת חכמה לניהול תסקירים, חוזים ותזכורות.<br>
-              בואו נגדיר כמה פרטים בסיסיים כדי להתחיל.
-            </p>
+            <div class="welcome-icon" aria-hidden="true">
+              <n-icon :component="ClipboardOutline" :size="28" />
+            </div>
+            <h2 class="welcome-title">{{ ob.welcomeTitle }}</h2>
+            <p class="welcome-desc">{{ ob.welcomeDesc }}</p>
           </div>
-          <div class="welcome-features">
-            <div class="welcome-feature">
-              <span class="welcome-feature__icon">📄</span>
+          <div class="welcome-plan">
+            <div class="welcome-plan__head">
+              <span class="welcome-plan__icon" aria-hidden="true">
+                <n-icon :component="DiamondOutline" :size="22" />
+              </span>
               <div>
-                <strong>העלאת מסמכים</strong>
-                <p>העלו PDF, תמונות או מסמכים — המערכת תחלץ את הנתונים אוטומטית</p>
+                <span class="welcome-plan__kicker">{{ ob.planLabel }}</span>
+                <strong class="welcome-plan__name">{{ pricingPlan.name }}</strong>
+                <p v-if="trialDaysLeft" class="welcome-plan__meta">{{ trialDaysLeft }}</p>
               </div>
             </div>
-            <div class="welcome-feature">
-              <span class="welcome-feature__icon">🔔</span>
-              <div>
-                <strong>תזכורות אוטומטיות</strong>
-                <p>קבלו תזכורות במייל לפני שתוקף חוזה או בדיקה פג</p>
-              </div>
-            </div>
-            <div class="welcome-feature">
-              <span class="welcome-feature__icon">📊</span>
-              <div>
-                <strong>דוחות ותסקירים</strong>
-                <p>הפיקו תסקירים מקצועיים ודוחות חודשיים בלחיצה</p>
-              </div>
-            </div>
+            <p class="welcome-plan__blurb">{{ pricingPlan.blurb }}</p>
+            <ul class="welcome-plan__features">
+              <li v-for="feature in pricingPlan.features" :key="feature">
+                <n-icon :component="CheckmarkCircleOutline" :size="16" />
+                <span>{{ feature }}</span>
+              </li>
+            </ul>
           </div>
         </div>
 
-        <!-- Step 2: Personal details -->
         <div v-if="currentStep === 2" class="step-content">
-          <h3 class="step-title">פרטים אישיים</h3>
-          <p class="step-desc">פרטים אלו ישמשו לזיהוי שלך במערכת ובתסקירים</p>
+          <h2 class="step-title">{{ ob.personalTitle }}</h2>
+          <p class="step-desc">{{ ob.personalDesc }}</p>
           <n-form label-placement="top" class="onboarding-form">
-            <n-form-item label="שם מלא">
-              <n-input v-model:value="form.name" placeholder="ישראל ישראלי" />
+            <n-form-item :label="pp.fullName">
+              <n-input v-model:value="form.name" :placeholder="ob.namePlaceholder" />
             </n-form-item>
-            <n-form-item label="טלפון">
-              <n-input v-model:value="form.phone" placeholder="052-1234567" dir="ltr" />
+            <n-form-item :label="pp.phone">
+              <n-input v-model:value="form.phone" :placeholder="ob.phonePlaceholder" dir="ltr" />
             </n-form-item>
-            <n-form-item label="שם חברה">
-              <n-input v-model:value="form.company_name" placeholder="לדוגמה: M.A.D הנדסה ובטיחות" />
+            <n-form-item :label="pp.companyName">
+              <n-input v-model:value="form.company_name" :placeholder="pp.companyNamePlaceholder" />
             </n-form-item>
           </n-form>
         </div>
 
-        <!-- Step 3: Engineer profile -->
         <div v-if="currentStep === 3" class="step-content">
-          <h3 class="step-title">פרופיל מהנדס</h3>
-          <p class="step-desc">פרטי הרישיון שלך — משמשים לתסקירים, סינון מסמכים ומספור אוטומטי</p>
+          <h2 class="step-title">{{ ob.engineerTitle }}</h2>
+          <p class="step-desc">{{ ob.engineerDesc }}</p>
           <n-form label-placement="top" class="onboarding-form">
-            <n-form-item label="מספר רישוי">
+            <n-form-item :label="pp.licenseNumber">
               <n-input v-model:value="form.inspector_number" placeholder="12345" dir="ltr" />
             </n-form-item>
             <div class="form-row">
-              <n-form-item label="כתובת">
-                <n-input v-model:value="form.address" placeholder="רחוב ומספר" />
+              <n-form-item :label="pp.address">
+                <n-input v-model:value="form.address" :placeholder="pp.addressPlaceholder" />
               </n-form-item>
-              <n-form-item label="עיר">
-                <n-input v-model:value="form.city" placeholder="תל אביב" />
+              <n-form-item :label="pp.city">
+                <n-input v-model:value="form.city" :placeholder="pp.cityPlaceholder" />
               </n-form-item>
             </div>
-            <n-form-item label="עוסק מורשה (ח.פ)">
-              <n-input v-model:value="form.company_registration" placeholder="51646673" dir="ltr" />
+            <n-form-item :label="pp.vatNumber">
+              <n-input v-model:value="form.company_registration" :placeholder="pp.vatPlaceholder" dir="ltr" />
             </n-form-item>
-            <n-form-item label="מספר התחלת תסקירים">
-              <n-input v-model:value="form.inspector_id_start" placeholder="לדוגמה: 16125" dir="ltr" />
+            <n-form-item :label="pp.inspectionStart">
+              <n-input v-model:value="form.inspector_id_start" :placeholder="pp.exampleNumber" dir="ltr" />
               <template #feedback>
                 <span v-if="form.inspector_number && form.inspector_id_start" class="id-preview">
-                  התסקיר הראשון: {{ form.inspector_number }}/{{ form.inspector_id_start }}
+                  {{ t("onboarding.firstInspection", {id: `${form.inspector_number}/${form.inspector_id_start}`}) }}
                 </span>
               </template>
             </n-form-item>
           </n-form>
         </div>
 
-        <!-- Step 4: Company branding -->
         <div v-if="currentStep === 4" class="step-content">
-          <h3 class="step-title">פרטי חברה ולוגו</h3>
-          <p class="step-desc">פרטים אלו יופיעו בתסקירים, בדוחות ובמיילים שנשלחים ללקוחות</p>
+          <h2 class="step-title">{{ ob.companyTitle }}</h2>
+          <p class="step-desc">{{ ob.companyDesc }}</p>
           <n-form label-placement="top" class="onboarding-form">
-            <n-form-item label="שם חברה לתסקירים">
-              <n-input v-model:value="form.eng_company_name" :placeholder="form.company_name || 'שם החברה'" />
+            <n-form-item :label="ob.companyNameForReports">
+              <n-input v-model:value="form.eng_company_name" :placeholder="form.company_name || pp.companyName" />
             </n-form-item>
-            <n-form-item label="תיאור / כותרת">
-              <n-input v-model:value="form.company_subtitle" placeholder="בדיקות בטיחות למתקני הרמה ומכלי לחץ" />
+            <n-form-item :label="pp.companySubtitle">
+              <n-input v-model:value="form.company_subtitle" :placeholder="pp.companySubtitlePlaceholder" />
             </n-form-item>
             <div class="form-row">
-              <n-form-item label="טלפון חברה" class="form-row__item">
-                <n-input v-model:value="form.company_phone" placeholder="052-8195650" dir="ltr" />
+              <n-form-item :label="pp.companyPhone" class="form-row__item">
+                <n-input v-model:value="form.company_phone" :placeholder="ob.phonePlaceholder" dir="ltr" />
               </n-form-item>
-              <n-form-item label="אימייל חברה" class="form-row__item">
+              <n-form-item :label="ob.companyEmail" class="form-row__item">
                 <n-input v-model:value="form.company_email" placeholder="name@company.com" dir="ltr" />
               </n-form-item>
             </div>
-            <n-form-item label="שם שולח במיילים">
-              <n-input v-model:value="form.email_from_name" :placeholder="form.eng_company_name || form.company_name || 'RemindOCR'" />
+            <n-form-item :label="ob.emailFromName">
+              <n-input
+                v-model:value="form.email_from_name"
+                :placeholder="form.eng_company_name || form.company_name || 'RemindOCR'"
+              />
             </n-form-item>
-            <n-form-item label="לוגו חברה">
+            <n-form-item :label="pp.companyLogo">
               <div class="logo-upload">
-                <img v-if="logoPreview" :src="logoPreview" class="logo-preview" alt="לוגו" />
-                <div v-else class="logo-placeholder">
-                  <span>📷</span>
-                  <span>העלו לוגו</span>
-                </div>
-                <input ref="logoInput" type="file" accept="image/*" style="display:none" @change="onLogoSelect" />
-                <n-button size="small" secondary @click="(logoInput as HTMLInputElement)?.click()">
-                  {{ logoPreview ? 'החלף לוגו' : 'בחר קובץ' }}
+                <button
+                  type="button"
+                  class="logo-drop"
+                  :class="{'logo-drop--filled': logoPreview}"
+                  @click="logoInput?.click()"
+                  @dragover.prevent
+                  @drop.prevent="onLogoDrop"
+                >
+                  <img v-if="logoPreview" :src="logoPreview" class="logo-preview" :alt="pp.companyLogoAlt" />
+                  <span v-else class="logo-placeholder">
+                    <n-icon :component="ImageOutline" :size="22" />
+                    <span>{{ ob.uploadLogo }}</span>
+                  </span>
+                </button>
+                <input
+                  ref="logoInput"
+                  type="file"
+                  accept="image/*"
+                  class="file-input"
+                  @change="onLogoSelect"
+                />
+                <n-button size="small" secondary @click="logoInput?.click()">
+                  {{ logoPreview ? pp.replaceLogo : ob.chooseFile }}
                 </n-button>
               </div>
             </n-form-item>
           </n-form>
         </div>
 
-        <!-- Step 5: Signature -->
         <div v-if="currentStep === 5" class="step-content">
-          <h3 class="step-title">חתימה</h3>
-          <p class="step-desc">העלו תמונת חתימה — תופיע בתסקירים שתפיקו. ניתן לדלג ולהוסיף בהמשך.</p>
-          <div class="signature-upload-area">
-            <img v-if="signaturePreview" :src="signaturePreview" class="signature-preview" alt="חתימה" />
+          <h2 class="step-title">{{ ob.signatureTitle }}</h2>
+          <p class="step-desc">{{ ob.signatureDesc }}</p>
+          <button
+            type="button"
+            class="signature-upload-area"
+            @click="sigInput?.click()"
+            @dragover.prevent
+            @drop.prevent="onSignatureDrop"
+          >
+            <img v-if="signaturePreview" :src="signaturePreview" class="signature-preview" :alt="pp.signatureAlt" />
             <div v-else class="signature-placeholder">
-              <span class="signature-placeholder__icon">✍️</span>
-              <span>גררו תמונת חתימה לכאן או לחצו לבחירה</span>
-              <span class="signature-placeholder__hint">PNG או JPG, רקע שקוף מומלץ</span>
+              <n-icon :component="CreateOutline" :size="28" />
+              <span>{{ ob.signatureDrop }}</span>
+              <span class="signature-placeholder__hint">{{ ob.signatureHint }}</span>
             </div>
-            <input ref="sigInput" type="file" accept="image/*" style="display:none" @change="onSignatureSelect" />
-            <n-button size="small" secondary @click="(sigInput as HTMLInputElement)?.click()" style="margin-top: 12px">
-              {{ signaturePreview ? 'החלף חתימה' : 'בחר קובץ' }}
+            <n-button size="small" secondary style="margin-top: 12px" @click.stop="sigInput?.click()">
+              {{ signaturePreview ? pp.replaceSignature : ob.chooseFile }}
             </n-button>
-          </div>
+          </button>
+          <input
+            ref="sigInput"
+            type="file"
+            accept="image/*"
+            class="file-input"
+            @change="onSignatureSelect"
+          />
 
-          <!-- Summary -->
           <div class="onboarding-summary">
-            <h4>סיכום הפרטים</h4>
+            <h3>{{ ob.summaryTitle }}</h3>
             <div class="summary-grid">
               <div v-if="form.name" class="summary-item">
-                <span class="summary-label">שם</span>
+                <span class="summary-label">{{ ob.summaryName }}</span>
                 <span>{{ form.name }}</span>
               </div>
               <div v-if="form.inspector_number" class="summary-item">
-                <span class="summary-label">מפקח</span>
+                <span class="summary-label">{{ ob.summaryInspector }}</span>
                 <span>{{ form.inspector_number }}</span>
               </div>
               <div v-if="form.eng_company_name || form.company_name" class="summary-item">
-                <span class="summary-label">חברה</span>
+                <span class="summary-label">{{ ob.summaryCompany }}</span>
                 <span>{{ form.eng_company_name || form.company_name }}</span>
               </div>
               <div v-if="form.phone" class="summary-item">
-                <span class="summary-label">טלפון</span>
+                <span class="summary-label">{{ ob.summaryPhone }}</span>
                 <span dir="ltr">{{ form.phone }}</span>
               </div>
             </div>
@@ -173,21 +199,16 @@
         </div>
       </div>
 
-      <!-- Navigation buttons -->
       <div class="onboarding-footer">
         <n-button v-if="currentStep > 1" quaternary @click="currentStep--">
-          חזרה
+          {{ l.common.back }}
         </n-button>
-        <div style="flex:1" />
+        <div class="onboarding-footer__spacer" />
         <n-button v-if="currentStep < 5" quaternary size="small" class="skip-btn" @click="skipAll">
-          דלג על ההגדרה
+          {{ ob.skip }}
         </n-button>
-        <n-button
-          type="primary"
-          :loading="saving"
-          @click="currentStep < 5 ? currentStep++ : finish()"
-        >
-          {{ currentStep < 5 ? 'הבא' : 'סיום והתחלה' }}
+        <n-button type="primary" :loading="saving" @click="currentStep < 5 ? currentStep++ : finish()">
+          {{ currentStep < 5 ? ob.next : ob.finish }}
         </n-button>
       </div>
     </n-card>
@@ -195,17 +216,46 @@
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from "vue";
-import {NButton, NCard, NForm, NFormItem, NInput, NModal, NStep, NSteps, useMessage} from "naive-ui";
+import {computed, onMounted, ref} from "vue";
+import {NButton, NCard, NForm, NFormItem, NIcon, NInput, NModal, NStep, NSteps, useMessage} from "naive-ui";
+import {
+  CheckmarkCircleOutline,
+  ClipboardOutline,
+  CreateOutline,
+  DiamondOutline,
+  ImageOutline,
+} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
 import {api} from "../services/apiService.js";
+import {useI18n} from "../composables/useI18n.js";
+import {getPricingPlanForLocale, resolveUserPlan} from "../shared/pricingPlans.js";
 
-const props = defineProps<{ modelValue: boolean }>();
+defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{ (e: "update:modelValue", v: boolean): void }>();
 
 const message = useMessage();
 const authStore = useAuthStore();
+const {l, t, dir, locale} = useI18n();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+
+const pricingPlan = computed(() => {
+  const resolved = authStore.user ? resolveUserPlan(authStore.user) : "trial";
+  const id = resolved === "expired" ? "trial" : resolved;
+  return getPricingPlanForLocale(id, locale.value);
+});
+
+const trialDaysLeft = computed(() => {
+  if (!authStore.user || resolveUserPlan(authStore.user) !== "trial") return "";
+  const ends = authStore.user.trial_ends_at;
+  if (!ends) return "";
+  const parsed = new Date(ends);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const days = Math.max(0, Math.ceil((parsed.getTime() - Date.now()) / 86_400_000));
+  return t("onboarding.trialDaysLeft", {n: days});
+});
+
+const ob = computed(() => l.value.onboarding);
+const pp = computed(() => l.value.profilePersonal);
 
 const currentStep = ref(1);
 const saving = ref(false);
@@ -238,44 +288,54 @@ onMounted(async () => {
   if (user) {
     form.value.name = user.name ?? "";
     form.value.phone = user.phone ?? "";
-    form.value.company_name = (user as any).company_name ?? "";
+    form.value.company_name = (user as {company_name?: string}).company_name ?? "";
   }
+  if (!authStore.user) return;
   await authStore.fetchMe();
   const p = authStore.user;
-  if (p) {
-    form.value.inspector_number = p.inspector_number ?? "";
-    form.value.address = p.address ?? "";
-    form.value.city = p.city ?? "";
-    form.value.company_registration = p.company_registration ?? "";
-    form.value.inspector_id_start = p.inspector_id_start ?? "";
-    form.value.eng_company_name = p.company_name ?? "";
-    form.value.company_subtitle = p.company_subtitle ?? "";
-    form.value.company_phone = p.company_phone ?? "";
-    form.value.company_email = p.company_email ?? "";
-    if (p.company_logo_url) logoPreview.value = p.company_logo_url;
-  }
+  if (!p) return;
+  form.value.inspector_number = p.inspector_number ?? "";
+  form.value.address = p.address ?? "";
+  form.value.city = p.city ?? "";
+  form.value.company_registration = p.company_registration ?? "";
+  form.value.inspector_id_start = p.inspector_id_start ?? "";
+  form.value.eng_company_name = p.company_name ?? "";
+  form.value.company_subtitle = p.company_subtitle ?? "";
+  form.value.company_phone = p.company_phone ?? "";
+  form.value.company_email = p.company_email ?? "";
+  if (p.company_logo_url) logoPreview.value = p.company_logo_url;
 });
 
+function takeImageFile(file: File | undefined, kind: "logo" | "signature") {
+  if (!file || !file.type.startsWith("image/")) return;
+  if (kind === "logo") {
+    logoFile.value = file;
+    logoPreview.value = URL.createObjectURL(file);
+  } else {
+    sigFile.value = file;
+    signaturePreview.value = URL.createObjectURL(file);
+  }
+}
+
 function onLogoSelect(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  logoFile.value = file;
-  logoPreview.value = URL.createObjectURL(file);
+  takeImageFile((e.target as HTMLInputElement).files?.[0], "logo");
 }
 
 function onSignatureSelect(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  sigFile.value = file;
-  signaturePreview.value = URL.createObjectURL(file);
+  takeImageFile((e.target as HTMLInputElement).files?.[0], "signature");
+}
+
+function onLogoDrop(e: DragEvent) {
+  takeImageFile(e.dataTransfer?.files?.[0], "logo");
+}
+
+function onSignatureDrop(e: DragEvent) {
+  takeImageFile(e.dataTransfer?.files?.[0], "signature");
 }
 
 async function finish() {
   saving.value = true;
   try {
-    // 1. Save the profile — one document, one request. The wizard asks for the
-    // company name twice (personal step and engineer step); the engineer step's
-    // answer is the one that was already winning when these were two calls.
     const savedUser = await authStore.save({
       name: form.value.name,
       phone: form.value.phone,
@@ -290,12 +350,8 @@ async function finish() {
       company_email: form.value.company_email || null,
     });
 
-    // The profile is saved at this point. The uploads below are optional
-    // extras, so a failure there is reported but must not present itself as
-    // "nothing was saved" — the user would redo a step that already worked.
     const failedUploads: string[] = [];
 
-    // 2. Upload logo if selected
     if (logoFile.value) {
       try {
         const fd = new FormData();
@@ -307,15 +363,10 @@ async function finish() {
         });
         if (!res.ok) throw new Error(String(res.status));
       } catch {
-        failedUploads.push("הלוגו");
+        failedUploads.push(ob.value.logoNoun);
       }
     }
 
-    // 3. Upload signature if selected
-    // Goes to the same endpoint as the profile page, which stores the URL on the
-    // user. The previous call uploaded to object storage but dropped the
-    // returned URL on the floor, so the signature was never referenced by
-    // anything and never appeared on a generated document.
     if (sigFile.value) {
       try {
         const fd = new FormData();
@@ -327,37 +378,30 @@ async function finish() {
         });
         if (!res.ok) throw new Error(String(res.status));
       } catch {
-        failedUploads.push("החתימה");
+        failedUploads.push(ob.value.signatureNoun);
       }
     }
 
-    // 4. Save email from name
     if (form.value.email_from_name) {
       await api.userSettings.save({email_from_name: form.value.email_from_name});
     }
 
-    // The profile save also marks onboarding complete once core fields exist.
-    // This avoids trapping users in the modal when an unrelated follow-up call
-    // fails after their data has already been persisted.
     const completed = Boolean(savedUser?.onboarding_completed);
     await authStore.fetchMe();
     emit("update:modelValue", false);
     if (failedUploads.length) {
-      message.warning(`הפרטים נשמרו, אך העלאת ${failedUploads.join(" ו")} נכשלה — ניתן להעלות שוב מהפרופיל`);
+      message.warning(t("onboarding.uploadFailed", {files: failedUploads.join(ob.value.uploadJoin)}));
     } else {
-      message.success(completed ? "ההגדרה הושלמה בהצלחה!" : "הפרטים נשמרו — השלימו שם, טלפון וחברה כדי לסיים את ההגדרה");
+      message.success(completed ? ob.value.saveOk : ob.value.savePartial);
     }
   } catch (error) {
     console.error("[onboarding] finish failed", error);
-    message.error("שגיאה בשמירת הנתונים");
+    message.error(ob.value.saveError);
   } finally {
     saving.value = false;
   }
 }
 
-// Just dismisses the modal — does not mark onboarding complete, so the
-// dashboard "finish setup" reminder keeps showing until the core fields
-// are actually filled in.
 function skipAll() {
   emit("update:modelValue", false);
 }
@@ -365,8 +409,23 @@ function skipAll() {
 
 <style scoped>
 .onboarding-card {
+  position: relative;
   border-radius: 16px;
   overflow: hidden;
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.onboarding-sr-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .onboarding-steps {
@@ -390,7 +449,7 @@ function skipAll() {
 }
 
 .step-content {
-  animation: fadeIn 0.25s ease;
+  animation: fadeIn 0.22s ease;
 }
 
 @keyframes fadeIn {
@@ -398,15 +457,27 @@ function skipAll() {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Welcome step */
+@media (prefers-reduced-motion: reduce) {
+  .step-content {
+    animation: none;
+  }
+}
+
 .welcome-hero {
   text-align: center;
   margin-bottom: 24px;
 }
 
 .welcome-icon {
-  font-size: 48px;
-  margin-bottom: 8px;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--brand-color) 16%, transparent);
+  color: var(--brand-color);
 }
 
 .welcome-title {
@@ -420,46 +491,89 @@ function skipAll() {
   color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.7;
-  margin: 0;
+  margin: 0 auto;
+  max-width: 36em;
 }
 
-.welcome-features {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.welcome-plan {
+  padding: 16px;
+  background: var(--bg-elevated, color-mix(in srgb, var(--text-primary) 4%, transparent));
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  text-align: start;
 }
 
-.welcome-feature {
+.welcome-plan__head {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  padding: 12px 16px;
-  background: var(--bg-elevated, rgba(255,255,255,0.04));
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
+  margin-bottom: 10px;
 }
 
-.welcome-feature__icon {
-  font-size: 24px;
+.welcome-plan__icon {
   flex-shrink: 0;
-  margin-top: 2px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--brand-color) 12%, transparent);
+  color: var(--brand-color);
 }
 
-.welcome-feature strong {
+.welcome-plan__kicker {
   display: block;
-  font-size: 14px;
-  margin-bottom: 2px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.welcome-plan__name {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
-.welcome-feature p {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.5;
+.welcome-plan__meta {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--brand-color);
 }
 
-/* Form steps */
+.welcome-plan__blurb {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.welcome-plan__features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.welcome-plan__features li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.welcome-plan__features li :deep(.n-icon) {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--brand-color);
+}
+
 .step-title {
   font-size: 18px;
   font-weight: 700;
@@ -471,6 +585,7 @@ function skipAll() {
   font-size: 13px;
   color: var(--text-secondary);
   margin: 0 0 20px;
+  line-height: 1.5;
 }
 
 .onboarding-form {
@@ -487,51 +602,68 @@ function skipAll() {
 }
 
 .id-preview {
-  color: var(--brand, #63e2b7);
+  color: var(--brand-color);
   font-size: 12px;
 }
 
-/* Logo upload */
 .logo-upload {
   display: flex;
   align-items: center;
   gap: 16px;
 }
 
+.logo-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  min-height: 56px;
+  padding: 6px;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.logo-drop--filled {
+  border-style: solid;
+  background: var(--bg-elevated, color-mix(in srgb, var(--text-primary) 4%, transparent));
+}
+
 .logo-preview {
   max-height: 56px;
   max-width: 180px;
-  border-radius: 8px;
+  border-radius: 6px;
   object-fit: contain;
-  border: 1px solid var(--border-color);
-  padding: 4px;
-  background: rgba(255,255,255,0.05);
 }
 
 .logo-placeholder {
-  width: 120px;
-  height: 56px;
-  border: 2px dashed var(--border-color);
-  border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   font-size: 12px;
   color: var(--text-secondary);
-  cursor: pointer;
 }
 
-/* Signature upload */
+.file-input {
+  display: none;
+}
+
 .signature-upload-area {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 100%;
   padding: 24px;
-  border: 2px dashed var(--border-color);
+  border: 1px dashed var(--border-color);
   border-radius: 12px;
   margin-bottom: 20px;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
 }
 
 .signature-preview {
@@ -547,26 +679,22 @@ function skipAll() {
   gap: 6px;
   color: var(--text-secondary);
   font-size: 14px;
-}
-
-.signature-placeholder__icon {
-  font-size: 36px;
+  text-align: center;
 }
 
 .signature-placeholder__hint {
   font-size: 12px;
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
-/* Summary */
 .onboarding-summary {
-  background: var(--bg-elevated, rgba(255,255,255,0.04));
+  background: var(--bg-elevated, color-mix(in srgb, var(--text-primary) 4%, transparent));
   border-radius: 10px;
   padding: 16px;
   border: 1px solid var(--border-color);
 }
 
-.onboarding-summary h4 {
+.onboarding-summary h3 {
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
@@ -593,7 +721,6 @@ function skipAll() {
   letter-spacing: 0.5px;
 }
 
-/* Footer */
 .onboarding-footer {
   display: flex;
   align-items: center;
@@ -602,12 +729,15 @@ function skipAll() {
   border-top: 1px solid var(--border-color);
 }
 
+.onboarding-footer__spacer {
+  flex: 1;
+}
+
 .skip-btn {
-  opacity: 0.6;
+  opacity: 0.7;
   font-size: 12px;
 }
 
-/* Mobile */
 @media (max-width: 640px) {
   .form-row {
     flex-direction: column;
@@ -615,9 +745,6 @@ function skipAll() {
   }
   .summary-grid {
     grid-template-columns: 1fr;
-  }
-  .welcome-features {
-    gap: 10px;
   }
 }
 </style>
