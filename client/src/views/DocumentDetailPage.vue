@@ -999,13 +999,17 @@ const equipmentColumns = computed(() => {
     { title: d.colRadius, key: "load_radius", width: 80, render: (row: any) => joinArr(row.load_radius) },
   ];
   const rows = equipment.value;
-  return all.filter(col => {
+  const visible = all.filter(col => {
     return rows.some(row => {
       const v = row[col.key];
       if (Array.isArray(v)) return v.some(Boolean);
       return v !== null && v !== undefined && v !== "";
     });
   });
+  if (dir.value !== "rtl") return visible;
+  return visible
+    .map(col => ({ ...col, align: "right" as const, titleAlign: "right" as const }))
+    .reverse();
 });
 
 async function reloadDoc() {

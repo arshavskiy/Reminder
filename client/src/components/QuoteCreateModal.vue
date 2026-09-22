@@ -88,14 +88,14 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from "vue";
+import {computed, ref, watch} from "vue";
 import {NInput, NModal, NSpin, NSelect, useMessage} from "naive-ui";
 import {paymentService, type InspectionRate} from "../services/paymentService";
 import {api} from "../services/apiService";
 import QuoteDocumentEquipmentPreview from "./QuoteDocumentEquipmentPreview.vue";
 import QuoteBillingForm from "./QuoteBillingForm.vue";
 
-defineProps<{show: boolean}>();
+const props = defineProps<{show: boolean}>();
 const emit = defineEmits<{
   "update:show": [show: boolean];
   "created": [id: string];
@@ -258,7 +258,9 @@ function saveAndIssue() {
   return persist(true);
 }
 
-onMounted(loadData);
+watch(() => props.show, (open) => {
+  if (open) loadData();
+}, {immediate: true});
 </script>
 
 <style scoped>
