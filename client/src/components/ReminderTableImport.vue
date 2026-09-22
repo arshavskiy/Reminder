@@ -82,6 +82,7 @@
 
 <script setup lang="ts">
 import {ref} from "vue";
+import {useDevModal} from "../composables/useDevModal.js";
 import {NAlert, NButton, NIcon, NModal, NSpin} from "naive-ui";
 import {GridOutline, CloudUploadOutline, DownloadOutline, DocumentOutline, DocumentTextOutline, InformationCircleOutline} from "@vicons/ionicons5";
 import {api} from "../services/apiService";
@@ -91,6 +92,7 @@ withDefaults(defineProps<{variant?: "button" | "card"}>(), {variant: "button"});
 const emit = defineEmits<{imported: []}>();
 const {l, t, dir} = useI18n();
 const show = ref(false);
+useDevModal("reminderTableImport", show);
 const busy = ref(false);
 const file = ref<File | null>(null);
 const preview = ref<Preview | null>(null);

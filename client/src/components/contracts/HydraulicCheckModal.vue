@@ -83,12 +83,12 @@
                           v-model:value="templateId"
                           :consistent-menu-width="false"
                           :loading="loadingTemplates"
-                          :menu-props="{style: 'width:100px!important;max-width:100px!important'}"
+                          :menu-props="{style: 'width:150px!important;max-width:150px!important'}"
                           :options="templateOptions"
                           :virtual-scroll="false"
                           filterable
                           :placeholder="l.inspectionModal.chooseTemplate"
-                          style="width:100px;flex:none"
+                          style="width:150px;flex:none"
                           @update:value="(id) => selectTemplate(id, {syncReportType: true})"
                       />
                       <n-tooltip trigger="hover">
@@ -503,6 +503,10 @@
                     {{ l.inspectionModal.needExpiryFirst }}
                   </div>
                 </div>
+              </section>
+
+              <!-- Step: Findings -->
+              <section v-show="activeStep === 'findings'" class="hm-section">
                 <div v-if="reminderExtraFields.length" class="hm-section__card hm-findings">
                   <div class="hm-section__card-head">
                     <n-icon :component="ListOutline" :size="18"/>
@@ -724,7 +728,7 @@ const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 const isMobile = ref(window.innerWidth <= 720);
 
 // Step navigation
-type StepKey = "basic" | "business" | "equipment" | "checklist" | "reminder" | "billing";
+type StepKey = "basic" | "business" | "equipment" | "checklist" | "findings" | "reminder" | "billing";
 const steps = computed(() => {
   const list: {key: StepKey; label: string}[] = [
     {key: "basic", label: l.value.inspectionModal.stepDetails},
@@ -733,6 +737,9 @@ const steps = computed(() => {
   ];
   if (templateChecklistSections.value.length) {
     list.push({key: "checklist", label: l.value.inspectionModal.stepChecklist});
+  }
+  if (reminderExtraFields.value.length) {
+    list.push({key: "findings", label: l.value.inspectionModal.stepFindings});
   }
   list.push(
     {key: "reminder", label: l.value.inspectionModal.stepReminder},
@@ -1048,10 +1055,43 @@ const reportTypePresets = computed<ReportTypePreset[]>(() => {
     ...(reportTypeFormText(preset.key) ?? FALLBACK_FORM_TEXT),
   }));
 });
-const reportTypeOptions = computed(() => reportTypePresets.value.map((preset) => ({label: preset.label, value: preset.value})));
+// underground_parking_lift stays in reportTypePresets (existing saved
+// contracts referencing it must still resolve to a valid label/interval)
+// but is hidden from the picker per user request — dropdown no longer
+// offers it for new selections.
+const HIDDEN_REPORT_TYPE_OPTIONS = new Set(["underground_parking_lift", "underground_parking_lift_en"]);
+const reportTypeOptions = computed(() =>
+    reportTypePresets.value
+        .filter((preset) => !HIDDEN_REPORT_TYPE_OPTIONS.has(preset.value))
+        .map((preset) => ({label: preset.label, value: preset.value})),
+);
 const selectedReportType = computed(() =>
     reportTypePresets.value.find((preset) => preset.value === reportType.value) ?? reportTypePresets.value[0],
 );
+
+// A saved draft (or a value carried over from switching locale mid-session)
+// can hold a key from the OTHER language's preset list — e.g. a draft saved
+// as "tower_crane_en" opened later while the UI is in Hebrew. The Hebrew
+// preset list has no such key, so n-select falls back to rendering the raw
+// bound value as text instead of a translated label. Remap to the current
+// locale's equivalent key (by stripping/adding the "_en" suffix) before it
+// ever reaches reportType.value, so the dropdown always shows a real option.
+function resolveReportTypeForLocale(value: string | null | undefined): string {
+  if (!value) return DEFAULT_REPORT_TYPE;
+  if (reportTypePresets.value.some((preset) => preset.value === value)) return value;
+  const counterpart = locale.value === "en"
+    ? (value.endsWith("_en") ? value : `${value}_en`)
+    : value.replace(/_en$/, "");
+  if (reportTypePresets.value.some((preset) => preset.value === counterpart)) return counterpart;
+  return DEFAULT_REPORT_TYPE;
+}
+
+// Same remap, but live: if the user switches the app's language while this
+// modal is open, keep the same equipment type selected instead of leaving a
+// now-foreign key bound to the select.
+watch(locale, () => {
+  reportType.value = resolveReportTypeForLocale(reportType.value);
+});
 const PRESSURE_TYPE_KEYS = new Set([
   "air_receiver", "steam_receiver", "steam_boiler", "pressure_vessel",
   "air_receiver_en", "steam_receiver_en", "steam_boiler_en", "pressure_vessel_en",
@@ -1128,11 +1168,17 @@ const computedReminderDate = computed(() => {
 
 const HYDRAULIC_PRINT_TEMPLATE_ID = "6a7cfbee5e95a7b2e1e4b606";
 
+// English (ltr) print templates seeded for the US preset set must not show
+// up while working in Hebrew, and vice versa — a template with no dir set
+// (legacy/custom ones predating this field) is assumed to match whatever
+// the modal's own locale is, so it still shows up rather than vanishing.
 const templateOptions = computed(() =>
-    templates.value.map((t) => ({
-      label: `${t.name} (${t.editorType === "sections" ? l.value.inspectionModal.layoutEditor : l.value.inspectionModal.excelEditor})`,
-      value: t._id,
-    }))
+    templates.value
+        .filter((t) => !t.dir || t.dir === dir.value)
+        .map((t) => ({
+          label: `${t.name} (${t.editorType === "sections" ? l.value.inspectionModal.layoutEditor : l.value.inspectionModal.excelEditor})`,
+          value: t._id,
+        }))
 );
 
 const equipmentOptions = computed(() => {
@@ -1308,6 +1354,9 @@ function ensureTemplateValueKeys() {
 watch([reportType, activeLayout], () => {
   ensureTemplateValueKeys();
   if (activeStep.value === "checklist" && !templateChecklistSections.value.length) {
+    activeStep.value = "equipment";
+  }
+  if (activeStep.value === "findings" && !reminderExtraFields.value.length) {
     activeStep.value = "equipment";
   }
 });
@@ -1727,7 +1776,7 @@ function guessReportTypeFromText(...texts: Array<string | null | undefined>): Re
   if (!haystack) return null;
   let best: {preset: ReportTypePreset; length: number} | null = null;
   for (const preset of reportTypePresets.value) {
-    const label = categoryDefaults.find((cat) => cat.value === preset.category)?.label;
+    const label = categoryDefaults.value.find((cat) => cat.value === preset.category)?.label;
     if (!label || !haystack.includes(label)) continue;
     if (!best || label.length > best.length) best = {preset, length: label.length};
   }
@@ -1916,7 +1965,7 @@ async function open(prefill?: HydraulicCheckPrefill) {
   checkDateMs.value = draft?.checkDateMs ?? Date.now();
   expiryDateMs.value = draft?.expiryDateMs ?? null;
   reminderDaysBefore.value = draft?.reminderDaysBefore ?? 30;
-  reportType.value = draft?.reportType ?? inferReportTypeValue(draft?.form?.contract_type, draft?.equipmentRows?.[0]?.category);
+  reportType.value = resolveReportTypeForLocale(draft?.reportType ?? inferReportTypeValue(draft?.form?.contract_type, draft?.equipmentRows?.[0]?.category));
   intervalMonths.value = clampIntervalMonths(draft?.intervalMonths ?? selectedReportType.value.intervalMonths);
   prevReportNumber.value = draft?.prevReportNumber ?? "";
   billingDocumentKind.value = draft?.billingDocumentKind ?? null;
@@ -2366,7 +2415,7 @@ async function openForUpdate(contractId: string, returnTo?: string) {
   checkDateMs.value = row.start_date ? new Date(dateOnly(row.start_date)).getTime() : Date.now();
   expiryDateMs.value = row.expiry_date ? new Date(dateOnly(row.expiry_date)).getTime() : null;
   reminderDaysBefore.value = 30;
-  reportType.value = inferReportTypeValue(row.contract_type, firstEquipment?.category);
+  reportType.value = resolveReportTypeForLocale(inferReportTypeValue(row.contract_type, firstEquipment?.category));
   intervalMonths.value = clampIntervalMonths((row as any).inspection_interval_months ?? manual.inspection_interval_months ?? selectedReportType.value.intervalMonths);
   hydraulicForm.value = {
     contract_number: contractNumberInputValue(row.contract_number),

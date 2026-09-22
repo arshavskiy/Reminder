@@ -178,13 +178,14 @@
         <WsConnector />
         <OnboardingWizard v-if="showOnboarding" v-model="showOnboarding" />
         <WalkthroughOverlay />
+        <component :is="DevModalHost" v-if="DevModalHost" />
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>
 </template>
 
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref, watch, watchEffect} from "vue";
+import {computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch, watchEffect} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {
   darkTheme,
@@ -246,6 +247,7 @@ import OnboardingWizard from "./components/OnboardingWizard.vue";
 import WalkthroughOverlay from "./components/WalkthroughOverlay.vue";
 import {useWalkthrough} from "./composables/useWalkthrough.js";
 import {useOnboarding} from "./composables/useOnboarding.js";
+import {useDevModal} from "./composables/useDevModal.js";
 import {useAuthStore} from "./stores/auth.js";
 import {useFeaturesStore} from "./stores/features.js";
 import {useUserSettingsStore} from "./stores/userSettings.js";
@@ -255,7 +257,6 @@ import {FEATURES} from "./shared/features.js";
 import {
   isLapsedTrial as isLapsedTrialPlan,
   normalizePlanId,
-  PAID_PLAN_IDS,
   planMeetsMinimum,
   resolveUserPlan,
   type PlanId
@@ -305,14 +306,21 @@ const hideAppChrome = computed(() =>
 );
 
 const mobileNavOpen = ref(false);
+const DevModalHost = import.meta.env.DEV
+  ? defineAsyncComponent(() => import("./dev/DevModalHost.vue"))
+  : null;
 
 // ── Onboarding wizard ───────────────────────────────────────────────────────
 const {showOnboarding} = useOnboarding();
+useDevModal("onboarding", showOnboarding);
+useDevModal("chrome.mobileNav", mobileNavOpen);
 
 watch(
-  () => authStore.user,
-  (user) => {
-    if (user && !(user as any).onboarding_completed && !hideAppChrome.value) {
+  [() => authStore.user, hideAppChrome],
+  ([user, hideChrome]) => {
+    // Login sets the user while the route is still /login (chrome hidden).
+    // Re-check after the dashboard opens or the card never appears.
+    if (user && !user.onboarding_completed && !hideChrome) {
       showOnboarding.value = true;
     }
   },
@@ -500,7 +508,7 @@ const allNav = computed(() => {
     {label: nav.dashboard, key: "dashboard", minPlan: "expired" as const, feature: FEATURES.pages.dashboard},
     {label: nav.documents, key: "documents", minPlan: "expired" as const, feature: FEATURES.pages.documents},
     {label: nav.reminders, key: "reminders", minPlan: "expired" as const, feature: FEATURES.pages.reminders},
-    {label: nav.reports, key: "reports", minPlan: PAID_PLAN_IDS, feature: FEATURES.pages.reports},
+    {label: nav.reports, key: "reports", minPlan: "expired" as const, feature: FEATURES.pages.reports},
     {label: nav.clients, key: "clients", minPlan: "expired" as const, feature: FEATURES.pages.clients},
     {label: nav.field, key: "field", minPlan: "business" as const, feature: FEATURES.pages.field},
     {label: nav.equipment, key: "equipment", minPlan: "expired" as const, feature: FEATURES.pages.equipment},

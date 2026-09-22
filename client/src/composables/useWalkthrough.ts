@@ -1,5 +1,6 @@
 import { ref, computed, watch, nextTick } from "vue";
 import { useRoute } from "vue-router";
+import { useLocaleStore } from "../stores/locale.js";
 
 export interface WalkthroughStep {
   selector: string;
@@ -48,7 +49,7 @@ const PAGE_TOUR_MAP: Record<string, string> = {
   "/reports": "reports",
 };
 
-const tours: Record<string, WalkthroughStep[]> = {
+const TOURS_HE: Record<string, WalkthroughStep[]> = {
   main: [
     {
       selector: ".appbar__brand",
@@ -213,9 +214,181 @@ const tours: Record<string, WalkthroughStep[]> = {
   ],
 };
 
+const TOURS_EN: Record<string, WalkthroughStep[]> = {
+  main: [
+    {
+      selector: ".appbar__brand",
+      title: "Welcome to RemindOCR",
+      text: "The system for managing inspections, reminders, and clients. Let's take a quick tour of the interface.",
+      placement: "bottom",
+    },
+    {
+      selector: ".appbar__nav",
+      title: "Navigation menu",
+      text: "Quick access to every part of the system: documents, inspections, reminders, reports, clients, and more.",
+      placement: "bottom",
+    },
+    {
+      selector: ".dash__intake",
+      title: "Quick upload area",
+      text: "Drag documents here, click + to create a new inspection report, or import inspection reports from Gmail.",
+      placement: "bottom",
+    },
+    {
+      selector: ".dash__stats",
+      title: "Quick stats",
+      text: "An overview of your document, client, inspection, and reminder counts.",
+      placement: "bottom",
+    },
+    {
+      selector: ".calendar-pref",
+      title: "Calendar and reminders",
+      text: "An interactive calendar showing all your scheduled reminders and inspections.",
+      placement: "top",
+    },
+    {
+      selector: ".module-grid",
+      title: "Modules",
+      text: "Shortcuts to every part of the system. Click a card to jump to that page.",
+      placement: "top",
+    },
+    {
+      selector: ".user-dropdown",
+      title: "User menu",
+      text: "Access your profile, print and email templates, equipment settings, and restart this tour from here.",
+      placement: "bottom",
+    },
+  ],
+  documents: [
+    {
+      selector: ".documents-actions",
+      title: "Document actions",
+      text: "Upload new documents, refresh the list, trigger a rescan, or delete documents.",
+      placement: "bottom",
+    },
+    {
+      selector: ".filterbar",
+      title: "Filter by status",
+      text: "Filter documents by processing state: all, pending, done, error, and more.",
+      placement: "bottom",
+    },
+    {
+      selector: ".toolbar",
+      title: "Search and advanced filters",
+      text: "Search by file name, filter by client or date, and switch between list and card views.",
+      placement: "bottom",
+    },
+    {
+      selector: ".bulk-action-anchor",
+      title: "Bulk actions",
+      text: "Turn on selection mode to mark documents and act on all of them at once — delete, rescan, and more.",
+      placement: "bottom",
+    },
+  ],
+  contracts: [
+    {
+      selector: ".page__actions-row--main",
+      title: "Manage inspections",
+      text: "Create a new inspection report, export a monthly report, or switch to the documents view.",
+      placement: "bottom",
+    },
+    {
+      selector: ".filterbar",
+      title: "Filter by status",
+      text: "Filter inspections by status: all, active, expired, pending review, and more.",
+      placement: "bottom",
+    },
+    {
+      selector: ".toolbar",
+      title: "Search inspections",
+      text: "Search by client name, contract number, or any other field.",
+      placement: "bottom",
+    },
+    {
+      selector: ".bulk-action-anchor",
+      title: "Bulk actions",
+      text: "Select inspections and send reminders, create reminders, or delete them all at once.",
+      placement: "bottom",
+    },
+  ],
+  reminders: [
+    {
+      selector: ".reminders-hero",
+      title: "Manage reminders",
+      text: "Create, send, and track the status of all your reminders here.",
+      placement: "bottom",
+    },
+    {
+      selector: ".reminders-summary",
+      title: "Quick summary",
+      text: "A quick look at reminder counts by status: pending, sent, done.",
+      placement: "bottom",
+    },
+    {
+      selector: ".reminders-controls",
+      title: "Search and filter",
+      text: "Search reminders by free text, filter by status, or use the quick filters.",
+      placement: "bottom",
+    },
+    {
+      selector: ".reminders-table",
+      title: "Reminders table",
+      text: "All reminders listed with full details. Click a row for more details and actions.",
+      placement: "top",
+    },
+  ],
+  clients: [
+    {
+      selector: ".clients-actions",
+      title: "Manage clients",
+      text: "Add a new client, refresh the list, or delete clients you no longer need.",
+      placement: "bottom",
+    },
+    {
+      selector: ".client-search",
+      title: "Search clients",
+      text: "Search by name, email, phone, or any field. Results update in real time.",
+      placement: "bottom",
+    },
+    {
+      selector: ".table-wrap",
+      title: "Clients table",
+      text: "All clients shown here with contact details, contract count, and reminders. Click to edit.",
+      placement: "top",
+    },
+  ],
+  reports: [
+    {
+      selector: ".reports-panel--generator",
+      title: "Generate reports",
+      text: "Choose a client and period, customize columns, and generate a PDF or Excel report.",
+      placement: "bottom",
+    },
+    {
+      selector: ".field-selector",
+      title: "Choose fields",
+      text: "Choose which columns appear in the report. Your settings are saved for next time.",
+      placement: "bottom",
+    },
+    {
+      selector: ".reports-panel--schedule",
+      title: "Scheduled reports",
+      text: "Set up automatic monthly report delivery to the email addresses you choose.",
+      placement: "bottom",
+    },
+  ],
+};
+
+const TOURS_BY_LOCALE: Record<"he" | "en", Record<string, WalkthroughStep[]>> = {
+  he: TOURS_HE,
+  en: TOURS_EN,
+};
+
 export function useWalkthrough() {
+  const localeStore = useLocaleStore();
+  const tours = computed(() => TOURS_BY_LOCALE[localeStore.locale] ?? TOURS_HE);
   const route = useRoute();
-  const steps = computed(() => currentTourId.value ? (tours[currentTourId.value] ?? []) : []);
+  const steps = computed(() => currentTourId.value ? (tours.value[currentTourId.value] ?? []) : []);
   const currentStep = computed(() => steps.value[currentStepIndex.value] ?? null);
   const totalSteps = computed(() => steps.value.length);
   const isLastStep = computed(() => currentStepIndex.value >= steps.value.length - 1);
@@ -257,7 +430,7 @@ export function useWalkthrough() {
     const tourId = PAGE_TOUR_MAP[path];
     if (!tourId || isCompleted(tourId) || active.value) return;
     setTimeout(() => {
-      const firstStep = tours[tourId]?.[0];
+      const firstStep = tours.value[tourId]?.[0];
       if (firstStep && document.querySelector(firstStep.selector)) {
         startTour(tourId);
       }

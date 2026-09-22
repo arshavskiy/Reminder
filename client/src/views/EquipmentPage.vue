@@ -412,6 +412,7 @@ import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import type {Client, Equipment, EquipmentCategory} from "@shared/types.js";
 import XlsxImportModal from "../components/XlsxImportModal.vue";
 
@@ -530,6 +531,7 @@ const lightboxUrl = ref<string | null>(null);
 const checklistDraft = ref<NonNullable<Equipment["inspection_checklist"]>>([]);
 const savingChecklist = ref(false);
 const showQr = ref(false);
+useDevModal("equipment.qr", showQr);
 const qrEquipment = ref<Equipment | null>(null);
 
 const clientOptions = computed<SelectOption[]>(() =>

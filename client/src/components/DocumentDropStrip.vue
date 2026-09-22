@@ -141,6 +141,7 @@ import { NButton, NIcon, NModal, useMessage } from "naive-ui";
 import { CloudUploadOutline, DocumentOutline, DocumentTextOutline, GridOutline, ImageOutline } from "@vicons/ionicons5";
 import { api } from "../services/apiService";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import MissingFieldsModal from "./MissingFieldsModal.vue";
 import {
   listMissingDocumentFields,
@@ -175,9 +176,11 @@ const message = useMessage();
 const isDragging = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 const showUploadResults = ref(false);
+useDevModal("dropStrip.uploadResults", showUploadResults);
 const uploadResultsLoading = ref(false);
 const uploadResultRows = ref<UploadResultRow[]>([]);
 const showMissingFieldsModal = ref(false);
+useDevModal("dropStrip.missingFields", showMissingFieldsModal);
 const missingFieldsTarget = ref<{
   documentId: string;
   fileName: string;

@@ -401,6 +401,7 @@ import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue
 import {useAuthStore} from "../stores/auth.js";
 import {resolveUserPlan} from "../shared/pricingPlans.js";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import type { Equipment, EventType } from "@shared/types.js";
 
 type TabKey = "docs" | "equipment" | "timeline";
@@ -457,11 +458,13 @@ const store = useClientsStore();
 const message = useMessage();
 
 const showEdit = ref(false);
+useDevModal("client.edit", showEdit);
 const saving = ref(false);
 const editForm = ref<EditForm | null>(null);
 const equipment = ref<Equipment[]>([]);
 const loadingEquipment = ref(false);
 const showEquipmentAdd = ref(false);
+useDevModal("client.equipmentAdd", showEquipmentAdd);
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
 const showHydraulicModal = ref(false);
 

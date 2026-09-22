@@ -677,6 +677,7 @@ import { useAuthStore } from "../stores/auth.js";
 import type { DocTemplate } from "../shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import GmailLogo from "../components/GmailLogo.vue";
 import GmailImportJobStatus from "../components/GmailImportJobStatus.vue";
 
@@ -724,6 +725,10 @@ const importResults = ref<{
   errors: number;
   results: Array<{ messageId: string; filename: string; documentId?: string; error?: string; explanation?: string }>;
 }>({ show: false, imported: 0, skipped: 0, errors: 0, results: [] });
+useDevModal("gmail.importResults", computed({
+  get: () => importResults.value.show,
+  set: (v) => { importResults.value.show = v; },
+}));
 
 // Import history
 type ImportedDocumentCard = GmailImportedDocument & {
@@ -754,6 +759,10 @@ const importedBusinessModal = ref<{
   doc: ImportedDocumentCard | null;
   value: string;
 }>({ show: false, doc: null, value: "" });
+useDevModal("gmail.assignBusiness", computed({
+  get: () => importedBusinessModal.value.show,
+  set: (v) => { importedBusinessModal.value.show = v; },
+}));
 const invoiceStatusOptions = computed<SelectOption[]>(() => [
   { label: l.value.common.statusNew, value: "new" },
   { label: l.value.common.statusReviewed, value: "reviewed" },

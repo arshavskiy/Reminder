@@ -335,6 +335,7 @@ import ReminderQuickView from "./ReminderQuickView.vue";
 import ConfirmDialogHead from "./ConfirmDialogHead.vue";
 import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS} from "../composables/useConfirm.js";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 
 const featuresStore = useFeaturesStore();
 const {l, t, locale, dir} = useI18n();
@@ -374,9 +375,11 @@ watch(() => props.testsOnly, (testsOnly) => {
 });
 const sendingVisible = ref(false);
 const showSendVisibleConfirm = ref(false);
+useDevModal("calendar.sendVisible", showSendVisibleConfirm);
 
 // Day detail modal — shows every reminder/expiry for a clicked calendar day
 const dayModalOpen = ref(false);
+useDevModal("calendar.day", dayModalOpen);
 const dayModalItems = ref<ReminderWithContext[]>([]);
 const dayModalExpiry = ref<ExpiryCalendarItem[]>([]);
 const dayModalLabel = ref("");

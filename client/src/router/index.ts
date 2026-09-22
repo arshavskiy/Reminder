@@ -178,7 +178,7 @@ const appRoutes: RouteRecordRaw[] = [
             meta: {feature: FEATURES.pages.emailTemplates}
         },
     {path: "/equipment", component: EquipmentPage, meta: {feature: FEATURES.pages.equipment, requirePlan: "expired"}},
-    {path: "/reports", component: ReportsPage, meta: {feature: FEATURES.pages.reports, requirePlan: PAID_PLAN_IDS}},
+    {path: "/reports", component: ReportsPage, meta: {feature: FEATURES.pages.reports, requirePlan: "expired"}},
         {path: "/reports/expenses", redirect: "/invoices/expenses"},
         {
             path: "/field",

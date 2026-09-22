@@ -537,6 +537,7 @@ import {
 } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
 import GmailLogo from "../components/GmailLogo.vue";
@@ -612,6 +613,8 @@ const vendorMergeModal = reactive({
   canonicalName: "" as string | null,
   saving: false,
 });
+useDevModal("invoices.assignClient", businessModal);
+useDevModal("invoices.mergeSuppliers", vendorMergeModal);
 
 const statusOptions = computed<SelectOption[]>(() => statusStrip.value.map((item) => ({
   label: `${item.label} (${item.count})`,

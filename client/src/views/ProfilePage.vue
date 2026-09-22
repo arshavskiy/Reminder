@@ -1575,6 +1575,7 @@ import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "@shared/printTemplateLayout.js"
 import type { User, UserSettings } from "@shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import GmailLogo from "../components/GmailLogo.vue";
 import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
 import AwsS3Logo from "../components/AwsS3Logo.vue";
@@ -2110,6 +2111,7 @@ const savingPw = ref(false);
 const disconnecting = ref(false);
 const deletingAccount = ref(false);
 const showDeleteAccountModal = ref(false);
+useDevModal("profile.deleteAccount", showDeleteAccountModal);
 const deleteAccountEmail = ref("");
 const deleteAccountConfirm = ref("");
 

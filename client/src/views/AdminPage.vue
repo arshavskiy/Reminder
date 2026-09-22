@@ -1671,6 +1671,7 @@ import {
   useMessage,
 } from "naive-ui";
 import {useAdminPush} from "../composables/useAdminPush";
+import {useDevModal} from "../composables/useDevModal.js";
 import {
   ArrowBackOutline,
   BriefcaseOutline,
@@ -2018,6 +2019,8 @@ function leadContactLink(kind: "email" | "phone" | "website", value: string | nu
 const showDocModal = ref(false);
 const docModalId = ref<string | null>(null);
 const showErrorModal = ref(false);
+useDevModal("admin.document", showDocModal);
+useDevModal("admin.error", showErrorModal);
 const errorDetail = ref<any>(null);
 
 function openDocModal(id: string) {
@@ -3179,6 +3182,11 @@ const retryingIds = ref<Set<string>>(new Set());
 // ── Report modal ───────────────────────────────────────────────────────────
 const showReportModal = ref(false);
 const reportModalUser = ref<{ id: string; name: string } | null>(null);
+useDevModal("admin.report", showReportModal, {
+  beforeOpen: () => {
+    if (!reportModalUser.value) reportModalUser.value = {id: "dev", name: "DEV"};
+  },
+});
 
 function openReportModal(user: any) {
   reportModalUser.value = { id: user.id ?? user.user_id, name: user.name ?? user.email ?? user.user_id };

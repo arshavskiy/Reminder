@@ -296,6 +296,7 @@ import {api} from "../services/apiService.js";
 import type {DocTemplate, EmailTemplate} from "@shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useConfirm} from "../composables/useConfirm.js";
+import {useDevModal} from "../composables/useDevModal.js";
 import {categoryLabel} from "../utils/reminderCategoryLabels.js";
 
 const templates = ref<EmailTemplate[]>([]);
@@ -387,6 +388,7 @@ const categoryOptions = computed(() =>
 );
 
 const showSendTest = ref(false);
+useDevModal("emailTemplates.sendTest", showSendTest);
 const sendTestEmail = ref("");
 const sendingTest = ref(false);
 const sendTestTemplateId = ref<string | null>(null);

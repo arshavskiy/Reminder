@@ -440,6 +440,7 @@ import {useRemindersStore} from "../stores/reminders.js";
 import {dashboardPath, localizedPath, marketingUrl, useLocaleStore} from "../stores/locale.js";
 import {INTENT_KEY, parseIntent, readIntent} from "../shared/signupIntent";
 import GoogleSignIn from "../components/GoogleSignIn.vue";
+import {useDevModal} from "../composables/useDevModal.js";
 import {trackConversion} from "../analytics.js";
 
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -487,6 +488,7 @@ const regTermsAccepted = ref(false);
 
 // Forgot password
 const showForgot = ref(false);
+useDevModal("login.forgotPassword", showForgot);
 const forgotEmail = ref("");
 
 const errorMsg = computed(() => {
