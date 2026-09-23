@@ -205,6 +205,40 @@ export function registerContractRoutes(app: express.Application) {
         await generateContractReminders(contractId, doc.client_id, null, String(doc.expiry_date), userId);
       }
 
+      // The draft page (/contracts/:id/draft) requires a print_template_drafts
+      // row to exist for the contract. Seed one from the source contract's draft
+      // so the renewal opens pre-filled instead of 404ing on first load.
+      if (doc.print_template_id) {
+        const sourceDraft = await col("print_template_drafts").findOne({
+          user_id: userId,
+          contract_id: String(source._id),
+        }) as any;
+        if (sourceDraft) {
+          const clonedData = { ...(sourceDraft.data ?? {}) };
+          if (startDate) clonedData.start_date = startDate;
+          if (expiryDate) clonedData.expiry_date = expiryDate;
+          delete clonedData.contract_number;
+          delete clonedData.document_number;
+          delete clonedData.report_number;
+          await col("print_template_drafts").updateOne(
+            { user_id: userId, contract_id: contractId },
+            {
+              $set: {
+                user_id: userId,
+                template_id: doc.print_template_id,
+                editor_type: sourceDraft.editor_type ?? (doc.editor_type === "grid" ? "grid" : "sections"),
+                data: clonedData,
+                meta: { ...(sourceDraft.meta ?? {}), contract_id: contractId },
+                client_id: doc.client_id ?? null,
+                contract_id: contractId,
+                updated_at: now.toISOString(),
+              },
+            },
+            { upsert: true },
+          );
+        }
+      }
+
       const inserted = await col("contracts").findOne({ _id: r.insertedId });
       res.status(201).json(flatDoc(inserted));
     } catch (err) {
