@@ -29,6 +29,56 @@
               >
             </n-space>
           </div>
+
+          <div class="settings-stack">
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="CameraOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">{{ l.profileSettings.avatarTitle }}</h3>
+                  <p class="settings-group__desc">{{ l.profileSettings.avatarDesc }}</p>
+                </div>
+              </div>
+              <div class="settings-row settings-row--avatar">
+                <div class="sidebar-avatar sidebar-avatar--lg">
+                  <img
+                    v-if="user?.picture_url"
+                    :src="user.picture_url"
+                    alt=""
+                    referrerpolicy="no-referrer"
+                  />
+                  <span v-else class="sidebar-avatar__initials">{{ initials }}</span>
+                </div>
+                <div class="settings-row__text">
+                  <span class="settings-row__title">{{ user?.name || user?.email || "—" }}</span>
+                  <span class="settings-row__desc">{{ l.profileSettings.avatarFormat }}</span>
+                </div>
+                <input
+                  ref="avatarInput"
+                  type="file"
+                  accept="image/*"
+                  class="visually-hidden"
+                  @change="onAvatarChange"
+                />
+                <div class="settings-row__actions">
+                  <n-button
+                    size="small"
+                    ghost
+                    :loading="uploadingAvatar"
+                    @click="avatarInput?.click()"
+                  >
+                    <template #icon>
+                      <n-icon :component="CameraOutline" />
+                    </template>
+                    {{ l.profileSettings.changePhoto }}
+                  </n-button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="info-card">
             <div class="info-row">
               <span class="info-label">{{ l.profilePersonal.fullName }}</span>
@@ -423,53 +473,6 @@
           </div>
 
           <div class="settings-stack">
-            <div class="settings-group">
-              <div class="settings-group__head">
-                <span class="settings-group__icon" aria-hidden="true">
-                  <n-icon :component="CameraOutline" :size="18" />
-                </span>
-                <div>
-                  <h3 class="settings-group__title">{{ l.profileSettings.avatarTitle }}</h3>
-                  <p class="settings-group__desc">{{ l.profileSettings.avatarDesc }}</p>
-                </div>
-              </div>
-              <div class="settings-row settings-row--avatar">
-                <div class="sidebar-avatar sidebar-avatar--lg">
-                  <img
-                    v-if="user?.picture_url"
-                    :src="user.picture_url"
-                    alt=""
-                    referrerpolicy="no-referrer"
-                  />
-                  <span v-else class="sidebar-avatar__initials">{{ initials }}</span>
-                </div>
-                <div class="settings-row__text">
-                  <span class="settings-row__title">{{ user?.name || user?.email || "—" }}</span>
-                  <span class="settings-row__desc">{{ l.profileSettings.avatarFormat }}</span>
-                </div>
-                <input
-                  ref="avatarInput"
-                  type="file"
-                  accept="image/*"
-                  class="visually-hidden"
-                  @change="onAvatarChange"
-                />
-                <div class="settings-row__actions">
-                  <n-button
-                    size="small"
-                    ghost
-                    :loading="uploadingAvatar"
-                    @click="avatarInput?.click()"
-                  >
-                    <template #icon>
-                      <n-icon :component="CameraOutline" />
-                    </template>
-                    {{ l.profileSettings.changePhoto }}
-                  </n-button>
-                </div>
-              </div>
-            </div>
-
             <div class="settings-group">
               <div class="settings-group__head">
                 <span class="settings-group__icon" aria-hidden="true">
