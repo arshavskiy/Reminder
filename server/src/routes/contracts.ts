@@ -208,11 +208,17 @@ export function registerContractRoutes(app: express.Application) {
       // The draft page (/contracts/:id/draft) requires a print_template_drafts
       // row to exist for the contract. Seed one from the source contract's draft
       // so the renewal opens pre-filled instead of 404ing on first load.
+      if (!doc.print_template_id) {
+        console.warn(`[contracts] clone ${contractId}: source ${source._id} has no print_template_id, skipping draft seed`);
+      }
       if (doc.print_template_id) {
         const sourceDraft = await col("print_template_drafts").findOne({
           user_id: userId,
           contract_id: String(source._id),
         }) as any;
+        if (!sourceDraft) {
+          console.warn(`[contracts] clone ${contractId}: source ${source._id} has print_template_id but no draft row, skipping seed`);
+        }
         if (sourceDraft) {
           const clonedData = { ...(sourceDraft.data ?? {}) };
           if (startDate) clonedData.start_date = startDate;
