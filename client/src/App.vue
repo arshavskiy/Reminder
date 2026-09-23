@@ -750,10 +750,6 @@ html[data-theme="dark"] .install-banner {
   flex: 0 0 auto;
 }
 
-.app-footer strong {
-  color: var(--brand, #63e2b7);
-}
-
 .app-footer__legal {
   margin-top: 6px;
   font-size: 11px;
@@ -761,8 +757,7 @@ html[data-theme="dark"] .install-banner {
 }
 
 .app-footer__legal a {
-  color: var(--brand, #63e2b7);
-  opacity: 0.7;
+  opacity: 0.9;
   text-decoration: none;
 }
 

@@ -31,7 +31,7 @@ async function request<T>(path: string, method = "GET", body?: unknown): Promise
   return response.json();
 }
 export const paymentService = {
-  list: () => request<PaymentData>("/"),
+  list: () => request<PaymentData>(""),
   counts: () => request<{ quotes: number }>("/counts"),
   get: (id: string) => request<PaymentRequest>(`/requests/${id}`),
   saveRates: (rates: InspectionRate[]) => request("/rates", "PUT", {rates}),

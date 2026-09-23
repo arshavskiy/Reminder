@@ -5,10 +5,14 @@
       <n-spin :show="loading">
         <section v-if="activeSection === 'personal'">
           <div class="section-header">
-            <h2 class="section-title">{{ l.profilePersonal.title }}</h2>
+            <div>
+              <h2 class="section-title">{{ l.profilePersonal.title }}</h2>
+              <p class="section-header__desc">{{ l.profilePersonal.subtitle }}</p>
+            </div>
             <n-button
               v-if="!editingEngineer"
               size="small"
+              ghost
               @click="startEditEngineer"
             >
               <template #icon>
@@ -17,7 +21,7 @@
               {{ l.profilePersonal.edit }}
             </n-button>
             <n-space v-else>
-              <n-button size="small" @click="cancelEditEngineer"
+              <n-button size="small" ghost @click="cancelEditEngineer"
                 >{{ l.common.cancel }}</n-button
               >
               <n-button
@@ -29,263 +33,311 @@
               >
             </n-space>
           </div>
-          <div class="info-card">
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.fullName }}</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.name"
-                class="info-input"
-              />
-              <span v-else class="info-val">{{ user?.name || "—" }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.phone }}</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.phone"
-                class="info-input"
-              />
-              <span v-else class="info-val">{{ user?.phone || "—" }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.email }}</span>
-              <span class="info-val">{{ user?.email }}</span>
-            </div>
 
-            <div class="info-section-divider">{{ l.profilePersonal.licensing }}</div>
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.licenseNumber }}</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.inspector_number"
-                class="info-input"
-                :placeholder="showPerTypeInspectorNumbers ? l.profilePersonal.licenseDefaultPlaceholder : ''"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.inspector_number || "—"
-              }}</span>
-            </div>
-            <template v-if="editingEngineer">
-              <button
-                v-if="!showPerTypeInspectorNumbers"
-                type="button"
-                class="btn btn--ghost btn--xs per-type-toggle"
-                @click="showPerTypeInspectorNumbers = true"
-              >{{ l.profilePersonal.addLicenseByType }}</button>
-              <div v-else class="per-type-inspector-numbers">
-                <div class="per-type-inspector-numbers__head">
-                  <span class="info-label">{{ l.profilePersonal.licenseByType }}</span>
-                  <button type="button" class="btn btn--ghost btn--xs" @click="showPerTypeInspectorNumbers = false; engineerForm.inspector_numbers_by_type = {}">{{ l.profilePersonal.dismiss }}</button>
+          <div class="settings-stack">
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="CameraOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">{{ l.profileSettings.avatarTitle }}</h3>
+                  <p class="settings-group__desc">{{ l.profileSettings.avatarDesc }}</p>
                 </div>
-                <div v-for="opt in inspectionTypeOptions" :key="opt.value" class="info-row per-type-inspector-numbers__row">
-                  <span class="info-label">{{ opt.label }}</span>
-                  <n-input
-                    v-model:value="engineerForm.inspector_numbers_by_type[opt.value]"
-                    class="info-input"
-                    :placeholder="engineerForm.inspector_number || l.profilePersonal.licenseNumber"
+              </div>
+              <div class="settings-row settings-row--avatar">
+                <div class="sidebar-avatar sidebar-avatar--lg">
+                  <img
+                    v-if="user?.picture_url"
+                    :src="user.picture_url"
+                    alt=""
+                    referrerpolicy="no-referrer"
                   />
+                  <span v-else class="sidebar-avatar__initials">{{ initials }}</span>
                 </div>
-              </div>
-            </template>
-            <div v-else-if="engineerProfile && Object.keys(engineerProfile?.inspector_numbers_by_type ?? {}).length" class="per-type-inspector-numbers per-type-inspector-numbers--readonly">
-              <span class="info-label">{{ l.profilePersonal.licenseByType }}</span>
-              <div v-for="[key, num] in Object.entries(engineerProfile?.inspector_numbers_by_type ?? {})" :key="key" class="info-row per-type-inspector-numbers__row">
-                <span class="info-label">{{ inspectionTypeOptions.find((o) => o.value === key)?.label ?? key }}</span>
-                <span class="info-val">{{ num }}</span>
-              </div>
-            </div>
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.address }}</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.address"
-                class="info-input"
-                :placeholder="l.profilePersonal.addressPlaceholder"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.address || "—"
-              }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.city }}</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.city"
-                class="info-input"
-                :placeholder="l.profilePersonal.cityPlaceholder"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.city || "—"
-              }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.inspectionStart }}</span>
-              <div
-                v-if="editingEngineer"
-                class="info-stack"
-              >
-                <n-input
-                  v-model:value="engineerForm.inspector_id_start"
-                  :placeholder="l.profilePersonal.exampleNumber"
-                />
-                <span v-if="engineerForm.inspector_id_start && engineerForm.inspector_number" class="info-hint">
-                  <n-icon :component="LockClosedOutline" :size="14" />
-                  {{ l.profilePersonal.nextPreview }}
-                  {{ engineerForm.inspector_number }}/{{ engineerForm.inspector_id_start }}
-                </span>
-                <span v-else-if="engineerForm.inspector_id_start" class="info-hint info-hint--warn">
-                  {{ l.profilePersonal.needLicenseForPreview }}
-                </span>
-              </div>
-              <div
-                v-else
-                class="info-val info-stack"
-              >
-                <span>{{ engineerProfile?.inspector_id_start || "—" }}</span>
-                <span
-                  v-if="engineerProfile?.inspector_id_start && engineerProfile?.inspector_number"
-                  class="info-hint"
-                >
-                  {{ t("profilePersonal.nextWillBe", { id: nextInspectionId }) }}
-                </span>
-                <span
-                  v-else-if="engineerProfile?.inspector_id_start"
-                  class="info-hint info-hint--warn"
-                >
-                  {{ l.profilePersonal.needLicenseForNext }}
-                </span>
-              </div>
-            </div>
-
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.vatNumber }}</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.company_registration"
-                class="info-input"
-                :placeholder="l.profilePersonal.vatPlaceholder"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.company_registration || "—"
-              }}</span>
-            </div>
-
-            <!-- ── Inspector company details (used to filter out from AI extraction) ── -->
-            <div class="info-section-divider">
-              {{ l.profilePersonal.companyDetails }}
-            </div>
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.companyName }}</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.company_name"
-                class="info-input"
-                :placeholder="l.profilePersonal.companyNamePlaceholder"
-              />
-              <span v-else class="info-val">{{ engineerProfile?.company_name || "—" }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.companySubtitle }}</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.company_subtitle"
-                class="info-input"
-                :placeholder="l.profilePersonal.companySubtitlePlaceholder"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.company_subtitle || "—"
-              }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.companyPhone }}</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.company_phone"
-                class="info-input"
-                placeholder="052-8195650"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.company_phone || user?.phone || "—"
-              }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">{{ l.profilePersonal.email }}</span>
-              <n-input
-                v-if="editingEngineer"
-                v-model:value="engineerForm.company_email"
-                class="info-input"
-                placeholder="name@company.com"
-              />
-              <span v-else class="info-val">{{
-                engineerProfile?.company_email || user?.email || "—"
-              }}</span>
-            </div>
-            <div class="info-row info-row--top">
-              <span class="info-label">{{ l.profilePersonal.companyLogo }}</span>
-              <div class="logo-upload">
-                <img
-                  v-if="engineerProfile?.company_logo_url"
-                  :src="engineerProfile?.company_logo_url"
-                  class="logo-upload__preview"
-                  :alt="l.profilePersonal.companyLogoAlt"
-                />
+                <div class="settings-row__text">
+                  <span class="settings-row__title">{{ user?.name || user?.email || "—" }}</span>
+                  <span class="settings-row__desc">{{ l.profileSettings.avatarFormat }}</span>
+                </div>
                 <input
-                  ref="companyLogoInput"
+                  ref="avatarInput"
                   type="file"
                   accept="image/*"
                   class="visually-hidden"
-                  @change="uploadCompanyLogo"
+                  @change="onAvatarChange"
                 />
-                <n-button size="small" secondary @click="(companyLogoInput as HTMLInputElement)?.click()">
-                  <template #icon>
-                    <n-icon :component="ImageOutline" />
-                  </template>
-                  {{ engineerProfile?.company_logo_url ? l.profilePersonal.replaceLogo : l.profilePersonal.uploadLogo }}
-                </n-button>
-              </div>
-            </div>
-            <div class="info-row info-row--top">
-              <span class="info-label">{{ l.profilePersonal.signature }}</span>
-              <div class="logo-upload">
-                <img
-                  v-if="signatureUrl"
-                  :src="signatureUrl"
-                  class="logo-upload__preview logo-upload__preview--signature"
-                  :alt="l.profilePersonal.signatureAlt"
-                />
-                <input
-                  ref="signatureInput"
-                  type="file"
-                  accept="image/*"
-                  class="visually-hidden"
-                  @change="uploadSignature"
-                />
-                <div class="signature-actions">
+                <div class="settings-row__actions">
                   <n-button
                     size="small"
-                    secondary
-                    :loading="uploadingSignature"
-                    @click="(signatureInput as HTMLInputElement)?.click()"
+                    ghost
+                    :loading="uploadingAvatar"
+                    @click="avatarInput?.click()"
                   >
+                    <template #icon>
+                      <n-icon :component="CameraOutline" />
+                    </template>
+                    {{ l.profileSettings.changePhoto }}
+                  </n-button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="PersonOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">{{ l.profilePersonal.contactTitle }}</h3>
+                  <p class="settings-group__desc">{{ l.profilePersonal.contactDesc }}</p>
+                </div>
+              </div>
+              <div class="profile-fields">
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.fullName }}</span>
+                  <n-input v-if="editingEngineer" v-model:value="engineerForm.name" />
+                  <span v-else class="profile-field__value">{{ user?.name || "—" }}</span>
+                </div>
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.phone }}</span>
+                  <n-input v-if="editingEngineer" v-model:value="engineerForm.phone" />
+                  <span v-else class="profile-field__value">{{ user?.phone || "—" }}</span>
+                </div>
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.email }}</span>
+                  <span class="profile-field__value">{{ user?.email || "—" }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="CardOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">{{ l.profilePersonal.licensing }}</h3>
+                  <p class="settings-group__desc">{{ l.profilePersonal.licensingDesc }}</p>
+                </div>
+              </div>
+              <div class="profile-fields">
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.licenseNumber }}</span>
+                  <n-input
+                    v-if="editingEngineer"
+                    v-model:value="engineerForm.inspector_number"
+                    :placeholder="showPerTypeInspectorNumbers ? l.profilePersonal.licenseDefaultPlaceholder : ''"
+                  />
+                  <span v-else class="profile-field__value">{{ engineerProfile?.inspector_number || "—" }}</span>
+                </div>
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.vatNumber }}</span>
+                  <n-input
+                    v-if="editingEngineer"
+                    v-model:value="engineerForm.company_registration"
+                    :placeholder="l.profilePersonal.vatPlaceholder"
+                  />
+                  <span v-else class="profile-field__value">{{ engineerProfile?.company_registration || "—" }}</span>
+                </div>
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.address }}</span>
+                  <n-input
+                    v-if="editingEngineer"
+                    v-model:value="engineerForm.address"
+                    :placeholder="l.profilePersonal.addressPlaceholder"
+                  />
+                  <span v-else class="profile-field__value">{{ engineerProfile?.address || "—" }}</span>
+                </div>
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.city }}</span>
+                  <n-input
+                    v-if="editingEngineer"
+                    v-model:value="engineerForm.city"
+                    :placeholder="l.profilePersonal.cityPlaceholder"
+                  />
+                  <span v-else class="profile-field__value">{{ engineerProfile?.city || "—" }}</span>
+                </div>
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.inspectionStart }}</span>
+                  <template v-if="editingEngineer">
+                    <n-input
+                      v-model:value="engineerForm.inspector_id_start"
+                      :placeholder="l.profilePersonal.exampleNumber"
+                    />
+                    <span v-if="engineerForm.inspector_id_start && engineerForm.inspector_number" class="info-hint">
+                      <n-icon :component="LockClosedOutline" :size="14" />
+                      {{ l.profilePersonal.nextPreview }}
+                      {{ engineerForm.inspector_number }}/{{ engineerForm.inspector_id_start }}
+                    </span>
+                    <span v-else-if="engineerForm.inspector_id_start" class="info-hint info-hint--warn">
+                      {{ l.profilePersonal.needLicenseForPreview }}
+                    </span>
+                  </template>
+                  <template v-else>
+                    <span class="profile-field__value">{{ engineerProfile?.inspector_id_start || "—" }}</span>
+                    <span
+                      v-if="engineerProfile?.inspector_id_start && engineerProfile?.inspector_number"
+                      class="info-hint"
+                    >
+                      {{ t("profilePersonal.nextWillBe", { id: nextInspectionId }) }}
+                    </span>
+                    <span
+                      v-else-if="engineerProfile?.inspector_id_start"
+                      class="info-hint info-hint--warn"
+                    >
+                      {{ l.profilePersonal.needLicenseForNext }}
+                    </span>
+                  </template>
+                </div>
+
+                <div v-if="editingEngineer" class="profile-field profile-field--wide">
+                  <button
+                    v-if="!showPerTypeInspectorNumbers"
+                    type="button"
+                    class="btn btn--ghost btn--xs per-type-toggle"
+                    @click="showPerTypeInspectorNumbers = true"
+                  >{{ l.profilePersonal.addLicenseByType }}</button>
+                  <div v-else>
+                    <div class="per-type-inspector-numbers__head">
+                      <span class="profile-field__label">{{ l.profilePersonal.licenseByType }}</span>
+                      <button type="button" class="btn btn--ghost btn--xs" @click="showPerTypeInspectorNumbers = false; engineerForm.inspector_numbers_by_type = {}">{{ l.profilePersonal.dismiss }}</button>
+                    </div>
+                    <div class="profile-fields">
+                      <div v-for="opt in inspectionTypeOptions" :key="opt.value" class="profile-field">
+                        <span class="profile-field__label">{{ opt.label }}</span>
+                        <n-input
+                          v-model:value="engineerForm.inspector_numbers_by_type[opt.value]"
+                          :placeholder="engineerForm.inspector_number || l.profilePersonal.licenseNumber"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  v-else-if="engineerProfile && Object.keys(engineerProfile?.inspector_numbers_by_type ?? {}).length"
+                  class="profile-field profile-field--wide"
+                >
+                  <span class="profile-field__label">{{ l.profilePersonal.licenseByType }}</span>
+                  <div class="profile-fields">
+                    <div v-for="[key, num] in Object.entries(engineerProfile?.inspector_numbers_by_type ?? {})" :key="key" class="profile-field">
+                      <span class="profile-field__label">{{ inspectionTypeOptions.find((o) => o.value === key)?.label ?? key }}</span>
+                      <span class="profile-field__value">{{ num }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="BusinessOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">{{ l.profilePersonal.companyTitle }}</h3>
+                  <p class="settings-group__desc">{{ l.profilePersonal.companyDesc }}</p>
+                </div>
+              </div>
+              <div class="profile-fields">
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.companyName }}</span>
+                  <n-input
+                    v-if="editingEngineer"
+                    v-model:value="engineerForm.company_name"
+                    :placeholder="l.profilePersonal.companyNamePlaceholder"
+                  />
+                  <span v-else class="profile-field__value">{{ engineerProfile?.company_name || "—" }}</span>
+                </div>
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.companySubtitle }}</span>
+                  <n-input
+                    v-if="editingEngineer"
+                    v-model:value="engineerForm.company_subtitle"
+                    :placeholder="l.profilePersonal.companySubtitlePlaceholder"
+                  />
+                  <span v-else class="profile-field__value">{{ engineerProfile?.company_subtitle || "—" }}</span>
+                </div>
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.companyPhone }}</span>
+                  <n-input
+                    v-if="editingEngineer"
+                    v-model:value="engineerForm.company_phone"
+                    placeholder="052-8195650"
+                  />
+                  <span v-else class="profile-field__value">{{ engineerProfile?.company_phone || user?.phone || "—" }}</span>
+                </div>
+                <div class="profile-field">
+                  <span class="profile-field__label">{{ l.profilePersonal.email }}</span>
+                  <n-input
+                    v-if="editingEngineer"
+                    v-model:value="engineerForm.company_email"
+                    placeholder="name@company.com"
+                  />
+                  <span v-else class="profile-field__value">{{ engineerProfile?.company_email || user?.email || "—" }}</span>
+                </div>
+              </div>
+
+              <div class="brand-grid">
+                <div class="brand-tile">
+                  <span class="profile-field__label">{{ l.profilePersonal.companyLogo }}</span>
+                  <img
+                    v-if="engineerProfile?.company_logo_url"
+                    :src="engineerProfile.company_logo_url"
+                    class="logo-upload__preview"
+                    :alt="l.profilePersonal.companyLogoAlt"
+                  />
+                  <input
+                    ref="companyLogoInput"
+                    type="file"
+                    accept="image/*"
+                    class="visually-hidden"
+                    @change="uploadCompanyLogo"
+                  />
+                  <n-button size="small" ghost @click="(companyLogoInput as HTMLInputElement)?.click()">
                     <template #icon>
                       <n-icon :component="ImageOutline" />
                     </template>
-                    {{ signatureUrl ? l.profilePersonal.replaceSignature : l.profilePersonal.uploadSignature }}
-                  </n-button>
-                  <n-button
-                    v-if="signatureUrl"
-                    size="small"
-                    quaternary
-                    :disabled="uploadingSignature"
-                    @click="removeSignature"
-                  >
-                    {{ l.profilePersonal.remove }}
+                    {{ engineerProfile?.company_logo_url ? l.profilePersonal.replaceLogo : l.profilePersonal.uploadLogo }}
                   </n-button>
                 </div>
-                <span class="info-hint">
-                  {{ l.profilePersonal.signatureHint }}
-                </span>
+                <div class="brand-tile">
+                  <span class="profile-field__label">{{ l.profilePersonal.signature }}</span>
+                  <img
+                    v-if="signatureUrl"
+                    :src="signatureUrl"
+                    class="logo-upload__preview logo-upload__preview--signature"
+                    :alt="l.profilePersonal.signatureAlt"
+                  />
+                  <input
+                    ref="signatureInput"
+                    type="file"
+                    accept="image/*"
+                    class="visually-hidden"
+                    @change="uploadSignature"
+                  />
+                  <div class="signature-actions">
+                    <n-button
+                      size="small"
+                      ghost
+                      :loading="uploadingSignature"
+                      @click="(signatureInput as HTMLInputElement)?.click()"
+                    >
+                      <template #icon>
+                        <n-icon :component="ImageOutline" />
+                      </template>
+                      {{ signatureUrl ? l.profilePersonal.replaceSignature : l.profilePersonal.uploadSignature }}
+                    </n-button>
+                    <n-button
+                      v-if="signatureUrl"
+                      size="small"
+                      ghost
+                      :disabled="uploadingSignature"
+                      @click="removeSignature"
+                    >
+                      {{ l.profilePersonal.remove }}
+                    </n-button>
+                  </div>
+                  <span class="info-hint">{{ l.profilePersonal.signatureHint }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -423,53 +475,6 @@
           </div>
 
           <div class="settings-stack">
-            <div class="settings-group">
-              <div class="settings-group__head">
-                <span class="settings-group__icon" aria-hidden="true">
-                  <n-icon :component="CameraOutline" :size="18" />
-                </span>
-                <div>
-                  <h3 class="settings-group__title">{{ l.profileSettings.avatarTitle }}</h3>
-                  <p class="settings-group__desc">{{ l.profileSettings.avatarDesc }}</p>
-                </div>
-              </div>
-              <div class="settings-row settings-row--avatar">
-                <div class="sidebar-avatar sidebar-avatar--lg">
-                  <img
-                    v-if="user?.picture_url"
-                    :src="user.picture_url"
-                    alt=""
-                    referrerpolicy="no-referrer"
-                  />
-                  <span v-else class="sidebar-avatar__initials">{{ initials }}</span>
-                </div>
-                <div class="settings-row__text">
-                  <span class="settings-row__title">{{ user?.name || user?.email || "—" }}</span>
-                  <span class="settings-row__desc">{{ l.profileSettings.avatarFormat }}</span>
-                </div>
-                <input
-                  ref="avatarInput"
-                  type="file"
-                  accept="image/*"
-                  class="visually-hidden"
-                  @change="onAvatarChange"
-                />
-                <div class="settings-row__actions">
-                  <n-button
-                    size="small"
-                    ghost
-                    :loading="uploadingAvatar"
-                    @click="avatarInput?.click()"
-                  >
-                    <template #icon>
-                      <n-icon :component="CameraOutline" />
-                    </template>
-                    {{ l.profileSettings.changePhoto }}
-                  </n-button>
-                </div>
-              </div>
-            </div>
-
             <div class="settings-group">
               <div class="settings-group__head">
                 <span class="settings-group__icon" aria-hidden="true">
@@ -1246,58 +1251,52 @@
             <n-tag :type="planTag.type" size="small">{{ planTag.label }}</n-tag>
           </div>
 
-          <div class="subscription-layout">
-            <article v-if="currentPricingPlan" class="sub-plan-card">
-              <div class="sub-plan-card__head">
-                <div>
-                  <p class="sub-plan-card__eyebrow">{{ l.profileBilling.yourPlan }}</p>
-                  <h3 class="sub-plan-card__title">{{ currentPricingPlan.name }}</h3>
-                  <p class="sub-plan-card__blurb">{{ currentPricingPlan.blurb }}</p>
-                  <p v-if="currentPricingPlan.price" class="sub-plan-card__blurb">{{ PRICING_COPY[locale].existingCustomerNote }}</p>
-                </div>
-                <div class="sub-plan-card__price">
-                  <strong v-if="currentPlanId !== 'expired'">{{ currentPricingPlan.price === 0 ? l.profileBilling.free : `${currency}${currentPricingPlan.price}` }}</strong>
-                  <span v-if="currentPricingPlan.period">{{ currentPricingPlan.period }}</span>
-                </div>
-              </div>
-              <ul class="sub-plan-card__features">
-                <li v-for="feature in currentPricingPlan.features" :key="feature">
-                  <n-icon :component="CheckmarkCircleOutline" :size="16"/>
-                  <span>{{ feature }}</span>
-                </li>
-              </ul>
-            </article>
+          <dl v-if="currentPricingPlan" class="sub-metrics" :aria-label="l.profileBilling.summaryAria">
+            <div>
+              <dt>{{ l.profileBilling.price }}</dt>
+              <dd>{{ planPriceLabel }}</dd>
+            </div>
+            <div>
+              <dt>{{ l.profileBilling.quotaType }}</dt>
+              <dd>{{ quotaScopeLabel }}</dd>
+            </div>
+            <div v-if="quotaPeriodLabel">
+              <dt>{{ l.profileBilling.quotaPeriod }}</dt>
+              <dd>{{ quotaPeriodLabel }}</dd>
+            </div>
+          </dl>
 
-            <aside :aria-label="l.profileBilling.summaryAria" class="sub-summary-card">
-              <div class="sub-summary-card__row">
-                <span aria-hidden="true" class="sub-summary-card__icon">
-                  <n-icon :component="CardOutline" :size="18"/>
-                </span>
-                <div>
-                  <span class="sub-summary-card__label">{{ l.profileBilling.price }}</span>
-                  <strong>{{ planPriceLabel }}</strong>
-                </div>
+          <div class="plans-grid">
+            <article
+              v-for="plan in tierPlans"
+              :key="plan.id"
+              class="plan"
+              :class="{
+                'plan--highlighted': plan.highlighted && plan.id !== currentPlanId,
+                'plan--current': plan.id === currentPlanId,
+              }"
+            >
+              <span v-if="plan.id === currentPlanId" class="plan__badge">{{ l.profileBilling.yourPlan }}</span>
+              <span v-else-if="plan.highlighted" class="plan__badge">{{ PRICING_COPY[locale].recommended }}</span>
+              <h3 class="plan__name">{{ plan.name }}</h3>
+              <p class="plan__blurb">{{ plan.blurb }}</p>
+              <div class="plan__price">
+                <strong>{{ plan.price === 0 ? l.profileBilling.free : `${currency}${plan.price}` }}</strong>
+                <span v-if="plan.period" class="plan__price-period">{{ plan.period }}</span>
               </div>
-              <div class="sub-summary-card__row">
-                <span aria-hidden="true" class="sub-summary-card__icon">
-                  <n-icon :component="WalletOutline" :size="18"/>
-                </span>
-                <div>
-                  <span class="sub-summary-card__label">{{ l.profileBilling.quotaType }}</span>
-                  <strong>{{ quotaScopeLabel }}</strong>
-                </div>
-              </div>
-              <div v-if="quotaPeriodLabel" class="sub-summary-card__row">
-                <span aria-hidden="true" class="sub-summary-card__icon">
-                  <n-icon :component="CalendarOutline" :size="18"/>
-                </span>
-                <div>
-                  <span class="sub-summary-card__label">{{ l.profileBilling.quotaPeriod }}</span>
-                  <strong>{{ quotaPeriodLabel }}</strong>
-                </div>
-              </div>
-            </aside>
+              <ul class="plan__features">
+                <li v-for="feature in plan.features" :key="feature">{{ feature }}</li>
+              </ul>
+              <template v-if="plan.id !== 'trial' && plan.id !== currentPlanId && PLAN_RANK[plan.id] > PLAN_RANK[currentPlanId]">
+                <a class="plan__cta plan__cta--primary" :href="planPurchaseUrl(plan, locale)" rel="noopener" target="_blank">
+                  {{ PRICING_COPY[locale].purchase }}
+                </a>
+                <p class="plan__soon-note">{{ PRICING_COPY[locale].purchaseNote }}</p>
+              </template>
+              <p v-else-if="plan.id === currentPlanId" class="plan__cta plan__cta--current">{{ l.profileBilling.yourPlan }}</p>
+            </article>
           </div>
+          <p class="plans-note">{{ PRICING_COPY[locale].existingCustomerNote }}</p>
 
           <div class="subscription-panels">
             <section class="sub-panel">
@@ -1346,42 +1345,6 @@
                 {{ l.profileBilling.usageEmpty }}
               </div>
             </section>
-          </div>
-
-          <div v-if="upgradePlans.length" class="subscription-upgrades">
-            <div class="sub-panel__head">
-              <div>
-                <h3>{{ l.profileBilling.upgradeTitle }}</h3>
-                <p>{{ l.profileBilling.upgradeDesc }}</p>
-              </div>
-            </div>
-            <div class="upgrade-grid">
-              <article
-                v-for="plan in upgradePlans"
-                :key="plan.id"
-                class="upgrade-card"
-                :class="{ 'upgrade-card--highlighted': plan.highlighted }"
-              >
-                <span v-if="plan.highlighted" class="upgrade-card__badge">{{ PRICING_COPY[locale].recommended }}</span>
-                <h3 class="upgrade-card__name">{{ plan.name }}</h3>
-                <p class="upgrade-card__blurb">{{ plan.blurb }}</p>
-                <div class="upgrade-card__price">
-                  <strong>{{ currency }}{{ plan.price }}</strong>
-                  <span class="upgrade-card__period">{{ plan.period }}</span>
-                </div>
-                <ul class="upgrade-card__features">
-                  <li v-for="feature in plan.features" :key="feature">
-                    <n-icon :component="CheckmarkCircleOutline" :size="14"/>
-                    <span>{{ feature }}</span>
-                  </li>
-                </ul>
-                <a :href="planPurchaseUrl(plan, locale)" class="upgrade-card__cta" rel="noopener" target="_blank">
-                  <n-icon :component="LogoWhatsapp" :size="16"/>
-                  {{ PRICING_COPY[locale].purchase }}
-                </a>
-                <p class="upgrade-card__note">{{ PRICING_COPY[locale].purchaseNote }}</p>
-              </article>
-            </div>
           </div>
 
           <section class="sub-panel sub-billing-panel">
@@ -1495,8 +1458,8 @@ import {
 import {
   CalendarOutline,
   CameraOutline,
+  BusinessOutline,
   CardOutline,
-  CheckmarkCircleOutline,
   CloudUploadOutline,
   ColorPaletteOutline,
   CreateOutline,
@@ -1507,7 +1470,6 @@ import {
   LockClosedOutline,
   LogOutOutline,
   LogoGoogle,
-  LogoWhatsapp,
   MailOutline,
   MoonOutline,
   NotificationsOutline,
@@ -1519,7 +1481,6 @@ import {
   SunnyOutline,
   TrashOutline,
   ReceiptOutline,
-  WalletOutline,
 } from "@vicons/ionicons5";
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
@@ -1744,10 +1705,7 @@ const PLAN_RANK: Record<PlanId, number> = {
   business: 4,
 };
 
-/** Higher-tier paid plans the user is not already on, including Digital. */
-const upgradePlans = computed(
-    () => plansForLocale(locale.value).filter((plan) => plan.id !== "trial" && PLAN_RANK[plan.id] > PLAN_RANK[currentPlanId.value]),
-);
+const tierPlans = computed(() => plansForLocale(locale.value));
 
 const planTag = computed(() => ({
   label: (locale.value === "en" ? PLAN_LABELS_EN : PLAN_LABELS)[currentPlanId.value],
@@ -2760,6 +2718,7 @@ function showGoogleConnectionErrorFromRoute() {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 20px;
+  padding-inline: 24px;
 }
 
 .section-title {
@@ -2774,6 +2733,89 @@ function showGoogleConnectionErrorFromRoute() {
   font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.4px;
+}
+
+.section-header__desc {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.profile-fields {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-field {
+  display: grid;
+  grid-template-columns: minmax(9.5rem, 14rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 20px;
+  min-width: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.profile-fields > .profile-field:first-child {
+  padding-top: 0;
+}
+
+.profile-fields > .profile-field:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.profile-field--wide {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.profile-field__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.profile-field__value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.profile-field :deep(.n-input),
+.profile-field__value {
+  justify-self: start;
+}
+
+.profile-field :deep(.n-input) {
+  width: min(100%, 420px);
+}
+
+.section-header :deep(.n-button) {
+  --n-border-radius: 8px !important;
+  border-radius: 8px;
+}
+
+.brand-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.brand-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 132px;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-elevated);
 }
 
 .info-card {
@@ -3106,7 +3148,19 @@ function showGoogleConnectionErrorFromRoute() {
   border-bottom: 1px solid var(--border-color);
 }
 .settings-row--avatar {
-  grid-template-columns: 64px minmax(12rem, 28rem) auto 1fr;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.settings-row--avatar .settings-row__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row--avatar .settings-row__actions {
+  margin-inline-start: auto;
+  flex: 0 0 auto;
 }
 .settings-row:not(:has(.settings-row__media, .sidebar-avatar)) {
   grid-template-columns: minmax(12rem, 28rem) auto 1fr;
@@ -3360,13 +3414,193 @@ function showGoogleConnectionErrorFromRoute() {
   margin-bottom: 14px;
 }
 
+.sub-hero,
 .sub-plan-card,
 .sub-summary-card,
 .sub-panel,
 .upgrade-card {
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--bg-card);
+}
+
+.sub-hero {
+  padding: 20px 22px;
+  margin-bottom: 14px;
+  border-color: color-mix(in srgb, var(--brand-color) 30%, var(--border-color));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--brand-color) 8%, transparent), transparent 70%),
+  var(--bg-card);
+}
+
+.sub-hero__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sub-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 18px;
+}
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 24px;
+  align-items: stretch;
+  margin-bottom: 14px;
+  padding-top: 14px;
+}
+
+.plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 32px 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--bg-card);
+}
+
+.plan--highlighted,
+.plan--current {
+  border-color: var(--brand-color);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--brand-color) 18%, transparent);
+}
+
+.plan__badge {
+  position: absolute;
+  top: -13px;
+  inset-inline-end: 28px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--brand-color);
+  color: var(--text-inverse);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.plan__name {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.plan__blurb {
+  min-height: 44px;
+  margin: 0 0 18px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.plan__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.plan__price strong {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.plan__price-period {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.plan__features {
+  flex: 1;
+  margin: 0 0 26px;
+  padding: 0;
+  list-style: none;
+}
+
+.plan__features li {
+  position: relative;
+  margin-bottom: 10px;
+  padding-inline-start: 26px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.plan__features li::before {
+  content: "✓";
+  position: absolute;
+  inset-inline-start: 0;
+  color: var(--brand-color);
+  font-weight: 700;
+}
+
+.plan__cta {
+  display: block;
+  margin-top: auto;
+  padding: 13px 20px;
+  border-radius: 10px;
+  text-align: center;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.plan__cta--primary {
+  background: var(--brand-color);
+  color: var(--text-inverse);
+}
+
+.plan__cta--primary:hover {
+  background: var(--brand-color-hover);
+}
+
+.plan__cta--current {
+  margin-bottom: 0;
+  background: color-mix(in srgb, var(--brand-color) 14%, transparent);
+  color: var(--brand-color);
+}
+
+.plan__soon-note,
+.plans-note {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.plans-note {
+  margin: 0 0 18px;
+  font-size: 13px;
+}
+
+.sub-metrics div {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+}
+
+.sub-metrics dt {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sub-metrics dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
 }
 
 .sub-plan-card {
@@ -3436,13 +3670,18 @@ function showGoogleConnectionErrorFromRoute() {
 }
 
 .sub-plan-card__features {
-  margin: 0;
+  margin: 16px 0 0;
   padding: 0;
   list-style: none;
   display: grid;
   gap: 8px;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.sub-plan-card__features--cols {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
 }
 
 .sub-plan-card__features li,
@@ -3788,7 +4027,11 @@ function showGoogleConnectionErrorFromRoute() {
   }
 
   .subscription-layout,
-  .subscription-panels {
+  .subscription-panels,
+  .profile-fields,
+  .brand-grid,
+  .sub-metrics,
+  .sub-plan-card__features--cols {
     grid-template-columns: 1fr;
   }
 }
@@ -3798,6 +4041,13 @@ function showGoogleConnectionErrorFromRoute() {
     align-items: stretch;
     flex-direction: column;
     gap: 10px;
+    padding-inline: 16px;
+  }
+
+  .profile-field {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 6px;
   }
 
   .section-header :deep(.n-button),
@@ -3903,6 +4153,14 @@ function showGoogleConnectionErrorFromRoute() {
 
   .sub-panel__head {
     flex-direction: column;
+  }
+
+  .plan {
+    padding: 24px 18px;
+  }
+
+  .plan__price strong {
+    font-size: 34px;
   }
 }
 </style>
