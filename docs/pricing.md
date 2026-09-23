@@ -11,9 +11,9 @@ npm run pricing:check
 ```
 
 The sync command publishes the catalog into `landing/assets/pricing-catalog.json`
-and refreshes the marked sections in `landing/pricing.html` and
-`landing/en/pricing.html`. Those HTML snapshots remain readable without JavaScript
-or a catalog request. Both pages also import `landing/assets/pricing.mjs`, which
+and refreshes the marked sections in both `index.html` and `pricing.html`, in
+Hebrew and English. Those HTML snapshots remain readable without JavaScript
+or a catalog request. All four pages share `landing/assets/pricing.css` and import `landing/assets/pricing.mjs`, which
 renders the published catalog at runtime. Other landing HTML pages can reuse that
 module by adding a `data-pricing-catalog` container; the document's `lang` selects
 Hebrew/ILS or English/USD.

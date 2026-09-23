@@ -13,13 +13,15 @@ if (check) {
   await writeFile(publishedCatalog, source, "utf8");
 }
 for (const locale of ["he", "en"]) {
-  const path = new URL(`../landing/${locale === "en" ? "en/" : ""}pricing.html`, import.meta.url);
-  const html = await readFile(path, "utf8");
-  const marker = /<!-- pricing:start -->[\s\S]*?<!-- pricing:end -->/;
-  if (!marker.test(html)) throw new Error(`Missing pricing markers: ${path}`);
-  const updated = html.replace(marker, () => `<!-- pricing:start -->\n${renderPricing(catalog, locale)}\n<!-- pricing:end -->`);
-  if (updated === html) continue;
-  if (check) throw new Error(`Pricing snapshot is stale (${locale}). Run npm run pricing:sync.`);
-  await writeFile(path, updated, "utf8");
+  for (const page of ["pricing.html", "index.html"]) {
+    const path = new URL(`../landing/${locale === "en" ? "en/" : ""}${page}`, import.meta.url);
+    const html = await readFile(path, "utf8");
+    const marker = /<!-- pricing:start -->[\s\S]*?<!-- pricing:end -->/;
+    if (!marker.test(html)) throw new Error(`Missing pricing markers: ${path}`);
+    const updated = html.replace(marker, () => `<!-- pricing:start -->\n${renderPricing(catalog, locale, page === "index.html" ? "h3" : "h2")}\n<!-- pricing:end -->`);
+    if (updated === html) continue;
+    if (check) throw new Error(`Pricing snapshot is stale (${locale}/${page}). Run npm run pricing:sync.`);
+    await writeFile(path, updated, "utf8");
+  }
 }
 console.log(check ? "Pricing snapshots match the catalog." : "Pricing snapshots updated.");
