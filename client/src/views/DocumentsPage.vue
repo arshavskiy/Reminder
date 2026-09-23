@@ -1719,9 +1719,13 @@ async function doCloneContract() {
     const created = await api.contracts.clone(cloneCandidate.value.contractId, {
       shift_months: cloneCandidate.value.shiftMonths,
     });
-    message.success("התסקיר שוכפל");
     showCloneConfirm.value = false;
-    router.push(`/contracts/${created.id}/draft`);
+    if (created.print_template_id) {
+      message.success("התסקיר שוכפל");
+      router.push(`/contracts/${created.id}/draft`);
+    } else {
+      message.warning("התסקיר שוכפל, אך אין לו תבנית הדפסה מקושרת — לא ניתן לפתוח את מסך המילוי");
+    }
   } catch (err) {
     message.error(err instanceof Error ? err.message : "שכפול התסקיר נכשל");
   } finally {
