@@ -153,10 +153,12 @@
 
       <div class="app-nav__user" :class="{ 'app-nav__user--collapsed': !showLabels }">
         <UserDropdown
+          :inline="isMobile"
           :userName="authStore.user?.name ?? authStore.user?.email ?? null"
           :userEmail="authStore.user?.email ?? null"
           :userPicture="authStore.user?.picture_url ?? null"
           :userRole="authStore.user?.role ?? null"
+          @navigated="emit('update:mobileOpen', false)"
         />
       </div>
 
@@ -522,9 +524,7 @@ function onItemClick(item: NavItem) {
   if (isPlanLocked(item)) return;
 
   if (props.isMobile && item.children?.length) {
-    const wasOpen = isExpanded(item.key);
     toggleExpanded(item.key);
-    if (!wasOpen) navigate(item);
     return;
   }
 

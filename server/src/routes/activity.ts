@@ -21,6 +21,12 @@ export type ActivityEntry = {
   at: string;
   status: "ok" | "failed" | "info";
   document_id: string | null;
+  client_name: string | null;
+  recipient: string | null;
+  subject: string | null;
+  file_name: string | null;
+  note: string | null;
+  channel: "email" | "system";
 };
 
 function isoDate(value: unknown): string | null {
@@ -66,10 +72,13 @@ export function registerActivityRoutes(app: express.Application) {
       // so filtering on it alone would silently drop the oldest history. Those rows
       // are reachable through the user's own reminder ids instead.
       const reminderIds = await col("reminders")
-        .find({user_id: userId} as any, {projection: {_id: 1}})
+        .find({user_id: userId} as any, {projection: {_id: 1, client_id: 1}})
         .limit(5000)
         .toArray();
       const reminderIdStrings = reminderIds.map((r: any) => String(r._id));
+      const reminderClientById = new Map(
+        (reminderIds as any[]).map((r) => [String(r._id), r.client_id ? String(r.client_id) : null]),
+      );
 
       const emailFilter: Record<string, any> = reminderIdStrings.length
         ? {$or: [{user_id: userId}, {reminder_id: {$in: reminderIdStrings}}]}
@@ -78,10 +87,13 @@ export function registerActivityRoutes(app: express.Application) {
       // timeline_events is keyed by client_id, never user_id, so it has to be
       // constrained to this user's own clients or it would leak across tenants.
       const clientIds = await col("clients")
-        .find({user_id: userId} as any, {projection: {_id: 1}})
+        .find({user_id: userId} as any, {projection: {_id: 1, display_name: 1}})
         .limit(5000)
         .toArray();
       const clientIdStrings = clientIds.map((c: any) => String(c._id));
+      const clientNameById = new Map(
+        (clientIds as any[]).map((c) => [String(c._id), typeof c.display_name === "string" ? c.display_name : undefined]),
+      );
 
       const wantEmail = kind !== "document";
       const wantDocument = kind !== "email";
@@ -106,16 +118,25 @@ export function registerActivityRoutes(app: express.Application) {
         if (!at) continue;
         const logType = String(row.log_type ?? "send");
         const failed = row.success === 0 || logType === "bounce" || logType === "complaint";
+        const subject = typeof row.subject === "string" && row.subject.trim() ? row.subject.trim() : null;
+        const recipientRaw = row.to_address ?? row.recipient;
+        const recipient = typeof recipientRaw === "string" && recipientRaw.trim() ? recipientRaw.trim() : null;
+        const note = typeof row.error === "string" && row.error.trim() ? row.error.trim() : null;
+        const reminderClientId = row.reminder_id ? reminderClientById.get(String(row.reminder_id)) : null;
         entries.push({
           id: String(row._id),
           kind: "email",
           title: EMAIL_KIND_LABEL[logType] ?? "פעילות אימייל",
-          detail: [row.subject, row.to_address ?? row.recipient, row.error]
-            .filter((part) => typeof part === "string" && part.trim())
-            .join(" · ") || null,
+          detail: [subject, recipient, note].filter(Boolean).join(" · ") || null,
           at,
           status: failed ? "failed" : "ok",
           document_id: null,
+          client_name: reminderClientId ? clientNameById.get(reminderClientId) ?? null : null,
+          recipient,
+          subject,
+          file_name: null,
+          note,
+          channel: "email",
         });
       }
 
@@ -123,19 +144,12 @@ export function registerActivityRoutes(app: express.Application) {
       // a source_id that may no longer point at a live document — so both are
       // resolved in one batch rather than per row.
       const eventRows = documentRows as any[];
-      const eventClientIds = [...new Set(eventRows.map((row) => String(row.client_id ?? "")).filter(Boolean))];
       const eventSourceIds = [...new Set(
         eventRows.filter((row) => row.source_type === "document" && row.source_id).map((row) => String(row.source_id)),
       )];
-      const [eventClients, eventDocuments] = await Promise.all([
-        eventClientIds.length
-          ? col("clients").find({_id: {$in: eventClientIds.map(tryObjectId)}} as any, {projection: {display_name: 1}}).toArray()
-          : Promise.resolve([]),
-        eventSourceIds.length
-          ? col("documents").find({_id: {$in: eventSourceIds.map(tryObjectId)}} as any, {projection: {file_name: 1}}).toArray()
-          : Promise.resolve([]),
-      ]);
-      const clientNameById = new Map((eventClients as any[]).map((c) => [String(c._id), c.display_name as string | undefined]));
+      const eventDocuments = eventSourceIds.length
+        ? await col("documents").find({_id: {$in: eventSourceIds.map(tryObjectId)}} as any, {projection: {file_name: 1}}).toArray()
+        : [];
       const documentNameById = new Map((eventDocuments as any[]).map((d) => [String(d._id), d.file_name as string | undefined]));
 
       for (const row of eventRows) {
@@ -156,6 +170,12 @@ export function registerActivityRoutes(app: express.Application) {
           // Only set when the source document still exists, so the client never
           // links to a row that 404s.
           document_id: fileName !== undefined ? documentId : null,
+          client_name: clientName ?? null,
+          recipient: null,
+          subject: null,
+          file_name: fileName ?? null,
+          note: description,
+          channel: "system",
         });
       }
 

@@ -1,11 +1,27 @@
 <template>
-  <div class="user-dropdown">
+  <div class="user-dropdown" :class="{ 'user-dropdown--inline': inline }">
+    <div v-if="inline && menuOpen" class="user-menu user-menu--inline" :dir="localeStore.dir">
+      <template v-for="item in menuEntries" :key="item.key">
+        <div v-if="item.divider" class="user-menu__divider"/>
+        <button
+            v-else
+            type="button"
+            class="user-menu__item"
+            :class="{ 'user-menu__item--active': isItemActive(item.key) }"
+            @click="handleSelect(item.key)"
+        >
+          {{ item.label }}
+        </button>
+      </template>
+    </div>
+
     <n-popover
+        v-if="!inline"
         :delay="40"
         :duration="120"
         :placement="menuPlacement"
         :show-arrow="false"
-        :trigger="menuTrigger"
+        trigger="hover"
         raw
     >
       <template #trigger>
@@ -33,7 +49,7 @@
               v-else
               type="button"
               class="user-menu__item"
-              :class="{ 'user-menu__item--active': item.key === activeMenuKey || (item.key === 'templates' && templateActive) }"
+              :class="{ 'user-menu__item--active': isItemActive(item.key) }"
               @click="handleSelect(item.key)"
           >
             {{ item.label }}
@@ -41,11 +57,39 @@
         </template>
       </div>
     </n-popover>
+
+    <button
+        v-else
+        type="button"
+        class="user-dropdown__trigger"
+        :aria-expanded="menuOpen"
+        @click="menuOpen = !menuOpen"
+    >
+      <div class="user-dropdown__avatar">
+        <img
+            v-if="avatarSrc"
+            :alt="userName"
+            :src="avatarSrc"
+            class="user-dropdown__avatar-img"
+            referrerpolicy="no-referrer"
+        />
+        <n-icon v-else :component="PersonOutline" :size="18"/>
+      </div>
+      <div class="user-dropdown__meta">
+        <span v-if="userName" class="user-dropdown__name">{{ userName }}</span>
+      </div>
+      <n-icon
+          class="app-nav__chevron"
+          :class="{ 'app-nav__chevron--open': menuOpen }"
+          :component="ChevronBackOutline"
+          :size="16"
+      />
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed} from "vue";
+import {computed, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {NIcon, NPopover} from "naive-ui";
 import {ChevronBackOutline, PersonOutline} from "@vicons/ionicons5";
@@ -63,7 +107,11 @@ interface Props {
   userRole?: string | null;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props & { inline?: boolean }>(), {
+  inline: false,
+});
+const emit = defineEmits<{ navigated: [] }>();
+const menuOpen = ref(false);
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
@@ -90,11 +138,6 @@ const avatarUrl = computed<string>(() => {
 const avatarSrc = computed<string>(() => avatarUrl.value || "");
 
 const menuPlacement = computed(() => (localeStore.dir === "rtl" ? "left-end" : "right-end"));
-const menuTrigger = computed(() =>
-  typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches
-    ? "hover"
-    : "click",
-);
 
 const userPlan = computed(() => resolveUserPlan(authStore.user));
 // Print + email templates stay on trial (inspections and reminders). Document
@@ -151,7 +194,13 @@ const activeMenuKey = computed(() => {
 
 const templateActive = computed(() => TEMPLATE_KEYS.has(activeMenuKey.value));
 
+function isItemActive(key: string) {
+  return key === activeMenuKey.value || (key === "templates" && templateActive.value);
+}
+
 async function handleSelect(key: string) {
+  menuOpen.value = false;
+  emit("navigated");
   if (key === "profile") {
     router.push({path: localizedPath("/profile"), query: {section: "personal"}});
   } else if (key === "engineer") {
@@ -183,6 +232,11 @@ async function handleSelect(key: string) {
   width: 100%;
 }
 
+.user-dropdown--inline {
+  flex-direction: column;
+  align-items: stretch;
+}
+
 .user-dropdown :deep(.n-popover) {
   display: block;
   width: 100%;
@@ -197,6 +251,10 @@ async function handleSelect(key: string) {
   padding: 5px 8px 5px 12px;
   border: 1px solid transparent;
   border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -298,6 +356,19 @@ async function handleSelect(key: string) {
   height: 1px;
   margin: 6px 10px;
   background: rgba(255, 255, 255, 0.08);
+}
+
+.user-menu--inline {
+  width: 100%;
+  min-width: 0;
+  max-height: min(320px, 46vh);
+  margin-bottom: 4px;
+  overflow: auto;
+  box-shadow: none;
+}
+
+.user-dropdown--inline :deep(.app-nav__chevron--open) {
+  transform: rotate(-90deg);
 }
 
 </style>
