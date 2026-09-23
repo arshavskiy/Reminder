@@ -684,6 +684,37 @@
       </div>
     </n-modal>
 
+    <!-- ── Clone & renew contract modal ────────────────────────────────── -->
+    <n-modal
+      v-model:show="showCloneConfirm"
+      :class="confirmDialogClass"
+      :negative-button-props="{ ...confirmCancelButtonProps, disabled: cloningContract }"
+      :positive-button-props="{ ...confirmActionButtonProps('primary'), loading: cloningContract, disabled: cloningContract }"
+      :show-icon="false"
+      negative-text="ביטול"
+      positive-text="שכפל"
+      preset="dialog"
+      type="info"
+      @positive-click="doCloneContract"
+      @negative-click="showCloneConfirm = false"
+    >
+      <template #header>
+        <ConfirmDialogHead title="שכפול תסקיר" type="info"/>
+      </template>
+      <div v-if="cloneCandidate" class="rescan-confirm" dir="rtl">
+        <p>
+          האם אתה בטוח שברצונך לשכפל את התסקיר
+          <bdi class="confirm-dialog__bidi" dir="ltr">"{{ cloneCandidate.contract_number || "ללא מספר" }}"</bdi>?
+        </p>
+        <p>תסקיר חדש ייווצר עם:</p>
+        <ul>
+          <li>תאריך בדיקה: {{ formatDate(cloneCandidate.newStartDate) }}</li>
+          <li>תאריך בדיקה הבאה: {{ formatDate(cloneCandidate.newExpiryDate) }} ({{ cloneCandidate.shiftMonths }} חודשים)</li>
+          <li>מספר תסקיר: יישאר ריק למילוי</li>
+        </ul>
+      </div>
+    </n-modal>
+
     <!-- ── Upload modal ───────────────────────────────────────────────── -->
     <UploadModal
       ref="uploadModalRef"
@@ -1640,22 +1671,62 @@ function handleRowAction(key: string, row: Document) {
   if (key === "delete") confirmDeleteDocument(row);
 }
 
-function confirmCloneContract(row: Document) {
+const showCloneConfirm = ref(false);
+const cloningContract = ref(false);
+const cloneCandidate = ref<{
+  contractId: string;
+  contract_number: string | null;
+  newStartDate: string | null;
+  newExpiryDate: string | null;
+  shiftMonths: number;
+} | null>(null);
+
+// Mirrors the server's clamp in POST /contracts/:id/clone so the preview matches
+// what will actually be created (day 0 of the target month rolls Feb 29 back
+// instead of overflowing into March).
+function shiftDate(value: string | null | undefined, shiftMonths: number): string | null {
+  const raw = typeof value === "string" ? value.slice(0, 10) : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [y, m, d] = raw.split("-").map(Number);
+  const target = new Date(Date.UTC(y!, m! - 1 + shiftMonths, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d!, lastDay));
+  return target.toISOString().slice(0, 10);
+}
+
+async function confirmCloneContract(row: Document) {
   if (!row.contract_id) return;
-  confirm({
-    title: "שכפול וחידוש תסקיר",
-    content: "ייווצר תסקיר חדש עם אותם פרטים ותאריכים מוסטים בשנה, כולל תזכורות חדשות. מספר התסקיר יישאר ריק למילוי.",
-    confirmText: "שכפל",
-    onConfirm: async () => {
-      try {
-        const created = await api.contracts.clone(String(row.contract_id));
-        message.success("התסקיר שוכפל");
-        router.push(`/contracts/${created.id}/draft`);
-      } catch (err) {
-        message.error(err instanceof Error ? err.message : "שכפול התסקיר נכשל");
-      }
-    },
-  });
+  try {
+    const contract = await api.contracts.get(String(row.contract_id));
+    const shiftMonths = 12;
+    cloneCandidate.value = {
+      contractId: String(row.contract_id),
+      contract_number: contract.contract_number,
+      newStartDate: shiftDate(contract.start_date, shiftMonths),
+      newExpiryDate: shiftDate(contract.expiry_date, shiftMonths),
+      shiftMonths,
+    };
+    showCloneConfirm.value = true;
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : "טעינת התסקיר נכשלה");
+  }
+}
+
+async function doCloneContract() {
+  if (!cloneCandidate.value) return;
+  cloningContract.value = true;
+  try {
+    const created = await api.contracts.clone(cloneCandidate.value.contractId, {
+      shift_months: cloneCandidate.value.shiftMonths,
+    });
+    message.success("התסקיר שוכפל");
+    showCloneConfirm.value = false;
+    router.push(`/contracts/${created.id}/draft`);
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : "שכפול התסקיר נכשל");
+  } finally {
+    cloningContract.value = false;
+  }
 }
 
 async function openDocumentReminderPreview(row: Document) {
