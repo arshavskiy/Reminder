@@ -11,6 +11,8 @@ import { releaseTempFile, tempDir } from "../storage/tempFiles";
 import { isProcessPaused } from "../ops/processControl";
 import { logger } from "../logger";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
+import { parseInlineReceipt } from "../gmail/inlineReceiptParser";
+import { buildInlineReceiptQueries, classifyNoAttachmentEmail } from "../gmail/inlineReceiptDetect";
 import {
     effectivePlanId,
     featureFlagsForUser,
@@ -32,6 +34,7 @@ const GMAIL_SCOPE = `${GOOGLE_IDENTITY_SCOPE} https://www.googleapis.com/auth/gm
 const DRIVE_SCOPE = `${GOOGLE_IDENTITY_SCOPE} https://www.googleapis.com/auth/drive.file`;
 const GMAIL_DEFAULT_PAGE_SIZE = 500;
 const GMAIL_MAX_PAGE_SIZE = 500;
+const GMAIL_INLINE_SCAN_MAX_PAGES = 5;
 const GMAIL_JOB_STALE_MS = 10 * 60 * 1000;
 const DEFAULT_GMAIL_ATTACHMENT_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx"];
 const DEFAULT_GMAIL_ATTACHMENT_EXTENSION_SET = new Set(DEFAULT_GMAIL_ATTACHMENT_EXTENSIONS);
@@ -57,6 +60,7 @@ type GmailImportJob = {
   _id: ObjectId;
   user_id: string;
   status: GmailImportJobStatus;
+  kind?: "inline";
   q: string;
   template_id: string | null;
   max_results: number;
@@ -354,6 +358,176 @@ export function registerGmailRoutes(app: express.Application) {
 
       res.json({ emails: visibleEmails, nextPageToken: listData.nextPageToken ?? null, resultSizeEstimate: listData.resultSizeEstimate ?? null });
     } catch (err) {
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
+
+  // GET /api/gmail/inbox/inline-only — invoice-looking emails with no matching
+  // attachment, either a "view document" style link (e.g. Rivhit, ezcount,
+  // Green Invoice — kind: "link") or a payment receipt inlined directly as an
+  // HTML table (e.g. Hyp/iPos, Cardcom — kind: "inline"). Both are invisible
+  // to /api/gmail/inbox because its query always requires has:attachment.
+  // Detection only: does not fetch the link or parse the inline table.
+  app.get("/api/gmail/inbox/inline-only", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    let ctx: Awaited<ReturnType<typeof requireAuth>>;
+    try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+
+    if (!planAllowsDocumentImport(effectivePlanId(ctx.user))) {
+      res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+      return;
+    }
+
+    const accessToken = await resolveGmailToken(ctx.userId);
+    if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
+
+    try {
+      const templateId = req.query.templateId as string | undefined;
+      const invoiceHistoryMonths = featureFlagsForUser(ctx.user).gmailInvoiceHistoryMonths;
+      const plans = buildInlineReceiptQueries(INVOICE_GMAIL_QUERY, invoiceHistoryMonths ?? 0);
+      const seen = new Set<string>();
+      const allMessageIds: string[] = [];
+      let resultSizeEstimate = 0;
+      let listToken = accessToken;
+      const SENDER_BUDGET = 640;
+      let senderCount = 0;
+
+      for (const [index, plan] of plans.entries()) {
+        const isKeywordQuery = index === plans.length - 1;
+        const room = isKeywordQuery ? 800 - allMessageIds.length : Math.max(0, SENDER_BUDGET - senderCount);
+        const take = Math.min(plan.budget, room);
+        if (take <= 0) continue;
+        const listed = await listGmailMessageIds(listToken, ctx.userId, plan.query, plan.pages, plan.pageSize);
+        listToken = listed.accessToken;
+        if (listed.error) {
+          logger.error("gmail_link_only_api_error", { status: listed.error.status, code: listed.error.code, message: listed.error.message, body: listed.error.body.slice(0, 500) });
+          res.status(listed.error.httpStatus).json({ error: listed.error.code, detail: listed.error.message });
+          return;
+        }
+        resultSizeEstimate += listed.estimate;
+        let added = 0;
+        for (const id of listed.ids) {
+          if (seen.has(id)) continue;
+          if (added >= take) break;
+          seen.add(id);
+          allMessageIds.push(id);
+          added += 1;
+          if (!isKeywordQuery) senderCount += 1;
+        }
+        if (allMessageIds.length >= 800) break;
+      }
+
+      const candidates = await Promise.all(
+        allMessageIds.map((id) => fetchInvoiceLikeEmailMeta(listToken, id))
+      );
+      const linkOnlyEmails = candidates.filter(Boolean);
+      logger.info("gmail_link_only_scan", {
+        query: plans.map((plan) => plan.query).join(" | "),
+        scanned: allMessageIds.length,
+        found: linkOnlyEmails.length,
+        linkKind: linkOnlyEmails.filter((e) => e!.kind === "link").length,
+        inlineKind: linkOnlyEmails.filter((e) => e!.kind === "inline").length,
+        templateId: templateId ?? null,
+      });
+
+      res.json({ emails: linkOnlyEmails, nextPageToken: null, resultSizeEstimate });
+    } catch (err) {
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
+
+  // POST /api/gmail/inbox/import-inline — saves parsed receipt fields as an
+  // invoice. No file is created and nothing is stored in S3 or Drive.
+  app.post("/api/gmail/inbox/import-inline", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    let ctx: Awaited<ReturnType<typeof requireAuth>>;
+    try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+
+    if (!planAllowsDocumentImport(effectivePlanId(ctx.user))) {
+      res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+      return;
+    }
+
+    const accessToken = await resolveGmailToken(ctx.userId);
+    if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
+
+    const { messageId, templateId } = req.body as { messageId?: string; templateId?: string };
+    if (!messageId) { res.status(400).json({ error: "messageId required" }); return; }
+
+    try {
+      const imported = await importInlineReceiptMessage(accessToken, ctx.userId, messageId, templateId);
+      res.json(imported);
+    } catch (err) {
+      if (err instanceof Error && err.message === "not_a_recognized_inline_receipt") {
+        res.status(422).json({ error: "not_a_recognized_inline_receipt" });
+        return;
+      }
+      logger.error("gmail_inline_receipt_import_failed", { user_id: ctx.userId, messageId, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
+
+  // POST /api/gmail/inbox/import-inline-all — one job for every receipt email
+  // already found by /inline-only. Progress is the same Gmail import bar.
+  app.post("/api/gmail/inbox/import-inline-all", async (req, res) => {
+    const cookieHeader = req.headers.cookie ?? undefined;
+    let ctx: Awaited<ReturnType<typeof requireAuth>>;
+    try { ctx = await requireAuth(cookieHeader); } catch { res.status(401).json({ error: "unauthorized" }); return; }
+
+    if (!planAllowsDocumentImport(effectivePlanId(ctx.user))) {
+      res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+      return;
+    }
+
+    const accessToken = await resolveGmailToken(ctx.userId);
+    if (!accessToken) { res.status(403).json({ error: "gmail_not_connected" }); return; }
+
+    const templateId = req.body.templateId as string | undefined;
+    const messageIds = [...new Set(
+      (Array.isArray(req.body.messageIds) ? req.body.messageIds : [])
+        .map((id: unknown) => String(id ?? "").trim())
+        .filter(Boolean),
+    )].slice(0, 800);
+    if (!messageIds.length) { res.status(400).json({ error: "messageIds required" }); return; }
+
+    try {
+      const now = new Date();
+      const insert = await col<GmailImportJob>("gmail_import_jobs").insertOne({
+        user_id: ctx.userId,
+        status: "queued",
+        kind: "inline",
+        q: "inline-receipts",
+        template_id: templateId ?? null,
+        max_results: messageIds.length,
+        total_messages: messageIds.length,
+        new_messages: messageIds.length,
+        processed_messages: 0,
+        imported: 0,
+        skipped: 0,
+        errors: 0,
+        attachments_found: 0,
+        stored: 0,
+        classified_invoices: 0,
+        rejected: 0,
+        ocr_failed: 0,
+        ai_retry_pending: 0,
+        results: [],
+        message_ids: messageIds,
+        cursor: 0,
+        error: null,
+        quota: null,
+        created_at: now,
+        updated_at: now,
+      } as any);
+      startGmailImportJobWorker();
+      const job = await col<GmailImportJob>("gmail_import_jobs").findOne({ _id: insert.insertedId } as any);
+      res.status(202).json(job ? presentGmailImportJob(job) : { jobId: insert.insertedId.toString(), status: "queued" });
+    } catch (err: any) {
+      if (err instanceof DocumentImportQuotaError) {
+        res.status(403).json(documentImportQuotaErrorPayload(err));
+        return;
+      }
+      logger.error("gmail_inline_import_all_failed", { user_id: ctx.userId, error: err.message });
       res.status(500).json({ error: "internal_error" });
     }
   });
@@ -829,6 +1003,149 @@ async function claimNextGmailImportJob(): Promise<GmailImportJob | null> {
   ) as GmailImportJob | null;
 }
 
+function inlineReceiptIssueDate(receiptDate: string | null, emailDateHeader: string): string {
+  if (receiptDate && /^\d{4}-\d{2}-\d{2}$/.test(receiptDate)) return receiptDate;
+  const parsed = Date.parse(emailDateHeader);
+  if (Number.isFinite(parsed)) return new Date(parsed).toISOString().slice(0, 10);
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function importInlineReceiptMessage(
+  accessToken: string,
+  userId: string,
+  messageId: string,
+  templateId: string | undefined,
+): Promise<{ invoiceId: string; receipt: { vendor: string; transactionId: string; amount: number; currency: string }; subject: string }> {
+  let msgRes = await gmailFetch(accessToken, `messages/${messageId}?format=full`);
+  if (msgRes.status === 401) {
+    const refreshed = await retryWithRefresh(userId);
+    if (refreshed) msgRes = await gmailFetch(refreshed, `messages/${messageId}?format=full`);
+  }
+  const msgError = await parseGmailError(msgRes);
+  if (msgError) throw new Error(msgError.code);
+  const msg = await msgRes.json() as any;
+  const headers: { name: string; value: string }[] = msg.payload?.headers ?? [];
+  const get = (name: string) => headers.find((header) => header.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+  const subject = get("Subject");
+  const from = get("From");
+  const { html, plain } = extractBodySignals(msg.payload);
+  const receipt = (html ? parseInlineReceipt(from, html, subject) : null)
+    ?? (plain ? parseInlineReceipt(from, plain, subject) : null);
+  if (!receipt) throw new Error("not_a_recognized_inline_receipt");
+
+  const issueDate = inlineReceiptIssueDate(receipt.date, get("Date"));
+  const now = new Date();
+  const documentKey = `gmail-inline:${messageId}`;
+  const merchantName = receipt.merchant?.trim() || "";
+  const supplierName = receipt.vendor === "PayPal" && merchantName ? merchantName : receipt.vendor;
+  const saved = await col("invoices").findOneAndUpdate(
+    { user_id: userId, document_id: documentKey } as any,
+    {
+      $set: {
+        user_id: userId,
+        source: "gmail_inline",
+        inline_no_file: true,
+        gmail_message_id: messageId,
+        supplier_name: supplierName,
+        invoice_number: receipt.transactionId,
+        document_subtype: "קבלה",
+        issue_date: issueDate,
+        payment_due_date: issueDate,
+        amount: receipt.amount,
+        currency: receipt.currency,
+        payment_status: "paid",
+        cash_flow: "expense",
+        notes: supplierName === receipt.vendor ? receipt.merchant : receipt.vendor,
+        template_id: templateId ?? null,
+        spaces_key: null,
+        drive_file_id: null,
+        drive_web_link: null,
+        fields: {
+          supplier_name: supplierName,
+          vendor_name: receipt.vendor,
+          merchant: receipt.merchant,
+          invoice_number: receipt.transactionId,
+          amount: receipt.amount,
+          currency: receipt.currency,
+          issue_date: issueDate,
+          document_subtype: "קבלה",
+          cash_flow: "expense",
+          source_subject: subject,
+          source_from: from,
+        },
+        updated_at: now,
+      },
+      $setOnInsert: {
+        document_id: documentKey,
+        created_at: now,
+        status: "new",
+      },
+    } as any,
+    { upsert: true, returnDocument: "after" },
+  );
+  const invoiceId = saved?._id?.toString?.() ?? documentKey;
+  logger.info("gmail_inline_receipt_imported", { user_id: userId, messageId, vendor: receipt.vendor, transactionId: receipt.transactionId, invoiceId });
+  return { invoiceId, receipt, subject };
+}
+
+async function runInlineReceiptImportJob(job: GmailImportJob, messageIds: string[]) {
+  const diagnostics = createGmailDiagnostics(job.q, new Set(), messageIds.length);
+  const existing = await col("invoices").find(
+    { user_id: job.user_id, source: "gmail_inline", gmail_message_id: { $in: messageIds } } as any,
+    { projection: { gmail_message_id: 1 } } as any,
+  ).toArray();
+  const importedSet = new Set(existing.map((row: any) => String(row.gmail_message_id ?? "")).filter(Boolean));
+
+  for (let index = job.cursor ?? 0; index < messageIds.length; index += 1) {
+    const id = messageIds[index];
+    if (importedSet.has(id)) {
+      await updateGmailImportJobProgress(job._id, { cursor: index + 1, processedDelta: 1, skippedDelta: 1 });
+      continue;
+    }
+    const freshToken = await resolveGmailToken(job.user_id);
+    if (!freshToken) throw new Error("gmail_not_connected");
+
+    let fileResult: GmailImportJobResult;
+    try {
+      const imported = await importInlineReceiptMessage(freshToken, job.user_id, id, job.template_id ?? undefined);
+      fileResult = {
+        messageId: id,
+        filename: `${imported.receipt.vendor} ${imported.receipt.transactionId}`,
+        import_status: "invoice",
+      };
+      await col("gmail_imports").updateOne(
+        { user_id: job.user_id, message_id: id },
+        {
+          $setOnInsert: { user_id: job.user_id, message_id: id, imported_at: new Date(), subject: imported.subject },
+          $set: { files: [{ filename: fileResult.filename, invoice_id: imported.invoiceId, error: null }] },
+        },
+        { upsert: true },
+      );
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "not_a_recognized_inline_receipt") {
+        fileResult = { messageId: id, filename: id, error: message, import_status: "rejected", retryable: false };
+      } else {
+        fileResult = { messageId: id, filename: id, error: message, import_status: "failed", retryable: true };
+      }
+    }
+
+    const saved = fileResult.import_status === "invoice";
+    await updateGmailImportJobProgress(job._id, {
+      cursor: index + 1,
+      processedDelta: 1,
+      importedDelta: saved ? 1 : 0,
+      storedDelta: saved ? 1 : 0,
+      invoiceDelta: saved ? 1 : 0,
+      rejectedDelta: fileResult.import_status === "rejected" ? 1 : 0,
+      errorDelta: fileResult.error && fileResult.import_status !== "rejected" ? 1 : 0,
+      results: [fileResult],
+    });
+  }
+
+  await completeGmailImportJob(job, diagnostics);
+}
+
 async function runGmailImportJob(job: GmailImportJob) {
   logger.info("gmail_import_job_started", { job_id: job._id.toString(), user_id: job.user_id, query: job.q, template_id: job.template_id });
 
@@ -854,6 +1171,11 @@ async function runGmailImportJob(job: GmailImportJob) {
 
   if (!messageIds.length) {
     await completeGmailImportJob(job, diagnostics);
+    return;
+  }
+
+  if (job.kind === "inline") {
+    await runInlineReceiptImportJob(job, messageIds);
     return;
   }
 
@@ -1194,8 +1516,8 @@ function presentGmailImportJob(job: GmailImportJob) {
     ...result,
     importStatus: gmailJobResultStatus(result),
     explanation: gmailJobResultExplanation(result),
-    retryable: Boolean(result.error),
-    retryMode: result.error ? "failed" : null,
+    retryable: typeof result.retryable === "boolean" ? result.retryable : Boolean(result.error),
+    retryMode: result.retryable === false ? null : (result.error ? "failed" : null),
   }));
   const explanationSummary = summarizeGmailImportResults(explainedResults);
   return {
@@ -1237,6 +1559,7 @@ function gmailJobResultStatus(result: GmailImportJobResult): string {
 
 function gmailJobResultExplanation(result: GmailImportJobResult): string {
   if (result.rejection_label) return result.rejection_label;
+  if (!result.documentId && result.import_status === "invoice") return "נשמרו ספק, סכום ומספר עסקה. אין קובץ.";
   if (result.documentId && result.import_status === "invoice") return "הקובץ נשמר וסווג כחשבונית";
   if (result.documentId && result.import_status === "rejected") return "הקובץ נשמר אבל נדחה כחשבונית";
   if (result.documentId && result.import_status === "failed") return "הקובץ נשמר אבל העיבוד נכשל";
@@ -1390,6 +1713,7 @@ function gmailFileExplanation(
 function gmailErrorExplanation(error: unknown): string {
   const text = String(error ?? "").trim();
   if (!text) return "לא נוצר מסמך לקובץ הזה";
+  if (text === "not_a_recognized_inline_receipt") return "אין במייל סכום ומספר עסקה שאפשר לשמור";
   if (text === "monthly_report_not_imported") return "דוח חודשי לא מיובא במסלול תסקיר בדיקה";
   if (text === DOCUMENT_MONTHLY_QUOTA_ERROR) return "מגבלת הייבוא החודשית נוצלה";
   if (/429|rate.?limit|quota/i.test(text)) return "הייבוא נכשל בגלל עומס/מגבלת בקשות זמנית";
@@ -1540,6 +1864,132 @@ async function fetchEmailMeta(
   };
 }
 
+// Deliberately narrow: generic phrases like "click here" or "לחץ כאן" appear
+// in unrelated marketing email and would false-positive constantly. Only the
+// document/invoice-specific phrasing counts.
+const DOCUMENT_LINK_TEXT_PATTERN = /(לצפי[הי]ה?\s*(ב|ב-)?מסמך|להורד(ה|ת)\s*המסמך|לצפי[הי]ה?\s*ב?חשבונית|view\s*(the\s*)?(document|invoice|receipt)|download\s*(the\s*)?(document|invoice|receipt))/i;
+// Exact phrasing only, since a loose "your" wildcard matched unrelated "View
+// invoice history" nav links and PayPal's generic "View details" refund link.
+const CLICK_HERE_RECEIPT_PATTERN = /click\s*here\s*to\s*view\s*your\s*receipt/i;
+
+type InvoiceLikeEmail = {
+  id: string;
+  subject: string;
+  from: string;
+  date: string;
+  internalDate: string;
+  kind: "link" | "inline";
+  documentLinkUrl: string | null;
+  importable: boolean;
+};
+
+async function fetchInvoiceLikeEmailMeta(accessToken: string, id: string): Promise<InvoiceLikeEmail | null> {
+  const r = await gmailFetch(accessToken, `messages/${id}?format=full`);
+  if (!r.ok) return null;
+  const msg = await r.json() as any;
+
+  const attachments: GmailAttachmentMeta[] = [];
+  collectMatchingAttachments(msg.payload, DEFAULT_GMAIL_ATTACHMENT_EXTENSION_SET, attachments);
+  if (attachments.length) return null; // has a real attachment, neither link-only nor inline
+
+  const headers: { name: string; value: string }[] = msg.payload?.headers ?? [];
+  const get = (name: string) => headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+  const base = { id, subject: get("Subject"), from: get("From"), date: get("Date"), internalDate: msg.internalDate as string };
+
+  const { href, html, plain } = extractBodySignals(msg.payload);
+  const classified = classifyNoAttachmentEmail({
+    from: base.from,
+    subject: base.subject,
+    html,
+    plain,
+    documentLinkUrl: href,
+  });
+  if (!classified) return null;
+  return { ...base, ...classified };
+}
+
+async function listGmailMessageIds(
+  accessToken: string,
+  userId: string,
+  query: string,
+  pages: number,
+  pageSize: number,
+): Promise<{
+  accessToken: string;
+  ids: string[];
+  estimate: number;
+  error: Awaited<ReturnType<typeof parseGmailError>>;
+}> {
+  const ids: string[] = [];
+  let estimate = 0;
+  let pageToken = "";
+  let token = accessToken;
+  for (let page = 0; page < pages; page += 1) {
+    const url = `messages?q=${encodeURIComponent(query)}&maxResults=${pageSize}${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
+    let listRes = await gmailFetch(token, url);
+    if (listRes.status === 401) {
+      const refreshed = await retryWithRefresh(userId);
+      if (!refreshed) break;
+      token = refreshed;
+      listRes = await gmailFetch(token, url);
+    }
+    const listError = await parseGmailError(listRes);
+    if (listError) return { accessToken: token, ids, estimate, error: listError };
+    const listData = await listRes.json() as { messages?: { id: string }[]; nextPageToken?: string; resultSizeEstimate?: number };
+    estimate = Math.max(estimate, listData.resultSizeEstimate ?? 0);
+    for (const message of listData.messages ?? []) ids.push(message.id);
+    if (!listData.nextPageToken) break;
+    pageToken = listData.nextPageToken;
+  }
+  return { accessToken: token, ids, estimate, error: null };
+}
+
+// Walks the MIME tree for the first text/html body. Returns the href of the
+// first anchor whose own visible text looks like a "view document" call to
+// action (not just any "click here" link, which appears in unrelated mail),
+// plus the raw decoded HTML for the inline-receipt table check.
+function extractBodySignals(part: any): { href: string | null; html: string | null; plain: string | null } {
+  let href: string | null = null;
+  let html: string | null = null;
+  let plain: string | null = null;
+
+  function walk(node: any) {
+    if (!node) return;
+    if (node.body?.data && node.mimeType === "text/plain" && !plain) {
+      plain = Buffer.from(String(node.body.data).replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
+    }
+    if (node.body?.data && node.mimeType === "text/html" && !html) {
+      const decoded = Buffer.from(String(node.body.data).replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
+      html = decoded;
+      // Scan every anchor, not just the first (marketing HTML has dozens before
+      // the real one). A bare "click here" link only counts if the phrase
+      // naming it as a document/receipt sits immediately before the anchor
+      // (a tight 30-char window — "You can click here to view your receipt."
+      // style phrasing), not just loosely nearby, which pulled in click-tracking
+      // links from unrelated newsletter/invoice threads.
+      const anchorPattern = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+      let match: RegExpExecArray | null;
+      while ((match = anchorPattern.exec(decoded))) {
+        const anchorText = match[2].replace(/<[^>]+>/g, "");
+        const precedingStart = Math.max(0, match.index - 60);
+        const preceding = decoded.slice(precedingStart, match.index).replace(/<[^>]+>/g, " ");
+        if (
+          DOCUMENT_LINK_TEXT_PATTERN.test(anchorText)
+          || CLICK_HERE_RECEIPT_PATTERN.test(preceding)
+          || CLICK_HERE_RECEIPT_PATTERN.test(anchorText)
+        ) {
+          href = match[1];
+          break;
+        }
+      }
+    }
+    if (node.parts) for (const child of node.parts) walk(child);
+  }
+  walk(part);
+
+  return { href, html, plain };
+}
+
 async function gmailImportPipelineOptions(
   templateId: string | undefined,
   meta: GmailMessageHeaders | null,
@@ -1582,11 +2032,14 @@ function isInspectionTemplate(template: Awaited<ReturnType<typeof loadTemplate>>
 const INSPECTION_GMAIL_QUERY = "has:attachment {filename:pdf filename:doc filename:docx} תסקיר";
 const INVOICE_GMAIL_QUERY = `has:attachment {${[
   "חשבונית",
+  "חשבוניות",
   "invoice",
   "receipt",
+  "receipts",
   "bill",
   "חשבונית מס",
   "קבלה",
+  "קבלות",
   "דרישת תשלום",
   "חשבון תקופתי",
 ].map(formatGmailSearchTerm).join(" ")}}`;

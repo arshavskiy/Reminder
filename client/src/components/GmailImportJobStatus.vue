@@ -20,7 +20,12 @@
       <div class="gmail-job__bar-fill" :style="{ width: `${progressPct}%` }" />
     </div>
 
-    <div class="gmail-job__stats">
+    <p v-if="inlineReceipts && job.status === 'completed'" class="gmail-job__plain">{{ inlineSummary }}</p>
+    <ul v-if="inlineReceipts && savedResults.length" class="gmail-job__saved">
+      <li v-for="result in savedResults" :key="result.messageId">{{ result.filename }}</li>
+    </ul>
+
+    <div v-if="!inlineReceipts" class="gmail-job__stats">
       <span>{{ job.processedMessages }} מתוך {{ totalForProgress }} מיילים נסרקו</span>
       <span>{{ job.attachmentsFound ?? job.results.length }} קבצים נמצאו</span>
       <span>{{ job.stored ?? job.imported }} נשמרו</span>
@@ -31,7 +36,7 @@
       <span v-if="job.errors" class="gmail-job__error">{{ job.errors }} שגיאות</span>
     </div>
 
-    <div v-if="summaryItems.length" class="gmail-job__summary" aria-label="פירוט תוצאות ייבוא">
+    <div v-if="!inlineReceipts && summaryItems.length" class="gmail-job__summary" aria-label="פירוט תוצאות ייבוא">
       <span
         v-for="item in summaryItems"
         :key="item.key"
@@ -42,23 +47,23 @@
       </span>
     </div>
 
-    <div v-if="retryableCount" class="gmail-job__retry">
-      <span>{{ retryableCount }} קבצים ניתנים לניסיון חוזר</span>
+    <div v-if="!inlineReceipts && retryableCount" class="gmail-job__retry">
+      <span>{{ retryableCount }} קבצים נכשלו ואפשר לנסות שוב</span>
       <button class="btn btn--ghost btn--xs" type="button" @click="$emit('retry', 'retryable')">
         נסה שוב
       </button>
     </div>
 
-    <details v-if="visibleResults.length" class="gmail-job__details">
-      <summary>פירוט קבצים</summary>
+    <details v-if="!inlineReceipts && visibleResults.length" class="gmail-job__details">
+      <summary>{{ inlineReceipts ? "מיילים שלא נשמרו" : "פירוט קבצים" }}</summary>
       <div class="gmail-job__result-list">
         <div v-for="result in visibleResults" :key="`${result.messageId}:${result.filename}`" class="gmail-job__result">
-          <span class="gmail-job__result-file" :title="result.filename">{{ result.filename }}</span>
+          <span class="gmail-job__result-file" :title="resultLabel(result)">{{ resultLabel(result) }}</span>
           <span class="gmail-job__result-status" :class="`gmail-job__result-status--${resultStatus(result)}`">
             {{ resultStatusLabel(resultStatus(result)) }}
           </span>
           <span class="gmail-job__result-reason" :title="result.explanation ?? result.rejection_label ?? result.error ?? ''">
-            {{ result.explanation ?? result.rejection_label ?? result.error ?? "—" }}
+            {{ resultReason(result) }}
           </span>
         </div>
       </div>
@@ -88,6 +93,14 @@ defineEmits<{
   retry: [mode: "failed" | "rejected" | "retryable"];
 }>();
 
+const inlineReceipts = computed(() => props.job.q === "inline-receipts");
+const savedCount = computed(() => Number(props.job.stored ?? props.job.imported ?? 0));
+const inlineSummary = computed(() => {
+  const saved = `${savedCount.value} קבלות נשמרו בטבלה, בלי קובץ.`;
+  const skipped = props.job.rejected ?? 0;
+  if (!skipped) return saved;
+  return `${saved} ${skipped} מיילים דולגו: לא נמצא בהם גם סכום וגם מספר עסקה, אז אין מה לשמור.`;
+});
 const totalForProgress = computed(() => props.job.newMessages || props.job.totalMessages || props.job.total || 0);
 const progressPct = computed(() => {
   if (props.job.status === "completed") return 100;
@@ -101,6 +114,7 @@ const statusTitle = computed(() => {
   if (props.job.status === "queued") return "ייבוא Gmail ממתין בתור";
   if (props.job.status === "running") return "ייבוא Gmail מתבצע";
   if (props.job.status === "failed") return props.job.error ? `ייבוא Gmail נכשל: ${props.job.error}` : "ייבוא Gmail נכשל";
+  if (inlineReceipts.value) return `${savedCount.value} קבלות נשמרו`;
   return `ייבוא Gmail הושלם: ${props.job.imported} קבצים`;
 });
 
@@ -113,6 +127,13 @@ const statusIcon = computed(() => {
 
 const summaryItems = computed(() => {
   const summary = props.job.explanationSummary ?? {};
+  if (inlineReceipts.value) {
+    return [
+      { key: "stored", label: "נשמרו", count: savedCount.value },
+      { key: "rejected", label: "לא זוהו", count: Number(props.job.rejected ?? summary.rejected ?? 0) },
+      { key: "failed", label: "נכשלו", count: Number(summary.failed ?? props.job.errors ?? 0) },
+    ].filter((item) => item.count > 0);
+  }
   return [
     { key: "stored", label: "נשמרו", count: Number(props.job.stored ?? summary.stored ?? props.job.imported ?? 0) },
     { key: "invoice", label: "חשבוניות", count: Number(props.job.classifiedInvoices ?? summary.invoice ?? 0) },
@@ -123,8 +144,26 @@ const summaryItems = computed(() => {
   ].filter((item) => item.count > 0);
 });
 
-const retryableCount = computed(() => Number(props.job.explanationSummary?.retryable ?? 0));
+const retryableCount = computed(() => {
+  if (inlineReceipts.value) {
+    return (props.job.results ?? []).filter((result) => resultStatus(result) === "failed").length;
+  }
+  return Number(props.job.explanationSummary?.retryable ?? 0);
+});
+const savedResults = computed(() =>
+  (props.job.results ?? []).filter((result) => resultStatus(result) === "invoice").slice(0, 8),
+);
 const visibleResults = computed(() => (props.job.results ?? []).slice(0, 12));
+
+function resultLabel(result: GmailImportJob["results"][number]): string {
+  if (inlineReceipts.value && /^[0-9a-f]{8,}$/i.test(result.filename)) return "מייל ללא קבלה";
+  return result.filename;
+}
+
+function resultReason(result: GmailImportJob["results"][number]): string {
+  if (result.error === "not_a_recognized_inline_receipt") return "אין סכום ומספר עסקה שאפשר לשמור";
+  return result.explanation ?? result.rejection_label ?? result.error ?? "—";
+}
 
 function resultStatusLabel(status: string): string {
   const labels: Record<string, string> = {
@@ -209,6 +248,31 @@ function resultStatus(result: GmailImportJob["results"][number]): string {
   gap: 8px 14px;
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+.gmail-job__plain {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.gmail-job__saved {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gmail-job__saved li {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-success) 13%, var(--bg-card));
+  color: var(--color-success);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .gmail-job__summary,

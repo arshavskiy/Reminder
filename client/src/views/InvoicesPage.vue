@@ -232,6 +232,24 @@
       :dismissible="!importingFromGmail"
       @dismiss="lastGmailImportJob = null"
     />
+    <div
+      v-if="inlineOnlyEmails.length && !inlineOnlyDismissed"
+      class="link-only-notice"
+    >
+      <div class="link-only-notice__text">
+        <strong>נמצאו {{ inlineOnlyEmails.length }} מיילי חשבונית ללא קובץ מצורף</strong>
+        <span>קבלות כמו Google Play, PayPal, Hyp ו-Meta Ads מיובאות מכאן בלחיצה אחת.</span>
+      </div>
+      <button
+        class="rbtn rbtn--primary"
+        type="button"
+        :disabled="importingFromGmail"
+        @click="handleImportInlineAll"
+      >
+        <GmailLogo :size="16" class="btn-icon" />
+        ייבא הכל
+      </button>
+    </div>
     <DriveExportJobStatus
       v-if="visibleDriveExportJob"
       :job="visibleDriveExportJob"
@@ -267,7 +285,8 @@
             <img v-else-if="isImage(row)" :src="previewSrc(row)" :alt="row.file_name" loading="lazy" />
             <iframe v-else-if="isPdf(row)" :src="previewSrc(row)" :title="row.file_name" loading="lazy" />
             <div v-else class="invoice-card__fallback">
-              <n-icon :component="DocumentTextOutline" :size="42" />
+              <n-icon :component="row.inline_no_file ? MailOutline : DocumentTextOutline" :size="42" />
+              <span v-if="row.inline_no_file">ללא קובץ</span>
             </div>
             <span class="invoice-card__status">{{ statusLabel(row.status) }}</span>
             <StorageSyncIcons
@@ -280,8 +299,16 @@
             />
           </div>
           <div class="invoice-card__body">
-            <div class="invoice-card__supplier" :title="row.supplier_name">{{ row.supplier_name }}</div>
-            <div class="invoice-card__amount">{{ row.amount_display }}</div>
+            <div class="invoice-card__supplier" :title="row.supplier_name">
+              {{ row.supplier_name }}
+              <span v-if="row.inline_no_file" class="invoice-nofile-flag">ללא קובץ</span>
+            </div>
+            <div class="invoice-card__amount">
+              {{ row.currency !== 'ILS' && row.amount_ils !== null ? formatIlsAmount(row.amount_ils) : row.amount_display }}
+              <span v-if="row.currency !== 'ILS'" class="invoice-card__amount-ils">
+                ({{ row.amount_display }})
+              </span>
+            </div>
             <div class="invoice-card__line">
               <span>{{ invoiceTypeLabel(row) }} · {{ cashFlowLabel(row) }}</span>
               <span>{{ displayDate(row) }}</span>
@@ -378,7 +405,13 @@
                 />
               </td>
               <td class="cell-strong invoice-col invoice-col--supplier">
-                <span class="invoice-cell-truncate" dir="auto" :title="row.supplier_name">{{ row.supplier_name }}</span>
+                <span class="invoice-supplier-cell">
+                  <span class="invoice-cell-truncate" dir="auto" :title="row.supplier_name">{{ row.supplier_name }}</span>
+                  <span v-if="row.inline_no_file" class="invoice-nofile-flag">
+                    <n-icon :component="MailOutline" :size="12" />
+                    ללא קובץ
+                  </span>
+                </span>
               </td>
               <td class="invoice-col invoice-col--date">{{ formatDate(row.issue_date) }}</td>
               <td class="invoice-col invoice-col--client">
@@ -398,7 +431,12 @@
                 />
               </td>
               <td class="invoice-col invoice-col--type">{{ invoiceTypeLabel(row) }} · {{ cashFlowLabel(row) }}</td>
-              <td class="cell-amount invoice-col invoice-col--amount" dir="ltr">{{ row.amount_display }}</td>
+              <td class="cell-amount invoice-col invoice-col--amount" dir="ltr">
+                {{ row.currency !== 'ILS' && row.amount_ils !== null ? formatIlsAmount(row.amount_ils) : row.amount_display }}
+                <span v-if="row.currency !== 'ILS'" class="cell-amount__ils">
+                  ({{ row.amount_display }})
+                </span>
+              </td>
               <td class="cell-actions invoice-col invoice-col--actions" @click.stop>
                 <div class="row-actions">
                   <StorageSyncIcons
@@ -546,7 +584,7 @@ import StorageSyncIcons from "../components/StorageSyncIcons.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import GmailImportJobStatus from "../components/GmailImportJobStatus.vue";
 import DriveExportJobStatus from "../components/DriveExportJobStatus.vue";
-import { api, type DriveExportJob, type GmailImportJob, type ImportedInvoice } from "../services/apiService.js";
+import { api, type DriveExportJob, type GmailImportJob, type GmailLinkOnlyEmail, type ImportedInvoice } from "../services/apiService.js";
 import type { DocTemplate } from "../shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
 import {featureFlagsForUser, planAllowsGoogleDrive, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
@@ -579,6 +617,9 @@ const lastGmailImportJob = ref<GmailImportJob | null>(null);
 const activeDriveExportJob = ref<DriveExportJob | null>(null);
 const lastDriveExportJob = ref<DriveExportJob | null>(null);
 const gmailConnected = ref<boolean | null>(null);
+const inlineOnlyEmails = ref<GmailLinkOnlyEmail[]>([]);
+const inlineOnlyDismissed = ref(false);
+const importingInlineId = ref<string | null>(null);
 const viewMode = ref<"cards" | "table">("table");
 const invoiceUploadInput = ref<HTMLInputElement | null>(null);
 const selectedInvoiceIds = ref(new Set<string>());
@@ -631,10 +672,16 @@ const cashFlowFilterOptions = computed<SelectOption[]>(() => [
   { label: l.value.common.expense, value: "expense" },
   { label: l.value.common.income, value: "income" },
 ]);
-const categoryOptions = computed<SelectOption[]>(() => categories.value.map((value) => ({
-  label: providerCategoryLabel(value),
-  value,
-})));
+const categoryOptions = computed<SelectOption[]>(() => {
+  const values = [...PROVIDER_CATEGORIES] as string[];
+  for (const value of categories.value) {
+    if (value && !values.includes(value)) values.push(value);
+  }
+  return values.map((value) => ({
+    label: providerCategoryLabel(value),
+    value,
+  }));
+});
 const providerCategoryOptions = computed<SelectOption[]>(() => PROVIDER_CATEGORIES.map((value) => ({
   label: providerCategoryLabel(value),
   value,
@@ -895,6 +942,10 @@ function displayDate(row: ImportedInvoice): string {
   return formatDate(row.issue_date ?? row.import_date);
 }
 
+function formatIlsAmount(amount: number): string {
+  return new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 2 }).format(amount);
+}
+
 function isoDate(value: string | null): string {
   if (!value) return "";
   const ts = Date.parse(value);
@@ -945,6 +996,7 @@ const PROVIDER_CATEGORIES: Array<NonNullable<ImportedInvoice["provider_category"
   "healthcare",
   "education",
   "retail",
+  "electronics",
   "nonprofit",
   "digital",
   "development",
@@ -972,6 +1024,7 @@ function providerCategoryLabel(category: string | null): string {
     healthcare: "בריאות",
     education: "לימודים",
     retail: "קמעונאות",
+    electronics: "אלקטרוניקה",
     nonprofit: "עמותות",
     digital: "דיגיטל",
     development: "פיתוח",
@@ -1054,6 +1107,7 @@ async function exportInvoicesToExcel() {
       "תנועה": cashFlowLabel(row),
       "סכום": row.amount ?? "",
       "מטבע": row.currency,
+      "סכום בש\"ח": row.amount_ils ?? "",
       "מספר חשבונית": row.invoice_number ?? "",
       "מספר לקוח": row.customer_number ?? "",
       "תקופת חיוב": row.billing_period ?? "",
@@ -1073,10 +1127,12 @@ async function exportInvoicesToExcel() {
       { wch: 12 },
       { wch: 12 },
       { wch: 10 },
+      { wch: 14 },
       { wch: 20 },
       { wch: 16 },
       { wch: 24 },
       { wch: 22 },
+      { wch: 16 },
       { wch: 36 },
     ];
     const wb = utils.book_new();
@@ -1212,11 +1268,13 @@ async function handleGmailImportButton() {
       return;
     }
     const template = await findInvoiceTemplate();
-    const started = await api.gmail.importAll(undefined, undefined, template?.id ? String(template.id) : undefined);
+    const templateId = template?.id ? String(template.id) : undefined;
+    const started = await api.gmail.importAll(undefined, undefined, templateId);
     activeGmailImportJob.value = started;
     message.info("ייבוא החשבוניות מ-Gmail התחיל ברקע");
     const result = await waitForGmailImportJob(started.jobId);
     lastGmailImportJob.value = result;
+    loadInlineOnlyEmails(templateId);
     const failed = result.errors || result.results.filter((item) => item.error).length;
     const imported = result.imported ?? 0;
     if (imported) {
@@ -1240,6 +1298,63 @@ async function handleGmailImportButton() {
   } finally {
     activeGmailImportJob.value = null;
     importingFromGmail.value = false;
+  }
+}
+
+async function loadInlineOnlyEmails(templateId: string | undefined) {
+  inlineOnlyDismissed.value = false;
+  try {
+    const result = await api.gmail.linkOnlyInbox(undefined, undefined, templateId);
+    inlineOnlyEmails.value = result.emails;
+  } catch {
+    inlineOnlyEmails.value = [];
+  }
+}
+
+async function handleImportInlineAll() {
+  const messageIds = inlineOnlyEmails.value.map((email) => email.id);
+  if (!messageIds.length) return;
+  importingFromGmail.value = true;
+  lastGmailImportJob.value = null;
+  try {
+    const template = await findInvoiceTemplate();
+    const started = await api.gmail.importInlineAll(messageIds, template?.id ? String(template.id) : undefined);
+    activeGmailImportJob.value = started;
+    message.info("ייבוא הקבלות מ-Gmail התחיל");
+    const result = await waitForGmailImportJob(started.jobId);
+    lastGmailImportJob.value = result;
+    const savedIds = new Set(result.results.filter((item) => item.import_status === "invoice").map((item) => item.messageId));
+    inlineOnlyEmails.value = inlineOnlyEmails.value.filter((email) => !savedIds.has(email.id));
+    if (result.imported) message.success(`נשמרו ${result.imported} קבלות מגוף המייל`);
+    else if (result.rejected) message.warning("לא נשמרו קבלות. המיילים לא זוהו כקבלה.");
+    else message.info("לא נמצאו קבלות חדשות לייבוא");
+    await load(true);
+  } catch (err: any) {
+    const code = String(err?.message ?? "");
+    if (code.includes("gmail_not_connected")) message.error("Gmail לא מחובר. לחץ שוב כדי להתחבר.");
+    else message.error("שגיאה בייבוא הקבלות");
+  } finally {
+    activeGmailImportJob.value = null;
+    importingFromGmail.value = false;
+  }
+}
+
+async function handleImportInline(row: GmailLinkOnlyEmail) {
+  importingInlineId.value = row.id;
+  try {
+    const template = await findInvoiceTemplate();
+    const result = await api.gmail.importInline(row.id, template?.id ? String(template.id) : undefined);
+    message.success(`יובאה חשבונית מ-${result.receipt.vendor}: ${result.receipt.amount} ${result.receipt.currency}`);
+    inlineOnlyEmails.value = inlineOnlyEmails.value.filter((email) => email.id !== row.id);
+    await load(true);
+  } catch (err: any) {
+    if (String(err?.message ?? "").includes("not_a_recognized_inline_receipt")) {
+      message.error("לא ניתן לייבא מייל זה אוטומטית");
+    } else {
+      message.error("שגיאה בייבוא המייל");
+    }
+  } finally {
+    importingInlineId.value = null;
   }
 }
 
@@ -1660,6 +1775,45 @@ function replaceRow(updated: ImportedInvoice) {
   justify-content: center;
 }
 
+.link-only-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+}
+
+.link-only-notice__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.link-only-notice__text strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.link-only-notice__list {
+  margin: 4px 0 0;
+  padding-inline-start: 20px;
+  font-size: 12px;
+}
+
+.link-only-notice__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}
+
 .empty {
   text-align: center;
   padding: 60px 20px;
@@ -1761,6 +1915,13 @@ function replaceRow(updated: ImportedInvoice) {
   color: var(--text-primary);
 }
 
+.invoice-card__amount-ils {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 .invoice-card__line {
   display: flex;
   justify-content: space-between;
@@ -1776,6 +1937,31 @@ function replaceRow(updated: ImportedInvoice) {
   margin-top: 4px;
   padding-top: 0;
   border-top: 0;
+}
+
+.invoice-supplier-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.invoice-nofile-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--text-secondary) 35%, var(--border-color));
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.invoice-card__supplier .invoice-nofile-flag {
+  margin-inline-start: 6px;
 }
 
 .invoice-category-chip {
@@ -1942,6 +2128,13 @@ function replaceRow(updated: ImportedInvoice) {
 .cell-amount {
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.cell-amount__ils {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .cell-actions {

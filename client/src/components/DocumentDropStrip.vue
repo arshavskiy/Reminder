@@ -373,7 +373,7 @@ async function uploadFiles(
 }
 
 async function pollDocumentResults(pendingIds: string[]) {
-  const MAX_POLLS = 30;
+  const MAX_POLLS = 90;
   const INTERVAL = 2000;
   const settled = new Set<string>();
 

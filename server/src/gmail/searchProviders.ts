@@ -23,6 +23,7 @@ export interface GmailSearchProvider {
     | "healthcare"
     | "education"
     | "retail"
+    | "electronics"
     | "nonprofit"
     | "digital"
     | "development"
@@ -124,13 +125,13 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
 
   { id: "yes", category: "tv", label: "טלוויזיה - yes", terms: ["yes.co.il", "yes", "יס"], sort_order: 1110, enabled: true },
   { id: "sting-tv", category: "tv", label: "טלוויזיה - STINGTV", terms: ["stingtv.co.il", "STINGTV", "סטינג"], sort_order: 1120, enabled: true },
-  { id: "hot-tv", category: "tv", label: "טלוויזיה - HOT", terms: ["hot.net.il", "hot-info.net.il", "HOT", "הוט"], sort_order: 1130, enabled: true },
-  { id: "partner-tv", category: "tv", label: "טלוויזיה - פרטנר TV", terms: ["partner.co.il", "פרטנר TV", "Partner TV"], sort_order: 1140, enabled: true },
-  { id: "cellcom-tv", category: "tv", label: "טלוויזיה - סלקום TV", terms: ["cellcom.co.il", "סלקום TV", "Cellcom TV"], sort_order: 1150, enabled: true },
+  { id: "hot-tv", category: "tv", label: "טלוויזיה - HOT TV", terms: ["HOT TV", "הוט TV"], sort_order: 1130, enabled: true },
+  { id: "partner-tv", category: "tv", label: "טלוויזיה - פרטנר TV", terms: ["פרטנר TV", "Partner TV"], sort_order: 1140, enabled: true },
+  { id: "cellcom-tv", category: "tv", label: "טלוויזיה - סלקום TV", terms: ["סלקום TV", "Cellcom TV"], sort_order: 1150, enabled: true },
   { id: "free-tv", category: "tv", label: "טלוויזיה - FreeTV", terms: ["freetv.tv", "FreeTV", "פרי טיוי"], sort_order: 1160, enabled: true },
   { id: "next-tv", category: "tv", label: "טלוויזיה - NEXT TV", terms: ["nexttv.co.il", "NEXT TV", "נקסט TV"], sort_order: 1165, enabled: true },
   { id: "netflix", category: "tv", label: "סטרימינג - Netflix", terms: ["netflix.com", "Netflix", "נטפליקס"], sort_order: 1170, enabled: true },
-  { id: "amazon-prime-video", category: "tv", label: "סטרימינג - Amazon Prime Video", terms: ["primevideo.com", "amazon.com", "Prime Video", "Amazon Prime Video"], sort_order: 1180, enabled: true },
+  { id: "amazon-prime-video", category: "tv", label: "סטרימינג - Amazon Prime Video", terms: ["primevideo.com", "Prime Video", "Amazon Prime Video"], sort_order: 1180, enabled: true },
   { id: "disney-plus", category: "tv", label: "סטרימינג - Disney+", terms: ["disneyplus.com", "Disney+", "דיסני פלוס"], sort_order: 1190, enabled: true },
   { id: "apple-tv", category: "tv", label: "סטרימינג - Apple TV", terms: ["tv.apple.com", "Apple TV", "Apple TV+"], sort_order: 1200, enabled: true },
   { id: "spotify", category: "tv", label: "סטרימינג - Spotify", terms: ["spotify.com", "Spotify"], sort_order: 1210, enabled: true },
@@ -138,9 +139,10 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "amazon", category: "marketplace", label: "קניות - Amazon", terms: ["amazon.com", "Amazon", "אמזון"], sort_order: 1310, enabled: true },
   { id: "aliexpress", category: "marketplace", label: "קניות - AliExpress", terms: ["aliexpress.com", "AliExpress", "עלי אקספרס"], sort_order: 1320, enabled: true },
   { id: "ebay", category: "marketplace", label: "קניות - eBay", terms: ["ebay.com", "eBay"], sort_order: 1330, enabled: true },
-  { id: "ksp", category: "marketplace", label: "קניות - KSP", terms: ["ksp.co.il", "KSP"], sort_order: 1340, enabled: true },
-  { id: "ivory", category: "marketplace", label: "קניות - Ivory", terms: ["ivory.co.il", "Ivory", "אייבורי"], sort_order: 1350, enabled: true },
-  { id: "bug", category: "marketplace", label: "קניות - BUG", terms: ["bug.co.il", "BUG", "באג"], sort_order: 1360, enabled: true },
+  { id: "temu", category: "marketplace", label: "קניות - Temu", terms: ["temu.com", "Temu"], sort_order: 1335, enabled: true },
+  { id: "shein", category: "marketplace", label: "קניות - Shein", terms: ["shein.com", "Shein"], sort_order: 1337, enabled: true },
+  { id: "wish", category: "marketplace", label: "קניות - Wish", terms: ["wish.com", "Wish"], sort_order: 1339, enabled: true },
+  { id: "banggood", category: "marketplace", label: "קניות - Banggood", terms: ["banggood.com", "Banggood"], sort_order: 1341, enabled: true },
   { id: "zap", category: "marketplace", label: "קניות - Zap", terms: ["zap.co.il", "Zap", "זאפ"], sort_order: 1370, enabled: true },
   { id: "lastprice", category: "marketplace", label: "קניות - LastPrice", terms: ["lastprice.co.il", "LastPrice", "לאסטפרייס"], sort_order: 1380, enabled: true },
   { id: "terminal-x", category: "marketplace", label: "קניות - TERMINAL X", terms: ["terminalx.com", "TERMINAL X", "טרמינל איקס"], sort_order: 1390, enabled: true },
@@ -164,6 +166,8 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "sinvoice", category: "payment", label: "חשבוניות - S-Invoice", terms: ["sinvoice.co.il", "S-Invoice", "חשבונית"], sort_order: 1740, enabled: true },
   { id: "myofficeguy", category: "payment", label: "חשבוניות - MyOfficeGuy", terms: ["myofficeguy.com", "MyOfficeGuy"], sort_order: 1750, enabled: true },
   { id: "moneysend", category: "payment", label: "תשלומים - MoneySend", terms: ["moneysend.co.il", "MoneySend", "דוח העברת כספים"], sort_order: 1760, enabled: true },
+  { id: "hyp", category: "payment", label: "תשלומים - Hyp / iPos", terms: ["hyp.co.il", "ipos@hyp.co.il"], sort_order: 1770, enabled: true },
+  { id: "paypal", category: "payment", label: "תשלומים - PayPal", terms: ["paypal.com", "paypal.co.il", "PayPal"], sort_order: 1780, enabled: true },
 
   { id: "gov-il", category: "government", label: "ממשלה - gov.il", terms: ["gov.il", "DoNotReply@gov.il", "ממשלתי"], sort_order: 1810, enabled: true },
   { id: "ecom-gov", category: "government", label: "ממשלה - שירות התשלומים הממשלתי", terms: ["ecom.gov.il", "שרות התשלומים הממשלתי", "שירות התשלומים הממשלתי"], sort_order: 1820, enabled: true },
@@ -176,7 +180,7 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "tel-aviv-muni", category: "municipality", label: "עירייה - תל אביב יפו", terms: ["mail.tel-aviv.gov.il", "arnona.tel-aviv.gov.il", "עיריית תל אביב", "עיריית תל-אביב-יפו", "ארנונה תל אביב"], sort_order: 1910, enabled: true },
   { id: "holon-muni", category: "municipality", label: "עירייה - חולון", terms: ["holon.muni.il", "ladpc.co.il", "עיריית חולון", "שובר תשלום ארנונה"], sort_order: 1920, enabled: true },
 
-  { id: "fnx", category: "insurance", label: "ביטוח - הפניקס", terms: ["fnx.co.il", "הפניקס"], sort_order: 2010, enabled: true },
+  { id: "fnx", category: "insurance", label: "ביטוח - הפניקס", terms: ["fnx.co.il", "9mil.co.il", "הפניקס"], sort_order: 2010, enabled: true },
   { id: "clal-ins", category: "insurance", label: "ביטוח - כלל", terms: ["clal-ins.co.il", "כלל ביטוח", "כלל פנסיה"], sort_order: 2020, enabled: true },
   { id: "menora", category: "insurance", label: "ביטוח - מנורה מבטחים", terms: ["menora.co.il", "מנורה מבטחים"], sort_order: 2030, enabled: true },
   { id: "passportcard", category: "insurance", label: "ביטוח - PassportCard", terms: ["passportcard.co.il", "PassportCard", "פספורטכארד"], sort_order: 2040, enabled: true },
@@ -195,6 +199,9 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "ferryscanner", category: "travel", label: "תיירות - Ferryscanner", terms: ["ferryscanner.com", "Ferryscanner"], sort_order: 2240, enabled: true },
   { id: "12go", category: "travel", label: "תיירות - 12Go", terms: ["12go.asia", "b.12go.asia", "12Go"], sort_order: 2250, enabled: true },
   { id: "bravofly", category: "travel", label: "תיירות - Bravofly", terms: ["bravofly.com", "Bravofly"], sort_order: 2260, enabled: true },
+  { id: "aeroflot", category: "travel", label: "תיירות - Aeroflot", terms: ["aeroflot.ru", "Aeroflot", "אירופלוט"], sort_order: 2270, enabled: true },
+  { id: "booking", category: "travel", label: "תיירות - Booking.com", terms: ["booking.com", "Booking.com"], sort_order: 2280, enabled: true },
+  { id: "grab", category: "travel", label: "תיירות - Grab", terms: ["grab.com", "Grab"], sort_order: 2290, enabled: true },
 
   { id: "hadassah", category: "healthcare", label: "בריאות - הדסה", terms: ["hadassah.org.il", "הדסה"], sort_order: 2310, enabled: true },
   { id: "maccabi-dent", category: "healthcare", label: "בריאות - מכבידנט", terms: ["maccabi-dent.com", "מכבידנט"], sort_order: 2320, enabled: true },
@@ -211,13 +218,36 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "devops-experts", category: "education", label: "לימודים - DevOps Experts", terms: ["devopsexperts.co.il", "DevOps Experts", "דבאופס"], sort_order: 2460, enabled: true },
   { id: "mika-center", category: "education", label: "לימודים - מיקה סנטר", terms: ["mika.center", "מיקה סנטר"], sort_order: 2470, enabled: true },
 
-  { id: "payngo", category: "retail", label: "קמעונאות - מחסני חשמל", terms: ["payngo.co.il", "מחסני חשמל", "PayNgo"], sort_order: 2510, enabled: true },
   { id: "homecenter", category: "retail", label: "קמעונאות - הום סנטר", terms: ["homecenter.co.il", "הום סנטר", "Home Center"], sort_order: 2520, enabled: true },
   { id: "intertoys", category: "retail", label: "קמעונאות - אינטרטויס", terms: ["אינטרטויס", "Intertoys"], sort_order: 2530, enabled: true },
-  { id: "onepc", category: "retail", label: "קמעונאות - A&A מחשבים וסלולר", terms: ["1pc.co.il", "א&א מחשבים", "א&A מחשבים"], sort_order: 2540, enabled: true },
   { id: "shw", category: "retail", label: "קמעונאות - שמרת הזורע", terms: ["shw.co.il", "שמרת הזורע"], sort_order: 2550, enabled: true },
   { id: "fizikal", category: "retail", label: "קמעונאות - Fizikal", terms: ["fizikal.co.il", "Fizikal"], sort_order: 2560, enabled: true },
   { id: "headstart", category: "retail", label: "קמעונאות - Headstart", terms: ["headstart.co.il", "Headstart", "הדסטארט"], sort_order: 2570, enabled: true },
+  { id: "ace", category: "retail", label: "קמעונאות - ACE", terms: ["ace.co.il", "ACE", "אייס"], sort_order: 2571, enabled: true },
+  { id: "ikea", category: "retail", label: "קמעונאות - IKEA", terms: ["ikea.co.il", "ikea.com", "IKEA", "איקאה"], sort_order: 2572, enabled: true },
+  { id: "max-stock", category: "retail", label: "קמעונאות - Max Stock", terms: ["maxstock.co.il", "Max Stock", "מקס סטוק"], sort_order: 2573, enabled: true },
+  { id: "office-depot", category: "retail", label: "קמעונאות - Office Depot", terms: ["officedepot.co.il", "Office Depot", "אופיס דיפו"], sort_order: 2574, enabled: true },
+  { id: "fox", category: "retail", label: "קמעונאות - Fox", terms: ["foxhome.co.il", "fox.co.il", "Fox Home", "פוקס"], sort_order: 2575, enabled: true },
+  { id: "castro", category: "retail", label: "קמעונאות - Castro", terms: ["castro.co.il", "Castro", "קסטרו"], sort_order: 2576, enabled: true },
+  { id: "golf", category: "retail", label: "קמעונאות - Golf", terms: ["golf.co.il", "Golf", "גולף"], sort_order: 2577, enabled: true },
+  { id: "renuar", category: "retail", label: "קמעונאות - רנואר", terms: ["renuar.co.il", "Renuar", "רנואר"], sort_order: 2578, enabled: true },
+  { id: "hamashbir", category: "retail", label: "קמעונאות - המשביר לצרכן", terms: ["hamashbir.co.il", "המשביר לצרכן", "המשביר"], sort_order: 2579, enabled: true },
+  { id: "super-pharm", category: "retail", label: "קמעונאות - סופר פארם", terms: ["super-pharm.co.il", "Super-Pharm", "סופר פארם"], sort_order: 2581, enabled: true },
+  { id: "be", category: "retail", label: "קמעונאות - Be", terms: ["be-fashion.co.il", "Be Fashion", "בי סטייל"], sort_order: 2582, enabled: true },
+  { id: "steimatzky", category: "retail", label: "קמעונאות - סטימצקי", terms: ["steimatzky.co.il", "Steimatzky", "סטימצקי"], sort_order: 2583, enabled: true },
+  { id: "tzomet-sfarim", category: "retail", label: "קמעונאות - צומת ספרים", terms: ["tzometsfarim.co.il", "צומת ספרים"], sort_order: 2584, enabled: true },
+  { id: "walkin", category: "retail", label: "קמעונאות - Walk In", terms: ["walkin.co.il", "Walk In", "ווק אין"], sort_order: 2592, enabled: true },
+  { id: "onyxboox", category: "retail", label: "קמעונאות - Onyx Boox", terms: ["onyxboox.co.il", "Onyx Boox"], sort_order: 2593, enabled: true },
+  { id: "atfolix", category: "retail", label: "קמעונאות - atFoliX", terms: ["folix.de", "atfolix", "atFoliX"], sort_order: 2594, enabled: true },
+  { id: "playstation-store", category: "retail", label: "קמעונאות - PlayStation Store", terms: ["playstation.com", "PlayStation Store", "פלייסטיישן"], sort_order: 2595, enabled: true },
+
+  { id: "ksp", category: "electronics", label: "אלקטרוניקה - KSP", terms: ["ksp.co.il", "KSP", "קיאספי"], sort_order: 2585, enabled: true },
+  { id: "bug", category: "electronics", label: "אלקטרוניקה - BUG", terms: ["bug.co.il", "BUG", "באג"], sort_order: 2586, enabled: true },
+  { id: "ivory", category: "electronics", label: "אלקטרוניקה - Ivory", terms: ["ivory.co.il", "Ivory", "אייבורי"], sort_order: 2587, enabled: true },
+  { id: "onepc", category: "electronics", label: "אלקטרוניקה - A&A מחשבים וסלולר", terms: ["1pc.co.il", "א&א מחשבים", "א&A מחשבים"], sort_order: 2588, enabled: true },
+  { id: "payngo", category: "electronics", label: "אלקטרוניקה - מחסני חשמל", terms: ["payngo.co.il", "מחסני חשמל", "PayNgo"], sort_order: 2589, enabled: true },
+  { id: "bexpress", category: "electronics", label: "אלקטרוניקה - Bexpress", terms: ["bexpress.co.il", "Bexpress", "בי אקספרס"], sort_order: 2590, enabled: true },
+  { id: "vinet", category: "electronics", label: "אלקטרוניקה - וויינט", terms: ["vinet.co.il", "וויינט"], sort_order: 2591, enabled: true },
 
   { id: "zofim", category: "nonprofit", label: "עמותות - הצופים", terms: ["zofim.org.il", "צופים"], sort_order: 2610, enabled: true },
   { id: "bnei-baruch", category: "nonprofit", label: "עמותות - בני ברוך", terms: ["kabbalah.info", "בני ברוך", "קבלה לעם"], sort_order: 2620, enabled: true },

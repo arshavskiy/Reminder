@@ -285,9 +285,19 @@ const supplierOptions = computed<SelectOption[]>(() => {
   });
 });
 
-const categoryOptions = computed<SelectOption[]>(() =>
-  categories.value.map((value) => ({ label: providerCategoryLabel(value), value })),
-);
+const EXPENSE_PROVIDER_CATEGORIES = [
+  "electricity", "telecom", "water", "transport", "parking", "fuel", "gas", "tv",
+  "marketplace", "food", "payment", "government", "municipality", "insurance",
+  "finance", "travel", "healthcare", "education", "retail", "electronics",
+  "nonprofit", "digital", "development", "general",
+];
+const categoryOptions = computed<SelectOption[]>(() => {
+  const values = [...EXPENSE_PROVIDER_CATEGORIES];
+  for (const value of categories.value) {
+    if (value && !values.includes(value)) values.push(value);
+  }
+  return values.map((value) => ({ label: providerCategoryLabel(value), value }));
+});
 const namedChartSeries = computed(() => chartSeries.value.filter((series) => !series.isOther));
 const hasChartData = computed(() => chartType.value === "pie"
   ? chartSeries.value.length > 0
@@ -694,6 +704,7 @@ function providerCategoryLabel(value: string): string {
     healthcare: "בריאות",
     education: "לימודים",
     retail: "קמעונאות",
+    electronics: "אלקטרוניקה",
     nonprofit: "עמותות",
     digital: "דיגיטל",
     development: "פיתוח",

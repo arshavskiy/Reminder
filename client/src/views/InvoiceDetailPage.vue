@@ -14,7 +14,7 @@
           <n-icon :component="ArrowForwardOutline" class="btn-icon" />
           חזרה
         </button>
-        <button class="rbtn rbtn--ghost" type="button" :disabled="!invoice" @click="downloadInvoice">
+        <button class="rbtn rbtn--ghost" type="button" :disabled="!invoice?.download_url" @click="downloadInvoice">
           <n-icon :component="DownloadOutline" class="btn-icon" />
           הורד
         </button>
@@ -29,6 +29,7 @@
       <span class="status-chip">{{ statusLabel(invoice.status) }}</span>
       <span class="meta-chip">{{ invoice.invoice_number || "ללא מספר" }}</span>
       <span class="meta-chip">{{ invoiceTypeLabel(invoice) }}</span>
+      <span v-if="invoice.inline_no_file" class="meta-chip">ללא קובץ</span>
       <span class="meta-chip" :class="form.cash_flow === 'income' ? 'meta-chip--income' : 'meta-chip--expense'">
         {{ form.cash_flow === "income" ? "הכנסה" : "הוצאה" }}
       </span>
@@ -56,7 +57,7 @@
             />
             <div v-else class="invoice-preview__empty">
               <n-icon :component="DocumentTextOutline" :size="48" />
-              <span>אין תצוגה מקדימה</span>
+              <span>{{ invoice.inline_no_file ? "נשמר מגוף המייל, ללא קובץ" : "אין תצוגה מקדימה" }}</span>
             </div>
           </div>
         </section>
@@ -72,7 +73,10 @@
             <div class="finance-summary">
               <div class="finance-summary__amount">
                 <span>סכום כולל</span>
-                <strong>{{ invoice.amount_display }}</strong>
+                <strong>{{ invoice.currency !== 'ILS' && invoice.amount_ils !== null ? formatIls(invoice.amount_ils) : invoice.amount_display }}</strong>
+                <span v-if="invoice.currency !== 'ILS'" class="finance-summary__amount-ils">
+                  ({{ invoice.amount_display }})
+                </span>
               </div>
               <label class="finance-summary__status">
                 <span>סטטוס תשלום</span>
@@ -291,6 +295,7 @@ const providerCategoryOptions: SelectOption[] = [
   { label: "בריאות", value: "healthcare" },
   { label: "לימודים", value: "education" },
   { label: "קמעונאות", value: "retail" },
+  { label: "אלקטרוניקה", value: "electronics" },
   { label: "עמותות", value: "nonprofit" },
   { label: "דיגיטל", value: "digital" },
   { label: "פיתוח", value: "development" },
@@ -428,6 +433,10 @@ function statusLabel(value: string): string {
     archived: "ארכיון",
   };
   return labels[value] ?? value;
+}
+
+function formatIls(amount: number): string {
+  return new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 2 }).format(amount);
 }
 
 function invoiceTypeLabel(row: ImportedInvoice): string {
@@ -824,6 +833,12 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
 }
 
 .finance-summary__amount span { color: rgba(255,255,255,0.85); }
+.finance-summary__amount-ils {
+  display: block !important;
+  margin-top: 4px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.75) !important;
+}
 .finance-summary strong { font-size: 22px; font-weight: 800; }
 
 .form-grid {

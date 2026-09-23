@@ -191,6 +191,56 @@
       :id="isAdmin ? undefined : 'gmail-search-section'"
       class="gmail-search-section"
     >
+      <div
+        v-if="linkOnlyContextActive && linkKindEmails.length && !linkOnlyDismissed"
+        class="link-only-notice"
+      >
+        <div class="link-only-notice__text">
+          <strong>נמצאו {{ linkKindEmails.length }} מיילי חשבונית עם קישור בלבד, ללא קובץ מצורף</strong>
+          <span>מיילים כאלה (למשל ריוחית, Green Invoice) לא ניתנים לייבוא אוטומטי כרגע — יש להוריד את המסמך ידנית מהקישור.</span>
+          <ul class="link-only-notice__list">
+            <li v-for="row in linkKindEmails.slice(0, 40)" :key="row.id">
+              <span>{{ row.subject }} — {{ row.from }}</span>
+              <button
+                v-if="row.importable"
+                class="btn btn--ghost btn--xs"
+                type="button"
+                :disabled="importingInlineId === row.id"
+                @click="handleImportInline(row)"
+              >
+                {{ importingInlineId === row.id ? "מייבא..." : "ייבוא" }}
+              </button>
+            </li>
+          </ul>
+        </div>
+        <button class="btn btn--ghost btn--xs" type="button" @click="linkOnlyDismissed = true">הבנתי</button>
+      </div>
+
+      <div
+        v-if="linkOnlyContextActive && inlineKindEmails.length && !inlineOnlyDismissed"
+        class="link-only-notice"
+      >
+        <div class="link-only-notice__text">
+          <strong>נמצאו {{ inlineKindEmails.length }} מיילי אישור תשלום עם פרטים בתוך גוף המייל, ללא קובץ</strong>
+          <span>PayPal, Google Play, Hyp ו-Meta Ads אפשר לייבא. שאר האישורים מוצגים כאן בלי ייבוא אוטומטי.</span>
+          <ul class="link-only-notice__list">
+            <li v-for="row in inlineKindEmails.slice(0, 80)" :key="row.id">
+              <span>{{ row.subject }} — {{ row.from }}</span>
+              <button
+                v-if="row.importable"
+                class="btn btn--ghost btn--xs"
+                type="button"
+                :disabled="importingInlineId === row.id"
+                @click="handleImportInline(row)"
+              >
+                {{ importingInlineId === row.id ? "מייבא..." : "ייבוא" }}
+              </button>
+            </li>
+          </ul>
+        </div>
+        <button class="btn btn--ghost btn--xs" type="button" @click="inlineOnlyDismissed = true">הבנתי</button>
+      </div>
+
       <div v-if="!emails.length" class="empty">
         <p>לא נמצאו מיילים עם קבצי {{ selectedTypeLabel }} מצורפים</p>
       </div>
@@ -672,7 +722,7 @@ import {
   SearchOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
-import { api, type GmailAttachment, type GmailEmail, type GmailImportedDocument, type GmailImportHistoryItem, type GmailImportJob, type GmailSearchProvider } from "../services/apiService.js";
+import { api, type GmailAttachment, type GmailEmail, type GmailImportedDocument, type GmailImportHistoryItem, type GmailImportJob, type GmailLinkOnlyEmail, type GmailSearchProvider } from "../services/apiService.js";
 import { useAuthStore } from "../stores/auth.js";
 import type { DocTemplate } from "../shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
@@ -705,6 +755,13 @@ const nextPageToken = ref<string | null>(null);
 const totalEstimate = ref<number | null>(null);
 const importing = ref<Record<string, boolean>>({});
 const selectedGuidedFlow = ref<"invoice" | "inspection" | null>(null);
+const linkOnlyEmails = ref<GmailLinkOnlyEmail[]>([]);
+const linkOnlyDismissed = ref(false);
+const inlineOnlyDismissed = ref(false);
+const linkOnlyContextActive = ref(false);
+const linkKindEmails = computed(() => linkOnlyEmails.value.filter((row) => row.kind === "link"));
+const inlineKindEmails = computed(() => linkOnlyEmails.value.filter((row) => row.kind === "inline"));
+const importingInlineId = ref<string | null>(null);
 const isAdmin = computed(() => authStore.user?.role === "admin");
 const guidedFlowLabel = computed(() => selectedGuidedFlow.value === "invoice" ? l.value.gmail.importInvoices : l.value.gmail.importInspection);
 const visibleImportJob = computed(() => activeImportJob.value ?? lastImportJob.value);
@@ -1053,6 +1110,14 @@ function requestedGuidedFlow(): "invoice" | "inspection" | null {
   return flow === "inspection" || flow === "invoice" ? flow : null;
 }
 
+function isInvoiceContext(): boolean {
+  if (selectedGuidedFlow.value === "invoice") return true;
+  const id = importTemplateId();
+  const template = templates.value.find((t) => String(t.id) === id);
+  if (!template) return false;
+  return template.document_kind === "invoice" || /חשבונית|קבלה|דרישת\s*תשלום/i.test(template.name);
+}
+
 function selectedSearchTemplateTerms(): string[] {
   const template = templates.value.find((t) => String(t.id) === searchTemplateId.value);
   if (!template) return [];
@@ -1173,6 +1238,9 @@ async function loadInbox() {
     emails.value = result.emails;
     nextPageToken.value = result.nextPageToken;
     totalEstimate.value = result.resultSizeEstimate;
+    linkOnlyContextActive.value = isInvoiceContext();
+    if (linkOnlyContextActive.value) loadLinkOnlyEmails();
+    else linkOnlyEmails.value = [];
   } catch (err: any) {
     if (err?.message?.includes("gmail_not_connected")) {
       connected.value = false;
@@ -1186,6 +1254,38 @@ async function loadInbox() {
     }
   } finally {
     loading.value = false;
+  }
+}
+
+let linkOnlyRequestId = 0;
+
+async function loadLinkOnlyEmails() {
+  linkOnlyDismissed.value = false;
+  inlineOnlyDismissed.value = false;
+  const requestId = ++linkOnlyRequestId;
+  try {
+    const result = await api.gmail.linkOnlyInbox(undefined, undefined, importTemplateId());
+    if (requestId !== linkOnlyRequestId) return; // a newer call already superseded this one
+    linkOnlyEmails.value = result.emails;
+  } catch {
+    if (requestId === linkOnlyRequestId) linkOnlyEmails.value = [];
+  }
+}
+
+async function handleImportInline(row: GmailLinkOnlyEmail) {
+  importingInlineId.value = row.id;
+  try {
+    const result = await api.gmail.importInline(row.id, importTemplateId());
+    message.success(`יובאה חשבונית מ-${result.receipt.vendor}: ${result.receipt.amount} ${result.receipt.currency}`);
+    linkOnlyEmails.value = linkOnlyEmails.value.filter((email) => email.id !== row.id);
+  } catch (err: any) {
+    if (String(err?.message ?? "").includes("not_a_recognized_inline_receipt")) {
+      message.error("לא ניתן לייבא מייל זה אוטומטית");
+    } else {
+      message.error("שגיאה בייבוא המייל");
+    }
+  } finally {
+    importingInlineId.value = null;
   }
 }
 
@@ -1470,6 +1570,7 @@ function providerCategoryLabel(category: string): string {
     healthcare: "בריאות",
     education: "לימודים",
     retail: "קמעונאות",
+    electronics: "אלקטרוניקה",
     nonprofit: "עמותות",
     digital: "דיגיטל",
     development: "פיתוח",
@@ -2029,6 +2130,47 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   background: var(--bg-card);
   border-color: transparent;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.link-only-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+}
+
+.link-only-notice__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.link-only-notice__text strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.link-only-notice__list {
+  margin: 4px 0 0;
+  padding-inline-start: 20px;
+  font-size: 12px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.link-only-notice__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
 }
 
 .empty {

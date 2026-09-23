@@ -37,6 +37,17 @@ export interface GmailEmail {
   attachments: GmailAttachment[];
 }
 
+export interface GmailLinkOnlyEmail {
+  id: string;
+  subject: string;
+  from: string;
+  date: string;
+  internalDate: string;
+  kind: "link" | "inline";
+  documentLinkUrl: string | null;
+  importable: boolean;
+}
+
 export interface GmailSearchProvider {
   id: string;
   category:
@@ -59,6 +70,7 @@ export interface GmailSearchProvider {
     | "healthcare"
     | "education"
     | "retail"
+    | "electronics"
     | "nonprofit"
     | "digital"
     | "development"
@@ -156,6 +168,7 @@ export interface GmailImportJob {
 export interface ImportedInvoice {
   id: string;
   document_id: string | null;
+  inline_no_file?: boolean;
   supplier_name: string;
   supplier_id: string | null;
   invoice_number: string | null;
@@ -170,6 +183,7 @@ export interface ImportedInvoice {
   billing_period: string | null;
   amount: number | null;
   amount_display: string;
+  amount_ils: number | null;
   vat_amount: number | null;
   currency: string;
   cash_flow: "income" | "expense";
@@ -1171,6 +1185,11 @@ export const api = {
       }>(`/gmail/auth-url${qs({returnTo, purpose})}`),
     searchProviders: () => get<{ providers: GmailSearchProvider[] }>("/gmail/search-providers"),
     inbox: (q?: string, limit?: number, pageToken?: string, templateId?: string) => get<{ emails: GmailEmail[]; nextPageToken: string | null; resultSizeEstimate: number | null }>(`/gmail/inbox${qs({ q, limit, pageToken, templateId })}`),
+    linkOnlyInbox: (limit?: number, pageToken?: string, templateId?: string) => get<{ emails: GmailLinkOnlyEmail[]; nextPageToken: string | null; resultSizeEstimate: number | null }>(`/gmail/inbox/inline-only${qs({ limit, pageToken, templateId })}`),
+    importInline: (messageId: string, templateId?: string) =>
+      post<{ invoiceId: string; receipt: { vendor: string; transactionId: string; amount: number; currency: string } }>("/gmail/inbox/import-inline", { messageId, templateId }),
+    importInlineAll: (messageIds: string[], templateId?: string) =>
+      post<GmailImportJob>("/gmail/inbox/import-inline-all", { messageIds, templateId }),
     attachmentUrl: (messageId: string, attachmentId: string, filename: string) =>
       `${BASE}/gmail/attachment/${messageId}/${attachmentId}?filename=${encodeURIComponent(filename)}`,
     importAttachment: (messageId: string, attachmentId: string, filename: string, templateId?: string) =>

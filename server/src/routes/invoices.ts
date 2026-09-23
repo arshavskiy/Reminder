@@ -15,6 +15,7 @@ import {
 import { inferInvoiceCashFlow, normalizeCashFlow, resolveVatAmount } from "../invoices/cashFlow";
 import { matchesExpenseProofFilter, normalizeExpenseProofFilter } from "../invoices/documentProof";
 import {sendEmailWithAttachments} from "../reminders/emailSender";
+import { toIlsMany } from "../invoices/fxRates";
 
 type InvoiceRow = Record<string, any>;
 const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
@@ -79,6 +80,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const providers = await loadGmailSearchProviders();
     const eligibleInvoices = invoices.filter((invoice) => invoiceIsVisible(invoice, documentMap.get(String(invoice.document_id))));
     const allRows = eligibleInvoices.map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers));
+    await enrichAmountIls(allRows);
     const facetRows = allRows.filter((row) => {
       if (type && row.type !== type) return false;
       if (cashFlow && row.cash_flow !== cashFlow) return false;
@@ -163,6 +165,7 @@ export function registerInvoiceRoutes(app: express.Application) {
         if (toTs && (!rowTs || rowTs > toTs)) return false;
         return Boolean(rowTs) && typeof row.amount === "number" && Number.isFinite(row.amount);
       });
+    await enrichAmountIls(expenseRows);
 
     // Facet options must not be narrowed by the facet they populate, or the
     // active selection becomes the only option the user can ever pick.
@@ -185,7 +188,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       const month = chartMonth(row, dateBasis);
       if (!month) continue;
       const supplier = row.supplier_name || "ספק לא מזוהה";
-      const amount = row.amount ?? 0;
+      const amount = row.amount_ils ?? row.amount ?? 0;
       const categoryKey = row.provider_category || "general";
       monthSet.add(month);
       totals.set(supplier, (totals.get(supplier) ?? 0) + amount);
@@ -280,7 +283,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       proofFilter,
       months,
       totalInvoices: rows.length,
-      totalAmount: roundMoney(rows.reduce((sum, row) => sum + (row.amount ?? 0), 0)),
+      totalAmount: roundMoney(rows.reduce((sum, row) => sum + (row.amount_ils ?? row.amount ?? 0), 0)),
       suppliers: supplierTotals,
       // Same reasoning as `categories`: not narrowed by the supplier filter.
       supplierNames: supplierFacetValues(supplierOptionRows),
@@ -341,6 +344,7 @@ export function registerInvoiceRoutes(app: express.Application) {
         return ts !== null && ts >= period.from.getTime() && ts <= period.to.getTime();
       })
       .sort((left, right) => compareInvoiceRows(left, right, "date", "desc"));
+    await enrichAmountIls(rows);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "RemindOCR";
@@ -357,6 +361,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       { header: "תנועה", key: "cashFlow", width: 12 },
       { header: "סכום", key: "amount", width: 12 },
       { header: "מטבע", key: "currency", width: 10 },
+      { header: "סכום בש\"ח", key: "amountIls", width: 14 },
       { header: "מספר חשבונית", key: "invoiceNumber", width: 20 },
       { header: "מספר לקוח", key: "customerNumber", width: 16 },
       { header: "תקופת חיוב", key: "billingPeriod", width: 24 },
@@ -378,6 +383,7 @@ export function registerInvoiceRoutes(app: express.Application) {
         cashFlow: row.cash_flow === "income" ? "הכנסה" : "הוצאה",
         amount: row.amount ?? "",
         currency: row.currency,
+        amountIls: row.amount_ils !== null ? roundMoney(row.amount_ils) : "",
         invoiceNumber: row.invoice_number ?? "",
         customerNumber: row.customer_number ?? "",
         billingPeriod: row.billing_period ?? "",
@@ -558,7 +564,9 @@ export function registerInvoiceRoutes(app: express.Application) {
       : null;
 
     const providers = await loadGmailSearchProviders();
-    res.json(presentInvoice(invoice, doc ?? undefined, gmailImport ?? undefined, providers));
+    const presented = presentInvoice(invoice, doc ?? undefined, gmailImport ?? undefined, providers);
+    await enrichAmountIls([presented]);
+    res.json(presented);
   });
 
   app.put("/api/invoices/:id", async (req, res) => {
@@ -652,11 +660,16 @@ export function registerInvoiceRoutes(app: express.Application) {
       return;
     }
     const providers = await loadGmailSearchProviders();
-    res.json(presentInvoice(result, doc ?? undefined, undefined, providers));
+    const presented = presentInvoice(result, doc ?? undefined, undefined, providers);
+    await enrichAmountIls([presented]);
+    res.json(presented);
   });
 }
 
 function invoiceIsVisible(invoice: InvoiceRow, doc?: InvoiceRow): boolean {
+  if (invoice.source === "gmail_inline" || invoice.inline_no_file === true) {
+    return invoice.possible_not_invoice !== true;
+  }
   if (!doc) return false;
   if (invoice.possible_not_invoice === true) return false;
   if (doc.invoice_rejected === true) return false;
@@ -674,6 +687,8 @@ function presentInvoice(
   providers: GmailSearchProvider[] = [],
 ) {
   const documentId = String(invoice.document_id ?? "");
+  const inlineNoFile = invoice.source === "gmail_inline" || invoice.inline_no_file === true;
+  const linkedDocumentId = inlineNoFile || !ObjectId.isValid(documentId) ? "" : documentId;
   const amount = typeof invoice.amount === "number" ? invoice.amount : parseAmount(invoice.amount);
   const currency = normalizeCurrencyCode(invoice.currency);
   const provider = matchGmailSearchProvider([
@@ -694,7 +709,8 @@ function presentInvoice(
   ].join(" "), providers);
   return {
     id: invoice._id?.toString?.() ?? String(invoice._id),
-    document_id: documentId || null,
+    document_id: linkedDocumentId || null,
+    inline_no_file: inlineNoFile,
     supplier_name: invoice.supplier_name ?? "ספק לא מזוהה",
     supplier_id: invoice.supplier_id ?? null,
     invoice_number: invoice.invoice_number ?? null,
@@ -709,6 +725,7 @@ function presentInvoice(
     billing_period: invoice.billing_period ?? null,
     amount,
     amount_display: formatAmount(amount, currency),
+    amount_ils: currency === "ILS" ? amount : null,
     vat_amount: resolveVatAmount({
       amount,
       vat_amount: invoice.vat_amount,
@@ -740,18 +757,18 @@ function presentInvoice(
     invoice_validation_status: invoice.invoice_validation_status ?? null,
     invoice_rejection_label: invoice.invoice_rejection_label ?? doc?.invoice_rejection_label ?? null,
     missing_required_fields: Array.isArray(invoice.missing_required_fields) ? invoice.missing_required_fields : [],
-    file_name: doc?.file_name ?? "",
-    mime_type: doc?.mime_type ?? null,
+    file_name: inlineNoFile ? "" : (doc?.file_name ?? ""),
+    mime_type: inlineNoFile ? null : (doc?.mime_type ?? null),
     created_at: invoice.created_at ?? doc?.created_at ?? null,
     import_date: doc?.import_date ?? invoice.created_at ?? null,
-    preview_url: documentId ? `/api/documents/${documentId}/download?raw=1` : null,
-    thumbnail_url: doc?.thumbnail_key || doc?.thumbnail_path ? `/api/documents/${documentId}/thumbnail` : null,
-    download_url: documentId ? `/api/documents/${documentId}/download?dl=1` : null,
-    in_s3: Boolean(invoice.spaces_key || doc?.spaces_key),
-    drive_file_id: invoice.drive_file_id || doc?.drive_file_id || null,
-    drive_web_link: invoice.drive_web_link || doc?.drive_web_link || null,
-    source_subject: gmailImport?.subject ?? doc?.source_subject ?? null,
-    source_email: doc?.source_email ?? null,
+    preview_url: linkedDocumentId ? `/api/documents/${linkedDocumentId}/download?raw=1` : null,
+    thumbnail_url: linkedDocumentId && (doc?.thumbnail_key || doc?.thumbnail_path) ? `/api/documents/${linkedDocumentId}/thumbnail` : null,
+    download_url: linkedDocumentId ? `/api/documents/${linkedDocumentId}/download?dl=1` : null,
+    in_s3: inlineNoFile ? false : Boolean(invoice.spaces_key || doc?.spaces_key),
+    drive_file_id: inlineNoFile ? null : (invoice.drive_file_id || doc?.drive_file_id || null),
+    drive_web_link: inlineNoFile ? null : (invoice.drive_web_link || doc?.drive_web_link || null),
+    source_subject: invoice.fields?.source_subject ?? gmailImport?.subject ?? doc?.source_subject ?? null,
+    source_email: invoice.fields?.source_from ?? doc?.source_email ?? null,
     fields: invoice.fields ?? {},
   };
 }
@@ -937,7 +954,7 @@ function compareInvoiceRows(
   const direction = sortDir === "asc" ? 1 : -1;
   let result = 0;
   if (sortBy === "amount") {
-    result = compareNumber(left.amount, right.amount);
+    result = compareNumber(left.amount_ils ?? left.amount, right.amount_ils ?? right.amount);
   } else if (sortBy === "date") {
     result = compareNumber(invoiceDateTs(left), invoiceDateTs(right));
   } else {
@@ -1007,6 +1024,20 @@ function formatAmount(amount: number | null, currency: string): string {
   } catch {
     return `${amount}`;
   }
+}
+
+// Fills amount_ils for rows in foreign currencies (already set for ILS rows in
+// presentInvoice). Mutates rows in place, one rate fetch for the whole batch.
+async function enrichAmountIls<T extends { amount: number | null; currency: string; amount_ils: number | null }>(
+  rows: T[],
+): Promise<T[]> {
+  const pending = rows.filter((row) => row.amount_ils === null && row.currency !== "ILS");
+  if (!pending.length) return rows;
+  const converted = await toIlsMany(pending.map((row) => ({ amount: row.amount, currency: row.currency })));
+  pending.forEach((row, i) => {
+    row.amount_ils = converted[i];
+  });
+  return rows;
 }
 
 function roundMoney(value: number): number {

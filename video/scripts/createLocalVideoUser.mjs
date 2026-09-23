@@ -3,6 +3,7 @@ import {MongoClient, ObjectId} from "../../server/node_modules/mongodb/lib/index
 
 const sourceEmail = process.argv[2] ?? "video-onboarding-v1-20260910@example.com";
 const email = process.argv[3] ?? `video-full-demo-${new Date().toISOString().slice(0, 10)}@example.com`;
+const plan = process.argv[4] ?? "business";
 const client = new MongoClient("mongodb://127.0.0.1:27017");
 await client.connect();
 const db = client.db("reminder-app");
@@ -22,8 +23,11 @@ await db.collection("users").insertOne({
     ...user,
     _id: userId,
     email,
-    plan: "business",
-    trial_ends_at: null,
+    role: "user",
+    plan,
+    onboarding_completed: false,
+    trial_ends_at: plan === "trial" ? new Date(Date.now() + 30 * 86400000) : null,
+    usage: {documents: 0, reminders: 0, scannedDocuments: 0, gmailDocuments: 0, gmailInvoices: 0},
     created_at: new Date(),
     updated_at: new Date()
 });
@@ -33,7 +37,7 @@ if (settings) {
     await db.collection("user_settings").insertOne({
         ...copy,
         user_id: userId.toString(),
-        plan: "business",
+        plan,
         updated_at: new Date()
     });
 }
