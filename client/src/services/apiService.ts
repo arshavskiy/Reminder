@@ -813,7 +813,7 @@ export const api = {
     },
     categories: (force = false) => get<{ categories: { name: string; count: number }[] }>("/reminders/categories", force),
     activity: (params?: { limit?: number; kind?: "email" | "document" }, force = false) =>
-      get<{ rows: { id: string; kind: "email" | "document"; title: string; detail: string | null; at: string; status: "ok" | "failed" | "info" }[] }>(
+      get<{ rows: { id: string; kind: "email" | "document"; title: string; detail: string | null; at: string; status: "ok" | "failed" | "info"; document_id: string | null; client_name: string | null; recipient: string | null; subject: string | null; file_name: string | null; note: string | null; channel: "email" | "system" }[] }>(
         `/activity${qs(params)}`,
         force,
       ),

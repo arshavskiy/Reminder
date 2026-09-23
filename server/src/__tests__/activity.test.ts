@@ -81,6 +81,18 @@ describe("GET /api/activity", () => {
     const row = body.rows.find((r: any) => r.id === "ev-1");
     expect(row.detail).toBe("לקוח לדוגמה · report.pdf");
     expect(row.document_id).toBe("doc-1");
+    expect(row.client_name).toBe("לקוח לדוגמה");
+    expect(row.file_name).toBe("report.pdf");
+    expect(row.channel).toBe("system");
+  });
+
+  it("keeps email subject and recipient as separate fields", async () => {
+    const body = await (await fetch(`${base}/api/activity`)).json();
+    const row = body.rows.find((r: any) => r.id === "log-1");
+    expect(row.subject).toBe("Sent one");
+    expect(row.recipient).toBe("a@x.com");
+    expect(row.channel).toBe("email");
+    expect(row.note).toBeNull();
   });
 
   it("resolves the client name but drops the link when the source document is gone", async () => {
