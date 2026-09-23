@@ -400,7 +400,7 @@ export function registerGmailRoutes(app: express.Application) {
         const listed = await listGmailMessageIds(listToken, ctx.userId, plan.query, plan.pages, plan.pageSize);
         listToken = listed.accessToken;
         if (listed.error) {
-          logger.error("gmail_link_only_api_error", { status: listed.error.status, code: listed.error.code, message: listed.error.message, body: listed.error.body.slice(0, 500) });
+          logger.error("gmail_link_only_api_error", { status: listed.error.httpStatus, code: listed.error.code, message: listed.error.message, body: listed.error.body.slice(0, 500) });
           res.status(listed.error.httpStatus).json({ error: listed.error.code, detail: listed.error.message });
           return;
         }
