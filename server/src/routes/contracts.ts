@@ -219,6 +219,9 @@ export function registerContractRoutes(app: express.Application) {
           doc.print_template_id = matchedTemplateId;
           doc.editor_type = "sections";
         }
+        console.warn(
+          `[contracts] clone: source ${source._id} template match — document_id=${source.document_id} inspectionType=${inspectionType} contractType=${doc.contract_type} matched=${matchedTemplateId}`,
+        );
       }
 
       // document_id is deliberately not copied: the renewal has no signed PDF of
