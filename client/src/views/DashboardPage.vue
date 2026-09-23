@@ -15,7 +15,7 @@
         "
         class="dash__intake"
       >
-        <DocumentDropStrip v-if="documentImportAllowed" class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
+        <DocumentDropStrip v-if="documentImportAllowed" compact class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
         <div v-else class="drop-strip drop-strip--disabled dash__drop">
           <span>{{ PLAN_GATE_MESSAGES.documentImport }}</span>
           <button class="rbtn-sm" type="button" @click="goToSubscription">
@@ -681,8 +681,9 @@ const data_cards = computed(() => modules.value);
 /* ── Stats chips ──────────────────────────────────────────────────────── */
 .dash__intake {
   display: flex;
-  align-items: stretch;
-  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 16px;
 }
 /*.dash__drop {
@@ -700,20 +701,7 @@ const data_cards = computed(() => modules.value);
   display: flex;
 }
 .dash__drop :deep(.drop-strip) {
-  flex: 1;
-  min-height: 60px;
-  margin: 0;
-  border-radius: 12px;
   box-sizing: border-box;
-}
-.dash__drop :deep(.drop-strip__copy strong) {
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-.dash__drop :deep(.drop-strip__copy span) {
-  font-size: 11px;
-  line-height: 1.3;
 }
 
 .dash__drop.drop-strip--disabled {
@@ -729,9 +717,10 @@ const data_cards = computed(() => modules.value);
 }
 .dash__intake-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 8px;
-  justify-content: center;
+  align-items: center;
 }
 
 .dash__locked-action {
@@ -745,8 +734,8 @@ const data_cards = computed(() => modules.value);
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
-  padding: 6px 12px;
+  min-height: 40px;
+  padding: 8px 14px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--bg-card);

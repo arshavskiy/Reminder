@@ -26,7 +26,8 @@ describe("shared pricing catalog", () => {
       expect(quote.searchParams.get("text")).toContain(appPlan.name);
       expect(quote.searchParams.get("text")).toContain(catalog.locales[locale].symbol);
       expect(quote.searchParams.get("text")).toContain(String(appPlan.price));
-      expect(quote.searchParams.get("text")).toContain(appPlan.yearlyPrice!.toLocaleString(locale === "he" ? "he-IL" : "en-US"));
+      expect(quote.searchParams.get("text")).not.toContain("שנתי");
+      expect(quote.searchParams.get("text")).not.toContain("yearly");
       expect(quote.searchParams.get("text")).toContain(planBillingTerms(appPlan, locale));
     }
   });

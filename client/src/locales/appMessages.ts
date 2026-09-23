@@ -216,7 +216,7 @@ const he = {
     allReminders: "כל התזכורות",
     noUpcoming: "אין תזכורות קרובות",
     quotaWarning: "הגעת למגבלת המסמכים בחשבון החינמי. שדרג את המסלול כדי להעלות עוד.",
-    dropTitle: "גרור תסקירים לתזכורת כאן",
+    dropTitle: "לחץ או גרור תסקירים לכאן",
     dropActive: "שחרר כאן והייבוא יתחיל",
     dropHint: "גרירה או לחיצה מעלות מיד",
     modules: {
@@ -1796,7 +1796,7 @@ const en = {
     allReminders: "All reminders",
     noUpcoming: "No upcoming reminders",
     quotaWarning: "You have reached the document limit on the free plan. Upgrade to upload more.",
-    dropTitle: "Drop inspections here to create reminders",
+    dropTitle: "Click or drop inspections here",
     dropActive: "Release to start the import",
     dropHint: "Drop or click to upload immediately",
     modules: {

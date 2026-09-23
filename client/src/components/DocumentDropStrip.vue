@@ -1,22 +1,23 @@
 <template>
   <div>
     <div
+      class="drop-strip"
       :class="{
         'drop-strip--active': isDragging,
         'drop-strip--uploading': isUploading,
+        'drop-strip--compact': compact,
       }"
-      class="drop-strip"
       @dragover.prevent="!isUploading && (isDragging = true)"
       @dragleave.prevent="isDragging = false"
       @click="!isUploading && fileInput?.click()"
       @drop.prevent="!isUploading && onStripDrop($event)"
     >
       <div class="drop-strip__icon">
-        <n-icon :component="CloudUploadOutline" :size="30" />
+        <n-icon :component="CloudUploadOutline" :size="compact ? 16 : 30" />
       </div>
       <div class="drop-strip__copy">
         <strong>{{ isDragging ? l.dashboard.dropActive : l.dashboard.dropTitle }}</strong>
-        <span>{{ l.dashboard.dropHint }}</span>
+        <span v-if="!compact">{{ l.dashboard.dropHint }}</span>
       </div>
     </div>
     <input
@@ -167,6 +168,7 @@ interface UploadResultRow {
   remindersCreated: number | null;
 }
 
+withDefaults(defineProps<{ compact?: boolean }>(), { compact: false });
 const emit = defineEmits<{ (e: "uploaded"): void; (e: "quota-reached"): void }>();
 
 const router = useRouter();
@@ -577,6 +579,35 @@ async function onMissingFieldsSaved() {
 .drop-strip__copy span {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.drop-strip--compact {
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 14px;
+  border-width: 1px;
+  border-radius: 10px;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--brand-color) 10%, var(--bg-card));
+}
+
+.drop-strip--compact:hover,
+.drop-strip--compact.drop-strip--active {
+  transform: none;
+  box-shadow: none;
+}
+
+.drop-strip--compact .drop-strip__icon {
+  width: 28px;
+  height: 28px;
+  box-shadow: none;
+}
+
+.drop-strip--compact .drop-strip__copy strong {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .hidden-file-input {

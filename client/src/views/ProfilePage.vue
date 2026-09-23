@@ -1258,7 +1258,6 @@
                 <div class="sub-plan-card__price">
                   <strong v-if="currentPlanId !== 'expired'">{{ currentPricingPlan.price === 0 ? l.profileBilling.free : `${currency}${currentPricingPlan.price}` }}</strong>
                   <span v-if="currentPricingPlan.period">{{ currentPricingPlan.period }}</span>
-                  <span v-if="planYearlyLabel" class="sub-plan-card__yearly">{{ planYearlyLabel }}</span>
                 </div>
               </div>
               <ul class="sub-plan-card__features">
@@ -1367,12 +1366,9 @@
                 <h3 class="upgrade-card__name">{{ plan.name }}</h3>
                 <p class="upgrade-card__blurb">{{ plan.blurb }}</p>
                 <div class="upgrade-card__price">
-                  <strong>{{ currency }}{{ yearlyMonthly(plan) }}</strong>
+                  <strong>{{ currency }}{{ plan.price }}</strong>
                   <span class="upgrade-card__period">{{ plan.period }}</span>
                 </div>
-                <p v-if="plan.yearlyPrice" class="upgrade-card__terms">
-                  {{ planBillingTerms(plan, locale) }}
-                </p>
                 <ul class="upgrade-card__features">
                   <li v-for="feature in plan.features" :key="feature">
                     <n-icon :component="CheckmarkCircleOutline" :size="14"/>
@@ -1541,14 +1537,11 @@ import {
   PLAN_LABELS,
   PLAN_LABELS_EN,
   formatPlanPrice,
-  formatPlanYearlyPrice,
   getPricingPlanForLocale,
   moneySymbol,
   plansForLocale,
   PRICING_COPY,
-  planBillingTerms,
   planPurchaseUrl,
-  yearlyMonthly,
   quotaPercent,
   resolveUserPlan,
   planAllowsGoogleDrive,
@@ -1761,7 +1754,6 @@ const planTag = computed(() => ({
   type: PLAN_TAG_TYPES[currentPlanId.value],
 }));
 const planPriceLabel = computed(() => formatPlanPrice(currentPricingPlan.value, locale.value));
-const planYearlyLabel = computed(() => formatPlanYearlyPrice(currentPricingPlan.value, locale.value));
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";

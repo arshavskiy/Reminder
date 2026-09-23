@@ -190,12 +190,7 @@ export function yearlyMonthly(plan: PricingPlan): number {
 }
 
 export function planBillingTerms(plan: PricingPlan, locale: "he" | "en"): string {
-  const symbol = moneySymbol(locale);
-  if (!plan.yearlyPrice) return formatPlanPrice(plan, locale);
-  const total = plan.yearlyPrice.toLocaleString(locale === "he" ? "he-IL" : "en-US");
-  return locale === "he"
-    ? `בתשלום שנתי: ${symbol}${total} לשנה · או ${symbol}${plan.price} בחיוב חודשי`
-    : `Billed yearly: ${symbol}${total} per year · or ${symbol}${plan.price} billed monthly`;
+  return formatPlanPrice(plan, locale);
 }
 
 export function planPurchaseUrl(plan: PricingPlan, locale: "he" | "en"): string {
@@ -370,9 +365,7 @@ export function formatPlanPrice(plan: PricingPlan, locale: "he" | "en" = "he"): 
     if (plan.id === "expired") return PRICING_COPY[locale].expiredName;
     const symbol = moneySymbol(locale);
     if (plan.price === 0) return locale === "en" ? "Free" : "חינם";
-    const monthly = `${symbol}${plan.price}${plan.period ? ` ${plan.period}` : ""}`;
-    if (plan.yearlyPrice) return planBillingTerms(plan, locale);
-    return monthly;
+    return `${symbol}${plan.price}${plan.period ? ` ${plan.period}` : ""}`;
 }
 
 export function formatPlanYearlyPrice(plan: PricingPlan, locale: "he" | "en" = "he"): string | null {
