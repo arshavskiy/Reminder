@@ -1253,10 +1253,10 @@
                   <p class="sub-plan-card__eyebrow">{{ l.profileBilling.yourPlan }}</p>
                   <h3 class="sub-plan-card__title">{{ currentPricingPlan.name }}</h3>
                   <p class="sub-plan-card__blurb">{{ currentPricingPlan.blurb }}</p>
+                  <p v-if="currentPricingPlan.price" class="sub-plan-card__blurb">{{ PRICING_COPY[locale].existingCustomerNote }}</p>
                 </div>
                 <div class="sub-plan-card__price">
-                  <span v-if="currentPricingPlan.oldPrice" class="sub-plan-card__old-price">{{ currency }}{{ currentPricingPlan.oldPrice }}</span>
-                  <strong>{{ currentPricingPlan.price === 0 ? l.profileBilling.free : `${currency}${currentPricingPlan.price}` }}</strong>
+                  <strong v-if="currentPlanId !== 'expired'">{{ currentPricingPlan.price === 0 ? l.profileBilling.free : `${currency}${currentPricingPlan.price}` }}</strong>
                   <span v-if="currentPricingPlan.period">{{ currentPricingPlan.period }}</span>
                   <span v-if="planYearlyLabel" class="sub-plan-card__yearly">{{ planYearlyLabel }}</span>
                 </div>
@@ -1363,18 +1363,15 @@
                 class="upgrade-card"
                 :class="{ 'upgrade-card--highlighted': plan.highlighted }"
               >
-                <span v-if="plan.highlighted" class="upgrade-card__badge">{{ l.profileBilling.mostPopular }}</span>
+                <span v-if="plan.highlighted" class="upgrade-card__badge">{{ PRICING_COPY[locale].recommended }}</span>
                 <h3 class="upgrade-card__name">{{ plan.name }}</h3>
                 <p class="upgrade-card__blurb">{{ plan.blurb }}</p>
                 <div class="upgrade-card__price">
-                  <span v-if="plan.oldPrice" class="upgrade-card__old">{{ currency }}{{ plan.oldPrice }}</span>
                   <strong>{{ currency }}{{ yearlyMonthly(plan) }}</strong>
                   <span class="upgrade-card__period">{{ plan.period }}</span>
                 </div>
                 <p v-if="plan.yearlyPrice" class="upgrade-card__terms">
-                  {{ locale === "en"
-                    ? `Billed yearly: ${currency}${plan.yearlyPrice.toLocaleString("en-US")} / year · or ${currency}${plan.oldPrice ?? plan.price} billed monthly`
-                    : `בתשלום שנתי: ${currency}${plan.yearlyPrice.toLocaleString("he-IL")} לשנה · או ${currency}${plan.oldPrice ?? plan.price} בחיוב חודשי` }}
+                  {{ planBillingTerms(plan, locale) }}
                 </p>
                 <ul class="upgrade-card__features">
                   <li v-for="feature in plan.features" :key="feature">
@@ -1382,11 +1379,11 @@
                     <span>{{ feature }}</span>
                   </li>
                 </ul>
-                <a :href="planPurchaseHref(plan)" class="upgrade-card__cta" rel="noopener" target="_blank">
-                  <n-icon v-if="!PLAN_PAYMENT_LINKS[plan.id]" :component="LogoWhatsapp" :size="16"/>
-                  {{ PLAN_PAYMENT_LINKS[plan.id] ? l.profileBilling.payNow : l.profileBilling.buyWhatsapp }}
+                <a :href="planPurchaseUrl(plan, locale)" class="upgrade-card__cta" rel="noopener" target="_blank">
+                  <n-icon :component="LogoWhatsapp" :size="16"/>
+                  {{ PRICING_COPY[locale].purchase }}
                 </a>
-                <p class="upgrade-card__note">{{ l.profileBilling.payNote }}</p>
+                <p class="upgrade-card__note">{{ PRICING_COPY[locale].purchaseNote }}</p>
               </article>
             </div>
           </div>
@@ -1548,7 +1545,10 @@ import {
   getPricingPlanForLocale,
   moneySymbol,
   plansForLocale,
-  PLAN_PAYMENT_LINKS,
+  PRICING_COPY,
+  planBillingTerms,
+  planPurchaseUrl,
+  yearlyMonthly,
   quotaPercent,
   resolveUserPlan,
   planAllowsGoogleDrive,
@@ -1740,7 +1740,7 @@ const billingMode = ref<string | null>(null);
 const currentPricingPlan = computed(() => {
   const plan = getPricingPlanForLocale(currentPlanId.value, locale.value);
   if (billingMode.value !== "one_time" || !plan) return plan;
-  return {...plan, price: plan.oldPrice ?? plan.price, oldPrice: undefined, yearlyPrice: undefined};
+  return {...plan, yearlyPrice: undefined};
 });
 
 const PLAN_RANK: Record<PlanId, number> = {
@@ -1753,42 +1753,9 @@ const PLAN_RANK: Record<PlanId, number> = {
 
 /** Higher-tier paid plans the user is not already on, including Digital. */
 const upgradePlans = computed(
-    () => plansForLocale(locale.value).filter((plan) => PLAN_RANK[plan.id] > PLAN_RANK[currentPlanId.value]),
+    () => plansForLocale(locale.value).filter((plan) => plan.id !== "trial" && PLAN_RANK[plan.id] > PLAN_RANK[currentPlanId.value]),
 );
 
-/** The yearly price expressed per month, which is how the cards compare. */
-function yearlyMonthly(plan: {price: number; yearlyPrice?: number}): number {
-  return plan.yearlyPrice ? Math.round(plan.yearlyPrice / 12) : plan.price;
-}
-
-/**
- * Checkout is manual until Green Invoice payment links exist, so the CTA opens
- * WhatsApp with the plan and its price already written into the message.
- */
-function planPurchaseHref(plan: {
-  id: PlanId;
-  name: string;
-  price: number;
-  oldPrice?: number;
-  yearlyPrice?: number
-}): string {
-  return PLAN_PAYMENT_LINKS[plan.id] || whatsappHref(plan);
-}
-
-function whatsappHref(plan: {name: string; price: number; oldPrice?: number; yearlyPrice?: number}): string {
-  const symbol = currency.value;
-  const price = plan.yearlyPrice
-      ? locale.value === "en"
-        ? `${symbol}${yearlyMonthly(plan)} / month billed yearly or ${symbol}${plan.oldPrice ?? plan.price} billed monthly`
-        : `${symbol}${yearlyMonthly(plan)} לחודש בתשלום שנתי או ${symbol}${plan.oldPrice ?? plan.price} בחיוב חודשי`
-      : locale.value === "en"
-        ? `${symbol}${plan.price} / month`
-        : `${symbol}${plan.price} לחודש`;
-  const message = locale.value === "en"
-      ? `Hi, I would like to purchase the RemindOCR ${plan.name} plan (${price}).`
-      : `שלום, אני מעוניין לרכוש את המסלול ${plan.name} של RemindOCR (${price}).`;
-  return `https://wa.me/972554605328?text=${encodeURIComponent(message)}`;
-}
 const planTag = computed(() => ({
   label: (locale.value === "en" ? PLAN_LABELS_EN : PLAN_LABELS)[currentPlanId.value],
   type: PLAN_TAG_TYPES[currentPlanId.value],

@@ -1,23 +1,24 @@
+import pricingCatalog from "./pricingCatalog.json";
+
 /**
  * "expired" is not a plan anyone signs up to or is assigned: it is the
  * entitlement set a lapsed trial resolves to. Mirrors server/src/plans/tierFeatures.ts.
  */
 export type PlanId = "expired" | "trial" | "digital" | "basic" | "business";
 
-/** Morning one-time checkout links. Env on the server can override these. */
-export const PLAN_PAYMENT_LINKS: Partial<Record<PlanId, string>> = {
-    digital: "https://mrng.to/SUPCi1tsrC",
-    basic: "https://mrng.to/5vjboMGOmm",
-    business: "https://mrng.to/qE6K86XDbW",
-};
+// New subscriptions use a quote until Morning links match this catalog revision.
+// Existing renewal links remain under the server's existing billing agreement.
+export const PRICING_COPY = pricingCatalog.locales;
 
 export const PLAN_LABELS: Record<PlanId, string> = {
-    expired: "הסתיים",
-    trial: "ניסיון",
-    digital: "דיגיטלי",
-    basic: "בסיסי",
-    business: "עסקי",
-};
+  expired: "הסתיים",
+  ...Object.fromEntries(pricingCatalog.plans.map((plan) => [plan.id, plan.copy.he.label])),
+} as Record<PlanId, string>;
+
+export const PLAN_LABELS_EN: Record<PlanId, string> = {
+  expired: "Ended",
+  ...Object.fromEntries(pricingCatalog.plans.map((plan) => [plan.id, plan.copy.en.label])),
+} as Record<PlanId, string>;
 
 export type QuotaScope = "monthly" | "lifetime" | "unlimited";
 
@@ -25,10 +26,9 @@ export interface PricingPlan {
     id: PlanId;
     name: string;
     price: number;
-    oldPrice?: number;
-    /** Monthly sticker price period label, e.g. "/ חודש". */
+    /** Monthly billing price period label, e.g. "/ חודש". */
     period: string;
-    /** Annual billed total in ILS, when payment is yearly. */
+    /** Annual billed total in the locale currency, when payment is yearly. */
     yearlyPrice?: number;
     blurb: string;
     highlighted?: boolean;
@@ -158,164 +158,53 @@ export const PLAN_GATE_MESSAGES = {
 
 export const PRICING_PAGE_URL = "https://remindocr.com/pricing";
 
-/** USD list prices for the English marketing site and `/en` app. Hebrew pages stay in ILS. */
-export const USD_PLAN_AMOUNTS: Record<PlanId, {price: number; oldPrice?: number; yearlyPrice?: number}> = {
-    expired: {price: 0},
-    trial: {price: 0},
-    digital: {price: 15},
-    basic: {price: 25, oldPrice: 28, yearlyPrice: 300},
-    business: {price: 39, oldPrice: 43, yearlyPrice: 468},
-};
-
-const PRICING_PLANS_EN_COPY: Record<Exclude<PlanId, "expired">, Pick<PricingPlan, "name" | "period" | "blurb" | "features">> = {
-    trial: {
-        name: "Trial · 30 days",
-        period: "/ 30 days",
-        blurb: "All Basic-plan capabilities, no credit card required.",
-        features: [
-            "Preview and AI data extraction",
-            "Automatic email reminders to clients",
-            "Import up to 20 documents — upload and Gmail",
-            "Excel export and monthly reports",
-            "Google Drive sync",
-        ],
-    },
-    digital: {
-        name: "Digital",
-        period: "/ month",
-        blurb: "Manage inspections and reminders with manual entry, without storing files in the cloud.",
-        features: [
-            "Manual data entry — no file uploads",
-            "Client and equipment management",
-            "Generate inspections for signing and sending",
-            "Automatic email reminders to clients",
-            "Excel export and monthly reports",
-        ],
-    },
-    basic: {
-        name: "Basic",
-        period: "/ month",
-        blurb: "For a small business that imports documents every month.",
-        features: [
-            "50 documents per month — inspections and receipts combined",
-            "Import inspections from the last 16 months",
-            "Client and equipment management",
-            "Inspection management and client reminders",
-            "Export receipts to Excel",
-            "Automatic monthly reports",
-            "Google Drive sync",
-        ],
-    },
-    business: {
-        name: "Business",
-        period: "/ month",
-        blurb: "For certified inspectors who import documents regularly, work with several mailboxes, and want a synced Google Calendar.",
-        features: [
-            "Unlimited inspection and invoice import",
-            "Import inspections from Gmail up to 24 months back",
-            "Import invoices and receipts from Gmail up to 36 months back",
-            "Client and equipment management",
-            "Google Calendar sync for upcoming inspections",
-        ],
-    },
-};
-
-export const PLAN_LABELS_EN: Record<PlanId, string> = {
-    expired: "Ended",
-    trial: "Trial",
-    digital: "Digital",
-    basic: "Basic",
-    business: "Business",
-};
-
-export function moneySymbol(locale: "he" | "en"): string {
-    return locale === "en" ? "$" : "₪";
+/** List prices and localized feature lists come only from pricingCatalog.json. */
+export function plansForLocale(locale: "he" | "en"): PricingPlan[] {
+  return pricingCatalog.plans.map((plan) => ({
+    id: plan.id as PlanId,
+    ...plan.copy[locale],
+    price: plan.amounts[locale].monthly,
+    yearlyPrice: plan.amounts[locale].yearly,
+    period: plan.id === "trial" ? PRICING_COPY[locale].trialPeriod : PRICING_COPY[locale].monthlyPeriod,
+    highlighted: plan.highlighted ?? false,
+  }));
 }
 
-export function plansForLocale(locale: "he" | "en"): PricingPlan[] {
-    if (locale !== "en") return PRICING_PLANS;
-    return PRICING_PLANS.map((plan) => {
-        const usd = USD_PLAN_AMOUNTS[plan.id];
-        const copy = plan.id === "expired" ? null : PRICING_PLANS_EN_COPY[plan.id];
-        return {
-            ...plan,
-            ...(copy ?? {}),
-            price: usd.price,
-            oldPrice: usd.oldPrice,
-            yearlyPrice: usd.yearlyPrice,
-        };
-    });
+export const PRICING_PLANS: PricingPlan[] = plansForLocale("he");
+
+export function moneySymbol(locale: "he" | "en"): string {
+  return PRICING_COPY[locale].symbol;
 }
 
 export function getPricingPlanForLocale(planId: PlanId, locale: "he" | "en"): PricingPlan {
-    return plansForLocale(locale).find((plan) => plan.id === planId) ?? plansForLocale(locale)[0];
+  const plan = plansForLocale(locale).find((item) => item.id === planId);
+  if (plan) return plan;
+  return {
+    id: "expired", name: PRICING_COPY[locale].expiredName, price: 0, period: "",
+    blurb: PRICING_COPY[locale].expiredBlurb, features: [],
+  };
 }
 
-export const PRICING_PLANS: PricingPlan[] = [
-    {
-        id: "trial",
-        name: "ניסיון · 30 יום",
-        price: 0,
-        period: "/ 30 יום",
-        blurb: "כל היכולות של המסלול הבסיסי, ללא כרטיס אשראי.",
-        features: [
-            "תצוגה מקדימה וחילוץ נתונים AI",
-            "תזכורות אימייל אוטומטיות ללקוחות",
-            "יבוא עד 20 מסמכים — העלאה ומ-Gmail",
-            "יצוא לאקסל ודוחות חודשיים",
-            "סנכרון Google Drive",
-        ],
-    },
-    {
-        id: "digital",
-        name: "דיגיטלי",
-        price: 47,
-        period: "/ חודש",
-        blurb: "לניהול תסקירים ותזכורות בהזנה ידנית, ללא שמירת קבצים בענן.",
-        features: [
-            "הזנת נתונים ידנית — ללא העלאת קבצים",
-            "ניהול לקוחות וציוד",
-            "הפקת תסקירים לחתימה ושליחה",
-            "תזכורות אימייל אוטומטיות ללקוחות",
-            "יצוא לאקסל ודוחות חודשיים",
-        ],
-    },
-    {
-        id: "basic",
-        name: "בסיסי",
-        price: 79,
-        oldPrice: 88,
-        period: "/ חודש",
-        yearlyPrice: 948,
-        blurb: "מתאים לעסק קטן שמייבא מסמכים בכל חודש.",
-        features: [
-            "50 מסמכים בחודש — תסקירים וקבלות יחד",
-            "יבוא תסקירים של 16 חודשים האחרונים",
-            "ניהול לקוחות וציוד",
-            "ניהול תסקירים ושליחת תזכורות ללקוחות",
-            "יצוא קבלות לקובץ אקסל",
-            "הפקת דוחות חודשיים אוטומטיים",
-            "סנכרון Google Drive",
-        ],
-    },
-    {
-        id: "business",
-        name: "עסקי",
-        price: 128,
-        oldPrice: 143,
-        period: "/ חודש",
-        yearlyPrice: 1536,
-        blurb: "לבודקים מוסמכים שמייבאים מסמכים באופן שוטף, עובדים עם כמה מאיילים ורוצים יומן Google מסונכרן.",
-        highlighted: true,
-        features: [
-            "יבוא תסקירים וחשבוניות ללא הגבלה",
-            "יבוא תסקירים מ-Gmail עד 24 חודשים אחורה",
-            "יבוא חשבוניות וקבלות מ-Gmail עד 36 חודשים אחורה",
-            "ניהול לקוחות וציוד",
-            "סנכרון Google Calendar לתסקירים עתידיים",
-        ],
-    },
-];
+export function yearlyMonthly(plan: PricingPlan): number {
+  return plan.yearlyPrice ? plan.yearlyPrice / 12 : plan.price;
+}
+
+export function planBillingTerms(plan: PricingPlan, locale: "he" | "en"): string {
+  const symbol = moneySymbol(locale);
+  if (!plan.yearlyPrice) return formatPlanPrice(plan, locale);
+  const total = plan.yearlyPrice.toLocaleString(locale === "he" ? "he-IL" : "en-US");
+  return locale === "he"
+    ? `בתשלום שנתי: ${symbol}${total} לשנה · או ${symbol}${plan.price} בחיוב חודשי`
+    : `Billed yearly: ${symbol}${total} per year · or ${symbol}${plan.price} billed monthly`;
+}
+
+export function planPurchaseUrl(plan: PricingPlan, locale: "he" | "en"): string {
+  const terms = planBillingTerms(plan, locale);
+  const message = locale === "he"
+    ? `שלום, אני מעוניין לרכוש את המסלול ${plan.name} של RemindOCR. ${terms}`
+    : `Hi, I would like to purchase the RemindOCR ${plan.name} plan. ${terms}`;
+  return `https://wa.me/${pricingCatalog.contactPhone}?text=${encodeURIComponent(message)}`;
+}
 
 export function planFromRole(role: string | null | undefined): PlanId {
     // Only a fallback for accounts with no plan stored. Roles no longer imply a
@@ -474,26 +363,16 @@ export function formatGmailInvoiceHistoryLimit(months: number | null): string {
 }
 
 export function getPricingPlan(planId: PlanId): PricingPlan {
-    return PRICING_PLANS.find((plan) => plan.id === planId) ?? PRICING_PLANS[0];
+    return getPricingPlanForLocale(planId, "he");
 }
 
 export function formatPlanPrice(plan: PricingPlan, locale: "he" | "en" = "he"): string {
+    if (plan.id === "expired") return PRICING_COPY[locale].expiredName;
     const symbol = moneySymbol(locale);
     if (plan.price === 0) return locale === "en" ? "Free" : "חינם";
     const monthly = `${symbol}${plan.price}${plan.period ? ` ${plan.period}` : ""}`;
-    if (plan.yearlyPrice) {
-        const year = plan.yearlyPrice.toLocaleString(locale === "en" ? "en-US" : "he-IL");
-        return locale === "en"
-            ? `${monthly} · ${symbol}${year} / year`
-            : `${monthly} · ${symbol}${year} לשנה`;
-    }
+    if (plan.yearlyPrice) return planBillingTerms(plan, locale);
     return monthly;
-}
-
-/** The pre-discount monthly sticker price, when the plan is currently discounted. */
-export function formatPlanOldPrice(plan: PricingPlan, locale: "he" | "en" = "he"): string | null {
-    if (!plan.oldPrice) return null;
-    return `${moneySymbol(locale)}${plan.oldPrice}`;
 }
 
 export function formatPlanYearlyPrice(plan: PricingPlan, locale: "he" | "en" = "he"): string | null {
