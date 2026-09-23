@@ -2491,8 +2491,33 @@ async function openForUpdate(contractId: string, returnTo?: string) {
   });
 }
 
+// Shifts a date by whole months, clamping into the target month instead of
+// overflowing (31 Jan + 1 month lands on 28/29 Feb, not 3 Mar).
+function shiftMonthsClamped(ms: number, months: number): number {
+  const d = new Date(ms);
+  const day = d.getDate();
+  const target = new Date(d.getFullYear(), d.getMonth() + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(day, lastDay));
+  target.setHours(d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
+  return target.getTime();
+}
+
+// ── Open pre-filled for renewing a contract as a new one ──────────────────────
+// Same data as openForUpdate, but leaves updatingContractId unset (so saving
+// creates a new contract) and shifts the dates forward + clears the contract
+// number, since a renewal is a fresh term rather than an edit of the old one.
+async function openForRenewal(contractId: string, shiftMonths = 12) {
+  await openForUpdate(contractId);
+  updatingContractId.value = null;
+  updateReturnTo.value = "";
+  if (hydraulicForm.value) hydraulicForm.value.contract_number = "";
+  if (checkDateMs.value) checkDateMs.value = shiftMonthsClamped(checkDateMs.value, shiftMonths);
+  if (expiryDateMs.value) expiryDateMs.value = shiftMonthsClamped(expiryDateMs.value, shiftMonths);
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
-defineExpose({open, openForUpdate});
+defineExpose({open, openForUpdate, openForRenewal});
 </script>
 
 <style scoped>

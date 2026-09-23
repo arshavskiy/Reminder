@@ -196,34 +196,6 @@ export function registerContractRoutes(app: express.Application) {
       const isPast = Boolean(doc.expiry_date && String(doc.expiry_date) < today);
       doc.status = isPast ? "expired" : "active";
 
-      // Contracts created from document extraction rather than the compose flow
-      // never got a print_template_id. Renewing one is still meant to land on
-      // the fill-in page, so fall back to matching a template the same way the
-      // "new inspection" modal picks a default one: by the source document's
-      // inspection type first (most specific), then by contract_type.
-      let matchedTemplateId: string | null = null;
-      if (!doc.print_template_id) {
-        const sourceDocument = source.document_id
-          ? await col("documents").findOne({ _id: tryObjectId(String(source.document_id)) }) as any
-          : null;
-        const inspectionType = sourceDocument?.inspection_type ?? null;
-        const templateFilter = printTemplateVisibleFilter(userId);
-        const byReportType = inspectionType
-          ? await col("print_templates").findOne({ ...templateFilter, editorType: "sections", reportTypeKey: inspectionType }) as any
-          : null;
-        const byContractType = !byReportType && doc.contract_type
-          ? await col("print_templates").findOne({ ...templateFilter, editorType: "sections", contractType: doc.contract_type }) as any
-          : null;
-        matchedTemplateId = (byReportType ?? byContractType)?._id?.toString() ?? null;
-        if (matchedTemplateId) {
-          doc.print_template_id = matchedTemplateId;
-          doc.editor_type = "sections";
-        }
-        console.warn(
-          `[contracts] clone: source ${source._id} template match — document_id=${source.document_id} inspectionType=${inspectionType} contractType=${doc.contract_type} matched=${matchedTemplateId}`,
-        );
-      }
-
       // document_id is deliberately not copied: the renewal has no signed PDF of
       // its own yet, and a stored null collides under the unique index.
       const r = await col("contracts").insertOne(doc);
@@ -231,51 +203,6 @@ export function registerContractRoutes(app: express.Application) {
 
       if (doc.expiry_date && !isPast) {
         await generateContractReminders(contractId, doc.client_id, null, String(doc.expiry_date), userId);
-      }
-
-      // The draft page (/contracts/:id/draft) requires a print_template_drafts
-      // row to exist for the contract. Seed one so the renewal opens pre-filled
-      // instead of 404ing on first load: copy the source contract's draft when
-      // it has one, or build a base draft from the contract/client fields when
-      // a template was just matched above (no prior draft to copy from).
-      if (doc.print_template_id) {
-        const sourceDraft = await col("print_template_drafts").findOne({
-          user_id: userId,
-          contract_id: String(source._id),
-        }) as any;
-        const client = doc.client_id ? await col("clients").findOne({ _id: tryObjectId(String(doc.client_id)) }) as any : null;
-        const baseData: Record<string, string> = sourceDraft
-          ? { ...(sourceDraft.data ?? {}) }
-          : {
-              client_name: client?.display_name ?? "",
-              client_company: client?.display_name ?? "",
-              contact_person: client?.contact_person ?? "",
-              client_phone: client?.phone ?? "",
-              client_email: client?.email ?? "",
-              client_address: client?.address ?? "",
-              inspection_type: doc.contract_type ?? "",
-            };
-        if (startDate) baseData.start_date = startDate;
-        if (expiryDate) baseData.expiry_date = expiryDate;
-        delete baseData.contract_number;
-        delete baseData.document_number;
-        delete baseData.report_number;
-        await col("print_template_drafts").updateOne(
-          { user_id: userId, contract_id: contractId },
-          {
-            $set: {
-              user_id: userId,
-              template_id: doc.print_template_id,
-              editor_type: sourceDraft?.editor_type ?? (doc.editor_type === "grid" ? "grid" : "sections"),
-              data: baseData,
-              meta: { ...(sourceDraft?.meta ?? {}), contract_id: contractId },
-              client_id: doc.client_id ?? null,
-              contract_id: contractId,
-              updated_at: now.toISOString(),
-            },
-          },
-          { upsert: true },
-        );
       }
 
       const inserted = await col("contracts").findOne({ _id: r.insertedId });
