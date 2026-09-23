@@ -2489,6 +2489,7 @@ async function openForUpdate(contractId: string, returnTo?: string) {
   void loadPrintTemplates().then(() => {
     selectTemplate(templateId.value ?? defaultTemplateId());
   });
+  return row;
 }
 
 // Shifts a date by whole months, clamping into the target month instead of
@@ -2508,12 +2509,24 @@ function shiftMonthsClamped(ms: number, months: number): number {
 // creates a new contract) and shifts the dates forward + clears the contract
 // number, since a renewal is a fresh term rather than an edit of the old one.
 async function openForRenewal(contractId: string, shiftMonths = 12) {
-  await openForUpdate(contractId);
+  const row = await openForUpdate(contractId);
+  // Compute both shifted dates before touching updatingContractId: the
+  // checkDateMs/intervalMonths watcher only recalculates expiryDateMs while
+  // updatingContractId is unset, so clearing it before both assignments land
+  // lets that watcher fire mid-way and clobber the expiry shift with the
+  // check-date-plus-interval formula instead.
+  const newCheckDateMs = checkDateMs.value ? shiftMonthsClamped(checkDateMs.value, shiftMonths) : null;
+  const newExpiryDateMs = expiryDateMs.value ? shiftMonthsClamped(expiryDateMs.value, shiftMonths) : null;
+  if (newCheckDateMs) checkDateMs.value = newCheckDateMs;
+  if (newExpiryDateMs) expiryDateMs.value = newExpiryDateMs;
   updatingContractId.value = null;
   updateReturnTo.value = "";
+  // The renewal is a fresh term: it gets its own blank number to fill in, and
+  // the old contract's full number (already inspector-prefixed, e.g.
+  // "484590/17920" — see allocateReportNumber in reminders.ts) becomes the
+  // "previous report" reference rather than being carried over.
+  prevReportNumber.value = row.contract_number ?? "";
   if (hydraulicForm.value) hydraulicForm.value.contract_number = "";
-  if (checkDateMs.value) checkDateMs.value = shiftMonthsClamped(checkDateMs.value, shiftMonths);
-  if (expiryDateMs.value) expiryDateMs.value = shiftMonthsClamped(expiryDateMs.value, shiftMonths);
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
