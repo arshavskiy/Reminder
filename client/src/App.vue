@@ -743,8 +743,6 @@ html[data-theme="dark"] .install-banner {
 }
 
 .app-footer {
-  background: #161616;
-  color: rgba(255, 255, 255, 0.65);
   padding: 10px 48px;
   text-align: center;
   font-size: 13px;
