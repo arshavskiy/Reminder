@@ -686,17 +686,12 @@ const data_cards = computed(() => modules.value);
   gap: 8px;
   margin-bottom: 16px;
 }
-/*.dash__drop {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-}*/
-/* The strip component wraps its .drop-strip in an extra div; make both fill the
-   row so the dropzone height matches the new-contract button exactly. */
+
 .dash__drop :deep(> div),
-.dash__intake :deep(.drop-strip) { margin-bottom: 0; }
+.dash__intake :deep(.drop-strip) {
+  margin-bottom: 0;
+}
 .dash__drop {
-  //flex: 1 1 0;
   min-width: 0;
   display: flex;
 }
