@@ -1640,13 +1640,22 @@ function handleRowAction(key: string, row: Document) {
   if (key === "delete") confirmDeleteDocument(row);
 }
 
-async function confirmCloneContract(row: Document) {
+function confirmCloneContract(row: Document) {
   if (!row.contract_id) return;
-  try {
-    await newInspectionModalRef.value?.openForRenewal(String(row.contract_id));
-  } catch (err) {
-    message.error(err instanceof Error ? err.message : "טעינת התסקיר לשכפול נכשלה");
-  }
+  confirm({
+    title: "שכפול וחידוש תסקיר",
+    content: "ייווצר תסקיר חדש עם אותם פרטים ותאריכים מוסטים בשנה, כולל תזכורות חדשות. מספר התסקיר יישאר ריק למילוי.",
+    confirmText: "שכפל",
+    onConfirm: async () => {
+      try {
+        const created = await api.contracts.clone(String(row.contract_id));
+        message.success("התסקיר שוכפל");
+        router.push(`/contracts/${created.id}/draft`);
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : "שכפול התסקיר נכשל");
+      }
+    },
+  });
 }
 
 async function openDocumentReminderPreview(row: Document) {
