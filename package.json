@@ -27,7 +27,9 @@
     "typecheck": "npm --prefix server run build",
     "backup:mongo": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup-mongo.ps1",
     "prepare": "node scripts/install-git-hooks.mjs",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "pricing:sync": "node scripts/sync-pricing.mjs",
+    "pricing:check": "node scripts/sync-pricing.mjs --check"
   },
   "repository": {
     "type": "git",
