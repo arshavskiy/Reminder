@@ -440,6 +440,7 @@ watch(isDark, (dark) => {
   display: flex;
   flex-direction: row;
   height: 100vh;
+  height: 100dvh;
   background: var(--bg-app);
   overflow: hidden;
 }
@@ -684,6 +685,7 @@ html[data-theme="dark"] .install-banner {
 
 .content {
   height: 100%;
+  min-width: 0;
   overflow-y: auto;
   padding: 32px 48px;
   background: var(--bg-app);
@@ -712,7 +714,7 @@ html[data-theme="dark"] .install-banner {
   }
 
   .content {
-    padding: 18px 14px 28px;
+    padding: 12px 10px 20px;
   }
 }
 
@@ -733,7 +735,7 @@ html[data-theme="dark"] .install-banner {
   }
 
   .content {
-    padding: 14px 10px 24px;
+    padding: 10px 8px 16px;
   }
 
   .app-footer {
@@ -763,5 +765,16 @@ html[data-theme="dark"] .install-banner {
 
 .app-footer__legal a:hover {
   opacity: 1;
+}
+
+@media (max-width: 900px) {
+  .content--fullpage {
+    padding: 0;
+  }
+
+  .app-footer {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
 }
 </style>

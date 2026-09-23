@@ -7,30 +7,43 @@
     >
       <template #actions>
         <div class="clients-actions">
-          <button :disabled="store.loading" class="btn btn--ghost" type="button" @click="refresh">
-            <n-icon :class="{ 'spin': store.loading }" :component="RefreshOutline" class="btn-icon" />
+          <MobileActionButton :disabled="store.loading" :label="l.common.refresh" class="btn btn--ghost" type="button"
+                              @click="refresh">
+            <template #icon>
+              <n-icon :class="{ 'spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
+            </template>
+
             {{ l.common.refresh }}
-          </button>
-          <button
+          </MobileActionButton>
+          <MobileActionButton
             class="btn btn--ghost"
             :class="{ 'btn--ghost-active': bulkMode }"
             type="button"
             @click="toggleBulkMode"
-          >
-            <n-icon :component="CheckboxOutline" class="btn-icon" />
+            :label="l.common.select">
+            <template #icon>
+              <n-icon :component="CheckboxOutline" class="btn-icon"/>
+            </template>
+
             {{ l.common.select }}
-          </button>
-          <button class="btn btn--primary" type="button" @click="openCreate">
-            <n-icon :component="AddOutline" class="btn-icon" />
+          </MobileActionButton>
+          <MobileActionButton :label="l.clients.newClient" class="btn btn--primary" type="button" @click="openCreate">
+            <template #icon>
+              <n-icon :component="AddOutline" class="btn-icon"/>
+            </template>
+
             {{ l.clients.newClient }}
-          </button>
+          </MobileActionButton>
           <n-tooltip v-if="canCreateInspection" :disabled="writesAllowed">
             <template #trigger>
               <span class="locked-action" @click="!writesAllowed && goToSubscription()">
-                <button :disabled="!writesAllowed" class="btn btn--ghost" type="button" @click="openReportClientPicker">
-                  <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+                <MobileActionButton :disabled="!writesAllowed" :label="l.clients.newInspection" class="btn btn--ghost"
+                                    type="button" @click="openReportClientPicker"><template #icon><n-icon
+                    :component="DocumentTextOutline" class="btn-icon"/>
+      </template>
+
                   {{ l.clients.newInspection }}
-                </button>
+                </MobileActionButton>
               </span>
             </template>
             {{ l.profile.upgradePlan }}
@@ -67,21 +80,25 @@
         :placeholder="l.clients.searchPlaceholder"
         @update:value="onSearch"
       >
-        <template #prefix><n-icon :component="SearchOutline" :size="16" /></template>
+        <template #prefix>
+          <n-icon :component="SearchOutline" :size="16"/>
+        </template>
       </n-input>
 
       <div class="clients-filters">
-        <button
+        <ResponsiveFilterButton
           v-for="f in typeFilters"
           :key="f.value"
           class="pill"
           :class="{ 'pill--active': entityFilter === f.value }"
           type="button"
           @click="entityFilter = f.value"
-        >
-          {{ f.label }}
-          <span class="pill__badge">{{ f.count }}</span>
-        </button>
+
+          :aria-pressed="entityFilter === f.value"
+          :count="f.count"
+          :filter-key="f.value"
+          :label="f.label"
+        />
       </div>
       <button
         v-if="store.rows.length >= 2"
@@ -335,6 +352,8 @@
 </template>
 
 <script setup lang="ts">
+import MobileActionButton from "../components/MobileActionButton.vue";
+import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
@@ -1155,24 +1174,8 @@ function bulkDeleteSelected() {
 }
 
 @media (max-width: 860px) {
-  .col-contact {
-    display: none;
-  }
-
-  .col-name {
-    width: 40%;
-  }
-
-  .col-email {
-    width: 28%;
-  }
-
-  .col-phone {
-    width: 18%;
-  }
-
-  .col-docs {
-    width: 14%;
+  .clients-table {
+    min-width: 760px;
   }
 }
 
@@ -1191,17 +1194,5 @@ function bulkDeleteSelected() {
     grid-template-columns: 1fr;
   }
 
-  .col-email,
-  .col-phone {
-    display: none;
-  }
-
-  .col-name {
-    width: auto;
-  }
-
-  .col-docs {
-    width: 72px;
-  }
 }
 </style>

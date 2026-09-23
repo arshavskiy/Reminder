@@ -26,16 +26,18 @@
     </PageHeader>
 
     <div class="quick-filterbar">
-      <button
+      <ResponsiveFilterButton
         v-for="option in kindFilters"
         :key="option.value"
         class="quick-pill"
         :class="{ 'quick-pill--active': kind === option.value }"
         type="button"
         @click="selectKind(option.value)"
-      >
-        {{ option.label }}
-      </button>
+
+        :aria-pressed="kind === option.value"
+        :filter-key="option.value"
+        :label="option.label"
+      />
     </div>
 
     <n-data-table
@@ -52,6 +54,7 @@
 </template>
 
 <script setup lang="ts">
+import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import {computed, h, onMounted, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {NDataTable, NIcon, NTooltip, useMessage} from "naive-ui";

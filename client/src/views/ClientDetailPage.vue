@@ -1287,13 +1287,6 @@ watch(
     grid-template-columns: 1fr;
   }
 
-  .hide-sm {
-    display: none;
-  }
-
-  .detail-table {
-    min-width: 0;
-  }
 }
 
 @media (max-width: 640px) {

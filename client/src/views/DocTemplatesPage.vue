@@ -7,18 +7,30 @@
     >
       <template #actions>
         <div class="dt-actions">
-          <button :disabled="loading" class="btn btn--ghost" type="button" @click="refresh">
-            <n-icon :class="{ 'dt-spin': loading }" :component="RefreshOutline" :size="16" class="btn-icon"/>
+          <MobileActionButton :disabled="loading" :label="l.docTemplates.refresh" class="btn btn--ghost" type="button"
+                              @click="refresh">
+            <template #icon>
+              <n-icon :class="{ 'dt-spin': loading }" :component="RefreshOutline" :size="16" class="btn-icon"/>
+            </template>
+
             {{ l.docTemplates.refresh }}
-          </button>
-          <button class="btn btn--ghost" type="button" @click="showGenerate = true">
-            <n-icon :component="FlashOutline" :size="16" class="btn-icon"/>
+          </MobileActionButton>
+          <MobileActionButton :label="l.docTemplates.createFromAi" class="btn btn--ghost" type="button"
+                              @click="showGenerate = true">
+            <template #icon>
+              <n-icon :component="FlashOutline" :size="16" class="btn-icon"/>
+            </template>
+
             {{ l.docTemplates.createFromAi }}
-          </button>
-          <button class="btn btn--primary" type="button" @click="newTemplate">
-            <n-icon :component="AddOutline" :size="16" class="btn-icon"/>
+          </MobileActionButton>
+          <MobileActionButton :label="l.docTemplates.newTemplate" class="btn btn--primary" type="button"
+                              @click="newTemplate">
+            <template #icon>
+              <n-icon :component="AddOutline" :size="16" class="btn-icon"/>
+            </template>
+
             {{ l.docTemplates.newTemplate }}
-          </button>
+          </MobileActionButton>
         </div>
       </template>
     </PageHeader>
@@ -35,17 +47,19 @@
         </template>
       </n-input>
       <div class="dt-filters">
-        <button
+        <ResponsiveFilterButton
             v-for="f in kindFilters"
             :key="f.value"
             :class="{ 'pill--active': kindFilter === f.value }"
             class="pill"
             type="button"
             @click="kindFilter = f.value"
-        >
-          {{ f.label }}
-          <span class="pill__badge">{{ f.count }}</span>
-        </button>
+
+            :aria-pressed="kindFilter === f.value"
+            :count="f.count"
+            :filter-key="f.value"
+            :label="f.label"
+        />
       </div>
     </div>
 
@@ -378,6 +392,8 @@
 </template>
 
 <script setup lang="ts">
+import MobileActionButton from "../components/MobileActionButton.vue";
+import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import {computed, onMounted, ref} from "vue";
 import {
   NCheckbox,

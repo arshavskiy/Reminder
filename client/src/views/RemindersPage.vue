@@ -127,17 +127,19 @@
       </div>
 
       <div class="quick-filterbar">
-        <button
+        <ResponsiveFilterButton
           v-for="f in dueFilters"
           :key="f.value"
           class="quick-pill"
           :class="{ 'quick-pill--active': dueFilter === f.value }"
           type="button"
           @click="dueFilter = f.value"
-        >
-          {{ f.label }}
-          <span>{{ f.count }}</span>
-        </button>
+
+          :aria-pressed="dueFilter === f.value"
+          :count="f.count"
+          :filter-key="f.value"
+          :label="f.label"
+        />
       </div>
 
       <div v-if="categoryViewActive" class="reminders-body">
@@ -402,6 +404,8 @@
 </template>
 
 <script setup lang="ts">
+import MobileMappedValue from "../components/MobileMappedValue.vue";
+import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import {computed, h, onMounted, ref, type Component} from "vue";
 import {useRouter} from "vue-router";
 import {NAlert, NButton, NCheckbox, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NTimePicker, NTooltip, useMessage,} from "naive-ui";
@@ -1429,7 +1433,10 @@ const baseColumns = computed(() => [
       categoryLabel(b.reminder_category || b.contract_type, locale.value),
     ),
     render: (row: ReminderWithContext) =>
-      h("span", categoryLabel(row.reminder_category || row.contract_type, locale.value) || "—"),
+        h(MobileMappedValue, {
+          value: row.reminder_category || row.contract_type,
+          label: categoryLabel(row.reminder_category || row.contract_type, locale.value) || "—"
+        }),
   },
   {
     title: l.value.common.email,
@@ -1629,6 +1636,7 @@ const columns = computed(() =>
 .reminders-page {
   max-width: 100%;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   font-family: inherit;
 }
@@ -1908,6 +1916,7 @@ const columns = computed(() =>
 
 .reminders-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding: 16px 18px;
   border: 1px solid var(--border-color);
@@ -1998,7 +2007,7 @@ const columns = computed(() =>
 
 .reminders-body {
   display: grid;
-  grid-template-columns: 150px 1fr;
+  grid-template-columns: 150px minmax(0, 1fr);
   gap: 14px;
   align-items: start;
 }
@@ -2019,6 +2028,8 @@ const columns = computed(() =>
 }
 
 .reminders-table {
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   border: 1px solid var(--border-color);
   border-radius: 14px;
@@ -2196,6 +2207,50 @@ const columns = computed(() =>
 }
 
 @media (max-width: 720px) {
+  .reminders-page {
+    gap: 10px;
+  }
+
+  .reminders-hero__copy h1 {
+    font-size: 20px;
+  }
+
+  .reminders-hero__copy p {
+    font-size: 12px;
+  }
+
+  .reminders-panel {
+    min-width: 0;
+    padding: 10px 8px;
+    gap: 10px;
+  }
+
+  .reminders-panel__head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .reminders-panel__head h2 {
+    font-size: 15px;
+  }
+
+  .summary-card {
+    padding: 8px 10px;
+  }
+
+  .summary-card strong {
+    font-size: 18px;
+  }
+
+  .summary-card__label {
+    font-size: 12px;
+  }
+
+  .reminders-table :deep(.n-data-table-td),
+  .reminders-table :deep(.n-data-table-th) {
+    padding: 8px;
+    font-size: 12px;
+  }
   .reminders-hero {
     flex-direction: column;
     align-items: stretch;
@@ -2237,7 +2292,7 @@ const columns = computed(() =>
   }
 
   .reminders-body {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .reminders-categories {
@@ -2258,7 +2313,7 @@ const columns = computed(() =>
 
 @media (max-width: 460px) {
   .reminders-summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

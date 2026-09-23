@@ -14,69 +14,85 @@
           accept=".pdf,.doc,.docx,.xls,.xlsx,image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           @change="onInvoiceUploadInputChange"
         />
-        <button
+        <MobileActionButton
           v-if="selectedInvoiceCount > 0"
           :disabled="loading || deletingSelected || batchEdit.saving"
           class="rbtn rbtn--ghost"
           type="button"
           @click="openBatchEdit"
-        >
-          <n-icon :component="CreateOutline" class="btn-icon" />
+          :label="l.invoicesMsg.edit">
+          <template #icon>
+            <n-icon :component="CreateOutline" class="btn-icon"/>
+          </template>
+
           {{ l.invoicesMsg.edit }} ({{ selectedInvoiceCount }})
-        </button>
-        <button
+        </MobileActionButton>
+        <MobileActionButton
           v-if="selectedInvoiceCount > 0"
           :class="{ 'rbtn--loading': deletingSelected }"
           :disabled="loading || deletingSelected"
           class="rbtn rbtn--danger"
           type="button"
           @click="confirmDeleteSelected"
-        >
-          <n-icon :component="TrashOutline" class="btn-icon" />
+          :label="t(&quot;common.deleteN&quot;, {n: selectedInvoiceCount})">
+          <template #icon>
+            <n-icon :component="TrashOutline" class="btn-icon"/>
+          </template>
+
           {{ t("common.deleteN", {n: selectedInvoiceCount}) }}
-        </button>
-        <button
+        </MobileActionButton>
+        <MobileActionButton
           :class="{ 'rbtn--loading': importingFromGmail }"
           :disabled="loading || importingFromGmail"
           class="rbtn rbtn--primary"
           type="button"
           @click="handleGmailImportButton"
-        >
-          <GmailLogo :size="16" class="btn-icon" />
+          :label="gmailImportButtonLabel">
+          <template #icon>
+            <GmailLogo :size="16" class="btn-icon"/>
+          </template>
+
           {{ gmailImportButtonLabel }}
-        </button>
-        <button
+        </MobileActionButton>
+        <MobileActionButton
           :class="{ 'rbtn--loading': uploadingInvoices }"
           :disabled="loading || uploadingInvoices"
           class="rbtn rbtn--ghost"
           type="button"
           @click="openInvoiceUploadPicker"
-        >
-          <n-icon :component="CloudUploadOutline" class="btn-icon" />
+          :label="l.common.upload">
+          <template #icon>
+            <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+          </template>
+
           {{ l.common.upload }}
-        </button>
-        <button
+        </MobileActionButton>
+        <MobileActionButton
           :disabled="loading"
           class="rbtn rbtn--ghost"
           type="button"
           @click="load(true)"
-        >
-          <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
+          :label="l.common.refresh">
+          <template #icon>
+            <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon"/>
+          </template>
+
           {{ l.common.refresh }}
-        </button>
+        </MobileActionButton>
         <n-tooltip placement="top">
           <template #trigger>
             <span>
-              <button
+              <MobileActionButton
                 :class="{ 'rbtn--loading': exporting }"
                 :disabled="!exportAllowed || !excelAllowed || loading || total === 0 || exporting"
                 class="rbtn rbtn--ghost"
                 type="button"
                 @click="exportInvoicesToExcel"
-              >
-                <n-icon :component="DownloadOutline" class="btn-icon" />
+                :label="l.common.exportExcel"><template #icon><n-icon :component="DownloadOutline" class="btn-icon"/>
+      </template>
+
                 {{ l.common.exportExcel }}
-              </button>
+              </MobileActionButton>
             </span>
           </template>
           {{ excelAllowed ? l.invoices.excelTooltip : excelExportLockedMessage }}
@@ -84,72 +100,85 @@
         <n-tooltip placement="top">
           <template #trigger>
             <span>
-              <button
+              <MobileActionButton
                 :class="{ 'rbtn--loading': sendingSixMonthReport }"
                 :disabled="!exportAllowed || !excelAllowed || loading || sendingSixMonthReport"
                 class="rbtn rbtn--ghost"
                 type="button"
                 @click="sendSixMonthInvoiceReport"
-              >
-                <n-icon :component="MailOutline" class="btn-icon" />
+                :label="l.invoices.sixMonth"><template #icon><n-icon :component="MailOutline" class="btn-icon"/>
+      </template>
+
                 {{ l.invoices.sixMonth }}
-              </button>
+              </MobileActionButton>
             </span>
           </template>
           {{ excelAllowed ? l.invoices.sixMonthTooltip : excelExportLockedMessage }}
         </n-tooltip>
-        <button
+        <MobileActionButton
             :class="{ 'rbtn--loading': exportingToDrive }"
             :disabled="!driveAllowed || exportingToDrive"
             class="rbtn rbtn--ghost"
             type="button"
             @click="handleDriveExport"
-        >
-          <GoogleDriveLogo :size="16" />
+            :label="l.documents.driveExport">
+          <template #icon>
+            <GoogleDriveLogo :size="16"/>
+          </template>
+
           {{ l.documents.driveExport }}
-        </button>
-        <button class="rbtn rbtn--ghost" type="button" :disabled="!exportAllowed" @click="openMonthlyReport">
-          <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+        </MobileActionButton>
+        <MobileActionButton :disabled="!exportAllowed" :label="l.documents.monthlyReport" class="rbtn rbtn--ghost" type="button"
+                            @click="openMonthlyReport">
+          <template #icon>
+            <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+          </template>
+
           {{ l.documents.monthlyReport }}
-        </button>
+        </MobileActionButton>
       </template>
     </PageHeader>
 
     <InvoiceSectionNav />
 
     <div class="filterbar filterbar--compact">
-      <button
+      <ResponsiveFilterButton
         v-for="option in documentCategoryStrip"
         :key="option.value"
         type="button"
         class="pill pill--compact pill--soft"
         :class="{ 'pill--active': (filters.documentCategory ?? '') === option.value }"
         @click="setDocumentCategory(option.value)"
-      >
-        {{ option.label }}
-        <span class="pill__badge">{{ option.count }}</span>
-      </button>
-      <button
+
+        :aria-pressed="(filters.documentCategory ?? '') === option.value"
+        :count="option.count"
+        :filter-key="option.value"
+        :label="option.label"
+      />
+      <ResponsiveFilterButton
         v-for="option in statusStrip"
         :key="option.value"
         type="button"
         class="pill pill--compact"
         :class="{ 'pill--active': (filters.status ?? '') === option.value }"
         @click="setStatus(option.value)"
-      >
-        {{ option.label }}
-        <span class="pill__badge">{{ option.count }}</span>
-      </button>
-      <button
+
+        :aria-pressed="(filters.status ?? '') === option.value"
+        :count="option.count"
+        :filter-key="option.value"
+        :label="option.label"
+      />
+      <ResponsiveFilterButton
         v-if="duplicatesCount > 0"
         type="button"
         class="pill pill--compact pill--warn"
         :class="{ 'pill--active': filters.duplicatesOnly }"
         @click="toggleDuplicates"
-      >
-        {{ l.common.duplicates }}
-        <span class="pill__badge">{{ duplicatesCount }}</span>
-      </button>
+        :aria-pressed="filters.duplicatesOnly"
+        :count="duplicatesCount"
+        :label="l.common.duplicates"
+        filter-key="duplicates"
+      />
       <div class="toolbar__view-toggle">
         <n-tooltip placement="top">
           <template #trigger>
@@ -182,14 +211,17 @@
       </div>
     </div>
 
-    <div class="toolbar">
-      <n-input
+    <MobileFilterPanel :active-count="[filters.type, filters.cashFlow, filters.category, filters.currency, filters.suppliers?.length, dateRange].filter(Boolean).length"
+                       class="toolbar">
+      <template #search>
+        <n-input
         v-model:value="filters.q"
         clearable
         :placeholder="l.invoices.searchPlaceholder"
         class="toolbar__search"
         @keydown.enter="load(true)"
       />
+      </template>
       <n-select
         v-model:value="filters.type"
         :options="typeOptions"
@@ -253,7 +285,7 @@
         class="toolbar__dates"
         @update:value="load(true)"
       />
-    </div>
+    </MobileFilterPanel>
 
     <GmailImportJobStatus
       v-if="visibleGmailImportJob"
@@ -351,8 +383,9 @@
             </div>
             <div class="invoice-card__line">
               <span class="invoice-type-cell">
-                <span>{{ invoiceTypeLabel(row) }}</span>
-                <span class="invoice-type-cell__flow">{{ cashFlowLabel(row) }}</span>
+                <MobileMappedValue :label="invoiceTypeLabel(row)" :value="row.document_category || row.type"/>
+                <MobileMappedValue :label="cashFlowLabel(row)" :value="row.cash_flow || 'expense'"
+                                   class="invoice-type-cell__flow"/>
               </span>
               <span>{{ displayDate(row) }}</span>
             </div>
@@ -502,22 +535,47 @@
                 <span class="invoice-cell-truncate" dir="auto" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
               </td>
               <td class="invoice-col invoice-col--category">
-                <n-select
-                  :value="row.provider_category"
+                <div class="category-desktop">
+                  <n-select
+                      :options="providerCategoryOptions"
+                      :placeholder="l.common.uncategorized"
+                      :value="row.provider_category"
+                      class="invoice-category-select"
+                      clearable
+                      filterable
+                      size="small"
+                      @click.stop
+                      @update:value="(value) => updateInvoiceProviderCategory(row, value)"
+                  />
+                </div>
+                <n-popover placement="bottom" trigger="click">
+                  <template #trigger>
+                    <button :aria-label="invoiceProviderCategoryLabel(row)" class="btn btn--ghost btn--xs icon-btn category-mobile"
+                            type="button" @click.stop>
+                      <MobileMappedValue :focusable="false" :label="invoiceProviderCategoryLabel(row)"
+                                         :value="row.provider_category"/>
+                    </button>
+                  </template>
+                  <div style="width: 220px">
+                    <n-select
                   :options="providerCategoryOptions"
+                  :placeholder="l.common.uncategorized"
+                  :value="row.provider_category"
+                  class="invoice-category-select"
                   clearable
                   filterable
                   size="small"
-                  class="invoice-category-select"
-                  :placeholder="l.common.uncategorized"
                   @click.stop
                   @update:value="(value) => updateInvoiceProviderCategory(row, value)"
-                />
+                    />
+                  </div>
+                </n-popover>
               </td>
               <td class="invoice-col invoice-col--type">
                 <span class="invoice-type-cell">
-                  <span>{{ invoiceTypeLabel(row) }}</span>
-                  <span class="invoice-type-cell__flow">{{ cashFlowLabel(row) }}</span>
+                  <MobileMappedValue :label="invoiceTypeLabel(row)" :value="row.document_category || row.type"/>
+                  <MobileMappedValue :label="cashFlowLabel(row)" :value="row.cash_flow || 'expense'"
+                                     class="invoice-type-cell__flow"/>
                 </span>
               </td>
               <td class="cell-amount invoice-col invoice-col--amount" dir="ltr">
@@ -692,9 +750,28 @@
 </template>
 
 <script setup lang="ts">
+import MobileMappedValue from "../components/MobileMappedValue.vue";
+import MobileFilterPanel from "../components/MobileFilterPanel.vue";
+import MobileActionButton from "../components/MobileActionButton.vue";
+import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import { computed, h, onMounted, reactive, ref, watch, type Component } from "vue";
 import { useRouter } from "vue-router";
-import { NButton, NCheckbox, NDatePicker, NDropdown, NIcon, NInput, NModal, NPagination, NSelect, NSpin, NTooltip, useMessage, type SelectOption } from "naive-ui";
+import {
+  NPopover,
+  NButton,
+  NCheckbox,
+  NDatePicker,
+  NDropdown,
+  NIcon,
+  NInput,
+  NModal,
+  NPagination,
+  NSelect,
+  NSpin,
+  NTooltip,
+  useMessage,
+  type SelectOption
+} from "naive-ui";
 import {
   ArchiveOutline,
   ArrowDownOutline,
@@ -2243,6 +2320,8 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 .invoice-table-wrap {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border-color);
   border-radius: 12px;
   background: var(--bg-card);
@@ -2467,36 +2546,6 @@ function replaceRow(updated: ImportedInvoice) {
   width: 560px !important;
 }
 
-@media (max-width: 1180px) {
-  .invoice-table {
-    min-width: 840px;
-  }
-
-  .invoice-col--type {
-    display: none;
-  }
-}
-
-@media (max-width: 920px) {
-  .invoice-table {
-    min-width: 720px;
-  }
-
-  .invoice-col--date {
-    display: none;
-  }
-}
-
-@media (max-width: 760px) {
-  .invoice-table {
-    min-width: 620px;
-  }
-
-  .invoice-col--client {
-    display: none;
-  }
-}
-
 .invoice-business-form {
   display: flex;
   flex-direction: column;
@@ -2525,6 +2574,11 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 @media (max-width: 640px) {
+  .invoice-table th,
+  .invoice-table td {
+    padding: 8px;
+    font-size: 12px;
+  }
   .invoices-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -2559,6 +2613,32 @@ function replaceRow(updated: ImportedInvoice) {
 @media (max-width: 420px) {
   .invoices-actions {
     grid-template-columns: 1fr;
+  }
+}
+
+.category-mobile {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .category-desktop {
+    display: none;
+  }
+
+  .category-mobile {
+    display: inline-flex;
+  }
+
+  .invoice-table__col--category {
+    width: 72px;
+  }
+
+  .invoice-table__col--type {
+    width: 72px;
+  }
+
+  .invoice-table {
+    min-width: 880px;
   }
 }
 </style>

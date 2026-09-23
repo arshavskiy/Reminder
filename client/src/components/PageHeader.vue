@@ -110,8 +110,21 @@ defineProps<Props>();
 
 @media (max-width: 640px) {
   .page-header {
-    margin-bottom: 18px;
+    margin-bottom: 12px;
+    gap: 10px;
   }
-  .page-header__title { font-size: 23px; }
+
+  .page-header__title {
+    font-size: 20px;
+  }
+
+  .page-header__subtitle,
+  .page-header__breadcrumb {
+    font-size: 12px;
+  }
+
+  .page-header__actions {
+    gap: 6px;
+  }
 }
 </style>

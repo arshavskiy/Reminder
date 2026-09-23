@@ -7,27 +7,33 @@
     >
       <template #hero>
         <div class="gmail-actions">
-          <button
+          <MobileActionButton
             v-if="connected && (isAdmin || selectedGuidedFlow)"
             :disabled="loading"
             class="rbtn rbtn--ghost"
             type="button"
             @click="refreshCurrentFlow"
-          >
-            <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
+            :label="l.common.refresh">
+            <template #icon>
+              <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon"/>
+            </template>
+
             {{ l.common.refresh }}
-          </button>
-          <button
+          </MobileActionButton>
+          <MobileActionButton
             v-if="connected && (isAdmin || selectedGuidedFlow)"
             :class="{ 'rbtn--loading': importingAll }"
             :disabled="loading || importingAll"
             class="rbtn rbtn--primary"
             type="button"
             @click="importAllNew"
-          >
-            <GmailLogo :size="16" class="btn-icon" />
+            :label="l.common.importAll">
+            <template #icon>
+              <GmailLogo :size="16" class="btn-icon"/>
+            </template>
+
             {{ l.common.importAll }}
-          </button>
+          </MobileActionButton>
           <n-select
             v-if="connected && isAdmin"
             v-model:value="selectedTemplateId"
@@ -45,15 +51,18 @@
           >
             {{ l.common.disconnectGmail }}
           </button>
-          <button
+          <MobileActionButton
             v-if="!connected && !loading"
             class="rbtn rbtn--primary gmail-actions__btn--full"
             type="button"
             @click="connectGmail"
-          >
-            <n-icon :component="LogoGoogle" class="btn-icon" />
+            :label="l.common.connectGmail">
+            <template #icon>
+              <n-icon :component="LogoGoogle" class="btn-icon"/>
+            </template>
+
             {{ l.common.connectGmail }}
-          </button>
+          </MobileActionButton>
         </div>
       </template>
       <template v-if="connected && isAdmin" #actions>
@@ -106,16 +115,19 @@
             :allow-input="(v: string) => /^\d*$/.test(v)"
             @keydown.enter="buildAndSearch"
           />
-          <button
+          <MobileActionButton
             :class="{ 'rbtn--loading': loading }"
             :disabled="loading"
             class="rbtn rbtn--primary gmail-search-bar__submit"
             type="button"
             @click="buildAndSearch"
-          >
-            <n-icon :component="SearchOutline" class="btn-icon" />
+            :label="l.common.search">
+            <template #icon>
+              <n-icon :component="SearchOutline" class="btn-icon"/>
+            </template>
+
             {{ l.common.search }}
-          </button>
+          </MobileActionButton>
         </div>
       </template>
     </PageHeader>
@@ -458,17 +470,19 @@
       </div>
 
       <div class="filterbar filterbar--compact">
-        <button
+        <ResponsiveFilterButton
           v-for="option in importedStatusStrip"
           :key="option.value || 'all'"
           type="button"
           class="pill pill--compact"
           :class="{ 'pill--active': (importedStatusFilter ?? '') === option.value }"
           @click="setImportedStatus(option.value)"
-        >
-          {{ option.label }}
-          <span class="pill__badge">{{ option.count }}</span>
-        </button>
+
+          :aria-pressed="(importedStatusFilter ?? '') === option.value"
+          :count="option.count"
+          :filter-key="option.value"
+          :label="option.label"
+        />
         <div class="toolbar__view-toggle">
           <n-tooltip placement="top">
             <template #trigger>
@@ -700,6 +714,8 @@
 </template>
 
 <script setup lang="ts">
+import MobileActionButton from "../components/MobileActionButton.vue";
+import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import { computed, h, onMounted, ref, watch, type Component } from "vue";
 import { useRoute } from "vue-router";
 import {
@@ -1440,14 +1456,14 @@ onMounted(async () => {
       const requestedFlow = requestedGuidedFlow();
       if (requestedFlow) {
         configureGuidedFlow(requestedFlow);
-      
+
         await Promise.all([loadInbox(), loadHistory()]);
       } else if (isAdmin.value) {
         buildSearchQuery();
         await Promise.all([loadInbox(), loadHistory()]);
       } else {
         configureGuidedFlow("invoice");
-      
+
         await Promise.all([loadInbox(), loadHistory()]);
       }
     }
@@ -2864,15 +2880,6 @@ function patchImportedInvoice(documentId: string, invoice: Awaited<ReturnType<ty
   .gmail-search-bar__submit {
     grid-column: 1 / -1;
     margin-inline-start: 0;
-  }
-
-  .inbox-cards {
-    display: grid;
-    gap: 10px;
-  }
-
-  .inbox-table-wrap {
-    display: none;
   }
 
   .gmail-doc-grid {

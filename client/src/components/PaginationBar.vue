@@ -8,6 +8,7 @@
       :page-size="pageSize"
       :item-count="itemCount"
       :page-sizes="pageSizes"
+      :page-slot="5"
       show-size-picker
       @update:page="$emit('update:page', $event)"
       @update:page-size="$emit('update:pageSize', $event)"
@@ -64,6 +65,8 @@ const end = computed(() => Math.min(props.itemCount, props.page * props.pageSize
 
 @media (max-width: 720px) {
   .pagination-bar {
+    min-width: 0;
+    padding: 8px;
     align-items: stretch;
     flex-direction: column;
     gap: 10px;
@@ -74,6 +77,7 @@ const end = computed(() => Math.min(props.itemCount, props.page * props.pageSize
   }
 
   .pagination-bar :deep(.n-pagination) {
+    flex-wrap: wrap;
     justify-content: center;
     overflow-x: auto;
     padding-bottom: 2px;

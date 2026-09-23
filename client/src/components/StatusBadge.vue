@@ -1,9 +1,12 @@
 <template>
-  <n-tag :type="tagType" size="small">{{ label }}</n-tag>
+  <n-tag :type="tagType" size="small">
+    <MobileMappedValue :label="label" :value="status"/>
+  </n-tag>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
+import MobileMappedValue from "./MobileMappedValue.vue";
 import { NTag } from "naive-ui";
 import { useI18n } from "../composables/useI18n.js";
 

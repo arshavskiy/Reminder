@@ -438,6 +438,7 @@ html[dir="rtl"] .n-base-clear {
 }
 
 .page {
+    min-width: 0;
     max-width: 1700px;
     margin: 0 auto;
 }
@@ -995,6 +996,91 @@ html[dir="rtl"] .n-modal.app-confirm-dialog .n-dialog {
     color: var(--text-primary);
     letter-spacing: -0.4px;
     line-height: 1.2;
+}
+
+@media (max-width: 640px) {
+    :root {
+        --font-size-md: 13px;
+        --space-md: 12px;
+        --space-lg: 16px;
+        --space-xl: 24px;
+    }
+
+    /* Keep wide data inside its own scroll region, in either text direction. */
+    .content :is(.table-wrap, .document-table-wrap, .invoice-table-wrap,
+        .clients-table-wrap, .quotes-table-wrap, .billing-table-wrap,
+        .inbox-table-wrap, .gmail-doc-table-wrap, .expense-supplier-table__scroll,
+        .quote-lines, .n-data-table) {
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    /* Shared density for data tables; document/print previews keep their layout. */
+    .app-main .content :is(.document-table, .invoice-table, .clients-table, .quotes-table,
+        .detail-table, .billing-table, .inbox-table, .gmail-doc-table,
+        .import-results__table, .s3-table, .expense-supplier-table__scroll,
+        .quote-lines, .n-data-table) :is(th, td) {
+        padding: 8px;
+        font-size: 12px;
+    }
+
+    .content .n-data-table .n-data-table-table {
+        min-width: 640px;
+    }
+
+    .content .n-data-table .n-pagination {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .content .quotes-page {
+        padding: 0;
+    }
+
+    .content .page-header__title {
+        font-size: 20px;
+    }
+
+    .content .inbox-table {
+        min-width: 760px;
+    }
+
+    .content .page-header__subtitle {
+        display: none;
+    }
+
+    .content .page-header :is(.page-header__hero, .page-header__actions,
+        .documents-actions, .invoices-actions, .gmail-actions, .clients-actions) {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        width: auto;
+    }
+
+    .content .page-header .mobile-action.mobile-action {
+        width: 36px;
+        min-width: 36px;
+        padding: 6px;
+    }
+
+    .content :is(.filterbar--compact, .clients-filters, .dt-filters, .quick-filterbar) {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        max-width: 100%;
+        min-width: 0;
+        gap: 4px;
+        padding: 4px;
+    }
+
+    .content .filterbar--compact .toolbar__view-toggle {
+        flex: 0 0 auto;
+    }
+
+    .content :is(.quote-lines, .quote-preview, .quote-detail__head) {
+        padding: 10px;
+    }
 }
 
 .hm-report-suggestion {

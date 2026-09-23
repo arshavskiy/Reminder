@@ -9,15 +9,16 @@
         <n-tooltip v-if="canCreateInspection" :disabled="!createLocked">
           <template #trigger>
             <span class="locked-action" @click="createLocked && goToSubscription()">
-              <button
+              <MobileActionButton
                   :disabled="createLocked"
                   class="rbtn rbtn--primary"
                   type="button"
                   @click="openNewInspection"
-              >
-                <n-icon :component="AddOutline" class="btn-icon"/>
+                  :label="l.documents.newInspection"><template #icon><n-icon :component="AddOutline" class="btn-icon"/>
+      </template>
+
                 {{ l.documents.newInspection }}
-              </button>
+              </MobileActionButton>
             </span>
           </template>
           {{ l.profile.upgradePlan }}
@@ -25,16 +26,17 @@
         <n-tooltip :disabled="!importLocked">
           <template #trigger>
             <span class="locked-action" @click="importLocked && goToSubscription()">
-              <button
+              <MobileActionButton
                   :class="{ 'rbtn--loading': uploading }"
                   :disabled="importLocked || uploading"
                   class="rbtn rbtn--primary"
                   type="button"
                   @click="openUploadModal()"
-              >
-                <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+                  :label="l.common.upload"><template #icon><n-icon :component="CloudUploadOutline" class="btn-icon"/>
+      </template>
+
                 {{ l.common.upload }}
-              </button>
+              </MobileActionButton>
             </span>
           </template>
           {{ l.profile.upgradePlan }}
@@ -42,34 +44,42 @@
         <n-tooltip :disabled="!importLocked">
           <template #trigger>
             <span class="locked-action" @click="importLocked && goToSubscription()">
-              <button
+              <MobileActionButton
                   :class="{ 'rbtn--loading': importingFromGmail }"
                   :disabled="importLocked || importingFromGmail"
                   class="rbtn rbtn--ghost"
                   type="button"
                   @click="handleGmailImport"
-              >
-                <GmailLogo :size="16" class="btn-icon"/>
+                  :label="l.documents.gmailImport"><template #icon><GmailLogo :size="16" class="btn-icon"/>
+      </template>
+
                 {{ l.documents.gmailImport }}
-              </button>
+              </MobileActionButton>
             </span>
           </template>
           {{ l.profile.upgradePlan }}
         </n-tooltip>
-        <button
+        <MobileActionButton
             :class="{ 'rbtn--loading': exportingToDrive }"
             :disabled="!driveAllowed || exportingToDrive"
             class="rbtn rbtn--ghost"
             type="button"
             @click="handleDriveExport"
-        >
-          <GoogleDriveLogo :size="16" />
+            :label="l.documents.driveExport">
+          <template #icon>
+            <GoogleDriveLogo :size="16"/>
+          </template>
+
           {{ l.documents.driveExport }}
-        </button>
-        <button class="rbtn rbtn--ghost" type="button" :disabled="!exportAllowed" @click="openMonthlyReport">
-          <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+        </MobileActionButton>
+        <MobileActionButton :disabled="!exportAllowed" :label="l.documents.monthlyReport" class="rbtn rbtn--ghost" type="button"
+                            @click="openMonthlyReport">
+          <template #icon>
+            <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+          </template>
+
           {{ l.documents.monthlyReport }}
-        </button>
+        </MobileActionButton>
       </template>
       <template #tools>
         <n-tooltip placement="bottom">
@@ -180,50 +190,62 @@
               </button>
             </div>
             <div v-if="selectedIds.size > 0" class="bulk-action-anchor__actions">
-              <button
+              <MobileActionButton
                   :class="{ 'bulk-action-item--loading': bulkDownloading }"
                   :disabled="bulkDownloading"
                   class="bulk-action-item bulk-action-item--primary"
                   type="button"
                   @click="bulkDownload"
-              >
-                <n-icon :component="DownloadOutline" class="bulk-action-item__icon"/>
+                  :label="l.common.downloadSelected">
+                <template #icon>
+                  <n-icon :component="DownloadOutline" class="bulk-action-item__icon"/>
+                </template>
+
                 <span class="bulk-action-item__text">{{ l.common.downloadSelected }}</span>
                 <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
-              </button>
-              <button
+              </MobileActionButton>
+              <MobileActionButton
                   :class="{ 'bulk-action-item--loading': bulkMerging }"
                   :disabled="bulkMerging"
                   class="bulk-action-item"
                   type="button"
                   @click="bulkMergePdf"
-              >
-                <n-icon :component="DocumentTextOutline" class="bulk-action-item__icon"/>
+                  :label="l.common.mergePdf">
+                <template #icon>
+                  <n-icon :component="DocumentTextOutline" class="bulk-action-item__icon"/>
+                </template>
+
                 <span class="bulk-action-item__text">{{ l.common.mergePdf }}</span>
                 <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
-              </button>
-              <button
+              </MobileActionButton>
+              <MobileActionButton
                   :class="{ 'bulk-action-item--loading': bulkExtracting }"
                   :disabled="bulkExtracting || selectedExtractableIds.length === 0"
                   class="bulk-action-item bulk-action-item--primary"
                   type="button"
                   @click="bulkExtractAi"
-              >
-                <n-icon :component="FlashOutline" class="bulk-action-item__icon"/>
+                  :label="l.documents.extractAi">
+                <template #icon>
+                  <n-icon :component="FlashOutline" class="bulk-action-item__icon"/>
+                </template>
+
                 <span class="bulk-action-item__text">{{ l.documents.extractAi }}</span>
                 <span class="bulk-action-item__count">{{ selectedExtractableIds.length }}</span>
-              </button>
-              <button
+              </MobileActionButton>
+              <MobileActionButton
                   :class="{ 'bulk-action-item--loading': bulkDeleting }"
                   :disabled="bulkDeleting"
                   class="bulk-action-item bulk-action-item--danger"
                   type="button"
                   @click="confirmBulkDelete"
-              >
-                <n-icon :component="TrashOutline" class="bulk-action-item__icon"/>
+                  :label="l.common.deleteSelected">
+                <template #icon>
+                  <n-icon :component="TrashOutline" class="bulk-action-item__icon"/>
+                </template>
+
                 <span class="bulk-action-item__text">{{ l.common.deleteSelected }}</span>
                 <span class="bulk-action-item__count">{{ selectedIds.size }}</span>
-              </button>
+              </MobileActionButton>
             </div>
           </div>
         </div>
@@ -265,27 +287,32 @@
 
     <!-- ── Unified filter bar ─────────────────────────────────────────── -->
     <div class="filterbar filterbar--compact">
-      <button
+      <ResponsiveFilterButton
         v-for="f in combinedFilters"
         :key="f.key"
         class="pill pill--compact"
         :class="{ 'pill--active': activeFilterKey === f.key }"
         @click="applyFilter(f)"
-      >
-        {{ f.label }}
-        <span class="pill__badge">{{ f.count }}</span>
-      </button>
+
+        :aria-pressed="activeFilterKey === f.key"
+        :count="f.count"
+        :filter-key="f.key"
+        :label="f.label"
+      />
     </div>
 
     <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
-    <div class="toolbar">
-      <n-input
+    <MobileFilterPanel :active-count="[filterClientId, filterInspectionType, filterDateRange].filter(Boolean).length"
+                       class="toolbar">
+      <template #search>
+        <n-input
         v-model:value="search"
         clearable
         :placeholder="l.documents.searchPlaceholder"
         class="toolbar__search"
         @update:value="currentPage = 1"
       />
+      </template>
       <n-select
         v-model:value="filterClientId"
         :options="[{ label: l.documents.allClients, value: null }, ...clientOptions]"
@@ -345,7 +372,7 @@
 <!--          טבלה-->
 <!--        </n-tooltip>-->
 <!--      </div>-->
-    </div>
+    </MobileFilterPanel>
 
 
     <!-- ── Tile grid ──────────────────────────────────────────────────── -->
@@ -542,8 +569,7 @@
                 </span>
               </td>
               <td class="document-col document-col--type">
-                <span :title="inspectionTypeLabel(row) ?? undefined"
-                      class="document-cell-truncate">{{ inspectionTypeLabel(row) || "—" }}</span>
+                <MobileMappedValue :label="inspectionTypeLabel(row) || '—'" :value="inspectionTypeLabel(row)"/>
               </td>
               <td class="document-col document-col--date">
                 <span v-if="documentExpiryDate(row)" class="document-expiry">
@@ -707,6 +733,10 @@
 </template>
 
 <script setup lang="ts">
+import MobileMappedValue from "../components/MobileMappedValue.vue";
+import MobileFilterPanel from "../components/MobileFilterPanel.vue";
+import MobileActionButton from "../components/MobileActionButton.vue";
+import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import {computed, h, nextTick, onMounted, onUnmounted, ref, watch, type Component} from "vue";
 import {useRouter} from "vue-router";
 import {
@@ -2559,6 +2589,8 @@ async function bulkExtractAi() {
 
 /* ── Document table (aligned with quotes-table) ──────────────────────────── */
 .document-table-wrap {
+  min-width: 0;
+  max-width: 100%;
   overflow: auto;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -2806,6 +2838,11 @@ async function bulkExtractAi() {
 .empty { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 14px; }
 
 @media (max-width: 640px) {
+  .document-table th,
+  .document-table td {
+    padding: 8px;
+    font-size: 12px;
+  }
   .page2 {
     width: 100%;
     max-width: 100%;
@@ -2813,7 +2850,7 @@ async function bulkExtractAi() {
   }
 
   :deep(.page-header) {
-    margin-bottom: 18px;
+    margin-bottom: 12px;
   }
 
   :deep(.page-header__actions) {
@@ -2861,11 +2898,11 @@ async function bulkExtractAi() {
   }
 
   .drop-strip {
-    min-height: 86px;
+    min-height: 56px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 18px 14px;
+    padding: 10px;
     line-height: 1.55;
   }
 
