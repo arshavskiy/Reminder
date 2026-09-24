@@ -711,7 +711,7 @@ export const api = {
       }>(`/invoices${qs(params)}`, force),
     get: (id: string, force = false) =>
       get<ImportedInvoice>(`/invoices/${id}`, force),
-    update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; cash_flow?: "income" | "expense" | null; provider_category?: GmailSearchProvider["category"] | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
+    update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; cash_flow?: "income" | "expense" | null; document_category?: ImportedInvoice["document_category"] | null; provider_category?: GmailSearchProvider["category"] | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
       put<ImportedInvoice>(`/invoices/${id}`, body),
     deleteSelected: (body: { ids: string[] }) =>
       post<{ ok: true; requested: number; deleted: number; documentsDeleted: number }>("/invoices/delete-selected", body),

@@ -616,6 +616,16 @@ export function registerInvoiceRoutes(app: express.Application) {
     }
     const expenseCategory = stringOrNull(req.body?.expense_category);
     if (expenseCategory !== undefined) updates.expense_category = expenseCategory;
+    const documentCategory = normalizeInvoiceDocumentCategory(req.body?.document_category);
+    if (req.body?.document_category != null && String(req.body.document_category).trim()) {
+      if (!documentCategory) {
+        res.status(400).json({ error: "Invalid document_category" });
+        return;
+      }
+      const subtype = documentCategorySubtype(documentCategory);
+      updates.document_subtype = subtype;
+      updates["fields.document_subtype"] = subtype;
+    }
     const cashFlow = stringOrNull(req.body?.cash_flow);
     if (cashFlow !== undefined) {
       const normalized = cashFlow === null ? null : normalizeCashFlow(cashFlow);
@@ -794,6 +804,16 @@ type InvoiceDocumentCategory = "invoice" | "receipt" | "bill" | "payment_request
 const INVOICE_DOCUMENT_CATEGORIES: InvoiceDocumentCategory[] = [
   "invoice", "receipt", "bill", "payment_request", "credit_note",
 ];
+
+function documentCategorySubtype(category: InvoiceDocumentCategory): string {
+  switch (category) {
+    case "receipt": return "קבלה";
+    case "bill": return "חשבון תקופתי";
+    case "payment_request": return "דרישת תשלום";
+    case "credit_note": return "זיכוי";
+    default: return "חשבונית";
+  }
+}
 
 function invoiceDocumentCategory(value: unknown): InvoiceDocumentCategory {
   const text = String(value ?? "").trim().toLowerCase();

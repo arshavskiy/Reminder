@@ -16,6 +16,16 @@
         />
         <button
           v-if="selectedInvoiceCount > 0"
+          :disabled="loading || deletingSelected || batchEdit.saving"
+          class="rbtn rbtn--ghost"
+          type="button"
+          @click="openBatchEdit"
+        >
+          <n-icon :component="CreateOutline" class="btn-icon" />
+          עריכה ({{ selectedInvoiceCount }})
+        </button>
+        <button
+          v-if="selectedInvoiceCount > 0"
           :class="{ 'rbtn--loading': deletingSelected }"
           :disabled="loading || deletingSelected"
           class="rbtn rbtn--danger"
@@ -321,7 +331,10 @@
               </span>
             </div>
             <div class="invoice-card__line">
-              <span>{{ invoiceTypeLabel(row) }} · {{ cashFlowLabel(row) }}</span>
+              <span class="invoice-type-cell">
+                <span>{{ invoiceTypeLabel(row) }}</span>
+                <span class="invoice-type-cell__flow">{{ cashFlowLabel(row) }}</span>
+              </span>
               <span>{{ displayDate(row) }}</span>
             </div>
             <div class="invoice-card__line invoice-card__line--muted">
@@ -387,6 +400,17 @@
                   <span>{{ l.common.type }}</span>
                   <n-icon :component="sortIcon('type')" :size="14" />
                 </button>
+                <n-select
+                  :value="filters.documentCategory"
+                  :options="documentCategoryFilterOptions"
+                  clearable
+                  size="small"
+                  class="invoice-col-filter"
+                  placeholder="סינון סוג"
+                  @click.stop
+                  @mousedown.stop
+                  @update:value="setColumnDocumentCategory"
+                />
               </th>
               <th class="invoice-col invoice-col--amount">
                 <button class="invoice-sort-button invoice-sort-button--amount" type="button" :aria-label="sortAriaLabel('amount')" @click="setSort('amount')">
@@ -441,7 +465,12 @@
                   @update:value="(value) => updateInvoiceProviderCategory(row, value)"
                 />
               </td>
-              <td class="invoice-col invoice-col--type">{{ invoiceTypeLabel(row) }} · {{ cashFlowLabel(row) }}</td>
+              <td class="invoice-col invoice-col--type">
+                <span class="invoice-type-cell">
+                  <span>{{ invoiceTypeLabel(row) }}</span>
+                  <span class="invoice-type-cell__flow">{{ cashFlowLabel(row) }}</span>
+                </span>
+              </td>
               <td class="cell-amount invoice-col invoice-col--amount" dir="ltr">
                 {{ row.currency !== 'ILS' && row.amount_ils !== null ? formatIlsAmount(row.amount_ils) : row.amount_display }}
                 <span v-if="row.currency !== 'ILS'" class="cell-amount__ils">
@@ -558,6 +587,47 @@
         </div>
       </div>
     </n-modal>
+    <n-modal
+      v-model:show="batchEdit.show"
+      preset="card"
+      title="עריכת סוג לנבחרים"
+      class="invoice-business-modal"
+      :closable="!batchEdit.saving"
+      :mask-closable="!batchEdit.saving"
+    >
+      <div class="invoice-business-form">
+        <p class="invoice-form-hint">{{ selectedInvoiceCount }} חשבוניות נבחרו. שדות ריקים לא משתנים.</p>
+        <label class="invoice-form-label">
+          <span>סוג מסמך</span>
+          <n-select
+            v-model:value="batchEdit.documentCategory"
+            :options="documentCategoryFilterOptions"
+            clearable
+            placeholder="בלי שינוי"
+          />
+        </label>
+        <label class="invoice-form-label">
+          <span>תנועה</span>
+          <n-select
+            v-model:value="batchEdit.cashFlow"
+            :options="cashFlowFilterOptions"
+            clearable
+            placeholder="בלי שינוי"
+          />
+        </label>
+        <div class="invoice-business-form__actions">
+          <n-button :disabled="batchEdit.saving" @click="batchEdit.show = false">{{ l.common.cancel }}</n-button>
+          <n-button
+            type="primary"
+            :loading="batchEdit.saving"
+            :disabled="!batchEdit.documentCategory && !batchEdit.cashFlow"
+            @click="saveBatchEdit"
+          >
+            עדכן
+          </n-button>
+        </div>
+      </div>
+    </n-modal>
     <MonthlyReportModal v-model:show="showMonthlyReport"/>
   </div>
 </template>
@@ -572,6 +642,7 @@ import {
   ArrowUpOutline,
   BriefcaseOutline,
   CloudUploadOutline,
+  CreateOutline,
   DocumentTextOutline,
   DownloadOutline,
   EllipsisVerticalOutline,
@@ -717,6 +788,11 @@ const statusStrip = computed(() => [
   { label: l.value.common.statusOutgoing, value: "outgoing", count: counts.value.outgoing ?? 0 },
   { label: l.value.common.statusArchived, value: "archived", count: counts.value.archived ?? 0 },
 ]);
+const documentCategoryFilterOptions = computed<SelectOption[]>(() =>
+  documentCategoryStrip.value
+    .filter((option) => option.value)
+    .map((option) => ({ label: option.label, value: option.value })),
+);
 const documentCategoryStrip = computed(() => [
   { label: l.value.common.all, value: "", count: totalAll.value },
   { label: l.value.invoices.title, value: "invoice", count: documentCategoryCounts.value.invoice ?? 0 },
@@ -892,6 +968,43 @@ function setStatus(value: string) {
 function setDocumentCategory(value: string) {
   filters.documentCategory = isInvoiceDocumentCategory(value) ? value : null;
   load(true);
+}
+
+function setColumnDocumentCategory(value: string | null) {
+  filters.documentCategory = value && isInvoiceDocumentCategory(value) ? value : null;
+  load(true);
+}
+
+const batchEdit = reactive({
+  show: false,
+  saving: false,
+  documentCategory: null as ImportedInvoice["document_category"] | null,
+  cashFlow: null as ImportedInvoice["cash_flow"] | null,
+});
+
+function openBatchEdit() {
+  batchEdit.documentCategory = null;
+  batchEdit.cashFlow = null;
+  batchEdit.show = true;
+}
+
+async function saveBatchEdit() {
+  const ids = [...selectedInvoiceIds.value];
+  if (!ids.length || (!batchEdit.documentCategory && !batchEdit.cashFlow)) return;
+  batchEdit.saving = true;
+  try {
+    await Promise.all(ids.map((id) => api.invoices.update(id, {
+      document_category: batchEdit.documentCategory ?? undefined,
+      cash_flow: batchEdit.cashFlow ?? undefined,
+    })));
+    message.success(`עודכנו ${ids.length} חשבוניות`);
+    batchEdit.show = false;
+    await load(true);
+  } catch {
+    message.error("שגיאה בעדכון החשבוניות");
+  } finally {
+    batchEdit.saving = false;
+  }
 }
 
 function isInvoiceDocumentCategory(value: string): value is ImportedInvoice["document_category"] {
@@ -2188,6 +2301,23 @@ function replaceRow(updated: ImportedInvoice) {
 .invoice-col--type {
   direction: rtl;
   text-align: right;
+}
+
+.invoice-type-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+
+.invoice-type-cell__flow {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.invoice-col-filter {
+  width: 118px;
+  margin-top: 6px;
 }
 
 .invoice-row-action {
