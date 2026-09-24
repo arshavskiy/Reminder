@@ -9,13 +9,30 @@ export const useRemindersStore = defineStore("reminders", () => {
   const loading = ref(false);
   const lastParams = ref<{ status?: string; days?: number; limit?: number; category?: string } | undefined>(undefined);
 
+  /** The server returns at most this many reminders per request. */
+  const PAGE_SIZE = 200;
+
+  /**
+   * Loads up to `limit` reminders. The API caps one response at PAGE_SIZE, so
+   * larger requests are fetched page by page; otherwise the page's totals and
+   * tabs were counted from only the first 200 rows.
+   */
   async function fetch(params?: { status?: string; days?: number; limit?: number; category?: string }, force = false) {
     lastParams.value = params;
     loading.value = true;
     try {
-      const r = await api.reminders.list(params, force);
-      rows.value = r.rows;
-      total.value = r.total;
+      const wanted = params?.limit ?? 50;
+      const first = await api.reminders.list({ ...params, limit: Math.min(wanted, PAGE_SIZE) }, force);
+      const all = [...first.rows];
+      const target = Math.min(wanted, first.total);
+      while (all.length < target) {
+        const page = await api.reminders.list({ ...params, limit: Math.min(PAGE_SIZE, target - all.length), offset: all.length }, force);
+        if (!page.rows.length) break;
+        all.push(...page.rows);
+      }
+      const seen = new Set<unknown>();
+      rows.value = all.filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)));
+      total.value = first.total;
     } finally {
       loading.value = false;
     }

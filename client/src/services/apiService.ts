@@ -947,7 +947,7 @@ export const api = {
   },
 
   reminders: {
-    list: (params?: { status?: string; days?: number; limit?: number; documentId?: string; sourceIds?: string; category?: string }, force = false) => {
+    list: (params?: { status?: string; days?: number; limit?: number; offset?: number; documentId?: string; sourceIds?: string; category?: string }, force = false) => {
       return get<{ rows: ReminderWithContext[]; total: number }>(`/reminders${qs(params)}`, force);
     },
     categories: (force = false) => get<{ categories: { name: string; count: number }[] }>("/reminders/categories", force),

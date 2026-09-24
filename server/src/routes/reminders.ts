@@ -302,7 +302,7 @@ export function registerReminderRoutes(app: express.Application) {
     const [reminderDocs, total] = await Promise.all([
       col("reminders")
         .find(filter)
-        .sort({ trigger_date: 1 })
+        .sort({ trigger_date: 1, _id: 1 }) // _id breaks date ties so offset pages never overlap
         .skip(offset)
         .limit(limit)
         .toArray(),
