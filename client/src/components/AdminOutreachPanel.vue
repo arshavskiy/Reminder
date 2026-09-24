@@ -2,13 +2,13 @@
   <section class="outreach-panel" aria-label="Email outreach">
     <div class="monitor-block">
       <div class="panel-heading">
-        <div class="monitor-block__title">Unsubscribe requests</div>
+        <div class="monitor-block__title">Unsubscribe requests · {{ unsubscribes.length }} <span class="title-note">from Gmail replies</span></div>
         <n-space size="small">
           <n-tooltip>
             <template #trigger>
               <n-button size="small" type="primary" :loading="scanning" @click="scan">
                 <template #icon><n-icon :component="MailUnreadOutline" /></template>
-                Scan Gmail for <bdi>"הסר"</bdi>
+                Scan Gmail for unsubscribes
               </n-button>
             </template>
             Searches your connected Gmail (contact@remindocr.com) for removal replies and flags those senders
@@ -243,6 +243,12 @@ onMounted(() => {
   font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.title-note {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
 }
 
 .panel-heading {
