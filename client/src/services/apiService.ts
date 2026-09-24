@@ -493,11 +493,12 @@ export interface UnsubscribeScanResult {
 
 export type EmailCampaignStatus = "draft" | "sending" | "sent" | "paused" | "failed";
 
-export type EmailCampaignAudience =
+export type EmailCampaignAudience = { statuses?: string[]; neverEmailed?: boolean } & (
   | { type: "leads"; ids: string[] }
   | { type: "import"; batchId: string }
   | { type: "filter"; source?: string | null; status?: string | null; q?: string | null }
-  | { type: "all" };
+  | { type: "all" }
+);
 
 export interface EmailCampaign {
   id: string;

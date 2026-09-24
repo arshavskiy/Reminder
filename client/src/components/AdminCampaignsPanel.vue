@@ -113,8 +113,21 @@
       </n-radio-group>
       <div v-if="audienceType === 'filter'" class="block-toolbar" style="margin-top:8px">
         <n-select v-model:value="filterSource" clearable size="small" placeholder="Source" :options="sourceOptions" style="width: 240px" />
-        <n-select v-model:value="filterStatus" clearable size="small" placeholder="Status" :options="statusOptions" style="width: 160px" />
         <n-input v-model:value="filterQ" clearable size="small" placeholder="Search name, email…" style="width: 220px" />
+      </div>
+      <div v-if="audienceType !== 'leads'" class="block-toolbar" style="margin-top:8px">
+        <n-select
+          v-model:value="filterStatuses"
+          multiple
+          clearable
+          size="small"
+          placeholder="Any status"
+          :options="statusOptions"
+          :max-tag-count="3"
+          style="width: 320px"
+        />
+        <n-switch v-model:value="neverEmailed" size="small" />
+        <span class="title-note">Only leads never emailed by any campaign</span>
       </div>
       <div class="block-toolbar" style="margin-top:12px">
         <n-button size="small" :loading="counting" @click="countAudience">
@@ -175,7 +188,7 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {
-  NAlert, NButton, NFormItem, NIcon, NInput, NModal, NProgress, NRadio, NRadioButton, NRadioGroup, NSelect, NSpace, NTooltip, useMessage,
+  NAlert, NButton, NFormItem, NIcon, NInput, NModal, NProgress, NRadio, NRadioButton, NRadioGroup, NSelect, NSpace, NSwitch, NTooltip, useMessage,
 } from "naive-ui";
 import {
   AddOutline, CloudUploadOutline, DocumentTextOutline, FlaskOutline, ImageOutline, PeopleOutline, SaveOutline, SendOutline,
@@ -219,10 +232,18 @@ const rendered = ref({subject: "", html: ""});
 
 const audienceType = ref<"leads" | "import" | "filter" | "all">(props.selectedLeadIds?.length ? "leads" : "filter");
 const filterSource = ref<string | null>(props.leadFilter?.source ?? null);
-const filterStatus = ref<string | null>(props.leadFilter?.status ?? null);
+const filterStatuses = ref<string[]>(props.leadFilter?.status ? [props.leadFilter.status] : []);
+const neverEmailed = ref(false);
 const filterQ = ref(props.leadFilter?.q ?? "");
 const sourceOptions = ref<{label: string; value: string}[]>([]);
-const statusOptions = ["NEW", "CONTACTED", "DEMO", "TRIAL", "CUSTOMER", "NOT_RELEVANT"].map((value) => ({label: value, value}));
+const statusOptions = [
+  {label: "New", value: "NEW"},
+  {label: "Contacted", value: "CONTACTED"},
+  {label: "Demo", value: "DEMO"},
+  {label: "Trial", value: "TRIAL"},
+  {label: "Customer", value: "CUSTOMER"},
+  {label: "Not relevant", value: "NOT_RELEVANT"},
+];
 
 const preview = ref<CampaignAudiencePreview | null>(null);
 const counting = ref(false);
@@ -255,12 +276,13 @@ const statusText = computed(() => {
 
 function audience(): EmailCampaignAudience {
   if (audienceType.value === "leads" && props.selectedLeadIds?.length) return {type: "leads", ids: [...props.selectedLeadIds]};
-  if (audienceType.value === "import" && lastImport.value) return {type: "import", batchId: lastImport.value.batchId};
-  if (audienceType.value === "filter") return {type: "filter", source: filterSource.value, status: filterStatus.value, q: filterQ.value.trim() || null};
-  return {type: "all"};
+  const refine = {statuses: [...filterStatuses.value], neverEmailed: neverEmailed.value};
+  if (audienceType.value === "import" && lastImport.value) return {...refine, type: "import", batchId: lastImport.value.batchId};
+  if (audienceType.value === "filter") return {...refine, type: "filter", source: filterSource.value, q: filterQ.value.trim() || null};
+  return {...refine, type: "all"};
 }
 
-watch([audienceType, filterSource, filterStatus, filterQ], () => { preview.value = null; });
+watch([audienceType, filterSource, filterStatuses, neverEmailed, filterQ], () => { preview.value = null; }, {deep: true});
 
 // Ticking leads in the table makes them the recipients; clearing the selection falls back to the filter.
 watch(() => props.selectedLeadIds?.length ?? 0, (count) => {
@@ -272,7 +294,7 @@ watch(() => props.selectedLeadIds?.length ?? 0, (count) => {
 // Follow the leads table filter when it changes, so "matching a filter" means what the table shows.
 watch(() => props.leadFilter, (filter) => {
   filterSource.value = filter?.source ?? null;
-  filterStatus.value = filter?.status ?? null;
+  filterStatuses.value = filter?.status ? [filter.status] : [];
   filterQ.value = filter?.q ?? "";
 }, {deep: true});
 
