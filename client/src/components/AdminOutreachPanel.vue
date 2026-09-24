@@ -8,7 +8,7 @@
             <template #trigger>
               <n-button size="small" type="primary" :loading="scanning" @click="scan">
                 <template #icon><n-icon :component="MailUnreadOutline" /></template>
-                Scan Gmail for "הסר"
+                Scan Gmail for <bdi>"הסר"</bdi>
               </n-button>
             </template>
             Searches your connected Gmail (contact@remindocr.com) for removal replies and flags those senders

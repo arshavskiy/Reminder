@@ -5,11 +5,15 @@ import {MongoClient} from "mongodb";
 // Records the SEED campaign sends in inspector_leads: existing leads get the send
 // appended to emailCampaigns (and NEW becomes CONTACTED); unknown addresses are
 // inserted as new leads with source "seed-email-list".
-// Dry run by default; pass --apply to write. Targets production (MONGODB_PRODUCTION_URI).
+// Dry run by default; pass --apply to write. Targets production (MONGODB_PRODUCTION_URI),
+// or the dev cluster with --dev (MONGODB_LOCAL_URI / MONGODB_URI + MONGODB_DB).
 config({path: new URL("../.env.local", import.meta.url), quiet: true});
 config({path: new URL("../.env", import.meta.url), quiet: true});
-if (!process.env.MONGODB_PRODUCTION_URI) throw new Error("MONGODB_PRODUCTION_URI is required");
 const apply = process.argv.includes("--apply");
+const dev = process.argv.includes("--dev");
+const uri = dev ? (process.env.MONGODB_LOCAL_URI || process.env.MONGODB_URI) : process.env.MONGODB_PRODUCTION_URI;
+const dbName = dev ? (process.env.MONGODB_DB || "reminder-dev") : (process.env.MONGODB_PRODUCTION_DB || "reminder-app");
+if (!uri) throw new Error(dev ? "MONGODB_LOCAL_URI or MONGODB_URI is required" : "MONGODB_PRODUCTION_URI is required");
 const CAMPAIGN = "seed-introduction-v1";
 const SUBJECT = "פרסומת: ניהול מסמכים, תפוגות ותזכורות — RemindOCR";
 
@@ -22,10 +26,10 @@ for (const receipt of receipts) {
   }));
 }
 
-const client = new MongoClient(process.env.MONGODB_PRODUCTION_URI, {serverSelectionTimeoutMS: 15000});
+const client = new MongoClient(uri, {serverSelectionTimeoutMS: 15000});
 try {
   await client.connect();
-  const leads = client.db(process.env.MONGODB_PRODUCTION_DB || "reminder-app").collection("inspector_leads");
+  const leads = client.db(dbName).collection("inspector_leads");
   const existing = new Map();
   for (const lead of await leads.find({email: {$type: "string"}}, {projection: {email: 1, contactStatus: 1, emailCampaigns: 1}}).toArray()) {
     existing.set(lead.email.trim().toLowerCase(), lead);
@@ -52,7 +56,7 @@ try {
       inserted++;
     }
   }
-  console.log(JSON.stringify({mode: apply ? "apply" : "dry-run", sends: sends.length, updateExisting: updated, insertNew: inserted, alreadyRecorded,
+  console.log(JSON.stringify({target: dev ? "dev" : "production", db: dbName, mode: apply ? "apply" : "dry-run", sends: sends.length, updateExisting: updated, insertNew: inserted, alreadyRecorded,
     missingResendIds: sends.filter(s => !s.resendId).length}));
   if (apply && ops.length) {
     const result = await leads.bulkWrite(ops, {ordered: false});
