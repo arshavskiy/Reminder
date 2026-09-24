@@ -7,6 +7,11 @@
           <span class="live-dot" :class="{ 'live-dot--stale': stale }" />
           <span class="title-note">{{ stale ? "not updating" : `updated ${secondsAgo}s ago · every 10s` }}</span>
           <span class="spacer" />
+          <template v-if="pushSupported">
+            <n-switch :value="pushSubscribed" :loading="pushBusy" size="small" @update:value="togglePush" />
+            <span class="title-note">Push on this device</span>
+          </template>
+          <span v-else class="title-note">{{ isIos ? "iPhone: add the app to the Home Screen to get push" : "Push not supported in this browser" }}</span>
           <n-tooltip>
             <template #trigger>
               <n-button size="small" :loading="testing" @click="sendTest">
@@ -137,7 +142,7 @@
 
 <script setup lang="ts">
 import {computed, h, nextTick, onBeforeUnmount, onMounted, ref} from "vue";
-import {NAlert, NButton, NDataTable, NIcon, NTooltip, useMessage, type DataTableColumns} from "naive-ui";
+import {NAlert, NButton, NDataTable, NIcon, NSwitch, NTooltip, useMessage, type DataTableColumns} from "naive-ui";
 import {
   AlertCircleOutline, HardwareChipOutline, HelpCircleOutline, NotificationsOutline, PulseOutline, ServerOutline,
   SpeedometerOutline, SwapHorizontalOutline,
@@ -148,10 +153,27 @@ import {GridComponent, LegendComponent, TooltipComponent} from "echarts/componen
 import {CanvasRenderer} from "echarts/renderers";
 import AdminStatCard from "./AdminStatCard.vue";
 import {api} from "../services/apiService";
+import {useAdminPush} from "../composables/useAdminPush";
 
 echarts.use([BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
 
 const message = useMessage();
+const {supported: pushSupported, subscribed: pushSubscribed, busy: pushBusy, refreshState, enablePush, disablePush} = useAdminPush();
+const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+async function togglePush(next: boolean) {
+  try {
+    if (next) {
+      await enablePush();
+      message.success("Push on for this device");
+    } else {
+      await disablePush();
+      message.success("Push off for this device");
+    }
+  } catch (err: any) {
+    message.error(err?.message ?? "Could not change push");
+  }
+}
 const data = ref<any | null>(null);
 const lastOkAt = ref(0);
 const nowTick = ref(Date.now());
@@ -302,6 +324,7 @@ function onResize() {
 }
 
 onMounted(() => {
+  void refreshState();
   void load();
   pollTimer = setInterval(() => { if (!document.hidden) void load(); }, 10_000);
   clockTimer = setInterval(() => { nowTick.value = Date.now(); }, 1_000);
@@ -351,6 +374,7 @@ onBeforeUnmount(() => {
 .head-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

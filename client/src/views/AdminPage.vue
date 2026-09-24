@@ -1544,7 +1544,7 @@
           <div class="monitor-block">
             <div class="monitor-block__title">Admin Push Notifications</div>
             <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 12px">
-              Get OS notifications for failed sends, extraction failures, new uploads and pipeline gaps — even when this tab is closed.
+              Get OS notifications for failed sends, extraction failures, new uploads, pipeline gaps and server alerts (CPU, memory, latency, errors, timeouts) — even when this tab is closed. Turn it on separately on each device, including your phone (on iPhone, add the app to the Home Screen first).
             </p>
             <div v-if="!pushSupported" style="font-size:13px;color:var(--text-secondary)">
               Push isn't available here (needs HTTPS + a browser that supports notifications).
