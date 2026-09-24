@@ -90,13 +90,15 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* Sits above the admin header, outside the scrolling section, so it stays pinned. */
 .health-strip {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 14px;
-  width: 100%;
-  margin: 0 0 14px;
+  width: auto;
+  margin: 12px 24px 0;
   padding: 8px 14px;
   border: 1px solid var(--border-color);
   border-radius: 10px;
