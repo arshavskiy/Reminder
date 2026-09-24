@@ -9,7 +9,7 @@
  * so both edge days are fully included.
  */
 
-export type DateRangePresetId = "1m" | "3m" | "6m" | "1y";
+export type DateRangePresetId = "1m" | "3m" | "6m" | "1y" | "3y";
 
 export type DateRangeTuple = [number, number];
 
@@ -18,6 +18,7 @@ const PRESET_MONTHS: Record<DateRangePresetId, number> = {
   "3m": 3,
   "6m": 6,
   "1y": 12,
+  "3y": 36,
 };
 
 function startOfDay(date: Date): Date {
@@ -63,6 +64,7 @@ export const DATE_RANGE_PRESETS: Array<{ id: DateRangePresetId; label: string; t
   { id: "3m", label: "3m", title: "3 החודשים האחרונים" },
   { id: "6m", label: "6m", title: "6 החודשים האחרונים" },
   { id: "1y", label: "1y", title: "השנה האחרונה" },
+  { id: "3y", label: "3y", title: "3 השנים האחרונות" },
 ];
 
 /** Which preset, if any, the current range matches — for highlighting the active chip. */
