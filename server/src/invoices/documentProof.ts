@@ -4,7 +4,7 @@
  * - requested = payment requests and other non-proof billing docs
  */
 
-export type ExpenseProofFilter = "all" | "paid" | "requested";
+export type ExpenseProofFilter = "all" | "paid" | "requested" | "income";
 
 const CREDIT_NOTE_RE = /זיכוי|credit\s*note|credit\s*memo/;
 const RECEIPT_RE = /receipt|קבלה/;
@@ -14,7 +14,7 @@ const PAYMENT_REQUEST_RE = /דרישת\s*תשלום|payment\s*request/;
 
 export function normalizeExpenseProofFilter(value: unknown): ExpenseProofFilter {
   const text = String(value ?? "").trim().toLowerCase();
-  if (text === "paid" || text === "requested") return text;
+  if (text === "paid" || text === "requested" || text === "income") return text;
   return "all";
 }
 
@@ -43,7 +43,7 @@ export function matchesExpenseProofFilter(
   documentType: unknown,
   filter: ExpenseProofFilter,
 ): boolean {
-  if (filter === "all") return true;
+  if (filter === "all" || filter === "income") return true;
   if (filter === "paid") return isPaymentProofDocument(documentType);
   return isPaymentRequestDocument(documentType);
 }

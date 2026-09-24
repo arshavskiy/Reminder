@@ -1551,19 +1551,15 @@ function matchImportedProvider(doc: ImportedDocumentCard): GmailSearchProvider |
 
 function providerCategoryLabel(category: string): string {
   const labels: Record<string, string> = {
-    electricity: "חשמל",
-    telecom: "תקשורת",
-    water: "מים",
     transport: "תחבורה",
     parking: "חניה",
     fuel: "דלק",
-    gas: "גז",
     tv: "טלוויזיה וסטרימינג",
     marketplace: "קניות",
     food: "מזון",
-    payment: "תשלומים וחשבוניות",
+    payment: "לא מסווג",
+    household: "חשבונות הבית",
     government: "ממשלה",
-    municipality: "עירייה",
     insurance: "ביטוח",
     finance: "פיננסים",
     travel: "תיירות",

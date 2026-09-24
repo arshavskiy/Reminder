@@ -2,6 +2,9 @@ import {describe, expect, it} from "vitest";
 import {
   categoryFacetRows,
   categoryFacetValues,
+  HOUSEHOLD_CATEGORY,
+  matchesCategoryFilter,
+  normalizeProviderCategory,
   supplierFacetRows,
   supplierFacetValues,
 } from "../invoices/expenseFacets";
@@ -56,5 +59,34 @@ describe("supplierFacetRows", () => {
     const options = supplierFacetValues(supplierFacetRows(rows, "development"));
 
     expect(options.filter((name) => name === "GitHub, Inc.")).toHaveLength(1);
+  });
+});
+
+describe("household bills category", () => {
+  // Saved before the merge: old values must read as household until backfilled.
+  const bills = [
+    { supplier_name: "IEC", provider_category: "electricity" },
+    { supplier_name: "Mei Avivim", provider_category: "water" },
+    { supplier_name: "Bezeq", provider_category: "household" },
+    { supplier_name: "Pharmacy", provider_category: "healthcare" },
+  ];
+
+  it("reads the old electricity/water/gas/telecom/municipality values as household", () => {
+    expect(normalizeProviderCategory("electricity")).toBe(HOUSEHOLD_CATEGORY);
+    expect(normalizeProviderCategory("municipality")).toBe(HOUSEHOLD_CATEGORY);
+    expect(normalizeProviderCategory("healthcare")).toBe("healthcare");
+    expect(normalizeProviderCategory(null)).toBe(null);
+  });
+
+  it("offers one household option instead of the old categories", () => {
+    expect(categoryFacetValues(bills)).toEqual(["healthcare", "household"]);
+  });
+
+  it("filters old and new household rows together", () => {
+    expect(matchesCategoryFilter("electricity", HOUSEHOLD_CATEGORY)).toBe(true);
+    expect(matchesCategoryFilter("household", HOUSEHOLD_CATEGORY)).toBe(true);
+    expect(matchesCategoryFilter("healthcare", HOUSEHOLD_CATEGORY)).toBe(false);
+    expect(matchesCategoryFilter("water", "")).toBe(true);
+    expect(supplierFacetValues(supplierFacetRows(bills, HOUSEHOLD_CATEGORY))).toEqual(["Bezeq", "IEC", "Mei Avivim"]);
   });
 });

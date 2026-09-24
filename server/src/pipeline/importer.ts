@@ -3391,6 +3391,26 @@ function parseEnglishMonthDate(value: string): string | null {
   return date.toISOString().slice(0, 10);
 }
 
+/** Hebrew PDF text often prints both 08.09.26 and the reversed 26.09.08. Keep the recent reading. */
+export function preferIsraeliDocumentDate(stored: string | null, rawText: string | null | undefined): string | null {
+  const normalized = normalizeInvoiceDate(stored);
+  if (!normalized || !rawText) return normalized;
+  const tokens = new Set(
+    [...rawText.matchAll(/\b(\d{2})[./-](\d{2})[./-](\d{2})\b/g)].map((match) => `${match[1]}.${match[2]}.${match[3]}`),
+  );
+  const nowYear = new Date().getUTCFullYear();
+  for (const token of tokens) {
+    if (parseIsraeliDate(token) !== normalized) continue;
+    const [day, month, year] = token.split(".");
+    const reversed = `${year}.${month}.${day}`;
+    if (!tokens.has(reversed)) continue;
+    const flipped = parseIsraeliDate(reversed);
+    const flippedYear = Number(flipped?.slice(0, 4));
+    if (flipped && flippedYear >= nowYear - 2 && flippedYear <= nowYear + 1) return flipped;
+  }
+  return normalized;
+}
+
 function parseIsraeliDate(value: string | null): string | null {
   if (!value) return null;
   const match = /(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/.exec(value);
@@ -3480,7 +3500,10 @@ async function saveInvoiceRecord(
   const invoiceNumber = firstInvoiceString(fields, ["invoice_number", "receipt_number", "document_number", "reference_number"]);
   const clientName = firstInvoiceString(fields, ["client_company", "client_name", "customer_name", "bill_to"])
     ?? extractInvoiceRecipientFromRawText(options.rawText);
-  const issueDate = firstInvoiceString(fields, ["issue_date", "invoice_date", "receipt_date", "date"]);
+  const issueDate = preferIsraeliDocumentDate(
+    firstInvoiceString(fields, ["issue_date", "invoice_date", "receipt_date", "date"]),
+    options.rawText,
+  );
   const paymentDueDate = firstInvoiceString(fields, ["payment_due_date", "due_date", "expiry_date"]);
   const amount = parseInvoiceAmount(
     fields.amount ?? fields.total_amount ?? fields.amount_due ?? fields.total_to_pay ?? fields.total,

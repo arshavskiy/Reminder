@@ -156,7 +156,7 @@
                   v-model:value="receivedDateValue"
                   type="date"
                   size="large"
-                  clearable
+                  disabled
                 />
               </label>
               <label>
@@ -284,19 +284,15 @@ const categoryOptions: SelectOption[] = [
   { label: "חשמל ומים", value: "חשמל ומים" },
 ];
 const providerCategoryOptions: SelectOption[] = [
-  { label: "חשמל", value: "electricity" },
-  { label: "תקשורת", value: "telecom" },
-  { label: "מים", value: "water" },
+  { label: "חשבונות הבית", value: "household" },
   { label: "תחבורה", value: "transport" },
   { label: "חניה", value: "parking" },
   { label: "דלק", value: "fuel" },
-  { label: "גז", value: "gas" },
   { label: "טלוויזיה וסטרימינג", value: "tv" },
   { label: "קניות", value: "marketplace" },
   { label: "מזון", value: "food" },
-  { label: "תשלומים וחשבוניות", value: "payment" },
+  { label: "לא מסווג", value: "payment" },
   { label: "ממשלה", value: "government" },
-  { label: "עירייה", value: "municipality" },
   { label: "ביטוח", value: "insurance" },
   { label: "פיננסים", value: "finance" },
   { label: "תיירות", value: "travel" },
@@ -321,8 +317,8 @@ const issueDateValue = computed<number | null>({
   set: (value) => { form.issue_date = tsToDate(value); },
 });
 const receivedDateValue = computed<number | null>({
-  get: () => dateToTs(form.payment_due_date),
-  set: (value) => { form.payment_due_date = tsToDate(value); },
+  get: () => dateToTs(normalizeDate(invoice.value?.import_date ?? null)),
+  set: () => {},
 });
 const vatDisplay = computed(() => {
   const amount = invoice.value?.vat_amount;

@@ -112,7 +112,7 @@ from the provided document text and return ONLY ONE valid JSON object whose keys
 match the schema below EXACTLY.
 
 GENERAL RULES:
-• All dates must be normalized to ISO 8601 (YYYY-MM-DD). Hebrew calendar → convert to Gregorian. Israeli DD/MM/YYYY → YYYY-MM-DD.
+• All dates must be normalized to ISO 8601 (YYYY-MM-DD). Hebrew calendar → convert to Gregorian. Israeli dates are day.month.year, including 2-digit years: 08.09.26 means 2026-09-08, never 2008-09-26. Hebrew PDF text may also show that date reversed as 26.09.08; that reversal is not the document date.
 • Phone numbers: keep original Israeli format (e.g. "050-1234567"). If the number appears as 10 consecutive digits with no dash (e.g. "0537285690"), insert the dash after the 3rd digit → "053-7285690".
 • Email addresses: Hebrew PDFs sometimes output email addresses in reversed visual order, e.g. "il.co1945.shelev@klodin" which is actually "klodin@shelev1945.co.il". Recognize a reversed email by checking whether the part after "@" looks like a name/word and the part before "@" looks like a domain (contains dots and a TLD like .co.il / .com / .org). If reversed, swap the two parts around "@".
 • Report number: report_number / "מספר תסקיר" is the CURRENT report number only. If the text also contains "מספר תסקיר קודם", "תסקיר קודם", or "previous report", do NOT use that previous value for report_number. Example: "מספר תסקיר: 17924/484590" and "מספר תסקיר קודם: 161748/340" means report_number="17924/484590".

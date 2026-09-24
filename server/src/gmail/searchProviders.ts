@@ -4,19 +4,15 @@ import { logger } from "../logger";
 export interface GmailSearchProvider {
   id: string;
   category:
-    | "electricity"
-    | "telecom"
-    | "water"
+    | "household"
     | "transport"
     | "parking"
     | "fuel"
-    | "gas"
     | "tv"
     | "marketplace"
     | "food"
     | "payment"
     | "government"
-    | "municipality"
     | "insurance"
     | "finance"
     | "travel"
@@ -35,58 +31,58 @@ export interface GmailSearchProvider {
 }
 
 export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
-  { id: "iec", category: "electricity", label: "חשמל - חברת חשמל לישראל", terms: ["iec.co.il", "חברת חשמל לישראל", "חברת החשמל"], sort_order: 10, enabled: true },
-  { id: "noga", category: "electricity", label: "חשמל - נגה / ניהול מערכת החשמל", terms: ["noga-iso.co.il", "נגה", "ניהול מערכת החשמל"], sort_order: 20, enabled: true },
-  { id: "electra-power", category: "electricity", label: "חשמל - אלקטרה פאוור", terms: ["electra-power.co.il", "אלקטרה פאוור"], sort_order: 30, enabled: true },
-  { id: "cellcom-energy", category: "electricity", label: "חשמל - סלקום חשמל", terms: ["cellcom.co.il", "סלקום חשמל"], sort_order: 40, enabled: true },
-  { id: "partner-energy", category: "electricity", label: "חשמל - פרטנר חשמל", terms: ["partner.co.il", "פרטנר חשמל"], sort_order: 50, enabled: true },
-  { id: "bezeq-energy", category: "electricity", label: "חשמל - בזק חשמל", terms: ["bezeq.co.il", "בזק חשמל"], sort_order: 60, enabled: true },
-  { id: "hot-energy", category: "electricity", label: "חשמל - HOT Energy", terms: ["hot.net.il", "הוט אנרג'י", "HOT Energy"], sort_order: 70, enabled: true },
-  { id: "amisragas-energy", category: "electricity", label: "חשמל - אמישראגז חשמל", terms: ["am-isragas.co.il", "אמישראגז חשמל"], sort_order: 80, enabled: true },
-  { id: "pazgas-energy", category: "electricity", label: "חשמל - פזגז חשמל", terms: ["pazgas.co.il", "פזגז חשמל"], sort_order: 90, enabled: true },
+  { id: "iec", category: "household", label: "חשמל - חברת חשמל לישראל", terms: ["iec.co.il", "חברת חשמל לישראל", "חברת החשמל"], sort_order: 10, enabled: true },
+  { id: "noga", category: "household", label: "חשמל - נגה / ניהול מערכת החשמל", terms: ["noga-iso.co.il", "נגה", "ניהול מערכת החשמל"], sort_order: 20, enabled: true },
+  { id: "electra-power", category: "household", label: "חשמל - אלקטרה פאוור", terms: ["electra-power.co.il", "אלקטרה פאוור"], sort_order: 30, enabled: true },
+  { id: "cellcom-energy", category: "household", label: "חשמל - סלקום חשמל", terms: ["cellcom.co.il", "סלקום חשמל"], sort_order: 40, enabled: true },
+  { id: "partner-energy", category: "household", label: "חשמל - פרטנר חשמל", terms: ["partner.co.il", "פרטנר חשמל"], sort_order: 50, enabled: true },
+  { id: "bezeq-energy", category: "household", label: "חשמל - בזק חשמל", terms: ["bezeq.co.il", "בזק חשמל"], sort_order: 60, enabled: true },
+  { id: "hot-energy", category: "household", label: "חשמל - HOT Energy", terms: ["hot.net.il", "הוט אנרג'י", "HOT Energy"], sort_order: 70, enabled: true },
+  { id: "amisragas-energy", category: "household", label: "חשמל - אמישראגז חשמל", terms: ["am-isragas.co.il", "אמישראגז חשמל"], sort_order: 80, enabled: true },
+  { id: "pazgas-energy", category: "household", label: "חשמל - פזגז חשמל", terms: ["pazgas.co.il", "פזגז חשמל"], sort_order: 90, enabled: true },
 
-  { id: "bezeq", category: "telecom", label: "תקשורת - בזק", terms: ["bezeq.co.il", "בזק"], sort_order: 110, enabled: true },
-  { id: "bezeqint", category: "telecom", label: "תקשורת - בזק בינלאומי", terms: ["bezeqint.net", "בזק בינלאומי"], sort_order: 120, enabled: true },
-  { id: "pelephone", category: "telecom", label: "תקשורת - פלאפון", terms: ["pelephone.co.il", "פלאפון"], sort_order: 130, enabled: true },
-  { id: "cellcom", category: "telecom", label: "תקשורת - סלקום", terms: ["cellcom.co.il", "cellcominv.co.il", "סלקום"], sort_order: 140, enabled: true },
-  { id: "partner", category: "telecom", label: "תקשורת - פרטנר", terms: ["partner.co.il", "פרטנר"], sort_order: 150, enabled: true },
-  { id: "hot", category: "telecom", label: "תקשורת - HOT", terms: ["hot.net.il", "hot-info.net.il", "HOT", "הוט"], sort_order: 160, enabled: true },
-  { id: "hot-mobile", category: "telecom", label: "תקשורת - HOT Mobile", terms: ["hotmobile.co.il", "HOT Mobile", "הוט מובייל"], sort_order: 170, enabled: true },
-  { id: "012-mobile", category: "telecom", label: "תקשורת - 012 מובייל", terms: ["012mobile.co.il", "012 מובייל"], sort_order: 180, enabled: true },
-  { id: "013-netvision", category: "telecom", label: "תקשורת - 013 נטוויז'ן", terms: ["013netvision.net.il", "013 נטוויז'ן", "נטוויז'ן"], sort_order: 190, enabled: true },
-  { id: "018-xfone", category: "telecom", label: "תקשורת - 018 אקספון", terms: ["018.co.il", "xphone.co.il", "XPhone", "אקספון"], sort_order: 200, enabled: true },
-  { id: "019-telzar", category: "telecom", label: "תקשורת - 019 טלזר", terms: ["019mobile.co.il", "019", "טלזר"], sort_order: 210, enabled: true },
-  { id: "golan-telecom", category: "telecom", label: "תקשורת - גולן טלקום", terms: ["golantelecom.co.il", "גולן טלקום"], sort_order: 220, enabled: true },
-  { id: "rami-levy-telecom", category: "telecom", label: "תקשורת - רמי לוי תקשורת", terms: ["ramilevy.co.il", "רמי לוי תקשורת"], sort_order: 230, enabled: true },
-  { id: "wecom", category: "telecom", label: "תקשורת - Wecom", terms: ["we-com.co.il", "Wecom", "וויקום"], sort_order: 240, enabled: true },
-  { id: "rimon", category: "telecom", label: "תקשורת - אינטרנט רימון", terms: ["rimon.net.il", "אינטרנט רימון"], sort_order: 250, enabled: true },
-  { id: "binat", category: "telecom", label: "תקשורת - בינת עסקים", terms: ["binat.net.il", "בינת עסקים"], sort_order: 260, enabled: true },
-  { id: "unlimited", category: "telecom", label: "תקשורת - Unlimited / IBC", terms: ["unlimited.net.il", "IBC", "אנלימיטד"], sort_order: 270, enabled: true },
+  { id: "bezeq", category: "household", label: "תקשורת - בזק", terms: ["bezeq.co.il", "בזק"], sort_order: 110, enabled: true },
+  { id: "bezeqint", category: "household", label: "תקשורת - בזק בינלאומי", terms: ["bezeqint.net", "בזק בינלאומי"], sort_order: 120, enabled: true },
+  { id: "pelephone", category: "household", label: "תקשורת - פלאפון", terms: ["pelephone.co.il", "פלאפון"], sort_order: 130, enabled: true },
+  { id: "cellcom", category: "household", label: "תקשורת - סלקום", terms: ["cellcom.co.il", "cellcominv.co.il", "סלקום"], sort_order: 140, enabled: true },
+  { id: "partner", category: "household", label: "תקשורת - פרטנר", terms: ["partner.co.il", "פרטנר"], sort_order: 150, enabled: true },
+  { id: "hot", category: "household", label: "תקשורת - HOT", terms: ["hot.net.il", "hot-info.net.il", "HOT", "הוט"], sort_order: 160, enabled: true },
+  { id: "hot-mobile", category: "household", label: "תקשורת - HOT Mobile", terms: ["hotmobile.co.il", "HOT Mobile", "הוט מובייל"], sort_order: 170, enabled: true },
+  { id: "012-mobile", category: "household", label: "תקשורת - 012 מובייל", terms: ["012mobile.co.il", "012 מובייל"], sort_order: 180, enabled: true },
+  { id: "013-netvision", category: "household", label: "תקשורת - 013 נטוויז'ן", terms: ["013netvision.net.il", "013 נטוויז'ן", "נטוויז'ן"], sort_order: 190, enabled: true },
+  { id: "018-xfone", category: "household", label: "תקשורת - 018 אקספון", terms: ["018.co.il", "xphone.co.il", "XPhone", "אקספון"], sort_order: 200, enabled: true },
+  { id: "019-telzar", category: "household", label: "תקשורת - 019 טלזר", terms: ["019mobile.co.il", "019", "טלזר"], sort_order: 210, enabled: true },
+  { id: "golan-telecom", category: "household", label: "תקשורת - גולן טלקום", terms: ["golantelecom.co.il", "גולן טלקום"], sort_order: 220, enabled: true },
+  { id: "rami-levy-telecom", category: "household", label: "תקשורת - רמי לוי תקשורת", terms: ["ramilevy.co.il", "רמי לוי תקשורת"], sort_order: 230, enabled: true },
+  { id: "wecom", category: "household", label: "תקשורת - Wecom", terms: ["we-com.co.il", "Wecom", "וויקום"], sort_order: 240, enabled: true },
+  { id: "rimon", category: "household", label: "תקשורת - אינטרנט רימון", terms: ["rimon.net.il", "אינטרנט רימון"], sort_order: 250, enabled: true },
+  { id: "binat", category: "household", label: "תקשורת - בינת עסקים", terms: ["binat.net.il", "בינת עסקים"], sort_order: 260, enabled: true },
+  { id: "unlimited", category: "household", label: "תקשורת - Unlimited / IBC", terms: ["unlimited.net.il", "IBC", "אנלימיטד"], sort_order: 270, enabled: true },
 
-  { id: "mekorot", category: "water", label: "מים - מקורות", terms: ["mekorot.co.il", "מקורות"], sort_order: 310, enabled: true },
-  { id: "mei-avivim", category: "water", label: "מים - מי אביבים", terms: ["mei-avivim.co.il", "מי אביבים"], sort_order: 320, enabled: true },
-  { id: "hagihon", category: "water", label: "מים - הגיחון", terms: ["hagihon.co.il", "הגיחון"], sort_order: 330, enabled: true },
-  { id: "mey7", category: "water", label: "מים - מי שבע", terms: ["mey7.co.il", "מי שבע"], sort_order: 340, enabled: true },
-  { id: "mei-brak", category: "water", label: "מים - מי ברק", terms: ["mei-brak.co.il", "מי ברק"], sort_order: 350, enabled: true },
-  { id: "mei-rg", category: "water", label: "מים - מי רמת גן", terms: ["mei-rg.co.il", "מי רמת גן"], sort_order: 360, enabled: true },
-  { id: "maniv-rishon", category: "water", label: "מים - מניב ראשון", terms: ["maniv-rishon.co.il", "מניב ראשון"], sort_order: 370, enabled: true },
-  { id: "mei-ziona", category: "water", label: "מים - מי ציונה", terms: ["mei-ziona.co.il", "מי ציונה"], sort_order: 380, enabled: true },
-  { id: "mei-modiin", category: "water", label: "מים - מי מודיעין", terms: ["mei-modiin.co.il", "מי מודיעין"], sort_order: 390, enabled: true },
-  { id: "mei-ono", category: "water", label: "מים - מי אונו", terms: ["mei-ono.co.il", "מי אונו"], sort_order: 400, enabled: true },
-  { id: "mei-herz", category: "water", label: "מים - מי הרצליה", terms: ["mei-herz.co.il", "מי הרצליה"], sort_order: 410, enabled: true },
-  { id: "mei-netanya", category: "water", label: "מים - מי נתניה", terms: ["mei-netanya.co.il", "מי נתניה"], sort_order: 420, enabled: true },
-  { id: "mei-raanana", category: "water", label: "מים - מי רעננה", terms: ["mei-raanana.co.il", "מי רעננה"], sort_order: 430, enabled: true },
-  { id: "sharonim", category: "water", label: "מים - שרונים", terms: ["sharonim.org.il", "שרונים"], sort_order: 440, enabled: true },
-  { id: "ein-afek", category: "water", label: "מים - עין אפק", terms: ["einafek.co.il", "עין אפק"], sort_order: 450, enabled: true },
-  { id: "mei-carmel", category: "water", label: "מים - מי כרמל", terms: ["mei-carmel.co.il", "מי כרמל"], sort_order: 460, enabled: true },
-  { id: "yuvalim-ashdod", category: "water", label: "מים - יובלים אשדוד", terms: ["yuvalim-ashdod.co.il", "יובלים אשדוד"], sort_order: 470, enabled: true },
-  { id: "mei-ashkelon", category: "water", label: "מים - מי אשקלון", terms: ["mei-a.co.il", "מי אשקלון"], sort_order: 480, enabled: true },
-  { id: "palgey-sharon", category: "water", label: "מים - פלגי השרון", terms: ["palgey-sharon.co.il", "פלגי השרון"], sort_order: 490, enabled: true },
-  { id: "palgey-galil", category: "water", label: "מים - פלג הגליל", terms: ["palgey-galil.co.il", "פלג הגליל"], sort_order: 500, enabled: true },
-  { id: "mayanot-hasharon", category: "water", label: "מים - מעיינות השרון", terms: ["m-sharon.co.il", "מעיינות השרון"], sort_order: 510, enabled: true },
-  { id: "mayanot-hameshulash", category: "water", label: "מים - מעיינות המשולש", terms: ["מעיינות המשולש"], sort_order: 520, enabled: true },
-  { id: "mei-iron", category: "water", label: "מים - מי עירון", terms: ["מי עירון"], sort_order: 530, enabled: true },
-  { id: "hatanur", category: "water", label: "מים - התנור", terms: ["התנור", "תאגיד מים התנור"], sort_order: 540, enabled: true },
+  { id: "mekorot", category: "household", label: "מים - מקורות", terms: ["mekorot.co.il", "מקורות"], sort_order: 310, enabled: true },
+  { id: "mei-avivim", category: "household", label: "מים - מי אביבים", terms: ["mei-avivim.co.il", "מי אביבים"], sort_order: 320, enabled: true },
+  { id: "hagihon", category: "household", label: "מים - הגיחון", terms: ["hagihon.co.il", "הגיחון"], sort_order: 330, enabled: true },
+  { id: "mey7", category: "household", label: "מים - מי שבע", terms: ["mey7.co.il", "מי שבע"], sort_order: 340, enabled: true },
+  { id: "mei-brak", category: "household", label: "מים - מי ברק", terms: ["mei-brak.co.il", "מי ברק"], sort_order: 350, enabled: true },
+  { id: "mei-rg", category: "household", label: "מים - מי רמת גן", terms: ["mei-rg.co.il", "מי רמת גן"], sort_order: 360, enabled: true },
+  { id: "maniv-rishon", category: "household", label: "מים - מניב ראשון", terms: ["maniv-rishon.co.il", "מניב ראשון"], sort_order: 370, enabled: true },
+  { id: "mei-ziona", category: "household", label: "מים - מי ציונה", terms: ["mei-ziona.co.il", "מי ציונה"], sort_order: 380, enabled: true },
+  { id: "mei-modiin", category: "household", label: "מים - מי מודיעין", terms: ["mei-modiin.co.il", "מי מודיעין"], sort_order: 390, enabled: true },
+  { id: "mei-ono", category: "household", label: "מים - מי אונו", terms: ["mei-ono.co.il", "מי אונו"], sort_order: 400, enabled: true },
+  { id: "mei-herz", category: "household", label: "מים - מי הרצליה", terms: ["mei-herz.co.il", "מי הרצליה"], sort_order: 410, enabled: true },
+  { id: "mei-netanya", category: "household", label: "מים - מי נתניה", terms: ["mei-netanya.co.il", "מי נתניה"], sort_order: 420, enabled: true },
+  { id: "mei-raanana", category: "household", label: "מים - מי רעננה", terms: ["mei-raanana.co.il", "מי רעננה"], sort_order: 430, enabled: true },
+  { id: "sharonim", category: "household", label: "מים - שרונים", terms: ["sharonim.org.il", "שרונים"], sort_order: 440, enabled: true },
+  { id: "ein-afek", category: "household", label: "מים - עין אפק", terms: ["einafek.co.il", "עין אפק"], sort_order: 450, enabled: true },
+  { id: "mei-carmel", category: "household", label: "מים - מי כרמל", terms: ["mei-carmel.co.il", "מי כרמל"], sort_order: 460, enabled: true },
+  { id: "yuvalim-ashdod", category: "household", label: "מים - יובלים אשדוד", terms: ["yuvalim-ashdod.co.il", "יובלים אשדוד"], sort_order: 470, enabled: true },
+  { id: "mei-ashkelon", category: "household", label: "מים - מי אשקלון", terms: ["mei-a.co.il", "מי אשקלון"], sort_order: 480, enabled: true },
+  { id: "palgey-sharon", category: "household", label: "מים - פלגי השרון", terms: ["palgey-sharon.co.il", "פלגי השרון"], sort_order: 490, enabled: true },
+  { id: "palgey-galil", category: "household", label: "מים - פלג הגליל", terms: ["palgey-galil.co.il", "פלג הגליל"], sort_order: 500, enabled: true },
+  { id: "mayanot-hasharon", category: "household", label: "מים - מעיינות השרון", terms: ["m-sharon.co.il", "מעיינות השרון"], sort_order: 510, enabled: true },
+  { id: "mayanot-hameshulash", category: "household", label: "מים - מעיינות המשולש", terms: ["מעיינות המשולש"], sort_order: 520, enabled: true },
+  { id: "mei-iron", category: "household", label: "מים - מי עירון", terms: ["מי עירון"], sort_order: 530, enabled: true },
+  { id: "hatanur", category: "household", label: "מים - התנור", terms: ["התנור", "תאגיד מים התנור"], sort_order: 540, enabled: true },
 
   { id: "road6", category: "transport", label: "תחבורה - כביש 6", terms: ["kvish6.co.il", "printernet.co.il", "כביש 6", "דרך ארץ", "Derech Eretz"], sort_order: 610, enabled: true },
   { id: "carmel-tunnels", category: "transport", label: "תחבורה - מנהרות הכרמל", terms: ["carmeltunnels.co.il", "מנהרות הכרמל", "כרמלטון"], sort_order: 620, enabled: true },
@@ -118,10 +114,10 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "ten", category: "fuel", label: "דלק - Ten", terms: ["ten10.co.il", "Ten", "טן"], sort_order: 950, enabled: true },
   { id: "menta", category: "fuel", label: "דלק - מנטה", terms: ["menta.co.il", "מנטה"], sort_order: 960, enabled: true },
 
-  { id: "amisragas", category: "gas", label: "גז - אמישראגז", terms: ["am-isragas.co.il", "אמישראגז"], sort_order: 1010, enabled: true },
-  { id: "supergas", category: "gas", label: "גז - סופרגז", terms: ["supergas.co.il", "סופרגז"], sort_order: 1020, enabled: true },
-  { id: "pazgas", category: "gas", label: "גז - פזגז", terms: ["pazgas.co.il", "פזגז"], sort_order: 1030, enabled: true },
-  { id: "dor-gas", category: "gas", label: "גז - דור גז", terms: ["dorgas.co.il", "דור גז"], sort_order: 1040, enabled: true },
+  { id: "amisragas", category: "household", label: "גז - אמישראגז", terms: ["am-isragas.co.il", "אמישראגז"], sort_order: 1010, enabled: true },
+  { id: "supergas", category: "household", label: "גז - סופרגז", terms: ["supergas.co.il", "סופרגז"], sort_order: 1020, enabled: true },
+  { id: "pazgas", category: "household", label: "גז - פזגז", terms: ["pazgas.co.il", "פזגז"], sort_order: 1030, enabled: true },
+  { id: "dor-gas", category: "household", label: "גז - דור גז", terms: ["dorgas.co.il", "דור גז"], sort_order: 1040, enabled: true },
 
   { id: "yes", category: "tv", label: "טלוויזיה - yes", terms: ["yes.co.il", "yes", "יס"], sort_order: 1110, enabled: true },
   { id: "sting-tv", category: "tv", label: "טלוויזיה - STINGTV", terms: ["stingtv.co.il", "STINGTV", "סטינג"], sort_order: 1120, enabled: true },
@@ -177,8 +173,8 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "israel-post", category: "government", label: "דואר - דואר ישראל", terms: ["israelpost.co.il", "דואר ישראל"], sort_order: 1860, enabled: true },
   { id: "idf-digital", category: "government", label: "ממשלה - אתר האישורים צה\"ל", terms: ["digital.idf.il", "אתר האישורים צהל", "אתר האישורים צה\"ל"], sort_order: 1870, enabled: true },
 
-  { id: "tel-aviv-muni", category: "municipality", label: "עירייה - תל אביב יפו", terms: ["mail.tel-aviv.gov.il", "arnona.tel-aviv.gov.il", "עיריית תל אביב", "עיריית תל-אביב-יפו", "ארנונה תל אביב"], sort_order: 1910, enabled: true },
-  { id: "holon-muni", category: "municipality", label: "עירייה - חולון", terms: ["holon.muni.il", "ladpc.co.il", "עיריית חולון", "שובר תשלום ארנונה"], sort_order: 1920, enabled: true },
+  { id: "tel-aviv-muni", category: "household", label: "עירייה - תל אביב יפו", terms: ["mail.tel-aviv.gov.il", "arnona.tel-aviv.gov.il", "עיריית תל אביב", "עיריית תל-אביב-יפו", "ארנונה תל אביב"], sort_order: 1910, enabled: true },
+  { id: "holon-muni", category: "household", label: "עירייה - חולון", terms: ["holon.muni.il", "ladpc.co.il", "עיריית חולון", "שובר תשלום ארנונה"], sort_order: 1920, enabled: true },
 
   { id: "fnx", category: "insurance", label: "ביטוח - הפניקס", terms: ["fnx.co.il", "9mil.co.il", "הפניקס"], sort_order: 2010, enabled: true },
   { id: "clal-ins", category: "insurance", label: "ביטוח - כלל", terms: ["clal-ins.co.il", "כלל ביטוח", "כלל פנסיה"], sort_order: 2020, enabled: true },

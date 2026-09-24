@@ -10,6 +10,7 @@ describe("normalizeExpenseProofFilter", () => {
   it("accepts paid and requested", () => {
     expect(normalizeExpenseProofFilter("paid")).toBe("paid");
     expect(normalizeExpenseProofFilter("requested")).toBe("requested");
+    expect(normalizeExpenseProofFilter("income")).toBe("income");
     expect(normalizeExpenseProofFilter("")).toBe("all");
     expect(normalizeExpenseProofFilter("nope")).toBe("all");
   });
