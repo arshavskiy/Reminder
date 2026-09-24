@@ -1,3 +1,4 @@
+import {resolveInspectionType} from "../documents/inspectionType.js";
 import {copyFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync} from "fs";
 import {createHash} from "crypto";
 import {basename, extname, join} from "path";
@@ -1655,7 +1656,8 @@ async function saveExtractionEntities(
 ) {
   await stripExcludedClientEmailsForUser(result as unknown as Record<string, unknown>, userId);
 
-  const inspectionType = validInspectionType(result.inspection_type);
+  const sourceDoc = await col("documents").findOne({_id: new ObjectId(documentId)} as any);
+  const inspectionType = resolveInspectionType({...sourceDoc, document_kind: (sourceDoc as Record<string, unknown> | null)?.document_kind, raw_text: rawText, extracted_fields: result}) ?? validInspectionType(result.inspection_type);
   if (result.document_type || result.document_number || inspectionType) {
     await col("documents").updateOne(
       { _id: new ObjectId(documentId) } as any,
@@ -2539,6 +2541,11 @@ async function saveTemplateEntities(
   rawText?: string,
 ) {
   await stripExcludedClientEmailsForUser(fields, userId);
+  if (documentTypeFromTemplate(template) === "inspection_report") {
+    const doc = await col("documents").findOne({_id: new ObjectId(documentId)} as any);
+    const inspectionType = resolveInspectionType({...doc, document_kind: "inspection_report", raw_text: rawText ?? (doc as Record<string, unknown> | null)?.raw_text, extracted_fields: fields});
+    if (inspectionType) await col("documents").updateOne({_id: new ObjectId(documentId)} as any, {$set: {inspection_type: inspectionType, updated_at: new Date()}});
+  }
   const f = fields;
 
   const getStr = (k: string): string | null => {
