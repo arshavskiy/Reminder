@@ -42,19 +42,25 @@
     </span>
 
     <span class="sparks">
-      <span class="spark" title="Requests per minute (bars, red = had a 5xx) and p95 latency (line), last 15 min">
+      <span class="spark" :title="`Last 15 min — requests/min (bars, red = had a 5xx) peak ${traffic.peakReq}, p95 latency (line) peak ${ms(traffic.peakP95)}`">
         <svg :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none" aria-hidden="true">
           <rect v-for="(bar, i) in traffic.bars" :key="i" :x="bar.x" :y="bar.y" :width="bar.w" :height="bar.h" :class="bar.err ? 'bar bar--err' : 'bar'" />
           <polyline v-if="traffic.line" :points="traffic.line" class="line line--p95" />
         </svg>
-        <span class="spark-label"><i class="sw sw--req" />req <i class="sw sw--p95" />p95</span>
+        <span class="spark-label">
+          <i class="sw sw--req" />req <b>{{ h.perMinute }}/min</b>
+          <i class="sw sw--p95" />p95 <b>{{ ms(h.p95Ms) }}</b>
+        </span>
       </span>
-      <span class="spark" title="CPU % and memory, last 15 min">
+      <span class="spark" :title="`Last 15 min — CPU peak ${resources.peakCpu}%, memory peak ${resources.peakMemPct}% of limit`">
         <svg :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none" aria-hidden="true">
           <polyline v-if="resources.mem" :points="resources.mem" class="line line--mem" />
           <polyline v-if="resources.cpu" :points="resources.cpu" class="line line--cpu" />
         </svg>
-        <span class="spark-label"><i class="sw sw--cpu" />CPU <i class="sw sw--mem" />mem</span>
+        <span class="spark-label">
+          <i class="sw sw--cpu" />CPU <b>{{ cpu }}%</b>
+          <i class="sw sw--mem" />mem <b>{{ memPct.toFixed(1) }}%</b>
+        </span>
       </span>
     </span>
   </button>
@@ -129,7 +135,7 @@ const traffic = computed(() => {
   const series = (data.value?.series.http ?? []) as any[];
   const slots = SPARK_MINUTES;
   const points = series.slice(-slots);
-  if (!points.length) return {bars: [], line: ""};
+  if (!points.length) return {bars: [], line: "", peakReq: 0, peakP95: 0};
   const barW = W / slots;
   const offset = slots - points.length;
   const maxCount = Math.max(1, ...points.map((p) => p.count));
@@ -137,29 +143,39 @@ const traffic = computed(() => {
     const hgt = Math.max(p.count ? 1.5 : 0, (p.count / maxCount) * (H - 4));
     return {x: (offset + i) * barW + 0.3, y: H - hgt, w: Math.max(0.6, barW - 0.6), h: hgt, err: p.s5xx > 0};
   });
-  return {bars, line: polyline(points.map((p) => p.p95Ms), (i) => (offset + i) * barW + barW / 2)};
+  return {
+    bars,
+    line: polyline(points.map((p) => p.p95Ms), (i) => (offset + i) * barW + barW / 2),
+    peakReq: maxCount,
+    peakP95: Math.max(0, ...points.map((p) => p.p95Ms)),
+  };
 });
 
-/** CPU % and memory over the last 15 minutes — Railway's container series when available, else this process. */
+/** CPU % and memory % of limit over the last 15 minutes — Railway's container series when available, else this process. */
 const resources = computed(() => {
   const since = Date.now() - SPARK_MINUTES * 60_000;
   const rs = railway.value?.series;
+  const m = railway.value;
   let cpuValues: number[];
   let memValues: number[];
   if (rs?.CPU_USAGE?.length || rs?.MEMORY_USAGE_GB?.length) {
-    // Railway timestamps are in seconds.
-    const recent = (points: any[] = []) => points.filter((p) => p.ts * 1000 >= since).map((p) => p.value);
-    cpuValues = recent(rs.CPU_USAGE);
-    memValues = recent(rs.MEMORY_USAGE_GB);
+    // Railway timestamps are in seconds; convert vCPU and GB to % of the service limits.
+    const recent = (points: any[] = []) => points.filter((p) => p.ts * 1000 >= since).map((p) => p.value as number);
+    cpuValues = recent(rs.CPU_USAGE).map((v) => (m?.cpuLimitVcpu ? (v / m.cpuLimitVcpu) * 100 : v));
+    memValues = recent(rs.MEMORY_USAGE_GB).map((v) => (m?.memoryLimitGb ? (v / m.memoryLimitGb) * 100 : v));
   } else {
+    const totalMb = data.value?.container.totalMemMb || 1;
     const samples = ((data.value?.series.system ?? []) as any[]).filter((s) => s.ts >= since);
     cpuValues = samples.map((s) => s.cpuPct);
-    memValues = samples.map((s) => s.rssMb);
+    memValues = samples.map((s) => (s.rssMb / totalMb) * 100);
   }
   const xAt = (count: number) => (i: number) => (count <= 1 ? W : (i / (count - 1)) * W);
+  const peak = (values: number[]) => Math.round(Math.max(0, ...values) * 10) / 10;
   return {
     cpu: polyline(cpuValues, xAt(cpuValues.length)),
     mem: polyline(memValues, xAt(memValues.length)),
+    peakCpu: peak(cpuValues),
+    peakMemPct: peak(memValues),
   };
 });
 
@@ -332,6 +348,13 @@ onBeforeUnmount(() => {
   gap: 4px;
   font-size: 10px;
   color: var(--text-secondary);
+}
+
+.spark-label b {
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-inline-end: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 .sw {
