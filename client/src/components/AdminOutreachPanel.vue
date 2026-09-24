@@ -29,6 +29,12 @@
           Refresh
         </n-button>
       </div>
+      <div class="scan-status">
+        <span v-if="scanSchedule">
+          Automatic scan: {{ scanSchedule.enabled ? `every ${scanSchedule.intervalMinutes} min and before each campaign send` : "off on this server (runs before each campaign send and on the button)" }}
+        </span>
+        <span v-if="scanRuns[0]"> · Last scan {{ formatDateTime(scanRuns[0].started_at) }} ({{ triggerLabel(scanRuns[0].trigger) }}) — {{ runResult(scanRuns[0]) }}</span>
+      </div>
       <n-alert v-if="scanSummary" type="success" style="margin:10px 0" closable @close="scanSummary = null">
         Scanned {{ scanSummary.scanned }} replies · {{ scanSummary.requests }} removal requests ·
         {{ scanSummary.newlyUnsubscribed + scanSummary.insertedLeads }} new ·
@@ -43,6 +49,11 @@
         size="small"
         :scroll-x="980"
       />
+      <n-collapse style="margin-top:12px">
+        <n-collapse-item :title="`Scan history (${scanRuns.length})`" name="scans">
+          <n-data-table :columns="scanColumns" :data="scanRuns" :bordered="false" size="small" :pagination="false" :max-height="320" />
+        </n-collapse-item>
+      </n-collapse>
     </div>
 
     <div class="monitor-block">
@@ -99,9 +110,9 @@
 
 <script setup lang="ts">
 import {computed, h, onMounted, ref} from "vue";
-import {NAlert, NButton, NDataTable, NIcon, NInput, NSelect, NTag, NTooltip, useMessage, type DataTableColumns} from "naive-ui";
+import {NAlert, NButton, NCollapse, NCollapseItem, NDataTable, NIcon, NInput, NSelect, NTag, NTooltip, useMessage, type DataTableColumns} from "naive-ui";
 import {DownloadOutline, MailUnreadOutline, RefreshOutline, SearchOutline} from "@vicons/ionicons5";
-import {api, type InspectorLead, type InspectorLeadEmailSend, type UnsubscribeScanResult} from "../services/apiService";
+import {api, type InspectorLead, type InspectorLeadEmailSend, type UnsubscribeScanResult, type UnsubscribeScanRun} from "../services/apiService";
 
 const message = useMessage();
 
@@ -109,6 +120,8 @@ const unsubscribes = ref<InspectorLead[]>([]);
 const unsubscribesLoading = ref(false);
 const scanning = ref(false);
 const scanSummary = ref<UnsubscribeScanResult | null>(null);
+const scanRuns = ref<UnsubscribeScanRun[]>([]);
+const scanSchedule = ref<{ enabled: boolean; intervalMinutes: number } | null>(null);
 
 const sends = ref<InspectorLeadEmailSend[]>([]);
 const sendsTotal = ref(0);
@@ -139,6 +152,20 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 const muted = (text: string) => h("span", {style: "font-size:12px;color:var(--text-secondary)"}, text);
+
+const scanColumns: DataTableColumns<UnsubscribeScanRun> = [
+  {title: "When", key: "started_at", width: 150, render: (row) => muted(formatDateTime(row.started_at))},
+  {title: "Trigger", key: "trigger", width: 120, render: (row) => triggerLabel(row.trigger)},
+  {
+    title: "Result", key: "status", minWidth: 260, ellipsis: {tooltip: true},
+    render: (row) => h("span", {style: row.status === "error" ? "color:#d03050" : ""}, runResult(row)),
+  },
+  {
+    title: "New unsubscribes", key: "newEmails", minWidth: 220, ellipsis: {tooltip: true},
+    render: (row) => row.newEmails?.length ? row.newEmails.join(", ") : muted("—"),
+  },
+  {title: "Scan ID", key: "id", width: 210, render: (row) => h("code", {class: "scan-id"}, row.id)},
+];
 
 const unsubscribeColumns: DataTableColumns<InspectorLead> = [
   {title: "Email", key: "email", minWidth: 220, ellipsis: {tooltip: true}},
@@ -224,11 +251,29 @@ function exportUnsubscribes() {
   URL.revokeObjectURL(url);
 }
 
+async function loadScanRuns() {
+  try {
+    const res = await api.admin.listUnsubscribeScans();
+    scanRuns.value = res.rows;
+    scanSchedule.value = res.schedule;
+  } catch { /* history is informational */ }
+}
+
+function triggerLabel(trigger: UnsubscribeScanRun["trigger"]) {
+  return {manual: "button", schedule: "automatic", "pre-send": "before a send"}[trigger];
+}
+
+function runResult(run: UnsubscribeScanRun) {
+  if (run.status === "running") return "running…";
+  if (run.status === "error") return `failed: ${run.error}`;
+  return `${run.scanned} replies checked, ${run.newEmails.length} new unsubscribe${run.newEmails.length === 1 ? "" : "s"}`;
+}
+
 async function scan() {
   scanning.value = true;
   try {
     scanSummary.value = await api.admin.scanInspectorLeadUnsubscribes();
-    await Promise.all([loadUnsubscribes(), loadSends(sendPage.value)]);
+    await Promise.all([loadUnsubscribes(), loadSends(sendPage.value), loadScanRuns()]);
   } catch (err: any) {
     const text = String(err?.message ?? "");
     message.error(text.includes("gmail_not_connected")
@@ -242,6 +287,7 @@ async function scan() {
 onMounted(() => {
   loadUnsubscribes();
   loadSends(1);
+  loadScanRuns();
 });
 </script>
 
@@ -269,6 +315,17 @@ onMounted(() => {
   font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.scan-status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.scan-id {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .title-note {

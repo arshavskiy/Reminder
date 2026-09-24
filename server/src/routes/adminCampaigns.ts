@@ -7,6 +7,7 @@ import {col, runWithPrimaryDb} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
 import {logger} from "../logger";
 import {inspectorLeadsCollection} from "./admin";
+import {runUnsubscribeScan} from "../outreach/unsubscribeScan";
 import {
   buildCampaignMessage,
   CAMPAIGN_BATCH_SIZE,
@@ -51,6 +52,7 @@ interface AudienceRefine {
 
 type CampaignAudience = AudienceRefine & (
   | {type: "leads"; ids: string[]}
+  | {type: "emails"; emails: string[]}
   | {type: "import"; batchId: string}
   | {type: "filter"; source?: string | null; status?: string | null; q?: string | null}
   | {type: "all"}
@@ -59,7 +61,7 @@ type CampaignAudience = AudienceRefine & (
 const LEAD_STATUSES = new Set(["NEW", "CONTACTED", "DEMO", "TRIAL", "CUSTOMER", "NOT_RELEVANT"]);
 
 function refineConditions(audience: CampaignAudience): Record<string, any>[] {
-  if (audience.type === "leads") return [];
+  if (audience.type === "leads" || audience.type === "emails") return [];
   const and: Record<string, any>[] = [];
   if (audience.statuses?.length) {
     const statusOr: Record<string, any>[] = [{contactStatus: {$in: audience.statuses}}];
@@ -99,6 +101,7 @@ function audienceFilter(audience: CampaignAudience): Record<string, any> {
   const base: Record<string, any> = {email: {$type: "string", $regex: /@/}, unsubscribed: {$ne: true}};
   const refine = refineConditions(audience);
   if (audience.type === "leads") return {...base, _id: {$in: audience.ids.map((id) => new ObjectId(id))}};
+  if (audience.type === "emails") return {email: {$in: audience.emails}, unsubscribed: {$ne: true}};
   if (audience.type === "import") return {$and: [{...base, importBatches: audience.batchId}, ...refine]};
   if (audience.type === "filter") {
     const and: Record<string, any>[] = [base, ...refine];
@@ -113,6 +116,20 @@ function audienceFilter(audience: CampaignAudience): Record<string, any> {
   return refine.length ? {$and: [base, ...refine]} : base;
 }
 
+function parseEmailList(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.map((item) => String(item ?? "")).join("\n") : String(value ?? "");
+  const seen = new Set<string>();
+  const emails: string[] = [];
+  for (const part of raw.split(/[\s,;]+/)) {
+    const email = part.trim().toLowerCase();
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    emails.push(email);
+    if (emails.length >= 200) break;
+  }
+  return emails;
+}
+
 function parseAudience(value: any): CampaignAudience | null {
   const refine: AudienceRefine = {
     statuses: Array.isArray(value?.statuses) ? value.statuses.filter((s: unknown) => LEAD_STATUSES.has(String(s))) : [],
@@ -122,6 +139,10 @@ function parseAudience(value: any): CampaignAudience | null {
     const ids = value.ids.filter((id: unknown) => typeof id === "string" && ObjectId.isValid(id)).slice(0, 5000);
     return ids.length ? {type: "leads", ids} : null;
   }
+  if (value?.type === "emails") {
+    const emails = parseEmailList(value.emails);
+    return emails.length ? {type: "emails", emails} : null;
+  }
   if (value?.type === "import" && typeof value.batchId === "string" && value.batchId) return {...refine, type: "import", batchId: value.batchId};
   if (value?.type === "filter") return {...refine, type: "filter", source: value.source ?? null, status: value.status ?? null, q: value.q ?? null};
   if (value?.type === "all") return {...refine, type: "all"};
@@ -130,6 +151,7 @@ function parseAudience(value: any): CampaignAudience | null {
 
 /** Leads matching the audience, minus invalid addresses and anyone this campaign already reached. */
 async function resolveRecipients(leads: Collection, audience: CampaignAudience, campaign: EmailCampaign) {
+  if (audience.type === "emails") return resolveTypedEmails(leads, audience.emails, campaign);
   const rows = await leads
     .find(audienceFilter(audience), {projection: {email: 1, emailCampaigns: 1}})
     .toArray();
@@ -146,6 +168,27 @@ async function resolveRecipients(leads: Collection, audience: CampaignAudience, 
     recipients.push({email, leadId: lead._id.toString(), status: "pending"});
   }
   return {recipients, alreadySent, invalid};
+}
+
+/** Addresses typed by the admin. Known leads are linked; unknown addresses are still sent. */
+async function resolveTypedEmails(leads: Collection, emails: string[], campaign: EmailCampaign) {
+  const found = await leads.find(
+    {email: {$in: emails}},
+    {projection: {email: 1, emailCampaigns: 1, unsubscribed: 1}},
+  ).toArray();
+  const byEmail = new Map((found as any[]).map((lead) => [String(lead.email).trim().toLowerCase(), lead]));
+  const recipients: CampaignRecipient[] = [];
+  let alreadySent = 0;
+  let invalid = 0;
+  let unsubscribed = 0;
+  for (const email of emails) {
+    if (!isValidCampaignEmail(email)) { invalid += 1; continue; }
+    const lead = byEmail.get(email);
+    if (lead?.unsubscribed === true) { unsubscribed += 1; continue; }
+    if ((lead?.emailCampaigns ?? []).some((c: any) => c.campaign === campaign.key)) { alreadySent += 1; continue; }
+    recipients.push({email, leadId: lead?._id ? String(lead._id) : null, status: "pending"});
+  }
+  return {recipients, alreadySent, invalid, unsubscribed};
 }
 
 async function runCampaign(campaigns: Collection<EmailCampaign>, leads: Collection, campaignId: ObjectId) {
@@ -419,11 +462,18 @@ export function registerAdminCampaignRoutes(app: express.Application) {
     if (!campaign.subject.trim() || !campaign.html.trim()) { res.status(400).json({error: "subject_and_html_required"}); return; }
     const audience = parseAudience(req.body?.audience);
     if (!audience) { res.status(400).json({error: "invalid_audience"}); return; }
+    // Catch "הסר" replies that arrived since the last scan. Best effort: a Gmail
+    // problem is logged on the scan run and does not block the send.
+    const preSendScan = await Promise.race([
+      runUnsubscribeScan({trigger: "pre-send", triggeredBy: `campaign:${campaign.key}`}),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 45_000)),
+    ]);
     const leads = await inspectorLeadsCollection();
     const {recipients} = await resolveRecipients(leads, audience, campaign);
     if (!recipients.length) { res.status(400).json({error: "no_recipients"}); return; }
+    // A fresh unsubscribe changes the count, so the admin re-confirms the new number.
     if (Number(req.body?.expectedCount) !== recipients.length) {
-      res.status(409).json({error: "audience_changed", count: recipients.length});
+      res.status(409).json({error: "audience_changed", count: recipients.length, newUnsubscribes: preSendScan?.newEmails ?? []});
       return;
     }
     const campaigns = campaignsCol();

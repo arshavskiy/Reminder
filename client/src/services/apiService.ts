@@ -483,7 +483,25 @@ export interface InspectorLeadEmailSendsResponse {
   campaigns: { campaign: string; count: number }[];
 }
 
+export interface UnsubscribeScanRun {
+  id: string;
+  trigger: "manual" | "schedule" | "pre-send";
+  triggeredBy: string | null;
+  status: "running" | "ok" | "error" | "skipped";
+  started_at: string;
+  finished_at: string | null;
+  scanned: number;
+  requests: number;
+  newlyUnsubscribed: number;
+  alreadyUnsubscribed: number;
+  insertedLeads: number;
+  newEmails: string[];
+  error: string | null;
+}
+
 export interface UnsubscribeScanResult {
+  scanId: string;
+  newEmails: string[];
   scanned: number;
   requests: number;
   newlyUnsubscribed: number;
@@ -495,6 +513,7 @@ export type EmailCampaignStatus = "draft" | "sending" | "sent" | "paused" | "fai
 
 export type EmailCampaignAudience = { statuses?: string[]; neverEmailed?: boolean } & (
   | { type: "leads"; ids: string[] }
+  | { type: "emails"; emails: string }
   | { type: "import"; batchId: string }
   | { type: "filter"; source?: string | null; status?: string | null; q?: string | null }
   | { type: "all" }
@@ -1143,6 +1162,8 @@ export const api = {
       adminPost<{ ok: true; queued: number }>(`/admin/campaigns/${id}/send`, { audience, expectedCount }),
     pauseCampaign: (id: string) => adminPost<{ ok: true }>(`/admin/campaigns/${id}/pause`, {}),
     resumeCampaign: (id: string) => adminPost<{ ok: true }>(`/admin/campaigns/${id}/resume`, {}),
+    listUnsubscribeScans: () =>
+      adminGet<{ schedule: { enabled: boolean; intervalMinutes: number }; rows: UnsubscribeScanRun[] }>("/admin/inspector-leads/unsubscribe-scans"),
     scanInspectorLeadUnsubscribes: () =>
       adminPost<UnsubscribeScanResult>("/admin/inspector-leads/scan-unsubscribes", {}),
     getDocument: (id: string) => adminGet<any>(`/admin/documents/${id}`),
