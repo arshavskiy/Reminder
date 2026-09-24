@@ -109,7 +109,7 @@
         <AdminMagicLinkPanel :key="adminDbTarget" @created="onMagicLinkUserCreated" />
       </section>
 
-      <section v-if="activeSection === 'inspector_leads'" class="admin-section">
+      <section v-if="activeSection === 'inspector_leads'" class="admin-section admin-section--leads">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else>
           <div class="admin-stats-grid">
@@ -134,8 +134,8 @@
               title="Best Score"
               :primary="inspectorLeadBestScore"
               primary-label="Lead score"
-              :secondary="inspectorLeadSourceText"
-              secondary-label="Top sources"
+              :secondary="inspectorLeadSummary.bySource.length"
+              secondary-label="Sources"
               :status="inspectorLeadBestScore >= 80 ? 'success' : 'default'"
             />
           </div>
@@ -195,11 +195,11 @@
               </div>
             </div>
           </div>
+
+          <AdminOutreachPanel :key="`outreach-${adminDbTarget}`" />
+          <WhatsAppCampaignPanel :key="adminDbTarget" :leads="inspectorLeadsRows" />
         </template>
       </section>
-
-      <AdminOutreachPanel v-if="activeSection === 'inspector_leads'" :key="`outreach-${adminDbTarget}`" />
-      <WhatsAppCampaignPanel v-if="activeSection === 'inspector_leads'" :key="adminDbTarget" :leads="inspectorLeadsRows" />
 
       <section v-if="activeSection === 'gmail'" class="admin-section admin-section--gmail">
         <GmailInboxPage />
@@ -1668,6 +1668,7 @@ import {
   NSpin,
   NSwitch,
   NTag,
+  NCheckbox,
   NTooltip,
   useMessage,
 } from "naive-ui";
@@ -1699,7 +1700,7 @@ import {
   TimerOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
-import {api, getAdminDbTarget, setAdminDbTarget, type AdminDbTarget, type InspectorLead, type InspectorLeadStatus} from "../services/apiService.js";
+import {api, getAdminDbTarget, setAdminDbTarget, type AdminDbTarget, type InspectorLead, type InspectorLeadStatus, type InspectorLeadsResponse} from "../services/apiService.js";
 import DocumentDetailPage from "./DocumentDetailPage.vue";
 import AdminStatCard from "../components/AdminStatCard.vue";
 import AdminReportModal from "../components/AdminReportModal.vue";
@@ -1864,10 +1865,7 @@ const inspectorLeadLimit = 50;
 const inspectorLeadSearch = ref("");
 const inspectorLeadSourceFilter = ref<string | null>(null);
 const inspectorLeadStatusFilter = ref<InspectorLeadStatus | null>(null);
-const inspectorLeadSummary = ref<{
-  bySource: { source: string; count: number }[];
-  byStatus: { status: InspectorLeadStatus; count: number }[];
-}>({ bySource: [], byStatus: [] });
+const inspectorLeadSummary = ref<InspectorLeadsResponse["summary"]>({ bySource: [], byStatus: [] });
 
 const inspectorLeadStatuses: InspectorLeadStatus[] = ["NEW", "CONTACTED", "DEMO", "TRIAL", "CUSTOMER", "NOT_RELEVANT"];
 const inspectorLeadStatusOptions = inspectorLeadStatuses.map((status) => ({
@@ -1880,12 +1878,9 @@ const inspectorLeadSourceOptions = computed(() =>
     value: row.source,
   })),
 );
-const inspectorLeadEmailCount = computed(() => inspectorLeadsRows.value.filter((lead) => lead.email).length);
-const inspectorLeadPhoneCount = computed(() => inspectorLeadsRows.value.filter((lead) => lead.phone || lead.whatsapp).length);
-const inspectorLeadBestScore = computed(() => Math.max(0, ...inspectorLeadsRows.value.map((lead) => Number(lead.leadScore) || 0)));
-const inspectorLeadSourceText = computed(() =>
-  inspectorLeadSummary.value.bySource.slice(0, 2).map((row) => `${row.source}: ${row.count}`).join(" · ") || "—",
-);
+const inspectorLeadEmailCount = computed(() => inspectorLeadSummary.value.withEmail ?? 0);
+const inspectorLeadPhoneCount = computed(() => inspectorLeadSummary.value.withPhone ?? 0);
+const inspectorLeadBestScore = computed(() => inspectorLeadSummary.value.bestScore ?? 0);
 const inspectorLeadRangeText = computed(() => {
   if (!inspectorLeadsTotal.value) return "No leads";
   const start = (inspectorLeadPage.value - 1) * inspectorLeadLimit + 1;
@@ -1909,25 +1904,40 @@ const inspectorLeadColumns: DataTableColumns<InspectorLead> = [
   },
   {
     title: "Score", key: "leadScore", align: "center", width: 82,
-    render: (row) => h(NTag, {
-      size: "small",
-      round: true,
-      type: row.leadScore >= 80 ? "success" : row.leadScore >= 60 ? "warning" : "default",
-    }, { default: () => String(row.leadScore ?? 0) }),
+    render: (row) => h("span", {
+      class: `lead-status-label lead-status-label--${row.leadScore >= 80 ? "success" : row.leadScore >= 60 ? "warning" : "default"}`,
+    }, String(row.leadScore ?? 0)),
   },
   {
-    title: "Status", key: "contactStatus", align: "left", width: 155,
+    title: "Status", key: "contactStatus", align: "left", width: 150,
     render: (row) => h(NSelect, {
       size: "tiny",
+      class: "lead-status-select",
       value: row.contactStatus ?? "NEW",
       options: inspectorLeadStatusOptions,
-      renderLabel: (option: any) => h(NTag, {
-        size: "small",
-        round: true,
-        type: leadStatusTagType(String(option.value)) as any,
-      }, { default: () => option.label }),
+      consistentMenuWidth: false,
+      renderLabel: (option: any) => h("span", {
+        class: `lead-status-label lead-status-label--${leadStatusTagType(String(option.value))}`,
+      }, option.label),
       onUpdateValue: (value: InspectorLeadStatus) => updateInspectorLeadStatus(row, value),
     }),
+  },
+  {
+    title: "Unsubscribed", key: "unsubscribed", align: "left", width: 150,
+    render: (row) => h("div", { class: "lead-unsub-cell" }, [
+      h(NCheckbox, {
+        checked: Boolean(row.unsubscribed),
+        onUpdateChecked: (checked: boolean) => setInspectorLeadUnsubscribed(row, checked),
+      }),
+      row.unsubscribed
+        ? h(NTooltip, null, {
+          trigger: () => h("span", { class: "lead-unsubscribed" }, formatDate(row.unsubscribedAt ?? null)),
+          default: () => row.unsubscribeSource === "admin"
+            ? "Marked unsubscribed by an admin — skipped by email campaigns"
+            : "Asked to be removed by email reply — skipped by email campaigns",
+        })
+        : null,
+    ]),
   },
   {
     title: "Phone", key: "phone", align: "left", width: 130,
@@ -1942,8 +1952,11 @@ const inspectorLeadColumns: DataTableColumns<InspectorLead> = [
     render: (row) => leadContactLink("website", row.website),
   },
   {
-    title: "Source", key: "source", align: "left", width: 100,
-    render: (row) => h(NTag, { size: "small", round: true }, { default: () => row.source || "—" }),
+    title: "Source", key: "source", align: "left", width: 170,
+    render: (row) => h(NTooltip, null, {
+      trigger: () => h(NTag, { size: "small", round: true, class: "lead-source-tag" }, { default: () => row.source || "—" }),
+      default: () => row.source || "—",
+    }),
   },
   {
     title: "Updated", key: "updated_at", align: "left", width: 120,
@@ -1970,6 +1983,16 @@ async function loadInspectorLeads(page = inspectorLeadPage.value) {
     message.error(err?.message ?? "Error loading inspector leads");
   } finally {
     inspectorLeadsLoading.value = false;
+  }
+}
+
+async function setInspectorLeadUnsubscribed(lead: InspectorLead, unsubscribed: boolean) {
+  try {
+    const updated = await api.admin.setInspectorLeadUnsubscribed(lead.id, unsubscribed);
+    inspectorLeadsRows.value = inspectorLeadsRows.value.map((row) => row.id === updated.id ? updated : row);
+    message.success(unsubscribed ? "Marked unsubscribed" : "Unsubscribe removed");
+  } catch (err: any) {
+    message.error(err?.message ?? "Failed to update lead");
   }
 }
 
@@ -3666,6 +3689,29 @@ onUnmounted(() => {
   min-height: auto;
 }
 
+.admin-section--leads {
+  background: color-mix(in srgb, var(--text-primary) 3.5%, var(--bg-app));
+}
+
+.admin-section--leads :deep(.stat-card) {
+  border-color: var(--border-strong);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.admin-section--leads :deep(.stat-card__title),
+.admin-section--leads :deep(.stat-card__num),
+.admin-section--leads :deep(.stat-card__num-small) {
+  color: var(--text-primary);
+}
+
+.admin-section--leads :deep(.stat-card--success .stat-card__num) {
+  color: var(--brand-color);
+}
+
+.admin-section--leads .monitor-block {
+  border-color: var(--border-strong);
+}
+
 .admin-section__toolbar {
   display: flex;
   align-items: center;
@@ -3674,7 +3720,49 @@ onUnmounted(() => {
 
 .leads-toolbar {
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: 0;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.lead-unsub-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lead-status-select {
+  width: 128px;
+}
+
+.lead-status-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.lead-status-label--success { color: var(--brand-color); }
+.lead-status-label--info { color: #2080f0; }
+.lead-status-label--warning { color: #d08b1c; }
+
+.lead-unsubscribed {
+  font-size: 12px;
+  font-weight: 600;
+  color: #d03050;
+  white-space: nowrap;
+}
+
+.lead-source-tag {
+  max-width: 158px;
+}
+
+.lead-source-tag :deep(.n-tag__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lead-cell {

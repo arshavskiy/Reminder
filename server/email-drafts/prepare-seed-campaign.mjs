@@ -1,9 +1,12 @@
 import {mkdir, readFile, writeFile} from "node:fs/promises";
+import {loadUnsubscribedEmails} from "./unsubscribed.mjs";
 
-// Builds the SEED outreach manifest from a plain list (one address per line).
-// Usage: node email-drafts/prepare-seed-campaign.mjs <path-to-list.txt>
-const source = process.argv[2];
-if (!source) throw new Error("Usage: prepare-seed-campaign.mjs <list.txt>");
+// Builds the SEED outreach manifest from a plain list (one address per line),
+// skipping anyone flagged unsubscribed in inspector_leads.
+// Usage: node email-drafts/prepare-seed-campaign.mjs <path-to-list.txt> [--dev]
+const source = process.argv.slice(2).find(arg => !arg.startsWith("--"));
+if (!source) throw new Error("Usage: prepare-seed-campaign.mjs <list.txt> [--dev]");
+const {emails: unsubscribed} = await loadUnsubscribedEmails({dev: process.argv.includes("--dev")});
 
 const EMAIL_RE = /^[^\s@,;<>/]+@[^\s@,;<>/]+\.[a-z]{2,}$/;
 // Obvious domain typos — skip rather than guess at the intended address.
@@ -18,11 +21,13 @@ const invalid = [];
 const typos = [];
 const duplicates = [];
 const skippedAlreadySent = [];
+const skippedUnsubscribed = [];
 for (const line of lines) {
   const email = line.toLowerCase();
   if (!EMAIL_RE.test(email)) { invalid.push(line); continue; }
   if (BAD_DOMAIN_RE.test(email)) { typos.push(line); continue; }
   if (recipients.has(email)) { duplicates.push(line); continue; }
+  if (unsubscribed.has(email)) { skippedUnsubscribed.push(email); continue; }
   if (alreadySent.has(email)) { skippedAlreadySent.push(email); continue; }
   recipients.add(email);
 }
@@ -32,6 +37,6 @@ await mkdir(new URL("../data/outreach/", import.meta.url), {recursive: true});
 await writeFile(new URL("../data/outreach/seed-introduction-manifest.json", import.meta.url), JSON.stringify(manifest, null, 2));
 console.log(JSON.stringify({
   lines: lines.length, uniqueRecipients: recipients.size, invalid, typos,
-  duplicates: duplicates.length, skippedAlreadySent: skippedAlreadySent.length,
+  duplicates: duplicates.length, skippedAlreadySent: skippedAlreadySent.length, skippedUnsubscribed,
   manifest: "server/data/outreach/seed-introduction-manifest.json",
 }, null, 2));

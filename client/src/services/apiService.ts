@@ -498,6 +498,10 @@ export interface InspectorLeadsResponse {
   summary: {
     bySource: { source: string; count: number }[];
     byStatus: { status: InspectorLeadStatus; count: number }[];
+    withEmail?: number;
+    withPhone?: number;
+    unsubscribed?: number;
+    bestScore?: number;
   };
 }
 
@@ -1043,6 +1047,8 @@ export const api = {
       const query = qs.toString();
       return adminGet<InspectorLeadEmailSendsResponse>(`/admin/inspector-leads/email-sends${query ? "?" + query : ""}`);
     },
+    setInspectorLeadUnsubscribed: (id: string, unsubscribed: boolean) =>
+      adminPut<InspectorLead>(`/admin/inspector-leads/${id}/unsubscribed`, { unsubscribed }),
     listInspectorLeadUnsubscribes: () =>
       adminGet<{ rows: InspectorLead[]; total: number }>("/admin/inspector-leads/unsubscribes"),
     scanInspectorLeadUnsubscribes: () =>

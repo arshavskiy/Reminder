@@ -561,6 +561,20 @@ export function registerAdminRoutes(app: express.Application) {
         { $sort: { count: -1 } },
       ]).toArray(),
     ]);
+    // Totals across the whole filtered set, not just the current page.
+    const [counts] = await leads.aggregate([
+      { $match: filter },
+      { $group: {
+        _id: null,
+        withEmail: { $sum: { $cond: [{ $regexMatch: { input: { $ifNull: [{ $toString: "$email" }, ""] }, regex: /\S/ } }, 1, 0] } },
+        withPhone: { $sum: { $cond: [{ $or: [
+          { $regexMatch: { input: { $ifNull: [{ $toString: "$phone" }, ""] }, regex: /\S/ } },
+          { $regexMatch: { input: { $ifNull: [{ $toString: "$whatsapp" }, ""] }, regex: /\S/ } },
+        ] }, 1, 0] } },
+        unsubscribed: { $sum: { $cond: [{ $eq: ["$unsubscribed", true] }, 1, 0] } },
+        bestScore: { $max: { $ifNull: ["$leadScore", 0] } },
+      } },
+    ]).toArray();
 
     res.json({
       rows: rows.map(flatInspectorLead),
@@ -570,6 +584,10 @@ export function registerAdminRoutes(app: express.Application) {
       summary: {
         bySource: bySource.map((row: any) => ({ source: row._id ?? "unknown", count: row.count })),
         byStatus: byStatus.map((row: any) => ({ status: row._id ?? "NEW", count: row.count })),
+        withEmail: counts?.withEmail ?? 0,
+        withPhone: counts?.withPhone ?? 0,
+        unsubscribed: counts?.unsubscribed ?? 0,
+        bestScore: counts?.bestScore ?? 0,
       },
     });
   });
@@ -600,6 +618,38 @@ export function registerAdminRoutes(app: express.Application) {
       return;
     }
 
+    res.json(flatInspectorLead(result));
+  });
+
+  // PUT /api/admin/inspector-leads/:id/unsubscribed — manual opt-out toggle
+  app.put("/api/admin/inspector-leads/:id/unsubscribed", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    if (!ObjectId.isValid(req.params.id)) {
+      res.status(400).json({ error: "invalid_lead_id" });
+      return;
+    }
+    if (typeof req.body?.unsubscribed !== "boolean") {
+      res.status(400).json({ error: "unsubscribed must be a boolean" });
+      return;
+    }
+
+    const now = new Date();
+    const update = req.body.unsubscribed
+      ? { $set: { unsubscribed: true, unsubscribedAt: now, unsubscribeSource: "admin", updated_at: now } }
+      : {
+        $set: { unsubscribed: false, updated_at: now },
+        $unset: { unsubscribedAt: "", unsubscribeSource: "", unsubscribeMessageId: "", unsubscribeSubject: "", unsubscribeSnippet: "" },
+      };
+    const leads = await inspectorLeadsCollection();
+    const result = await leads.findOneAndUpdate(
+      { _id: new ObjectId(req.params.id) },
+      update,
+      { returnDocument: "after" },
+    );
+    if (!result) {
+      res.status(404).json({ error: "lead_not_found" });
+      return;
+    }
     res.json(flatInspectorLead(result));
   });
 
