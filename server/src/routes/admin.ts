@@ -28,6 +28,7 @@ import {
 } from "../ops/processControl";
 import {runTempFileSweep, tempDirUsage, tempSweeperState} from "../storage/tempFiles";
 import {runUnsubscribeScan, scanRunsCollection, unsubscribeScanUserId} from "../outreach/unsubscribeScan";
+import {liveSnapshot} from "../ops/serverMetrics";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 // "expired" is not assignable: it is what a lapsed trial resolves to, not a
@@ -3030,6 +3031,26 @@ export function registerAdminRoutes(app: express.Application) {
       console.error("storage-folder-delete error:", err);
       res.status(500).json({ error: err.message ?? "Failed" });
     }
+  });
+
+  // GET /api/admin/monitor/server-live — request latency/status/timeouts and
+  // CPU/RAM measured in this container, Railway service metrics, and alerts.
+  app.get("/api/admin/monitor/server-live", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    try {
+      res.json(await liveSnapshot());
+    } catch (err: any) {
+      logger.error("admin_server_live_failed", { error: String(err) });
+      res.status(500).json({ error: err.message ?? "Failed" });
+    }
+  });
+
+  // POST /api/admin/monitor/test-alert — sends a test push so admins can confirm notifications arrive.
+  app.post("/api/admin/monitor/test-alert", async (req, res) => {
+    const auth = await adminAuth(req, res);
+    if (!auth) return;
+    await sendPushToAdmins({ title: "Server alert test", body: `Sent by ${auth.user.email ?? "admin"} — alerts will look like this.`, data: { url: "/admin?section=system_health" } });
+    res.json({ ok: true });
   });
 
   // ── Monitoring: background processes ──────────────────────────────────────
