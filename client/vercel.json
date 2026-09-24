@@ -28,11 +28,11 @@
     { "source": "/robots.txt", "destination": "/robots.txt" },
     {
       "source": "/api/:path*",
-      "destination": "https://api.remindocr.com/api/:path*"
+      "destination": "https://api-dev.remindocr.com/api/:path*"
     },
     {
       "source": "/auth/:path*",
-      "destination": "https://api.remindocr.com/auth/:path*"
+      "destination": "https://api-dev.remindocr.com/auth/:path*"
     },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
