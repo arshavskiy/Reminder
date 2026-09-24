@@ -1496,6 +1496,7 @@
       </section>
 
       <section v-if="activeSection === 'system_health'" class="admin-section">
+        <AdminServerLivePanel :key="`live-${adminDbTarget}`" />
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="systemHealth">
           <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">
@@ -1745,6 +1746,7 @@ import AdminMagicLinkPanel from "../components/AdminMagicLinkPanel.vue";
 import WhatsAppCampaignPanel from "../components/WhatsAppCampaignPanel.vue";
 import AdminOutreachPanel from "../components/AdminOutreachPanel.vue";
 import AdminCampaignsPanel from "../components/AdminCampaignsPanel.vue";
+import AdminServerLivePanel from "../components/AdminServerLivePanel.vue";
 import GmailInboxPage from "./GmailInboxPage.vue";
 
 const router = useRouter();

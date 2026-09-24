@@ -50,6 +50,7 @@ import {seedGmailSearchProviders} from "./gmail/searchProviders";
 import {importFile, startDocumentProcessingJobWorker} from "./pipeline/importer";
 import {applyScannedKeys, scanFileForKeys, shouldScanFile} from "./pipeline/keyScanner";
 import {logger, requestLogger} from "./logger";
+import {metricsMiddleware, startServerMetrics} from "./ops/serverMetrics";
 import {registerResendWebhook} from "./reminders/resendDelivery";
 import {initializePaymentCollections, registerPaymentRoutes} from "./payments/routes";
 import {registerWhatsAppRoutes, registerWhatsAppWebhook} from "./whatsapp/routes";
@@ -120,6 +121,7 @@ app.use((_req, res, next) => {
   next();
 });
 app.use(requestLogger);
+app.use(metricsMiddleware);
 
 // Railway health check — must return 200 before traffic is routed
 app.get("/health", (_req, res) => {
@@ -333,6 +335,7 @@ async function main() {
 
   startScheduler();
   startUnsubscribeScanScheduler();
+  startServerMetrics();
   startWatchFolder();
 }
 
