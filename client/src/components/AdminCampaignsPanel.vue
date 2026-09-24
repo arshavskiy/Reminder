@@ -46,6 +46,9 @@
         </n-button>
       </div>
 
+      <n-alert v-if="!draft && selectedLeadIds?.length" type="info" style="margin-top:10px">
+        {{ selectedLeadIds.length }} leads selected. Choose a campaign or create a new one to send to them.
+      </n-alert>
       <div v-if="draft" class="editor-grid">
         <div class="editor-col">
           <n-form-item label="Subject" :show-feedback="false">
