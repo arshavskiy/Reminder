@@ -71,6 +71,7 @@
 
     <!-- ── Main content ─────────────────────────────────────────────────── -->
     <div class="admin-main">
+      <AdminHealthStrip v-if="activeSection !== 'system_health'" :key="`strip-${adminDbTarget}`" @open="switchSection('system_health')" />
       <header class="admin-main__header">
         <div class="admin-main__title-row">
           <h1 class="admin-main__title">{{ currentItem?.label }}</h1>
@@ -92,7 +93,6 @@
         </div>
       </header>
 
-      <AdminHealthStrip v-if="activeSection !== 'system_health'" :key="`strip-${adminDbTarget}`" @open="switchSection('system_health')" />
 
       <!-- ── Users ── -->
       <section v-if="activeSection === 'users'" class="admin-section admin-section--users">
