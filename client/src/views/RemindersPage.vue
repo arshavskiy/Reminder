@@ -175,7 +175,7 @@
           :row-key="(r: any) => r.id"
           :row-props="rowProps"
           :checked-row-keys="selectedReminderKeys"
-          :scroll-x="1380"
+          :scroll-x="1600"
           class="reminders-table reminders-table--with-sidebar"
           size="small"
           @update:checked-row-keys="onSelectedReminderKeys"
@@ -190,7 +190,7 @@
         :row-key="(r: any) => r.id"
         :row-props="rowProps"
         :checked-row-keys="selectedReminderKeys"
-        :scroll-x="1380"
+        :scroll-x="1600"
         class="reminders-table"
         size="small"
         @update:checked-row-keys="onSelectedReminderKeys"
@@ -1508,7 +1508,7 @@ const baseColumns = computed(() => [
   {
     title: l.value.common.status,
     key: "status",
-    width: 120,
+    width: 80,
     filterMultiple: true,
     filterOptions: statusOptions.value,
     filter: (value: string | number, row: ReminderWithContext) => row.status === value,
@@ -1516,16 +1516,8 @@ const baseColumns = computed(() => [
     render: (row: ReminderWithContext) => h(StatusBadge, { status: row.status }),
   },
   {
-    title: l.value.reminders.detailCalendar,
-    key: "actions",
-    width: 112,
-    filterMultiple: true,
-    filterOptions: [
-      { label: l.value.reminders.detailCalendarOn, value: "synced" },
-      { label: l.value.reminders.detailCalendarNotSynced, value: "unsynced" },
-    ],
-    filter: (value: string | number, row: ReminderWithContext) =>
-      Boolean(row.calendar_synced) === (value === "synced"),
+    key: "calendar",
+    width: 60,
     sorter: (a: ReminderWithContext, b: ReminderWithContext) =>
       Number(Boolean(a.calendar_synced)) - Number(Boolean(b.calendar_synced)),
     render: (row: ReminderWithContext) =>
@@ -1549,6 +1541,18 @@ const baseColumns = computed(() => [
               : l.value.calendar.synced;
           },
         }),
+      ]),
+  },
+  {
+    title: l.value.common.actions,
+    key: "actions",
+    width: 72,
+    minWidth: 72,
+    render: (row: ReminderWithContext) =>
+      h("div", {
+        class: "reminder-actions-cell",
+        onClick: (event: MouseEvent) => event.stopPropagation(),
+      }, [
         h(NDropdown, {
           options: rowActionsFor(row),
           placement: "bottom-end",
@@ -1985,8 +1989,8 @@ const columns = computed(() =>
 
 .reminders-body {
   display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 16px;
+  grid-template-columns: 150px 1fr;
+  gap: 14px;
   align-items: start;
 }
 
@@ -2031,8 +2035,9 @@ const columns = computed(() =>
 }
 
 .reminders-table :deep(.n-data-table-th__title) {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   margin-inline-end: 0;
+  white-space: nowrap;
 }
 
 .reminders-table :deep(.n-data-table-filter) {
@@ -2106,7 +2111,7 @@ const columns = computed(() =>
 .reminder-actions-cell {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 8px;
   width: 100%;
 }

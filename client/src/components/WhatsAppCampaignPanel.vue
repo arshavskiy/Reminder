@@ -1,7 +1,9 @@
 <template>
-  <section class="whatsapp-panel" aria-label="WhatsApp campaigns">
-    <div class="panel-heading">
+  <section class="whatsapp-panel" aria-label="WhatsApp campaigns" dir="ltr">
+    <div class="block-head">
       <h3>WhatsApp campaigns</h3>
+    </div>
+    <div class="block-toolbar">
       <n-button size="small" :loading="busy" @click="refresh">Refresh</n-button>
     </div>
     <n-alert v-if="error" type="error" style="margin-bottom:12px">{{ error }}</n-alert>
@@ -148,9 +150,10 @@ onMounted(refresh);
 </script>
 
 <style scoped>
-.whatsapp-panel { margin-top:20px;padding:20px;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);color:var(--text-primary); }
-.panel-heading,.campaign-row { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
-h3 { margin:0 0 12px; }
+.whatsapp-panel { margin-top:16px;padding:18px 20px;border:1px solid var(--border-strong);border-radius:12px;background:var(--bg-card);color:var(--text-primary); }
+.block-head h3 { margin:0; font-size:15px; font-weight:700; }
+.block-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; direction:ltr; padding:8px 10px; margin:10px 0 14px; background:var(--bg-elevated); border:1px solid var(--border-color); border-radius:8px; }
+.campaign-row { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
 .muted { color:var(--text-secondary);font-size:13px; }
 .template-body { white-space:pre-wrap;line-height:1.8;padding:16px;border:1px solid var(--border-color);border-radius:8px; }
 .preview { margin-top:16px;padding:16px;border:1px solid var(--brand-color);border-radius:8px; }

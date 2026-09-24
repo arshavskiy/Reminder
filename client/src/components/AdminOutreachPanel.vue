@@ -1,23 +1,33 @@
 <template>
   <section class="outreach-panel" aria-label="Email outreach">
     <div class="monitor-block">
-      <div class="panel-heading">
-        <div class="monitor-block__title">Unsubscribe requests · {{ unsubscribes.length }} <span class="title-note">from Gmail replies</span></div>
-        <n-space size="small">
-          <n-tooltip>
-            <template #trigger>
-              <n-button size="small" type="primary" :loading="scanning" @click="scan">
-                <template #icon><n-icon :component="MailUnreadOutline" /></template>
-                Scan Gmail for unsubscribes
-              </n-button>
-            </template>
-            Searches your connected Gmail (contact@remindocr.com) for removal replies and flags those senders
-          </n-tooltip>
-          <n-button size="small" :loading="unsubscribesLoading" @click="loadUnsubscribes">
-            <template #icon><n-icon :component="RefreshOutline" /></template>
-            Refresh
-          </n-button>
-        </n-space>
+      <div class="block-head">
+        <div class="monitor-block__title">Unsubscribe requests</div>
+        <div class="title-note">{{ unsubscribes.length }} from Gmail replies</div>
+      </div>
+      <div class="block-toolbar" dir="ltr">
+        <n-tooltip>
+          <template #trigger>
+            <n-button size="small" type="primary" dir="ltr" :loading="scanning" @click="scan">
+              <template #icon><n-icon :component="MailUnreadOutline" /></template>
+              Scan Gmail for unsubscribes
+            </n-button>
+          </template>
+          Searches your connected Gmail (contact@remindocr.com) for removal replies and flags those senders
+        </n-tooltip>
+        <n-tooltip>
+          <template #trigger>
+            <n-button size="small" :disabled="!unsubscribes.length" @click="exportUnsubscribes">
+              <template #icon><n-icon :component="DownloadOutline" /></template>
+              Export list
+            </n-button>
+          </template>
+          Downloads the addresses as .txt. Campaign scripts already skip them; run remove-unsubscribed-from-seed.mjs to clean the SEED file.
+        </n-tooltip>
+        <n-button size="small" :loading="unsubscribesLoading" @click="loadUnsubscribes">
+          <template #icon><n-icon :component="RefreshOutline" /></template>
+          Refresh
+        </n-button>
       </div>
       <n-alert v-if="scanSummary" type="success" style="margin:10px 0" closable @close="scanSummary = null">
         Scanned {{ scanSummary.scanned }} replies · {{ scanSummary.requests }} removal requests ·
@@ -31,39 +41,40 @@
         :bordered="false"
         :pagination="{ pageSize: 20 }"
         size="small"
-        style="margin-top:12px"
+        :scroll-x="980"
       />
     </div>
 
     <div class="monitor-block">
-      <div class="panel-heading">
+      <div class="block-head">
         <div class="monitor-block__title">Emails sent</div>
-        <n-space size="small">
-          <n-input
-            v-model:value="sendSearch"
-            clearable
-            size="small"
-            placeholder="Search email..."
-            style="width: 220px"
-            @keyup.enter="loadSends(1)"
-            @clear="loadSends(1)"
-          >
-            <template #prefix><n-icon :component="SearchOutline" /></template>
-          </n-input>
-          <n-select
-            v-model:value="campaignFilter"
-            clearable
-            size="small"
-            placeholder="Campaign"
-            :options="campaignOptions"
-            style="width: 240px"
-            @update:value="loadSends(1)"
-          />
-          <n-button size="small" :loading="sendsLoading" @click="loadSends(1)">
-            <template #icon><n-icon :component="RefreshOutline" /></template>
-            Refresh
-          </n-button>
-        </n-space>
+        <div class="title-note">{{ sendRangeText }}</div>
+      </div>
+      <div class="block-toolbar" dir="ltr">
+        <n-input
+          v-model:value="sendSearch"
+          clearable
+          size="small"
+          placeholder="Search email..."
+          style="width: 220px"
+          @keyup.enter="loadSends(1)"
+          @clear="loadSends(1)"
+        >
+          <template #prefix><n-icon :component="SearchOutline" /></template>
+        </n-input>
+        <n-select
+          v-model:value="campaignFilter"
+          clearable
+          size="small"
+          placeholder="Campaign"
+          :options="campaignOptions"
+          style="width: 240px"
+          @update:value="loadSends(1)"
+        />
+        <n-button size="small" :loading="sendsLoading" @click="loadSends(1)">
+          <template #icon><n-icon :component="RefreshOutline" /></template>
+          Refresh
+        </n-button>
       </div>
       <n-data-table
         :columns="sendColumns"
@@ -72,8 +83,8 @@
         :bordered="false"
         :pagination="false"
         :max-height="480"
+        :scroll-x="900"
         size="small"
-        style="margin-top:12px"
       />
       <div class="leads-pagination">
         <span>{{ sendRangeText }}</span>
@@ -88,8 +99,8 @@
 
 <script setup lang="ts">
 import {computed, h, onMounted, ref} from "vue";
-import {NAlert, NButton, NDataTable, NIcon, NInput, NSelect, NSpace, NTag, NTooltip, useMessage, type DataTableColumns} from "naive-ui";
-import {MailUnreadOutline, RefreshOutline, SearchOutline} from "@vicons/ionicons5";
+import {NAlert, NButton, NDataTable, NIcon, NInput, NSelect, NTag, NTooltip, useMessage, type DataTableColumns} from "naive-ui";
+import {DownloadOutline, MailUnreadOutline, RefreshOutline, SearchOutline} from "@vicons/ionicons5";
 import {api, type InspectorLead, type InspectorLeadEmailSend, type UnsubscribeScanResult} from "../services/apiService";
 
 const message = useMessage();
@@ -140,8 +151,8 @@ const unsubscribeColumns: DataTableColumns<InspectorLead> = [
     render: (row) => muted(formatDateTime(row.unsubscribedAt)),
   },
   {
-    title: "Reply", key: "unsubscribeSnippet", minWidth: 240, ellipsis: {tooltip: true},
-    render: (row) => h("span", {dir: "auto"}, row.unsubscribeSnippet || row.unsubscribeSubject || "—"),
+    title: "Reply", key: "unsubscribeSnippet", width: 280, ellipsis: {tooltip: true},
+    render: (row) => h("span", {dir: "auto", class: "reply-snippet"}, row.unsubscribeSnippet || row.unsubscribeSubject || "—"),
   },
   {
     title: "Last campaign", key: "lastEmailCampaign", width: 190,
@@ -202,6 +213,17 @@ async function loadSends(page = sendPage.value) {
   }
 }
 
+function exportUnsubscribes() {
+  const emails = [...new Set(unsubscribes.value.map((row) => String(row.email ?? "").trim().toLowerCase()).filter(Boolean))].sort();
+  const blob = new Blob([emails.join("\n") + "\n"], {type: "text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `unsubscribed-${new Date().toISOString().slice(0, 10)}.txt`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 async function scan() {
   scanning.value = true;
   try {
@@ -233,9 +255,13 @@ onMounted(() => {
 
 .monitor-block {
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
   padding: 18px 20px;
+}
+
+.block-head {
+  margin-bottom: 10px;
 }
 
 .monitor-block__title {
@@ -246,17 +272,33 @@ onMounted(() => {
 }
 
 .title-note {
+  margin-top: 2px;
   font-size: 12px;
   font-weight: 400;
   color: var(--text-secondary);
 }
 
-.panel-heading {
+.block-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 8px;
   flex-wrap: wrap;
+  direction: ltr;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.reply-snippet {
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .leads-pagination {
