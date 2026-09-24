@@ -110,7 +110,7 @@
               </main>
             </div>
 
-            <footer v-if="!isPublicMarketingRoute && !isLegalRoute" class="app-footer" :dir="localeStore.dir">
+            <footer v-if="!isPublicMarketingRoute && !isLegalRoute && !isAppAdminRoute" class="app-footer" :dir="localeStore.dir">
               <strong>RemindOCR</strong> — {{ l.chrome.footerTagline }}
               <div class="app-footer__legal">
                 © 2026 HandCoded. {{ l.chrome.rights }} |

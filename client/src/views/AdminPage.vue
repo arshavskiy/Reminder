@@ -916,10 +916,23 @@
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="monthlyMonitor">
           <div class="monitor-block">
-            <div class="monitor-block__title">Monthly Report Configuration by User</div>
+            <div class="monitor-block__title">
+              Monthly Report Configuration by User
+              <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">
+                {{ filteredMonthlySchedules.length }} of {{ monthlyMonitor.schedules.length }}
+              </span>
+            </div>
+            <div class="admin-section__toolbar" style="margin-top:8px">
+              <n-input v-model:value="monthlyFilter.q" clearable size="small" placeholder="Search user or recipient..." style="max-width: 260px">
+                <template #prefix><n-icon :component="SearchOutline" /></template>
+              </n-input>
+              <n-select v-model:value="monthlyFilter.enabled" clearable size="small" placeholder="Enabled" :options="monthlyEnabledOptions" style="width: 130px" />
+              <n-select v-model:value="monthlyFilter.day" clearable size="small" placeholder="Day" :options="monthlyDayOptions" style="width: 110px" />
+              <n-select v-model:value="monthlyFilter.status" clearable size="small" placeholder="Status" :options="monthlyStatusOptions" style="width: 150px" />
+            </div>
             <n-data-table
               :columns="monthlyScheduleDetailColumns"
-              :data="monthlyMonitor.schedules"
+              :data="filteredMonthlySchedules"
               :bordered="false"
               :pagination="{ pageSize: 15 }"
               size="small"
@@ -3269,6 +3282,42 @@ function openReportModal(user: any) {
   reportModalUser.value = { id: user.id ?? user.user_id, name: user.name ?? user.email ?? user.user_id };
   showReportModal.value = true;
 }
+
+const monthlyFilter = ref<{ q: string; enabled: "yes" | "no" | null; day: number | null; status: "error" | "never" | "sent" | null }>({
+  q: "", enabled: null, day: null, status: null,
+});
+const monthlyEnabledOptions = [
+  { label: "Enabled", value: "yes" },
+  { label: "Disabled", value: "no" },
+];
+const monthlyStatusOptions = [
+  { label: "Has error", value: "error" },
+  { label: "Never sent", value: "never" },
+  { label: "Sent", value: "sent" },
+];
+const monthlyDayOptions = computed(() => {
+  const days = new Set<number>();
+  for (const row of monthlyMonitor.value?.schedules ?? []) if (row.day != null) days.add(Number(row.day));
+  return [...days].sort((a, b) => a - b).map((day) => ({ label: `Day ${day}`, value: day }));
+});
+function listText(value: unknown): string {
+  let list = value ?? [];
+  if (typeof list === "string") { try { list = JSON.parse(list); } catch { return String(value); } }
+  return Array.isArray(list) ? list.join(" ") : "";
+}
+const filteredMonthlySchedules = computed(() => {
+  const f = monthlyFilter.value;
+  const q = f.q.trim().toLowerCase();
+  return (monthlyMonitor.value?.schedules ?? []).filter((row: any) => {
+    if (f.enabled && Boolean(row.enabled) !== (f.enabled === "yes")) return false;
+    if (f.day != null && Number(row.day) !== f.day) return false;
+    if (f.status === "error" && !row.last_error) return false;
+    if (f.status === "never" && row.last_sent) return false;
+    if (f.status === "sent" && !row.last_sent) return false;
+    if (q && !`${resolveUserEmail(row.user_id)} ${listText(row.recipients)}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+});
 
 const monthlyScheduleDetailColumns: DataTableColumns<any> = [
   {
