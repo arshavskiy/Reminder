@@ -169,6 +169,7 @@ export interface ImportedInvoice {
   id: string;
   document_id: string | null;
   inline_no_file?: boolean;
+  preview_html?: string | null;
   supplier_name: string;
   supplier_id: string | null;
   invoice_number: string | null;
@@ -493,6 +494,7 @@ export interface UnsubscribeScanResult {
 export type EmailCampaignStatus = "draft" | "sending" | "sent" | "paused" | "failed";
 
 export type EmailCampaignAudience =
+  | { type: "leads"; ids: string[] }
   | { type: "import"; batchId: string }
   | { type: "filter"; source?: string | null; status?: string | null; q?: string | null }
   | { type: "all" };
@@ -524,6 +526,7 @@ export interface CampaignLeadImportResult {
   invalid: number;
   inserted: number;
   updated: number;
+  mode: "fill" | "overwrite";
 }
 
 export interface CampaignAudiencePreview {
@@ -682,8 +685,9 @@ async function adminPut<T>(path: string, body: unknown, target?: AdminDbTarget):
   return res.json() as Promise<T>;
 }
 
-async function adminUpload<T>(path: string, field: string, file: File): Promise<T> {
+async function adminUpload<T>(path: string, field: string, file: File, extra?: Record<string, string>): Promise<T> {
   const form = new FormData();
+  for (const [key, value] of Object.entries(extra ?? {})) form.append(key, value);
   form.append(field, file);
   const res = await fetch(ADMIN_BASE + path, {
     method: "POST",
@@ -785,6 +789,8 @@ export const api = {
       post<{ ok: true; requested: number; deleted: number; documentsDeleted: number }>("/invoices/delete-selected", body),
     mergeVendors: (body: { supplierNames: string[]; canonicalName: string }) =>
       post<{ ok: true; matched: number; modified: number; supplierName: string }>("/invoices/vendors/merge", body),
+    setSupplierCategory: (body: { supplierName: string; provider_category: GmailSearchProvider["category"] | null }) =>
+      post<{ ok: true; matched: number; modified: number; supplierName: string; provider_category: string | null }>("/invoices/vendors/category", body),
     sendSixMonthReport: () =>
       post<{ ok: true; recipients: string[]; count: number; period: { from: string; to: string } }>("/invoices/reports/six-months/send", {}),
     expenseMonthly: (params?: { dateBasis?: "invoice" | "import"; proofFilter?: "all" | "paid" | "requested"; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; top?: number }, force = false) =>
@@ -1090,13 +1096,14 @@ export const api = {
         sameAsLocal: boolean;
       };
     }>("/admin/db-targets"),
-    listInspectorLeads: (params?: { page?: number; limit?: number; source?: string | null; status?: string | null; q?: string | null }) => {
+    listInspectorLeads: (params?: { page?: number; limit?: number; source?: string | null; status?: string | null; q?: string | null; unsubscribed?: "hide" | "only" | null }) => {
       const qs = new URLSearchParams();
       if (params?.page) qs.set("page", String(params.page));
       if (params?.limit) qs.set("limit", String(params.limit));
       if (params?.source) qs.set("source", params.source);
       if (params?.status) qs.set("status", params.status);
       if (params?.q) qs.set("q", params.q);
+      if (params?.unsubscribed) qs.set("unsubscribed", params.unsubscribed);
       const query = qs.toString();
       return adminGet<InspectorLeadsResponse>(`/admin/inspector-leads${query ? "?" + query : ""}`);
     },
@@ -1115,8 +1122,8 @@ export const api = {
       adminPut<InspectorLead>(`/admin/inspector-leads/${id}/unsubscribed`, { unsubscribed }),
     listInspectorLeadUnsubscribes: () =>
       adminGet<{ rows: InspectorLead[]; total: number }>("/admin/inspector-leads/unsubscribes"),
-    importCampaignLeads: (file: File) =>
-      adminUpload<CampaignLeadImportResult>("/admin/campaigns/import-leads", "file", file),
+    importCampaignLeads: (file: File, mode: "fill" | "overwrite" = "fill") =>
+      adminUpload<CampaignLeadImportResult>("/admin/campaigns/import-leads", "file", file, { mode }),
     uploadCampaignImage: (file: File) =>
       adminUpload<{ url: string }>("/admin/campaigns/images", "image", file),
     renderCampaign: (subject: string, html: string) =>

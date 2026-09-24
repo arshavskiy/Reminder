@@ -529,6 +529,9 @@ export function registerAdminRoutes(app: express.Application) {
     const filter: Record<string, any> = {};
     if (source) filter.source = source;
     if (status) filter.contactStatus = status;
+    const unsubscribed = String(req.query.unsubscribed ?? "").trim();
+    if (unsubscribed === "only") filter.unsubscribed = true;
+    else if (unsubscribed === "hide") filter.unsubscribed = { $ne: true };
     if (q) {
       const safe = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const rx = new RegExp(safe, "i");

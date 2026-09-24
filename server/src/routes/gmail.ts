@@ -1033,7 +1033,12 @@ async function importInlineReceiptMessage(
   const now = new Date();
   const documentKey = `gmail-inline:${messageId}`;
   const merchantName = receipt.merchant?.trim() || "";
-  const supplierName = receipt.vendor === "PayPal" && merchantName ? merchantName : receipt.vendor;
+  const supplierName = (receipt.vendor === "PayPal" || receipt.vendor === "Google Play") && merchantName
+    ? merchantName
+    : receipt.vendor;
+  const renewalNote = receipt.renewalAmount
+    ? `Next charge ${receipt.renewalAmount.toFixed(2)} ${receipt.currency}/${receipt.renewalInterval ?? "period"}${receipt.renewalDate ? ` from ${receipt.renewalDate}` : ""}`
+    : null;
   const saved = await col("invoices").findOneAndUpdate(
     { user_id: userId, document_id: documentKey } as any,
     {
@@ -1051,7 +1056,7 @@ async function importInlineReceiptMessage(
         currency: receipt.currency,
         payment_status: "paid",
         cash_flow: "expense",
-        notes: supplierName === receipt.vendor ? receipt.merchant : receipt.vendor,
+        notes: [supplierName === receipt.vendor ? receipt.merchant : receipt.vendor, renewalNote].filter(Boolean).join(" · "),
         preview_html: emailBodyToPreviewHtml(html, plain),
         template_id: templateId ?? null,
         spaces_key: null,
@@ -1061,6 +1066,9 @@ async function importInlineReceiptMessage(
           supplier_name: supplierName,
           vendor_name: receipt.vendor,
           merchant: receipt.merchant,
+          renewal_amount: receipt.renewalAmount ?? null,
+          renewal_interval: receipt.renewalInterval ?? null,
+          renewal_date: receipt.renewalDate ?? null,
           invoice_number: receipt.transactionId,
           amount: receipt.amount,
           currency: receipt.currency,

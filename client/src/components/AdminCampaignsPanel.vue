@@ -3,11 +3,15 @@
     <!-- 1. Leads -->
     <div class="monitor-block">
       <div class="block-head">
-        <div class="monitor-block__title">1. Import leads</div>
-        <div class="title-note">CSV or Excel. Columns are matched by name (email / name / company / phone / city, English or Hebrew); a plain list of emails also works.</div>
+        <div class="monitor-block__title">1. Import leads <span class="title-note">(optional)</span></div>
+        <div class="title-note">Skip this if the leads are already in the database — choose them in step 3. Use it to add new addresses or update existing leads from a CSV/Excel file (columns email / name / company / phone / city, English or Hebrew; a plain list of emails also works).</div>
       </div>
       <div class="block-toolbar">
         <input ref="leadFileInput" type="file" accept=".csv,.txt,.xlsx,.xls" hidden @change="onLeadFile" />
+        <n-radio-group v-model:value="importMode" size="small">
+          <n-radio-button value="fill">Fill empty fields only</n-radio-button>
+          <n-radio-button value="overwrite">Overwrite with file values</n-radio-button>
+        </n-radio-group>
         <n-button size="small" :loading="importing" @click="leadFileInput?.click()">
           <template #icon><n-icon :component="CloudUploadOutline" /></template>
           Upload leads file
@@ -15,7 +19,7 @@
       </div>
       <n-alert v-if="lastImport" type="success" style="margin-top:10px">
         {{ lastImport.file }}: {{ lastImport.valid }} valid emails ·
-        {{ lastImport.inserted }} new leads · {{ lastImport.updated }} already existed (blank fields filled) ·
+        {{ lastImport.inserted }} new leads · {{ lastImport.updated }} existing leads {{ lastImport.mode === "overwrite" ? "updated" : "had empty fields filled" }} ·
         {{ lastImport.invalid }} rows without a valid email<span v-if="lastImport.duplicatesInFile"> · {{ lastImport.duplicatesInFile }} duplicates in file</span>
       </n-alert>
     </div>
@@ -24,7 +28,7 @@
     <div class="monitor-block">
       <div class="block-head">
         <div class="monitor-block__title">2. Email</div>
-        <div class="title-note">"פרסומת:" is added to the subject and an opt-out line to the footer automatically when missing.</div>
+        <div class="title-note">The advertising mark <bdi dir="rtl">פרסומת:</bdi> is added to the subject and an opt-out line to the footer automatically when missing.</div>
       </div>
       <div class="block-toolbar">
         <n-select
@@ -98,6 +102,7 @@
       </div>
       <n-radio-group v-model:value="audienceType" :disabled="sending" style="margin-top:6px">
         <n-space vertical>
+          <n-radio value="leads" :disabled="!selectedLeadIds?.length">Leads selected in the Leads tab ({{ selectedLeadIds?.length ?? 0 }})</n-radio>
           <n-radio value="import" :disabled="!lastImport">Leads from the file uploaded above<span v-if="lastImport"> ({{ lastImport.file }})</span></n-radio>
           <n-radio value="filter">Leads matching a filter (starts from the Leads tab filter)</n-radio>
           <n-radio value="all">All leads with an email</n-radio>
@@ -167,7 +172,7 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {
-  NAlert, NButton, NFormItem, NIcon, NInput, NModal, NProgress, NRadio, NRadioGroup, NSelect, NSpace, NTooltip, useMessage,
+  NAlert, NButton, NFormItem, NIcon, NInput, NModal, NProgress, NRadio, NRadioButton, NRadioGroup, NSelect, NSpace, NTooltip, useMessage,
 } from "naive-ui";
 import {
   AddOutline, CloudUploadOutline, DocumentTextOutline, FlaskOutline, ImageOutline, PeopleOutline, SaveOutline, SendOutline,
@@ -183,6 +188,8 @@ import {
 const props = defineProps<{
   /** The Inspector Leads table filter, used as the starting recipient filter. */
   leadFilter?: {source?: string | null; status?: string | null; q?: string | null};
+  /** Lead ids ticked in the Leads tab table. */
+  selectedLeadIds?: string[];
 }>();
 const emit = defineEmits<{ "leads-imported": [] }>();
 
@@ -195,6 +202,7 @@ const htmlInput = ref<InstanceType<typeof NInput> | null>(null);
 
 const importing = ref(false);
 const lastImport = ref<CampaignLeadImportResult | null>(null);
+const importMode = ref<"fill" | "overwrite">("fill");
 
 const campaigns = ref<EmailCampaign[]>([]);
 const selectedId = ref<string | null>(null);
@@ -206,7 +214,7 @@ const saving = ref(false);
 const uploadingImage = ref(false);
 const rendered = ref({subject: "", html: ""});
 
-const audienceType = ref<"import" | "filter" | "all">("filter");
+const audienceType = ref<"leads" | "import" | "filter" | "all">(props.selectedLeadIds?.length ? "leads" : "filter");
 const filterSource = ref<string | null>(props.leadFilter?.source ?? null);
 const filterStatus = ref<string | null>(props.leadFilter?.status ?? null);
 const filterQ = ref(props.leadFilter?.q ?? "");
@@ -243,12 +251,20 @@ const statusText = computed(() => {
 });
 
 function audience(): EmailCampaignAudience {
+  if (audienceType.value === "leads" && props.selectedLeadIds?.length) return {type: "leads", ids: [...props.selectedLeadIds]};
   if (audienceType.value === "import" && lastImport.value) return {type: "import", batchId: lastImport.value.batchId};
   if (audienceType.value === "filter") return {type: "filter", source: filterSource.value, status: filterStatus.value, q: filterQ.value.trim() || null};
   return {type: "all"};
 }
 
 watch([audienceType, filterSource, filterStatus, filterQ], () => { preview.value = null; });
+
+// Ticking leads in the table makes them the recipients; clearing the selection falls back to the filter.
+watch(() => props.selectedLeadIds?.length ?? 0, (count) => {
+  if (count) audienceType.value = "leads";
+  else if (audienceType.value === "leads") audienceType.value = "filter";
+  preview.value = null;
+});
 
 // Follow the leads table filter when it changes, so "matching a filter" means what the table shows.
 watch(() => props.leadFilter, (filter) => {
@@ -273,7 +289,7 @@ async function onLeadFile(event: Event) {
   if (!file) return;
   importing.value = true;
   try {
-    lastImport.value = await api.admin.importCampaignLeads(file);
+    lastImport.value = await api.admin.importCampaignLeads(file, importMode.value);
     audienceType.value = "import";
     await loadSources();
     emit("leads-imported");

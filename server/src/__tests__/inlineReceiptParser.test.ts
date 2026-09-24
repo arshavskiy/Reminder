@@ -145,6 +145,35 @@ describe("parseInlineReceipt", () => {
     expect(result?.merchant).toBe("200 GB (Google One)");
   });
 
+  it("parses a Google Play thank-you receipt and keeps the app as the merchant", () => {
+    const text = `
+      Google Play
+      Thank you
+      Your trial of NordVPN – fast VPN for privacy has ended. Your
+      subscription continues at the price of 175.00₪. Starting Oct 21,
+      2026 you will be automatically charged 325.00₪/year unless you cancel.
+      Order number: GPA.3329-4916-5836-76651..0
+      Order date: Oct 21, 2025 7:00:11 PM GMT+3
+      Your account: arshavsky.pasha@gmail.com
+      Item Price
+      NordVPN 1 Year Subscription (NordVPN – fast VPN for privacy) 175.00₪
+      Auto-renewing subscription
+      Total: 175.00₪
+      (Includes VAT of 0.00₪)
+      Payment method: Mastercard-5218
+    `;
+    const result = parseInlineReceipt("googleplay-noreply@google.com", text, "Your Google Play Order Receipt");
+    expect(result?.vendor).toBe("Google Play");
+    expect(result?.transactionId).toBe("GPA.3329-4916-5836-76651..0");
+    expect(result?.amount).toBeCloseTo(175);
+    expect(result?.currency).toBe("ILS");
+    expect(result?.date).toBe("2025-10-21");
+    expect(result?.merchant).toBe("NordVPN 1 Year Subscription (NordVPN – fast VPN for privacy)");
+    expect(result?.renewalAmount).toBeCloseTo(325);
+    expect(result?.renewalInterval).toBe("year");
+    expect(result?.renewalDate).toBe("2026-10-21");
+  });
+
   it("parses a Google Play receipt when bidi marks wrap the shekel amount", () => {
     const text = "Order number: SOP.3385-8665-0643-31794..26\nTotal: \u200f12.00 \u200f₪/month";
     const result = parseInlineReceipt("googleplay-noreply@google.com", text, "Your Google Play Order Receipt from 6 Nov 2025");

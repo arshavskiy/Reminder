@@ -55,6 +55,14 @@
               :src="invoice.preview_url"
               :alt="invoice.file_name"
             />
+            <iframe
+              v-else-if="invoice.preview_html"
+              class="invoice-preview__html"
+              sandbox=""
+              referrerpolicy="no-referrer"
+              :srcdoc="invoice.preview_html"
+              title="תצוגת המייל"
+            />
             <div v-else class="invoice-preview__empty">
               <n-icon :component="DocumentTextOutline" :size="48" />
               <span>{{ invoice.inline_no_file ? "נשמר מגוף המייל, ללא קובץ" : "אין תצוגה מקדימה" }}</span>
@@ -748,6 +756,10 @@ function shouldUseLtrValue(key: string, value: unknown): boolean {
   border: 0;
   object-fit: contain;
   background: var(--bg-card);
+}
+
+.invoice-preview__html {
+  background: #fff;
 }
 
 .invoice-preview__empty {

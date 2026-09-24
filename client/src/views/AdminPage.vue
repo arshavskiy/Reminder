@@ -173,15 +173,33 @@
                 style="width: 170px"
                 @update:value="loadInspectorLeads(1)"
               />
+              <n-select
+                v-model:value="inspectorLeadUnsubFilter"
+                clearable
+                size="small"
+                placeholder="Unsubscribed"
+                :options="inspectorLeadUnsubOptions"
+                style="width: 170px"
+                @update:value="loadInspectorLeads(1)"
+              />
               <n-button size="small" :loading="inspectorLeadsLoading" @click="loadInspectorLeads(1)">
                 <template #icon><n-icon :component="RefreshOutline" /></template>
                 Refresh
               </n-button>
+              <template v-if="inspectorLeadSelected.length">
+                <n-button size="small" type="primary" @click="inspectorLeadsTab = 'campaigns'">
+                  <template #icon><n-icon :component="MailOutline" /></template>
+                  Email selected ({{ inspectorLeadSelected.length }})
+                </n-button>
+                <n-button size="small" quaternary @click="inspectorLeadSelected = []">Clear selection</n-button>
+              </template>
             </div>
 
             <n-data-table
               :columns="inspectorLeadColumns"
               :data="inspectorLeadsRows"
+              :row-key="(row: InspectorLead) => row.id"
+              v-model:checked-row-keys="inspectorLeadSelected"
               :bordered="false"
               :loading="inspectorLeadsLoading"
               :pagination="false"
@@ -203,6 +221,7 @@
             <AdminCampaignsPanel
               :key="`campaigns-${adminDbTarget}`"
               :lead-filter="{ source: inspectorLeadSourceFilter, status: inspectorLeadStatusFilter, q: inspectorLeadSearch.trim() || null }"
+              :selected-lead-ids="inspectorLeadSelected"
               @leads-imported="loadInspectorLeads(1)"
             />
           </n-tab-pane>
@@ -1877,6 +1896,13 @@ function resolveUserEmail(userId: string) {
 // ── Inspector leads ───────────────────────────────────────────────────────
 const inspectorLeadsRows = ref<InspectorLead[]>([]);
 const inspectorLeadsTab = ref<"leads" | "campaigns" | "outreach" | "whatsapp">("leads");
+/** Lead ids ticked in the table (kept across pages) for "Email selected". */
+const inspectorLeadSelected = ref<string[]>([]);
+const inspectorLeadUnsubFilter = ref<"hide" | "only" | null>(null);
+const inspectorLeadUnsubOptions = [
+  { label: "Hide unsubscribed", value: "hide" },
+  { label: "Only unsubscribed", value: "only" },
+];
 const inspectorLeadsTotal = ref(0);
 const inspectorLeadsLoading = ref(false);
 const inspectorLeadPage = ref(1);
@@ -1908,6 +1934,7 @@ const inspectorLeadRangeText = computed(() => {
 });
 
 const inspectorLeadColumns: DataTableColumns<InspectorLead> = [
+  { type: "selection", disabled: (row) => !row.email || Boolean(row.unsubscribed) },
   {
     title: "Lead", key: "name", align: "left", minWidth: 260, ellipsis: { tooltip: true },
     render: (row) => h("div", { class: "lead-cell" }, [
@@ -1928,7 +1955,7 @@ const inspectorLeadColumns: DataTableColumns<InspectorLead> = [
     }, String(row.leadScore ?? 0)),
   },
   {
-    title: "Status", key: "contactStatus", align: "left", width: 150,
+    title: "Status", key: "contactStatus", align: "left", width: 175,
     render: (row) => h(NSelect, {
       size: "tiny",
       class: "lead-status-select",
@@ -1950,7 +1977,7 @@ const inspectorLeadColumns: DataTableColumns<InspectorLead> = [
       }),
       row.unsubscribed
         ? h(NTooltip, null, {
-          trigger: () => h("span", { class: "lead-unsubscribed" }, formatDate(row.unsubscribedAt ?? null)),
+          trigger: () => h("span", { class: "lead-unsubscribed" }, row.unsubscribedAt ? new Date(row.unsubscribedAt).toLocaleDateString("en-GB") : "—"),
           default: () => row.unsubscribeSource === "admin"
             ? "Marked unsubscribed by an admin — skipped by email campaigns"
             : "Asked to be removed by email reply — skipped by email campaigns",
@@ -1991,6 +2018,7 @@ async function loadInspectorLeads(page = inspectorLeadPage.value) {
       limit: inspectorLeadLimit,
       source: inspectorLeadSourceFilter.value,
       status: inspectorLeadStatusFilter.value,
+      unsubscribed: inspectorLeadUnsubFilter.value,
       q: inspectorLeadSearch.value.trim() || null,
     });
     inspectorLeadsRows.value = res.rows;
@@ -3754,7 +3782,7 @@ onUnmounted(() => {
 }
 
 .lead-status-select {
-  width: 128px;
+  width: 150px;
 }
 
 .lead-status-label {

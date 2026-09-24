@@ -615,12 +615,22 @@
             placeholder="בלי שינוי"
           />
         </label>
+        <label class="invoice-form-label">
+          <span>קטגוריה</span>
+          <n-select
+            v-model:value="batchEdit.providerCategory"
+            :options="providerCategoryOptions"
+            clearable
+            filterable
+            placeholder="בלי שינוי"
+          />
+        </label>
         <div class="invoice-business-form__actions">
           <n-button :disabled="batchEdit.saving" @click="batchEdit.show = false">{{ l.common.cancel }}</n-button>
           <n-button
             type="primary"
             :loading="batchEdit.saving"
-            :disabled="!batchEdit.documentCategory && !batchEdit.cashFlow"
+            :disabled="!batchEdit.documentCategory && !batchEdit.cashFlow && !batchEdit.providerCategory"
             @click="saveBatchEdit"
           >
             עדכן
@@ -980,22 +990,25 @@ const batchEdit = reactive({
   saving: false,
   documentCategory: null as ImportedInvoice["document_category"] | null,
   cashFlow: null as ImportedInvoice["cash_flow"] | null,
+  providerCategory: null as ImportedInvoice["provider_category"] | null,
 });
 
 function openBatchEdit() {
   batchEdit.documentCategory = null;
   batchEdit.cashFlow = null;
+  batchEdit.providerCategory = null;
   batchEdit.show = true;
 }
 
 async function saveBatchEdit() {
   const ids = [...selectedInvoiceIds.value];
-  if (!ids.length || (!batchEdit.documentCategory && !batchEdit.cashFlow)) return;
+  if (!ids.length || (!batchEdit.documentCategory && !batchEdit.cashFlow && !batchEdit.providerCategory)) return;
   batchEdit.saving = true;
   try {
     await Promise.all(ids.map((id) => api.invoices.update(id, {
       document_category: batchEdit.documentCategory ?? undefined,
       cash_flow: batchEdit.cashFlow ?? undefined,
+      provider_category: batchEdit.providerCategory ?? undefined,
     })));
     message.success(`עודכנו ${ids.length} חשבוניות`);
     batchEdit.show = false;
@@ -1640,8 +1653,20 @@ async function updateInvoiceStatus(row: ImportedInvoice, status: string) {
 }
 
 async function updateInvoiceProviderCategory(row: ImportedInvoice, value: string | null) {
-  if ((row.provider_category ?? null) === (value ?? null)) return;
-  await updateInvoiceMeta(row, { provider_category: normalizeProviderCategory(value) });
+  const category = normalizeProviderCategory(value);
+  if ((row.provider_category ?? null) === (category ?? null)) return;
+  const supplierName = row.supplier_name?.trim();
+  if (!supplierName) {
+    await updateInvoiceMeta(row, { provider_category: category });
+    return;
+  }
+  try {
+    const result = await api.invoices.setSupplierCategory({ supplierName, provider_category: category });
+    rows.value = rows.value.map((item) => item.supplier_name === supplierName ? { ...item, provider_category: category } : item);
+    message.success(`הקטגוריה עודכנה ב-${result.modified} חשבוניות של ${supplierName}`);
+  } catch {
+    message.error("שגיאה בעדכון הקטגוריה");
+  }
 }
 
 function normalizeProviderCategory(value: string | null): ImportedInvoice["provider_category"] | null {
