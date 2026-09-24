@@ -43,11 +43,33 @@ interface EmailCampaign {
   completed_at?: Date | null;
 }
 
-type CampaignAudience =
+/** Narrowing applied on top of every audience except hand-picked leads. */
+interface AudienceRefine {
+  statuses?: string[];
+  neverEmailed?: boolean;
+}
+
+type CampaignAudience = AudienceRefine & (
   | {type: "leads"; ids: string[]}
   | {type: "import"; batchId: string}
   | {type: "filter"; source?: string | null; status?: string | null; q?: string | null}
-  | {type: "all"};
+  | {type: "all"}
+);
+
+const LEAD_STATUSES = new Set(["NEW", "CONTACTED", "DEMO", "TRIAL", "CUSTOMER", "NOT_RELEVANT"]);
+
+function refineConditions(audience: CampaignAudience): Record<string, any>[] {
+  if (audience.type === "leads") return [];
+  const and: Record<string, any>[] = [];
+  if (audience.statuses?.length) {
+    const statusOr: Record<string, any>[] = [{contactStatus: {$in: audience.statuses}}];
+    // Leads without a status are shown as NEW.
+    if (audience.statuses.includes("NEW")) statusOr.push({contactStatus: {$in: [null, ""]}});
+    and.push({$or: statusOr});
+  }
+  if (audience.neverEmailed) and.push({$or: [{emailCampaigns: {$exists: false}}, {emailCampaigns: {$size: 0}}]});
+  return and;
+}
 
 const upload = multer({storage: multer.memoryStorage(), limits: {fileSize: 10 * 1024 * 1024}});
 const runningCampaigns = new Set<string>();
@@ -75,10 +97,11 @@ function presentCampaign(doc: EmailCampaign, withRecipients = false) {
 
 function audienceFilter(audience: CampaignAudience): Record<string, any> {
   const base: Record<string, any> = {email: {$type: "string", $regex: /@/}, unsubscribed: {$ne: true}};
+  const refine = refineConditions(audience);
   if (audience.type === "leads") return {...base, _id: {$in: audience.ids.map((id) => new ObjectId(id))}};
-  if (audience.type === "import") return {...base, importBatches: audience.batchId};
+  if (audience.type === "import") return {$and: [{...base, importBatches: audience.batchId}, ...refine]};
   if (audience.type === "filter") {
-    const and: Record<string, any>[] = [base];
+    const and: Record<string, any>[] = [base, ...refine];
     if (audience.source) and.push({source: audience.source});
     if (audience.status) and.push({contactStatus: audience.status});
     if (audience.q?.trim()) {
@@ -87,17 +110,21 @@ function audienceFilter(audience: CampaignAudience): Record<string, any> {
     }
     return {$and: and};
   }
-  return base;
+  return refine.length ? {$and: [base, ...refine]} : base;
 }
 
 function parseAudience(value: any): CampaignAudience | null {
+  const refine: AudienceRefine = {
+    statuses: Array.isArray(value?.statuses) ? value.statuses.filter((s: unknown) => LEAD_STATUSES.has(String(s))) : [],
+    neverEmailed: value?.neverEmailed === true,
+  };
   if (value?.type === "leads" && Array.isArray(value.ids)) {
     const ids = value.ids.filter((id: unknown) => typeof id === "string" && ObjectId.isValid(id)).slice(0, 5000);
     return ids.length ? {type: "leads", ids} : null;
   }
-  if (value?.type === "import" && typeof value.batchId === "string" && value.batchId) return {type: "import", batchId: value.batchId};
-  if (value?.type === "filter") return {type: "filter", source: value.source ?? null, status: value.status ?? null, q: value.q ?? null};
-  if (value?.type === "all") return {type: "all"};
+  if (value?.type === "import" && typeof value.batchId === "string" && value.batchId) return {...refine, type: "import", batchId: value.batchId};
+  if (value?.type === "filter") return {...refine, type: "filter", source: value.source ?? null, status: value.status ?? null, q: value.q ?? null};
+  if (value?.type === "all") return {...refine, type: "all"};
   return null;
 }
 
