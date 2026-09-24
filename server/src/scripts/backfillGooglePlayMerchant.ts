@@ -71,7 +71,13 @@ function renewalNote(receipt: NonNullable<ReturnType<typeof parseInlineReceipt>>
 
 const db = await connectDb();
 try {
-  const rows = await col("invoices").find({
+  const rows = await col<{
+    preview_html?: string | null;
+    gmail_message_id?: string;
+    user_id?: string;
+    invoice_number?: string;
+    fields?: {source_from?: string; source_subject?: string};
+  }>("invoices").find({
     source: "gmail_inline",
     $or: [
       {preview_html: {$exists: false}},
