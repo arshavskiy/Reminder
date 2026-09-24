@@ -99,7 +99,7 @@
       <n-radio-group v-model:value="audienceType" :disabled="sending" style="margin-top:6px">
         <n-space vertical>
           <n-radio value="import" :disabled="!lastImport">Leads from the file uploaded above<span v-if="lastImport"> ({{ lastImport.file }})</span></n-radio>
-          <n-radio value="filter">Leads matching a filter</n-radio>
+          <n-radio value="filter">Leads matching a filter (starts from the Leads tab filter)</n-radio>
           <n-radio value="all">All leads with an email</n-radio>
         </n-space>
       </n-radio-group>
@@ -180,6 +180,12 @@ import {
   type EmailCampaignAudience,
 } from "../services/apiService";
 
+const props = defineProps<{
+  /** The Inspector Leads table filter, used as the starting recipient filter. */
+  leadFilter?: {source?: string | null; status?: string | null; q?: string | null};
+}>();
+const emit = defineEmits<{ "leads-imported": [] }>();
+
 const message = useMessage();
 
 const leadFileInput = ref<HTMLInputElement | null>(null);
@@ -201,9 +207,9 @@ const uploadingImage = ref(false);
 const rendered = ref({subject: "", html: ""});
 
 const audienceType = ref<"import" | "filter" | "all">("filter");
-const filterSource = ref<string | null>(null);
-const filterStatus = ref<string | null>(null);
-const filterQ = ref("");
+const filterSource = ref<string | null>(props.leadFilter?.source ?? null);
+const filterStatus = ref<string | null>(props.leadFilter?.status ?? null);
+const filterQ = ref(props.leadFilter?.q ?? "");
 const sourceOptions = ref<{label: string; value: string}[]>([]);
 const statusOptions = ["NEW", "CONTACTED", "DEMO", "TRIAL", "CUSTOMER", "NOT_RELEVANT"].map((value) => ({label: value, value}));
 
@@ -244,6 +250,13 @@ function audience(): EmailCampaignAudience {
 
 watch([audienceType, filterSource, filterStatus, filterQ], () => { preview.value = null; });
 
+// Follow the leads table filter when it changes, so "matching a filter" means what the table shows.
+watch(() => props.leadFilter, (filter) => {
+  filterSource.value = filter?.source ?? null;
+  filterStatus.value = filter?.status ?? null;
+  filterQ.value = filter?.q ?? "";
+}, {deep: true});
+
 async function readFileText(file: File) {
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -263,6 +276,7 @@ async function onLeadFile(event: Event) {
     lastImport.value = await api.admin.importCampaignLeads(file);
     audienceType.value = "import";
     await loadSources();
+    emit("leads-imported");
     message.success(`Imported ${lastImport.value.valid} leads`);
   } catch (err: any) {
     message.error(err?.message ?? "Import failed");

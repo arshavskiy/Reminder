@@ -105,10 +105,6 @@
         />
       </section>
 
-      <section v-if="activeSection === 'email_campaigns'" class="admin-section">
-        <AdminCampaignsPanel :key="`campaigns-${adminDbTarget}`" />
-      </section>
-
       <section v-if="activeSection === 'magic_links'" class="admin-section">
         <AdminMagicLinkPanel :key="adminDbTarget" @created="onMagicLinkUserCreated" />
       </section>
@@ -144,6 +140,8 @@
             />
           </div>
 
+          <n-tabs v-model:value="inspectorLeadsTab" type="line" animated class="leads-tabs">
+          <n-tab-pane name="leads" tab="Leads" display-directive="show">
           <div class="monitor-block">
             <div class="monitor-block__title">Inspector Leads</div>
             <div class="admin-section__toolbar leads-toolbar">
@@ -200,8 +198,21 @@
             </div>
           </div>
 
-          <AdminOutreachPanel :key="`outreach-${adminDbTarget}`" />
-          <WhatsAppCampaignPanel :key="adminDbTarget" :leads="inspectorLeadsRows" />
+          </n-tab-pane>
+          <n-tab-pane name="campaigns" tab="Email campaigns" display-directive="show:lazy">
+            <AdminCampaignsPanel
+              :key="`campaigns-${adminDbTarget}`"
+              :lead-filter="{ source: inspectorLeadSourceFilter, status: inspectorLeadStatusFilter, q: inspectorLeadSearch.trim() || null }"
+              @leads-imported="loadInspectorLeads(1)"
+            />
+          </n-tab-pane>
+          <n-tab-pane name="outreach" tab="Sent &amp; unsubscribes" display-directive="show:lazy">
+            <AdminOutreachPanel :key="`outreach-${adminDbTarget}`" />
+          </n-tab-pane>
+          <n-tab-pane name="whatsapp" tab="WhatsApp" display-directive="show:lazy">
+            <WhatsAppCampaignPanel :key="adminDbTarget" :leads="inspectorLeadsRows" />
+          </n-tab-pane>
+          </n-tabs>
         </template>
       </section>
 
@@ -1671,6 +1682,8 @@ import {
   NSelect,
   NSpin,
   NSwitch,
+  NTabPane,
+  NTabs,
   NTag,
   NCheckbox,
   NTooltip,
@@ -1699,7 +1712,6 @@ import {
   ReceiptOutline,
   RefreshOutline,
   SearchOutline,
-  SendOutline,
   ServerOutline,
   SettingsOutline,
   TimerOutline,
@@ -1804,7 +1816,6 @@ const adminSections = [
   { key: "users",              label: "Users",                  icon: PeopleOutline },
   { key: "magic_links",        label: "Magic Links",            icon: KeyOutline },
   { key: "inspector_leads",    label: "Inspector Leads",        icon: SearchOutline },
-  { key: "email_campaigns",    label: "Email Campaigns",        icon: SendOutline },
   { key: "gmail",              label: "Gmail Inbox",            icon: MailOutline },
   { key: "documents",          label: "Documents & Extraction", icon: DocumentOutline },
   { key: "extraction_quality", label: "Extraction Quality",     icon: FlashOutline },
@@ -1865,6 +1876,7 @@ function resolveUserEmail(userId: string) {
 
 // ── Inspector leads ───────────────────────────────────────────────────────
 const inspectorLeadsRows = ref<InspectorLead[]>([]);
+const inspectorLeadsTab = ref<"leads" | "campaigns" | "outreach" | "whatsapp">("leads");
 const inspectorLeadsTotal = ref(0);
 const inspectorLeadsLoading = ref(false);
 const inspectorLeadPage = ref(1);
