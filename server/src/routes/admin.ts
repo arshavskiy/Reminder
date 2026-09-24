@@ -27,14 +27,7 @@ import {
   type ProcessId,
 } from "../ops/processControl";
 import {runTempFileSweep, tempDirUsage, tempSweeperState} from "../storage/tempFiles";
-import {gmailFetch, resolveGmailToken, retryWithRefresh} from "./gmail";
-import {
-  dedupeUnsubscribeReplies,
-  parseUnsubscribeReply,
-  recordUnsubscribes,
-  UNSUBSCRIBE_GMAIL_QUERY,
-  type UnsubscribeReply,
-} from "../outreach/unsubscribeReplies";
+import {runUnsubscribeScan, scanRunsCollection, unsubscribeScanUserId} from "../outreach/unsubscribeScan";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 // "expired" is not assignable: it is what a lapsed trial resolves to, not a
@@ -719,64 +712,32 @@ export function registerAdminRoutes(app: express.Application) {
     res.json({ rows: rows.map(flatInspectorLead), total: rows.length });
   });
 
-  // POST /api/admin/inspector-leads/scan-unsubscribes — searches the admin's
-  // connected Gmail (contact@remindocr.com) for "הסר" replies and flags the
-  // senders as unsubscribed.
+  // POST /api/admin/inspector-leads/scan-unsubscribes — runs the Gmail "הסר" scan
+  // now (the same scan the server also runs on a schedule and before each send).
   app.post("/api/admin/inspector-leads/scan-unsubscribes", async (req, res) => {
     const auth = await adminAuth(req, res);
     if (!auth) return;
-
-    let accessToken = await runWithPrimaryDb(() => resolveGmailToken(auth.userId));
-    if (!accessToken) {
-      res.status(409).json({ error: "gmail_not_connected" });
+    // Prefer the configured contact-mailbox account; fall back to the admin's own Gmail.
+    const gmailUserId = await unsubscribeScanUserId() ?? auth.userId;
+    const run = await runUnsubscribeScan({trigger: "manual", triggeredBy: auth.user.email ?? auth.userId, gmailUserId});
+    if (run.status === "error") {
+      res.status(run.error === "gmail_not_connected" ? 409 : 502).json({ error: run.error, scanId: run._id.toString() });
       return;
     }
+    res.json({ scanId: run._id.toString(), scanned: run.scanned, requests: run.requests, newlyUnsubscribed: run.newlyUnsubscribed, alreadyUnsubscribed: run.alreadyUnsubscribed, insertedLeads: run.insertedLeads, newEmails: run.newEmails });
+  });
 
-    const replies: UnsubscribeReply[] = [];
-    let scanned = 0;
-    let pageToken = "";
-    for (let pageIndex = 0; pageIndex < 5; pageIndex += 1) {
-      const listPath = `messages?q=${encodeURIComponent(UNSUBSCRIBE_GMAIL_QUERY)}&maxResults=100${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
-      let listRes = await gmailFetch(accessToken, listPath);
-      if (listRes.status === 401) {
-        const refreshed = await runWithPrimaryDb(() => retryWithRefresh(auth.userId));
-        if (!refreshed) {
-          res.status(409).json({ error: "gmail_not_connected" });
-          return;
-        }
-        accessToken = refreshed;
-        listRes = await gmailFetch(accessToken, listPath);
-      }
-      if (!listRes.ok) {
-        logger.warn("unsubscribe_scan_list_failed", { status: listRes.status });
-        res.status(502).json({ error: "gmail_search_failed" });
-        return;
-      }
-      const listData = await listRes.json() as { messages?: { id: string }[]; nextPageToken?: string };
-      const ids = (listData.messages ?? []).map((m) => m.id);
-      scanned += ids.length;
-      const token = accessToken;
-      const messages = await Promise.all(ids.map(async (id) => {
-        const msgRes = await gmailFetch(token, `messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
-        if (!msgRes.ok) return null;
-        const msg = await msgRes.json() as any;
-        return parseUnsubscribeReply({
-          id,
-          snippet: msg.snippet,
-          internalDate: msg.internalDate,
-          headers: msg.payload?.headers ?? [],
-        });
-      }));
-      for (const reply of messages) if (reply) replies.push(reply);
-      if (!listData.nextPageToken) break;
-      pageToken = listData.nextPageToken;
-    }
-
-    const unique = dedupeUnsubscribeReplies(replies);
-    const leads = await inspectorLeadsCollection();
-    const result = await recordUnsubscribes(leads, unique);
-    logger.info("unsubscribe_scan_completed", { scanned, requests: unique.length, ...result });
-    res.json({ scanned, requests: unique.length, ...result });
+  // GET /api/admin/inspector-leads/unsubscribe-scans — recent scan runs (manual, scheduled, pre-send)
+  app.get("/api/admin/inspector-leads/unsubscribe-scans", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const rows = await scanRunsCollection().find({}).sort({ started_at: -1 }).limit(20).toArray();
+    const intervalMinutes = Math.max(5, Number(process.env.UNSUBSCRIBE_SCAN_INTERVAL_MINUTES ?? 60) || 60);
+    const scheduled = process.env.UNSUBSCRIBE_SCAN_ENABLED === "true"
+      || ((process.env.APP_ENV ?? "development") === "production" && process.env.UNSUBSCRIBE_SCAN_ENABLED !== "false");
+    res.json({
+      schedule: { enabled: scheduled, intervalMinutes },
+      rows: rows.map(({ _id, ...row }) => ({ id: _id.toString(), ...row })),
+    });
   });
 
   // ── Web Push subscription (admin notifications) ───────────────────────────

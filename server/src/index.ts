@@ -38,6 +38,7 @@ import {registerUserSettingsRoutes} from "./routes/userSettings";
 import {registerProfileRoutes} from "./routes/profile";
 import {closeInspectorLeadsClient, registerAdminRoutes} from "./routes/admin";
 import {registerAdminCampaignRoutes} from "./routes/adminCampaigns";
+import {startUnsubscribeScanScheduler} from "./outreach/unsubscribeScan";
 import {registerBillingRoutes} from "./routes/billing";
 import {initPush} from "./push/pushService";
 import {checkSystemDeps, logSystemDepsOnStartup} from "./pipeline/systemDeps";
@@ -331,6 +332,7 @@ async function main() {
   process.on("SIGINT", () => { void shutdown("SIGINT"); });
 
   startScheduler();
+  startUnsubscribeScanScheduler();
   startWatchFolder();
 }
 

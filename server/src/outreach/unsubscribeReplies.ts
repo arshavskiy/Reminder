@@ -86,10 +86,11 @@ function exactEmailFilter(email: string) {
  * Flags each sender as unsubscribed in inspector_leads. A sender that is not a
  * lead yet is inserted as a suppression-only lead so future campaigns skip it.
  */
-export async function recordUnsubscribes(leads: Collection, replies: UnsubscribeReply[]) {
+export async function recordUnsubscribes(leads: Collection, replies: UnsubscribeReply[], scanId: string | null = null) {
   let newlyUnsubscribed = 0;
   let alreadyUnsubscribed = 0;
   let insertedLeads = 0;
+  const newEmails: string[] = [];
   for (const reply of replies) {
     const lead = await leads.findOne(exactEmailFilter(reply.email));
     const unsubscribe = {
@@ -99,6 +100,7 @@ export async function recordUnsubscribes(leads: Collection, replies: Unsubscribe
       unsubscribeMessageId: reply.messageId,
       unsubscribeSubject: reply.subject,
       unsubscribeSnippet: reply.snippet.slice(0, 300),
+      unsubscribeScanId: scanId,
       updated_at: new Date(),
     };
     if (!lead) {
@@ -112,6 +114,7 @@ export async function recordUnsubscribes(leads: Collection, replies: Unsubscribe
         ...unsubscribe,
       });
       insertedLeads += 1;
+      newEmails.push(reply.email);
       continue;
     }
     if (lead.unsubscribed) {
@@ -124,6 +127,7 @@ export async function recordUnsubscribes(leads: Collection, replies: Unsubscribe
       ...(status === "NEW" || status === "CONTACTED" ? {contactStatus: "NOT_RELEVANT"} : {}),
     }});
     newlyUnsubscribed += 1;
+    newEmails.push(reply.email);
   }
-  return {newlyUnsubscribed, alreadyUnsubscribed, insertedLeads};
+  return {newlyUnsubscribed, alreadyUnsubscribed, insertedLeads, newEmails};
 }
