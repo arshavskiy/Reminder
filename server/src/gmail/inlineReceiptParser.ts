@@ -11,6 +11,9 @@ export interface ParsedInlineReceipt {
   currency: string; // ISO 4217 where knowable, else the raw symbol/code
   merchant: string | null; // who was paid, if distinct from the sending vendor
   date: string | null; // ISO yyyy-mm-dd when parseable
+  renewalAmount?: number | null; // later auto-charge, when the mail states one
+  renewalInterval?: "year" | "month" | null;
+  renewalDate?: string | null; // ISO yyyy-mm-dd the auto-charge starts
 }
 
 function decodeHtmlEntity(codePoint: number): string {
@@ -24,6 +27,10 @@ function stripTags(html: string): string {
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => decodeHtmlEntity(parseInt(hex, 16)))
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
     .replace(/<[^>]+>/g, " ")
     // Gmail wraps amounts in bidi marks (U+200F before ₪, U+202A around $14.50).
     // Those are not whitespace, so "Total: ‏12.00" never matched the amount.
@@ -138,22 +145,49 @@ function parseMeta(html: string): ParsedInlineReceipt | null {
   };
 }
 
+function googlePlayMerchant(text: string): string | null {
+  // "200 GB (Google One) (by Google LLC)" — the product, not the store.
+  const byDeveloper = text.match(/Item\s+Price\s+(.+?)\s+\(by\s/i);
+  if (byDeveloper) return byDeveloper[1].trim();
+  // "NordVPN 1 Year Subscription (NordVPN – fast VPN for privacy) 175.00₪"
+  const itemLine = text.match(/Item\s+Price\s+(.+?)\s+[₪$€£]?\s*[\d,]+\.\d{2}/i);
+  if (itemLine) return itemLine[1].trim();
+  const trial = text.match(/Your trial of\s+(.+?)\s+has ended/i);
+  return trial ? trial[1].trim() : null;
+}
+
+function googlePlayRenewal(text: string): { amount: number; interval: "year" | "month"; date: string | null } | null {
+  const charged = text.match(/automatically charged\s+[₪$€£]?\s*([\d,]+\.\d{2})\s*[₪$€£]?\s*\/\s*(year|month)/i);
+  if (!charged) return null;
+  const amount = parseAmount(charged[1]);
+  if (amount === null) return null;
+  const starting = text.match(/Starting\s+((?:[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4})|(?:\d{1,2}\s+[A-Za-z]{3,9}\.?\s+\d{4}))/i);
+  return {
+    amount,
+    interval: charged[2].toLowerCase() === "year" ? "year" : "month",
+    date: starting ? parseHumanDate(starting[1]) : null,
+  };
+}
+
 function parseGooglePlay(html: string): ParsedInlineReceipt | null {
   const text = stripTags(html);
   const txnMatch = text.match(/Order number\s*:?\s*([A-Z0-9.\-]{10,})/i);
   const totalMatch = text.match(/(?<!Sub)\bTotal\s*:?\s*([₪$€£]?\s*[\d,]+\.?\d*)(?:\s*([₪$€£]|ILS|USD|EUR|GBP))?/i);
-  const dateMatch = text.match(/Order date\s*:?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i);
-  const itemMatch = text.match(/Item\s+Price\s+(.+?)\s+\(by\s/i) ?? text.match(/\n\n([^\n]+?)\s+\(by\s/i);
+  const dateMatch = text.match(/Order date\s*:?\s*((?:\d{1,2}\s+[A-Za-z]{3,9}\.?\s+\d{4})|(?:[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}))/i);
   if (!txnMatch || !totalMatch) return null;
   const amount = parseAmount(totalMatch[1]);
   if (amount === null) return null;
+  const renewal = googlePlayRenewal(text);
   return {
     vendor: "Google Play",
     transactionId: txnMatch[1],
     amount,
-    currency: normalizeCurrencyToken(totalMatch[2]) ?? detectCurrency(totalMatch[1]),
-    merchant: itemMatch ? itemMatch[1].trim() : "Google Play",
+    currency: normalizeCurrencyToken(totalMatch[2]) ?? detectCurrency(`${totalMatch[1]} ${totalMatch[2] ?? ""}`),
+    merchant: googlePlayMerchant(text),
     date: dateMatch ? parseHumanDate(dateMatch[1]) : null,
+    renewalAmount: renewal?.amount ?? null,
+    renewalInterval: renewal?.interval ?? null,
+    renewalDate: renewal?.date ?? null,
   };
 }
 

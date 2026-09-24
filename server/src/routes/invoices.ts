@@ -64,7 +64,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const toTs = parseDateTs(req.query.dateTo, true);
 
     const invoices = await col("invoices")
-      .find({ user_id: userId } as any)
+      .find({ user_id: userId } as any, { projection: { preview_html: 0 } } as any)
       .sort({ issue_date: -1, created_at: -1 } as any)
       .limit(2000)
       .toArray() as InvoiceRow[];
@@ -141,7 +141,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const proofFilter = normalizeExpenseProofFilter(req.query.proofFilter);
 
     const invoices = await col("invoices")
-      .find({ user_id: userId } as any)
+      .find({ user_id: userId } as any, { projection: { preview_html: 0 } } as any)
       .sort({ issue_date: -1, created_at: -1 } as any)
       .limit(5000)
       .toArray() as InvoiceRow[];
@@ -323,7 +323,7 @@ export function registerInvoiceRoutes(app: express.Application) {
 
     const period = lastSixMonthPeriod();
     const invoices = await col("invoices")
-      .find({ user_id: userId } as any)
+      .find({ user_id: userId } as any, { projection: { preview_html: 0 } } as any)
       .sort({ issue_date: -1, created_at: -1 } as any)
       .limit(5000)
       .toArray() as InvoiceRow[];
@@ -469,6 +469,41 @@ export function registerInvoiceRoutes(app: express.Application) {
     });
   });
 
+  app.post("/api/invoices/vendors/category", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    const supplierName = String(req.body?.supplierName ?? "").trim();
+    const providerCategory = stringOrNull(req.body?.provider_category);
+    if (!supplierName || providerCategory === undefined) {
+      res.status(400).json({ error: "supplierName and provider_category are required" });
+      return;
+    }
+    if (providerCategory !== null && !/^[a-z][a-z0-9_]{0,40}$/.test(providerCategory)) {
+      res.status(400).json({ error: "Invalid provider_category" });
+      return;
+    }
+
+    const now = new Date();
+    const result = await col("invoices").updateMany(
+      { user_id: userId, supplier_name: supplierName } as any,
+      { $set: { provider_category: providerCategory, "fields.provider_category": providerCategory, updated_at: now } } as any,
+    );
+    res.json({
+      ok: true,
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+      supplierName,
+      provider_category: providerCategory,
+    });
+  });
+
   app.post("/api/invoices/delete-selected", async (req, res) => {
     let userId: string;
     try {
@@ -564,7 +599,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       : null;
 
     const providers = await loadGmailSearchProviders();
-    const presented = presentInvoice(invoice, doc ?? undefined, gmailImport ?? undefined, providers);
+    const presented = presentInvoice(invoice, doc ?? undefined, gmailImport ?? undefined, providers, true);
     await enrichAmountIls([presented]);
     res.json(presented);
   });
@@ -670,7 +705,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       return;
     }
     const providers = await loadGmailSearchProviders();
-    const presented = presentInvoice(result, doc ?? undefined, undefined, providers);
+    const presented = presentInvoice(result, doc ?? undefined, undefined, providers, true);
     await enrichAmountIls([presented]);
     res.json(presented);
   });
@@ -695,6 +730,7 @@ function presentInvoice(
   doc?: InvoiceRow,
   gmailImport?: InvoiceRow,
   providers: GmailSearchProvider[] = [],
+  includePreview = false,
 ) {
   const documentId = String(invoice.document_id ?? "");
   const inlineNoFile = invoice.source === "gmail_inline" || invoice.inline_no_file === true;
@@ -774,6 +810,7 @@ function presentInvoice(
     created_at: invoice.created_at ?? doc?.created_at ?? null,
     import_date: doc?.import_date ?? invoice.created_at ?? null,
     preview_url: linkedDocumentId ? `/api/documents/${linkedDocumentId}/download?raw=1` : null,
+    preview_html: includePreview && inlineNoFile ? (typeof invoice.preview_html === "string" ? invoice.preview_html : null) : null,
     thumbnail_url: linkedDocumentId && (doc?.thumbnail_key || doc?.thumbnail_path) ? `/api/documents/${linkedDocumentId}/thumbnail` : null,
     download_url: linkedDocumentId ? `/api/documents/${linkedDocumentId}/download?dl=1` : null,
     in_s3: inlineNoFile ? false : Boolean(invoice.spaces_key || doc?.spaces_key),

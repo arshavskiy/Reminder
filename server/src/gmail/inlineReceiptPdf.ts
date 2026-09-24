@@ -40,6 +40,9 @@ export async function renderInlineReceiptPdf(receipt: ParsedInlineReceipt, subje
     if (receipt.merchant) row("Merchant", receipt.merchant);
     row("Amount", `${receipt.amount.toFixed(2)} ${receipt.currency}`);
     if (receipt.date) row("Date", receipt.date);
+    if (receipt.renewalAmount) {
+      row("Next charge", `${receipt.renewalAmount.toFixed(2)} ${receipt.currency}/${receipt.renewalInterval ?? "period"}${receipt.renewalDate ? ` from ${receipt.renewalDate}` : ""}`);
+    }
 
     doc.moveDown(0.6);
     doc.moveTo(56, doc.y).lineTo(539, doc.y).stroke("#cfd5dc");

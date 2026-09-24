@@ -44,6 +44,7 @@ interface EmailCampaign {
 }
 
 type CampaignAudience =
+  | {type: "leads"; ids: string[]}
   | {type: "import"; batchId: string}
   | {type: "filter"; source?: string | null; status?: string | null; q?: string | null}
   | {type: "all"};
@@ -74,6 +75,7 @@ function presentCampaign(doc: EmailCampaign, withRecipients = false) {
 
 function audienceFilter(audience: CampaignAudience): Record<string, any> {
   const base: Record<string, any> = {email: {$type: "string", $regex: /@/}, unsubscribed: {$ne: true}};
+  if (audience.type === "leads") return {...base, _id: {$in: audience.ids.map((id) => new ObjectId(id))}};
   if (audience.type === "import") return {...base, importBatches: audience.batchId};
   if (audience.type === "filter") {
     const and: Record<string, any>[] = [base];
@@ -89,6 +91,10 @@ function audienceFilter(audience: CampaignAudience): Record<string, any> {
 }
 
 function parseAudience(value: any): CampaignAudience | null {
+  if (value?.type === "leads" && Array.isArray(value.ids)) {
+    const ids = value.ids.filter((id: unknown) => typeof id === "string" && ObjectId.isValid(id)).slice(0, 5000);
+    return ids.length ? {type: "leads", ids} : null;
+  }
   if (value?.type === "import" && typeof value.batchId === "string" && value.batchId) return {type: "import", batchId: value.batchId};
   if (value?.type === "filter") return {type: "filter", source: value.source ?? null, status: value.status ?? null, q: value.q ?? null};
   if (value?.type === "all") return {type: "all"};
@@ -156,11 +162,14 @@ async function runCampaign(campaigns: Collection<EmailCampaign>, leads: Collecti
         update: {$set: {"recipients.$.status": "sent", "recipients.$.resendId": ids[i]?.id ?? null, "recipients.$.sentAt": sentAt}},
       }})));
       await campaigns.updateOne({_id: campaignId}, {$inc: {"counts.sent": pending.length}, $set: {updated_at: new Date()}});
-      const leadOps = pending.filter((r) => r.leadId && ObjectId.isValid(r.leadId)).map((r, i) => ({updateOne: {
+      // Pair each recipient with its Resend id before filtering, so indexes stay aligned.
+      const leadOps = pending.map((r, i) => ({r, resendId: ids[i]?.id ?? null}))
+        .filter(({r}) => r.leadId && ObjectId.isValid(r.leadId))
+        .map(({r, resendId}) => ({updateOne: {
         filter: {_id: new ObjectId(r.leadId!)},
         update: [
           {$set: {
-            emailCampaigns: {$concatArrays: [{$ifNull: ["$emailCampaigns", []]}, [{campaign: campaign.key, subject: message.subject, sentAt, resendId: ids[i]?.id ?? null}]]},
+            emailCampaigns: {$concatArrays: [{$ifNull: ["$emailCampaigns", []]}, [{campaign: campaign.key, subject: message.subject, sentAt, resendId}]]},
             lastEmailedAt: sentAt,
             lastEmailCampaign: campaign.key,
             updated_at: sentAt,
@@ -217,6 +226,8 @@ export function registerAdminCampaignRoutes(app: express.Application) {
       res.status(400).json({error: `Could not read the file: ${err?.message ?? err}`});
       return;
     }
+    // "fill" (default) only fills empty fields on existing leads; "overwrite" replaces them with the file's values.
+    const overwrite = String(req.body?.mode ?? "") === "overwrite";
     const batchId = `csv-${new Date().toISOString().slice(0, 10)}-${Date.now().toString(36)}`;
     const source = `csv:${req.file.originalname}`.slice(0, 80);
     const leads = await inspectorLeadsCollection();
@@ -230,14 +241,21 @@ export function registerAdminCampaignRoutes(app: express.Application) {
     for (const row of byEmail.values()) {
       const id = existingByEmail.get(row.email);
       if (id) {
-        // Only fill blanks on existing leads; never overwrite researched data.
+        // A field the file leaves empty never clears existing data, in either mode.
+        const merge = (field: "name" | "company" | "phone" | "city") => {
+          const incoming = row[field];
+          if (incoming == null) return `$${field}`;
+          if (overwrite) return incoming;
+          const current = {$trim: {input: {$ifNull: [{$toString: `$${field}`}, ""]}}};
+          return {$cond: [{$gt: [{$strLenCP: current}, 0]}, `$${field}`, incoming]};
+        };
         ops.push({updateOne: {
           filter: {_id: id},
           update: [{$set: {
-            name: {$ifNull: ["$name", row.name]},
-            company: {$ifNull: ["$company", row.company]},
-            phone: {$ifNull: ["$phone", row.phone]},
-            city: {$ifNull: ["$city", row.city]},
+            name: merge("name"),
+            company: merge("company"),
+            phone: merge("phone"),
+            city: merge("city"),
             importBatches: {$setUnion: [{$ifNull: ["$importBatches", []]}, [batchId]]},
             updated_at: now,
           }}],
@@ -250,7 +268,7 @@ export function registerAdminCampaignRoutes(app: express.Application) {
     }
     if (ops.length) await leads.bulkWrite(ops, {ordered: false});
     const inserted = ops.filter((op) => op.insertOne).length;
-    logger.info("campaign_leads_imported", {file: req.file.originalname, rows: parsed.totalRows, inserted, updated: ops.length - inserted});
+    logger.info("campaign_leads_imported", {file: req.file.originalname, rows: parsed.totalRows, inserted, updated: ops.length - inserted, overwrite});
     res.json({
       batchId,
       file: req.file.originalname,
@@ -260,6 +278,7 @@ export function registerAdminCampaignRoutes(app: express.Application) {
       invalid: parsed.invalid,
       inserted,
       updated: ops.length - inserted,
+      mode: overwrite ? "overwrite" : "fill",
     });
   });
 
