@@ -1466,6 +1466,8 @@ async function handleImportInlineAll() {
     lastGmailImportJob.value = result;
     const savedIds = new Set(result.results.filter((item) => item.import_status === "invoice").map((item) => item.messageId));
     inlineOnlyEmails.value = inlineOnlyEmails.value.filter((email) => !savedIds.has(email.id));
+    // The admin acted on the notice; emails left over were not receipts, so don't keep offering them.
+    inlineOnlyDismissed.value = true;
     if (result.imported) message.success(`נשמרו ${result.imported} קבלות מגוף המייל`);
     else if (result.rejected) message.warning("לא נשמרו קבלות. המיילים לא זוהו כקבלה.");
     else message.info("לא נמצאו קבלות חדשות לייבוא");
