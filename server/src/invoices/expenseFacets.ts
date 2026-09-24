@@ -14,6 +14,24 @@ export type ExpenseFacetRow = {
 
 const DEFAULT_CATEGORY = "general";
 
+/**
+ * "חשבונות הבית" replaced the separate electricity, water, gas, telecom and
+ * municipality categories. Rows saved before the merge still carry the old
+ * value until backfillHouseholdCategory runs, so they are read as household.
+ */
+export const HOUSEHOLD_CATEGORY = "household";
+export const LEGACY_HOUSEHOLD_CATEGORIES = ["electricity", "water", "gas", "telecom", "municipality"];
+
+export function normalizeProviderCategory<T extends string | null | undefined>(category: T): T | typeof HOUSEHOLD_CATEGORY {
+  return LEGACY_HOUSEHOLD_CATEGORIES.includes(String(category ?? "")) ? HOUSEHOLD_CATEGORY : category;
+}
+
+/** Whether a row's category passes a category filter (old household values count as household). */
+export function matchesCategoryFilter(category: string | null | undefined, filter: string): boolean {
+  if (!filter) return true;
+  return (normalizeProviderCategory(category) ?? null) === filter;
+}
+
 function sortUnique(values: string[]): string[] {
   return [...new Set(values.filter((value) => value.trim().length > 0))].sort((a, b) =>
     a.localeCompare(b, "he", { sensitivity: "base" }),
@@ -29,11 +47,11 @@ export function categoryFacetRows<T extends ExpenseFacetRow>(rows: T[], supplier
 /** Rows to build supplier options from: every filter applied except supplier. */
 export function supplierFacetRows<T extends ExpenseFacetRow>(rows: T[], category: string): T[] {
   if (!category) return rows;
-  return rows.filter((row) => (row.provider_category ?? null) === category);
+  return rows.filter((row) => matchesCategoryFilter(row.provider_category, category));
 }
 
 export function categoryFacetValues(rows: ExpenseFacetRow[]): string[] {
-  return sortUnique(rows.map((row) => row.provider_category || DEFAULT_CATEGORY));
+  return sortUnique(rows.map((row) => normalizeProviderCategory(row.provider_category) || DEFAULT_CATEGORY));
 }
 
 export function supplierFacetValues(rows: ExpenseFacetRow[]): string[] {

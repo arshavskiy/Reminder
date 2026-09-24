@@ -1,5 +1,5 @@
 <template>
-  <!-- dir=ltr keeps 1m..1y in ascending order inside the RTL toolbar. -->
+  <!-- dir=ltr keeps 1m..3y in ascending order inside the RTL toolbar. -->
   <div class="date-presets" dir="ltr" role="group" :aria-label="l.common.dateRangeAria">
     <button
       v-for="preset in DATE_RANGE_PRESETS"
@@ -44,6 +44,7 @@ function presetTitle(id: DateRangePresetId): string {
     "3m": l.value.common.range3m,
     "6m": l.value.common.range6m,
     "1y": l.value.common.range1y,
+    "3y": l.value.common.range3y,
   };
   return map[id];
 }

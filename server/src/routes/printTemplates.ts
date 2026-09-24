@@ -1,3 +1,4 @@
+import {resolveInspectionType} from "../documents/inspectionType.js";
 import type {Express} from "express";
 import {existsSync, mkdirSync, statSync, writeFileSync} from "node:fs";
 import {spawnSync} from "node:child_process";
@@ -504,6 +505,7 @@ async function saveGeneratedPdfDocument(args: {
     processing_status: "done",
     document_source: "generated",
     document_kind: "generated_print_template_pdf",
+    inspection_type: resolveInspectionType({document_kind: "generated_print_template_pdf", extracted_fields: data, file_name: fileName}, template.reportTypeKey),
     template_id: String(template._id),
     client_id: clientId,
     contract_id: contractId,

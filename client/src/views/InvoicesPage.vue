@@ -400,17 +400,17 @@
                   <span>{{ l.common.type }}</span>
                   <n-icon :component="sortIcon('type')" :size="14" />
                 </button>
-                <n-select
-                  :value="filters.documentCategory"
-                  :options="documentCategoryFilterOptions"
-                  clearable
-                  size="small"
-                  class="invoice-col-filter"
-                  placeholder="סינון סוג"
-                  @click.stop
-                  @mousedown.stop
-                  @update:value="setColumnDocumentCategory"
-                />
+<!--                <n-select-->
+<!--                  :value="filters.documentCategory"-->
+<!--                  :options="documentCategoryFilterOptions"-->
+<!--                  clearable-->
+<!--                  size="small"-->
+<!--                  class="invoice-col-filter"-->
+<!--                  placeholder="סינון סוג"-->
+<!--                  @click.stop-->
+<!--                  @mousedown.stop-->
+<!--                  @update:value="setColumnDocumentCategory"-->
+<!--                />-->
               </th>
               <th class="invoice-col invoice-col--amount">
                 <button class="invoice-sort-button invoice-sort-button--amount" type="button" :aria-label="sortAriaLabel('amount')" @click="setSort('amount')">
@@ -441,6 +441,36 @@
               </td>
               <td class="cell-strong invoice-col invoice-col--supplier">
                 <span class="invoice-supplier-cell">
+                  <n-tooltip v-if="paymentVendorName(row)" placement="top">
+                    <template #trigger>
+                      <span class="invoice-vendor-mark" :aria-label="paymentVendorName(row) ?? undefined">
+                        <svg v-if="paymentVendorKey(paymentVendorName(row)!) === 'play'" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                          <path fill="#4285F4" d="M1.2 2.1c0-.7.8-1.1 1.4-.7l5.2 3.1L4.2 8 1.2 2.1z"/>
+                          <path fill="#34A853" d="M4.2 8 1.2 13.9c-.2.4-.2.9 0 1.2.3.4.8.6 1.3.3L8 12.1 4.2 8z"/>
+                          <path fill="#FBBC04" d="M4.2 8 8 12.1l3.1-1.8L7.8 8 4.2 8z"/>
+                          <path fill="#EA4335" d="M7.8 3.9 11.1 5.7c.6.3.6 1.2 0 1.6L8 9.1 4.2 8l3.6-4.1z"/>
+                        </svg>
+                        <svg v-else-if="paymentVendorKey(paymentVendorName(row)!) === 'paypal'" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                          <rect width="16" height="16" rx="4" fill="#003087"/>
+                          <path fill="#009cde" d="M6.4 2.6h3c1.7 0 2.7.9 2.4 2.4-.3 1.6-1.6 2.4-3.2 2.4H7.4l-.5 2.8H5.3L6.4 2.6z"/>
+                          <path fill="#fff" d="M5.6 3.2h2.7c1.4 0 2.2.7 2 1.9-.3 1.3-1.3 2-2.6 2H6.6l-.4 2.5H4.8L5.6 3.2z"/>
+                        </svg>
+                        <svg v-else-if="paymentVendorKey(paymentVendorName(row)!) === 'meta'" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                          <rect width="16" height="16" rx="4" fill="#0668E1"/>
+                          <path fill="#fff" d="M3.2 10.6c.8-2.2 1.8-4.4 2.6-4.4.6 0 1 .8 1.6 2.2.5-1.2 1-2.2 1.6-2.2.9 0 1.8 2.2 2.6 4.4h-1.5c-.5-1.4-1-2.6-1.3-2.6-.3 0-.7.9-1.2 2.2l-.4.9-.4-.9C6.5 8.9 6.1 8 5.8 8c-.3 0-.8 1.2-1.3 2.6H3.2z"/>
+                        </svg>
+                        <svg v-else-if="paymentVendorKey(paymentVendorName(row)!) === 'hyp'" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                          <rect width="16" height="16" rx="4" fill="#0f766e"/>
+                          <path fill="#fff" d="M4.2 3.4h1.6v3.4h3.2V3.4h1.6v9.2h-1.6V8.2H5.8v4.4H4.2V3.4z"/>
+                        </svg>
+                        <svg v-else viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                          <rect width="16" height="16" rx="4" fill="#64748b"/>
+                          <text x="8" y="12" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" font-family="Segoe UI, Arial">{{ paymentVendorName(row)?.slice(0, 1) }}</text>
+                        </svg>
+                      </span>
+                    </template>
+                    {{ paymentVendorName(row) }}
+                  </n-tooltip>
                   <span class="invoice-cell-truncate" dir="auto" :title="row.supplier_name">{{ row.supplier_name }}</span>
                   <span v-if="row.inline_no_file" class="invoice-nofile-flag">
                     <n-icon :component="MailOutline" :size="12" />
@@ -1094,6 +1124,22 @@ function clientLabel(row: ImportedInvoice): string {
   return row.client_name ?? firstInvoiceField(row, ["client_company", "client_name", "customer_name", "bill_to"]) ?? "—";
 }
 
+function paymentVendorName(row: ImportedInvoice): string | null {
+  const value = row.fields?.vendor_name;
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!name || name === row.supplier_name) return null;
+  return name;
+}
+
+function paymentVendorKey(name: string): "play" | "paypal" | "meta" | "hyp" | "other" {
+  const key = name.toLowerCase();
+  if (key.includes("google play")) return "play";
+  if (key.includes("paypal")) return "paypal";
+  if (key.includes("meta")) return "meta";
+  if (key.includes("hyp") || key.includes("ipos")) return "hyp";
+  return "other";
+}
+
 function invoiceTypeLabel(row: ImportedInvoice): string {
   if (row.document_category === "receipt") return l.value.invoices.typeReceipt;
   if (row.document_category === "bill") return l.value.invoices.typeBill;
@@ -1115,19 +1161,15 @@ function invoiceProviderCategoryLabel(row: ImportedInvoice): string {
 }
 
 const PROVIDER_CATEGORIES: Array<NonNullable<ImportedInvoice["provider_category"]>> = [
-  "electricity",
-  "telecom",
-  "water",
+  "household",
   "transport",
   "parking",
   "fuel",
-  "gas",
   "tv",
   "marketplace",
   "food",
   "payment",
   "government",
-  "municipality",
   "insurance",
   "finance",
   "travel",
@@ -1143,19 +1185,15 @@ const PROVIDER_CATEGORIES: Array<NonNullable<ImportedInvoice["provider_category"
 
 function providerCategoryLabel(category: string | null): string {
   const labels: Record<string, string> = {
-    electricity: "חשמל",
-    telecom: "תקשורת",
-    water: "מים",
     transport: "תחבורה",
     parking: "חניה",
     fuel: "דלק",
-    gas: "גז",
     tv: "טלוויזיה וסטרימינג",
     marketplace: "קניות",
     food: "מזון",
-    payment: "תשלומים וחשבוניות",
+    payment: "לא מסווג",
+    household: "חשבונות הבית",
     government: "ממשלה",
-    municipality: "עירייה",
     insurance: "ביטוח",
     finance: "פיננסים",
     travel: "תיירות",
@@ -1466,6 +1504,8 @@ async function handleImportInlineAll() {
     lastGmailImportJob.value = result;
     const savedIds = new Set(result.results.filter((item) => item.import_status === "invoice").map((item) => item.messageId));
     inlineOnlyEmails.value = inlineOnlyEmails.value.filter((email) => !savedIds.has(email.id));
+    // The admin acted on the notice; emails left over were not receipts, so don't keep offering them.
+    inlineOnlyDismissed.value = true;
     if (result.imported) message.success(`נשמרו ${result.imported} קבלות מגוף המייל`);
     else if (result.rejected) message.warning("לא נשמרו קבלות. המיילים לא זוהו כקבלה.");
     else message.info("לא נמצאו קבלות חדשות לייבוא");
@@ -2111,6 +2151,11 @@ function replaceRow(updated: ImportedInvoice) {
   min-width: 0;
 }
 
+.invoice-supplier-cell .invoice-cell-truncate {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .invoice-nofile-flag {
   display: inline-flex;
   align-items: center;
@@ -2317,6 +2362,17 @@ function replaceRow(updated: ImportedInvoice) {
 
 .invoice-col--select {
   text-align: center;
+}
+
+.invoice-vendor-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.invoice-vendor-mark svg {
+  display: block;
 }
 
 .invoice-col--supplier,

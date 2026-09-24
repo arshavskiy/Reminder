@@ -88,11 +88,11 @@
     </div>
 
     <n-spin :show="loading">
-      <section class="expense-summary" aria-label="סיכום הוצאות">
+      <section class="expense-summary" :aria-label="isIncomeView ? 'סיכום הכנסות' : 'סיכום הוצאות'">
         <div class="expense-metric">
           <n-icon :component="WalletOutline" :size="18" class="expense-metric__icon" />
           <div>
-            <span>סה״כ הוצאות עם סכום ותאריך</span>
+            <span>{{ isIncomeView ? "סה״כ הכנסות עם סכום ותאריך" : "סה״כ הוצאות עם סכום ותאריך" }}</span>
             <strong>{{ formatMoney(totalAmount) }}</strong>
           </div>
         </div>
@@ -110,6 +110,13 @@
             <strong>{{ totalInvoices }}</strong>
           </div>
         </div>
+        <div v-if="!isIncomeView && householdTotal > 0" class="expense-metric expense-metric--link" role="button" tabindex="0" title="הצג רק חשבונות הבית" @click="showHousehold" @keydown.enter="showHousehold">
+          <n-icon :component="HomeOutline" :size="18" class="expense-metric__icon" />
+          <div>
+            <span>חשבונות הבית</span>
+            <strong>{{ formatMoney(householdTotal) }}</strong>
+          </div>
+        </div>
         <div class="expense-metric">
           <n-icon :component="CalendarOutline" :size="18" class="expense-metric__icon" />
           <div>
@@ -123,8 +130,8 @@
         <div class="expense-chart-panel">
           <header class="expense-panel__head">
             <div>
-              <h2>{{ activeChartType.title }}</h2>
-              <p>{{ activeChartType.hint }}</p>
+              <h2>{{ flowLabel(activeChartType.title) }}</h2>
+              <p>{{ flowLabel(activeChartType.hint) }}</p>
             </div>
             <div class="expense-chart-types" role="group" aria-label="סוג גרף">
               <n-tooltip v-for="item in chartTypeOptions" :key="item.id" placement="top">
@@ -148,7 +155,7 @@
             <n-icon :component="AnalyticsOutline" :size="40" class="expense-empty__icon" />
             <p>אין נתונים להצגה עבור הסינון הנוכחי</p>
           </div>
-          <div v-else ref="chartEl" class="expense-chart" role="img" :aria-label="activeChartType.ariaLabel" />
+          <div v-else ref="chartEl" class="expense-chart" role="img" :aria-label="flowLabel(activeChartType.ariaLabel)" />
         </div>
 
         <aside class="expense-legend" aria-label="ספקים בגרף">
@@ -184,6 +191,43 @@
           </div>
         </aside>
       </section>
+
+      <section class="expense-supplier-table" :aria-label="supplierTableTitle">
+        <header class="expense-panel__head">
+          <div>
+            <h2>{{ supplierTableTitle }}</h2>
+            <p>{{ suppliers.length ? `${suppliers.length} ספקים` : "אין ספקים בסינון הנוכחי" }}</p>
+          </div>
+        </header>
+        <div v-if="supplierTableRows.length" class="expense-supplier-table__scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>ספק</th>
+                <th>חשבוניות</th>
+                <th>סכום</th>
+                <th>חלק</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in supplierTableRows"
+                :key="row.name"
+                :class="{ 'expense-supplier-table__row--active': isFocusedSupplier(row.name) }"
+                tabindex="0"
+                @click="focusSupplier(row.name)"
+                @keydown.enter.prevent="focusSupplier(row.name)"
+              >
+                <td dir="auto">{{ row.name }}</td>
+                <td>{{ row.count }}</td>
+                <td>{{ formatMoney(row.total) }}</td>
+                <td>{{ row.share }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-else class="expense-supplier-table__empty">אין נתונים להצגה עבור הסינון הנוכחי</p>
+      </section>
     </n-spin>
   </div>
 </template>
@@ -197,6 +241,7 @@ import {
   CalendarOutline,
   CloseOutline,
   DownloadOutline,
+  HomeOutline,
   LayersOutline,
   PeopleOutline,
   PieChartOutline,
@@ -227,13 +272,16 @@ const authStore = useAuthStore();
 const chartEl = ref<HTMLDivElement | null>(null);
 const loading = ref(false);
 const dateBasis = ref<"invoice" | "import">("invoice");
-const proofFilter = ref<"all" | "paid" | "requested">("all");
+type ProofFilter = "all" | "paid" | "requested" | "income";
+const proofFilter = ref<ProofFilter>("all");
 const category = ref<string | null>(null);
 const selectedSuppliers = ref<string[]>([]);
 const dateRange = ref<[number, number] | null>(null);
 const months = ref<string[]>([]);
 const suppliers = ref<{ name: string; total: number; count?: number }[]>([]);
 const categories = ref<string[]>([]);
+/** Total of the "חשבונות הבית" category (electricity, water, gas, telecom, municipal bills). */
+const householdTotal = ref(0);
 const supplierNames = ref<string[]>([]);
 const chartSeries = ref<InvoiceExpenseMonthlySeries[]>([]);
 const totalAmount = ref(0);
@@ -251,10 +299,11 @@ const dateBasisOptions: SelectOption[] = [
   { label: "תאריך חשבונית", value: "invoice" },
   { label: "תאריך ייבוא", value: "import" },
 ];
-const proofFilterOptions = [
-  { label: "הכל", value: "all" as const },
-  { label: "הוכחת תשלום", value: "paid" as const },
-  { label: "דרישות תשלום", value: "requested" as const },
+const proofFilterOptions: { label: string; value: ProofFilter }[] = [
+  { label: "הכל", value: "all" },
+  { label: "הוכחת תשלום", value: "paid" },
+  { label: "דרישות תשלום", value: "requested" },
+  { label: "הכנסה", value: "income" },
 ];
 const exportMenuOptions = [
   { label: "Excel — סה״כ לפי ספק", key: "xlsx" },
@@ -267,6 +316,21 @@ const chartTypeOptions = [
   { id: "pie" as const, label: "עוגה לפי ספק", icon: PieChartOutline, title: "התפלגות לפי ספק", hint: "כל פלח הוא סכום ההוצאות של ספק.", ariaLabel: "גרף עוגה של הוצאות לפי ספק" },
 ];
 const activeChartType = computed(() => chartTypeOptions.find((item) => item.id === chartType.value) ?? chartTypeOptions[0]);
+const isIncomeView = computed(() => proofFilter.value === "income");
+const supplierTableTitle = computed(() => (isIncomeView.value ? "הכנסות לפי ספק" : "הוצאות לפי ספק"));
+const supplierTableRows = computed(() => {
+  const total = totalAmount.value;
+  return suppliers.value.map((row) => ({
+    name: row.name,
+    total: row.total,
+    count: row.count ?? 0,
+    share: total > 0 ? `${Math.round((row.total / total) * 100)}%` : "0%",
+  }));
+});
+
+function flowLabel(text: string): string {
+  return isIncomeView.value ? text.replaceAll("הוצאות", "הכנסות") : text;
+}
 
 // `suppliers` is narrowed by the active supplier filter, so it cannot drive the
 // picker on its own — selecting one supplier would hide all the others.
@@ -286,8 +350,8 @@ const supplierOptions = computed<SelectOption[]>(() => {
 });
 
 const EXPENSE_PROVIDER_CATEGORIES = [
-  "electricity", "telecom", "water", "transport", "parking", "fuel", "gas", "tv",
-  "marketplace", "food", "payment", "government", "municipality", "insurance",
+  "household", "transport", "parking", "fuel", "tv",
+  "marketplace", "food", "payment", "government", "insurance",
   "finance", "travel", "healthcare", "education", "retail", "electronics",
   "nonprofit", "digital", "development", "general",
 ];
@@ -461,6 +525,12 @@ watch(chartOption, () => {
   renderChart();
 }, { deep: true });
 
+function showHousehold() {
+  if (category.value === "household") return;
+  category.value = "household";
+  void load(true);
+}
+
 async function load(force = false) {
   loading.value = true;
   try {
@@ -478,6 +548,9 @@ async function load(force = false) {
     suppliers.value = result.suppliers;
     supplierNames.value = result.supplierNames ?? [];
     categories.value = result.categories;
+    householdTotal.value = (result.categorySeries ?? [])
+      .filter((row) => row.category === "household")
+      .reduce((sum, row) => sum + row.total, 0);
     chartSeries.value = result.series.filter((series) => series.total > 0);
     rememberSupplierColors(chartSeries.value);
     totalAmount.value = result.totalAmount;
@@ -491,7 +564,7 @@ async function load(force = false) {
   }
 }
 
-function setProofFilter(value: "all" | "paid" | "requested") {
+function setProofFilter(value: ProofFilter) {
   if (proofFilter.value === value) return;
   proofFilter.value = value;
   load(true);
@@ -685,19 +758,15 @@ function cssVar(name: string, fallback: string): string {
 
 function providerCategoryLabel(value: string): string {
   const labels: Record<string, string> = {
-    electricity: "חשמל",
-    telecom: "תקשורת",
-    water: "מים",
     transport: "תחבורה",
     parking: "חניה",
     fuel: "דלק",
-    gas: "גז",
     tv: "טלוויזיה וסטרימינג",
     marketplace: "קניות",
     food: "מזון",
-    payment: "תשלומים וחשבוניות",
+    payment: "לא מסווג",
+    household: "חשבונות הבית",
     government: "ממשלה",
-    municipality: "עירייה",
     insurance: "ביטוח",
     finance: "פיננסים",
     travel: "תיירות",
@@ -818,6 +887,14 @@ function providerCategoryLabel(value: string): string {
   margin-bottom: 16px;
 }
 
+.expense-metric--link {
+  cursor: pointer;
+}
+
+.expense-metric--link:hover {
+  border-color: var(--brand-color);
+}
+
 .expense-metric {
   display: flex;
   align-items: flex-start;
@@ -857,6 +934,68 @@ function providerCategoryLabel(value: string): string {
   grid-template-columns: minmax(0, 1fr) 280px;
   gap: 16px;
   align-items: start;
+}
+
+.expense-supplier-table {
+  margin-top: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-card);
+}
+
+.expense-supplier-table .expense-panel__head {
+  padding-bottom: 12px;
+}
+
+.expense-supplier-table__scroll {
+  overflow-x: auto;
+  padding: 0 8px 8px;
+}
+
+.expense-supplier-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.expense-supplier-table th,
+.expense-supplier-table td {
+  padding: 10px 12px;
+  text-align: start;
+  border-top: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.expense-supplier-table th {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.expense-supplier-table td:first-child {
+  white-space: normal;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.expense-supplier-table tbody tr {
+  cursor: pointer;
+}
+
+.expense-supplier-table tbody tr:hover,
+.expense-supplier-table tbody tr:focus-visible {
+  background: color-mix(in srgb, var(--brand-color) 8%, transparent);
+  outline: none;
+}
+
+.expense-supplier-table__row--active {
+  background: color-mix(in srgb, var(--brand-color) 14%, transparent);
+}
+
+.expense-supplier-table__empty {
+  margin: 0;
+  padding: 8px 16px 16px;
+  color: var(--text-secondary);
 }
 
 .expense-chart-panel,

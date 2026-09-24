@@ -51,19 +51,15 @@ export interface GmailLinkOnlyEmail {
 export interface GmailSearchProvider {
   id: string;
   category:
-    | "electricity"
-    | "telecom"
-    | "water"
+    | "household"
     | "transport"
     | "parking"
     | "fuel"
-    | "gas"
     | "tv"
     | "marketplace"
     | "food"
     | "payment"
     | "government"
-    | "municipality"
     | "insurance"
     | "finance"
     | "travel"
@@ -238,7 +234,7 @@ export interface InvoiceExpenseCategorySeries {
 
 export interface InvoiceExpenseMonthlyResponse {
   dateBasis: "invoice" | "import";
-  proofFilter?: "all" | "paid" | "requested";
+  proofFilter?: "all" | "paid" | "requested" | "income";
   months: string[];
   totalInvoices: number;
   totalAmount: number;
@@ -813,7 +809,7 @@ export const api = {
       post<{ ok: true; matched: number; modified: number; supplierName: string; provider_category: string | null }>("/invoices/vendors/category", body),
     sendSixMonthReport: () =>
       post<{ ok: true; recipients: string[]; count: number; period: { from: string; to: string } }>("/invoices/reports/six-months/send", {}),
-    expenseMonthly: (params?: { dateBasis?: "invoice" | "import"; proofFilter?: "all" | "paid" | "requested"; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; top?: number }, force = false) =>
+    expenseMonthly: (params?: { dateBasis?: "invoice" | "import"; proofFilter?: "all" | "paid" | "requested" | "income"; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; top?: number }, force = false) =>
       get<InvoiceExpenseMonthlyResponse>(`/invoices/expenses/monthly${qs(params)}`, force),
   },
 

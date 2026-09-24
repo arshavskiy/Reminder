@@ -9,6 +9,8 @@ import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/sea
 import {
   categoryFacetRows,
   categoryFacetValues,
+  matchesCategoryFilter,
+  normalizeProviderCategory,
   supplierFacetRows,
   supplierFacetValues,
 } from "../invoices/expenseFacets";
@@ -84,7 +86,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const facetRows = allRows.filter((row) => {
       if (type && row.type !== type) return false;
       if (cashFlow && row.cash_flow !== cashFlow) return false;
-      if (category && row.provider_category !== category) return false;
+      if (category && !matchesCategoryFilter(row.provider_category, category)) return false;
       if (suppliers.length && !invoiceMatchesSuppliers(row, suppliers)) return false;
       const rowTs = invoiceDateTs(row);
       if (fromTs && (!rowTs || rowTs < fromTs)) return false;
@@ -158,8 +160,9 @@ export function registerInvoiceRoutes(app: express.Application) {
       .filter((invoice) => invoiceIsVisible(invoice, documentMap.get(String(invoice.document_id))))
       .map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers))
       .filter((row) => {
-        if (row.cash_flow === "income") return false;
-        if (!matchesExpenseProofFilter(row.type, proofFilter)) return false;
+        const wantIncome = proofFilter === "income";
+        if (wantIncome ? row.cash_flow !== "income" : row.cash_flow === "income") return false;
+        if (!wantIncome && !matchesExpenseProofFilter(row.type, proofFilter)) return false;
         const rowTs = chartDateTs(row, dateBasis);
         if (fromTs && (!rowTs || rowTs < fromTs)) return false;
         if (toTs && (!rowTs || rowTs > toTs)) return false;
@@ -173,7 +176,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const supplierOptionRows = supplierFacetRows(expenseRows, category);
 
     const rows = expenseRows.filter((row) => {
-      if (category && row.provider_category !== category) return false;
+      if (category && !matchesCategoryFilter(row.provider_category, category)) return false;
       if (suppliers.length && !suppliers.includes(row.supplier_name)) return false;
       return true;
     });
@@ -797,7 +800,7 @@ function presentInvoice(
     expense_category: invoice.expense_category ?? invoice.fields?.expense_category ?? null,
     provider_id: invoice.provider_id ?? provider?.id ?? null,
     provider_label: invoice.provider_label ?? provider?.label ?? null,
-    provider_category: invoice.provider_category ?? invoice.fields?.provider_category ?? provider?.category ?? null,
+    provider_category: normalizeProviderCategory(invoice.provider_category ?? invoice.fields?.provider_category ?? provider?.category ?? null),
     payment_status: invoice.payment_status ?? null,
     note: invoice.note ?? null,
     status: normalizeInvoiceStatus(invoice.status),
@@ -1172,19 +1175,15 @@ function invoiceTypeLabel(row: ReturnType<typeof presentInvoice>): string {
 
 function providerCategoryLabel(category: string | null): string {
   const labels: Record<string, string> = {
-    electricity: "חשמל",
-    telecom: "תקשורת",
-    water: "מים",
+    household: "חשבונות הבית",
     transport: "תחבורה",
     parking: "חניה",
     fuel: "דלק",
-    gas: "גז",
     tv: "טלוויזיה וסטרימינג",
     marketplace: "קניות",
     food: "מזון",
-    payment: "תשלומים וחשבוניות",
+    payment: "לא מסווג",
     government: "ממשלה",
-    municipality: "עירייה",
     insurance: "ביטוח",
     finance: "פיננסים",
     travel: "תיירות",

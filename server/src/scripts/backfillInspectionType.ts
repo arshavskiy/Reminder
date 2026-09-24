@@ -1,117 +1,38 @@
-/**
- * Sets inspection_type on existing documents (imported before this field
- * existed) by matching their stored file_name / raw_text against each
- * inspection type's known Hebrew phrasing — the same classification the AI
- * extractor now does going forward, run here as a cheap deterministic regex
- * pass instead of a paid re-extraction of every old document.
- *
- * Real documents phrase their title differently from our print-template
- * titles (e.g. a real report says "תסקיר על בדיקת קולט אויר", not our
- * generated "תסקיר בדיקה לקולט אוויר"), so each type has a short list of
- * distinguishing phrases rather than matching the preset title verbatim.
- *
- * Dry run by default; pass --apply to write. Only touches documents where
- * inspection_type is not already set, so a manually-corrected value is never
- * overwritten.
- *
- *   npm run inspection-type:backfill
- *   npm run inspection-type:backfill -- --apply
- */
-import dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
-dotenv.config();
+/** Dry run: --target=dev|production|local. Add --apply to persist supported categories. */
+import {config} from "dotenv";
+import {MongoClient} from "mongodb";
+import {resolveInspectionType} from "../documents/inspectionType.js";
 
-import { connectDb, closeDb } from "../db/db.js";
-import { INSPECTION_PRINT_TEMPLATE_PRESETS } from "../shared/printTemplateLayout.js";
-
+const target = process.argv.find(arg => arg.startsWith("--target="))?.split("=")[1];
+if (!["dev", "production", "local"].includes(target ?? "")) throw new Error("Specify --target=dev|production|local");
+const env: Record<string, string> = {};
+config({path: target === "dev" ? ".env.dev" : ".env.local", processEnv: env, quiet: true});
+const uri = target === "production" ? env.MONGODB_PRODUCTION_URI : env.MONGODB_LOCAL_URI || env.MONGODB_URI;
+const dbName = target === "production" ? env.MONGODB_PRODUCTION_DB : env.MONGODB_DB;
+if (!uri || !dbName) throw new Error("Explicit database URI and name required");
+if (target !== "local" && !new URL(uri).hostname.endsWith(".mongodb.net")) throw new Error("Expected Atlas target");
 const apply = process.argv.includes("--apply");
-
-// Ordered most-specific-first: a document mentioning both "מכונת הרמה" and
-// "מעלית" should still match on whichever phrase is actually in its title,
-// but checking accessories/cranes/etc. before the broad "מכונות הרמה" catch-all
-// avoids a tower-crane report being misclassified as a generic lifting machine.
-const MATCH_PHRASES: Record<string, string[]> = {
-    underground_parking_lift: ["קרקעי תת חניה", "קרקעי תת-חניה", "תת חניה מתקן", "מתקן תת חניה", "מתקן תת-חניה"],
-  air_receiver: ["קולט אוויר", "קולט אויר", "קולטי אוויר", "קולטי אויר"],
-  steam_receiver: ["קולט קיטור", "קולטי קיטור"],
-  steam_boiler: ["דוד קיטור", "דודי קיטור"],
-  pressure_vessel: ["כלי לחץ", "מיתקן לחץ", "מתקן לחץ"],
-  tower_crane: ["עגורן צריח"],
-  work_platform: ["במת הרמה"],
-  powered_scaffold: ["פיגום ממוכן"],
-  escalator: ["דרגנוע"],
-  elevator: ["מעלית", "מעליות"],
-  lifting_accessory: ["אביזרי הרמה", "אביזר הרמה"],
-  lifting_machine: ["מכונת הרמה", "מכונות הרמה", "ציוד הרמה"],
-};
-
-// Presets not covered by an explicit phrase list above still get checked
-// against their own name/reportTypeLabel — keeps this from silently missing a
-// type if MATCH_PHRASES falls out of sync with the preset list.
-function phrasesFor(key: string): string[] {
-  const explicit = MATCH_PHRASES[key] ?? [];
-  const preset = INSPECTION_PRINT_TEMPLATE_PRESETS.find((p) => p.key === key);
-  const fromPreset = preset ? [preset.name, preset.reportTypeLabel] : [];
-  return [...new Set([...explicit, ...fromPreset])];
-}
-
-function classify(text: string): string | null {
-    const seen = new Set<string>();
-    for (const key of Object.keys(MATCH_PHRASES)) {
-        seen.add(key);
-        if (phrasesFor(key).some((phrase) => text.includes(phrase))) return key;
-    }
-  for (const preset of INSPECTION_PRINT_TEMPLATE_PRESETS) {
-      if (seen.has(preset.key)) continue;
-      if (phrasesFor(preset.key).some((phrase) => text.includes(phrase))) return preset.key;
-  }
-  return null;
-}
-
-const db = await connectDb();
+const client = new MongoClient(uri, {serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000});
 try {
+  await client.connect();
+  const db = client.db(dbName);
+  const templates = await db.collection("print_templates").find({}, {projection: {reportTypeKey: 1}}).toArray();
+  const templateKeys = new Map(templates.map(t => [String(t._id), t.reportTypeKey]));
   const col = db.collection("documents");
-  const candidates = await col
-    .find({ inspection_type: { $in: [null, undefined] } } as any)
-    .project({ file_name: 1, raw_text: 1 })
-    .toArray();
-
-  console.log(`Scanning ${candidates.length} documents without inspection_type...`);
-
-  const matches = new Map<string, number>();
-  const updates: Array<{ id: any; type: string }> = [];
-  for (const doc of candidates) {
-    const haystack = `${(doc as any).file_name ?? ""} ${(doc as any).raw_text ?? ""}`;
-    const type = classify(haystack);
-    if (type) {
-      updates.push({ id: doc._id, type });
-      matches.set(type, (matches.get(type) ?? 0) + 1);
+  const docs = await col.find({document_kind: {$in: ["inspection_report", "generated_print_template_pdf"]}}, {projection: {document_kind: 1, inspection_type: 1, extracted_fields: 1, file_name: 1, raw_text: 1, template_id: 1}}).toArray();
+  const counts: Record<string, number> = {};
+  let unresolved = 0, changed = 0, modified = 0;
+  for (const doc of docs) {
+    const type = resolveInspectionType({...doc, document_kind: doc.document_kind}, doc.document_kind === "generated_print_template_pdf" ? templateKeys.get(String(doc.template_id)) : undefined);
+    if (!type) { unresolved++; continue; }
+    if (type === doc.inspection_type) continue;
+    changed++;
+    if (process.argv.includes("--audit") && changed <= 15) console.log(JSON.stringify({id: String(doc._id), before: doc.inspection_type ?? null, after: type, headings: String(doc.raw_text ?? "").split(/\r?\n/).slice(0, 40).filter(line => /תסקיר|inspection report/i.test(line)).map(line => line.slice(0, 180))}));
+    counts[type] = (counts[type] ?? 0) + 1;
+    if (apply) {
+      const result = await col.updateOne({_id: doc._id, inspection_type: doc.inspection_type ?? null, extracted_fields: doc.extracted_fields ?? null}, {$set: {inspection_type: type, updated_at: new Date()}});
+      modified += result.modifiedCount;
     }
   }
-
-  console.log(`Matched ${updates.length} of ${candidates.length}:`);
-  console.table(
-    [...matches.entries()].map(([type, count]) => ({
-      type,
-      name: INSPECTION_PRINT_TEMPLATE_PRESETS.find((p) => p.key === type)?.name ?? type,
-      count,
-    })),
-  );
-
-  if (!apply) {
-    console.log("\nDry run only. Re-run with --apply to write inspection_type.");
-    process.exit(0);
-  }
-
-  let modified = 0;
-  for (const { id, type } of updates) {
-    const result = await col.updateOne(
-      { _id: id, inspection_type: { $in: [null, undefined] } } as any,
-      { $set: { inspection_type: type, updated_at: new Date() } } as any,
-    );
-    if (result.modifiedCount) modified++;
-  }
-  console.log(`Updated ${modified} documents.`);
-} finally {
-  await closeDb();
-}
+  console.log(JSON.stringify({target, database: dbName, apply, scanned: docs.length, changed, modified, unresolved, counts}));
+} finally { await client.close(); }
