@@ -92,6 +92,8 @@
         </div>
       </header>
 
+      <AdminHealthStrip v-if="activeSection !== 'system_health'" :key="`strip-${adminDbTarget}`" @open="switchSection('system_health')" />
+
       <!-- ── Users ── -->
       <section v-if="activeSection === 'users'" class="admin-section admin-section--users">
         <AdminUserFocus
@@ -1747,6 +1749,7 @@ import WhatsAppCampaignPanel from "../components/WhatsAppCampaignPanel.vue";
 import AdminOutreachPanel from "../components/AdminOutreachPanel.vue";
 import AdminCampaignsPanel from "../components/AdminCampaignsPanel.vue";
 import AdminServerLivePanel from "../components/AdminServerLivePanel.vue";
+import AdminHealthStrip from "../components/AdminHealthStrip.vue";
 import GmailInboxPage from "./GmailInboxPage.vue";
 
 const router = useRouter();
@@ -1834,6 +1837,7 @@ async function onAdminDbTargetChange(next: AdminDbTarget) {
 }
 // ── Sidebar ────────────────────────────────────────────────────────────────
 const adminSections = [
+  { key: "system_health",     label: "System Health",          icon: PulseOutline },
   { key: "users",              label: "Users",                  icon: PeopleOutline },
   { key: "magic_links",        label: "Magic Links",            icon: KeyOutline },
   { key: "inspector_leads",    label: "Inspector Leads",        icon: SearchOutline },
@@ -1846,13 +1850,12 @@ const adminSections = [
   { key: "bad_emails",         label: "Bad Emails",             icon: MailOutline },
   { key: "import_queue",      label: "Import Queue",           icon: TimerOutline },
   // { key: "invoices",          label: "Invoices",               icon: ReceiptOutline },
-  { key: "system_health",     label: "System Health",          icon: PulseOutline },
   { key: "processes",         label: "Processes & Temp Files", icon: PulseOutline },
   { key: "storage_drive",     label: "Storage & Drive",        icon: ServerOutline },
   { key: "settings",           label: "Settings",               icon: SettingsOutline },
 ];
 const sidebarItems = adminSections.filter((item) => item.key !== "settings");
-const activeSection = ref("users");
+const activeSection = ref("system_health");
 const currentItem = computed(() => adminSections.find((i) => i.key === activeSection.value));
 const sectionLoading = ref(false);
 
@@ -3518,10 +3521,7 @@ onMounted(async () => {
   } catch { /* non-critical */ }
   await loadUsers();
   await refreshDbTargetMeta();
-  const initialSection = sectionFromQuery();
-  if (initialSection) {
-    await switchSection(initialSection);
-  }
+  await switchSection(sectionFromQuery() ?? "system_health");
   startPolling();
   refreshPushState();
 });
