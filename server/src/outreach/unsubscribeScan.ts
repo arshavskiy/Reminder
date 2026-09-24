@@ -1,6 +1,7 @@
 import {ObjectId} from "mongodb";
 import {col, runWithPrimaryDb} from "../db/db";
 import {logger} from "../logger";
+import {isProcessPaused} from "../ops/processControl";
 import {gmailFetch, resolveGmailToken, retryWithRefresh} from "../routes/gmail";
 import {inspectorLeadsCollection} from "../routes/admin";
 import {
@@ -35,6 +36,21 @@ let scanInFlight: Promise<UnsubscribeScanRun> | null = null;
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 
 export const scanRunsCollection = () => col<UnsubscribeScanRun>("unsubscribe_scans");
+
+/** Same scheduler_health row shape the reminder scheduler writes, shown on the admin Scheduler/Processes pages. */
+export async function recordJobHealth(name: string, error: string | null, startedAt: Date) {
+  try {
+    await col("scheduler_health").updateOne(
+      {name},
+      error
+        ? {$set: {name, last_run_at: startedAt, last_error: error}, $inc: {consecutive_failures: 1}}
+        : {$set: {name, last_run_at: startedAt, last_success_at: startedAt, last_error: null, consecutive_failures: 0}},
+      {upsert: true},
+    );
+  } catch (err) {
+    logger.warn("job_health_write_failed", {name, error: String(err)});
+  }
+}
 
 /**
  * The account whose Gmail receives replies to contact@remindocr.com:
@@ -135,6 +151,7 @@ export function runUnsubscribeScan(opts: {
     }
     run.finished_at = new Date();
     await runs.updateOne({_id: run._id}, {$set: run});
+    await recordJobHealth("unsubscribeScan", run.status === "error" ? `${run.trigger}: ${run.error}` : null, run.started_at);
     const log = run.status === "ok" ? logger.info : logger.warn;
     log("unsubscribe_scan_completed", {
       scan_id: run._id.toString(), trigger: run.trigger, status: run.status, scanned: run.scanned,
@@ -159,10 +176,16 @@ export function startUnsubscribeScanScheduler() {
     return;
   }
   const minutes = Math.max(5, Number(process.env.UNSUBSCRIBE_SCAN_INTERVAL_MINUTES ?? 60) || 60);
-  const tick = () => { void runUnsubscribeScan({trigger: "schedule"}).catch(() => undefined); };
+  const tick = async () => {
+    if (await isProcessPaused("unsubscribe_scan")) {
+      logger.info("unsubscribe_scan_paused", {});
+      return;
+    }
+    await runUnsubscribeScan({trigger: "schedule"}).catch(() => undefined);
+  };
   // First run shortly after boot, then on the interval.
-  setTimeout(tick, 2 * 60 * 1000).unref?.();
-  schedulerTimer = setInterval(tick, minutes * 60 * 1000);
+  setTimeout(() => { void tick(); }, 2 * 60 * 1000).unref?.();
+  schedulerTimer = setInterval(() => { void tick(); }, minutes * 60 * 1000);
   schedulerTimer.unref?.();
   logger.info("unsubscribe_scan_scheduler_started", {interval_minutes: minutes});
 }

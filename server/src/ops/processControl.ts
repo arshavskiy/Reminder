@@ -27,6 +27,8 @@ export const PROCESS_IDS = [
   "drive_export",
   "whatsapp",
   "temp_sweeper",
+  "unsubscribe_scan",
+  "email_campaigns",
 ] as const;
 
 export type ProcessId = (typeof PROCESS_IDS)[number];
@@ -84,6 +86,20 @@ export const PROCESS_DESCRIPTORS: ProcessDescriptor[] = [
     kind: "interval_timer",
     jobCollection: null,
     description: "Deletes scratch files left in the data directory past retention.",
+  },
+  {
+    id: "unsubscribe_scan",
+    label: "Unsubscribe scan",
+    kind: "interval_timer",
+    jobCollection: null,
+    description: "Searches the contact@remindocr.com Gmail for \"הסר\" replies and flags those leads. Pausing stops the timed scan; the admin button and pre-send check still run.",
+  },
+  {
+    id: "email_campaigns",
+    label: "Email campaign sender",
+    kind: "queue_worker",
+    jobCollection: null,
+    description: "Sends admin email campaigns through Resend in batches of 100. Pausing stops any campaign after its current batch.",
   },
 ];
 

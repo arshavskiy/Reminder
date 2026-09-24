@@ -7,7 +7,8 @@ import {col, runWithPrimaryDb} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
 import {logger} from "../logger";
 import {inspectorLeadsCollection} from "./admin";
-import {runUnsubscribeScan} from "../outreach/unsubscribeScan";
+import {recordJobHealth, runUnsubscribeScan} from "../outreach/unsubscribeScan";
+import {isProcessPaused} from "../ops/processControl";
 import {
   buildCampaignMessage,
   CAMPAIGN_BATCH_SIZE,
@@ -202,6 +203,11 @@ async function runCampaign(campaigns: Collection<EmailCampaign>, leads: Collecti
     while (true) {
       const campaign = await campaigns.findOne({_id: campaignId});
       if (!campaign || campaign.status !== "sending") return;
+      if (await isProcessPaused("email_campaigns")) {
+        await campaigns.updateOne({_id: campaignId}, {$set: {status: "paused", error: "Paused from Processes (Email campaign sender)", updated_at: new Date()}});
+        logger.info("email_campaign_paused_by_process_control", {campaign_id: id});
+        return;
+      }
       const pending = campaign.recipients.filter((r) => r.status === "pending").slice(0, CAMPAIGN_BATCH_SIZE);
       if (!pending.length) {
         await campaigns.updateOne({_id: campaignId}, {$set: {status: "sent", completed_at: new Date(), updated_at: new Date()}});
@@ -223,6 +229,7 @@ async function runCampaign(campaigns: Collection<EmailCampaign>, leads: Collecti
           $inc: {"counts.failed": pending.length},
         });
         logger.error("email_campaign_batch_failed", {campaign_id: id, error: error.message});
+        await recordJobHealth("emailCampaignSend", `${campaign.name}: ${error.name}: ${error.message}`, sentAt);
         return;
       }
 
@@ -248,6 +255,7 @@ async function runCampaign(campaigns: Collection<EmailCampaign>, leads: Collecti
         ],
       }}));
       if (leadOps.length) await leads.bulkWrite(leadOps as any, {ordered: false});
+      await recordJobHealth("emailCampaignSend", null, sentAt);
       // Resend allows a couple of batch calls per second; stay well under it.
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
