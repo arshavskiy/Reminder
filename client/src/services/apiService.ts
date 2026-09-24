@@ -490,6 +490,50 @@ export interface UnsubscribeScanResult {
   insertedLeads: number;
 }
 
+export type EmailCampaignStatus = "draft" | "sending" | "sent" | "paused" | "failed";
+
+export type EmailCampaignAudience =
+  | { type: "import"; batchId: string }
+  | { type: "filter"; source?: string | null; status?: string | null; q?: string | null }
+  | { type: "all" };
+
+export interface EmailCampaign {
+  id: string;
+  key: string;
+  name: string;
+  subject: string;
+  html: string;
+  status: EmailCampaignStatus;
+  counts: { total: number; sent: number; failed: number };
+  audience?: EmailCampaignAudience | null;
+  error?: string | null;
+  failedRecipients?: { email: string; error?: string | null }[];
+  running?: boolean;
+  created_at: string;
+  updated_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface CampaignLeadImportResult {
+  batchId: string;
+  file: string;
+  totalRows: number;
+  valid: number;
+  duplicatesInFile: number;
+  invalid: number;
+  inserted: number;
+  updated: number;
+}
+
+export interface CampaignAudiencePreview {
+  count: number;
+  alreadySent: number;
+  invalid: number;
+  unsubscribed: number;
+  sample: string[];
+}
+
 export interface InspectorLeadsResponse {
   rows: InspectorLead[];
   total: number;
@@ -634,6 +678,26 @@ async function adminPut<T>(path: string, body: unknown, target?: AdminDbTarget):
       detail = parsed?.error ?? text;
     } catch { /* keep text */ }
     throw new Error(detail || `PUT ${path} failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function adminUpload<T>(path: string, field: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append(field, file);
+  const res = await fetch(ADMIN_BASE + path, {
+    method: "POST",
+    headers: adminHeaders(),
+    credentials: "include",
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let detail = text;
+    try {
+      detail = JSON.parse(text)?.error ?? text;
+    } catch { /* keep text */ }
+    throw new Error(detail || `POST ${path} failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -1051,6 +1115,26 @@ export const api = {
       adminPut<InspectorLead>(`/admin/inspector-leads/${id}/unsubscribed`, { unsubscribed }),
     listInspectorLeadUnsubscribes: () =>
       adminGet<{ rows: InspectorLead[]; total: number }>("/admin/inspector-leads/unsubscribes"),
+    importCampaignLeads: (file: File) =>
+      adminUpload<CampaignLeadImportResult>("/admin/campaigns/import-leads", "file", file),
+    uploadCampaignImage: (file: File) =>
+      adminUpload<{ url: string }>("/admin/campaigns/images", "image", file),
+    renderCampaign: (subject: string, html: string) =>
+      adminPost<{ subject: string; html: string }>("/admin/campaigns/render", { subject, html }),
+    listCampaigns: () => adminGet<{ rows: EmailCampaign[] }>("/admin/campaigns"),
+    getCampaign: (id: string) => adminGet<EmailCampaign>(`/admin/campaigns/${id}`),
+    createCampaign: (body: { name: string; subject?: string; html?: string }) =>
+      adminPost<EmailCampaign>("/admin/campaigns", body),
+    updateCampaign: (id: string, body: { name?: string; subject?: string; html?: string }) =>
+      adminPut<EmailCampaign>(`/admin/campaigns/${id}`, body),
+    previewCampaignAudience: (id: string, audience: EmailCampaignAudience) =>
+      adminPost<CampaignAudiencePreview>(`/admin/campaigns/${id}/audience`, { audience }),
+    sendCampaignTest: (id: string, to?: string) =>
+      adminPost<{ ok: true; to: string }>(`/admin/campaigns/${id}/test`, to ? { to } : {}),
+    sendCampaign: (id: string, audience: EmailCampaignAudience, expectedCount: number) =>
+      adminPost<{ ok: true; queued: number }>(`/admin/campaigns/${id}/send`, { audience, expectedCount }),
+    pauseCampaign: (id: string) => adminPost<{ ok: true }>(`/admin/campaigns/${id}/pause`, {}),
+    resumeCampaign: (id: string) => adminPost<{ ok: true }>(`/admin/campaigns/${id}/resume`, {}),
     scanInspectorLeadUnsubscribes: () =>
       adminPost<UnsubscribeScanResult>("/admin/inspector-leads/scan-unsubscribes", {}),
     getDocument: (id: string) => adminGet<any>(`/admin/documents/${id}`),

@@ -105,6 +105,10 @@
         />
       </section>
 
+      <section v-if="activeSection === 'email_campaigns'" class="admin-section">
+        <AdminCampaignsPanel :key="`campaigns-${adminDbTarget}`" />
+      </section>
+
       <section v-if="activeSection === 'magic_links'" class="admin-section">
         <AdminMagicLinkPanel :key="adminDbTarget" @created="onMagicLinkUserCreated" />
       </section>
@@ -1063,67 +1067,67 @@
       </section>
 
       <!-- ── Invoices ── -->
-      <section v-if="activeSection === 'invoices'" class="admin-section">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="invoiceMonitor">
-          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">
-            <AdminStatCard title="Invoices" :primary="invoiceMonitor.totals.invoices" primary-label="Saved rows" />
-            <AdminStatCard title="With Amount" :primary="invoiceMonitor.totals.with_amount" primary-label="Have a total" />
-            <AdminStatCard
-              title="Save Rate"
-              :primary="invoiceMonitor.totals.save_rate != null ? Math.round(invoiceMonitor.totals.save_rate * 100) + '%' : '—'"
-              primary-label="Processed → saved"
-              format="custom"
-            />
-            <AdminStatCard title="Not Saved" :primary="invoiceMonitor.processed_not_saved.reduce((s: number, r: any) => s + r.count, 0)" primary-label="Processed, skipped" />
-          </div>
+<!--      <section v-if="activeSection === 'invoices'" class="admin-section">-->
+<!--        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />-->
+<!--        <template v-else-if="invoiceMonitor">-->
+<!--          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">-->
+<!--            <AdminStatCard title="Invoices" :primary="invoiceMonitor.totals.invoices" primary-label="Saved rows" />-->
+<!--            <AdminStatCard title="With Amount" :primary="invoiceMonitor.totals.with_amount" primary-label="Have a total" />-->
+<!--            <AdminStatCard-->
+<!--              title="Save Rate"-->
+<!--              :primary="invoiceMonitor.totals.save_rate != null ? Math.round(invoiceMonitor.totals.save_rate * 100) + '%' : '—'"-->
+<!--              primary-label="Processed → saved"-->
+<!--              format="custom"-->
+<!--            />-->
+<!--            <AdminStatCard title="Not Saved" :primary="invoiceMonitor.processed_not_saved.reduce((s: number, r: any) => s + r.count, 0)" primary-label="Processed, skipped" />-->
+<!--          </div>-->
 
-          <div class="monitor-block">
-            <div class="monitor-block__title">By Document Subtype</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
-              <n-tag v-for="r in invoiceMonitor.by_subtype" :key="r.subtype" size="small">
-                {{ r.subtype }} · {{ r.count }}
-              </n-tag>
-            </div>
-          </div>
+<!--          <div class="monitor-block">-->
+<!--            <div class="monitor-block__title">By Document Subtype</div>-->
+<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
+<!--              <n-tag v-for="r in invoiceMonitor.by_subtype" :key="r.subtype" size="small">-->
+<!--                {{ r.subtype }} · {{ r.count }}-->
+<!--              </n-tag>-->
+<!--            </div>-->
+<!--          </div>-->
 
-          <div class="monitor-block">
-            <div class="monitor-block__title">Cash Flow</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
-              <n-tag v-for="(n, k) in invoiceMonitor.by_cash_flow" :key="k" size="small" :type="k === 'income' ? 'success' : 'default'">
-                {{ k }} · {{ n }}
-              </n-tag>
-            </div>
-          </div>
+<!--          <div class="monitor-block">-->
+<!--            <div class="monitor-block__title">Cash Flow</div>-->
+<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
+<!--              <n-tag v-for="(n, k) in invoiceMonitor.by_cash_flow" :key="k" size="small" :type="k === 'income' ? 'success' : 'default'">-->
+<!--                {{ k }} · {{ n }}-->
+<!--              </n-tag>-->
+<!--            </div>-->
+<!--          </div>-->
 
-          <div v-if="invoiceMonitor.known_extractor_providers.length" class="monitor-block">
-            <div class="monitor-block__title">Matched Vendors (deterministic extractors)</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
-              <n-tag v-for="r in invoiceMonitor.known_extractor_providers" :key="r.provider" size="small" type="info">
-                {{ r.provider }} · {{ r.count }}
-              </n-tag>
-            </div>
-          </div>
+<!--          <div v-if="invoiceMonitor.known_extractor_providers.length" class="monitor-block">-->
+<!--            <div class="monitor-block__title">Matched Vendors (deterministic extractors)</div>-->
+<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
+<!--              <n-tag v-for="r in invoiceMonitor.known_extractor_providers" :key="r.provider" size="small" type="info">-->
+<!--                {{ r.provider }} · {{ r.count }}-->
+<!--              </n-tag>-->
+<!--            </div>-->
+<!--          </div>-->
 
-          <div v-if="invoiceMonitor.processed_not_saved.length" class="monitor-block">
-            <div class="monitor-block__title">Processed But Not Saved (by classified kind)</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
-              <n-tag v-for="r in invoiceMonitor.processed_not_saved" :key="r.document_kind" size="small" type="warning">
-                {{ r.document_kind }} · {{ r.count }}
-              </n-tag>
-            </div>
-          </div>
+<!--          <div v-if="invoiceMonitor.processed_not_saved.length" class="monitor-block">-->
+<!--            <div class="monitor-block__title">Processed But Not Saved (by classified kind)</div>-->
+<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
+<!--              <n-tag v-for="r in invoiceMonitor.processed_not_saved" :key="r.document_kind" size="small" type="warning">-->
+<!--                {{ r.document_kind }} · {{ r.count }}-->
+<!--              </n-tag>-->
+<!--            </div>-->
+<!--          </div>-->
 
-          <div v-if="invoiceMonitor.missing_required_fields.length" class="monitor-block">
-            <div class="monitor-block__title">Missing Required Fields</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
-              <n-tag v-for="r in invoiceMonitor.missing_required_fields" :key="r.field" size="small" type="error">
-                {{ r.field }} · {{ r.count }}
-              </n-tag>
-            </div>
-          </div>
-        </template>
-      </section>
+<!--          <div v-if="invoiceMonitor.missing_required_fields.length" class="monitor-block">-->
+<!--            <div class="monitor-block__title">Missing Required Fields</div>-->
+<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
+<!--              <n-tag v-for="r in invoiceMonitor.missing_required_fields" :key="r.field" size="small" type="error">-->
+<!--                {{ r.field }} · {{ r.count }}-->
+<!--              </n-tag>-->
+<!--            </div>-->
+<!--          </div>-->
+<!--        </template>-->
+<!--      </section>-->
 
       <!-- ── Storage & Drive ── -->
       <section v-if="activeSection === 'storage_drive'" class="admin-section">
@@ -1695,6 +1699,7 @@ import {
   ReceiptOutline,
   RefreshOutline,
   SearchOutline,
+  SendOutline,
   ServerOutline,
   SettingsOutline,
   TimerOutline,
@@ -1708,6 +1713,7 @@ import AdminUserFocus from "../components/AdminUserFocus.vue";
 import AdminMagicLinkPanel from "../components/AdminMagicLinkPanel.vue";
 import WhatsAppCampaignPanel from "../components/WhatsAppCampaignPanel.vue";
 import AdminOutreachPanel from "../components/AdminOutreachPanel.vue";
+import AdminCampaignsPanel from "../components/AdminCampaignsPanel.vue";
 import GmailInboxPage from "./GmailInboxPage.vue";
 
 const router = useRouter();
@@ -1798,6 +1804,7 @@ const adminSections = [
   { key: "users",              label: "Users",                  icon: PeopleOutline },
   { key: "magic_links",        label: "Magic Links",            icon: KeyOutline },
   { key: "inspector_leads",    label: "Inspector Leads",        icon: SearchOutline },
+  { key: "email_campaigns",    label: "Email Campaigns",        icon: SendOutline },
   { key: "gmail",              label: "Gmail Inbox",            icon: MailOutline },
   { key: "documents",          label: "Documents & Extraction", icon: DocumentOutline },
   { key: "extraction_quality", label: "Extraction Quality",     icon: FlashOutline },
@@ -1806,7 +1813,7 @@ const adminSections = [
   { key: "monthly",            label: "Monthly Reports",        icon: CalendarOutline },
   { key: "bad_emails",         label: "Bad Emails",             icon: MailOutline },
   { key: "import_queue",      label: "Import Queue",           icon: TimerOutline },
-  { key: "invoices",          label: "Invoices",               icon: ReceiptOutline },
+  // { key: "invoices",          label: "Invoices",               icon: ReceiptOutline },
   { key: "system_health",     label: "System Health",          icon: PulseOutline },
   { key: "processes",         label: "Processes & Temp Files", icon: PulseOutline },
   { key: "storage_drive",     label: "Storage & Drive",        icon: ServerOutline },
