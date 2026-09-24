@@ -57,7 +57,7 @@ export async function createSession(
   userId: string,
   userAgent?: string,
   ip?: string
-): Promise<{ sessionId: string; cookies: string }> {
+): Promise<{ sessionId: string; cookies: string[] }> {
   const sessionId = generateSessionId();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -70,13 +70,22 @@ export async function createSession(
     ip: ip ?? null,
   });
 
-  const setCookieHeader = buildSessionCookie(sessionId, 604800);
-
-  return { sessionId, cookies: setCookieHeader };
+  return { sessionId, cookies: sessionCookieHeaders(sessionId, 604800) };
 }
 
-export function clearSessionCookie(): string {
-  return buildSessionCookie("", 0);
+export function clearSessionCookie(): string[] {
+  return sessionCookieHeaders("", 0);
+}
+
+/**
+ * Host-only session cookie. app.remindocr.com and dev.remindocr.com used to
+ * share Domain=.remindocr.com, so one Chrome profile overwrote a single
+ * `session` value and the other host sent a session id this database does
+ * not have. The old parent cookie is left alone so the other site stays
+ * signed in; requests that still carry both are matched in resolveSession.
+ */
+export function sessionCookieHeaders(value: string, maxAge: number): string[] {
+  return [buildSessionCookie(value, maxAge)];
 }
 
 function buildSessionCookie(value: string, maxAge: number): string {
@@ -116,16 +125,21 @@ function cookieSameSite(secure: boolean): "Lax" | "None" | "Strict" {
 
 function cookieDomain(): string | null {
   const configured = process.env.COOKIE_DOMAIN?.trim();
-  if (configured) return configured;
+  if (configured) {
+    // Parent domain covers every subdomain, including app and dev.
+    if (isSharedParentDomain(configured)) return null;
+    return configured;
+  }
   if (process.env.COOKIE_DOMAIN_AUTO?.trim().toLowerCase() === "false") return null;
   if (isLocalAppEnv()) return null;
-  const urls = [process.env.FRONTEND_URL, process.env.DEV_FRONTEND_URL, process.env.SERVER_URL];
-  for (const url of urls) {
-    const host = hostname(url);
-    if (host === "handcoded.tech" || host?.endsWith(".handcoded.tech")) return ".handcoded.tech";
-    if (host === "remindocr.com" || host?.endsWith(".remindocr.com")) return ".remindocr.com";
-  }
+  // The browser talks to the frontend host (Vercel proxies /api). A host-only
+  // cookie stays on that host, so dev and app no longer share a session.
   return null;
+}
+
+function isSharedParentDomain(domain: string): boolean {
+  const normalized = domain.trim().toLowerCase().replace(/^\./, "");
+  return normalized === "remindocr.com" || normalized === "handcoded.tech";
 }
 
 function isLocalAppEnv(): boolean {
@@ -138,15 +152,6 @@ function isLocalAppEnv(): boolean {
 
 function isHttpsUrl(value: string | undefined): boolean {
   return value?.trim().toLowerCase().startsWith("https://") ?? false;
-}
-
-function hostname(value: string | undefined): string | null {
-  if (!value) return null;
-  try {
-    return new URL(value).hostname.toLowerCase();
-  } catch {
-    return null;
-  }
 }
 
 function toUser(doc: any): User {
@@ -245,11 +250,34 @@ export async function revokeSession(sessionId: string): Promise<void> {
   await getDb().collection("sessions").deleteOne({ _id: sessionId as any });
 }
 
-export function extractSessionFromCookie(cookieHeader: string | undefined): string | null {
-  if (!cookieHeader) return null;
+export function extractSessionIds(cookieHeader: string | undefined): string[] {
+  if (!cookieHeader) return [];
+  const ids: string[] = [];
   for (const cookie of cookieHeader.split(";")) {
-    const [name, value] = cookie.trim().split("=");
-    if (name === "session") return value;
+    const eq = cookie.indexOf("=");
+    if (eq === -1) continue;
+    const name = cookie.slice(0, eq).trim();
+    const value = cookie.slice(eq + 1).trim();
+    if (name === "session" && value) ids.push(value);
+  }
+  return ids;
+}
+
+export function extractSessionFromCookie(cookieHeader: string | undefined): string | null {
+  return extractSessionIds(cookieHeader)[0] ?? null;
+}
+
+/**
+ * Chrome sends every `session` cookie for this host. The parent-domain cookie
+ * from the other environment is listed too; use the one this database issued.
+ */
+export async function resolveSession(cookieHeader: string | undefined): Promise<{
+  sessionId: string;
+  identity: SessionIdentity;
+} | null> {
+  for (const sessionId of extractSessionIds(cookieHeader)) {
+    const identity = await verifySessionIdentity(sessionId);
+    if (identity) return { sessionId, identity };
   }
   return null;
 }
