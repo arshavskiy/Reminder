@@ -453,6 +453,41 @@ export interface InspectorLead {
   foundAt?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  unsubscribed?: boolean;
+  unsubscribedAt?: string | null;
+  unsubscribeSource?: string | null;
+  unsubscribeSubject?: string | null;
+  unsubscribeSnippet?: string | null;
+  lastEmailedAt?: string | null;
+  lastEmailCampaign?: string | null;
+}
+
+export interface InspectorLeadEmailSend {
+  leadId: string;
+  email: string;
+  name?: string | null;
+  company?: string | null;
+  campaign: string;
+  subject?: string | null;
+  sentAt: string;
+  resendId?: string | null;
+  unsubscribed: boolean;
+}
+
+export interface InspectorLeadEmailSendsResponse {
+  rows: InspectorLeadEmailSend[];
+  total: number;
+  page: number;
+  limit: number;
+  campaigns: { campaign: string; count: number }[];
+}
+
+export interface UnsubscribeScanResult {
+  scanned: number;
+  requests: number;
+  newlyUnsubscribed: number;
+  alreadyUnsubscribed: number;
+  insertedLeads: number;
 }
 
 export interface InspectorLeadsResponse {
@@ -676,7 +711,7 @@ export const api = {
       }>(`/invoices${qs(params)}`, force),
     get: (id: string, force = false) =>
       get<ImportedInvoice>(`/invoices/${id}`, force),
-    update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; cash_flow?: "income" | "expense" | null; provider_category?: GmailSearchProvider["category"] | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
+    update: (id: string, body: { status?: string; client_name?: string | null; business?: string | null; expense_category?: string | null; cash_flow?: "income" | "expense" | null; document_category?: ImportedInvoice["document_category"] | null; provider_category?: GmailSearchProvider["category"] | null; payment_status?: string | null; currency?: string | null; issue_date?: string | null; payment_due_date?: string | null; note?: string | null }) =>
       put<ImportedInvoice>(`/invoices/${id}`, body),
     deleteSelected: (body: { ids: string[] }) =>
       post<{ ok: true; requested: number; deleted: number; documentsDeleted: number }>("/invoices/delete-selected", body),
@@ -999,6 +1034,19 @@ export const api = {
     },
     updateInspectorLeadStatus: (id: string, contactStatus: InspectorLeadStatus) =>
       adminPut<InspectorLead>(`/admin/inspector-leads/${id}/status`, { contactStatus }),
+    listInspectorLeadEmailSends: (params?: { page?: number; limit?: number; campaign?: string | null; q?: string | null }) => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.campaign) qs.set("campaign", params.campaign);
+      if (params?.q) qs.set("q", params.q);
+      const query = qs.toString();
+      return adminGet<InspectorLeadEmailSendsResponse>(`/admin/inspector-leads/email-sends${query ? "?" + query : ""}`);
+    },
+    listInspectorLeadUnsubscribes: () =>
+      adminGet<{ rows: InspectorLead[]; total: number }>("/admin/inspector-leads/unsubscribes"),
+    scanInspectorLeadUnsubscribes: () =>
+      adminPost<UnsubscribeScanResult>("/admin/inspector-leads/scan-unsubscribes", {}),
     getDocument: (id: string) => adminGet<any>(`/admin/documents/${id}`),
     monitorDocuments: () => adminGet<any>("/admin/monitor/documents"),
     monitorExtractions: (params?: { user_id?: string; page?: number; limit?: number }) => {

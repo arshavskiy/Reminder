@@ -20,6 +20,14 @@ describe("inferInvoiceCashFlow", () => {
     expect(inferInvoiceCashFlow({ document_subtype: "קבלה" })).toBe("income");
   });
 
+  it("treats a Gmail inline vendor receipt as an expense even if it was stored as income", () => {
+    expect(inferInvoiceCashFlow({
+      cash_flow: "income",
+      document_subtype: "קבלה",
+      source: "gmail_inline",
+    })).toBe("expense");
+  });
+
   it("treats vendor receipts and periodic bills as expenses", () => {
     expect(inferInvoiceCashFlow({ document_subtype: "קבלה", notes: "GitHub subscription receipt" })).toBe("expense");
     expect(inferInvoiceCashFlow({ document_subtype: "חשבון תקופתי" })).toBe("expense");

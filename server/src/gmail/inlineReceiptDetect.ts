@@ -36,15 +36,21 @@ function withHistory(query: string, historyMonths: number): string {
   return `${body} newer_than:${historyMonths}m`;
 }
 
+// Gmail returns newest mail first and caps a page at 500. These known senders
+// keep paging until newer_than runs out, so one scan covers the history window
+// instead of only the first 250–500 messages.
+const KNOWN_SENDER_WINDOW = { pages: 8, pageSize: 500, budget: 2000 };
+
 export function buildInlineReceiptQueries(keywordQuery: string, historyMonths: number): InlineReceiptQueryPlan[] {
   const keywords = keywordQuery.replace(/\bhas:attachment\b/gi, " ").replace(/\s+/g, " ").trim();
   return [
-    { query: withHistory("from:googleplay-noreply@google.com (receipt OR \"order receipt\")", historyMonths), pages: 3, pageSize: 100, budget: 250 },
-    { query: withHistory("from:paypal.com (receipt OR \"receipt for your payment\")", historyMonths), pages: 2, pageSize: 100, budget: 150 },
-    { query: withHistory("from:paypal.co.il (receipt OR \"receipt for your payment\")", historyMonths), pages: 1, pageSize: 100, budget: 80 },
-    { query: withHistory("from:hyp.co.il", historyMonths), pages: 1, pageSize: 100, budget: 80 },
-    { query: withHistory("from:(business-updates.facebook.com OR support.facebook.com) receipt", historyMonths), pages: 1, pageSize: 100, budget: 80 },
-    { query: withHistory(keywords, historyMonths), pages: 2, pageSize: 250, budget: 500 },
+    { query: withHistory("from:googleplay-noreply@google.com (receipt OR \"order receipt\")", historyMonths), ...KNOWN_SENDER_WINDOW },
+    { query: withHistory("from:paypal.com (receipt OR \"receipt for your payment\")", historyMonths), ...KNOWN_SENDER_WINDOW },
+    { query: withHistory("from:paypal.co.il (receipt OR \"receipt for your payment\")", historyMonths), ...KNOWN_SENDER_WINDOW },
+    { query: withHistory("from:hyp.co.il", historyMonths), ...KNOWN_SENDER_WINDOW },
+    { query: withHistory("from:(business-updates.facebook.com OR support.facebook.com) receipt", historyMonths), ...KNOWN_SENDER_WINDOW },
+    // Broad catch-all stays short. It matches ordinary mail, not a receipt sender.
+    { query: withHistory(keywords, historyMonths), pages: 1, pageSize: 500, budget: 500 },
   ];
 }
 

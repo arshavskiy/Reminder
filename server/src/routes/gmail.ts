@@ -11,6 +11,7 @@ import { releaseTempFile, tempDir } from "../storage/tempFiles";
 import { isProcessPaused } from "../ops/processControl";
 import { logger } from "../logger";
 import { loadGmailSearchProviders, type GmailSearchProvider } from "../gmail/searchProviders";
+import { emailBodyToPreviewHtml } from "../gmail/emailPreview";
 import { parseInlineReceipt } from "../gmail/inlineReceiptParser";
 import { buildInlineReceiptQueries, classifyNoAttachmentEmail } from "../gmail/inlineReceiptDetect";
 import {
@@ -383,20 +384,17 @@ export function registerGmailRoutes(app: express.Application) {
 
     try {
       const templateId = req.query.templateId as string | undefined;
-      const invoiceHistoryMonths = featureFlagsForUser(ctx.user).gmailInvoiceHistoryMonths;
-      const plans = buildInlineReceiptQueries(INVOICE_GMAIL_QUERY, invoiceHistoryMonths ?? 0);
+      const configuredHistory = featureFlagsForUser(ctx.user).gmailInvoiceHistoryMonths;
+      // null is an unlimited plan. This scan still stops at 36 months.
+      const invoiceHistoryMonths = configuredHistory == null ? 36 : configuredHistory;
+      const plans = buildInlineReceiptQueries(INVOICE_GMAIL_QUERY, invoiceHistoryMonths);
       const seen = new Set<string>();
       const allMessageIds: string[] = [];
       let resultSizeEstimate = 0;
       let listToken = accessToken;
-      const SENDER_BUDGET = 640;
-      let senderCount = 0;
 
-      for (const [index, plan] of plans.entries()) {
-        const isKeywordQuery = index === plans.length - 1;
-        const room = isKeywordQuery ? 800 - allMessageIds.length : Math.max(0, SENDER_BUDGET - senderCount);
-        const take = Math.min(plan.budget, room);
-        if (take <= 0) continue;
+      for (const plan of plans) {
+        if (plan.budget <= 0) continue;
         const listed = await listGmailMessageIds(listToken, ctx.userId, plan.query, plan.pages, plan.pageSize);
         listToken = listed.accessToken;
         if (listed.error) {
@@ -408,13 +406,11 @@ export function registerGmailRoutes(app: express.Application) {
         let added = 0;
         for (const id of listed.ids) {
           if (seen.has(id)) continue;
-          if (added >= take) break;
+          if (added >= plan.budget) break;
           seen.add(id);
           allMessageIds.push(id);
           added += 1;
-          if (!isKeywordQuery) senderCount += 1;
         }
-        if (allMessageIds.length >= 800) break;
       }
 
       const candidates = await Promise.all(
@@ -487,7 +483,7 @@ export function registerGmailRoutes(app: express.Application) {
       (Array.isArray(req.body.messageIds) ? req.body.messageIds : [])
         .map((id: unknown) => String(id ?? "").trim())
         .filter(Boolean),
-    )].slice(0, 800);
+    )].slice(0, 4000);
     if (!messageIds.length) { res.status(400).json({ error: "messageIds required" }); return; }
 
     try {
@@ -1056,6 +1052,7 @@ async function importInlineReceiptMessage(
         payment_status: "paid",
         cash_flow: "expense",
         notes: supplierName === receipt.vendor ? receipt.merchant : receipt.vendor,
+        preview_html: emailBodyToPreviewHtml(html, plain),
         template_id: templateId ?? null,
         spaces_key: null,
         drive_file_id: null,
@@ -2266,13 +2263,13 @@ async function refreshGmailToken(user: any, userId: string): Promise<string | nu
   return data.access_token;
 }
 
-function gmailFetch(accessToken: string, path: string) {
+export function gmailFetch(accessToken: string, path: string) {
   return fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
 
-async function resolveGmailToken(userId: string): Promise<string | null> {
+export async function resolveGmailToken(userId: string): Promise<string | null> {
   // 1. Check user's OAuth token
   const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
     if (user?.gmail_scope_granted === false) return null;
@@ -2369,7 +2366,7 @@ async function downloadAndImportAttachment(
   return { documentId, filename };
 }
 
-async function retryWithRefresh(userId: string): Promise<string | null> {
+export async function retryWithRefresh(userId: string): Promise<string | null> {
   const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
   if (user?.gmail_refresh_token) {
     return refreshGmailToken(user, userId);

@@ -14,11 +14,9 @@ import {
     consumeMagicLinkToken,
     createSession,
     clearSessionCookie,
-    extractSessionFromCookie,
+    resolveSession,
     revokeSession,
     setActingAsUser,
-    verifySession,
-    verifySessionIdentity,
 } from "../auth/session";
 import {HTTPException, requireAuth, requireRole} from "../auth/middleware";
 import {
@@ -276,18 +274,16 @@ export function registerAuthRoutes(app: express.Application) {
   // POST /api/auth/logout
   app.post("/api/auth/logout", async (req, res) => {
     const cookieHeader = req.headers.cookie ?? undefined;
-    const sessionId = extractSessionFromCookie(cookieHeader);
-    if (sessionId) {
-      const user = await verifySession(sessionId);
-      await revokeSession(sessionId);
-      if (user) {
-        logger.info("logout", {
-          user_id: (user as any).id,
-          email: user.email,
-          role: user.role,
-          ip: clientIp(req) ?? null,
-        });
-      }
+    const resolved = await resolveSession(cookieHeader);
+    if (resolved) {
+      await revokeSession(resolved.sessionId);
+      const user = resolved.identity.user;
+      logger.info("logout", {
+        user_id: (user as any).id,
+        email: user.email,
+        role: user.role,
+        ip: clientIp(req) ?? null,
+      });
     }
     res.setHeader("Set-Cookie", clearSessionCookie());
     res.json({ ok: true });
@@ -296,17 +292,12 @@ export function registerAuthRoutes(app: express.Application) {
   // GET /api/auth/me — return current user info
   app.get("/api/auth/me", async (req, res) => {
     const cookieHeader = req.headers.cookie ?? undefined;
-    const sessionId = extractSessionFromCookie(cookieHeader);
-    if (!sessionId) {
+    const resolved = await resolveSession(cookieHeader);
+    if (!resolved) {
       res.json({ user: null });
       return;
     }
-
-    const identity = await verifySessionIdentity(sessionId);
-    if (!identity) {
-      res.json({ user: null });
-      return;
-    }
+    const {identity} = resolved;
     const { user, actingAs } = identity;
 
     const userDoc = await col("users").findOne({ _id: new ObjectId((user as any).id) }) as any;
@@ -338,11 +329,12 @@ export function registerAuthRoutes(app: express.Application) {
   // follows the selection. Pass userId: null to go back to viewing own data.
   app.post("/api/auth/act-as", async (req, res) => {
     const cookieHeader = req.headers.cookie ?? undefined;
-    const sessionId = extractSessionFromCookie(cookieHeader);
-    if (!sessionId) {
+    const resolved = await resolveSession(cookieHeader);
+    if (!resolved) {
       res.status(401).json({ error: "No session cookie" });
       return;
     }
+    const sessionId = resolved.sessionId;
 
     let ctx;
     try {

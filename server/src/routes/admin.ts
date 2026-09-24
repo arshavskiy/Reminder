@@ -27,6 +27,14 @@ import {
   type ProcessId,
 } from "../ops/processControl";
 import {runTempFileSweep, tempDirUsage, tempSweeperState} from "../storage/tempFiles";
+import {gmailFetch, resolveGmailToken, retryWithRefresh} from "./gmail";
+import {
+  dedupeUnsubscribeReplies,
+  parseUnsubscribeReply,
+  recordUnsubscribes,
+  UNSUBSCRIBE_GMAIL_QUERY,
+  type UnsubscribeReply,
+} from "../outreach/unsubscribeReplies";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 // "expired" is not assignable: it is what a lapsed trial resolves to, not a
@@ -593,6 +601,129 @@ export function registerAdminRoutes(app: express.Application) {
     }
 
     res.json(flatInspectorLead(result));
+  });
+
+  // GET /api/admin/inspector-leads/email-sends — one row per outreach email
+  // recorded on a lead (emailCampaigns), newest first.
+  app.get("/api/admin/inspector-leads/email-sends", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+
+    const page = Math.max(1, Number(req.query.page ?? 1) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 50) || 50));
+    const campaign = String(req.query.campaign ?? "").trim();
+    const q = String(req.query.q ?? "").trim();
+
+    const match: Record<string, any> = {};
+    if (campaign) match["emailCampaigns.campaign"] = campaign;
+    if (q) match.email = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+
+    const leads = await inspectorLeadsCollection();
+    const [result] = await leads.aggregate([
+      { $match: { emailCampaigns: { $exists: true, $ne: [] } } },
+      { $unwind: "$emailCampaigns" },
+      { $match: match },
+      { $facet: {
+        rows: [
+          { $sort: { "emailCampaigns.sentAt": -1, email: 1 } },
+          { $skip: (page - 1) * limit },
+          { $limit: limit },
+          { $project: {
+            _id: 0,
+            leadId: { $toString: "$_id" },
+            email: 1,
+            name: 1,
+            company: 1,
+            campaign: "$emailCampaigns.campaign",
+            subject: "$emailCampaigns.subject",
+            sentAt: "$emailCampaigns.sentAt",
+            resendId: "$emailCampaigns.resendId",
+            unsubscribed: { $ifNull: ["$unsubscribed", false] },
+          } },
+        ],
+        total: [{ $count: "count" }],
+        campaigns: [{ $group: { _id: "$emailCampaigns.campaign", count: { $sum: 1 } } }, { $sort: { _id: 1 } }],
+      } },
+    ]).toArray();
+
+    res.json({
+      rows: result?.rows ?? [],
+      total: result?.total?.[0]?.count ?? 0,
+      page,
+      limit,
+      campaigns: (result?.campaigns ?? []).map((row: any) => ({ campaign: row._id, count: row.count })),
+    });
+  });
+
+  // GET /api/admin/inspector-leads/unsubscribes — leads who asked to be removed
+  app.get("/api/admin/inspector-leads/unsubscribes", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const leads = await inspectorLeadsCollection();
+    const rows = await leads
+      .find({ unsubscribed: true })
+      .sort({ unsubscribedAt: -1 })
+      .limit(1000)
+      .toArray();
+    res.json({ rows: rows.map(flatInspectorLead), total: rows.length });
+  });
+
+  // POST /api/admin/inspector-leads/scan-unsubscribes — searches the admin's
+  // connected Gmail (contact@remindocr.com) for "הסר" replies and flags the
+  // senders as unsubscribed.
+  app.post("/api/admin/inspector-leads/scan-unsubscribes", async (req, res) => {
+    const auth = await adminAuth(req, res);
+    if (!auth) return;
+
+    let accessToken = await runWithPrimaryDb(() => resolveGmailToken(auth.userId));
+    if (!accessToken) {
+      res.status(409).json({ error: "gmail_not_connected" });
+      return;
+    }
+
+    const replies: UnsubscribeReply[] = [];
+    let scanned = 0;
+    let pageToken = "";
+    for (let pageIndex = 0; pageIndex < 5; pageIndex += 1) {
+      const listPath = `messages?q=${encodeURIComponent(UNSUBSCRIBE_GMAIL_QUERY)}&maxResults=100${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
+      let listRes = await gmailFetch(accessToken, listPath);
+      if (listRes.status === 401) {
+        const refreshed = await runWithPrimaryDb(() => retryWithRefresh(auth.userId));
+        if (!refreshed) {
+          res.status(409).json({ error: "gmail_not_connected" });
+          return;
+        }
+        accessToken = refreshed;
+        listRes = await gmailFetch(accessToken, listPath);
+      }
+      if (!listRes.ok) {
+        logger.warn("unsubscribe_scan_list_failed", { status: listRes.status });
+        res.status(502).json({ error: "gmail_search_failed" });
+        return;
+      }
+      const listData = await listRes.json() as { messages?: { id: string }[]; nextPageToken?: string };
+      const ids = (listData.messages ?? []).map((m) => m.id);
+      scanned += ids.length;
+      const token = accessToken;
+      const messages = await Promise.all(ids.map(async (id) => {
+        const msgRes = await gmailFetch(token, `messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
+        if (!msgRes.ok) return null;
+        const msg = await msgRes.json() as any;
+        return parseUnsubscribeReply({
+          id,
+          snippet: msg.snippet,
+          internalDate: msg.internalDate,
+          headers: msg.payload?.headers ?? [],
+        });
+      }));
+      for (const reply of messages) if (reply) replies.push(reply);
+      if (!listData.nextPageToken) break;
+      pageToken = listData.nextPageToken;
+    }
+
+    const unique = dedupeUnsubscribeReplies(replies);
+    const leads = await inspectorLeadsCollection();
+    const result = await recordUnsubscribes(leads, unique);
+    logger.info("unsubscribe_scan_completed", { scanned, requests: unique.length, ...result });
+    res.json({ scanned, requests: unique.length, ...result });
   });
 
   // ── Web Push subscription (admin notifications) ───────────────────────────

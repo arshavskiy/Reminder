@@ -1,4 +1,4 @@
-import {extractSessionFromCookie, verifySessionIdentity} from "./session";
+import {extractSessionIds, resolveSession} from "./session";
 import type {User, UserRole} from "../../src/shared/types.js";
 import {isAnyFeatureEnabledForUser} from "../features";
 import {normalizePlanId} from "../plans/tierFeatures";
@@ -30,11 +30,11 @@ export class HTTPException extends Error {
 }
 
 export async function requireAuth(cookieHeader: string | undefined): Promise<AuthContext> {
-  const sessionId = extractSessionFromCookie(cookieHeader);
-  if (!sessionId) throw new HTTPException(401, "No session cookie");
+  if (extractSessionIds(cookieHeader).length === 0) throw new HTTPException(401, "No session cookie");
 
-  const identity = await verifySessionIdentity(sessionId);
-  if (!identity) throw new HTTPException(401, "Invalid or expired session");
+  const resolved = await resolveSession(cookieHeader);
+  if (!resolved) throw new HTTPException(401, "Invalid or expired session");
+  const {identity} = resolved;
 
   const { user, actingAs } = identity;
   if ((user as any).is_active === 0) throw new HTTPException(403, "User account is inactive");
