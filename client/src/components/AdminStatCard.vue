@@ -7,12 +7,12 @@
     
     <div class="stat-card__values">
       <div class="stat-card__primary">
-        <div class="stat-card__num">{{ formattedPrimary }}</div>
+        <div class="stat-card__num" :class="sizeClass(formattedPrimary, 7, 12)" :title="formattedPrimary">{{ formattedPrimary }}</div>
         <div class="stat-card__label">{{ primaryLabel }}</div>
       </div>
       
       <div v-if="secondary !== undefined" class="stat-card__secondary">
-        <div class="stat-card__num-small">{{ formattedSecondary }}</div>
+        <div class="stat-card__num-small" :class="sizeClass(formattedSecondary, 7, 12)" :title="formattedSecondary">{{ formattedSecondary }}</div>
         <div class="stat-card__label-small">{{ secondaryLabel }}</div>
       </div>
     </div>
@@ -54,6 +54,14 @@ const formattedPrimary = computed(() => {
   if (props.format === "bytes") return formatBytes(Number(props.primary));
   return String(props.primary);
 });
+
+/** Long values (dates, "0.00 / 8 GB") step down a size so they fit the card instead of wrapping or clipping. */
+function sizeClass(text: string, medium: number, small: number): string {
+  const length = String(text ?? "").length;
+  if (length > small) return "is-sm";
+  if (length > medium) return "is-md";
+  return "";
+}
 
 const formattedSecondary = computed(() => {
   if (props.secondary === undefined) return "";
@@ -126,14 +134,22 @@ function formatBytes(bytes: number): string {
 
 .stat-card__primary {
   flex: 1;
+  min-width: 0;
 }
 
 .stat-card__num {
   font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
-  line-height: 1;
+  line-height: 1.1;
   margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+.stat-card__num.is-md {
+  font-size: 20px;
+}
+.stat-card__num.is-sm {
+  font-size: 16px;
 }
 
 .stat-card--error .stat-card__num {
@@ -157,15 +173,24 @@ function formatBytes(bytes: number): string {
   text-align: left;
   padding-left: 16px;
   border-left: 1px solid var(--border-color);
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
 }
 
 .stat-card__num-small {
   font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
-  line-height: 1;
+  line-height: 1.15;
   margin-bottom: 2px;
+  overflow-wrap: anywhere;
+}
+.stat-card__num-small.is-md {
+  font-size: 14px;
+}
+.stat-card__num-small.is-sm {
+  font-size: 12px;
 }
 
 .stat-card__label-small {
