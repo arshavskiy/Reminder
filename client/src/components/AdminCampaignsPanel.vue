@@ -106,16 +106,25 @@
       <n-radio-group v-model:value="audienceType" :disabled="sending" style="margin-top:6px">
         <n-space vertical>
           <n-radio value="leads" :disabled="!selectedLeadIds?.length">Leads selected in the Leads tab ({{ selectedLeadIds?.length ?? 0 }})</n-radio>
+          <n-radio value="emails">Specific email addresses</n-radio>
           <n-radio value="import" :disabled="!lastImport">Leads from the file uploaded above<span v-if="lastImport"> ({{ lastImport.file }})</span></n-radio>
           <n-radio value="filter">Leads matching a filter (starts from the Leads tab filter)</n-radio>
           <n-radio value="all">All leads with an email</n-radio>
         </n-space>
       </n-radio-group>
+      <n-input
+        v-if="audienceType === 'emails'"
+        v-model:value="specificEmails"
+        type="textarea"
+        :autosize="{minRows: 3, maxRows: 8}"
+        placeholder="One address per line, or separated by commas"
+        style="margin-top:8px"
+      />
       <div v-if="audienceType === 'filter'" class="block-toolbar" style="margin-top:8px">
         <n-select v-model:value="filterSource" clearable size="small" placeholder="Source" :options="sourceOptions" style="width: 240px" />
         <n-input v-model:value="filterQ" clearable size="small" placeholder="Search name, email…" style="width: 220px" />
       </div>
-      <div v-if="audienceType !== 'leads'" class="block-toolbar" style="margin-top:8px">
+      <div v-if="audienceType === 'filter' || audienceType === 'import' || audienceType === 'all'" class="block-toolbar" style="margin-top:8px">
         <n-select
           v-model:value="filterStatuses"
           multiple
@@ -230,7 +239,7 @@ const saving = ref(false);
 const uploadingImage = ref(false);
 const rendered = ref({subject: "", html: ""});
 
-const audienceType = ref<"leads" | "import" | "filter" | "all">(props.selectedLeadIds?.length ? "leads" : "filter");
+const audienceType = ref<"leads" | "emails" | "import" | "filter" | "all">(props.selectedLeadIds?.length ? "leads" : "filter");
 const filterSource = ref<string | null>(props.leadFilter?.source ?? null);
 const filterStatuses = ref<string[]>(props.leadFilter?.status ? [props.leadFilter.status] : []);
 const neverEmailed = ref(false);
@@ -248,6 +257,7 @@ const statusOptions = [
 const preview = ref<CampaignAudiencePreview | null>(null);
 const counting = ref(false);
 const testTo = ref("");
+const specificEmails = ref("");
 const testing = ref(false);
 const confirmOpen = ref(false);
 const confirmText = ref("");
@@ -276,13 +286,14 @@ const statusText = computed(() => {
 
 function audience(): EmailCampaignAudience {
   if (audienceType.value === "leads" && props.selectedLeadIds?.length) return {type: "leads", ids: [...props.selectedLeadIds]};
+  if (audienceType.value === "emails") return {type: "emails", emails: specificEmails.value};
   const refine = {statuses: [...filterStatuses.value], neverEmailed: neverEmailed.value};
   if (audienceType.value === "import" && lastImport.value) return {...refine, type: "import", batchId: lastImport.value.batchId};
   if (audienceType.value === "filter") return {...refine, type: "filter", source: filterSource.value, q: filterQ.value.trim() || null};
   return {...refine, type: "all"};
 }
 
-watch([audienceType, filterSource, filterStatuses, neverEmailed, filterQ], () => { preview.value = null; }, {deep: true});
+watch([audienceType, filterSource, filterStatuses, neverEmailed, filterQ, specificEmails], () => { preview.value = null; }, {deep: true});
 
 // Ticking leads in the table makes them the recipients; clearing the selection falls back to the filter.
 watch(() => props.selectedLeadIds?.length ?? 0, (count) => {
