@@ -42,14 +42,14 @@
     </span>
 
     <span class="sparks">
-      <span class="spark" title="Requests per minute (bars, red = had a 5xx) and p95 latency (line), last 60 min">
+      <span class="spark" title="Requests per minute (bars, red = had a 5xx) and p95 latency (line), last 15 min">
         <svg :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none" aria-hidden="true">
           <rect v-for="(bar, i) in traffic.bars" :key="i" :x="bar.x" :y="bar.y" :width="bar.w" :height="bar.h" :class="bar.err ? 'bar bar--err' : 'bar'" />
           <polyline v-if="traffic.line" :points="traffic.line" class="line line--p95" />
         </svg>
         <span class="spark-label"><i class="sw sw--req" />req <i class="sw sw--p95" />p95</span>
       </span>
-      <span class="spark" title="CPU % and memory, last 60 min">
+      <span class="spark" title="CPU % and memory, last 15 min">
         <svg :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none" aria-hidden="true">
           <polyline v-if="resources.mem" :points="resources.mem" class="line line--mem" />
           <polyline v-if="resources.cpu" :points="resources.cpu" class="line line--cpu" />
@@ -70,6 +70,8 @@ let timer: ReturnType<typeof setInterval> | null = null;
 
 const W = 130;
 const H = 34;
+/** The strip's mini charts cover the last 15 minutes; System Health has the full hour. */
+const SPARK_MINUTES = 15;
 
 type Level = "ok" | "warn" | "bad";
 const level = (value: number, limit: number): Level => (value >= limit ? "bad" : value >= limit * 0.7 ? "warn" : "ok");
@@ -122,10 +124,10 @@ function polyline(values: number[], xAt: (i: number) => number): string {
   return values.map((v, i) => `${xAt(i).toFixed(1)},${(H - 2 - (v / max) * (H - 6)).toFixed(1)}`).join(" ");
 }
 
-/** Bars = requests per minute (red when that minute had a 5xx), line = p95 latency. */
+/** Bars = requests per minute over the last 15 minutes (red when that minute had a 5xx), line = p95 latency. */
 const traffic = computed(() => {
   const series = (data.value?.series.http ?? []) as any[];
-  const slots = 60;
+  const slots = SPARK_MINUTES;
   const points = series.slice(-slots);
   if (!points.length) return {bars: [], line: ""};
   const barW = W / slots;
@@ -138,16 +140,19 @@ const traffic = computed(() => {
   return {bars, line: polyline(points.map((p) => p.p95Ms), (i) => (offset + i) * barW + barW / 2)};
 });
 
-/** CPU % and memory over the hour — Railway's container series when available, else this process. */
+/** CPU % and memory over the last 15 minutes — Railway's container series when available, else this process. */
 const resources = computed(() => {
+  const since = Date.now() - SPARK_MINUTES * 60_000;
   const rs = railway.value?.series;
   let cpuValues: number[];
   let memValues: number[];
   if (rs?.CPU_USAGE?.length || rs?.MEMORY_USAGE_GB?.length) {
-    cpuValues = (rs.CPU_USAGE ?? []).map((p: any) => p.value);
-    memValues = (rs.MEMORY_USAGE_GB ?? []).map((p: any) => p.value);
+    // Railway timestamps are in seconds.
+    const recent = (points: any[] = []) => points.filter((p) => p.ts * 1000 >= since).map((p) => p.value);
+    cpuValues = recent(rs.CPU_USAGE);
+    memValues = recent(rs.MEMORY_USAGE_GB);
   } else {
-    const samples = (data.value?.series.system ?? []) as any[];
+    const samples = ((data.value?.series.system ?? []) as any[]).filter((s) => s.ts >= since);
     cpuValues = samples.map((s) => s.cpuPct);
     memValues = samples.map((s) => s.rssMb);
   }
@@ -175,7 +180,7 @@ async function load() {
 
 onMounted(() => {
   void load();
-  timer = setInterval(() => { if (!document.hidden) void load(); }, 30_000);
+  timer = setInterval(() => { if (!document.hidden) void load(); }, 10_000);
 });
 
 onBeforeUnmount(() => {
