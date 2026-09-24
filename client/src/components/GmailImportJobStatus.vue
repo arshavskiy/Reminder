@@ -21,9 +21,6 @@
     </div>
 
     <p v-if="inlineReceipts && job.status === 'completed'" class="gmail-job__plain">{{ inlineSummary }}</p>
-    <ul v-if="inlineReceipts && savedResults.length" class="gmail-job__saved">
-      <li v-for="result in savedResults" :key="result.messageId">{{ result.filename }}</li>
-    </ul>
 
     <div v-if="!inlineReceipts" class="gmail-job__stats">
       <span>{{ job.processedMessages }} מתוך {{ totalForProgress }} מיילים נסרקו</span>
@@ -150,9 +147,6 @@ const retryableCount = computed(() => {
   }
   return Number(props.job.explanationSummary?.retryable ?? 0);
 });
-const savedResults = computed(() =>
-  (props.job.results ?? []).filter((result) => resultStatus(result) === "invoice").slice(0, 8),
-);
 const visibleResults = computed(() => (props.job.results ?? []).slice(0, 12));
 
 function resultLabel(result: GmailImportJob["results"][number]): string {
@@ -255,24 +249,6 @@ function resultStatus(result: GmailImportJob["results"][number]): string {
   color: var(--text-primary);
   font-size: 14px;
   line-height: 1.5;
-}
-
-.gmail-job__saved {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.gmail-job__saved li {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-success) 13%, var(--bg-card));
-  color: var(--color-success);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .gmail-job__summary,

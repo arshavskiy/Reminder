@@ -233,21 +233,32 @@
       @dismiss="lastGmailImportJob = null"
     />
     <div
-      v-if="inlineOnlyEmails.length && !inlineOnlyDismissed"
+      v-if="(inlineOnlyLoading || inlineOnlyEmails.length) && !inlineOnlyDismissed"
       class="link-only-notice"
+      :class="{ 'link-only-notice--pending': inlineOnlyLoading }"
+      role="status"
+      aria-live="polite"
     >
       <div class="link-only-notice__text">
-        <strong>נמצאו {{ inlineOnlyEmails.length }} מיילי חשבונית ללא קובץ מצורף</strong>
-        <span>קבלות כמו Google Play, PayPal, Hyp ו-Meta Ads מיובאות מכאן בלחיצה אחת.</span>
+        <strong class="link-only-notice__title">
+          <n-spin v-if="inlineOnlyLoading" :size="18" />
+          <n-icon v-else :component="MailOutline" :size="20" />
+          <span v-if="inlineOnlyLoading">מחפש מיילי חשבונית ללא קובץ מצורף...</span>
+          <span v-else>נמצאו {{ inlineOnlyEmails.length }} מיילי חשבונית ללא קובץ מצורף</span>
+        </strong>
+        <span v-if="inlineOnlyLoading">הסריקה של Gmail עדיין רצה. הרשימה תופיע כאן כשתסתיים.</span>
+        <span v-else>קבלות כמו Google Play, PayPal, Hyp ו-Meta Ads מיובאות מכאן בלחיצה אחת.</span>
       </div>
       <button
+        v-if="!inlineOnlyLoading"
         class="rbtn rbtn--primary"
+        :class="{ 'rbtn--loading': importingFromGmail }"
         type="button"
         :disabled="importingFromGmail"
         @click="handleImportInlineAll"
       >
         <GmailLogo :size="16" class="btn-icon" />
-        ייבא הכל
+        {{ importingFromGmail ? "מייבא..." : "ייבא הכל" }}
       </button>
     </div>
     <DriveExportJobStatus
@@ -618,6 +629,7 @@ const activeDriveExportJob = ref<DriveExportJob | null>(null);
 const lastDriveExportJob = ref<DriveExportJob | null>(null);
 const gmailConnected = ref<boolean | null>(null);
 const inlineOnlyEmails = ref<GmailLinkOnlyEmail[]>([]);
+const inlineOnlyLoading = ref(false);
 const inlineOnlyDismissed = ref(false);
 const importingInlineId = ref<string | null>(null);
 const viewMode = ref<"cards" | "table">("table");
@@ -1303,11 +1315,14 @@ async function handleGmailImportButton() {
 
 async function loadInlineOnlyEmails(templateId: string | undefined) {
   inlineOnlyDismissed.value = false;
+  inlineOnlyLoading.value = true;
   try {
     const result = await api.gmail.linkOnlyInbox(undefined, undefined, templateId);
     inlineOnlyEmails.value = result.emails;
   } catch {
     inlineOnlyEmails.value = [];
+  } finally {
+    inlineOnlyLoading.value = false;
   }
 }
 
@@ -1777,27 +1792,39 @@ function replaceRow(updated: ImportedInvoice) {
 
 .link-only-notice {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 16px;
+  padding: 16px 18px;
   margin-bottom: 16px;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
+  border-radius: 12px;
+  border: 2px solid var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 16%, var(--bg-card));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-warning) 18%, transparent);
+}
+
+.link-only-notice--pending {
+  border-color: var(--brand-color);
+  background: color-mix(in srgb, var(--brand-color) 14%, var(--bg-card));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-color) 16%, transparent);
 }
 
 .link-only-notice__text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--text-secondary);
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-primary);
 }
 
-.link-only-notice__text strong {
+.link-only-notice__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .link-only-notice__list {

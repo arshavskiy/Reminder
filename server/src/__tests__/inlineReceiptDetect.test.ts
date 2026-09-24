@@ -88,11 +88,13 @@ describe("buildInlineReceiptQueries", () => {
     }
   });
 
-  it("searches Google Play and PayPal directly, inside the invoice history window", () => {
+  it("searches Google Play and PayPal through the 36 month window, not one 500 page", () => {
     const joined = plans.map((plan) => plan.query).join("\n");
+    const play = plans[0];
     expect(joined).toContain("from:googleplay-noreply@google.com");
     expect(joined).toContain("from:paypal.com");
     expect(joined).toContain("newer_than:36m");
-    expect(plans.reduce((sum, plan) => sum + plan.budget, 0)).toBeGreaterThan(500);
+    expect(play.pages * play.pageSize).toBeGreaterThan(500);
+    expect(play.budget).toBeGreaterThan(500);
   });
 });

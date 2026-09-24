@@ -25,8 +25,15 @@ export function inferInvoiceCashFlow(input: {
   provider_id?: unknown;
   provider_category?: unknown;
   notes?: unknown;
+  source?: unknown;
+  inline_no_file?: unknown;
   fields?: Record<string, unknown> | null;
 }): InvoiceCashFlow {
+  // A receipt saved from a vendor email is money the account paid. The Hebrew
+  // "קבלה" default below means a receipt the business issued, and that default
+  // was stored on these rows, which then dropped them from the expense chart.
+  if (input.source === "gmail_inline" || input.inline_no_file === true) return "expense";
+
   const stored = normalizeCashFlow(input.cash_flow) ?? normalizeCashFlow(input.fields?.cash_flow);
   if (stored) return stored;
 

@@ -740,6 +740,8 @@ function presentInvoice(
       provider_id: invoice.provider_id ?? provider?.id,
       provider_category: invoice.provider_category ?? invoice.fields?.provider_category ?? provider?.category,
       notes: invoice.notes ?? invoice.fields?.notes,
+      source: invoice.source,
+      inline_no_file: invoice.inline_no_file,
       fields: invoice.fields,
     }),
       client_name: invoiceDocumentCategory(invoice.document_subtype ?? invoice.template_name ?? invoice.fields?.document_subtype) === "receipt"
