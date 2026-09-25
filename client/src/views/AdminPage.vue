@@ -22,17 +22,31 @@
       </div>
 
       <nav class="admin-sidebar__nav">
-        <button
-          v-for="item in sidebarItems"
-          :key="item.key"
-          class="admin-sidebar__item"
-          :class="{ 'admin-sidebar__item--active': activeSection === item.key }"
-          type="button"
-          @click="switchSection(item.key)"
-        >
-          <n-icon :component="item.icon" :size="18" />
-          <span>{{ item.label }}</span>
-        </button>
+        <div v-for="group in sidebarGroups" :key="group.key" class="admin-sidebar__group">
+          <button
+            class="admin-sidebar__group-header"
+            type="button"
+            :aria-expanded="group.open"
+            @click="toggleNavGroup(group.key)"
+          >
+            <span>{{ group.label }}</span>
+            <span class="admin-sidebar__group-count">{{ group.items.length }}</span>
+            <n-icon :component="group.open ? ChevronDownOutline : ChevronForwardOutline" :size="12" />
+          </button>
+          <template v-if="group.open">
+            <button
+              v-for="item in group.items"
+              :key="item.key"
+              class="admin-sidebar__item"
+              :class="{ 'admin-sidebar__item--active': activeSection === item.key }"
+              type="button"
+              @click="switchSection(item.key)"
+            >
+              <n-icon :component="item.icon" :size="18" />
+              <span>{{ item.label }}</span>
+            </button>
+          </template>
+        </div>
       </nav>
 
       <div class="admin-sidebar__footer">
@@ -111,8 +125,9 @@
         <AdminMagicLinkPanel :key="adminDbTarget" @created="onMagicLinkUserCreated" />
       </section>
 
-      <section v-if="activeSection === 'inspector_leads'" class="admin-section admin-section--leads">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+      <section v-if="isSeedSection" class="admin-section admin-section--leads">
+        <!-- Shared SEED header: the lead totals stay visible on every SEED page. -->
+        <n-spin v-if="sectionLoading && activeSection === 'inspector_leads'" style="display:flex;justify-content:center;padding:40px" />
         <template v-else>
           <div class="admin-stats-grid">
             <AdminStatCard
@@ -142,9 +157,7 @@
             />
           </div>
 
-          <n-tabs v-model:value="inspectorLeadsTab" type="line" animated class="leads-tabs">
-          <n-tab-pane name="leads" tab="Leads" display-directive="show">
-          <div class="monitor-block">
+          <div v-if="activeSection === 'inspector_leads'" class="monitor-block">
             <div class="monitor-block__title">Inspector Leads</div>
             <div class="admin-section__toolbar leads-toolbar">
               <n-input
@@ -189,7 +202,7 @@
                 Refresh
               </n-button>
               <template v-if="inspectorLeadSelected.length">
-                <n-button size="small" type="primary" @click="inspectorLeadsTab = 'campaigns'">
+                <n-button size="small" type="primary" @click="switchSection('seed_campaigns')">
                   <template #icon><n-icon :component="MailOutline" /></template>
                   Email selected ({{ inspectorLeadSelected.length }})
                 </n-button>
@@ -218,23 +231,28 @@
             </div>
           </div>
 
-          </n-tab-pane>
-          <n-tab-pane name="campaigns" tab="Email campaigns" display-directive="show:lazy">
-            <AdminCampaignsPanel
-              :key="`campaigns-${adminDbTarget}`"
-              :lead-filter="{ source: inspectorLeadSourceFilter, status: inspectorLeadStatusFilter, q: inspectorLeadSearch.trim() || null }"
-              :selected-lead-ids="inspectorLeadSelected"
-              @leads-imported="loadInspectorLeads(1)"
-            />
-          </n-tab-pane>
-          <n-tab-pane name="outreach" tab="Sent &amp; unsubscribes" display-directive="show:lazy">
-            <AdminOutreachPanel :key="`outreach-${adminDbTarget}`" />
-          </n-tab-pane>
-          <n-tab-pane name="whatsapp" tab="WhatsApp" display-directive="show:lazy">
-            <WhatsAppCampaignPanel :key="adminDbTarget" :leads="inspectorLeadsRows" />
-          </n-tab-pane>
-          </n-tabs>
         </template>
+
+        <!-- Mounted on first visit and kept, so a half-edited campaign survives switching sections. -->
+        <AdminCampaignsPanel
+          v-if="visitedSeedSections.has('seed_campaigns')"
+          v-show="activeSection === 'seed_campaigns'"
+          :key="`campaigns-${adminDbTarget}`"
+          :lead-filter="{ source: inspectorLeadSourceFilter, status: inspectorLeadStatusFilter, q: inspectorLeadSearch.trim() || null }"
+          :selected-lead-ids="inspectorLeadSelected"
+          @leads-imported="loadInspectorLeads(1)"
+        />
+        <AdminOutreachPanel
+          v-if="visitedSeedSections.has('seed_outreach')"
+          v-show="activeSection === 'seed_outreach'"
+          :key="`outreach-${adminDbTarget}`"
+        />
+        <WhatsAppCampaignPanel
+          v-if="visitedSeedSections.has('seed_whatsapp')"
+          v-show="activeSection === 'seed_whatsapp'"
+          :key="adminDbTarget"
+          :leads="inspectorLeadsRows"
+        />
       </section>
 
       <section v-if="activeSection === 'gmail'" class="admin-section admin-section--gmail">
@@ -1717,8 +1735,6 @@ import {
   NSelect,
   NSpin,
   NSwitch,
-  NTabPane,
-  NTabs,
   NTag,
   NCheckbox,
   NTooltip,
@@ -1730,7 +1746,9 @@ import {
   ArrowBackOutline,
   BriefcaseOutline,
   CalendarOutline,
+  ChatbubblesOutline,
   ChevronBackOutline,
+  ChevronDownOutline,
   ChevronForwardOutline,
   CloseOutline,
   CloudUploadOutline,
@@ -1740,6 +1758,7 @@ import {
   FlashOutline,
   KeyOutline,
   MailOutline,
+  MailUnreadOutline,
   MenuOutline,
   PulseOutline,
   NotificationsOutline,
@@ -1747,6 +1766,7 @@ import {
   ReceiptOutline,
   RefreshOutline,
   SearchOutline,
+  SendOutline,
   ServerOutline,
   SettingsOutline,
   TimerOutline,
@@ -1849,25 +1869,72 @@ async function onAdminDbTargetChange(next: AdminDbTarget) {
   }
 }
 // ── Sidebar ────────────────────────────────────────────────────────────────
-const adminSections = [
-  { key: "system_health",     label: "System Health",          icon: PulseOutline },
-  { key: "users",              label: "Users",                  icon: PeopleOutline },
-  { key: "magic_links",        label: "Magic Links",            icon: KeyOutline },
-  { key: "inspector_leads",    label: "Inspector Leads",        icon: SearchOutline },
-  { key: "gmail",              label: "Gmail Inbox",            icon: MailOutline },
-  { key: "documents",          label: "Documents & Extraction", icon: DocumentOutline },
-  { key: "extraction_quality", label: "Extraction Quality",     icon: FlashOutline },
-  { key: "reminders",          label: "Reminders",              icon: NotificationsOutline },
-  { key: "scheduler",          label: "Scheduler",              icon: TimerOutline },
-  { key: "monthly",            label: "Monthly Reports",        icon: CalendarOutline },
-  { key: "bad_emails",         label: "Bad Emails",             icon: MailOutline },
-  { key: "import_queue",      label: "Import Queue",           icon: TimerOutline },
+type AdminGroupKey = "ops" | "users" | "seed";
+
+/** Sidebar groups, in display order. */
+const adminGroups: { key: AdminGroupKey; label: string }[] = [
+  { key: "ops",   label: "Operations" },
+  { key: "users", label: "Users" },
+  { key: "seed",  label: "SEED" },
+];
+
+const adminSections: { key: string; label: string; icon: any; group?: AdminGroupKey }[] = [
+  // Operations — is the system healthy
+  { key: "system_health",      label: "System Health",          icon: PulseOutline,         group: "ops" },
+  { key: "processes",          label: "Processes & Temp Files", icon: PulseOutline,         group: "ops" },
+  { key: "scheduler",          label: "Scheduler",              icon: TimerOutline,         group: "ops" },
+  { key: "import_queue",       label: "Import Queue",           icon: TimerOutline,         group: "ops" },
+  { key: "documents",          label: "Documents & Extraction", icon: DocumentOutline,      group: "ops" },
+  { key: "extraction_quality", label: "Extraction Quality",     icon: FlashOutline,         group: "ops" },
+  { key: "storage_drive",      label: "Storage & Drive",        icon: ServerOutline,        group: "ops" },
+  { key: "gmail",              label: "Gmail Inbox",            icon: MailOutline,          group: "ops" },
+  // Users — customer accounts and their data
+  { key: "users",              label: "Users",                  icon: PeopleOutline,        group: "users" },
+  { key: "magic_links",        label: "Magic Links",            icon: KeyOutline,           group: "users" },
+  { key: "monthly",            label: "Monthly Reports",        icon: CalendarOutline,      group: "users" },
+  { key: "bad_emails",         label: "Bad Emails",             icon: MailOutline,          group: "users" },
+  { key: "reminders",          label: "Reminders",              icon: NotificationsOutline, group: "users" },
+  // SEED — leads and outreach. "inspector_leads" keeps its key so old links still work.
+  { key: "inspector_leads",    label: "Leads",                  icon: SearchOutline,        group: "seed" },
+  { key: "seed_campaigns",     label: "Email campaigns",        icon: SendOutline,          group: "seed" },
+  { key: "seed_outreach",      label: "Sent & unsubscribes",    icon: MailUnreadOutline,    group: "seed" },
+  { key: "seed_whatsapp",      label: "WhatsApp",               icon: ChatbubblesOutline,   group: "seed" },
   // { key: "invoices",          label: "Invoices",               icon: ReceiptOutline },
-  { key: "processes",         label: "Processes & Temp Files", icon: PulseOutline },
-  { key: "storage_drive",     label: "Storage & Drive",        icon: ServerOutline },
   { key: "settings",           label: "Settings",               icon: SettingsOutline },
 ];
 const sidebarItems = adminSections.filter((item) => item.key !== "settings");
+
+const SEED_SECTION_KEYS = ["inspector_leads", "seed_campaigns", "seed_outreach", "seed_whatsapp"];
+const isSeedSection = computed(() => SEED_SECTION_KEYS.includes(activeSection.value));
+/** SEED panels mount on first visit and then stay mounted (hidden) so their state survives navigation. */
+const visitedSeedSections = ref(new Set<string>());
+
+const NAV_COLLAPSED_KEY = "admin.nav.collapsed";
+function readCollapsedGroups(): Set<string> {
+  try {
+    const raw = localStorage.getItem(NAV_COLLAPSED_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+const collapsedGroups = ref(readCollapsedGroups());
+const activeGroup = computed(() => adminSections.find((item) => item.key === activeSection.value)?.group ?? null);
+const sidebarGroups = computed(() => adminGroups.map((group) => ({
+  ...group,
+  items: sidebarItems.filter((item) => item.group === group.key),
+  // The active section's group always stays open so the current item is never hidden.
+  open: !collapsedGroups.value.has(group.key) || activeGroup.value === group.key,
+})));
+function toggleNavGroup(key: string) {
+  const next = new Set(collapsedGroups.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  collapsedGroups.value = next;
+  try {
+    localStorage.setItem(NAV_COLLAPSED_KEY, JSON.stringify([...next]));
+  } catch { /* per-browser convenience only */ }
+}
 const activeSection = ref("system_health");
 const currentItem = computed(() => adminSections.find((i) => i.key === activeSection.value));
 const sectionLoading = ref(false);
@@ -1913,7 +1980,6 @@ function resolveUserEmail(userId: string) {
 
 // ── Inspector leads ───────────────────────────────────────────────────────
 const inspectorLeadsRows = ref<InspectorLead[]>([]);
-const inspectorLeadsTab = ref<"leads" | "campaigns" | "outreach" | "whatsapp">("leads");
 /** Lead ids ticked in the table (kept across pages) for "Email selected". */
 const inspectorLeadSelected = ref<string[]>([]);
 const inspectorLeadUnsubFilter = ref<"hide" | "only" | null>(null);
@@ -3440,6 +3506,9 @@ async function switchSection(key: string) {
   if (route.query.section !== key) {
     await router.replace({ query: { ...route.query, section: key } });
   }
+  if (SEED_SECTION_KEYS.includes(key) && !visitedSeedSections.value.has(key)) {
+    visitedSeedSections.value = new Set([...visitedSeedSections.value, key]);
+  }
   await loadSectionData(key);
 }
 
@@ -3458,8 +3527,9 @@ async function loadSectionData(key: string) {
       const [monitor, gaps] = await Promise.all([api.admin.monitorDocuments(), api.admin.monitorPipelineGaps(), loadExtractions(1)]);
       docMonitor.value = monitor;
       pipelineGaps.value = gaps;
-    } else if (key === "inspector_leads") {
-      await loadInspectorLeads(1);
+    } else if (SEED_SECTION_KEYS.includes(key)) {
+      // Every SEED page shows the lead totals, and WhatsApp needs the rows.
+      if (key === "inspector_leads" || !inspectorLeadsRows.value.length) await loadInspectorLeads(1);
     } else if (key === "extraction_quality") {
       extractionQuality.value = await api.admin.monitorExtractionQuality();
     } else if (key === "reminders") {
@@ -3672,8 +3742,43 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 14px 12px;
+  padding: 10px 12px 14px;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.admin-sidebar__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-sidebar__group-header {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  width: 100%;
+  padding: 6px 12px 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.admin-sidebar__group-header:hover {
+  color: var(--text-primary);
+}
+
+.admin-sidebar__group-count {
+  margin-inline-start: auto;
+  font-weight: 600;
+  opacity: 0.7;
 }
 
 .admin-sidebar__item {
