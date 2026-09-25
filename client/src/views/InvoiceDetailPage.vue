@@ -7,31 +7,31 @@
       <template #breadcrumb>
         <router-link :to="href('/invoices')">{{ l.invoices.title }}</router-link>
         <span class="sep">/</span>
-        <span>{{ invoice?.invoice_number || "פרטי חשבונית" }}</span>
+        <span>{{ invoice?.invoice_number || l.invoiceDetailMsg.details }}</span>
       </template>
       <template #actions>
         <button class="rbtn rbtn--ghost" type="button" @click="router.push('/invoices')">
           <n-icon :component="ArrowForwardOutline" class="btn-icon" />
-          חזרה
+          {{ l.invoiceDetailMsg.back }}
         </button>
         <button class="rbtn rbtn--ghost" type="button" :disabled="!invoice?.download_url" @click="downloadInvoice">
           <n-icon :component="DownloadOutline" class="btn-icon" />
-          הורד
+          {{ l.invoiceDetailMsg.download }}
         </button>
         <button class="rbtn rbtn--ghost" type="button" :disabled="!invoice?.document_id" @click="openDocumentPage">
           <n-icon :component="OpenOutline" class="btn-icon" />
-          מסמך מקור
+          {{ l.invoiceDetailMsg.sourceDoc }}
         </button>
       </template>
     </PageHeader>
 
     <div v-if="invoice" class="invoice-detail__chips">
       <span class="status-chip">{{ statusLabel(invoice.status) }}</span>
-      <span class="meta-chip">{{ invoice.invoice_number || "ללא מספר" }}</span>
+      <span class="meta-chip">{{ invoice.invoice_number || l.invoiceDetailMsg.noNumber }}</span>
       <span class="meta-chip">{{ invoiceTypeLabel(invoice) }}</span>
-      <span v-if="invoice.inline_no_file" class="meta-chip">ללא קובץ</span>
+      <span v-if="invoice.inline_no_file" class="meta-chip">{{ l.invoicesMsg.noFile }}</span>
       <span class="meta-chip" :class="form.cash_flow === 'income' ? 'meta-chip--income' : 'meta-chip--expense'">
-        {{ form.cash_flow === "income" ? "הכנסה" : "הוצאה" }}
+        {{ form.cash_flow === "income" ? l.invoiceDetailMsg.income : l.invoiceDetailMsg.expense }}
       </span>
       <StorageSyncIcons
         :in-s3="invoice.in_s3"
@@ -61,33 +61,33 @@
               sandbox=""
               referrerpolicy="no-referrer"
               :srcdoc="invoice.preview_html"
-              title="תצוגת המייל"
+              :title="l.invoiceDetailMsg.emailPreview"
             />
             <div v-else class="invoice-preview__empty">
               <n-icon :component="DocumentTextOutline" :size="48" />
-              <span>{{ invoice.inline_no_file ? "נשמר מגוף המייל, ללא קובץ" : "אין תצוגה מקדימה" }}</span>
+              <span>{{ invoice.inline_no_file ? l.invoiceDetailMsg.savedFromEmail : l.invoiceDetailMsg.noPreview }}</span>
             </div>
           </div>
         </section>
 
         <aside class="invoice-side">
           <div v-if="probablyContractDocument" class="invoice-warning">
-            <strong>כנראה לא חשבונית</strong>
-            <span>חסרים גם מספר חשבונית וגם סכום לתשלום. המסמך כנראה חוזה או מסמך אחר.</span>
+            <strong>{{ l.invoiceDetailMsg.notInvoiceTitle }}</strong>
+            <span>{{ l.invoiceDetailMsg.notInvoiceBody }}</span>
           </div>
 
           <section class="side-card side-card--main">
-            <h2>פיננסים</h2>
+            <h2>{{ l.invoiceDetailMsg.finance }}</h2>
             <div class="finance-summary">
               <div class="finance-summary__amount">
-                <span>סכום כולל</span>
+                <span>{{ l.invoiceDetailMsg.totalAmount }}</span>
                 <strong>{{ invoice.currency !== 'ILS' && invoice.amount_ils !== null ? formatIls(invoice.amount_ils) : invoice.amount_display }}</strong>
                 <span v-if="invoice.currency !== 'ILS'" class="finance-summary__amount-ils">
                   ({{ invoice.amount_display }})
                 </span>
               </div>
               <label class="finance-summary__status">
-                <span>סטטוס תשלום</span>
+                <span>{{ l.invoiceDetailMsg.paymentStatus }}</span>
                 <n-select
                   v-model:value="form.payment_status"
                   :options="paymentStatusOptions"
@@ -97,11 +97,11 @@
             </div>
             <div class="form-grid">
               <label>
-                <span>מטבע</span>
+                <span>{{ l.invoiceDetailMsg.currency }}</span>
                 <n-select v-model:value="form.currency" :options="currencyOptions" size="large" />
               </label>
               <label>
-                <span>מע"מ</span>
+                <span>{{ l.invoiceDetailMsg.vat }}</span>
                 <n-input :value="vatDisplay" size="large" readonly />
               </label>
             </div>
@@ -109,31 +109,31 @@
 
           <section class="side-card">
             <h2>
-              סיווג
+              {{ l.invoiceDetailMsg.classification }}
               <n-icon :component="FolderOutline" :size="18" />
             </h2>
             <div class="form-grid">
               <label>
-                <span>סוג תנועה</span>
+                <span>{{ l.invoiceDetailMsg.cashFlowType }}</span>
                 <n-select v-model:value="form.cash_flow" :options="cashFlowOptions" size="large" />
               </label>
               <label>
-                <span>קטגוריית ספק</span>
+                <span>{{ l.invoiceDetailMsg.providerCategory }}</span>
                 <n-select
                   v-model:value="form.provider_category"
                   :options="providerCategoryOptions"
                   clearable
                   filterable
                   size="large"
-                  placeholder="לא מסווג"
+                  :placeholder="l.providerCategory.payment"
                 />
               </label>
               <label>
-                <span>{{ form.cash_flow === "income" ? "קטגוריית הכנסה" : "קטגוריית הוצאה" }}</span>
+                <span>{{ form.cash_flow === "income" ? l.invoiceDetailMsg.incomeCategory : l.invoiceDetailMsg.expenseCategory }}</span>
                 <n-select
                     v-model:value="form.expense_category"
                     :options="categoryOptions"
-                    :placeholder="form.cash_flow === 'income' ? 'בחר או הקלד קטגוריית הכנסה' : 'בחר או הקלד קטגוריית הוצאה'"
+                    :placeholder="form.cash_flow === 'income' ? l.invoiceDetailMsg.pickIncomeCategory : l.invoiceDetailMsg.pickExpenseCategory"
                     clearable
                     filterable
                     size="large"
@@ -141,17 +141,17 @@
                 />
               </label>
               <label v-if="!isReceiptDocument">
-                <span>לקוח</span>
+                <span>{{ l.invoiceDetailMsg.client }}</span>
                 <n-input v-model:value="form.client_name" size="large" />
               </label>
             </div>
           </section>
 
           <section class="side-card">
-            <h2>תאריכים</h2>
+            <h2>{{ l.invoiceDetailMsg.dates }}</h2>
             <div class="form-grid">
               <label>
-                <span>תאריך קבלה</span>
+                <span>{{ l.invoiceDetailMsg.receivedDate }}</span>
                 <n-date-picker
                   v-model:value="receivedDateValue"
                   type="date"
@@ -160,7 +160,7 @@
                 />
               </label>
               <label>
-                <span>{{ form.cash_flow === "income" ? "תאריך הנפקה" : "תאריך הוצאה" }}</span>
+                <span>{{ form.cash_flow === "income" ? l.invoiceDetailMsg.issuedDate : l.invoiceDetailMsg.expenseDate }}</span>
                 <n-date-picker
                   v-model:value="issueDateValue"
                   type="date"
@@ -172,27 +172,27 @@
           </section>
 
           <section class="side-card">
-            <h2>הערה</h2>
+            <h2>{{ l.invoiceDetailMsg.note }}</h2>
             <n-input
               v-model:value="form.note"
               type="textarea"
               :autosize="{ minRows: 3, maxRows: 6 }"
-              placeholder="הקלד משהו..."
+              :placeholder="l.invoiceDetailMsg.notePlaceholder"
             />
           </section>
 
           <section class="side-card side-card--extracted">
             <button class="extracted-toggle" type="button" @click="showExtractedFields = !showExtractedFields">
               <span>
-                נתונים שחולצו
-                <small>{{ visibleExtractedFields.length }} שדות</small>
+                {{ l.invoiceDetailMsg.extracted }}
+                <small>{{ t("invoiceDetailMsg.fieldCount", {count: visibleExtractedFields.length}) }}</small>
               </span>
               <n-icon :component="ChevronDownOutline" :class="{ 'is-open': showExtractedFields }" />
             </button>
             <div v-if="showExtractedFields" class="extracted-panel">
               <div class="extracted-panel__actions">
                 <n-button text size="tiny" @click="showEmptyExtractedFields = !showEmptyExtractedFields">
-                  {{ showEmptyExtractedFields ? "הסתר ריקים" : "הצג הכל" }}
+                  {{ showEmptyExtractedFields ? l.invoiceDetailMsg.hideEmpty : l.invoiceDetailMsg.showAll }}
                 </n-button>
               </div>
               <div v-if="visibleExtractedFields.length" class="extracted-fields">
@@ -206,17 +206,17 @@
                   <span class="extracted-field__value" :dir="field.dir">{{ field.value }}</span>
                 </div>
               </div>
-              <div v-else class="extracted-empty">אין שדות להצגה</div>
+              <div v-else class="extracted-empty">{{ l.invoiceDetailMsg.noFields }}</div>
             </div>
           </section>
 
           <div class="invoice-side__actions">
-            <n-button @click="load(true)">בטל</n-button>
-            <n-button type="primary" :loading="saving" @click="save">שמור</n-button>
+            <n-button @click="load(true)">{{ l.invoiceDetailMsg.discard }}</n-button>
+            <n-button type="primary" :loading="saving" @click="save">{{ l.invoiceDetailMsg.save }}</n-button>
           </div>
         </aside>
       </div>
-      <div v-else-if="!loading" class="invoice-detail__missing">החשבונית לא נמצאה</div>
+      <div v-else-if="!loading" class="invoice-detail__missing">{{ l.invoiceDetailMsg.notFound }}</div>
     </n-spin>
   </div>
 </template>
@@ -261,50 +261,51 @@ const form = reactive({
   payment_due_date: null as string | null,
 });
 
-const paymentStatusOptions: SelectOption[] = [
-  { label: "שולם", value: "paid" },
-  { label: "ממתין", value: "pending" },
-  { label: "באיחור", value: "overdue" },
-];
-const cashFlowOptions: SelectOption[] = [
-  { label: "הוצאה", value: "expense" },
-  { label: "הכנסה", value: "income" },
-];
+const paymentStatusOptions = computed<SelectOption[]>(() => [
+  { label: l.value.invoiceDetailMsg.paid, value: "paid" },
+  { label: l.value.invoiceDetailMsg.pending, value: "pending" },
+  { label: l.value.invoiceDetailMsg.overdue, value: "overdue" },
+]);
+const cashFlowOptions = computed<SelectOption[]>(() => [
+  { label: l.value.invoiceDetailMsg.expense, value: "expense" },
+  { label: l.value.invoiceDetailMsg.income, value: "income" },
+]);
 const currencyOptions: SelectOption[] = [
   { label: "₪ ILS - Israeli shekels", value: "ILS" },
   { label: "$ USD - US dollar", value: "USD" },
   { label: "€ EUR - Euro", value: "EUR" },
 ];
-const categoryOptions: SelectOption[] = [
-  {label: "כללי וניהול", value: "כללי וניהול"},
-  { label: "חשבוניות", value: "חשבוניות" },
-  { label: "קבלות", value: "קבלות" },
-  { label: "ציוד", value: "ציוד" },
-  { label: "תקשורת", value: "תקשורת" },
-  { label: "חשמל ומים", value: "חשמל ומים" },
-];
-const providerCategoryOptions: SelectOption[] = [
-  { label: "חשבונות הבית", value: "household" },
-  { label: "תחבורה", value: "transport" },
-  { label: "חניה", value: "parking" },
-  { label: "דלק", value: "fuel" },
-  { label: "טלוויזיה וסטרימינג", value: "tv" },
-  { label: "קניות", value: "marketplace" },
-  { label: "מזון", value: "food" },
-  { label: "לא מסווג", value: "payment" },
-  { label: "ממשלה", value: "government" },
-  { label: "ביטוח", value: "insurance" },
-  { label: "פיננסים", value: "finance" },
-  { label: "תיירות", value: "travel" },
-  { label: "בריאות", value: "healthcare" },
-  { label: "לימודים", value: "education" },
-  { label: "קמעונאות", value: "retail" },
-  { label: "אלקטרוניקה", value: "electronics" },
-  { label: "עמותות", value: "nonprofit" },
-  { label: "דיגיטל", value: "digital" },
-  { label: "פיתוח", value: "development" },
-  { label: "כללי", value: "general" },
-];
+// Values are the stored (Hebrew) expense category names.
+const categoryOptions = computed<SelectOption[]>(() => [
+  { label: l.value.invoiceDetailMsg.catGeneral, value: "כללי וניהול" },
+  { label: l.value.invoiceDetailMsg.catInvoices, value: "חשבוניות" },
+  { label: l.value.invoiceDetailMsg.catReceipts, value: "קבלות" },
+  { label: l.value.invoiceDetailMsg.catEquipment, value: "ציוד" },
+  { label: l.value.invoiceDetailMsg.catTelecom, value: "תקשורת" },
+  { label: l.value.invoiceDetailMsg.catUtilities, value: "חשמל ומים" },
+]);
+const providerCategoryOptions = computed<SelectOption[]>(() => ([
+  "household",
+  "transport",
+  "parking",
+  "fuel",
+  "tv",
+  "marketplace",
+  "food",
+  "payment",
+  "government",
+  "insurance",
+  "finance",
+  "travel",
+  "healthcare",
+  "education",
+  "retail",
+  "electronics",
+  "nonprofit",
+  "digital",
+  "development",
+  "general",
+] as const).map((value) => ({ label: l.value.providerCategory[value], value })));
 
 const sourceLine = computed(() =>
   invoice.value?.source_email ||
@@ -351,7 +352,7 @@ const extractedFields = computed(() => {
     rows.push({
       key,
       label: extractedFieldLabel(key),
-      value: "חסר",
+      value: l.value.invoiceDetailMsg.missing,
       empty: true,
       missing: true,
       dir: "rtl",
@@ -398,7 +399,7 @@ async function load(force = false) {
     form.payment_due_date = normalizeDate(row.payment_due_date);
   } catch {
     invoice.value = null;
-    message.error("שגיאה בטעינת החשבונית");
+    message.error(l.value.invoiceDetailMsg.loadError);
   } finally {
     loading.value = false;
   }
@@ -421,9 +422,9 @@ async function save() {
       note: form.note,
     });
     invoice.value = updated;
-    message.success("החשבונית נשמרה");
+    message.success(l.value.invoiceDetailMsg.saved);
   } catch {
-    message.error("שגיאה בשמירת החשבונית");
+    message.error(l.value.invoiceDetailMsg.saveError);
   } finally {
     saving.value = false;
   }
@@ -431,10 +432,10 @@ async function save() {
 
 function statusLabel(value: string): string {
   const labels: Record<string, string> = {
-    new: "חדש",
-    reviewed: "נבדק",
-    outgoing: "יוצא",
-    archived: "ארכיון",
+    new: l.value.invoiceDetailMsg.statusNew,
+    reviewed: l.value.invoiceDetailMsg.statusReviewed,
+    outgoing: l.value.invoiceDetailMsg.statusOutgoing,
+    archived: l.value.invoiceDetailMsg.statusArchived,
   };
   return labels[value] ?? value;
 }
@@ -446,10 +447,10 @@ function formatIls(amount: number): string {
 function invoiceTypeLabel(row: ImportedInvoice): string {
   const value = String(row.type || row.fields?.document_subtype || row.fields?.invoice_type || "").trim();
   const normalized = value.toLowerCase();
-  if (/receipt|קבלה/.test(normalized)) return "קבלה";
-  if (/order|הזמנה/.test(normalized)) return "אישור הזמנה";
-  if (/payment|תשלום/.test(normalized)) return "אישור תשלום";
-  return "חשבונית";
+  if (/receipt|קבלה/.test(normalized)) return l.value.invoices.typeReceipt;
+  if (/order|הזמנה/.test(normalized)) return l.value.invoiceDetailMsg.typeOrder;
+  if (/payment|תשלום/.test(normalized)) return l.value.invoiceDetailMsg.typePayment;
+  return l.value.invoiceDetailMsg.typeInvoice;
 }
 
 function isPdf(row: ImportedInvoice): boolean {
@@ -518,38 +519,6 @@ function emailFromSource(value: string | null | undefined): string | null {
   return match?.[1] ?? null;
 }
 
-const extractedFieldLabels: Record<string, string> = {
-  supplier_name: "שם הספק",
-  supplier_id: "ח.פ / מזהה ספק",
-  invoice_number: "מספר חשבונית",
-  receipt_number: "מספר קבלה",
-  document_subtype: "סוג מסמך",
-  client_company: "שם הלקוח / חברה",
-  client_name: "שם הלקוח",
-  client_id: "ח.פ / ת.ז לקוח",
-  customer_number: "מספר לקוח / מנוי",
-  account_number: "מספר חשבון / חוזה",
-  service_address: "כתובת שירות",
-  issue_date: "תאריך הוצאה",
-  billing_period: "תקופת חיוב",
-  billing_period_start: "תחילת תקופת חיוב",
-  billing_period_end: "סוף תקופת חיוב",
-  payment_due_date: "תאריך לתשלום",
-  amount: "סכום לתשלום",
-  amount_before_vat: "סכום לפני מע\"מ",
-  vat_amount: "סכום מע\"מ",
-  currency: "מטבע",
-  payment_status: "סטטוס תשלום",
-  payment_method: "אמצעי תשלום",
-  meter_number: "מספר מונה",
-  previous_reading: "קריאה קודמת",
-  current_reading: "קריאה נוכחית",
-  usage_quantity: "צריכה",
-  tariff_plan: "מסלול / תעריף",
-  items: "פירוט חיובים",
-  notes: "הערות",
-};
-
 const missingFieldAliases: Record<string, string> = {
   supplierName: "supplier_name",
   invoiceNumber: "invoice_number",
@@ -596,7 +565,8 @@ function isClientFieldKey(key: string): boolean {
 
 function extractedFieldLabel(key: string): string {
   const normalized = normalizeMissingFieldKey(key);
-  return extractedFieldLabels[normalized] ?? normalized.replace(/_/g, " ");
+  const labels: Record<string, string> = l.value.invoiceField;
+  return labels[normalized] ?? normalized.replace(/_/g, " ");
 }
 
 function normalizeMissingFieldKey(key: unknown): string {
@@ -624,7 +594,7 @@ function isEmptyExtractedValue(value: unknown): boolean {
 }
 
 function formatExtractedValue(value: unknown): string {
-  if (isEmptyExtractedValue(value)) return "חסר";
+  if (isEmptyExtractedValue(value)) return l.value.invoiceDetailMsg.missing;
   if (Array.isArray(value)) {
     return value.map((item) => {
       if (item && typeof item === "object") {
