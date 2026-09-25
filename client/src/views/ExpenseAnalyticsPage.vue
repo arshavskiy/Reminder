@@ -20,7 +20,7 @@
             type="button"
           >
             <n-icon :component="DownloadOutline" class="btn-icon" />
-            ייצוא
+            {{ l.expensesMsg.export }}
           </button>
         </n-dropdown>
         <button
@@ -30,7 +30,7 @@
           @click="load(true)"
         >
           <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
-          רענן
+          {{ l.expensesMsg.refresh }}
         </button>
       </template>
     </PageHeader>
@@ -38,7 +38,7 @@
     <InvoiceSectionNav />
 
     <div class="toolbar">
-      <div class="proof-strip" role="tablist" aria-label="סוג מסמך בגרף">
+      <div class="proof-strip" role="tablist" :aria-label="l.expensesMsg.proofAria">
         <button
           v-for="item in proofFilterOptions"
           :key="item.value"
@@ -62,7 +62,7 @@
         :options="categoryOptions"
         clearable
         filterable
-        placeholder="קטגוריה"
+        :placeholder="l.expensesMsg.category"
         class="toolbar__type"
         @update:value="load(true)"
       />
@@ -73,7 +73,7 @@
         filterable
         multiple
         max-tag-count="responsive"
-        placeholder="ספקים"
+        :placeholder="l.expensesMsg.suppliers"
         class="toolbar__supplier"
         @update:value="load(true)"
       />
@@ -88,39 +88,39 @@
     </div>
 
     <n-spin :show="loading">
-      <section class="expense-summary" :aria-label="isIncomeView ? 'סיכום הכנסות' : 'סיכום הוצאות'">
+      <section class="expense-summary" :aria-label="isIncomeView ? l.expensesMsg.incomeSummary : l.expensesMsg.expenseSummary">
         <div class="expense-metric">
           <n-icon :component="WalletOutline" :size="18" class="expense-metric__icon" />
           <div>
-            <span>{{ isIncomeView ? "סה״כ הכנסות עם סכום ותאריך" : "סה״כ הוצאות עם סכום ותאריך" }}</span>
+            <span>{{ isIncomeView ? l.expensesMsg.incomeTotal : l.expensesMsg.expenseTotal }}</span>
             <strong>{{ formatMoney(totalAmount) }}</strong>
           </div>
         </div>
         <div class="expense-metric">
           <n-icon :component="PeopleOutline" :size="18" class="expense-metric__icon" />
           <div>
-            <span>ספקים בגרף</span>
+            <span>{{ l.expensesMsg.suppliersInChart }}</span>
             <strong>{{ `${namedChartSeries.length} / ${suppliers.length}` }}</strong>
           </div>
         </div>
         <div class="expense-metric">
           <n-icon :component="ReceiptOutline" :size="18" class="expense-metric__icon" />
           <div>
-            <span>חשבוניות בגרף</span>
+            <span>{{ l.expensesMsg.invoicesInChart }}</span>
             <strong>{{ totalInvoices }}</strong>
           </div>
         </div>
-        <div v-if="!isIncomeView && householdTotal > 0" class="expense-metric expense-metric--link" role="button" tabindex="0" title="הצג רק חשבונות הבית" @click="showHousehold" @keydown.enter="showHousehold">
+        <div v-if="!isIncomeView && householdTotal > 0" class="expense-metric expense-metric--link" role="button" tabindex="0" :title="l.expensesMsg.showHousehold" @click="showHousehold" @keydown.enter="showHousehold">
           <n-icon :component="HomeOutline" :size="18" class="expense-metric__icon" />
           <div>
-            <span>חשבונות הבית</span>
+            <span>{{ l.providerCategory.household }}</span>
             <strong>{{ formatMoney(householdTotal) }}</strong>
           </div>
         </div>
         <div class="expense-metric">
           <n-icon :component="CalendarOutline" :size="18" class="expense-metric__icon" />
           <div>
-            <span>חודשים</span>
+            <span>{{ l.expensesMsg.months }}</span>
             <strong>{{ months.length }}</strong>
           </div>
         </div>
@@ -133,7 +133,7 @@
               <h2>{{ flowLabel(activeChartType.title) }}</h2>
               <p>{{ flowLabel(activeChartType.hint) }}</p>
             </div>
-            <div class="expense-chart-types" role="group" aria-label="סוג גרף">
+            <div class="expense-chart-types" role="group" :aria-label="l.expensesMsg.chartType">
               <n-tooltip v-for="item in chartTypeOptions" :key="item.id" placement="top">
                 <template #trigger>
                   <button
@@ -153,14 +153,14 @@
           </header>
           <div v-if="!hasChartData" class="expense-empty">
             <n-icon :component="AnalyticsOutline" :size="40" class="expense-empty__icon" />
-            <p>אין נתונים להצגה עבור הסינון הנוכחי</p>
+            <p>{{ l.expensesMsg.noData }}</p>
           </div>
           <div v-else ref="chartEl" class="expense-chart" role="img" :aria-label="flowLabel(activeChartType.ariaLabel)" />
         </div>
 
-        <aside class="expense-legend" aria-label="ספקים בגרף">
+        <aside class="expense-legend" :aria-label="l.expensesMsg.suppliersInChart">
           <header class="expense-panel__head">
-            <h2>לפי ספק</h2>
+            <h2>{{ l.expensesMsg.bySupplier }}</h2>
             <button
               v-if="selectedSuppliers.length > 0"
               class="expense-legend__clear"
@@ -168,7 +168,7 @@
               @click="clearSupplierFilter()"
             >
               <n-icon :component="CloseOutline" :size="14" />
-              הצג הכל
+              {{ l.expensesMsg.showAll }}
             </button>
           </header>
           <div class="expense-legend__scroll">
@@ -196,17 +196,17 @@
         <header class="expense-panel__head">
           <div>
             <h2>{{ supplierTableTitle }}</h2>
-            <p>{{ suppliers.length ? `${suppliers.length} ספקים` : "אין ספקים בסינון הנוכחי" }}</p>
+            <p>{{ suppliers.length ? t("expensesMsg.supplierCount", {count: suppliers.length}) : l.expensesMsg.noSuppliers }}</p>
           </div>
         </header>
         <div v-if="supplierTableRows.length" class="expense-supplier-table__scroll">
           <table>
             <thead>
               <tr>
-                <th>ספק</th>
-                <th>חשבוניות</th>
-                <th>סכום</th>
-                <th>חלק</th>
+                <th>{{ l.expensesMsg.colSupplier }}</th>
+                <th>{{ l.expensesMsg.colInvoices }}</th>
+                <th>{{ l.expensesMsg.colAmount }}</th>
+                <th>{{ l.expensesMsg.colShare }}</th>
               </tr>
             </thead>
             <tbody>
@@ -226,7 +226,7 @@
             </tbody>
           </table>
         </div>
-        <p v-else class="expense-supplier-table__empty">אין נתונים להצגה עבור הסינון הנוכחי</p>
+        <p v-else class="expense-supplier-table__empty">{{ l.expensesMsg.noData }}</p>
       </section>
     </n-spin>
   </div>
@@ -267,7 +267,7 @@ echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, Can
 type ExpenseChartType = "stacked" | "grouped" | "line" | "pie";
 
 const message = useMessage();
-const {l, dir} = useI18n();
+const {l, dir, t} = useI18n();
 const authStore = useAuthStore();
 const chartEl = ref<HTMLDivElement | null>(null);
 const loading = ref(false);
@@ -295,29 +295,32 @@ let chart: echarts.EChartsType | null = null;
 let chartResizeObserver: ResizeObserver | null = null;
 let themeObserver: MutationObserver | null = null;
 
-const dateBasisOptions: SelectOption[] = [
-  { label: "תאריך חשבונית", value: "invoice" },
-  { label: "תאריך ייבוא", value: "import" },
-];
-const proofFilterOptions: { label: string; value: ProofFilter }[] = [
-  { label: "הכל", value: "all" },
-  { label: "הוכחת תשלום", value: "paid" },
-  { label: "דרישות תשלום", value: "requested" },
-  { label: "הכנסה", value: "income" },
-];
-const exportMenuOptions = [
-  { label: "Excel — סה״כ לפי ספק", key: "xlsx" },
-  { label: "CSV — סה״כ לפי ספק", key: "csv" },
-];
-const chartTypeOptions = [
-  { id: "stacked" as const, label: "עמודות מוערמות", icon: LayersOutline, title: "מגמה חודשית", hint: "כל עמודה היא חודש. הגובה הוא סה״כ ההוצאות, והצבעים הם הספקים.", ariaLabel: "עמודות מוערמות של הוצאות חודשיות לפי ספק" },
-  { id: "grouped" as const, label: "עמודות מקובצות", icon: BarChartOutline, title: "השוואה חודשית", hint: "כל קבוצה היא חודש, וכל עמודה היא ספק.", ariaLabel: "עמודות מקובצות של הוצאות חודשיות לפי ספק" },
-  { id: "line" as const, label: "קווים", icon: StatsChartOutline, title: "מגמה חודשית", hint: "כל קו מייצג ספק לאורך החודשים.", ariaLabel: "גרף קווים של הוצאות חודשיות לפי ספק" },
-  { id: "pie" as const, label: "עוגה לפי ספק", icon: PieChartOutline, title: "התפלגות לפי ספק", hint: "כל פלח הוא סכום ההוצאות של ספק.", ariaLabel: "גרף עוגה של הוצאות לפי ספק" },
-];
-const activeChartType = computed(() => chartTypeOptions.find((item) => item.id === chartType.value) ?? chartTypeOptions[0]);
+const dateBasisOptions = computed<SelectOption[]>(() => [
+  { label: l.value.expensesMsg.invoiceDate, value: "invoice" },
+  { label: l.value.expensesMsg.importDate, value: "import" },
+]);
+const proofFilterOptions = computed<{ label: string; value: ProofFilter }[]>(() => [
+  { label: l.value.expensesMsg.proofAll, value: "all" },
+  { label: l.value.expensesMsg.proofPaid, value: "paid" },
+  { label: l.value.expensesMsg.proofRequested, value: "requested" },
+  { label: l.value.expensesMsg.proofIncome, value: "income" },
+]);
+const exportMenuOptions = computed(() => [
+  { label: `Excel — ${l.value.expensesMsg.totalsBySupplier}`, key: "xlsx" },
+  { label: `CSV — ${l.value.expensesMsg.totalsBySupplier}`, key: "csv" },
+]);
+const chartTypeOptions = computed(() => {
+  const m = l.value.expensesMsg;
+  return [
+    { id: "stacked" as const, label: m.stackedLabel, icon: LayersOutline, title: m.monthlyTrend, hint: m.stackedHint, ariaLabel: m.stackedAria },
+    { id: "grouped" as const, label: m.groupedLabel, icon: BarChartOutline, title: m.monthlyComparison, hint: m.groupedHint, ariaLabel: m.groupedAria },
+    { id: "line" as const, label: m.lineLabel, icon: StatsChartOutline, title: m.monthlyTrend, hint: m.lineHint, ariaLabel: m.lineAria },
+    { id: "pie" as const, label: m.pieLabel, icon: PieChartOutline, title: m.pieTitle, hint: m.pieHint, ariaLabel: m.pieAria },
+  ];
+});
+const activeChartType = computed(() => chartTypeOptions.value.find((item) => item.id === chartType.value) ?? chartTypeOptions.value[0]);
 const isIncomeView = computed(() => proofFilter.value === "income");
-const supplierTableTitle = computed(() => (isIncomeView.value ? "הכנסות לפי ספק" : "הוצאות לפי ספק"));
+const supplierTableTitle = computed(() => (isIncomeView.value ? l.value.expensesMsg.incomeBySupplier : l.value.expensesMsg.expensesBySupplier));
 const supplierTableRows = computed(() => {
   const total = totalAmount.value;
   return suppliers.value.map((row) => ({
@@ -329,7 +332,8 @@ const supplierTableRows = computed(() => {
 });
 
 function flowLabel(text: string): string {
-  return isIncomeView.value ? text.replaceAll("הוצאות", "הכנסות") : text;
+  if (!isIncomeView.value) return text;
+  return text.replaceAll("הוצאות", "הכנסות").replaceAll("expenses", "income").replaceAll("Expenses", "Income");
 }
 
 // `suppliers` is narrowed by the active supplier filter, so it cannot drive the
@@ -558,7 +562,7 @@ async function load(force = false) {
     await nextTick();
     renderChart();
   } catch {
-    message.error("שגיאה בטעינת גרף ההוצאות");
+    message.error(l.value.expensesMsg.loadError);
   } finally {
     loading.value = false;
   }
@@ -587,16 +591,18 @@ function clearSupplierFilter() {
 }
 
 function totalsExportRows(): (string | number)[][] {
-  const rows: (string | number)[][] = [["ספק", "סכום", "מספר חשבוניות"]];
+  const m = l.value.expensesMsg;
+  const rows: (string | number)[][] = [[m.colSupplier, m.colAmount, m.invoiceCount]];
   for (const supplier of suppliers.value) {
     rows.push([supplier.name, supplier.total, supplier.count ?? 0]);
   }
-  rows.push(["סה״כ", totalAmount.value, totalInvoices.value]);
+  rows.push([m.total, totalAmount.value, totalInvoices.value]);
   return rows;
 }
 
 function monthlyExportRows(): (string | number)[][] {
-  const rows: (string | number)[][] = [["ספק", ...months.value.map(formatMonth), "סה״כ"]];
+  const m = l.value.expensesMsg;
+  const rows: (string | number)[][] = [[m.colSupplier, ...months.value.map(formatMonth), m.total]];
   for (const series of chartSeries.value) {
     rows.push([series.supplier, ...series.points.map((point) => point.total), series.total]);
   }
@@ -604,18 +610,18 @@ function monthlyExportRows(): (string | number)[][] {
     chartSeries.value.reduce((sum, series) => sum + (series.points[index]?.total ?? 0), 0)
   ));
   const visibleTotal = chartSeries.value.reduce((sum, series) => sum + series.total, 0);
-  rows.push(["סה״כ בגרף", ...monthSums, visibleTotal]);
+  rows.push([m.totalInChart, ...monthSums, visibleTotal]);
   return rows;
 }
 
 async function exportTotals(format: string | number) {
   if (format !== "xlsx" && format !== "csv") return;
   if (!exportAllowed.value) {
-    message.warning("ייצוא זמין במסלולים בסיסי ועסקי בלבד");
+    message.warning(l.value.invoicesMsg.exportPlanOnly);
     return;
   }
   if (!suppliers.value.length) {
-    message.info("אין סכומים לייצוא");
+    message.info(l.value.expensesMsg.nothingToExport);
     return;
   }
   exporting.value = true;
@@ -634,12 +640,12 @@ async function exportTotals(format: string | number) {
       link.download = `expenses-totals-${stamp}.csv`;
       link.click();
       URL.revokeObjectURL(url);
-      message.success("הקובץ כולל סה״כ לפי ספק");
+      message.success(l.value.expensesMsg.exportDone);
       return;
     }
     const wb = utils.book_new();
-    wb.Workbook = {Views: [{RTL: true}]};
-    utils.book_append_sheet(wb, totalsSheet, "סהכ לפי ספק");
+    wb.Workbook = {Views: [{RTL: dir.value === "rtl"}]};
+    utils.book_append_sheet(wb, totalsSheet, l.value.expensesMsg.sheetTotals);
     if (chartSeries.value.length && months.value.length) {
       const monthlySheet = utils.aoa_to_sheet(monthlyExportRows());
       monthlySheet["!cols"] = [
@@ -647,12 +653,12 @@ async function exportTotals(format: string | number) {
         ...months.value.map(() => ({wch: 12})),
         {wch: 14},
       ];
-      utils.book_append_sheet(wb, monthlySheet, "פירוט חודשי");
+      utils.book_append_sheet(wb, monthlySheet, l.value.expensesMsg.sheetMonthly);
     }
     writeFile(wb, `expenses-totals-${stamp}.xlsx`);
-    message.success("הקובץ כולל סה״כ לפי ספק");
+    message.success(l.value.expensesMsg.exportDone);
   } catch {
-    message.error("שגיאה בייצוא ההוצאות");
+    message.error(l.value.expensesMsg.exportError);
   } finally {
     exporting.value = false;
   }
@@ -719,8 +725,8 @@ function formatStackTooltip(raw: unknown, border: string): string {
   }).join("");
   return `<div style="min-width:190px">
     <div style="margin-bottom:8px;font-weight:700">${title}</div>
-    ${rows || "אין הוצאות בחודש זה"}
-    <div style="margin-top:8px;padding-top:8px;border-top:1px solid ${border};font-weight:700">סה״כ ${formatMoney(monthTotal)}</div>
+    ${rows || l.value.expensesMsg.noMonthExpenses}
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid ${border};font-weight:700">${l.value.expensesMsg.total} ${formatMoney(monthTotal)}</div>
   </div>`;
 }
 
