@@ -123,7 +123,7 @@
             @change="onPhoto"
           />
         </label>
-        <button class="field__btn field__btn--report" @click="openReportModal">
+        <button v-if="canCreateInspection" class="field__btn field__btn--report" @click="openReportModal">
           📝 {{ l.fieldPage.newInspection }}
         </button>
       </div>
@@ -160,7 +160,7 @@ import type {Equipment} from "../shared/types.js";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 
 const {confirm} = useConfirm();
-const {l, t} = useI18n();
+const {l, t, canCreateInspection} = useI18n();
 const router = useRouter();
 const route = useRoute();
 const query = ref("");

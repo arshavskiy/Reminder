@@ -6,7 +6,7 @@
       :subtitle="l.documents.subtitle"
     >
       <template #hero>
-        <n-tooltip :disabled="!createLocked">
+        <n-tooltip v-if="canCreateInspection" :disabled="!createLocked">
           <template #trigger>
             <span class="locked-action" @click="createLocked && goToSubscription()">
               <button
@@ -796,7 +796,7 @@ import {useDevModal} from "../composables/useDevModal.js";
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 const store = useDocumentsStore();
-const {l, href, t, dir} = useI18n();
+const {l, href, t, dir, canCreateInspection} = useI18n();
 const authStore = useAuthStore();
 const rescanStore = useRescanModalStore();
 const router = useRouter();

@@ -13,7 +13,7 @@
               <n-icon :component="ArrowForwardOutline" class="btn-icon" />
               {{ l.clientDetail.back }}
             </button>
-            <n-tooltip :disabled="writesAllowed">
+            <n-tooltip v-if="canCreateInspection" :disabled="writesAllowed">
               <template #trigger>
                 <span class="locked-action" @click="!writesAllowed && goToSubscription()">
                   <button :disabled="!writesAllowed" class="btn btn--primary" type="button" @click="openReport">
@@ -447,7 +447,7 @@ const CATEGORY_LABELS = computed<Record<string, string>>(() => ({
 
 const route = useRoute();
 const router = useRouter();
-const {href, l} = useI18n();
+const {href, l, canCreateInspection} = useI18n();
 const authStore = useAuthStore();
 const writesAllowed = computed(() => resolveUserPlan(authStore.user) !== "expired");
 
