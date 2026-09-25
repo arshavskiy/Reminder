@@ -91,10 +91,10 @@ try {
     console.log(`user ${user.email ?? userId} (${userId}): ${ids.length} receipt mails`);
     summary.found += ids.length;
     const already = await col<any>("invoices").find(
-      {user_id: userId, gmail_message_id: {$in: ids}},
-      {projection: {gmail_message_id: 1}},
+      {user_id: userId, $or: [{gmail_message_id: {$in: ids}}, {superseded_gmail_message_ids: {$in: ids}}]},
+      {projection: {gmail_message_id: 1, superseded_gmail_message_ids: 1}},
     ).toArray();
-    const importedIds = new Set(already.map((row: any) => String(row.gmail_message_id)));
+    const importedIds = new Set(already.flatMap((row: any) => [String(row.gmail_message_id), ...(row.superseded_gmail_message_ids ?? []).map(String)]));
 
     for (const id of ids) {
       if (importedIds.has(id)) {
