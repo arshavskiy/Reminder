@@ -469,6 +469,8 @@ export interface InspectorLeadEmailSend {
   sentAt: string;
   resendId?: string | null;
   unsubscribed: boolean;
+  registered: boolean;
+  registeredAt?: string | null;
 }
 
 export interface InspectorLeadEmailSendsResponse {

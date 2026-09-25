@@ -692,8 +692,32 @@ export function registerAdminRoutes(app: express.Application) {
       } },
     ]).toArray();
 
+    const rows = result?.rows ?? [];
+    const emails = [...new Set(rows.map((row: any) => String(row.email ?? "").trim().toLowerCase()).filter(Boolean))];
+    const registeredByEmail = new Map<string, string | null>();
+    if (emails.length) {
+      const accounts = await col("users").find(
+        {$or: [{email: {$in: emails}}, {gmail_email: {$in: emails}}]},
+        {collation: {locale: "en", strength: 2}, projection: {email: 1, gmail_email: 1, created_at: 1}},
+      ).toArray() as any[];
+      for (const user of accounts) {
+        const when = user.created_at ? new Date(user.created_at).toISOString() : null;
+        for (const key of [user.email, user.gmail_email]) {
+          const email = String(key ?? "").trim().toLowerCase();
+          if (email && emails.includes(email)) registeredByEmail.set(email, when);
+        }
+      }
+    }
+
     res.json({
-      rows: result?.rows ?? [],
+      rows: rows.map((row: any) => {
+        const email = String(row.email ?? "").trim().toLowerCase();
+        return {
+          ...row,
+          registered: registeredByEmail.has(email),
+          registeredAt: registeredByEmail.get(email) ?? null,
+        };
+      }),
       total: result?.total?.[0]?.count ?? 0,
       page,
       limit,
