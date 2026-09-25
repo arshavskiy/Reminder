@@ -76,6 +76,22 @@ Total | $14.50 USD
 Payment | $14.50 USD
 `;
 
+// Shaped like a real AliExpress "order confirmed" mail (single order).
+const ALIEXPRESS_SINGLE_HTML = `
+<td>Hi customer,</td><td>Your order <a href="https://www.aliexpress.com/p/order/detail.html?orderId=1120746610816975">1120746610816975</a> is confirmed.</td>
+<a href="https://www.aliexpress.com/p/order/detail.html?orderId=1120746610816975"><td>ETESBAY T470 61++ Laptop Batt...</td><td>China Mainland</td><td>x1</td></a>
+<a href="https://www.aliexpress.com/p/order/detail.html?orderId=1120746610816975"><td>Order total</td><td>&#8362;147.12</td></a>
+<td>Ship to</td><td>Somewhere 1</td>
+`;
+
+// Shaped like a real AliExpress mail for one payment that covered several orders.
+const ALIEXPRESS_MERGED_HTML = `
+<td>Thank you for shopping with us. A total of 3 orders are now confirmed.</td>
+<a href="https://www.aliexpress.com/p/order/detail.html?orderId=1120322762016975"><td>Order 1</td><td>1120322762016975</td><td>Headlight bulbs x1</td><td>Total</td><td>&#8362;51.34</td></a>
+<a href="https://www.aliexpress.com/p/order/detail.html?orderId=1120322762036975"><td>Order 2</td><td>1120322762036975</td><td>Roof light x1</td><td>Total</td><td>&#8362;72.26</td></a>
+<a href="https://www.aliexpress.com/p/order/detail.html?orderId=1120322761956975"><td>Order 3</td><td>1120322761956975</td><td>Tool set x1</td><td>Total</td><td>&#8362;15.22</td></a>
+`;
+
 describe("parseInlineReceipt", () => {
   it("parses a real captured PayPal receipt (plaintext rendering)", () => {
     const result = parseInlineReceipt("service@paypal.co.il", REAL_PAYPAL_TEXT, "Receipt for Your Payment to Patreon");
@@ -231,6 +247,33 @@ describe("parseInlineReceipt", () => {
     const result = parseInlineReceipt("service@paypal.co.il", text, "Receipt for Your Payment");
     expect(result?.amount).toBeCloseTo(150);
     expect(result?.currency).toBe("ILS");
+  });
+
+  it("parses an AliExpress single-order confirmation", () => {
+    const result = parseInlineReceipt("AliExpress <transaction@notice.aliexpress.com>", ALIEXPRESS_SINGLE_HTML, "Order 1120746610816975: order confirmed");
+    expect(result?.vendor).toBe("AliExpress");
+    expect(result?.transactionId).toBe("1120746610816975");
+    expect(result?.amount).toBeCloseTo(147.12);
+    expect(result?.currency).toBe("ILS");
+    expect(result?.merchant).toBeNull();
+  });
+
+  it("sums every order in an AliExpress multi-order confirmation", () => {
+    const result = parseInlineReceipt("transaction@notice.aliexpress.com", ALIEXPRESS_MERGED_HTML, "3 orders confirmed: 1120322762016975 & more");
+    expect(result?.transactionId).toBe("1120322762016975");
+    expect(result?.amount).toBeCloseTo(138.82);
+    expect(result?.merchant).toBe("3 orders: 1120322762016975, 1120322762036975, 1120322761956975");
+  });
+
+  it("ignores AliExpress status mails that repeat the order total", () => {
+    for (const subject of [
+      "Order 1120746610816975: awaiting confirmation",
+      "Order 1120746610816975: order shipped",
+      "Order 1120746610816975: how did it go?",
+      "Confirmation time extended: order 1120746610816975",
+    ]) {
+      expect(parseInlineReceipt("transaction@notice.aliexpress.com", ALIEXPRESS_SINGLE_HTML, subject)).toBeNull();
+    }
   });
 
   it("returns null for a non-whitelisted sender", () => {

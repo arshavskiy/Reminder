@@ -191,6 +191,34 @@ function parseGooglePlay(html: string): ParsedInlineReceipt | null {
   };
 }
 
+// AliExpress sends many mails per order (shipped, awaiting confirmation,
+// "how did it go?"), all carrying the order total. Only the payment
+// confirmation becomes a record, so one purchase is imported once:
+// "Order 1120746610816975: order confirmed" for a single order, or
+// "5 orders confirmed: 1120322762016975 & more" when one payment covered
+// several orders (each order card has its own "Total ₪51.34").
+function parseAliExpress(html: string, subject: string): ParsedInlineReceipt | null {
+  const single = subject.match(/^Order\s+(\d{10,})\s*:\s*order confirmed/i);
+  const merged = subject.match(/^\d+\s+orders confirmed\s*:\s*(\d{10,})/i);
+  if (!single && !merged) return null;
+  const text = stripTags(html);
+  const totals = [...text.matchAll(/\bTotal\s*\|?\s*([₪$€£])\s*([\d,]+(?:\.\d+)?)/gi)];
+  if (!totals.length) return null;
+  const amounts = totals.map((match) => parseAmount(match[2]));
+  if (amounts.some((value) => value === null)) return null;
+  const amount = Math.round((amounts as number[]).reduce((sum, value) => sum + value, 0) * 100) / 100;
+  const firstOrderId = (single ?? merged)![1];
+  const orderIds = [...new Set([...html.matchAll(/orderId=(\d{10,})/g)].map((match) => match[1]))];
+  return {
+    vendor: "AliExpress",
+    transactionId: firstOrderId,
+    amount,
+    currency: detectCurrency(totals[0][1]),
+    merchant: merged && orderIds.length > 1 ? `${orderIds.length} orders: ${orderIds.join(", ")}` : null,
+    date: null,
+  };
+}
+
 // Whitelist gate: only these sender patterns are eligible to be parsed into
 // an invoice record at all. Detection (the link-only/inline banner) stays
 // broader than this on purpose — this list is strictly the "safe to create a
@@ -203,6 +231,7 @@ const INLINE_RECEIPT_PARSERS: Array<{
   { senderPattern: /@hyp\.co\.il$/i, parse: parseHyp },
   { senderPattern: /@(support\.facebook\.com|business-updates\.facebook\.com)$/i, parse: parseMeta },
   { senderPattern: /@google\.com$/i, parse: parseGooglePlay },
+  { senderPattern: /@(notice\.)?aliexpress\.com$/i, parse: parseAliExpress },
 ];
 
 export function parseInlineReceipt(from: string, html: string, subject: string): ParsedInlineReceipt | null {

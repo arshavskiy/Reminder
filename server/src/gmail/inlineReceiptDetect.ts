@@ -18,6 +18,7 @@ const INLINE_TXN_LABEL_PATTERN = /(מספר\s*עסק[הא]|מספר\s*אישור
 const MARKETPLACE_ORDER_SENDER_PATTERN = /@(notice\.)?aliexpress\.com|@orders\.temu\.com|@temu\.com/i;
 const MARKETPLACE_ORDER_TOTAL_PATTERN = /order\s*total\s*<\/[^>]+>\s*<[^>]+>\s*[₪$€]?\s*[\d,]+(\.\d+)?/i;
 const ORDER_NUMBER_IN_SUBJECT_PATTERN = /order\s*#?\s*\d{8,}|#[a-z0-9-]*\d{8,}/i;
+const ALIEXPRESS_SENDER_PATTERN = /@(notice\.)?aliexpress\.com/i;
 
 export interface ClassifiedReceiptEmail {
   kind: "link" | "inline";
@@ -49,6 +50,7 @@ export function buildInlineReceiptQueries(keywordQuery: string, historyMonths: n
     { query: withHistory("from:paypal.co.il (receipt OR \"receipt for your payment\")", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:hyp.co.il", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:(business-updates.facebook.com OR support.facebook.com) receipt", historyMonths), ...KNOWN_SENDER_WINDOW },
+    { query: withHistory("from:aliexpress.com subject:(\"order confirmed\" OR \"orders confirmed\")", historyMonths), ...KNOWN_SENDER_WINDOW },
     // Broad catch-all stays short. It matches ordinary mail, not a receipt sender.
     { query: withHistory(keywords, historyMonths), pages: 1, pageSize: 500, budget: 500 },
   ];
@@ -75,6 +77,9 @@ export function classifyNoAttachmentEmail(input: {
   const parsed = (html ? parseInlineReceipt(input.from, html, input.subject) : null)
     ?? (plain ? parseInlineReceipt(input.from, plain, input.subject) : null);
   const importable = parsed !== null;
+  // AliExpress repeats the order total in every status mail (shipped, awaiting
+  // confirmation, review request). Only the payment confirmation is a receipt.
+  if (!importable && ALIEXPRESS_SENDER_PATTERN.test(input.from)) return null;
   const tableInline = Boolean(html && INLINE_AMOUNT_LABEL_PATTERN.test(html) && INLINE_TXN_LABEL_PATTERN.test(html));
   const marketplace = Boolean(
     html

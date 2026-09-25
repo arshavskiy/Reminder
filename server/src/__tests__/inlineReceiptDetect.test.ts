@@ -76,6 +76,13 @@ describe("classifyNoAttachmentEmail", () => {
       documentLinkUrl: null,
     })).toBeNull();
   });
+  it("skips AliExpress status mails and keeps the payment confirmation", () => {
+    const html = '<a href="x?orderId=1120746610816975"><td>Order total</td><td>&#8362;147.12</td></a>';
+    const base = { from: "AliExpress <transaction@notice.aliexpress.com>", html, plain: null, documentLinkUrl: null };
+    expect(classifyNoAttachmentEmail({ ...base, subject: "Order 1120746610816975: awaiting confirmation" })).toBeNull();
+    expect(classifyNoAttachmentEmail({ ...base, subject: "Order 1120746610816975: order confirmed" }))
+      .toEqual({ kind: "inline", documentLinkUrl: null, importable: true });
+  });
 });
 
 describe("buildInlineReceiptQueries", () => {
