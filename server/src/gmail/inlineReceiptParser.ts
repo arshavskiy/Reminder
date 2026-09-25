@@ -58,6 +58,7 @@ function detectCurrency(raw: string): string {
   if (/\$|USD/i.test(raw)) return "USD";
   if (/€|EUR/i.test(raw)) return "EUR";
   if (/£|GBP/i.test(raw)) return "GBP";
+  if (/₽|RUB|руб/i.test(raw)) return "RUB";
   return "ILS";
 }
 

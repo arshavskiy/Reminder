@@ -1604,6 +1604,7 @@ function normalizeCurrencyCode(value: unknown): string {
   if (/\$|USD|DOLLAR/.test(text)) return "USD";
   if (/€|EUR/.test(text)) return "EUR";
   if (/£|GBP/.test(text)) return "GBP";
+  if (/₽|RUB|RUR|РУБ/.test(text)) return "RUB";
   return /^[A-Z]{3}$/.test(text) ? text : "ILS";
 }
 

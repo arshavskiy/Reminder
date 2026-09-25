@@ -275,6 +275,7 @@ const currencyOptions: SelectOption[] = [
   { label: "₪ ILS - Israeli shekels", value: "ILS" },
   { label: "$ USD - US dollar", value: "USD" },
   { label: "€ EUR - Euro", value: "EUR" },
+  { label: "₽ RUB - Russian ruble", value: "RUB" },
 ];
 // Values are the stored (Hebrew) expense category names.
 const categoryOptions = computed<SelectOption[]>(() => [
