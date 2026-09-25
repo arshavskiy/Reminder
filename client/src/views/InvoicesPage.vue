@@ -207,6 +207,15 @@
         @update:value="load(true)"
       />
       <n-select
+        v-if="currencyOptions.length > 1 || filters.currency"
+        v-model:value="filters.currency"
+        :options="currencyOptions"
+        clearable
+        :placeholder="l.invoicesMsg.currency"
+        class="toolbar__currency"
+        @update:value="load(true)"
+      />
+      <n-select
         v-model:value="filters.suppliers"
         :options="supplierOptions"
         clearable
@@ -758,6 +767,7 @@ const documentCategoryCounts = ref<Record<string, number>>({});
 const types = ref<string[]>([]);
 const categories = ref<string[]>([]);
 const suppliers = ref<string[]>([]);
+const currencies = ref<string[]>([]);
 const filters = reactive({
   q: "",
   status: null as string | null,
@@ -765,6 +775,7 @@ const filters = reactive({
   documentCategory: null as ImportedInvoice["document_category"] | null,
   cashFlow: null as string | null,
   category: null as string | null,
+  currency: null as string | null,
   suppliers: [] as string[],
 });
 const businessModal = reactive({
@@ -806,6 +817,11 @@ const categoryOptions = computed<SelectOption[]>(() => {
     value,
   }));
 });
+const CURRENCY_SYMBOLS: Record<string, string> = { ILS: "₪", USD: "$", EUR: "€", GBP: "£", RUB: "₽" };
+const currencyOptions = computed<SelectOption[]>(() => currencies.value.map((code) => ({
+  label: CURRENCY_SYMBOLS[code] ? `${CURRENCY_SYMBOLS[code]} ${code}` : code,
+  value: code,
+})));
 const providerCategoryOptions = computed<SelectOption[]>(() => PROVIDER_CATEGORIES.map((value) => ({
   label: providerCategoryLabel(value),
   value,
@@ -875,6 +891,7 @@ async function load(force = false) {
       documentCategory: filters.documentCategory ?? undefined,
       cashFlow: filters.cashFlow ?? undefined,
       category: filters.category ?? undefined,
+      currency: filters.currency ?? undefined,
       supplier: supplierFilterParam(),
       sortBy: sortBy.value,
       sortDir: sortDir.value,
@@ -892,6 +909,7 @@ async function load(force = false) {
     types.value = result.types;
     categories.value = result.categories;
     suppliers.value = result.suppliers;
+    currencies.value = result.currencies ?? [];
     pruneSelectedInvoices();
   } catch {
     message.error(l.value.invoicesMsg.loadError);
@@ -1243,6 +1261,7 @@ async function exportInvoicesToExcel() {
       type: filters.type ?? undefined,
       cashFlow: filters.cashFlow ?? undefined,
       category: filters.category ?? undefined,
+      currency: filters.currency ?? undefined,
       supplier: supplierFilterParam(),
       sortBy: sortBy.value,
       sortDir: sortDir.value,
@@ -1905,6 +1924,10 @@ function replaceRow(updated: ImportedInvoice) {
 
 .toolbar__type {
   width: 200px;
+}
+
+.toolbar__currency {
+  width: 130px;
 }
 
 .toolbar__supplier {

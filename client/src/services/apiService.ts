@@ -785,7 +785,7 @@ export const api = {
   },
 
   invoices: {
-    list: (params?: { q?: string; status?: string; type?: string; documentCategory?: ImportedInvoice["document_category"]; cashFlow?: string; category?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number; export?: boolean }, force = false) =>
+    list: (params?: { q?: string; status?: string; type?: string; documentCategory?: ImportedInvoice["document_category"]; cashFlow?: string; category?: string; currency?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number; export?: boolean }, force = false) =>
       get<{
         rows: ImportedInvoice[];
         total: number;
@@ -798,6 +798,7 @@ export const api = {
         types: string[];
         categories: GmailSearchProvider["category"][];
         suppliers: string[];
+        currencies?: string[];
       }>(`/invoices${qs(params)}`, force),
     get: (id: string, force = false) =>
       get<ImportedInvoice>(`/invoices/${id}`, force),

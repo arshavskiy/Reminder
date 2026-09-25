@@ -59,6 +59,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const type = String(req.query.type ?? "").trim();
     const cashFlow = normalizeCashFlow(req.query.cashFlow);
     const category = String(req.query.category ?? "").trim();
+    const currency = String(req.query.currency ?? "").trim().toUpperCase();
     const suppliers = parseMultiQuery(req.query.supplier);
     const sortBy = normalizeInvoiceSortBy(req.query.sortBy);
     const sortDir = normalizeSortDir(req.query.sortDir);
@@ -87,6 +88,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       if (type && row.type !== type) return false;
       if (cashFlow && row.cash_flow !== cashFlow) return false;
       if (category && !matchesCategoryFilter(row.provider_category, category)) return false;
+      if (currency && String(row.currency ?? "").toUpperCase() !== currency) return false;
       if (suppliers.length && !invoiceMatchesSuppliers(row, suppliers)) return false;
       const rowTs = invoiceDateTs(row);
       if (fromTs && (!rowTs || rowTs < fromTs)) return false;
@@ -121,6 +123,8 @@ export function registerInvoiceRoutes(app: express.Application) {
       types: uniqueSorted(visibleFacetRows.map((row) => row.type).filter(isNonEmptyString)),
       categories: uniqueSorted(visibleFacetRows.map((row) => row.provider_category ?? "").filter(isNonEmptyString)),
       suppliers: uniqueSorted(visibleFacetRows.map((row) => row.supplier_name).filter(isNonEmptyString)),
+      // Every currency the user has, so the filter still offers the others once one is picked.
+      currencies: uniqueSorted(allRows.map((row) => String(row.currency ?? "").toUpperCase()).filter(isNonEmptyString)),
     });
   });
 

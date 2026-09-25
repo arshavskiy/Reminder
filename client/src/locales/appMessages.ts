@@ -2039,6 +2039,7 @@ const he = {
   },
   invoicesMsg: {
     noChange: "בלי שינוי",
+    currency: "מטבע",
     noFile: "ללא קובץ",
     edit: "עריכה",
     inlineSearching: "מחפש מיילי חשבונית ללא קובץ מצורף...",
@@ -4323,6 +4324,7 @@ const en = {
   },
   invoicesMsg: {
     noChange: "No change",
+    currency: "Currency",
     noFile: "No file",
     edit: "Edit",
     inlineSearching: "Looking for invoice emails with no attachment...",
