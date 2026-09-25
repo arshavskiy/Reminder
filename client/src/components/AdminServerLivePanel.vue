@@ -27,11 +27,13 @@
             Railway · {{ [data.railway.projectName, data.railway.serviceName, data.railway.environmentName].filter(Boolean).join(" / ") }}
             <span v-if="data.railway.replicaId"> · replica {{ short(data.railway.replicaId) }}<span v-if="data.railway.replicaRegion"> ({{ data.railway.replicaRegion }})</span></span>
             <span v-if="data.railway.gitCommit"> · {{ data.railway.gitBranch }}@{{ data.railway.gitCommit }}</span>
-            <span v-if="data.railway.deploymentId"> · deploy {{ short(data.railway.deploymentId) }}</span>
+            <span v-if="data.railway.deployment?.createdAt"> · last deploy {{ deployWhen(data.railway.deployment.createdAt) }}<span v-if="data.railway.deployment.status"> ({{ data.railway.deployment.status }})</span></span>
+            <span v-else-if="data.railway.deploymentId"> · deploy {{ short(data.railway.deploymentId) }}</span>
           </template>
           <template v-else>Not running on Railway (local server)</template>
-          · up {{ uptime(data.container.uptimeSeconds) }} · Node {{ data.container.node }} · {{ data.container.cpus }} CPU
+          · replica up {{ uptime(data.container.uptimeSeconds) }} · Node {{ data.container.node }} · {{ data.container.cpus }} CPU
         </div>
+        <div v-if="deploySubject" class="title-note">{{ deploySubject }}</div>
       </div>
 
       <n-alert v-if="data && !data.railway.metricsConfigured && data.railway.onRailway" type="info" style="margin-bottom:12px">
@@ -242,6 +244,16 @@ function level(value: number, limit: number): "success" | "warning" | "error" {
 
 function short(id: string) {
   return id.slice(0, 8);
+}
+
+const deploySubject = computed(() => String(data.value?.railway?.gitMessage ?? "").split("\n")[0].trim());
+
+function deployWhen(iso: string) {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return iso;
+  const seconds = Math.max(0, Math.round((nowTick.value - then) / 1000));
+  const clock = new Date(iso).toLocaleString("en-GB", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"});
+  return `${uptime(seconds)} ago · ${clock}`;
 }
 
 function uptime(seconds: number) {
