@@ -28,7 +28,7 @@ import {
 } from "../ops/processControl";
 import {runTempFileSweep, tempDirUsage, tempSweeperState} from "../storage/tempFiles";
 import {runUnsubscribeScan, scanRunsCollection, unsubscribeScanUserId} from "../outreach/unsubscribeScan";
-import {liveSnapshot} from "../ops/serverMetrics";
+import {liveSnapshot, parseGraphRange} from "../ops/serverMetrics";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 // "expired" is not assignable: it is what a lapsed trial resolves to, not a
@@ -3038,7 +3038,7 @@ export function registerAdminRoutes(app: express.Application) {
   app.get("/api/admin/monitor/server-live", async (req, res) => {
     if (!await adminAuth(req, res)) return;
     try {
-      res.json(await liveSnapshot());
+      res.json(await liveSnapshot(parseGraphRange(req.query.range)));
     } catch (err: any) {
       logger.error("admin_server_live_failed", { error: String(err) });
       res.status(500).json({ error: err.message ?? "Failed" });

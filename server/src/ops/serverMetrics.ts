@@ -12,8 +12,11 @@ import {sendPushToAdmins} from "../push/pushService";
  * metrics (fetched with RAILWAY_API_TOKEN) are the fleet-level view.
  */
 
-const WINDOW_MINUTES = 60;
 const SAMPLE_EVERY_MS = 15_000;
+/** Minute buckets kept in memory. Longer graph ranges use hourly rollups. */
+const MINUTE_HISTORY = 8 * 60;
+const HOUR_HISTORY = 31 * 24;
+const DETAIL_MINUTES = 15;
 const MAX_DURATIONS_PER_MINUTE = 2_000;
 /** A request still open after this long counts as a timeout even if it later finishes. */
 const TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_ALERT_MS ?? 30_000) || 30_000;
@@ -31,6 +34,27 @@ interface MinuteBucket {
   durations: number[];
   paths404: Map<string, number>;
   slow: Map<string, {count: number; totalMs: number; maxMs: number}>;
+  p95Ms?: number;
+  closed?: boolean;
+}
+
+interface HourRollup {
+  hour: number;
+  count: number;
+  s4xx: number;
+  s404: number;
+  s5xx: number;
+  timeouts: number;
+  p95Ms: number;
+}
+
+interface SystemHour {
+  hour: number;
+  cpuSum: number;
+  rssSum: number;
+  n: number;
+  cpuPct: number;
+  rssMb: number;
 }
 
 interface SystemSample {
@@ -45,6 +69,8 @@ interface SystemSample {
 
 const buckets: MinuteBucket[] = [];
 const samples: SystemSample[] = [];
+const hourRollups: HourRollup[] = [];
+const systemHours: SystemHour[] = [];
 let lastCpu = process.cpuUsage();
 let lastCpuAt = Date.now();
 const loopDelay = monitorEventLoopDelay({resolution: 20});
@@ -57,10 +83,43 @@ function currentBucket(now = Date.now()): MinuteBucket {
   let bucket = buckets[buckets.length - 1];
   if (!bucket || bucket.minute !== minute) {
     bucket = {minute, count: 0, s2xx: 0, s3xx: 0, s4xx: 0, s404: 0, s5xx: 0, timeouts: 0, aborted: 0, durations: [], paths404: new Map(), slow: new Map()};
+    if (buckets.length) closeMinute(buckets[buckets.length - 1]);
     buckets.push(bucket);
-    while (buckets.length > WINDOW_MINUTES) buckets.shift();
+    const cutoff = minute - MINUTE_HISTORY * 60_000;
+    while (buckets.length && buckets[0].minute < cutoff) buckets.shift();
+    compactOldBuckets(now);
   }
   return bucket;
+}
+
+function closeMinute(bucket: MinuteBucket) {
+  if (bucket.closed) return;
+  bucket.closed = true;
+  bucket.p95Ms = percentile(bucket.durations, 95);
+  const hour = Math.floor(bucket.minute / 3_600_000) * 3_600_000;
+  let roll = hourRollups[hourRollups.length - 1];
+  if (!roll || roll.hour !== hour) {
+    roll = {hour, count: 0, s4xx: 0, s404: 0, s5xx: 0, timeouts: 0, p95Ms: 0};
+    hourRollups.push(roll);
+    while (hourRollups.length > HOUR_HISTORY) hourRollups.shift();
+  }
+  roll.count += bucket.count;
+  roll.s4xx += bucket.s4xx;
+  roll.s404 += bucket.s404;
+  roll.s5xx += bucket.s5xx;
+  roll.timeouts += bucket.timeouts;
+  roll.p95Ms = Math.max(roll.p95Ms, bucket.p95Ms);
+}
+
+function compactOldBuckets(now: number) {
+  const detailAfter = now - DETAIL_MINUTES * 60_000;
+  for (const bucket of buckets) {
+    if (bucket.minute >= detailAfter) continue;
+    closeMinute(bucket);
+    if (bucket.durations.length) bucket.durations = [];
+    if (bucket.paths404.size) bucket.paths404 = new Map();
+    if (bucket.slow.size) bucket.slow = new Map();
+  }
 }
 
 /** Collapses ids in paths (/api/documents/66f…) so slow-path stats group by route. */
@@ -130,8 +189,25 @@ function takeSample() {
     eventLoopLagMs: Math.round(loopDelay.percentile(99) / 1e6),
   });
   loopDelay.reset();
-  const cutoff = now - WINDOW_MINUTES * 60_000;
+  const cutoff = now - MINUTE_HISTORY * 60_000;
   while (samples.length && samples[0].ts < cutoff) samples.shift();
+  const sample = samples[samples.length - 1];
+  if (sample) foldSystemSample(sample);
+}
+
+function foldSystemSample(sample: SystemSample) {
+  const hour = Math.floor(sample.ts / 3_600_000) * 3_600_000;
+  let roll = systemHours[systemHours.length - 1];
+  if (!roll || roll.hour !== hour) {
+    roll = {hour, cpuSum: 0, rssSum: 0, n: 0, cpuPct: 0, rssMb: 0};
+    systemHours.push(roll);
+    while (systemHours.length > HOUR_HISTORY) systemHours.shift();
+  }
+  roll.cpuSum += sample.cpuPct;
+  roll.rssSum += sample.rssMb;
+  roll.n += 1;
+  roll.cpuPct = Math.round((roll.cpuSum / roll.n) * 10) / 10;
+  roll.rssMb = Math.round(roll.rssSum / roll.n);
 }
 
 // ── Aggregates ──────────────────────────────────────────────────────────────
@@ -186,7 +262,22 @@ function systemSummary(minutes: number) {
 // ── Railway container metrics ───────────────────────────────────────────────
 
 const RAILWAY_API = "https://backboard.railway.com/graphql/v2";
-let railwayCache: {at: number; data: any} | null = null;
+const railwayCache = new Map<string, {at: number; data: any}>();
+
+export const GRAPH_RANGES = ["1h", "8h", "1d", "7d", "1m"] as const;
+export type GraphRange = (typeof GRAPH_RANGES)[number];
+
+const GRAPH_RANGE: Record<GraphRange, {ms: number; sampleRateSeconds: number; bucketMs: number; label: string}> = {
+  "1h": {ms: 60 * 60_000, sampleRateSeconds: 60, bucketMs: 60_000, label: "1 hour"},
+  "8h": {ms: 8 * 60 * 60_000, sampleRateSeconds: 300, bucketMs: 5 * 60_000, label: "8 hours"},
+  "1d": {ms: 24 * 60 * 60_000, sampleRateSeconds: 900, bucketMs: 15 * 60_000, label: "1 day"},
+  "7d": {ms: 7 * 24 * 60 * 60_000, sampleRateSeconds: 3600, bucketMs: 60 * 60_000, label: "7 days"},
+  "1m": {ms: 30 * 24 * 60 * 60_000, sampleRateSeconds: 3 * 60 * 60, bucketMs: 6 * 60 * 60_000, label: "1 month"},
+};
+
+export function parseGraphRange(value: unknown): GraphRange {
+  return GRAPH_RANGES.includes(value as GraphRange) ? value as GraphRange : "1h";
+}
 
 export function railwayInfo() {
   const e = process.env;
@@ -206,11 +297,13 @@ export function railwayInfo() {
   };
 }
 
-/** CPU/memory/network for the whole service over the last hour, from Railway's API (cached 60s). */
-export async function railwayMetrics(): Promise<any | null> {
+/** CPU/memory/network for the service over the selected range, from Railway's API (cached 60s per range). */
+export async function railwayMetrics(range: GraphRange = "1h"): Promise<any | null> {
   const e = process.env;
   if (!e.RAILWAY_API_TOKEN || !e.RAILWAY_SERVICE_ID || !e.RAILWAY_ENVIRONMENT_ID) return null;
-  if (railwayCache && Date.now() - railwayCache.at < 60_000) return railwayCache.data;
+  const cached = railwayCache.get(range);
+  if (cached && Date.now() - cached.at < 60_000) return cached.data;
+  const window = GRAPH_RANGE[range];
   const query = `query metrics($serviceId: String!, $environmentId: String!, $startDate: DateTime!, $measurements: [MetricMeasurement!]!, $sampleRateSeconds: Int) {
     metrics(serviceId: $serviceId, environmentId: $environmentId, startDate: $startDate, measurements: $measurements, sampleRateSeconds: $sampleRateSeconds) {
       measurement
@@ -226,9 +319,9 @@ export async function railwayMetrics(): Promise<any | null> {
         variables: {
           serviceId: e.RAILWAY_SERVICE_ID,
           environmentId: e.RAILWAY_ENVIRONMENT_ID,
-          startDate: new Date(Date.now() - 60 * 60_000).toISOString(),
+          startDate: new Date(Date.now() - window.ms).toISOString(),
           measurements: ["CPU_USAGE", "CPU_LIMIT", "MEMORY_USAGE_GB", "MEMORY_LIMIT_GB", "NETWORK_RX_GB", "NETWORK_TX_GB"],
-          sampleRateSeconds: 60,
+          sampleRateSeconds: window.sampleRateSeconds,
         },
       }),
       signal: AbortSignal.timeout(10_000),
@@ -246,11 +339,11 @@ export async function railwayMetrics(): Promise<any | null> {
       memoryLimitGb: last("MEMORY_LIMIT_GB"),
       error: null as string | null,
     };
-    railwayCache = {at: Date.now(), data};
+    railwayCache.set(range, {at: Date.now(), data});
     return data;
   } catch (err: any) {
     const data = {series: {}, error: err?.message ?? String(err)};
-    railwayCache = {at: Date.now(), data};
+    railwayCache.set(range, {at: Date.now(), data});
     return data;
   }
 }
@@ -335,7 +428,72 @@ export function startServerMetrics() {
 
 // ── Snapshot for the admin page ─────────────────────────────────────────────
 
-export async function liveSnapshot() {
+interface HttpPoint {
+  ts: number;
+  count: number;
+  s4xx: number;
+  s404: number;
+  s5xx: number;
+  timeouts: number;
+  p95Ms: number;
+}
+
+function minutePoint(bucket: MinuteBucket): HttpPoint {
+  return {
+    ts: bucket.minute,
+    count: bucket.count,
+    s4xx: bucket.s4xx,
+    s404: bucket.s404,
+    s5xx: bucket.s5xx,
+    timeouts: bucket.timeouts,
+    p95Ms: bucket.durations.length ? percentile(bucket.durations, 95) : (bucket.p95Ms ?? 0),
+  };
+}
+
+function aggregatePoints(points: HttpPoint[], bucketMs: number): HttpPoint[] {
+  const grouped = new Map<number, HttpPoint>();
+  for (const point of points) {
+    const ts = Math.floor(point.ts / bucketMs) * bucketMs;
+    const acc = grouped.get(ts) ?? {ts, count: 0, s4xx: 0, s404: 0, s5xx: 0, timeouts: 0, p95Ms: 0};
+    acc.count += point.count;
+    acc.s4xx += point.s4xx;
+    acc.s404 += point.s404;
+    acc.s5xx += point.s5xx;
+    acc.timeouts += point.timeouts;
+    acc.p95Ms = Math.max(acc.p95Ms, point.p95Ms);
+    grouped.set(ts, acc);
+  }
+  return [...grouped.values()].sort((a, b) => a.ts - b.ts);
+}
+
+function httpSeries(range: GraphRange): HttpPoint[] {
+  const spec = GRAPH_RANGE[range];
+  const since = Date.now() - spec.ms;
+  const oldestMinute = buckets[0]?.minute ?? Date.now();
+  const fromMinutes = buckets.filter((b) => b.minute >= since).map(minutePoint);
+  const fromHours: HttpPoint[] = hourRollups
+    .filter((h) => h.hour >= since && h.hour < oldestMinute)
+    .map((h) => ({ts: h.hour, count: h.count, s4xx: h.s4xx, s404: h.s404, s5xx: h.s5xx, timeouts: h.timeouts, p95Ms: h.p95Ms}));
+  return aggregatePoints([...fromHours, ...fromMinutes], spec.bucketMs);
+}
+
+function systemSeries(range: GraphRange): {ts: number; cpuPct: number; rssMb: number}[] {
+  const spec = GRAPH_RANGE[range];
+  const since = Date.now() - spec.ms;
+  const oldestSample = samples[0]?.ts ?? Date.now();
+  const recent = samples
+    .filter((s) => s.ts >= since)
+    .map((s) => ({ts: s.ts, cpuPct: s.cpuPct, rssMb: s.rssMb}));
+  const older = systemHours
+    .filter((h) => h.hour >= since && h.hour < oldestSample)
+    .map((h) => ({ts: h.hour, cpuPct: h.cpuPct, rssMb: h.rssMb}));
+  const points = [...older, ...recent].sort((a, b) => a.ts - b.ts);
+  if (points.length <= 180) return points;
+  const step = Math.ceil(points.length / 180);
+  return points.filter((_, i) => i % step === 0 || i === points.length - 1);
+}
+
+export async function liveSnapshot(range: GraphRange = "1h") {
   const topEntries = <T>(map: Map<string, T>, score: (v: T) => number, n: number) =>
     [...map.entries()].sort((a, b) => score(b[1]) - score(a[1])).slice(0, n);
   const recent = buckets.filter((b) => b.minute >= Date.now() - 15 * 60_000);
@@ -350,9 +508,14 @@ export async function liveSnapshot() {
     }
   }
   const alerts = await col("server_alerts").find({}).sort({created_at: -1}).limit(20).toArray().catch(() => []);
+  const ranged = await railwayMetrics(range);
+  const latest = range === "1h" ? ranged : await railwayMetrics("1h");
+  const metrics = ranged && latest ? {...latest, series: ranged.series ?? {}, error: ranged.error ?? latest.error} : (ranged ?? latest);
   return {
     now: new Date().toISOString(),
-    railway: {...railwayInfo(), metrics: await railwayMetrics()},
+    range,
+    rangeLabel: GRAPH_RANGE[range].label,
+    railway: {...railwayInfo(), metrics},
     container: {
       pid: process.pid,
       uptimeSeconds: Math.round(process.uptime()),
@@ -363,8 +526,8 @@ export async function liveSnapshot() {
     http: {last5: httpSummary(5), last60: httpSummary(60)},
     system: {last5: systemSummary(5)},
     series: {
-      http: buckets.map((b) => ({ts: b.minute, count: b.count, s4xx: b.s4xx, s404: b.s404, s5xx: b.s5xx, timeouts: b.timeouts, p95Ms: percentile(b.durations, 95)})),
-      system: samples,
+      http: httpSeries(range),
+      system: systemSeries(range),
     },
     top404: topEntries(paths404, (v) => v, 8).map(([path, count]) => ({path, count})),
     slowest: topEntries(slow, (v) => v.totalMs / v.count, 8).map(([route, v]) => ({route, count: v.count, avgMs: Math.round(v.totalMs / v.count), maxMs: v.maxMs})),
