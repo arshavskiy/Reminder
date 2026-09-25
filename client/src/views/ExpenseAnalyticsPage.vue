@@ -267,7 +267,11 @@ echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, Can
 type ExpenseChartType = "stacked" | "grouped" | "line" | "pie";
 
 const message = useMessage();
-const {l, dir, t} = useI18n();
+const {l, dir, t, locale} = useI18n();
+const intlLocale = computed(() => (locale.value === "en" ? "en-US" : "he-IL"));
+const tooltipCss = computed(() => (dir.value === "rtl"
+  ? "direction: rtl; text-align: right; max-width: 280px;"
+  : "direction: ltr; text-align: left; max-width: 280px;"));
 const authStore = useAuthStore();
 const chartEl = ref<HTMLDivElement | null>(null);
 const loading = ref(false);
@@ -397,7 +401,7 @@ const chartOption = computed<echarts.EChartsCoreOption>(() => {
         backgroundColor: tooltipBg,
         borderColor: border,
         textStyle: { color: tooltipText },
-        extraCssText: "direction: rtl; text-align: right; max-width: 280px;",
+        extraCssText: tooltipCss.value,
         formatter: (raw: unknown) => formatPieTooltip(raw),
       },
       series: [{
@@ -432,7 +436,7 @@ const chartOption = computed<echarts.EChartsCoreOption>(() => {
       backgroundColor: tooltipBg,
       borderColor: border,
       textStyle: { color: tooltipText },
-      extraCssText: "direction: rtl; text-align: right; max-width: 280px;",
+      extraCssText: tooltipCss.value,
       formatter: (raw: unknown) => formatStackTooltip(raw, border),
     },
     grid: {
@@ -457,7 +461,7 @@ const chartOption = computed<echarts.EChartsCoreOption>(() => {
     yAxis: {
       type: "value",
       min: 0,
-      position: "right",
+      position: dir.value === "rtl" ? "right" : "left",
       axisLabel: {
         color: text,
         formatter: (value: number) => compactMoney(value),
@@ -747,15 +751,15 @@ function formatPieTooltip(raw: unknown): string {
 function formatMonth(month: string): string {
   const [year, monthIndex] = month.split("-").map(Number);
   if (!year || !monthIndex) return month;
-  return new Date(Date.UTC(year, monthIndex - 1, 1)).toLocaleDateString("he-IL", { month: "short", year: "2-digit" });
+  return new Date(Date.UTC(year, monthIndex - 1, 1)).toLocaleDateString(intlLocale.value, { month: "short", year: "2-digit" });
 }
 
 function formatMoney(value: number): string {
-  return new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat(intlLocale.value, { style: "currency", currency: "ILS", maximumFractionDigits: 0 }).format(value);
 }
 
 function compactMoney(value: number): string {
-  return new Intl.NumberFormat("he-IL", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+  return new Intl.NumberFormat(intlLocale.value, { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
 function cssVar(name: string, fallback: string): string {
@@ -1137,7 +1141,7 @@ function providerCategoryLabel(value: string): string {
   color: var(--text-primary);
   cursor: pointer;
   font: inherit;
-  text-align: right;
+  text-align: start;
 }
 
 .expense-legend__item:hover,

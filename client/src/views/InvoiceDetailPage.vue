@@ -239,7 +239,8 @@ import {useI18n} from "../composables/useI18n.js";
 import StorageSyncIcons from "../components/StorageSyncIcons.vue";
 
 const route = useRoute();
-const {l, t, href, dir} = useI18n();
+const {l, t, href, dir, locale} = useI18n();
+const intlLocale = computed(() => (locale.value === "en" ? "en-US" : "he-IL"));
 const router = useRouter();
 const message = useMessage();
 
@@ -324,7 +325,7 @@ const receivedDateValue = computed<number | null>({
 const vatDisplay = computed(() => {
   const amount = invoice.value?.vat_amount;
   if (amount == null) return "—";
-  return new Intl.NumberFormat("he-IL", {
+  return new Intl.NumberFormat(intlLocale.value, {
     style: "currency",
     currency: form.currency || "ILS",
     maximumFractionDigits: 2,
@@ -355,7 +356,7 @@ const extractedFields = computed(() => {
       value: l.value.invoiceDetailMsg.missing,
       empty: true,
       missing: true,
-      dir: "rtl",
+      dir: dir.value,
     });
   }
 
@@ -441,7 +442,7 @@ function statusLabel(value: string): string {
 }
 
 function formatIls(amount: number): string {
-  return new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 2 }).format(amount);
+  return new Intl.NumberFormat(intlLocale.value, { style: "currency", currency: "ILS", maximumFractionDigits: 2 }).format(amount);
 }
 
 function invoiceTypeLabel(row: ImportedInvoice): string {

@@ -713,7 +713,8 @@ import {featureFlagsForUser, planAllowsGoogleDrive, planAllowsExcelExport, resol
 import {useConfirm} from "../composables/useConfirm.js";
 
 const router = useRouter();
-const {l, dir, t} = useI18n();
+const {l, dir, t, locale} = useI18n();
+const intlLocale = computed(() => (locale.value === "en" ? "en-US" : "he-IL"));
 const message = useMessage();
 const {confirm} = useConfirm();
 const authStore = useAuthStore();
@@ -1102,7 +1103,7 @@ function formatDate(value: string | null): string {
   if (!value) return "—";
   const ts = Date.parse(value);
   return Number.isFinite(ts)
-    ? new Date(ts).toLocaleDateString("he-IL", { day: "numeric", month: "short", year: "numeric" })
+    ? new Date(ts).toLocaleDateString(intlLocale.value, { day: "numeric", month: "short", year: "numeric" })
     : value;
 }
 
@@ -1111,7 +1112,7 @@ function displayDate(row: ImportedInvoice): string {
 }
 
 function formatIlsAmount(amount: number): string {
-  return new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 2 }).format(amount);
+  return new Intl.NumberFormat(intlLocale.value, { style: "currency", currency: "ILS", maximumFractionDigits: 2 }).format(amount);
 }
 
 function isoDate(value: string | null): string {
@@ -2222,7 +2223,7 @@ function replaceRow(updated: ImportedInvoice) {
 .invoice-table td {
   padding: 11px 12px;
   border-bottom: 1px solid var(--border-color);
-  text-align: right;
+  text-align: start;
   white-space: nowrap;
   vertical-align: middle;
 }
@@ -2270,10 +2271,6 @@ function replaceRow(updated: ImportedInvoice) {
   outline: 2px solid color-mix(in srgb, var(--brand-color) 45%, transparent);
   outline-offset: 3px;
   border-radius: 6px;
-}
-
-.invoice-sort-button--amount {
-  direction: rtl;
 }
 
 .invoice-table tbody tr:last-child td {
@@ -2332,8 +2329,7 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 .invoice-col--amount {
-  direction: ltr;
-  text-align: left;
+  text-align: end;
 }
 
 .invoice-col--actions {
@@ -2360,8 +2356,7 @@ function replaceRow(updated: ImportedInvoice) {
 .invoice-col--client,
 .invoice-col--category,
 .invoice-col--type {
-  direction: rtl;
-  text-align: right;
+  text-align: start;
 }
 
 .invoice-type-cell {
