@@ -326,7 +326,7 @@
             </div>
             <div class="invoice-card__amount">
               {{ row.currency !== 'ILS' && row.amount_ils !== null ? formatIlsAmount(row.amount_ils) : row.amount_display }}
-              <span v-if="row.currency !== 'ILS'" class="invoice-card__amount-ils">
+              <span v-if="row.currency !== 'ILS' && row.amount_ils !== null" class="invoice-card__amount-ils">
                 ({{ row.amount_display }})
               </span>
             </div>
@@ -503,7 +503,7 @@
               </td>
               <td class="cell-amount invoice-col invoice-col--amount" dir="ltr">
                 {{ row.currency !== 'ILS' && row.amount_ils !== null ? formatIlsAmount(row.amount_ils) : row.amount_display }}
-                <span v-if="row.currency !== 'ILS'" class="cell-amount__ils">
+                <span v-if="row.currency !== 'ILS' && row.amount_ils !== null" class="cell-amount__ils">
                   ({{ row.amount_display }})
                 </span>
               </td>
