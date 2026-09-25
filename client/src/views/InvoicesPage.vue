@@ -22,7 +22,7 @@
           @click="openBatchEdit"
         >
           <n-icon :component="CreateOutline" class="btn-icon" />
-          עריכה ({{ selectedInvoiceCount }})
+          {{ l.invoicesMsg.edit }} ({{ selectedInvoiceCount }})
         </button>
         <button
           v-if="selectedInvoiceCount > 0"
@@ -253,11 +253,11 @@
         <strong class="link-only-notice__title">
           <n-spin v-if="inlineOnlyLoading" :size="18" />
           <n-icon v-else :component="MailOutline" :size="20" />
-          <span v-if="inlineOnlyLoading">מחפש מיילי חשבונית ללא קובץ מצורף...</span>
-          <span v-else>נמצאו {{ inlineOnlyEmails.length }} מיילי חשבונית ללא קובץ מצורף</span>
+          <span v-if="inlineOnlyLoading">{{ l.invoicesMsg.inlineSearching }}</span>
+          <span v-else>{{ t("invoicesMsg.inlineFound", {count: inlineOnlyEmails.length}) }}</span>
         </strong>
-        <span v-if="inlineOnlyLoading">הסריקה של Gmail עדיין רצה. הרשימה תופיע כאן כשתסתיים.</span>
-        <span v-else>קבלות כמו Google Play, PayPal, Hyp ו-Meta Ads מיובאות מכאן בלחיצה אחת.</span>
+        <span v-if="inlineOnlyLoading">{{ l.invoicesMsg.inlineStillRunning }}</span>
+        <span v-else>{{ l.invoicesMsg.inlineHint }}</span>
       </div>
       <button
         v-if="!inlineOnlyLoading"
@@ -268,7 +268,7 @@
         @click="handleImportInlineAll"
       >
         <GmailLogo :size="16" class="btn-icon" />
-        {{ importingFromGmail ? "מייבא..." : "ייבא הכל" }}
+        {{ importingFromGmail ? l.invoicesMsg.importing : l.invoicesMsg.importAll }}
       </button>
     </div>
     <DriveExportJobStatus
@@ -307,7 +307,7 @@
             <iframe v-else-if="isPdf(row)" :src="previewSrc(row)" :title="row.file_name" loading="lazy" />
             <div v-else class="invoice-card__fallback">
               <n-icon :component="row.inline_no_file ? MailOutline : DocumentTextOutline" :size="42" />
-              <span v-if="row.inline_no_file">ללא קובץ</span>
+              <span v-if="row.inline_no_file">{{ l.invoicesMsg.noFile }}</span>
             </div>
             <span class="invoice-card__status">{{ statusLabel(row.status) }}</span>
             <StorageSyncIcons
@@ -322,7 +322,7 @@
           <div class="invoice-card__body">
             <div class="invoice-card__supplier" :title="row.supplier_name">
               {{ row.supplier_name }}
-              <span v-if="row.inline_no_file" class="invoice-nofile-flag">ללא קובץ</span>
+              <span v-if="row.inline_no_file" class="invoice-nofile-flag">{{ l.invoicesMsg.noFile }}</span>
             </div>
             <div class="invoice-card__amount">
               {{ row.currency !== 'ILS' && row.amount_ils !== null ? formatIlsAmount(row.amount_ils) : row.amount_display }}
@@ -435,7 +435,7 @@
               <td class="invoice-col invoice-col--select" @click.stop>
                 <n-checkbox
                   :checked="selectedInvoiceIds.has(row.id)"
-                  :aria-label="`בחר חשבונית של ${row.supplier_name}`"
+                  :aria-label="t('invoicesMsg.selectInvoice', {supplier: row.supplier_name})"
                   @update:checked="(checked) => toggleSelectInvoice(row.id, checked)"
                 />
               </td>
@@ -474,7 +474,7 @@
                   <span class="invoice-cell-truncate" dir="auto" :title="row.supplier_name">{{ row.supplier_name }}</span>
                   <span v-if="row.inline_no_file" class="invoice-nofile-flag">
                     <n-icon :component="MailOutline" :size="12" />
-                    ללא קובץ
+                    {{ l.invoicesMsg.noFile }}
                   </span>
                 </span>
               </td>
@@ -620,39 +620,39 @@
     <n-modal
       v-model:show="batchEdit.show"
       preset="card"
-      title="עריכת סוג לנבחרים"
+      :title="l.invoicesMsg.batchTitle"
       class="invoice-business-modal"
       :closable="!batchEdit.saving"
       :mask-closable="!batchEdit.saving"
     >
       <div class="invoice-business-form">
-        <p class="invoice-form-hint">{{ selectedInvoiceCount }} חשבוניות נבחרו. שדות ריקים לא משתנים.</p>
+        <p class="invoice-form-hint">{{ t("invoicesMsg.batchHint", {count: selectedInvoiceCount}) }}</p>
         <label class="invoice-form-label">
-          <span>סוג מסמך</span>
+          <span>{{ l.invoicesMsg.docType }}</span>
           <n-select
             v-model:value="batchEdit.documentCategory"
             :options="documentCategoryFilterOptions"
             clearable
-            placeholder="בלי שינוי"
+            :placeholder="l.invoicesMsg.noChange"
           />
         </label>
         <label class="invoice-form-label">
-          <span>תנועה</span>
+          <span>{{ l.invoicesMsg.cashFlow }}</span>
           <n-select
             v-model:value="batchEdit.cashFlow"
             :options="cashFlowFilterOptions"
             clearable
-            placeholder="בלי שינוי"
+            :placeholder="l.invoicesMsg.noChange"
           />
         </label>
         <label class="invoice-form-label">
-          <span>קטגוריה</span>
+          <span>{{ l.invoicesMsg.category }}</span>
           <n-select
             v-model:value="batchEdit.providerCategory"
             :options="providerCategoryOptions"
             clearable
             filterable
-            placeholder="בלי שינוי"
+            :placeholder="l.invoicesMsg.noChange"
           />
         </label>
         <div class="invoice-business-form__actions">
@@ -663,7 +663,7 @@
             :disabled="!batchEdit.documentCategory && !batchEdit.cashFlow && !batchEdit.providerCategory"
             @click="saveBatchEdit"
           >
-            עדכן
+            {{ l.invoicesMsg.update }}
           </n-button>
         </div>
       </div>
@@ -893,7 +893,7 @@ async function load(force = false) {
     suppliers.value = result.suppliers;
     pruneSelectedInvoices();
   } catch {
-    message.error("שגיאה בטעינת החשבוניות");
+    message.error(l.value.invoicesMsg.loadError);
   } finally {
     loading.value = false;
   }
@@ -931,9 +931,9 @@ function confirmDeleteSelected() {
   const ids = [...selectedInvoiceIds.value];
   if (!ids.length) return;
   confirm({
-    title: "מחיקת חשבוניות",
-    content: `למחוק ${ids.length} חשבוניות שנבחרו? הפעולה תמחק גם את המסמכים המקושרים.`,
-    confirmText: "מחק",
+    title: l.value.invoicesMsg.deleteTitle,
+    content: t("invoicesMsg.deleteConfirm", {count: ids.length}),
+    confirmText: l.value.fieldPage.delete,
     type: "warning",
     onConfirm: () => deleteSelectedInvoices(ids),
   });
@@ -944,10 +944,10 @@ async function deleteSelectedInvoices(ids: string[]) {
   try {
     const result = await api.invoices.deleteSelected({ ids });
     selectedInvoiceIds.value = new Set();
-    message.success(`נמחקו ${result.deleted} חשבוניות`);
+    message.success(t("invoicesMsg.deleted", {count: result.deleted}));
     await load(true);
   } catch {
-    message.error("שגיאה במחיקת החשבוניות");
+    message.error(l.value.invoicesMsg.deleteError);
   } finally {
     deletingSelected.value = false;
   }
@@ -978,10 +978,10 @@ async function uploadInvoiceFiles(files: File[]) {
     const duplicateCount = result.duplicates?.length ?? 0;
     const queuedCount = Math.max(0, result.ids.length - duplicateCount);
     if (queuedCount > 0) {
-      message.success(`${queuedCount} קבצים נוספו לתור עיבוד חשבוניות`);
+      message.success(t("invoicesMsg.queued", {count: queuedCount}));
     }
     if (duplicateCount > 0) {
-      message.info(`${duplicateCount} קבצים כבר קיימים ונשלחו לעיבוד חוזר כחשבוניות`);
+      message.info(t("invoicesMsg.duplicatesReprocessed", {count: duplicateCount}));
     }
     await load(true);
   } catch (err: any) {
@@ -991,9 +991,9 @@ async function uploadInvoiceFiles(files: File[]) {
         || code.includes("document_monthly_limit_reached")
         || code.includes("document_monthly_quota_exceeded")
     ) {
-      message.error("הגעת למגבלת הייבוא של המנוי.");
+      message.error(l.value.invoicesMsg.importQuota);
     } else {
-      message.error("שגיאה בהעלאת החשבוניות");
+      message.error(l.value.invoicesMsg.uploadError);
     }
   } finally {
     uploadingInvoices.value = false;
@@ -1040,11 +1040,11 @@ async function saveBatchEdit() {
       cash_flow: batchEdit.cashFlow ?? undefined,
       provider_category: batchEdit.providerCategory ?? undefined,
     })));
-    message.success(`עודכנו ${ids.length} חשבוניות`);
+    message.success(t("invoicesMsg.updatedMany", {count: ids.length}));
     batchEdit.show = false;
     await load(true);
   } catch {
-    message.error("שגיאה בעדכון החשבוניות");
+    message.error(l.value.invoicesMsg.updateManyError);
   } finally {
     batchEdit.saving = false;
   }
@@ -1184,28 +1184,7 @@ const PROVIDER_CATEGORIES: Array<NonNullable<ImportedInvoice["provider_category"
 ];
 
 function providerCategoryLabel(category: string | null): string {
-  const labels: Record<string, string> = {
-    transport: "תחבורה",
-    parking: "חניה",
-    fuel: "דלק",
-    tv: "טלוויזיה וסטרימינג",
-    marketplace: "קניות",
-    food: "מזון",
-    payment: "לא מסווג",
-    household: "חשבונות הבית",
-    government: "ממשלה",
-    insurance: "ביטוח",
-    finance: "פיננסים",
-    travel: "תיירות",
-    healthcare: "בריאות",
-    education: "לימודים",
-    retail: "קמעונאות",
-    electronics: "אלקטרוניקה",
-    nonprofit: "עמותות",
-    digital: "דיגיטל",
-    development: "פיתוח",
-    general: "כללי",
-  };
+  const labels: Record<string, string> = l.value.providerCategory;
   return labels[category] ?? category;
 }
 
@@ -1247,7 +1226,7 @@ function download(row: ImportedInvoice) {
 
 async function exportInvoicesToExcel() {
   if (!exportAllowed.value) {
-    message.warning("ייצוא זמין במסלולים בסיסי ועסקי בלבד");
+    message.warning(l.value.invoicesMsg.exportPlanOnly);
     return;
   }
   if (!excelAllowed.value) {
@@ -1273,24 +1252,25 @@ async function exportInvoicesToExcel() {
       export: true,
     }, true);
     const { utils, writeFile } = await import("xlsx");
+    const c = l.value.invoiceExport;
     const data = result.rows.map((row) => ({
-      "ספק": row.supplier_name,
-      "סטטוס": statusLabel(row.status),
-      "תאריך חשבונית": isoDate(row.issue_date),
-      "תאריך לתשלום": isoDate(row.payment_due_date),
-      "לקוח": clientLabel(row),
-      "סוג": invoiceTypeLabel(row),
-      "תנועה": cashFlowLabel(row),
-      "סכום": row.amount ?? "",
-      "מטבע": row.currency,
-      "סכום בש\"ח": row.amount_ils ?? "",
-      "מספר חשבונית": row.invoice_number ?? "",
-      "מספר לקוח": row.customer_number ?? "",
-      "תקופת חיוב": row.billing_period ?? "",
-      "קטגוריית ספק": invoiceProviderCategoryLabel(row),
-      "ספק מזוהה": row.provider_label ?? "",
-      "קטגוריה": row.expense_category ?? "",
-      "קובץ": row.file_name,
+      [c.supplier]: row.supplier_name,
+      [c.status]: statusLabel(row.status),
+      [c.issueDate]: isoDate(row.issue_date),
+      [c.dueDate]: isoDate(row.payment_due_date),
+      [c.client]: clientLabel(row),
+      [c.type]: invoiceTypeLabel(row),
+      [c.cashFlow]: cashFlowLabel(row),
+      [c.amount]: row.amount ?? "",
+      [c.currency]: row.currency,
+      [c.amountIls]: row.amount_ils ?? "",
+      [c.invoiceNumber]: row.invoice_number ?? "",
+      [c.customerNumber]: row.customer_number ?? "",
+      [c.billingPeriod]: row.billing_period ?? "",
+      [c.providerCategory]: invoiceProviderCategoryLabel(row),
+      [c.providerLabel]: row.provider_label ?? "",
+      [c.category]: row.expense_category ?? "",
+      [c.file]: row.file_name,
     }));
     const ws = utils.json_to_sheet(data);
     ws["!cols"] = [
@@ -1313,10 +1293,10 @@ async function exportInvoicesToExcel() {
     ];
     const wb = utils.book_new();
     wb.Workbook = { Views: [{ RTL: true }] };
-    utils.book_append_sheet(wb, ws, "חשבוניות");
+    utils.book_append_sheet(wb, ws, c.sheet);
     writeFile(wb, `invoices-${new Date().toISOString().slice(0, 10)}.xlsx`);
   } catch {
-    message.error("שגיאה בייצוא לאקסל");
+    message.error(l.value.invoicesMsg.excelError);
   } finally {
     exporting.value = false;
   }
@@ -1324,7 +1304,7 @@ async function exportInvoicesToExcel() {
 
 async function sendSixMonthInvoiceReport() {
   if (!exportAllowed.value) {
-    message.warning("שליחת דוחות זמינה במסלולים בסיסי ועסקי בלבד");
+    message.warning(l.value.invoicesMsg.reportSendPlanOnly);
     return;
   }
   if (!excelAllowed.value) {
@@ -1334,16 +1314,16 @@ async function sendSixMonthInvoiceReport() {
   sendingSixMonthReport.value = true;
   try {
     const result = await api.invoices.sendSixMonthReport();
-    const recipient = result.recipients[0] ?? "המייל שלך";
-    message.success(`דוח 6 חודשים נשלח אל ${recipient} (${result.count} רשומות)`);
+    const recipient = result.recipients[0] ?? l.value.invoicesMsg.yourEmail;
+    message.success(t("invoicesMsg.reportSent", {recipient, count: result.count}));
   } catch (err: any) {
     const code = String(err?.message ?? "");
     if (code.includes("excel_export_plan_required")) {
       message.warning(PLAN_GATE_MESSAGES.excelExport);
     } else if (code.includes("missing_report_recipient")) {
-      message.error("לא נמצא מייל לשליחת הדוח");
+      message.error(l.value.invoicesMsg.noReportEmail);
     } else {
-      message.error("שגיאה בשליחת דוח החשבוניות");
+      message.error(l.value.invoicesMsg.reportError);
     }
   } finally {
     sendingSixMonthReport.value = false;
@@ -1352,7 +1332,7 @@ async function sendSixMonthInvoiceReport() {
 
 function openMonthlyReport() {
   if (!exportAllowed.value) {
-    message.warning("ייצוא דוחות זמין במסלולים בסיסי ועסקי בלבד");
+    message.warning(l.value.documentsMsg.reportsPlanOnly);
     return;
   }
   showMonthlyReport.value = true;
@@ -1360,28 +1340,28 @@ function openMonthlyReport() {
 
 async function handleDriveExport() {
   if (!driveAllowed.value) {
-    message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    message.warning(l.value.documentsMsg.drivePlanOnly);
     return;
   }
   try {
     const status = await api.drive.status();
     if (!status.allowed) {
-      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+      message.warning(l.value.documentsMsg.drivePlanOnly);
       return;
     }
     if (!status.syncEnabled) {
-      message.warning("יש להפעיל סנכרון Drive בהגדרות הפרופיל לפני ייצוא");
+      message.warning(l.value.documentsMsg.driveSyncOff);
       return;
     }
     const folderGone = status.folderState === "missing" || status.folderState === "trashed";
     if (folderGone) {
       const count = status.syncedFileCount ?? 0;
       confirm({
-        title: status.folderState === "trashed" ? "תיקיית Drive בפח" : "תיקיית Drive נמחקה",
+        title: status.folderState === "trashed" ? l.value.documentsMsg.driveTrashed : l.value.documentsMsg.driveDeleted,
         content: count
-          ? `${count} מסמכים סומנו כמסונכרנים אבל הם כבר לא בתיקייה. ליצור תיקייה חדשה ולהעלות מחדש?`
-          : "תיקיית Google Drive נמחקה. ליצור תיקייה חדשה ולהעלות את המסמכים?",
-        confirmText: "העלה מחדש",
+          ? t("documentsMsg.driveMissingFiles", {count})
+          : l.value.documentsMsg.driveFolderGone,
+        confirmText: l.value.documentsMsg.reupload,
         type: "warning",
         onConfirm: runDriveExport,
       });
@@ -1390,9 +1370,9 @@ async function handleDriveExport() {
     await runDriveExport();
   } catch (err: any) {
     if (String(err?.message ?? "").includes("drive_plan_required")) {
-      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+      message.warning(l.value.documentsMsg.drivePlanOnly);
     } else {
-      message.error("שגיאה בייצוא ל-Drive");
+      message.error(l.value.documentsMsg.driveExportError);
     }
   }
 }
@@ -1403,16 +1383,16 @@ async function runDriveExport() {
   try {
     const started = await api.drive.exportAll();
     activeDriveExportJob.value = started;
-    message.info("ייצוא ל-Drive התחיל ברקע");
+    message.info(l.value.documentsMsg.driveStarted);
     const result = await waitForDriveExportJob(started.jobId);
     lastDriveExportJob.value = result;
-    const folderHint = result.folderName ? ` לתיקיית "${result.folderName}"` : "";
+    const folderHint = result.folderName ? t("documentsMsg.toFolder", {folder: result.folderName}) : "";
     if (result.recreated) {
-      message.success(`נוצרה תיקייה חדשה והועלו ${result.uploaded} מסמכים${folderHint}${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+      message.success(`${t("documentsMsg.newFolderUploaded", {count: result.uploaded})}${folderHint}${result.failed > 0 ? ` ${t("documentsMsg.failedSuffix", {count: result.failed})}` : ""}`);
     } else if (result.total === 0) {
-      message.info("כל המסמכים כבר מסונכרנים ל-Drive");
+      message.info(l.value.documentsMsg.allSynced);
     } else {
-      message.success(`הועלו ${result.uploaded} מסמכים${folderHint} ב-Google Drive${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+      message.success(`${t("documentsMsg.uploadedToDrive", {count: result.uploaded})}${folderHint}${result.failed > 0 ? ` ${t("documentsMsg.failedSuffix", {count: result.failed})}` : ""}`);
     }
     if (result.folderUrl) {
       window.open(result.folderUrl, "_blank", "noopener,noreferrer");
@@ -1420,11 +1400,11 @@ async function runDriveExport() {
     await load(true);
   } catch (err: any) {
     if (String(err?.message ?? "").includes("drive_plan_required")) {
-      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+      message.warning(l.value.documentsMsg.drivePlanOnly);
     } else if (String(err?.message ?? "").includes("drive_scope_missing")) {
-      message.warning("יש להתחבר מחדש ל-Gmail כדי לאשר גישה ל-Drive");
+      message.warning(l.value.documentsMsg.reconnectForDrive);
     } else {
-      message.error("שגיאה בייצוא ל-Drive");
+      message.error(l.value.documentsMsg.driveExportError);
     }
   } finally {
     activeDriveExportJob.value = null;
@@ -1447,29 +1427,29 @@ async function handleGmailImportButton() {
     const templateId = template?.id ? String(template.id) : undefined;
     const started = await api.gmail.importAll(undefined, undefined, templateId);
     activeGmailImportJob.value = started;
-    message.info("ייבוא החשבוניות מ-Gmail התחיל ברקע");
+    message.info(l.value.invoicesMsg.gmailImportStarted);
     const result = await waitForGmailImportJob(started.jobId);
     lastGmailImportJob.value = result;
     loadInlineOnlyEmails(templateId);
     const failed = result.errors || result.results.filter((item) => item.error).length;
     const imported = result.imported ?? 0;
     if (imported) {
-      message.success(`יובאו ${imported} מסמכים מ-Gmail`);
+      message.success(t("invoicesMsg.gmailImported", {count: imported}));
     } else if (failed) {
-      message.warning("לא יובאו מסמכים. חלק מהקבצים נכשלו בעיבוד.");
+      message.warning(l.value.documentsMsg.gmailNoneImported);
     } else {
-      message.info("לא נמצאו מסמכים חדשים לייבוא");
+      message.info(l.value.invoicesMsg.gmailNothingNew);
     }
     await load(true);
   } catch (err: any) {
     const code = String(err?.message ?? "");
     if (code.includes("gmail_not_connected")) {
       gmailConnected.value = false;
-      message.error("Gmail לא מחובר. לחץ שוב כדי להתחבר.");
+      message.error(l.value.documentsMsg.gmailNotConnected);
     } else if (code.includes("document_monthly_quota_exceeded")) {
-      message.error("הגעת למגבלת הייבוא החודשית של המנוי.");
+      message.error(l.value.documentsMsg.monthlyQuota);
     } else {
-      message.error("שגיאה בייבוא מ-Gmail");
+      message.error(l.value.documentsMsg.gmailError);
     }
   } finally {
     activeGmailImportJob.value = null;
@@ -1499,21 +1479,21 @@ async function handleImportInlineAll() {
     const template = await findInvoiceTemplate();
     const started = await api.gmail.importInlineAll(messageIds, template?.id ? String(template.id) : undefined);
     activeGmailImportJob.value = started;
-    message.info("ייבוא הקבלות מ-Gmail התחיל");
+    message.info(l.value.invoicesMsg.receiptsImportStarted);
     const result = await waitForGmailImportJob(started.jobId);
     lastGmailImportJob.value = result;
     const savedIds = new Set(result.results.filter((item) => item.import_status === "invoice").map((item) => item.messageId));
     inlineOnlyEmails.value = inlineOnlyEmails.value.filter((email) => !savedIds.has(email.id));
     // The admin acted on the notice; emails left over were not receipts, so don't keep offering them.
     inlineOnlyDismissed.value = true;
-    if (result.imported) message.success(`נשמרו ${result.imported} קבלות מגוף המייל`);
-    else if (result.rejected) message.warning("לא נשמרו קבלות. המיילים לא זוהו כקבלה.");
-    else message.info("לא נמצאו קבלות חדשות לייבוא");
+    if (result.imported) message.success(t("invoicesMsg.receiptsSaved", {count: result.imported}));
+    else if (result.rejected) message.warning(l.value.invoicesMsg.receiptsRejected);
+    else message.info(l.value.invoicesMsg.receiptsNothingNew);
     await load(true);
   } catch (err: any) {
     const code = String(err?.message ?? "");
-    if (code.includes("gmail_not_connected")) message.error("Gmail לא מחובר. לחץ שוב כדי להתחבר.");
-    else message.error("שגיאה בייבוא הקבלות");
+    if (code.includes("gmail_not_connected")) message.error(l.value.documentsMsg.gmailNotConnected);
+    else message.error(l.value.invoicesMsg.receiptsError);
   } finally {
     activeGmailImportJob.value = null;
     importingFromGmail.value = false;
@@ -1525,14 +1505,14 @@ async function handleImportInline(row: GmailLinkOnlyEmail) {
   try {
     const template = await findInvoiceTemplate();
     const result = await api.gmail.importInline(row.id, template?.id ? String(template.id) : undefined);
-    message.success(`יובאה חשבונית מ-${result.receipt.vendor}: ${result.receipt.amount} ${result.receipt.currency}`);
+    message.success(t("invoicesMsg.receiptImported", {vendor: result.receipt.vendor, amount: result.receipt.amount, currency: result.receipt.currency}));
     inlineOnlyEmails.value = inlineOnlyEmails.value.filter((email) => email.id !== row.id);
     await load(true);
   } catch (err: any) {
     if (String(err?.message ?? "").includes("not_a_recognized_inline_receipt")) {
-      message.error("לא ניתן לייבא מייל זה אוטומטית");
+      message.error(l.value.invoicesMsg.emailNotImportable);
     } else {
-      message.error("שגיאה בייבוא המייל");
+      message.error(l.value.invoicesMsg.emailImportError);
     }
   } finally {
     importingInlineId.value = null;
@@ -1604,9 +1584,9 @@ function invoiceActionOptions(row: ImportedInvoice) {
       key: "category",
       icon: renderActionIcon(PricetagOutline),
       children: [
-        { label: "חשבוניות", key: "category:חשבוניות" },
-        { label: "קבלות", key: "category:קבלות" },
-        { label: "זיכויים", key: "category:זיכויים" },
+        { label: l.value.invoicesMsg.catInvoices, key: "category:חשבוניות" },
+        { label: l.value.invoicesMsg.catReceipts, key: "category:קבלות" },
+        { label: l.value.invoicesMsg.catCredits, key: "category:זיכויים" },
       ],
     },
     {
@@ -1672,10 +1652,10 @@ async function saveVendorMerge() {
     const result = await api.invoices.mergeVendors({ supplierNames: sourceNames, canonicalName });
     vendorMergeModal.show = false;
     filters.suppliers = [result.supplierName];
-    message.success(`${result.modified} חשבוניות מוזגו תחת ${result.supplierName}`);
+    message.success(t("invoicesMsg.suppliersMerged", {count: result.modified, supplier: result.supplierName}));
     await load(true);
   } catch {
-    message.error("שגיאה במיזוג ספקים");
+    message.error(l.value.invoicesMsg.mergeError);
   } finally {
     vendorMergeModal.saving = false;
   }
@@ -1686,9 +1666,9 @@ async function updateInvoiceStatus(row: ImportedInvoice, status: string) {
   try {
     const updated = await api.invoices.update(row.id, { status });
     replaceRow(updated);
-    message.success("הסטטוס עודכן");
+    message.success(l.value.invoicesMsg.statusUpdated);
   } catch {
-    message.error("שגיאה בעדכון הסטטוס");
+    message.error(l.value.invoicesMsg.statusError);
   }
 }
 
@@ -1703,9 +1683,9 @@ async function updateInvoiceProviderCategory(row: ImportedInvoice, value: string
   try {
     const result = await api.invoices.setSupplierCategory({ supplierName, provider_category: category });
     rows.value = rows.value.map((item) => item.supplier_name === supplierName ? { ...item, provider_category: category } : item);
-    message.success(`הקטגוריה עודכנה ב-${result.modified} חשבוניות של ${supplierName}`);
+    message.success(t("invoicesMsg.categoryUpdated", {count: result.modified, supplier: supplierName}));
   } catch {
-    message.error("שגיאה בעדכון הקטגוריה");
+    message.error(l.value.invoicesMsg.categoryError);
   }
 }
 
@@ -1719,9 +1699,9 @@ async function updateInvoiceMeta(row: ImportedInvoice, body: { client_name?: str
   try {
     const updated = await api.invoices.update(row.id, body);
     replaceRow(updated);
-    message.success("החשבונית עודכנה");
+    message.success(l.value.invoicesMsg.invoiceUpdated);
   } catch {
-    message.error("שגיאה בעדכון החשבונית");
+    message.error(l.value.invoicesMsg.invoiceUpdateError);
   }
 }
 
