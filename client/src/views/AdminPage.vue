@@ -156,6 +156,11 @@
               :status="inspectorLeadBestScore >= 80 ? 'success' : 'default'"
             />
           </div>
+          <n-alert v-if="inspectorSeedError" type="error" style="margin-bottom:12px">{{ inspectorSeedError }}</n-alert>
+          <div v-else-if="inspectorSeedDb" class="seed-db-note">
+            SEED data: {{ inspectorSeedDb.dbName }}<span v-if="inspectorSeedDb.host"> · {{ inspectorSeedDb.host }}</span>
+            · shared by local, dev and production, independent of the DB switch
+          </div>
 
           <div v-if="activeSection === 'inspector_leads'" class="monitor-block">
             <div class="monitor-block__title">Inspector Leads</div>
@@ -1982,6 +1987,9 @@ function resolveUserEmail(userId: string) {
 const inspectorLeadsRows = ref<InspectorLead[]>([]);
 /** Lead ids ticked in the table (kept across pages) for "Email selected". */
 const inspectorLeadSelected = ref<string[]>([]);
+/** Where SEED data is read from (always the production DB), shown under the SEED stat cards. */
+const inspectorSeedDb = ref<{ mode: string; dbName: string | null; host: string | null } | null>(null);
+const inspectorSeedError = ref<string | null>(null);
 const inspectorLeadUnsubFilter = ref<"hide" | "only" | null>(null);
 const inspectorLeadUnsubOptions = [
   { label: "Hide unsubscribed", value: "hide" },
@@ -2109,9 +2117,15 @@ async function loadInspectorLeads(page = inspectorLeadPage.value) {
     inspectorLeadsTotal.value = res.total;
     inspectorLeadPage.value = res.page;
     inspectorLeadSummary.value = res.summary;
+    inspectorSeedDb.value = (res as any).seedDb ?? null;
+    inspectorSeedError.value = null;
     lastRefreshed.value.set("inspector_leads", new Date());
   } catch (err: any) {
-    message.error(err?.message ?? "Error loading inspector leads");
+    if (err?.status === 503) {
+      inspectorSeedError.value = "SEED data lives in the production database, which this server can't reach. Set SEED_MONGODB_URI (or MONGODB_PRODUCTION_URI) in the server environment.";
+    } else {
+      message.error(err?.message ?? "Error loading inspector leads");
+    }
   } finally {
     inspectorLeadsLoading.value = false;
   }
@@ -3745,6 +3759,12 @@ onUnmounted(() => {
   padding: 10px 12px 14px;
   gap: 10px;
   overflow-y: auto;
+}
+
+.seed-db-note {
+  margin: -6px 0 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .admin-sidebar__group {

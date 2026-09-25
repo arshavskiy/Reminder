@@ -3,7 +3,8 @@ import multer from "multer";
 import {createHash} from "crypto";
 import {extname} from "path";
 import {Collection, ObjectId} from "mongodb";
-import {col, runWithPrimaryDb} from "../db/db";
+import {runWithPrimaryDb} from "../db/db";
+import {seedCollection} from "../db/seedDb";
 import {requireAuth, requireRole} from "../auth/middleware";
 import {logger} from "../logger";
 import {inspectorLeadsCollection} from "./admin";
@@ -281,14 +282,15 @@ export function registerAdminCampaignRoutes(app: express.Application) {
     });
   }
 
-  const campaignsCol = () => col<EmailCampaign>("email_campaigns");
+  // Campaigns live with the leads they email, in the SEED (production) database.
+  const campaignsCol = () => seedCollection<EmailCampaign>("email_campaigns");
 
   async function loadCampaign(req: express.Request, res: express.Response): Promise<EmailCampaign | null> {
     if (!ObjectId.isValid(req.params.id)) {
       res.status(400).json({error: "invalid_campaign_id"});
       return null;
     }
-    const campaign = await campaignsCol().findOne({_id: new ObjectId(req.params.id)});
+    const campaign = await (await campaignsCol()).findOne({_id: new ObjectId(req.params.id)});
     if (!campaign) res.status(404).json({error: "campaign_not_found"});
     return campaign;
   }
@@ -382,7 +384,7 @@ export function registerAdminCampaignRoutes(app: express.Application) {
   // GET /api/admin/campaigns
   app.get("/api/admin/campaigns", async (req, res) => {
     if (!await adminAuth(req, res)) return;
-    const rows = await campaignsCol().find({}).sort({created_at: -1}).limit(50).toArray();
+    const rows = await (await campaignsCol()).find({}).sort({created_at: -1}).limit(50).toArray();
     res.json({rows: rows.map((row) => presentCampaign(row))});
   });
 
@@ -403,7 +405,7 @@ export function registerAdminCampaignRoutes(app: express.Application) {
       created_at: now,
       updated_at: now,
     };
-    const result = await campaignsCol().insertOne(doc as EmailCampaign);
+    const result = await (await campaignsCol()).insertOne(doc as EmailCampaign);
     res.json(presentCampaign({...doc, _id: result.insertedId} as EmailCampaign));
   });
 
@@ -417,7 +419,7 @@ export function registerAdminCampaignRoutes(app: express.Application) {
     if (typeof req.body?.name === "string" && req.body.name.trim()) set.name = req.body.name.trim();
     if (typeof req.body?.subject === "string") set.subject = req.body.subject;
     if (typeof req.body?.html === "string") set.html = req.body.html;
-    const updated = await campaignsCol().findOneAndUpdate({_id: campaign._id}, {$set: set}, {returnDocument: "after"});
+    const updated = await (await campaignsCol()).findOneAndUpdate({_id: campaign._id}, {$set: set}, {returnDocument: "after"});
     res.json(presentCampaign(updated!));
   });
 
@@ -484,7 +486,7 @@ export function registerAdminCampaignRoutes(app: express.Application) {
       res.status(409).json({error: "audience_changed", count: recipients.length, newUnsubscribes: preSendScan?.newEmails ?? []});
       return;
     }
-    const campaigns = campaignsCol();
+    const campaigns = await campaignsCol();
     // Keep earlier sends of this campaign; add only new pending recipients.
     const known = new Set(campaign.recipients.map((r) => r.email));
     const added = recipients.filter((r) => !known.has(r.email));
@@ -501,7 +503,7 @@ export function registerAdminCampaignRoutes(app: express.Application) {
     if (!await adminAuth(req, res)) return;
     const campaign = await loadCampaign(req, res);
     if (!campaign) return;
-    await campaignsCol().updateOne({_id: campaign._id, status: "sending"}, {$set: {status: "paused", updated_at: new Date()}});
+    await (await campaignsCol()).updateOne({_id: campaign._id, status: "sending"}, {$set: {status: "paused", updated_at: new Date()}});
     res.json({ok: true});
   });
 
@@ -510,7 +512,7 @@ export function registerAdminCampaignRoutes(app: express.Application) {
     const campaign = await loadCampaign(req, res);
     if (!campaign) return;
     if (!["paused", "failed", "sending"].includes(campaign.status)) { res.status(409).json({error: "nothing_to_resume"}); return; }
-    const campaigns = campaignsCol();
+    const campaigns = await campaignsCol();
     // Failed recipients get another attempt on resume.
     await campaigns.updateOne({_id: campaign._id}, {
       $set: {status: "sending", error: null, updated_at: new Date(), "recipients.$[f].status": "pending", "recipients.$[f].error": null},

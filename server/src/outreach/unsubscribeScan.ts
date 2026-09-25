@@ -1,5 +1,6 @@
 import {ObjectId} from "mongodb";
 import {col, runWithPrimaryDb} from "../db/db";
+import {seedCollection} from "../db/seedDb";
 import {logger} from "../logger";
 import {isProcessPaused} from "../ops/processControl";
 import {gmailFetch, resolveGmailToken, retryWithRefresh} from "../routes/gmail";
@@ -35,7 +36,8 @@ const MAX_PAGES = 5;
 let scanInFlight: Promise<UnsubscribeScanRun> | null = null;
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 
-export const scanRunsCollection = () => col<UnsubscribeScanRun>("unsubscribe_scans");
+/** Scan history lives with the leads it updates, in the SEED (production) database. */
+export const scanRunsCollection = () => seedCollection<UnsubscribeScanRun>("unsubscribe_scans");
 
 /** Same scheduler_health row shape the reminder scheduler writes, shown on the admin Scheduler/Processes pages. */
 export async function recordJobHealth(name: string, error: string | null, startedAt: Date) {
@@ -119,7 +121,6 @@ export function runUnsubscribeScan(opts: {
 }): Promise<UnsubscribeScanRun> {
   if (scanInFlight) return scanInFlight;
   scanInFlight = (async () => {
-    const runs = scanRunsCollection();
     const run: UnsubscribeScanRun = {
       _id: new ObjectId(),
       trigger: opts.trigger,
@@ -136,8 +137,10 @@ export function runUnsubscribeScan(opts: {
       newEmails: [],
       error: null,
     };
-    await runs.insertOne(run);
+    let runs: Awaited<ReturnType<typeof scanRunsCollection>> | null = null;
     try {
+      runs = await scanRunsCollection();
+      await runs.insertOne(run);
       const gmailUserId = opts.gmailUserId ?? await unsubscribeScanUserId();
       run.gmailUserId = gmailUserId;
       if (!gmailUserId) throw new Error("gmail_not_connected");
@@ -150,7 +153,8 @@ export function runUnsubscribeScan(opts: {
       run.error = err?.message ?? String(err);
     }
     run.finished_at = new Date();
-    await runs.updateOne({_id: run._id}, {$set: run});
+    // Without a reachable SEED DB there is nowhere to log the run; the error still goes to the logs and health row.
+    if (runs) await runs.updateOne({_id: run._id}, {$set: run}).catch(() => undefined);
     await recordJobHealth("unsubscribeScan", run.status === "error" ? `${run.trigger}: ${run.error}` : null, run.started_at);
     const log = run.status === "ok" ? logger.info : logger.warn;
     log("unsubscribe_scan_completed", {

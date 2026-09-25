@@ -1,5 +1,5 @@
 import express from "express";
-import {Collection, Db, MongoClient, ObjectId} from "mongodb";
+import {Collection, ObjectId} from "mongodb";
 import {extname} from "path";
 import {col, ensureProductionDb, enterAdminDbTarget, getDbTargetStatus, getPrimaryUri, parseAdminDbTarget, runWithPrimaryDb} from "../db/db";
 import {requireAuth, requireRole} from "../auth/middleware";
@@ -29,6 +29,7 @@ import {
 import {runTempFileSweep, tempDirUsage, tempSweeperState} from "../storage/tempFiles";
 import {runUnsubscribeScan, scanRunsCollection, unsubscribeScanUserId} from "../outreach/unsubscribeScan";
 import {liveSnapshot, parseGraphRange} from "../ops/serverMetrics";
+import {closeSeedDb, requireSeedDb, seedCollection, seedDbStatus} from "../db/seedDb";
 
 const VALID_ROLES: UserRole[] = ["admin", "pro", "user"];
 // "expired" is not assignable: it is what a lapsed trial resolves to, not a
@@ -37,61 +38,14 @@ const VALID_PLANS: UserPlan[] = ["trial", "digital", "basic", "business"];
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
 const VALID_LEAD_STATUSES = new Set(["NEW", "CONTACTED", "DEMO", "TRIAL", "CUSTOMER", "NOT_RELEVANT"]);
 
-let inspectorLeadsClient: MongoClient | null = null;
-let inspectorLeadsDb: Db | null = null;
-
-function env(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value || undefined;
-}
-
-function redactUri(uri: string): string {
-  return uri.replace(/\/\/[^:]+:[^@]+@/, "//***:***@");
-}
-
+/** Kept for the shutdown hook; SEED data now has one shared connection (see db/seedDb). */
 export async function closeInspectorLeadsClient(): Promise<void> {
-  const client = inspectorLeadsClient;
-  inspectorLeadsClient = null;
-  inspectorLeadsDb = null;
-  if (client) await client.close();
+  await closeSeedDb();
 }
 
+/** Marketing leads always come from the SEED (production) database, whatever the admin DB switch says. */
 export async function inspectorLeadsCollection(): Promise<Collection> {
-  const uri = env("MONGODB_URI");
-  if (!uri) return col("inspector_leads");
-  // In production MONGODB_URI is the same cluster the primary slot already holds a
-  // pool on, so opening a second client here doubled the connection count per
-  // replica against the Atlas cap. Reuse the existing pool when the URI matches.
-  if (uri === getPrimaryUri()) return col("inspector_leads");
-  if (!inspectorLeadsDb) {
-    const dbName = env("INSPECTOR_LEADS_DB") ?? "reminder";
-    // Bounded on purpose: the driver default is 100 with no wait-queue timeout, so a
-    // saturated pool here would hang requests indefinitely instead of failing fast.
-    inspectorLeadsClient = new MongoClient(uri, {
-      maxPoolSize: 10,
-      minPoolSize: 0,
-      waitQueueTimeoutMS: 10_000,
-      maxIdleTimeMS: 60_000,
-    });
-    await inspectorLeadsClient.connect();
-    inspectorLeadsDb = inspectorLeadsClient.db(dbName);
-    await inspectorLeadsDb.createCollection("inspector_leads").catch((err: any) => {
-      if (err?.codeName !== "NamespaceExists") throw err;
-    });
-    await Promise.all([
-      inspectorLeadsDb.collection("inspector_leads").createIndex({ email: 1 }, { sparse: true }),
-      inspectorLeadsDb.collection("inspector_leads").createIndex({ phone: 1 }, { sparse: true }),
-      inspectorLeadsDb.collection("inspector_leads").createIndex({ website: 1 }, { sparse: true }),
-      inspectorLeadsDb.collection("inspector_leads").createIndex({ source: 1 }),
-      inspectorLeadsDb.collection("inspector_leads").createIndex({ contactStatus: 1, leadScore: -1 }),
-      inspectorLeadsDb.collection("inspector_leads").createIndex({ leadScore: -1 }),
-    ]);
-    logger.info("inspector_leads_db_connected", {
-      db_name: dbName,
-      uri: redactUri(uri),
-    });
-  }
-  return inspectorLeadsDb.collection("inspector_leads");
+  return seedCollection("inspector_leads");
 }
 
 function normalizeUsername(raw: unknown): string | null {
@@ -195,6 +149,10 @@ function adminMagicLinkBase(req: express.Request): string | null {
 
 export function registerAdminRoutes(app: express.Application) {
   // Admin data can target local or production Mongo while auth stays on primary.
+  // SEED routes (leads, campaigns) always use the production SEED database;
+  // fail with a clear 503 before the handler if it isn't configured or reachable.
+  app.use(["/api/admin/inspector-leads", "/api/admin/campaigns"], requireSeedDb);
+
   app.use("/api/admin", async (req, res, next) => {
     const fromHeader = req.headers["x-admin-db-target"];
     const fromQuery = req.query.admin_db_target;
@@ -574,6 +532,7 @@ export function registerAdminRoutes(app: express.Application) {
     ]).toArray();
 
     res.json({
+      seedDb: seedDbStatus(),
       rows: rows.map(flatInspectorLead),
       total,
       page,
@@ -755,7 +714,7 @@ export function registerAdminRoutes(app: express.Application) {
   // GET /api/admin/inspector-leads/unsubscribe-scans — recent scan runs (manual, scheduled, pre-send)
   app.get("/api/admin/inspector-leads/unsubscribe-scans", async (req, res) => {
     if (!await adminAuth(req, res)) return;
-    const rows = await scanRunsCollection().find({}).sort({ started_at: -1 }).limit(20).toArray();
+    const rows = await (await scanRunsCollection()).find({}).sort({ started_at: -1 }).limit(20).toArray();
     const intervalMinutes = Math.max(5, Number(process.env.UNSUBSCRIBE_SCAN_INTERVAL_MINUTES ?? 60) || 60);
     const scheduled = process.env.UNSUBSCRIBE_SCAN_ENABLED === "true"
       || ((process.env.APP_ENV ?? "development") === "production" && process.env.UNSUBSCRIBE_SCAN_ENABLED !== "false");
