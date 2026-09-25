@@ -94,7 +94,7 @@
         :bordered="false"
         :pagination="false"
         :max-height="480"
-        :scroll-x="900"
+        :scroll-x="1060"
         size="small"
       />
       <div class="leads-pagination">
@@ -200,6 +200,15 @@ const sendColumns: DataTableColumns<InspectorLeadEmailSend> = [
   {
     title: "Sent", key: "sentAt", width: 150,
     render: (row) => muted(formatDateTime(row.sentAt)),
+  },
+  {
+    title: "Registered", key: "registered", width: 160,
+    render: (row) => row.registered
+      ? h("span", {class: "registered-cell"}, [
+        h(NTag, {size: "small", round: true, type: "success"}, {default: () => "Yes"}),
+        muted(formatDateTime(row.registeredAt)),
+      ])
+      : h(NTag, {size: "small", round: true}, {default: () => "No"}),
   },
   {
     title: "Status", key: "unsubscribed", width: 130,
@@ -347,6 +356,13 @@ onMounted(() => {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
   border-radius: 8px;
+}
+
+.registered-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .reply-snippet {
