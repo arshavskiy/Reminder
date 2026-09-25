@@ -1031,7 +1031,22 @@ export async function importInlineReceiptMessage(
 
   const issueDate = inlineReceiptIssueDate(receipt.date, get("Date"));
   const now = new Date();
-  const documentKey = `gmail-inline:${messageId}`;
+  const documentKey = receipt.dedupeKey ? `gmail-inline:${receipt.dedupeKey}` : `gmail-inline:${messageId}`;
+  if (receipt.dedupeKey) {
+    // A newer receipt for the same booking replaces this one. Keep the newest and
+    // remember this message so a re-import skips it.
+    const existing = await col("invoices").findOne(
+      { user_id: userId, document_id: documentKey } as any,
+      { projection: { _id: 1, issue_date: 1, gmail_message_id: 1 } } as any,
+    ) as any;
+    if (existing && existing.gmail_message_id !== messageId && String(existing.issue_date ?? "") > issueDate) {
+      await col("invoices").updateOne(
+        { _id: existing._id } as any,
+        { $addToSet: { superseded_gmail_message_ids: messageId } } as any,
+      );
+      return { invoiceId: existing._id.toString(), receipt, subject };
+    }
+  }
   const merchantName = receipt.merchant?.trim() || "";
   const supplierName = (receipt.vendor === "PayPal" || receipt.vendor === "Google Play") && merchantName
     ? merchantName
@@ -1086,9 +1101,17 @@ export async function importInlineReceiptMessage(
         status: "new",
       },
     } as any,
-    { upsert: true, returnDocument: "after" },
+    { upsert: true, returnDocument: "before" },
   );
-  const invoiceId = saved?._id?.toString?.() ?? documentKey;
+  const previous = saved as { gmail_message_id?: string } | null;
+  if (receipt.dedupeKey && previous?.gmail_message_id && previous.gmail_message_id !== messageId) {
+    await col("invoices").updateOne(
+      { user_id: userId, document_id: documentKey } as any,
+      { $addToSet: { superseded_gmail_message_ids: previous.gmail_message_id } } as any,
+    );
+  }
+  const savedId = saved?._id ?? (await col("invoices").findOne({ user_id: userId, document_id: documentKey } as any, { projection: { _id: 1 } } as any))?._id;
+  const invoiceId = savedId?.toString?.() ?? documentKey;
   logger.info("gmail_inline_receipt_imported", { user_id: userId, messageId, vendor: receipt.vendor, transactionId: receipt.transactionId, invoiceId });
   return { invoiceId, receipt, subject };
 }
@@ -1096,10 +1119,17 @@ export async function importInlineReceiptMessage(
 async function runInlineReceiptImportJob(job: GmailImportJob, messageIds: string[]) {
   const diagnostics = createGmailDiagnostics(job.q, new Set(), messageIds.length);
   const existing = await col("invoices").find(
-    { user_id: job.user_id, source: "gmail_inline", gmail_message_id: { $in: messageIds } } as any,
-    { projection: { gmail_message_id: 1 } } as any,
+    {
+      user_id: job.user_id,
+      source: "gmail_inline",
+      $or: [{ gmail_message_id: { $in: messageIds } }, { superseded_gmail_message_ids: { $in: messageIds } }],
+    } as any,
+    { projection: { gmail_message_id: 1, superseded_gmail_message_ids: 1 } } as any,
   ).toArray();
-  const importedSet = new Set(existing.map((row: any) => String(row.gmail_message_id ?? "")).filter(Boolean));
+  const importedSet = new Set(existing.flatMap((row: any) => [
+    String(row.gmail_message_id ?? ""),
+    ...((row.superseded_gmail_message_ids ?? []) as unknown[]).map(String),
+  ]).filter(Boolean));
 
   for (let index = job.cursor ?? 0; index < messageIds.length; index += 1) {
     const id = messageIds[index];

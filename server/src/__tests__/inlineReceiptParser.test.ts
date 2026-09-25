@@ -306,6 +306,37 @@ describe("parseInlineReceipt", () => {
     expect(parseInlineReceipt("no-reply@grab.com", "<p>Total Paid THB 523</p>", "You're in! It only gets better from here with Grab.")).toBeNull();
   });
 
+  it("parses a Booking.com payment receipt", () => {
+    const html = "<h3>This is your receipt</h3><td>Booking number</td><td>6615507868</td><td>Property name</td><td>COSI Krabi Ao Nang Beach</td>"
+      + "<td>Property address</td><td>Ao Nang, Thailand</td><td><strong>Amount paid on 21 Jun 2025</strong></td><td><strong>THB 5,188.03</strong></td>";
+    const result = parseInlineReceipt("noreply-payments@booking.com", html, "This is your receipt");
+    expect(result).toMatchObject({ vendor: "Booking.com", transactionId: "6615507868", amount: 5188.03, currency: "THB", merchant: "COSI Krabi Ao Nang Beach", date: "2025-06-21" });
+  });
+
+  it("parses an Airbnb receipt and keys it by confirmation code", () => {
+    const html = "<h1>Your receipt from Airbnb</h1><p>Receipt ID: RCXDBZWK9R &middot; December 25, 2024</p><p>7 nights in Bakuriani</p>"
+      + "<p>Tue, Jan 7, 2025</p><p>Confirmation code: HMTSWBRFR9</p><p>Total (ILS)</p><p>&#8362;1,668.17</p><p>Amount paid (ILS)</p><p>&#8362;1,668.17</p>";
+    const result = parseInlineReceipt("Airbnb <express@airbnb.com>", html.replace("&middot;", "·"), "Your receipt from Airbnb");
+    expect(result).toMatchObject({
+      vendor: "Airbnb", transactionId: "RCXDBZWK9R", amount: 1668.17, currency: "ILS",
+      merchant: "7 nights in Bakuriani · HMTSWBRFR9", date: "2024-12-25", dedupeKey: "airbnb:HMTSWBRFR9",
+    });
+  });
+
+  it("uses the new total from an Airbnb reservation change receipt", () => {
+    const paidMore = "<p>Receipt ID: RCADQME398 · September 30, 2022</p><p>Confirmation code: HMTZMZZDKD</p><p>Reservation change: Price adjusted</p>"
+      + "<p>Price difference ₪39.06</p><p>Total adjustment (ILS) ₪39.06</p><p>Previous total (ILS) ₪128.91</p><p>New total (ILS) ₪167.97</p><p>Amount paid (ILS) ₪39.06</p>";
+    expect(parseInlineReceipt("express@airbnb.com", paidMore, "Your receipt from Airbnb")).toMatchObject({ amount: 167.97, dedupeKey: "airbnb:HMTZMZZDKD" });
+    const refunded = "<p>Receipt ID: RCM3BWTRMP · May 25, 2022</p><p>Confirmation code: HMJ2EHP3KQ</p><p>Price difference -₪1,062.00</p>"
+      + "<p>Previous total (ILS) ₪4,221.00</p><p>New total (ILS) ₪3,159.00</p><p>Amount refunded (ILS) ₪1,062.00</p>";
+    expect(parseInlineReceipt("express@airbnb.com", refunded, "Your receipt from Airbnb")).toMatchObject({ amount: 3159, dedupeKey: "airbnb:HMJ2EHP3KQ" });
+  });
+
+  it("ignores Airbnb reminders and Booking.com property messages", () => {
+    expect(parseInlineReceipt("automated@airbnb.com", "<p>Amount paid (ILS) ₪100</p>", "Reservation reminder - January 7, 2025")).toBeNull();
+    expect(parseInlineReceipt("123-abc@property.booking.com", "<p>Amount paid on 1 Jan 2025 EUR 10</p>", "Confirmation email for Pavel")).toBeNull();
+  });
+
   it("returns null for a non-whitelisted sender", () => {
     const result = parseInlineReceipt("no-reply@example-rides.com", PAYPAL_HTML, "Your E-Receipt");
     expect(result).toBeNull();

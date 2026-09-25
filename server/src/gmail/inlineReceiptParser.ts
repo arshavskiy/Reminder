@@ -14,6 +14,9 @@ export interface ParsedInlineReceipt {
   renewalAmount?: number | null; // later auto-charge, when the mail states one
   renewalInterval?: "year" | "month" | null;
   renewalDate?: string | null; // ISO yyyy-mm-dd the auto-charge starts
+  // Receipts that replace an earlier one for the same booking share this key
+  // (e.g. an Airbnb date change issues a new receipt for the same confirmation code).
+  dedupeKey?: string | null;
 }
 
 function decodeHtmlEntity(codePoint: number): string {
@@ -271,6 +274,56 @@ function parseGrab(html: string, subject: string): ParsedInlineReceipt | null {
   };
 }
 
+// "This is your receipt" from noreply-payments@booking.com:
+// "Booking number 6615507868 ... Property name COSI Krabi ... Amount paid on 21 Jun 2025 THB 5,188.03".
+function parseBookingCom(html: string, subject: string): ParsedInlineReceipt | null {
+  if (!/your receipt/i.test(subject)) return null;
+  const text = stripTags(html);
+  const bookingNumber = text.match(/Booking number\s*:?\s*(\d{6,})/i);
+  const paid = text.match(/Amount paid on\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\s*([A-Z]{3}|[₪$€£฿₾₽])\s*([\d,]+(?:\.\d+)?)/i);
+  if (!bookingNumber || !paid) return null;
+  const amount = parseAmount(paid[3]);
+  if (amount === null) return null;
+  const property = text.match(/Property name\s*(.+?)\s+Property address/i);
+  return {
+    vendor: "Booking.com",
+    transactionId: bookingNumber[1],
+    amount,
+    currency: normalizeCurrencyToken(paid[2]) ?? "ILS",
+    merchant: property ? property[1].trim() : null,
+    date: parseHumanDate(paid[1]),
+  };
+}
+
+// "Your receipt from Airbnb": "Receipt ID: RCXDBZWK9R · December 25, 2024 ... 7 nights in Bakuriani
+// ... Confirmation code: HMTSWBRFR9 ... Amount paid (ILS) ₪1,668.17". A date change issues a new
+// receipt for the same confirmation code, so the code is the dedupe key.
+function parseAirbnb(html: string, subject: string): ParsedInlineReceipt | null {
+  if (!/receipt from Airbnb/i.test(subject)) return null;
+  const text = stripTags(html);
+  const receiptId = text.match(/Receipt ID:\s*(RC[A-Z0-9]{6,})/i);
+  // A reservation change receipt shows "Previous total", "New total" and only the
+  // difference as "Amount paid" / "Amount refunded". The booking now costs the new total.
+  const paid = text.match(/New total\s*\(([A-Z]{3})\)\s*[^\d\s]{0,3}\s*([\d,]+(?:\.\d+)?)/i)
+    ?? text.match(/Amount paid\s*\(([A-Z]{3})\)\s*[^\d\s]{0,3}\s*([\d,]+(?:\.\d+)?)/i)
+    ?? text.match(/(?<!Previous\s)\bTotal\s*\(([A-Z]{3})\)\s*[^\d\s]{0,3}\s*([\d,]+(?:\.\d+)?)/i);
+  if (!receiptId || !paid) return null;
+  const amount = parseAmount(paid[2]);
+  if (amount === null) return null;
+  const receiptDate = text.match(/Receipt ID:\s*RC[A-Z0-9]+\s*[·-]\s*([A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4})/i);
+  const stay = text.match(/(\d+\s+nights?\s+in\s+.+?)\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),/i);
+  const confirmation = text.match(/Confirmation code:\s*(HM[A-Z0-9]{6,})/i);
+  return {
+    vendor: "Airbnb",
+    transactionId: receiptId[1],
+    amount,
+    currency: paid[1].toUpperCase(),
+    merchant: [stay?.[1], confirmation?.[1]].filter(Boolean).join(" · ") || null,
+    date: receiptDate ? parseHumanDate(receiptDate[1]) : null,
+    dedupeKey: confirmation ? `airbnb:${confirmation[1]}` : null,
+  };
+}
+
 // Whitelist gate: only these sender patterns are eligible to be parsed into
 // an invoice record at all. Detection (the link-only/inline banner) stays
 // broader than this on purpose — this list is strictly the "safe to create a
@@ -286,6 +339,8 @@ const INLINE_RECEIPT_PARSERS: Array<{
   { senderPattern: /@(notice\.)?aliexpress\.com$/i, parse: parseAliExpress },
   { senderPattern: /@([a-z0-9-]+\.)*bolt\.eu$/i, parse: parseBolt },
   { senderPattern: /@([a-z0-9-]+\.)*grab\.com$/i, parse: parseGrab },
+  { senderPattern: /^noreply-payments@booking\.com$/i, parse: parseBookingCom },
+  { senderPattern: /@airbnb\.com$/i, parse: parseAirbnb },
 ];
 
 export function parseInlineReceipt(from: string, html: string, subject: string): ParsedInlineReceipt | null {

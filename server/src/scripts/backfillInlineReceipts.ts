@@ -1,15 +1,16 @@
 /**
- * Import AliExpress order confirmations that arrived before the AliExpress
- * inline-receipt parser existed. For every user with Gmail connected, searches
- * the confirmation mails ("Order N: order confirmed", "5 orders confirmed: N & more")
- * and imports each one the same way the Invoices page "Import all" does.
+ * Import body-only receipts (no attachment) that arrived before their parser
+ * existed: AliExpress, Bolt, Grab, Booking.com and Airbnb. For every user with
+ * Gmail connected, searches the vendor's receipt mails and imports each one the
+ * same way the Invoices page "Import all" does.
  *
- * Skips a mail already imported, and an order whose number is already on an invoice.
+ * Skips a mail already imported, and a receipt whose number is already on an invoice.
+ * Airbnb receipts for the same booking collapse into one invoice (newest wins).
  *
  * Dry run by default. Uses the local DB unless MONGODB_TARGET=production.
- *   npx tsx src/scripts/backfillAliExpressReceipts.ts
- *   npx tsx src/scripts/backfillAliExpressReceipts.ts --apply
- *   npx tsx src/scripts/backfillAliExpressReceipts.ts --user <userId> --apply
+ *   npx tsx src/scripts/backfillInlineReceipts.ts --vendor aliexpress
+ *   npx tsx src/scripts/backfillInlineReceipts.ts --vendor bolt,grab,booking,airbnb --apply
+ *   npx tsx src/scripts/backfillInlineReceipts.ts --vendor all --user <userId> --apply
  */
 import dotenv from "dotenv";
 import {parseInlineReceipt} from "../gmail/inlineReceiptParser.js";
@@ -23,7 +24,20 @@ const {col, connectDb, closeDb} = await import("../db/db.js");
 const apply = process.argv.includes("--apply");
 const userArg = process.argv.indexOf("--user");
 const onlyUser = userArg > -1 ? process.argv[userArg + 1] : null;
-const QUERY = "from:aliexpress.com subject:(\"order confirmed\" OR \"orders confirmed\")";
+const VENDOR_QUERIES: Record<string, string> = {
+  aliexpress: "from:aliexpress.com subject:(\"order confirmed\" OR \"orders confirmed\")",
+  bolt: "from:bolt.eu subject:\"Your Bolt trip\"",
+  grab: "from:grab.com subject:\"E-Receipt\"",
+  booking: "from:noreply-payments@booking.com subject:\"your receipt\"",
+  airbnb: "from:airbnb.com subject:\"receipt from Airbnb\"",
+};
+const vendorArg = process.argv.indexOf("--vendor");
+const vendors = (vendorArg > -1 ? process.argv[vendorArg + 1] : "aliexpress").split(",").map((v) => v.trim().toLowerCase());
+const selected = vendors.includes("all") ? Object.keys(VENDOR_QUERIES) : vendors;
+for (const vendor of selected) {
+  if (!VENDOR_QUERIES[vendor]) throw new Error(`unknown vendor ${vendor}; use ${Object.keys(VENDOR_QUERIES).join(", ")} or all`);
+}
+const QUERY = selected.map((vendor) => `(${VENDOR_QUERIES[vendor]})`).join(" OR ");
 
 function decodePart(data: string): string {
   return Buffer.from(data.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
@@ -56,7 +70,7 @@ async function listMessageIds(token: string): Promise<string[]> {
 }
 
 const db = await connectDb();
-const summary = {db: db.databaseName, mode: apply ? "apply" : "dry-run", users: 0, found: 0, imported: 0, skipped: 0, failed: 0, total: 0};
+const summary = {db: db.databaseName, mode: apply ? "apply" : "dry-run", users: 0, found: 0, imported: 0, skipped: 0, failed: 0, totals: {} as Record<string, number>};
 try {
   const userFilter: Record<string, unknown> = {gmail_access_token: {$nin: [null, ""]}};
   const users = await col<any>("users").find(userFilter, {projection: {_id: 1, email: 1}}).toArray();
@@ -74,7 +88,7 @@ try {
     }
     if (!ids.length) continue;
     summary.users += 1;
-    console.log(`user ${user.email ?? userId} (${userId}): ${ids.length} confirmation mails`);
+    console.log(`user ${user.email ?? userId} (${userId}): ${ids.length} receipt mails`);
     summary.found += ids.length;
     const already = await col<any>("invoices").find(
       {user_id: userId, gmail_message_id: {$in: ids}},
@@ -108,7 +122,7 @@ try {
         continue;
       }
       console.log(`  ${apply ? "import" : "would import"} ${receipt.transactionId} ${receipt.amount} ${receipt.currency}${receipt.merchant ? ` (${receipt.merchant})` : ""}`);
-      summary.total += receipt.amount;
+      summary.totals[receipt.currency] = Math.round(((summary.totals[receipt.currency] ?? 0) + receipt.amount) * 100) / 100;
       if (!apply) continue;
       try {
         await importInlineReceiptMessage(token, userId, id, undefined);
@@ -119,7 +133,6 @@ try {
       }
     }
   }
-  summary.total = Math.round(summary.total * 100) / 100;
   console.log(JSON.stringify(summary));
 } finally {
   await closeDb?.();

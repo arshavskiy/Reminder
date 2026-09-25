@@ -94,7 +94,6 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "gett", category: "transport", label: "תחבורה - Gett", terms: ["gett.com", "Gett", "גט טקסי"], sort_order: 670, enabled: true },
   { id: "yango", category: "transport", label: "תחבורה - Yango", terms: ["yango.com", "Yango", "יאנגו"], sort_order: 680, enabled: true },
   { id: "bolt", category: "transport", label: "תחבורה - Bolt", terms: ["bolt.eu", "Your Bolt trip", "Bolt"], sort_order: 682, enabled: true },
-  { id: "grab", category: "transport", label: "תחבורה - Grab", terms: ["grab.com", "Grab E-Receipt", "GrabFood"], sort_order: 684, enabled: true },
   { id: "egged", category: "transport", label: "תחבורה - אגד", terms: ["egged.co.il", "אגד"], sort_order: 690, enabled: true },
   { id: "dan", category: "transport", label: "תחבורה - דן", terms: ["dan.co.il", "דן"], sort_order: 700, enabled: true },
   { id: "metropoline", category: "transport", label: "תחבורה - מטרופולין", terms: ["metropoline.com", "מטרופולין"], sort_order: 710, enabled: true },
@@ -199,6 +198,7 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "bravofly", category: "travel", label: "תיירות - Bravofly", terms: ["bravofly.com", "Bravofly"], sort_order: 2260, enabled: true },
   { id: "aeroflot", category: "travel", label: "תיירות - Aeroflot", terms: ["aeroflot.ru", "Aeroflot", "אירופלוט"], sort_order: 2270, enabled: true },
   { id: "booking", category: "travel", label: "תיירות - Booking.com", terms: ["booking.com", "Booking.com"], sort_order: 2280, enabled: true },
+  { id: "airbnb", category: "travel", label: "תיירות - Airbnb", terms: ["airbnb.com", "Airbnb"], sort_order: 2285, enabled: true },
   { id: "grab", category: "travel", label: "תיירות - Grab", terms: ["grab.com", "Grab"], sort_order: 2290, enabled: true },
 
   { id: "hadassah", category: "healthcare", label: "בריאות - הדסה", terms: ["hadassah.org.il", "הדסה"], sort_order: 2310, enabled: true },

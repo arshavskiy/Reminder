@@ -53,6 +53,8 @@ export function buildInlineReceiptQueries(keywordQuery: string, historyMonths: n
     { query: withHistory("from:aliexpress.com subject:(\"order confirmed\" OR \"orders confirmed\")", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:bolt.eu subject:\"Your Bolt trip\"", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:grab.com subject:\"E-Receipt\"", historyMonths), ...KNOWN_SENDER_WINDOW },
+    { query: withHistory("from:noreply-payments@booking.com subject:\"your receipt\"", historyMonths), ...KNOWN_SENDER_WINDOW },
+    { query: withHistory("from:airbnb.com subject:\"receipt from Airbnb\"", historyMonths), ...KNOWN_SENDER_WINDOW },
     // Broad catch-all stays short. It matches ordinary mail, not a receipt sender.
     { query: withHistory(keywords, historyMonths), pages: 1, pageSize: 500, budget: 500 },
   ];
